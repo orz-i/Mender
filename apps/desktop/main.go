@@ -5,12 +5,11 @@ import (
 	"embed"
 	"fmt"
 	"log"
-	"os"
-	"sync"
 
 	"github.com/orz-i/Mender/backend/internal/bootstrap"
 	"github.com/orz-i/Mender/backend/internal/desktop/appdata"
 	desktopbinding "github.com/orz-i/Mender/backend/internal/desktop/binding"
+	"github.com/orz-i/Mender/backend/internal/desktop/lifecycle"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
@@ -24,7 +23,7 @@ func main() {
 }
 
 func run() error {
-	databasePath, err := appdata.ResolveDatabasePath(os.Getenv("MENDER_DB"))
+	databasePath, err := appdata.ResolveDatabasePath()
 	if err != nil {
 		return fmt.Errorf("resolve desktop database: %w", err)
 	}
@@ -38,10 +37,10 @@ func run() error {
 		return fmt.Errorf("open desktop runtime: %w", err)
 	}
 
-	closeRuntime := sync.OnceValue(runtime.Close)
+	runtimeCloser := lifecycle.NewCloser(runtime.Close)
 	shutdown := func() {
 		cancel()
-		if closeErr := closeRuntime(); closeErr != nil {
+		if closeErr := runtimeCloser.Close(); closeErr != nil {
 			log.Printf("mender desktop: close runtime: %v", closeErr)
 		}
 	}

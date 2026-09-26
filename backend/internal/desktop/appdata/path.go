@@ -9,8 +9,8 @@ import (
 
 const directoryName = "Mender"
 
-func ResolveDatabasePath(explicit string) (string, error) {
-	return resolveDatabasePath(explicit, os.UserConfigDir)
+func ResolveDatabasePath() (string, error) {
+	return resolveDatabasePath(os.Getenv("MENDER_DB"), os.UserConfigDir)
 }
 
 func resolveDatabasePath(

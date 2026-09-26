@@ -1,20 +1,18 @@
 package appdata
 
 import (
-	"errors"
 	"path/filepath"
 	"testing"
 )
 
-func TestResolveDatabasePathUsesExplicitOverride(t *testing.T) {
+func TestResolveDatabasePathUsesEnvironmentOverride(t *testing.T) {
 	root := t.TempDir()
 	explicit := filepath.Join(root, "custom", "mender.db")
+	t.Setenv("MENDER_DB", explicit)
 
-	got, err := resolveDatabasePath(explicit, func() (string, error) {
-		return "", errors.New("should not be called")
-	})
+	got, err := ResolveDatabasePath()
 	if err != nil {
-		t.Fatalf("resolve explicit path: %v", err)
+		t.Fatalf("resolve environment path: %v", err)
 	}
 	want, err := filepath.Abs(explicit)
 	if err != nil {
