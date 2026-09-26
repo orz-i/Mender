@@ -5,13 +5,12 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"os"
 	"os/exec"
-	"sort"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/orz-i/Mender/backend/internal/mcp/infrastructure/transportpolicy"
 )
 
 // CommandConfig configures a local upstream MCP Provider over stdio.
@@ -46,20 +45,11 @@ func ConnectCommand(ctx context.Context, config CommandConfig) (*Connection, err
 		command.Stderr = os.Stderr
 	}
 
-	if config.Environment != nil {
-		command.Env = append([]string{}, os.Environ()...)
-		keys := make([]string, 0, len(config.Environment))
-		for key := range config.Environment {
-			if key == "" || strings.ContainsRune(key, '=') || strings.ContainsRune(key, 0) {
-				return nil, fmt.Errorf("connect MCP command: invalid environment key")
-			}
-			keys = append(keys, key)
-		}
-		sort.Strings(keys)
-		for _, key := range keys {
-			command.Env = append(command.Env, key+"="+config.Environment[key])
-		}
+	environment, err := commandEnvironment(os.Environ(), config.Environment)
+	if err != nil {
+		return nil, err
 	}
+	command.Env = environment
 
 	return ConnectTransport(ctx, &mcp.CommandTransport{Command: command})
 }
@@ -67,15 +57,8 @@ func ConnectCommand(ctx context.Context, config CommandConfig) (*Connection, err
 // ConnectHTTP connects to a remote MCP server over Streamable HTTP.
 func ConnectHTTP(ctx context.Context, config HTTPConfig) (*Connection, error) {
 	endpoint := strings.TrimSpace(config.Endpoint)
-	parsed, err := url.Parse(endpoint)
-	if err != nil {
-		return nil, fmt.Errorf("connect MCP HTTP: parse endpoint: %w", err)
-	}
-	if parsed.Scheme != "http" && parsed.Scheme != "https" {
-		return nil, fmt.Errorf("connect MCP HTTP: endpoint must use http or https")
-	}
-	if parsed.Host == "" {
-		return nil, fmt.Errorf("connect MCP HTTP: endpoint must be absolute")
+	if err := transportpolicy.ValidateHTTPEndpoint(endpoint); err != nil {
+		return nil, fmt.Errorf("connect MCP HTTP: %w", err)
 	}
 
 	transport := &mcp.StreamableClientTransport{
