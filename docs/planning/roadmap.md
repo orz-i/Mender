@@ -164,7 +164,7 @@ See `phase-6-management-web.md`.
 
 ## Phase 7 — Wails desktop distribution
 
-Status: In Progress
+Status: Complete
 
 Goals:
 
@@ -180,6 +180,8 @@ Exit criteria:
 See `phase-7-wails-desktop.md`.
 
 ## Phase 8 — Hardening and distribution
+
+Status: Next
 
 Goals:
 

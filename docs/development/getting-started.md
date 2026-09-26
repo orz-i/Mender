@@ -9,7 +9,7 @@ Mender's foundation currently expects:
 - pnpm 12.4.2.
 - golangci-lint v2.14.0.
 
-The repository pins pnpm in the root `package.json` and golangci-lint in `.golangci-lint-version`.
+The repository pins pnpm in the root `package.json` and golangci-lint in `.golangci-lint-version`. Native desktop development additionally uses Wails v3.0.0-beta.26; the portable `pnpm check` gate regenerates bindings with that pinned version through `go run`, so a globally installed Wails CLI is only required for `wails3 dev`, native build, and packaging.
 
 Install the pinned Go linter when needed:
 
@@ -29,17 +29,19 @@ pnpm check
 `pnpm check` is the repository-level verification command. It currently runs:
 
 1. OpenAPI TypeScript regeneration/diff verification.
-2. golangci-lint.
-3. Go tests.
-4. Go race tests.
-5. ESLint.
-6. strict TypeScript type checking.
-7. Vitest.
-8. production frontend build.
+2. Wails binding regeneration/diff verification.
+3. Desktop architecture boundary verification.
+4. golangci-lint.
+5. Go tests.
+6. Go race tests.
+7. ESLint.
+8. strict TypeScript type checking.
+9. Vitest.
+10. Web and Desktop production frontend builds.
 
 ## Common commands
 
-See [Management Web UI](web.md) for the local API + Vite development workflow.
+See [Management Web UI](web.md) for the local API + Vite development workflow and [Desktop Development](desktop.md) for Wails setup, native build, and packaging.
 
 Run the web development server:
 
@@ -64,6 +66,8 @@ pnpm run:server
 Run individual quality gates:
 
 ```bash
+pnpm desktop:bindings:check
+pnpm desktop:architecture:check
 pnpm go:lint
 pnpm go:test
 pnpm go:test:race
@@ -79,13 +83,15 @@ The repository now includes Catalog, the shared Invocation/Policy/Credential/Aud
 
 - `backend/` contains Go executable hosts, domain/application contexts, MCP infrastructure adapters, and composition roots.
 - `apps/web/` is the browser host.
+- `apps/desktop/` is the isolated Wails v3 desktop host and separate Go module.
 - `packages/app/` is the shared React application shell.
 - `packages/ui/` is the shared UI boundary and shadcn/ui destination.
 - `packages/sdk/` is the generated/typed management API client boundary and the only browser HTTP boundary.
 - `contracts/` owns the OpenAPI management contract; `skills/` contains the Agent Skill surface.
-- Wails is intentionally not required by the current CLI/server/web build.
+- Wails remains isolated from `backend/go.mod`; CLI/server dependency graphs do not contain Wails.
+- Web and Desktop both mount `packages/app` behind the same `MenderClient` contract, using HTTP and Wails transports respectively.
 
-The next implementation phase is Wails v3 desktop distribution. It must reuse the shared React application and core Runtime rather than introducing a desktop-specific product implementation.
+Native Wails build/package checks are documented separately because they require platform GUI and packaging toolchains. The next implementation phase is hardening and distribution.
 
 ## Quality policy
 

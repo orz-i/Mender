@@ -107,9 +107,13 @@ The CLI is a first-class interface, not a wrapper around HTTP.
 
 Provides progressive-disclosure instructions and optional generated resources that guide agents to use the Mender CLI/runtime.
 
-### Management API
+### Management HTTP API
 
-Provides administration operations for Web and Desktop clients. It is distinct from MCP protocol endpoints.
+Provides the loopback administration transport used by the browser host. It is distinct from MCP protocol endpoints.
+
+### Desktop binding adapter
+
+Adapts the same Runtime/Application management semantics to Wails bindings without routing through the management HTTP server. Wails SDK imports and WebView lifecycle remain in the desktop shell; the backend adapter itself is Wails-independent.
 
 ## Persistence
 

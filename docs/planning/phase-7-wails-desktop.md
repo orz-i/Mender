@@ -1,5 +1,7 @@
 # Phase 7 Plan — Wails Desktop Distribution
 
+Status: Complete
+
 ## Objective
 
 Package Mender's existing management application as a native desktop application without introducing a second product implementation or a second runtime path.
@@ -88,7 +90,7 @@ The root `go.work` includes:
 - `./backend`
 - `./apps/desktop`
 
-The desktop module depends on the backend module and Wails. The backend module does not depend on Wails.
+The desktop module depends on the backend module and Wails. Because the backend module is not published as an independent versioned module, `apps/desktop/go.mod` uses a repository-local `replace github.com/orz-i/Mender/backend => ../../backend`. The backend module does not depend on Wails.
 
 This is deliberate dependency isolation: adding desktop distribution must not make `mender` or `menderd` require native WebView dependencies or Wails SDK packages.
 
@@ -330,26 +332,39 @@ On the current development host:
 
 Small corrective commits are acceptable when a gate exposes an issue. Failed states are not committed.
 
+## Closeout
+
+Phase 7 completed on 2026-09-26.
+
+Validated on the current macOS development host:
+
+- `wails3 build` completed with the shared React application embedded in the native binary.
+- `wails3 package` produced an ad-hoc-signed `mender-desktop.app`.
+- the checked-in Wails build assets contain macOS, Windows, and Linux build/package tasks.
+- `pnpm check` passed with binding regeneration, desktop architecture checks, Go lint/tests/race, ESLint, strict TypeScript, 4 Vitest files / 11 tests, and both Web/Desktop production frontend builds.
+
+The current macOS linker emits a warning that one native object was built for macOS 13 while the Wails task targets macOS 12. The resulting native build and `.app` package succeed. Production deployment-target policy, release signing, and notarization remain Phase 8 work.
+
 ## Exit checklist
 
-- [ ] Wails v3 version is pinned from a documented research baseline.
-- [ ] Desktop Wails dependency is isolated from the backend CLI/server module.
-- [ ] Desktop owns and closes one shared Mender Runtime.
-- [ ] Desktop DB defaults to a per-user application-data/config directory.
-- [ ] A Wails binding adapter exposes existing management semantics only.
-- [ ] Desktop invocation still enters the shared invocation pipeline.
-- [ ] `MenderClient` is an explicit transport-neutral frontend contract.
-- [ ] Browser HTTP client implements `MenderClient`.
-- [ ] Desktop Wails client implements `MenderClient`.
-- [ ] `packages/app` has no Wails-specific imports.
-- [ ] Desktop mounts the existing `packages/app` UI without copied pages.
-- [ ] Desktop uses HashRouter while Web keeps BrowserRouter.
-- [ ] Vite production assets are embedded by the Wails shell.
-- [ ] Wails bindings are generated reproducibly from the pinned tool version.
-- [ ] Policy and Credential UI remain read-only.
-- [ ] No unnecessary native integration is added.
-- [ ] macOS native build succeeds locally.
-- [ ] Windows/Linux packaging configuration is present.
-- [ ] CLI/server dependency graphs contain no Wails packages.
-- [ ] Go tests/lint, strict TypeScript, Vitest, Vite builds, and architecture checks pass.
-- [ ] Full `pnpm check` passes.
+- [x] Wails v3 version is pinned from a documented research baseline.
+- [x] Desktop Wails dependency is isolated from the backend CLI/server module.
+- [x] Desktop owns and closes one shared Mender Runtime.
+- [x] Desktop DB defaults to a per-user application-data/config directory.
+- [x] A Wails binding adapter exposes existing management semantics only.
+- [x] Desktop invocation still enters the shared invocation pipeline.
+- [x] `MenderClient` is an explicit transport-neutral frontend contract.
+- [x] Browser HTTP client implements `MenderClient`.
+- [x] Desktop Wails client implements `MenderClient`.
+- [x] `packages/app` has no Wails-specific imports.
+- [x] Desktop mounts the existing `packages/app` UI without copied pages.
+- [x] Desktop uses HashRouter while Web keeps BrowserRouter.
+- [x] Vite production assets are embedded by the Wails shell.
+- [x] Wails bindings are generated reproducibly from the pinned tool version.
+- [x] Policy and Credential UI remain read-only.
+- [x] No unnecessary native integration is added.
+- [x] macOS native build succeeds locally.
+- [x] Windows/Linux packaging configuration is present.
+- [x] CLI/server dependency graphs contain no Wails packages.
+- [x] Go tests/lint, strict TypeScript, Vitest, Vite builds, and architecture checks pass.
+- [x] Full `pnpm check` passes.

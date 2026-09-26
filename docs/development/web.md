@@ -91,7 +91,7 @@ pnpm check verifies that regenerating the contract produces no diff.
 
 packages/sdk is the only browser package allowed to perform HTTP requests.
 
-The product UI in packages/app receives a typed MenderClient from its host. The browser host constructs that client; Phase 7 can provide a Wails host adapter without duplicating product pages.
+The product UI in `packages/app` receives a typed `MenderClient` from its host. The browser host constructs the HTTP implementation; the Wails desktop host constructs a binding-backed implementation without duplicating product pages.
 
 ## Production build
 
@@ -99,4 +99,4 @@ Build the current browser bundle with:
 
     pnpm build
 
-Phase 6 keeps API serving and frontend asset distribution separate. Desktop packaging and native hosting belong to Phase 7.
+API serving and browser asset distribution remain separate from desktop packaging. The Wails desktop shell owns its Runtime directly and embeds its Vite production assets; it does not start the management HTTP server.

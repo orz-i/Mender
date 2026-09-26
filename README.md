@@ -11,7 +11,7 @@ It provides one canonical tool model and execution pipeline, then exposes the sa
 
 ## Status
 
-The governance, foundation, Catalog, shared runtime, MCP adapter, CLI/Agent Skill, and Management Web UI phases are complete. Mender now provides a loopback management API, generated TypeScript SDK, and browser workflows for Providers, Catalog, Profiles, Policy/Credential status, and Audit. The next phase packages the shared management application with Wails v3.
+The governance, foundation, Catalog, shared runtime, MCP adapter, CLI/Agent Skill, Management Web UI, and Wails Desktop phases are complete. Mender now provides CLI/MCP runtime adapters, a loopback management API, a generated TypeScript SDK, and shared Web/Desktop workflows for Providers, Catalog, Profiles, Policy/Credential status, and Audit. The next phase hardens packaging, release security, and distribution.
 
 ## Product principles
 
@@ -33,6 +33,7 @@ See:
 - [Local development](docs/development/getting-started.md)
 - [CLI reference](docs/development/cli.md)
 - [Management Web UI](docs/development/web.md)
+- [Wails Desktop](docs/development/desktop.md)
 
 ## Development
 
@@ -45,7 +46,7 @@ pnpm check
 
 See [Local development](docs/development/getting-started.md) for individual commands and prerequisites.
 
-## Planned technology stack
+## Technology stack
 
 ### Backend
 
