@@ -102,6 +102,34 @@ func validateProviderFields(
 	return nil
 }
 
+// UpdateMetadata returns the same Provider identity with refreshed user-owned
+// metadata and an updated timestamp.
+func (p Provider) UpdateMetadata(
+	displayName string,
+	description string,
+	now time.Time,
+) (Provider, error) {
+	if err := validateProviderFields(p.id, p.namespace, displayName, description); err != nil {
+		return Provider{}, err
+	}
+	if now.IsZero() {
+		return Provider{}, validationError("now", "must not be zero")
+	}
+	now = now.UTC()
+	if now.Before(p.createdAt) {
+		return Provider{}, validationError("updated_at", "must not be before created_at")
+	}
+
+	return Provider{
+		id:          p.id,
+		namespace:   p.namespace,
+		displayName: strings.TrimSpace(displayName),
+		description: strings.TrimSpace(description),
+		createdAt:   p.createdAt,
+		updatedAt:   now,
+	}, nil
+}
+
 func (p Provider) ID() ProviderID {
 	return p.id
 }

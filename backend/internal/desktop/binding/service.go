@@ -167,6 +167,65 @@ func (s *Service) CreateStdioProvider(
 	}, nil
 }
 
+func (s *Service) UpdateProvider(
+	providerID string,
+	displayName string,
+	description string,
+	transport string,
+	endpoint string,
+	executable string,
+	args []string,
+	directory string,
+) (ProviderMutationResponse, error) {
+	id, err := catalogdomain.ParseProviderID(providerID)
+	if err != nil {
+		return ProviderMutationResponse{}, err
+	}
+	if strings.TrimSpace(displayName) == "" {
+		return ProviderMutationResponse{}, fmt.Errorf("displayName is required")
+	}
+
+	var config mcpconfigstore.Config
+	switch transport {
+	case string(mcpconfigstore.TransportHTTP):
+		config = mcpconfigstore.Config{
+			Transport: mcpconfigstore.TransportHTTP,
+			Endpoint:  endpoint,
+		}
+	case string(mcpconfigstore.TransportStdio):
+		config = mcpconfigstore.Config{
+			Transport:  mcpconfigstore.TransportStdio,
+			Executable: executable,
+			Args:       append([]string(nil), args...),
+			Directory:  directory,
+		}
+	default:
+		return ProviderMutationResponse{}, fmt.Errorf("transport must be http or stdio")
+	}
+
+	provider, err := s.runtime.UpdateMCPProvider(
+		s.ctx,
+		id,
+		catalogapplication.UpdateProviderRequest{
+			DisplayName: displayName,
+			Description: description,
+		},
+		config,
+	)
+	if err != nil {
+		return ProviderMutationResponse{}, err
+	}
+	result, err := s.runtime.SyncConfiguredMCPProvider(s.ctx, id)
+	if err != nil {
+		return ProviderMutationResponse{}, err
+	}
+
+	return ProviderMutationResponse{
+		Provider: providerProjection(provider, config),
+		Sync:     syncProjection(result),
+	}, nil
+}
+
 func (s *Service) SyncProvider(providerID string) (SyncResult, error) {
 	id, err := catalogdomain.ParseProviderID(providerID)
 	if err != nil {

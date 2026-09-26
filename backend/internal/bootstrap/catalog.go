@@ -20,6 +20,7 @@ type CatalogOptions struct {
 // Tool execution and protocol adapters intentionally do not belong in this Catalog composition root.
 type Catalog struct {
 	RegisterProvider        application.RegisterProvider
+	UpdateProvider          application.UpdateProvider
 	GetProvider             application.GetProvider
 	ListProviders           application.ListProviders
 	FindProviderByNamespace application.FindProviderByNamespace
@@ -44,6 +45,7 @@ func NewCatalog(ctx context.Context, options CatalogOptions) (*Catalog, error) {
 
 	return &Catalog{
 		RegisterProvider:        application.NewRegisterProvider(store, ids, clock),
+		UpdateProvider:          application.NewUpdateProvider(store, store, clock),
 		GetProvider:             application.NewGetProvider(store),
 		ListProviders:           application.NewListProviders(store),
 		FindProviderByNamespace: application.NewFindProviderByNamespace(store),

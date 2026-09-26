@@ -92,7 +92,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        put?: never;
+        put: operations["updateProvider"];
         post?: never;
         delete: operations["deleteProvider"];
         options?: never;
@@ -319,6 +319,24 @@ export interface components {
         };
         CreateStdioProviderRequest: {
             namespace: string;
+            displayName: string;
+            description?: string;
+            executable: string;
+            args?: string[];
+            directory?: string;
+        };
+        UpdateProviderRequest: components["schemas"]["UpdateHTTPProviderRequest"] | components["schemas"]["UpdateStdioProviderRequest"];
+        UpdateHTTPProviderRequest: {
+            /** @constant */
+            transport: "http";
+            displayName: string;
+            description?: string;
+            /** Format: uri */
+            endpoint: string;
+        };
+        UpdateStdioProviderRequest: {
+            /** @constant */
+            transport: "stdio";
             displayName: string;
             description?: string;
             executable: string;
@@ -587,6 +605,36 @@ export interface operations {
                     "application/json": components["schemas"]["SyncResult"];
                 };
             };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            502: components["responses"]["BadGateway"];
+        };
+    };
+    updateProvider: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                providerId: components["parameters"]["ProviderId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateProviderRequest"];
+            };
+        };
+        responses: {
+            /** @description Provider updated and synchronized */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderMutationResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             502: components["responses"]["BadGateway"];

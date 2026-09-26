@@ -63,6 +63,35 @@ export function createDesktopMenderClient(): MenderClient {
       );
     },
 
+    async updateProvider(providerId, body) {
+      if (body.transport === "http") {
+        return providerMutation(
+          await Service.UpdateProvider(
+            providerId,
+            body.displayName,
+            body.description ?? "",
+            "http",
+            body.endpoint,
+            "",
+            [],
+            "",
+          ),
+        );
+      }
+      return providerMutation(
+        await Service.UpdateProvider(
+          providerId,
+          body.displayName,
+          body.description ?? "",
+          "stdio",
+          "",
+          body.executable,
+          body.args ?? [],
+          body.directory ?? "",
+        ),
+      );
+    },
+
     async syncProvider(providerId) {
       return syncResult(await Service.SyncProvider(providerId));
     },

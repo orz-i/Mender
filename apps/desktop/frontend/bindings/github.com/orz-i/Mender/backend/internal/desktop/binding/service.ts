@@ -83,3 +83,7 @@ export function SearchTools(query: string, limit: number, profile: string): $Can
 export function SyncProvider(providerID: string): $CancellablePromise<$models.SyncResult> {
     return $Call.ByID(2246585286, providerID);
 }
+
+export function UpdateProvider(providerID: string, displayName: string, description: string, transport: string, endpoint: string, executable: string, args: string[] | null, directory: string): $CancellablePromise<$models.ProviderMutationResponse> {
+    return $Call.ByID(2087755724, providerID, displayName, description, transport, endpoint, executable, args, directory);
+}

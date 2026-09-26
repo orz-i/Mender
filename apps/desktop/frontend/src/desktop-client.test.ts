@@ -6,6 +6,7 @@ vi.mock(
     Service: {
       GetSystemStatus: vi.fn(),
       ListProviders: vi.fn(),
+      UpdateProvider: vi.fn(),
     },
   }),
 );
@@ -94,6 +95,45 @@ describe("desktop Mender client", () => {
         },
       ],
     });
+  });
+
+  it("adapts Provider updates to the Wails binding", async () => {
+    vi.mocked(Service.UpdateProvider).mockResolvedValue({
+      provider: {
+        providerId: "prov_00000000000000000000000000000001",
+        namespace: "upstream",
+        displayName: "Upstream edited",
+        description: "Edited",
+        createdAt: "2026-09-26T00:00:00Z",
+        updatedAt: "2026-09-26T01:00:00Z",
+        transport: "http",
+        endpoint: "https://example.test/mcp",
+      },
+      sync: { created: 0, updated: 1, removed: 0, total: 1 },
+    });
+
+    const client = createDesktopMenderClient();
+    const result = await client.updateProvider(
+      "prov_00000000000000000000000000000001",
+      {
+        transport: "http",
+        displayName: "Upstream edited",
+        description: "Edited",
+        endpoint: "https://example.test/mcp",
+      },
+    );
+
+    expect(Service.UpdateProvider).toHaveBeenCalledWith(
+      "prov_00000000000000000000000000000001",
+      "Upstream edited",
+      "Edited",
+      "http",
+      "https://example.test/mcp",
+      "",
+      [],
+      "",
+    );
+    expect(result.provider.displayName).toBe("Upstream edited");
   });
 
   it("rejects unexpected binding enum values at the host boundary", async () => {

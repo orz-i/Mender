@@ -48,6 +48,48 @@ func TestRegisterAndGetProvider(t *testing.T) {
 	}
 }
 
+func TestUpdateProviderPreservesIdentityAndNamespace(t *testing.T) {
+	t.Parallel()
+
+	store := newMemoryCatalog()
+	id := mustProviderID(t, "prov_00000000000000000000000000000001")
+	namespace, _ := domain.NewNamespace("github")
+	created := testTime()
+	provider, _ := domain.NewProvider(id, namespace, "GitHub", "Old", created)
+	if err := store.CreateProvider(context.Background(), provider); err != nil {
+		t.Fatal(err)
+	}
+
+	update := NewUpdateProvider(
+		store,
+		store,
+		fixedClock{now: created.Add(time.Hour)},
+	)
+	updated, err := update.Execute(context.Background(), UpdateProviderRequest{
+		ProviderID:  id,
+		DisplayName: "GitHub Work",
+		Description: "Updated",
+	})
+	if err != nil {
+		t.Fatalf("UpdateProvider.Execute() error = %v", err)
+	}
+
+	if updated.ID() != id || updated.Namespace() != namespace {
+		t.Fatalf("identity changed: %#v", updated)
+	}
+	if updated.DisplayName() != "GitHub Work" || updated.Description() != "Updated" {
+		t.Fatalf("metadata = %#v", updated)
+	}
+
+	loaded, err := store.GetProvider(context.Background(), id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.UpdatedAt() != created.Add(time.Hour) {
+		t.Fatalf("updatedAt = %v", loaded.UpdatedAt())
+	}
+}
+
 func TestListFindAndRemoveProviders(t *testing.T) {
 	t.Parallel()
 
@@ -365,6 +407,21 @@ func (m *memoryCatalog) CreateProvider(_ context.Context, provider domain.Provid
 	}
 	m.providersByID[provider.ID()] = provider
 	m.providerByNamespace[provider.Namespace()] = provider.ID()
+	return nil
+}
+
+func (m *memoryCatalog) UpdateProvider(
+	_ context.Context,
+	provider domain.Provider,
+) error {
+	current, exists := m.providersByID[provider.ID()]
+	if !exists {
+		return ErrProviderNotFound
+	}
+	if current.Namespace() != provider.Namespace() {
+		return errors.New("memory catalog provider namespace changed")
+	}
+	m.providersByID[provider.ID()] = provider
 	return nil
 }
 

@@ -40,6 +40,32 @@ func (s *Store) CreateProvider(ctx context.Context, provider domain.Provider) er
 	return nil
 }
 
+// UpdateProvider persists mutable Provider metadata while preserving stable identity.
+func (s *Store) UpdateProvider(ctx context.Context, provider domain.Provider) error {
+	result, err := s.db.ExecContext(
+		ctx,
+		`UPDATE providers
+		SET display_name = ?, description = ?, updated_at = ?
+		WHERE id = ?`,
+		provider.DisplayName(),
+		provider.Description(),
+		formatTime(provider.UpdatedAt()),
+		provider.ID().String(),
+	)
+	if err != nil {
+		return fmt.Errorf("update provider: %w", err)
+	}
+
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("update provider: rows affected: %w", err)
+	}
+	if affected == 0 {
+		return application.ErrProviderNotFound
+	}
+	return nil
+}
+
 // GetProvider loads one Provider by stable Mender identity.
 func (s *Store) GetProvider(
 	ctx context.Context,

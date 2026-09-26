@@ -25,6 +25,16 @@ type createStdioProviderRequest struct {
 	Directory   string   `json:"directory"`
 }
 
+type updateProviderRequest struct {
+	Transport   string   `json:"transport"`
+	DisplayName string   `json:"displayName"`
+	Description string   `json:"description"`
+	Endpoint    string   `json:"endpoint"`
+	Executable  string   `json:"executable"`
+	Args        []string `json:"args"`
+	Directory   string   `json:"directory"`
+}
+
 func (h *Handler) listProviders(w http.ResponseWriter, r *http.Request) {
 	providers, err := h.runtime.Catalog.ListProviders.Execute(r.Context())
 	if err != nil {
@@ -128,6 +138,76 @@ func (h *Handler) createStdioProvider(w http.ResponseWriter, r *http.Request) {
 
 	config, _ := h.runtime.MCPProviderConfig(r.Context(), provider.ID())
 	writeJSON(w, http.StatusCreated, map[string]any{
+		"provider": providerProjection(provider, config),
+		"sync":     syncProjection(syncResult),
+	})
+}
+
+func (h *Handler) updateProvider(w http.ResponseWriter, r *http.Request) {
+	providerID, err := catalogdomain.ParseProviderID(r.PathValue("providerId"))
+	if err != nil {
+		writeAPIError(w, http.StatusBadRequest, "validation_error", err)
+		return
+	}
+
+	var input updateProviderRequest
+	if err := decodeJSON(r, &input); err != nil {
+		writeAPIError(w, http.StatusBadRequest, "validation_error", err)
+		return
+	}
+	if input.DisplayName == "" {
+		writeAPIError(w, http.StatusBadRequest, "validation_error", fmt.Errorf("displayName is required"))
+		return
+	}
+
+	var config mcpconfigstore.Config
+	switch input.Transport {
+	case string(mcpconfigstore.TransportHTTP):
+		if input.Endpoint == "" {
+			writeAPIError(w, http.StatusBadRequest, "validation_error", fmt.Errorf("endpoint is required for HTTP provider"))
+			return
+		}
+		config = mcpconfigstore.Config{
+			Transport: mcpconfigstore.TransportHTTP,
+			Endpoint:  input.Endpoint,
+		}
+	case string(mcpconfigstore.TransportStdio):
+		if input.Executable == "" {
+			writeAPIError(w, http.StatusBadRequest, "validation_error", fmt.Errorf("executable is required for stdio provider"))
+			return
+		}
+		config = mcpconfigstore.Config{
+			Transport:  mcpconfigstore.TransportStdio,
+			Executable: input.Executable,
+			Args:       append([]string(nil), input.Args...),
+			Directory:  input.Directory,
+		}
+	default:
+		writeAPIError(w, http.StatusBadRequest, "validation_error", fmt.Errorf("transport must be http or stdio"))
+		return
+	}
+
+	provider, err := h.runtime.UpdateMCPProvider(
+		r.Context(),
+		providerID,
+		catalogapplication.UpdateProviderRequest{
+			DisplayName: input.DisplayName,
+			Description: input.Description,
+		},
+		config,
+	)
+	if err != nil {
+		writeKnownError(w, err)
+		return
+	}
+
+	syncResult, err := h.runtime.SyncConfiguredMCPProvider(r.Context(), providerID)
+	if err != nil {
+		writeAPIError(w, http.StatusBadGateway, "provider_error", err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
 		"provider": providerProjection(provider, config),
 		"sync":     syncProjection(syncResult),
 	})

@@ -72,6 +72,57 @@ func (r *Runtime) CallConfiguredTool(
 	})
 }
 
+func (r *Runtime) UpdateMCPProvider(
+	ctx context.Context,
+	providerID catalogdomain.ProviderID,
+	request catalogapplication.UpdateProviderRequest,
+	config mcpconfigstore.Config,
+) (catalogdomain.Provider, error) {
+	currentProvider, err := r.Catalog.GetProvider.Execute(ctx, providerID)
+	if err != nil {
+		return catalogdomain.Provider{}, err
+	}
+
+	config.ProviderID = providerID
+	if err := config.Validate(); err != nil {
+		return catalogdomain.Provider{}, err
+	}
+	if _, err := currentProvider.UpdateMetadata(
+		request.DisplayName,
+		request.Description,
+		r.Catalog.clock.Now(),
+	); err != nil {
+		return catalogdomain.Provider{}, err
+	}
+
+	currentConfig, err := r.mcpConfigs.Get(ctx, providerID)
+	if err != nil {
+		return catalogdomain.Provider{}, err
+	}
+
+	if err := r.mcpConfigs.Save(ctx, config); err != nil {
+		return catalogdomain.Provider{}, fmt.Errorf(
+			"update MCP provider: save config: %w",
+			err,
+		)
+	}
+
+	request.ProviderID = providerID
+	updatedProvider, err := r.Catalog.UpdateProvider.Execute(ctx, request)
+	if err != nil {
+		restoreErr := r.mcpConfigs.Save(ctx, currentConfig)
+		if restoreErr != nil {
+			return catalogdomain.Provider{}, errors.Join(
+				fmt.Errorf("update MCP provider: metadata: %w", err),
+				fmt.Errorf("update MCP provider: restore config: %w", restoreErr),
+			)
+		}
+		return catalogdomain.Provider{}, err
+	}
+
+	return updatedProvider, nil
+}
+
 func (r *Runtime) DeleteMCPProvider(
 	ctx context.Context,
 	providerID catalogdomain.ProviderID,

@@ -21,4 +21,5 @@ export type {
   SystemStatus,
   ToolDetail,
   ToolSummary,
+  UpdateProviderRequest,
 } from "./client";

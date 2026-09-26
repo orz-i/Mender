@@ -12,6 +12,7 @@ import (
 
 	"github.com/orz-i/Mender/backend/internal/bootstrap"
 	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
+	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
 	mcpconfigstore "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/configstore"
 	profileapplication "github.com/orz-i/Mender/backend/internal/profile/application"
@@ -48,6 +49,7 @@ func (h *Handler) routes() {
 	h.mux.HandleFunc("POST /api/v1/providers/http", h.createHTTPProvider)
 	h.mux.HandleFunc("POST /api/v1/providers/stdio", h.createStdioProvider)
 	h.mux.HandleFunc("POST /api/v1/providers/{providerId}/sync", h.syncProvider)
+	h.mux.HandleFunc("PUT /api/v1/providers/{providerId}", h.updateProvider)
 	h.mux.HandleFunc("DELETE /api/v1/providers/{providerId}", h.deleteProvider)
 
 	h.mux.HandleFunc("GET /api/v1/tools", h.searchTools)
@@ -166,6 +168,11 @@ func writeKnownError(w http.ResponseWriter, err error) {
 		writeAPIError(w, http.StatusForbidden, "policy_denied", err)
 
 	default:
+		var validationErr catalogdomain.ValidationError
+		if errors.As(err, &validationErr) {
+			writeAPIError(w, http.StatusBadRequest, "validation_error", err)
+			return
+		}
 		writeAPIError(w, http.StatusInternalServerError, "internal_error", err)
 	}
 }

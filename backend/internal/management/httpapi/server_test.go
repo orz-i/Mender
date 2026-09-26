@@ -86,6 +86,29 @@ func TestManagementAPIEndToEnd(t *testing.T) {
 		t.Fatalf("provider = %#v", provider)
 	}
 
+	updated := requestJSON(
+		t,
+		server.Client(),
+		http.MethodPut,
+		server.URL+"/api/v1/providers/"+providerID,
+		map[string]any{
+			"transport":   "http",
+			"displayName": "Upstream edited",
+			"description": "Edited provider",
+			"endpoint":    upstreamHTTP.URL,
+		},
+		http.StatusOK,
+	)
+	updatedProvider, ok := updated["provider"].(map[string]any)
+	if !ok {
+		t.Fatalf("updated provider response = %#v", updated)
+	}
+	if updatedProvider["namespace"] != "upstream" ||
+		updatedProvider["displayName"] != "Upstream edited" ||
+		updatedProvider["description"] != "Edited provider" {
+		t.Fatalf("updated provider = %#v", updatedProvider)
+	}
+
 	search := requestJSON(
 		t,
 		server.Client(),

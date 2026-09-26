@@ -90,6 +90,27 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '502': { $ref: '#/components/responses/BadGateway' }
   /providers/{providerId}:
+    put:
+      operationId: updateProvider
+      parameters:
+        - $ref: '#/components/parameters/ProviderId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProviderRequest'
+      responses:
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '200':
+          description: Provider updated and synchronized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderMutationResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '502': { $ref: '#/components/responses/BadGateway' }
     delete:
       operationId: deleteProvider
       parameters:
@@ -407,6 +428,32 @@ components:
       required: [namespace, displayName, executable]
       properties:
         namespace: { type: string }
+        displayName: { type: string }
+        description: { type: string }
+        executable: { type: string }
+        args:
+          type: array
+          items: { type: string }
+        directory: { type: string }
+      additionalProperties: false
+    UpdateProviderRequest:
+      oneOf:
+        - $ref: '#/components/schemas/UpdateHTTPProviderRequest'
+        - $ref: '#/components/schemas/UpdateStdioProviderRequest'
+    UpdateHTTPProviderRequest:
+      type: object
+      required: [transport, displayName, endpoint]
+      properties:
+        transport: { type: string, const: http }
+        displayName: { type: string }
+        description: { type: string }
+        endpoint: { type: string, format: uri }
+      additionalProperties: false
+    UpdateStdioProviderRequest:
+      type: object
+      required: [transport, displayName, executable]
+      properties:
+        transport: { type: string, const: stdio }
         displayName: { type: string }
         description: { type: string }
         executable: { type: string }

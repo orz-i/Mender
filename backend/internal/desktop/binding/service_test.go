@@ -78,6 +78,25 @@ func TestServiceEndToEndUsesSharedRuntime(t *testing.T) {
 		t.Fatalf("sync result = %#v", created.Sync)
 	}
 
+	updated, err := service.UpdateProvider(
+		created.Provider.ProviderID,
+		"Upstream edited",
+		"Edited provider",
+		"http",
+		upstreamHTTP.URL,
+		"",
+		nil,
+		"",
+	)
+	if err != nil {
+		t.Fatalf("UpdateProvider() error = %v", err)
+	}
+	if updated.Provider.Namespace != "upstream" ||
+		updated.Provider.DisplayName != "Upstream edited" ||
+		updated.Provider.Description != "Edited provider" {
+		t.Fatalf("updated provider = %#v", updated.Provider)
+	}
+
 	search, err := service.SearchTools("echo", 10, "")
 	if err != nil {
 		t.Fatalf("SearchTools() error = %v", err)
