@@ -17,6 +17,9 @@
     "lint": "eslint apps packages",
     "run:cli": "go run ./backend/cmd/mender",
     "run:server": "go run ./backend/cmd/menderd",
+    "security:check": "pnpm security:go && pnpm security:js",
+    "security:go": "node scripts/security-go.mjs",
+    "security:js": "pnpm audit --prod --audit-level high",
     "sdk:check": "pnpm --filter @mender/sdk generate && git diff --exit-code -- packages/sdk/src/generated/schema.ts",
     "test": "vitest run",
     "typecheck": "pnpm -r --if-present run typecheck"

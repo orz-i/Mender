@@ -67,3 +67,24 @@ jobs:
         run: pnpm test
       - name: Build
         run: pnpm build
+
+  security:
+    name: Dependency vulnerability scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: |
+            backend/go.sum
+            apps/desktop/go.sum
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 12.4.2
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Scan Go and production JavaScript dependencies
+        run: pnpm security:check
