@@ -5,6 +5,7 @@ import (
 	"embed"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/orz-i/Mender/backend/internal/bootstrap"
 	"github.com/orz-i/Mender/backend/internal/buildinfo"
@@ -69,6 +70,11 @@ func run() error {
 		},
 	})
 
+	// WKWebView may retain the previous embedded index document across local
+	// rebuilds. A per-launch query keeps the document fresh while hashed Vite
+	// assets continue to provide normal cache safety.
+	startupURL := fmt.Sprintf("/?desktopBoot=%d", time.Now().UnixNano())
+
 	window := app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Name:      "main",
 		Title:     windowTitle,
@@ -76,7 +82,7 @@ func run() error {
 		Height:    820,
 		MinWidth:  960,
 		MinHeight: 640,
-		URL:       "/",
+		URL:       startupURL,
 	})
 	window.Center()
 
