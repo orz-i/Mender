@@ -700,15 +700,19 @@ function ToolPickerDialog({
                     }}
                   />
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium">
+                    <p className="truncate text-sm font-medium">
                       {tool.title || tool.name}
                     </p>
                     <p className="mt-1 text-xs text-muted-foreground">
                       {provider?.displayName ||
                         provider?.namespace ||
                         "Unknown Provider"}
-                      {tool.description ? " · " + tool.description : ""}
                     </p>
+                    {tool.description ? (
+                      <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">
+                        {tool.description}
+                      </p>
+                    ) : null}
                   </div>
                   {profile?.mode === "hybrid" && isSelected ? (
                     <label className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">

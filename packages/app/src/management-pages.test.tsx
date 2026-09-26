@@ -409,6 +409,9 @@ describe("management pages", () => {
     fireEvent.click(screen.getByRole("button", { name: "Choose tools" }));
     expect(await screen.findByText("Extract")).toBeTruthy();
     expect(screen.getAllByRole("dialog")).toHaveLength(1);
+    expect(screen.getByText("Extract content").classList.contains("line-clamp-2")).toBe(
+      true,
+    );
     expect(
       screen.getByRole<HTMLInputElement>("checkbox", { name: "Select Extract" })
         .disabled,
