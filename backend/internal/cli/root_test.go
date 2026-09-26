@@ -29,6 +29,25 @@ func TestDatabasePathResolution(t *testing.T) {
 		}
 	})
 
+	t.Run("default home", func(t *testing.T) {
+		t.Parallel()
+		home := t.TempDir()
+		a := &app{
+			options: normalizeOptions(Options{
+				Getenv:  func(string) string { return "" },
+				HomeDir: func() (string, error) { return home, nil },
+			}),
+		}
+		got, err := a.resolveDatabasePath()
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := filepath.Join(home, ".mender", "mender.db")
+		if got != want {
+			t.Fatalf("database path = %q, want %q", got, want)
+		}
+	})
+
 	t.Run("environment", func(t *testing.T) {
 		t.Parallel()
 		a := &app{
@@ -124,5 +143,32 @@ func TestProviderListJSONIsSingleDocument(t *testing.T) {
 	var extra any
 	if err := decoder.Decode(&extra); err == nil {
 		t.Fatalf("provider list emitted multiple JSON documents: %q", stdout.String())
+	}
+}
+
+func TestRunExitCodes(t *testing.T) {
+	t.Parallel()
+
+	var stdout, stderr bytes.Buffer
+	code := Run(
+		context.Background(),
+		[]string{"profile", "create"},
+		&stdout,
+		&stderr,
+	)
+	if code != ExitUsage {
+		t.Fatalf("usage exit code = %d, want %d; stderr=%q", code, ExitUsage, stderr.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	code = Run(
+		context.Background(),
+		[]string{"--db", filepath.Join(t.TempDir(), "mender.db"), "profile", "show", "missing"},
+		&stdout,
+		&stderr,
+	)
+	if code != ExitConfig {
+		t.Fatalf("config exit code = %d, want %d; stderr=%q", code, ExitConfig, stderr.String())
 	}
 }
