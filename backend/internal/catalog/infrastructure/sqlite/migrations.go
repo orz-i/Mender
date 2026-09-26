@@ -67,6 +67,25 @@ func migrate(ctx context.Context, db *sql.DB) error {
 		return fmt.Errorf("create migration table: %w", err)
 	}
 
+	latestVersion := 0
+	if len(catalogMigrations) != 0 {
+		latestVersion = catalogMigrations[len(catalogMigrations)-1].version
+	}
+	var recordedVersion sql.NullInt64
+	if err := tx.QueryRowContext(
+		ctx,
+		"SELECT MAX(version) FROM catalog_schema_migrations",
+	).Scan(&recordedVersion); err != nil {
+		return fmt.Errorf("check catalog schema version: %w", err)
+	}
+	if recordedVersion.Valid && recordedVersion.Int64 > int64(latestVersion) {
+		return fmt.Errorf(
+			"catalog schema version %d is newer than supported version %d",
+			recordedVersion.Int64,
+			latestVersion,
+		)
+	}
+
 	for _, migration := range catalogMigrations {
 		var count int
 		if err := tx.QueryRowContext(

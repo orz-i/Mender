@@ -21,6 +21,20 @@ func migrate(ctx context.Context, db *sql.DB) error {
 		return fmt.Errorf("create MCP config migration table: %w", err)
 	}
 
+	var recordedVersion sql.NullInt64
+	if err := tx.QueryRowContext(
+		ctx,
+		"SELECT MAX(version) FROM mcp_config_schema_migrations",
+	).Scan(&recordedVersion); err != nil {
+		return fmt.Errorf("check MCP config schema version: %w", err)
+	}
+	if recordedVersion.Valid && recordedVersion.Int64 > 1 {
+		return fmt.Errorf(
+			"MCP config schema version %d is newer than supported version 1",
+			recordedVersion.Int64,
+		)
+	}
+
 	var applied int
 	if err := tx.QueryRowContext(
 		ctx,

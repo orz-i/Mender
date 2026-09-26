@@ -21,6 +21,20 @@ func migrate(ctx context.Context, db *sql.DB) error {
 		return fmt.Errorf("create audit migration table: %w", err)
 	}
 
+	var recordedVersion sql.NullInt64
+	if err := tx.QueryRowContext(
+		ctx,
+		"SELECT MAX(version) FROM audit_schema_migrations",
+	).Scan(&recordedVersion); err != nil {
+		return fmt.Errorf("check audit schema version: %w", err)
+	}
+	if recordedVersion.Valid && recordedVersion.Int64 > 1 {
+		return fmt.Errorf(
+			"audit schema version %d is newer than supported version 1",
+			recordedVersion.Int64,
+		)
+	}
+
 	var applied int
 	if err := tx.QueryRowContext(
 		ctx,
