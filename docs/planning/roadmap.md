@@ -164,7 +164,7 @@ See `phase-6-management-web.md`.
 
 ## Phase 7 — Wails desktop distribution
 
-Status: Next
+Status: In Progress
 
 Goals:
 
@@ -176,6 +176,8 @@ Exit criteria:
 - Desktop uses the same core application semantics as CLI/server.
 - Wails-specific code stays at the shell/binding boundary.
 - Server and CLI build/test without desktop dependencies.
+
+See `phase-7-wails-desktop.md`.
 
 ## Phase 8 — Hardening and distribution
 

@@ -36,3 +36,4 @@ Minor implementation choices that remain inside an accepted architectural bounda
 - [ADR-0008: Treat MCP as an anti-corruption layer and serve 2026-07-28 stateless HTTP](0008-mcp-adapter.md)
 - [ADR-0009: Make the CLI a first-class local adapter with stable JSON contracts](0009-cli-contract.md)
 - [ADR-0010: Use an OpenAPI-first loopback management control plane](0010-management-api.md)
+- [ADR-0011: Isolate Wails as a desktop shell with a host-neutral management client](0011-wails-desktop-host.md)
