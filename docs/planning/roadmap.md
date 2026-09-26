@@ -126,7 +126,7 @@ See `phase-4-mcp.md`.
 
 ## Phase 5 — CLI discovery and Agent Skill
 
-Status: In progress
+Status: Complete
 
 Goals:
 
@@ -144,6 +144,8 @@ Exit criteria:
 See `phase-5-cli-skill.md`.
 
 ## Phase 6 — Management Web UI
+
+Status: Next
 
 Goals:
 

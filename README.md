@@ -11,7 +11,7 @@ It provides one canonical tool model and execution pipeline, then exposes the sa
 
 ## Status
 
-The governance, foundation, Catalog, shared runtime, and MCP adapter phases are complete. Mender can synchronize and invoke local stdio or remote Streamable HTTP MCP providers, expose Profile-scoped direct/dynamic/hybrid MCP servers, and route all calls through the same policy-controlled Invocation pipeline. The next phase makes local operation usable through the CLI and Agent Skills.
+The governance, foundation, Catalog, shared runtime, MCP adapter, and local CLI/Agent Skill phases are complete. Mender can persist Provider/Profile configuration, search/describe/call Tools from the CLI, serve Profiles over MCP, and provide progressive discovery through the mender-tools Skill. The next phase builds the management Web UI over the same application boundaries.
 
 ## Product principles
 
@@ -31,6 +31,7 @@ See:
 - [Architecture Decision Records](docs/architecture/adr/)
 - [Roadmap](docs/planning/roadmap.md)
 - [Local development](docs/development/getting-started.md)
+- [CLI reference](docs/development/cli.md)
 
 ## Development
 

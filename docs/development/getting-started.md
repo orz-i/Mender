@@ -44,7 +44,9 @@ Run the web development server:
 pnpm dev:web
 ```
 
-Run the current CLI foundation entry point:
+See [CLI reference](cli.md) for provider, profile, discovery, invocation, and MCP serving workflows.
+
+Run the CLI:
 
 ```bash
 pnpm run:cli
@@ -70,7 +72,7 @@ pnpm build
 
 ## Workspace boundaries
 
-The repository now includes Catalog, the shared Invocation/Policy/Credential/Audit runtime, a minimal Profile exposure domain, and MCP provider/server adapters.
+The repository now includes Catalog, the shared Invocation/Policy/Credential/Audit runtime, persistent Profiles, MCP provider/server adapters, and the local CLI/Agent Skill workflow.
 
 - `backend/` contains Go executable hosts, domain/application contexts, MCP infrastructure adapters, and composition roots.
 - `apps/web/` is the browser host.
@@ -80,7 +82,7 @@ The repository now includes Catalog, the shared Invocation/Policy/Credential/Aud
 - `contracts/` and `skills/` will be introduced when their owning phases begin.
 - Wails is intentionally not required by the current CLI/server/web build.
 
-The next implementation phase is CLI discovery and Agent Skill support. The CLI must operate directly on the shared application/runtime boundaries, provide stable machine-readable output, and avoid becoming an HTTP-only wrapper.
+The next implementation phase is the management Web UI. It must reuse typed management boundaries and must not bypass the backend SDK/API boundary with scattered direct fetch calls.
 
 ## Quality policy
 

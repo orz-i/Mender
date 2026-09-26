@@ -419,22 +419,22 @@ docs: complete CLI and Agent Skill phase
 
 ## Exit checklist
 
-- [ ] Cobra v1.10.2 is pinned.
-- [ ] CLI directly uses application/runtime boundaries rather than an HTTP management API.
-- [ ] Default database path and MENDER_DB override work.
-- [ ] Provider list/find/remove operations exist.
-- [ ] HTTP MCP Provider config persists without secret material.
-- [ ] stdio MCP Provider config persists executable/argv/directory without environment values.
-- [ ] Provider sync works from persisted config.
-- [ ] Profile create/get/list/add/remove operations persist through SQLite.
-- [ ] Tool search supports Profile-scoped discovery.
-- [ ] Tool describe exposes full canonical schema only on demand.
-- [ ] Tool call connects the owning Provider and uses shared InvokeTool.
-- [ ] CLI JSON success output is exactly one document.
-- [ ] MCP serve loads Profile and upstream Provider configs.
-- [ ] MCP serve supports stdio.
-- [ ] MCP serve supports stateless Streamable HTTP.
-- [ ] Agent Skill uses search -> describe -> call with --output json.
-- [ ] CLI integration tests cover provider/profile/tool workflows.
-- [ ] Domain packages have no Cobra dependency.
-- [ ] pnpm check passes.
+- [x] Cobra v1.10.2 is pinned.
+- [x] CLI directly uses application/runtime boundaries rather than an HTTP management API.
+- [x] Default database path and MENDER_DB override work.
+- [x] Provider list/find/remove operations exist.
+- [x] HTTP MCP Provider config persists without secret material.
+- [x] stdio MCP Provider config persists executable/argv/directory without environment values.
+- [x] Provider sync works from persisted config.
+- [x] Profile create/get/list/add/remove operations persist through SQLite.
+- [x] Tool search supports Profile-scoped discovery.
+- [x] Tool describe exposes full canonical schema only on demand.
+- [x] Tool call connects the owning Provider and uses shared InvokeTool.
+- [x] CLI JSON success output is exactly one document.
+- [x] MCP serve loads Profile and upstream Provider configs.
+- [x] MCP serve supports stdio.
+- [x] MCP serve supports stateless Streamable HTTP.
+- [x] Agent Skill uses search -> describe -> call with --output json.
+- [x] CLI integration tests cover provider/profile/tool workflows.
+- [x] Domain packages have no Cobra dependency.
+- [x] pnpm check passes.
