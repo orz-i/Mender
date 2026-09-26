@@ -42,7 +42,9 @@ The shared React application provides:
 
 ### Providers
 
-Register Streamable HTTP or stdio MCP Providers, synchronize their Tool catalogs, and remove Providers that are no longer referenced by Profiles.
+The Providers page is list-first. Registration no longer occupies permanent page space: `Add provider` opens a focused Dialog for HTTP or stdio configuration. Provider rows expose View, Edit, Sync, and Delete actions.
+
+Provider ID, namespace, and transport kind remain stable during editing. Editable metadata/connection fields are persisted through the shared Runtime and the Provider is re-synchronized after save.
 
 Persistent stdio configuration does not store environment values or secrets. Local stdio Provider processes receive only a small non-secret ambient environment allow-list rather than Mender's complete process environment.
 
@@ -50,18 +52,19 @@ Non-loopback HTTP Provider endpoints must use HTTPS, and Provider URLs cannot co
 
 ### Catalog
 
-Catalog follows progressive disclosure:
+Catalog follows progressive disclosure while keeping the page itself focused on discovery:
 
     search compact metadata
-      -> select Tool
+      -> result list
+      -> open Tool Dialog
       -> load full schema
       -> invoke through Mender
 
-Search can be restricted to one Profile.
+Schemas and invocation controls are not permanently rendered beside the result list. Search can be restricted to one Profile.
 
 ### Profiles
 
-Create direct, dynamic, or hybrid Profiles and manage Tool membership.
+Profiles is also list-first. `Create profile` opens a Dialog; Tool membership management opens from each Profile row in a separate Manage Dialog. The page itself does not permanently combine creation, selection, and membership editing surfaces.
 
 ### Policy and Credentials
 

@@ -1,6 +1,6 @@
 # Management UI Refinement
 
-Status: In Progress
+Status: Complete
 
 ## Objective
 
@@ -124,6 +124,23 @@ After Providers establishes the pattern, review:
 - Overview: remain a summary/navigation surface, not a second copy of each domain page.
 
 Each page should be changed independently with tests rather than through one broad visual rewrite.
+
+## Closeout
+
+Completed on 2026-09-26.
+
+Applied the page-responsibility rule to the management surfaces that were carrying multiple competing workflows:
+
+- Providers: list-first; Add/View/Edit moved to Dialogs; Sync/Delete remain row actions.
+- Profiles: list-first; Create and Tool membership management moved to Dialogs.
+- Catalog: search/results remain the page responsibility; Tool schemas and invocation moved to a Tool Dialog while preserving progressive disclosure.
+- Audit: already a single invocation-history table, so no structural split was required.
+- Policy/Credentials: already single read-only status surfaces and remain intentionally non-editable.
+- Overview: remains the intentional cross-domain summary/navigation surface rather than duplicating domain editing workflows.
+
+Provider editing required a real end-to-end update contract. Provider ID, namespace, and transport remain immutable; display metadata and transport-specific connection fields can be updated through both HTTP and Wails adapters, followed by Catalog synchronization.
+
+Final validation: `pnpm check` passed with OpenAPI and Wails binding regeneration, architecture checks, Go lint/tests/race, ESLint, strict TypeScript, 4 Vitest files / 15 tests, and Web/Desktop production builds.
 
 ## Verification
 
