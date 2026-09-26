@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	auditapplication "github.com/orz-i/Mender/backend/internal/audit/application"
 	auditsqlite "github.com/orz-i/Mender/backend/internal/audit/infrastructure/sqlite"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	credentialunavailable "github.com/orz-i/Mender/backend/internal/credential/infrastructure/unavailable"
@@ -30,6 +31,7 @@ type Runtime struct {
 	Catalog    *Catalog
 	Profiles   *Profiles
 	InvokeTool invocationapplication.InvokeTool
+	ListAudit  auditapplication.ListRecords
 
 	audit      *auditsqlite.Store
 	executors  *invocationrouter.Router
@@ -86,6 +88,7 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		Catalog:    catalog,
 		Profiles:   profiles,
 		InvokeTool: invokeTool,
+		ListAudit:  auditapplication.NewListRecords(auditStore),
 		audit:      auditStore,
 		executors:  executors,
 		mcpConfigs: configs,

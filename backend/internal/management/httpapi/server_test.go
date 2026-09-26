@@ -1,0 +1,357 @@
+package httpapi
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"path/filepath"
+	"strings"
+	"sync/atomic"
+	"testing"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/orz-i/Mender/backend/internal/bootstrap"
+)
+
+func TestManagementAPIEndToEnd(t *testing.T) {
+	t.Parallel()
+
+	var upstreamCalls atomic.Int32
+	upstream := mcp.NewServer(
+		&mcp.Implementation{Name: "management-api-upstream", Version: "1.0.0"},
+		nil,
+	)
+	upstream.AddTool(
+		&mcp.Tool{
+			Name:         "echo",
+			Title:        "Echo",
+			Description:  "Echo JSON input",
+			InputSchema:  json.RawMessage("{\"type\":\"object\"}"),
+			OutputSchema: json.RawMessage("{\"type\":\"object\"}"),
+		},
+		func(_ context.Context, request *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			upstreamCalls.Add(1)
+			var input map[string]any
+			if err := json.Unmarshal(request.Params.Arguments, &input); err != nil {
+				return nil, err
+			}
+			return &mcp.CallToolResult{StructuredContent: input}, nil
+		},
+	)
+	upstreamHTTP := httptest.NewServer(
+		mcp.NewStreamableHTTPHandler(
+			func(*http.Request) *mcp.Server { return upstream },
+			&mcp.StreamableHTTPOptions{Stateless: true, JSONResponse: true},
+		),
+	)
+	t.Cleanup(upstreamHTTP.Close)
+
+	runtime, err := bootstrap.NewRuntime(context.Background(), bootstrap.RuntimeOptions{
+		DatabasePath: filepath.Join(t.TempDir(), "mender.db"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = runtime.Close() })
+
+	server := httptest.NewServer(New(runtime))
+	t.Cleanup(server.Close)
+
+	status := requestJSON(t, server.Client(), http.MethodGet, server.URL+"/api/v1/system/status", nil, http.StatusOK)
+	if status["ready"] != true {
+		t.Fatalf("system status = %#v", status)
+	}
+
+	created := requestJSON(
+		t,
+		server.Client(),
+		http.MethodPost,
+		server.URL+"/api/v1/providers/http",
+		map[string]any{
+			"namespace":   "upstream",
+			"displayName": "Upstream",
+			"endpoint":    upstreamHTTP.URL,
+		},
+		http.StatusCreated,
+	)
+	provider, ok := created["provider"].(map[string]any)
+	if !ok {
+		t.Fatalf("provider response = %#v", created)
+	}
+	providerID, _ := provider["providerId"].(string)
+	if providerID == "" || provider["transport"] != "http" {
+		t.Fatalf("provider = %#v", provider)
+	}
+
+	search := requestJSON(
+		t,
+		server.Client(),
+		http.MethodGet,
+		server.URL+"/api/v1/tools?query=echo&limit=10",
+		nil,
+		http.StatusOK,
+	)
+	tools, ok := search["tools"].([]any)
+	if !ok || len(tools) != 1 {
+		t.Fatalf("search response = %#v", search)
+	}
+	toolSummary, _ := tools[0].(map[string]any)
+	toolID, _ := toolSummary["toolId"].(string)
+	if toolID == "" {
+		t.Fatalf("tool summary = %#v", toolSummary)
+	}
+
+	detail := requestJSON(
+		t,
+		server.Client(),
+		http.MethodGet,
+		server.URL+"/api/v1/tools/"+toolID,
+		nil,
+		http.StatusOK,
+	)
+	if detail["name"] != "echo" {
+		t.Fatalf("tool detail = %#v", detail)
+	}
+	if _, ok := detail["inputSchema"].(map[string]any); !ok {
+		t.Fatalf("tool detail inputSchema = %#v", detail["inputSchema"])
+	}
+
+	requestJSON(
+		t,
+		server.Client(),
+		http.MethodPost,
+		server.URL+"/api/v1/profiles",
+		map[string]any{
+			"slug":        "default",
+			"displayName": "Default",
+			"mode":        "hybrid",
+		},
+		http.StatusCreated,
+	)
+	requestJSON(
+		t,
+		server.Client(),
+		http.MethodPost,
+		server.URL+"/api/v1/profiles/default/tools",
+		map[string]any{
+			"toolId": toolID,
+			"direct": true,
+		},
+		http.StatusOK,
+	)
+
+	scoped := requestJSON(
+		t,
+		server.Client(),
+		http.MethodGet,
+		server.URL+"/api/v1/tools?query=echo&profile=default",
+		nil,
+		http.StatusOK,
+	)
+	if scopedTools, ok := scoped["tools"].([]any); !ok || len(scopedTools) != 1 {
+		t.Fatalf("profile search = %#v", scoped)
+	}
+
+	called := requestJSON(
+		t,
+		server.Client(),
+		http.MethodPost,
+		server.URL+"/api/v1/tools/"+toolID+"/call",
+		map[string]any{
+			"arguments": map[string]any{"value": "web"},
+		},
+		http.StatusOK,
+	)
+	if called["kind"] != "complete" {
+		t.Fatalf("tool call = %#v", called)
+	}
+	content, _ := called["content"].(map[string]any)
+	if content["value"] != "web" {
+		t.Fatalf("tool call content = %#v", content)
+	}
+	if upstreamCalls.Load() != 1 {
+		t.Fatalf("upstream call count = %d", upstreamCalls.Load())
+	}
+
+	audit := requestJSON(
+		t,
+		server.Client(),
+		http.MethodGet,
+		server.URL+"/api/v1/audit?limit=10",
+		nil,
+		http.StatusOK,
+	)
+	records, ok := audit["records"].([]any)
+	if !ok || len(records) != 1 {
+		t.Fatalf("audit response = %#v", audit)
+	}
+	record, _ := records[0].(map[string]any)
+	for _, forbidden := range []string{"arguments", "result", "content", "secret", "credential"} {
+		if _, exists := record[forbidden]; exists {
+			t.Fatalf("audit record contains forbidden field %q: %#v", forbidden, record)
+		}
+	}
+
+	conflict := requestJSON(
+		t,
+		server.Client(),
+		http.MethodDelete,
+		server.URL+"/api/v1/providers/"+providerID,
+		nil,
+		http.StatusConflict,
+	)
+	if conflict["code"] != "conflict" {
+		t.Fatalf("provider delete conflict = %#v", conflict)
+	}
+
+	requestJSON(
+		t,
+		server.Client(),
+		http.MethodDelete,
+		server.URL+"/api/v1/profiles/default/tools/"+toolID,
+		nil,
+		http.StatusOK,
+	)
+	requestNoContent(
+		t,
+		server.Client(),
+		http.MethodDelete,
+		server.URL+"/api/v1/providers/"+providerID,
+		http.StatusNoContent,
+	)
+
+	policy := requestJSON(
+		t,
+		server.Client(),
+		http.MethodGet,
+		server.URL+"/api/v1/policy/status",
+		nil,
+		http.StatusOK,
+	)
+	if policy["editable"] != false {
+		t.Fatalf("policy status = %#v", policy)
+	}
+	credentials := requestJSON(
+		t,
+		server.Client(),
+		http.MethodGet,
+		server.URL+"/api/v1/credentials/status",
+		nil,
+		http.StatusOK,
+	)
+	if credentials["editable"] != false || credentials["resolver"] != "unavailable" {
+		t.Fatalf("credential status = %#v", credentials)
+	}
+}
+
+func TestManagementAPIErrorShape(t *testing.T) {
+	t.Parallel()
+
+	runtime, err := bootstrap.NewRuntime(context.Background(), bootstrap.RuntimeOptions{
+		DatabasePath: filepath.Join(t.TempDir(), "mender.db"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = runtime.Close() })
+
+	server := httptest.NewServer(New(runtime))
+	t.Cleanup(server.Close)
+
+	missingID := "tool_00000000000000000000000000000099"
+	response := requestJSON(
+		t,
+		server.Client(),
+		http.MethodGet,
+		server.URL+"/api/v1/tools/"+missingID,
+		nil,
+		http.StatusNotFound,
+	)
+	if response["code"] != "not_found" {
+		t.Fatalf("error response = %#v", response)
+	}
+	if message, _ := response["message"].(string); strings.TrimSpace(message) == "" {
+		t.Fatalf("error message = %#v", response["message"])
+	}
+}
+
+func requestJSON(
+	t *testing.T,
+	client *http.Client,
+	method string,
+	url string,
+	body any,
+	wantStatus int,
+) map[string]any {
+	t.Helper()
+
+	var reader io.Reader
+	if body != nil {
+		raw, err := json.Marshal(body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		reader = bytes.NewReader(raw)
+	}
+	request, err := http.NewRequestWithContext(context.Background(), method, url, reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if body != nil {
+		request.Header.Set("Content-Type", "application/json")
+	}
+	response, err := client.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = response.Body.Close() }()
+
+	raw, err := io.ReadAll(response.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != wantStatus {
+		t.Fatalf(
+			"%s %s status = %d, want %d; body=%s",
+			method,
+			url,
+			response.StatusCode,
+			wantStatus,
+			raw,
+		)
+	}
+	if len(raw) == 0 {
+		return map[string]any{}
+	}
+	var value map[string]any
+	if err := json.Unmarshal(raw, &value); err != nil {
+		t.Fatalf("decode response %s: %v", raw, err)
+	}
+	return value
+}
+
+func requestNoContent(
+	t *testing.T,
+	client *http.Client,
+	method string,
+	url string,
+	wantStatus int,
+) {
+	t.Helper()
+	request, err := http.NewRequestWithContext(context.Background(), method, url, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response, err := client.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode != wantStatus {
+		raw, _ := io.ReadAll(response.Body)
+		t.Fatalf("status = %d, want %d body=%s", response.StatusCode, wantStatus, raw)
+	}
+}
