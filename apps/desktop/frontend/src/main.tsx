@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { HashRouter } from "react-router";
 
 import { MenderApp } from "@mender/app";
+import { Clipboard } from "@wailsio/runtime";
 
 import "@mender/ui/globals.css";
 
@@ -19,7 +20,7 @@ const client = createDesktopMenderClient();
 createRoot(rootElement).render(
   <StrictMode>
     <HashRouter>
-      <MenderApp client={client} />
+      <MenderApp client={client} copyText={Clipboard.SetText} />
     </HashRouter>
   </StrictMode>,
 );

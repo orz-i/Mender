@@ -33,7 +33,13 @@ import { EmptyState, ErrorNotice, PageHeader } from "../../shared/page";
 
 const defaultAddress = "127.0.0.1:8765";
 
-export function ServersPage({ client }: { client: MenderClient }) {
+export function ServersPage({
+  client,
+  copyText = browserCopyText,
+}: {
+  client: MenderClient;
+  copyText?: (value: string) => Promise<void>;
+}) {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [servers, setServers] = useState<MCPServerInstance[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -153,10 +159,7 @@ export function ServersPage({ client }: { client: MenderClient }) {
 
   async function copy(value: string, key: string) {
     try {
-      if (navigator.clipboard === undefined) {
-        throw new Error("Clipboard API is unavailable in this host.");
-      }
-      await navigator.clipboard.writeText(value);
+      await copyText(value);
       setCopied(key);
       setError("");
     } catch (reason) {
@@ -385,6 +388,13 @@ export function ServersPage({ client }: { client: MenderClient }) {
       </Dialog>
     </>
   );
+}
+
+async function browserCopyText(value: string) {
+  if (navigator.clipboard === undefined) {
+    throw new Error("Clipboard API is unavailable in this host.");
+  }
+  await navigator.clipboard.writeText(value);
 }
 
 function Field({

@@ -13,7 +13,13 @@ import {
 } from "./domains/status/status-pages";
 import { ManagementShell } from "./shell/management-shell";
 
-export function MenderApp({ client }: { client: MenderClient }) {
+export function MenderApp({
+  client,
+  copyText,
+}: {
+  client: MenderClient;
+  copyText?: (value: string) => Promise<void>;
+}) {
   return (
     <Routes>
       <Route element={<ManagementShell />}>
@@ -21,7 +27,15 @@ export function MenderApp({ client }: { client: MenderClient }) {
         <Route path="providers" element={<ProvidersPage client={client} />} />
         <Route path="catalog" element={<CatalogPage client={client} />} />
         <Route path="profiles" element={<ProfilesPage client={client} />} />
-        <Route path="servers" element={<ServersPage client={client} />} />
+        <Route
+          path="servers"
+          element={
+            <ServersPage
+              client={client}
+              {...(copyText === undefined ? {} : { copyText })}
+            />
+          }
+        />
         <Route path="policy" element={<PolicyPage client={client} />} />
         <Route
           path="credentials"
