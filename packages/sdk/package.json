@@ -6,6 +6,10 @@
     ".": "./src/index.ts"
   },
   "scripts": {
+    "generate": "pnpm dlx openapi-typescript@7.13.0 ../../contracts/api/openapi.yaml -o src/generated/schema.ts",
     "typecheck": "tsc --project tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "openapi-fetch": "0.17.0"
   }
 }

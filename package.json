@@ -7,7 +7,7 @@
   },
   "scripts": {
     "build": "pnpm -r --if-present run build",
-    "check": "pnpm go:lint && pnpm go:test && pnpm go:test:race && pnpm lint && pnpm typecheck && pnpm test && pnpm build",
+    "check": "pnpm sdk:check && pnpm go:lint && pnpm go:test && pnpm go:test:race && pnpm lint && pnpm typecheck && pnpm test && pnpm build",
     "dev:web": "pnpm --filter @mender/web dev",
     "go:lint": "golangci-lint run ./backend/...",
     "go:test": "go test ./backend/...",
@@ -15,6 +15,7 @@
     "lint": "eslint apps packages",
     "run:cli": "go run ./backend/cmd/mender",
     "run:server": "go run ./backend/cmd/menderd",
+    "sdk:check": "pnpm --filter @mender/sdk generate && git diff --exit-code -- packages/sdk/src/generated/schema.ts",
     "test": "vitest run",
     "typecheck": "pnpm -r --if-present run typecheck"
   },
