@@ -84,7 +84,7 @@ See `phase-2-catalog.md`.
 
 ## Phase 3 — Invocation, policy, credentials, and audit
 
-Status: Next
+Status: In progress
 
 Goals:
 
@@ -100,6 +100,8 @@ Exit criteria:
 - Secret material does not appear in domain events or normal audit records.
 - Timeout/cancellation behavior is tested.
 - Invocation model can represent immediate result, input-required, and task-oriented outcomes.
+
+See `phase-3-runtime.md`.
 
 ## Phase 4 — MCP provider and server adapters
 

@@ -32,3 +32,4 @@ Minor implementation choices that remain inside an accepted architectural bounda
 | [0004](0004-runtime-modes-and-mcp.md) | Support local and remote modes with MCP as an adapter | Accepted |
 | [0005](0005-frontend-desktop-stack.md) | Standardize the frontend stack and keep Wails as a shell | Accepted |
 - [ADR-0006: Use database/sql with a pure-Go SQLite driver for local persistence](0006-sqlite-persistence.md)
+- [ADR-0007: Centralize execution with data-minimized audit and execution-boundary credentials](0007-invocation-security-audit.md)
