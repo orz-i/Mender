@@ -1,15 +1,25 @@
-import React from "react";
-import ReactDOM from "react-dom/client";
+import { StrictMode } from "react";
+import { createRoot } from "react-dom/client";
+import { HashRouter } from "react-router";
 
-import App from "./App";
+import { MenderApp } from "@mender/app";
 
-const root = document.getElementById("root");
-if (root === null) {
+import "@mender/ui/globals.css";
+
+import { createDesktopMenderClient } from "./desktop-client";
+
+const rootElement = document.getElementById("root");
+
+if (rootElement === null) {
   throw new Error("Mender desktop root element was not found");
 }
 
-ReactDOM.createRoot(root).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>,
+const client = createDesktopMenderClient();
+
+createRoot(rootElement).render(
+  <StrictMode>
+    <HashRouter>
+      <MenderApp client={client} />
+    </HashRouter>
+  </StrictMode>,
 );

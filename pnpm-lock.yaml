@@ -208,6 +208,15 @@ importers:
 
   apps/desktop/frontend:
     dependencies:
+      '@mender/app':
+        specifier: workspace:*
+        version: link:../../../packages/app
+      '@mender/sdk':
+        specifier: workspace:*
+        version: link:../../../packages/sdk
+      '@mender/ui':
+        specifier: workspace:*
+        version: link:../../../packages/ui
       '@wailsio/runtime':
         specifier: 3.0.0-beta.26
         version: 3.0.0-beta.26
@@ -217,7 +226,13 @@ importers:
       react-dom:
         specifier: ^19.3.0
         version: 19.3.0(react@19.3.0)
+      react-router:
+        specifier: ^8.4.0
+        version: 8.4.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
     devDependencies:
+      '@tailwindcss/vite':
+        specifier: ^4.3.3
+        version: 4.3.3(vite@8.3.1(@types/node@24.13.6)(jiti@2.7.0))
       '@types/react':
         specifier: ^19.0.0
         version: 19.3.0
@@ -227,6 +242,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^6.1.1
         version: 6.1.1(vite@8.3.1(@types/node@24.13.6)(jiti@2.7.0))
+      tailwindcss:
+        specifier: ^4.3.3
+        version: 4.3.3
       vite:
         specifier: ^8.3.1
         version: 8.3.1(@types/node@24.13.6)(jiti@2.7.0)
