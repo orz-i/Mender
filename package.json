@@ -11,6 +11,7 @@
     "desktop:architecture:check": "node scripts/check-desktop-architecture.mjs",
     "desktop:bindings:check": "node scripts/check-desktop-bindings.mjs",
     "dev:web": "pnpm --filter @mender/web dev",
+    "go:bench:catalog": "go test ./backend/internal/catalog/infrastructure/sqlite -run '^$' -bench 'BenchmarkCatalog(Search|ScopedSearch)10K' -benchmem",
     "go:lint": "golangci-lint run ./backend/...",
     "go:test": "go test ./backend/...",
     "go:test:race": "go test -race ./backend/...",
