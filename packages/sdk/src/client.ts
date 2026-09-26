@@ -12,6 +12,8 @@ export type AuditRecord = components["schemas"]["AuditRecord"];
 export type SystemStatus = components["schemas"]["SystemStatus"];
 export type PolicyStatus = components["schemas"]["PolicyStatus"];
 export type CredentialStatus = components["schemas"]["CredentialStatus"];
+export type ProviderMutationResponse =
+  components["schemas"]["ProviderMutationResponse"];
 export type CreateHTTPProviderRequest =
   components["schemas"]["CreateHTTPProviderRequest"];
 export type CreateStdioProviderRequest =
@@ -19,6 +21,39 @@ export type CreateStdioProviderRequest =
 export type CreateProfileRequest = components["schemas"]["CreateProfileRequest"];
 export type AddProfileToolRequest =
   components["schemas"]["AddProfileToolRequest"];
+
+export interface SearchToolsInput {
+  query: string;
+  limit?: number;
+  profile?: string;
+}
+
+export interface MenderClient {
+  getSystemStatus(): Promise<SystemStatus>;
+  listProviders(): Promise<{ providers: Provider[] }>;
+  createHTTPProvider(
+    body: CreateHTTPProviderRequest,
+  ): Promise<ProviderMutationResponse>;
+  createStdioProvider(
+    body: CreateStdioProviderRequest,
+  ): Promise<ProviderMutationResponse>;
+  syncProvider(providerId: string): Promise<SyncResult>;
+  deleteProvider(providerId: string): Promise<void>;
+  searchTools(input: SearchToolsInput): Promise<{ tools: ToolSummary[] }>;
+  getTool(toolId: string): Promise<ToolDetail>;
+  callTool(
+    toolId: string,
+    argumentsValue: Record<string, unknown>,
+  ): Promise<InvocationResult>;
+  listProfiles(): Promise<{ profiles: Profile[] }>;
+  createProfile(body: CreateProfileRequest): Promise<Profile>;
+  getProfile(slug: string): Promise<Profile>;
+  addProfileTool(slug: string, body: AddProfileToolRequest): Promise<Profile>;
+  removeProfileTool(slug: string, toolId: string): Promise<Profile>;
+  listAudit(limit?: number): Promise<{ records: AuditRecord[] }>;
+  getPolicyStatus(): Promise<PolicyStatus>;
+  getCredentialStatus(): Promise<CredentialStatus>;
+}
 
 type FetchLike = (input: Request) => Promise<Response>;
 
@@ -39,7 +74,9 @@ export interface MenderClientOptions {
   fetch?: FetchLike;
 }
 
-export function createMenderClient(options: MenderClientOptions = {}) {
+export function createMenderClient(
+  options: MenderClientOptions = {},
+): MenderClient {
   const client = createClient<paths>({
     baseUrl: options.baseUrl ?? "/api/v1",
     ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
@@ -82,11 +119,7 @@ export function createMenderClient(options: MenderClientOptions = {}) {
       }
     },
 
-    async searchTools(input: {
-      query: string;
-      limit?: number;
-      profile?: string;
-    }) {
+    async searchTools(input: SearchToolsInput) {
       const result = await client.GET("/tools", {
         params: {
           query: {
@@ -195,5 +228,3 @@ function throwApiError(error: unknown, response: Response): never {
     `Mender API request failed with HTTP ${response.status}`,
   );
 }
-
-export type MenderClient = ReturnType<typeof createMenderClient>;

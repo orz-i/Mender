@@ -15,6 +15,8 @@ export type {
   PolicyStatus,
   Profile,
   Provider,
+  ProviderMutationResponse,
+  SearchToolsInput,
   SyncResult,
   SystemStatus,
   ToolDetail,
