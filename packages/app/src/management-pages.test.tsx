@@ -8,35 +8,23 @@ import { MenderApp } from "./mender-app";
 afterEach(cleanup);
 
 describe("management pages", () => {
-  it("registers an HTTP Provider through the SDK boundary", async () => {
+  it("keeps Provider creation out of the primary list surface", async () => {
+    const provider = {
+      providerId: "prov_1",
+      namespace: "demo",
+      displayName: "Demo",
+      description: "",
+      createdAt: "2026-09-26T00:00:00Z",
+      updatedAt: "2026-09-26T00:00:00Z",
+      transport: "http" as const,
+      endpoint: "https://example.test/mcp",
+    };
     const listProviders = vi
       .fn()
       .mockResolvedValueOnce({ providers: [] })
-      .mockResolvedValueOnce({
-        providers: [
-          {
-            providerId: "prov_1",
-            namespace: "demo",
-            displayName: "Demo",
-            description: "",
-            createdAt: "2026-09-26T00:00:00Z",
-            updatedAt: "2026-09-26T00:00:00Z",
-            transport: "http",
-            endpoint: "http://example.test/mcp",
-          },
-        ],
-      });
+      .mockResolvedValueOnce({ providers: [provider] });
     const createHTTPProvider = vi.fn().mockResolvedValue({
-      provider: {
-        providerId: "prov_1",
-        namespace: "demo",
-        displayName: "Demo",
-        description: "",
-        createdAt: "2026-09-26T00:00:00Z",
-        updatedAt: "2026-09-26T00:00:00Z",
-        transport: "http",
-        endpoint: "http://example.test/mcp",
-      },
+      provider,
       sync: { created: 1, updated: 0, removed: 0, total: 1 },
     });
 
@@ -46,28 +34,155 @@ describe("management pages", () => {
     });
 
     expect(await screen.findByText("No providers")).toBeTruthy();
+    expect(screen.queryByText("Remote MCP")).toBeNull();
+    expect(screen.queryByText("Local MCP")).toBeNull();
 
-    fireEvent.change(screen.getAllByPlaceholderText("namespace")[0]!, {
+    fireEvent.click(screen.getByRole("button", { name: "Add provider" }));
+    expect(screen.getByRole("dialog")).toBeTruthy();
+    expect(screen.getByText("Remote MCP")).toBeTruthy();
+    expect(screen.getByText("Local MCP")).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText("Namespace"), {
       target: { value: "demo" },
     });
-    fireEvent.change(screen.getAllByPlaceholderText("Display name")[0]!, {
+    fireEvent.change(screen.getByLabelText("Display name"), {
       target: { value: "Demo" },
     });
-    fireEvent.change(screen.getByPlaceholderText("https://example.com/mcp"), {
-      target: { value: "http://example.test/mcp" },
+    fireEvent.change(screen.getByLabelText("Endpoint"), {
+      target: { value: "https://example.test/mcp" },
     });
-    fireEvent.click(
-      screen.getByRole("button", { name: "Register HTTP provider" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Add provider" }));
 
     await waitFor(() => {
       expect(createHTTPProvider).toHaveBeenCalledWith({
         namespace: "demo",
         displayName: "Demo",
-        endpoint: "http://example.test/mcp",
+        endpoint: "https://example.test/mcp",
       });
     });
     expect(await screen.findByText("demo")).toBeTruthy();
+  });
+
+  it("registers a stdio Provider from the same Add dialog", async () => {
+    const provider = {
+      providerId: "prov_2",
+      namespace: "local",
+      displayName: "Local Tools",
+      description: "",
+      createdAt: "2026-09-26T00:00:00Z",
+      updatedAt: "2026-09-26T00:00:00Z",
+      transport: "stdio" as const,
+      executable: "/usr/local/bin/local-tools",
+      args: ["--stdio"],
+    };
+    const listProviders = vi
+      .fn()
+      .mockResolvedValueOnce({ providers: [] })
+      .mockResolvedValueOnce({ providers: [provider] });
+    const createStdioProvider = vi.fn().mockResolvedValue({
+      provider,
+      sync: { created: 1, updated: 0, removed: 0, total: 1 },
+    });
+
+    renderApp("/providers", {
+      listProviders,
+      createStdioProvider,
+    });
+
+    expect(await screen.findByText("No providers")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Add provider" }));
+    fireEvent.click(screen.getByRole("button", { name: "Local MCP" }));
+
+    fireEvent.change(screen.getByLabelText("Namespace"), {
+      target: { value: "local" },
+    });
+    fireEvent.change(screen.getByLabelText("Display name"), {
+      target: { value: "Local Tools" },
+    });
+    fireEvent.change(screen.getByLabelText("Executable"), {
+      target: { value: "/usr/local/bin/local-tools" },
+    });
+    fireEvent.change(screen.getByLabelText("Arguments"), {
+      target: { value: "--stdio" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Add provider" }));
+
+    await waitFor(() => {
+      expect(createStdioProvider).toHaveBeenCalledWith({
+        namespace: "local",
+        displayName: "Local Tools",
+        executable: "/usr/local/bin/local-tools",
+        args: ["--stdio"],
+      });
+    });
+    expect(await screen.findByText("Local Tools")).toBeTruthy();
+  });
+
+  it("views and edits a Provider without leaving the list page", async () => {
+    const original = {
+      providerId: "prov_1",
+      namespace: "search",
+      displayName: "AnySearch",
+      description: "Search provider",
+      createdAt: "2026-09-26T00:00:00Z",
+      updatedAt: "2026-09-26T00:00:00Z",
+      transport: "http" as const,
+      endpoint: "https://api.anysearch.com/mcp",
+    };
+    const updated = {
+      ...original,
+      displayName: "AnySearch Production",
+      description: "Production search provider",
+      updatedAt: "2026-09-26T01:00:00Z",
+    };
+    const listProviders = vi
+      .fn()
+      .mockResolvedValueOnce({ providers: [original] })
+      .mockResolvedValueOnce({ providers: [updated] });
+    const updateProvider = vi.fn().mockResolvedValue({
+      provider: updated,
+      sync: { created: 0, updated: 1, removed: 0, total: 1 },
+    });
+
+    renderApp("/providers", {
+      listProviders,
+      updateProvider,
+    });
+
+    expect(await screen.findByText("AnySearch")).toBeTruthy();
+    expect(screen.queryByText("prov_1")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "View search" }));
+    expect(await screen.findByText("Provider details")).toBeTruthy();
+    expect(screen.getByText("prov_1")).toBeTruthy();
+    expect(
+      screen.getAllByText("https://api.anysearch.com/mcp").length,
+    ).toBeGreaterThanOrEqual(2);
+
+    const closeButtons = screen.getAllByRole("button", { name: "Close" });
+    fireEvent.click(closeButtons[0]!);
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit search" }));
+    expect(await screen.findByText("Edit provider")).toBeTruthy();
+    expect(screen.getAllByText("search").length).toBeGreaterThanOrEqual(2);
+
+    fireEvent.change(screen.getByLabelText("Display name"), {
+      target: { value: "AnySearch Production" },
+    });
+    fireEvent.change(screen.getByLabelText("Description"), {
+      target: { value: "Production search provider" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() => {
+      expect(updateProvider).toHaveBeenCalledWith("prov_1", {
+        transport: "http",
+        displayName: "AnySearch Production",
+        description: "Production search provider",
+        endpoint: "https://api.anysearch.com/mcp",
+      });
+    });
+    expect(await screen.findByText("AnySearch Production")).toBeTruthy();
   });
 
   it("keeps Catalog schemas deferred until a search result is selected", async () => {
