@@ -113,9 +113,9 @@ Current runtime behavior is displayed accurately rather than inventing configura
 
 ### Audit
 
-Audit shows data-minimized terminal invocation metadata only.
+Audit shows data-minimized terminal invocation metadata. Each row can open a read-only detail Dialog containing invocation identity, timing, policy/approval outcome, error class, and an optional bounded/redacted failure summary.
 
-It does not display or retain Tool arguments, result payloads, Credential references, or secret values.
+It does not display or retain Tool arguments, full result payloads, Credential references, or raw MCP protocol traffic. Existing Audit v1 records have an empty failure summary because that information was not retained when they were created.
 
 ## API contract
 

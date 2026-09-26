@@ -31,7 +31,7 @@ Protocol/UI adapters may translate inputs and outputs but may not bypass these s
 
 Credential values are resolved only by execution infrastructure. The Invocation application layer may pass a restricted resolver capability to a ToolExecutor, but it will not resolve or inspect secret values itself.
 
-Normal Audit Records use data minimization. They persist invocation/tool/provider identity, policy/approval outcome, lifecycle status, timestamps, result kind, and stable error classification. They do not persist arguments, result content, secret values, or raw protocol traffic.
+Normal Audit Records use data minimization. They persist invocation/tool/provider identity, policy/approval outcome, lifecycle status, timestamps, result kind, and stable error classification. Failed records may additionally persist one bounded, single-line diagnostic summary supplied by an executor. The Invocation boundary redacts common authorization/token/API-key/password forms before persistence, and the Audit Domain limits the summary to 512 Unicode code points. Audit still does not persist Tool arguments, full result content, Credential references, or raw protocol traffic.
 
 Invocation supports canonical result variants for immediate completion, additional input requirements, and asynchronous task handles.
 
@@ -65,7 +65,7 @@ Executors would record different metadata and could omit denied calls that never
 
 ### Negative / trade-offs
 
-- Full request/response debugging is not available from normal Audit storage.
+- Full request/response debugging is not available from normal Audit storage. Failure diagnosis is intentionally limited to stable classification plus an optional bounded/redacted summary.
 - Tool executors must explicitly use a resolver to obtain credentials.
 - Future argument-aware policies need a separate redaction/classification design.
 - Async task management requires later APIs beyond the initial Task handle.
