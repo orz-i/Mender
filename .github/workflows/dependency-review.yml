@@ -9,6 +9,7 @@ permissions:
 jobs:
   dependency-review:
     name: Dependency review
+    if: github.event.repository.visibility == 'public' || vars.MENDER_ENABLE_DEPENDENCY_REVIEW == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
