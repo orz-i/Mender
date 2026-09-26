@@ -298,6 +298,67 @@ paths:
               schema:
                 $ref: '#/components/schemas/Profile'
         '404': { $ref: '#/components/responses/NotFound' }
+  /mcp/servers:
+    get:
+      operationId: listMCPServers
+      responses:
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '200':
+          description: Running managed MCP servers
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [servers]
+                properties:
+                  servers:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MCPServerInstance'
+    post:
+      operationId: startMCPServer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StartMCPServerRequest'
+      responses:
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '201':
+          description: MCP server started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MCPServerInstance'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /mcp/servers/{serverId}:
+    delete:
+      operationId: stopMCPServer
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+      responses:
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '204':
+          description: MCP server stopped
+        '404': { $ref: '#/components/responses/NotFound' }
+  /mcp/servers/{serverId}/restart:
+    post:
+      operationId: restartMCPServer
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+      responses:
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '200':
+          description: MCP server restarted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MCPServerInstance'
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
   /audit:
     get:
       operationId: listAudit
@@ -355,6 +416,11 @@ components:
       schema: { type: string }
     ProfileSlug:
       name: slug
+      in: path
+      required: true
+      schema: { type: string }
+    ServerId:
+      name: serverId
       in: path
       required: true
       schema: { type: string }
@@ -590,6 +656,26 @@ components:
         tools:
           type: array
           items: { $ref: '#/components/schemas/ProfileTool' }
+    StartMCPServerRequest:
+      type: object
+      required: [profile, address]
+      properties:
+        profile: { type: string }
+        address:
+          type: string
+          description: Loopback listen address, for example 127.0.0.1:8765
+      additionalProperties: false
+    MCPServerInstance:
+      type: object
+      required: [serverId, profile, transport, address, endpoint, status, startedAt]
+      properties:
+        serverId: { type: string }
+        profile: { type: string }
+        transport: { type: string, const: streamable-http }
+        address: { type: string }
+        endpoint: { type: string, format: uri }
+        status: { type: string, const: running }
+        startedAt: { type: string, format: date-time }
     AuditRecord:
       type: object
       required: [invocationId, toolId, caller, startedAt, finishedAt, policyKind, policyReason, approval, status, resultKind, errorClass]

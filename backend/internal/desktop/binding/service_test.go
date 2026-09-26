@@ -147,6 +147,33 @@ func TestServiceEndToEndUsesSharedRuntime(t *testing.T) {
 		t.Fatalf("profile search tools = %#v", scoped.Tools)
 	}
 
+	serverInstance, err := service.StartMCPServer("default", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("StartMCPServer() error = %v", err)
+	}
+	if serverInstance.Status != "running" ||
+		serverInstance.Transport != "streamable-http" {
+		t.Fatalf("server instance = %#v", serverInstance)
+	}
+	serverList := service.ListMCPServers()
+	if len(serverList.Servers) != 1 ||
+		serverList.Servers[0].ServerID != serverInstance.ServerID {
+		t.Fatalf("server list = %#v", serverList)
+	}
+	restarted, err := service.RestartMCPServer(serverInstance.ServerID)
+	if err != nil {
+		t.Fatalf("RestartMCPServer() error = %v", err)
+	}
+	if restarted.ServerID == serverInstance.ServerID {
+		t.Fatalf("restart reused server ID %q", restarted.ServerID)
+	}
+	if err := service.StopMCPServer(restarted.ServerID); err != nil {
+		t.Fatalf("StopMCPServer() error = %v", err)
+	}
+	if len(service.ListMCPServers().Servers) != 0 {
+		t.Fatal("servers remain after stop")
+	}
+
 	result, err := service.CallTool(toolID, map[string]any{"value": "desktop"})
 	if err != nil {
 		t.Fatalf("CallTool() error = %v", err)

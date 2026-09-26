@@ -68,6 +68,10 @@ export function ListAudit(limit: number): $CancellablePromise<$models.AuditList>
     return $Call.ByID(938849691, limit);
 }
 
+export function ListMCPServers(): $CancellablePromise<$models.MCPServerList> {
+    return $Call.ByID(3824735736);
+}
+
 export function ListProfiles(): $CancellablePromise<$models.ProfileList> {
     return $Call.ByID(2998135054);
 }
@@ -80,8 +84,20 @@ export function RemoveProfileTool(slug: string, toolID: string): $CancellablePro
     return $Call.ByID(610642707, slug, toolID);
 }
 
+export function RestartMCPServer(serverID: string): $CancellablePromise<$models.MCPServerInstance> {
+    return $Call.ByID(2194966826, serverID);
+}
+
 export function SearchTools(query: string, limit: number, profile: string): $CancellablePromise<$models.ToolList> {
     return $Call.ByID(1688287699, query, limit, profile);
+}
+
+export function StartMCPServer(profile: string, address: string): $CancellablePromise<$models.MCPServerInstance> {
+    return $Call.ByID(1278287583, profile, address);
+}
+
+export function StopMCPServer(serverID: string): $CancellablePromise<void> {
+    return $Call.ByID(2585675323, serverID);
 }
 
 export function SyncProvider(providerID: string): $CancellablePromise<$models.SyncResult> {

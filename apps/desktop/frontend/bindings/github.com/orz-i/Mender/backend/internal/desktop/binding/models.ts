@@ -37,6 +37,20 @@ export interface InvocationResult {
     "status"?: string;
 }
 
+export interface MCPServerInstance {
+    "serverId": string;
+    "profile": string;
+    "transport": string;
+    "address": string;
+    "endpoint": string;
+    "status": string;
+    "startedAt": string;
+}
+
+export interface MCPServerList {
+    "servers": MCPServerInstance[] | null;
+}
+
 export interface MCPStatus {
     "stdio": boolean;
     "streamableHttp": boolean;

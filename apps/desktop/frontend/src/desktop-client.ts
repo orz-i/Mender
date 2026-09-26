@@ -2,6 +2,7 @@ import type {
   AuditRecord,
   CredentialStatus,
   InvocationResult,
+  MCPServerInstance,
   MenderClient,
   PolicyStatus,
   Profile,
@@ -18,6 +19,7 @@ import {
   type AuditRecord as BindingAuditRecord,
   type CredentialStatus as BindingCredentialStatus,
   type InvocationResult as BindingInvocationResult,
+  type MCPServerInstance as BindingMCPServerInstance,
   type PolicyStatus as BindingPolicyStatus,
   type Profile as BindingProfile,
   type Provider as BindingProvider,
@@ -151,6 +153,25 @@ export function createDesktopMenderClient(): MenderClient {
 
     async removeProfileTool(slug, toolId) {
       return profile(await Service.RemoveProfileTool(slug, toolId));
+    },
+
+    async listMCPServers() {
+      const result = await Service.ListMCPServers();
+      return { servers: (result.servers ?? []).map(mcpServerInstance) };
+    },
+
+    async startMCPServer(body) {
+      return mcpServerInstance(
+        await Service.StartMCPServer(body.profile, body.address),
+      );
+    },
+
+    async restartMCPServer(serverId) {
+      return mcpServerInstance(await Service.RestartMCPServer(serverId));
+    },
+
+    async stopMCPServer(serverId) {
+      await Service.StopMCPServer(serverId);
     },
 
     async listAudit(limit = 50) {
@@ -319,6 +340,28 @@ function profile(value: BindingProfile): Profile {
       toolId: tool.toolId,
       direct: tool.direct,
     })),
+  };
+}
+
+function mcpServerInstance(
+  value: BindingMCPServerInstance,
+): MCPServerInstance {
+  if (value.transport !== "streamable-http") {
+    throw new Error(
+      `Unsupported managed MCP server transport: ${value.transport}`,
+    );
+  }
+  if (value.status !== "running") {
+    throw new Error(`Unsupported managed MCP server status: ${value.status}`);
+  }
+  return {
+    serverId: value.serverId,
+    profile: value.profile,
+    transport: "streamable-http",
+    address: value.address,
+    endpoint: value.endpoint,
+    status: "running",
+    startedAt: value.startedAt,
   };
 }
 

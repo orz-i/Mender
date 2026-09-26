@@ -12,6 +12,9 @@ export type AuditRecord = components["schemas"]["AuditRecord"];
 export type SystemStatus = components["schemas"]["SystemStatus"];
 export type PolicyStatus = components["schemas"]["PolicyStatus"];
 export type CredentialStatus = components["schemas"]["CredentialStatus"];
+export type MCPServerInstance = components["schemas"]["MCPServerInstance"];
+export type StartMCPServerRequest =
+  components["schemas"]["StartMCPServerRequest"];
 export type ProviderMutationResponse =
   components["schemas"]["ProviderMutationResponse"];
 export type CreateHTTPProviderRequest =
@@ -62,6 +65,10 @@ export interface MenderClient {
   getProfile(slug: string): Promise<Profile>;
   addProfileTool(slug: string, body: AddProfileToolRequest): Promise<Profile>;
   removeProfileTool(slug: string, toolId: string): Promise<Profile>;
+  listMCPServers(): Promise<{ servers: MCPServerInstance[] }>;
+  startMCPServer(body: StartMCPServerRequest): Promise<MCPServerInstance>;
+  restartMCPServer(serverId: string): Promise<MCPServerInstance>;
+  stopMCPServer(serverId: string): Promise<void>;
   listAudit(limit?: number): Promise<{ records: AuditRecord[] }>;
   getPolicyStatus(): Promise<PolicyStatus>;
   getCredentialStatus(): Promise<CredentialStatus>;
@@ -211,6 +218,32 @@ export function createMenderClient(
         params: { path: { slug, toolId } },
       });
       return requireData(result);
+    },
+
+    async listMCPServers() {
+      const result = await client.GET("/mcp/servers");
+      return requireData(result);
+    },
+
+    async startMCPServer(body: StartMCPServerRequest) {
+      const result = await client.POST("/mcp/servers", { body });
+      return requireData(result);
+    },
+
+    async restartMCPServer(serverId: string) {
+      const result = await client.POST("/mcp/servers/{serverId}/restart", {
+        params: { path: { serverId } },
+      });
+      return requireData(result);
+    },
+
+    async stopMCPServer(serverId: string) {
+      const result = await client.DELETE("/mcp/servers/{serverId}", {
+        params: { path: { serverId } },
+      });
+      if (!result.response.ok) {
+        throwApiError(result.error, result.response);
+      }
     },
 
     async listAudit(limit = 50) {

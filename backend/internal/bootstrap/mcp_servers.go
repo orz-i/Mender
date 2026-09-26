@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
 	"sort"
 	"strings"
 	"time"
@@ -16,7 +17,10 @@ import (
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 )
 
-var ErrMCPServerNotFound = errors.New("managed MCP server not found")
+var (
+	ErrInvalidMCPServerAddress = errors.New("invalid managed MCP server address")
+	ErrMCPServerNotFound       = errors.New("managed MCP server not found")
+)
 
 type MCPServerInstance struct {
 	ServerID  string
@@ -85,7 +89,10 @@ func (r *Runtime) StartMCPHTTPServer(
 	}
 
 	mux := http.NewServeMux()
-	mux.Handle("/mcp", adapter.StreamableHTTPHandler())
+	mux.Handle(
+		"/mcp",
+		localMCPRequestGuard(adapter.StreamableHTTPHandler()),
+	)
 	httpServer := &http.Server{
 		Handler:           mux,
 		ReadHeaderTimeout: 10 * time.Second,
@@ -247,24 +254,76 @@ func shutdownHTTPServer(ctx context.Context, server *http.Server) error {
 	return server.Shutdown(shutdownCtx)
 }
 
+func localMCPRequestGuard(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if !isLoopbackRequestHost(request.Host) {
+			http.Error(w, "MCP request Host must be localhost or loopback", http.StatusForbidden)
+			return
+		}
+
+		if origin := strings.TrimSpace(request.Header.Get("Origin")); origin != "" {
+			parsed, err := url.Parse(origin)
+			if err != nil ||
+				(parsed.Scheme != "http" && parsed.Scheme != "https") ||
+				!isLoopbackHostname(parsed.Hostname()) {
+				http.Error(
+					w,
+					"MCP request Origin must be localhost or loopback",
+					http.StatusForbidden,
+				)
+				return
+			}
+		}
+
+		if strings.EqualFold(
+			strings.TrimSpace(request.Header.Get("Sec-Fetch-Site")),
+			"cross-site",
+		) {
+			http.Error(w, "cross-site MCP requests are forbidden", http.StatusForbidden)
+			return
+		}
+		next.ServeHTTP(w, request)
+	})
+}
+
+func isLoopbackRequestHost(value string) bool {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return false
+	}
+	if host, _, err := net.SplitHostPort(value); err == nil {
+		return isLoopbackHostname(host)
+	}
+	if strings.HasPrefix(value, "[") && strings.HasSuffix(value, "]") {
+		value = strings.TrimSuffix(strings.TrimPrefix(value, "["), "]")
+	}
+	return isLoopbackHostname(value)
+}
+
+func isLoopbackHostname(host string) bool {
+	host = strings.TrimSpace(host)
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
 func validateLoopbackMCPAddress(address string) error {
 	host, port, err := net.SplitHostPort(address)
 	if err != nil {
-		return fmt.Errorf("MCP server address: %w", err)
+		return fmt.Errorf("%w: %w", ErrInvalidMCPServerAddress, err)
 	}
 	if port == "" {
-		return fmt.Errorf("MCP server address: port is required")
+		return fmt.Errorf("%w: port is required", ErrInvalidMCPServerAddress)
 	}
-	if strings.EqualFold(host, "localhost") {
+	if isLoopbackHostname(host) {
 		return nil
 	}
-	ip := net.ParseIP(host)
-	if ip == nil || !ip.IsLoopback() {
-		return fmt.Errorf(
-			"MCP server address: host must be localhost or a loopback IP",
-		)
-	}
-	return nil
+	return fmt.Errorf(
+		"%w: host must be localhost or a loopback IP",
+		ErrInvalidMCPServerAddress,
+	)
 }
 
 func newMCPServerID() (string, error) {

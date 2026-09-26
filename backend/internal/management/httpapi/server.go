@@ -63,6 +63,11 @@ func (h *Handler) routes() {
 	h.mux.HandleFunc("POST /api/v1/profiles/{slug}/tools", h.addProfileTool)
 	h.mux.HandleFunc("DELETE /api/v1/profiles/{slug}/tools/{toolId}", h.removeProfileTool)
 
+	h.mux.HandleFunc("GET /api/v1/mcp/servers", h.listMCPServers)
+	h.mux.HandleFunc("POST /api/v1/mcp/servers", h.startMCPServer)
+	h.mux.HandleFunc("POST /api/v1/mcp/servers/{serverId}/restart", h.restartMCPServer)
+	h.mux.HandleFunc("DELETE /api/v1/mcp/servers/{serverId}", h.stopMCPServer)
+
 	h.mux.HandleFunc("GET /api/v1/audit", h.listAudit)
 }
 
@@ -152,7 +157,8 @@ func writeKnownError(w http.ResponseWriter, err error) {
 	case errors.Is(err, catalogapplication.ErrProviderNotFound),
 		errors.Is(err, catalogapplication.ErrToolNotFound),
 		errors.Is(err, profileapplication.ErrProfileNotFound),
-		errors.Is(err, mcpconfigstore.ErrNotFound):
+		errors.Is(err, mcpconfigstore.ErrNotFound),
+		errors.Is(err, bootstrap.ErrMCPServerNotFound):
 		writeAPIError(w, http.StatusNotFound, "not_found", err)
 
 	case errors.Is(err, catalogapplication.ErrNamespaceConflict),
@@ -161,7 +167,8 @@ func writeKnownError(w http.ResponseWriter, err error) {
 		writeAPIError(w, http.StatusConflict, "conflict", err)
 
 	case errors.Is(err, catalogapplication.ErrInvalidSearchLimit),
-		errors.Is(err, catalogapplication.ErrInvalidSearchQuery):
+		errors.Is(err, catalogapplication.ErrInvalidSearchQuery),
+		errors.Is(err, bootstrap.ErrInvalidMCPServerAddress):
 		writeAPIError(w, http.StatusBadRequest, "validation_error", err)
 
 	case errors.Is(err, invocationapplication.ErrPolicyDenied),

@@ -258,6 +258,44 @@ func (s *Service) DeleteProvider(providerID string) error {
 	return s.runtime.DeleteMCPProvider(s.ctx, id)
 }
 
+func (s *Service) ListMCPServers() MCPServerList {
+	instances := s.runtime.ListMCPServers()
+	items := make([]MCPServerInstance, 0, len(instances))
+	for _, instance := range instances {
+		items = append(items, mcpServerProjection(instance))
+	}
+	return MCPServerList{Servers: items}
+}
+
+func (s *Service) StartMCPServer(
+	profile string,
+	address string,
+) (MCPServerInstance, error) {
+	slug, err := profiledomain.NewSlug(profile)
+	if err != nil {
+		return MCPServerInstance{}, err
+	}
+	instance, err := s.runtime.StartMCPHTTPServer(s.ctx, slug, address)
+	if err != nil {
+		return MCPServerInstance{}, err
+	}
+	return mcpServerProjection(instance), nil
+}
+
+func (s *Service) RestartMCPServer(
+	serverID string,
+) (MCPServerInstance, error) {
+	instance, err := s.runtime.RestartMCPServer(s.ctx, serverID)
+	if err != nil {
+		return MCPServerInstance{}, err
+	}
+	return mcpServerProjection(instance), nil
+}
+
+func (s *Service) StopMCPServer(serverID string) error {
+	return s.runtime.StopMCPServer(s.ctx, serverID)
+}
+
 func (s *Service) BrowseTools(limit int, providerID string) (ToolList, error) {
 	if limit == 0 {
 		limit = 100
@@ -515,6 +553,20 @@ func cloneHeaders(headers map[string]string) map[string]string {
 		result[name] = value
 	}
 	return result
+}
+
+func mcpServerProjection(
+	instance bootstrap.MCPServerInstance,
+) MCPServerInstance {
+	return MCPServerInstance{
+		ServerID:  instance.ServerID,
+		Profile:   instance.Profile,
+		Transport: instance.Transport,
+		Address:   instance.Address,
+		Endpoint:  instance.Endpoint,
+		Status:    instance.Status,
+		StartedAt: instance.StartedAt.Format(timeFormat),
+	}
 }
 
 func syncProjection(result catalogapplication.SyncProviderToolsResult) SyncResult {

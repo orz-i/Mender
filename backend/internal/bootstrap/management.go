@@ -62,7 +62,7 @@ func (r *Runtime) CallConfiguredTool(
 	if err != nil {
 		return invocationapplication.InvokeToolResponse{}, err
 	}
-	if err := r.EnsureConfiguredMCPProvider(ctx, tool.ProviderID()); err != nil {
+	if err := r.ActivateConfiguredMCPProvider(ctx, tool.ProviderID()); err != nil {
 		return invocationapplication.InvokeToolResponse{}, fmt.Errorf("activate tool provider: %w", err)
 	}
 	return r.InvokeTool.Execute(ctx, invocationapplication.InvokeToolRequest{

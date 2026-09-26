@@ -11,6 +11,8 @@ export type {
     AuditRecord,
     CredentialStatus,
     InvocationResult,
+    MCPServerInstance,
+    MCPServerList,
     MCPStatus,
     PolicyStatus,
     Profile,

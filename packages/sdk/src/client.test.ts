@@ -131,6 +131,47 @@ describe("Mender SDK", () => {
     expect(result.tools[0]?.name).toBe("search");
   });
 
+  it("starts a managed MCP server through the generated contract", async () => {
+    const fetch = async (request: Request) => {
+      expect(request.method).toBe("POST");
+      expect(request.url).toContain("/api/v1/mcp/servers");
+      await expect(request.json()).resolves.toEqual({
+        profile: "default",
+        address: "127.0.0.1:8765",
+      });
+      return new Response(
+        JSON.stringify({
+          serverId: "srv_1",
+          profile: "default",
+          transport: "streamable-http",
+          address: "127.0.0.1:8765",
+          endpoint: "http://127.0.0.1:8765/mcp",
+          status: "running",
+          startedAt: "2026-09-26T09:00:00Z",
+        }),
+        {
+          status: 201,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    };
+
+    const client = createMenderClient({
+      baseUrl: "http://localhost:8080/api/v1",
+      fetch,
+    });
+
+    await expect(
+      client.startMCPServer({
+        profile: "default",
+        address: "127.0.0.1:8765",
+      }),
+    ).resolves.toMatchObject({
+      serverId: "srv_1",
+      endpoint: "http://127.0.0.1:8765/mcp",
+    });
+  });
+
   it("maps API error envelopes", async () => {
     const client = createMenderClient({
       baseUrl: "http://localhost:8080/api/v1",

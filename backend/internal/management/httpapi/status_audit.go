@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	auditdomain "github.com/orz-i/Mender/backend/internal/audit/domain"
+	"github.com/orz-i/Mender/backend/internal/bootstrap"
 	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
 	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
@@ -144,6 +145,8 @@ func isKnownClientError(err error) bool {
 	return errors.Is(err, catalogapplication.ErrProviderNotFound) ||
 		errors.Is(err, catalogapplication.ErrToolNotFound) ||
 		errors.Is(err, profileapplication.ErrProfileNotFound) ||
+		errors.Is(err, bootstrap.ErrInvalidMCPServerAddress) ||
+		errors.Is(err, bootstrap.ErrMCPServerNotFound) ||
 		errors.Is(err, invocationapplication.ErrPolicyDenied) ||
 		errors.Is(err, invocationapplication.ErrApprovalDenied)
 }

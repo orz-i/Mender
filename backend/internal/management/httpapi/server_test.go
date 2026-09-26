@@ -210,6 +210,60 @@ func TestManagementAPIEndToEnd(t *testing.T) {
 		t.Fatalf("profile search = %#v", scoped)
 	}
 
+	startedServer := requestJSON(
+		t,
+		server.Client(),
+		http.MethodPost,
+		server.URL+"/api/v1/mcp/servers",
+		map[string]any{
+			"profile": "default",
+			"address": "127.0.0.1:0",
+		},
+		http.StatusCreated,
+	)
+	serverID, _ := startedServer["serverId"].(string)
+	serverEndpoint, _ := startedServer["endpoint"].(string)
+	if serverID == "" || serverEndpoint == "" {
+		t.Fatalf("started MCP server = %#v", startedServer)
+	}
+	assertHTTPMCPServerTool(t, serverEndpoint, "upstream__echo")
+
+	serverList := requestJSON(
+		t,
+		server.Client(),
+		http.MethodGet,
+		server.URL+"/api/v1/mcp/servers",
+		nil,
+		http.StatusOK,
+	)
+	runningServers, ok := serverList["servers"].([]any)
+	if !ok || len(runningServers) != 1 {
+		t.Fatalf("MCP server list = %#v", serverList)
+	}
+
+	restartedServer := requestJSON(
+		t,
+		server.Client(),
+		http.MethodPost,
+		server.URL+"/api/v1/mcp/servers/"+serverID+"/restart",
+		nil,
+		http.StatusOK,
+	)
+	restartedID, _ := restartedServer["serverId"].(string)
+	restartedEndpoint, _ := restartedServer["endpoint"].(string)
+	if restartedID == "" || restartedID == serverID {
+		t.Fatalf("restarted MCP server = %#v", restartedServer)
+	}
+	assertHTTPMCPServerTool(t, restartedEndpoint, "upstream__echo")
+
+	requestNoContent(
+		t,
+		server.Client(),
+		http.MethodDelete,
+		server.URL+"/api/v1/mcp/servers/"+restartedID,
+		http.StatusNoContent,
+	)
+
 	called := requestJSON(
 		t,
 		server.Client(),
@@ -511,6 +565,73 @@ func TestManagementAPIErrorShape(t *testing.T) {
 	}
 	if message, _ := response["message"].(string); strings.TrimSpace(message) == "" {
 		t.Fatalf("error message = %#v", response["message"])
+	}
+
+	invalidBind := requestJSON(
+		t,
+		server.Client(),
+		http.MethodPost,
+		server.URL+"/api/v1/mcp/servers",
+		map[string]any{
+			"profile": "default",
+			"address": "0.0.0.0:8765",
+		},
+		http.StatusBadRequest,
+	)
+	if invalidBind["code"] != "validation_error" {
+		t.Fatalf("invalid bind response = %#v", invalidBind)
+	}
+
+	missingServer := requestJSON(
+		t,
+		server.Client(),
+		http.MethodDelete,
+		server.URL+"/api/v1/mcp/servers/srv_missing",
+		nil,
+		http.StatusNotFound,
+	)
+	if missingServer["code"] != "not_found" {
+		t.Fatalf("missing server response = %#v", missingServer)
+	}
+}
+
+func assertHTTPMCPServerTool(
+	t *testing.T,
+	endpoint string,
+	expectedName string,
+) {
+	t.Helper()
+
+	client := mcp.NewClient(
+		&mcp.Implementation{Name: "management-api-mcp-client", Version: "1.0.0"},
+		nil,
+	)
+	session, err := client.Connect(
+		context.Background(),
+		&mcp.StreamableClientTransport{
+			Endpoint:             endpoint,
+			DisableStandaloneSSE: true,
+		},
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("MCP client.Connect(%q) error = %v", endpoint, err)
+	}
+	defer func() { _ = session.Close() }()
+
+	listed, err := session.ListTools(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("MCP ListTools() error = %v", err)
+	}
+	found := false
+	for _, tool := range listed.Tools {
+		if tool.Name == expectedName {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("MCP tools = %#v, missing %q", listed.Tools, expectedName)
 	}
 }
 

@@ -130,6 +130,12 @@ func TestManagedMCPHTTPServerLifecycle(t *testing.T) {
 		t.Fatalf("ListMCPServers() = %#v", got)
 	}
 
+	assertManagedServerRejectsHost(t, instance.Endpoint, "attacker.example")
+	assertManagedServerRejectsOrigin(
+		t,
+		instance.Endpoint,
+		"https://attacker.example",
+	)
 	assertManagedServerExportsTool(t, instance.Endpoint, "upstream__echo")
 
 	restarted, err := runtime.RestartMCPServer(ctx, instance.ServerID)
@@ -216,6 +222,70 @@ func TestRuntimeCloseStopsManagedMCPServers(t *testing.T) {
 	}
 	if len(runtime.ListMCPServers()) != 0 {
 		t.Fatal("managed servers remain after Runtime.Close")
+	}
+}
+
+func assertManagedServerRejectsHost(
+	t *testing.T,
+	endpoint string,
+	host string,
+) {
+	t.Helper()
+
+	request, err := http.NewRequestWithContext(
+		context.Background(),
+		http.MethodGet,
+		endpoint,
+		nil,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Host = host
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode != http.StatusForbidden {
+		t.Fatalf(
+			"Host %q status = %d, want %d",
+			host,
+			response.StatusCode,
+			http.StatusForbidden,
+		)
+	}
+}
+
+func assertManagedServerRejectsOrigin(
+	t *testing.T,
+	endpoint string,
+	origin string,
+) {
+	t.Helper()
+
+	request, err := http.NewRequestWithContext(
+		context.Background(),
+		http.MethodGet,
+		endpoint,
+		nil,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Origin", origin)
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode != http.StatusForbidden {
+		t.Fatalf(
+			"Origin %q status = %d, want %d",
+			origin,
+			response.StatusCode,
+			http.StatusForbidden,
+		)
 	}
 }
 

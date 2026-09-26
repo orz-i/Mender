@@ -366,6 +366,74 @@ describe("management pages", () => {
     expect(screen.getByPlaceholderText("tool_...")).toBeTruthy();
   });
 
+  it("starts, restarts, and stops a managed MCP server", async () => {
+    const profile = {
+      profileId: "prof_1",
+      slug: "default",
+      displayName: "Default",
+      mode: "hybrid" as const,
+      tools: [{ toolId: "tool_1", direct: true }],
+    };
+    const started = {
+      serverId: "srv_1",
+      profile: "default",
+      transport: "streamable-http" as const,
+      address: "127.0.0.1:8765",
+      endpoint: "http://127.0.0.1:8765/mcp",
+      status: "running" as const,
+      startedAt: "2026-09-26T09:00:00Z",
+    };
+    const restarted = {
+      ...started,
+      serverId: "srv_2",
+      endpoint: "http://127.0.0.1:8766/mcp",
+      address: "127.0.0.1:8766",
+      startedAt: "2026-09-26T09:01:00Z",
+    };
+
+    const startMCPServer = vi.fn().mockResolvedValue(started);
+    const restartMCPServer = vi.fn().mockResolvedValue(restarted);
+    const stopMCPServer = vi.fn().mockResolvedValue(undefined);
+
+    renderApp("/servers", {
+      listProfiles: vi.fn().mockResolvedValue({ profiles: [profile] }),
+      listMCPServers: vi.fn().mockResolvedValue({ servers: [] }),
+      startMCPServer,
+      restartMCPServer,
+      stopMCPServer,
+    });
+
+    expect(await screen.findByText("No running MCP servers")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Start server" }));
+    expect(await screen.findByText("Start MCP server")).toBeTruthy();
+    expect(
+      screen.getByLabelText<HTMLSelectElement>("Server profile").value,
+    ).toBe("default");
+
+    fireEvent.click(screen.getByRole("button", { name: "Start server" }));
+
+    await waitFor(() => {
+      expect(startMCPServer).toHaveBeenCalledWith({
+        profile: "default",
+        address: "127.0.0.1:8765",
+      });
+    });
+    expect(await screen.findByText(started.endpoint)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Restart" }));
+    await waitFor(() => {
+      expect(restartMCPServer).toHaveBeenCalledWith("srv_1");
+    });
+    expect(await screen.findByText(restarted.endpoint)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Stop" }));
+    await waitFor(() => {
+      expect(stopMCPServer).toHaveBeenCalledWith("srv_2");
+    });
+    expect(await screen.findByText("No running MCP servers")).toBeTruthy();
+  });
+
   it("shows Policy and Credential capabilities as read-only", async () => {
     const policyClient = renderApp("/policy", {
       getPolicyStatus: vi.fn().mockResolvedValue({

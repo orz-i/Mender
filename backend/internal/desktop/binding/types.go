@@ -70,6 +70,20 @@ type ToolList struct {
 	Tools []ToolSummary `json:"tools"`
 }
 
+type MCPServerInstance struct {
+	ServerID  string `json:"serverId"`
+	Profile   string `json:"profile"`
+	Transport string `json:"transport"`
+	Address   string `json:"address"`
+	Endpoint  string `json:"endpoint"`
+	Status    string `json:"status"`
+	StartedAt string `json:"startedAt"`
+}
+
+type MCPServerList struct {
+	Servers []MCPServerInstance `json:"servers"`
+}
+
 type ToolDetail struct {
 	ToolID       string   `json:"toolId"`
 	ProviderID   string   `json:"providerId"`

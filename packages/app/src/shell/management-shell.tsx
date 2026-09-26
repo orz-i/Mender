@@ -6,6 +6,7 @@ const navigation = [
   { to: "/providers", label: "Providers" },
   { to: "/catalog", label: "Catalog" },
   { to: "/profiles", label: "Profiles" },
+  { to: "/servers", label: "Servers" },
   { to: "/policy", label: "Policy" },
   { to: "/credentials", label: "Credentials" },
   { to: "/audit", label: "Audit" },

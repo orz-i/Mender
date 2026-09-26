@@ -6,7 +6,11 @@ vi.mock(
     Service: {
       BrowseTools: vi.fn(),
       GetSystemStatus: vi.fn(),
+      ListMCPServers: vi.fn(),
       ListProviders: vi.fn(),
+      RestartMCPServer: vi.fn(),
+      StartMCPServer: vi.fn(),
+      StopMCPServer: vi.fn(),
       UpdateProvider: vi.fn(),
     },
   }),
@@ -182,6 +186,49 @@ describe("desktop Mender client", () => {
       ],
     });
     expect(Service.BrowseTools).toHaveBeenCalledWith(100, "");
+  });
+
+  it("adapts managed MCP server lifecycle to Wails", async () => {
+    const instance = {
+      serverId: "srv_1",
+      profile: "default",
+      transport: "streamable-http",
+      address: "127.0.0.1:8765",
+      endpoint: "http://127.0.0.1:8765/mcp",
+      status: "running",
+      startedAt: "2026-09-26T09:00:00Z",
+    };
+    vi.mocked(Service.ListMCPServers).mockResolvedValue({
+      servers: [instance],
+    });
+    vi.mocked(Service.StartMCPServer).mockResolvedValue(instance);
+    vi.mocked(Service.RestartMCPServer).mockResolvedValue({
+      ...instance,
+      serverId: "srv_2",
+    });
+    vi.mocked(Service.StopMCPServer).mockResolvedValue(undefined);
+
+    const client = createDesktopMenderClient();
+
+    await expect(client.listMCPServers()).resolves.toEqual({
+      servers: [instance],
+    });
+    await expect(
+      client.startMCPServer({
+        profile: "default",
+        address: "127.0.0.1:8765",
+      }),
+    ).resolves.toEqual(instance);
+    expect(Service.StartMCPServer).toHaveBeenCalledWith(
+      "default",
+      "127.0.0.1:8765",
+    );
+
+    await expect(client.restartMCPServer("srv_1")).resolves.toMatchObject({
+      serverId: "srv_2",
+    });
+    await client.stopMCPServer("srv_2");
+    expect(Service.StopMCPServer).toHaveBeenCalledWith("srv_2");
   });
 
   it("rejects unexpected binding enum values at the host boundary", async () => {

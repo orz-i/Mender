@@ -22,6 +22,7 @@ describe("MenderApp", () => {
       "Providers",
       "Catalog",
       "Profiles",
+      "Servers",
       "Policy",
       "Credentials",
       "Audit",
