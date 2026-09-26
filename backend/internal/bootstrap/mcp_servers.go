@@ -238,20 +238,25 @@ func (r *Runtime) closeManagedMCPServers() error {
 
 	errs := make([]error, 0, len(servers))
 	for _, server := range servers {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		errs = append(errs, server.server.Shutdown(ctx))
-		cancel()
+		errs = append(errs, shutdownHTTPServer(context.Background(), server.server))
 	}
 	return errors.Join(errs...)
 }
 
 func shutdownHTTPServer(ctx context.Context, server *http.Server) error {
-	if _, hasDeadline := ctx.Deadline(); hasDeadline {
-		return server.Shutdown(ctx)
+	shutdownCtx := ctx
+	cancel := func() {}
+	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+		shutdownCtx, cancel = context.WithTimeout(ctx, time.Second)
 	}
-	shutdownCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	return server.Shutdown(shutdownCtx)
+
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		if closeErr := server.Close(); closeErr != nil {
+			return errors.Join(err, closeErr)
+		}
+	}
+	return nil
 }
 
 func localMCPRequestGuard(next http.Handler) http.Handler {
