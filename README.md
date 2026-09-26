@@ -11,7 +11,7 @@ It provides one canonical tool model and execution pipeline, then exposes the sa
 
 ## Status
 
-The governance, foundation, Catalog, shared runtime, MCP adapter, and local CLI/Agent Skill phases are complete. Mender can persist Provider/Profile configuration, search/describe/call Tools from the CLI, serve Profiles over MCP, and provide progressive discovery through the mender-tools Skill. The next phase builds the management Web UI over the same application boundaries.
+The governance, foundation, Catalog, shared runtime, MCP adapter, CLI/Agent Skill, and Management Web UI phases are complete. Mender now provides a loopback management API, generated TypeScript SDK, and browser workflows for Providers, Catalog, Profiles, Policy/Credential status, and Audit. The next phase packages the shared management application with Wails v3.
 
 ## Product principles
 
@@ -32,6 +32,7 @@ See:
 - [Roadmap](docs/planning/roadmap.md)
 - [Local development](docs/development/getting-started.md)
 - [CLI reference](docs/development/cli.md)
+- [Management Web UI](docs/development/web.md)
 
 ## Development
 

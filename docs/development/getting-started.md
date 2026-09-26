@@ -28,15 +28,18 @@ pnpm check
 
 `pnpm check` is the repository-level verification command. It currently runs:
 
-1. golangci-lint.
-2. Go tests.
-3. Go race tests.
-4. ESLint.
-5. strict TypeScript type checking.
-6. Vitest.
-7. production frontend build.
+1. OpenAPI TypeScript regeneration/diff verification.
+2. golangci-lint.
+3. Go tests.
+4. Go race tests.
+5. ESLint.
+6. strict TypeScript type checking.
+7. Vitest.
+8. production frontend build.
 
 ## Common commands
+
+See [Management Web UI](web.md) for the local API + Vite development workflow.
 
 Run the web development server:
 
@@ -52,7 +55,7 @@ Run the CLI:
 pnpm run:cli
 ```
 
-Run the current daemon foundation entry point:
+Run the loopback management API:
 
 ```bash
 pnpm run:server
@@ -72,17 +75,17 @@ pnpm build
 
 ## Workspace boundaries
 
-The repository now includes Catalog, the shared Invocation/Policy/Credential/Audit runtime, persistent Profiles, MCP provider/server adapters, and the local CLI/Agent Skill workflow.
+The repository now includes Catalog, the shared Invocation/Policy/Credential/Audit runtime, persistent Profiles, MCP adapters, the local CLI/Agent Skill workflow, the OpenAPI management control plane, typed TypeScript SDK, and shared React management application.
 
 - `backend/` contains Go executable hosts, domain/application contexts, MCP infrastructure adapters, and composition roots.
 - `apps/web/` is the browser host.
 - `packages/app/` is the shared React application shell.
 - `packages/ui/` is the shared UI boundary and shadcn/ui destination.
-- `packages/sdk/` reserves the typed management API client boundary.
-- `contracts/` and `skills/` will be introduced when their owning phases begin.
+- `packages/sdk/` is the generated/typed management API client boundary and the only browser HTTP boundary.
+- `contracts/` owns the OpenAPI management contract; `skills/` contains the Agent Skill surface.
 - Wails is intentionally not required by the current CLI/server/web build.
 
-The next implementation phase is the management Web UI. It must reuse typed management boundaries and must not bypass the backend SDK/API boundary with scattered direct fetch calls.
+The next implementation phase is Wails v3 desktop distribution. It must reuse the shared React application and core Runtime rather than introducing a desktop-specific product implementation.
 
 ## Quality policy
 

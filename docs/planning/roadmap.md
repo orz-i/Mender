@@ -145,7 +145,7 @@ See `phase-5-cli-skill.md`.
 
 ## Phase 6 — Management Web UI
 
-Status: In progress
+Status: Complete
 
 Goals:
 
@@ -163,6 +163,8 @@ Exit criteria:
 See `phase-6-management-web.md`.
 
 ## Phase 7 — Wails desktop distribution
+
+Status: Next
 
 Goals:
 

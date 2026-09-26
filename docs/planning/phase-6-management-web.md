@@ -210,26 +210,26 @@ Integration:
 
 ## Exit checklist
 
-- [ ] OpenAPI 3.1 management contract exists.
-- [ ] Management server defaults to loopback.
-- [ ] Management HTTP handlers use Runtime/Application boundaries.
-- [ ] Provider add/list/sync/delete API works.
-- [ ] Tool search/describe/call API works.
-- [ ] Profile create/list/get/add/remove API works.
-- [ ] Audit newest-first query API works.
-- [ ] Policy status API is explicit and read-only.
-- [ ] Credential status API is explicit and read-only.
-- [ ] API errors use stable JSON shape.
-- [ ] openapi-typescript 7.13.0 is pinned.
-- [ ] openapi-fetch 0.17.0 is pinned.
-- [ ] generated TypeScript contract is current.
-- [ ] packages/sdk is the only browser fetch boundary.
-- [ ] Web navigation exposes Overview/Providers/Catalog/Profiles/Policy/Credentials/Audit.
-- [ ] Provider administration works in browser.
-- [ ] Catalog uses search -> describe progressive disclosure.
-- [ ] Profile administration works in browser.
-- [ ] Policy/Credential views do not invent unsupported editing.
-- [ ] Audit view displays only minimized records.
-- [ ] Strict TypeScript checks pass.
-- [ ] Go race tests pass.
-- [ ] pnpm check passes.
+- [x] OpenAPI 3.1 management contract exists.
+- [x] Management server defaults to loopback.
+- [x] Management HTTP handlers use Runtime/Application boundaries.
+- [x] Provider add/list/sync/delete API works.
+- [x] Tool search/describe/call API works.
+- [x] Profile create/list/get/add/remove API works.
+- [x] Audit newest-first query API works.
+- [x] Policy status API is explicit and read-only.
+- [x] Credential status API is explicit and read-only.
+- [x] API errors use stable JSON shape.
+- [x] openapi-typescript 7.13.0 is pinned.
+- [x] openapi-fetch 0.17.0 is pinned.
+- [x] generated TypeScript contract is current.
+- [x] packages/sdk is the only browser fetch boundary.
+- [x] Web navigation exposes Overview/Providers/Catalog/Profiles/Policy/Credentials/Audit.
+- [x] Provider administration works in browser.
+- [x] Catalog uses search -> describe progressive disclosure.
+- [x] Profile administration works in browser.
+- [x] Policy/Credential views do not invent unsupported editing.
+- [x] Audit view displays only minimized records.
+- [x] Strict TypeScript checks pass.
+- [x] Go race tests pass.
+- [x] pnpm check passes.
