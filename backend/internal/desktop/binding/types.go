@@ -137,6 +137,7 @@ type AuditRecord struct {
 	Status       string `json:"status"`
 	ResultKind   string `json:"resultKind"`
 	ErrorClass   string `json:"errorClass"`
+	ErrorSummary string `json:"errorSummary"`
 }
 
 type AuditList struct {

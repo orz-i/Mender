@@ -18,6 +18,7 @@ export interface AuditRecord {
     "status": string;
     "resultKind": string;
     "errorClass": string;
+    "errorSummary": string;
 }
 
 export interface CredentialStatus {

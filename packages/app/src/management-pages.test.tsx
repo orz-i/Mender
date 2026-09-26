@@ -604,6 +604,7 @@ describe("management pages", () => {
             status: "completed",
             resultKind: "complete",
             errorClass: "",
+            errorSummary: "",
           },
         ],
       }),
@@ -614,6 +615,44 @@ describe("management pages", () => {
     expect(screen.queryByRole("columnheader", { name: "Arguments" })).toBeNull();
     expect(screen.queryByRole("columnheader", { name: "Result" })).toBeNull();
     expect(screen.queryByRole("columnheader", { name: "Secret" })).toBeNull();
+  });
+
+  it("shows a bounded Audit failure summary in a detail dialog", async () => {
+    renderApp("/audit", {
+      listAudit: vi.fn().mockResolvedValue({
+        records: [
+          {
+            invocationId: "inv_failed",
+            toolId: "tool_1",
+            providerId: "prov_1",
+            caller: "desktop",
+            startedAt: "2026-09-26T00:00:00Z",
+            finishedAt: "2026-09-26T00:00:01Z",
+            policyKind: "allow",
+            policyReason: "local.default",
+            approval: "not_required",
+            status: "failed",
+            resultKind: "",
+            errorClass: "execution",
+            errorSummary: "provider rejected request: missing required query",
+          },
+        ],
+      }),
+    });
+
+    expect(await screen.findByText("failed")).toBeTruthy();
+    fireEvent.click(
+      screen.getByRole("button", { name: "View audit inv_failed" }),
+    );
+
+    expect(await screen.findByText("Invocation details")).toBeTruthy();
+    expect(
+      screen.getByText("provider rejected request: missing required query"),
+    ).toBeTruthy();
+    expect(
+      within(screen.getByRole("dialog")).getByText("execution"),
+    ).toBeTruthy();
+    expect(screen.queryByText(/TOP-SECRET/)).toBeNull();
   });
 });
 

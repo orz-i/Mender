@@ -712,7 +712,7 @@ components:
         startedAt: { type: string, format: date-time }
     AuditRecord:
       type: object
-      required: [invocationId, toolId, caller, startedAt, finishedAt, policyKind, policyReason, approval, status, resultKind, errorClass]
+      required: [invocationId, toolId, caller, startedAt, finishedAt, policyKind, policyReason, approval, status, resultKind, errorClass, errorSummary]
       properties:
         invocationId: { type: string }
         toolId: { type: string }
@@ -726,3 +726,6 @@ components:
         status: { type: string }
         resultKind: { type: string }
         errorClass: { type: string }
+        errorSummary:
+          type: string
+          description: Bounded redacted diagnostic summary. Raw arguments and result payloads are not retained.

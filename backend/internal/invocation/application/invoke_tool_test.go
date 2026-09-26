@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -170,6 +171,31 @@ func TestCredentialResolverIsConsumedOnlyByExecutor(t *testing.T) {
 	if bytes.Contains([]byte(record.Caller()), fixture.credentials.secret) ||
 		bytes.Contains([]byte(record.PolicyReason()), fixture.credentials.secret) {
 		t.Fatal("audit record exposed secret material")
+	}
+}
+
+func TestExecutionDiagnosticSummaryIsAuditedAndReturned(t *testing.T) {
+	t.Parallel()
+
+	fixture := newFixture(t)
+	fixture.executor.err = testDiagnosticError{
+		message: "provider rejected request token=supersecretvalue",
+	}
+
+	_, err := fixture.useCase.Execute(context.Background(), InvokeToolRequest{
+		ToolID:    fixture.tool.ID(),
+		Arguments: []byte(`{}`),
+	})
+	if err == nil || !strings.Contains(err.Error(), "provider rejected request token=[REDACTED]") {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	record := fixture.audit.last(t)
+	if record.ErrorClass() != auditdomain.ErrorExecution {
+		t.Fatalf("ErrorClass() = %q", record.ErrorClass())
+	}
+	if record.ErrorSummary() != "provider rejected request token=[REDACTED]" {
+		t.Fatalf("ErrorSummary() = %q", record.ErrorSummary())
 	}
 }
 

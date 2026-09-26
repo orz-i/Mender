@@ -94,6 +94,16 @@ func TestConnectionMapsMCPErrorResultToExecutionError(t *testing.T) {
 	if !errors.Is(err, ErrToolResult) {
 		t.Fatalf("Execute() error = %v, want ErrToolResult", err)
 	}
+	var resultErr *ToolResultError
+	if !errors.As(err, &resultErr) {
+		t.Fatalf("Execute() error = %T, want ToolResultError", err)
+	}
+	if resultErr.DiagnosticSummary() != "provider rejected request" {
+		t.Fatalf("DiagnosticSummary() = %q", resultErr.DiagnosticSummary())
+	}
+	if err.Error() != ErrToolResult.Error() {
+		t.Fatalf("Error() = %q, want generic error", err.Error())
+	}
 }
 
 func TestConnectionMapsInputRequiredWithoutAutoRetry(t *testing.T) {

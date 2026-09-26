@@ -386,6 +386,7 @@ function auditRecord(value: BindingAuditRecord): AuditRecord {
     status: value.status,
     resultKind: value.resultKind,
     errorClass: value.errorClass,
+    errorSummary: value.errorSummary,
   };
 }
 

@@ -21,6 +21,22 @@ var (
 	ErrArgumentsNotObject = errors.New("MCP tool arguments must be a JSON object")
 )
 
+type ToolResultError struct {
+	summary string
+}
+
+func (e *ToolResultError) Error() string {
+	return ErrToolResult.Error()
+}
+
+func (e *ToolResultError) Unwrap() error {
+	return ErrToolResult
+}
+
+func (e *ToolResultError) DiagnosticSummary() string {
+	return e.summary
+}
+
 // Execute implements Invocation's ToolExecutor port.
 func (c *Connection) Execute(
 	ctx context.Context,
@@ -51,7 +67,9 @@ func invocationResult(result *mcp.CallToolResult) (invocationdomain.Result, erro
 		return inputRequiredResult(result)
 	}
 	if result.IsError {
-		return invocationdomain.Result{}, ErrToolResult
+		return invocationdomain.Result{}, &ToolResultError{
+			summary: toolErrorSummary(result.Content),
+		}
 	}
 
 	var raw []byte
@@ -76,6 +94,37 @@ func invocationResult(result *mcp.CallToolResult) (invocationdomain.Result, erro
 		return invocationdomain.Result{}, fmt.Errorf("map MCP complete result: %w", err)
 	}
 	return complete, nil
+}
+
+func toolErrorSummary(content []mcp.Content) string {
+	const maxSummaryRunes = 2048
+
+	parts := make([]string, 0, len(content))
+	totalRunes := 0
+	for _, item := range content {
+		text, ok := item.(*mcp.TextContent)
+		if !ok {
+			continue
+		}
+		value := strings.TrimSpace(text.Text)
+		if value == "" {
+			continue
+		}
+		runes := []rune(value)
+		remaining := maxSummaryRunes - totalRunes
+		if remaining <= 0 {
+			break
+		}
+		if len(runes) > remaining {
+			runes = runes[:remaining]
+		}
+		parts = append(parts, string(runes))
+		totalRunes += len(runes)
+		if totalRunes >= maxSummaryRunes {
+			break
+		}
+	}
+	return strings.Join(parts, " | ")
 }
 
 func inputRequiredResult(result *mcp.CallToolResult) (invocationdomain.Result, error) {

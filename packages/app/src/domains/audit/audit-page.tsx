@@ -10,6 +10,14 @@ import {
   CardTitle,
 } from "@mender/ui/components/card";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@mender/ui/components/dialog";
+import {
   Table,
   TableBody,
   TableCell,
@@ -22,6 +30,7 @@ import { EmptyState, ErrorNotice, PageHeader } from "../../shared/page";
 
 export function AuditPage({ client }: { client: MenderClient }) {
   const [records, setRecords] = useState<AuditRecord[]>([]);
+  const [selected, setSelected] = useState<AuditRecord | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -62,7 +71,7 @@ export function AuditPage({ client }: { client: MenderClient }) {
     <>
       <PageHeader
         title="Audit"
-        description="Data-minimized terminal invocation records. Arguments, result payloads, credential references, and secrets are not retained here."
+        description="Data-minimized terminal invocation records. Arguments, full result payloads, credential references, and raw protocol traffic are not retained; failures may include a bounded redacted summary."
         actions={
           <Button variant="outline" onClick={() => void refresh()} disabled={busy}>
             Refresh
@@ -86,6 +95,7 @@ export function AuditPage({ client }: { client: MenderClient }) {
                   <TableHead>Tool</TableHead>
                   <TableHead>Policy</TableHead>
                   <TableHead>Error</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -113,6 +123,16 @@ export function AuditPage({ client }: { client: MenderClient }) {
                     <TableCell className="text-xs text-muted-foreground">
                       {record.errorClass || "—"}
                     </TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        aria-label={"View audit " + record.invocationId}
+                        onClick={() => setSelected(record)}
+                      >
+                        View
+                      </Button>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -125,7 +145,124 @@ export function AuditPage({ client }: { client: MenderClient }) {
           )}
         </CardContent>
       </Card>
+
+      <Dialog
+        open={selected !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSelected(null);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Invocation details</DialogTitle>
+            <DialogDescription>
+              Data-minimized terminal metadata and failure diagnostics.
+            </DialogDescription>
+          </DialogHeader>
+
+          {selected !== null ? (
+            <div className="space-y-5">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <AuditField label="Status" value={selected.status} />
+                <AuditField label="Caller" value={selected.caller || "—"} />
+                <AuditField
+                  label="Invocation ID"
+                  value={selected.invocationId}
+                  mono
+                />
+                <AuditField label="Tool ID" value={selected.toolId} mono />
+                <AuditField
+                  label="Provider ID"
+                  value={selected.providerId || "—"}
+                  mono
+                />
+                <AuditField
+                  label="Result kind"
+                  value={selected.resultKind || "—"}
+                />
+                <AuditField
+                  label="Started"
+                  value={new Date(selected.startedAt).toLocaleString()}
+                />
+                <AuditField
+                  label="Finished"
+                  value={new Date(selected.finishedAt).toLocaleString()}
+                />
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-3">
+                <AuditField
+                  label="Policy"
+                  value={selected.policyKind || "—"}
+                />
+                <AuditField
+                  label="Approval"
+                  value={selected.approval || "—"}
+                />
+                <AuditField
+                  label="Error class"
+                  value={selected.errorClass || "—"}
+                />
+              </div>
+
+              {selected.policyReason ? (
+                <div>
+                  <p className="text-sm font-medium">Policy reason</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {selected.policyReason}
+                  </p>
+                </div>
+              ) : null}
+
+              {selected.status !== "completed" ? (
+                <div className="rounded-lg border border-border p-4">
+                  <p className="text-sm font-medium">Error summary</p>
+                  {selected.errorSummary ? (
+                    <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-muted-foreground">
+                      {selected.errorSummary}
+                    </p>
+                  ) : (
+                    <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                      No diagnostic summary was retained for this record. Older
+                      Audit records and failures without a safe upstream summary
+                      only contain the error class.
+                    </p>
+                  )}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          <DialogFooter showCloseButton />
+        </DialogContent>
+      </Dialog>
     </>
+  );
+}
+
+function AuditField({
+  label,
+  value,
+  mono = false,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+}) {
+  return (
+    <div className="min-w-0 rounded-lg border border-border bg-muted/40 p-3">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p
+        className={[
+          "mt-1 truncate text-sm",
+          mono ? "font-mono text-xs" : "",
+        ].join(" ")}
+      >
+        {value}
+      </p>
+    </div>
   );
 }
 

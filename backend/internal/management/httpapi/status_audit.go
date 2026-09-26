@@ -97,6 +97,7 @@ func auditProjection(record auditdomain.Record) map[string]any {
 		"status":       string(record.Status()),
 		"resultKind":   string(record.ResultKind()),
 		"errorClass":   string(record.ErrorClass()),
+		"errorSummary": record.ErrorSummary(),
 	}
 	if providerID := record.ProviderID(); providerID != nil {
 		result["providerId"] = providerID.String()

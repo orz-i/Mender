@@ -518,6 +518,8 @@ export interface components {
             status: string;
             resultKind: string;
             errorClass: string;
+            /** @description Bounded redacted diagnostic summary. Raw arguments and result payloads are not retained. */
+            errorSummary: string;
         };
     };
     responses: {

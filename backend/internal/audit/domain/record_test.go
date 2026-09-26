@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -37,6 +38,44 @@ func TestRecordContainsOnlyMetadataFields(t *testing.T) {
 
 	if record.InvocationID() != invocationID || record.ToolID() != toolID || record.Status() != StatusCompleted {
 		t.Fatalf("record = %#v", record)
+	}
+}
+
+func TestRecordErrorSummaryIsBoundedAndSingleLine(t *testing.T) {
+	t.Parallel()
+
+	invocationID, _ := invocationdomain.ParseInvocationID("inv_00000000000000000000000000000002")
+	toolID, _ := catalogdomain.ParseToolID("tool_00000000000000000000000000000002")
+	providerID, _ := catalogdomain.ParseProviderID("prov_00000000000000000000000000000002")
+	now := time.Now().UTC()
+
+	record, err := NewRecord(
+		invocationID,
+		toolID,
+		&providerID,
+		"desktop",
+		now,
+		now,
+		policydomain.DecisionAllow,
+		"local.default",
+		ApprovalNotRequired,
+		StatusFailed,
+		"",
+		ErrorExecution,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	record = record.WithErrorSummary(" first\n\tsecond  " + strings.Repeat("x", 600))
+	if strings.ContainsAny(record.ErrorSummary(), "\n\t") {
+		t.Fatalf("ErrorSummary() contains controls: %q", record.ErrorSummary())
+	}
+	if len([]rune(record.ErrorSummary())) != maxErrorSummaryRunes {
+		t.Fatalf("ErrorSummary() rune length = %d", len([]rune(record.ErrorSummary())))
+	}
+	if !strings.HasPrefix(record.ErrorSummary(), "first second ") {
+		t.Fatalf("ErrorSummary() = %q", record.ErrorSummary())
 	}
 }
 

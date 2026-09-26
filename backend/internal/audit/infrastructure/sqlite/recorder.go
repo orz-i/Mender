@@ -34,8 +34,9 @@ func (s *Store) Record(ctx context.Context, record auditdomain.Record) error {
 			approval,
 			status,
 			result_kind,
-			error_class
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			error_class,
+			error_summary
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		record.InvocationID().String(),
 		record.ToolID().String(),
 		providerID,
@@ -48,6 +49,7 @@ func (s *Store) Record(ctx context.Context, record auditdomain.Record) error {
 		string(record.Status()),
 		string(record.ResultKind()),
 		string(record.ErrorClass()),
+		record.ErrorSummary(),
 	)
 	if err != nil {
 		return fmt.Errorf("record invocation audit: %w", err)
@@ -76,7 +78,8 @@ func (s *Store) Get(
 			approval,
 			status,
 			result_kind,
-			error_class
+			error_class,
+			error_summary
 		FROM invocation_audit
 		WHERE invocation_id = ?`,
 		id.String(),
@@ -114,7 +117,8 @@ func (s *Store) ListRecords(
 			approval,
 			status,
 			result_kind,
-			error_class
+			error_class,
+			error_summary
 		FROM invocation_audit
 		ORDER BY finished_at DESC, invocation_id DESC
 		LIMIT ?`,
@@ -153,6 +157,7 @@ func scanRecord(scanner interface{ Scan(...any) error }) (auditdomain.Record, er
 		status          string
 		resultKind      string
 		errorClass      string
+		errorSummary    string
 	)
 	if err := scanner.Scan(
 		&rawInvocationID,
@@ -167,6 +172,7 @@ func scanRecord(scanner interface{ Scan(...any) error }) (auditdomain.Record, er
 		&status,
 		&resultKind,
 		&errorClass,
+		&errorSummary,
 	); err != nil {
 		return auditdomain.Record{}, err
 	}
@@ -198,7 +204,7 @@ func scanRecord(scanner interface{ Scan(...any) error }) (auditdomain.Record, er
 		return auditdomain.Record{}, fmt.Errorf("parse finished_at: %w", err)
 	}
 
-	return auditdomain.NewRecord(
+	record, err := auditdomain.NewRecord(
 		invocationID,
 		toolID,
 		providerID,
@@ -212,4 +218,8 @@ func scanRecord(scanner interface{ Scan(...any) error }) (auditdomain.Record, er
 		invocationdomain.ResultKind(resultKind),
 		auditdomain.ErrorClass(errorClass),
 	)
+	if err != nil {
+		return auditdomain.Record{}, err
+	}
+	return record.WithErrorSummary(errorSummary), nil
 }

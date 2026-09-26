@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode"
 
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
@@ -61,7 +62,10 @@ type Record struct {
 	status       Status
 	resultKind   invocationdomain.ResultKind
 	errorClass   ErrorClass
+	errorSummary string
 }
+
+const maxErrorSummaryRunes = 512
 
 // NewRecord constructs a terminal audit record.
 func NewRecord(
@@ -154,6 +158,43 @@ func (r Record) Approval() ApprovalOutcome                   { return r.approval
 func (r Record) Status() Status                              { return r.status }
 func (r Record) ResultKind() invocationdomain.ResultKind     { return r.resultKind }
 func (r Record) ErrorClass() ErrorClass                      { return r.errorClass }
+func (r Record) ErrorSummary() string                        { return r.errorSummary }
+
+// WithErrorSummary returns the same terminal Audit record with a bounded,
+// single-line diagnostic summary. The summary is metadata only; callers must
+// redact secret material before passing it into the Audit Domain.
+func (r Record) WithErrorSummary(summary string) Record {
+	r.errorSummary = normalizeErrorSummary(summary)
+	return r
+}
+
+func normalizeErrorSummary(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+
+	var b strings.Builder
+	b.Grow(len(value))
+	lastSpace := false
+	for _, r := range value {
+		if unicode.IsControl(r) || unicode.IsSpace(r) {
+			if !lastSpace {
+				b.WriteByte(' ')
+				lastSpace = true
+			}
+			continue
+		}
+		b.WriteRune(r)
+		lastSpace = false
+	}
+	normalized := strings.TrimSpace(b.String())
+	runes := []rune(normalized)
+	if len(runes) > maxErrorSummaryRunes {
+		normalized = string(runes[:maxErrorSummaryRunes-1]) + "…"
+	}
+	return normalized
+}
 
 func cloneProviderID(id *catalogdomain.ProviderID) *catalogdomain.ProviderID {
 	if id == nil {

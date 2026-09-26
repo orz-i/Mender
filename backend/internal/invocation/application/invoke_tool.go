@@ -287,6 +287,7 @@ func (uc InvokeTool) execute(
 	}, uc.credentials)
 	if err != nil {
 		status, class := classifyExecutionError(execCtx, err)
+		summary := auditErrorSummary(err)
 		recordErr := uc.record(
 			context.WithoutCancel(parent),
 			response.InvocationID,
@@ -299,9 +300,10 @@ func (uc InvokeTool) execute(
 			status,
 			"",
 			class,
+			summary,
 		)
 		return response, joinInvocationError(
-			fmt.Errorf("invoke tool: execute: %w", err),
+			executionDisplayError(err, summary),
 			recordErr,
 		)
 	}
@@ -357,6 +359,7 @@ func (uc InvokeTool) record(
 	status auditdomain.Status,
 	resultKind invocationdomain.ResultKind,
 	errorClass auditdomain.ErrorClass,
+	errorSummary ...string,
 ) error {
 	providerID := tool.ProviderID()
 	record, err := auditdomain.NewRecord(
@@ -375,6 +378,9 @@ func (uc InvokeTool) record(
 	)
 	if err != nil {
 		return fmt.Errorf("%w: construct: %w", ErrAuditFailed, err)
+	}
+	if len(errorSummary) != 0 {
+		record = record.WithErrorSummary(errorSummary[0])
 	}
 	if err := uc.audit.Record(ctx, record); err != nil {
 		return fmt.Errorf("%w: persist: %w", ErrAuditFailed, err)

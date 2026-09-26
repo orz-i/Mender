@@ -39,6 +39,46 @@ func TestAuditRecordRoundTrip(t *testing.T) {
 	}
 }
 
+func TestAuditErrorSummaryRoundTrip(t *testing.T) {
+	t.Parallel()
+
+	store := openTestStore(t)
+	invocationID, _ := invocationdomain.ParseInvocationID("inv_00000000000000000000000000000003")
+	toolID, _ := catalogdomain.ParseToolID("tool_00000000000000000000000000000003")
+	providerID, _ := catalogdomain.ParseProviderID("prov_00000000000000000000000000000003")
+	now := time.Date(2026, 9, 25, 12, 0, 0, 0, time.UTC)
+
+	record, err := auditdomain.NewRecord(
+		invocationID,
+		toolID,
+		&providerID,
+		"desktop",
+		now,
+		now.Add(time.Millisecond),
+		policydomain.DecisionAllow,
+		"local.default",
+		auditdomain.ApprovalNotRequired,
+		auditdomain.StatusFailed,
+		"",
+		auditdomain.ErrorExecution,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	record = record.WithErrorSummary("provider rejected input")
+
+	if err := store.Record(context.Background(), record); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := store.Get(context.Background(), invocationID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.ErrorSummary() != "provider rejected input" {
+		t.Fatalf("ErrorSummary() = %q", loaded.ErrorSummary())
+	}
+}
+
 func TestAuditAllowsUnknownProviderForUnresolvedTool(t *testing.T) {
 	t.Parallel()
 
