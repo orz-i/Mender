@@ -80,6 +80,24 @@ The parent directory is created before Runtime startup.
 
 CLI and daemon database-path behavior is unchanged.
 
+## Authenticated remote MCP Providers
+
+HTTP Provider header templates are resolved from the **Mender desktop process environment** when a Provider connection is created. A typical template is:
+
+```text
+Authorization: Bearer ${ANYSEARCH_API_KEY}
+```
+
+Only the template is persisted. The resolved secret is not stored in the Mender SQLite database.
+
+For local development, ensure the variable is present in the process that launches Mender, for example when using `wails3 dev`:
+
+```bash
+ANYSEARCH_API_KEY=... wails3 dev
+```
+
+On macOS, do not assume an environment variable that exists only in an interactive shell is available to an application launched separately through Finder/Launch Services. If a header template reports a missing variable, launch the development executable from an environment that contains it or configure the user session environment explicitly. Persistent desktop secret storage is not implemented yet.
+
 ## Frontend routing
 
 The Web host uses `BrowserRouter`.

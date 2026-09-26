@@ -46,21 +46,32 @@ The Providers page is list-first. Registration no longer occupies permanent page
 
 Provider ID, namespace, and transport kind remain stable during editing. Editable metadata/connection fields are persisted through the shared Runtime and the Provider is re-synchronized after save.
 
+Remote HTTP Providers support advanced header templates and import of common `mcpServers` / `mcp` JSON shapes. For example:
+
+```text
+Authorization: Bearer ${ANYSEARCH_API_KEY}
+X-Anysearch-Client: mcp/1.0.0
+```
+
+Sensitive headers must use an environment-variable reference; Mender persists only the template and resolves the value from the Mender process environment when connecting or reconnecting to the Provider. Plaintext Authorization/API-key/token-like values are rejected. Resolved secret material is not stored or returned by the management surface. Cross-origin redirects are rejected when custom headers are configured.
+
 Persistent stdio configuration does not store environment values or secrets. Local stdio Provider processes receive only a small non-secret ambient environment allow-list rather than Mender's complete process environment.
 
 Non-loopback HTTP Provider endpoints must use HTTPS, and Provider URLs cannot contain URL userinfo credentials.
 
 ### Catalog
 
-Catalog follows progressive disclosure while keeping the page itself focused on discovery:
+Catalog now opens with a compact browse of synchronized Tools, so successful Provider synchronization is visible without guessing a search term. Provider rows also expose their current synchronized Tool count.
 
-    search compact metadata
+Catalog still follows progressive disclosure:
+
+    browse/search compact metadata
       -> result list
       -> open Tool Dialog
       -> load full schema
       -> invoke through Mender
 
-Schemas and invocation controls are not permanently rendered beside the result list. Search can be restricted to one Profile.
+Browse/search never eagerly loads Tool schemas. Search can be restricted to one Profile.
 
 ### Profiles
 

@@ -17,6 +17,8 @@ Each bounded context applies only its own migrations.
 
 Migration execution is transactional.
 
+The current MCP Provider configuration schema is version 2. Version 2 is an additive migration that adds `headers_json` for HTTP header **templates**. Existing Provider rows receive an empty `{}` header map; no existing endpoint/stdio configuration is rewritten and no resolved secret values are stored in this column.
+
 ## Before upgrading
 
 For a release that adds a migration:

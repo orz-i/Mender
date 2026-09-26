@@ -40,3 +40,4 @@ Minor implementation choices that remain inside an accepted architectural bounda
 - [ADR-0012: Harden local management and upstream Provider execution boundaries](0012-local-security-hardening.md)
 - [ADR-0013: Require verifiable release artifacts and supply-chain evidence](0013-release-supply-chain.md)
 - [ADR-0014: Fail closed on future SQLite schemas and use forward-only migrations](0014-sqlite-upgrade-compatibility.md)
+- [ADR-0015: Persist HTTP header templates and resolve secrets at the Provider connection boundary](0015-http-provider-header-templates.md)
