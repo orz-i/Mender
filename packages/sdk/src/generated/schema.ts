@@ -100,6 +100,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/tools/browse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["browseTools"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/tools": {
         parameters: {
             query?: never;
@@ -305,7 +321,9 @@ export interface components {
             updatedAt: string;
             /** @enum {string} */
             transport: "http" | "stdio" | "unconfigured";
+            toolCount: number;
             endpoint?: string;
+            headers?: components["schemas"]["HeaderTemplates"];
             executable?: string;
             args?: string[];
             directory?: string;
@@ -316,6 +334,7 @@ export interface components {
             description?: string;
             /** Format: uri */
             endpoint: string;
+            headers?: components["schemas"]["HeaderTemplates"];
         };
         CreateStdioProviderRequest: {
             namespace: string;
@@ -333,6 +352,7 @@ export interface components {
             description?: string;
             /** Format: uri */
             endpoint: string;
+            headers?: components["schemas"]["HeaderTemplates"];
         };
         UpdateStdioProviderRequest: {
             /** @constant */
@@ -342,6 +362,10 @@ export interface components {
             executable: string;
             args?: string[];
             directory?: string;
+        };
+        /** @description Persisted HTTP header templates. Sensitive headers must reference environment variables, for example "Bearer ${ANYSEARCH_API_KEY}". */
+        HeaderTemplates: {
+            [key: string]: string;
         };
         ProviderMutationResponse: {
             provider: components["schemas"]["Provider"];
@@ -661,6 +685,33 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+        };
+    };
+    browseTools: {
+        parameters: {
+            query?: {
+                limit?: number;
+                providerId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Compact synchronized Tool list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        tools: components["schemas"]["ToolSummary"][];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
         };
     };
     searchTools: {

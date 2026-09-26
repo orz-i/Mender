@@ -4,6 +4,7 @@ vi.mock(
   "../bindings/github.com/orz-i/Mender/backend/internal/desktop/binding",
   () => ({
     Service: {
+      BrowseTools: vi.fn(),
       GetSystemStatus: vi.fn(),
       ListProviders: vi.fn(),
       UpdateProvider: vi.fn(),
@@ -73,6 +74,7 @@ describe("desktop Mender client", () => {
           createdAt: "2026-09-26T00:00:00Z",
           updatedAt: "2026-09-26T00:00:00Z",
           transport: "stdio",
+          toolCount: 1,
           executable: "example",
           args: null,
         },
@@ -91,13 +93,14 @@ describe("desktop Mender client", () => {
           createdAt: "2026-09-26T00:00:00Z",
           updatedAt: "2026-09-26T00:00:00Z",
           transport: "stdio",
+          toolCount: 1,
           executable: "example",
         },
       ],
     });
   });
 
-  it("adapts Provider updates to the Wails binding", async () => {
+  it("adapts Provider updates and header templates to the Wails binding", async () => {
     vi.mocked(Service.UpdateProvider).mockResolvedValue({
       provider: {
         providerId: "prov_00000000000000000000000000000001",
@@ -107,7 +110,11 @@ describe("desktop Mender client", () => {
         createdAt: "2026-09-26T00:00:00Z",
         updatedAt: "2026-09-26T01:00:00Z",
         transport: "http",
+        toolCount: 1,
         endpoint: "https://example.test/mcp",
+        headers: {
+          Authorization: "Bearer ${EXAMPLE_API_KEY}",
+        },
       },
       sync: { created: 0, updated: 1, removed: 0, total: 1 },
     });
@@ -120,6 +127,9 @@ describe("desktop Mender client", () => {
         displayName: "Upstream edited",
         description: "Edited",
         endpoint: "https://example.test/mcp",
+        headers: {
+          Authorization: "Bearer ${EXAMPLE_API_KEY}",
+        },
       },
     );
 
@@ -129,11 +139,49 @@ describe("desktop Mender client", () => {
       "Edited",
       "http",
       "https://example.test/mcp",
+      {
+        Authorization: "Bearer ${EXAMPLE_API_KEY}",
+      },
       "",
       [],
       "",
     );
     expect(result.provider.displayName).toBe("Upstream edited");
+    expect(result.provider.toolCount).toBe(1);
+    expect(result.provider.headers).toEqual({
+      Authorization: "Bearer ${EXAMPLE_API_KEY}",
+    });
+  });
+
+  it("browses compact synchronized Tools through Wails", async () => {
+    vi.mocked(Service.BrowseTools).mockResolvedValue({
+      tools: [
+        {
+          rank: 1,
+          toolId: "tool_1",
+          providerId: "prov_1",
+          name: "search",
+          title: "",
+          description: "Search",
+        },
+      ],
+    });
+
+    const client = createDesktopMenderClient();
+
+    await expect(client.browseTools()).resolves.toEqual({
+      tools: [
+        {
+          rank: 1,
+          toolId: "tool_1",
+          providerId: "prov_1",
+          name: "search",
+          title: "",
+          description: "Search",
+        },
+      ],
+    });
+    expect(Service.BrowseTools).toHaveBeenCalledWith(100, "");
   });
 
   it("rejects unexpected binding enum values at the host boundary", async () => {
@@ -147,6 +195,7 @@ describe("desktop Mender client", () => {
           createdAt: "2026-09-26T00:00:00Z",
           updatedAt: "2026-09-26T00:00:00Z",
           transport: "unknown",
+          toolCount: 0,
         },
       ],
     });

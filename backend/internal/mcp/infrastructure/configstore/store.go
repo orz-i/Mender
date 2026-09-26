@@ -62,24 +62,34 @@ func (s *Store) Save(ctx context.Context, config Config) error {
 	if err != nil {
 		return fmt.Errorf("save MCP provider config: encode args: %w", err)
 	}
+	headers := config.Headers
+	if headers == nil {
+		headers = map[string]string{}
+	}
+	headersJSON, err := json.Marshal(headers)
+	if err != nil {
+		return fmt.Errorf("save MCP provider config: encode headers: %w", err)
+	}
 
 	_, err = s.db.ExecContext(
 		ctx,
 		`INSERT INTO mcp_provider_configs(
-			provider_id, transport, endpoint, executable, args_json, directory
-		) VALUES (?, ?, ?, ?, ?, ?)
+			provider_id, transport, endpoint, executable, args_json, directory, headers_json
+		) VALUES (?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(provider_id) DO UPDATE SET
 			transport = excluded.transport,
 			endpoint = excluded.endpoint,
 			executable = excluded.executable,
 			args_json = excluded.args_json,
-			directory = excluded.directory`,
+			directory = excluded.directory,
+			headers_json = excluded.headers_json`,
 		config.ProviderID.String(),
 		string(config.Transport),
 		config.Endpoint,
 		config.Executable,
 		string(argsJSON),
 		config.Directory,
+		string(headersJSON),
 	)
 	if err != nil {
 		return fmt.Errorf("save MCP provider config: %w", err)
@@ -93,7 +103,7 @@ func (s *Store) Get(
 ) (Config, error) {
 	row := s.db.QueryRowContext(
 		ctx,
-		`SELECT provider_id, transport, endpoint, executable, args_json, directory
+		`SELECT provider_id, transport, endpoint, executable, args_json, directory, headers_json
 		FROM mcp_provider_configs
 		WHERE provider_id = ?`,
 		providerID.String(),
@@ -111,7 +121,7 @@ func (s *Store) Get(
 func (s *Store) List(ctx context.Context) ([]Config, error) {
 	rows, err := s.db.QueryContext(
 		ctx,
-		`SELECT provider_id, transport, endpoint, executable, args_json, directory
+		`SELECT provider_id, transport, endpoint, executable, args_json, directory, headers_json
 		FROM mcp_provider_configs
 		ORDER BY provider_id`,
 	)
@@ -151,7 +161,7 @@ type rowScanner interface {
 }
 
 func scanConfig(scanner rowScanner) (Config, error) {
-	var rawProviderID, rawTransport, endpoint, executable, rawArgs, directory string
+	var rawProviderID, rawTransport, endpoint, executable, rawArgs, directory, rawHeaders string
 	if err := scanner.Scan(
 		&rawProviderID,
 		&rawTransport,
@@ -159,6 +169,7 @@ func scanConfig(scanner rowScanner) (Config, error) {
 		&executable,
 		&rawArgs,
 		&directory,
+		&rawHeaders,
 	); err != nil {
 		return Config{}, err
 	}
@@ -171,11 +182,16 @@ func scanConfig(scanner rowScanner) (Config, error) {
 	if err := json.Unmarshal([]byte(rawArgs), &args); err != nil {
 		return Config{}, fmt.Errorf("parse args: %w", err)
 	}
+	headers := make(map[string]string)
+	if err := json.Unmarshal([]byte(rawHeaders), &headers); err != nil {
+		return Config{}, fmt.Errorf("parse headers: %w", err)
+	}
 
 	config := Config{
 		ProviderID: providerID,
 		Transport:  Transport(rawTransport),
 		Endpoint:   endpoint,
+		Headers:    headers,
 		Executable: executable,
 		Args:       args,
 		Directory:  directory,

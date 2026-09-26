@@ -220,6 +220,75 @@ func TestToolSchemaRoundTripDescribeAndSearch(t *testing.T) {
 	}
 }
 
+func TestBrowseToolsAndProviderCountsUseCompactCatalogRows(t *testing.T) {
+	t.Parallel()
+
+	store := openTestStore(t)
+	first := createProvider(t, store, "alpha", "prov_00000000000000000000000000000001")
+	second := createProvider(t, store, "beta", "prov_00000000000000000000000000000002")
+	input, _ := domain.NewSchema([]byte(`{"type":"object","properties":{"large":{"type":"string"}}}`))
+
+	firstTool, _ := domain.NewTool(
+		mustToolID(t, "tool_00000000000000000000000000000001"),
+		first.ID(),
+		domain.ToolSpec{
+			SourceKey:   "alpha.search",
+			Name:        "search",
+			Title:       "Search",
+			Description: "Search alpha",
+			InputSchema: input,
+		},
+		testTime(),
+	)
+	secondTool, _ := domain.NewTool(
+		mustToolID(t, "tool_00000000000000000000000000000002"),
+		second.ID(),
+		domain.ToolSpec{
+			SourceKey:   "beta.extract",
+			Name:        "extract",
+			Title:       "Extract",
+			Description: "Extract beta",
+			InputSchema: input,
+		},
+		testTime(),
+	)
+	if err := store.ReplaceProviderTools(context.Background(), first.ID(), []domain.Tool{firstTool}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.ReplaceProviderTools(context.Background(), second.ID(), []domain.Tool{secondTool}); err != nil {
+		t.Fatal(err)
+	}
+
+	browse := application.NewBrowseTools(store)
+	items, err := browse.Execute(context.Background(), application.BrowseToolsRequest{Limit: 10})
+	if err != nil {
+		t.Fatalf("BrowseTools.Execute() error = %v", err)
+	}
+	if len(items) != 2 {
+		t.Fatalf("browse items = %+v", items)
+	}
+
+	scoped, err := browse.Execute(context.Background(), application.BrowseToolsRequest{
+		Limit:      10,
+		ProviderID: ptrProviderID(first.ID()),
+	})
+	if err != nil {
+		t.Fatalf("scoped BrowseTools.Execute() error = %v", err)
+	}
+	if len(scoped) != 1 || scoped[0].ToolID != firstTool.ID() {
+		t.Fatalf("scoped browse items = %+v", scoped)
+	}
+
+	counts := application.NewListProviderToolCounts(store)
+	byProvider, err := counts.Execute(context.Background())
+	if err != nil {
+		t.Fatalf("ListProviderToolCounts.Execute() error = %v", err)
+	}
+	if byProvider[first.ID()] != 1 || byProvider[second.ID()] != 1 {
+		t.Fatalf("provider counts = %+v", byProvider)
+	}
+}
+
 func TestReplaceProviderToolsRemovesOldSnapshotAndSearchRows(t *testing.T) {
 	t.Parallel()
 
@@ -311,6 +380,10 @@ func createProvider(t *testing.T, store *Store, namespaceValue, rawID string) do
 		t.Fatal(err)
 	}
 	return provider
+}
+
+func ptrProviderID(value domain.ProviderID) *domain.ProviderID {
+	return &value
 }
 
 func mustProviderID(t *testing.T, raw string) domain.ProviderID {

@@ -24,6 +24,11 @@ export type CreateProfileRequest = components["schemas"]["CreateProfileRequest"]
 export type AddProfileToolRequest =
   components["schemas"]["AddProfileToolRequest"];
 
+export interface BrowseToolsInput {
+  limit?: number;
+  providerId?: string;
+}
+
 export interface SearchToolsInput {
   query: string;
   limit?: number;
@@ -45,6 +50,7 @@ export interface MenderClient {
   ): Promise<ProviderMutationResponse>;
   syncProvider(providerId: string): Promise<SyncResult>;
   deleteProvider(providerId: string): Promise<void>;
+  browseTools(input?: BrowseToolsInput): Promise<{ tools: ToolSummary[] }>;
   searchTools(input: SearchToolsInput): Promise<{ tools: ToolSummary[] }>;
   getTool(toolId: string): Promise<ToolDetail>;
   callTool(
@@ -131,6 +137,20 @@ export function createMenderClient(
       if (!result.response.ok) {
         throwApiError(result.error, result.response);
       }
+    },
+
+    async browseTools(input: BrowseToolsInput = {}) {
+      const result = await client.GET("/tools/browse", {
+        params: {
+          query: {
+            ...(input.limit === undefined ? {} : { limit: input.limit }),
+            ...(input.providerId === undefined
+              ? {}
+              : { providerId: input.providerId }),
+          },
+        },
+      });
+      return requireData(result);
     },
 
     async searchTools(input: SearchToolsInput) {

@@ -85,6 +85,22 @@ func TestManagementAPIEndToEnd(t *testing.T) {
 	if providerID == "" || provider["transport"] != "http" {
 		t.Fatalf("provider = %#v", provider)
 	}
+	if provider["toolCount"] != float64(1) {
+		t.Fatalf("provider toolCount = %#v, want 1", provider["toolCount"])
+	}
+
+	browse := requestJSON(
+		t,
+		server.Client(),
+		http.MethodGet,
+		server.URL+"/api/v1/tools/browse?limit=100",
+		nil,
+		http.StatusOK,
+	)
+	browsedTools, ok := browse["tools"].([]any)
+	if !ok || len(browsedTools) != 1 {
+		t.Fatalf("browse response = %#v", browse)
+	}
 
 	updated := requestJSON(
 		t,
@@ -284,6 +300,89 @@ func TestManagementAPIEndToEnd(t *testing.T) {
 	if credentials["editable"] != false || credentials["resolver"] != "unavailable" {
 		t.Fatalf("credential status = %#v", credentials)
 	}
+}
+
+func TestManagementAPIResolvesHTTPHeaderTemplatesAtConnectionTime(t *testing.T) {
+	const envName = "MENDER_TEST_MCP_API_KEY"
+	t.Setenv(envName, "runtime-secret")
+
+	upstream := mcp.NewServer(
+		&mcp.Implementation{Name: "management-header-upstream", Version: "1.0.0"},
+		nil,
+	)
+	upstream.AddTool(
+		&mcp.Tool{
+			Name:        "secured_search",
+			Description: "Secured search",
+			InputSchema: json.RawMessage(`{"type":"object"}`),
+		},
+		func(context.Context, *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			return &mcp.CallToolResult{StructuredContent: map[string]any{"ok": true}}, nil
+		},
+	)
+
+	mcpHandler := mcp.NewStreamableHTTPHandler(
+		func(*http.Request) *mcp.Server { return upstream },
+		&mcp.StreamableHTTPOptions{Stateless: true, JSONResponse: true},
+	)
+	upstreamHTTP := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Authorization"); got != "Bearer runtime-secret" {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		mcpHandler.ServeHTTP(w, r)
+	}))
+	t.Cleanup(upstreamHTTP.Close)
+
+	runtime, err := bootstrap.NewRuntime(context.Background(), bootstrap.RuntimeOptions{
+		DatabasePath: filepath.Join(t.TempDir(), "mender.db"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = runtime.Close() })
+
+	server := httptest.NewServer(New(runtime))
+	t.Cleanup(server.Close)
+
+	created := requestJSON(
+		t,
+		server.Client(),
+		http.MethodPost,
+		server.URL+"/api/v1/providers/http",
+		map[string]any{
+			"namespace":   "secured",
+			"displayName": "Secured",
+			"endpoint":    upstreamHTTP.URL,
+			"headers": map[string]any{
+				"Authorization": "Bearer ${" + envName + "}",
+			},
+		},
+		http.StatusCreated,
+	)
+
+	provider, ok := created["provider"].(map[string]any)
+	if !ok {
+		t.Fatalf("provider response = %#v", created)
+	}
+	if provider["toolCount"] != float64(1) {
+		t.Fatalf("provider toolCount = %#v, want 1", provider["toolCount"])
+	}
+	headers, ok := provider["headers"].(map[string]any)
+	if !ok {
+		t.Fatalf("provider headers = %#v", provider["headers"])
+	}
+	if headers["Authorization"] != "Bearer ${"+envName+"}" {
+		t.Fatalf("persisted header template = %#v", headers["Authorization"])
+	}
+	if strings.Contains(recorderJSON(created), "runtime-secret") {
+		t.Fatal("management response leaked resolved header secret")
+	}
+}
+
+func recorderJSON(value any) string {
+	data, _ := json.Marshal(value)
+	return string(data)
 }
 
 func TestManagementAPIRejectsNonLocalRequestProvenance(t *testing.T) {

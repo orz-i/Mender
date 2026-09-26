@@ -70,9 +70,17 @@ func (s *Service) ListProviders() (ProviderList, error) {
 	for _, config := range configs {
 		configByProvider[config.ProviderID] = config
 	}
+	toolCounts, err := s.runtime.Catalog.ListProviderToolCounts.Execute(s.ctx)
+	if err != nil {
+		return ProviderList{}, err
+	}
 	items := make([]Provider, 0, len(providers))
 	for _, provider := range providers {
-		items = append(items, providerProjection(provider, configByProvider[provider.ID()]))
+		items = append(items, providerProjection(
+			provider,
+			configByProvider[provider.ID()],
+			toolCounts[provider.ID()],
+		))
 	}
 	return ProviderList{Providers: items}, nil
 }
@@ -82,6 +90,7 @@ func (s *Service) CreateHTTPProvider(
 	displayName string,
 	description string,
 	endpoint string,
+	headers map[string]string,
 ) (ProviderMutationResponse, error) {
 	if strings.TrimSpace(namespace) == "" ||
 		strings.TrimSpace(displayName) == "" ||
@@ -101,6 +110,7 @@ func (s *Service) CreateHTTPProvider(
 		mcpconfigstore.Config{
 			Transport: mcpconfigstore.TransportHTTP,
 			Endpoint:  endpoint,
+			Headers:   cloneHeaders(headers),
 		},
 	)
 	if err != nil {
@@ -115,7 +125,7 @@ func (s *Service) CreateHTTPProvider(
 		return ProviderMutationResponse{}, err
 	}
 	return ProviderMutationResponse{
-		Provider: providerProjection(provider, config),
+		Provider: providerProjection(provider, config, result.Total),
 		Sync:     syncProjection(result),
 	}, nil
 }
@@ -162,7 +172,7 @@ func (s *Service) CreateStdioProvider(
 		return ProviderMutationResponse{}, err
 	}
 	return ProviderMutationResponse{
-		Provider: providerProjection(provider, config),
+		Provider: providerProjection(provider, config, result.Total),
 		Sync:     syncProjection(result),
 	}, nil
 }
@@ -173,6 +183,7 @@ func (s *Service) UpdateProvider(
 	description string,
 	transport string,
 	endpoint string,
+	headers map[string]string,
 	executable string,
 	args []string,
 	directory string,
@@ -191,6 +202,7 @@ func (s *Service) UpdateProvider(
 		config = mcpconfigstore.Config{
 			Transport: mcpconfigstore.TransportHTTP,
 			Endpoint:  endpoint,
+			Headers:   cloneHeaders(headers),
 		}
 	case string(mcpconfigstore.TransportStdio):
 		config = mcpconfigstore.Config{
@@ -221,7 +233,7 @@ func (s *Service) UpdateProvider(
 	}
 
 	return ProviderMutationResponse{
-		Provider: providerProjection(provider, config),
+		Provider: providerProjection(provider, config, result.Total),
 		Sync:     syncProjection(result),
 	}, nil
 }
@@ -244,6 +256,42 @@ func (s *Service) DeleteProvider(providerID string) error {
 		return err
 	}
 	return s.runtime.DeleteMCPProvider(s.ctx, id)
+}
+
+func (s *Service) BrowseTools(limit int, providerID string) (ToolList, error) {
+	if limit == 0 {
+		limit = 100
+	}
+	var id *catalogdomain.ProviderID
+	if providerID != "" {
+		parsed, err := catalogdomain.ParseProviderID(providerID)
+		if err != nil {
+			return ToolList{}, err
+		}
+		id = &parsed
+	}
+	results, err := s.runtime.Catalog.BrowseTools.Execute(
+		s.ctx,
+		catalogapplication.BrowseToolsRequest{
+			Limit:      limit,
+			ProviderID: id,
+		},
+	)
+	if err != nil {
+		return ToolList{}, err
+	}
+	items := make([]ToolSummary, 0, len(results))
+	for index, result := range results {
+		items = append(items, ToolSummary{
+			Rank:        index + 1,
+			ToolID:      result.ToolID.String(),
+			ProviderID:  result.ProviderID.String(),
+			Name:        result.Name,
+			Title:       result.Title,
+			Description: result.Description,
+		})
+	}
+	return ToolList{Tools: items}, nil
 }
 
 func (s *Service) SearchTools(query string, limit int, profile string) (ToolList, error) {
@@ -432,6 +480,7 @@ func credentialStatus(status bootstrap.RuntimeStatus) CredentialStatus {
 func providerProjection(
 	provider catalogdomain.Provider,
 	config mcpconfigstore.Config,
+	toolCount int,
 ) Provider {
 	result := Provider{
 		ProviderID:  provider.ID().String(),
@@ -441,16 +490,29 @@ func providerProjection(
 		CreatedAt:   provider.CreatedAt().Format(timeFormat),
 		UpdatedAt:   provider.UpdatedAt().Format(timeFormat),
 		Transport:   "unconfigured",
+		ToolCount:   toolCount,
 	}
 	switch config.Transport {
 	case mcpconfigstore.TransportHTTP:
 		result.Transport = "http"
 		result.Endpoint = config.Endpoint
+		result.Headers = cloneHeaders(config.Headers)
 	case mcpconfigstore.TransportStdio:
 		result.Transport = "stdio"
 		result.Executable = config.Executable
 		result.Args = append([]string(nil), config.Args...)
 		result.Directory = config.Directory
+	}
+	return result
+}
+
+func cloneHeaders(headers map[string]string) map[string]string {
+	if len(headers) == 0 {
+		return map[string]string{}
+	}
+	result := make(map[string]string, len(headers))
+	for name, value := range headers {
+		result[name] = value
 	}
 	return result
 }

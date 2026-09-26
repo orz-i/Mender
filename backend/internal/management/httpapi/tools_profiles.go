@@ -6,10 +6,58 @@ import (
 	"net/http"
 	"strconv"
 
+	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	profileapplication "github.com/orz-i/Mender/backend/internal/profile/application"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 )
+
+func (h *Handler) browseTools(w http.ResponseWriter, r *http.Request) {
+	limit := 100
+	if rawLimit := r.URL.Query().Get("limit"); rawLimit != "" {
+		parsed, err := strconv.Atoi(rawLimit)
+		if err != nil {
+			writeAPIError(w, http.StatusBadRequest, "validation_error", fmt.Errorf("limit must be an integer"))
+			return
+		}
+		limit = parsed
+	}
+
+	var providerID *catalogdomain.ProviderID
+	if rawProviderID := r.URL.Query().Get("providerId"); rawProviderID != "" {
+		parsed, err := catalogdomain.ParseProviderID(rawProviderID)
+		if err != nil {
+			writeAPIError(w, http.StatusBadRequest, "validation_error", err)
+			return
+		}
+		providerID = &parsed
+	}
+
+	results, err := h.runtime.Catalog.BrowseTools.Execute(
+		r.Context(),
+		catalogapplication.BrowseToolsRequest{
+			Limit:      limit,
+			ProviderID: providerID,
+		},
+	)
+	if err != nil {
+		writeKnownError(w, err)
+		return
+	}
+
+	items := make([]map[string]any, 0, len(results))
+	for index, result := range results {
+		items = append(items, map[string]any{
+			"rank":        index + 1,
+			"toolId":      result.ToolID.String(),
+			"providerId":  result.ProviderID.String(),
+			"name":        result.Name,
+			"title":       result.Title,
+			"description": result.Description,
+		})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"tools": items})
+}
 
 func (h *Handler) searchTools(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query().Get("query")

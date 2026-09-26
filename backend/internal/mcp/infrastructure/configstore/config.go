@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
+	"github.com/orz-i/Mender/backend/internal/mcp/infrastructure/headertemplate"
 	"github.com/orz-i/Mender/backend/internal/mcp/infrastructure/transportpolicy"
 )
 
@@ -22,6 +23,7 @@ type Config struct {
 	ProviderID catalogdomain.ProviderID
 	Transport  Transport
 	Endpoint   string
+	Headers    map[string]string
 	Executable string
 	Args       []string
 	Directory  string
@@ -40,6 +42,9 @@ func (c Config) Validate() error {
 		if err := transportpolicy.ValidateHTTPEndpoint(c.Endpoint); err != nil {
 			return fmt.Errorf("MCP provider config: %w", err)
 		}
+		if err := headertemplate.Validate(c.Headers); err != nil {
+			return fmt.Errorf("MCP provider config: %w", err)
+		}
 		if c.Executable != "" || len(c.Args) != 0 || c.Directory != "" {
 			return fmt.Errorf("MCP provider config: HTTP config must not contain stdio fields")
 		}
@@ -47,8 +52,8 @@ func (c Config) Validate() error {
 		if strings.TrimSpace(c.Executable) == "" {
 			return fmt.Errorf("MCP provider config: stdio executable must not be empty")
 		}
-		if c.Endpoint != "" {
-			return fmt.Errorf("MCP provider config: stdio config must not contain endpoint")
+		if c.Endpoint != "" || len(c.Headers) != 0 {
+			return fmt.Errorf("MCP provider config: stdio config must not contain HTTP fields")
 		}
 	default:
 		return fmt.Errorf("MCP provider config: unknown transport %q", c.Transport)

@@ -22,6 +22,10 @@ func TestConfigRoundTripHTTPAndStdio(t *testing.T) {
 		ProviderID: httpID,
 		Transport:  TransportHTTP,
 		Endpoint:   "https://example.test/mcp",
+		Headers: map[string]string{
+			"Authorization": "Bearer ${EXAMPLE_API_KEY}",
+			"X-Client":      "mender",
+		},
 	}
 	stdioConfig := Config{
 		ProviderID: stdioID,
@@ -41,7 +45,10 @@ func TestConfigRoundTripHTTPAndStdio(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if loadedHTTP.Endpoint != httpConfig.Endpoint || loadedHTTP.Transport != TransportHTTP {
+	if loadedHTTP.Endpoint != httpConfig.Endpoint ||
+		loadedHTTP.Transport != TransportHTTP ||
+		loadedHTTP.Headers["Authorization"] != "Bearer ${EXAMPLE_API_KEY}" ||
+		loadedHTTP.Headers["X-Client"] != "mender" {
 		t.Fatalf("HTTP config = %+v", loadedHTTP)
 	}
 
@@ -68,6 +75,23 @@ func TestConfigRoundTripHTTPAndStdio(t *testing.T) {
 	}
 	if _, err := store.Get(context.Background(), httpID); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("Get(deleted) error = %v", err)
+	}
+}
+
+func TestConfigRejectsPersistedSensitiveHeaderValue(t *testing.T) {
+	t.Parallel()
+
+	store := openTestStore(t)
+	err := store.Save(context.Background(), Config{
+		ProviderID: mustProviderID(t, "prov_00000000000000000000000000000003"),
+		Transport:  TransportHTTP,
+		Endpoint:   "https://example.test/mcp",
+		Headers: map[string]string{
+			"Authorization": "Bearer plaintext-secret",
+		},
+	})
+	if err == nil {
+		t.Fatal("Save() expected plaintext Authorization rejection")
 	}
 }
 

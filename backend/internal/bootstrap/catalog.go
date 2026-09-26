@@ -26,7 +26,9 @@ type Catalog struct {
 	FindProviderByNamespace application.FindProviderByNamespace
 	RemoveProvider          application.RemoveProvider
 	DescribeTool            application.DescribeTool
+	BrowseTools             application.BrowseTools
 	SearchTools             application.SearchTools
+	ListProviderToolCounts  application.ListProviderToolCounts
 
 	store *catalogsqlite.Store
 	ids   *identity.Generator
@@ -51,7 +53,9 @@ func NewCatalog(ctx context.Context, options CatalogOptions) (*Catalog, error) {
 		FindProviderByNamespace: application.NewFindProviderByNamespace(store),
 		RemoveProvider:          application.NewRemoveProvider(store),
 		DescribeTool:            application.NewDescribeTool(store),
+		BrowseTools:             application.NewBrowseTools(store),
 		SearchTools:             application.NewSearchTools(store),
+		ListProviderToolCounts:  application.NewListProviderToolCounts(store),
 		store:                   store,
 		ids:                     ids,
 		clock:                   clock,

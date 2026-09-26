@@ -46,6 +46,7 @@ export function createDesktopMenderClient(): MenderClient {
           body.displayName,
           body.description ?? "",
           body.endpoint,
+          body.headers ?? {},
         ),
       );
     },
@@ -72,6 +73,7 @@ export function createDesktopMenderClient(): MenderClient {
             body.description ?? "",
             "http",
             body.endpoint,
+            body.headers ?? {},
             "",
             [],
             "",
@@ -85,6 +87,7 @@ export function createDesktopMenderClient(): MenderClient {
           body.description ?? "",
           "stdio",
           "",
+          {},
           body.executable,
           body.args ?? [],
           body.directory ?? "",
@@ -98,6 +101,14 @@ export function createDesktopMenderClient(): MenderClient {
 
     async deleteProvider(providerId) {
       await Service.DeleteProvider(providerId);
+    },
+
+    async browseTools(input = {}) {
+      const result = await Service.BrowseTools(
+        input.limit ?? 100,
+        input.providerId ?? "",
+      );
+      return { tools: (result.tools ?? []).map(toolSummary) };
     },
 
     async searchTools(input) {
@@ -215,7 +226,17 @@ function provider(value: BindingProvider): Provider {
     createdAt: value.createdAt,
     updatedAt: value.updatedAt,
     transport,
+    toolCount: value.toolCount,
     ...(value.endpoint === undefined ? {} : { endpoint: value.endpoint }),
+    ...(value.headers === undefined || value.headers === null
+      ? {}
+      : {
+          headers: Object.fromEntries(
+            Object.entries(value.headers).filter(
+              (entry): entry is [string, string] => entry[1] !== undefined,
+            ),
+          ),
+        }),
     ...(value.executable === undefined
       ? {}
       : { executable: value.executable }),

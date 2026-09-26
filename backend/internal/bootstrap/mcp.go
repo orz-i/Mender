@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 
 	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	mcpconfigstore "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/configstore"
+	"github.com/orz-i/Mender/backend/internal/mcp/infrastructure/headertemplate"
 	mcpprovider "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/provider"
 	mcpserver "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/server"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
@@ -106,8 +108,13 @@ func connectStoredMCP(
 ) (*mcpprovider.Connection, error) {
 	switch config.Transport {
 	case mcpconfigstore.TransportHTTP:
+		headers, err := headertemplate.Resolve(config.Headers, os.LookupEnv)
+		if err != nil {
+			return nil, fmt.Errorf("connect configured MCP HTTP provider: resolve headers: %w", err)
+		}
 		connection, err := mcpprovider.ConnectHTTP(ctx, mcpprovider.HTTPConfig{
 			Endpoint: config.Endpoint,
+			Headers:  headers,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("connect configured MCP HTTP provider: %w", err)

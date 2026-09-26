@@ -121,6 +121,31 @@ paths:
           description: Provider deleted
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
+  /tools/browse:
+    get:
+      operationId: browseTools
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 100 }
+        - name: providerId
+          in: query
+          schema: { type: string }
+      responses:
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '200':
+          description: Compact synchronized Tool list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [tools]
+                properties:
+                  tools:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ToolSummary'
+        '400': { $ref: '#/components/responses/BadRequest' }
   /tools:
     get:
       operationId: searchTools
@@ -399,7 +424,7 @@ components:
         editable: { type: boolean, const: false }
     Provider:
       type: object
-      required: [providerId, namespace, displayName, description, createdAt, updatedAt, transport]
+      required: [providerId, namespace, displayName, description, createdAt, updatedAt, transport, toolCount]
       properties:
         providerId: { type: string }
         namespace: { type: string }
@@ -408,7 +433,10 @@ components:
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
         transport: { type: string, enum: [http, stdio, unconfigured] }
+        toolCount: { type: integer, minimum: 0 }
         endpoint: { type: string }
+        headers:
+          $ref: '#/components/schemas/HeaderTemplates'
         executable: { type: string }
         args:
           type: array
@@ -422,6 +450,8 @@ components:
         displayName: { type: string }
         description: { type: string }
         endpoint: { type: string, format: uri }
+        headers:
+          $ref: '#/components/schemas/HeaderTemplates'
       additionalProperties: false
     CreateStdioProviderRequest:
       type: object
@@ -448,6 +478,8 @@ components:
         displayName: { type: string }
         description: { type: string }
         endpoint: { type: string, format: uri }
+        headers:
+          $ref: '#/components/schemas/HeaderTemplates'
       additionalProperties: false
     UpdateStdioProviderRequest:
       type: object
@@ -462,6 +494,11 @@ components:
           items: { type: string }
         directory: { type: string }
       additionalProperties: false
+    HeaderTemplates:
+      type: object
+      description: Persisted HTTP header templates. Sensitive headers must reference environment variables, for example "Bearer ${ANYSEARCH_API_KEY}".
+      additionalProperties:
+        type: string
     ProviderMutationResponse:
       type: object
       required: [provider, sync]

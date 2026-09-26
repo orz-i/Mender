@@ -44,6 +44,8 @@ interface ProviderFormState {
   displayName: string;
   description: string;
   endpoint: string;
+  headers: string;
+  importJson: string;
   executable: string;
   args: string;
   directory: string;
@@ -55,6 +57,8 @@ const emptyProviderForm: ProviderFormState = {
   displayName: "",
   description: "",
   endpoint: "",
+  headers: "",
+  importJson: "",
   executable: "",
   args: "",
   directory: "",
@@ -74,13 +78,15 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
   const [editProvider, setEditProvider] = useState<Provider | null>(null);
   const [editForm, setEditForm] = useState<ProviderFormState | null>(null);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (): Promise<Provider[] | null> => {
     try {
       const result = await client.listProviders();
       setProviders(result.providers);
       setError("");
+      return result.providers;
     } catch (reason) {
       setError(errorMessage(reason));
+      return null;
     } finally {
       setLoaded(true);
     }
@@ -111,10 +117,15 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
   }, [client]);
 
   async function addProvider() {
+    const namespaceExisted = providers.some(
+      (provider) => provider.namespace === createForm.namespace,
+    );
+
     setBusy("create");
     setError("");
     try {
       if (createForm.transport === "http") {
+        const headers = parseHeaders(createForm.headers);
         await client.createHTTPProvider({
           namespace: createForm.namespace,
           displayName: createForm.displayName,
@@ -122,6 +133,7 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
           ...(createForm.description
             ? { description: createForm.description }
             : {}),
+          ...(Object.keys(headers).length ? { headers } : {}),
         });
       } else {
         const args = parseArgs(createForm.args);
@@ -141,7 +153,16 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
       setCreateForm(emptyProviderForm);
       await refresh();
     } catch (reason) {
-      setError(errorMessage(reason));
+      const message = errorMessage(reason);
+      const current = await refresh();
+      setError(message);
+      if (
+        !namespaceExisted &&
+        current?.some((provider) => provider.namespace === createForm.namespace)
+      ) {
+        setCreateOpen(false);
+        setCreateForm(emptyProviderForm);
+      }
     } finally {
       setBusy("");
     }
@@ -151,6 +172,7 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
     if (provider.transport === "unconfigured") {
       return;
     }
+    setError("");
     setEditProvider(provider);
     setEditForm(formFromProvider(provider));
   }
@@ -160,39 +182,43 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
       return;
     }
 
-    const request: UpdateProviderRequest =
-      editForm.transport === "http"
-        ? {
-            transport: "http",
-            displayName: editForm.displayName,
-            endpoint: editForm.endpoint,
-            ...(editForm.description
-              ? { description: editForm.description }
-              : {}),
-          }
-        : {
-            transport: "stdio",
-            displayName: editForm.displayName,
-            executable: editForm.executable,
-            ...(editForm.description
-              ? { description: editForm.description }
-              : {}),
-            ...(editForm.directory ? { directory: editForm.directory } : {}),
-            ...(parseArgs(editForm.args).length
-              ? { args: parseArgs(editForm.args) }
-              : {}),
-          };
-
     setBusy(editProvider.providerId);
     setError("");
     try {
+      let request: UpdateProviderRequest;
+      if (editForm.transport === "http") {
+        const headers = parseHeaders(editForm.headers);
+        request = {
+          transport: "http",
+          displayName: editForm.displayName,
+          endpoint: editForm.endpoint,
+          ...(Object.keys(headers).length ? { headers } : {}),
+          ...(editForm.description
+            ? { description: editForm.description }
+            : {}),
+        };
+      } else {
+        const args = parseArgs(editForm.args);
+        request = {
+          transport: "stdio",
+          displayName: editForm.displayName,
+          executable: editForm.executable,
+          ...(editForm.description
+            ? { description: editForm.description }
+            : {}),
+          ...(editForm.directory ? { directory: editForm.directory } : {}),
+          ...(args.length ? { args } : {}),
+        };
+      }
+
       await client.updateProvider(editProvider.providerId, request);
       setEditProvider(null);
       setEditForm(null);
       await refresh();
     } catch (reason) {
-      setError(errorMessage(reason));
+      const message = errorMessage(reason);
       await refresh();
+      setError(message);
     } finally {
       setBusy("");
     }
@@ -244,7 +270,14 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
         title="Providers"
         description="Manage the MCP tool sources connected to Mender."
         actions={
-          <Button onClick={() => setCreateOpen(true)}>Add provider</Button>
+          <Button
+            onClick={() => {
+              setError("");
+              setCreateOpen(true);
+            }}
+          >
+            Add provider
+          </Button>
         }
       />
 
@@ -269,6 +302,7 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
                   <TableHead>Provider</TableHead>
                   <TableHead>Transport</TableHead>
                   <TableHead>Connection</TableHead>
+                  <TableHead>Tools</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -286,6 +320,13 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
                     </TableCell>
                     <TableCell className="max-w-[360px] truncate font-mono text-xs">
                       {connectionSummary(provider)}
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant={provider.toolCount ? "outline" : "secondary"}
+                      >
+                        {provider.toolCount} synced
+                      </Badge>
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
@@ -399,6 +440,7 @@ function ProviderFormDialog({
   onChange: (value: ProviderFormState) => void;
   onSubmit: () => void;
 }) {
+  const [importError, setImportError] = useState("");
   const creating = mode === "create";
   const valid =
     form.displayName.trim() !== "" &&
@@ -408,7 +450,15 @@ function ProviderFormDialog({
       : form.executable.trim() !== "");
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) {
+          setImportError("");
+        }
+        onOpenChange(nextOpen);
+      }}
+    >
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>
@@ -492,19 +542,101 @@ function ProviderFormDialog({
           </Field>
 
           {form.transport === "http" ? (
-            <Field label="Endpoint">
-              <Input
-                aria-label="Endpoint"
-                placeholder="https://example.com/mcp"
-                value={form.endpoint}
-                onChange={(event) =>
-                  onChange({ ...form, endpoint: event.target.value })
-                }
-              />
-              <p className="mt-1 text-xs text-muted-foreground">
-                Non-loopback endpoints require HTTPS.
-              </p>
-            </Field>
+            <>
+              <Field label="Endpoint">
+                <Input
+                  aria-label="Endpoint"
+                  placeholder="https://example.com/mcp"
+                  value={form.endpoint}
+                  onChange={(event) =>
+                    onChange({ ...form, endpoint: event.target.value })
+                  }
+                />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Non-loopback endpoints require HTTPS.
+                </p>
+              </Field>
+
+              <details className="rounded-lg border border-border">
+                <summary className="cursor-pointer select-none px-4 py-3 text-sm font-medium">
+                  Advanced settings
+                </summary>
+                <div className="space-y-4 border-t border-border px-4 py-4">
+                  <ReadOnlyField
+                    label="MCP type"
+                    value="streamable-http"
+                  />
+
+                  <Field label="HTTP header templates" optional>
+                    <Textarea
+                      aria-label="HTTP header templates"
+                      className="min-h-24 font-mono text-xs"
+                      placeholder={
+                        "Authorization: Bearer ${ANYSEARCH_API_KEY}\nX-Anysearch-Client: mcp/1.0.0"
+                      }
+                      value={form.headers}
+                      onChange={(event) =>
+                        onChange({ ...form, headers: event.target.value })
+                      }
+                    />
+                    <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                      One header per line. Sensitive headers must use environment
+                      references such as <code>{"${ANYSEARCH_API_KEY}"}</code>.
+                      The resolved secret is never stored in Mender.
+                    </p>
+                  </Field>
+
+                  {creating ? (
+                    <div className="rounded-lg bg-muted/40 p-3">
+                      <Field label="Import MCP JSON" optional>
+                        <Textarea
+                          aria-label="MCP JSON"
+                          className="min-h-28 font-mono text-xs"
+                          placeholder={
+                            '{"mcpServers":{"anysearch":{"type":"streamable-http","url":"https://api.anysearch.com/mcp","headers":{"Authorization":"Bearer ${ANYSEARCH_API_KEY}"}}}}'
+                          }
+                          value={form.importJson}
+                          onChange={(event) =>
+                            onChange({ ...form, importJson: event.target.value })
+                          }
+                        />
+                      </Field>
+                      {importError ? (
+                        <p className="mt-2 text-xs text-destructive">
+                          {importError}
+                        </p>
+                      ) : null}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="mt-3"
+                        disabled={!form.importJson.trim()}
+                        onClick={() => {
+                          try {
+                            const imported = parseMCPJSON(form.importJson);
+                            onChange({
+                              ...form,
+                              transport: "http",
+                              namespace: imported.namespace,
+                              displayName:
+                                form.displayName || imported.namespace,
+                              endpoint: imported.endpoint,
+                              headers: formatHeaders(imported.headers),
+                            });
+                            setImportError("");
+                          } catch (reason) {
+                            setImportError(errorMessage(reason));
+                          }
+                        }}
+                      >
+                        Import configuration
+                      </Button>
+                    </div>
+                  ) : null}
+                </div>
+              </details>
+            </>
           ) : (
             <>
               <Field label="Executable">
@@ -586,11 +718,22 @@ function ProviderDetailsDialog({
             <DetailRow label="Namespace" value={provider.namespace} mono />
             <DetailRow label="Provider ID" value={provider.providerId} mono />
             <DetailRow label="Transport" value={provider.transport} />
+            <DetailRow label="Synced Tools" value={String(provider.toolCount)} />
             <DetailRow
               label="Connection"
               value={connectionSummary(provider)}
               mono
             />
+            {provider.transport === "http" &&
+            provider.headers !== undefined &&
+            Object.keys(provider.headers).length ? (
+              <DetailRow
+                label="Header templates"
+                value={formatHeaders(provider.headers)}
+                mono
+                preserve
+              />
+            ) : null}
             {provider.transport === "stdio" && provider.args?.length ? (
               <DetailRow
                 label="Arguments"
@@ -696,10 +839,131 @@ function formFromProvider(provider: Provider): ProviderFormState {
     displayName: provider.displayName,
     description: provider.description,
     endpoint: provider.endpoint ?? "",
+    headers: formatHeaders(provider.headers ?? {}),
+    importJson: "",
     executable: provider.executable ?? "",
     args: provider.args?.join("\n") ?? "",
     directory: provider.directory ?? "",
   };
+}
+
+function parseHeaders(value: string): Record<string, string> {
+  const result: Record<string, string> = {};
+  const lines = value.split("\n");
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index]?.trim() ?? "";
+    if (!line) {
+      continue;
+    }
+    const separator = line.indexOf(":");
+    if (separator <= 0) {
+      throw new Error(
+        `Header line ${index + 1} must use "Name: value" format.`,
+      );
+    }
+    const name = line.slice(0, separator).trim();
+    const headerValue = line.slice(separator + 1).trim();
+    if (!name) {
+      throw new Error(`Header line ${index + 1} has an empty name.`);
+    }
+    result[name] = headerValue;
+  }
+
+  return result;
+}
+
+function formatHeaders(headers: Record<string, string>): string {
+  return Object.entries(headers)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([name, value]) => `${name}: ${value}`)
+    .join("\n");
+}
+
+function parseMCPJSON(value: string): {
+  namespace: string;
+  endpoint: string;
+  headers: Record<string, string>;
+} {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    throw new Error("MCP JSON must be valid JSON.");
+  }
+
+  const root = asRecord(parsed);
+  if (root === null) {
+    throw new Error("MCP JSON must contain an object.");
+  }
+
+  let entries: [string, unknown][];
+  const mcpServers = asRecord(root.mcpServers);
+  const mcp = asRecord(root.mcp);
+  if (mcpServers !== null) {
+    entries = Object.entries(mcpServers);
+  } else if (mcp !== null) {
+    entries = Object.entries(mcp);
+  } else if (
+    typeof root.url === "string" ||
+    typeof root.endpoint === "string"
+  ) {
+    entries = [["provider", root]];
+  } else {
+    throw new Error('Expected an "mcpServers" or "mcp" object.');
+  }
+
+  if (entries.length !== 1) {
+    throw new Error("Paste a configuration containing exactly one MCP server.");
+  }
+
+  const [namespace, rawConfig] = entries[0]!;
+  const config = asRecord(rawConfig);
+  if (config === null) {
+    throw new Error("MCP server configuration must be an object.");
+  }
+
+  if (typeof config.type === "string") {
+    const type = config.type.toLowerCase();
+    if (!["remote", "streamable-http", "http"].includes(type)) {
+      throw new Error(
+        `Unsupported remote MCP type "${config.type}". Expected remote or streamable-http.`,
+      );
+    }
+  }
+
+  const endpoint =
+    typeof config.url === "string"
+      ? config.url
+      : typeof config.endpoint === "string"
+        ? config.endpoint
+        : "";
+  if (!endpoint) {
+    throw new Error('Remote MCP configuration requires "url".');
+  }
+
+  const headers: Record<string, string> = {};
+  if (config.headers !== undefined) {
+    const rawHeaders = asRecord(config.headers);
+    if (rawHeaders === null) {
+      throw new Error('"headers" must be an object of string values.');
+    }
+    for (const [name, headerValue] of Object.entries(rawHeaders)) {
+      if (typeof headerValue !== "string") {
+        throw new Error(`Header "${name}" must have a string value.`);
+      }
+      headers[name] = headerValue;
+    }
+  }
+
+  return { namespace, endpoint, headers };
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return null;
+  }
+  return value as Record<string, unknown>;
 }
 
 function parseArgs(value: string) {

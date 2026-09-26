@@ -26,17 +26,19 @@ type CredentialStatus struct {
 }
 
 type Provider struct {
-	ProviderID  string   `json:"providerId"`
-	Namespace   string   `json:"namespace"`
-	DisplayName string   `json:"displayName"`
-	Description string   `json:"description"`
-	CreatedAt   string   `json:"createdAt"`
-	UpdatedAt   string   `json:"updatedAt"`
-	Transport   string   `json:"transport"`
-	Endpoint    string   `json:"endpoint,omitempty"`
-	Executable  string   `json:"executable,omitempty"`
-	Args        []string `json:"args,omitempty"`
-	Directory   string   `json:"directory,omitempty"`
+	ProviderID  string            `json:"providerId"`
+	Namespace   string            `json:"namespace"`
+	DisplayName string            `json:"displayName"`
+	Description string            `json:"description"`
+	CreatedAt   string            `json:"createdAt"`
+	UpdatedAt   string            `json:"updatedAt"`
+	Transport   string            `json:"transport"`
+	ToolCount   int               `json:"toolCount"`
+	Endpoint    string            `json:"endpoint,omitempty"`
+	Headers     map[string]string `json:"headers,omitempty"`
+	Executable  string            `json:"executable,omitempty"`
+	Args        []string          `json:"args,omitempty"`
+	Directory   string            `json:"directory,omitempty"`
 }
 
 type ProviderList struct {

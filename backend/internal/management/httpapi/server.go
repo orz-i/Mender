@@ -53,6 +53,7 @@ func (h *Handler) routes() {
 	h.mux.HandleFunc("DELETE /api/v1/providers/{providerId}", h.deleteProvider)
 
 	h.mux.HandleFunc("GET /api/v1/tools", h.searchTools)
+	h.mux.HandleFunc("GET /api/v1/tools/browse", h.browseTools)
 	h.mux.HandleFunc("GET /api/v1/tools/{toolId}", h.getTool)
 	h.mux.HandleFunc("POST /api/v1/tools/{toolId}/call", h.callTool)
 

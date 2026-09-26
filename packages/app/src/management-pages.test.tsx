@@ -17,6 +17,7 @@ describe("management pages", () => {
       createdAt: "2026-09-26T00:00:00Z",
       updatedAt: "2026-09-26T00:00:00Z",
       transport: "http" as const,
+      toolCount: 1,
       endpoint: "https://example.test/mcp",
     };
     const listProviders = vi
@@ -63,6 +64,82 @@ describe("management pages", () => {
     expect(await screen.findByText("demo")).toBeTruthy();
   });
 
+  it("imports common remote MCP JSON with env-backed headers", async () => {
+    const provider = {
+      providerId: "prov_anysearch",
+      namespace: "anysearch",
+      displayName: "anysearch",
+      description: "",
+      createdAt: "2026-09-26T00:00:00Z",
+      updatedAt: "2026-09-26T00:00:00Z",
+      transport: "http" as const,
+      toolCount: 4,
+      endpoint: "https://api.anysearch.com/mcp",
+      headers: {
+        Authorization: "Bearer ${ANYSEARCH_API_KEY}",
+      },
+    };
+    const listProviders = vi
+      .fn()
+      .mockResolvedValueOnce({ providers: [] })
+      .mockResolvedValueOnce({ providers: [provider] });
+    const createHTTPProvider = vi.fn().mockResolvedValue({
+      provider,
+      sync: { created: 4, updated: 0, removed: 0, total: 4 },
+    });
+
+    renderApp("/providers", {
+      listProviders,
+      createHTTPProvider,
+    });
+
+    expect(await screen.findByText("No providers")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Add provider" }));
+    fireEvent.click(screen.getByText("Advanced settings"));
+
+    fireEvent.change(screen.getByLabelText("MCP JSON"), {
+      target: {
+        value: JSON.stringify({
+          mcpServers: {
+            anysearch: {
+              type: "streamable-http",
+              url: "https://api.anysearch.com/mcp",
+              headers: {
+                Authorization: "Bearer ${ANYSEARCH_API_KEY}",
+              },
+            },
+          },
+        }),
+      },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Import configuration" }),
+    );
+
+    expect(
+      screen.getByLabelText<HTMLInputElement>("Namespace").value,
+    ).toBe("anysearch");
+    expect(
+      screen.getByLabelText<HTMLInputElement>("Endpoint").value,
+    ).toBe("https://api.anysearch.com/mcp");
+    expect(
+      screen.getByLabelText<HTMLTextAreaElement>("HTTP header templates").value,
+    ).toContain("Authorization: Bearer ${ANYSEARCH_API_KEY}");
+
+    fireEvent.click(screen.getByRole("button", { name: "Add provider" }));
+
+    await waitFor(() => {
+      expect(createHTTPProvider).toHaveBeenCalledWith({
+        namespace: "anysearch",
+        displayName: "anysearch",
+        endpoint: "https://api.anysearch.com/mcp",
+        headers: {
+          Authorization: "Bearer ${ANYSEARCH_API_KEY}",
+        },
+      });
+    });
+  });
+
   it("registers a stdio Provider from the same Add dialog", async () => {
     const provider = {
       providerId: "prov_2",
@@ -72,6 +149,7 @@ describe("management pages", () => {
       createdAt: "2026-09-26T00:00:00Z",
       updatedAt: "2026-09-26T00:00:00Z",
       transport: "stdio" as const,
+      toolCount: 1,
       executable: "/usr/local/bin/local-tools",
       args: ["--stdio"],
     };
@@ -127,6 +205,7 @@ describe("management pages", () => {
       createdAt: "2026-09-26T00:00:00Z",
       updatedAt: "2026-09-26T00:00:00Z",
       transport: "http" as const,
+      toolCount: 4,
       endpoint: "https://api.anysearch.com/mcp",
     };
     const updated = {
@@ -200,6 +279,33 @@ describe("management pages", () => {
 
     renderApp("/catalog", {
       listProfiles: vi.fn().mockResolvedValue({ profiles: [] }),
+      listProviders: vi.fn().mockResolvedValue({
+        providers: [
+          {
+            providerId: "prov_1",
+            namespace: "demo",
+            displayName: "Demo",
+            description: "",
+            createdAt: "2026-09-26T00:00:00Z",
+            updatedAt: "2026-09-26T00:00:00Z",
+            transport: "http",
+            toolCount: 2,
+            endpoint: "https://example.test/mcp",
+          },
+        ],
+      }),
+      browseTools: vi.fn().mockResolvedValue({
+        tools: [
+          {
+            rank: 1,
+            toolId: "tool_browse",
+            providerId: "prov_1",
+            name: "web_search",
+            title: "Web search",
+            description: "Browse synchronized Tool",
+          },
+        ],
+      }),
       searchTools: vi.fn().mockResolvedValue({
         tools: [
           {
@@ -214,6 +320,9 @@ describe("management pages", () => {
       }),
       getTool,
     });
+
+    expect(await screen.findByText("Web search")).toBeTruthy();
+    expect(getTool).not.toHaveBeenCalled();
 
     fireEvent.change(
       screen.getByPlaceholderText("Search intent, e.g. create issue"),

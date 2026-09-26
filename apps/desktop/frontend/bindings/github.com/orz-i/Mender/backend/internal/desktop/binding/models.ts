@@ -74,7 +74,9 @@ export interface Provider {
     "createdAt": string;
     "updatedAt": string;
     "transport": string;
+    "toolCount": number;
     "endpoint"?: string;
+    "headers"?: { [_ in string]?: string } | null;
     "executable"?: string;
     "args"?: string[] | null;
     "directory"?: string;

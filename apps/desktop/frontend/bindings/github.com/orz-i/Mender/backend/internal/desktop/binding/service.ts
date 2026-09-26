@@ -20,12 +20,16 @@ export function AddProfileTool(slug: string, toolID: string, direct: boolean): $
     return $Call.ByID(296290586, slug, toolID, direct);
 }
 
+export function BrowseTools(limit: number, providerID: string): $CancellablePromise<$models.ToolList> {
+    return $Call.ByID(594360793, limit, providerID);
+}
+
 export function CallTool(toolID: string, $arguments: { [_ in string]?: any } | null): $CancellablePromise<$models.InvocationResult> {
     return $Call.ByID(3440826094, toolID, $arguments);
 }
 
-export function CreateHTTPProvider($namespace: string, displayName: string, description: string, endpoint: string): $CancellablePromise<$models.ProviderMutationResponse> {
-    return $Call.ByID(2466151773, $namespace, displayName, description, endpoint);
+export function CreateHTTPProvider($namespace: string, displayName: string, description: string, endpoint: string, headers: { [_ in string]?: string } | null): $CancellablePromise<$models.ProviderMutationResponse> {
+    return $Call.ByID(2466151773, $namespace, displayName, description, endpoint, headers);
 }
 
 export function CreateProfile(slug: string, displayName: string, mode: string): $CancellablePromise<$models.Profile> {
@@ -84,6 +88,6 @@ export function SyncProvider(providerID: string): $CancellablePromise<$models.Sy
     return $Call.ByID(2246585286, providerID);
 }
 
-export function UpdateProvider(providerID: string, displayName: string, description: string, transport: string, endpoint: string, executable: string, args: string[] | null, directory: string): $CancellablePromise<$models.ProviderMutationResponse> {
-    return $Call.ByID(2087755724, providerID, displayName, description, transport, endpoint, executable, args, directory);
+export function UpdateProvider(providerID: string, displayName: string, description: string, transport: string, endpoint: string, headers: { [_ in string]?: string } | null, executable: string, args: string[] | null, directory: string): $CancellablePromise<$models.ProviderMutationResponse> {
+    return $Call.ByID(2087755724, providerID, displayName, description, transport, endpoint, headers, executable, args, directory);
 }

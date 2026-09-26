@@ -4,6 +4,7 @@ import type {
   InvocationResult,
   MenderClient,
   Profile,
+  Provider,
   ToolDetail,
   ToolSummary,
 } from "@mender/sdk";
@@ -41,8 +42,10 @@ export function CatalogPage({ client }: { client: MenderClient }) {
   const [query, setQuery] = useState("");
   const [profile, setProfile] = useState("");
   const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [providers, setProviders] = useState<Provider[]>([]);
   const [results, setResults] = useState<ToolSummary[]>([]);
   const [searched, setSearched] = useState(false);
+  const [loaded, setLoaded] = useState(false);
 
   const [selected, setSelected] = useState<ToolDetail | null>(null);
   const [argumentsText, setArgumentsText] = useState("{}");
@@ -54,22 +57,46 @@ export function CatalogPage({ client }: { client: MenderClient }) {
 
   useEffect(() => {
     let active = true;
-    void client
-      .listProfiles()
-      .then((value) => {
+    void Promise.all([
+      client.listProfiles(),
+      client.listProviders(),
+      client.browseTools({ limit: 100 }),
+    ])
+      .then(([profileResult, providerResult, toolResult]) => {
         if (active) {
-          setProfiles(value.profiles);
+          setProfiles(profileResult.profiles);
+          setProviders(providerResult.providers);
+          setResults(toolResult.tools);
+          setSearched(false);
+          setLoaded(true);
         }
       })
       .catch((reason: unknown) => {
         if (active) {
           setError(errorMessage(reason));
+          setLoaded(true);
         }
       });
     return () => {
       active = false;
     };
   }, [client]);
+
+  async function browseAll() {
+    setBusy("browse");
+    setError("");
+    try {
+      const response = await client.browseTools({ limit: 100 });
+      setResults(response.tools);
+      setSearched(false);
+      setSelected(null);
+      setInvocation(null);
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
+      setBusy("");
+    }
+  }
 
   async function search() {
     if (!query.trim()) {
@@ -155,13 +182,13 @@ export function CatalogPage({ client }: { client: MenderClient }) {
     <>
       <PageHeader
         title="Catalog"
-        description="Search compact Tool metadata. Full schemas and invocation controls open only when you inspect a Tool."
+        description="Browse synchronized Tools or search compact metadata. Full schemas and invocation controls open only when you inspect a Tool."
       />
       {error ? <ErrorNotice message={error} /> : null}
 
       <Card>
         <CardContent className="pt-6">
-          <div className="grid grid-cols-[minmax(0,1fr)_220px_auto] gap-3">
+          <div className="grid grid-cols-[minmax(0,1fr)_220px_auto_auto] gap-3">
             <Input
               aria-label="Catalog search"
               placeholder="Search intent, e.g. create issue"
@@ -192,6 +219,13 @@ export function CatalogPage({ client }: { client: MenderClient }) {
             >
               {busy === "search" ? "Searching…" : "Search"}
             </Button>
+            <Button
+              variant="outline"
+              onClick={() => void browseAll()}
+              disabled={busy !== ""}
+            >
+              {busy === "browse" ? "Loading…" : "Browse all"}
+            </Button>
           </div>
         </CardContent>
       </Card>
@@ -200,9 +234,11 @@ export function CatalogPage({ client }: { client: MenderClient }) {
         <CardHeader className="border-b">
           <CardTitle>Tools</CardTitle>
           <CardDescription>
-            {searched
-              ? `${results.length} compact match${results.length === 1 ? "" : "es"}`
-              : "Search the Catalog to discover Tools."}
+            {!loaded
+              ? "Loading synchronized Tools…"
+              : searched
+                ? `${results.length} compact match${results.length === 1 ? "" : "es"}`
+                : `${results.length} synchronized Tool${results.length === 1 ? "" : "s"}`}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -226,8 +262,13 @@ export function CatalogPage({ client }: { client: MenderClient }) {
                         {tool.toolId}
                       </div>
                     </TableCell>
-                    <TableCell className="font-mono text-[11px] text-muted-foreground">
-                      {tool.providerId}
+                    <TableCell>
+                      <div className="text-sm">
+                        {providerLabel(providers, tool.providerId)}
+                      </div>
+                      <div className="font-mono text-[11px] text-muted-foreground">
+                        {tool.providerId}
+                      </div>
                     </TableCell>
                     <TableCell className="max-w-[420px] truncate text-sm text-muted-foreground">
                       {tool.description || "No description"}
@@ -252,11 +293,13 @@ export function CatalogPage({ client }: { client: MenderClient }) {
             </Table>
           ) : (
             <EmptyState
-              title={searched ? "No matching tools" : "Search the Catalog"}
+              title={
+                searched ? "No matching tools" : "No synchronized tools"
+              }
               description={
                 searched
                   ? "Try a different search intent or Profile filter."
-                  : "Schemas are not loaded until you inspect a Tool."
+                  : "Sync a Provider to populate the Catalog. Schemas load only when you inspect a Tool."
               }
             />
           )}
@@ -362,6 +405,14 @@ function SchemaBlock({ title, value }: { title: string; value: unknown }) {
       </pre>
     </div>
   );
+}
+
+function providerLabel(providers: Provider[], providerId: string) {
+  const provider = providers.find((item) => item.providerId === providerId);
+  if (provider === undefined) {
+    return "Unknown Provider";
+  }
+  return provider.displayName || provider.namespace;
 }
 
 function errorMessage(reason: unknown) {

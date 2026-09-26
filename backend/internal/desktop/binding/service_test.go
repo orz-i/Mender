@@ -67,6 +67,7 @@ func TestServiceEndToEndUsesSharedRuntime(t *testing.T) {
 		"Upstream",
 		"",
 		upstreamHTTP.URL,
+		nil,
 	)
 	if err != nil {
 		t.Fatalf("CreateHTTPProvider() error = %v", err)
@@ -84,6 +85,7 @@ func TestServiceEndToEndUsesSharedRuntime(t *testing.T) {
 		"Edited provider",
 		"http",
 		upstreamHTTP.URL,
+		nil,
 		"",
 		nil,
 		"",
@@ -95,6 +97,14 @@ func TestServiceEndToEndUsesSharedRuntime(t *testing.T) {
 		updated.Provider.DisplayName != "Upstream edited" ||
 		updated.Provider.Description != "Edited provider" {
 		t.Fatalf("updated provider = %#v", updated.Provider)
+	}
+
+	browse, err := service.BrowseTools(100, created.Provider.ProviderID)
+	if err != nil {
+		t.Fatalf("BrowseTools() error = %v", err)
+	}
+	if len(browse.Tools) != 1 || browse.Tools[0].Name != "echo" {
+		t.Fatalf("browse tools = %#v", browse.Tools)
 	}
 
 	search, err := service.SearchTools("echo", 10, "")

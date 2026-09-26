@@ -28,10 +28,12 @@ func migrate(ctx context.Context, db *sql.DB) error {
 	).Scan(&recordedVersion); err != nil {
 		return fmt.Errorf("check MCP config schema version: %w", err)
 	}
-	if recordedVersion.Valid && recordedVersion.Int64 > 1 {
+	const latestSupportedVersion = 2
+	if recordedVersion.Valid && recordedVersion.Int64 > latestSupportedVersion {
 		return fmt.Errorf(
-			"MCP config schema version %d is newer than supported version 1",
+			"MCP config schema version %d is newer than supported version %d",
 			recordedVersion.Int64,
+			latestSupportedVersion,
 		)
 	}
 
@@ -60,6 +62,29 @@ func migrate(ctx context.Context, db *sql.DB) error {
 			time.Now().UTC().Format(time.RFC3339Nano),
 		); err != nil {
 			return fmt.Errorf("record MCP config migration 1: %w", err)
+		}
+	}
+
+	applied = 0
+	if err := tx.QueryRowContext(
+		ctx,
+		"SELECT COUNT(*) FROM mcp_config_schema_migrations WHERE version = 2",
+	).Scan(&applied); err != nil {
+		return fmt.Errorf("check MCP config migration 2: %w", err)
+	}
+	if applied == 0 {
+		if _, err := tx.ExecContext(
+			ctx,
+			`ALTER TABLE mcp_provider_configs ADD COLUMN headers_json TEXT NOT NULL DEFAULT '{}'`,
+		); err != nil {
+			return fmt.Errorf("apply MCP config migration 2: %w", err)
+		}
+		if _, err := tx.ExecContext(
+			ctx,
+			"INSERT INTO mcp_config_schema_migrations(version, applied_at) VALUES (2, ?)",
+			time.Now().UTC().Format(time.RFC3339Nano),
+		); err != nil {
+			return fmt.Errorf("record MCP config migration 2: %w", err)
 		}
 	}
 

@@ -25,6 +25,7 @@ type CommandConfig struct {
 // HTTPConfig configures a remote upstream MCP Provider over Streamable HTTP.
 type HTTPConfig struct {
 	Endpoint   string
+	Headers    map[string]string
 	HTTPClient *http.Client
 	MaxRetries int
 }
@@ -61,9 +62,18 @@ func ConnectHTTP(ctx context.Context, config HTTPConfig) (*Connection, error) {
 		return nil, fmt.Errorf("connect MCP HTTP: %w", err)
 	}
 
+	httpClient, err := httpClientWithHeaders(
+		config.HTTPClient,
+		endpoint,
+		config.Headers,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("connect MCP HTTP: %w", err)
+	}
+
 	transport := &mcp.StreamableClientTransport{
 		Endpoint:             endpoint,
-		HTTPClient:           config.HTTPClient,
+		HTTPClient:           httpClient,
 		MaxRetries:           config.MaxRetries,
 		DisableStandaloneSSE: true,
 	}
