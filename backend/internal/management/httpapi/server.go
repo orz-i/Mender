@@ -5,7 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
+	"strings"
 
 	"github.com/orz-i/Mender/backend/internal/bootstrap"
 	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
@@ -26,6 +29,13 @@ func New(runtime *bootstrap.Runtime) *Handler {
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+
+	if err := validateLocalRequest(r); err != nil {
+		writeAPIError(w, http.StatusForbidden, "request_forbidden", err)
+		return
+	}
 	h.mux.ServeHTTP(w, r)
 }
 
@@ -83,6 +93,55 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 
 func writeAPIError(w http.ResponseWriter, status int, code string, err error) {
 	writeJSON(w, status, apiError{Code: code, Message: err.Error()})
+}
+
+func validateLocalRequest(r *http.Request) error {
+	if !isLoopbackHost(r.Host) {
+		return fmt.Errorf("management request Host must be localhost or loopback")
+	}
+
+	if origin := strings.TrimSpace(r.Header.Get("Origin")); origin != "" {
+		parsed, err := url.Parse(origin)
+		if err != nil {
+			return fmt.Errorf("management request Origin is invalid")
+		}
+		if (parsed.Scheme != "http" && parsed.Scheme != "https") ||
+			!isLoopbackHostname(parsed.Hostname()) {
+			return fmt.Errorf("management request Origin must be localhost or loopback")
+		}
+	}
+
+	if strings.EqualFold(
+		strings.TrimSpace(r.Header.Get("Sec-Fetch-Site")),
+		"cross-site",
+	) {
+		return fmt.Errorf("cross-site management requests are forbidden")
+	}
+	return nil
+}
+
+func isLoopbackHost(value string) bool {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return false
+	}
+
+	if host, _, err := net.SplitHostPort(value); err == nil {
+		return isLoopbackHostname(host)
+	}
+
+	if strings.HasPrefix(value, "[") && strings.HasSuffix(value, "]") {
+		value = strings.TrimSuffix(strings.TrimPrefix(value, "["), "]")
+	}
+	return isLoopbackHostname(value)
+}
+
+func isLoopbackHostname(host string) bool {
+	if strings.EqualFold(strings.TrimSpace(host), "localhost") {
+		return true
+	}
+	ip := net.ParseIP(strings.TrimSpace(host))
+	return ip != nil && ip.IsLoopback()
 }
 
 func writeKnownError(w http.ResponseWriter, err error) {

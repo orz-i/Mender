@@ -247,6 +247,104 @@ func TestManagementAPIEndToEnd(t *testing.T) {
 	}
 }
 
+func TestManagementAPIRejectsNonLocalRequestProvenance(t *testing.T) {
+	t.Parallel()
+
+	handler := New(nil)
+	tests := []struct {
+		name      string
+		host      string
+		origin    string
+		fetchSite string
+	}{
+		{
+			name: "non-loopback Host",
+			host: "attacker.example",
+		},
+		{
+			name:   "non-loopback Origin",
+			host:   "127.0.0.1:8080",
+			origin: "https://attacker.example",
+		},
+		{
+			name:   "opaque Origin",
+			host:   "localhost:8080",
+			origin: "null",
+		},
+		{
+			name:      "cross-site fetch metadata",
+			host:      "[::1]:8080",
+			origin:    "http://localhost:5173",
+			fetchSite: "cross-site",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			request := httptest.NewRequest(
+				http.MethodGet,
+				"http://127.0.0.1/api/v1/system/status",
+				nil,
+			)
+			request.Host = tc.host
+			if tc.origin != "" {
+				request.Header.Set("Origin", tc.origin)
+			}
+			if tc.fetchSite != "" {
+				request.Header.Set("Sec-Fetch-Site", tc.fetchSite)
+			}
+
+			recorder := httptest.NewRecorder()
+			handler.ServeHTTP(recorder, request)
+
+			if recorder.Code != http.StatusForbidden {
+				t.Fatalf("status = %d, want %d", recorder.Code, http.StatusForbidden)
+			}
+			var response apiError
+			if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+				t.Fatalf("decode error response: %v", err)
+			}
+			if response.Code != "request_forbidden" {
+				t.Fatalf("error code = %q, want request_forbidden", response.Code)
+			}
+			if got := recorder.Header().Get("Cache-Control"); got != "no-store" {
+				t.Fatalf("Cache-Control = %q, want no-store", got)
+			}
+			if got := recorder.Header().Get("X-Content-Type-Options"); got != "nosniff" {
+				t.Fatalf("X-Content-Type-Options = %q, want nosniff", got)
+			}
+		})
+	}
+}
+
+func TestManagementAPIAcceptsLocalBrowserOrigin(t *testing.T) {
+	t.Parallel()
+
+	runtime, err := bootstrap.NewRuntime(context.Background(), bootstrap.RuntimeOptions{
+		DatabasePath: filepath.Join(t.TempDir(), "mender.db"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = runtime.Close() })
+
+	request := httptest.NewRequest(
+		http.MethodGet,
+		"http://127.0.0.1/api/v1/system/status",
+		nil,
+	)
+	request.Host = "127.0.0.1:8080"
+	request.Header.Set("Origin", "http://localhost:5173")
+	request.Header.Set("Sec-Fetch-Site", "same-site")
+
+	recorder := httptest.NewRecorder()
+	New(runtime).ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body=%s", recorder.Code, http.StatusOK, recorder.Body.Bytes())
+	}
+}
+
 func TestManagementAPIErrorShape(t *testing.T) {
 	t.Parallel()
 

@@ -419,7 +419,7 @@ export interface components {
                 "application/json": components["schemas"]["ErrorResponse"];
             };
         };
-        /** @description Policy or approval denied */
+        /** @description Request provenance rejected, or Policy/Approval denied */
         Forbidden: {
             headers: {
                 [name: string]: unknown;
@@ -485,6 +485,7 @@ export interface operations {
                     "application/json": components["schemas"]["SystemStatus"];
                 };
             };
+            403: components["responses"]["Forbidden"];
         };
     };
     listProviders: {
@@ -507,6 +508,7 @@ export interface operations {
                     };
                 };
             };
+            403: components["responses"]["Forbidden"];
         };
     };
     createHTTPProvider: {
@@ -532,6 +534,7 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
             409: components["responses"]["Conflict"];
             502: components["responses"]["BadGateway"];
         };
@@ -559,6 +562,7 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
             409: components["responses"]["Conflict"];
             502: components["responses"]["BadGateway"];
         };
@@ -583,6 +587,7 @@ export interface operations {
                     "application/json": components["schemas"]["SyncResult"];
                 };
             };
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             502: components["responses"]["BadGateway"];
         };
@@ -605,6 +610,7 @@ export interface operations {
                 };
                 content?: never;
             };
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
         };
@@ -634,6 +640,7 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
         };
     };
@@ -657,6 +664,7 @@ export interface operations {
                     "application/json": components["schemas"]["ToolDetail"];
                 };
             };
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
         };
     };
@@ -710,6 +718,7 @@ export interface operations {
                     };
                 };
             };
+            403: components["responses"]["Forbidden"];
         };
     };
     createProfile: {
@@ -735,6 +744,7 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
             409: components["responses"]["Conflict"];
         };
     };
@@ -758,6 +768,7 @@ export interface operations {
                     "application/json": components["schemas"]["Profile"];
                 };
             };
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
         };
     };
@@ -786,6 +797,7 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
         };
@@ -811,6 +823,7 @@ export interface operations {
                     "application/json": components["schemas"]["Profile"];
                 };
             };
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
         };
     };
@@ -836,6 +849,7 @@ export interface operations {
                     };
                 };
             };
+            403: components["responses"]["Forbidden"];
         };
     };
     getPolicyStatus: {
@@ -856,6 +870,7 @@ export interface operations {
                     "application/json": components["schemas"]["PolicyStatus"];
                 };
             };
+            403: components["responses"]["Forbidden"];
         };
     };
     getCredentialStatus: {
@@ -876,6 +891,7 @@ export interface operations {
                     "application/json": components["schemas"]["CredentialStatus"];
                 };
             };
+            403: components["responses"]["Forbidden"];
         };
     };
 }
