@@ -93,4 +93,26 @@ if (!desktopMain.includes('from "@mender/app"')) {
   fail("desktop host must mount the shared @mender/app product UI");
 }
 
+const darwinTask = readFileSync(
+  join(root, "apps/desktop/build/darwin/Taskfile.yml"),
+  "utf8",
+);
+for (const expected of [
+  "-mmacosx-version-min=13.0",
+  'MACOSX_DEPLOYMENT_TARGET: "13.0"',
+]) {
+  if (!darwinTask.includes(expected)) {
+    fail(`macOS build assets must preserve Go 1.27 deployment target: ${expected}`);
+  }
+}
+for (const file of ["Info.plist", "Info.dev.plist"]) {
+  const plist = readFileSync(
+    join(root, "apps/desktop/build/darwin", file),
+    "utf8",
+  );
+  if (!plist.includes("<string>13.0.0</string>")) {
+    fail(`${file} must declare macOS 13.0 minimum system version`);
+  }
+}
+
 console.log("desktop architecture check: ok");
