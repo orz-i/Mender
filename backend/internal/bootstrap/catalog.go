@@ -19,10 +19,13 @@ type CatalogOptions struct {
 //
 // Tool execution and protocol adapters intentionally do not belong in this Catalog composition root.
 type Catalog struct {
-	RegisterProvider application.RegisterProvider
-	GetProvider      application.GetProvider
-	DescribeTool     application.DescribeTool
-	SearchTools      application.SearchTools
+	RegisterProvider        application.RegisterProvider
+	GetProvider             application.GetProvider
+	ListProviders           application.ListProviders
+	FindProviderByNamespace application.FindProviderByNamespace
+	RemoveProvider          application.RemoveProvider
+	DescribeTool            application.DescribeTool
+	SearchTools             application.SearchTools
 
 	store *catalogsqlite.Store
 	ids   *identity.Generator
@@ -40,13 +43,16 @@ func NewCatalog(ctx context.Context, options CatalogOptions) (*Catalog, error) {
 	clock := systemClock{}
 
 	return &Catalog{
-		RegisterProvider: application.NewRegisterProvider(store, ids, clock),
-		GetProvider:      application.NewGetProvider(store),
-		DescribeTool:     application.NewDescribeTool(store),
-		SearchTools:      application.NewSearchTools(store),
-		store:            store,
-		ids:              ids,
-		clock:            clock,
+		RegisterProvider:        application.NewRegisterProvider(store, ids, clock),
+		GetProvider:             application.NewGetProvider(store),
+		ListProviders:           application.NewListProviders(store),
+		FindProviderByNamespace: application.NewFindProviderByNamespace(store),
+		RemoveProvider:          application.NewRemoveProvider(store),
+		DescribeTool:            application.NewDescribeTool(store),
+		SearchTools:             application.NewSearchTools(store),
+		store:                   store,
+		ids:                     ids,
+		clock:                   clock,
 	}, nil
 }
 

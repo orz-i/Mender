@@ -14,6 +14,7 @@ import (
 	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
 	invocationidentity "github.com/orz-i/Mender/backend/internal/invocation/infrastructure/identity"
 	invocationrouter "github.com/orz-i/Mender/backend/internal/invocation/infrastructure/router"
+	mcpconfigstore "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/configstore"
 	policylocal "github.com/orz-i/Mender/backend/internal/policy/infrastructure/local"
 )
 
@@ -23,13 +24,16 @@ type RuntimeOptions struct {
 	DefaultTimeout time.Duration
 }
 
-// Runtime composes Catalog with Mender's shared invocation pipeline.
+// Runtime composes Catalog, Profile persistence, Provider config persistence,
+// and Mender's shared invocation pipeline.
 type Runtime struct {
 	Catalog    *Catalog
+	Profiles   *Profiles
 	InvokeTool invocationapplication.InvokeTool
 
-	audit     *auditsqlite.Store
-	executors *invocationrouter.Router
+	audit      *auditsqlite.Store
+	executors  *invocationrouter.Router
+	mcpConfigs *mcpconfigstore.Store
 
 	closersMu sync.Mutex
 	closers   []io.Closer
@@ -46,6 +50,21 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 	if err != nil {
 		_ = catalog.Close()
 		return nil, fmt.Errorf("compose runtime: audit: %w", err)
+	}
+
+	profiles, err := NewProfiles(ctx, options.DatabasePath, catalog.store)
+	if err != nil {
+		_ = auditStore.Close()
+		_ = catalog.Close()
+		return nil, fmt.Errorf("compose runtime: profiles: %w", err)
+	}
+
+	configs, err := mcpconfigstore.Open(ctx, options.DatabasePath)
+	if err != nil {
+		_ = profiles.Close()
+		_ = auditStore.Close()
+		_ = catalog.Close()
+		return nil, fmt.Errorf("compose runtime: MCP configs: %w", err)
 	}
 
 	executors := invocationrouter.New()
@@ -65,9 +84,11 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 
 	return &Runtime{
 		Catalog:    catalog,
+		Profiles:   profiles,
 		InvokeTool: invokeTool,
 		audit:      auditStore,
 		executors:  executors,
+		mcpConfigs: configs,
 	}, nil
 }
 
@@ -95,10 +116,16 @@ func (r *Runtime) Close() error {
 	r.closers = nil
 	r.closersMu.Unlock()
 
-	errs := make([]error, 0, len(closers)+2)
+	errs := make([]error, 0, len(closers)+4)
 	for i := len(closers) - 1; i >= 0; i-- {
 		errs = append(errs, closers[i].Close())
 	}
-	errs = append(errs, r.audit.Close(), r.Catalog.Close())
+	errs = append(
+		errs,
+		r.mcpConfigs.Close(),
+		r.Profiles.Close(),
+		r.audit.Close(),
+		r.Catalog.Close(),
+	)
 	return errors.Join(errs...)
 }
