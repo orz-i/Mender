@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"path/filepath"
 	"testing"
+
+	"github.com/orz-i/Mender/backend/internal/buildinfo"
 )
 
 func TestDatabasePathResolution(t *testing.T) {
@@ -69,6 +71,38 @@ func TestDatabasePathResolution(t *testing.T) {
 			t.Fatalf("database path = %q", got)
 		}
 	})
+}
+
+func TestVersionCommandJSON(t *testing.T) {
+	oldVersion := buildinfo.Version
+	oldCommit := buildinfo.Commit
+	oldBuildDate := buildinfo.BuildDate
+	t.Cleanup(func() {
+		buildinfo.Version = oldVersion
+		buildinfo.Commit = oldCommit
+		buildinfo.BuildDate = oldBuildDate
+	})
+
+	buildinfo.Version = "v1.2.3"
+	buildinfo.Commit = "abcdef123456"
+	buildinfo.BuildDate = "2026-09-26T12:00:00Z"
+
+	var stdout, stderr bytes.Buffer
+	root := NewRootCommand(Options{Stdout: &stdout, Stderr: &stderr})
+	root.SetArgs([]string{"--output", "json", "version"})
+	if err := root.ExecuteContext(context.Background()); err != nil {
+		t.Fatalf("version error = %v stderr=%s", err, stderr.String())
+	}
+
+	var value map[string]any
+	if err := json.Unmarshal(stdout.Bytes(), &value); err != nil {
+		t.Fatalf("version JSON error = %v output=%q", err, stdout.String())
+	}
+	if value["version"] != "v1.2.3" ||
+		value["commit"] != "abcdef123456" ||
+		value["buildDate"] != "2026-09-26T12:00:00Z" {
+		t.Fatalf("version output = %#v", value)
+	}
 }
 
 func TestProfileCreateListAndShowJSON(t *testing.T) {

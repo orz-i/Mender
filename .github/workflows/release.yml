@@ -1,0 +1,80 @@
+name: Release Go binaries
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+  artifact-metadata: write
+
+jobs:
+  release-go:
+    name: Build and publish CLI/server
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: |
+            backend/go.sum
+            apps/desktop/go.sum
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 12.4.2
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: Build versioned Go release artifacts
+        run: pnpm release:go
+        env:
+          MENDER_VERSION: ${{ github.ref_name }}
+          MENDER_COMMIT: ${{ github.sha }}
+
+      - name: Generate SPDX SBOM
+        run: pnpm release:sbom
+
+      - name: Generate and verify SHA-256 checksums
+        run: |
+          pnpm release:checksums
+          pnpm release:checksums:verify
+
+      - name: Attest build provenance
+        if: github.event.repository.visibility == 'public' || vars.MENDER_ENABLE_ATTESTATIONS == 'true'
+        uses: actions/attest@v4
+        with:
+          subject-checksums: dist/release/SHA256SUMS
+
+      - name: Attest SBOM
+        if: github.event.repository.visibility == 'public' || vars.MENDER_ENABLE_ATTESTATIONS == 'true'
+        uses: actions/attest@v4
+        with:
+          subject-path: |
+            dist/release/go/mender-v*
+            dist/release/go/menderd-v*
+          sbom-path: dist/release/mender-go.spdx.json
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            dist/release/go/mender-v* \
+            dist/release/go/menderd-v* \
+            dist/release/go/build-metadata.json \
+            dist/release/mender-go.spdx.json \
+            dist/release/SHA256SUMS \
+            --verify-tag \
+            --generate-notes \
+            --title "Mender ${GITHUB_REF_NAME}"

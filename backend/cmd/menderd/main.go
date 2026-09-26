@@ -11,6 +11,7 @@ import (
 	"syscall"
 
 	"github.com/orz-i/Mender/backend/internal/bootstrap"
+	"github.com/orz-i/Mender/backend/internal/buildinfo"
 	"github.com/orz-i/Mender/backend/internal/management/httpapi"
 	managementserver "github.com/orz-i/Mender/backend/internal/management/server"
 )
@@ -48,6 +49,14 @@ func main() {
 	}()
 
 	handler := httpapi.New(runtime)
+	info := buildinfo.Current()
+	_, _ = fmt.Fprintf(
+		os.Stderr,
+		"menderd: %s commit=%s built=%s\n",
+		info.Version,
+		info.Commit,
+		info.BuildDate,
+	)
 	_, _ = fmt.Fprintf(os.Stderr, "menderd: management API listening on http://%s\n", listenAddress)
 	if err := managementserver.Run(ctx, listenAddress, handler); err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "menderd: %v\n", err)

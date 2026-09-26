@@ -7,6 +7,7 @@ import (
 	"log"
 
 	"github.com/orz-i/Mender/backend/internal/bootstrap"
+	"github.com/orz-i/Mender/backend/internal/buildinfo"
 	"github.com/orz-i/Mender/backend/internal/desktop/appdata"
 	desktopbinding "github.com/orz-i/Mender/backend/internal/desktop/binding"
 	"github.com/orz-i/Mender/backend/internal/desktop/lifecycle"
@@ -47,6 +48,12 @@ func run() error {
 	defer shutdown()
 
 	service := desktopbinding.NewService(ctx, runtime)
+	info := buildinfo.Current()
+	windowTitle := "Mender"
+	if info.Version != "dev" {
+		windowTitle = "Mender " + info.Version
+	}
+
 	app := application.New(application.Options{
 		Name:        "Mender",
 		Description: "Tools aggregation runtime and gateway for LLMs and Agents",
@@ -64,7 +71,7 @@ func run() error {
 
 	window := app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Name:      "main",
-		Title:     "Mender",
+		Title:     windowTitle,
 		Width:     1240,
 		Height:    820,
 		MinWidth:  960,
