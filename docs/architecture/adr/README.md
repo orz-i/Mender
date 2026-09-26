@@ -33,3 +33,4 @@ Minor implementation choices that remain inside an accepted architectural bounda
 | [0005](0005-frontend-desktop-stack.md) | Standardize the frontend stack and keep Wails as a shell | Accepted |
 - [ADR-0006: Use database/sql with a pure-Go SQLite driver for local persistence](0006-sqlite-persistence.md)
 - [ADR-0007: Centralize execution with data-minimized audit and execution-boundary credentials](0007-invocation-security-audit.md)
+- [ADR-0008: Treat MCP as an anti-corruption layer and serve 2026-07-28 stateless HTTP](0008-mcp-adapter.md)

@@ -105,7 +105,7 @@ See `phase-3-runtime.md`.
 
 ## Phase 4 — MCP provider and server adapters
 
-Status: Next
+Status: In progress
 
 Goals:
 
@@ -121,6 +121,8 @@ Exit criteria:
 - All paths use the same invocation pipeline.
 - Profile exposure rules are enforced.
 - MCP SDK types do not leak into domain packages.
+
+See `phase-4-mcp.md`.
 
 ## Phase 5 — CLI discovery and Agent Skill
 
