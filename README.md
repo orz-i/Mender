@@ -11,7 +11,7 @@ It provides one canonical tool model and execution pipeline, then exposes the sa
 
 ## Status
 
-Mender is in the architecture and project-governance phase. The repository intentionally starts with documentation, architectural decisions, and engineering constraints before implementation.
+The governance and foundation scaffold phases are complete. Product domain implementation has not started yet; the next phase establishes the canonical Catalog domain and persistence boundary.
 
 ## Product principles
 
@@ -30,6 +30,18 @@ See:
 - [System context](docs/architecture/context.md)
 - [Architecture Decision Records](docs/architecture/adr/)
 - [Roadmap](docs/planning/roadmap.md)
+- [Local development](docs/development/getting-started.md)
+
+## Development
+
+Bootstrap and verify the complete repository:
+
+```bash
+pnpm install --frozen-lockfile
+pnpm check
+```
+
+See [Local development](docs/development/getting-started.md) for individual commands and prerequisites.
 
 ## Planned technology stack
 

@@ -142,14 +142,14 @@ Feature/domain implementation should begin only after these gates pass.
 
 ## Exit checklist
 
-- [ ] Workspace structure matches ADR-0001.
-- [ ] Go commands build.
-- [ ] golangci-lint passes.
-- [ ] Go tests pass.
-- [ ] pnpm workspace installs reproducibly.
-- [ ] TypeScript strict typecheck passes.
-- [ ] ESLint passes.
-- [ ] Frontend tests pass.
-- [ ] Vite build passes.
-- [ ] CI executes the same quality gates.
-- [ ] No product feature logic has been introduced.
+- [x] Workspace structure matches ADR-0001.
+- [x] Go commands build.
+- [x] golangci-lint passes.
+- [x] Go tests pass.
+- [x] pnpm workspace installs reproducibly.
+- [x] TypeScript strict typecheck passes.
+- [x] ESLint passes.
+- [x] Frontend tests pass.
+- [x] Vite build passes.
+- [x] CI executes the same quality gates.
+- [x] No product feature logic has been introduced.

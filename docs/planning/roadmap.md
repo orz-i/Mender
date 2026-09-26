@@ -26,6 +26,8 @@ Exit criteria:
 
 ## Phase 1 — Foundation scaffold
 
+Status: Complete
+
 Goals:
 
 - Create the monorepo/workspace skeleton.
@@ -60,6 +62,8 @@ Exit criteria:
 See `phase-1-foundation.md`.
 
 ## Phase 2 — Catalog domain and persistence
+
+Status: Next
 
 Goals:
 

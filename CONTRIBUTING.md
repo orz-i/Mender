@@ -64,7 +64,13 @@ Use the repository pull request template.
 
 ## Quality gates
 
-Once the implementation scaffold is in place, changes are expected to pass:
+Run the complete local gate from the repository root:
+
+```bash
+pnpm check
+```
+
+The underlying checks are:
 
 ### Go
 
