@@ -63,7 +63,7 @@ See `phase-1-foundation.md`.
 
 ## Phase 2 — Catalog domain and persistence
 
-Status: Next
+Status: In progress
 
 Goals:
 
@@ -79,6 +79,8 @@ Exit criteria:
 - Tool schemas round-trip through persistence.
 - Search/describe queries work through application use cases.
 - Catalog infrastructure has integration tests.
+
+See `phase-2-catalog.md`.
 
 ## Phase 3 — Invocation, policy, credentials, and audit
 

@@ -31,3 +31,4 @@ Minor implementation choices that remain inside an accepted architectural bounda
 | [0003](0003-canonical-tool-model.md) | Use a protocol-independent canonical tool model | Accepted |
 | [0004](0004-runtime-modes-and-mcp.md) | Support local and remote modes with MCP as an adapter | Accepted |
 | [0005](0005-frontend-desktop-stack.md) | Standardize the frontend stack and keep Wails as a shell | Accepted |
+- [ADR-0006: Use database/sql with a pure-Go SQLite driver for local persistence](0006-sqlite-persistence.md)
