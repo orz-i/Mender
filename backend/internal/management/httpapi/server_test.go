@@ -109,6 +109,22 @@ func TestManagementAPIEndToEnd(t *testing.T) {
 		t.Fatalf("updated provider = %#v", updatedProvider)
 	}
 
+	transportChange := requestJSON(
+		t,
+		server.Client(),
+		http.MethodPut,
+		server.URL+"/api/v1/providers/"+providerID,
+		map[string]any{
+			"transport":   "stdio",
+			"displayName": "Upstream edited",
+			"executable":  "/bin/echo",
+		},
+		http.StatusBadRequest,
+	)
+	if transportChange["code"] != "validation_error" {
+		t.Fatalf("transport change error = %#v", transportChange)
+	}
+
 	search := requestJSON(
 		t,
 		server.Client(),

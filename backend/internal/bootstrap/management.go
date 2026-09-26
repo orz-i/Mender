@@ -99,6 +99,12 @@ func (r *Runtime) UpdateMCPProvider(
 	if err != nil {
 		return catalogdomain.Provider{}, err
 	}
+	if currentConfig.Transport != config.Transport {
+		return catalogdomain.Provider{}, catalogdomain.ValidationError{
+			Field:  "transport",
+			Reason: "must not change after Provider registration",
+		}
+	}
 
 	if err := r.mcpConfigs.Save(ctx, config); err != nil {
 		return catalogdomain.Provider{}, fmt.Errorf(
