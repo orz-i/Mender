@@ -12,7 +12,9 @@ The management server defaults to:
 
     http://127.0.0.1:8080
 
-It intentionally rejects non-loopback listen addresses in Phase 6 because remote management authentication and authorization have not been designed yet.
+It intentionally rejects non-loopback listen addresses because remote management authentication and authorization have not been designed yet.
+
+The HTTP adapter also validates local request provenance: Host must resolve to localhost/loopback, browser Origin (when present) must be localhost/loopback, and explicit cross-site Fetch Metadata is rejected. Mender does not add permissive CORS headers. These checks harden the local control plane against hostile web origins and DNS-rebinding-style paths; they are not a substitute for a future authenticated remote-management design.
 
 Use a specific database when needed:
 
@@ -42,7 +44,9 @@ The shared React application provides:
 
 Register Streamable HTTP or stdio MCP Providers, synchronize their Tool catalogs, and remove Providers that are no longer referenced by Profiles.
 
-Persistent stdio configuration does not store environment values or secrets.
+Persistent stdio configuration does not store environment values or secrets. Local stdio Provider processes receive only a small non-secret ambient environment allow-list rather than Mender's complete process environment.
+
+Non-loopback HTTP Provider endpoints must use HTTPS, and Provider URLs cannot contain URL userinfo credentials.
 
 ### Catalog
 

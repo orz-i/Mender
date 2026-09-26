@@ -1,6 +1,6 @@
 # Phase 8 Plan — Hardening and Distribution
 
-Status: In Progress
+Status: Complete
 
 ## Objective
 
@@ -57,12 +57,11 @@ The reviewed Syft release is:
 
 `v1.52.0` (2026-09-17)
 
-GitHub integration uses `anchore/sbom-action@v0.24.0` with `syft-version: v1.52.0`, so the scanner version is not inherited implicitly from the action bundle.
+Mender invokes Syft directly through the repository-owned `release:sbom` script using the version pinned in `.syft-version`; the GitHub release workflow calls the same script. This keeps local and CI SBOM generation on the same explicit scanner version.
 
-References:
+Reference:
 
 - https://github.com/anchore/syft/releases
-- https://github.com/anchore/sbom-action
 
 ### Build provenance
 
@@ -241,7 +240,7 @@ Desktop release artifacts are built natively on target OS runners where signatur
 
 Initial native release targets:
 
-- macOS arm64 and/or universal package according to release policy,
+- macOS 13+ arm64 and/or universal package according to release policy,
 - Windows amd64 and arm64 package paths,
 - Linux amd64 with GTK4/WebKitGTK 6.0 baseline; arm64 is supported when the runner/build environment is validated.
 
@@ -263,7 +262,7 @@ Release binaries should expose the build version/commit through a small protocol
 
 Version values are injected at build time. Development builds use explicit development defaults.
 
-Desktop metadata and release asset names use the same release version.
+When automated signed desktop publication is enabled, desktop metadata and release asset names must use the same release version. Phase 8 does not publish generic unsigned desktop artifacts.
 
 ## Performance and Catalog scale
 
@@ -310,25 +309,43 @@ Downgrades are allowed only when the older binary supports every recorded contex
 
 Small corrective commits remain preferable to bundling unrelated fixes.
 
+## Closeout
+
+Phase 8 completed on 2026-09-26.
+
+Final validation included:
+
+- `pnpm security:check`: pinned govulncheck reported no vulnerabilities in either Go module; production pnpm audit reported no known vulnerabilities.
+- `pnpm check`: OpenAPI/binding regeneration, architecture checks, golangci-lint, Go tests, Go race tests, ESLint, strict TypeScript, 4 Vitest files / 11 tests, and Web/Desktop production frontend builds all passed.
+- `actionlint v1.7.12`: all GitHub Actions workflows passed static validation.
+- Go release smoke: six GOOS/GOARCH targets produced 12 versioned CLI/daemon binaries; SPDX SBOM generation succeeded; 14 SHA-256 subjects verified against `SHA256SUMS`.
+- signing-secret audit: no tracked private-key PEM markers, common cloud access-key patterns, or `.p12` / `.pfx` / `.key` / `.pem` containers were found.
+- macOS native package smoke: Wails beta.26 produced an ad-hoc-signed `.app`; after aligning the deployment target with Go 1.27, the previous macOS 12/13 linker mismatch warning is gone.
+- Catalog scale: 10,000-Tool correctness coverage passes under normal and race testing. The Apple M4 development baseline is approximately 24.4 ms / 85 KB for unrestricted search and 21.4 ms / 280 KB for the 100-ID scoped workload, without a fixed CI timing threshold.
+
+Public desktop release automation remains intentionally gated on real platform signing credentials. Phase 8 establishes the requirement and native Wails signing paths without fabricating or committing credentials.
+
+Portable kernel-level Provider sandboxing remains intentionally unclaimed. Mender reduces ambient authority and documents the platform-specific boundary; any future OS sandbox must have a real independently tested implementation.
+
 ## Exit checklist
 
-- [ ] Management HTTP rejects non-local Host/Origin and cross-site browser requests.
-- [ ] menderd remains loopback-only.
-- [ ] Remote HTTP Providers require TLS except loopback.
-- [ ] Provider URLs cannot persist embedded userinfo credentials.
-- [ ] Stdio Providers do not inherit arbitrary Mender environment variables.
-- [ ] Provider tools/annotations remain untrusted for security decisions.
-- [ ] OS-level sandbox limits are documented without claiming unsupported isolation.
-- [ ] All SQLite stores reject unknown future schema versions.
-- [ ] Upgrade/downgrade strategy is documented.
-- [ ] Pinned Go and JS vulnerability scans pass.
-- [ ] Pull requests have dependency review where repository capabilities permit it.
-- [ ] SBOM generation is reproducible with a pinned Syft version.
-- [ ] Release artifacts receive SHA-256 checksums.
-- [ ] Public desktop release policy requires native signatures.
-- [ ] Release provenance/attestation is configured where supported.
-- [ ] No signing secrets are committed.
-- [ ] MCPB compatibility was evaluated and intentionally scoped.
-- [ ] Catalog 10k-scale correctness coverage exists.
-- [ ] Catalog search benchmark exists and is documented.
-- [ ] Full `pnpm check` passes.
+- [x] Management HTTP rejects non-local Host/Origin and cross-site browser requests.
+- [x] menderd remains loopback-only.
+- [x] Remote HTTP Providers require TLS except loopback.
+- [x] Provider URLs cannot persist embedded userinfo credentials.
+- [x] Stdio Providers do not inherit arbitrary Mender environment variables.
+- [x] Provider tools/annotations remain untrusted for security decisions.
+- [x] OS-level sandbox limits are documented without claiming unsupported isolation.
+- [x] All SQLite stores reject unknown future schema versions.
+- [x] Upgrade/downgrade strategy is documented.
+- [x] Pinned Go and JS vulnerability scans pass.
+- [x] Pull requests have dependency review where repository capabilities permit it.
+- [x] SBOM generation is reproducible with a pinned Syft version.
+- [x] Release artifacts receive SHA-256 checksums.
+- [x] Public desktop release policy requires native signatures.
+- [x] Release provenance/attestation is configured where supported.
+- [x] No signing secrets are committed.
+- [x] MCPB compatibility was evaluated and intentionally scoped.
+- [x] Catalog 10k-scale correctness coverage exists.
+- [x] Catalog search benchmark exists and is documented.
+- [x] Full `pnpm check` passes.

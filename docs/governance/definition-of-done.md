@@ -27,6 +27,7 @@ A change is done when all criteria relevant to its scope are satisfied.
 - Build passes for affected artifacts.
 - Integration/contract tests exist for changed infrastructure boundaries.
 - Regression coverage accompanies bug fixes where practical.
+- Persistence changes test upgrade behavior and rejection of unsupported future schema versions where applicable.
 
 ## Documentation
 
@@ -49,3 +50,12 @@ For changes involving tools or execution:
 - Credential resolution remains at the execution boundary.
 - Audit data excludes secret values.
 - Untrusted provider metadata is not treated as an enforcement guarantee.
+- New process/network boundaries minimize ambient authority and document any unavailable sandbox guarantee.
+
+For release/distribution changes:
+
+- dependency vulnerability scans pass,
+- generated release artifacts have reproducible SBOM/checksum generation,
+- signing credentials are not committed or logged,
+- public desktop artifacts require native platform signatures,
+- migrations and downgrade implications are documented in release notes when applicable.

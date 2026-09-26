@@ -41,6 +41,8 @@ mender provider add http \
   --endpoint https://example.com/mcp
 ```
 
+Non-loopback HTTP Providers must use HTTPS. Plain HTTP is accepted only for `localhost` / loopback development endpoints. URL userinfo such as `https://user:password@example.com/...` is rejected so Provider configuration cannot become a hidden credential store.
+
 Add a local stdio MCP Provider:
 
 ```bash
@@ -51,7 +53,7 @@ mender provider add stdio \
   --arg --stdio
 ```
 
-Persistent stdio configuration intentionally does not store environment values.
+Persistent stdio configuration intentionally does not store environment values. Stdio Provider processes also do not inherit Mender's arbitrary ambient environment: only a small non-secret process/runtime allow-list is passed automatically. Credential-bearing environment injection remains an explicit infrastructure-boundary capability rather than persistent Provider configuration.
 
 List Providers:
 
@@ -173,6 +175,17 @@ tool search --output json
 ```
 
 The Skill intentionally contains no duplicated Tool Catalog.
+
+## Build version
+
+Inspect the running CLI build without opening the Runtime database:
+
+```bash
+mender version
+mender --output json version
+```
+
+Release builds report version, source commit, and build date. Development builds report explicit development defaults.
 
 ## Exit codes
 

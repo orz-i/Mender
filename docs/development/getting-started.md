@@ -63,7 +63,7 @@ Run the loopback management API:
 pnpm run:server
 ```
 
-Run individual quality gates:
+Run individual portable quality gates:
 
 ```bash
 pnpm desktop:bindings:check
@@ -76,6 +76,20 @@ pnpm typecheck
 pnpm test
 pnpm build
 ```
+
+Run network-requiring dependency vulnerability scans separately:
+
+```bash
+pnpm security:check
+```
+
+Reproduce the Catalog scale benchmark with:
+
+```bash
+pnpm go:bench:catalog
+```
+
+Release and upgrade procedures are documented in [Release and Distribution](release.md) and [Upgrade and Downgrade](upgrades.md).
 
 ## Workspace boundaries
 
@@ -91,7 +105,7 @@ The repository now includes Catalog, the shared Invocation/Policy/Credential/Aud
 - Wails remains isolated from `backend/go.mod`; CLI/server dependency graphs do not contain Wails.
 - Web and Desktop both mount `packages/app` behind the same `MenderClient` contract, using HTTP and Wails transports respectively.
 
-Native Wails build/package checks are documented separately because they require platform GUI and packaging toolchains. The next implementation phase is hardening and distribution.
+Native Wails build/package checks are documented separately because they require platform GUI and packaging toolchains. Release signing, SBOM/checksum generation, dependency scanning, and database compatibility rules are repository-owned hardening concerns rather than UI behavior.
 
 ## Quality policy
 

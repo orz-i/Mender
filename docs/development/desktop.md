@@ -130,6 +130,8 @@ Wails runs the Vite development server through the checked-in Task configuration
 
 ## Native build
 
+Mender's macOS desktop baseline is macOS 13 Ventura or newer. The repository uses Go 1.27, whose Darwin port no longer supports macOS 12; the checked-in Wails deployment target and Info.plist minimum are therefore pinned to 13.0 even though the upstream Wails beta template currently defaults to 12.0.
+
 Build for the current platform:
 
 ```bash
@@ -149,9 +151,11 @@ The checked-in Wails v3 build assets provide:
 - Windows: amd64/arm64 build path, NSIS default packaging, and MSIX support.
 - Linux: amd64/arm64 build path plus AppImage, deb, rpm, and Arch packaging tasks.
 
-Cross-platform native builds may require Docker and the platform prerequisites expected by Wails. Signing, notarization, release certificates, checksums, and production release policy are Phase 8 concerns.
+Cross-platform native builds may require Docker and the platform prerequisites expected by Wails.
 
-Phase 7 validated `wails3 build` and `wails3 package` on the current macOS development host. The package command produced an ad-hoc-signed `.app`.
+A native package is not automatically a production release. Public desktop artifacts require platform-native signing; macOS distribution additionally requires notarization. Generic CI must not publish an unsigned or merely ad-hoc-signed desktop package as a production release. See [Release and Distribution](release.md).
+
+Phase 7 validated `wails3 build` and `wails3 package` on the current macOS development host. That local smoke package is ad-hoc-signed only.
 
 ## Quality gates
 

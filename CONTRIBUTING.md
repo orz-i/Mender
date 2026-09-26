@@ -93,6 +93,16 @@ pnpm build
 
 `vite build` is not a substitute for TypeScript type checking.
 
+### Security dependencies
+
+Network-requiring dependency scans are separate from the portable `pnpm check` gate:
+
+```bash
+pnpm security:check
+```
+
+Do not weaken vulnerability thresholds or suppress a scanner finding without documenting the affected dependency/reachability and the mitigation or accepted risk.
+
 ## Testing by layer
 
 - Domain: fast unit tests; no database, network, filesystem, or protocol runtime.
@@ -105,6 +115,8 @@ pnpm build
 Generated files must identify their generator where practical and must not be edited manually.
 
 Contract generation must be reproducible from source files committed in the repository.
+
+Release-generated SBOM/checksum artifacts are outputs, not source files. Their generator versions and source inputs must be pinned/reproducible.
 
 ## Dependencies
 

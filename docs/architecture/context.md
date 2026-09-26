@@ -95,7 +95,7 @@ It may expose a profile in direct, dynamic, or hybrid discovery mode.
 
 ### MCP provider adapter
 
-Connects to upstream MCP servers, maps their tools into the canonical Catalog model, and delegates execution through the Invocation application layer.
+Connects to upstream MCP servers, maps their tools into the canonical Catalog model, and delegates execution through the Invocation application layer. Remote non-loopback HTTP transport requires TLS; local stdio processes run without a shell and receive a reduced ambient environment. These controls reduce authority but do not claim kernel-level Provider sandboxing.
 
 ### CLI adapter
 
