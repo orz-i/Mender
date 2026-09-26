@@ -1,6 +1,6 @@
 # MCP Server Management
 
-Status: In Progress
+Status: Complete
 
 ## Objective
 
@@ -93,16 +93,34 @@ Add host-neutral client operations:
 
 Both loopback Management HTTP and Wails bindings expose the same Runtime operations.
 
+## Closeout
+
+Completed on 2026-09-26.
+
+Validated behavior:
+
+- Runtime-managed Streamable HTTP servers bind only to loopback addresses and expose MCP at `/mcp`.
+- Management HTTP and Wails both support list/start/restart/stop through the shared Runtime manager.
+- A real MCP client connected to a managed endpoint and observed the Profile-exported Tool.
+- Stop/Restart force-close lingering downstream connections after the graceful shutdown timeout, and the race suite covers this lifecycle.
+- Downstream endpoints reject non-local Host/Origin and explicit cross-site browser provenance.
+- Servers are ephemeral and are closed by `Runtime.Close`; no SQLite/autostart state was added.
+- The shared Servers page exposes runtime status, endpoint/config copy, Restart, and Stop.
+- Profiles with zero Tool membership are called out in the Start dialog to avoid a misleading “running but no Provider Tools” state.
+- `pnpm check` passed with OpenAPI/Wails regeneration, Go lint/tests/race, ESLint, strict TypeScript, 21 Vitest tests, and Web/Desktop production builds.
+- macOS `wails3 package` completed successfully with the local ad-hoc signature.
+
 ## Exit criteria
 
-- [ ] Servers page exists as a dedicated route.
-- [ ] Start dialog selects Profile and loopback address.
-- [ ] Running server list exposes endpoint and status.
-- [ ] Stop and Restart work without restarting the Desktop app.
-- [ ] Client configuration can be copied for a running server.
-- [ ] Runtime closes all managed servers during shutdown.
-- [ ] Repeated Tool calls / server starts do not unnecessarily reconnect already-active Providers.
-- [ ] HTTP management and Wails clients share one contract.
-- [ ] Non-loopback binds are rejected.
-- [ ] Full `pnpm check` passes.
-- [ ] macOS Desktop native package smoke succeeds.
+- [x] Servers page exists as a dedicated route.
+- [x] Start dialog selects Profile and loopback address.
+- [x] Running server list exposes endpoint and status.
+- [x] Stop and Restart work without restarting the Desktop app.
+- [x] Client configuration can be copied for a running server.
+- [x] Runtime closes all managed servers during shutdown.
+- [x] Repeated Server starts reuse already-active Provider executors.
+- [x] HTTP management and Wails clients share one contract.
+- [x] Non-loopback binds are rejected.
+- [x] Downstream MCP HTTP requests reject non-local Host/Origin and cross-site browser provenance.
+- [x] Full `pnpm check` passes.
+- [x] macOS Desktop native package smoke succeeds.

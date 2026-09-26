@@ -148,6 +148,9 @@ export function ServersPage({ client }: { client: MenderClient }) {
     }
   }
 
+  const selectedProfile =
+    profiles.find((profile) => profile.slug === startProfile) ?? null;
+
   async function copy(value: string, key: string) {
     try {
       if (navigator.clipboard === undefined) {
@@ -329,11 +332,19 @@ export function ServersPage({ client }: { client: MenderClient }) {
               >
                 {profiles.map((profile) => (
                   <option key={profile.profileId} value={profile.slug}>
-                    {profile.displayName} ({profile.slug})
+                    {profile.displayName} ({profile.slug}) · {profile.tools.length} tools
                   </option>
                 ))}
               </select>
             </Field>
+
+            {selectedProfile !== null && selectedProfile.tools.length === 0 ? (
+              <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-5">
+                This Profile currently contains 0 Tools. The server can start,
+                but downstream discovery will not return Provider Tools until
+                you add Tool membership on the Profiles page and Restart it.
+              </div>
+            ) : null}
 
             <Field label="Listen address">
               <Input

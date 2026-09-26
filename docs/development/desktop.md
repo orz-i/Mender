@@ -210,10 +210,13 @@ Desktop currently exposes the same management workflows as the Web UI:
 - Providers,
 - Catalog search/describe/invoke,
 - Profiles,
+- managed MCP Servers,
 - Policy status,
 - Credential resolver status,
 - Audit.
 
 Policy and Credential remain read-only.
+
+The Desktop `Servers` page can start a Profile as a loopback Streamable HTTP MCP server without launching a second Mender process. Running servers are ephemeral Runtime state and stop with the Desktop process. The page provides endpoint/config copy plus Restart/Stop controls. stdio serving remains client-launched through the CLI because its lifetime is tied to the external client's stdin/stdout process.
 
 Phase 7 intentionally does not add tray behavior, notifications, deep links, file dialogs, auto-start, or other native integrations without a product requirement.

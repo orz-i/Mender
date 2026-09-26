@@ -36,6 +36,7 @@ The shared React application provides:
 - Providers
 - Catalog
 - Profiles
+- Servers
 - Policy
 - Credentials
 - Audit
@@ -76,6 +77,28 @@ Browse/search never eagerly loads Tool schemas. Search can be restricted to one 
 ### Profiles
 
 Profiles is also list-first. `Create profile` opens a Dialog; Tool membership management opens from each Profile row in a separate Manage Dialog. The page itself does not permanently combine creation, selection, and membership editing surfaces.
+
+### Servers
+
+Servers completes the management flow by exposing a persisted Profile as a running downstream MCP endpoint.
+
+The page lists runtime-owned Streamable HTTP servers and supports Start, Restart, Stop, endpoint copy, and client-config copy.
+
+Start selects a Profile and loopback bind address. The endpoint is exposed at `/mcp`, for example:
+
+```text
+http://127.0.0.1:8765/mcp
+```
+
+Managed servers are runtime-only. They stop when Mender exits and are not auto-started after restart. Profile changes require Restart before an already-running server sees the new Profile snapshot.
+
+Desktop-managed/management-managed servers are loopback-only and reject non-local Host/Origin and explicit cross-site browser requests. Remote downstream serving is intentionally unavailable until authentication/authorization is designed.
+
+stdio remains client-launched through:
+
+```bash
+mender serve mcp --profile default --stdio
+```
 
 ### Policy and Credentials
 
