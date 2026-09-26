@@ -32,7 +32,9 @@ func ConnectTransport(ctx context.Context, transport mcp.Transport) (*Connection
 
 	client := mcp.NewClient(
 		&mcp.Implementation{Name: clientName, Version: clientVersion},
-		nil,
+		&mcp.ClientOptions{
+			MultiRoundTrip: &mcp.MultiRoundTripOptions{Disabled: true},
+		},
 	)
 	session, err := client.Connect(ctx, transport, nil)
 	if err != nil {
