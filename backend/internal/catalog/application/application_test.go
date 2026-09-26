@@ -225,6 +225,30 @@ func TestDescribeAndSearchToolsUseApplicationPorts(t *testing.T) {
 	if len(results) != 1 || results[0].ToolID != githubTool.ID() || results[0].Rank != 1 {
 		t.Fatalf("SearchTools results = %+v", results)
 	}
+
+	restricted, err := search.Execute(context.Background(), SearchToolsRequest{
+		Query:          "github",
+		Limit:          10,
+		AllowedToolIDs: []domain.ToolID{other.ID()},
+	})
+	if err != nil {
+		t.Fatalf("restricted SearchTools.Execute() error = %v", err)
+	}
+	if len(restricted) != 1 || restricted[0].ToolID != other.ID() {
+		t.Fatalf("restricted SearchTools results = %+v", restricted)
+	}
+
+	empty, err := search.Execute(context.Background(), SearchToolsRequest{
+		Query:          "github",
+		Limit:          10,
+		AllowedToolIDs: []domain.ToolID{},
+	})
+	if err != nil {
+		t.Fatalf("empty scoped SearchTools.Execute() error = %v", err)
+	}
+	if len(empty) != 0 {
+		t.Fatalf("empty scoped SearchTools results = %+v", empty)
+	}
 }
 
 type fixedClock struct {
@@ -356,14 +380,24 @@ func (m *memoryCatalog) SearchTools(
 	_ context.Context,
 	query string,
 	limit int,
-	providerID *domain.ProviderID,
+	scope ToolSearchScope,
 ) ([]domain.Tool, error) {
 	query = strings.ToLower(query)
 	result := make([]domain.Tool, 0, limit)
 
+	allowed := make(map[domain.ToolID]struct{}, len(scope.AllowedToolIDs))
+	for _, id := range scope.AllowedToolIDs {
+		allowed[id] = struct{}{}
+	}
+
 	for _, tool := range m.toolsByID {
-		if providerID != nil && tool.ProviderID() != *providerID {
+		if scope.ProviderID != nil && tool.ProviderID() != *scope.ProviderID {
 			continue
+		}
+		if scope.AllowedToolIDs != nil {
+			if _, visible := allowed[tool.ID()]; !visible {
+				continue
+			}
 		}
 		haystack := strings.ToLower(fmt.Sprintf(
 			"%s %s %s %s",

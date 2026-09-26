@@ -145,6 +145,30 @@ func TestToolSchemaRoundTripDescribeAndSearch(t *testing.T) {
 	if len(prefixResults) != 1 || prefixResults[0].ToolID != branchTool.ID() {
 		t.Fatalf("prefix search results = %+v", prefixResults)
 	}
+
+	restricted, err := search.Execute(context.Background(), application.SearchToolsRequest{
+		Query:          "repository",
+		Limit:          10,
+		AllowedToolIDs: []domain.ToolID{branchTool.ID()},
+	})
+	if err != nil {
+		t.Fatalf("restricted search error = %v", err)
+	}
+	if len(restricted) != 1 || restricted[0].ToolID != branchTool.ID() {
+		t.Fatalf("restricted search results = %+v", restricted)
+	}
+
+	empty, err := search.Execute(context.Background(), application.SearchToolsRequest{
+		Query:          "repository",
+		Limit:          10,
+		AllowedToolIDs: []domain.ToolID{},
+	})
+	if err != nil {
+		t.Fatalf("empty scoped search error = %v", err)
+	}
+	if len(empty) != 0 {
+		t.Fatalf("empty scoped search results = %+v", empty)
+	}
 }
 
 func TestReplaceProviderToolsRemovesOldSnapshotAndSearchRows(t *testing.T) {

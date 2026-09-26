@@ -3,10 +3,20 @@ package application
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/orz-i/Mender/backend/internal/catalog/domain"
 )
+
+// ToolSearchScope restricts lexical discovery without changing ranking semantics.
+//
+// A nil AllowedToolIDs slice means unrestricted. A non-nil empty slice means
+// that no Tool is visible.
+type ToolSearchScope struct {
+	ProviderID     *domain.ProviderID
+	AllowedToolIDs []domain.ToolID
+}
 
 // ToolSearch finds canonical Tools ordered by relevance.
 type ToolSearch interface {
@@ -14,15 +24,16 @@ type ToolSearch interface {
 		context.Context,
 		string,
 		int,
-		*domain.ProviderID,
+		ToolSearchScope,
 	) ([]domain.Tool, error)
 }
 
-// SearchToolsRequest defines initial lexical discovery constraints.
+// SearchToolsRequest defines lexical discovery constraints.
 type SearchToolsRequest struct {
-	Query      string
-	Limit      int
-	ProviderID *domain.ProviderID
+	Query          string
+	Limit          int
+	ProviderID     *domain.ProviderID
+	AllowedToolIDs []domain.ToolID
 }
 
 // ToolSearchResult is a compact application projection for discovery results.
@@ -56,7 +67,16 @@ func (uc SearchTools) Execute(
 		return nil, ErrInvalidSearchLimit
 	}
 
-	tools, err := uc.search.SearchTools(ctx, query, request.Limit, request.ProviderID)
+	for _, id := range request.AllowedToolIDs {
+		if _, err := domain.ParseToolID(id.String()); err != nil {
+			return nil, fmt.Errorf("search tools: allowed tool id: %w", err)
+		}
+	}
+
+	tools, err := uc.search.SearchTools(ctx, query, request.Limit, ToolSearchScope{
+		ProviderID:     request.ProviderID,
+		AllowedToolIDs: slices.Clone(request.AllowedToolIDs),
+	})
 	if err != nil {
 		return nil, fmt.Errorf("search tools: %w", err)
 	}
