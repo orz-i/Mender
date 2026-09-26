@@ -181,7 +181,7 @@ See `phase-7-wails-desktop.md`.
 
 ## Phase 8 — Hardening and distribution
 
-Status: Next
+Status: In Progress
 
 Goals:
 
@@ -192,4 +192,4 @@ Goals:
 - Upgrade/migration strategy.
 - Performance and catalog-scale validation.
 
-Exit criteria are defined when this phase becomes active.
+Exit criteria are defined in `phase-8-hardening-distribution.md`.

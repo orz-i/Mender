@@ -37,3 +37,6 @@ Minor implementation choices that remain inside an accepted architectural bounda
 - [ADR-0009: Make the CLI a first-class local adapter with stable JSON contracts](0009-cli-contract.md)
 - [ADR-0010: Use an OpenAPI-first loopback management control plane](0010-management-api.md)
 - [ADR-0011: Isolate Wails as a desktop shell with a host-neutral management client](0011-wails-desktop-host.md)
+- [ADR-0012: Harden local management and upstream Provider execution boundaries](0012-local-security-hardening.md)
+- [ADR-0013: Require verifiable release artifacts and supply-chain evidence](0013-release-supply-chain.md)
+- [ADR-0014: Fail closed on future SQLite schemas and use forward-only migrations](0014-sqlite-upgrade-compatibility.md)
