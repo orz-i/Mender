@@ -4,9 +4,9 @@ import { createMenderClient } from "./client";
 
 describe("Mender SDK", () => {
   it("uses the generated provider contract", async () => {
-    const fetch = async (request: Request) => {
+    const fetch = (request: Request) => {
       expect(request.url).toContain("/api/v1/providers");
-      return new Response(
+      return Promise.resolve(new Response(
         JSON.stringify({
           providers: [
             {
@@ -25,7 +25,7 @@ describe("Mender SDK", () => {
           status: 200,
           headers: { "Content-Type": "application/json" },
         },
-      );
+      ));
     };
 
     const client = createMenderClient({
@@ -40,8 +40,8 @@ describe("Mender SDK", () => {
   it("maps API error envelopes", async () => {
     const client = createMenderClient({
       baseUrl: "http://localhost:8080/api/v1",
-      fetch: async () =>
-        new Response(
+      fetch: () =>
+        Promise.resolve(new Response(
           JSON.stringify({
             code: "not_found",
             message: "tool not found",
@@ -50,7 +50,7 @@ describe("Mender SDK", () => {
             status: 404,
             headers: { "Content-Type": "application/json" },
           },
-        ),
+        )),
     });
 
     await expect(client.getTool("tool_missing")).rejects.toMatchObject({
