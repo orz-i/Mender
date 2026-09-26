@@ -42,6 +42,14 @@ func (r *Router) Register(
 	return nil
 }
 
+// HasProvider reports whether an executor is already registered for a Provider.
+func (r *Router) HasProvider(providerID catalogdomain.ProviderID) bool {
+	r.mu.RLock()
+	_, ok := r.executors[providerID]
+	r.mu.RUnlock()
+	return ok
+}
+
 // ExecutorFor returns the executor registered for the Tool's Provider.
 func (r *Router) ExecutorFor(
 	_ context.Context,

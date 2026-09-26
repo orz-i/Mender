@@ -39,6 +39,10 @@ type Runtime struct {
 
 	closersMu sync.Mutex
 	closers   []io.Closer
+
+	providerActivationMu sync.Mutex
+	mcpServersMu         sync.Mutex
+	mcpServers           map[string]*managedMCPServer
 }
 
 // NewRuntime constructs the protocol-independent local runtime.
@@ -92,6 +96,7 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		audit:      auditStore,
 		executors:  executors,
 		mcpConfigs: configs,
+		mcpServers: make(map[string]*managedMCPServer),
 	}, nil
 }
 
@@ -114,12 +119,15 @@ func (r *Runtime) addCloser(closer io.Closer) {
 
 // Close releases all runtime-owned infrastructure.
 func (r *Runtime) Close() error {
+	serverErr := r.closeManagedMCPServers()
+
 	r.closersMu.Lock()
 	closers := append([]io.Closer(nil), r.closers...)
 	r.closers = nil
 	r.closersMu.Unlock()
 
-	errs := make([]error, 0, len(closers)+4)
+	errs := make([]error, 0, len(closers)+5)
+	errs = append(errs, serverErr)
 	for i := len(closers) - 1; i >= 0; i-- {
 		errs = append(errs, closers[i].Close())
 	}

@@ -6,11 +6,9 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"sort"
 	"time"
 
 	"github.com/orz-i/Mender/backend/internal/bootstrap"
-	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	mcpserver "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/server"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 	"github.com/spf13/cobra"
@@ -51,7 +49,7 @@ func (a *app) newServeMCPCommand() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				if err := activateProfileProviders(cmd.Context(), runtime, profile); err != nil {
+				if err := runtime.ActivateProfileProviders(cmd.Context(), profile); err != nil {
 					return err
 				}
 
@@ -84,36 +82,6 @@ func (a *app) newServeMCPCommand() *cobra.Command {
 	command.Flags().BoolVar(&stdio, "stdio", false, "serve MCP over stdin/stdout")
 	command.Flags().StringVar(&httpAddress, "http", "", "serve stateless Streamable HTTP on address")
 	return command
-}
-
-func activateProfileProviders(
-	ctx context.Context,
-	runtime *bootstrap.Runtime,
-	profile profiledomain.Profile,
-) error {
-	providerSet := make(map[catalogdomain.ProviderID]struct{})
-	for _, toolID := range profile.ToolIDs() {
-		tool, err := runtime.Catalog.DescribeTool.Execute(ctx, toolID)
-		if err != nil {
-			return fmt.Errorf("activate profile provider: describe %s: %w", toolID, err)
-		}
-		providerSet[tool.ProviderID()] = struct{}{}
-	}
-
-	providerIDs := make([]catalogdomain.ProviderID, 0, len(providerSet))
-	for providerID := range providerSet {
-		providerIDs = append(providerIDs, providerID)
-	}
-	sort.Slice(providerIDs, func(i, j int) bool {
-		return providerIDs[i].String() < providerIDs[j].String()
-	})
-
-	for _, providerID := range providerIDs {
-		if err := runtime.ActivateConfiguredMCPProvider(ctx, providerID); err != nil {
-			return fmt.Errorf("activate profile provider %s: %w", providerID, err)
-		}
-	}
-	return nil
 }
 
 func serveHTTP(
