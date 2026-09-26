@@ -343,13 +343,13 @@ docs: complete catalog foundation phase
 
 ## Exit checklist
 
-- [ ] Canonical Tool model has no MCP SDK dependency.
-- [ ] Provider identity rules are tested.
-- [ ] Tool identity preservation across synchronization is tested.
-- [ ] Duplicate source keys are rejected.
-- [ ] Input/output schemas round-trip through persistence.
-- [ ] Register/Get Provider use cases work through ports.
-- [ ] Search/Describe Tool queries work through application use cases.
-- [ ] SQLite repository integration tests pass.
-- [ ] FTS search returns expected tools.
-- [ ] `pnpm check` passes.
+- [x] Canonical Tool model has no MCP SDK dependency.
+- [x] Provider identity rules are tested.
+- [x] Tool identity preservation across synchronization is tested.
+- [x] Duplicate source keys are rejected.
+- [x] Input/output schemas round-trip through persistence.
+- [x] Register/Get Provider use cases work through ports.
+- [x] Search/Describe Tool queries work through application use cases.
+- [x] SQLite repository integration tests pass.
+- [x] FTS search returns expected tools.
+- [x] `pnpm check` passes.

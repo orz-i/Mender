@@ -70,9 +70,9 @@ pnpm build
 
 ## Workspace boundaries
 
-The current scaffold intentionally contains no product domain implementation.
+The repository now includes the Catalog bounded context; later product contexts remain intentionally absent until their owning phases begin.
 
-- `backend/` contains Go executable hosts and the future application/domain core.
+- `backend/` contains Go executable hosts, the Catalog bounded context, and composition roots.
 - `apps/web/` is the browser host.
 - `packages/app/` is the shared React application shell.
 - `packages/ui/` is the shared UI boundary and shadcn/ui destination.
@@ -80,7 +80,7 @@ The current scaffold intentionally contains no product domain implementation.
 - `contracts/` and `skills/` will be introduced when their owning phases begin.
 - Wails is intentionally not required by the current CLI/server/web build.
 
-The next implementation phase is Catalog domain and persistence. It must begin from canonical Provider/Tool models rather than MCP SDK types.
+The next implementation phase is Invocation, Policy, Credential, and Audit. It must reuse Catalog through application boundaries and must not bypass Catalog ownership through SQLite tables.
 
 ## Quality policy
 

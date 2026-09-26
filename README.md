@@ -11,7 +11,7 @@ It provides one canonical tool model and execution pipeline, then exposes the sa
 
 ## Status
 
-The governance and foundation scaffold phases are complete. Product domain implementation has not started yet; the next phase establishes the canonical Catalog domain and persistence boundary.
+The governance, foundation scaffold, and Catalog phases are complete. Catalog now provides protocol-independent Provider/Tool models, application use cases, SQLite persistence, and FTS discovery. The next phase establishes Invocation, Policy, Credential, and Audit behavior.
 
 ## Product principles
 
