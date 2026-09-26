@@ -204,7 +204,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        put?: never;
+        put: operations["replaceProfileTools"];
         post: operations["addProfileTool"];
         delete?: never;
         options?: never;
@@ -469,6 +469,9 @@ export interface components {
         AddProfileToolRequest: {
             toolId: string;
             direct?: boolean;
+        };
+        ReplaceProfileToolsRequest: {
+            tools: components["schemas"]["ProfileTool"][];
         };
         ProfileTool: {
             toolId: string;
@@ -934,6 +937,35 @@ export interface operations {
                     "application/json": components["schemas"]["Profile"];
                 };
             };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    replaceProfileTools: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: components["parameters"]["ProfileSlug"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReplaceProfileToolsRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated profile */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Profile"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
         };

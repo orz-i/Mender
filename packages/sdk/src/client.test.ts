@@ -131,6 +131,55 @@ describe("Mender SDK", () => {
     expect(result.tools[0]?.name).toBe("search");
   });
 
+  it("replaces Profile Tool membership through the generated contract", async () => {
+    const fetch = async (request: Request) => {
+      expect(request.method).toBe("PUT");
+      expect(request.url).toContain("/api/v1/profiles/default/tools");
+      await expect(request.json()).resolves.toEqual({
+        tools: [
+          { toolId: "tool_1", direct: true },
+          { toolId: "tool_2", direct: false },
+        ],
+      });
+      return new Response(
+        JSON.stringify({
+          profileId: "prof_1",
+          slug: "default",
+          displayName: "Default",
+          mode: "hybrid",
+          tools: [
+            { toolId: "tool_1", direct: true },
+            { toolId: "tool_2", direct: false },
+          ],
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    };
+
+    const client = createMenderClient({
+      baseUrl: "http://localhost:8080/api/v1",
+      fetch,
+    });
+
+    await expect(
+      client.replaceProfileTools("default", {
+        tools: [
+          { toolId: "tool_1", direct: true },
+          { toolId: "tool_2", direct: false },
+        ],
+      }),
+    ).resolves.toMatchObject({
+      slug: "default",
+      tools: [
+        { toolId: "tool_1", direct: true },
+        { toolId: "tool_2", direct: false },
+      ],
+    });
+  });
+
   it("starts a managed MCP server through the generated contract", async () => {
     const fetch = async (request: Request) => {
       expect(request.method).toBe("POST");

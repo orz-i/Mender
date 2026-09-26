@@ -11,11 +11,12 @@ import (
 
 // Profiles composes persistent Profile use cases.
 type Profiles struct {
-	Create     profileapplication.CreateProfile
-	Get        profileapplication.GetProfile
-	List       profileapplication.ListProfiles
-	AddTool    profileapplication.AddTool
-	RemoveTool profileapplication.RemoveTool
+	Create       profileapplication.CreateProfile
+	Get          profileapplication.GetProfile
+	List         profileapplication.ListProfiles
+	AddTool      profileapplication.AddTool
+	ReplaceTools profileapplication.ReplaceTools
+	RemoveTool   profileapplication.RemoveTool
 
 	store *profilesqlite.Store
 }
@@ -32,12 +33,13 @@ func NewProfiles(
 	ids := profileidentity.NewGenerator()
 
 	return &Profiles{
-		Create:     profileapplication.NewCreateProfile(store, ids),
-		Get:        profileapplication.NewGetProfile(store),
-		List:       profileapplication.NewListProfiles(store),
-		AddTool:    profileapplication.NewAddTool(store, tools),
-		RemoveTool: profileapplication.NewRemoveTool(store),
-		store:      store,
+		Create:       profileapplication.NewCreateProfile(store, ids),
+		Get:          profileapplication.NewGetProfile(store),
+		List:         profileapplication.NewListProfiles(store),
+		AddTool:      profileapplication.NewAddTool(store, tools),
+		ReplaceTools: profileapplication.NewReplaceTools(store, tools),
+		RemoveTool:   profileapplication.NewRemoveTool(store),
+		store:        store,
 	}, nil
 }
 

@@ -462,6 +462,40 @@ func (s *Service) AddProfileTool(
 	return profileProjection(profile), nil
 }
 
+func (s *Service) ReplaceProfileTools(
+	slug string,
+	tools []ProfileTool,
+) (Profile, error) {
+	profileSlug, err := profiledomain.NewSlug(slug)
+	if err != nil {
+		return Profile{}, err
+	}
+
+	selections := make([]profileapplication.ReplaceToolSelection, 0, len(tools))
+	for _, item := range tools {
+		id, err := catalogdomain.ParseToolID(item.ToolID)
+		if err != nil {
+			return Profile{}, err
+		}
+		selections = append(selections, profileapplication.ReplaceToolSelection{
+			ToolID: id,
+			Direct: item.Direct,
+		})
+	}
+
+	profile, err := s.runtime.Profiles.ReplaceTools.Execute(
+		s.ctx,
+		profileapplication.ReplaceToolsRequest{
+			ProfileSlug: profileSlug,
+			Tools:       selections,
+		},
+	)
+	if err != nil {
+		return Profile{}, err
+	}
+	return profileProjection(profile), nil
+}
+
 func (s *Service) RemoveProfileTool(slug string, toolID string) (Profile, error) {
 	profileSlug, err := profiledomain.NewSlug(slug)
 	if err != nil {

@@ -61,6 +61,7 @@ func (h *Handler) routes() {
 	h.mux.HandleFunc("POST /api/v1/profiles", h.createProfile)
 	h.mux.HandleFunc("GET /api/v1/profiles/{slug}", h.getProfile)
 	h.mux.HandleFunc("POST /api/v1/profiles/{slug}/tools", h.addProfileTool)
+	h.mux.HandleFunc("PUT /api/v1/profiles/{slug}/tools", h.replaceProfileTools)
 	h.mux.HandleFunc("DELETE /api/v1/profiles/{slug}/tools/{toolId}", h.removeProfileTool)
 
 	h.mux.HandleFunc("GET /api/v1/mcp/servers", h.listMCPServers)

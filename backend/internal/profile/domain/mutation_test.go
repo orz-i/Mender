@@ -2,6 +2,30 @@ package domain
 
 import "testing"
 
+func TestProfileReplaceToolsNormalizesByMode(t *testing.T) {
+	t.Parallel()
+
+	id, _ := ParseProfileID("prof_00000000000000000000000000000001")
+	slug, _ := NewSlug("default")
+	first := mustToolID(t, "tool_00000000000000000000000000000001")
+	second := mustToolID(t, "tool_00000000000000000000000000000002")
+
+	profile, err := NewProfile(id, slug, "Default", ExposureDirect, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	replaced, err := profile.ReplaceTools([]ToolSelection{
+		{ToolID: first, Direct: false},
+		{ToolID: second, Direct: false},
+	})
+	if err != nil {
+		t.Fatalf("ReplaceTools() error = %v", err)
+	}
+	if len(replaced.Selections()) != 2 || len(replaced.DirectToolIDs()) != 2 {
+		t.Fatalf("replaced selections = %+v", replaced.Selections())
+	}
+}
+
 func TestProfileAddAndRemoveTool(t *testing.T) {
 	t.Parallel()
 

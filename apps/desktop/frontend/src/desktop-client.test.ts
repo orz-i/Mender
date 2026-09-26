@@ -8,6 +8,7 @@ vi.mock(
       GetSystemStatus: vi.fn(),
       ListMCPServers: vi.fn(),
       ListProviders: vi.fn(),
+      ReplaceProfileTools: vi.fn(),
       RestartMCPServer: vi.fn(),
       StartMCPServer: vi.fn(),
       StopMCPServer: vi.fn(),
@@ -186,6 +187,33 @@ describe("desktop Mender client", () => {
       ],
     });
     expect(Service.BrowseTools).toHaveBeenCalledWith(100, "");
+  });
+
+  it("replaces Profile Tool membership through Wails", async () => {
+    vi.mocked(Service.ReplaceProfileTools).mockResolvedValue({
+      profileId: "prof_1",
+      slug: "default",
+      displayName: "Default",
+      mode: "hybrid",
+      tools: [
+        { toolId: "tool_1", direct: true },
+        { toolId: "tool_2", direct: false },
+      ],
+    });
+
+    const client = createDesktopMenderClient();
+    const result = await client.replaceProfileTools("default", {
+      tools: [
+        { toolId: "tool_1", direct: true },
+        { toolId: "tool_2", direct: false },
+      ],
+    });
+
+    expect(Service.ReplaceProfileTools).toHaveBeenCalledWith("default", [
+      { toolId: "tool_1", direct: true },
+      { toolId: "tool_2", direct: false },
+    ]);
+    expect(result.tools).toHaveLength(2);
   });
 
   it("adapts managed MCP server lifecycle to Wails", async () => {

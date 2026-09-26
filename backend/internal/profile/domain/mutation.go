@@ -17,6 +17,11 @@ func (p Profile) AddTool(toolID catalogdomain.ToolID, direct bool) (Profile, err
 	return NewProfile(p.id, p.slug, p.displayName, p.mode, selections)
 }
 
+// ReplaceTools returns the same Profile identity with an exact Tool membership set.
+func (p Profile) ReplaceTools(selections []ToolSelection) (Profile, error) {
+	return NewProfile(p.id, p.slug, p.displayName, p.mode, selections)
+}
+
 // RemoveTool returns a new Profile without one Tool membership.
 func (p Profile) RemoveTool(toolID catalogdomain.ToolID) (Profile, error) {
 	if !p.Contains(toolID) {

@@ -84,6 +84,10 @@ export function RemoveProfileTool(slug: string, toolID: string): $CancellablePro
     return $Call.ByID(610642707, slug, toolID);
 }
 
+export function ReplaceProfileTools(slug: string, tools: $models.ProfileTool[] | null): $CancellablePromise<$models.Profile> {
+    return $Call.ByID(1466001064, slug, tools);
+}
+
 export function RestartMCPServer(serverID: string): $CancellablePromise<$models.MCPServerInstance> {
     return $Call.ByID(2194966826, serverID);
 }

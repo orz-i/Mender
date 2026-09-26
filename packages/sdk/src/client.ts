@@ -26,6 +26,8 @@ export type UpdateProviderRequest =
 export type CreateProfileRequest = components["schemas"]["CreateProfileRequest"];
 export type AddProfileToolRequest =
   components["schemas"]["AddProfileToolRequest"];
+export type ReplaceProfileToolsRequest =
+  components["schemas"]["ReplaceProfileToolsRequest"];
 
 export interface BrowseToolsInput {
   limit?: number;
@@ -64,6 +66,10 @@ export interface MenderClient {
   createProfile(body: CreateProfileRequest): Promise<Profile>;
   getProfile(slug: string): Promise<Profile>;
   addProfileTool(slug: string, body: AddProfileToolRequest): Promise<Profile>;
+  replaceProfileTools(
+    slug: string,
+    body: ReplaceProfileToolsRequest,
+  ): Promise<Profile>;
   removeProfileTool(slug: string, toolId: string): Promise<Profile>;
   listMCPServers(): Promise<{ servers: MCPServerInstance[] }>;
   startMCPServer(body: StartMCPServerRequest): Promise<MCPServerInstance>;
@@ -207,6 +213,17 @@ export function createMenderClient(
 
     async addProfileTool(slug: string, body: AddProfileToolRequest) {
       const result = await client.POST("/profiles/{slug}/tools", {
+        params: { path: { slug } },
+        body,
+      });
+      return requireData(result);
+    },
+
+    async replaceProfileTools(
+      slug: string,
+      body: ReplaceProfileToolsRequest,
+    ) {
+      const result = await client.PUT("/profiles/{slug}/tools", {
         params: { path: { slug } },
         body,
       });

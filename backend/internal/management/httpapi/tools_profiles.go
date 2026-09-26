@@ -231,6 +231,10 @@ type addProfileToolRequest struct {
 	Direct bool   `json:"direct"`
 }
 
+type replaceProfileToolsRequest struct {
+	Tools []addProfileToolRequest `json:"tools"`
+}
+
 func (h *Handler) addProfileTool(w http.ResponseWriter, r *http.Request) {
 	slug, err := profiledomain.NewSlug(r.PathValue("slug"))
 	if err != nil {
@@ -254,6 +258,45 @@ func (h *Handler) addProfileTool(w http.ResponseWriter, r *http.Request) {
 			ProfileSlug: slug,
 			ToolID:      toolID,
 			Direct:      input.Direct,
+		},
+	)
+	if err != nil {
+		writeKnownError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, profileProjection(profile))
+}
+
+func (h *Handler) replaceProfileTools(w http.ResponseWriter, r *http.Request) {
+	slug, err := profiledomain.NewSlug(r.PathValue("slug"))
+	if err != nil {
+		writeAPIError(w, http.StatusBadRequest, "validation_error", err)
+		return
+	}
+	var input replaceProfileToolsRequest
+	if err := decodeJSON(r, &input); err != nil {
+		writeAPIError(w, http.StatusBadRequest, "validation_error", err)
+		return
+	}
+
+	tools := make([]profileapplication.ReplaceToolSelection, 0, len(input.Tools))
+	for _, item := range input.Tools {
+		toolID, err := catalogdomain.ParseToolID(item.ToolID)
+		if err != nil {
+			writeAPIError(w, http.StatusBadRequest, "validation_error", err)
+			return
+		}
+		tools = append(tools, profileapplication.ReplaceToolSelection{
+			ToolID: toolID,
+			Direct: item.Direct,
+		})
+	}
+
+	profile, err := h.runtime.Profiles.ReplaceTools.Execute(
+		r.Context(),
+		profileapplication.ReplaceToolsRequest{
+			ProfileSlug: slug,
+			Tools:       tools,
 		},
 	)
 	if err != nil {

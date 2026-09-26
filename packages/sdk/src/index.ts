@@ -18,6 +18,7 @@ export type {
   Profile,
   Provider,
   ProviderMutationResponse,
+  ReplaceProfileToolsRequest,
   SearchToolsInput,
   StartMCPServerRequest,
   SyncResult,

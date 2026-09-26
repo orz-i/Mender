@@ -198,6 +198,23 @@ func TestManagementAPIEndToEnd(t *testing.T) {
 		http.StatusOK,
 	)
 
+	replacedProfile := requestJSON(
+		t,
+		server.Client(),
+		http.MethodPut,
+		server.URL+"/api/v1/profiles/default/tools",
+		map[string]any{
+			"tools": []map[string]any{
+				{"toolId": toolID, "direct": true},
+			},
+		},
+		http.StatusOK,
+	)
+	replacedTools, ok := replacedProfile["tools"].([]any)
+	if !ok || len(replacedTools) != 1 {
+		t.Fatalf("replace profile tools = %#v", replacedProfile)
+	}
+
 	scoped := requestJSON(
 		t,
 		server.Client(),

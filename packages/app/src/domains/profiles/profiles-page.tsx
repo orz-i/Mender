@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import type { MenderClient, Profile } from "@mender/sdk";
+import type {
+  MenderClient,
+  Profile,
+  Provider,
+  ToolSummary,
+} from "@mender/sdk";
 import { Badge } from "@mender/ui/components/badge";
 import { Button } from "@mender/ui/components/button";
 import {
@@ -39,6 +44,8 @@ const emptyCreateForm = {
 
 export function ProfilesPage({ client }: { client: MenderClient }) {
   const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [providers, setProviders] = useState<Provider[]>([]);
+  const [catalogTools, setCatalogTools] = useState<ToolSummary[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -47,10 +54,14 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
   const [createForm, setCreateForm] = useState(emptyCreateForm);
 
   const [manageSlug, setManageSlug] = useState("");
-  const [toolId, setToolId] = useState("");
-  const [direct, setDirect] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerQuery, setPickerQuery] = useState("");
+  const [pickerProvider, setPickerProvider] = useState("");
+  const [pickerTools, setPickerTools] = useState<ToolSummary[]>([]);
+  const [pickerSelected, setPickerSelected] = useState<Set<string>>(new Set());
+  const [pickerDirect, setPickerDirect] = useState<Record<string, boolean>>({});
 
-  const refresh = useCallback(async () => {
+  const refreshProfiles = useCallback(async () => {
     try {
       const result = await client.listProfiles();
       setProfiles(result.profiles);
@@ -64,11 +75,16 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
 
   useEffect(() => {
     let active = true;
-    void client
-      .listProfiles()
-      .then((result) => {
+    void Promise.all([
+      client.listProfiles(),
+      client.listProviders(),
+      client.browseTools({ limit: 100 }),
+    ])
+      .then(([profileResult, providerResult, toolResult]) => {
         if (active) {
-          setProfiles(result.profiles);
+          setProfiles(profileResult.profiles);
+          setProviders(providerResult.providers);
+          setCatalogTools(toolResult.tools);
           setError("");
           setLoaded(true);
         }
@@ -79,6 +95,7 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
           setLoaded(true);
         }
       });
+
     return () => {
       active = false;
     };
@@ -89,6 +106,19 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
     [profiles, manageSlug],
   );
 
+  const knownTools = useMemo(() => {
+    const result = new Map<string, ToolSummary>();
+    for (const tool of [...catalogTools, ...pickerTools]) {
+      result.set(tool.toolId, tool);
+    }
+    return result;
+  }, [catalogTools, pickerTools]);
+
+  const providerById = useMemo(
+    () => new Map(providers.map((provider) => [provider.providerId, provider])),
+    [providers],
+  );
+
   async function createProfile() {
     setBusy(true);
     setError("");
@@ -96,7 +126,7 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
       const profile = await client.createProfile(createForm);
       setCreateOpen(false);
       setCreateForm(emptyCreateForm);
-      await refresh();
+      await refreshProfiles();
       setManageSlug(profile.slug);
     } catch (reason) {
       setError(errorMessage(reason));
@@ -105,20 +135,50 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
     }
   }
 
-  async function addTool() {
+  function openToolPicker() {
     if (managedProfile === null) {
       return;
     }
+    setPickerQuery("");
+    setPickerProvider("");
+    setPickerSelected(
+      new Set(managedProfile.tools.map((selection) => selection.toolId)),
+    );
+    setPickerDirect(
+      Object.fromEntries(
+        managedProfile.tools.map((selection) => [
+          selection.toolId,
+          selection.direct,
+        ]),
+      ),
+    );
+    setPickerTools(catalogTools);
+    setPickerOpen(true);
+  }
+
+  async function searchPicker() {
     setBusy(true);
     setError("");
     try {
-      await client.addProfileTool(managedProfile.slug, {
-        toolId,
-        ...(direct ? { direct: true } : {}),
-      });
-      setToolId("");
-      setDirect(false);
-      await refresh();
+      let tools: ToolSummary[];
+      if (pickerQuery.trim()) {
+        const result = await client.searchTools({
+          query: pickerQuery,
+          limit: 100,
+        });
+        tools = result.tools;
+        if (pickerProvider) {
+          tools = tools.filter((tool) => tool.providerId === pickerProvider);
+        }
+      } else {
+        const result = await client.browseTools({
+          limit: 100,
+          ...(pickerProvider ? { providerId: pickerProvider } : {}),
+        });
+        tools = result.tools;
+      }
+      setPickerTools(tools);
+      setCatalogTools((current) => mergeTools(current, tools));
     } catch (reason) {
       setError(errorMessage(reason));
     } finally {
@@ -126,15 +186,81 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
     }
   }
 
-  async function removeTool(id: string) {
+  async function saveToolSelection() {
     if (managedProfile === null) {
       return;
     }
+
+    const tools = [...pickerSelected].map((toolId) => ({
+      toolId,
+      direct:
+        managedProfile.mode === "direct"
+          ? true
+          : managedProfile.mode === "dynamic"
+            ? false
+            : (pickerDirect[toolId] ?? false),
+    }));
+
     setBusy(true);
     setError("");
     try {
-      await client.removeProfileTool(managedProfile.slug, id);
-      await refresh();
+      const profile = await client.replaceProfileTools(managedProfile.slug, {
+        tools,
+      });
+      setProfiles((current) =>
+        current.map((item) => (item.slug === profile.slug ? profile : item)),
+      );
+      setPickerOpen(false);
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function removeTool(toolId: string) {
+    if (managedProfile === null) {
+      return;
+    }
+
+    setBusy(true);
+    setError("");
+    try {
+      const profile = await client.replaceProfileTools(managedProfile.slug, {
+        tools: managedProfile.tools
+          .filter((selection) => selection.toolId !== toolId)
+          .map((selection) => ({
+            toolId: selection.toolId,
+            direct: selection.direct,
+          })),
+      });
+      setProfiles((current) =>
+        current.map((item) => (item.slug === profile.slug ? profile : item)),
+      );
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function setDirect(toolId: string, direct: boolean) {
+    if (managedProfile === null || managedProfile.mode !== "hybrid") {
+      return;
+    }
+
+    setBusy(true);
+    setError("");
+    try {
+      const profile = await client.replaceProfileTools(managedProfile.slug, {
+        tools: managedProfile.tools.map((selection) => ({
+          toolId: selection.toolId,
+          direct: selection.toolId === toolId ? direct : selection.direct,
+        })),
+      });
+      setProfiles((current) =>
+        current.map((item) => (item.slug === profile.slug ? profile : item)),
+      );
     } catch (reason) {
       setError(errorMessage(reason));
     } finally {
@@ -157,7 +283,8 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
         <CardHeader className="border-b">
           <CardTitle>Profiles</CardTitle>
           <CardDescription>
-            {profiles.length} configured {profiles.length === 1 ? "profile" : "profiles"}
+            {profiles.length} configured{" "}
+            {profiles.length === 1 ? "profile" : "profiles"}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -180,7 +307,7 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
                   <TableRow key={profile.profileId}>
                     <TableCell>
                       <div className="font-medium">{profile.displayName}</div>
-                      <div className="font-mono text-xs text-muted-foreground">
+                      <div className="text-xs text-muted-foreground">
                         {profile.slug}
                       </div>
                     </TableCell>
@@ -192,12 +319,8 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
                       <Button
                         variant="outline"
                         size="sm"
-                        aria-label={`Manage ${profile.slug}`}
-                        onClick={() => {
-                          setToolId("");
-                          setDirect(false);
-                          setManageSlug(profile.slug);
-                        }}
+                        aria-label={"Manage " + profile.slug}
+                        onClick={() => setManageSlug(profile.slug)}
                       >
                         Manage
                       </Button>
@@ -228,7 +351,7 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
           <DialogHeader>
             <DialogTitle>Create profile</DialogTitle>
             <DialogDescription>
-              Choose an exposure mode, then manage Tool membership separately.
+              Choose an exposure mode, then select Tools from the Catalog.
             </DialogDescription>
           </DialogHeader>
 
@@ -277,7 +400,7 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
             </Field>
             <p className="text-xs leading-5 text-muted-foreground">
               Direct exports selected Tools. Dynamic exposes discovery meta-tools.
-              Hybrid supports both and marks selected Tools for direct export.
+              Hybrid supports both and lets selected Tools opt into direct export.
             </p>
           </div>
 
@@ -300,125 +423,273 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
         onOpenChange={(open) => {
           if (!open) {
             setManageSlug("");
-            setToolId("");
-            setDirect(false);
+            setPickerOpen(false);
           }
         }}
       >
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent className="sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle>
               {managedProfile?.displayName ?? "Manage profile"}
             </DialogTitle>
             <DialogDescription>
-              Manage Tool membership for this Profile. Profile identity and mode
-              remain unchanged.
+              Choose which Catalog Tools this Profile may expose.
             </DialogDescription>
           </DialogHeader>
 
           {managedProfile !== null ? (
             <div className="space-y-5">
               <div className="grid grid-cols-2 gap-3">
-                <ReadOnlyField label="Slug" value={managedProfile.slug} />
+                <ReadOnlyField label="Profile" value={managedProfile.slug} />
                 <ReadOnlyField label="Mode" value={managedProfile.mode} />
               </div>
 
-              <div className="rounded-lg border border-border p-4">
-                <div className="mb-3">
-                  <div className="font-medium">Add Tool</div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="font-medium">Selected Tools</div>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Use the stable ToolID from Catalog.
+                    Tool identity is managed internally; select by name and source.
                   </p>
                 </div>
-                <div className="flex items-end gap-3">
-                  <Field label="ToolID" className="min-w-0 flex-1">
-                    <Input
-                      aria-label="ToolID"
-                      className="font-mono text-xs"
-                      placeholder="tool_..."
-                      value={toolId}
-                      onChange={(event) => setToolId(event.target.value)}
-                    />
-                  </Field>
-                  {managedProfile.mode === "hybrid" ? (
-                    <label className="flex h-8 items-center gap-2 text-sm text-muted-foreground">
-                      <input
-                        type="checkbox"
-                        checked={direct}
-                        onChange={(event) => setDirect(event.target.checked)}
-                      />
-                      Direct export
-                    </label>
-                  ) : null}
-                  <Button
-                    disabled={busy || !toolId}
-                    onClick={() => void addTool()}
-                  >
-                    Add Tool
-                  </Button>
-                </div>
+                <Button
+                  disabled={busy}
+                  onClick={openToolPicker}
+                >
+                  Choose tools
+                </Button>
               </div>
 
-              <div>
-                <div className="mb-3 flex items-center justify-between">
-                  <div className="font-medium">Selected Tools</div>
-                  <Badge variant="outline">{managedProfile.tools.length}</Badge>
-                </div>
-                {managedProfile.tools.length ? (
-                  <div className="divide-y divide-border rounded-lg border border-border">
-                    {managedProfile.tools.map((tool) => (
+              {managedProfile.tools.length ? (
+                <div className="divide-y divide-border rounded-lg border border-border">
+                  {managedProfile.tools.map((selection) => {
+                    const tool = knownTools.get(selection.toolId);
+                    const provider =
+                      tool === undefined
+                        ? undefined
+                        : providerById.get(tool.providerId);
+                    return (
                       <div
-                        key={tool.toolId}
+                        key={selection.toolId}
                         className="flex items-center justify-between gap-4 px-4 py-3"
                       >
                         <div className="min-w-0">
-                          <p className="truncate font-mono text-xs">
-                            {tool.toolId}
+                          <p className="truncate text-sm font-medium">
+                            {tool?.title || tool?.name || "Unavailable Tool"}
                           </p>
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            {tool.direct ? "Direct export" : "Dynamic only"}
+                          <p className="mt-1 truncate text-xs text-muted-foreground">
+                            {provider?.displayName ||
+                              provider?.namespace ||
+                              "Unknown Provider"}
+                            {tool?.description
+                              ? " · " + tool.description
+                              : ""}
                           </p>
                         </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          aria-label={`Remove ${tool.toolId}`}
-                          disabled={busy}
-                          onClick={() => void removeTool(tool.toolId)}
-                        >
-                          Remove
-                        </Button>
+                        <div className="flex shrink-0 items-center gap-3">
+                          {managedProfile.mode === "hybrid" ? (
+                            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                              <input
+                                type="checkbox"
+                                checked={selection.direct}
+                                disabled={busy}
+                                onChange={(event) =>
+                                  void setDirect(
+                                    selection.toolId,
+                                    event.target.checked,
+                                  )
+                                }
+                              />
+                              Direct export
+                            </label>
+                          ) : (
+                            <Badge variant="outline">
+                              {managedProfile.mode === "direct"
+                                ? "Direct"
+                                : "Dynamic"}
+                            </Badge>
+                          )}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            aria-label={
+                              "Remove " +
+                              (tool?.title || tool?.name || "selected tool")
+                            }
+                            disabled={busy}
+                            onClick={() => void removeTool(selection.toolId)}
+                          >
+                            Remove
+                          </Button>
+                        </div>
                       </div>
-                    ))}
-                  </div>
-                ) : (
-                  <EmptyState
-                    title="No tools selected"
-                    description="Find a Tool in Catalog, then add its stable ToolID."
-                  />
-                )}
-              </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <EmptyState
+                  title="No tools selected"
+                  description="Choose Tools from the Catalog to define this Profile's exposure boundary."
+                />
+              )}
             </div>
           ) : null}
 
           <DialogFooter showCloseButton />
         </DialogContent>
       </Dialog>
+
+      <Dialog
+        open={pickerOpen}
+        onOpenChange={(open) => {
+          setPickerOpen(open);
+          if (!open) {
+            setPickerQuery("");
+            setPickerProvider("");
+          }
+        }}
+      >
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>Choose tools</DialogTitle>
+            <DialogDescription>
+              Browse or search the Catalog, then select the Tools this Profile may
+              expose.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid grid-cols-[minmax(0,1fr)_220px_auto] gap-3">
+            <Input
+              aria-label="Profile tool search"
+              placeholder="Search tools"
+              value={pickerQuery}
+              onChange={(event) => setPickerQuery(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  void searchPicker();
+                }
+              }}
+            />
+            <select
+              aria-label="Provider filter"
+              value={pickerProvider}
+              onChange={(event) => {
+                setPickerProvider(event.target.value);
+              }}
+              className="h-8 rounded-lg border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
+            >
+              <option value="">All Providers</option>
+              {providers.map((provider) => (
+                <option key={provider.providerId} value={provider.providerId}>
+                  {provider.displayName || provider.namespace}
+                </option>
+              ))}
+            </select>
+            <Button
+              variant="outline"
+              disabled={busy}
+              onClick={() => void searchPicker()}
+            >
+              {busy ? "Loading…" : "Apply"}
+            </Button>
+          </div>
+
+          <div className="max-h-[52vh] divide-y divide-border overflow-y-auto rounded-lg border border-border">
+            {pickerTools.length ? (
+              pickerTools.map((tool) => {
+                const selected = pickerSelected.has(tool.toolId);
+                const provider = providerById.get(tool.providerId);
+                return (
+                  <div
+                    key={tool.toolId}
+                    className="flex items-start gap-3 px-4 py-3"
+                  >
+                    <input
+                      aria-label={"Select " + (tool.title || tool.name)}
+                      type="checkbox"
+                      className="mt-1"
+                      checked={selected}
+                      onChange={(event) => {
+                        setPickerSelected((current) => {
+                          const next = new Set(current);
+                          if (event.target.checked) {
+                            next.add(tool.toolId);
+                          } else {
+                            next.delete(tool.toolId);
+                          }
+                          return next;
+                        });
+                      }}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium">
+                        {tool.title || tool.name}
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {provider?.displayName ||
+                          provider?.namespace ||
+                          "Unknown Provider"}
+                        {tool.description ? " · " + tool.description : ""}
+                      </p>
+                    </div>
+                    {managedProfile?.mode === "hybrid" && selected ? (
+                      <label className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
+                        <input
+                          type="checkbox"
+                          checked={pickerDirect[tool.toolId] ?? false}
+                          onChange={(event) =>
+                            setPickerDirect((current) => ({
+                              ...current,
+                              [tool.toolId]: event.target.checked,
+                            }))
+                          }
+                        />
+                        Direct export
+                      </label>
+                    ) : null}
+                  </div>
+                );
+              })
+            ) : (
+              <div className="p-8 text-center text-sm text-muted-foreground">
+                No matching Tools.
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <DialogClose render={<Button variant="outline" />}>
+              Cancel
+            </DialogClose>
+            <Button disabled={busy} onClick={() => void saveToolSelection()}>
+              {busy ? "Saving…" : "Save selection"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
 
+function mergeTools(
+  current: ToolSummary[],
+  incoming: ToolSummary[],
+): ToolSummary[] {
+  const byId = new Map(current.map((tool) => [tool.toolId, tool]));
+  for (const tool of incoming) {
+    byId.set(tool.toolId, tool);
+  }
+  return [...byId.values()];
+}
+
 function Field({
   label,
-  className = "",
   children,
 }: {
   label: string;
-  className?: string;
   children: React.ReactNode;
 }) {
   return (
-    <label className={["block space-y-1.5", className].join(" ")}>
+    <label className="block space-y-1.5">
       <span className="text-sm font-medium">{label}</span>
       {children}
     </label>
@@ -429,7 +700,7 @@ function ReadOnlyField({ label, value }: { label: string; value: string }) {
   return (
     <div>
       <div className="mb-1.5 text-sm font-medium">{label}</div>
-      <div className="rounded-lg border border-border bg-muted/40 px-3 py-2 font-mono text-sm text-muted-foreground">
+      <div className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
         {value}
       </div>
     </div>

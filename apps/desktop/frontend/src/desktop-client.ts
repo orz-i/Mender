@@ -151,6 +151,10 @@ export function createDesktopMenderClient(): MenderClient {
       );
     },
 
+    async replaceProfileTools(slug, body) {
+      return profile(await Service.ReplaceProfileTools(slug, body.tools));
+    },
+
     async removeProfileTool(slug, toolId) {
       return profile(await Service.RemoveProfileTool(slug, toolId));
     },

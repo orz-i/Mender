@@ -262,6 +262,26 @@ paths:
                 $ref: '#/components/schemas/Profile'
         '404': { $ref: '#/components/responses/NotFound' }
   /profiles/{slug}/tools:
+    put:
+      operationId: replaceProfileTools
+      parameters:
+        - $ref: '#/components/parameters/ProfileSlug'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReplaceProfileToolsRequest'
+      responses:
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '200':
+          description: Updated profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Profile'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
     post:
       operationId: addProfileTool
       parameters:
@@ -638,6 +658,15 @@ components:
       properties:
         toolId: { type: string }
         direct: { type: boolean }
+      additionalProperties: false
+    ReplaceProfileToolsRequest:
+      type: object
+      required: [tools]
+      properties:
+        tools:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProfileTool'
       additionalProperties: false
     ProfileTool:
       type: object

@@ -139,6 +139,16 @@ func TestServiceEndToEndUsesSharedRuntime(t *testing.T) {
 		t.Fatalf("profile tools = %#v", profile.Tools)
 	}
 
+	profile, err = service.ReplaceProfileTools("default", []ProfileTool{
+		{ToolID: toolID, Direct: true},
+	})
+	if err != nil {
+		t.Fatalf("ReplaceProfileTools() error = %v", err)
+	}
+	if len(profile.Tools) != 1 || profile.Tools[0].ToolID != toolID {
+		t.Fatalf("replaced profile tools = %#v", profile.Tools)
+	}
+
 	scoped, err := service.SearchTools("echo", 10, "default")
 	if err != nil {
 		t.Fatalf("profile SearchTools() error = %v", err)

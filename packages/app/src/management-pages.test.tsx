@@ -340,30 +340,86 @@ describe("management pages", () => {
     expect(getTool).toHaveBeenCalledWith("tool_1");
   });
 
-  it("renders persisted Profile membership management", async () => {
+  it("manages Profile membership through a Tool picker without ToolID input", async () => {
+    const profile = {
+      profileId: "prof_1",
+      slug: "default",
+      displayName: "Default",
+      mode: "hybrid" as const,
+      tools: [{ toolId: "tool_1", direct: true }],
+    };
+    const updated = {
+      ...profile,
+      tools: [
+        { toolId: "tool_1", direct: true },
+        { toolId: "tool_2", direct: false },
+      ],
+    };
+    const replaceProfileTools = vi.fn().mockResolvedValue(updated);
+
     renderApp("/profiles", {
-      listProfiles: vi.fn().mockResolvedValue({
-        profiles: [
+      listProfiles: vi.fn().mockResolvedValue({ profiles: [profile] }),
+      listProviders: vi.fn().mockResolvedValue({
+        providers: [
           {
-            profileId: "prof_1",
-            slug: "default",
-            displayName: "Default",
-            mode: "hybrid",
-            tools: [{ toolId: "tool_1", direct: true }],
+            providerId: "prov_1",
+            namespace: "search",
+            displayName: "AnySearch",
+            description: "",
+            createdAt: "2026-09-26T00:00:00Z",
+            updatedAt: "2026-09-26T00:00:00Z",
+            transport: "http",
+            toolCount: 2,
+            endpoint: "https://api.anysearch.com/mcp",
           },
         ],
       }),
+      browseTools: vi.fn().mockResolvedValue({
+        tools: [
+          {
+            rank: 1,
+            toolId: "tool_1",
+            providerId: "prov_1",
+            name: "search",
+            title: "Search",
+            description: "Search the web",
+          },
+          {
+            rank: 2,
+            toolId: "tool_2",
+            providerId: "prov_1",
+            name: "extract",
+            title: "Extract",
+            description: "Extract content",
+          },
+        ],
+      }),
+      replaceProfileTools,
     });
 
     expect((await screen.findAllByText("Default")).length).toBeGreaterThan(0);
+    expect(screen.queryByText("tool_1")).toBeNull();
     expect(screen.queryByPlaceholderText("tool_...")).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Manage default" }));
+    expect(await screen.findByText("Search")).toBeTruthy();
+    expect(screen.queryByText("tool_1")).toBeNull();
 
-    expect(
-      (await screen.findAllByText("Direct export")).length,
-    ).toBeGreaterThanOrEqual(2);
-    expect(screen.getByPlaceholderText("tool_...")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Choose tools" }));
+    expect(await screen.findByText("Extract")).toBeTruthy();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select Extract" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save selection" }));
+
+    await waitFor(() => {
+      expect(replaceProfileTools).toHaveBeenCalledWith("default", {
+        tools: [
+          { toolId: "tool_1", direct: true },
+          { toolId: "tool_2", direct: false },
+        ],
+      });
+    });
+    expect(await screen.findByText("Extract")).toBeTruthy();
+    expect(screen.queryByPlaceholderText("tool_...")).toBeNull();
   });
 
   it("starts, restarts, and stops a managed MCP server", async () => {
