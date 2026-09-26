@@ -17,7 +17,7 @@ type CatalogOptions struct {
 
 // Catalog contains the currently composed Catalog use cases.
 //
-// Tool execution and protocol adapters intentionally do not belong here yet.
+// Tool execution and protocol adapters intentionally do not belong in this Catalog composition root.
 type Catalog struct {
 	RegisterProvider application.RegisterProvider
 	GetProvider      application.GetProvider

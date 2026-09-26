@@ -70,9 +70,9 @@ pnpm build
 
 ## Workspace boundaries
 
-The repository now includes Catalog plus the shared Invocation, Policy, Credential, and Audit runtime boundaries; protocol adapters remain intentionally absent until their owning phases begin.
+The repository now includes Catalog, the shared Invocation/Policy/Credential/Audit runtime, a minimal Profile exposure domain, and MCP provider/server adapters.
 
-- `backend/` contains Go executable hosts, the Catalog bounded context, and composition roots.
+- `backend/` contains Go executable hosts, domain/application contexts, MCP infrastructure adapters, and composition roots.
 - `apps/web/` is the browser host.
 - `packages/app/` is the shared React application shell.
 - `packages/ui/` is the shared UI boundary and shadcn/ui destination.
@@ -80,7 +80,7 @@ The repository now includes Catalog plus the shared Invocation, Policy, Credenti
 - `contracts/` and `skills/` will be introduced when their owning phases begin.
 - Wails is intentionally not required by the current CLI/server/web build.
 
-The next implementation phase is MCP provider and server adapters. MCP SDK types must remain at adapter boundaries and all MCP tool calls must enter the existing shared Invocation pipeline.
+The next implementation phase is CLI discovery and Agent Skill support. The CLI must operate directly on the shared application/runtime boundaries, provide stable machine-readable output, and avoid becoming an HTTP-only wrapper.
 
 ## Quality policy
 

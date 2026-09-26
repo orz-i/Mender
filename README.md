@@ -11,7 +11,7 @@ It provides one canonical tool model and execution pipeline, then exposes the sa
 
 ## Status
 
-The governance, foundation scaffold, Catalog, and shared runtime phases are complete. Mender now has protocol-independent Provider/Tool models, discovery, a policy-controlled invocation pipeline, execution-boundary credential resolution, data-minimized Audit persistence, and local executor routing. The next phase adds MCP provider and server adapters.
+The governance, foundation, Catalog, shared runtime, and MCP adapter phases are complete. Mender can synchronize and invoke local stdio or remote Streamable HTTP MCP providers, expose Profile-scoped direct/dynamic/hybrid MCP servers, and route all calls through the same policy-controlled Invocation pipeline. The next phase makes local operation usable through the CLI and Agent Skills.
 
 ## Product principles
 

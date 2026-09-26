@@ -105,7 +105,7 @@ See `phase-3-runtime.md`.
 
 ## Phase 4 — MCP provider and server adapters
 
-Status: In progress
+Status: Complete
 
 Goals:
 
@@ -125,6 +125,8 @@ Exit criteria:
 See `phase-4-mcp.md`.
 
 ## Phase 5 — CLI discovery and Agent Skill
+
+Status: Next
 
 Goals:
 

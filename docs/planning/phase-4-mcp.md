@@ -335,20 +335,20 @@ docs: complete MCP adapter phase
 
 ## Exit checklist
 
-- [ ] Official Go MCP SDK v1.8.0 is pinned.
-- [ ] MCP SDK types exist only in MCP infrastructure/adapter packages.
-- [ ] Minimal Profile Domain supports direct, dynamic, and hybrid exposure.
-- [ ] Catalog search can be restricted to a ToolID allow-list.
-- [ ] MCP Tool schemas map into canonical Catalog schemas.
-- [ ] Local stdio upstream MCP provider can synchronize and invoke.
-- [ ] Remote Streamable HTTP upstream provider can synchronize and invoke.
-- [ ] One upstream MCP Tool executes through Mender's shared Invocation pipeline.
-- [ ] Direct server exposure lists/calls only Profile Tools.
-- [ ] Dynamic server exposure lists only Mender meta-tools.
-- [ ] Dynamic search/describe/call cannot escape Profile membership.
-- [ ] Hybrid exposure combines selected direct tools with meta-tools.
-- [ ] Mender Streamable HTTP server is stateless.
-- [ ] Stdio server transport is available.
-- [ ] MCP adapter integration tests pass.
-- [ ] Domain packages have no MCP SDK dependency.
-- [ ] `pnpm check` passes.
+- [x] Official Go MCP SDK v1.8.0 is pinned.
+- [x] MCP SDK types exist only in MCP infrastructure/adapter packages.
+- [x] Minimal Profile Domain supports direct, dynamic, and hybrid exposure.
+- [x] Catalog search can be restricted to a ToolID allow-list.
+- [x] MCP Tool schemas map into canonical Catalog schemas.
+- [x] Local stdio upstream MCP provider can synchronize and invoke.
+- [x] Remote Streamable HTTP upstream provider can synchronize and invoke.
+- [x] One upstream MCP Tool executes through Mender's shared Invocation pipeline.
+- [x] Direct server exposure lists/calls only Profile Tools.
+- [x] Dynamic server exposure lists only Mender meta-tools.
+- [x] Dynamic search/describe/call cannot escape Profile membership.
+- [x] Hybrid exposure combines selected direct tools with meta-tools.
+- [x] Mender Streamable HTTP server is stateless.
+- [x] Stdio server transport is available.
+- [x] MCP adapter integration tests pass.
+- [x] Domain packages have no MCP SDK dependency.
+- [x] `pnpm check` passes.
