@@ -68,11 +68,12 @@ Catalog still follows progressive disclosure:
 
     browse/search compact metadata
       -> result list
-      -> open Tool Dialog
-      -> load full schema
-      -> invoke through Mender
+      -> Tool overview
+           -> full description
+           -> schemas
+           -> invocation/result
 
-Browse/search never eagerly loads Tool schemas. Catalog filtering is source-oriented: both browse and lexical search can be restricted to one Provider. Profile membership is an exposure/governance concern and is managed only from the Profiles workflow, not used as the Catalog page's primary filter.
+The Tool overlay is intentionally split into mutually exclusive views so long descriptions, schemas, and invocation controls never compete in one screen. Browse/search never eagerly loads Tool schemas. Catalog filtering is source-oriented: both browse and lexical search can be restricted to one Provider. Profile membership is an exposure/governance concern and is managed only from the Profiles workflow, not used as the Catalog page's primary filter.
 
 ### Profiles
 

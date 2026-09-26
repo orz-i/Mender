@@ -37,6 +37,8 @@ import { Textarea } from "@mender/ui/components/textarea";
 
 import { EmptyState, ErrorNotice, PageHeader } from "../../shared/page";
 
+type ToolView = "overview" | "description" | "schemas" | "invoke";
+
 export function CatalogPage({ client }: { client: MenderClient }) {
   const [query, setQuery] = useState("");
   const [providerId, setProviderId] = useState("");
@@ -46,6 +48,7 @@ export function CatalogPage({ client }: { client: MenderClient }) {
   const [loaded, setLoaded] = useState(false);
 
   const [selected, setSelected] = useState<ToolDetail | null>(null);
+  const [toolView, setToolView] = useState<ToolView | null>(null);
   const [argumentsText, setArgumentsText] = useState("{}");
   const [invocation, setInvocation] = useState<InvocationResult | null>(null);
 
@@ -89,6 +92,7 @@ export function CatalogPage({ client }: { client: MenderClient }) {
       setResults(response.tools);
       setSearched(false);
       setSelected(null);
+      setToolView(null);
       setInvocation(null);
     } catch (reason) {
       setError(errorMessage(reason));
@@ -112,6 +116,7 @@ export function CatalogPage({ client }: { client: MenderClient }) {
       setResults(response.tools);
       setSearched(true);
       setSelected(null);
+      setToolView(null);
       setInvocation(null);
     } catch (reason) {
       setError(errorMessage(reason));
@@ -126,6 +131,7 @@ export function CatalogPage({ client }: { client: MenderClient }) {
     try {
       const detail = await client.getTool(tool.toolId);
       setSelected(detail);
+      setToolView("overview");
       setArgumentsText("{}");
       setInvocation(null);
     } catch (reason) {
@@ -173,6 +179,7 @@ export function CatalogPage({ client }: { client: MenderClient }) {
 
   function closeDetail() {
     setSelected(null);
+    setToolView(null);
     setArgumentsText("{}");
     setInvocation(null);
   }
@@ -327,57 +334,106 @@ export function CatalogPage({ client }: { client: MenderClient }) {
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle>
-              {selected ? selected.title || selected.name : "Tool details"}
+              {toolView === "description"
+                ? "Tool description"
+                : toolView === "schemas"
+                  ? "Tool schemas"
+                  : toolView === "invoke"
+                    ? "Invoke tool"
+                    : selected?.title || selected?.name || "Tool details"}
             </DialogTitle>
             <DialogDescription>
-              {selected?.toolId ?? "Canonical Tool detail"}
+              {selected === null
+                ? "Canonical Tool detail"
+                : toolView === "overview" || toolView === null
+                  ? providerLabel(providers, selected.providerId)
+                  : selected.title || selected.name}
             </DialogDescription>
           </DialogHeader>
 
-          {selected !== null ? (
+          {selected !== null && (toolView === "overview" || toolView === null) ? (
             <div className="space-y-5">
-              <div>
-                <p className="text-sm leading-6 text-muted-foreground">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <ToolMeta label="Provider" value={providerLabel(providers, selected.providerId)} />
+                <ToolMeta label="Name" value={selected.name} />
+                <ToolMeta label="Tool ID" value={selected.toolId} mono />
+                <ToolMeta label="Source key" value={selected.sourceKey} mono />
+              </div>
+
+              <div className="rounded-lg border border-border p-4">
+                <p className="text-sm font-medium">Description</p>
+                <p className="mt-2 line-clamp-3 text-sm leading-6 text-muted-foreground">
                   {selected.description || "No description"}
                 </p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <Badge variant="outline">{selected.name}</Badge>
+                {selected.description ? (
+                  <Button
+                    className="mt-2 px-0"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setToolView("description")}
+                  >
+                    Read full description
+                  </Button>
+                ) : null}
+              </div>
+
+              {selected.tags.length ? (
+                <div className="flex flex-wrap gap-2">
                   {selected.tags.map((tag) => (
                     <Badge key={tag} variant="secondary">
                       {tag}
                     </Badge>
                   ))}
                 </div>
-              </div>
+              ) : null}
 
-              <div className="grid gap-4 lg:grid-cols-2">
-                <SchemaBlock title="Input schema" value={selected.inputSchema} />
-                {selected.outputSchema !== undefined ? (
-                  <SchemaBlock
-                    title="Output schema"
-                    value={selected.outputSchema}
-                  />
-                ) : (
-                  <div>
-                    <p className="mb-2 text-sm font-medium">Output schema</p>
-                    <div className="rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground">
-                      Not declared by this Tool.
-                    </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setToolView("schemas")}
+                >
+                  View schemas
+                </Button>
+                <Button onClick={() => setToolView("invoke")}>Invoke tool</Button>
+              </div>
+            </div>
+          ) : null}
+
+          {selected !== null && toolView === "description" ? (
+            <div className="max-h-[58vh] overflow-y-auto rounded-lg border border-border p-4">
+              <p className="whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
+                {selected.description || "No description"}
+              </p>
+            </div>
+          ) : null}
+
+          {selected !== null && toolView === "schemas" ? (
+            <div className="grid gap-4 lg:grid-cols-2">
+              <JsonBlock title="Input schema" value={selected.inputSchema} />
+              {selected.outputSchema !== undefined ? (
+                <JsonBlock title="Output schema" value={selected.outputSchema} />
+              ) : (
+                <div>
+                  <p className="mb-2 text-sm font-medium">Output schema</p>
+                  <div className="rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground">
+                    Not declared by this Tool.
                   </div>
-                )}
-              </div>
-
-              <div className="rounded-lg border border-border p-4">
-                <div className="mb-3">
-                  <p className="font-medium">Invoke Tool</p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Invocation still passes through Policy, Approval, Credential,
-                    Executor, and Audit.
-                  </p>
                 </div>
+              )}
+            </div>
+          ) : null}
+
+          {selected !== null && toolView === "invoke" ? (
+            <div className="space-y-4">
+              <div className="rounded-lg border border-border p-4">
+                <p className="font-medium">Arguments</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Invocation passes through Policy, Approval, Credential,
+                  Executor, and Audit.
+                </p>
                 <Textarea
                   aria-label="Invocation arguments"
-                  className="min-h-32 font-mono text-xs"
+                  className="mt-3 min-h-40 font-mono text-xs"
                   value={argumentsText}
                   onChange={(event) => setArgumentsText(event.target.value)}
                 />
@@ -391,7 +447,7 @@ export function CatalogPage({ client }: { client: MenderClient }) {
               </div>
 
               {invocation !== null ? (
-                <SchemaBlock
+                <JsonBlock
                   title={`Result · ${invocation.kind}`}
                   value={invocation}
                 />
@@ -399,14 +455,44 @@ export function CatalogPage({ client }: { client: MenderClient }) {
             </div>
           ) : null}
 
-          <DialogFooter showCloseButton />
+          <DialogFooter showCloseButton>
+            {toolView !== "overview" && toolView !== null ? (
+              <Button variant="outline" onClick={() => setToolView("overview")}>
+                Back
+              </Button>
+            ) : null}
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </>
   );
 }
 
-function SchemaBlock({ title, value }: { title: string; value: unknown }) {
+function ToolMeta({
+  label,
+  value,
+  mono = false,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+}) {
+  return (
+    <div className="min-w-0 rounded-lg border border-border bg-muted/40 p-3">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p
+        className={[
+          "mt-1 truncate text-sm",
+          mono ? "font-mono text-xs" : "",
+        ].join(" ")}
+      >
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function JsonBlock({ title, value }: { title: string; value: unknown }) {
   return (
     <div className="min-w-0">
       <p className="mb-2 text-sm font-medium">{title}</p>

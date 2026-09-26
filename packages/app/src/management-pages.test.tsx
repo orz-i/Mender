@@ -1,4 +1,11 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import type { MenderClient } from "@mender/sdk";
 import { MemoryRouter } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -366,8 +373,28 @@ describe("management pages", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Create issue/ }));
 
-    expect(await screen.findByText("Input schema")).toBeTruthy();
+    expect(await screen.findByText("Create issue")).toBeTruthy();
     expect(getTool).toHaveBeenCalledWith("tool_1");
+    expect(within(screen.getByRole("dialog")).getByText("Description")).toBeTruthy();
+    expect(screen.queryByText("Input schema")).toBeNull();
+    expect(screen.queryByLabelText("Invocation arguments")).toBeNull();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Read full description" }),
+    );
+    expect(await screen.findByText("Tool description")).toBeTruthy();
+    expect(screen.queryByText("Input schema")).toBeNull();
+    expect(screen.queryByLabelText("Invocation arguments")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    fireEvent.click(screen.getByRole("button", { name: "View schemas" }));
+    expect(await screen.findByText("Input schema")).toBeTruthy();
+    expect(screen.queryByLabelText("Invocation arguments")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    fireEvent.click(screen.getByRole("button", { name: "Invoke tool" }));
+    expect(await screen.findByLabelText("Invocation arguments")).toBeTruthy();
+    expect(screen.queryByText("Input schema")).toBeNull();
   });
 
   it("manages Profile membership through a Tool picker without ToolID input", async () => {
