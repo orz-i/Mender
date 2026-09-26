@@ -247,7 +247,13 @@ describe("management pages", () => {
     });
 
     expect((await screen.findAllByText("Default")).length).toBeGreaterThan(0);
-    expect(screen.getByText("Direct export")).toBeTruthy();
+    expect(screen.queryByPlaceholderText("tool_...")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Manage default" }));
+
+    expect(
+      (await screen.findAllByText("Direct export")).length,
+    ).toBeGreaterThanOrEqual(2);
     expect(screen.getByPlaceholderText("tool_...")).toBeTruthy();
   });
 

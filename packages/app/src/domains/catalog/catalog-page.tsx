@@ -16,7 +16,23 @@ import {
   CardHeader,
   CardTitle,
 } from "@mender/ui/components/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@mender/ui/components/dialog";
 import { Input } from "@mender/ui/components/input";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@mender/ui/components/table";
 import { Textarea } from "@mender/ui/components/textarea";
 
 import { EmptyState, ErrorNotice, PageHeader } from "../../shared/page";
@@ -26,11 +42,15 @@ export function CatalogPage({ client }: { client: MenderClient }) {
   const [profile, setProfile] = useState("");
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [results, setResults] = useState<ToolSummary[]>([]);
+  const [searched, setSearched] = useState(false);
+
   const [selected, setSelected] = useState<ToolDetail | null>(null);
   const [argumentsText, setArgumentsText] = useState("{}");
   const [invocation, setInvocation] = useState<InvocationResult | null>(null);
+
   const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState("");
+  const [loadingToolId, setLoadingToolId] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -55,7 +75,8 @@ export function CatalogPage({ client }: { client: MenderClient }) {
     if (!query.trim()) {
       return;
     }
-    setBusy(true);
+    setBusy("search");
+    setError("");
     try {
       const response = await client.searchTools({
         query,
@@ -63,33 +84,33 @@ export function CatalogPage({ client }: { client: MenderClient }) {
         ...(profile ? { profile } : {}),
       });
       setResults(response.tools);
+      setSearched(true);
       setSelected(null);
       setInvocation(null);
-      setError("");
     } catch (reason) {
       setError(errorMessage(reason));
     } finally {
-      setBusy(false);
+      setBusy("");
     }
   }
 
-  async function selectTool(tool: ToolSummary) {
-    setBusy(true);
+  async function viewTool(tool: ToolSummary) {
+    setLoadingToolId(tool.toolId);
+    setError("");
     try {
       const detail = await client.getTool(tool.toolId);
       setSelected(detail);
       setArgumentsText("{}");
       setInvocation(null);
-      setError("");
     } catch (reason) {
       setError(errorMessage(reason));
     } finally {
-      setBusy(false);
+      setLoadingToolId("");
     }
   }
 
   async function callTool() {
-    if (!selected) {
+    if (selected === null) {
       return;
     }
 
@@ -109,26 +130,32 @@ export function CatalogPage({ client }: { client: MenderClient }) {
       return;
     }
 
-    setBusy(true);
+    setBusy("invoke");
+    setError("");
     try {
       const result = await client.callTool(
         selected.toolId,
         argumentsValue as Record<string, unknown>,
       );
       setInvocation(result);
-      setError("");
     } catch (reason) {
       setError(errorMessage(reason));
     } finally {
-      setBusy(false);
+      setBusy("");
     }
+  }
+
+  function closeDetail() {
+    setSelected(null);
+    setArgumentsText("{}");
+    setInvocation(null);
   }
 
   return (
     <>
       <PageHeader
         title="Catalog"
-        description="Search compact Tool metadata first, then load schemas only for the selected Tool."
+        description="Search compact Tool metadata. Full schemas and invocation controls open only when you inspect a Tool."
       />
       {error ? <ErrorNotice message={error} /> : null}
 
@@ -136,6 +163,7 @@ export function CatalogPage({ client }: { client: MenderClient }) {
         <CardContent className="pt-6">
           <div className="grid grid-cols-[minmax(0,1fr)_220px_auto] gap-3">
             <Input
+              aria-label="Catalog search"
               placeholder="Search intent, e.g. create issue"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
@@ -146,6 +174,7 @@ export function CatalogPage({ client }: { client: MenderClient }) {
               }}
             />
             <select
+              aria-label="Catalog profile filter"
               value={profile}
               onChange={(event) => setProfile(event.target.value)}
               className="h-8 rounded-lg border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
@@ -157,132 +186,178 @@ export function CatalogPage({ client }: { client: MenderClient }) {
                 </option>
               ))}
             </select>
-            <Button onClick={() => void search()} disabled={busy || !query.trim()}>
-              Search
+            <Button
+              onClick={() => void search()}
+              disabled={busy !== "" || !query.trim()}
+            >
+              {busy === "search" ? "Searching…" : "Search"}
             </Button>
           </div>
         </CardContent>
       </Card>
 
-      <div className="mt-6 grid gap-5 xl:grid-cols-[minmax(340px,0.85fr)_minmax(0,1.4fr)]">
-        <Card>
-          <CardHeader>
-            <CardTitle>Results</CardTitle>
-            <CardDescription>
-              {results.length} compact match{results.length === 1 ? "" : "es"}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {results.length ? (
-              <div className="space-y-2">
+      <Card className="mt-6">
+        <CardHeader className="border-b">
+          <CardTitle>Tools</CardTitle>
+          <CardDescription>
+            {searched
+              ? `${results.length} compact match${results.length === 1 ? "" : "es"}`
+              : "Search the Catalog to discover Tools."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {results.length ? (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Tool</TableHead>
+                  <TableHead>Provider</TableHead>
+                  <TableHead>Description</TableHead>
+                  <TableHead>Rank</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {results.map((tool) => (
-                  <button
-                    type="button"
-                    key={tool.toolId}
-                    onClick={() => void selectTool(tool)}
-                    className={[
-                      "w-full rounded-lg border p-3 text-left transition-colors",
-                      selected?.toolId === tool.toolId
-                        ? "border-primary bg-primary/5"
-                        : "border-border hover:bg-muted",
-                    ].join(" ")}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="font-medium">{tool.title || tool.name}</p>
-                        <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
-                          {tool.description || "No description"}
-                        </p>
+                  <TableRow key={tool.toolId}>
+                    <TableCell>
+                      <div className="font-medium">{tool.title || tool.name}</div>
+                      <div className="font-mono text-[11px] text-muted-foreground">
+                        {tool.toolId}
                       </div>
+                    </TableCell>
+                    <TableCell className="font-mono text-[11px] text-muted-foreground">
+                      {tool.providerId}
+                    </TableCell>
+                    <TableCell className="max-w-[420px] truncate text-sm text-muted-foreground">
+                      {tool.description || "No description"}
+                    </TableCell>
+                    <TableCell>
                       <Badge variant="outline">#{tool.rank}</Badge>
-                    </div>
-                    <p className="mt-2 truncate font-mono text-[11px] text-muted-foreground">
-                      {tool.toolId}
-                    </p>
-                  </button>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        aria-label={`View ${tool.title || tool.name}`}
+                        disabled={loadingToolId !== ""}
+                        onClick={() => void viewTool(tool)}
+                      >
+                        {loadingToolId === tool.toolId ? "Loading…" : "View"}
+                      </Button>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </div>
-            ) : (
-              <EmptyState
-                title="Search the Catalog"
-                description="Schemas are not loaded until you choose a Tool."
-              />
-            )}
-          </CardContent>
-        </Card>
+              </TableBody>
+            </Table>
+          ) : (
+            <EmptyState
+              title={searched ? "No matching tools" : "Search the Catalog"}
+              description={
+                searched
+                  ? "Try a different search intent or Profile filter."
+                  : "Schemas are not loaded until you inspect a Tool."
+              }
+            />
+          )}
+        </CardContent>
+      </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>
+      <Dialog
+        open={selected !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            closeDetail();
+          }
+        }}
+      >
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>
               {selected ? selected.title || selected.name : "Tool details"}
-            </CardTitle>
-            <CardDescription>
-              {selected
-                ? selected.toolId
-                : "Select a search result to load its canonical schema."}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {selected ? (
-              <div className="space-y-5">
-                <div>
-                  <p className="text-sm text-muted-foreground">
-                    {selected.description || "No description"}
-                  </p>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {selected.tags.map((tag) => (
-                      <Badge key={tag} variant="secondary">
-                        {tag}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
+            </DialogTitle>
+            <DialogDescription>
+              {selected?.toolId ?? "Canonical Tool detail"}
+            </DialogDescription>
+          </DialogHeader>
 
+          {selected !== null ? (
+            <div className="space-y-5">
+              <div>
+                <p className="text-sm leading-6 text-muted-foreground">
+                  {selected.description || "No description"}
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Badge variant="outline">{selected.name}</Badge>
+                  {selected.tags.map((tag) => (
+                    <Badge key={tag} variant="secondary">
+                      {tag}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid gap-4 lg:grid-cols-2">
                 <SchemaBlock title="Input schema" value={selected.inputSchema} />
                 {selected.outputSchema !== undefined ? (
-                  <SchemaBlock title="Output schema" value={selected.outputSchema} />
-                ) : null}
-
-                <div>
-                  <label className="mb-2 block text-sm font-medium">
-                    Invocation arguments
-                  </label>
-                  <Textarea
-                    className="min-h-36 font-mono text-xs"
-                    value={argumentsText}
-                    onChange={(event) => setArgumentsText(event.target.value)}
+                  <SchemaBlock
+                    title="Output schema"
+                    value={selected.outputSchema}
                   />
-                  <Button
-                    className="mt-3"
-                    onClick={() => void callTool()}
-                    disabled={busy}
-                  >
-                    Invoke through Mender
-                  </Button>
-                </div>
-
-                {invocation ? (
-                  <SchemaBlock title={`Result · ${invocation.kind}`} value={invocation} />
-                ) : null}
+                ) : (
+                  <div>
+                    <p className="mb-2 text-sm font-medium">Output schema</p>
+                    <div className="rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground">
+                      Not declared by this Tool.
+                    </div>
+                  </div>
+                )}
               </div>
-            ) : (
-              <EmptyState
-                title="Progressive disclosure"
-                description="Search returns metadata only. Full schemas appear here after selection."
-              />
-            )}
-          </CardContent>
-        </Card>
-      </div>
+
+              <div className="rounded-lg border border-border p-4">
+                <div className="mb-3">
+                  <p className="font-medium">Invoke Tool</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Invocation still passes through Policy, Approval, Credential,
+                    Executor, and Audit.
+                  </p>
+                </div>
+                <Textarea
+                  aria-label="Invocation arguments"
+                  className="min-h-32 font-mono text-xs"
+                  value={argumentsText}
+                  onChange={(event) => setArgumentsText(event.target.value)}
+                />
+                <Button
+                  className="mt-3"
+                  onClick={() => void callTool()}
+                  disabled={busy === "invoke"}
+                >
+                  {busy === "invoke" ? "Invoking…" : "Invoke through Mender"}
+                </Button>
+              </div>
+
+              {invocation !== null ? (
+                <SchemaBlock
+                  title={`Result · ${invocation.kind}`}
+                  value={invocation}
+                />
+              ) : null}
+            </div>
+          ) : null}
+
+          <DialogFooter showCloseButton />
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
 
 function SchemaBlock({ title, value }: { title: string; value: unknown }) {
   return (
-    <div>
+    <div className="min-w-0">
       <p className="mb-2 text-sm font-medium">{title}</p>
-      <pre className="max-h-80 overflow-auto rounded-lg border border-border bg-muted/60 p-3 text-xs leading-5">
+      <pre className="max-h-72 overflow-auto rounded-lg border border-border bg-muted/60 p-3 text-xs leading-5">
         {JSON.stringify(value, null, 2)}
       </pre>
     </div>
