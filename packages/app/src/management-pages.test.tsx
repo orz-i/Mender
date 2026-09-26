@@ -326,6 +326,15 @@ describe("management pages", () => {
     expect(await screen.findByText("Web search")).toBeTruthy();
     expect(getTool).not.toHaveBeenCalled();
     expect(screen.queryByLabelText("Catalog profile filter")).toBeNull();
+    expect(screen.getByRole("table").classList.contains("table-fixed")).toBe(
+      true,
+    );
+    expect(screen.getByRole("columnheader", { name: "Rank" }).classList).toContain(
+      "hidden",
+    );
+    expect(
+      screen.getByRole("columnheader", { name: "Actions" }),
+    ).toBeTruthy();
 
     fireEvent.change(screen.getByLabelText("Catalog provider filter"), {
       target: { value: "prov_1" },

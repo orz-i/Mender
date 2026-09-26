@@ -187,7 +187,7 @@ export function CatalogPage({ client }: { client: MenderClient }) {
 
       <Card>
         <CardContent className="pt-6">
-          <div className="grid grid-cols-[minmax(0,1fr)_220px_auto_auto] gap-3">
+          <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_180px_auto_auto] xl:grid-cols-[minmax(0,1fr)_220px_auto_auto]">
             <Input
               aria-label="Catalog search"
               placeholder="Search intent, e.g. create issue"
@@ -242,40 +242,51 @@ export function CatalogPage({ client }: { client: MenderClient }) {
         </CardHeader>
         <CardContent>
           {results.length ? (
-            <Table>
+            <Table className="table-fixed">
+              <colgroup>
+                <col className="w-[28%]" />
+                <col className="w-[24%]" />
+                <col />
+                <col className="hidden w-16 xl:table-column" />
+                <col className="w-20" />
+              </colgroup>
               <TableHeader>
                 <TableRow>
                   <TableHead>Tool</TableHead>
                   <TableHead>Provider</TableHead>
                   <TableHead>Description</TableHead>
-                  <TableHead>Rank</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead className="hidden xl:table-cell">Rank</TableHead>
+                  <TableHead className="w-20 text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {results.map((tool) => (
                   <TableRow key={tool.toolId}>
-                    <TableCell>
-                      <div className="font-medium">{tool.title || tool.name}</div>
-                      <div className="font-mono text-[11px] text-muted-foreground">
+                    <TableCell className="min-w-0">
+                      <div className="truncate font-medium">
+                        {tool.title || tool.name}
+                      </div>
+                      <div className="truncate font-mono text-[11px] text-muted-foreground">
                         {tool.toolId}
                       </div>
                     </TableCell>
-                    <TableCell>
-                      <div className="text-sm">
+                    <TableCell className="min-w-0">
+                      <div className="truncate text-sm">
                         {providerLabel(providers, tool.providerId)}
                       </div>
-                      <div className="font-mono text-[11px] text-muted-foreground">
+                      <div className="truncate font-mono text-[11px] text-muted-foreground">
                         {tool.providerId}
                       </div>
                     </TableCell>
-                    <TableCell className="max-w-[420px] truncate text-sm text-muted-foreground">
-                      {tool.description || "No description"}
+                    <TableCell className="min-w-0">
+                      <div className="truncate text-sm text-muted-foreground">
+                        {tool.description || "No description"}
+                      </div>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="hidden xl:table-cell">
                       <Badge variant="outline">#{tool.rank}</Badge>
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="w-20 text-right">
                       <Button
                         variant="outline"
                         size="sm"
