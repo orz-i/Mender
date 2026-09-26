@@ -9,6 +9,7 @@ import (
 	"time"
 
 	auditdomain "github.com/orz-i/Mender/backend/internal/audit/domain"
+	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
@@ -61,6 +62,29 @@ func TestInvokeToolSuccessfulResultVariants(t *testing.T) {
 				t.Fatalf("Audit record = %#v", record)
 			}
 		})
+	}
+}
+
+func TestToolLookupFailureIsAuditedWithoutProvider(t *testing.T) {
+	t.Parallel()
+
+	fixture := newFixture(t)
+	fixture.useCase.tools = fakeToolLookup{err: catalogapplication.ErrToolNotFound}
+
+	_, err := fixture.useCase.Execute(context.Background(), InvokeToolRequest{
+		ToolID:    fixture.tool.ID(),
+		Arguments: []byte(`{}`),
+	})
+	if !errors.Is(err, catalogapplication.ErrToolNotFound) {
+		t.Fatalf("Execute() error = %v, want catalog ErrToolNotFound", err)
+	}
+
+	record := fixture.audit.last(t)
+	if record.ProviderID() != nil {
+		t.Fatalf("ProviderID() = %v, want nil", record.ProviderID())
+	}
+	if record.ErrorClass() != auditdomain.ErrorToolNotFound {
+		t.Fatalf("ErrorClass() = %q, want %q", record.ErrorClass(), auditdomain.ErrorToolNotFound)
 	}
 }
 

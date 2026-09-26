@@ -7,6 +7,7 @@ import (
 	"time"
 
 	auditdomain "github.com/orz-i/Mender/backend/internal/audit/domain"
+	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	policydomain "github.com/orz-i/Mender/backend/internal/policy/domain"
@@ -93,7 +94,22 @@ func (uc InvokeTool) Execute(
 
 	tool, err := uc.tools.GetTool(ctx, request.ToolID)
 	if err != nil {
-		return response, fmt.Errorf("invoke tool: resolve tool: %w", err)
+		errorClass := auditdomain.ErrorInternal
+		if errors.Is(err, catalogapplication.ErrToolNotFound) {
+			errorClass = auditdomain.ErrorToolNotFound
+		}
+		recordErr := uc.recordUnresolvedTool(
+			context.WithoutCancel(ctx),
+			invocationID,
+			request.ToolID,
+			request.Caller,
+			startedAt,
+			errorClass,
+		)
+		return response, joinInvocationError(
+			fmt.Errorf("invoke tool: resolve tool: %w", err),
+			recordErr,
+		)
 	}
 
 	decision, err := uc.policy.Evaluate(ctx, PolicyRequest{
@@ -104,7 +120,7 @@ func (uc InvokeTool) Execute(
 	})
 	if err != nil {
 		recordErr := uc.record(
-			ctx,
+			context.WithoutCancel(ctx),
 			invocationID,
 			tool,
 			request.Caller,
@@ -125,7 +141,7 @@ func (uc InvokeTool) Execute(
 	switch decision.Kind() {
 	case policydomain.DecisionDeny:
 		recordErr := uc.record(
-			ctx,
+			context.WithoutCancel(ctx),
 			invocationID,
 			tool,
 			request.Caller,
@@ -207,7 +223,7 @@ func (uc InvokeTool) Execute(
 
 	default:
 		recordErr := uc.record(
-			ctx,
+			context.WithoutCancel(ctx),
 			invocationID,
 			tool,
 			request.Caller,
@@ -342,10 +358,11 @@ func (uc InvokeTool) record(
 	resultKind invocationdomain.ResultKind,
 	errorClass auditdomain.ErrorClass,
 ) error {
+	providerID := tool.ProviderID()
 	record, err := auditdomain.NewRecord(
 		invocationID,
 		tool.ID(),
-		tool.ProviderID(),
+		&providerID,
 		caller,
 		startedAt,
 		uc.clock.Now(),
@@ -361,6 +378,37 @@ func (uc InvokeTool) record(
 	}
 	if err := uc.audit.Record(ctx, record); err != nil {
 		return fmt.Errorf("%w: persist: %w", ErrAuditFailed, err)
+	}
+	return nil
+}
+
+func (uc InvokeTool) recordUnresolvedTool(
+	ctx context.Context,
+	invocationID invocationdomain.InvocationID,
+	toolID catalogdomain.ToolID,
+	caller string,
+	startedAt time.Time,
+	errorClass auditdomain.ErrorClass,
+) error {
+	record, err := auditdomain.NewRecord(
+		invocationID,
+		toolID,
+		nil,
+		caller,
+		startedAt,
+		uc.clock.Now(),
+		policydomain.DecisionKind(""),
+		"",
+		auditdomain.ApprovalNotRequired,
+		auditdomain.StatusFailed,
+		"",
+		errorClass,
+	)
+	if err != nil {
+		return fmt.Errorf("%w: construct unresolved tool record: %w", ErrAuditFailed, err)
+	}
+	if err := uc.audit.Record(ctx, record); err != nil {
+		return fmt.Errorf("%w: persist unresolved tool record: %w", ErrAuditFailed, err)
 	}
 	return nil
 }

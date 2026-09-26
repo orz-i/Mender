@@ -51,7 +51,7 @@ const (
 type Record struct {
 	invocationID invocationdomain.InvocationID
 	toolID       catalogdomain.ToolID
-	providerID   catalogdomain.ProviderID
+	providerID   *catalogdomain.ProviderID
 	caller       string
 	startedAt    time.Time
 	finishedAt   time.Time
@@ -67,7 +67,7 @@ type Record struct {
 func NewRecord(
 	invocationID invocationdomain.InvocationID,
 	toolID catalogdomain.ToolID,
-	providerID catalogdomain.ProviderID,
+	providerID *catalogdomain.ProviderID,
 	caller string,
 	startedAt time.Time,
 	finishedAt time.Time,
@@ -84,8 +84,10 @@ func NewRecord(
 	if _, err := catalogdomain.ParseToolID(toolID.String()); err != nil {
 		return Record{}, err
 	}
-	if _, err := catalogdomain.ParseProviderID(providerID.String()); err != nil {
-		return Record{}, err
+	if providerID != nil {
+		if _, err := catalogdomain.ParseProviderID(providerID.String()); err != nil {
+			return Record{}, err
+		}
 	}
 	if startedAt.IsZero() || finishedAt.IsZero() {
 		return Record{}, fmt.Errorf("audit timestamps must not be zero")
@@ -103,7 +105,7 @@ func NewRecord(
 	return Record{
 		invocationID: invocationID,
 		toolID:       toolID,
-		providerID:   providerID,
+		providerID:   cloneProviderID(providerID),
 		caller:       strings.TrimSpace(caller),
 		startedAt:    startedAt.UTC(),
 		finishedAt:   finishedAt.UTC(),
@@ -142,7 +144,7 @@ func validateOutcome(status Status, resultKind invocationdomain.ResultKind, erro
 
 func (r Record) InvocationID() invocationdomain.InvocationID { return r.invocationID }
 func (r Record) ToolID() catalogdomain.ToolID                { return r.toolID }
-func (r Record) ProviderID() catalogdomain.ProviderID        { return r.providerID }
+func (r Record) ProviderID() *catalogdomain.ProviderID       { return cloneProviderID(r.providerID) }
 func (r Record) Caller() string                              { return r.caller }
 func (r Record) StartedAt() time.Time                        { return r.startedAt }
 func (r Record) FinishedAt() time.Time                       { return r.finishedAt }
@@ -152,3 +154,11 @@ func (r Record) Approval() ApprovalOutcome                   { return r.approval
 func (r Record) Status() Status                              { return r.status }
 func (r Record) ResultKind() invocationdomain.ResultKind     { return r.resultKind }
 func (r Record) ErrorClass() ErrorClass                      { return r.errorClass }
+
+func cloneProviderID(id *catalogdomain.ProviderID) *catalogdomain.ProviderID {
+	if id == nil {
+		return nil
+	}
+	cloned := *id
+	return &cloned
+}

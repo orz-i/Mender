@@ -20,7 +20,7 @@ func TestRecordContainsOnlyMetadataFields(t *testing.T) {
 	record, err := NewRecord(
 		invocationID,
 		toolID,
-		providerID,
+		&providerID,
 		"cli",
 		now,
 		now.Add(time.Second),
@@ -51,7 +51,7 @@ func TestRecordRejectsInconsistentOutcome(t *testing.T) {
 	_, err := NewRecord(
 		invocationID,
 		toolID,
-		providerID,
+		&providerID,
 		"",
 		now,
 		now,
