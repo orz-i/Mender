@@ -1,0 +1,22 @@
+{
+  "name": "@mender/desktop",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc --project tsconfig.json --noEmit && vite build --mode production",
+    "build:dev": "tsc --project tsconfig.json --noEmit && vite build --minify false --mode development",
+    "dev": "vite",
+    "typecheck": "tsc --project tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@wailsio/runtime": "3.0.0-beta.26",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "vite": "^8.3.1"
+  }
+}

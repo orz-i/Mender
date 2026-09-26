@@ -206,6 +206,31 @@ importers:
         specifier: ^5.0.2
         version: 5.0.2(@types/node@24.13.6)(jsdom@30.1.1)(vite@8.3.1(@types/node@24.13.6)(jiti@2.7.0))
 
+  apps/desktop/frontend:
+    dependencies:
+      '@wailsio/runtime':
+        specifier: 3.0.0-beta.26
+        version: 3.0.0-beta.26
+      react:
+        specifier: ^19.3.0
+        version: 19.3.0
+      react-dom:
+        specifier: ^19.3.0
+        version: 19.3.0(react@19.3.0)
+    devDependencies:
+      '@types/react':
+        specifier: ^19.0.0
+        version: 19.3.0
+      '@types/react-dom':
+        specifier: ^19.0.0
+        version: 19.3.0(@types/react@19.3.0)
+      '@vitejs/plugin-react':
+        specifier: ^6.1.1
+        version: 6.1.1(vite@8.3.1(@types/node@24.13.6)(jiti@2.7.0))
+      vite:
+        specifier: ^8.3.1
+        version: 8.3.1(@types/node@24.13.6)(jiti@2.7.0)
+
   apps/web:
     dependencies:
       '@mender/app':
@@ -883,6 +908,9 @@ packages:
 
   '@vitest/spy@5.0.2':
     resolution: {integrity: sha512-Ijc7T1nT9efNb5LxvjaBrEqw3f/QwUv5EE0nKqZxgqsaV/FxAAZ8baGylA8X/Z2oS4Lp+K74Jr6dTJsDKxJDeg==}
+
+  '@wailsio/runtime@3.0.0-beta.26':
+    resolution: {integrity: sha512-sYEngKg3N7rWuK1CEJGuSJz/SfyIX1vcPfJiRX7UCSb1+6Re4CPMbMme/5FiZvqqUHNbD5NBbJcTTkmHDYNHWg==}
 
   acorn-jsx@5.3.2:
     resolution: {integrity: sha512-rq9s+JNhf0IChjtDXxllJ7g41oZk5SlXtp0LHwyA5cejwn7vKmKp4pPri6YEePv2PU65sAsegbXtIinmDFDXgQ==}
@@ -2343,6 +2371,8 @@ snapshots:
       vite: 8.3.1(@types/node@24.13.6)(jiti@2.7.0)
 
   '@vitest/spy@5.0.2': {}
+
+  '@wailsio/runtime@3.0.0-beta.26': {}
 
   acorn-jsx@5.3.2(acorn@8.18.0):
     dependencies:

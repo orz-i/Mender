@@ -1,0 +1,15 @@
+{
+	"fixed": {
+		"file_version": "0.1.0"
+	},
+	"info": {
+		"0000": {
+			"ProductVersion": "0.1.0",
+			"CompanyName": "orz-i",
+			"FileDescription": "Tools aggregation runtime and gateway for LLMs and Agents",
+			"LegalCopyright": "Mender contributors",
+			"ProductName": "Mender",
+			"Comments": "Mender desktop distribution"
+		}
+	}
+}

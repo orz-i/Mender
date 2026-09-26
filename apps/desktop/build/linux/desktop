@@ -1,0 +1,11 @@
+[Desktop Entry]
+Version=1.0
+Name=Mender
+Comment=Tools aggregation runtime and gateway for LLMs and Agents
+# The Exec line includes %u to pass the URL to the application
+Exec=/usr/local/bin/mender-desktop %u
+Terminal=false
+Type=Application
+Icon=mender-desktop
+Categories=Utility;
+StartupWMClass=mender-desktop
