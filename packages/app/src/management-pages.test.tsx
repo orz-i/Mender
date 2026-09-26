@@ -404,6 +404,19 @@ describe("management pages", () => {
     fireEvent.click(screen.getByRole("button", { name: "Manage default" }));
     expect(await screen.findByText("Search")).toBeTruthy();
     expect(screen.queryByText("tool_1")).toBeNull();
+    expect(screen.getAllByRole("dialog")).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Choose tools" }));
+    expect(await screen.findByText("Extract")).toBeTruthy();
+    expect(screen.getAllByRole("dialog")).toHaveLength(1);
+    expect(
+      screen.getByRole<HTMLInputElement>("checkbox", { name: "Select Extract" })
+        .disabled,
+    ).toBe(false);
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(await screen.findByRole("button", { name: "Choose tools" })).toBeTruthy();
+    expect(screen.getAllByRole("dialog")).toHaveLength(1);
 
     fireEvent.click(screen.getByRole("button", { name: "Choose tools" }));
     expect(await screen.findByText("Extract")).toBeTruthy();

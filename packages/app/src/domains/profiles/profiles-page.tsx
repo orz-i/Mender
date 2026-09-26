@@ -54,7 +54,7 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
   const [createForm, setCreateForm] = useState(emptyCreateForm);
 
   const [manageSlug, setManageSlug] = useState("");
-  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerSlug, setPickerSlug] = useState("");
   const [pickerQuery, setPickerQuery] = useState("");
   const [pickerProvider, setPickerProvider] = useState("");
   const [pickerTools, setPickerTools] = useState<ToolSummary[]>([]);
@@ -105,6 +105,10 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
     () => profiles.find((profile) => profile.slug === manageSlug) ?? null,
     [profiles, manageSlug],
   );
+  const pickerProfile = useMemo(
+    () => profiles.find((profile) => profile.slug === pickerSlug) ?? null,
+    [profiles, pickerSlug],
+  );
 
   const knownTools = useMemo(() => {
     const result = new Map<string, ToolSummary>();
@@ -139,6 +143,7 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
     if (managedProfile === null) {
       return;
     }
+    const slug = managedProfile.slug;
     setPickerQuery("");
     setPickerProvider("");
     setPickerSelected(
@@ -153,7 +158,12 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
       ),
     );
     setPickerTools(catalogTools);
-    setPickerOpen(true);
+
+    // Base UI modal dialogs must never overlap here. Close Manage first,
+    // then open the independent Tool Picker on the next task after focus/inert
+    // cleanup has completed in the WebView.
+    setManageSlug("");
+    window.setTimeout(() => setPickerSlug(slug), 0);
   }
 
   async function searchPicker() {
@@ -187,16 +197,16 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
   }
 
   async function saveToolSelection() {
-    if (managedProfile === null) {
+    if (pickerProfile === null) {
       return;
     }
 
     const tools = [...pickerSelected].map((toolId) => ({
       toolId,
       direct:
-        managedProfile.mode === "direct"
+        pickerProfile.mode === "direct"
           ? true
-          : managedProfile.mode === "dynamic"
+          : pickerProfile.mode === "dynamic"
             ? false
             : (pickerDirect[toolId] ?? false),
     }));
@@ -204,17 +214,30 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
     setBusy(true);
     setError("");
     try {
-      const profile = await client.replaceProfileTools(managedProfile.slug, {
+      const profile = await client.replaceProfileTools(pickerProfile.slug, {
         tools,
       });
       setProfiles((current) =>
         current.map((item) => (item.slug === profile.slug ? profile : item)),
       );
-      setPickerOpen(false);
+      returnToManage(profile.slug);
     } catch (reason) {
       setError(errorMessage(reason));
     } finally {
       setBusy(false);
+    }
+  }
+
+  function closeToolPicker() {
+    returnToManage(pickerProfile?.slug ?? "");
+  }
+
+  function returnToManage(slug: string) {
+    setPickerSlug("");
+    setPickerQuery("");
+    setPickerProvider("");
+    if (slug) {
+      window.setTimeout(() => setManageSlug(slug), 0);
     }
   }
 
@@ -423,7 +446,6 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
         onOpenChange={(open) => {
           if (!open) {
             setManageSlug("");
-            setPickerOpen(false);
           }
         }}
       >
@@ -538,135 +560,191 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
         </DialogContent>
       </Dialog>
 
-      <Dialog
-        open={pickerOpen}
-        onOpenChange={(open) => {
-          setPickerOpen(open);
-          if (!open) {
-            setPickerQuery("");
-            setPickerProvider("");
-          }
-        }}
-      >
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-4xl">
-          <DialogHeader>
-            <DialogTitle>Choose tools</DialogTitle>
-            <DialogDescription>
-              Browse or search the Catalog, then select the Tools this Profile may
-              expose.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="grid grid-cols-[minmax(0,1fr)_220px_auto] gap-3">
-            <Input
-              aria-label="Profile tool search"
-              placeholder="Search tools"
-              value={pickerQuery}
-              onChange={(event) => setPickerQuery(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  void searchPicker();
-                }
-              }}
-            />
-            <select
-              aria-label="Provider filter"
-              value={pickerProvider}
-              onChange={(event) => {
-                setPickerProvider(event.target.value);
-              }}
-              className="h-8 rounded-lg border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
-            >
-              <option value="">All Providers</option>
-              {providers.map((provider) => (
-                <option key={provider.providerId} value={provider.providerId}>
-                  {provider.displayName || provider.namespace}
-                </option>
-              ))}
-            </select>
-            <Button
-              variant="outline"
-              disabled={busy}
-              onClick={() => void searchPicker()}
-            >
-              {busy ? "Loading…" : "Apply"}
-            </Button>
-          </div>
-
-          <div className="max-h-[52vh] divide-y divide-border overflow-y-auto rounded-lg border border-border">
-            {pickerTools.length ? (
-              pickerTools.map((tool) => {
-                const selected = pickerSelected.has(tool.toolId);
-                const provider = providerById.get(tool.providerId);
-                return (
-                  <div
-                    key={tool.toolId}
-                    className="flex items-start gap-3 px-4 py-3"
-                  >
-                    <input
-                      aria-label={"Select " + (tool.title || tool.name)}
-                      type="checkbox"
-                      className="mt-1"
-                      checked={selected}
-                      onChange={(event) => {
-                        setPickerSelected((current) => {
-                          const next = new Set(current);
-                          if (event.target.checked) {
-                            next.add(tool.toolId);
-                          } else {
-                            next.delete(tool.toolId);
-                          }
-                          return next;
-                        });
-                      }}
-                    />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium">
-                        {tool.title || tool.name}
-                      </p>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {provider?.displayName ||
-                          provider?.namespace ||
-                          "Unknown Provider"}
-                        {tool.description ? " · " + tool.description : ""}
-                      </p>
-                    </div>
-                    {managedProfile?.mode === "hybrid" && selected ? (
-                      <label className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
-                        <input
-                          type="checkbox"
-                          checked={pickerDirect[tool.toolId] ?? false}
-                          onChange={(event) =>
-                            setPickerDirect((current) => ({
-                              ...current,
-                              [tool.toolId]: event.target.checked,
-                            }))
-                          }
-                        />
-                        Direct export
-                      </label>
-                    ) : null}
-                  </div>
-                );
-              })
-            ) : (
-              <div className="p-8 text-center text-sm text-muted-foreground">
-                No matching Tools.
-              </div>
-            )}
-          </div>
-
-          <DialogFooter>
-            <DialogClose render={<Button variant="outline" />}>
-              Cancel
-            </DialogClose>
-            <Button disabled={busy} onClick={() => void saveToolSelection()}>
-              {busy ? "Saving…" : "Save selection"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ToolPickerDialog
+        open={pickerProfile !== null}
+        profile={pickerProfile}
+        providers={providers}
+        tools={pickerTools}
+        query={pickerQuery}
+        providerId={pickerProvider}
+        selected={pickerSelected}
+        direct={pickerDirect}
+        busy={busy}
+        onQueryChange={setPickerQuery}
+        onProviderChange={setPickerProvider}
+        onSelectedChange={setPickerSelected}
+        onDirectChange={setPickerDirect}
+        onApply={() => void searchPicker()}
+        onSave={() => void saveToolSelection()}
+        onClose={closeToolPicker}
+      />
     </>
+  );
+}
+
+function ToolPickerDialog({
+  open,
+  profile,
+  providers,
+  tools,
+  query,
+  providerId,
+  selected,
+  direct,
+  busy,
+  onQueryChange,
+  onProviderChange,
+  onSelectedChange,
+  onDirectChange,
+  onApply,
+  onSave,
+  onClose,
+}: {
+  open: boolean;
+  profile: Profile | null;
+  providers: Provider[];
+  tools: ToolSummary[];
+  query: string;
+  providerId: string;
+  selected: Set<string>;
+  direct: Record<string, boolean>;
+  busy: boolean;
+  onQueryChange: (value: string) => void;
+  onProviderChange: (value: string) => void;
+  onSelectedChange: (value: Set<string>) => void;
+  onDirectChange: (value: Record<string, boolean>) => void;
+  onApply: () => void;
+  onSave: () => void;
+  onClose: () => void;
+}) {
+  const providerById = new Map(
+    providers.map((provider) => [provider.providerId, provider]),
+  );
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) {
+          onClose();
+        }
+      }}
+    >
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-4xl">
+        <DialogHeader>
+          <DialogTitle>Choose tools</DialogTitle>
+          <DialogDescription>
+            Browse or search the Catalog, then select the Tools this Profile may
+            expose.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="grid grid-cols-[minmax(0,1fr)_220px_auto] gap-3">
+          <Input
+            aria-label="Profile tool search"
+            placeholder="Search tools"
+            value={query}
+            onChange={(event) => onQueryChange(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                onApply();
+              }
+            }}
+          />
+          <select
+            aria-label="Provider filter"
+            value={providerId}
+            onChange={(event) => onProviderChange(event.target.value)}
+            className="h-8 rounded-lg border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
+          >
+            <option value="">All Providers</option>
+            {providers.map((provider) => (
+              <option key={provider.providerId} value={provider.providerId}>
+                {provider.displayName || provider.namespace}
+              </option>
+            ))}
+          </select>
+          <Button variant="outline" disabled={busy} onClick={onApply}>
+            {busy ? "Loading…" : "Apply"}
+          </Button>
+        </div>
+
+        <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <span>{tools.length} visible Tools</span>
+          <span>{selected.size} selected</span>
+        </div>
+
+        <div className="max-h-[52vh] divide-y divide-border overflow-y-auto rounded-lg border border-border">
+          {tools.length ? (
+            tools.map((tool) => {
+              const isSelected = selected.has(tool.toolId);
+              const provider = providerById.get(tool.providerId);
+              return (
+                <div
+                  key={tool.toolId}
+                  className="flex items-start gap-3 px-4 py-3"
+                >
+                  <input
+                    aria-label={"Select " + (tool.title || tool.name)}
+                    type="checkbox"
+                    className="mt-1"
+                    checked={isSelected}
+                    onChange={(event) => {
+                      const next = new Set(selected);
+                      if (event.target.checked) {
+                        next.add(tool.toolId);
+                      } else {
+                        next.delete(tool.toolId);
+                      }
+                      onSelectedChange(next);
+                    }}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium">
+                      {tool.title || tool.name}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {provider?.displayName ||
+                        provider?.namespace ||
+                        "Unknown Provider"}
+                      {tool.description ? " · " + tool.description : ""}
+                    </p>
+                  </div>
+                  {profile?.mode === "hybrid" && isSelected ? (
+                    <label className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
+                      <input
+                        type="checkbox"
+                        checked={direct[tool.toolId] ?? false}
+                        onChange={(event) =>
+                          onDirectChange({
+                            ...direct,
+                            [tool.toolId]: event.target.checked,
+                          })
+                        }
+                      />
+                      Direct export
+                    </label>
+                  ) : null}
+                </div>
+              );
+            })
+          ) : (
+            <div className="p-8 text-center text-sm text-muted-foreground">
+              No matching Tools.
+            </div>
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button disabled={busy} onClick={onSave}>
+            {busy ? "Saving…" : "Save selection"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
