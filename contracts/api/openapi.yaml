@@ -383,7 +383,7 @@ components:
       properties:
         namespace: { type: string }
         displayName: { type: string }
-        description: { type: string, default: '' }
+        description: { type: string }
         endpoint: { type: string, format: uri }
       additionalProperties: false
     CreateStdioProviderRequest:
@@ -392,13 +392,12 @@ components:
       properties:
         namespace: { type: string }
         displayName: { type: string }
-        description: { type: string, default: '' }
+        description: { type: string }
         executable: { type: string }
         args:
           type: array
           items: { type: string }
-          default: []
-        directory: { type: string, default: '' }
+        directory: { type: string }
       additionalProperties: false
     ProviderMutationResponse:
       type: object
@@ -472,7 +471,7 @@ components:
       required: [toolId]
       properties:
         toolId: { type: string }
-        direct: { type: boolean, default: false }
+        direct: { type: boolean }
       additionalProperties: false
     ProfileTool:
       type: object
