@@ -7,7 +7,9 @@
   },
   "scripts": {
     "build": "pnpm -r --if-present run build",
-    "check": "pnpm sdk:check && pnpm go:lint && pnpm go:test && pnpm go:test:race && pnpm lint && pnpm typecheck && pnpm test && pnpm build",
+    "check": "pnpm sdk:check && pnpm desktop:bindings:check && pnpm desktop:architecture:check && pnpm go:lint && pnpm go:test && pnpm go:test:race && pnpm lint && pnpm typecheck && pnpm test && pnpm build",
+    "desktop:architecture:check": "node scripts/check-desktop-architecture.mjs",
+    "desktop:bindings:check": "node scripts/check-desktop-bindings.mjs",
     "dev:web": "pnpm --filter @mender/web dev",
     "go:lint": "golangci-lint run ./backend/...",
     "go:test": "go test ./backend/...",
