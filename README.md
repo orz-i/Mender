@@ -11,7 +11,7 @@ It provides one canonical tool model and execution pipeline, then exposes the sa
 
 ## Status
 
-The governance, foundation scaffold, and Catalog phases are complete. Catalog now provides protocol-independent Provider/Tool models, application use cases, SQLite persistence, and FTS discovery. The next phase establishes Invocation, Policy, Credential, and Audit behavior.
+The governance, foundation scaffold, Catalog, and shared runtime phases are complete. Mender now has protocol-independent Provider/Tool models, discovery, a policy-controlled invocation pipeline, execution-boundary credential resolution, data-minimized Audit persistence, and local executor routing. The next phase adds MCP provider and server adapters.
 
 ## Product principles
 

@@ -70,7 +70,7 @@ pnpm build
 
 ## Workspace boundaries
 
-The repository now includes the Catalog bounded context; later product contexts remain intentionally absent until their owning phases begin.
+The repository now includes Catalog plus the shared Invocation, Policy, Credential, and Audit runtime boundaries; protocol adapters remain intentionally absent until their owning phases begin.
 
 - `backend/` contains Go executable hosts, the Catalog bounded context, and composition roots.
 - `apps/web/` is the browser host.
@@ -80,7 +80,7 @@ The repository now includes the Catalog bounded context; later product contexts 
 - `contracts/` and `skills/` will be introduced when their owning phases begin.
 - Wails is intentionally not required by the current CLI/server/web build.
 
-The next implementation phase is Invocation, Policy, Credential, and Audit. It must reuse Catalog through application boundaries and must not bypass Catalog ownership through SQLite tables.
+The next implementation phase is MCP provider and server adapters. MCP SDK types must remain at adapter boundaries and all MCP tool calls must enter the existing shared Invocation pipeline.
 
 ## Quality policy
 

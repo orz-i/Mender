@@ -168,7 +168,7 @@ An ExecutorRouter selects an executor for a Tool. Initial routing is by Provider
 
 Audit is data-minimized by default.
 
-An Audit Record stores InvocationID, ToolID, ProviderID, caller label when supplied, start/finish times, policy decision kind and reason, approval outcome, terminal status, result kind, and stable error classification.
+An Audit Record stores InvocationID, ToolID, ProviderID when the Tool resolved successfully, caller label when supplied, start/finish times, policy decision kind and reason, approval outcome, terminal status, result kind, and stable error classification.
 
 Normal Audit Records explicitly do **not** store:
 
@@ -207,17 +207,17 @@ docs: complete invocation policy credential audit phase
 
 ## Exit checklist
 
-- [ ] Invocation model represents Complete.
-- [ ] Invocation model represents InputRequired.
-- [ ] Invocation model represents Task.
-- [ ] Policy Deny prevents executor execution.
-- [ ] RequireApproval calls the approval gate.
-- [ ] Approval denial prevents executor execution.
-- [ ] Credential resolver is only consumed by the executor boundary.
-- [ ] Secret material is absent from Audit domain records and SQLite rows.
-- [ ] Parent cancellation is tested.
-- [ ] Timeout behavior is tested.
-- [ ] Built-in/fake execution traverses the full pipeline.
-- [ ] SQLite Audit integration tests pass.
-- [ ] Domain packages have no SQLite/MCP dependency.
-- [ ] `pnpm check` passes.
+- [x] Invocation model represents Complete.
+- [x] Invocation model represents InputRequired.
+- [x] Invocation model represents Task.
+- [x] Policy Deny prevents executor execution.
+- [x] RequireApproval calls the approval gate.
+- [x] Approval denial prevents executor execution.
+- [x] Credential resolver is only consumed by the executor boundary.
+- [x] Secret material is absent from Audit domain records and SQLite rows.
+- [x] Parent cancellation is tested.
+- [x] Timeout behavior is tested.
+- [x] Built-in/fake execution traverses the full pipeline.
+- [x] SQLite Audit integration tests pass.
+- [x] Domain packages have no SQLite/MCP dependency.
+- [x] `pnpm check` passes.

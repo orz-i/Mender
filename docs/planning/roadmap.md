@@ -84,7 +84,7 @@ See `phase-2-catalog.md`.
 
 ## Phase 3 — Invocation, policy, credentials, and audit
 
-Status: In progress
+Status: Complete
 
 Goals:
 
@@ -104,6 +104,8 @@ Exit criteria:
 See `phase-3-runtime.md`.
 
 ## Phase 4 — MCP provider and server adapters
+
+Status: Next
 
 Goals:
 
