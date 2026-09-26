@@ -30,5 +30,6 @@ describe("Dialog layering", () => {
     expect(overlay?.classList.contains("z-50")).toBe(false);
     expect(content?.classList.contains("z-50")).toBe(true);
     expect(content?.classList.contains("pointer-events-auto")).toBe(true);
+    expect(content?.classList.contains("[&>*]:min-w-0")).toBe(true);
   });
 });
