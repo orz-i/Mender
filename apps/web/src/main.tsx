@@ -4,7 +4,7 @@ import { BrowserRouter } from "react-router";
 
 import { MenderApp } from "@mender/app";
 
-import "./styles.css";
+import "@mender/ui/globals.css";
 
 const rootElement = document.getElementById("root");
 

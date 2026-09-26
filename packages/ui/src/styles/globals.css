@@ -1,6 +1,5 @@
 @import "tailwindcss";
-@source "../../../packages/app/src";
-@source "../../../packages/ui/src";
+@source "../../../app/src";
 
 :root {
   font-family:
