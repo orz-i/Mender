@@ -145,7 +145,7 @@ See `phase-5-cli-skill.md`.
 
 ## Phase 6 — Management Web UI
 
-Status: Next
+Status: In progress
 
 Goals:
 
@@ -159,6 +159,8 @@ Exit criteria:
 - Strict TypeScript checks remain enabled.
 - UI domain language matches backend ubiquitous language.
 - No direct scattered `fetch` usage bypasses the SDK/API boundary.
+
+See `phase-6-management-web.md`.
 
 ## Phase 7 — Wails desktop distribution
 
