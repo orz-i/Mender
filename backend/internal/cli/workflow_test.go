@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	mcpserver "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/server"
 )
 
 func TestCLILocalWorkflowWithPersistedHTTPProvider(t *testing.T) {
@@ -118,6 +119,30 @@ func TestCLILocalWorkflowWithPersistedHTTPProvider(t *testing.T) {
 		t.Fatalf("invocationId = %#v", called["invocationId"])
 	}
 
+	var servedHTTP atomic.Bool
+	runServeCommand(t, dbPath, Options{
+		ServeHTTP: func(ctx context.Context, _ string, adapter *mcpserver.Adapter) error {
+			servedHTTP.Store(true)
+			assertServedProfileTools(t, ctx, adapter, "upstream__echo")
+			return nil
+		},
+	}, "serve", "mcp", "--profile", "default", "--http", "127.0.0.1:0")
+	if !servedHTTP.Load() {
+		t.Fatal("serve HTTP adapter was not invoked")
+	}
+
+	var servedStdio atomic.Bool
+	runServeCommand(t, dbPath, Options{
+		ServeStdio: func(ctx context.Context, adapter *mcpserver.Adapter) error {
+			servedStdio.Store(true)
+			assertServedProfileTools(t, ctx, adapter, "upstream__echo")
+			return nil
+		},
+	}, "serve", "mcp", "--profile", "default", "--stdio")
+	if !servedStdio.Load() {
+		t.Fatal("serve stdio adapter was not invoked")
+	}
+
 	if got := upstreamCalls.Load(); got != 1 {
 		t.Fatalf("upstream call count = %d, want 1", got)
 	}
@@ -165,4 +190,81 @@ func executeJSONCommand(
 		)
 	}
 	return value
+}
+
+func TestServeMCPRequiresExactlyOneTransport(t *testing.T) {
+	t.Parallel()
+
+	for _, args := range [][]string{
+		{"serve", "mcp", "--profile", "default"},
+		{"serve", "mcp", "--profile", "default", "--stdio", "--http", "127.0.0.1:8080"},
+	} {
+		var stdout, stderr bytes.Buffer
+		root := NewRootCommand(Options{Stdout: &stdout, Stderr: &stderr})
+		root.SetArgs(append([]string{
+			"--db", filepath.Join(t.TempDir(), "mender.db"),
+		}, args...))
+		if err := root.ExecuteContext(context.Background()); err == nil {
+			t.Fatalf("command %v expected validation error", args)
+		}
+	}
+}
+
+func runServeCommand(
+	t *testing.T,
+	dbPath string,
+	options Options,
+	args ...string,
+) {
+	t.Helper()
+
+	var stdout, stderr bytes.Buffer
+	options.Stdout = &stdout
+	options.Stderr = &stderr
+	root := NewRootCommand(options)
+	root.SetArgs(append([]string{"--db", dbPath}, args...))
+	if err := root.ExecuteContext(context.Background()); err != nil {
+		t.Fatalf("serve command %v error = %v stderr=%q", args, err, stderr.String())
+	}
+}
+
+func assertServedProfileTools(
+	t *testing.T,
+	ctx context.Context,
+	adapter *mcpserver.Adapter,
+	expectedDirect string,
+) {
+	t.Helper()
+
+	clientTransport, serverTransport := mcp.NewInMemoryTransports()
+	serverSession, err := adapter.MCPServer().Connect(ctx, serverTransport, nil)
+	if err != nil {
+		t.Fatalf("served MCP server.Connect() error = %v", err)
+	}
+	defer func() { _ = serverSession.Close() }()
+
+	client := mcp.NewClient(
+		&mcp.Implementation{Name: "cli-serve-test", Version: "1.0.0"},
+		nil,
+	)
+	session, err := client.Connect(ctx, clientTransport, nil)
+	if err != nil {
+		t.Fatalf("served MCP client.Connect() error = %v", err)
+	}
+	defer func() { _ = session.Close() }()
+
+	listed, err := session.ListTools(ctx, nil)
+	if err != nil {
+		t.Fatalf("served MCP ListTools() error = %v", err)
+	}
+	found := false
+	for _, tool := range listed.Tools {
+		if tool.Name == expectedDirect {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("served MCP tools do not include %q: %+v", expectedDirect, listed.Tools)
+	}
 }

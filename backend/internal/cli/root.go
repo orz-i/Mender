@@ -12,6 +12,7 @@ import (
 	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
 	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
 	mcpconfigstore "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/configstore"
+	mcpserver "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/server"
 	profileapplication "github.com/orz-i/Mender/backend/internal/profile/application"
 	"github.com/spf13/cobra"
 )
@@ -31,6 +32,8 @@ type Options struct {
 	OpenRuntime func(context.Context, string) (*bootstrap.Runtime, error)
 	Getenv      func(string) string
 	HomeDir     func() (string, error)
+	ServeStdio  func(context.Context, *mcpserver.Adapter) error
+	ServeHTTP   func(context.Context, string, *mcpserver.Adapter) error
 }
 
 type app struct {
@@ -45,6 +48,13 @@ type usageError struct {
 
 func (e usageError) Error() string { return e.err.Error() }
 func (e usageError) Unwrap() error { return e.err }
+
+type internalError struct {
+	err error
+}
+
+func (e internalError) Error() string { return e.err.Error() }
+func (e internalError) Unwrap() error { return e.err }
 
 func NewRootCommand(options Options) *cobra.Command {
 	options = normalizeOptions(options)
@@ -73,6 +83,7 @@ func NewRootCommand(options Options) *cobra.Command {
 	root.AddCommand(a.newProviderCommand())
 	root.AddCommand(a.newProfileCommand())
 	root.AddCommand(a.newToolCommand())
+	root.AddCommand(a.newServeCommand())
 	return root
 }
 
@@ -104,6 +115,14 @@ func normalizeOptions(options Options) Options {
 	if options.HomeDir == nil {
 		options.HomeDir = os.UserHomeDir
 	}
+	if options.ServeStdio == nil {
+		options.ServeStdio = func(ctx context.Context, adapter *mcpserver.Adapter) error {
+			return adapter.RunStdio(ctx)
+		}
+	}
+	if options.ServeHTTP == nil {
+		options.ServeHTTP = serveHTTP
+	}
 	return options
 }
 
@@ -117,18 +136,21 @@ func (a *app) withRuntime(
 	}
 	runtime, err := a.options.OpenRuntime(ctx, path)
 	if err != nil {
-		return fmt.Errorf("open Mender runtime: %w", err)
+		return internalError{err: fmt.Errorf("open Mender runtime: %w", err)}
 	}
 	runErr := fn(runtime)
 	closeErr := runtime.Close()
 	if runErr != nil {
 		if closeErr != nil {
-			return errors.Join(runErr, fmt.Errorf("close Mender runtime: %w", closeErr))
+			return errors.Join(
+				runErr,
+				internalError{err: fmt.Errorf("close Mender runtime: %w", closeErr)},
+			)
 		}
 		return runErr
 	}
 	if closeErr != nil {
-		return fmt.Errorf("close Mender runtime: %w", closeErr)
+		return internalError{err: fmt.Errorf("close Mender runtime: %w", closeErr)}
 	}
 	return nil
 }
@@ -168,9 +190,12 @@ func exactArgs(count int) cobra.PositionalArgs {
 
 func exitCode(err error) int {
 	var usage usageError
+	var internal internalError
 	switch {
 	case errors.As(err, &usage):
 		return ExitUsage
+	case errors.As(err, &internal):
+		return ExitInternal
 	case errors.Is(err, catalogapplication.ErrProviderNotFound),
 		errors.Is(err, catalogapplication.ErrToolNotFound),
 		errors.Is(err, profileapplication.ErrProfileNotFound),
