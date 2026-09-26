@@ -1,0 +1,168 @@
+package cli
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"path/filepath"
+	"sync/atomic"
+	"testing"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+)
+
+func TestCLILocalWorkflowWithPersistedHTTPProvider(t *testing.T) {
+	t.Parallel()
+
+	var upstreamCalls atomic.Int32
+	upstream := mcp.NewServer(
+		&mcp.Implementation{Name: "cli-upstream", Version: "1.0.0"},
+		nil,
+	)
+	upstream.AddTool(
+		&mcp.Tool{
+			Name:         "echo",
+			Title:        "Echo",
+			Description:  "Echo JSON input",
+			InputSchema:  json.RawMessage("{\"type\":\"object\"}"),
+			OutputSchema: json.RawMessage("{\"type\":\"object\"}"),
+		},
+		func(_ context.Context, request *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			upstreamCalls.Add(1)
+			var input map[string]any
+			if err := json.Unmarshal(request.Params.Arguments, &input); err != nil {
+				return nil, err
+			}
+			return &mcp.CallToolResult{StructuredContent: input}, nil
+		},
+	)
+
+	httpServer := httptest.NewServer(
+		mcp.NewStreamableHTTPHandler(
+			func(*http.Request) *mcp.Server { return upstream },
+			&mcp.StreamableHTTPOptions{Stateless: true, JSONResponse: true},
+		),
+	)
+	t.Cleanup(httpServer.Close)
+
+	dbPath := filepath.Join(t.TempDir(), "mender.db")
+	execute := func(args ...string) map[string]any {
+		t.Helper()
+		return executeJSONCommand(t, dbPath, args...)
+	}
+
+	registered := execute(
+		"provider", "add", "http",
+		"--namespace", "upstream",
+		"--name", "Upstream",
+		"--endpoint", httpServer.URL,
+	)
+	provider, ok := registered["provider"].(map[string]any)
+	if !ok || provider["namespace"] != "upstream" {
+		t.Fatalf("provider add output = %#v", registered)
+	}
+
+	execute("provider", "sync", "upstream")
+
+	search := execute("tool", "search", "echo")
+	tools, ok := search["tools"].([]any)
+	if !ok || len(tools) != 1 {
+		t.Fatalf("tool search output = %#v", search)
+	}
+	tool, ok := tools[0].(map[string]any)
+	if !ok {
+		t.Fatalf("tool search item = %#v", tools[0])
+	}
+	toolID, ok := tool["toolId"].(string)
+	if !ok || toolID == "" {
+		t.Fatalf("toolId = %#v", tool["toolId"])
+	}
+
+	described := execute("tool", "describe", toolID)
+	if described["name"] != "echo" {
+		t.Fatalf("tool describe output = %#v", described)
+	}
+	if _, ok := described["inputSchema"].(map[string]any); !ok {
+		t.Fatalf("tool describe inputSchema = %#v", described["inputSchema"])
+	}
+
+	execute(
+		"profile", "create",
+		"--slug", "default",
+		"--name", "Default",
+		"--mode", "hybrid",
+	)
+	execute("profile", "add-tool", "default", toolID, "--direct")
+
+	scoped := execute("tool", "search", "echo", "--profile", "default")
+	scopedTools, ok := scoped["tools"].([]any)
+	if !ok || len(scopedTools) != 1 {
+		t.Fatalf("profile-scoped search output = %#v", scoped)
+	}
+
+	called := execute(
+		"tool", "call", toolID,
+		"--args", "{\"value\":\"hello\"}",
+	)
+	if called["kind"] != "complete" {
+		t.Fatalf("tool call output = %#v", called)
+	}
+	content, ok := called["content"].(map[string]any)
+	if !ok || content["value"] != "hello" {
+		t.Fatalf("tool call content = %#v", called["content"])
+	}
+	if invocationID, ok := called["invocationId"].(string); !ok || invocationID == "" {
+		t.Fatalf("invocationId = %#v", called["invocationId"])
+	}
+
+	if got := upstreamCalls.Load(); got != 1 {
+		t.Fatalf("upstream call count = %d, want 1", got)
+	}
+}
+
+func executeJSONCommand(
+	t *testing.T,
+	dbPath string,
+	args ...string,
+) map[string]any {
+	t.Helper()
+
+	var stdout, stderr bytes.Buffer
+	root := NewRootCommand(Options{
+		Stdout: &stdout,
+		Stderr: &stderr,
+	})
+	root.SetArgs(append(
+		[]string{"--db", dbPath, "--output", "json"},
+		args...,
+	))
+	if err := root.ExecuteContext(context.Background()); err != nil {
+		t.Fatalf(
+			"command %v error = %v stderr=%q stdout=%q",
+			args,
+			err,
+			stderr.String(),
+			stdout.String(),
+		)
+	}
+
+	decoder := json.NewDecoder(&stdout)
+	var value map[string]any
+	if err := decoder.Decode(&value); err != nil {
+		t.Fatalf("command %v decode error = %v output=%q", args, err, stdout.String())
+	}
+
+	var extra any
+	if err := decoder.Decode(&extra); err != io.EOF {
+		t.Fatalf(
+			"command %v must emit exactly one JSON document; trailing decode error=%v output=%q",
+			args,
+			err,
+			stdout.String(),
+		)
+	}
+	return value
+}

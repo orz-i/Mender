@@ -72,6 +72,7 @@ func NewRootCommand(options Options) *cobra.Command {
 
 	root.AddCommand(a.newProviderCommand())
 	root.AddCommand(a.newProfileCommand())
+	root.AddCommand(a.newToolCommand())
 	return root
 }
 
