@@ -48,6 +48,50 @@ func TestRegisterAndGetProvider(t *testing.T) {
 	}
 }
 
+func TestListFindAndRemoveProviders(t *testing.T) {
+	t.Parallel()
+
+	store := newMemoryCatalog()
+	firstID := mustProviderID(t, "prov_00000000000000000000000000000001")
+	secondID := mustProviderID(t, "prov_00000000000000000000000000000002")
+	firstNS, _ := domain.NewNamespace("alpha")
+	secondNS, _ := domain.NewNamespace("beta")
+	first, _ := domain.NewProvider(firstID, firstNS, "Alpha", "", testTime())
+	second, _ := domain.NewProvider(secondID, secondNS, "Beta", "", testTime())
+	if err := store.CreateProvider(context.Background(), first); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.CreateProvider(context.Background(), second); err != nil {
+		t.Fatal(err)
+	}
+
+	list := NewListProviders(store)
+	providers, err := list.Execute(context.Background())
+	if err != nil {
+		t.Fatalf("ListProviders.Execute() error = %v", err)
+	}
+	if len(providers) != 2 {
+		t.Fatalf("ListProviders = %+v", providers)
+	}
+
+	find := NewFindProviderByNamespace(store)
+	found, err := find.Execute(context.Background(), secondNS)
+	if err != nil {
+		t.Fatalf("FindProviderByNamespace.Execute() error = %v", err)
+	}
+	if found.ID() != secondID {
+		t.Fatalf("found ProviderID = %q, want %q", found.ID(), secondID)
+	}
+
+	remove := NewRemoveProvider(store)
+	if err := remove.Execute(context.Background(), firstID); err != nil {
+		t.Fatalf("RemoveProvider.Execute() error = %v", err)
+	}
+	if _, err := store.GetProvider(context.Background(), firstID); !errors.Is(err, ErrProviderNotFound) {
+		t.Fatalf("GetProvider(removed) error = %v", err)
+	}
+}
+
 func TestRegisterProviderPropagatesNamespaceConflict(t *testing.T) {
 	t.Parallel()
 
@@ -321,6 +365,42 @@ func (m *memoryCatalog) CreateProvider(_ context.Context, provider domain.Provid
 	}
 	m.providersByID[provider.ID()] = provider
 	m.providerByNamespace[provider.Namespace()] = provider.ID()
+	return nil
+}
+
+func (m *memoryCatalog) ListProviders(context.Context) ([]domain.Provider, error) {
+	providers := make([]domain.Provider, 0, len(m.providersByID))
+	for _, provider := range m.providersByID {
+		providers = append(providers, provider)
+	}
+	return providers, nil
+}
+
+func (m *memoryCatalog) FindProviderByNamespace(
+	_ context.Context,
+	namespace domain.Namespace,
+) (domain.Provider, error) {
+	id, exists := m.providerByNamespace[namespace]
+	if !exists {
+		return domain.Provider{}, ErrProviderNotFound
+	}
+	return m.providersByID[id], nil
+}
+
+func (m *memoryCatalog) RemoveProvider(
+	_ context.Context,
+	id domain.ProviderID,
+) error {
+	provider, exists := m.providersByID[id]
+	if !exists {
+		return ErrProviderNotFound
+	}
+	delete(m.providersByID, id)
+	delete(m.providerByNamespace, provider.Namespace())
+	for _, toolID := range m.toolsByProvider[id] {
+		delete(m.toolsByID, toolID)
+	}
+	delete(m.toolsByProvider, id)
 	return nil
 }
 

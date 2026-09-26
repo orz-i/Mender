@@ -57,6 +57,55 @@ func TestProviderRoundTripAndNamespaceConflict(t *testing.T) {
 	}
 }
 
+func TestProviderAdministrationQueriesAndRemoval(t *testing.T) {
+	t.Parallel()
+
+	store := openTestStore(t)
+	first := createProvider(t, store, "alpha", "prov_00000000000000000000000000000001")
+	second := createProvider(t, store, "beta", "prov_00000000000000000000000000000002")
+
+	providers, err := store.ListProviders(context.Background())
+	if err != nil {
+		t.Fatalf("ListProviders() error = %v", err)
+	}
+	if len(providers) != 2 || providers[0].ID() != first.ID() || providers[1].ID() != second.ID() {
+		t.Fatalf("ListProviders() = %+v", providers)
+	}
+
+	found, err := store.FindProviderByNamespace(context.Background(), second.Namespace())
+	if err != nil {
+		t.Fatalf("FindProviderByNamespace() error = %v", err)
+	}
+	if found.ID() != second.ID() {
+		t.Fatalf("found ID = %q, want %q", found.ID(), second.ID())
+	}
+
+	input, _ := domain.NewSchema([]byte(`{"type":"object"}`))
+	tool, _ := domain.NewTool(
+		mustToolID(t, "tool_00000000000000000000000000000001"),
+		first.ID(),
+		domain.ToolSpec{
+			SourceKey:   "owned",
+			Name:        "owned",
+			InputSchema: input,
+		},
+		testTime(),
+	)
+	if err := store.ReplaceProviderTools(context.Background(), first.ID(), []domain.Tool{tool}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := store.RemoveProvider(context.Background(), first.ID()); err != nil {
+		t.Fatalf("RemoveProvider() error = %v", err)
+	}
+	if _, err := store.GetProvider(context.Background(), first.ID()); !errors.Is(err, application.ErrProviderNotFound) {
+		t.Fatalf("GetProvider(removed) error = %v", err)
+	}
+	if _, err := store.GetTool(context.Background(), tool.ID()); !errors.Is(err, application.ErrToolNotFound) {
+		t.Fatalf("GetTool(cascade removed) error = %v", err)
+	}
+}
+
 func TestToolSchemaRoundTripDescribeAndSearch(t *testing.T) {
 	t.Parallel()
 

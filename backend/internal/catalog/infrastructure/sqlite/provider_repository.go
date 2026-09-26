@@ -121,3 +121,65 @@ func formatTime(value time.Time) string {
 func parseTime(value string) (time.Time, error) {
 	return time.Parse(time.RFC3339Nano, value)
 }
+
+func (s *Store) ListProviders(ctx context.Context) ([]domain.Provider, error) {
+	rows, err := s.db.QueryContext(
+		ctx,
+		`SELECT id, namespace, display_name, description, created_at, updated_at
+		FROM providers
+		ORDER BY namespace, id`,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list providers: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	providers := make([]domain.Provider, 0)
+	for rows.Next() {
+		provider, scanErr := scanProvider(rows)
+		if scanErr != nil {
+			return nil, fmt.Errorf("list providers: %w", scanErr)
+		}
+		providers = append(providers, provider)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("list providers: rows: %w", err)
+	}
+	return providers, nil
+}
+
+func (s *Store) FindProviderByNamespace(
+	ctx context.Context,
+	namespace domain.Namespace,
+) (domain.Provider, error) {
+	row := s.db.QueryRowContext(
+		ctx,
+		`SELECT id, namespace, display_name, description, created_at, updated_at
+		FROM providers
+		WHERE namespace = ?`,
+		namespace.String(),
+	)
+	provider, err := scanProvider(row)
+	if errors.Is(err, sql.ErrNoRows) {
+		return domain.Provider{}, application.ErrProviderNotFound
+	}
+	if err != nil {
+		return domain.Provider{}, fmt.Errorf("find provider by namespace: %w", err)
+	}
+	return provider, nil
+}
+
+func (s *Store) RemoveProvider(ctx context.Context, id domain.ProviderID) error {
+	result, err := s.db.ExecContext(ctx, "DELETE FROM providers WHERE id = ?", id.String())
+	if err != nil {
+		return fmt.Errorf("remove provider: %w", err)
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("remove provider: rows affected: %w", err)
+	}
+	if affected == 0 {
+		return application.ErrProviderNotFound
+	}
+	return nil
+}
