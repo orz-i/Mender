@@ -34,3 +34,4 @@ Minor implementation choices that remain inside an accepted architectural bounda
 - [ADR-0006: Use database/sql with a pure-Go SQLite driver for local persistence](0006-sqlite-persistence.md)
 - [ADR-0007: Centralize execution with data-minimized audit and execution-boundary credentials](0007-invocation-security-audit.md)
 - [ADR-0008: Treat MCP as an anti-corruption layer and serve 2026-07-28 stateless HTTP](0008-mcp-adapter.md)
+- [ADR-0009: Make the CLI a first-class local adapter with stable JSON contracts](0009-cli-contract.md)

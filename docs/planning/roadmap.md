@@ -126,7 +126,7 @@ See `phase-4-mcp.md`.
 
 ## Phase 5 — CLI discovery and Agent Skill
 
-Status: Next
+Status: In progress
 
 Goals:
 
@@ -140,6 +140,8 @@ Exit criteria:
 - Large catalogs can be used without eagerly loading every tool schema.
 - Skill instructions rely on stable machine-readable CLI output.
 - CLI commands have integration coverage.
+
+See `phase-5-cli-skill.md`.
 
 ## Phase 6 — Management Web UI
 
