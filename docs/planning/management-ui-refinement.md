@@ -132,7 +132,7 @@ Completed on 2026-09-26.
 Applied the page-responsibility rule to the management surfaces that were carrying multiple competing workflows:
 
 - Providers: list-first; Add/View/Edit moved to Dialogs; Sync/Delete remain row actions.
-- Profiles: list-first; Create and Tool membership management moved to Dialogs.
+- Profiles: list-first; Create and Tool membership management moved to Dialogs. Profile membership now uses a Catalog-backed Tool Picker; raw ToolID entry is absent from the normal user flow, and multi-select membership is saved atomically.
 - Catalog: search/results remain the page responsibility; Tool schemas and invocation moved to a Tool Dialog while preserving progressive disclosure.
 - Audit: already a single invocation-history table, so no structural split was required.
 - Policy/Credentials: already single read-only status surfaces and remain intentionally non-editable.

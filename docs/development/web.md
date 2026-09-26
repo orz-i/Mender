@@ -76,7 +76,11 @@ Browse/search never eagerly loads Tool schemas. Search can be restricted to one 
 
 ### Profiles
 
-Profiles is also list-first. `Create profile` opens a Dialog; Tool membership management opens from each Profile row in a separate Manage Dialog. The page itself does not permanently combine creation, selection, and membership editing surfaces.
+Profiles is also list-first. `Create profile` opens a Dialog; Tool membership management opens from each Profile row in a separate Manage Dialog.
+
+Normal Profile governance never asks the user to type or copy a ToolID. `Choose tools` opens a Catalog-backed picker with Tool search, Provider filtering, multi-select, and human-readable Tool/Provider metadata. Existing membership rows also display Tool names and Providers rather than stable IDs.
+
+Saving picker selection uses one atomic membership-replacement operation. The application validates every selected Tool before the Profile repository transaction replaces membership, so a multi-select update cannot intentionally leave a partially saved Profile. Hybrid Profiles expose the Direct export choice; direct/dynamic modes normalize that flag automatically.
 
 ### Servers
 
