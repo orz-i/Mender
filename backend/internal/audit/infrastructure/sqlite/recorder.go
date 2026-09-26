@@ -62,22 +62,7 @@ func (s *Store) Get(
 	ctx context.Context,
 	id invocationdomain.InvocationID,
 ) (auditdomain.Record, error) {
-	var (
-		rawInvocationID string
-		rawToolID       string
-		rawProviderID   sql.NullString
-		caller          string
-		rawStarted      string
-		rawFinished     string
-		policyKind      string
-		policyReason    string
-		approval        string
-		status          string
-		resultKind      string
-		errorClass      string
-	)
-
-	err := s.db.QueryRowContext(
+	row := s.db.QueryRowContext(
 		ctx,
 		`SELECT
 			invocation_id,
@@ -95,7 +80,81 @@ func (s *Store) Get(
 		FROM invocation_audit
 		WHERE invocation_id = ?`,
 		id.String(),
-	).Scan(
+	)
+	record, err := scanRecord(row)
+	if errors.Is(err, sql.ErrNoRows) {
+		return auditdomain.Record{}, sql.ErrNoRows
+	}
+	if err != nil {
+		return auditdomain.Record{}, fmt.Errorf("get invocation audit: %w", err)
+	}
+	return record, nil
+}
+
+func formatTime(value time.Time) string {
+	return value.UTC().Format(time.RFC3339Nano)
+}
+
+// ListRecords returns the newest terminal Audit records first.
+func (s *Store) ListRecords(
+	ctx context.Context,
+	limit int,
+) ([]auditdomain.Record, error) {
+	rows, err := s.db.QueryContext(
+		ctx,
+		`SELECT
+			invocation_id,
+			tool_id,
+			provider_id,
+			caller,
+			started_at,
+			finished_at,
+			policy_kind,
+			policy_reason,
+			approval,
+			status,
+			result_kind,
+			error_class
+		FROM invocation_audit
+		ORDER BY finished_at DESC, invocation_id DESC
+		LIMIT ?`,
+		limit,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list invocation audit: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	records := make([]auditdomain.Record, 0, limit)
+	for rows.Next() {
+		record, scanErr := scanRecord(rows)
+		if scanErr != nil {
+			return nil, fmt.Errorf("list invocation audit: %w", scanErr)
+		}
+		records = append(records, record)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("list invocation audit: rows: %w", err)
+	}
+	return records, nil
+}
+
+func scanRecord(scanner interface{ Scan(...any) error }) (auditdomain.Record, error) {
+	var (
+		rawInvocationID string
+		rawToolID       string
+		rawProviderID   sql.NullString
+		caller          string
+		rawStarted      string
+		rawFinished     string
+		policyKind      string
+		policyReason    string
+		approval        string
+		status          string
+		resultKind      string
+		errorClass      string
+	)
+	if err := scanner.Scan(
 		&rawInvocationID,
 		&rawToolID,
 		&rawProviderID,
@@ -108,12 +167,8 @@ func (s *Store) Get(
 		&status,
 		&resultKind,
 		&errorClass,
-	)
-	if errors.Is(err, sql.ErrNoRows) {
-		return auditdomain.Record{}, sql.ErrNoRows
-	}
-	if err != nil {
-		return auditdomain.Record{}, fmt.Errorf("get invocation audit: %w", err)
+	); err != nil {
+		return auditdomain.Record{}, err
 	}
 
 	invocationID, err := invocationdomain.ParseInvocationID(rawInvocationID)
@@ -143,7 +198,7 @@ func (s *Store) Get(
 		return auditdomain.Record{}, fmt.Errorf("parse finished_at: %w", err)
 	}
 
-	record, err := auditdomain.NewRecord(
+	return auditdomain.NewRecord(
 		invocationID,
 		toolID,
 		providerID,
@@ -157,12 +212,4 @@ func (s *Store) Get(
 		invocationdomain.ResultKind(resultKind),
 		auditdomain.ErrorClass(errorClass),
 	)
-	if err != nil {
-		return auditdomain.Record{}, fmt.Errorf("restore invocation audit: %w", err)
-	}
-	return record, nil
-}
-
-func formatTime(value time.Time) string {
-	return value.UTC().Format(time.RFC3339Nano)
 }
