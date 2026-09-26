@@ -37,6 +37,7 @@ export interface BrowseToolsInput {
 export interface SearchToolsInput {
   query: string;
   limit?: number;
+  providerId?: string;
   profile?: string;
 }
 
@@ -172,6 +173,9 @@ export function createMenderClient(
           query: {
             query: input.query,
             ...(input.limit === undefined ? {} : { limit: input.limit }),
+            ...(input.providerId === undefined
+              ? {}
+              : { providerId: input.providerId }),
             ...(input.profile === undefined ? {} : { profile: input.profile }),
           },
         },

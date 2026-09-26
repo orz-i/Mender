@@ -131,6 +131,45 @@ describe("Mender SDK", () => {
     expect(result.tools[0]?.name).toBe("search");
   });
 
+  it("searches Tools within a Provider scope", async () => {
+    const client = createMenderClient({
+      baseUrl: "http://localhost:8080/api/v1",
+      fetch: (request) => {
+        expect(request.url).toContain("/api/v1/tools");
+        expect(request.url).toContain("query=search");
+        expect(request.url).toContain("providerId=prov_1");
+        expect(request.url).not.toContain("profile=");
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              tools: [
+                {
+                  rank: 1,
+                  toolId: "tool_1",
+                  providerId: "prov_1",
+                  name: "search",
+                  title: "",
+                  description: "Search",
+                },
+              ],
+            }),
+            {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            },
+          ),
+        );
+      },
+    });
+
+    const result = await client.searchTools({
+      query: "search",
+      limit: 30,
+      providerId: "prov_1",
+    });
+    expect(result.tools).toHaveLength(1);
+  });
+
   it("replaces Profile Tool membership through the generated contract", async () => {
     const fetch = async (request: Request) => {
       expect(request.method).toBe("PUT");

@@ -789,6 +789,11 @@ export interface operations {
             query: {
                 query: string;
                 limit?: number;
+                providerId?: string;
+                /**
+                 * @deprecated
+                 * @description Legacy Profile-scoped search. Catalog UI uses providerId.
+                 */
                 profile?: string;
             };
             header?: never;

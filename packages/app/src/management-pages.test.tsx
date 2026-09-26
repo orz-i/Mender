@@ -264,7 +264,7 @@ describe("management pages", () => {
     expect(await screen.findByText("AnySearch Production")).toBeTruthy();
   });
 
-  it("keeps Catalog schemas deferred until a search result is selected", async () => {
+  it("filters Catalog browse and search by Provider", async () => {
     const getTool = vi.fn().mockResolvedValue({
       toolId: "tool_1",
       providerId: "prov_1",
@@ -277,8 +277,32 @@ describe("management pages", () => {
       tags: ["mcp"],
     });
 
+    const browseTools = vi.fn().mockResolvedValue({
+      tools: [
+        {
+          rank: 1,
+          toolId: "tool_browse",
+          providerId: "prov_1",
+          name: "web_search",
+          title: "Web search",
+          description: "Browse synchronized Tool",
+        },
+      ],
+    });
+    const searchTools = vi.fn().mockResolvedValue({
+      tools: [
+        {
+          rank: 1,
+          toolId: "tool_1",
+          providerId: "prov_1",
+          name: "create_issue",
+          title: "Create issue",
+          description: "Create a repository issue",
+        },
+      ],
+    });
+
     renderApp("/catalog", {
-      listProfiles: vi.fn().mockResolvedValue({ profiles: [] }),
       listProviders: vi.fn().mockResolvedValue({
         providers: [
           {
@@ -294,35 +318,25 @@ describe("management pages", () => {
           },
         ],
       }),
-      browseTools: vi.fn().mockResolvedValue({
-        tools: [
-          {
-            rank: 1,
-            toolId: "tool_browse",
-            providerId: "prov_1",
-            name: "web_search",
-            title: "Web search",
-            description: "Browse synchronized Tool",
-          },
-        ],
-      }),
-      searchTools: vi.fn().mockResolvedValue({
-        tools: [
-          {
-            rank: 1,
-            toolId: "tool_1",
-            providerId: "prov_1",
-            name: "create_issue",
-            title: "Create issue",
-            description: "Create a repository issue",
-          },
-        ],
-      }),
+      browseTools,
+      searchTools,
       getTool,
     });
 
     expect(await screen.findByText("Web search")).toBeTruthy();
     expect(getTool).not.toHaveBeenCalled();
+    expect(screen.queryByLabelText("Catalog profile filter")).toBeNull();
+
+    fireEvent.change(screen.getByLabelText("Catalog provider filter"), {
+      target: { value: "prov_1" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Browse" }));
+    await waitFor(() => {
+      expect(browseTools).toHaveBeenLastCalledWith({
+        limit: 100,
+        providerId: "prov_1",
+      });
+    });
 
     fireEvent.change(
       screen.getByPlaceholderText("Search intent, e.g. create issue"),
@@ -330,6 +344,13 @@ describe("management pages", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Search" }));
 
+    await waitFor(() => {
+      expect(searchTools).toHaveBeenCalledWith({
+        query: "create issue",
+        limit: 30,
+        providerId: "prov_1",
+      });
+    });
     expect(await screen.findByText("Create issue")).toBeTruthy();
     expect(getTool).not.toHaveBeenCalled();
     expect(screen.queryByText("Input schema")).toBeNull();

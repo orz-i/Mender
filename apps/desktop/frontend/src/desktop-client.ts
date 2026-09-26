@@ -117,6 +117,7 @@ export function createDesktopMenderClient(): MenderClient {
       const result = await Service.SearchTools(
         input.query,
         input.limit ?? 20,
+        input.providerId ?? "",
         input.profile ?? "",
       );
       return { tools: (result.tools ?? []).map(toolSummary) };

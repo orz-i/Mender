@@ -332,9 +332,22 @@ func (s *Service) BrowseTools(limit int, providerID string) (ToolList, error) {
 	return ToolList{Tools: items}, nil
 }
 
-func (s *Service) SearchTools(query string, limit int, profile string) (ToolList, error) {
+func (s *Service) SearchTools(
+	query string,
+	limit int,
+	providerID string,
+	profile string,
+) (ToolList, error) {
 	if limit == 0 {
 		limit = defaultToolSearchLimit
+	}
+	var provider *catalogdomain.ProviderID
+	if providerID != "" {
+		parsed, err := catalogdomain.ParseProviderID(providerID)
+		if err != nil {
+			return ToolList{}, err
+		}
+		provider = &parsed
 	}
 	var profileSlug *profiledomain.Slug
 	if profile != "" {
@@ -344,7 +357,13 @@ func (s *Service) SearchTools(query string, limit int, profile string) (ToolList
 		}
 		profileSlug = &slug
 	}
-	results, err := s.runtime.SearchCatalog(s.ctx, query, limit, profileSlug)
+	results, err := s.runtime.SearchCatalog(
+		s.ctx,
+		query,
+		limit,
+		provider,
+		profileSlug,
+	)
 	if err != nil {
 		return ToolList{}, err
 	}

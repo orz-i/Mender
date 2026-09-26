@@ -76,6 +76,16 @@ func (h *Handler) searchTools(w http.ResponseWriter, r *http.Request) {
 		limit = parsed
 	}
 
+	var providerID *catalogdomain.ProviderID
+	if rawProviderID := r.URL.Query().Get("providerId"); rawProviderID != "" {
+		parsed, err := catalogdomain.ParseProviderID(rawProviderID)
+		if err != nil {
+			writeAPIError(w, http.StatusBadRequest, "validation_error", err)
+			return
+		}
+		providerID = &parsed
+	}
+
 	var profileSlug *profiledomain.Slug
 	if rawProfile := r.URL.Query().Get("profile"); rawProfile != "" {
 		slug, err := profiledomain.NewSlug(rawProfile)
@@ -86,7 +96,13 @@ func (h *Handler) searchTools(w http.ResponseWriter, r *http.Request) {
 		profileSlug = &slug
 	}
 
-	results, err := h.runtime.SearchCatalog(r.Context(), query, limit, profileSlug)
+	results, err := h.runtime.SearchCatalog(
+		r.Context(),
+		query,
+		limit,
+		providerID,
+		profileSlug,
+	)
 	if err != nil {
 		writeKnownError(w, err)
 		return

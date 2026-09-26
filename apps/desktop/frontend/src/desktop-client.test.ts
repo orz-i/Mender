@@ -10,6 +10,7 @@ vi.mock(
       ListProviders: vi.fn(),
       ReplaceProfileTools: vi.fn(),
       RestartMCPServer: vi.fn(),
+      SearchTools: vi.fn(),
       StartMCPServer: vi.fn(),
       StopMCPServer: vi.fn(),
       UpdateProvider: vi.fn(),
@@ -187,6 +188,39 @@ describe("desktop Mender client", () => {
       ],
     });
     expect(Service.BrowseTools).toHaveBeenCalledWith(100, "");
+  });
+
+  it("forwards Provider-scoped Tool search through Wails", async () => {
+    vi.mocked(Service.SearchTools).mockResolvedValue({
+      tools: [
+        {
+          rank: 1,
+          toolId: "tool_1",
+          providerId: "prov_1",
+          name: "search",
+          title: "",
+          description: "Search",
+        },
+      ],
+    });
+
+    const client = createDesktopMenderClient();
+    await expect(
+      client.searchTools({
+        query: "search",
+        limit: 30,
+        providerId: "prov_1",
+      }),
+    ).resolves.toMatchObject({
+      tools: [{ toolId: "tool_1", providerId: "prov_1" }],
+    });
+
+    expect(Service.SearchTools).toHaveBeenCalledWith(
+      "search",
+      30,
+      "prov_1",
+      "",
+    );
   });
 
   it("replaces Profile Tool membership through Wails", async () => {

@@ -72,7 +72,7 @@ Catalog still follows progressive disclosure:
       -> load full schema
       -> invoke through Mender
 
-Browse/search never eagerly loads Tool schemas. Search can be restricted to one Profile.
+Browse/search never eagerly loads Tool schemas. Catalog filtering is source-oriented: both browse and lexical search can be restricted to one Provider. Profile membership is an exposure/governance concern and is managed only from the Profiles workflow, not used as the Catalog page's primary filter.
 
 ### Profiles
 

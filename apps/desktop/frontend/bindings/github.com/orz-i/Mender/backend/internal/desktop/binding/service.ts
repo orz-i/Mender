@@ -92,8 +92,8 @@ export function RestartMCPServer(serverID: string): $CancellablePromise<$models.
     return $Call.ByID(2194966826, serverID);
 }
 
-export function SearchTools(query: string, limit: number, profile: string): $CancellablePromise<$models.ToolList> {
-    return $Call.ByID(1688287699, query, limit, profile);
+export function SearchTools(query: string, limit: number, providerID: string, profile: string): $CancellablePromise<$models.ToolList> {
+    return $Call.ByID(1688287699, query, limit, providerID, profile);
 }
 
 export function StartMCPServer(profile: string, address: string): $CancellablePromise<$models.MCPServerInstance> {

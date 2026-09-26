@@ -157,8 +157,13 @@ paths:
         - name: limit
           in: query
           schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        - name: providerId
+          in: query
+          schema: { type: string }
         - name: profile
           in: query
+          deprecated: true
+          description: Legacy Profile-scoped search. Catalog UI uses providerId.
           schema: { type: string }
       responses:
         '403': { $ref: '#/components/responses/Forbidden' }

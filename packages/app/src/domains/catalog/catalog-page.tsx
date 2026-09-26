@@ -3,7 +3,6 @@ import { useEffect, useState } from "react";
 import type {
   InvocationResult,
   MenderClient,
-  Profile,
   Provider,
   ToolDetail,
   ToolSummary,
@@ -40,8 +39,7 @@ import { EmptyState, ErrorNotice, PageHeader } from "../../shared/page";
 
 export function CatalogPage({ client }: { client: MenderClient }) {
   const [query, setQuery] = useState("");
-  const [profile, setProfile] = useState("");
-  const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [providerId, setProviderId] = useState("");
   const [providers, setProviders] = useState<Provider[]>([]);
   const [results, setResults] = useState<ToolSummary[]>([]);
   const [searched, setSearched] = useState(false);
@@ -58,13 +56,11 @@ export function CatalogPage({ client }: { client: MenderClient }) {
   useEffect(() => {
     let active = true;
     void Promise.all([
-      client.listProfiles(),
       client.listProviders(),
       client.browseTools({ limit: 100 }),
     ])
-      .then(([profileResult, providerResult, toolResult]) => {
+      .then(([providerResult, toolResult]) => {
         if (active) {
-          setProfiles(profileResult.profiles);
           setProviders(providerResult.providers);
           setResults(toolResult.tools);
           setSearched(false);
@@ -86,7 +82,10 @@ export function CatalogPage({ client }: { client: MenderClient }) {
     setBusy("browse");
     setError("");
     try {
-      const response = await client.browseTools({ limit: 100 });
+      const response = await client.browseTools({
+        limit: 100,
+        ...(providerId ? { providerId } : {}),
+      });
       setResults(response.tools);
       setSearched(false);
       setSelected(null);
@@ -108,7 +107,7 @@ export function CatalogPage({ client }: { client: MenderClient }) {
       const response = await client.searchTools({
         query,
         limit: 30,
-        ...(profile ? { profile } : {}),
+        ...(providerId ? { providerId } : {}),
       });
       setResults(response.tools);
       setSearched(true);
@@ -201,15 +200,15 @@ export function CatalogPage({ client }: { client: MenderClient }) {
               }}
             />
             <select
-              aria-label="Catalog profile filter"
-              value={profile}
-              onChange={(event) => setProfile(event.target.value)}
+              aria-label="Catalog provider filter"
+              value={providerId}
+              onChange={(event) => setProviderId(event.target.value)}
               className="h-8 rounded-lg border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
             >
-              <option value="">All catalog tools</option>
-              {profiles.map((item) => (
-                <option key={item.profileId} value={item.slug}>
-                  Profile: {item.slug}
+              <option value="">All Providers</option>
+              {providers.map((provider) => (
+                <option key={provider.providerId} value={provider.providerId}>
+                  {provider.displayName || provider.namespace}
                 </option>
               ))}
             </select>
@@ -224,7 +223,7 @@ export function CatalogPage({ client }: { client: MenderClient }) {
               onClick={() => void browseAll()}
               disabled={busy !== ""}
             >
-              {busy === "browse" ? "Loading…" : "Browse all"}
+              {busy === "browse" ? "Loading…" : "Browse"}
             </Button>
           </div>
         </CardContent>
@@ -298,7 +297,7 @@ export function CatalogPage({ client }: { client: MenderClient }) {
               }
               description={
                 searched
-                  ? "Try a different search intent or Profile filter."
+                  ? "Try a different search intent or Provider filter."
                   : "Sync a Provider to populate the Catalog. Schemas load only when you inspect a Tool."
               }
             />

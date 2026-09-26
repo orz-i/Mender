@@ -215,6 +215,18 @@ func TestManagementAPIEndToEnd(t *testing.T) {
 		t.Fatalf("replace profile tools = %#v", replacedProfile)
 	}
 
+	providerScoped := requestJSON(
+		t,
+		server.Client(),
+		http.MethodGet,
+		server.URL+"/api/v1/tools?query=echo&providerId="+providerID,
+		nil,
+		http.StatusOK,
+	)
+	if providerTools, ok := providerScoped["tools"].([]any); !ok || len(providerTools) != 1 {
+		t.Fatalf("provider search = %#v", providerScoped)
+	}
+
 	scoped := requestJSON(
 		t,
 		server.Client(),
