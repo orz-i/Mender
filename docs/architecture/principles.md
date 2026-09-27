@@ -99,9 +99,9 @@ Direct enumeration remains available for small profiles and protocol compatibili
 
 ## 10. Profiles are operational and security boundaries
 
-A profile is more than a list of tools. It may define visible providers and tools, aliases, export behavior, policy, credential scope, and approval requirements.
+A Profile is more than a list of Tools. Its Profile-to-Tool relationship is a ToolBinding that may define exposure, machine/model presentation, restrictive policy, and execution constraints. Future Credential scope also belongs on this relationship once Credential inventory and validation exist.
 
-Remote endpoints may bind directly to profiles. Profile-scoped Tool membership must be enforced by the shared Invocation pipeline; adapter checks may narrow discovery/projection but are not the authoritative execution boundary.
+Remote endpoints may bind directly to Profiles. Profile-scoped ToolBinding membership must be enforced by the shared Invocation pipeline; adapter checks may narrow discovery/projection but are not the authoritative execution boundary. Binding policy may tighten global Policy but must never relax it.
 
 ## 11. Local-first, remote-native
 

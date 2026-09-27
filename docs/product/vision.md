@@ -21,7 +21,7 @@ Mender should eventually provide:
 - Provider registration and synchronization.
 - A canonical tool catalog independent from MCP or any other protocol.
 - Search, describe, and invoke workflows for large catalogs.
-- Profiles that combine tool selection, aliases, visibility, and security policy.
+- Profiles whose ToolBindings combine membership, exposure, aliases/presentation, and restrictive execution governance.
 - Credential references and runtime-only secret resolution.
 - Invocation policy and optional approval gates.
 - Auditable execution records.
@@ -105,7 +105,7 @@ Result Guard
 Invocation Outcome
 ```
 
-Adapters enter this flow at application boundaries; they do not bypass it. Profile-scoped execution is enforced inside Invocation rather than delegated solely to protocol adapters.
+Adapters enter this flow at application boundaries; they do not bypass it. Profile-scoped execution is enforced inside Invocation rather than delegated solely to protocol adapters. Profile ToolBinding policy can only tighten the global execution decision; presentation overrides remain outside Invocation.
 
 ## Primary users
 

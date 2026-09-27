@@ -59,9 +59,17 @@ A Tool is not an MCP-specific struct.
 
 ### Profile
 
-A named view over the catalog that controls exposure and execution constraints.
+A named view over the Catalog that controls exposure and execution constraints.
+
+A Profile owns ToolBindings rather than copying canonical Tool state. A ToolBinding is the Profile-specific relationship to one Tool and can carry exposure/presentation overrides plus restrictive execution governance.
 
 Profiles can be used by CLI sessions, MCP endpoints, Agent Skills, or management clients.
+
+### ToolBinding
+
+The Profile-owned relationship between one Profile and one canonical Tool.
+
+ToolBinding may customize Profile-facing alias/title/description and may tighten execution policy or serialize calls for that binding. ToolID remains canonical identity; schemas and provenance remain Catalog-owned.
 
 ### Invocation
 

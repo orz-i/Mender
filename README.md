@@ -11,7 +11,7 @@ It provides one canonical tool model and execution pipeline, then exposes the sa
 
 ## Status
 
-The architecture-through-governed-execution roadmap (Phases 0–9) is complete. Mender now provides explicit Profile/Catalog execution scopes, JSON Schema preflight validation, bounded Governance Facts, canonical rejection/failure outcomes, execution/result guards, lifecycle progress events, governed Audit metadata, and consistent CLI/MCP/Web/Desktop outcome semantics.
+The architecture-through-governed-execution roadmap (Phases 0–9) is complete. Phase 10 is planned to promote Profile Tool membership into first-class ToolBindings with Profile-specific presentation, restrictive policy constraints, and binding-local execution serialization while preserving canonical Catalog identity and the shared Invocation pipeline.
 
 ## Product principles
 

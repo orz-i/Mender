@@ -211,3 +211,27 @@ Goals:
 Exit criteria are complete. Profile/Catalog execution scopes, input/output validation, canonical rejection/failure outcomes, execution/result guards, lifecycle events, governed Audit metadata, and cross-adapter mappings are covered by the shared Runtime and end-to-end tests.
 
 See `phase-9-governed-invocation.md` for the final architecture, validation evidence, and deferred governance work.
+
+## Phase 10 — Profile ToolBinding governance
+
+Status: Planned
+
+Goals:
+
+- Replace Profile Tool membership selections with first-class ToolBindings.
+- Add Profile-specific alias/title/description presentation without mutating Catalog.
+- Let a binding tighten global Policy with inherit/require_approval/deny semantics.
+- Add binding-local serial execution on ProfileID + ToolID while preserving the Runtime baseline ExecutionGuard.
+- Keep membership selection separate from presentation/execution governance in Web/Desktop UX.
+- Preserve existing Profile rows and clients through behavior-compatible defaults.
+
+Exit criteria:
+
+- ToolBinding is the canonical Profile-to-Tool relationship across Domain, persistence, adapters, and UI.
+- Existing Profile SQLite v1 rows migrate without behavior change.
+- Binding policy cannot weaken global Policy.
+- Binding-local serialization is enforced inside Invocation timeout/cancellation.
+- MCP direct/dynamic projections use effective Profile presentation while canonical Tool identity/schemas remain unchanged.
+- CLI/OpenAPI/Wails and shared Web/Desktop UI expose normalized binding configuration without requiring manual ToolID entry.
+
+See `phase-10-profile-tool-binding-governance.md`.
