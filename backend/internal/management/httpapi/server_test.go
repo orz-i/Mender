@@ -186,7 +186,7 @@ func TestManagementAPIEndToEnd(t *testing.T) {
 		},
 		http.StatusCreated,
 	)
-	requestJSON(
+	legacyProfile := requestJSON(
 		t,
 		server.Client(),
 		http.MethodPost,
@@ -197,6 +197,31 @@ func TestManagementAPIEndToEnd(t *testing.T) {
 		},
 		http.StatusOK,
 	)
+	legacyTools, ok := legacyProfile["tools"].([]any)
+	if !ok || len(legacyTools) != 1 {
+		t.Fatalf("legacy profile tools = %#v", legacyProfile)
+	}
+	legacyBinding, _ := legacyTools[0].(map[string]any)
+	if legacyBinding["alias"] != "" ||
+		legacyBinding["policyConstraint"] != "inherit" ||
+		legacyBinding["concurrencyConstraint"] != "inherit" {
+		t.Fatalf("legacy binding defaults = %#v", legacyBinding)
+	}
+
+	invalidBinding := requestJSON(
+		t,
+		server.Client(),
+		http.MethodPost,
+		server.URL+"/api/v1/profiles/default/tools",
+		map[string]any{
+			"toolId": toolID,
+			"alias":  "_invalid",
+		},
+		http.StatusBadRequest,
+	)
+	if invalidBinding["code"] != "validation_error" {
+		t.Fatalf("invalid binding response = %#v", invalidBinding)
+	}
 
 	replacedProfile := requestJSON(
 		t,
@@ -205,7 +230,15 @@ func TestManagementAPIEndToEnd(t *testing.T) {
 		server.URL+"/api/v1/profiles/default/tools",
 		map[string]any{
 			"tools": []map[string]any{
-				{"toolId": toolID, "direct": true},
+				{
+					"toolId":                toolID,
+					"direct":                true,
+					"alias":                 "echo_profile",
+					"titleOverride":         "Profile Echo",
+					"descriptionOverride":   "Echo through the default Profile",
+					"policyConstraint":      "inherit",
+					"concurrencyConstraint": "serial",
+				},
 			},
 		},
 		http.StatusOK,
@@ -213,6 +246,14 @@ func TestManagementAPIEndToEnd(t *testing.T) {
 	replacedTools, ok := replacedProfile["tools"].([]any)
 	if !ok || len(replacedTools) != 1 {
 		t.Fatalf("replace profile tools = %#v", replacedProfile)
+	}
+	replacedBinding, _ := replacedTools[0].(map[string]any)
+	if replacedBinding["alias"] != "echo_profile" ||
+		replacedBinding["titleOverride"] != "Profile Echo" ||
+		replacedBinding["descriptionOverride"] != "Echo through the default Profile" ||
+		replacedBinding["policyConstraint"] != "inherit" ||
+		replacedBinding["concurrencyConstraint"] != "serial" {
+		t.Fatalf("replace profile binding = %#v", replacedBinding)
 	}
 
 	providerScoped := requestJSON(
@@ -255,7 +296,7 @@ func TestManagementAPIEndToEnd(t *testing.T) {
 	if serverID == "" || serverEndpoint == "" {
 		t.Fatalf("started MCP server = %#v", startedServer)
 	}
-	assertHTTPMCPServerTool(t, serverEndpoint, "upstream__echo")
+	assertHTTPMCPServerTool(t, serverEndpoint, "upstream__echo_profile")
 
 	serverList := requestJSON(
 		t,
@@ -283,7 +324,7 @@ func TestManagementAPIEndToEnd(t *testing.T) {
 	if restartedID == "" || restartedID == serverID {
 		t.Fatalf("restarted MCP server = %#v", restartedServer)
 	}
-	assertHTTPMCPServerTool(t, restartedEndpoint, "upstream__echo")
+	assertHTTPMCPServerTool(t, restartedEndpoint, "upstream__echo_profile")
 
 	requestNoContent(
 		t,

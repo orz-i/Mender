@@ -665,6 +665,11 @@ components:
       properties:
         toolId: { type: string }
         direct: { type: boolean }
+        alias: { type: string }
+        titleOverride: { type: string }
+        descriptionOverride: { type: string }
+        policyConstraint: { type: string, enum: [inherit, require_approval, deny] }
+        concurrencyConstraint: { type: string, enum: [inherit, serial] }
       additionalProperties: false
     ReplaceProfileToolsRequest:
       type: object
@@ -673,14 +678,31 @@ components:
         tools:
           type: array
           items:
-            $ref: '#/components/schemas/ProfileTool'
+            $ref: '#/components/schemas/ProfileToolInput'
       additionalProperties: false
-    ProfileTool:
+    ProfileToolInput:
       type: object
-      required: [toolId, direct]
+      required: [toolId]
       properties:
         toolId: { type: string }
         direct: { type: boolean }
+        alias: { type: string }
+        titleOverride: { type: string }
+        descriptionOverride: { type: string }
+        policyConstraint: { type: string, enum: [inherit, require_approval, deny] }
+        concurrencyConstraint: { type: string, enum: [inherit, serial] }
+      additionalProperties: false
+    ProfileTool:
+      type: object
+      required: [toolId, direct, alias, titleOverride, descriptionOverride, policyConstraint, concurrencyConstraint]
+      properties:
+        toolId: { type: string }
+        direct: { type: boolean }
+        alias: { type: string }
+        titleOverride: { type: string }
+        descriptionOverride: { type: string }
+        policyConstraint: { type: string, enum: [inherit, require_approval, deny] }
+        concurrencyConstraint: { type: string, enum: [inherit, serial] }
     Profile:
       type: object
       required: [profileId, slug, displayName, mode, tools]

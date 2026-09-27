@@ -148,12 +148,17 @@ export function createDesktopMenderClient(): MenderClient {
 
     async addProfileTool(slug, body) {
       return profile(
-        await Service.AddProfileTool(slug, body.toolId, body.direct ?? false),
+        await Service.AddProfileTool(slug, bindingProfileTool(body)),
       );
     },
 
     async replaceProfileTools(slug, body) {
-      return profile(await Service.ReplaceProfileTools(slug, body.tools));
+      return profile(
+        await Service.ReplaceProfileTools(
+          slug,
+          body.tools.map(bindingProfileTool),
+        ),
+      );
     },
 
     async removeProfileTool(slug, toolId) {
@@ -348,8 +353,57 @@ function profile(value: BindingProfile): Profile {
     tools: (value.tools ?? []).map((tool) => ({
       toolId: tool.toolId,
       direct: tool.direct,
+      alias: tool.alias,
+      titleOverride: tool.titleOverride,
+      descriptionOverride: tool.descriptionOverride,
+      policyConstraint: profilePolicyConstraint(tool.policyConstraint),
+      concurrencyConstraint: profileConcurrencyConstraint(
+        tool.concurrencyConstraint,
+      ),
     })),
   };
+}
+
+function bindingProfileTool(tool: {
+  toolId: string;
+  direct?: boolean;
+  alias?: string;
+  titleOverride?: string;
+  descriptionOverride?: string;
+  policyConstraint?: "inherit" | "require_approval" | "deny";
+  concurrencyConstraint?: "inherit" | "serial";
+}) {
+  return {
+    toolId: tool.toolId,
+    direct: tool.direct ?? false,
+    alias: tool.alias ?? "",
+    titleOverride: tool.titleOverride ?? "",
+    descriptionOverride: tool.descriptionOverride ?? "",
+    policyConstraint: tool.policyConstraint ?? "inherit",
+    concurrencyConstraint: tool.concurrencyConstraint ?? "inherit",
+  };
+}
+
+function profilePolicyConstraint(
+  value: string,
+): "inherit" | "require_approval" | "deny" {
+  if (
+    value === "inherit" ||
+    value === "require_approval" ||
+    value === "deny"
+  ) {
+    return value;
+  }
+  throw new Error("Unsupported desktop Profile policy constraint: " + value);
+}
+
+function profileConcurrencyConstraint(
+  value: string,
+): "inherit" | "serial" {
+  if (value === "inherit" || value === "serial") {
+    return value;
+  }
+  throw new Error("Unsupported desktop Profile concurrency constraint: " + value);
 }
 
 function mcpServerInstance(

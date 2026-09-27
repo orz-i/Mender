@@ -16,8 +16,8 @@ import { Call as $Call, CancellablePromise as $CancellablePromise } from "@wails
 // @ts-ignore: Unused imports
 import * as $models from "./models.js";
 
-export function AddProfileTool(slug: string, toolID: string, direct: boolean): $CancellablePromise<$models.Profile> {
-    return $Call.ByID(296290586, slug, toolID, direct);
+export function AddProfileTool(slug: string, tool: $models.ProfileTool): $CancellablePromise<$models.Profile> {
+    return $Call.ByID(296290586, slug, tool);
 }
 
 export function BrowseTools(limit: number, providerID: string): $CancellablePromise<$models.ToolList> {

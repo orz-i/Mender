@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/orz-i/Mender/backend/internal/buildinfo"
@@ -177,6 +178,29 @@ func TestProviderListJSONIsSingleDocument(t *testing.T) {
 	var extra any
 	if err := decoder.Decode(&extra); err == nil {
 		t.Fatalf("provider list emitted multiple JSON documents: %q", stdout.String())
+	}
+}
+
+func TestProfileAddToolRejectsInvalidBindingPolicyAsUsage(t *testing.T) {
+	t.Parallel()
+
+	var stdout, stderr bytes.Buffer
+	code := Run(
+		context.Background(),
+		[]string{
+			"profile", "add-tool",
+			"default",
+			"tool_00000000000000000000000000000001",
+			"--policy", "allow",
+		},
+		&stdout,
+		&stderr,
+	)
+	if code != ExitUsage {
+		t.Fatalf("exit code = %d, want %d; stderr=%q", code, ExitUsage, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "policy must be inherit") {
+		t.Fatalf("stderr = %q", stderr.String())
 	}
 }
 

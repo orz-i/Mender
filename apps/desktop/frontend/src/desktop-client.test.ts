@@ -232,24 +232,69 @@ describe("desktop Mender client", () => {
       displayName: "Default",
       mode: "hybrid",
       tools: [
-        { toolId: "tool_1", direct: true },
-        { toolId: "tool_2", direct: false },
+        {
+          toolId: "tool_1",
+          direct: true,
+          alias: "profile_tool",
+          titleOverride: "Profile Tool",
+          descriptionOverride: "Profile-specific presentation",
+          policyConstraint: "deny",
+          concurrencyConstraint: "serial",
+        },
+        {
+          toolId: "tool_2",
+          direct: false,
+          alias: "",
+          titleOverride: "",
+          descriptionOverride: "",
+          policyConstraint: "inherit",
+          concurrencyConstraint: "inherit",
+        },
       ],
     });
 
     const client = createDesktopMenderClient();
     const result = await client.replaceProfileTools("default", {
       tools: [
-        { toolId: "tool_1", direct: true },
+        {
+          toolId: "tool_1",
+          direct: true,
+          alias: "profile_tool",
+          titleOverride: "Profile Tool",
+          descriptionOverride: "Profile-specific presentation",
+          policyConstraint: "deny",
+          concurrencyConstraint: "serial",
+        },
         { toolId: "tool_2", direct: false },
       ],
     });
 
     expect(Service.ReplaceProfileTools).toHaveBeenCalledWith("default", [
-      { toolId: "tool_1", direct: true },
-      { toolId: "tool_2", direct: false },
+      {
+        toolId: "tool_1",
+        direct: true,
+        alias: "profile_tool",
+        titleOverride: "Profile Tool",
+        descriptionOverride: "Profile-specific presentation",
+        policyConstraint: "deny",
+        concurrencyConstraint: "serial",
+      },
+      {
+        toolId: "tool_2",
+        direct: false,
+        alias: "",
+        titleOverride: "",
+        descriptionOverride: "",
+        policyConstraint: "inherit",
+        concurrencyConstraint: "inherit",
+      },
     ]);
     expect(result.tools).toHaveLength(2);
+    expect(result.tools[0]).toMatchObject({
+      alias: "profile_tool",
+      policyConstraint: "deny",
+      concurrencyConstraint: "serial",
+    });
   });
 
   it("adapts managed MCP server lifecycle to Wails", async () => {

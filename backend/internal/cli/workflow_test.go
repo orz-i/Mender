@@ -96,7 +96,27 @@ func TestCLILocalWorkflowWithPersistedHTTPProvider(t *testing.T) {
 		"--name", "Default",
 		"--mode", "hybrid",
 	)
-	execute("profile", "add-tool", "default", toolID, "--direct")
+	configuredProfile := execute(
+		"profile", "add-tool", "default", toolID,
+		"--direct",
+		"--alias", "echo_cli",
+		"--title", "CLI Echo",
+		"--description", "Echo configured through the CLI",
+		"--policy", "inherit",
+		"--concurrency", "serial",
+	)
+	configuredTools, ok := configuredProfile["tools"].([]any)
+	if !ok || len(configuredTools) != 1 {
+		t.Fatalf("configured Profile tools = %#v", configuredProfile)
+	}
+	configuredBinding, _ := configuredTools[0].(map[string]any)
+	if configuredBinding["alias"] != "echo_cli" ||
+		configuredBinding["titleOverride"] != "CLI Echo" ||
+		configuredBinding["descriptionOverride"] != "Echo configured through the CLI" ||
+		configuredBinding["policyConstraint"] != "inherit" ||
+		configuredBinding["concurrencyConstraint"] != "serial" {
+		t.Fatalf("configured Profile binding = %#v", configuredBinding)
+	}
 	restricted := execute(
 		"profile", "create",
 		"--slug", "restricted",
@@ -172,7 +192,7 @@ func TestCLILocalWorkflowWithPersistedHTTPProvider(t *testing.T) {
 	runServeCommand(t, dbPath, Options{
 		ServeHTTP: func(ctx context.Context, _ string, adapter *mcpserver.Adapter) error {
 			servedHTTP.Store(true)
-			assertServedProfileTools(t, ctx, adapter, "upstream__echo")
+			assertServedProfileTools(t, ctx, adapter, "upstream__echo_cli")
 			return nil
 		},
 	}, "serve", "mcp", "--profile", "default", "--http", "127.0.0.1:0")
@@ -184,7 +204,7 @@ func TestCLILocalWorkflowWithPersistedHTTPProvider(t *testing.T) {
 	runServeCommand(t, dbPath, Options{
 		ServeStdio: func(ctx context.Context, adapter *mcpserver.Adapter) error {
 			servedStdio.Store(true)
-			assertServedProfileTools(t, ctx, adapter, "upstream__echo")
+			assertServedProfileTools(t, ctx, adapter, "upstream__echo_cli")
 			return nil
 		},
 	}, "serve", "mcp", "--profile", "default", "--stdio")

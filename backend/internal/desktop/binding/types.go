@@ -110,8 +110,13 @@ type InvocationResult struct {
 }
 
 type ProfileTool struct {
-	ToolID string `json:"toolId"`
-	Direct bool   `json:"direct"`
+	ToolID                string `json:"toolId"`
+	Direct                bool   `json:"direct"`
+	Alias                 string `json:"alias"`
+	TitleOverride         string `json:"titleOverride"`
+	DescriptionOverride   string `json:"descriptionOverride"`
+	PolicyConstraint      string `json:"policyConstraint"`
+	ConcurrencyConstraint string `json:"concurrencyConstraint"`
 }
 
 type Profile struct {

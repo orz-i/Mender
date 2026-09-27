@@ -254,8 +254,13 @@ func (h *Handler) getProfile(w http.ResponseWriter, r *http.Request) {
 }
 
 type addProfileToolRequest struct {
-	ToolID string `json:"toolId"`
-	Direct bool   `json:"direct"`
+	ToolID                string `json:"toolId"`
+	Direct                bool   `json:"direct"`
+	Alias                 string `json:"alias"`
+	TitleOverride         string `json:"titleOverride"`
+	DescriptionOverride   string `json:"descriptionOverride"`
+	PolicyConstraint      string `json:"policyConstraint"`
+	ConcurrencyConstraint string `json:"concurrencyConstraint"`
 }
 
 type replaceProfileToolsRequest struct {
@@ -282,9 +287,14 @@ func (h *Handler) addProfileTool(w http.ResponseWriter, r *http.Request) {
 	profile, err := h.runtime.Profiles.AddTool.Execute(
 		r.Context(),
 		profileapplication.AddToolRequest{
-			ProfileSlug: slug,
-			ToolID:      toolID,
-			Direct:      input.Direct,
+			ProfileSlug:           slug,
+			ToolID:                toolID,
+			Direct:                input.Direct,
+			Alias:                 input.Alias,
+			TitleOverride:         input.TitleOverride,
+			DescriptionOverride:   input.DescriptionOverride,
+			PolicyConstraint:      profiledomain.PolicyConstraint(input.PolicyConstraint),
+			ConcurrencyConstraint: profiledomain.ConcurrencyConstraint(input.ConcurrencyConstraint),
 		},
 	)
 	if err != nil {
@@ -306,16 +316,21 @@ func (h *Handler) replaceProfileTools(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tools := make([]profileapplication.ReplaceToolSelection, 0, len(input.Tools))
+	tools := make([]profileapplication.ToolBindingInput, 0, len(input.Tools))
 	for _, item := range input.Tools {
 		toolID, err := catalogdomain.ParseToolID(item.ToolID)
 		if err != nil {
 			writeAPIError(w, http.StatusBadRequest, "validation_error", err)
 			return
 		}
-		tools = append(tools, profileapplication.ReplaceToolSelection{
-			ToolID: toolID,
-			Direct: item.Direct,
+		tools = append(tools, profileapplication.ToolBindingInput{
+			ToolID:                toolID,
+			Direct:                item.Direct,
+			Alias:                 item.Alias,
+			TitleOverride:         item.TitleOverride,
+			DescriptionOverride:   item.DescriptionOverride,
+			PolicyConstraint:      profiledomain.PolicyConstraint(item.PolicyConstraint),
+			ConcurrencyConstraint: profiledomain.ConcurrencyConstraint(item.ConcurrencyConstraint),
 		})
 	}
 
@@ -384,11 +399,16 @@ func toolProjection(tool catalogdomain.Tool) (map[string]any, error) {
 }
 
 func profileProjection(profile profiledomain.Profile) map[string]any {
-	tools := make([]map[string]any, 0, len(profile.Selections()))
-	for _, selection := range profile.Selections() {
+	tools := make([]map[string]any, 0, len(profile.Bindings()))
+	for _, binding := range profile.Bindings() {
 		tools = append(tools, map[string]any{
-			"toolId": selection.ToolID.String(),
-			"direct": selection.Direct,
+			"toolId":                binding.ToolID().String(),
+			"direct":                binding.Direct(),
+			"alias":                 binding.Alias(),
+			"titleOverride":         binding.TitleOverride(),
+			"descriptionOverride":   binding.DescriptionOverride(),
+			"policyConstraint":      string(binding.PolicyConstraint()),
+			"concurrencyConstraint": string(binding.ConcurrencyConstraint()),
 		})
 	}
 	return map[string]any{

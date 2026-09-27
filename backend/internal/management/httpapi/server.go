@@ -164,11 +164,13 @@ func writeKnownError(w http.ResponseWriter, err error) {
 
 	case errors.Is(err, catalogapplication.ErrNamespaceConflict),
 		errors.Is(err, profileapplication.ErrSlugConflict),
+		errors.Is(err, profileapplication.ErrBindingNameConflict),
 		errors.Is(err, bootstrap.ErrProviderInUse):
 		writeAPIError(w, http.StatusConflict, "conflict", err)
 
 	case errors.Is(err, catalogapplication.ErrInvalidSearchLimit),
 		errors.Is(err, catalogapplication.ErrInvalidSearchQuery),
+		errors.Is(err, profileapplication.ErrInvalidBinding),
 		errors.Is(err, bootstrap.ErrInvalidMCPServerAddress):
 		writeAPIError(w, http.StatusBadRequest, "validation_error", err)
 

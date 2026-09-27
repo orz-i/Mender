@@ -131,21 +131,39 @@ func TestServiceEndToEndUsesSharedRuntime(t *testing.T) {
 	if profile.Mode != "hybrid" {
 		t.Fatalf("profile mode = %q", profile.Mode)
 	}
-	profile, err = service.AddProfileTool("default", toolID, true)
+	profile, err = service.AddProfileTool("default", ProfileTool{
+		ToolID: toolID,
+		Direct: true,
+	})
 	if err != nil {
 		t.Fatalf("AddProfileTool() error = %v", err)
 	}
-	if len(profile.Tools) != 1 || !profile.Tools[0].Direct {
+	if len(profile.Tools) != 1 || !profile.Tools[0].Direct ||
+		profile.Tools[0].PolicyConstraint != "inherit" ||
+		profile.Tools[0].ConcurrencyConstraint != "inherit" {
 		t.Fatalf("profile tools = %#v", profile.Tools)
 	}
 
 	profile, err = service.ReplaceProfileTools("default", []ProfileTool{
-		{ToolID: toolID, Direct: true},
+		{
+			ToolID:                toolID,
+			Direct:                true,
+			Alias:                 "echo_desktop",
+			TitleOverride:         "Desktop Echo",
+			DescriptionOverride:   "Echo configured from the Desktop binding.",
+			PolicyConstraint:      "inherit",
+			ConcurrencyConstraint: "serial",
+		},
 	})
 	if err != nil {
 		t.Fatalf("ReplaceProfileTools() error = %v", err)
 	}
-	if len(profile.Tools) != 1 || profile.Tools[0].ToolID != toolID {
+	if len(profile.Tools) != 1 || profile.Tools[0].ToolID != toolID ||
+		profile.Tools[0].Alias != "echo_desktop" ||
+		profile.Tools[0].TitleOverride != "Desktop Echo" ||
+		profile.Tools[0].DescriptionOverride != "Echo configured from the Desktop binding." ||
+		profile.Tools[0].PolicyConstraint != "inherit" ||
+		profile.Tools[0].ConcurrencyConstraint != "serial" {
 		t.Fatalf("replaced profile tools = %#v", profile.Tools)
 	}
 

@@ -203,7 +203,9 @@ func exitCode(err error) int {
 	var internal internalError
 	var outcomeErr invocationOutcomeError
 	switch {
-	case errors.As(err, &usage):
+	case errors.As(err, &usage),
+		errors.Is(err, profileapplication.ErrInvalidBinding),
+		errors.Is(err, profileapplication.ErrBindingNameConflict):
 		return ExitUsage
 	case errors.As(err, &internal):
 		return ExitInternal

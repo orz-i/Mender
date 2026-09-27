@@ -137,6 +137,11 @@ func (a *app) newProfileShowCommand() *cobra.Command {
 
 func (a *app) newProfileAddToolCommand() *cobra.Command {
 	var direct bool
+	var alias string
+	var titleOverride string
+	var descriptionOverride string
+	var policyValue string
+	var concurrencyValue string
 
 	command := &cobra.Command{
 		Use:   "add-tool <profile> <tool-id>",
@@ -147,14 +152,27 @@ func (a *app) newProfileAddToolCommand() *cobra.Command {
 			if err != nil {
 				return usageError{err: err}
 			}
+			policy, err := parseProfilePolicyConstraint(policyValue)
+			if err != nil {
+				return usageError{err: err}
+			}
+			concurrency, err := parseProfileConcurrencyConstraint(concurrencyValue)
+			if err != nil {
+				return usageError{err: err}
+			}
 
 			return a.withRuntime(cmd.Context(), func(runtime *bootstrap.Runtime) error {
 				profile, err := runtime.Profiles.AddTool.Execute(
 					cmd.Context(),
 					profileapplication.AddToolRequest{
-						ProfileSlug: slug,
-						ToolID:      toolID,
-						Direct:      direct,
+						ProfileSlug:           slug,
+						ToolID:                toolID,
+						Direct:                direct,
+						Alias:                 alias,
+						TitleOverride:         titleOverride,
+						DescriptionOverride:   descriptionOverride,
+						PolicyConstraint:      policy,
+						ConcurrencyConstraint: concurrency,
 					},
 				)
 				if err != nil {
@@ -168,6 +186,21 @@ func (a *app) newProfileAddToolCommand() *cobra.Command {
 		},
 	}
 	command.Flags().BoolVar(&direct, "direct", false, "export this Tool directly in hybrid mode")
+	command.Flags().StringVar(&alias, "alias", "", "Profile-local machine/model Tool alias")
+	command.Flags().StringVar(&titleOverride, "title", "", "Profile-local Tool title override")
+	command.Flags().StringVar(&descriptionOverride, "description", "", "Profile-local Tool description override")
+	command.Flags().StringVar(
+		&policyValue,
+		"policy",
+		"inherit",
+		"binding policy: inherit, require_approval, or deny",
+	)
+	command.Flags().StringVar(
+		&concurrencyValue,
+		"concurrency",
+		"inherit",
+		"binding concurrency: inherit or serial",
+	)
 	return command
 }
 
@@ -214,6 +247,28 @@ func parseExposureMode(value string) (profiledomain.ExposureMode, error) {
 	}
 }
 
+func parseProfilePolicyConstraint(value string) (profiledomain.PolicyConstraint, error) {
+	constraint := profiledomain.PolicyConstraint(value)
+	switch constraint {
+	case profiledomain.PolicyInherit,
+		profiledomain.PolicyRequireApproval,
+		profiledomain.PolicyDeny:
+		return constraint, nil
+	default:
+		return "", fmt.Errorf("policy must be inherit, require_approval, or deny")
+	}
+}
+
+func parseProfileConcurrencyConstraint(value string) (profiledomain.ConcurrencyConstraint, error) {
+	constraint := profiledomain.ConcurrencyConstraint(value)
+	switch constraint {
+	case profiledomain.ConcurrencyInherit, profiledomain.ConcurrencySerial:
+		return constraint, nil
+	default:
+		return "", fmt.Errorf("concurrency must be inherit or serial")
+	}
+}
+
 func parseProfileToolArgs(
 	args []string,
 ) (profiledomain.Slug, catalogdomain.ToolID, error) {
@@ -229,11 +284,16 @@ func parseProfileToolArgs(
 }
 
 func profileProjection(profile profiledomain.Profile) map[string]any {
-	selections := make([]map[string]any, 0, len(profile.Selections()))
-	for _, selection := range profile.Selections() {
-		selections = append(selections, map[string]any{
-			"toolId": selection.ToolID.String(),
-			"direct": selection.Direct,
+	bindings := make([]map[string]any, 0, len(profile.Bindings()))
+	for _, binding := range profile.Bindings() {
+		bindings = append(bindings, map[string]any{
+			"toolId":                binding.ToolID().String(),
+			"direct":                binding.Direct(),
+			"alias":                 binding.Alias(),
+			"titleOverride":         binding.TitleOverride(),
+			"descriptionOverride":   binding.DescriptionOverride(),
+			"policyConstraint":      string(binding.PolicyConstraint()),
+			"concurrencyConstraint": string(binding.ConcurrencyConstraint()),
 		})
 	}
 	return map[string]any{
@@ -241,6 +301,6 @@ func profileProjection(profile profiledomain.Profile) map[string]any {
 		"slug":        profile.Slug().String(),
 		"displayName": profile.DisplayName(),
 		"mode":        string(profile.Mode()),
-		"tools":       selections,
+		"tools":       bindings,
 	}
 }

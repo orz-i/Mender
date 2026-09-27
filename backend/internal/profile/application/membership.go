@@ -46,11 +46,19 @@ func (uc AddTool) Execute(
 		ConcurrencyConstraint: request.ConcurrencyConstraint,
 	})
 	if err != nil {
-		return profiledomain.Profile{}, fmt.Errorf("add profile tool: %w", err)
+		return profiledomain.Profile{}, fmt.Errorf(
+			"add profile tool: %w: %w",
+			ErrInvalidBinding,
+			err,
+		)
 	}
 	updated, err := profile.AddBinding(binding)
 	if err != nil {
-		return profiledomain.Profile{}, fmt.Errorf("add profile tool: %w", err)
+		return profiledomain.Profile{}, fmt.Errorf(
+			"add profile tool: %w: %w",
+			ErrInvalidBinding,
+			err,
+		)
 	}
 	if err := validateBindingToolsAndNames(ctx, updated, uc.tools); err != nil {
 		return profiledomain.Profile{}, fmt.Errorf("add profile tool: %w", err)

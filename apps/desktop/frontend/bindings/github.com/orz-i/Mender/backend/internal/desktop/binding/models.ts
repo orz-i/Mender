@@ -88,6 +88,11 @@ export interface ProfileList {
 export interface ProfileTool {
     "toolId": string;
     "direct": boolean;
+    "alias": string;
+    "titleOverride": string;
+    "descriptionOverride": string;
+    "policyConstraint": string;
+    "concurrencyConstraint": string;
 }
 
 export interface Provider {

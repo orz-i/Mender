@@ -472,13 +472,38 @@ export interface components {
         AddProfileToolRequest: {
             toolId: string;
             direct?: boolean;
+            alias?: string;
+            titleOverride?: string;
+            descriptionOverride?: string;
+            /** @enum {string} */
+            policyConstraint?: "inherit" | "require_approval" | "deny";
+            /** @enum {string} */
+            concurrencyConstraint?: "inherit" | "serial";
         };
         ReplaceProfileToolsRequest: {
-            tools: components["schemas"]["ProfileTool"][];
+            tools: components["schemas"]["ProfileToolInput"][];
+        };
+        ProfileToolInput: {
+            toolId: string;
+            direct?: boolean;
+            alias?: string;
+            titleOverride?: string;
+            descriptionOverride?: string;
+            /** @enum {string} */
+            policyConstraint?: "inherit" | "require_approval" | "deny";
+            /** @enum {string} */
+            concurrencyConstraint?: "inherit" | "serial";
         };
         ProfileTool: {
             toolId: string;
             direct: boolean;
+            alias: string;
+            titleOverride: string;
+            descriptionOverride: string;
+            /** @enum {string} */
+            policyConstraint: "inherit" | "require_approval" | "deny";
+            /** @enum {string} */
+            concurrencyConstraint: "inherit" | "serial";
         };
         Profile: {
             profileId: string;

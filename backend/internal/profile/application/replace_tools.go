@@ -38,8 +38,9 @@ func (uc ReplaceTools) Execute(
 		binding, err := newToolBinding(item)
 		if err != nil {
 			return profiledomain.Profile{}, fmt.Errorf(
-				"replace profile tools: binding %s: %w",
+				"replace profile tools: binding %s: %w: %w",
 				item.ToolID,
+				ErrInvalidBinding,
 				err,
 			)
 		}
@@ -48,7 +49,11 @@ func (uc ReplaceTools) Execute(
 
 	updated, err := profile.ReplaceBindings(bindings)
 	if err != nil {
-		return profiledomain.Profile{}, fmt.Errorf("replace profile tools: %w", err)
+		return profiledomain.Profile{}, fmt.Errorf(
+			"replace profile tools: %w: %w",
+			ErrInvalidBinding,
+			err,
+		)
 	}
 	if err := validateBindingToolsAndNames(ctx, updated, uc.tools); err != nil {
 		return profiledomain.Profile{}, fmt.Errorf("replace profile tools: %w", err)

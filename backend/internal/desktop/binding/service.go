@@ -464,23 +464,27 @@ func (s *Service) GetProfile(slug string) (Profile, error) {
 
 func (s *Service) AddProfileTool(
 	slug string,
-	toolID string,
-	direct bool,
+	tool ProfileTool,
 ) (Profile, error) {
 	profileSlug, err := profiledomain.NewSlug(slug)
 	if err != nil {
 		return Profile{}, err
 	}
-	id, err := catalogdomain.ParseToolID(toolID)
+	id, err := catalogdomain.ParseToolID(tool.ToolID)
 	if err != nil {
 		return Profile{}, err
 	}
 	profile, err := s.runtime.Profiles.AddTool.Execute(
 		s.ctx,
 		profileapplication.AddToolRequest{
-			ProfileSlug: profileSlug,
-			ToolID:      id,
-			Direct:      direct,
+			ProfileSlug:           profileSlug,
+			ToolID:                id,
+			Direct:                tool.Direct,
+			Alias:                 tool.Alias,
+			TitleOverride:         tool.TitleOverride,
+			DescriptionOverride:   tool.DescriptionOverride,
+			PolicyConstraint:      profiledomain.PolicyConstraint(tool.PolicyConstraint),
+			ConcurrencyConstraint: profiledomain.ConcurrencyConstraint(tool.ConcurrencyConstraint),
 		},
 	)
 	if err != nil {
@@ -498,15 +502,20 @@ func (s *Service) ReplaceProfileTools(
 		return Profile{}, err
 	}
 
-	selections := make([]profileapplication.ReplaceToolSelection, 0, len(tools))
+	bindings := make([]profileapplication.ToolBindingInput, 0, len(tools))
 	for _, item := range tools {
 		id, err := catalogdomain.ParseToolID(item.ToolID)
 		if err != nil {
 			return Profile{}, err
 		}
-		selections = append(selections, profileapplication.ReplaceToolSelection{
-			ToolID: id,
-			Direct: item.Direct,
+		bindings = append(bindings, profileapplication.ToolBindingInput{
+			ToolID:                id,
+			Direct:                item.Direct,
+			Alias:                 item.Alias,
+			TitleOverride:         item.TitleOverride,
+			DescriptionOverride:   item.DescriptionOverride,
+			PolicyConstraint:      profiledomain.PolicyConstraint(item.PolicyConstraint),
+			ConcurrencyConstraint: profiledomain.ConcurrencyConstraint(item.ConcurrencyConstraint),
 		})
 	}
 
@@ -514,7 +523,7 @@ func (s *Service) ReplaceProfileTools(
 		s.ctx,
 		profileapplication.ReplaceToolsRequest{
 			ProfileSlug: profileSlug,
-			Tools:       selections,
+			Tools:       bindings,
 		},
 	)
 	if err != nil {
@@ -664,11 +673,16 @@ func toolProjection(tool catalogdomain.Tool) (ToolDetail, error) {
 }
 
 func profileProjection(profile profiledomain.Profile) Profile {
-	tools := make([]ProfileTool, 0, len(profile.Selections()))
-	for _, selection := range profile.Selections() {
+	tools := make([]ProfileTool, 0, len(profile.Bindings()))
+	for _, binding := range profile.Bindings() {
 		tools = append(tools, ProfileTool{
-			ToolID: selection.ToolID.String(),
-			Direct: selection.Direct,
+			ToolID:                binding.ToolID().String(),
+			Direct:                binding.Direct(),
+			Alias:                 binding.Alias(),
+			TitleOverride:         binding.TitleOverride(),
+			DescriptionOverride:   binding.DescriptionOverride(),
+			PolicyConstraint:      string(binding.PolicyConstraint()),
+			ConcurrencyConstraint: string(binding.ConcurrencyConstraint()),
 		})
 	}
 	return Profile{
