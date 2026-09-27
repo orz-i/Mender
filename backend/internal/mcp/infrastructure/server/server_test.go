@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"reflect"
 	"sort"
 	"strings"
 	"sync"
@@ -133,6 +134,173 @@ func TestDynamicProfileExposesMetaToolsAndEnforcesMembership(t *testing.T) {
 	if got := fixture.invokedIDs(); len(got) != 2 ||
 		got[0] != fixture.tools[2].ID() || got[1] != fixture.tools[0].ID() {
 		t.Fatalf("invoked ToolIDs = %v", got)
+	}
+}
+
+func TestProfileBindingPresentationOverridesMCPProjection(t *testing.T) {
+	t.Parallel()
+
+	fixture := newServerFixture(t)
+	binding, err := profiledomain.NewToolBinding(profiledomain.ToolBindingSpec{
+		ToolID:              fixture.tools[0].ID(),
+		Direct:              true,
+		Alias:               "open_prod_issue",
+		TitleOverride:       "Open production issue",
+		DescriptionOverride: "Open an issue in the production tracker.",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile := fixture.profileBindings(
+		t,
+		profiledomain.ExposureHybrid,
+		[]profiledomain.ToolBinding{binding},
+	)
+	adapter := fixture.adapter(t, profile)
+	client := connectClient(t, adapter)
+
+	listed, err := client.ListTools(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("ListTools() error = %v", err)
+	}
+	var direct *mcp.Tool
+	for _, tool := range listed.Tools {
+		if tool.Name == "github__open_prod_issue" {
+			direct = tool
+			break
+		}
+	}
+	if direct == nil {
+		t.Fatalf("direct tools = %#v", listed.Tools)
+	}
+	if direct.Title != "Open production issue" ||
+		direct.Description != "Open an issue in the production tracker." {
+		t.Fatalf(
+			"direct presentation = title %q description %q",
+			direct.Title,
+			direct.Description,
+		)
+	}
+	var canonicalInputSchema any
+	if err := json.Unmarshal(fixture.tools[0].InputSchema().Bytes(), &canonicalInputSchema); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(direct.InputSchema, canonicalInputSchema) {
+		t.Fatalf(
+			"direct InputSchema changed: got %#v want %#v",
+			direct.InputSchema,
+			canonicalInputSchema,
+		)
+	}
+
+	searchResult, err := client.CallTool(context.Background(), &mcp.CallToolParams{
+		Name:      metaSearchName,
+		Arguments: json.RawMessage(`{"query":"issue","limit":10}`),
+	})
+	if err != nil {
+		t.Fatalf("search CallTool() error = %v", err)
+	}
+	searchMap, ok := searchResult.StructuredContent.(map[string]any)
+	if !ok {
+		t.Fatalf("search StructuredContent = %T", searchResult.StructuredContent)
+	}
+	items, ok := searchMap["tools"].([]any)
+	if !ok || len(items) != 1 {
+		t.Fatalf("search tools = %#v", searchMap["tools"])
+	}
+	item, ok := items[0].(map[string]any)
+	if !ok {
+		t.Fatalf("search item = %#v", items[0])
+	}
+	if item["name"] != "open_prod_issue" ||
+		item["title"] != "Open production issue" ||
+		item["description"] != "Open an issue in the production tracker." {
+		t.Fatalf("search presentation = %#v", item)
+	}
+
+	describeResult, err := client.CallTool(context.Background(), &mcp.CallToolParams{
+		Name: metaDescribeName,
+		Arguments: json.RawMessage(
+			`{"toolId":"` + fixture.tools[0].ID().String() + `"}`,
+		),
+	})
+	if err != nil {
+		t.Fatalf("describe CallTool() error = %v", err)
+	}
+	describeMap, ok := describeResult.StructuredContent.(map[string]any)
+	if !ok {
+		t.Fatalf("describe StructuredContent = %T", describeResult.StructuredContent)
+	}
+	if describeMap["toolId"] != fixture.tools[0].ID().String() ||
+		describeMap["name"] != "open_prod_issue" ||
+		describeMap["title"] != "Open production issue" ||
+		describeMap["description"] != "Open an issue in the production tracker." {
+		t.Fatalf("describe presentation = %#v", describeMap)
+	}
+	inputSchema, ok := describeMap["inputSchema"].(map[string]any)
+	if !ok || inputSchema["type"] != "object" {
+		t.Fatalf("describe inputSchema = %#v", describeMap["inputSchema"])
+	}
+}
+
+func TestMCPDirectProjectionRejectsNormalizedNameCollision(t *testing.T) {
+	t.Parallel()
+
+	fixture := newServerFixture(t)
+	first := testCanonicalTool(
+		t,
+		"tool_00000000000000000000000000000011",
+		fixture.provider.ID(),
+		"collision.first",
+		"collision/name",
+		"Collision first",
+		"",
+	)
+	second := testCanonicalTool(
+		t,
+		"tool_00000000000000000000000000000012",
+		fixture.provider.ID(),
+		"collision.second",
+		"collision_name",
+		"Collision second",
+		"",
+	)
+	fixture.tools = []catalogdomain.Tool{first, second}
+
+	firstBinding, err := profiledomain.DefaultToolBinding(first.ID(), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondBinding, err := profiledomain.DefaultToolBinding(second.ID(), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile := fixture.profileBindings(
+		t,
+		profiledomain.ExposureDirect,
+		[]profiledomain.ToolBinding{firstBinding, secondBinding},
+	)
+
+	byID := map[catalogdomain.ToolID]catalogdomain.Tool{
+		first.ID():  first,
+		second.ID(): second,
+	}
+	_, err = New(context.Background(), profile, Dependencies{
+		DescribeTool: func(_ context.Context, id catalogdomain.ToolID) (catalogdomain.Tool, error) {
+			return byID[id], nil
+		},
+		GetProvider: func(context.Context, catalogdomain.ProviderID) (catalogdomain.Provider, error) {
+			return fixture.provider, nil
+		},
+		SearchTools: func(context.Context, catalogapplication.SearchToolsRequest) ([]catalogapplication.ToolSearchResult, error) {
+			return nil, nil
+		},
+		InvokeTool: func(context.Context, invocationapplication.InvokeToolRequest) (invocationapplication.InvokeToolResponse, error) {
+			return invocationapplication.InvokeToolResponse{}, nil
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), "exported tool name collision") {
+		t.Fatalf("New() error = %v, want normalized exported-name collision", err)
 	}
 }
 
@@ -271,6 +439,27 @@ func (f *serverFixture) profile(t *testing.T, mode profiledomain.ExposureMode, s
 	id, _ := profiledomain.ParseProfileID("prof_00000000000000000000000000000001")
 	slug, _ := profiledomain.NewSlug("default")
 	profile, err := profiledomain.NewProfile(id, slug, "Default", mode, selections)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return profile
+}
+
+func (f *serverFixture) profileBindings(
+	t *testing.T,
+	mode profiledomain.ExposureMode,
+	bindings []profiledomain.ToolBinding,
+) profiledomain.Profile {
+	t.Helper()
+	id, _ := profiledomain.ParseProfileID("prof_00000000000000000000000000000001")
+	slug, _ := profiledomain.NewSlug("default")
+	profile, err := profiledomain.NewProfileWithBindings(
+		id,
+		slug,
+		"Default",
+		mode,
+		bindings,
+	)
 	if err != nil {
 		t.Fatal(err)
 	}

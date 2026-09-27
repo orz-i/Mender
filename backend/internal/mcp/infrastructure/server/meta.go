@@ -66,13 +66,29 @@ func (a *Adapter) searchHandler(ctx context.Context, request *mcp.CallToolReques
 
 	tools := make([]map[string]any, 0, len(results))
 	for _, result := range results {
+		presentation := toolPresentation{
+			name:        result.Name,
+			title:       result.Title,
+			description: result.Description,
+		}
+		if binding, ok := a.profile.Binding(result.ToolID); ok {
+			if binding.Alias() != "" {
+				presentation.name = binding.Alias()
+			}
+			if binding.TitleOverride() != "" {
+				presentation.title = binding.TitleOverride()
+			}
+			if binding.DescriptionOverride() != "" {
+				presentation.description = binding.DescriptionOverride()
+			}
+		}
 		tools = append(tools, map[string]any{
 			"rank":        result.Rank,
 			"toolId":      result.ToolID.String(),
 			"providerId":  result.ProviderID.String(),
-			"name":        result.Name,
-			"title":       result.Title,
-			"description": result.Description,
+			"name":        presentation.name,
+			"title":       presentation.title,
+			"description": presentation.description,
 		})
 	}
 	return structuredResult(map[string]any{"tools": tools})
@@ -90,7 +106,8 @@ func (a *Adapter) describeHandler(ctx context.Context, request *mcp.CallToolRequ
 	if err != nil {
 		return nil, fmt.Errorf("mender describe tool: %w", err)
 	}
-	if !a.profile.Contains(toolID) {
+	binding, selected := a.profile.Binding(toolID)
+	if !selected {
 		return nil, ErrToolOutsideProfile
 	}
 
@@ -113,12 +130,16 @@ func (a *Adapter) describeHandler(ctx context.Context, request *mcp.CallToolRequ
 		}
 	}
 
+	presentation := effectivePresentation(a.profile, tool)
+	if binding.ToolID() != tool.ID() {
+		return nil, fmt.Errorf("mender describe tool: Profile binding identity mismatch")
+	}
 	return structuredResult(map[string]any{
 		"toolId":       tool.ID().String(),
 		"providerId":   tool.ProviderID().String(),
-		"name":         tool.Name(),
-		"title":        tool.Title(),
-		"description":  tool.Description(),
+		"name":         presentation.name,
+		"title":        presentation.title,
+		"description":  presentation.description,
 		"inputSchema":  inputSchema,
 		"outputSchema": outputSchema,
 		"tags":         tool.Tags(),

@@ -114,13 +114,18 @@ func (a *Adapter) addDirectTools(ctx context.Context) error {
 			return fmt.Errorf("build MCP server: get provider %s: %w", tool.ProviderID(), err)
 		}
 
-		name := exportName(provider.Namespace().String(), tool)
+		presentation := effectivePresentation(a.profile, tool)
+		name := exportName(
+			provider.Namespace().String(),
+			presentation.name,
+			tool.ID(),
+		)
 		if existing, collision := seenNames[name]; collision && existing != tool.ID() {
 			return fmt.Errorf("build MCP server: exported tool name collision %q", name)
 		}
 		seenNames[name] = tool.ID()
 
-		mcpTool, err := exportedTool(name, tool)
+		mcpTool, err := exportedTool(name, presentation, tool)
 		if err != nil {
 			return fmt.Errorf("build MCP server: export %s: %w", tool.ID(), err)
 		}
@@ -142,15 +147,50 @@ func (a *Adapter) addDirectTools(ctx context.Context) error {
 	return nil
 }
 
-func exportedTool(name string, tool catalogdomain.Tool) (*mcp.Tool, error) {
+type toolPresentation struct {
+	name        string
+	title       string
+	description string
+}
+
+func effectivePresentation(
+	profile profiledomain.Profile,
+	tool catalogdomain.Tool,
+) toolPresentation {
+	result := toolPresentation{
+		name:        tool.Name(),
+		title:       tool.Title(),
+		description: tool.Description(),
+	}
+	binding, ok := profile.Binding(tool.ID())
+	if !ok {
+		return result
+	}
+	if binding.Alias() != "" {
+		result.name = binding.Alias()
+	}
+	if binding.TitleOverride() != "" {
+		result.title = binding.TitleOverride()
+	}
+	if binding.DescriptionOverride() != "" {
+		result.description = binding.DescriptionOverride()
+	}
+	return result
+}
+
+func exportedTool(
+	name string,
+	presentation toolPresentation,
+	tool catalogdomain.Tool,
+) (*mcp.Tool, error) {
 	if !isObjectSchema(tool.InputSchema().Bytes()) {
 		return nil, fmt.Errorf("input schema root must be an object for MCP export")
 	}
 
 	exported := &mcp.Tool{
 		Name:        name,
-		Title:       tool.Title(),
-		Description: tool.Description(),
+		Title:       presentation.title,
+		Description: presentation.description,
 		InputSchema: json.RawMessage(tool.InputSchema().Bytes()),
 	}
 	if schema := tool.OutputSchema(); schema != nil {
@@ -159,8 +199,12 @@ func exportedTool(name string, tool catalogdomain.Tool) (*mcp.Tool, error) {
 	return exported, nil
 }
 
-func exportName(namespace string, tool catalogdomain.Tool) string {
-	raw := namespace + "__" + tool.Name()
+func exportName(
+	namespace string,
+	machineName string,
+	toolID catalogdomain.ToolID,
+) string {
+	raw := namespace + "__" + machineName
 	var builder strings.Builder
 	builder.Grow(len(raw))
 	for _, r := range raw {
@@ -176,7 +220,7 @@ func exportName(namespace string, tool catalogdomain.Tool) string {
 		return name
 	}
 
-	suffix := "_" + strings.TrimPrefix(tool.ID().String(), "tool_")[:12]
+	suffix := "_" + strings.TrimPrefix(toolID.String(), "tool_")[:12]
 	maxPrefix := 128 - len(suffix)
 	return name[:maxPrefix] + suffix
 }
