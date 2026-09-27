@@ -36,7 +36,19 @@ func RequireApproval(reasonCode, explanation string) (Decision, error) {
 	return newDecision(DecisionRequireApproval, reasonCode, explanation)
 }
 
+func ValidateDecisionKind(kind DecisionKind) error {
+	switch kind {
+	case DecisionAllow, DecisionRequireApproval, DecisionDeny:
+		return nil
+	default:
+		return fmt.Errorf("decision: unknown value %q", kind)
+	}
+}
+
 func newDecision(kind DecisionKind, reasonCode, explanation string) (Decision, error) {
+	if err := ValidateDecisionKind(kind); err != nil {
+		return Decision{}, err
+	}
 	reasonCode = strings.TrimSpace(reasonCode)
 	if !reasonCodePattern.MatchString(reasonCode) {
 		return Decision{}, fmt.Errorf("reason_code: must be a lowercase stable code")
