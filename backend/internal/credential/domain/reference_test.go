@@ -34,3 +34,14 @@ func TestParseReference(t *testing.T) {
 		}
 	}
 }
+
+func TestNewReferenceRejectsInvalidParts(t *testing.T) {
+	t.Parallel()
+
+	if _, err := NewReference("GitHub", "work"); err == nil {
+		t.Fatal("NewReference() accepted uppercase namespace")
+	}
+	if _, err := NewReference("github", "work/extra"); err == nil {
+		t.Fatal("NewReference() accepted slash")
+	}
+}
