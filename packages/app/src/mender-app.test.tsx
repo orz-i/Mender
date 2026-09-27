@@ -37,9 +37,12 @@ function overviewClient(): MenderClient {
     getSystemStatus: () => Promise.resolve({
       ready: true,
       policy: {
-        mode: "local_allow_all",
-        editable: false,
+        mode: "configured",
+        editable: true,
         approval: "fail_closed_when_required",
+        defaultDecision: "allow",
+        ruleCount: 0,
+        enabledRuleCount: 0,
       },
       credentials: {
         resolver: "inventory",

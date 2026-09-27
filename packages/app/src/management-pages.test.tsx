@@ -6,7 +6,7 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import type { MenderClient } from "@mender/sdk";
+import type { MenderClient, PolicyRuleInput } from "@mender/sdk";
 import { MemoryRouter } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -801,16 +801,156 @@ describe("management pages", () => {
     expect(await screen.findByText("No running MCP servers")).toBeTruthy();
   });
 
-  it("keeps Policy read-only and manages Credential inventory without echoing secrets", async () => {
-    const policyClient = renderApp("/policy", {
-      getPolicyStatus: vi.fn().mockResolvedValue({
-        mode: "local_allow_all",
-        editable: false,
+  it("manages Policy rules and Credential inventory without raw identities or secret echo", async () => {
+    const policyProfile = {
+      profileId: "prof_00000000000000000000000000000001",
+      slug: "default",
+      displayName: "Default",
+      mode: "hybrid" as const,
+      tools: [],
+    };
+    const policyProvider = {
+      providerId: "prov_00000000000000000000000000000001",
+      namespace: "demo",
+      displayName: "Demo Provider",
+      description: "",
+      createdAt: "2026-09-27T00:00:00Z",
+      updatedAt: "2026-09-27T00:00:00Z",
+      transport: "http" as const,
+      toolCount: 1,
+      endpoint: "https://example.test/mcp",
+    };
+    const policyTool = {
+      rank: 1,
+      toolId: "tool_00000000000000000000000000000001",
+      providerId: policyProvider.providerId,
+      name: "search",
+      title: "Search",
+      description: "Search documentation",
+    };
+    const createdRule = {
+      ruleId: "rule_00000000000000000000000000000001",
+      displayName: "Approve MCP search",
+      enabled: true,
+      decision: "require_approval" as const,
+      match: {
+        origins: ["mcp"] as Array<"mcp">,
+        scopeKinds: ["profile"] as Array<"profile">,
+        profileRefs: [policyProfile.profileId],
+        providerIds: [policyProvider.providerId],
+        toolIds: [policyTool.toolId],
+        factKnowledge: "unknown" as const,
+        effectsAny: [],
+        resourcesAny: [],
+      },
+      createdAt: "2026-09-27T01:00:00Z",
+      updatedAt: "2026-09-27T01:00:00Z",
+    };
+    const getPolicy = vi
+      .fn()
+      .mockResolvedValueOnce({ defaultDecision: "allow", rules: [] })
+      .mockResolvedValueOnce({ defaultDecision: "deny", rules: [] })
+      .mockResolvedValue({ defaultDecision: "deny", rules: [createdRule] });
+    const getPolicyStatus = vi
+      .fn()
+      .mockResolvedValueOnce({
+        mode: "configured",
+        editable: true,
         approval: "fail_closed_when_required",
-      }),
+        defaultDecision: "allow",
+        ruleCount: 0,
+        enabledRuleCount: 0,
+      })
+      .mockResolvedValueOnce({
+        mode: "configured",
+        editable: true,
+        approval: "fail_closed_when_required",
+        defaultDecision: "deny",
+        ruleCount: 0,
+        enabledRuleCount: 0,
+      })
+      .mockResolvedValue({
+        mode: "configured",
+        editable: true,
+        approval: "fail_closed_when_required",
+        defaultDecision: "deny",
+        ruleCount: 1,
+        enabledRuleCount: 1,
+      });
+    const setPolicyDefault = vi.fn().mockResolvedValue({
+      defaultDecision: "deny",
+      rules: [],
     });
-    expect(await screen.findByText("local_allow_all")).toBeTruthy();
-    expect(screen.getByText("Read only")).toBeTruthy();
+    const createPolicyRule = vi.fn().mockResolvedValue(createdRule);
+
+    const policyClient = renderApp("/policy", {
+      getPolicy,
+      getPolicyStatus,
+      setPolicyDefault,
+      createPolicyRule,
+      listProfiles: vi.fn().mockResolvedValue({ profiles: [policyProfile] }),
+      listProviders: vi.fn().mockResolvedValue({ providers: [policyProvider] }),
+      browseTools: vi.fn().mockResolvedValue({ tools: [policyTool] }),
+    });
+
+    expect(await screen.findByText("No Policy Rules")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    expect(await screen.findByText("Edit default decision")).toBeTruthy();
+    expect(screen.getAllByRole("dialog")).toHaveLength(1);
+    fireEvent.change(screen.getByLabelText("Default Policy decision"), {
+      target: { value: "deny" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save default" }));
+    await waitFor(() => {
+      expect(setPolicyDefault).toHaveBeenCalledWith({ decision: "deny" });
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Add rule" }));
+    expect(await screen.findByText("Add Policy rule")).toBeTruthy();
+    expect(screen.getAllByRole("dialog")).toHaveLength(1);
+    expect(screen.queryByLabelText("Rule ID")).toBeNull();
+    fireEvent.change(screen.getByLabelText("Policy Rule display name"), {
+      target: { value: "Approve MCP search" },
+    });
+    fireEvent.change(screen.getByLabelText("Policy Rule decision"), {
+      target: { value: "require_approval" },
+    });
+    expect(screen.getByText(/Approval adapter is fail-closed/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    expect(screen.getByText(/Scope and targets/)).toBeTruthy();
+    fireEvent.click(screen.getByText("MCP").closest("label")!);
+    fireEvent.click(screen.getByText("Profile").closest("label")!);
+    fireEvent.click(screen.getByText("Default").closest("label")!);
+    fireEvent.click(screen.getByText("Demo Provider").closest("label")!);
+    fireEvent.click(screen.getByText("Search").closest("label")!);
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    expect(screen.getByText("Governance Facts")).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Policy fact knowledge"), {
+      target: { value: "unknown" },
+    });
+    expect(screen.queryByLabelText("Policy effects")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Create rule" }));
+
+    await waitFor(() => {
+      expect(createPolicyRule).toHaveBeenCalledTimes(1);
+    });
+    const createInput = createPolicyRule.mock.calls[0]?.[0] as PolicyRuleInput;
+    expect(createInput).toMatchObject({
+      displayName: "Approve MCP search",
+      decision: "require_approval",
+      match: {
+        origins: ["mcp"],
+        scopeKinds: ["profile"],
+        profileRefs: [policyProfile.profileId],
+        providerIds: [policyProvider.providerId],
+        toolIds: [policyTool.toolId],
+        factKnowledge: "unknown",
+      },
+    });
+    expect("ruleId" in createInput).toBe(false);
+    expect(await screen.findByText("Approve MCP search")).toBeTruthy();
     policyClient.unmount();
 
     const credential = {
