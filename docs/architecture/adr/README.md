@@ -45,3 +45,5 @@ Minor implementation choices that remain inside an accepted architectural bounda
 - [ADR-0017: Govern invocation with explicit execution scope and preflight/postflight stages](0017-governed-invocation-pipeline.md)
 - [ADR-0018: Represent expected invocation rejections and failures as canonical outcomes](0018-canonical-invocation-outcomes.md)
 - [ADR-0019: Make Profile ToolBinding the per-Profile governance unit](0019-profile-tool-binding-governance.md)
+- [ADR-0020: Separate Credential inventory metadata from secret material](0020-credential-inventory-secret-backends.md)
+- [ADR-0021: Bind Provider authentication to Credential References and enforce Profile credential scope](0021-provider-credential-bindings.md)
