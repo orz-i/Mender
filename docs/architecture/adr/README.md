@@ -50,3 +50,4 @@ Minor implementation choices that remain inside an accepted architectural bounda
 - [ADR-0022: Persist an unordered PolicySet with deterministic most-restrictive evaluation](0022-persistent-policy-set.md)
 - [ADR-0023: Bound Policy matching to stable execution metadata and reviewed Governance Facts](0023-bounded-policy-match-language.md)
 - [ADR-0024: Make Provider plugins the runtime boundary and treat MCP transport as plugin configuration](0024-provider-plugin-runtime.md)
+- [ADR-0025: Map OpenAPI operations into governed Tools through a bounded Provider plugin](0025-openapi-provider-plugin.md)

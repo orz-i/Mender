@@ -283,3 +283,20 @@ Goals:
 Exit criteria are complete. Generic plugin configuration is persistent and imported from the legacy MCP schema without changing canonical identities; `io.mender.provider.mcp` owns both stdio and Streamable HTTP; Provider instances are reused/replaced/closed deterministically with Provider-scoped synchronization; Credential usage inspection works through the plugin boundary; CLI/OpenAPI/Wails/Web/Desktop use plugin-oriented Provider contracts; and all repository/security checks are green.
 
 See `phase-13-provider-plugin-runtime.md` for implementation and verification evidence.
+
+## Phase 14 — OpenAPI Provider Plugin
+
+Status: In progress
+
+Goals:
+
+- Add `io.mender.provider.openapi` as the first non-MCP Provider plugin.
+- Convert supported OpenAPI 3.0/3.1/3.2 operations into canonical Mender Tools with stable SourceKeys and self-contained JSON Schemas.
+- Execute JSON HTTP operations through the shared governed Invocation pipeline.
+- Bind supported OpenAPI Security Schemes to Mender Credential References without exposing secrets as Tool arguments.
+- Reject external references and unsupported media/serialization/authentication semantics rather than silently weakening execution.
+- Reuse generic Provider configuration, lifecycle, CLI/API/Wails/Web/Desktop plugin surfaces without adding OpenAPI branches to Catalog/Invocation Runtime orchestration.
+
+Exit criteria include bounded URL/file description loading, deterministic operation discovery/filtering, apiKey/Bearer execution, Profile Credential scope, runtime end-to-end coverage, plugin-first management UX, and green repository/security checks.
+
+See `phase-14-openapi-provider.md`.
