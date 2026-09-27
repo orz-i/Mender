@@ -32,21 +32,30 @@ JSON commands emit exactly one JSON document on stdout whenever Invocation produ
 
 ## Provider management
 
+List the Provider plugins built into the current Mender binary:
+
+```bash
+mender provider plugins
+mender provider plugins --output json
+```
+
+The initial built-in plugin is `io.mender.provider.mcp`. MCP connection transport is selected below that plugin rather than represented as a top-level Provider kind.
+
 Add a remote MCP Provider:
 
 ```bash
-mender provider add http \
+mender provider add mcp http \
   --namespace github \
   --name "GitHub" \
   --endpoint https://example.com/mcp
 ```
 
-Non-loopback HTTP Providers must use HTTPS. Plain HTTP is accepted only for `localhost` / loopback development endpoints. URL userinfo such as `https://user:password@example.com/...` is rejected so Provider configuration cannot become a hidden credential store.
+Non-loopback Streamable HTTP endpoints must use HTTPS. Plain HTTP is accepted only for `localhost` / loopback development endpoints. URL userinfo such as `https://user:password@example.com/...` is rejected so Provider configuration cannot become a hidden credential store.
 
 Add a local stdio MCP Provider:
 
 ```bash
-mender provider add stdio \
+mender provider add mcp stdio \
   --namespace local-tools \
   --name "Local tools" \
   --exec /path/to/server \
@@ -55,7 +64,11 @@ mender provider add stdio \
 
 Persistent stdio configuration never stores resolved secret environment values. Stdio Provider processes do not inherit Mender's arbitrary ambient environment: only a small non-secret process/runtime allow-list is passed automatically, plus explicit Credential-backed environment entries configured through the management/API surfaces.
 
+The historical `provider add http` and `provider add stdio` paths remain hidden compatibility aliases for Phase 5 scripts. New scripts should use the plugin-first commands above.
+
 Provider Credential bindings are currently configured through Web/Desktop or the structured management API. The Provider CLI intentionally does not yet add a separate authentication-binding flag DSL.
+
+`provider list` reports Plugin identity as the primary implementation dimension; MCP transport appears only as connection detail.
 
 List Providers:
 
@@ -279,7 +292,7 @@ Serve it over stateless Streamable HTTP:
 mender serve mcp --profile default --http 127.0.0.1:8080
 ```
 
-Before serving, Mender activates all persisted MCP Providers referenced by the Profile.
+Before serving, Mender ensures every configured Provider referenced by the Profile has an active plugin instance. Downstream serving remains an MCP exposure adapter; upstream Provider activation is plugin-generic.
 
 ## Agent Skill
 

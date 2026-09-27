@@ -268,7 +268,7 @@ See `phase-12-policy-governance.md` for implementation and verification evidence
 
 ## Phase 13 — Provider Plugin Runtime and MCP unification
 
-Status: In progress
+Status: Complete
 
 Goals:
 
@@ -280,6 +280,6 @@ Goals:
 - Migrate CLI/OpenAPI/Wails/Web/Desktop management to plugin-oriented Provider semantics.
 - Leave a stable extension boundary for OpenAPI and model-hosted Tool Providers without implementing them in this phase.
 
-Exit criteria include generic plugin configuration persistence, one built-in MCP plugin, Provider-scoped instance lifecycle/race coverage, migration compatibility for existing MCP configurations, plugin-oriented first-party management contracts, and green repository/security checks.
+Exit criteria are complete. Generic plugin configuration is persistent and imported from the legacy MCP schema without changing canonical identities; `io.mender.provider.mcp` owns both stdio and Streamable HTTP; Provider instances are reused/replaced/closed deterministically with Provider-scoped synchronization; Credential usage inspection works through the plugin boundary; CLI/OpenAPI/Wails/Web/Desktop use plugin-oriented Provider contracts; and all repository/security checks are green.
 
-See `phase-13-provider-plugin-runtime.md`.
+See `phase-13-provider-plugin-runtime.md` for implementation and verification evidence.

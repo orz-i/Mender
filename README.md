@@ -11,7 +11,7 @@ It provides one canonical tool model and execution pipeline, then exposes the sa
 
 ## Status
 
-The architecture-through-Policy-governance roadmap (Phases 0–12) is complete. Mender now uses a persistent, editable PolicySet with deterministic unordered rules over stable execution metadata and bounded Governance Facts, while Profile ToolBinding remains tightening-only. Credential and Policy governance share the same audited Invocation pipeline across CLI, MCP, Web, and Desktop.
+Phases 0–13 are complete. Mender now combines the governed Invocation pipeline with a Provider Plugin Runtime: canonical Provider/Tool identity stays protocol-independent, upstream MCP is one built-in plugin with stdio and Streamable HTTP transport variants, and active Provider instances are reused/reloaded/closed through an explicit lifecycle manager. Credential and Policy governance remain shared across CLI, MCP, Web, and Desktop.
 
 ## Product principles
 

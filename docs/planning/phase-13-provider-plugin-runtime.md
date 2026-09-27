@@ -1,6 +1,6 @@
 # Phase 13 Plan — Provider Plugin Runtime and MCP Unification
 
-Status: In progress
+Status: Complete
 
 ## Objective
 
@@ -962,24 +962,62 @@ docs: complete provider plugin runtime phase
 
 Phase 13 is complete when:
 
-- [ ] Provider plugin identity/configuration is persisted generically.
-- [ ] `io.mender.provider.mcp` is registered as a built-in plugin.
-- [ ] MCP stdio and Streamable HTTP are transport variants of that plugin.
-- [ ] Catalog Provider Domain contains no plugin/transport SDK coupling.
-- [ ] Runtime generic Tool call path contains no MCP-specific activation.
-- [ ] Provider Instance Manager reuses and closes instances deterministically.
-- [ ] repeated direct Tool calls do not accumulate stale MCP connections/processes.
-- [ ] Provider-scoped activation does not globally serialize unrelated Providers.
-- [ ] existing MCP Provider configs migrate without ProviderID/ToolID changes.
-- [ ] Credential Reference usage checks work through the generic Provider boundary.
-- [ ] Profile Credential scope still blocks unauthorized shared Provider execution.
-- [ ] management API/SDK expose plugin-oriented Provider configuration.
-- [ ] Wails/Web/Desktop use the same plugin-oriented contract.
-- [ ] normal UX no longer presents HTTP/stdio as top-level Provider kinds.
-- [ ] legacy compatibility behavior, if retained, is explicitly documented.
-- [ ] targeted lifecycle race tests pass.
-- [ ] `pnpm check` passes.
-- [ ] `pnpm security:check` passes.
+- [x] Provider plugin identity/configuration is persisted generically.
+- [x] `io.mender.provider.mcp` is registered as a built-in plugin.
+- [x] MCP stdio and Streamable HTTP are transport variants of that plugin.
+- [x] Catalog Provider Domain contains no plugin/transport SDK coupling.
+- [x] Runtime generic Tool call path contains no MCP-specific activation.
+- [x] Provider Instance Manager reuses and closes instances deterministically.
+- [x] repeated direct Tool calls do not accumulate stale MCP connections/processes.
+- [x] Provider-scoped activation does not globally serialize unrelated Providers.
+- [x] existing MCP Provider configs migrate without ProviderID/ToolID changes.
+- [x] Credential Reference usage checks work through the generic Provider boundary.
+- [x] Profile Credential scope still blocks unauthorized shared Provider execution.
+- [x] management API/SDK expose plugin-oriented Provider configuration.
+- [x] Wails/Web/Desktop use the same plugin-oriented contract.
+- [x] normal UX no longer presents HTTP/stdio as top-level Provider kinds.
+- [x] legacy compatibility behavior, if retained, is explicitly documented.
+- [x] targeted lifecycle race tests pass.
+- [x] `pnpm check` passes.
+- [x] `pnpm security:check` passes.
+
+## Closeout
+
+Phase 13 completed on 2026-09-27.
+
+The implementation now has a real Provider Plugin Runtime rather than a collection of MCP-specific Runtime branches:
+
+- `providerplugin.Plugin` defines descriptor, configuration validation/inspection, and instance opening; the Registry resolves stable namespaced Plugin IDs.
+- `providerplugin.Manager` owns ProviderID-scoped activation, revision-based reuse, replacement, executor routing, and deterministic close semantics without one global Provider activation lock.
+- `io.mender.provider.mcp` is the first built-in plugin. Its stdio and Streamable HTTP paths are discriminated transport variants of one plugin configuration and both open the existing MCP anti-corruption `Connection`.
+- generic `provider_configs` persistence is the Runtime source of truth. Existing MCP rows are imported once without recreating canonical Providers or Tools; the legacy MCP schema is retained temporarily as a version-4 compatibility/sentinel store for first-party compatibility paths and downgrade fail-closed behavior.
+- Credential deletion/usage inspection now asks the registered plugin for bounded `ConfigMetadata` rather than understanding MCP authentication fields in the Credential bounded context.
+- Runtime registration/update/sync/ensure/delete is plugin-generic. Direct Tool calls and Profile Provider activation no longer contain MCP-specific activation logic.
+- HTTP/OpenAPI SDK and Wails expose Provider plugin discovery plus generic Provider create/update configuration. Legacy `/providers/http` and `/providers/stdio` creation remain compatibility shims.
+- Web/Desktop Provider management is plugin-first; MCP local/remote choices appear only after selecting MCP and are stored as stdio/Streamable HTTP config variants.
+- CLI normal discovery is plugin-first through `provider plugins` and `provider add mcp http|stdio`; the Phase-5 `provider add http|stdio` paths remain hidden compatibility aliases.
+- Runtime end-to-end coverage proves repeated configured Tool calls reuse one plugin instance, configuration revision changes replace/close the old instance, and Provider deletion closes the current instance.
+
+Validation evidence:
+
+~~~text
+pnpm sdk:check                         PASS
+pnpm desktop:bindings:check            PASS
+pnpm desktop:architecture:check        PASS
+pnpm go:lint                           PASS
+pnpm go:test                           PASS
+pnpm go:test:race                      PASS
+pnpm lint                              PASS
+pnpm typecheck                         PASS
+pnpm test                              PASS (5 files / 33 tests)
+pnpm build                             PASS (Web + Desktop; existing chunk-size warnings only)
+pnpm security:go                       PASS (no vulnerabilities: backend + desktop)
+pnpm security:js                       PASS (no known production dependency vulnerabilities)
+~~~
+
+The aggregate `pnpm check` and `pnpm security:check` invocations exceeded the local bridge's single-call execution window, so their repository-defined constituent commands were run separately. Every constituent command in both scripts passed.
+
+The next architectural validation should be a non-MCP Provider plugin, preferably OpenAPI-to-Tool, without changes to Catalog Domain, Invocation governance, Profile ToolBinding, Policy Domain, or Audit Domain.
 
 ## Deferred follow-up
 

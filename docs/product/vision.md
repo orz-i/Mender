@@ -18,7 +18,7 @@ A tool is registered once into Mender's canonical catalog and can then be discov
 
 Mender should eventually provide:
 
-- Provider registration and synchronization.
+- Provider plugin registration, configuration, synchronization, and lifecycle management.
 - A canonical tool catalog independent from MCP or any other protocol.
 - Search, describe, and invoke workflows for large catalogs.
 - Profiles whose ToolBindings combine membership, exposure, aliases/presentation, and restrictive execution governance.
@@ -120,7 +120,7 @@ Initial target users are:
 
 A first usable release should allow a user to:
 
-1. Register local and remote MCP providers.
+1. Register Providers through built-in Provider plugins, starting with MCP over local stdio or remote Streamable HTTP.
 2. Synchronize their tools into a canonical catalog.
 3. Create a profile containing a subset of tools.
 4. Search, inspect, and invoke tools from the CLI.

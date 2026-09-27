@@ -43,13 +43,15 @@ The shared React application provides:
 
 ### Providers
 
-The Providers page is list-first. Registration no longer occupies permanent page space: `Add provider` opens a focused Dialog for HTTP or stdio configuration. Provider rows expose View, Edit, Sync, and Delete actions.
+The Providers page is list-first. `Add provider` is plugin-first: the first step selects an available Provider plugin, and plugin-owned connection configuration appears only after that selection. The initial built-in plugin is `io.mender.provider.mcp`; its connection step offers `Local command` (stdio) and `Remote endpoint` (Streamable HTTP). HTTP/stdio are therefore MCP transport choices, not top-level Provider kinds. Provider rows expose View, Edit, Sync, and Delete actions.
 
-Provider ID, namespace, and transport kind remain stable during editing. Editable metadata/connection fields are persisted through the shared Runtime and the Provider is re-synchronized after save.
+Provider ID, namespace, and Plugin ID remain stable during editing. Plugin-owned configuration can change without changing canonical Provider identity; for MCP this includes switching between stdio and Streamable HTTP through the generic Provider configuration path. Saving persists metadata/configuration and re-synchronizes the Provider.
 
-Remote HTTP Providers support a separate inventory-backed `Authentication` workflow plus legacy header templates for compatibility. Provider connection fields and authentication are intentionally edited in separate Dialogs.
+The management contract exposes `GET /api/v1/provider-plugins` and generic `POST /api/v1/providers`, while the historical `/providers/http` and `/providers/stdio` create endpoints remain temporary first-party compatibility shims. Provider responses expose `pluginId`, plugin/config versions, and plugin-owned `config`; the old transport-specific projection remains for compatibility while Web/Desktop use the plugin-oriented contract.
 
-Normal authentication selects Credentials from inventory. HTTP bindings store header name, optional scheme, and Credential Reference; stdio bindings store environment name and Credential Reference. Resolved values are injected only when connecting/launching the Provider, and shared authenticated MCP connections re-authorize required References before every Tool call.
+Remote MCP configuration supports a separate inventory-backed `Authentication` workflow plus legacy header templates for compatibility. Provider connection fields and authentication are intentionally edited in separate Dialogs.
+
+Normal authentication selects Credentials from inventory. MCP HTTP bindings store header name, optional scheme, and Credential Reference; MCP stdio bindings store environment name and Credential Reference. Resolved values are injected only when connecting/launching the Provider, and shared authenticated MCP connections re-authorize required References before every Tool call.
 
 Legacy header templates and import of common `mcpServers` / `mcp` JSON shapes remain supported. For example:
 
