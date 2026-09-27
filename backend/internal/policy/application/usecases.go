@@ -37,7 +37,7 @@ func (uc SetDefaultDecision) Execute(
 	decision policydomain.DecisionKind,
 ) (policydomain.PolicySet, error) {
 	if err := policydomain.ValidateDecisionKind(decision); err != nil {
-		return policydomain.PolicySet{}, fmt.Errorf("set policy default: %w: %v", ErrInvalidRule, err)
+		return policydomain.PolicySet{}, fmt.Errorf("set policy default: %w: %w", ErrInvalidRule, err)
 	}
 	if err := uc.repository.SetDefaultDecision(ctx, decision, uc.clock.Now()); err != nil {
 		return policydomain.PolicySet{}, fmt.Errorf("set policy default: %w", err)
@@ -83,7 +83,7 @@ func (uc CreateRule) Execute(
 ) (policydomain.Rule, error) {
 	match, err := policydomain.NewMatch(input.Match)
 	if err != nil {
-		return policydomain.Rule{}, fmt.Errorf("create policy rule: %w: %v", ErrInvalidRule, err)
+		return policydomain.Rule{}, fmt.Errorf("create policy rule: %w: %w", ErrInvalidRule, err)
 	}
 	if err := validateReferences(ctx, uc.references, match); err != nil {
 		return policydomain.Rule{}, fmt.Errorf("create policy rule: %w", err)
@@ -101,7 +101,7 @@ func (uc CreateRule) Execute(
 		uc.clock.Now(),
 	)
 	if err != nil {
-		return policydomain.Rule{}, fmt.Errorf("create policy rule: %w: %v", ErrInvalidRule, err)
+		return policydomain.Rule{}, fmt.Errorf("create policy rule: %w: %w", ErrInvalidRule, err)
 	}
 	if err := uc.repository.CreateRule(ctx, rule); err != nil {
 		return policydomain.Rule{}, fmt.Errorf("create policy rule: %w", err)
@@ -138,7 +138,7 @@ func (uc UpdateRule) Execute(
 	}
 	match, err := policydomain.NewMatch(input.Match)
 	if err != nil {
-		return policydomain.Rule{}, fmt.Errorf("update policy rule: %w: %v", ErrInvalidRule, err)
+		return policydomain.Rule{}, fmt.Errorf("update policy rule: %w: %w", ErrInvalidRule, err)
 	}
 	if err := validateReferences(ctx, uc.references, match); err != nil {
 		return policydomain.Rule{}, fmt.Errorf("update policy rule: %w", err)
@@ -150,7 +150,7 @@ func (uc UpdateRule) Execute(
 		uc.clock.Now(),
 	)
 	if err != nil {
-		return policydomain.Rule{}, fmt.Errorf("update policy rule: %w: %v", ErrInvalidRule, err)
+		return policydomain.Rule{}, fmt.Errorf("update policy rule: %w: %w", ErrInvalidRule, err)
 	}
 	updated, err = updated.SetEnabled(input.Enabled, uc.clock.Now())
 	if err != nil {
