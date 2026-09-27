@@ -79,25 +79,33 @@ Catalog
    +--> Search / Describe
    |
    v
-Profile
+Execution Scope (Catalog / Profile)
    |
    v
-Policy
+Input Validation
    |
    v
-Credential Resolution
+Governance Facts
    |
    v
-Execution
+Policy / Approval
    |
    v
-Audit
+Execution Guard
    |
    v
-Result
+Credential-boundary Execution
+   |
+   v
+Result Guard
+   |
+   +--> Audit terminal outcome
+   |
+   v
+Invocation Outcome
 ```
 
-Adapters enter this flow at application boundaries; they do not bypass it.
+Adapters enter this flow at application boundaries; they do not bypass it. Profile-scoped execution is enforced inside Invocation rather than delegated solely to protocol adapters.
 
 ## Primary users
 

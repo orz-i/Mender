@@ -11,14 +11,14 @@ It provides one canonical tool model and execution pipeline, then exposes the sa
 
 ## Status
 
-The planned architecture-through-distribution roadmap (Phases 0–8) is complete. Mender provides CLI/MCP runtime adapters, a hardened loopback management API, shared Web/Desktop management workflows, fail-closed SQLite schema compatibility, Provider transport/process hardening, dependency vulnerability gates, reproducible SBOM/checksum release tooling, and Catalog scale/performance coverage. Future capabilities should begin with a new planning item or ADR rather than extending the completed roadmap implicitly.
+The architecture-through-distribution roadmap (Phases 0–8) is complete. Phase 9 is planned to harden the shared Invocation runtime into an explicit governed execution protocol with Profile/Catalog scopes, schema validation, canonical failure outcomes, execution/result guards, and adapter-independent Audit semantics.
 
 ## Product principles
 
 1. Tool is the core domain concept; MCP, CLI, and Skill are adapters.
 2. Local-first does not mean local-only. The same core must support remote operation.
 3. Discovery is a first-class capability. Large catalogs must not require eager schema injection.
-4. Every invocation passes through policy, credential resolution, execution, and audit.
+4. Every invocation uses an explicit execution scope and passes through validation, policy, guarded execution, result governance, credential-boundary handling, and audit.
 5. Domain code must not depend on transport, storage, UI, or protocol SDKs.
 6. Web, CLI, daemon, and desktop clients share the same application core.
 7. Security boundaries are designed into the runtime, not added after feature development.

@@ -65,15 +65,19 @@ Domain entities must not contain MCP SDK structs, SQL row types, HTTP request ty
 All tool execution paths must converge on the same application pipeline:
 
 ```text
-Resolve Tool
-   -> Evaluate Policy
-   -> Resolve Credentials
+Resolve Execution Scope
+   -> Resolve Tool
+   -> Validate Arguments
+   -> Derive Governance Facts
+   -> Evaluate Policy / Approval
+   -> Apply Execution Guard
    -> Execute
+   -> Apply Result Guard
    -> Record Audit
-   -> Return Result
+   -> Return Invocation Outcome
 ```
 
-CLI, MCP, Skill, Web, and Desktop clients must not implement independent execution semantics.
+CLI, MCP, Skill, Web, and Desktop clients must not implement independent execution semantics. Expected Tool/rejection failures are canonical outcomes; internal runtime failures remain distinguishable from those outcomes.
 
 ## 8. Credentials are references until the execution boundary
 
@@ -97,7 +101,7 @@ Direct enumeration remains available for small profiles and protocol compatibili
 
 A profile is more than a list of tools. It may define visible providers and tools, aliases, export behavior, policy, credential scope, and approval requirements.
 
-Remote endpoints may bind directly to profiles.
+Remote endpoints may bind directly to profiles. Profile-scoped Tool membership must be enforced by the shared Invocation pipeline; adapter checks may narrow discovery/projection but are not the authoritative execution boundary.
 
 ## 11. Local-first, remote-native
 

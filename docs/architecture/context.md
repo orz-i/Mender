@@ -65,9 +65,11 @@ Profiles can be used by CLI sessions, MCP endpoints, Agent Skills, or management
 
 ### Invocation
 
-A request to execute a tool within a specific identity/profile/policy context.
+A governed request to execute a Tool within an explicit origin and execution scope.
 
-An invocation may complete immediately, require additional input, fail, be cancelled, or become a long-running task.
+The scope is either privileged Catalog scope or one Profile scope. Invocation owns Profile membership enforcement for Profile-scoped calls, validates input before Policy/execution, applies execution/result guards, and returns a canonical outcome.
+
+An invocation may complete immediately, require additional input, be rejected, fail, be cancelled, or become a long-running task.
 
 ### Policy
 
@@ -83,7 +85,7 @@ Credential metadata can participate in domain decisions. Secret values remain in
 
 ### Audit Record
 
-A durable record of an invocation lifecycle and relevant policy decisions, without unnecessarily persisting secret material.
+A durable terminal record of an invocation lifecycle, execution scope/origin, outcome classification, and relevant policy decisions, without unnecessarily persisting secret material or Tool payloads.
 
 ## Adapter boundaries
 

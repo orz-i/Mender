@@ -149,7 +149,7 @@ Audit remains a durable, data-minimized terminal record. Runtime progress is a s
 
 Invocation may emit bounded lifecycle/progress events through an observer/reporter port. Events must not contain raw arguments, resolved credentials, or full result payloads by default.
 
-The core event contract may be established in Phase 9 without requiring a public SSE/WebSocket API. A no-op observer remains valid for adapters that do not consume progress.
+The core event contract may be established in Phase 9 without requiring a public SSE/WebSocket API. A no-op observer remains valid for adapters that do not consume progress. Observer delivery is best-effort and non-authoritative; it must not change a governed Invocation outcome or replace required Audit persistence.
 
 ## Alternatives considered
 
