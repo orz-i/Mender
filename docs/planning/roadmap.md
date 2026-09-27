@@ -248,3 +248,27 @@ Exit criteria are complete. Credential inventory metadata is persistent while se
 Legacy environment header templates remain supported as an explicitly labeled compatibility exception rather than inventory-scoped authentication.
 
 See `phase-11-credential-governance.md` for implementation evidence and deferred session-pool/cloud-secret work.
+
+## Phase 12 — Persistent Policy governance
+
+Status: Planned
+
+Goals:
+
+- Replace the local AllowAll placeholder with one persistent Runtime-wide PolicySet.
+- Add an editable default decision plus unordered allow/require-approval/deny rules.
+- Match stable origin/scope/Profile/Provider/Tool metadata and bounded Governance Facts without raw arguments or secrets.
+- Keep evaluation deterministic: no priority/order semantics, deny dominates matching approval/allow rules, and the default applies only when no rule matches.
+- Preserve Profile ToolBinding policy as a second tightening-only layer.
+- Replace the read-only Policy page with list-first Rule management and inventory-backed selectors.
+
+Exit criteria:
+
+- fresh migration preserves current allow behavior;
+- default-deny allowlists and deny-over-allow composition are covered end to end;
+- Policy SQLite, CLI/OpenAPI/Wails, and Web/Desktop share one canonical Rule model;
+- unknown Governance Facts remain explicit and cannot satisfy effect/resource predicates;
+- normal UI never requires opaque Rule/Profile/Provider/Tool IDs;
+- `pnpm check` and `pnpm security:check` pass.
+
+See `phase-12-policy-governance.md`.

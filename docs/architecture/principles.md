@@ -79,6 +79,8 @@ Resolve Execution Scope
 
 CLI, MCP, Skill, Web, and Desktop clients must not implement independent execution semantics. Expected Tool/rejection failures are canonical outcomes; internal runtime failures remain distinguishable from those outcomes.
 
+Global Policy must be deterministic and adapter-independent. Persistent rules have no priority/order semantics: the default decision applies only when no enabled rule matches, and matching rules combine by most-restrictive decision. Policy consumes stable execution metadata and bounded Governance Facts rather than raw Tool arguments or secret-bearing context.
+
 ## 8. Credentials are references until the execution boundary
 
 Domain and application objects refer to Credentials by stable Reference. Inventory metadata may be persisted, but secret bytes must live behind a dedicated secret backend.

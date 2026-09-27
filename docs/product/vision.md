@@ -23,7 +23,7 @@ Mender should eventually provide:
 - Search, describe, and invoke workflows for large catalogs.
 - Profiles whose ToolBindings combine membership, exposure, aliases/presentation, and restrictive execution governance.
 - A non-secret Credential inventory with runtime-only resolution from native OS keyrings or environment-backed sources.
-- Invocation policy and optional approval gates.
+- Persistent global Policy rules over bounded execution metadata/Governance Facts, plus optional approval gates.
 - Auditable execution records.
 - MCP server exposure.
 - Local CLI access.
@@ -105,7 +105,7 @@ Result Guard
 Invocation Outcome
 ```
 
-Adapters enter this flow at application boundaries; they do not bypass it. Profile-scoped execution is enforced inside Invocation rather than delegated solely to protocol adapters. Profile ToolBinding policy can only tighten the global execution decision; presentation overrides remain outside Invocation.
+Adapters enter this flow at application boundaries; they do not bypass it. Global Policy is evaluated once inside Invocation from a deterministic persistent PolicySet; Profile-scoped execution is enforced inside Invocation rather than delegated solely to protocol adapters. Profile ToolBinding policy can only tighten the global execution decision; presentation overrides remain outside Invocation.
 
 ## Primary users
 

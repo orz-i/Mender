@@ -11,7 +11,7 @@ It provides one canonical tool model and execution pipeline, then exposes the sa
 
 ## Status
 
-The architecture-through-Credential-governance roadmap (Phases 0–11) is complete. Mender now provides a non-secret Credential inventory, native OS-keyring and environment-backed secret sources, Profile Credential allowlists, and Credential-backed Provider authentication while preserving the rule that secret bytes never enter SQLite, Profile/Provider persistence, Policy, Audit, or normal response models.
+The architecture-through-Credential-governance roadmap (Phases 0–11) is complete. Phase 12 is planned to replace the local AllowAll placeholder with a persistent, editable PolicySet using deterministic unordered rules over stable execution metadata and bounded Governance Facts, while preserving Profile ToolBinding as a tightening-only layer.
 
 ## Product principles
 

@@ -81,9 +81,9 @@ An invocation may complete immediately, require additional input, be rejected, f
 
 ### Policy
 
-Rules that determine whether and how an invocation may proceed.
+A persistent Runtime-wide PolicySet that determines whether and how an Invocation may proceed.
 
-Policy may account for profile, identity, tool, provider trust, declared effects, filesystem/network scope, and approval requirements.
+Policy rules are unordered and evaluate bounded execution metadata plus reviewed Governance Facts. Matching deny decisions dominate require-approval/allow rules; the default decision applies only when no rule matches. Profile ToolBinding policy remains a second tightening layer. Raw arguments, secrets, Caller identity, and Credential References do not cross the Policy boundary in Phase 12.
 
 ### Credential
 
