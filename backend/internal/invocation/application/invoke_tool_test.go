@@ -603,6 +603,141 @@ func TestExecutionDiagnosticSummaryIsAuditedAndReturned(t *testing.T) {
 	}
 }
 
+func TestExecutionGuardWaitUsesInvocationTimeout(t *testing.T) {
+	t.Parallel()
+
+	fixture := newFixture(t)
+	fixture.executionGuard.blockUntilDone = true
+
+	response, err := fixture.useCase.Execute(context.Background(), InvokeToolRequest{
+		ToolID:    fixture.tool.ID(),
+		Arguments: []byte(`{}`),
+		Context:   catalogInvocationContext(t, ""),
+		Timeout:   time.Millisecond,
+	})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if response.Outcome.Kind() != invocationdomain.OutcomeKindFailed ||
+		response.Outcome.FailureSource() != invocationdomain.FailureSourceRuntime ||
+		response.Outcome.FailureCode() != invocationdomain.FailureTimedOut {
+		t.Fatalf(
+			"Outcome = kind %q source %q code %q",
+			response.Outcome.Kind(),
+			response.Outcome.FailureSource(),
+			response.Outcome.FailureCode(),
+		)
+	}
+	if fixture.executionGuard.calls != 1 || fixture.executor.calls != 0 {
+		t.Fatalf(
+			"guard/executor calls = %d/%d, want 1/0",
+			fixture.executionGuard.calls,
+			fixture.executor.calls,
+		)
+	}
+	if fixture.resultGuard.calls != 0 {
+		t.Fatalf("result guard calls = %d, want 0", fixture.resultGuard.calls)
+	}
+
+	record := fixture.audit.last(t)
+	if record.Status() != auditdomain.StatusTimedOut ||
+		record.ErrorClass() != auditdomain.ErrorTimedOut {
+		t.Fatalf("Audit record = %#v", record)
+	}
+}
+
+func TestExecutionGuardReleasesAfterExecutorFailure(t *testing.T) {
+	t.Parallel()
+
+	fixture := newFixture(t)
+	fixture.executor.err = errors.New("provider failed")
+
+	response, err := fixture.useCase.Execute(context.Background(), InvokeToolRequest{
+		ToolID:    fixture.tool.ID(),
+		Arguments: []byte(`{}`),
+		Context:   catalogInvocationContext(t, ""),
+	})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if response.Outcome.Kind() != invocationdomain.OutcomeKindFailed {
+		t.Fatalf("Outcome kind = %q", response.Outcome.Kind())
+	}
+	if fixture.executionGuard.releases != 1 {
+		t.Fatalf("guard releases = %d, want 1", fixture.executionGuard.releases)
+	}
+}
+
+func TestResultGuardFailureOutcomeIsAuditedAsResultGuard(t *testing.T) {
+	t.Parallel()
+
+	fixture := newFixture(t)
+	guarded, err := invocationdomain.Failed(
+		invocationdomain.FailureSourceResultGuard,
+		invocationdomain.FailureOutputSchemaMismatch,
+		"tool result does not match the declared output schema",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixture.resultGuard.outcome = guarded
+
+	response, err := fixture.useCase.Execute(context.Background(), InvokeToolRequest{
+		ToolID:    fixture.tool.ID(),
+		Arguments: []byte(`{}`),
+		Context:   catalogInvocationContext(t, ""),
+	})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if response.Outcome.FailureSource() != invocationdomain.FailureSourceResultGuard ||
+		response.Outcome.FailureCode() != invocationdomain.FailureOutputSchemaMismatch {
+		t.Fatalf(
+			"Outcome = source %q code %q",
+			response.Outcome.FailureSource(),
+			response.Outcome.FailureCode(),
+		)
+	}
+	if fixture.resultGuard.calls != 1 {
+		t.Fatalf("result guard calls = %d, want 1", fixture.resultGuard.calls)
+	}
+	if fixture.executionGuard.releases != 1 {
+		t.Fatalf("guard releases = %d, want 1", fixture.executionGuard.releases)
+	}
+
+	record := fixture.audit.last(t)
+	if record.ErrorClass() != auditdomain.ErrorResultGuard {
+		t.Fatalf("ErrorClass() = %q", record.ErrorClass())
+	}
+}
+
+func TestResultGuardInternalErrorRemainsGoError(t *testing.T) {
+	t.Parallel()
+
+	fixture := newFixture(t)
+	fixture.resultGuard.err = errors.New("output schema could not be evaluated")
+
+	response, err := fixture.useCase.Execute(context.Background(), InvokeToolRequest{
+		ToolID:    fixture.tool.ID(),
+		Arguments: []byte(`{}`),
+		Context:   catalogInvocationContext(t, ""),
+	})
+	if err == nil {
+		t.Fatal("Execute() expected result guard internal error")
+	}
+	if response.Outcome.Kind() != "" {
+		t.Fatalf("Outcome kind = %q, want zero", response.Outcome.Kind())
+	}
+	if fixture.executionGuard.releases != 1 {
+		t.Fatalf("guard releases = %d, want 1", fixture.executionGuard.releases)
+	}
+
+	record := fixture.audit.last(t)
+	if record.ErrorClass() != auditdomain.ErrorInternal {
+		t.Fatalf("ErrorClass() = %q", record.ErrorClass())
+	}
+}
+
 func TestParentCancellationIsAudited(t *testing.T) {
 	t.Parallel()
 
@@ -660,17 +795,19 @@ func TestTimeoutIsAudited(t *testing.T) {
 }
 
 type fixture struct {
-	useCase       InvokeTool
-	tool          catalogdomain.Tool
-	tools         *fakeToolLookup
-	profileScopes *fakeProfileScopes
-	arguments     *fakeArgumentValidator
-	facts         *fakeFactExtractor
-	policy        *fakePolicy
-	approvals     *fakeApproval
-	executor      *fakeExecutor
-	credentials   *fakeCredentials
-	audit         *memoryAudit
+	useCase        InvokeTool
+	tool           catalogdomain.Tool
+	tools          *fakeToolLookup
+	profileScopes  *fakeProfileScopes
+	arguments      *fakeArgumentValidator
+	facts          *fakeFactExtractor
+	policy         *fakePolicy
+	approvals      *fakeApproval
+	executionGuard *fakeExecutionGuard
+	resultGuard    *fakeResultGuard
+	executor       *fakeExecutor
+	credentials    *fakeCredentials
+	audit          *memoryAudit
 }
 
 func newFixture(t *testing.T) fixture {
@@ -687,6 +824,8 @@ func newFixture(t *testing.T) fixture {
 	facts := &fakeFactExtractor{facts: invocationdomain.UnknownGovernanceFacts()}
 	policy := &fakePolicy{decision: allow}
 	approvals := &fakeApproval{approved: true}
+	executionGuard := &fakeExecutionGuard{}
+	resultGuard := &fakeResultGuard{}
 	executor := &fakeExecutor{result: result}
 	credentials := &fakeCredentials{}
 	audit := &memoryAudit{}
@@ -707,6 +846,8 @@ func newFixture(t *testing.T) fixture {
 		facts,
 		policy,
 		approvals,
+		executionGuard,
+		resultGuard,
 		fakeRouter{executor: executor},
 		credentials,
 		audit,
@@ -716,17 +857,19 @@ func newFixture(t *testing.T) fixture {
 	)
 
 	return fixture{
-		useCase:       useCase,
-		tool:          tool,
-		tools:         tools,
-		profileScopes: profileScopes,
-		arguments:     arguments,
-		facts:         facts,
-		policy:        policy,
-		approvals:     approvals,
-		executor:      executor,
-		credentials:   credentials,
-		audit:         audit,
+		useCase:        useCase,
+		tool:           tool,
+		tools:          tools,
+		profileScopes:  profileScopes,
+		arguments:      arguments,
+		facts:          facts,
+		policy:         policy,
+		approvals:      approvals,
+		executionGuard: executionGuard,
+		resultGuard:    resultGuard,
+		executor:       executor,
+		credentials:    credentials,
+		audit:          audit,
 	}
 }
 
@@ -818,6 +961,49 @@ type fakeApproval struct {
 func (f *fakeApproval) Approve(context.Context, ApprovalRequest) (bool, error) {
 	f.calls++
 	return f.approved, f.err
+}
+
+type fakeExecutionGuard struct {
+	err            error
+	calls          int
+	releases       int
+	blockUntilDone bool
+}
+
+func (f *fakeExecutionGuard) Acquire(
+	ctx context.Context,
+	_ ExecutionGuardRequest,
+) (func(), error) {
+	f.calls++
+	if f.blockUntilDone {
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}
+	if f.err != nil {
+		return nil, f.err
+	}
+	return func() { f.releases++ }, nil
+}
+
+type fakeResultGuard struct {
+	outcome invocationdomain.Outcome
+	err     error
+	calls   int
+}
+
+func (f *fakeResultGuard) Guard(
+	_ context.Context,
+	_ catalogdomain.Tool,
+	outcome invocationdomain.Outcome,
+) (invocationdomain.Outcome, error) {
+	f.calls++
+	if f.err != nil {
+		return invocationdomain.Outcome{}, f.err
+	}
+	if f.outcome.Kind() != "" {
+		return f.outcome, nil
+	}
+	return outcome, nil
 }
 
 type fakeRouter struct {

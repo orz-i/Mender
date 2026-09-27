@@ -1,0 +1,71 @@
+package resultguard
+
+import (
+	"context"
+	"fmt"
+
+	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
+	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
+	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
+)
+
+const DefaultMaxResultBytes = 1 << 20 // 1 MiB
+
+// Guard enforces canonical post-execution result invariants.
+type Guard struct {
+	validator invocationapplication.ArgumentValidator
+	maxBytes  int
+}
+
+func New(
+	validator invocationapplication.ArgumentValidator,
+	maxBytes int,
+) Guard {
+	if maxBytes <= 0 {
+		maxBytes = DefaultMaxResultBytes
+	}
+	return Guard{validator: validator, maxBytes: maxBytes}
+}
+
+func (g Guard) Guard(
+	ctx context.Context,
+	tool catalogdomain.Tool,
+	outcome invocationdomain.Outcome,
+) (invocationdomain.Outcome, error) {
+	if err := ctx.Err(); err != nil {
+		return invocationdomain.Outcome{}, err
+	}
+	if outcome.Kind() != invocationdomain.OutcomeKindComplete {
+		return outcome, nil
+	}
+
+	content := outcome.Content()
+	if len(content.Bytes()) > g.maxBytes {
+		return invocationdomain.Failed(
+			invocationdomain.FailureSourceResultGuard,
+			invocationdomain.FailureResultTooLarge,
+			"tool result exceeds the configured canonical result-size limit",
+		)
+	}
+
+	outputSchema := tool.OutputSchema()
+	if outputSchema == nil {
+		return outcome, nil
+	}
+	if g.validator == nil {
+		return invocationdomain.Outcome{}, fmt.Errorf("result guard: schema validator is unavailable")
+	}
+
+	valid, err := g.validator.Validate(ctx, *outputSchema, content)
+	if err != nil {
+		return invocationdomain.Outcome{}, fmt.Errorf("result guard: validate output schema: %w", err)
+	}
+	if !valid {
+		return invocationdomain.Failed(
+			invocationdomain.FailureSourceResultGuard,
+			invocationdomain.FailureOutputSchemaMismatch,
+			"tool result does not match the declared output schema",
+		)
+	}
+	return outcome, nil
+}

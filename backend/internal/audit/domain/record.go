@@ -44,6 +44,7 @@ const (
 	ErrorApproval         ErrorClass = "approval"
 	ErrorExecutorNotFound ErrorClass = "executor_not_found"
 	ErrorExecution        ErrorClass = "execution"
+	ErrorResultGuard      ErrorClass = "result_guard"
 	ErrorCancelled        ErrorClass = "cancelled"
 	ErrorTimedOut         ErrorClass = "timed_out"
 	ErrorInternal         ErrorClass = "internal"

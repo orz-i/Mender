@@ -51,6 +51,20 @@ type ApprovalGate interface {
 	Approve(context.Context, ApprovalRequest) (bool, error)
 }
 
+// ExecutionGuard controls entry into provider execution critical sections.
+type ExecutionGuard interface {
+	Acquire(context.Context, ExecutionGuardRequest) (release func(), err error)
+}
+
+// ResultGuard applies post-execution governance before adapters receive an outcome.
+type ResultGuard interface {
+	Guard(
+		context.Context,
+		catalogdomain.Tool,
+		invocationdomain.Outcome,
+	) (invocationdomain.Outcome, error)
+}
+
 // ExecutorRouter resolves the outbound executor for a canonical Tool.
 type ExecutorRouter interface {
 	ExecutorFor(context.Context, catalogdomain.Tool) (ToolExecutor, error)
@@ -103,6 +117,13 @@ type ApprovalRequest struct {
 	Tool         catalogdomain.Tool
 	Caller       string
 	Decision     policydomain.Decision
+}
+
+// ExecutionGuardRequest identifies the governed execution entering a critical section.
+type ExecutionGuardRequest struct {
+	InvocationID invocationdomain.InvocationID
+	Tool         catalogdomain.Tool
+	Context      invocationdomain.InvocationContext
 }
 
 // ExecutionRequest is the protocol-independent executor input.

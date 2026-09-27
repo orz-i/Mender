@@ -13,9 +13,11 @@ import (
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	credentialunavailable "github.com/orz-i/Mender/backend/internal/credential/infrastructure/unavailable"
 	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
+	invocationexecutionguard "github.com/orz-i/Mender/backend/internal/invocation/infrastructure/executionguard"
 	invocationgovernance "github.com/orz-i/Mender/backend/internal/invocation/infrastructure/governance"
 	invocationidentity "github.com/orz-i/Mender/backend/internal/invocation/infrastructure/identity"
 	invocationjsonschema "github.com/orz-i/Mender/backend/internal/invocation/infrastructure/jsonschema"
+	invocationresultguard "github.com/orz-i/Mender/backend/internal/invocation/infrastructure/resultguard"
 	invocationrouter "github.com/orz-i/Mender/backend/internal/invocation/infrastructure/router"
 	mcpconfigstore "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/configstore"
 	policylocal "github.com/orz-i/Mender/backend/internal/policy/infrastructure/local"
@@ -25,6 +27,8 @@ import (
 type RuntimeOptions struct {
 	DatabasePath   string
 	DefaultTimeout time.Duration
+	MaxResultBytes int
+	ExecutionGuard invocationapplication.ExecutionGuard
 }
 
 // Runtime composes Catalog, Profile persistence, Provider config persistence,
@@ -78,13 +82,20 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 	executors := invocationrouter.New()
 	ids := invocationidentity.NewGenerator()
 
+	schemaValidator := invocationjsonschema.Validator{}
+	executionGuard := options.ExecutionGuard
+	if executionGuard == nil {
+		executionGuard = invocationexecutionguard.Unlimited{}
+	}
 	invokeTool := invocationapplication.NewInvokeTool(
 		catalog.store,
 		newInvocationProfileScopeAuthorizer(profiles.GetByID),
-		invocationjsonschema.Validator{},
+		schemaValidator,
 		invocationgovernance.UnknownExtractor{},
 		policylocal.AllowAll{},
 		policylocal.RejectApproval{},
+		executionGuard,
+		invocationresultguard.New(schemaValidator, options.MaxResultBytes),
 		executors,
 		credentialunavailable.Resolver{},
 		auditStore,

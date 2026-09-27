@@ -37,6 +37,8 @@ type InvokeTool struct {
 	facts          GovernanceFactExtractor
 	policy         PolicyEvaluator
 	approvals      ApprovalGate
+	executionGuard ExecutionGuard
+	resultGuard    ResultGuard
 	router         ExecutorRouter
 	credentials    CredentialResolver
 	audit          AuditRecorder
@@ -53,6 +55,8 @@ func NewInvokeTool(
 	facts GovernanceFactExtractor,
 	policy PolicyEvaluator,
 	approvals ApprovalGate,
+	executionGuard ExecutionGuard,
+	resultGuard ResultGuard,
 	router ExecutorRouter,
 	credentials CredentialResolver,
 	audit AuditRecorder,
@@ -71,6 +75,8 @@ func NewInvokeTool(
 		facts:          facts,
 		policy:         policy,
 		approvals:      approvals,
+		executionGuard: executionGuard,
+		resultGuard:    resultGuard,
 		router:         router,
 		credentials:    credentials,
 		audit:          audit,
@@ -530,8 +536,93 @@ func (uc InvokeTool) execute(
 	decision policydomain.Decision,
 	approval auditdomain.ApprovalOutcome,
 ) (InvokeToolResponse, error) {
-	executor, err := uc.router.ExecutorFor(parent, tool)
+	timeout := request.Timeout
+	if timeout == 0 {
+		timeout = uc.defaultTimeout
+	}
+	execCtx, cancel := context.WithTimeout(parent, timeout)
+	defer cancel()
+
+	if uc.executionGuard == nil {
+		recordErr := uc.record(
+			context.WithoutCancel(parent),
+			response.InvocationID,
+			tool,
+			request.Context.Caller(),
+			startedAt,
+			decision.Kind(),
+			decision.ReasonCode(),
+			approval,
+			auditdomain.StatusFailed,
+			"",
+			auditdomain.ErrorInternal,
+		)
+		return response, joinInvocationError(
+			fmt.Errorf("invoke tool: execution guard is unavailable"),
+			recordErr,
+		)
+	}
+
+	release, err := uc.executionGuard.Acquire(execCtx, ExecutionGuardRequest{
+		InvocationID: response.InvocationID,
+		Tool:         tool,
+		Context:      request.Context,
+	})
 	if err != nil {
+		if isExecutionContextError(execCtx, err) {
+			return uc.returnExecutionFailure(
+				parent,
+				response,
+				tool,
+				request,
+				startedAt,
+				decision,
+				approval,
+				execCtx,
+				err,
+			)
+		}
+
+		recordErr := uc.record(
+			context.WithoutCancel(parent),
+			response.InvocationID,
+			tool,
+			request.Context.Caller(),
+			startedAt,
+			decision.Kind(),
+			decision.ReasonCode(),
+			approval,
+			auditdomain.StatusFailed,
+			"",
+			auditdomain.ErrorInternal,
+		)
+		return response, joinInvocationError(
+			fmt.Errorf("invoke tool: acquire execution guard: %w", err),
+			recordErr,
+		)
+	}
+	if release == nil {
+		recordErr := uc.record(
+			context.WithoutCancel(parent),
+			response.InvocationID,
+			tool,
+			request.Context.Caller(),
+			startedAt,
+			decision.Kind(),
+			decision.ReasonCode(),
+			approval,
+			auditdomain.StatusFailed,
+			"",
+			auditdomain.ErrorInternal,
+		)
+		return response, joinInvocationError(
+			fmt.Errorf("invoke tool: execution guard returned no release function"),
+			recordErr,
+		)
+	}
+	executor, err := uc.router.ExecutorFor(execCtx, tool)
+	if err != nil {
+		release()
 		outcome, outcomeErr := newFailedOutcome(
 			invocationdomain.FailureSourceRuntime,
 			invocationdomain.FailureExecutorUnavailable,
@@ -542,7 +633,7 @@ func (uc InvokeTool) execute(
 		}
 		response.Outcome = outcome
 		recordErr := uc.record(
-			parent,
+			context.WithoutCancel(parent),
 			response.InvocationID,
 			tool,
 			request.Context.Caller(),
@@ -560,25 +651,32 @@ func (uc InvokeTool) execute(
 		return response, nil
 	}
 
-	timeout := request.Timeout
-	if timeout == 0 {
-		timeout = uc.defaultTimeout
-	}
-	execCtx, cancel := context.WithTimeout(parent, timeout)
-	defer cancel()
-
-	outcome, err := executor.Execute(execCtx, ExecutionRequest{
-		InvocationID: response.InvocationID,
-		Tool:         tool,
-		Arguments:    arguments,
-	}, uc.credentials)
+	outcome, err := executeWithGuardRelease(
+		execCtx,
+		executor,
+		ExecutionRequest{
+			InvocationID: response.InvocationID,
+			Tool:         tool,
+			Arguments:    arguments,
+		},
+		uc.credentials,
+		release,
+	)
 	if err != nil {
-		failed, status, class, outcomeErr := failedOutcomeForExecutionError(execCtx, err)
-		if outcomeErr != nil {
-			return response, outcomeErr
-		}
-		response.Outcome = failed
-		summary := auditErrorSummary(err)
+		return uc.returnExecutionFailure(
+			parent,
+			response,
+			tool,
+			request,
+			startedAt,
+			decision,
+			approval,
+			execCtx,
+			err,
+		)
+	}
+
+	if uc.resultGuard == nil {
 		recordErr := uc.record(
 			context.WithoutCancel(parent),
 			response.InvocationID,
@@ -588,16 +686,51 @@ func (uc InvokeTool) execute(
 			decision.Kind(),
 			decision.ReasonCode(),
 			approval,
-			status,
+			auditdomain.StatusFailed,
 			"",
-			class,
-			summary,
+			auditdomain.ErrorInternal,
 		)
-		if recordErr != nil {
-			return response, recordErr
-		}
-		return response, nil
+		return response, joinInvocationError(
+			fmt.Errorf("invoke tool: result guard is unavailable"),
+			recordErr,
+		)
 	}
+
+	guardedOutcome, err := uc.resultGuard.Guard(execCtx, tool, outcome)
+	if err != nil {
+		if isExecutionContextError(execCtx, err) {
+			return uc.returnExecutionFailure(
+				parent,
+				response,
+				tool,
+				request,
+				startedAt,
+				decision,
+				approval,
+				execCtx,
+				err,
+			)
+		}
+
+		recordErr := uc.record(
+			context.WithoutCancel(parent),
+			response.InvocationID,
+			tool,
+			request.Context.Caller(),
+			startedAt,
+			decision.Kind(),
+			decision.ReasonCode(),
+			approval,
+			auditdomain.StatusFailed,
+			"",
+			auditdomain.ErrorInternal,
+		)
+		return response, joinInvocationError(
+			fmt.Errorf("invoke tool: result guard: %w", err),
+			recordErr,
+		)
+	}
+	outcome = guardedOutcome
 
 	status, resultKind, class, ok := auditClassificationForExecutorOutcome(outcome)
 	if !ok {
@@ -641,6 +774,61 @@ func (uc InvokeTool) execute(
 
 	response.Outcome = outcome
 	return response, nil
+}
+
+func executeWithGuardRelease(
+	ctx context.Context,
+	executor ToolExecutor,
+	request ExecutionRequest,
+	credentials CredentialResolver,
+	release func(),
+) (invocationdomain.Outcome, error) {
+	defer release()
+	return executor.Execute(ctx, request, credentials)
+}
+
+func (uc InvokeTool) returnExecutionFailure(
+	parent context.Context,
+	response InvokeToolResponse,
+	tool catalogdomain.Tool,
+	request InvokeToolRequest,
+	startedAt time.Time,
+	decision policydomain.Decision,
+	approval auditdomain.ApprovalOutcome,
+	execCtx context.Context,
+	err error,
+) (InvokeToolResponse, error) {
+	failed, status, class, outcomeErr := failedOutcomeForExecutionError(execCtx, err)
+	if outcomeErr != nil {
+		return response, outcomeErr
+	}
+	response.Outcome = failed
+	summary := auditErrorSummary(err)
+	recordErr := uc.record(
+		context.WithoutCancel(parent),
+		response.InvocationID,
+		tool,
+		request.Context.Caller(),
+		startedAt,
+		decision.Kind(),
+		decision.ReasonCode(),
+		approval,
+		status,
+		"",
+		class,
+		summary,
+	)
+	if recordErr != nil {
+		return response, recordErr
+	}
+	return response, nil
+}
+
+func isExecutionContextError(ctx context.Context, err error) bool {
+	return errors.Is(err, context.Canceled) ||
+		errors.Is(err, context.DeadlineExceeded) ||
+		errors.Is(ctx.Err(), context.Canceled) ||
+		errors.Is(ctx.Err(), context.DeadlineExceeded)
 }
 
 func newRejectedOutcome(
@@ -720,7 +908,7 @@ func auditClassificationForExecutorOutcome(
 				return "", "", "", false
 			}
 		case invocationdomain.FailureSourceResultGuard:
-			return auditdomain.StatusFailed, "", auditdomain.ErrorExecution, true
+			return auditdomain.StatusFailed, "", auditdomain.ErrorResultGuard, true
 		default:
 			return "", "", "", false
 		}
