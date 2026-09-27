@@ -671,6 +671,112 @@ func TestCredentialResolverIsConsumedOnlyByExecutor(t *testing.T) {
 	}
 }
 
+func TestProfileCredentialScopeAllowsConfiguredReference(t *testing.T) {
+	t.Parallel()
+
+	fixture := newFixture(t)
+	fixture.credentials.secret = []byte("PROFILE-SECRET")
+	fixture.executor.resolveCredential = true
+	ref, err := credentialdomain.NewReference("github", "work")
+	if err != nil {
+		t.Fatal(err)
+	}
+	governance, err := invocationdomain.NewScopedBindingGovernanceWithCredentials(
+		invocationdomain.BindingPolicyInherit,
+		invocationdomain.BindingConcurrencyInherit,
+		[]credentialdomain.Reference{ref},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixture.profileScopes.governance = governance
+
+	response, err := fixture.useCase.Execute(context.Background(), InvokeToolRequest{
+		ToolID:    fixture.tool.ID(),
+		Arguments: []byte("{}"),
+		Context: profileInvocationContext(
+			t,
+			"mcp:credential-allowed",
+			"prof_00000000000000000000000000000008",
+		),
+	})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if response.Outcome.Kind() != invocationdomain.OutcomeKindComplete {
+		t.Fatalf("Outcome kind = %q", response.Outcome.Kind())
+	}
+	if fixture.credentials.calls != 1 {
+		t.Fatalf("underlying credential resolver calls = %d, want 1", fixture.credentials.calls)
+	}
+}
+
+func TestProfileCredentialScopeRejectsReferenceBeforeUnderlyingResolver(t *testing.T) {
+	t.Parallel()
+
+	fixture := newFixture(t)
+	fixture.credentials.secret = []byte("MUST-NOT-BE-READ")
+	fixture.executor.resolveCredential = true
+	fixture.profileScopes.governance = invocationdomain.InheritedScopedBindingGovernance()
+
+	response, err := fixture.useCase.Execute(context.Background(), InvokeToolRequest{
+		ToolID:    fixture.tool.ID(),
+		Arguments: []byte("{}"),
+		Context: profileInvocationContext(
+			t,
+			"mcp:credential-denied",
+			"prof_00000000000000000000000000000009",
+		),
+	})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if response.Outcome.Kind() != invocationdomain.OutcomeKindFailed ||
+		response.Outcome.FailureSource() != invocationdomain.FailureSourceRuntime ||
+		response.Outcome.FailureCode() != invocationdomain.FailureCredentialOutsideScope {
+		t.Fatalf(
+			"Outcome = kind %q source %q code %q",
+			response.Outcome.Kind(),
+			response.Outcome.FailureSource(),
+			response.Outcome.FailureCode(),
+		)
+	}
+	if fixture.credentials.calls != 0 {
+		t.Fatalf(
+			"underlying credential resolver calls = %d, want 0",
+			fixture.credentials.calls,
+		)
+	}
+	record := fixture.audit.last(t)
+	if record.ErrorClass() != auditdomain.ErrorPolicy ||
+		record.FailureCode() != invocationdomain.FailureCredentialOutsideScope {
+		t.Fatalf("Audit record = %#v", record)
+	}
+}
+
+func TestCatalogScopeRetainsFullCredentialResolver(t *testing.T) {
+	t.Parallel()
+
+	fixture := newFixture(t)
+	fixture.credentials.secret = []byte("CATALOG-SECRET")
+	fixture.executor.resolveCredential = true
+
+	response, err := fixture.useCase.Execute(context.Background(), InvokeToolRequest{
+		ToolID:    fixture.tool.ID(),
+		Arguments: []byte("{}"),
+		Context:   catalogInvocationContext(t, "catalog-credential"),
+	})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if response.Outcome.Kind() != invocationdomain.OutcomeKindComplete {
+		t.Fatalf("Outcome kind = %q", response.Outcome.Kind())
+	}
+	if fixture.credentials.calls != 1 {
+		t.Fatalf("underlying credential resolver calls = %d, want 1", fixture.credentials.calls)
+	}
+}
+
 func TestExecutorUnavailableReturnsRuntimeFailureOutcome(t *testing.T) {
 	t.Parallel()
 

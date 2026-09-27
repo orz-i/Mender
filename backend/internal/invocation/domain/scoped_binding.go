@@ -1,6 +1,11 @@
 package domain
 
-import "fmt"
+import (
+	"fmt"
+	"slices"
+
+	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
+)
 
 // BindingPolicyConstraint is the Invocation-owned normalized Profile policy constraint.
 type BindingPolicyConstraint string
@@ -23,12 +28,25 @@ const (
 type ScopedBindingGovernance struct {
 	policyConstraint      BindingPolicyConstraint
 	concurrencyConstraint BindingConcurrencyConstraint
+	credentialRefs        []credentialdomain.Reference
 }
 
 // NewScopedBindingGovernance validates one Profile ToolBinding governance projection.
 func NewScopedBindingGovernance(
 	policyConstraint BindingPolicyConstraint,
 	concurrencyConstraint BindingConcurrencyConstraint,
+) (ScopedBindingGovernance, error) {
+	return NewScopedBindingGovernanceWithCredentials(
+		policyConstraint,
+		concurrencyConstraint,
+		nil,
+	)
+}
+
+func NewScopedBindingGovernanceWithCredentials(
+	policyConstraint BindingPolicyConstraint,
+	concurrencyConstraint BindingConcurrencyConstraint,
+	credentialRefs []credentialdomain.Reference,
 ) (ScopedBindingGovernance, error) {
 	switch policyConstraint {
 	case BindingPolicyInherit, BindingPolicyRequireApproval, BindingPolicyDeny:
@@ -46,9 +64,30 @@ func NewScopedBindingGovernance(
 			concurrencyConstraint,
 		)
 	}
+	refs := make([]credentialdomain.Reference, 0, len(credentialRefs))
+	seen := make(map[credentialdomain.Reference]struct{}, len(credentialRefs))
+	for _, ref := range credentialRefs {
+		parsed, err := credentialdomain.ParseReference(ref.String())
+		if err != nil {
+			return ScopedBindingGovernance{}, fmt.Errorf(
+				"scoped binding governance: credential ref: %w",
+				err,
+			)
+		}
+		if _, exists := seen[parsed]; exists {
+			return ScopedBindingGovernance{}, fmt.Errorf(
+				"scoped binding governance: duplicate credential ref %s",
+				parsed,
+			)
+		}
+		seen[parsed] = struct{}{}
+		refs = append(refs, parsed)
+	}
+
 	return ScopedBindingGovernance{
 		policyConstraint:      policyConstraint,
 		concurrencyConstraint: concurrencyConstraint,
+		credentialRefs:        refs,
 	}, nil
 }
 
@@ -65,9 +104,10 @@ func InheritedScopedBindingGovernance() ScopedBindingGovernance {
 }
 
 func (g ScopedBindingGovernance) Validate() error {
-	_, err := NewScopedBindingGovernance(
+	_, err := NewScopedBindingGovernanceWithCredentials(
 		g.policyConstraint,
 		g.concurrencyConstraint,
+		g.credentialRefs,
 	)
 	return err
 }
@@ -78,4 +118,8 @@ func (g ScopedBindingGovernance) PolicyConstraint() BindingPolicyConstraint {
 
 func (g ScopedBindingGovernance) ConcurrencyConstraint() BindingConcurrencyConstraint {
 	return g.concurrencyConstraint
+}
+
+func (g ScopedBindingGovernance) CredentialRefs() []credentialdomain.Reference {
+	return slices.Clone(g.credentialRefs)
 }

@@ -848,6 +848,11 @@ func (uc InvokeTool) execute(
 		return response, nil
 	}
 	emitter.lifecycle(invocationdomain.EventExecutionStarted)
+	executionCredentials := credentialResolverForScope(
+		uc.credentials,
+		request.Context.Scope(),
+		scopeGovernance,
+	)
 
 	outcome, err := executeWithGuardRelease(
 		execCtx,
@@ -857,7 +862,7 @@ func (uc InvokeTool) execute(
 			Tool:         tool,
 			Arguments:    arguments,
 		},
-		uc.credentials,
+		executionCredentials,
 		emitter,
 		release,
 	)
@@ -1078,7 +1083,11 @@ func failedOutcomeForExecutionError(
 		code = invocationdomain.FailureCancelled
 		message = "tool execution was cancelled"
 	default:
-		if summary := auditErrorSummary(err); summary != "" {
+		if errors.Is(err, ErrCredentialOutsideScope) {
+			source = invocationdomain.FailureSourceRuntime
+			code = invocationdomain.FailureCredentialOutsideScope
+			message = "credential is not available in this execution scope"
+		} else if summary := auditErrorSummary(err); summary != "" {
 			message = summary
 		}
 	}
@@ -1105,6 +1114,8 @@ func auditClassificationForExecutorOutcome(
 			switch outcome.FailureCode() {
 			case invocationdomain.FailureExecutorUnavailable:
 				return auditdomain.StatusFailed, "", auditdomain.ErrorExecutorNotFound, true
+			case invocationdomain.FailureCredentialOutsideScope:
+				return auditdomain.StatusFailed, "", auditdomain.ErrorPolicy, true
 			case invocationdomain.FailureTimedOut:
 				return auditdomain.StatusTimedOut, "", auditdomain.ErrorTimedOut, true
 			case invocationdomain.FailureCancelled:
@@ -1334,6 +1345,8 @@ func classifyExecutionError(
 		return auditdomain.StatusTimedOut, auditdomain.ErrorTimedOut
 	case errors.Is(err, context.Canceled), errors.Is(ctx.Err(), context.Canceled):
 		return auditdomain.StatusCancelled, auditdomain.ErrorCancelled
+	case errors.Is(err, ErrCredentialOutsideScope):
+		return auditdomain.StatusFailed, auditdomain.ErrorPolicy
 	default:
 		return auditdomain.StatusFailed, auditdomain.ErrorExecution
 	}

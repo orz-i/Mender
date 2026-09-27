@@ -313,6 +313,7 @@ func (r Record) withOutcomeMetadata(
 		case invocationdomain.FailureSourceRuntime:
 			switch failureCode {
 			case invocationdomain.FailureExecutorUnavailable,
+				invocationdomain.FailureCredentialOutsideScope,
 				invocationdomain.FailureTimedOut,
 				invocationdomain.FailureCancelled:
 			default:
@@ -412,6 +413,10 @@ func validateGovernanceOutcomeConsistency(
 			case invocationdomain.FailureExecutorUnavailable:
 				if status != StatusFailed || errorClass != ErrorExecutorNotFound {
 					return fmt.Errorf("executor_unavailable Audit failure metadata is inconsistent")
+				}
+			case invocationdomain.FailureCredentialOutsideScope:
+				if status != StatusFailed || errorClass != ErrorPolicy {
+					return fmt.Errorf("credential_outside_scope Audit failure metadata is inconsistent")
 				}
 			case invocationdomain.FailureTimedOut:
 				if status != StatusTimedOut || errorClass != ErrorTimedOut {

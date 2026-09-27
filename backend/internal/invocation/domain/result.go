@@ -44,13 +44,14 @@ const (
 type FailureCode string
 
 const (
-	FailureToolError            FailureCode = "tool_error"
-	FailureProviderError        FailureCode = "provider_error"
-	FailureExecutorUnavailable  FailureCode = "executor_unavailable"
-	FailureTimedOut             FailureCode = "timed_out"
-	FailureCancelled            FailureCode = "cancelled"
-	FailureOutputSchemaMismatch FailureCode = "output_schema_mismatch"
-	FailureResultTooLarge       FailureCode = "result_too_large"
+	FailureToolError              FailureCode = "tool_error"
+	FailureProviderError          FailureCode = "provider_error"
+	FailureExecutorUnavailable    FailureCode = "executor_unavailable"
+	FailureCredentialOutsideScope FailureCode = "credential_outside_scope"
+	FailureTimedOut               FailureCode = "timed_out"
+	FailureCancelled              FailureCode = "cancelled"
+	FailureOutputSchemaMismatch   FailureCode = "output_schema_mismatch"
+	FailureResultTooLarge         FailureCode = "result_too_large"
 )
 
 // Outcome is the canonical, protocol-independent result of one governed Invocation.
@@ -197,7 +198,10 @@ func validFailureCode(source FailureSource, code FailureCode) bool {
 	case FailureSourceProvider:
 		return code == FailureProviderError
 	case FailureSourceRuntime:
-		return code == FailureExecutorUnavailable || code == FailureTimedOut || code == FailureCancelled
+		return code == FailureExecutorUnavailable ||
+			code == FailureCredentialOutsideScope ||
+			code == FailureTimedOut ||
+			code == FailureCancelled
 	case FailureSourceResultGuard:
 		return code == FailureOutputSchemaMismatch || code == FailureResultTooLarge
 	default:

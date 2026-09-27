@@ -19,4 +19,6 @@ var (
 	ErrInvalidExecutorResult = errors.New("invocation: executor returned invalid result")
 	// ErrAuditFailed indicates that the terminal outcome could not be recorded.
 	ErrAuditFailed = errors.New("invocation: audit record failed")
+	// ErrCredentialOutsideScope indicates a Profile-scoped executor requested an unapproved Credential Reference.
+	ErrCredentialOutsideScope = errors.New("invocation: credential is not available in execution scope")
 )

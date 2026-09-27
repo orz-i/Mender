@@ -56,7 +56,11 @@ func (a invocationProfileScopeResolver) ResolveBindingGovernance(
 	if err != nil {
 		return invocationdomain.ScopedBindingGovernance{}, false, err
 	}
-	governance, err := invocationdomain.NewScopedBindingGovernance(policy, concurrency)
+	governance, err := invocationdomain.NewScopedBindingGovernanceWithCredentials(
+		policy,
+		concurrency,
+		binding.CredentialRefs(),
+	)
 	if err != nil {
 		return invocationdomain.ScopedBindingGovernance{}, false, fmt.Errorf(
 			"resolve profile scope governance: %w",
