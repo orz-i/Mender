@@ -28,10 +28,12 @@ func migrate(ctx context.Context, db *sql.DB) error {
 	).Scan(&recordedVersion); err != nil {
 		return fmt.Errorf("check profile schema version: %w", err)
 	}
-	if recordedVersion.Valid && recordedVersion.Int64 > 1 {
+	const latestSupportedVersion = 2
+	if recordedVersion.Valid && recordedVersion.Int64 > latestSupportedVersion {
 		return fmt.Errorf(
-			"profile schema version %d is newer than supported version 1",
+			"profile schema version %d is newer than supported version %d",
 			recordedVersion.Int64,
+			latestSupportedVersion,
 		)
 	}
 
@@ -69,6 +71,35 @@ func migrate(ctx context.Context, db *sql.DB) error {
 			time.Now().UTC().Format(time.RFC3339Nano),
 		); err != nil {
 			return fmt.Errorf("record profile migration 1: %w", err)
+		}
+	}
+
+	applied = 0
+	if err := tx.QueryRowContext(
+		ctx,
+		"SELECT COUNT(*) FROM profile_schema_migrations WHERE version = 2",
+	).Scan(&applied); err != nil {
+		return fmt.Errorf("check profile migration 2: %w", err)
+	}
+	if applied == 0 {
+		statements := []string{
+			"ALTER TABLE profile_tools ADD COLUMN alias TEXT NOT NULL DEFAULT ''",
+			"ALTER TABLE profile_tools ADD COLUMN title_override TEXT NOT NULL DEFAULT ''",
+			"ALTER TABLE profile_tools ADD COLUMN description_override TEXT NOT NULL DEFAULT ''",
+			"ALTER TABLE profile_tools ADD COLUMN policy_constraint TEXT NOT NULL DEFAULT 'inherit'",
+			"ALTER TABLE profile_tools ADD COLUMN concurrency_constraint TEXT NOT NULL DEFAULT 'inherit'",
+		}
+		for _, statement := range statements {
+			if _, err := tx.ExecContext(ctx, statement); err != nil {
+				return fmt.Errorf("apply profile migration 2: %w", err)
+			}
+		}
+		if _, err := tx.ExecContext(
+			ctx,
+			"INSERT INTO profile_schema_migrations(version, applied_at) VALUES (2, ?)",
+			time.Now().UTC().Format(time.RFC3339Nano),
+		); err != nil {
+			return fmt.Errorf("record profile migration 2: %w", err)
 		}
 	}
 

@@ -20,15 +20,20 @@ func TestProfileRoundTripAndMembershipPersistence(t *testing.T) {
 	first, _ := catalogdomain.ParseToolID("tool_00000000000000000000000000000001")
 	second, _ := catalogdomain.ParseToolID("tool_00000000000000000000000000000002")
 
-	profile, err := profiledomain.NewProfile(
+	firstBinding, err := profiledomain.DefaultToolBinding(first, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondBinding, err := profiledomain.DefaultToolBinding(second, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile, err := profiledomain.NewProfileWithBindings(
 		id,
 		slug,
 		"Default",
 		profiledomain.ExposureHybrid,
-		[]profiledomain.ToolSelection{
-			{ToolID: first, Direct: true},
-			{ToolID: second, Direct: false},
-		},
+		[]profiledomain.ToolBinding{firstBinding, secondBinding},
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -41,16 +46,16 @@ func TestProfileRoundTripAndMembershipPersistence(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetProfileByID() error = %v", err)
 	}
-	if loadedByID.Slug() != slug || len(loadedByID.Selections()) != 2 {
-		t.Fatalf("GetProfileByID() = %+v", loadedByID.Selections())
+	if loadedByID.Slug() != slug || len(loadedByID.Bindings()) != 2 {
+		t.Fatalf("GetProfileByID() = %+v", loadedByID.Bindings())
 	}
 
 	loaded, err := store.GetProfileBySlug(context.Background(), slug)
 	if err != nil {
 		t.Fatalf("GetProfileBySlug() error = %v", err)
 	}
-	if loaded.ID() != profile.ID() || len(loaded.Selections()) != 2 || len(loaded.DirectToolIDs()) != 1 {
-		t.Fatalf("loaded Profile = %+v", loaded.Selections())
+	if loaded.ID() != profile.ID() || len(loaded.Bindings()) != 2 || len(loaded.DirectToolIDs()) != 1 {
+		t.Fatalf("loaded Profile = %+v", loaded.Bindings())
 	}
 
 	updated, err := loaded.RemoveTool(first)
@@ -65,7 +70,7 @@ func TestProfileRoundTripAndMembershipPersistence(t *testing.T) {
 		t.Fatal(err)
 	}
 	if reloaded.Contains(first) || !reloaded.Contains(second) {
-		t.Fatalf("reloaded selections = %+v", reloaded.Selections())
+		t.Fatalf("reloaded bindings = %+v", reloaded.Bindings())
 	}
 
 	profiles, err := store.ListProfiles(context.Background())

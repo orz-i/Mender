@@ -32,9 +32,9 @@ func (s *Store) CreateProfile(ctx context.Context, profile profiledomain.Profile
 	if affected == 0 {
 		return profileapplication.ErrSlugConflict
 	}
-	if len(profile.Selections()) != 0 {
+	if len(profile.Bindings()) != 0 {
 		if err := s.SaveProfile(ctx, profile); err != nil {
-			return fmt.Errorf("create profile selections: %w", err)
+			return fmt.Errorf("create profile bindings: %w", err)
 		}
 	}
 	return nil
@@ -159,20 +159,33 @@ func (s *Store) SaveProfile(ctx context.Context, profile profiledomain.Profile) 
 		return fmt.Errorf("save profile: clear memberships: %w", err)
 	}
 
-	for _, selection := range profile.Selections() {
+	for _, binding := range profile.Bindings() {
 		direct := 0
-		if selection.Direct {
+		if binding.Direct() {
 			direct = 1
 		}
 		if _, err := tx.ExecContext(
 			ctx,
-			`INSERT INTO profile_tools(profile_id, tool_id, direct)
-            VALUES (?, ?, ?)`,
+			`INSERT INTO profile_tools(
+                profile_id,
+                tool_id,
+                direct,
+                alias,
+                title_override,
+                description_override,
+                policy_constraint,
+                concurrency_constraint
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 			profile.ID().String(),
-			selection.ToolID.String(),
+			binding.ToolID().String(),
 			direct,
+			binding.Alias(),
+			binding.TitleOverride(),
+			binding.DescriptionOverride(),
+			string(binding.PolicyConstraint()),
+			string(binding.ConcurrencyConstraint()),
 		); err != nil {
-			return fmt.Errorf("save profile: insert membership %s: %w", selection.ToolID, err)
+			return fmt.Errorf("save profile: insert binding %s: %w", binding.ToolID(), err)
 		}
 	}
 
@@ -200,7 +213,14 @@ func (s *Store) restoreProfile(
 
 	rows, err := s.db.QueryContext(
 		ctx,
-		`SELECT tool_id, direct
+		`SELECT
+            tool_id,
+            direct,
+            alias,
+            title_override,
+            description_override,
+            policy_constraint,
+            concurrency_constraint
         FROM profile_tools
         WHERE profile_id = ?
         ORDER BY tool_id`,
@@ -211,31 +231,55 @@ func (s *Store) restoreProfile(
 	}
 	defer func() { _ = rows.Close() }()
 
-	selections := make([]profiledomain.ToolSelection, 0)
+	bindings := make([]profiledomain.ToolBinding, 0)
 	for rows.Next() {
-		var rawToolID string
-		var direct int
-		if err := rows.Scan(&rawToolID, &direct); err != nil {
-			return profiledomain.Profile{}, fmt.Errorf("load profile memberships: scan: %w", err)
+		var (
+			rawToolID             string
+			direct                int
+			alias                 string
+			titleOverride         string
+			descriptionOverride   string
+			policyConstraint      string
+			concurrencyConstraint string
+		)
+		if err := rows.Scan(
+			&rawToolID,
+			&direct,
+			&alias,
+			&titleOverride,
+			&descriptionOverride,
+			&policyConstraint,
+			&concurrencyConstraint,
+		); err != nil {
+			return profiledomain.Profile{}, fmt.Errorf("load profile bindings: scan: %w", err)
 		}
 		toolID, err := catalogdomain.ParseToolID(rawToolID)
 		if err != nil {
 			return profiledomain.Profile{}, fmt.Errorf("parse profile tool id: %w", err)
 		}
-		selections = append(selections, profiledomain.ToolSelection{
-			ToolID: toolID,
-			Direct: direct == 1,
+		binding, err := profiledomain.NewToolBinding(profiledomain.ToolBindingSpec{
+			ToolID:                toolID,
+			Direct:                direct == 1,
+			Alias:                 alias,
+			TitleOverride:         titleOverride,
+			DescriptionOverride:   descriptionOverride,
+			PolicyConstraint:      profiledomain.PolicyConstraint(policyConstraint),
+			ConcurrencyConstraint: profiledomain.ConcurrencyConstraint(concurrencyConstraint),
 		})
+		if err != nil {
+			return profiledomain.Profile{}, fmt.Errorf("restore profile tool binding %s: %w", rawToolID, err)
+		}
+		bindings = append(bindings, binding)
 	}
 	if err := rows.Err(); err != nil {
 		return profiledomain.Profile{}, fmt.Errorf("load profile memberships: rows: %w", err)
 	}
 
-	return profiledomain.NewProfile(
+	return profiledomain.NewProfileWithBindings(
 		id,
 		slug,
 		displayName,
 		profiledomain.ExposureMode(rawMode),
-		selections,
+		bindings,
 	)
 }
