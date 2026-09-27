@@ -50,6 +50,7 @@ type Runtime struct {
 	audit             *auditsqlite.Store
 	executors         *invocationrouter.Router
 	mcpConfigs        *mcpconfigstore.Store
+	providerPlugins   *providerplugin.Registry
 	providerConfigs   *providerconfigstore.Store
 	providerInstances *providerplugin.Manager
 
@@ -215,6 +216,7 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		audit:             auditStore,
 		executors:         executors,
 		mcpConfigs:        configs,
+		providerPlugins:   providerPlugins,
 		providerConfigs:   providerConfigs,
 		providerInstances: providerInstances,
 		mcpServers:        make(map[string]*managedMCPServer),

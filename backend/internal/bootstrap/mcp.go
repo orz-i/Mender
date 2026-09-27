@@ -94,37 +94,11 @@ func (r *Runtime) ConnectConfiguredMCPProvider(
 	providerID catalogdomain.ProviderID,
 	synchronize bool,
 ) (catalogapplication.SyncProviderToolsResult, error) {
-	if _, err := r.Catalog.GetProvider.Execute(ctx, providerID); err != nil {
-		return catalogapplication.SyncProviderToolsResult{}, fmt.Errorf(
-			"connect configured MCP provider: provider: %w",
-			err,
-		)
-	}
-
 	if synchronize {
-		instance, err := r.providerInstances.Reload(ctx, providerID)
-		if err != nil {
-			return catalogapplication.SyncProviderToolsResult{}, fmt.Errorf(
-				"connect configured MCP provider: %w",
-				err,
-			)
-		}
-		syncTools := r.Catalog.SyncProviderTools(instance)
-		result, err := syncTools.Execute(ctx, providerID)
-		if err != nil {
-			return catalogapplication.SyncProviderToolsResult{}, fmt.Errorf(
-				"connect configured MCP provider: synchronize: %w",
-				err,
-			)
-		}
-		return result, nil
+		return r.SyncConfiguredProvider(ctx, providerID)
 	}
-
-	if _, err := r.providerInstances.Ensure(ctx, providerID); err != nil {
-		return catalogapplication.SyncProviderToolsResult{}, fmt.Errorf(
-			"connect configured MCP provider: %w",
-			err,
-		)
+	if err := r.EnsureConfiguredProvider(ctx, providerID); err != nil {
+		return catalogapplication.SyncProviderToolsResult{}, err
 	}
 	return catalogapplication.SyncProviderToolsResult{}, nil
 }

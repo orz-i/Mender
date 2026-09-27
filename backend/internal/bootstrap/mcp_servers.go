@@ -190,7 +190,7 @@ func (r *Runtime) ActivateProfileProviders(
 	})
 
 	for _, providerID := range providerIDs {
-		if err := r.EnsureConfiguredMCPProvider(ctx, providerID); err != nil {
+		if err := r.EnsureConfiguredProvider(ctx, providerID); err != nil {
 			return fmt.Errorf(
 				"activate profile provider %s: %w",
 				providerID,
@@ -201,11 +201,13 @@ func (r *Runtime) ActivateProfileProviders(
 	return nil
 }
 
+// EnsureConfiguredMCPProvider remains a compatibility alias while first-party
+// adapters migrate to generic Provider plugin terminology.
 func (r *Runtime) EnsureConfiguredMCPProvider(
 	ctx context.Context,
 	providerID catalogdomain.ProviderID,
 ) error {
-	return r.ActivateConfiguredMCPProvider(ctx, providerID)
+	return r.EnsureConfiguredProvider(ctx, providerID)
 }
 
 func (r *Runtime) serveManagedMCPServer(

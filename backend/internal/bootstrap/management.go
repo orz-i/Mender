@@ -92,7 +92,7 @@ func (r *Runtime) CallConfiguredTool(
 		}
 		return invocationapplication.InvokeToolResponse{}, err
 	}
-	if err := r.ActivateConfiguredMCPProvider(ctx, tool.ProviderID()); err != nil {
+	if err := r.EnsureConfiguredProvider(ctx, tool.ProviderID()); err != nil {
 		return invocationapplication.InvokeToolResponse{}, fmt.Errorf("activate tool provider: %w", err)
 	}
 	return r.InvokeTool.Execute(ctx, request)
@@ -195,41 +195,8 @@ func (r *Runtime) DeleteMCPProvider(
 	ctx context.Context,
 	providerID catalogdomain.ProviderID,
 ) error {
-	profiles, err := r.Profiles.List.Execute(ctx)
-	if err != nil {
-		return fmt.Errorf("delete MCP provider: list profiles: %w", err)
-	}
-
-	for _, profile := range profiles {
-		for _, selection := range profile.Selections() {
-			tool, describeErr := r.Catalog.DescribeTool.Execute(ctx, selection.ToolID)
-			if describeErr != nil {
-				if errors.Is(describeErr, catalogapplication.ErrToolNotFound) {
-					continue
-				}
-				return fmt.Errorf("delete MCP provider: inspect profile %s: %w", profile.Slug(), describeErr)
-			}
-			if tool.ProviderID() == providerID {
-				return fmt.Errorf("%w: profile %s selects tool %s", ErrProviderInUse, profile.Slug(), tool.ID())
-			}
-		}
-	}
-
-	policy, err := r.Policy.Get.Execute(ctx)
-	if err != nil {
-		return fmt.Errorf("delete MCP provider: inspect Policy: %w", err)
-	}
-	for _, rule := range policy.Rules() {
-		for _, referencedProviderID := range rule.Match().ProviderIDs() {
-			if referencedProviderID == providerID.String() {
-				return fmt.Errorf(
-					"%w: Policy Rule %s references Provider %s",
-					ErrProviderInUse,
-					rule.ID(),
-					providerID,
-				)
-			}
-		}
+	if err := r.ensureProviderUnused(ctx, providerID); err != nil {
+		return err
 	}
 
 	compatConfig, compatErr := r.mcpConfigs.Get(ctx, providerID)
