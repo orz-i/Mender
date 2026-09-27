@@ -2,10 +2,13 @@ package bootstrap
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -61,8 +64,9 @@ func TestCredentialBackedHTTPProviderEnforcesProfileScope(t *testing.T) {
 	}))
 	t.Cleanup(httpServer.Close)
 
+	databasePath := filepath.Join(t.TempDir(), "mender.db")
 	runtime, err := NewRuntime(ctx, RuntimeOptions{
-		DatabasePath:   filepath.Join(t.TempDir(), "mender.db"),
+		DatabasePath:   databasePath,
 		DefaultTimeout: time.Second,
 	})
 	if err != nil {
@@ -142,6 +146,13 @@ func TestCredentialBackedHTTPProviderEnforcesProfileScope(t *testing.T) {
 	)
 	if err != nil {
 		t.Fatal(err)
+	}
+
+	if err := runtime.Credentials.Delete.Execute(ctx, ref); !errors.Is(
+		err,
+		credentialapplication.ErrCredentialInUse,
+	) {
+		t.Fatalf("delete in-use Credential error = %v", err)
 	}
 
 	allowedScope, _ := invocationdomain.ProfileExecutionScope(allowed.ID().String())
@@ -235,5 +246,58 @@ func TestCredentialBackedHTTPProviderEnforcesProfileScope(t *testing.T) {
 	}
 	if upstreamCalls.Load() != 2 {
 		t.Fatalf("upstream calls after Catalog scope = %d, want 2", upstreamCalls.Load())
+	}
+
+	records, err := runtime.ListAudit.Execute(ctx, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(records) != 3 {
+		t.Fatalf("audit records = %d, want 3", len(records))
+	}
+	assertAuditSchemaHasNoCredentialFields(t, databasePath)
+}
+
+func assertAuditSchemaHasNoCredentialFields(t *testing.T, databasePath string) {
+	t.Helper()
+	db, err := sql.Open("sqlite", databasePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+
+	rows, err := db.Query("PRAGMA table_info(invocation_audit)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	for rows.Next() {
+		var (
+			cid          int
+			name         string
+			columnType   string
+			notNull      int
+			defaultValue any
+			primaryKey   int
+		)
+		if err := rows.Scan(
+			&cid,
+			&name,
+			&columnType,
+			&notNull,
+			&defaultValue,
+			&primaryKey,
+		); err != nil {
+			t.Fatal(err)
+		}
+		normalized := strings.ToLower(name)
+		if strings.Contains(normalized, "credential") ||
+			strings.Contains(normalized, "secret") {
+			t.Fatalf("Audit schema contains forbidden column %q", name)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
 	}
 }
