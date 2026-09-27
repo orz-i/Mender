@@ -44,3 +44,4 @@ Minor implementation choices that remain inside an accepted architectural bounda
 - [ADR-0016: Manage downstream MCP HTTP servers as ephemeral Runtime-owned instances](0016-managed-downstream-mcp-servers.md)
 - [ADR-0017: Govern invocation with explicit execution scope and preflight/postflight stages](0017-governed-invocation-pipeline.md)
 - [ADR-0018: Represent expected invocation rejections and failures as canonical outcomes](0018-canonical-invocation-outcomes.md)
+- [ADR-0019: Make Profile ToolBinding the per-Profile governance unit](0019-profile-tool-binding-governance.md)
