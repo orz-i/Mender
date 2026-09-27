@@ -1,6 +1,6 @@
 # Phase 10 Plan — Profile ToolBinding Governance
 
-Status: Planned
+Status: Complete
 
 ## Objective
 
@@ -592,28 +592,60 @@ docs: complete profile tool binding governance phase
 
 Phase 10 is complete only when:
 
-- [ ] Profile Domain uses ToolBinding as the canonical Profile-to-Tool relationship.
-- [ ] Existing Profile rows migrate without behavior change.
-- [ ] Existing API clients that send only ToolID/direct remain compatible.
-- [ ] Alias/title/description overrides never mutate Catalog.
-- [ ] Direct MCP export uses effective alias/presentation safely.
-- [ ] Dynamic MCP projections return effective binding presentation.
-- [ ] Profile binding policy supports inherit/require_approval/deny.
-- [ ] Binding policy cannot weaken global Policy.
-- [ ] Binding require-approval uses existing ApprovalGate.
-- [ ] Binding deny is a canonical policy rejection and is audited.
-- [ ] Binding-local serial execution is enforced inside Invocation timeout/cancellation.
-- [ ] Baseline Runtime ExecutionGuard remains authoritative/additive.
-- [ ] Catalog scope remains unaffected by Profile binding constraints.
-- [ ] Profile SQLite v2 migration and future-version fail-closed tests pass.
-- [ ] CLI/OpenAPI/Wails contracts expose normalized binding configuration.
-- [ ] Normal UI binding management never requires manual ToolID.
-- [ ] Membership selection is not overloaded with governance fields.
-- [ ] Presentation and execution governance use separate focused UI surfaces.
-- [ ] Credential references/secrets are not persisted by ToolBinding in Phase 10.
-- [ ] Go race tests pass.
-- [ ] pnpm check passes.
-- [ ] pnpm security:check passes.
+- [x] Profile Domain uses ToolBinding as the canonical Profile-to-Tool relationship.
+- [x] Existing Profile rows migrate without behavior change.
+- [x] Existing API clients that send only ToolID/direct remain compatible.
+- [x] Alias/title/description overrides never mutate Catalog.
+- [x] Direct MCP export uses effective alias/presentation safely.
+- [x] Dynamic MCP projections return effective binding presentation.
+- [x] Profile binding policy supports inherit/require_approval/deny.
+- [x] Binding policy cannot weaken global Policy.
+- [x] Binding require-approval uses existing ApprovalGate.
+- [x] Binding deny is a canonical policy rejection and is audited.
+- [x] Binding-local serial execution is enforced inside Invocation timeout/cancellation.
+- [x] Baseline Runtime ExecutionGuard remains authoritative/additive.
+- [x] Catalog scope remains unaffected by Profile binding constraints.
+- [x] Profile SQLite v2 migration and future-version fail-closed tests pass.
+- [x] CLI/OpenAPI/Wails contracts expose normalized binding configuration.
+- [x] Normal UI binding management never requires manual ToolID.
+- [x] Membership selection is not overloaded with governance fields.
+- [x] Presentation and execution governance use separate focused UI surfaces.
+- [x] Credential references/secrets are not persisted by ToolBinding in Phase 10.
+- [x] Go race tests pass.
+- [x] pnpm check passes.
+- [x] pnpm security:check passes.
+
+## Closeout
+
+Phase 10 completed on 2026-09-27.
+
+Implementation commits:
+
+~~~text
+75f6773 docs: define profile tool binding governance
+161dd54 docs: plan profile tool binding governance phase
+9da344a refactor(profile): introduce tool binding domain model
+cfaaa8a feat(profile): persist tool binding governance
+796d445 feat(profile): manage tool binding configuration
+a6e3552 feat(invocation): apply profile binding policy constraints
+8d4db9e feat(invocation): serialize configured profile bindings
+aec9bac feat(mcp): project profile tool binding metadata
+a9ba6ae feat(adapters): expose profile tool binding configuration
+64770ac feat(app): manage profile tool binding governance
+ce1c3e6 test(runtime): cover profile binding governance end to end
+~~~
+
+Verification evidence:
+
+- `pnpm check` passed after the end-to-end binding governance coverage. OpenAPI SDK regeneration, Wails binding regeneration, desktop architecture checks, golangci-lint, all Go tests, all Go race tests, ESLint, strict TypeScript, 5 Vitest files / 28 tests, and Web/Desktop production builds are green.
+- `pnpm security:check` passed. Pinned `govulncheck v1.8.0` found no vulnerabilities in backend or desktop, and production pnpm audit reported no known vulnerabilities at high severity.
+- Profile SQLite schema v2 migrates v1 membership rows to behavior-compatible ToolBindings with empty presentation overrides and inherited policy/concurrency defaults; malformed binding state and future schemas fail closed.
+- Runtime end-to-end tests verify binding deny, binding require-approval, Catalog-scope independence, and same-binding serial execution. Phase 9 governed execution behavior remains covered.
+- MCP tests verify Profile alias/title/description projection for direct and dynamic exposure while canonical ToolID/schemas remain Catalog-owned; normalized exported-name collisions fail closed.
+- CLI, management HTTP, OpenAPI SDK, Wails bindings, Desktop host mapping, and shared Web/Desktop UI expose the same normalized ToolBinding contract while old ToolID/direct request shapes remain accepted.
+- The Profile management UI keeps Catalog-backed membership selection separate from Presentation and Governance dialogs, preserves existing binding fields during membership/direct changes, truncates long descriptions in rows, and never requires manual ToolID entry.
+
+Credential scope remains intentionally deferred until Mender has a real Credential inventory, validation boundary, selector UX, and scoped resolver enforcement.
 
 ## Deferred follow-up
 

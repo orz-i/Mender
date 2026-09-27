@@ -214,7 +214,7 @@ See `phase-9-governed-invocation.md` for the final architecture, validation evid
 
 ## Phase 10 — Profile ToolBinding governance
 
-Status: Planned
+Status: Complete
 
 Goals:
 
@@ -225,13 +225,6 @@ Goals:
 - Keep membership selection separate from presentation/execution governance in Web/Desktop UX.
 - Preserve existing Profile rows and clients through behavior-compatible defaults.
 
-Exit criteria:
+Exit criteria are complete. ToolBinding is now the canonical Profile-to-Tool relationship, Profile SQLite v2 preserves v1 behavior, binding policy only tightens global Policy, binding-local serial execution is enforced inside Invocation, MCP uses effective Profile presentation without mutating Catalog identity/schemas, and all adapters/UI share one normalized binding contract without manual ToolID entry.
 
-- ToolBinding is the canonical Profile-to-Tool relationship across Domain, persistence, adapters, and UI.
-- Existing Profile SQLite v1 rows migrate without behavior change.
-- Binding policy cannot weaken global Policy.
-- Binding-local serialization is enforced inside Invocation timeout/cancellation.
-- MCP direct/dynamic projections use effective Profile presentation while canonical Tool identity/schemas remain unchanged.
-- CLI/OpenAPI/Wails and shared Web/Desktop UI expose normalized binding configuration without requiring manual ToolID entry.
-
-See `phase-10-profile-tool-binding-governance.md`.
+See `phase-10-profile-tool-binding-governance.md` for implementation evidence and deferred Credential/global-Policy work.

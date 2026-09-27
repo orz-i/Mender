@@ -11,7 +11,7 @@ It provides one canonical tool model and execution pipeline, then exposes the sa
 
 ## Status
 
-The architecture-through-governed-execution roadmap (Phases 0–9) is complete. Phase 10 is planned to promote Profile Tool membership into first-class ToolBindings with Profile-specific presentation, restrictive policy constraints, and binding-local execution serialization while preserving canonical Catalog identity and the shared Invocation pipeline.
+The architecture-through-Profile-governance roadmap (Phases 0–10) is complete. Mender now provides first-class Profile ToolBindings with Profile-specific alias/title/description projection, restrictive inherit/require-approval/deny policy constraints, binding-local serial execution, SQLite v2 persistence, and consistent CLI/MCP/Web/Desktop management while preserving canonical Catalog identity and the shared Invocation pipeline.
 
 ## Product principles
 

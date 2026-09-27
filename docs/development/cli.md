@@ -139,12 +139,22 @@ Available modes:
 - `dynamic`
 - `hybrid`
 
-Manage membership:
+Manage membership and optional ToolBinding governance:
 
 ```bash
 mender profile add-tool default tool_... --direct
+
+mender profile add-tool default tool_... \
+  --alias create_prod_issue \
+  --title "Create production issue" \
+  --description "Create an issue in the production tracker" \
+  --policy require_approval \
+  --concurrency serial
+
 mender profile remove-tool default tool_...
 ```
+
+ToolBinding policy accepts `inherit`, `require_approval`, or `deny`; it can only tighten the global Policy decision. Concurrency accepts `inherit` or `serial`, where `serial` applies only to that Profile + Tool binding. Profile JSON always returns normalized binding fields. Existing clients that supply only ToolID/direct retain inherited defaults.
 
 Inspect:
 

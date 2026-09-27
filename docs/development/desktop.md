@@ -215,7 +215,7 @@ Desktop currently exposes the same management workflows as the Web UI:
 - Credential resolver status,
 - Audit.
 
-Policy and Credential remain read-only. Desktop Tool calls use the same canonical Invocation outcomes as the management HTTP adapter, including `rejected` and `failed`; the Wails host adapter maps those outcomes without treating them as binding/transport failures. Audit details expose the same origin/scope/outcome metadata as Web.
+Policy and Credential remain read-only. Profile ToolBinding management is shared with Web: Catalog-backed membership selection, separate Presentation/Governance dialogs, restrictive binding policy, and binding-local serial execution all use the same generated contract. The Wails host fills inherited defaults for older ToolID/direct requests and validates normalized policy/concurrency values from Go bindings. Desktop Tool calls use the same canonical Invocation outcomes as the management HTTP adapter, including `rejected` and `failed`; Audit details expose the same origin/scope/outcome metadata as Web.
 
 The Desktop `Servers` page can start a Profile as a loopback Streamable HTTP MCP server without launching a second Mender process. Running servers are ephemeral Runtime state and stop with the Desktop process. The page provides endpoint/config copy plus Restart/Stop controls. stdio serving remains client-launched through the CLI because its lifetime is tied to the external client's stdin/stdout process.
 

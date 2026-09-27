@@ -83,7 +83,9 @@ Profiles is also list-first. `Create profile` opens a Dialog; Tool membership ma
 
 Normal Profile governance never asks the user to type or copy a ToolID. `Choose tools` opens a Catalog-backed picker with Tool search, Provider filtering, multi-select, and human-readable Tool/Provider metadata. Existing membership rows also display Tool names and Providers rather than stable IDs.
 
-Saving picker selection uses one atomic membership-replacement operation. The application validates every selected Tool before the Profile repository transaction replaces membership, so a multi-select update cannot intentionally leave a partially saved Profile. Hybrid Profiles expose the Direct export choice; direct/dynamic modes normalize that flag automatically.
+Saving picker selection uses one atomic binding-replacement operation. The application validates every selected Tool before the Profile repository transaction replaces bindings, so a multi-select update cannot intentionally leave a partially saved Profile. Hybrid Profiles expose the Direct export choice; direct/dynamic modes normalize that flag automatically. Existing alias/presentation/policy/concurrency fields are preserved when membership or Direct state changes.
+
+Each selected Tool exposes separate focused `Presentation` and `Governance` actions rather than expanding the picker into a dense form. Presentation edits alias/title/description plus hybrid Direct export; Governance edits restrictive policy (`inherit`, `require approval`, `deny`) and binding-local concurrency (`inherit`, `serial`). Long descriptions stay truncated in the selected-Tool row. The dialogs never overlap the Manage dialog, and normal management still never asks for ToolID.
 
 ### Servers
 
