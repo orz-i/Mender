@@ -484,7 +484,11 @@ func TestManagementAPIEndToEnd(t *testing.T) {
 		nil,
 		http.StatusOK,
 	)
-	if policy["editable"] != false {
+	if policy["editable"] != true ||
+		policy["mode"] != "configured" ||
+		policy["defaultDecision"] != "allow" ||
+		policy["ruleCount"] != float64(0) ||
+		policy["enabledRuleCount"] != float64(0) {
 		t.Fatalf("policy status = %#v", policy)
 	}
 	credentials := requestJSON(
@@ -686,6 +690,151 @@ func TestManagementAPICredentialBackedProviderAuth(t *testing.T) {
 	if provider["toolCount"] != float64(1) {
 		t.Fatalf("provider toolCount = %#v, want 1", provider["toolCount"])
 	}
+}
+
+func TestManagementAPIPolicyGovernanceContract(t *testing.T) {
+	t.Parallel()
+
+	runtime, err := bootstrap.NewRuntime(context.Background(), bootstrap.RuntimeOptions{
+		DatabasePath: filepath.Join(t.TempDir(), "mender.db"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = runtime.Close() })
+
+	server := httptest.NewServer(New(runtime))
+	t.Cleanup(server.Close)
+
+	policy := requestJSON(
+		t,
+		server.Client(),
+		http.MethodGet,
+		server.URL+"/api/v1/policy",
+		nil,
+		http.StatusOK,
+	)
+	if policy["defaultDecision"] != "allow" {
+		t.Fatalf("fresh Policy = %#v", policy)
+	}
+
+	updated := requestJSON(
+		t,
+		server.Client(),
+		http.MethodPut,
+		server.URL+"/api/v1/policy/default",
+		map[string]any{"decision": "deny"},
+		http.StatusOK,
+	)
+	if updated["defaultDecision"] != "deny" {
+		t.Fatalf("updated Policy = %#v", updated)
+	}
+
+	rule := requestJSON(
+		t,
+		server.Client(),
+		http.MethodPost,
+		server.URL+"/api/v1/policy/rules",
+		map[string]any{
+			"displayName": "Allow internal Catalog",
+			"enabled":     true,
+			"decision":    "allow",
+			"match": map[string]any{
+				"origins":       []string{"internal"},
+				"scopeKinds":    []string{"catalog"},
+				"profileRefs":   []string{},
+				"providerIds":   []string{},
+				"toolIds":       []string{},
+				"factKnowledge": "any",
+				"effectsAny":    []string{},
+				"resourcesAny":  []map[string]any{},
+			},
+		},
+		http.StatusCreated,
+	)
+	ruleID, ok := rule["ruleId"].(string)
+	if !ok || !strings.HasPrefix(ruleID, "rule_") {
+		t.Fatalf("created Rule = %#v", rule)
+	}
+	if rule["decision"] != "allow" || rule["displayName"] != "Allow internal Catalog" {
+		t.Fatalf("created Rule = %#v", rule)
+	}
+	if _, exists := rule["priority"]; exists {
+		t.Fatalf("Rule response unexpectedly exposes priority: %#v", rule)
+	}
+
+	status := requestJSON(
+		t,
+		server.Client(),
+		http.MethodGet,
+		server.URL+"/api/v1/policy/status",
+		nil,
+		http.StatusOK,
+	)
+	if status["defaultDecision"] != "deny" ||
+		status["ruleCount"] != float64(1) ||
+		status["enabledRuleCount"] != float64(1) {
+		t.Fatalf("Policy status = %#v", status)
+	}
+
+	disabled := requestJSON(
+		t,
+		server.Client(),
+		http.MethodPost,
+		server.URL+"/api/v1/policy/rules/"+ruleID+"/disable",
+		nil,
+		http.StatusOK,
+	)
+	if disabled["enabled"] != false {
+		t.Fatalf("disabled Rule = %#v", disabled)
+	}
+
+	status = requestJSON(
+		t,
+		server.Client(),
+		http.MethodGet,
+		server.URL+"/api/v1/policy/status",
+		nil,
+		http.StatusOK,
+	)
+	if status["enabledRuleCount"] != float64(0) {
+		t.Fatalf("disabled Policy status = %#v", status)
+	}
+
+	invalid := requestJSON(
+		t,
+		server.Client(),
+		http.MethodPost,
+		server.URL+"/api/v1/policy/rules",
+		map[string]any{
+			"ruleId":      "rule_00000000000000000000000000000001",
+			"displayName": "Client identity must be rejected",
+			"enabled":     true,
+			"decision":    "deny",
+			"match": map[string]any{
+				"origins":       []string{},
+				"scopeKinds":    []string{},
+				"profileRefs":   []string{},
+				"providerIds":   []string{},
+				"toolIds":       []string{},
+				"factKnowledge": "any",
+				"effectsAny":    []string{},
+				"resourcesAny":  []map[string]any{},
+			},
+		},
+		http.StatusBadRequest,
+	)
+	if invalid["code"] != "validation_error" {
+		t.Fatalf("client-supplied RuleID response = %#v", invalid)
+	}
+
+	requestNoContent(
+		t,
+		server.Client(),
+		http.MethodDelete,
+		server.URL+"/api/v1/policy/rules/"+ruleID,
+		http.StatusNoContent,
+	)
 }
 
 func TestManagementAPIRejectsNonLocalRequestProvenance(t *testing.T) {

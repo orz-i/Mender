@@ -28,6 +28,100 @@ func TestCredentialNativeCommandDoesNotExposeSecretFlag(t *testing.T) {
 	}
 }
 
+func TestPolicyCLIWorkflow(t *testing.T) {
+	t.Parallel()
+
+	dbPath := filepath.Join(t.TempDir(), "mender.db")
+	execute := func(args ...string) map[string]any {
+		t.Helper()
+		var stdout, stderr bytes.Buffer
+		root := NewRootCommand(Options{
+			Stdin:  strings.NewReader(""),
+			Stdout: &stdout,
+			Stderr: &stderr,
+		})
+		root.SetArgs(append([]string{"--db", dbPath, "--output", "json"}, args...))
+		if err := root.ExecuteContext(context.Background()); err != nil {
+			t.Fatalf("%v: error = %v stderr=%q", args, err, stderr.String())
+		}
+		var value map[string]any
+		if err := json.Unmarshal(stdout.Bytes(), &value); err != nil {
+			t.Fatalf("%v: decode JSON: %v output=%q", args, err, stdout.String())
+		}
+		return value
+	}
+
+	policy := execute("policy", "show")
+	if policy["defaultDecision"] != "allow" {
+		t.Fatalf("fresh Policy = %#v", policy)
+	}
+
+	policy = execute("policy", "set-default", "deny")
+	if policy["defaultDecision"] != "deny" {
+		t.Fatalf("set-default Policy = %#v", policy)
+	}
+
+	rule := execute(
+		"policy", "rule", "add",
+		"--name", "Allow internal Catalog",
+		"--decision", "allow",
+		"--origin", "internal",
+		"--scope", "catalog",
+	)
+	ruleID, ok := rule["ruleId"].(string)
+	if !ok || !strings.HasPrefix(ruleID, "rule_") {
+		t.Fatalf("created Rule = %#v", rule)
+	}
+	if _, exists := rule["priority"]; exists {
+		t.Fatalf("created Rule unexpectedly has priority = %#v", rule)
+	}
+
+	policy = execute("policy", "show")
+	rules, ok := policy["rules"].([]any)
+	if !ok || len(rules) != 1 {
+		t.Fatalf("Policy rules = %#v", policy)
+	}
+
+	disabled := execute("policy", "rule", "disable", ruleID)
+	if disabled["enabled"] != false {
+		t.Fatalf("disabled Rule = %#v", disabled)
+	}
+
+	removed := execute("policy", "rule", "remove", ruleID)
+	if removed["ruleId"] != ruleID {
+		t.Fatalf("removed Rule = %#v", removed)
+	}
+
+	policy = execute("policy", "show")
+	rules, ok = policy["rules"].([]any)
+	if !ok || len(rules) != 0 {
+		t.Fatalf("Policy after remove = %#v", policy)
+	}
+}
+
+func TestPolicyRuleAddRejectsInvalidResourceAsUsage(t *testing.T) {
+	t.Parallel()
+
+	var stdout, stderr bytes.Buffer
+	code := Run(
+		context.Background(),
+		[]string{
+			"policy", "rule", "add",
+			"--name", "Invalid",
+			"--decision", "deny",
+			"--resource", "regex:path:.*",
+		},
+		&stdout,
+		&stderr,
+	)
+	if code != ExitUsage {
+		t.Fatalf("exit code = %d, want %d; stderr=%q", code, ExitUsage, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "resource.operator") {
+		t.Fatalf("stderr = %q", stderr.String())
+	}
+}
+
 func TestCredentialEnvironmentCLIWorkflow(t *testing.T) {
 	t.Parallel()
 

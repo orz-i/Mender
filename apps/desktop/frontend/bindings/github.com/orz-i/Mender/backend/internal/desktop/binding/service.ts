@@ -40,6 +40,10 @@ export function CreateNativeCredential($namespace: string, name: string, display
     return $Call.ByID(46061890, $namespace, name, displayName, secret);
 }
 
+export function CreatePolicyRule(input: $models.PolicyRuleInput): $CancellablePromise<$models.PolicyRule> {
+    return $Call.ByID(2018955356, input);
+}
+
 export function CreateProfile(slug: string, displayName: string, mode: string): $CancellablePromise<$models.Profile> {
     return $Call.ByID(891700837, slug, displayName, mode);
 }
@@ -52,6 +56,10 @@ export function DeleteCredential($namespace: string, name: string): $Cancellable
     return $Call.ByID(3995507350, $namespace, name);
 }
 
+export function DeletePolicyRule(ruleID: string): $CancellablePromise<void> {
+    return $Call.ByID(3136236455, ruleID);
+}
+
 export function DeleteProvider(providerID: string): $CancellablePromise<void> {
     return $Call.ByID(1608019374, providerID);
 }
@@ -62,6 +70,10 @@ export function GetCredential($namespace: string, name: string): $CancellablePro
 
 export function GetCredentialStatus(): $CancellablePromise<$models.CredentialStatus> {
     return $Call.ByID(1672808003);
+}
+
+export function GetPolicy(): $CancellablePromise<$models.Policy> {
+    return $Call.ByID(2308623514);
 }
 
 export function GetPolicyStatus(): $CancellablePromise<$models.PolicyStatus> {
@@ -120,6 +132,14 @@ export function SearchTools(query: string, limit: number, providerID: string, pr
     return $Call.ByID(1688287699, query, limit, providerID, profile);
 }
 
+export function SetPolicyDefault(decision: string): $CancellablePromise<$models.Policy> {
+    return $Call.ByID(510468027, decision);
+}
+
+export function SetPolicyRuleEnabled(ruleID: string, enabled: boolean): $CancellablePromise<$models.PolicyRule> {
+    return $Call.ByID(2414471985, ruleID, enabled);
+}
+
 export function StartMCPServer(profile: string, address: string): $CancellablePromise<$models.MCPServerInstance> {
     return $Call.ByID(1278287583, profile, address);
 }
@@ -130,6 +150,10 @@ export function StopMCPServer(serverID: string): $CancellablePromise<void> {
 
 export function SyncProvider(providerID: string): $CancellablePromise<$models.SyncResult> {
     return $Call.ByID(2246585286, providerID);
+}
+
+export function UpdatePolicyRule(ruleID: string, input: $models.PolicyRuleInput): $CancellablePromise<$models.PolicyRule> {
+    return $Call.ByID(3306678577, ruleID, input);
 }
 
 export function UpdateProvider(providerID: string, displayName: string, description: string, transport: string, endpoint: string, headers: { [_ in string]?: string } | null, credentialHeaders: $models.CredentialHeader[] | null, executable: string, args: string[] | null, directory: string, credentialEnvironment: $models.CredentialEnvironment[] | null): $CancellablePromise<$models.ProviderMutationResponse> {

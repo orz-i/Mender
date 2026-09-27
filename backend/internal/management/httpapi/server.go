@@ -16,6 +16,7 @@ import (
 	credentialapplication "github.com/orz-i/Mender/backend/internal/credential/application"
 	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
 	mcpconfigstore "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/configstore"
+	policyapplication "github.com/orz-i/Mender/backend/internal/policy/application"
 	profileapplication "github.com/orz-i/Mender/backend/internal/profile/application"
 )
 
@@ -44,6 +45,13 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) routes() {
 	h.mux.HandleFunc("GET /api/v1/system/status", h.getSystemStatus)
 	h.mux.HandleFunc("GET /api/v1/policy/status", h.getPolicyStatus)
+	h.mux.HandleFunc("GET /api/v1/policy", h.getPolicy)
+	h.mux.HandleFunc("PUT /api/v1/policy/default", h.setPolicyDefault)
+	h.mux.HandleFunc("POST /api/v1/policy/rules", h.createPolicyRule)
+	h.mux.HandleFunc("PUT /api/v1/policy/rules/{ruleId}", h.updatePolicyRule)
+	h.mux.HandleFunc("DELETE /api/v1/policy/rules/{ruleId}", h.deletePolicyRule)
+	h.mux.HandleFunc("POST /api/v1/policy/rules/{ruleId}/enable", h.enablePolicyRule)
+	h.mux.HandleFunc("POST /api/v1/policy/rules/{ruleId}/disable", h.disablePolicyRule)
 	h.mux.HandleFunc("GET /api/v1/credentials/status", h.getCredentialStatus)
 	h.mux.HandleFunc("GET /api/v1/credentials", h.listCredentials)
 	h.mux.HandleFunc("POST /api/v1/credentials/native", h.createNativeCredential)
@@ -164,6 +172,7 @@ func writeKnownError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, catalogapplication.ErrProviderNotFound),
 		errors.Is(err, catalogapplication.ErrToolNotFound),
+		errors.Is(err, policyapplication.ErrRuleNotFound),
 		errors.Is(err, credentialapplication.ErrCredentialNotFound),
 		errors.Is(err, profileapplication.ErrProfileNotFound),
 		errors.Is(err, mcpconfigstore.ErrNotFound),
@@ -171,6 +180,7 @@ func writeKnownError(w http.ResponseWriter, err error) {
 		writeAPIError(w, http.StatusNotFound, "not_found", err)
 
 	case errors.Is(err, catalogapplication.ErrNamespaceConflict),
+		errors.Is(err, policyapplication.ErrRuleConflict),
 		errors.Is(err, credentialapplication.ErrReferenceConflict),
 		errors.Is(err, credentialapplication.ErrCredentialInUse),
 		errors.Is(err, profileapplication.ErrSlugConflict),
@@ -179,6 +189,10 @@ func writeKnownError(w http.ResponseWriter, err error) {
 		writeAPIError(w, http.StatusConflict, "conflict", err)
 
 	case errors.Is(err, catalogapplication.ErrInvalidSearchLimit),
+		errors.Is(err, policyapplication.ErrInvalidRule),
+		errors.Is(err, policyapplication.ErrProfileReferenceNotFound),
+		errors.Is(err, policyapplication.ErrProviderReferenceNotFound),
+		errors.Is(err, policyapplication.ErrToolReferenceNotFound),
 		errors.Is(err, catalogapplication.ErrInvalidSearchQuery),
 		errors.Is(err, credentialapplication.ErrInvalidSecret),
 		errors.Is(err, credentialapplication.ErrInvalidSource),

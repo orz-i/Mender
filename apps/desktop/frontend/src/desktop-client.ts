@@ -5,6 +5,9 @@ import type {
   InvocationResult,
   MCPServerInstance,
   MenderClient,
+  Policy,
+  PolicyRule,
+  PolicyRuleInput,
   PolicyStatus,
   Profile,
   Provider,
@@ -22,6 +25,9 @@ import {
   type CredentialStatus as BindingCredentialStatus,
   type InvocationResult as BindingInvocationResult,
   type MCPServerInstance as BindingMCPServerInstance,
+  type Policy as BindingPolicy,
+  type PolicyRule as BindingPolicyRule,
+  type PolicyRuleInput as BindingPolicyRuleInput,
   type PolicyStatus as BindingPolicyStatus,
   type Profile as BindingProfile,
   type Provider as BindingProvider,
@@ -201,6 +207,34 @@ export function createDesktopMenderClient(): MenderClient {
       return policyStatus(await Service.GetPolicyStatus());
     },
 
+    async getPolicy() {
+      return policy(await Service.GetPolicy());
+    },
+
+    async setPolicyDefault(body) {
+      return policy(await Service.SetPolicyDefault(body.decision));
+    },
+
+    async createPolicyRule(body) {
+      return policyRule(
+        await Service.CreatePolicyRule(bindingPolicyRuleInput(body)),
+      );
+    },
+
+    async updatePolicyRule(ruleId, body) {
+      return policyRule(
+        await Service.UpdatePolicyRule(ruleId, bindingPolicyRuleInput(body)),
+      );
+    },
+
+    async deletePolicyRule(ruleId) {
+      await Service.DeletePolicyRule(ruleId);
+    },
+
+    async setPolicyRuleEnabled(ruleId, enabled) {
+      return policyRule(await Service.SetPolicyRuleEnabled(ruleId, enabled));
+    },
+
     async getCredentialStatus() {
       return credentialStatus(await Service.GetCredentialStatus());
     },
@@ -262,20 +296,135 @@ function systemStatus(value: BindingSystemStatus): SystemStatus {
 }
 
 function policyStatus(value: BindingPolicyStatus): PolicyStatus {
-  if (value.mode !== "local_allow_all") {
+  if (value.mode !== "configured") {
     throw new Error(`Unsupported desktop policy mode: ${value.mode}`);
   }
   if (value.approval !== "fail_closed_when_required") {
     throw new Error(`Unsupported desktop approval mode: ${value.approval}`);
   }
-  if (value.editable) {
-    throw new Error("Desktop policy unexpectedly reported editable state");
+  if (!value.editable) {
+    throw new Error("Desktop policy unexpectedly reported read-only state");
+  }
+  if (value.ruleCount < 0 || value.enabledRuleCount < 0) {
+    throw new Error("Desktop policy reported invalid Rule counts");
   }
   return {
-    mode: value.mode,
-    editable: false,
+    mode: "configured",
+    editable: true,
     approval: value.approval,
+    defaultDecision: policyDecision(value.defaultDecision),
+    ruleCount: value.ruleCount,
+    enabledRuleCount: value.enabledRuleCount,
   };
+}
+
+function policy(value: BindingPolicy): Policy {
+  return {
+    defaultDecision: policyDecision(value.defaultDecision),
+    rules: (value.rules ?? []).map(policyRule),
+  };
+}
+
+function policyRule(value: BindingPolicyRule): PolicyRule {
+  return {
+    ruleId: value.ruleId,
+    displayName: value.displayName,
+    enabled: value.enabled,
+    decision: policyDecision(value.decision),
+    match: {
+      origins: (value.match.origins ?? []).map(policyOrigin),
+      scopeKinds: (value.match.scopeKinds ?? []).map(policyScopeKind),
+      profileRefs: value.match.profileRefs ?? [],
+      providerIds: value.match.providerIds ?? [],
+      toolIds: value.match.toolIds ?? [],
+      factKnowledge: policyFactKnowledge(value.match.factKnowledge),
+      effectsAny: value.match.effectsAny ?? [],
+      resourcesAny: (value.match.resourcesAny ?? []).map((resource) => ({
+        kind: resource.kind,
+        operator: policyResourceOperator(resource.operator),
+        value: resource.value,
+      })),
+    },
+    createdAt: value.createdAt,
+    updatedAt: value.updatedAt,
+  };
+}
+
+function bindingPolicyRuleInput(
+  value: PolicyRuleInput,
+): BindingPolicyRuleInput {
+  return {
+    displayName: value.displayName,
+    enabled: value.enabled,
+    decision: value.decision,
+    match: {
+      origins: value.match.origins,
+      scopeKinds: value.match.scopeKinds,
+      profileRefs: value.match.profileRefs,
+      providerIds: value.match.providerIds,
+      toolIds: value.match.toolIds,
+      factKnowledge: value.match.factKnowledge,
+      effectsAny: value.match.effectsAny,
+      resourcesAny: value.match.resourcesAny.map((resource) => ({
+        kind: resource.kind,
+        operator: resource.operator,
+        value: resource.value,
+      })),
+    },
+  };
+}
+
+function policyDecision(value: string): Policy["defaultDecision"] {
+  if (
+    value === "allow" ||
+    value === "require_approval" ||
+    value === "deny"
+  ) {
+    return value;
+  }
+  throw new Error("Unsupported desktop Policy decision: " + value);
+}
+
+function policyOrigin(
+  value: string,
+): PolicyRule["match"]["origins"][number] {
+  if (
+    value === "cli" ||
+    value === "mcp" ||
+    value === "management_http" ||
+    value === "desktop" ||
+    value === "internal"
+  ) {
+    return value;
+  }
+  throw new Error("Unsupported desktop Policy origin: " + value);
+}
+
+function policyScopeKind(
+  value: string,
+): PolicyRule["match"]["scopeKinds"][number] {
+  if (value === "catalog" || value === "profile") {
+    return value;
+  }
+  throw new Error("Unsupported desktop Policy scope kind: " + value);
+}
+
+function policyFactKnowledge(
+  value: string,
+): PolicyRule["match"]["factKnowledge"] {
+  if (value === "any" || value === "known" || value === "unknown") {
+    return value;
+  }
+  throw new Error("Unsupported desktop Policy fact knowledge: " + value);
+}
+
+function policyResourceOperator(
+  value: string,
+): PolicyRule["match"]["resourcesAny"][number]["operator"] {
+  if (value === "exact" || value === "prefix") {
+    return value;
+  }
+  throw new Error("Unsupported desktop Policy resource operator: " + value);
 }
 
 function credentialStatus(value: BindingCredentialStatus): CredentialStatus {

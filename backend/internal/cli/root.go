@@ -15,6 +15,7 @@ import (
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	mcpconfigstore "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/configstore"
 	mcpserver "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/server"
+	policyapplication "github.com/orz-i/Mender/backend/internal/policy/application"
 	profileapplication "github.com/orz-i/Mender/backend/internal/profile/application"
 	"github.com/spf13/cobra"
 )
@@ -93,6 +94,7 @@ func NewRootCommand(options Options) *cobra.Command {
 	})
 
 	root.AddCommand(a.newCredentialCommand())
+	root.AddCommand(a.newPolicyCommand())
 	root.AddCommand(a.newProviderCommand())
 	root.AddCommand(a.newProfileCommand())
 	root.AddCommand(a.newToolCommand())
@@ -212,6 +214,7 @@ func exitCode(err error) int {
 	switch {
 	case errors.As(err, &usage),
 		errors.Is(err, credentialapplication.ErrInvalidSecret),
+		errors.Is(err, policyapplication.ErrInvalidRule),
 		errors.Is(err, credentialapplication.ErrInvalidSource),
 		errors.Is(err, profileapplication.ErrInvalidBinding),
 		errors.Is(err, profileapplication.ErrBindingNameConflict):
@@ -222,6 +225,11 @@ func exitCode(err error) int {
 		return invocationOutcomeExitCode(outcomeErr.outcome)
 	case errors.Is(err, catalogapplication.ErrProviderNotFound),
 		errors.Is(err, catalogapplication.ErrToolNotFound),
+		errors.Is(err, policyapplication.ErrRuleNotFound),
+		errors.Is(err, policyapplication.ErrRuleConflict),
+		errors.Is(err, policyapplication.ErrProfileReferenceNotFound),
+		errors.Is(err, policyapplication.ErrProviderReferenceNotFound),
+		errors.Is(err, policyapplication.ErrToolReferenceNotFound),
 		errors.Is(err, credentialapplication.ErrCredentialNotFound),
 		errors.Is(err, credentialapplication.ErrReferenceConflict),
 		errors.Is(err, credentialapplication.ErrCredentialInUse),

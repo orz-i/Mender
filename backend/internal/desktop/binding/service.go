@@ -15,6 +15,8 @@ import (
 	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	mcpconfigstore "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/configstore"
+	policyapplication "github.com/orz-i/Mender/backend/internal/policy/application"
+	policydomain "github.com/orz-i/Mender/backend/internal/policy/domain"
 	profileapplication "github.com/orz-i/Mender/backend/internal/profile/application"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 )
@@ -37,22 +39,103 @@ func NewService(ctx context.Context, runtime *bootstrap.Runtime) *Service {
 	return &Service{ctx: ctx, runtime: runtime}
 }
 
-func (s *Service) GetSystemStatus() SystemStatus {
+func (s *Service) GetSystemStatus() (SystemStatus, error) {
 	status := s.runtime.Status()
+	policy, err := s.runtime.Policy.Get.Execute(s.ctx)
+	if err != nil {
+		return SystemStatus{}, err
+	}
 	return SystemStatus{
 		Ready:       status.Ready,
-		Policy:      policyStatus(status),
+		Policy:      policyStatus(status, policy),
 		Credentials: credentialStatus(status),
 		MCP: MCPStatus{
 			Stdio:          true,
 			StreamableHTTP: true,
 			ExposureModes:  []string{"direct", "dynamic", "hybrid"},
 		},
-	}
+	}, nil
 }
 
-func (s *Service) GetPolicyStatus() PolicyStatus {
-	return policyStatus(s.runtime.Status())
+func (s *Service) GetPolicyStatus() (PolicyStatus, error) {
+	policy, err := s.runtime.Policy.Get.Execute(s.ctx)
+	if err != nil {
+		return PolicyStatus{}, err
+	}
+	return policyStatus(s.runtime.Status(), policy), nil
+}
+
+func (s *Service) GetPolicy() (Policy, error) {
+	policy, err := s.runtime.Policy.Get.Execute(s.ctx)
+	if err != nil {
+		return Policy{}, err
+	}
+	return policyProjection(policy), nil
+}
+
+func (s *Service) SetPolicyDefault(decision string) (Policy, error) {
+	policy, err := s.runtime.Policy.SetDefault.Execute(
+		s.ctx,
+		policydomain.DecisionKind(decision),
+	)
+	if err != nil {
+		return Policy{}, err
+	}
+	return policyProjection(policy), nil
+}
+
+func (s *Service) CreatePolicyRule(input PolicyRuleInput) (PolicyRule, error) {
+	ruleInput, err := parsePolicyRuleInput(input)
+	if err != nil {
+		return PolicyRule{}, err
+	}
+	rule, err := s.runtime.Policy.CreateRule.Execute(s.ctx, ruleInput)
+	if err != nil {
+		return PolicyRule{}, err
+	}
+	return policyRuleProjection(rule), nil
+}
+
+func (s *Service) UpdatePolicyRule(
+	ruleID string,
+	input PolicyRuleInput,
+) (PolicyRule, error) {
+	id, err := policydomain.ParseRuleID(ruleID)
+	if err != nil {
+		return PolicyRule{}, err
+	}
+	ruleInput, err := parsePolicyRuleInput(input)
+	if err != nil {
+		return PolicyRule{}, err
+	}
+	rule, err := s.runtime.Policy.UpdateRule.Execute(s.ctx, id, ruleInput)
+	if err != nil {
+		return PolicyRule{}, err
+	}
+	return policyRuleProjection(rule), nil
+}
+
+func (s *Service) DeletePolicyRule(ruleID string) error {
+	id, err := policydomain.ParseRuleID(ruleID)
+	if err != nil {
+		return err
+	}
+	return s.runtime.Policy.DeleteRule.Execute(s.ctx, id)
+}
+
+func (s *Service) SetPolicyRuleEnabled(
+	ruleID string,
+	enabled bool,
+) (PolicyRule, error) {
+	id, err := policydomain.ParseRuleID(ruleID)
+	if err != nil {
+		return PolicyRule{}, err
+	}
+	rule, err := s.runtime.Policy.SetRuleEnabled.Execute(s.ctx, id, enabled)
+	if err != nil {
+		return PolicyRule{}, err
+	}
+	return policyRuleProjection(rule), nil
 }
 
 func (s *Service) GetCredentialStatus() CredentialStatus {
@@ -695,11 +778,112 @@ func (s *Service) ListAudit(limit int) (AuditList, error) {
 	return AuditList{Records: items}, nil
 }
 
-func policyStatus(status bootstrap.RuntimeStatus) PolicyStatus {
+func policyStatus(
+	status bootstrap.RuntimeStatus,
+	policy policydomain.PolicySet,
+) PolicyStatus {
+	enabled := 0
+	for _, rule := range policy.Rules() {
+		if rule.Enabled() {
+			enabled++
+		}
+	}
 	return PolicyStatus{
-		Mode:     status.PolicyMode,
-		Editable: false,
-		Approval: status.ApprovalMode,
+		Mode:             status.PolicyMode,
+		Editable:         true,
+		Approval:         status.ApprovalMode,
+		DefaultDecision:  string(policy.DefaultDecision()),
+		RuleCount:        len(policy.Rules()),
+		EnabledRuleCount: enabled,
+	}
+}
+
+func parsePolicyRuleInput(input PolicyRuleInput) (policyapplication.RuleInput, error) {
+	resources := make([]policydomain.ResourceMatcher, 0, len(input.Match.ResourcesAny))
+	for _, item := range input.Match.ResourcesAny {
+		resource, err := policydomain.NewResourceMatcher(
+			item.Kind,
+			policydomain.ResourceOperator(item.Operator),
+			item.Value,
+		)
+		if err != nil {
+			return policyapplication.RuleInput{}, err
+		}
+		resources = append(resources, resource)
+	}
+
+	origins := make([]policydomain.Origin, 0, len(input.Match.Origins))
+	for _, value := range input.Match.Origins {
+		origins = append(origins, policydomain.Origin(value))
+	}
+	scopeKinds := make([]policydomain.ScopeKind, 0, len(input.Match.ScopeKinds))
+	for _, value := range input.Match.ScopeKinds {
+		scopeKinds = append(scopeKinds, policydomain.ScopeKind(value))
+	}
+
+	return policyapplication.RuleInput{
+		DisplayName: input.DisplayName,
+		Enabled:     input.Enabled,
+		Decision:    policydomain.DecisionKind(input.Decision),
+		Match: policydomain.MatchSpec{
+			Origins:       origins,
+			ScopeKinds:    scopeKinds,
+			ProfileRefs:   append([]string(nil), input.Match.ProfileRefs...),
+			ProviderIDs:   append([]string(nil), input.Match.ProviderIDs...),
+			ToolIDs:       append([]string(nil), input.Match.ToolIDs...),
+			FactKnowledge: policydomain.FactKnowledge(input.Match.FactKnowledge),
+			EffectsAny:    append([]string(nil), input.Match.EffectsAny...),
+			ResourcesAny:  resources,
+		},
+	}, nil
+}
+
+func policyProjection(policy policydomain.PolicySet) Policy {
+	rules := make([]PolicyRule, 0, len(policy.Rules()))
+	for _, rule := range policy.Rules() {
+		rules = append(rules, policyRuleProjection(rule))
+	}
+	return Policy{
+		DefaultDecision: string(policy.DefaultDecision()),
+		Rules:           rules,
+	}
+}
+
+func policyRuleProjection(rule policydomain.Rule) PolicyRule {
+	match := rule.Match()
+	origins := make([]string, 0, len(match.Origins()))
+	for _, value := range match.Origins() {
+		origins = append(origins, string(value))
+	}
+	scopeKinds := make([]string, 0, len(match.ScopeKinds()))
+	for _, value := range match.ScopeKinds() {
+		scopeKinds = append(scopeKinds, string(value))
+	}
+	resources := make([]PolicyResourceMatcher, 0, len(match.ResourcesAny()))
+	for _, resource := range match.ResourcesAny() {
+		resources = append(resources, PolicyResourceMatcher{
+			Kind:     resource.Kind(),
+			Operator: string(resource.Operator()),
+			Value:    resource.Value(),
+		})
+	}
+	return PolicyRule{
+		RuleID:      rule.ID().String(),
+		DisplayName: rule.DisplayName(),
+		Enabled:     rule.Enabled(),
+		Decision:    string(rule.Decision()),
+		Match: PolicyMatch{
+			Origins:       origins,
+			ScopeKinds:    scopeKinds,
+			ProfileRefs:   match.ProfileRefs(),
+			ProviderIDs:   match.ProviderIDs(),
+			ToolIDs:       match.ToolIDs(),
+			FactKnowledge: string(match.FactKnowledge()),
+			EffectsAny:    match.EffectsAny(),
+			ResourcesAny:  resources,
+		},
+		CreatedAt: rule.CreatedAt().Format(timeFormat),
+		UpdatedAt: rule.UpdatedAt().Format(timeFormat),
 	}
 }
 

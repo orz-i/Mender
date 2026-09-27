@@ -1,3 +1,4 @@
+import type { PolicyRuleInput } from "@mender/sdk";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock(
@@ -8,8 +9,12 @@ vi.mock(
       CallTool: vi.fn(),
       CreateEnvironmentCredential: vi.fn(),
       CreateNativeCredential: vi.fn(),
+      CreatePolicyRule: vi.fn(),
       DeleteCredential: vi.fn(),
+      DeletePolicyRule: vi.fn(),
       GetCredential: vi.fn(),
+      GetPolicy: vi.fn(),
+      GetPolicyStatus: vi.fn(),
       GetSystemStatus: vi.fn(),
       ListAudit: vi.fn(),
       ListCredentials: vi.fn(),
@@ -19,8 +24,11 @@ vi.mock(
       RestartMCPServer: vi.fn(),
       RotateNativeCredential: vi.fn(),
       SearchTools: vi.fn(),
+      SetPolicyDefault: vi.fn(),
+      SetPolicyRuleEnabled: vi.fn(),
       StartMCPServer: vi.fn(),
       StopMCPServer: vi.fn(),
+      UpdatePolicyRule: vi.fn(),
       UpdateProvider: vi.fn(),
     },
   }),
@@ -39,9 +47,12 @@ describe("desktop Mender client", () => {
     vi.mocked(Service.GetSystemStatus).mockResolvedValue({
       ready: true,
       policy: {
-        mode: "local_allow_all",
-        editable: false,
+        mode: "configured",
+        editable: true,
         approval: "fail_closed_when_required",
+        defaultDecision: "allow",
+        ruleCount: 0,
+        enabledRuleCount: 0,
       },
       credentials: {
         resolver: "inventory",
@@ -60,9 +71,12 @@ describe("desktop Mender client", () => {
     await expect(client.getSystemStatus()).resolves.toEqual({
       ready: true,
       policy: {
-        mode: "local_allow_all",
-        editable: false,
+        mode: "configured",
+        editable: true,
         approval: "fail_closed_when_required",
+        defaultDecision: "allow",
+        ruleCount: 0,
+        enabledRuleCount: 0,
       },
       credentials: {
         resolver: "inventory",
@@ -322,6 +336,108 @@ describe("desktop Mender client", () => {
       "DEMO_WORK_TOKEN",
     );
     expect(Service.DeleteCredential).toHaveBeenCalledWith("demo", "work");
+  });
+
+  it("maps persistent Policy CRUD through Wails", async () => {
+    const rule = {
+      ruleId: "rule_00000000000000000000000000000001",
+      displayName: "Guard MCP",
+      enabled: true,
+      decision: "deny",
+      match: {
+        origins: ["mcp"],
+        scopeKinds: ["profile"],
+        profileRefs: ["prof_00000000000000000000000000000001"],
+        providerIds: ["prov_00000000000000000000000000000001"],
+        toolIds: ["tool_00000000000000000000000000000001"],
+        factKnowledge: "known",
+        effectsAny: ["filesystem.write"],
+        resourcesAny: [
+          { kind: "path", operator: "prefix", value: "/workspace/release" },
+        ],
+      },
+      createdAt: "2026-09-27T00:00:00Z",
+      updatedAt: "2026-09-27T00:00:00Z",
+    };
+    vi.mocked(Service.GetPolicy).mockResolvedValue({
+      defaultDecision: "allow",
+      rules: [rule],
+    });
+    vi.mocked(Service.SetPolicyDefault).mockResolvedValue({
+      defaultDecision: "deny",
+      rules: [rule],
+    });
+    vi.mocked(Service.CreatePolicyRule).mockResolvedValue(rule);
+    vi.mocked(Service.UpdatePolicyRule).mockResolvedValue({
+      ...rule,
+      displayName: "Updated guard",
+    });
+    vi.mocked(Service.SetPolicyRuleEnabled).mockResolvedValue({
+      ...rule,
+      enabled: false,
+    });
+
+    const client = createDesktopMenderClient();
+    const input: PolicyRuleInput = {
+      displayName: "Guard MCP",
+      enabled: true,
+      decision: "deny" as const,
+      match: {
+        origins: ["mcp"],
+        scopeKinds: ["profile"],
+        profileRefs: ["prof_00000000000000000000000000000001"],
+        providerIds: ["prov_00000000000000000000000000000001"],
+        toolIds: ["tool_00000000000000000000000000000001"],
+        factKnowledge: "known",
+        effectsAny: ["filesystem.write"],
+        resourcesAny: [
+          {
+            kind: "path",
+            operator: "prefix",
+            value: "/workspace/release",
+          },
+        ],
+      },
+    };
+
+    await expect(client.getPolicy()).resolves.toMatchObject({
+      defaultDecision: "allow",
+      rules: [{ decision: "deny", match: { origins: ["mcp"] } }],
+    });
+    await expect(
+      client.setPolicyDefault({ decision: "deny" }),
+    ).resolves.toMatchObject({ defaultDecision: "deny" });
+    await expect(client.createPolicyRule(input)).resolves.toMatchObject({
+      ruleId: rule.ruleId,
+      decision: "deny",
+    });
+    await expect(
+      client.updatePolicyRule(rule.ruleId, {
+        ...input,
+        displayName: "Updated guard",
+      }),
+    ).resolves.toMatchObject({ displayName: "Updated guard" });
+    await expect(
+      client.setPolicyRuleEnabled(rule.ruleId, false),
+    ).resolves.toMatchObject({ enabled: false });
+    await client.deletePolicyRule(rule.ruleId);
+
+    expect(Service.SetPolicyDefault).toHaveBeenCalledWith("deny");
+    expect(Service.CreatePolicyRule).toHaveBeenCalledWith(
+      expect.objectContaining({
+        displayName: "Guard MCP",
+        decision: "deny",
+      }),
+    );
+    expect(Service.UpdatePolicyRule).toHaveBeenCalledWith(
+      rule.ruleId,
+      expect.objectContaining({ displayName: "Updated guard" }),
+    );
+    expect(Service.SetPolicyRuleEnabled).toHaveBeenCalledWith(
+      rule.ruleId,
+      false,
+    );
+    expect(Service.DeletePolicyRule).toHaveBeenCalledWith(rule.ruleId);
   });
 
   it("replaces Profile Tool membership through Wails", async () => {

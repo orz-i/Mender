@@ -12,14 +12,20 @@ import (
 	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
 	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
+	policydomain "github.com/orz-i/Mender/backend/internal/policy/domain"
 	profileapplication "github.com/orz-i/Mender/backend/internal/profile/application"
 )
 
-func (h *Handler) getSystemStatus(w http.ResponseWriter, _ *http.Request) {
+func (h *Handler) getSystemStatus(w http.ResponseWriter, r *http.Request) {
 	status := h.runtime.Status()
+	policy, err := h.runtime.Policy.Get.Execute(r.Context())
+	if err != nil {
+		writeKnownError(w, err)
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ready":  status.Ready,
-		"policy": policyStatusProjection(status.PolicyMode, status.ApprovalMode),
+		"policy": policyStatusProjection(status.PolicyMode, status.ApprovalMode, policy),
 		"credentials": credentialStatusProjection(
 			status.CredentialResolver,
 			status.CredentialPersistent,
@@ -32,9 +38,18 @@ func (h *Handler) getSystemStatus(w http.ResponseWriter, _ *http.Request) {
 	})
 }
 
-func (h *Handler) getPolicyStatus(w http.ResponseWriter, _ *http.Request) {
+func (h *Handler) getPolicyStatus(w http.ResponseWriter, r *http.Request) {
 	status := h.runtime.Status()
-	writeJSON(w, http.StatusOK, policyStatusProjection(status.PolicyMode, status.ApprovalMode))
+	policy, err := h.runtime.Policy.Get.Execute(r.Context())
+	if err != nil {
+		writeKnownError(w, err)
+		return
+	}
+	writeJSON(
+		w,
+		http.StatusOK,
+		policyStatusProjection(status.PolicyMode, status.ApprovalMode, policy),
+	)
 }
 
 func (h *Handler) getCredentialStatus(w http.ResponseWriter, _ *http.Request) {
@@ -45,11 +60,25 @@ func (h *Handler) getCredentialStatus(w http.ResponseWriter, _ *http.Request) {
 	))
 }
 
-func policyStatusProjection(mode, approval string) map[string]any {
+func policyStatusProjection(
+	mode string,
+	approval string,
+	policy policydomain.PolicySet,
+) map[string]any {
+	ruleCount := len(policy.Rules())
+	enabledRuleCount := 0
+	for _, rule := range policy.Rules() {
+		if rule.Enabled() {
+			enabledRuleCount++
+		}
+	}
 	return map[string]any{
-		"mode":     mode,
-		"editable": false,
-		"approval": approval,
+		"mode":             mode,
+		"editable":         true,
+		"approval":         approval,
+		"defaultDecision":  string(policy.DefaultDecision()),
+		"ruleCount":        ruleCount,
+		"enabledRuleCount": enabledRuleCount,
 	}
 }
 

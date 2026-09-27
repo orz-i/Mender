@@ -308,6 +308,102 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getPolicy"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/policy/default": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["setPolicyDefault"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/policy/rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["createPolicyRule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/policy/rules/{ruleId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["updatePolicyRule"];
+        post?: never;
+        delete: operations["deletePolicyRule"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/policy/rules/{ruleId}/enable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["enablePolicyRule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/policy/rules/{ruleId}/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["disablePolicyRule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/credentials/status": {
         parameters: {
             query?: never;
@@ -424,11 +520,57 @@ export interface components {
         };
         PolicyStatus: {
             /** @enum {string} */
-            mode: "local_allow_all";
+            mode: "configured";
             /** @constant */
-            editable: false;
+            editable: true;
             /** @enum {string} */
             approval: "fail_closed_when_required";
+            defaultDecision: components["schemas"]["PolicyDecision"];
+            ruleCount: number;
+            enabledRuleCount: number;
+        };
+        /** @enum {string} */
+        PolicyDecision: "allow" | "require_approval" | "deny";
+        Policy: {
+            defaultDecision: components["schemas"]["PolicyDecision"];
+            rules: components["schemas"]["PolicyRule"][];
+        };
+        PolicyDefaultRequest: {
+            decision: components["schemas"]["PolicyDecision"];
+        };
+        PolicyRule: {
+            ruleId: string;
+            displayName: string;
+            enabled: boolean;
+            decision: components["schemas"]["PolicyDecision"];
+            match: components["schemas"]["PolicyMatch"];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        PolicyRuleInput: {
+            displayName: string;
+            enabled: boolean;
+            decision: components["schemas"]["PolicyDecision"];
+            match: components["schemas"]["PolicyMatch"];
+        };
+        PolicyMatch: {
+            origins: ("cli" | "mcp" | "management_http" | "desktop" | "internal")[];
+            scopeKinds: ("catalog" | "profile")[];
+            profileRefs: string[];
+            providerIds: string[];
+            toolIds: string[];
+            /** @enum {string} */
+            factKnowledge: "any" | "known" | "unknown";
+            effectsAny: string[];
+            resourcesAny: components["schemas"]["PolicyResourceMatcher"][];
+        };
+        PolicyResourceMatcher: {
+            kind: string;
+            /** @enum {string} */
+            operator: "exact" | "prefix";
+            value: string;
         };
         CredentialStatus: {
             /** @enum {string} */
@@ -737,6 +879,7 @@ export interface components {
         ServerId: string;
         CredentialNamespace: string;
         CredentialName: string;
+        RuleId: string;
     };
     requestBodies: never;
     headers: never;
@@ -1337,6 +1480,173 @@ export interface operations {
                 };
             };
             403: components["responses"]["Forbidden"];
+        };
+    };
+    getPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Persistent PolicySet */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Policy"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    setPolicyDefault: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PolicyDefaultRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated PolicySet */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Policy"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+        };
+    };
+    createPolicyRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PolicyRuleInput"];
+            };
+        };
+        responses: {
+            /** @description Policy Rule created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PolicyRule"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    updatePolicyRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ruleId: components["parameters"]["RuleId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PolicyRuleInput"];
+            };
+        };
+        responses: {
+            /** @description Policy Rule updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PolicyRule"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deletePolicyRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ruleId: components["parameters"]["RuleId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Policy Rule deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    enablePolicyRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ruleId: components["parameters"]["RuleId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Policy Rule enabled */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PolicyRule"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    disablePolicyRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ruleId: components["parameters"]["RuleId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Policy Rule disabled */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PolicyRule"];
+                };
+            };
+            404: components["responses"]["NotFound"];
         };
     };
     getCredentialStatus: {

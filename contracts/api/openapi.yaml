@@ -416,6 +416,97 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PolicyStatus'
+  /policy:
+    get:
+      operationId: getPolicy
+      responses:
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '200':
+          description: Persistent PolicySet
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Policy'
+  /policy/default:
+    put:
+      operationId: setPolicyDefault
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PolicyDefaultRequest' }
+      responses:
+        '200':
+          description: Updated PolicySet
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Policy' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+  /policy/rules:
+    post:
+      operationId: createPolicyRule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PolicyRuleInput' }
+      responses:
+        '201':
+          description: Policy Rule created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PolicyRule' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /policy/rules/{ruleId}:
+    put:
+      operationId: updatePolicyRule
+      parameters:
+        - $ref: '#/components/parameters/RuleId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PolicyRuleInput' }
+      responses:
+        '200':
+          description: Policy Rule updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PolicyRule' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      operationId: deletePolicyRule
+      parameters:
+        - $ref: '#/components/parameters/RuleId'
+      responses:
+        '204': { description: Policy Rule deleted }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /policy/rules/{ruleId}/enable:
+    post:
+      operationId: enablePolicyRule
+      parameters:
+        - $ref: '#/components/parameters/RuleId'
+      responses:
+        '200':
+          description: Policy Rule enabled
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PolicyRule' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /policy/rules/{ruleId}/disable:
+    post:
+      operationId: disablePolicyRule
+      parameters:
+        - $ref: '#/components/parameters/RuleId'
+      responses:
+        '200':
+          description: Policy Rule disabled
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PolicyRule' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /credentials/status:
     get:
       operationId: getCredentialStatus
@@ -548,6 +639,11 @@ components:
       in: path
       required: true
       schema: { type: string }
+    RuleId:
+      name: ruleId
+      in: path
+      required: true
+      schema: { type: string }
   responses:
     BadRequest:
       description: Invalid request
@@ -600,11 +696,86 @@ components:
               items: { type: string, enum: [direct, dynamic, hybrid] }
     PolicyStatus:
       type: object
-      required: [mode, editable, approval]
+      required: [mode, editable, approval, defaultDecision, ruleCount, enabledRuleCount]
       properties:
-        mode: { type: string, enum: [local_allow_all] }
-        editable: { type: boolean, const: false }
+        mode: { type: string, enum: [configured] }
+        editable: { type: boolean, const: true }
         approval: { type: string, enum: [fail_closed_when_required] }
+        defaultDecision: { $ref: '#/components/schemas/PolicyDecision' }
+        ruleCount: { type: integer, minimum: 0 }
+        enabledRuleCount: { type: integer, minimum: 0 }
+    PolicyDecision:
+      type: string
+      enum: [allow, require_approval, deny]
+    Policy:
+      type: object
+      required: [defaultDecision, rules]
+      properties:
+        defaultDecision: { $ref: '#/components/schemas/PolicyDecision' }
+        rules:
+          type: array
+          items: { $ref: '#/components/schemas/PolicyRule' }
+    PolicyDefaultRequest:
+      type: object
+      required: [decision]
+      properties:
+        decision: { $ref: '#/components/schemas/PolicyDecision' }
+      additionalProperties: false
+    PolicyRule:
+      type: object
+      required: [ruleId, displayName, enabled, decision, match, createdAt, updatedAt]
+      properties:
+        ruleId: { type: string }
+        displayName: { type: string }
+        enabled: { type: boolean }
+        decision: { $ref: '#/components/schemas/PolicyDecision' }
+        match: { $ref: '#/components/schemas/PolicyMatch' }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    PolicyRuleInput:
+      type: object
+      required: [displayName, enabled, decision, match]
+      properties:
+        displayName: { type: string }
+        enabled: { type: boolean }
+        decision: { $ref: '#/components/schemas/PolicyDecision' }
+        match: { $ref: '#/components/schemas/PolicyMatch' }
+      additionalProperties: false
+    PolicyMatch:
+      type: object
+      required: [origins, scopeKinds, profileRefs, providerIds, toolIds, factKnowledge, effectsAny, resourcesAny]
+      properties:
+        origins:
+          type: array
+          items: { type: string, enum: [cli, mcp, management_http, desktop, internal] }
+        scopeKinds:
+          type: array
+          items: { type: string, enum: [catalog, profile] }
+        profileRefs:
+          type: array
+          items: { type: string }
+        providerIds:
+          type: array
+          items: { type: string }
+        toolIds:
+          type: array
+          items: { type: string }
+        factKnowledge: { type: string, enum: [any, known, unknown] }
+        effectsAny:
+          type: array
+          items: { type: string }
+        resourcesAny:
+          type: array
+          items: { $ref: '#/components/schemas/PolicyResourceMatcher' }
+      additionalProperties: false
+    PolicyResourceMatcher:
+      type: object
+      required: [kind, operator, value]
+      properties:
+        kind: { type: string }
+        operator: { type: string, enum: [exact, prefix] }
+        value: { type: string }
+      additionalProperties: false
     CredentialStatus:
       type: object
       required: [resolver, persistentStore, editable]

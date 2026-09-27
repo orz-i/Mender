@@ -93,10 +93,52 @@ export interface MCPStatus {
     "exposureModes": string[] | null;
 }
 
+export interface Policy {
+    "defaultDecision": string;
+    "rules": PolicyRule[] | null;
+}
+
+export interface PolicyMatch {
+    "origins": string[] | null;
+    "scopeKinds": string[] | null;
+    "profileRefs": string[] | null;
+    "providerIds": string[] | null;
+    "toolIds": string[] | null;
+    "factKnowledge": string;
+    "effectsAny": string[] | null;
+    "resourcesAny": PolicyResourceMatcher[] | null;
+}
+
+export interface PolicyResourceMatcher {
+    "kind": string;
+    "operator": string;
+    "value": string;
+}
+
+export interface PolicyRule {
+    "ruleId": string;
+    "displayName": string;
+    "enabled": boolean;
+    "decision": string;
+    "match": PolicyMatch;
+    "createdAt": string;
+    "updatedAt": string;
+}
+
+export interface PolicyRuleInput {
+    "displayName": string;
+    "enabled": boolean;
+    "decision": string;
+    "match": PolicyMatch;
+}
+
 export interface PolicyStatus {
     "mode": string;
     "editable": boolean;
     "approval": string;
+    "defaultDecision": string;
+    "ruleCount": number;
+    "enabledRuleCount": number;
 }
 
 export interface Profile {

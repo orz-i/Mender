@@ -14,9 +14,51 @@ type MCPStatus struct {
 }
 
 type PolicyStatus struct {
-	Mode     string `json:"mode"`
-	Editable bool   `json:"editable"`
-	Approval string `json:"approval"`
+	Mode             string `json:"mode"`
+	Editable         bool   `json:"editable"`
+	Approval         string `json:"approval"`
+	DefaultDecision  string `json:"defaultDecision"`
+	RuleCount        int    `json:"ruleCount"`
+	EnabledRuleCount int    `json:"enabledRuleCount"`
+}
+
+type Policy struct {
+	DefaultDecision string       `json:"defaultDecision"`
+	Rules           []PolicyRule `json:"rules"`
+}
+
+type PolicyRule struct {
+	RuleID      string      `json:"ruleId"`
+	DisplayName string      `json:"displayName"`
+	Enabled     bool        `json:"enabled"`
+	Decision    string      `json:"decision"`
+	Match       PolicyMatch `json:"match"`
+	CreatedAt   string      `json:"createdAt"`
+	UpdatedAt   string      `json:"updatedAt"`
+}
+
+type PolicyRuleInput struct {
+	DisplayName string      `json:"displayName"`
+	Enabled     bool        `json:"enabled"`
+	Decision    string      `json:"decision"`
+	Match       PolicyMatch `json:"match"`
+}
+
+type PolicyMatch struct {
+	Origins       []string                `json:"origins"`
+	ScopeKinds    []string                `json:"scopeKinds"`
+	ProfileRefs   []string                `json:"profileRefs"`
+	ProviderIDs   []string                `json:"providerIds"`
+	ToolIDs       []string                `json:"toolIds"`
+	FactKnowledge string                  `json:"factKnowledge"`
+	EffectsAny    []string                `json:"effectsAny"`
+	ResourcesAny  []PolicyResourceMatcher `json:"resourcesAny"`
+}
+
+type PolicyResourceMatcher struct {
+	Kind     string `json:"kind"`
+	Operator string `json:"operator"`
+	Value    string `json:"value"`
 }
 
 type CredentialStatus struct {

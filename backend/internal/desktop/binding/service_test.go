@@ -57,8 +57,14 @@ func TestServiceEndToEndUsesSharedRuntime(t *testing.T) {
 
 	service := NewService(context.Background(), runtime)
 
-	status := service.GetSystemStatus()
-	if !status.Ready || status.Policy.Editable || !status.Credentials.Editable {
+	status, err := service.GetSystemStatus()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !status.Ready || !status.Policy.Editable || !status.Credentials.Editable ||
+		status.Policy.Mode != "configured" ||
+		status.Policy.DefaultDecision != "allow" ||
+		status.Policy.RuleCount != 0 {
 		t.Fatalf("system status = %#v", status)
 	}
 

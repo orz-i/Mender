@@ -11,6 +11,15 @@ export type Profile = components["schemas"]["Profile"];
 export type AuditRecord = components["schemas"]["AuditRecord"];
 export type SystemStatus = components["schemas"]["SystemStatus"];
 export type PolicyStatus = components["schemas"]["PolicyStatus"];
+export type Policy = components["schemas"]["Policy"];
+export type PolicyDecision = components["schemas"]["PolicyDecision"];
+export type PolicyRule = components["schemas"]["PolicyRule"];
+export type PolicyRuleInput = components["schemas"]["PolicyRuleInput"];
+export type PolicyMatch = components["schemas"]["PolicyMatch"];
+export type PolicyResourceMatcher =
+  components["schemas"]["PolicyResourceMatcher"];
+export type PolicyDefaultRequest =
+  components["schemas"]["PolicyDefaultRequest"];
 export type CredentialStatus = components["schemas"]["CredentialStatus"];
 export type Credential = components["schemas"]["Credential"];
 export type CreateNativeCredentialRequest =
@@ -85,6 +94,12 @@ export interface MenderClient {
   stopMCPServer(serverId: string): Promise<void>;
   listAudit(limit?: number): Promise<{ records: AuditRecord[] }>;
   getPolicyStatus(): Promise<PolicyStatus>;
+  getPolicy(): Promise<Policy>;
+  setPolicyDefault(body: PolicyDefaultRequest): Promise<Policy>;
+  createPolicyRule(body: PolicyRuleInput): Promise<PolicyRule>;
+  updatePolicyRule(ruleId: string, body: PolicyRuleInput): Promise<PolicyRule>;
+  deletePolicyRule(ruleId: string): Promise<void>;
+  setPolicyRuleEnabled(ruleId: string, enabled: boolean): Promise<PolicyRule>;
   getCredentialStatus(): Promise<CredentialStatus>;
   listCredentials(): Promise<{ credentials: Credential[] }>;
   getCredential(namespace: string, name: string): Promise<Credential>;
@@ -295,6 +310,49 @@ export function createMenderClient(
 
     async getPolicyStatus() {
       const result = await client.GET("/policy/status");
+      return requireData(result);
+    },
+
+    async getPolicy() {
+      const result = await client.GET("/policy");
+      return requireData(result);
+    },
+
+    async setPolicyDefault(body: PolicyDefaultRequest) {
+      const result = await client.PUT("/policy/default", { body });
+      return requireData(result);
+    },
+
+    async createPolicyRule(body: PolicyRuleInput) {
+      const result = await client.POST("/policy/rules", { body });
+      return requireData(result);
+    },
+
+    async updatePolicyRule(ruleId: string, body: PolicyRuleInput) {
+      const result = await client.PUT("/policy/rules/{ruleId}", {
+        params: { path: { ruleId } },
+        body,
+      });
+      return requireData(result);
+    },
+
+    async deletePolicyRule(ruleId: string) {
+      const result = await client.DELETE("/policy/rules/{ruleId}", {
+        params: { path: { ruleId } },
+      });
+      if (!result.response.ok) {
+        throwApiError(result.error, result.response);
+      }
+    },
+
+    async setPolicyRuleEnabled(ruleId: string, enabled: boolean) {
+      const result = enabled
+        ? await client.POST("/policy/rules/{ruleId}/enable", {
+            params: { path: { ruleId } },
+          })
+        : await client.POST("/policy/rules/{ruleId}/disable", {
+            params: { path: { ruleId } },
+          });
       return requireData(result);
     },
 
