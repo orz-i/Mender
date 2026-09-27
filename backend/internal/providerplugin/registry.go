@@ -67,20 +67,28 @@ func (r *Registry) Register(plugin Plugin) error {
 
 // Lookup resolves a registered Provider plugin.
 func (r *Registry) Lookup(id ID) (Plugin, error) {
+	entry, err := r.lookup(id)
+	if err != nil {
+		return nil, err
+	}
+	return entry.plugin, nil
+}
+
+func (r *Registry) lookup(id ID) (registeredPlugin, error) {
 	if r == nil {
-		return nil, fmt.Errorf("lookup provider plugin: registry must not be nil")
+		return registeredPlugin{}, fmt.Errorf("lookup provider plugin: registry must not be nil")
 	}
 	if _, err := ParseID(id.String()); err != nil {
-		return nil, fmt.Errorf("lookup provider plugin: %w", err)
+		return registeredPlugin{}, fmt.Errorf("lookup provider plugin: %w", err)
 	}
 
 	r.mu.RLock()
 	entry, ok := r.plugins[id]
 	r.mu.RUnlock()
 	if !ok {
-		return nil, fmt.Errorf("%w: %s", ErrNotFound, id)
+		return registeredPlugin{}, fmt.Errorf("%w: %s", ErrNotFound, id)
 	}
-	return entry.plugin, nil
+	return entry, nil
 }
 
 // Descriptors returns stable management-safe metadata ordered by PluginID.

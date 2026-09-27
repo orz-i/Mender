@@ -40,6 +40,26 @@ func TestRouterReturnsExecutorNotFound(t *testing.T) {
 	}
 }
 
+func TestRouterUnregisterRemovesExecutor(t *testing.T) {
+	t.Parallel()
+
+	router := New()
+	tool := testTool(t)
+	if err := router.Register(tool.ProviderID(), stubExecutor{}); err != nil {
+		t.Fatalf("Register() error = %v", err)
+	}
+	if err := router.Unregister(tool.ProviderID()); err != nil {
+		t.Fatalf("Unregister() error = %v", err)
+	}
+	if router.HasProvider(tool.ProviderID()) {
+		t.Fatal("HasProvider() = true after Unregister()")
+	}
+	_, err := router.ExecutorFor(context.Background(), tool)
+	if !errors.Is(err, invocationapplication.ErrExecutorNotFound) {
+		t.Fatalf("ExecutorFor() error = %v, want ErrExecutorNotFound", err)
+	}
+}
+
 type stubExecutor struct{}
 
 func (stubExecutor) Execute(

@@ -42,6 +42,18 @@ func (r *Router) Register(
 	return nil
 }
 
+// Unregister removes the executor route for one Provider.
+func (r *Router) Unregister(providerID catalogdomain.ProviderID) error {
+	if _, err := catalogdomain.ParseProviderID(providerID.String()); err != nil {
+		return fmt.Errorf("unregister executor: %w", err)
+	}
+
+	r.mu.Lock()
+	delete(r.executors, providerID)
+	r.mu.Unlock()
+	return nil
+}
+
 // HasProvider reports whether an executor is already registered for a Provider.
 func (r *Router) HasProvider(providerID catalogdomain.ProviderID) bool {
 	r.mu.RLock()

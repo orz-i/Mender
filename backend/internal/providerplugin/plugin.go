@@ -101,9 +101,10 @@ func (d Descriptor) Validate() error {
 // Config is plugin-owned non-secret persisted configuration. Credentials is a
 // capability, not resolved secret material.
 type OpenRequest struct {
-	ProviderID  catalogdomain.ProviderID
-	Config      json.RawMessage
-	Credentials invocationapplication.CredentialResolver
+	ProviderID    catalogdomain.ProviderID
+	ConfigVersion int
+	Config        json.RawMessage
+	Credentials   invocationapplication.CredentialResolver
 }
 
 // Plugin validates configuration and opens runtime Provider instances.
