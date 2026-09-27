@@ -205,29 +205,6 @@ func (uc SetRuleEnabled) Execute(
 	return updated, nil
 }
 
-type Evaluate struct {
-	repository Repository
-}
-
-func NewEvaluate(repository Repository) Evaluate {
-	return Evaluate{repository: repository}
-}
-
-func (uc Evaluate) Execute(
-	ctx context.Context,
-	input policydomain.EvaluationInput,
-) (policydomain.Decision, error) {
-	policy, err := uc.repository.GetPolicySet(ctx)
-	if err != nil {
-		return policydomain.Decision{}, fmt.Errorf("evaluate policy: %w", err)
-	}
-	decision, err := policy.Evaluate(input)
-	if err != nil {
-		return policydomain.Decision{}, fmt.Errorf("evaluate policy: %w", err)
-	}
-	return decision, nil
-}
-
 func validateReferences(
 	ctx context.Context,
 	lookup ReferenceLookup,

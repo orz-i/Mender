@@ -128,8 +128,11 @@ func TestSetDefaultAndEvaluateUseCurrentPolicySet(t *testing.T) {
 
 	decision, err := NewEvaluate(repository).Execute(
 		context.Background(),
-		policydomain.EvaluationInput{
+		EvaluateRequest{
 			Origin:        policydomain.OriginCLI,
+			ScopeKind:     policydomain.ScopeCatalog,
+			ProviderID:    "prov_00000000000000000000000000000001",
+			ToolID:        "tool_00000000000000000000000000000001",
 			FactKnowledge: policydomain.FactUnknown,
 		},
 	)

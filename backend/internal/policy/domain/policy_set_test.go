@@ -12,7 +12,7 @@ func TestPolicySetUsesDefaultOnlyWhenNoRuleMatches(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	decision, err := denyDefault.Evaluate(EvaluationInput{FactKnowledge: FactUnknown})
+	decision, err := denyDefault.Evaluate(validEvaluationInput(OriginCLI, FactUnknown))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -31,10 +31,7 @@ func TestPolicySetUsesDefaultOnlyWhenNoRuleMatches(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	decision, err = allowList.Evaluate(EvaluationInput{
-		Origin:        OriginMCP,
-		FactKnowledge: FactUnknown,
-	})
+	decision, err = allowList.Evaluate(validEvaluationInput(OriginMCP, FactUnknown))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,10 +74,7 @@ func TestPolicySetMatchingRulesUseMostRestrictiveDecisionWithoutOrder(t *testing
 		if err != nil {
 			t.Fatal(err)
 		}
-		decision, err := policy.Evaluate(EvaluationInput{
-			Origin:        OriginMCP,
-			FactKnowledge: FactUnknown,
-		})
+		decision, err := policy.Evaluate(validEvaluationInput(OriginMCP, FactUnknown))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -114,7 +108,7 @@ func TestPolicySetSameDecisionTieBreaksByRuleID(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	decision, err := policy.Evaluate(EvaluationInput{FactKnowledge: FactUnknown})
+	decision, err := policy.Evaluate(validEvaluationInput(OriginCLI, FactUnknown))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -141,7 +135,7 @@ func TestDisabledRuleDoesNotMatch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	decision, err := policy.Evaluate(EvaluationInput{FactKnowledge: FactUnknown})
+	decision, err := policy.Evaluate(validEvaluationInput(OriginCLI, FactUnknown))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -178,4 +172,14 @@ func mustPolicyRule(
 		t.Fatal(err)
 	}
 	return rule
+}
+
+func validEvaluationInput(origin Origin, knowledge FactKnowledge) EvaluationInput {
+	return EvaluationInput{
+		Origin:        origin,
+		ScopeKind:     ScopeCatalog,
+		ProviderID:    "prov_00000000000000000000000000000001",
+		ToolID:        "tool_00000000000000000000000000000001",
+		FactKnowledge: knowledge,
+	}
 }

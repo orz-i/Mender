@@ -48,6 +48,9 @@ func (p PolicySet) Rules() []Rule {
 }
 
 func (p PolicySet) Evaluate(input EvaluationInput) (Decision, error) {
+	if err := input.Validate(); err != nil {
+		return Decision{}, err
+	}
 	var winning *Rule
 	winningSeverity := 0
 

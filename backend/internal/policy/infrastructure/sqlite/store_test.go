@@ -31,6 +31,9 @@ func TestFreshStoreDefaultsToAllowWithNoRules(t *testing.T) {
 
 	decision, err := policy.Evaluate(policydomain.EvaluationInput{
 		Origin:        policydomain.OriginCLI,
+		ScopeKind:     policydomain.ScopeCatalog,
+		ProviderID:    "prov_00000000000000000000000000000001",
+		ToolID:        "tool_00000000000000000000000000000001",
 		FactKnowledge: policydomain.FactUnknown,
 	})
 	if err != nil {

@@ -257,6 +257,63 @@ type EvaluationInput struct {
 	Resources      []ResourceFact
 }
 
+func (i EvaluationInput) Validate() error {
+	switch i.Origin {
+	case OriginCLI, OriginMCP, OriginManagementHTTP, OriginDesktop, OriginInternal:
+	default:
+		return fmt.Errorf("evaluation.origin: unknown value %q", i.Origin)
+	}
+	switch i.ScopeKind {
+	case ScopeCatalog:
+		if strings.TrimSpace(i.ScopeReference) != "" {
+			return fmt.Errorf("evaluation.scope_reference: must be empty for catalog scope")
+		}
+	case ScopeProfile:
+		if strings.TrimSpace(i.ScopeReference) == "" {
+			return fmt.Errorf("evaluation.scope_reference: must not be empty for profile scope")
+		}
+		if len(i.ScopeReference) > maxSelectorValueLen {
+			return fmt.Errorf("evaluation.scope_reference: is too long")
+		}
+	default:
+		return fmt.Errorf("evaluation.scope_kind: unknown value %q", i.ScopeKind)
+	}
+	if strings.TrimSpace(i.ProviderID) == "" || len(i.ProviderID) > maxSelectorValueLen {
+		return fmt.Errorf("evaluation.provider_id: must be non-empty and bounded")
+	}
+	if strings.TrimSpace(i.ToolID) == "" || len(i.ToolID) > maxSelectorValueLen {
+		return fmt.Errorf("evaluation.tool_id: must be non-empty and bounded")
+	}
+	switch i.FactKnowledge {
+	case FactKnown, FactUnknown:
+	default:
+		return fmt.Errorf("evaluation.fact_knowledge: unknown value %q", i.FactKnowledge)
+	}
+	if len(i.Effects) > maxEffectValues {
+		return fmt.Errorf("evaluation.effects: contains too many entries")
+	}
+	for _, effect := range i.Effects {
+		value := strings.TrimSpace(effect)
+		if value == "" || len(value) > maxFactKindLen {
+			return fmt.Errorf("evaluation.effects: contains invalid value")
+		}
+	}
+	if len(i.Resources) > maxResourceMatchers {
+		return fmt.Errorf("evaluation.resources: contains too many entries")
+	}
+	for index, resource := range i.Resources {
+		kind := strings.TrimSpace(resource.Kind)
+		value := strings.TrimSpace(resource.Value)
+		if kind == "" || len(kind) > maxFactKindLen || value == "" || len(value) > maxFactValueLen {
+			return fmt.Errorf("evaluation.resources[%d]: contains invalid value", index)
+		}
+	}
+	if i.FactKnowledge == FactUnknown && (len(i.Effects) != 0 || len(i.Resources) != 0) {
+		return fmt.Errorf("evaluation: unknown facts must not contain effect/resource values")
+	}
+	return nil
+}
+
 func (m Match) Matches(input EvaluationInput) bool {
 	if len(m.origins) != 0 && !slices.Contains(m.origins, input.Origin) {
 		return false
