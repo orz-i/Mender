@@ -5,9 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"path/filepath"
+	"sync"
 	"testing"
 
 	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
+	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
+	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
+	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	mcpplugin "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/plugin"
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
 	providerconfigstore "github.com/orz-i/Mender/backend/internal/providerplugin/configstore"
@@ -210,4 +214,229 @@ func mustProviderConfigJSON(t *testing.T, config mcpplugin.Config) json.RawMessa
 		t.Fatal(err)
 	}
 	return raw
+}
+
+func TestConfiguredProviderRuntimeReusesAndReplacesPluginInstances(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	runtime := newProviderTestRuntime(t)
+	plugin := &runtimeTestProviderPlugin{
+		descriptor: providerplugin.Descriptor{
+			ID:            providerplugin.ID("io.mender.provider.runtime-test"),
+			Version:       "1.0.0",
+			DisplayName:   "Runtime Test",
+			Description:   "Test Provider plugin",
+			ConfigVersion: 1,
+		},
+	}
+	if err := runtime.providerPlugins.Register(plugin); err != nil {
+		t.Fatalf("Register(test plugin) error = %v", err)
+	}
+
+	provider, err := runtime.RegisterConfiguredProvider(
+		ctx,
+		catalogapplication.RegisterProviderRequest{
+			Namespace:   "runtime-test",
+			DisplayName: "Runtime Test",
+		},
+		plugin.descriptor.ID,
+		json.RawMessage(`{"revision":1}`),
+	)
+	if err != nil {
+		t.Fatalf("RegisterConfiguredProvider() error = %v", err)
+	}
+	syncResult, err := runtime.SyncConfiguredProvider(ctx, provider.ID())
+	if err != nil {
+		t.Fatalf("SyncConfiguredProvider() error = %v", err)
+	}
+	if syncResult.Total != 1 {
+		t.Fatalf("SyncConfiguredProvider().Total = %d, want 1", syncResult.Total)
+	}
+	if got := plugin.counts(); got.opens != 1 || got.closes != 0 {
+		t.Fatalf("plugin counts after sync = %+v, want opens=1 closes=0", got)
+	}
+
+	search, err := runtime.Catalog.SearchTools.Execute(
+		ctx,
+		catalogapplication.SearchToolsRequest{
+			Query:      "echo",
+			Limit:      10,
+			ProviderID: providerIDPtr(provider.ID()),
+		},
+	)
+	if err != nil {
+		t.Fatalf("SearchTools.Execute() error = %v", err)
+	}
+	if len(search) != 1 {
+		t.Fatalf("SearchTools.Execute() = %+v, want one Tool", search)
+	}
+
+	invocationContext, err := invocationdomain.NewInvocationContext(
+		invocationdomain.OriginInternal,
+		"provider-plugin-runtime-test",
+		invocationdomain.CatalogExecutionScope(),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, value := range []string{"first", "second"} {
+		response, callErr := runtime.CallConfiguredTool(
+			ctx,
+			search[0].ToolID,
+			[]byte(`{"value":"`+value+`"}`),
+			invocationContext,
+		)
+		if callErr != nil {
+			t.Fatalf("CallConfiguredTool(%s) error = %v", value, callErr)
+		}
+		if response.Outcome.Kind() != invocationdomain.OutcomeKindComplete {
+			t.Fatalf(
+				"CallConfiguredTool(%s) outcome = %s, want complete",
+				value,
+				response.Outcome.Kind(),
+			)
+		}
+	}
+	if got := plugin.counts(); got.opens != 1 || got.closes != 0 {
+		t.Fatalf(
+			"plugin counts after repeated calls = %+v, want opens=1 closes=0",
+			got,
+		)
+	}
+
+	if _, err := runtime.UpdateConfiguredProvider(
+		ctx,
+		provider.ID(),
+		catalogapplication.UpdateProviderRequest{
+			DisplayName: "Runtime Test Updated",
+		},
+		json.RawMessage(`{"revision":2}`),
+	); err != nil {
+		t.Fatalf("UpdateConfiguredProvider() error = %v", err)
+	}
+
+	if _, err := runtime.CallConfiguredTool(
+		ctx,
+		search[0].ToolID,
+		[]byte(`{"value":"third"}`),
+		invocationContext,
+	); err != nil {
+		t.Fatalf("CallConfiguredTool(after revision) error = %v", err)
+	}
+	if got := plugin.counts(); got.opens != 2 || got.closes != 1 {
+		t.Fatalf(
+			"plugin counts after revision change = %+v, want opens=2 closes=1",
+			got,
+		)
+	}
+
+	if err := runtime.DeleteConfiguredProvider(ctx, provider.ID()); err != nil {
+		t.Fatalf("DeleteConfiguredProvider() error = %v", err)
+	}
+	if got := plugin.counts(); got.opens != 2 || got.closes != 2 {
+		t.Fatalf(
+			"plugin counts after delete = %+v, want opens=2 closes=2",
+			got,
+		)
+	}
+}
+
+func providerIDPtr(id catalogdomain.ProviderID) *catalogdomain.ProviderID {
+	return &id
+}
+
+type runtimeTestProviderPlugin struct {
+	descriptor providerplugin.Descriptor
+
+	mu     sync.Mutex
+	opens  int
+	closes int
+}
+
+func (p *runtimeTestProviderPlugin) Descriptor() providerplugin.Descriptor {
+	return p.descriptor
+}
+
+func (*runtimeTestProviderPlugin) ValidateConfig(
+	_ context.Context,
+	raw json.RawMessage,
+) error {
+	if !json.Valid(raw) {
+		return errors.New("invalid JSON")
+	}
+	return nil
+}
+
+func (*runtimeTestProviderPlugin) InspectConfig(
+	_ context.Context,
+	raw json.RawMessage,
+) (providerplugin.ConfigMetadata, error) {
+	if !json.Valid(raw) {
+		return providerplugin.ConfigMetadata{}, errors.New("invalid JSON")
+	}
+	return providerplugin.NewConfigMetadata(nil)
+}
+
+func (p *runtimeTestProviderPlugin) Open(
+	_ context.Context,
+	request providerplugin.OpenRequest,
+) (providerplugin.Instance, error) {
+	if request.ConfigVersion != p.descriptor.ConfigVersion {
+		return nil, errors.New("unsupported config version")
+	}
+	p.mu.Lock()
+	p.opens++
+	p.mu.Unlock()
+	return &runtimeTestProviderInstance{owner: p}, nil
+}
+
+func (p *runtimeTestProviderPlugin) counts() struct {
+	opens  int
+	closes int
+} {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return struct {
+		opens  int
+		closes int
+	}{opens: p.opens, closes: p.closes}
+}
+
+type runtimeTestProviderInstance struct {
+	owner *runtimeTestProviderPlugin
+	once  sync.Once
+}
+
+func (*runtimeTestProviderInstance) DiscoverTools(
+	_ context.Context,
+	_ catalogdomain.Provider,
+) ([]catalogapplication.DiscoveredTool, error) {
+	return []catalogapplication.DiscoveredTool{
+		{
+			SourceKey:   "echo",
+			Name:        "echo",
+			Title:       "Echo",
+			Description: "Echo JSON input",
+			InputSchema: []byte(`{"type":"object"}`),
+		},
+	}, nil
+}
+
+func (*runtimeTestProviderInstance) Execute(
+	_ context.Context,
+	request invocationapplication.ExecutionRequest,
+	_ invocationapplication.CredentialResolver,
+	_ invocationapplication.ProgressReporter,
+) (invocationdomain.Outcome, error) {
+	return invocationdomain.Complete(request.Arguments)
+}
+
+func (i *runtimeTestProviderInstance) Close() error {
+	i.once.Do(func() {
+		i.owner.mu.Lock()
+		i.owner.closes++
+		i.owner.mu.Unlock()
+	})
+	return nil
 }
