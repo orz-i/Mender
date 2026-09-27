@@ -17,31 +17,42 @@ const (
 	ExposureHybrid  ExposureMode = "hybrid"
 )
 
-// ToolSelection adds one canonical Tool to a Profile.
-//
-// Direct is meaningful only in hybrid mode. Direct mode exports every selected
-// Tool directly; dynamic mode exports none directly.
-type ToolSelection struct {
-	ToolID catalogdomain.ToolID
-	Direct bool
-}
-
-// Profile is the immutable Tool exposure boundary consumed by adapters.
+// Profile is the immutable Tool exposure and governance boundary consumed by adapters.
 type Profile struct {
 	id          ProfileID
 	slug        Slug
 	displayName string
 	mode        ExposureMode
-	selections  []ToolSelection
+	bindings    []ToolBinding
 }
 
-// NewProfile constructs a Profile and normalizes Direct flags according to mode.
+// NewProfile is the legacy membership constructor retained while adapters migrate.
+// Deprecated: use NewProfileWithBindings.
 func NewProfile(
 	id ProfileID,
 	slug Slug,
 	displayName string,
 	mode ExposureMode,
 	selections []ToolSelection,
+) (Profile, error) {
+	bindings := make([]ToolBinding, 0, len(selections))
+	for _, selection := range selections {
+		binding, err := DefaultToolBinding(selection.ToolID, selection.Direct)
+		if err != nil {
+			return Profile{}, err
+		}
+		bindings = append(bindings, binding)
+	}
+	return NewProfileWithBindings(id, slug, displayName, mode, bindings)
+}
+
+// NewProfileWithBindings constructs a Profile and normalizes binding exposure by mode.
+func NewProfileWithBindings(
+	id ProfileID,
+	slug Slug,
+	displayName string,
+	mode ExposureMode,
+	bindings []ToolBinding,
 ) (Profile, error) {
 	if _, err := ParseProfileID(id.String()); err != nil {
 		return Profile{}, err
@@ -64,25 +75,37 @@ func NewProfile(
 		return Profile{}, fmt.Errorf("exposure_mode: unknown mode %q", mode)
 	}
 
-	normalized := make([]ToolSelection, 0, len(selections))
-	seen := make(map[catalogdomain.ToolID]struct{}, len(selections))
-	for _, selection := range selections {
-		if _, err := catalogdomain.ParseToolID(selection.ToolID.String()); err != nil {
-			return Profile{}, fmt.Errorf("tool selection: %w", err)
+	normalized := make([]ToolBinding, 0, len(bindings))
+	seen := make(map[catalogdomain.ToolID]struct{}, len(bindings))
+	for _, binding := range bindings {
+		rebuilt, err := NewToolBinding(ToolBindingSpec{
+			ToolID:                binding.ToolID(),
+			Direct:                binding.Direct(),
+			Alias:                 binding.Alias(),
+			TitleOverride:         binding.TitleOverride(),
+			DescriptionOverride:   binding.DescriptionOverride(),
+			PolicyConstraint:      binding.PolicyConstraint(),
+			ConcurrencyConstraint: binding.ConcurrencyConstraint(),
+		})
+		if err != nil {
+			return Profile{}, err
 		}
-		if _, exists := seen[selection.ToolID]; exists {
-			return Profile{}, fmt.Errorf("tool selection: duplicate ToolID %s", selection.ToolID)
+		if _, exists := seen[rebuilt.ToolID()]; exists {
+			return Profile{}, fmt.Errorf(
+				"tool binding: duplicate ToolID %s",
+				rebuilt.ToolID(),
+			)
 		}
-		seen[selection.ToolID] = struct{}{}
+		seen[rebuilt.ToolID()] = struct{}{}
 
 		switch mode {
 		case ExposureDirect:
-			selection.Direct = true
+			rebuilt = rebuilt.withDirect(true)
 		case ExposureDynamic:
-			selection.Direct = false
+			rebuilt = rebuilt.withDirect(false)
 		case ExposureHybrid:
 		}
-		normalized = append(normalized, selection)
+		normalized = append(normalized, rebuilt)
 	}
 
 	return Profile{
@@ -90,7 +113,7 @@ func NewProfile(
 		slug:        slug,
 		displayName: displayName,
 		mode:        mode,
-		selections:  normalized,
+		bindings:    normalized,
 	}, nil
 }
 
@@ -110,32 +133,50 @@ func (p Profile) Mode() ExposureMode {
 	return p.mode
 }
 
+func (p Profile) Bindings() []ToolBinding {
+	return slices.Clone(p.bindings)
+}
+
+// Selections returns behavior-compatible legacy membership state.
+// Deprecated: use Bindings.
 func (p Profile) Selections() []ToolSelection {
-	return slices.Clone(p.selections)
+	selections := make([]ToolSelection, 0, len(p.bindings))
+	for _, binding := range p.bindings {
+		selections = append(selections, ToolSelection{
+			ToolID: binding.ToolID(),
+			Direct: binding.Direct(),
+		})
+	}
+	return selections
+}
+
+func (p Profile) Binding(toolID catalogdomain.ToolID) (ToolBinding, bool) {
+	for _, binding := range p.bindings {
+		if binding.ToolID() == toolID {
+			return binding, true
+		}
+	}
+	return ToolBinding{}, false
 }
 
 func (p Profile) Contains(toolID catalogdomain.ToolID) bool {
-	for _, selection := range p.selections {
-		if selection.ToolID == toolID {
-			return true
-		}
-	}
-	return false
+	_, ok := p.Binding(toolID)
+	return ok
 }
 
 func (p Profile) ToolIDs() []catalogdomain.ToolID {
-	ids := make([]catalogdomain.ToolID, 0, len(p.selections))
-	for _, selection := range p.selections {
-		ids = append(ids, selection.ToolID)
+	ids := make([]catalogdomain.ToolID, 0, len(p.bindings))
+	for _, binding := range p.bindings {
+		ids = append(ids, binding.ToolID())
 	}
 	return ids
 }
 
 func (p Profile) DirectToolIDs() []catalogdomain.ToolID {
-	ids := make([]catalogdomain.ToolID, 0, len(p.selections))
-	for _, selection := range p.selections {
-		if selection.Direct {
-			ids = append(ids, selection.ToolID)
+	ids := make([]catalogdomain.ToolID, 0, len(p.bindings))
+	for _, binding := range p.bindings {
+		if binding.Direct() {
+			ids = append(ids, binding.ToolID())
 		}
 	}
 	return ids

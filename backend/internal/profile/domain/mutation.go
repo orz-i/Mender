@@ -6,33 +6,59 @@ import (
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 )
 
-// AddTool returns a new Profile with one additional Tool membership.
-func (p Profile) AddTool(toolID catalogdomain.ToolID, direct bool) (Profile, error) {
-	if p.Contains(toolID) {
-		return Profile{}, fmt.Errorf("profile tool: ToolID %s already selected", toolID)
+// AddBinding returns a new Profile with one additional ToolBinding.
+func (p Profile) AddBinding(binding ToolBinding) (Profile, error) {
+	if p.Contains(binding.ToolID()) {
+		return Profile{}, fmt.Errorf(
+			"profile tool: ToolID %s already selected",
+			binding.ToolID(),
+		)
 	}
-
-	selections := p.Selections()
-	selections = append(selections, ToolSelection{ToolID: toolID, Direct: direct})
-	return NewProfile(p.id, p.slug, p.displayName, p.mode, selections)
+	bindings := p.Bindings()
+	bindings = append(bindings, binding)
+	return NewProfileWithBindings(p.id, p.slug, p.displayName, p.mode, bindings)
 }
 
-// ReplaceTools returns the same Profile identity with an exact Tool membership set.
+// ReplaceBindings returns the same Profile identity with an exact ToolBinding set.
+func (p Profile) ReplaceBindings(bindings []ToolBinding) (Profile, error) {
+	return NewProfileWithBindings(p.id, p.slug, p.displayName, p.mode, bindings)
+}
+
+// AddTool is the legacy membership mutation retained while application adapters migrate.
+// Deprecated: use AddBinding.
+func (p Profile) AddTool(toolID catalogdomain.ToolID, direct bool) (Profile, error) {
+	binding, err := DefaultToolBinding(toolID, direct)
+	if err != nil {
+		return Profile{}, err
+	}
+	return p.AddBinding(binding)
+}
+
+// ReplaceTools is the legacy membership mutation retained while application adapters migrate.
+// Deprecated: use ReplaceBindings.
 func (p Profile) ReplaceTools(selections []ToolSelection) (Profile, error) {
-	return NewProfile(p.id, p.slug, p.displayName, p.mode, selections)
+	bindings := make([]ToolBinding, 0, len(selections))
+	for _, selection := range selections {
+		binding, err := DefaultToolBinding(selection.ToolID, selection.Direct)
+		if err != nil {
+			return Profile{}, err
+		}
+		bindings = append(bindings, binding)
+	}
+	return p.ReplaceBindings(bindings)
 }
 
-// RemoveTool returns a new Profile without one Tool membership.
+// RemoveTool returns a new Profile without one ToolBinding.
 func (p Profile) RemoveTool(toolID catalogdomain.ToolID) (Profile, error) {
 	if !p.Contains(toolID) {
 		return Profile{}, fmt.Errorf("profile tool: ToolID %s is not selected", toolID)
 	}
 
-	selections := make([]ToolSelection, 0, len(p.selections)-1)
-	for _, selection := range p.selections {
-		if selection.ToolID != toolID {
-			selections = append(selections, selection)
+	bindings := make([]ToolBinding, 0, len(p.bindings)-1)
+	for _, binding := range p.bindings {
+		if binding.ToolID() != toolID {
+			bindings = append(bindings, binding)
 		}
 	}
-	return NewProfile(p.id, p.slug, p.displayName, p.mode, selections)
+	return NewProfileWithBindings(p.id, p.slug, p.displayName, p.mode, bindings)
 }
