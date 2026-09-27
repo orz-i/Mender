@@ -171,6 +171,11 @@ export interface Provider {
     "description": string;
     "createdAt": string;
     "updatedAt": string;
+    "pluginId"?: string;
+    "pluginVersion"?: string;
+    "pluginDisplayName"?: string;
+    "configVersion"?: number;
+    "config"?: { [_ in string]?: any } | null;
     "transport": string;
     "toolCount": number;
     "endpoint"?: string;
@@ -189,6 +194,18 @@ export interface ProviderList {
 export interface ProviderMutationResponse {
     "provider": Provider;
     "sync": SyncResult;
+}
+
+export interface ProviderPlugin {
+    "pluginId": string;
+    "version": string;
+    "displayName": string;
+    "description": string;
+    "configVersion": number;
+}
+
+export interface ProviderPluginList {
+    "plugins": ProviderPlugin[] | null;
 }
 
 export interface SyncResult {

@@ -17,6 +17,23 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SystemStatus'
+  /provider-plugins:
+    get:
+      operationId: listProviderPlugins
+      responses:
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '200':
+          description: Available built-in Provider plugins
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [plugins]
+                properties:
+                  plugins:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ProviderPlugin'
   /providers:
     get:
       operationId: listProviders
@@ -34,8 +51,28 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/Provider'
+    post:
+      operationId: createProvider
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProviderRequest'
+      responses:
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '201':
+          description: Provider created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderMutationResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '502': { $ref: '#/components/responses/BadGateway' }
   /providers/http:
     post:
+      deprecated: true
       operationId: createHTTPProvider
       requestBody:
         required: true
@@ -56,6 +93,7 @@ paths:
         '502': { $ref: '#/components/responses/BadGateway' }
   /providers/stdio:
     post:
+      deprecated: true
       operationId: createStdioProvider
       requestBody:
         required: true
@@ -819,6 +857,16 @@ components:
       properties:
         secret: { type: string, writeOnly: true }
       additionalProperties: false
+    ProviderPlugin:
+      type: object
+      required: [pluginId, version, displayName, description, configVersion]
+      properties:
+        pluginId: { type: string }
+        version: { type: string }
+        displayName: { type: string }
+        description: { type: string }
+        configVersion: { type: integer, minimum: 1 }
+      additionalProperties: false
     Provider:
       type: object
       required: [providerId, namespace, displayName, description, createdAt, updatedAt, transport, toolCount]
@@ -829,7 +877,17 @@ components:
         description: { type: string }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
-        transport: { type: string, enum: [http, stdio, unconfigured] }
+        pluginId: { type: string }
+        pluginVersion: { type: string }
+        pluginDisplayName: { type: string }
+        configVersion: { type: integer, minimum: 1 }
+        config:
+          type: object
+          additionalProperties: true
+        transport:
+          type: string
+          enum: [http, stdio, unconfigured]
+          description: Compatibility projection for the built-in MCP plugin. New clients should use pluginId and config.
         toolCount: { type: integer, minimum: 0 }
         endpoint: { type: string }
         headers:
@@ -845,6 +903,18 @@ components:
         credentialEnvironment:
           type: array
           items: { $ref: '#/components/schemas/CredentialEnvironmentBinding' }
+    CreateProviderRequest:
+      type: object
+      required: [namespace, displayName, pluginId, config]
+      properties:
+        namespace: { type: string }
+        displayName: { type: string }
+        description: { type: string }
+        pluginId: { type: string }
+        config:
+          type: object
+          additionalProperties: true
+      additionalProperties: false
     CreateHTTPProviderRequest:
       type: object
       required: [namespace, displayName, endpoint]
@@ -877,8 +947,19 @@ components:
       additionalProperties: false
     UpdateProviderRequest:
       oneOf:
+        - $ref: '#/components/schemas/UpdateConfiguredProviderRequest'
         - $ref: '#/components/schemas/UpdateHTTPProviderRequest'
         - $ref: '#/components/schemas/UpdateStdioProviderRequest'
+    UpdateConfiguredProviderRequest:
+      type: object
+      required: [displayName, config]
+      properties:
+        displayName: { type: string }
+        description: { type: string }
+        config:
+          type: object
+          additionalProperties: true
+      additionalProperties: false
     UpdateHTTPProviderRequest:
       type: object
       required: [transport, displayName, endpoint]

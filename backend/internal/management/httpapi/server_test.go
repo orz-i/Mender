@@ -1110,3 +1110,154 @@ func requestNoContent(
 		t.Fatalf("status = %d, want %d body=%s", response.StatusCode, wantStatus, raw)
 	}
 }
+
+func TestManagementAPIGenericProviderPluginFlow(t *testing.T) {
+	t.Parallel()
+
+	upstream := mcp.NewServer(
+		&mcp.Implementation{Name: "generic-provider-upstream", Version: "1.0.0"},
+		nil,
+	)
+	upstream.AddTool(
+		&mcp.Tool{
+			Name:        "ping",
+			Description: "Ping through generic Provider plugin API",
+			InputSchema: json.RawMessage(`{"type":"object"}`),
+		},
+		func(
+			context.Context,
+			*mcp.CallToolRequest,
+		) (*mcp.CallToolResult, error) {
+			return &mcp.CallToolResult{
+				StructuredContent: map[string]any{"ok": true},
+			}, nil
+		},
+	)
+	upstreamHTTP := httptest.NewServer(
+		mcp.NewStreamableHTTPHandler(
+			func(*http.Request) *mcp.Server { return upstream },
+			&mcp.StreamableHTTPOptions{Stateless: true, JSONResponse: true},
+		),
+	)
+	t.Cleanup(upstreamHTTP.Close)
+
+	runtime, err := bootstrap.NewRuntime(context.Background(), bootstrap.RuntimeOptions{
+		DatabasePath: filepath.Join(t.TempDir(), "mender.db"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = runtime.Close() })
+
+	server := httptest.NewServer(New(runtime))
+	t.Cleanup(server.Close)
+
+	plugins := requestJSON(
+		t,
+		server.Client(),
+		http.MethodGet,
+		server.URL+"/api/v1/provider-plugins",
+		nil,
+		http.StatusOK,
+	)
+	items, ok := plugins["plugins"].([]any)
+	if !ok || len(items) != 1 {
+		t.Fatalf("provider plugins = %#v", plugins)
+	}
+	plugin, _ := items[0].(map[string]any)
+	if plugin["pluginId"] != "io.mender.provider.mcp" {
+		t.Fatalf("provider plugin = %#v", plugin)
+	}
+
+	created := requestJSON(
+		t,
+		server.Client(),
+		http.MethodPost,
+		server.URL+"/api/v1/providers",
+		map[string]any{
+			"namespace":   "generic-upstream",
+			"displayName": "Generic Upstream",
+			"pluginId":    "io.mender.provider.mcp",
+			"config": map[string]any{
+				"transport": map[string]any{
+					"kind":     "streamable-http",
+					"endpoint": upstreamHTTP.URL,
+				},
+			},
+		},
+		http.StatusCreated,
+	)
+	provider, ok := created["provider"].(map[string]any)
+	if !ok {
+		t.Fatalf("provider response = %#v", created)
+	}
+	providerID, _ := provider["providerId"].(string)
+	if providerID == "" {
+		t.Fatalf("provider id missing: %#v", provider)
+	}
+	if provider["pluginId"] != "io.mender.provider.mcp" {
+		t.Fatalf("provider pluginId = %#v", provider["pluginId"])
+	}
+	if provider["transport"] != "http" {
+		t.Fatalf("compatibility transport = %#v, want http", provider["transport"])
+	}
+	if provider["toolCount"] != float64(1) {
+		t.Fatalf("provider toolCount = %#v, want 1", provider["toolCount"])
+	}
+	config, ok := provider["config"].(map[string]any)
+	if !ok {
+		t.Fatalf("provider config = %#v", provider["config"])
+	}
+	transport, _ := config["transport"].(map[string]any)
+	if transport["kind"] != "streamable-http" {
+		t.Fatalf("provider config transport = %#v", transport)
+	}
+
+	updated := requestJSON(
+		t,
+		server.Client(),
+		http.MethodPut,
+		server.URL+"/api/v1/providers/"+providerID,
+		map[string]any{
+			"displayName": "Generic Upstream Edited",
+			"description": "generic plugin update",
+			"config": map[string]any{
+				"transport": map[string]any{
+					"kind":     "streamable-http",
+					"endpoint": upstreamHTTP.URL,
+				},
+			},
+		},
+		http.StatusOK,
+	)
+	updatedProvider, _ := updated["provider"].(map[string]any)
+	if updatedProvider["displayName"] != "Generic Upstream Edited" ||
+		updatedProvider["pluginId"] != "io.mender.provider.mcp" {
+		t.Fatalf("updated provider = %#v", updatedProvider)
+	}
+
+	listed := requestJSON(
+		t,
+		server.Client(),
+		http.MethodGet,
+		server.URL+"/api/v1/providers",
+		nil,
+		http.StatusOK,
+	)
+	providers, ok := listed["providers"].([]any)
+	if !ok || len(providers) != 1 {
+		t.Fatalf("providers response = %#v", listed)
+	}
+	listedProvider, _ := providers[0].(map[string]any)
+	if listedProvider["pluginId"] != "io.mender.provider.mcp" {
+		t.Fatalf("listed provider = %#v", listedProvider)
+	}
+
+	requestNoContent(
+		t,
+		server.Client(),
+		http.MethodDelete,
+		server.URL+"/api/v1/providers/"+providerID,
+		http.StatusNoContent,
+	)
+}

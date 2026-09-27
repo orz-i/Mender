@@ -15,10 +15,12 @@ import (
 	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	mcpconfigstore "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/configstore"
+	mcpplugin "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/plugin"
 	policyapplication "github.com/orz-i/Mender/backend/internal/policy/application"
 	policydomain "github.com/orz-i/Mender/backend/internal/policy/domain"
 	profileapplication "github.com/orz-i/Mender/backend/internal/profile/application"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
+	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
 )
 
 const (
@@ -232,18 +234,40 @@ func (s *Service) DeleteCredential(namespace string, name string) error {
 	return s.runtime.Credentials.Delete.Execute(s.ctx, ref)
 }
 
+func (s *Service) ListProviderPlugins() ProviderPluginList {
+	descriptors := s.runtime.ProviderPluginDescriptors()
+	items := make([]ProviderPlugin, 0, len(descriptors))
+	for _, descriptor := range descriptors {
+		items = append(items, ProviderPlugin{
+			PluginID:      descriptor.ID.String(),
+			Version:       descriptor.Version,
+			DisplayName:   descriptor.DisplayName,
+			Description:   descriptor.Description,
+			ConfigVersion: descriptor.ConfigVersion,
+		})
+	}
+	return ProviderPluginList{Plugins: items}
+}
+
 func (s *Service) ListProviders() (ProviderList, error) {
 	providers, err := s.runtime.Catalog.ListProviders.Execute(s.ctx)
 	if err != nil {
 		return ProviderList{}, err
 	}
-	configs, err := s.runtime.ListMCPProviderConfigs(s.ctx)
+	configs, err := s.runtime.ListProviderConfigs(s.ctx)
 	if err != nil {
 		return ProviderList{}, err
 	}
-	configByProvider := make(map[catalogdomain.ProviderID]mcpconfigstore.Config, len(configs))
+	configByProvider := make(
+		map[catalogdomain.ProviderID]providerplugin.Configuration,
+		len(configs),
+	)
 	for _, config := range configs {
 		configByProvider[config.ProviderID] = config
+	}
+	descriptorByID := make(map[providerplugin.ID]providerplugin.Descriptor)
+	for _, descriptor := range s.runtime.ProviderPluginDescriptors() {
+		descriptorByID[descriptor.ID] = descriptor
 	}
 	toolCounts, err := s.runtime.Catalog.ListProviderToolCounts.Execute(s.ctx)
 	if err != nil {
@@ -251,13 +275,71 @@ func (s *Service) ListProviders() (ProviderList, error) {
 	}
 	items := make([]Provider, 0, len(providers))
 	for _, provider := range providers {
+		config, configured := configByProvider[provider.ID()]
+		var configPtr *providerplugin.Configuration
+		var descriptorPtr *providerplugin.Descriptor
+		if configured {
+			configCopy := config
+			configPtr = &configCopy
+			if descriptor, ok := descriptorByID[config.PluginID]; ok {
+				descriptorCopy := descriptor
+				descriptorPtr = &descriptorCopy
+			}
+		}
 		items = append(items, providerProjection(
 			provider,
-			configByProvider[provider.ID()],
+			configPtr,
+			descriptorPtr,
 			toolCounts[provider.ID()],
 		))
 	}
 	return ProviderList{Providers: items}, nil
+}
+
+func (s *Service) CreateProvider(
+	namespace string,
+	displayName string,
+	description string,
+	pluginID string,
+	config map[string]any,
+) (ProviderMutationResponse, error) {
+	id, err := providerplugin.ParseID(pluginID)
+	if err != nil {
+		return ProviderMutationResponse{}, err
+	}
+	raw, err := json.Marshal(config)
+	if err != nil {
+		return ProviderMutationResponse{}, fmt.Errorf("encode provider config: %w", err)
+	}
+	provider, err := s.runtime.RegisterConfiguredProvider(
+		s.ctx,
+		catalogapplication.RegisterProviderRequest{
+			Namespace:   namespace,
+			DisplayName: displayName,
+			Description: description,
+		},
+		id,
+		raw,
+	)
+	if err != nil {
+		return ProviderMutationResponse{}, err
+	}
+	result, err := s.runtime.SyncConfiguredProvider(s.ctx, provider.ID())
+	if err != nil {
+		return ProviderMutationResponse{}, err
+	}
+	stored, err := s.runtime.ProviderConfig(s.ctx, provider.ID())
+	if err != nil {
+		return ProviderMutationResponse{}, err
+	}
+	descriptor := desktopDescriptorForPlugin(
+		s.runtime.ProviderPluginDescriptors(),
+		stored.PluginID,
+	)
+	return ProviderMutationResponse{
+		Provider: providerProjection(provider, &stored, descriptor, result.Total),
+		Sync:     syncProjection(result),
+	}, nil
 }
 
 func (s *Service) CreateHTTPProvider(
@@ -297,16 +379,20 @@ func (s *Service) CreateHTTPProvider(
 	if err != nil {
 		return ProviderMutationResponse{}, err
 	}
-	result, err := s.runtime.SyncConfiguredMCPProvider(s.ctx, provider.ID())
+	result, err := s.runtime.SyncConfiguredProvider(s.ctx, provider.ID())
 	if err != nil {
 		return ProviderMutationResponse{}, err
 	}
-	config, err := s.runtime.MCPProviderConfig(s.ctx, provider.ID())
+	config, err := s.runtime.ProviderConfig(s.ctx, provider.ID())
 	if err != nil {
 		return ProviderMutationResponse{}, err
 	}
+	descriptor := desktopDescriptorForPlugin(
+		s.runtime.ProviderPluginDescriptors(),
+		config.PluginID,
+	)
 	return ProviderMutationResponse{
-		Provider: providerProjection(provider, config, result.Total),
+		Provider: providerProjection(provider, &config, descriptor, result.Total),
 		Sync:     syncProjection(result),
 	}, nil
 }
@@ -350,16 +436,64 @@ func (s *Service) CreateStdioProvider(
 	if err != nil {
 		return ProviderMutationResponse{}, err
 	}
-	result, err := s.runtime.SyncConfiguredMCPProvider(s.ctx, provider.ID())
+	result, err := s.runtime.SyncConfiguredProvider(s.ctx, provider.ID())
 	if err != nil {
 		return ProviderMutationResponse{}, err
 	}
-	config, err := s.runtime.MCPProviderConfig(s.ctx, provider.ID())
+	config, err := s.runtime.ProviderConfig(s.ctx, provider.ID())
 	if err != nil {
 		return ProviderMutationResponse{}, err
 	}
+	descriptor := desktopDescriptorForPlugin(
+		s.runtime.ProviderPluginDescriptors(),
+		config.PluginID,
+	)
 	return ProviderMutationResponse{
-		Provider: providerProjection(provider, config, result.Total),
+		Provider: providerProjection(provider, &config, descriptor, result.Total),
+		Sync:     syncProjection(result),
+	}, nil
+}
+
+func (s *Service) UpdateConfiguredProvider(
+	providerID string,
+	displayName string,
+	description string,
+	config map[string]any,
+) (ProviderMutationResponse, error) {
+	id, err := catalogdomain.ParseProviderID(providerID)
+	if err != nil {
+		return ProviderMutationResponse{}, err
+	}
+	raw, err := json.Marshal(config)
+	if err != nil {
+		return ProviderMutationResponse{}, fmt.Errorf("encode provider config: %w", err)
+	}
+	provider, err := s.runtime.UpdateConfiguredProvider(
+		s.ctx,
+		id,
+		catalogapplication.UpdateProviderRequest{
+			DisplayName: displayName,
+			Description: description,
+		},
+		raw,
+	)
+	if err != nil {
+		return ProviderMutationResponse{}, err
+	}
+	result, err := s.runtime.SyncConfiguredProvider(s.ctx, id)
+	if err != nil {
+		return ProviderMutationResponse{}, err
+	}
+	stored, err := s.runtime.ProviderConfig(s.ctx, id)
+	if err != nil {
+		return ProviderMutationResponse{}, err
+	}
+	descriptor := desktopDescriptorForPlugin(
+		s.runtime.ProviderPluginDescriptors(),
+		stored.PluginID,
+	)
+	return ProviderMutationResponse{
+		Provider: providerProjection(provider, &stored, descriptor, result.Total),
 		Sync:     syncProjection(result),
 	}, nil
 }
@@ -426,13 +560,21 @@ func (s *Service) UpdateProvider(
 	if err != nil {
 		return ProviderMutationResponse{}, err
 	}
-	result, err := s.runtime.SyncConfiguredMCPProvider(s.ctx, id)
+	result, err := s.runtime.SyncConfiguredProvider(s.ctx, id)
 	if err != nil {
 		return ProviderMutationResponse{}, err
 	}
+	stored, err := s.runtime.ProviderConfig(s.ctx, id)
+	if err != nil {
+		return ProviderMutationResponse{}, err
+	}
+	descriptor := desktopDescriptorForPlugin(
+		s.runtime.ProviderPluginDescriptors(),
+		stored.PluginID,
+	)
 
 	return ProviderMutationResponse{
-		Provider: providerProjection(provider, config, result.Total),
+		Provider: providerProjection(provider, &stored, descriptor, result.Total),
 		Sync:     syncProjection(result),
 	}, nil
 }
@@ -442,7 +584,7 @@ func (s *Service) SyncProvider(providerID string) (SyncResult, error) {
 	if err != nil {
 		return SyncResult{}, err
 	}
-	result, err := s.runtime.SyncConfiguredMCPProvider(s.ctx, id)
+	result, err := s.runtime.SyncConfiguredProvider(s.ctx, id)
 	if err != nil {
 		return SyncResult{}, err
 	}
@@ -941,7 +1083,8 @@ func parseCredentialEnvironment(items []CredentialEnvironment) ([]mcpconfigstore
 
 func providerProjection(
 	provider catalogdomain.Provider,
-	config mcpconfigstore.Config,
+	config *providerplugin.Configuration,
+	descriptor *providerplugin.Descriptor,
 	toolCount int,
 ) Provider {
 	result := Provider{
@@ -954,33 +1097,81 @@ func providerProjection(
 		Transport:   "unconfigured",
 		ToolCount:   toolCount,
 	}
-	switch config.Transport {
-	case mcpconfigstore.TransportHTTP:
+	if config == nil {
+		return result
+	}
+
+	result.PluginID = config.PluginID.String()
+	result.ConfigVersion = config.ConfigVersion
+	if descriptor != nil {
+		result.PluginVersion = descriptor.Version
+		result.PluginDisplayName = descriptor.DisplayName
+	}
+	if err := json.Unmarshal(config.Config, &result.Config); err != nil {
+		result.Config = nil
+	}
+
+	if config.PluginID != mcpplugin.ID {
+		return result
+	}
+	mcpConfig, err := mcpplugin.DecodeConfig(config.Config)
+	if err != nil {
+		return result
+	}
+	switch mcpConfig.Transport.Kind {
+	case mcpplugin.TransportStreamableHTTP:
 		result.Transport = "http"
-		result.Endpoint = config.Endpoint
-		result.Headers = cloneHeaders(config.Headers)
-		result.CredentialHeaders = make([]CredentialHeader, 0, len(config.CredentialHeaders))
-		for _, binding := range config.CredentialHeaders {
-			result.CredentialHeaders = append(result.CredentialHeaders, CredentialHeader{
-				Name:          binding.Name,
-				Scheme:        binding.Scheme,
-				CredentialRef: binding.Reference.String(),
-			})
+		result.Endpoint = mcpConfig.Transport.Endpoint
+		result.Headers = cloneHeaders(mcpConfig.Transport.Headers)
+		result.CredentialHeaders = make(
+			[]CredentialHeader,
+			0,
+			len(mcpConfig.Transport.CredentialHeaders),
+		)
+		for _, binding := range mcpConfig.Transport.CredentialHeaders {
+			result.CredentialHeaders = append(
+				result.CredentialHeaders,
+				CredentialHeader{
+					Name:          binding.Name,
+					Scheme:        binding.Scheme,
+					CredentialRef: binding.Reference.String(),
+				},
+			)
 		}
-	case mcpconfigstore.TransportStdio:
+	case mcpplugin.TransportStdio:
 		result.Transport = "stdio"
-		result.Executable = config.Executable
-		result.Args = append([]string(nil), config.Args...)
-		result.Directory = config.Directory
-		result.CredentialEnvironment = make([]CredentialEnvironment, 0, len(config.CredentialEnvironment))
-		for _, binding := range config.CredentialEnvironment {
-			result.CredentialEnvironment = append(result.CredentialEnvironment, CredentialEnvironment{
-				Name:          binding.Name,
-				CredentialRef: binding.Reference.String(),
-			})
+		result.Executable = mcpConfig.Transport.Executable
+		result.Args = append([]string(nil), mcpConfig.Transport.Args...)
+		result.Directory = mcpConfig.Transport.Directory
+		result.CredentialEnvironment = make(
+			[]CredentialEnvironment,
+			0,
+			len(mcpConfig.Transport.CredentialEnvironment),
+		)
+		for _, binding := range mcpConfig.Transport.CredentialEnvironment {
+			result.CredentialEnvironment = append(
+				result.CredentialEnvironment,
+				CredentialEnvironment{
+					Name:          binding.Name,
+					CredentialRef: binding.Reference.String(),
+				},
+			)
 		}
 	}
 	return result
+}
+
+func desktopDescriptorForPlugin(
+	descriptors []providerplugin.Descriptor,
+	pluginID providerplugin.ID,
+) *providerplugin.Descriptor {
+	for _, descriptor := range descriptors {
+		if descriptor.ID == pluginID {
+			copy := descriptor
+			return &copy
+		}
+	}
+	return nil
 }
 
 func cloneHeaders(headers map[string]string) map[string]string {

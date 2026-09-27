@@ -9,6 +9,7 @@ vi.mock(
       CallTool: vi.fn(),
       CreateEnvironmentCredential: vi.fn(),
       CreateNativeCredential: vi.fn(),
+      CreateProvider: vi.fn(),
       CreatePolicyRule: vi.fn(),
       DeleteCredential: vi.fn(),
       DeletePolicyRule: vi.fn(),
@@ -19,6 +20,7 @@ vi.mock(
       ListAudit: vi.fn(),
       ListCredentials: vi.fn(),
       ListMCPServers: vi.fn(),
+      ListProviderPlugins: vi.fn(),
       ListProviders: vi.fn(),
       ReplaceProfileTools: vi.fn(),
       RestartMCPServer: vi.fn(),
@@ -28,6 +30,7 @@ vi.mock(
       SetPolicyRuleEnabled: vi.fn(),
       StartMCPServer: vi.fn(),
       StopMCPServer: vi.fn(),
+      UpdateConfiguredProvider: vi.fn(),
       UpdatePolicyRule: vi.fn(),
       UpdateProvider: vi.fn(),
     },
@@ -89,6 +92,85 @@ describe("desktop Mender client", () => {
         exposureModes: ["direct", "dynamic", "hybrid"],
       },
     });
+  });
+
+  it("adapts generic Provider plugin discovery and configuration to Wails", async () => {
+    vi.mocked(Service.ListProviderPlugins).mockResolvedValue({
+      plugins: [
+        {
+          pluginId: "io.mender.provider.mcp",
+          version: "1.0.0",
+          displayName: "MCP",
+          description: "Model Context Protocol provider",
+          configVersion: 1,
+        },
+      ],
+    });
+    vi.mocked(Service.CreateProvider).mockResolvedValue({
+      provider: {
+        providerId: "prov_00000000000000000000000000000001",
+        namespace: "upstream",
+        displayName: "Upstream",
+        description: "",
+        createdAt: "2026-09-27T00:00:00Z",
+        updatedAt: "2026-09-27T00:00:00Z",
+        pluginId: "io.mender.provider.mcp",
+        pluginVersion: "1.0.0",
+        pluginDisplayName: "MCP",
+        configVersion: 1,
+        config: {
+          transport: {
+            kind: "streamable-http",
+            endpoint: "https://example.test/mcp",
+          },
+        },
+        transport: "http",
+        toolCount: 1,
+        endpoint: "https://example.test/mcp",
+      },
+      sync: { created: 1, updated: 0, removed: 0, total: 1 },
+    });
+
+    const client = createDesktopMenderClient();
+    await expect(client.listProviderPlugins()).resolves.toEqual({
+      plugins: [
+        {
+          pluginId: "io.mender.provider.mcp",
+          version: "1.0.0",
+          displayName: "MCP",
+          description: "Model Context Protocol provider",
+          configVersion: 1,
+        },
+      ],
+    });
+
+    const config = {
+      transport: {
+        kind: "streamable-http",
+        endpoint: "https://example.test/mcp",
+      },
+    };
+    await expect(
+      client.createProvider({
+        namespace: "upstream",
+        displayName: "Upstream",
+        pluginId: "io.mender.provider.mcp",
+        config,
+      }),
+    ).resolves.toMatchObject({
+      provider: {
+        pluginId: "io.mender.provider.mcp",
+        config,
+        transport: "http",
+      },
+    });
+    expect(Service.CreateProvider).toHaveBeenCalledWith(
+      "upstream",
+      "Upstream",
+      "",
+      "io.mender.provider.mcp",
+      config,
+    );
   });
 
   it("normalizes nullable binding arrays without leaking Wails models", async () => {

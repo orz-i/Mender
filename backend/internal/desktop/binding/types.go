@@ -93,6 +93,18 @@ type CredentialEnvironment struct {
 	CredentialRef string `json:"credentialRef"`
 }
 
+type ProviderPlugin struct {
+	PluginID      string `json:"pluginId"`
+	Version       string `json:"version"`
+	DisplayName   string `json:"displayName"`
+	Description   string `json:"description"`
+	ConfigVersion int    `json:"configVersion"`
+}
+
+type ProviderPluginList struct {
+	Plugins []ProviderPlugin `json:"plugins"`
+}
+
 type Provider struct {
 	ProviderID            string                  `json:"providerId"`
 	Namespace             string                  `json:"namespace"`
@@ -100,6 +112,11 @@ type Provider struct {
 	Description           string                  `json:"description"`
 	CreatedAt             string                  `json:"createdAt"`
 	UpdatedAt             string                  `json:"updatedAt"`
+	PluginID              string                  `json:"pluginId,omitempty"`
+	PluginVersion         string                  `json:"pluginVersion,omitempty"`
+	PluginDisplayName     string                  `json:"pluginDisplayName,omitempty"`
+	ConfigVersion         int                     `json:"configVersion,omitempty"`
+	Config                map[string]any          `json:"config,omitempty"`
 	Transport             string                  `json:"transport"`
 	ToolCount             int                     `json:"toolCount"`
 	Endpoint              string                  `json:"endpoint,omitempty"`

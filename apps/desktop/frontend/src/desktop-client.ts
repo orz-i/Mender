@@ -12,6 +12,7 @@ import type {
   Profile,
   Provider,
   ProviderMutationResponse,
+  ProviderPlugin,
   SyncResult,
   SystemStatus,
   ToolDetail,
@@ -32,6 +33,7 @@ import {
   type Profile as BindingProfile,
   type Provider as BindingProvider,
   type ProviderMutationResponse as BindingProviderMutationResponse,
+  type ProviderPlugin as BindingProviderPlugin,
   type SyncResult as BindingSyncResult,
   type SystemStatus as BindingSystemStatus,
   type ToolDetail as BindingToolDetail,
@@ -44,9 +46,26 @@ export function createDesktopMenderClient(): MenderClient {
       return systemStatus(await Service.GetSystemStatus());
     },
 
+    async listProviderPlugins() {
+      const result = await Service.ListProviderPlugins();
+      return { plugins: (result.plugins ?? []).map(providerPlugin) };
+    },
+
     async listProviders() {
       const result = await Service.ListProviders();
       return { providers: (result.providers ?? []).map(provider) };
+    },
+
+    async createProvider(body) {
+      return providerMutation(
+        await Service.CreateProvider(
+          body.namespace,
+          body.displayName,
+          body.description ?? "",
+          body.pluginId,
+          body.config,
+        ),
+      );
     },
 
     async createHTTPProvider(body) {
@@ -77,6 +96,16 @@ export function createDesktopMenderClient(): MenderClient {
     },
 
     async updateProvider(providerId, body) {
+      if ("config" in body) {
+        return providerMutation(
+          await Service.UpdateConfiguredProvider(
+            providerId,
+            body.displayName,
+            body.description ?? "",
+            body.config,
+          ),
+        );
+      }
       if (body.transport === "http") {
         return providerMutation(
           await Service.UpdateProvider(
@@ -461,6 +490,16 @@ function credential(value: BindingCredential): Credential {
   };
 }
 
+function providerPlugin(value: BindingProviderPlugin): ProviderPlugin {
+  return {
+    pluginId: value.pluginId,
+    version: value.version,
+    displayName: value.displayName,
+    description: value.description,
+    configVersion: value.configVersion,
+  };
+}
+
 function provider(value: BindingProvider): Provider {
   const transport = providerTransport(value.transport);
   return {
@@ -470,6 +509,19 @@ function provider(value: BindingProvider): Provider {
     description: value.description,
     createdAt: value.createdAt,
     updatedAt: value.updatedAt,
+    ...(value.pluginId === undefined ? {} : { pluginId: value.pluginId }),
+    ...(value.pluginVersion === undefined
+      ? {}
+      : { pluginVersion: value.pluginVersion }),
+    ...(value.pluginDisplayName === undefined
+      ? {}
+      : { pluginDisplayName: value.pluginDisplayName }),
+    ...(value.configVersion === undefined
+      ? {}
+      : { configVersion: value.configVersion }),
+    ...(value.config === undefined || value.config === null
+      ? {}
+      : { config: value.config }),
     transport,
     toolCount: value.toolCount,
     ...(value.endpoint === undefined ? {} : { endpoint: value.endpoint }),

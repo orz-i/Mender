@@ -7,6 +7,7 @@ export type {
   AuditRecord,
   BrowseToolsInput,
   CreateEnvironmentCredentialRequest,
+  CreateProviderRequest,
   CreateHTTPProviderRequest,
   CreateNativeCredentialRequest,
   CreateProfileRequest,
@@ -28,6 +29,7 @@ export type {
   Profile,
   Provider,
   ProviderMutationResponse,
+  ProviderPlugin,
   ReplaceProfileToolsRequest,
   RotateCredentialRequest,
   SearchToolsInput,
@@ -36,5 +38,6 @@ export type {
   SystemStatus,
   ToolDetail,
   ToolSummary,
+  UpdateConfiguredProviderRequest,
   UpdateProviderRequest,
 } from "./client";

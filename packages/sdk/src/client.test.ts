@@ -3,6 +3,105 @@ import { describe, expect, it } from "vitest";
 import { createMenderClient } from "./client";
 
 describe("Mender SDK", () => {
+  it("discovers Provider plugins and creates a generic Provider", async () => {
+    let call = 0;
+    const fetch = async (request: Request) => {
+      call += 1;
+      if (call == 1) {
+        expect(request.method).toBe("GET");
+        expect(request.url).toContain("/api/v1/provider-plugins");
+        return new Response(
+          JSON.stringify({
+            plugins: [
+              {
+                pluginId: "io.mender.provider.mcp",
+                version: "1.0.0",
+                displayName: "MCP",
+                description: "Model Context Protocol provider",
+                configVersion: 1,
+              },
+            ],
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      expect(request.method).toBe("POST");
+      expect(request.url).toContain("/api/v1/providers");
+      await expect(request.json()).resolves.toEqual({
+        namespace: "demo",
+        displayName: "Demo",
+        pluginId: "io.mender.provider.mcp",
+        config: {
+          transport: {
+            kind: "streamable-http",
+            endpoint: "https://example.test/mcp",
+          },
+        },
+      });
+      return new Response(
+        JSON.stringify({
+          provider: {
+            providerId: "prov_1",
+            namespace: "demo",
+            displayName: "Demo",
+            description: "",
+            createdAt: "2026-09-27T00:00:00Z",
+            updatedAt: "2026-09-27T00:00:00Z",
+            pluginId: "io.mender.provider.mcp",
+            pluginVersion: "1.0.0",
+            pluginDisplayName: "MCP",
+            configVersion: 1,
+            config: {
+              transport: {
+                kind: "streamable-http",
+                endpoint: "https://example.test/mcp",
+              },
+            },
+            transport: "http",
+            endpoint: "https://example.test/mcp",
+            toolCount: 1,
+          },
+          sync: { created: 1, updated: 0, removed: 0, total: 1 },
+        }),
+        {
+          status: 201,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    };
+
+    const client = createMenderClient({
+      baseUrl: "http://localhost:8080/api/v1",
+      fetch,
+    });
+
+    await expect(client.listProviderPlugins()).resolves.toMatchObject({
+      plugins: [{ pluginId: "io.mender.provider.mcp" }],
+    });
+    await expect(
+      client.createProvider({
+        namespace: "demo",
+        displayName: "Demo",
+        pluginId: "io.mender.provider.mcp",
+        config: {
+          transport: {
+            kind: "streamable-http",
+            endpoint: "https://example.test/mcp",
+          },
+        },
+      }),
+    ).resolves.toMatchObject({
+      provider: {
+        pluginId: "io.mender.provider.mcp",
+        toolCount: 1,
+      },
+    });
+  });
+
   it("uses the generated provider contract", async () => {
     const fetch = (request: Request) => {
       expect(request.url).toContain("/api/v1/providers");

@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 
@@ -9,6 +10,8 @@ import (
 	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	mcpconfigstore "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/configstore"
+	mcpplugin "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/plugin"
+	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
 )
 
 type credentialHeaderRequest struct {
@@ -20,6 +23,14 @@ type credentialHeaderRequest struct {
 type credentialEnvironmentRequest struct {
 	Name          string `json:"name"`
 	CredentialRef string `json:"credentialRef"`
+}
+
+type createProviderRequest struct {
+	Namespace   string          `json:"namespace"`
+	DisplayName string          `json:"displayName"`
+	Description string          `json:"description"`
+	PluginID    string          `json:"pluginId"`
+	Config      json.RawMessage `json:"config"`
 }
 
 type createHTTPProviderRequest struct {
@@ -42,9 +53,11 @@ type createStdioProviderRequest struct {
 }
 
 type updateProviderRequest struct {
+	DisplayName string          `json:"displayName"`
+	Description string          `json:"description"`
+	Config      json.RawMessage `json:"config"`
+
 	Transport             string                         `json:"transport"`
-	DisplayName           string                         `json:"displayName"`
-	Description           string                         `json:"description"`
 	Endpoint              string                         `json:"endpoint"`
 	Headers               map[string]string              `json:"headers"`
 	CredentialHeaders     []credentialHeaderRequest      `json:"credentialHeaders"`
@@ -54,13 +67,28 @@ type updateProviderRequest struct {
 	CredentialEnvironment []credentialEnvironmentRequest `json:"credentialEnvironment"`
 }
 
+func (h *Handler) listProviderPlugins(w http.ResponseWriter, _ *http.Request) {
+	descriptors := h.runtime.ProviderPluginDescriptors()
+	items := make([]map[string]any, 0, len(descriptors))
+	for _, descriptor := range descriptors {
+		items = append(items, map[string]any{
+			"pluginId":      descriptor.ID.String(),
+			"version":       descriptor.Version,
+			"displayName":   descriptor.DisplayName,
+			"description":   descriptor.Description,
+			"configVersion": descriptor.ConfigVersion,
+		})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"plugins": items})
+}
+
 func (h *Handler) listProviders(w http.ResponseWriter, r *http.Request) {
 	providers, err := h.runtime.Catalog.ListProviders.Execute(r.Context())
 	if err != nil {
 		writeKnownError(w, err)
 		return
 	}
-	configs, err := h.runtime.ListMCPProviderConfigs(r.Context())
+	configs, err := h.runtime.ListProviderConfigs(r.Context())
 	if err != nil {
 		writeKnownError(w, err)
 		return
@@ -71,23 +99,94 @@ func (h *Handler) listProviders(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	configByProvider := make(map[catalogdomain.ProviderID]mcpconfigstore.Config, len(configs))
+	configByProvider := make(
+		map[catalogdomain.ProviderID]providerplugin.Configuration,
+		len(configs),
+	)
 	for _, config := range configs {
 		configByProvider[config.ProviderID] = config
+	}
+	descriptorByID := make(map[providerplugin.ID]providerplugin.Descriptor)
+	for _, descriptor := range h.runtime.ProviderPluginDescriptors() {
+		descriptorByID[descriptor.ID] = descriptor
 	}
 
 	items := make([]map[string]any, 0, len(providers))
 	for _, provider := range providers {
+		config, configured := configByProvider[provider.ID()]
+		var configPtr *providerplugin.Configuration
+		var descriptorPtr *providerplugin.Descriptor
+		if configured {
+			configCopy := config
+			configPtr = &configCopy
+			if descriptor, ok := descriptorByID[config.PluginID]; ok {
+				descriptorCopy := descriptor
+				descriptorPtr = &descriptorCopy
+			}
+		}
 		items = append(
 			items,
 			providerProjection(
 				provider,
-				configByProvider[provider.ID()],
+				configPtr,
+				descriptorPtr,
 				toolCounts[provider.ID()],
 			),
 		)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"providers": items})
+}
+
+func (h *Handler) createProvider(w http.ResponseWriter, r *http.Request) {
+	var input createProviderRequest
+	if err := decodeJSON(r, &input); err != nil {
+		writeAPIError(w, http.StatusBadRequest, "validation_error", err)
+		return
+	}
+	if input.Namespace == "" ||
+		input.DisplayName == "" ||
+		input.PluginID == "" ||
+		len(input.Config) == 0 {
+		writeAPIError(
+			w,
+			http.StatusBadRequest,
+			"validation_error",
+			fmt.Errorf("namespace, displayName, pluginId, and config are required"),
+		)
+		return
+	}
+	pluginID, err := providerplugin.ParseID(input.PluginID)
+	if err != nil {
+		writeAPIError(w, http.StatusBadRequest, "validation_error", err)
+		return
+	}
+
+	provider, err := h.runtime.RegisterConfiguredProvider(
+		r.Context(),
+		catalogapplication.RegisterProviderRequest{
+			Namespace:   input.Namespace,
+			DisplayName: input.DisplayName,
+			Description: input.Description,
+		},
+		pluginID,
+		input.Config,
+	)
+	if err != nil {
+		writeKnownError(w, err)
+		return
+	}
+
+	syncResult, err := h.runtime.SyncConfiguredProvider(r.Context(), provider.ID())
+	if err != nil {
+		writeAPIError(w, http.StatusBadGateway, "provider_error", err)
+		return
+	}
+	config, _ := h.runtime.ProviderConfig(r.Context(), provider.ID())
+	descriptor := descriptorForPlugin(h.runtime.ProviderPluginDescriptors(), config.PluginID)
+	writeJSON(w, http.StatusCreated, map[string]any{
+		"provider": providerProjection(provider, &config, descriptor, syncResult.Total),
+		"sync":     syncProjection(syncResult),
+	})
 }
 
 func (h *Handler) createHTTPProvider(w http.ResponseWriter, r *http.Request) {
@@ -131,15 +230,16 @@ func (h *Handler) createHTTPProvider(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	syncResult, err := h.runtime.SyncConfiguredMCPProvider(r.Context(), provider.ID())
+	syncResult, err := h.runtime.SyncConfiguredProvider(r.Context(), provider.ID())
 	if err != nil {
 		writeAPIError(w, http.StatusBadGateway, "provider_error", err)
 		return
 	}
 
-	config, _ := h.runtime.MCPProviderConfig(r.Context(), provider.ID())
+	config, _ := h.runtime.ProviderConfig(r.Context(), provider.ID())
+	descriptor := descriptorForPlugin(h.runtime.ProviderPluginDescriptors(), config.PluginID)
 	writeJSON(w, http.StatusCreated, map[string]any{
-		"provider": providerProjection(provider, config, syncResult.Total),
+		"provider": providerProjection(provider, &config, descriptor, syncResult.Total),
 		"sync":     syncProjection(syncResult),
 	})
 }
@@ -186,15 +286,16 @@ func (h *Handler) createStdioProvider(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	syncResult, err := h.runtime.SyncConfiguredMCPProvider(r.Context(), provider.ID())
+	syncResult, err := h.runtime.SyncConfiguredProvider(r.Context(), provider.ID())
 	if err != nil {
 		writeAPIError(w, http.StatusBadGateway, "provider_error", err)
 		return
 	}
 
-	config, _ := h.runtime.MCPProviderConfig(r.Context(), provider.ID())
+	config, _ := h.runtime.ProviderConfig(r.Context(), provider.ID())
+	descriptor := descriptorForPlugin(h.runtime.ProviderPluginDescriptors(), config.PluginID)
 	writeJSON(w, http.StatusCreated, map[string]any{
-		"provider": providerProjection(provider, config, syncResult.Total),
+		"provider": providerProjection(provider, &config, descriptor, syncResult.Total),
 		"sync":     syncProjection(syncResult),
 	})
 }
@@ -221,6 +322,51 @@ func (h *Handler) updateProvider(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if len(input.Config) != 0 {
+		h.updateConfiguredProvider(w, r, providerID, input)
+		return
+	}
+	h.updateLegacyMCPProvider(w, r, providerID, input)
+}
+
+func (h *Handler) updateConfiguredProvider(
+	w http.ResponseWriter,
+	r *http.Request,
+	providerID catalogdomain.ProviderID,
+	input updateProviderRequest,
+) {
+	provider, err := h.runtime.UpdateConfiguredProvider(
+		r.Context(),
+		providerID,
+		catalogapplication.UpdateProviderRequest{
+			DisplayName: input.DisplayName,
+			Description: input.Description,
+		},
+		input.Config,
+	)
+	if err != nil {
+		writeKnownError(w, err)
+		return
+	}
+	syncResult, err := h.runtime.SyncConfiguredProvider(r.Context(), providerID)
+	if err != nil {
+		writeAPIError(w, http.StatusBadGateway, "provider_error", err)
+		return
+	}
+	config, _ := h.runtime.ProviderConfig(r.Context(), providerID)
+	descriptor := descriptorForPlugin(h.runtime.ProviderPluginDescriptors(), config.PluginID)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"provider": providerProjection(provider, &config, descriptor, syncResult.Total),
+		"sync":     syncProjection(syncResult),
+	})
+}
+
+func (h *Handler) updateLegacyMCPProvider(
+	w http.ResponseWriter,
+	r *http.Request,
+	providerID catalogdomain.ProviderID,
+	input updateProviderRequest,
+) {
 	var config mcpconfigstore.Config
 	switch input.Transport {
 	case string(mcpconfigstore.TransportHTTP):
@@ -233,9 +379,9 @@ func (h *Handler) updateProvider(w http.ResponseWriter, r *http.Request) {
 			)
 			return
 		}
-		credentialHeaders, parseErr := parseCredentialHeaders(input.CredentialHeaders)
-		if parseErr != nil {
-			writeAPIError(w, http.StatusBadRequest, "validation_error", parseErr)
+		credentialHeaders, err := parseCredentialHeaders(input.CredentialHeaders)
+		if err != nil {
+			writeAPIError(w, http.StatusBadRequest, "validation_error", err)
 			return
 		}
 		config = mcpconfigstore.Config{
@@ -244,6 +390,7 @@ func (h *Handler) updateProvider(w http.ResponseWriter, r *http.Request) {
 			Headers:           cloneHeaders(input.Headers),
 			CredentialHeaders: credentialHeaders,
 		}
+
 	case string(mcpconfigstore.TransportStdio):
 		if input.Executable == "" {
 			writeAPIError(
@@ -254,9 +401,9 @@ func (h *Handler) updateProvider(w http.ResponseWriter, r *http.Request) {
 			)
 			return
 		}
-		credentialEnvironment, parseErr := parseCredentialEnvironment(input.CredentialEnvironment)
-		if parseErr != nil {
-			writeAPIError(w, http.StatusBadRequest, "validation_error", parseErr)
+		credentialEnvironment, err := parseCredentialEnvironment(input.CredentialEnvironment)
+		if err != nil {
+			writeAPIError(w, http.StatusBadRequest, "validation_error", err)
 			return
 		}
 		config = mcpconfigstore.Config{
@@ -266,6 +413,7 @@ func (h *Handler) updateProvider(w http.ResponseWriter, r *http.Request) {
 			Directory:             input.Directory,
 			CredentialEnvironment: credentialEnvironment,
 		}
+
 	default:
 		writeAPIError(
 			w,
@@ -289,16 +437,24 @@ func (h *Handler) updateProvider(w http.ResponseWriter, r *http.Request) {
 		writeKnownError(w, err)
 		return
 	}
-
-	syncResult, err := h.runtime.SyncConfiguredMCPProvider(r.Context(), providerID)
+	syncResult, err := h.runtime.SyncConfiguredProvider(r.Context(), providerID)
 	if err != nil {
 		writeAPIError(w, http.StatusBadGateway, "provider_error", err)
 		return
 	}
-
+	genericConfig, _ := h.runtime.ProviderConfig(r.Context(), providerID)
+	descriptor := descriptorForPlugin(
+		h.runtime.ProviderPluginDescriptors(),
+		genericConfig.PluginID,
+	)
 	writeJSON(w, http.StatusOK, map[string]any{
-		"provider": providerProjection(provider, config, syncResult.Total),
-		"sync":     syncProjection(syncResult),
+		"provider": providerProjection(
+			provider,
+			&genericConfig,
+			descriptor,
+			syncResult.Total,
+		),
+		"sync": syncProjection(syncResult),
 	})
 }
 
@@ -308,7 +464,7 @@ func (h *Handler) syncProvider(w http.ResponseWriter, r *http.Request) {
 		writeAPIError(w, http.StatusBadRequest, "validation_error", err)
 		return
 	}
-	result, err := h.runtime.SyncConfiguredMCPProvider(r.Context(), providerID)
+	result, err := h.runtime.SyncConfiguredProvider(r.Context(), providerID)
 	if err != nil {
 		writeAPIError(w, http.StatusBadGateway, "provider_error", err)
 		return
@@ -322,6 +478,10 @@ func (h *Handler) deleteProvider(w http.ResponseWriter, r *http.Request) {
 		writeAPIError(w, http.StatusBadRequest, "validation_error", err)
 		return
 	}
+
+	// Until compatibility MCP persistence is retired, use the compatibility
+	// delete path so legacy rows cannot become stale. It also removes the
+	// generic configuration and canonical Provider.
 	if err := h.runtime.DeleteMCPProvider(r.Context(), providerID); err != nil {
 		writeKnownError(w, err)
 		return
@@ -331,7 +491,8 @@ func (h *Handler) deleteProvider(w http.ResponseWriter, r *http.Request) {
 
 func providerProjection(
 	provider catalogdomain.Provider,
-	config mcpconfigstore.Config,
+	config *providerplugin.Configuration,
+	descriptor *providerplugin.Descriptor,
 	toolCount int,
 ) map[string]any {
 	result := map[string]any{
@@ -344,21 +505,56 @@ func providerProjection(
 		"transport":   "unconfigured",
 		"toolCount":   toolCount,
 	}
+	if config == nil {
+		return result
+	}
 
-	switch config.Transport {
-	case mcpconfigstore.TransportHTTP:
+	result["pluginId"] = config.PluginID.String()
+	result["configVersion"] = config.ConfigVersion
+	result["config"] = cloneRawMessage(config.Config)
+	if descriptor != nil {
+		result["pluginVersion"] = descriptor.Version
+		result["pluginDisplayName"] = descriptor.DisplayName
+	}
+
+	if config.PluginID != mcpplugin.ID {
+		return result
+	}
+	mcpConfig, err := mcpplugin.DecodeConfig(config.Config)
+	if err != nil {
+		return result
+	}
+	switch mcpConfig.Transport.Kind {
+	case mcpplugin.TransportStreamableHTTP:
 		result["transport"] = "http"
-		result["endpoint"] = config.Endpoint
-		result["headers"] = cloneHeaders(config.Headers)
-		result["credentialHeaders"] = credentialHeadersProjection(config.CredentialHeaders)
-	case mcpconfigstore.TransportStdio:
+		result["endpoint"] = mcpConfig.Transport.Endpoint
+		result["headers"] = cloneHeaders(mcpConfig.Transport.Headers)
+		result["credentialHeaders"] = mcpCredentialHeadersProjection(
+			mcpConfig.Transport.CredentialHeaders,
+		)
+	case mcpplugin.TransportStdio:
 		result["transport"] = "stdio"
-		result["executable"] = config.Executable
-		result["args"] = append([]string(nil), config.Args...)
-		result["directory"] = config.Directory
-		result["credentialEnvironment"] = credentialEnvironmentProjection(config.CredentialEnvironment)
+		result["executable"] = mcpConfig.Transport.Executable
+		result["args"] = append([]string(nil), mcpConfig.Transport.Args...)
+		result["directory"] = mcpConfig.Transport.Directory
+		result["credentialEnvironment"] = mcpCredentialEnvironmentProjection(
+			mcpConfig.Transport.CredentialEnvironment,
+		)
 	}
 	return result
+}
+
+func descriptorForPlugin(
+	descriptors []providerplugin.Descriptor,
+	pluginID providerplugin.ID,
+) *providerplugin.Descriptor {
+	for _, descriptor := range descriptors {
+		if descriptor.ID == pluginID {
+			copy := descriptor
+			return &copy
+		}
+	}
+	return nil
 }
 
 func parseCredentialHeaders(
@@ -396,8 +592,8 @@ func parseCredentialEnvironment(
 	return result, nil
 }
 
-func credentialHeadersProjection(
-	items []mcpconfigstore.CredentialHeader,
+func mcpCredentialHeadersProjection(
+	items []mcpplugin.CredentialHeader,
 ) []map[string]any {
 	result := make([]map[string]any, 0, len(items))
 	for _, item := range items {
@@ -410,8 +606,8 @@ func credentialHeadersProjection(
 	return result
 }
 
-func credentialEnvironmentProjection(
-	items []mcpconfigstore.CredentialEnvironment,
+func mcpCredentialEnvironmentProjection(
+	items []mcpplugin.CredentialEnvironment,
 ) []map[string]any {
 	result := make([]map[string]any, 0, len(items))
 	for _, item := range items {
@@ -432,6 +628,13 @@ func cloneHeaders(headers map[string]string) map[string]string {
 		result[name] = value
 	}
 	return result
+}
+
+func cloneRawMessage(raw json.RawMessage) json.RawMessage {
+	if raw == nil {
+		return nil
+	}
+	return append(json.RawMessage(nil), raw...)
 }
 
 func syncProjection(result catalogapplication.SyncProviderToolsResult) map[string]any {

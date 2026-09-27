@@ -30,6 +30,8 @@ export type {
     Provider,
     ProviderList,
     ProviderMutationResponse,
+    ProviderPlugin,
+    ProviderPluginList,
     SyncResult,
     SystemStatus,
     ToolDetail,

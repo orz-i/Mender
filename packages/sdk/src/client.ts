@@ -2,6 +2,7 @@ import createClient from "openapi-fetch";
 
 import type { components, paths } from "./generated/schema";
 
+export type ProviderPlugin = components["schemas"]["ProviderPlugin"];
 export type Provider = components["schemas"]["Provider"];
 export type SyncResult = components["schemas"]["SyncResult"];
 export type ToolSummary = components["schemas"]["ToolSummary"];
@@ -33,12 +34,15 @@ export type StartMCPServerRequest =
   components["schemas"]["StartMCPServerRequest"];
 export type ProviderMutationResponse =
   components["schemas"]["ProviderMutationResponse"];
+export type CreateProviderRequest = components["schemas"]["CreateProviderRequest"];
 export type CreateHTTPProviderRequest =
   components["schemas"]["CreateHTTPProviderRequest"];
 export type CreateStdioProviderRequest =
   components["schemas"]["CreateStdioProviderRequest"];
 export type UpdateProviderRequest =
   components["schemas"]["UpdateProviderRequest"];
+export type UpdateConfiguredProviderRequest =
+  components["schemas"]["UpdateConfiguredProviderRequest"];
 export type CreateProfileRequest = components["schemas"]["CreateProfileRequest"];
 export type AddProfileToolRequest =
   components["schemas"]["AddProfileToolRequest"];
@@ -59,7 +63,9 @@ export interface SearchToolsInput {
 
 export interface MenderClient {
   getSystemStatus(): Promise<SystemStatus>;
+  listProviderPlugins(): Promise<{ plugins: ProviderPlugin[] }>;
   listProviders(): Promise<{ providers: Provider[] }>;
+  createProvider(body: CreateProviderRequest): Promise<ProviderMutationResponse>;
   createHTTPProvider(
     body: CreateHTTPProviderRequest,
   ): Promise<ProviderMutationResponse>;
@@ -148,8 +154,18 @@ export function createMenderClient(
       return requireData(result);
     },
 
+    async listProviderPlugins() {
+      const result = await client.GET("/provider-plugins");
+      return requireData(result);
+    },
+
     async listProviders() {
       const result = await client.GET("/providers");
+      return requireData(result);
+    },
+
+    async createProvider(body: CreateProviderRequest) {
+      const result = await client.POST("/providers", { body });
       return requireData(result);
     },
 

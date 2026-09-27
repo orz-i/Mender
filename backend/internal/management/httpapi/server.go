@@ -18,6 +18,8 @@ import (
 	mcpconfigstore "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/configstore"
 	policyapplication "github.com/orz-i/Mender/backend/internal/policy/application"
 	profileapplication "github.com/orz-i/Mender/backend/internal/profile/application"
+	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
+	providerconfigstore "github.com/orz-i/Mender/backend/internal/providerplugin/configstore"
 )
 
 type Handler struct {
@@ -60,7 +62,9 @@ func (h *Handler) routes() {
 	h.mux.HandleFunc("POST /api/v1/credentials/{namespace}/{name}/rotate", h.rotateCredential)
 	h.mux.HandleFunc("DELETE /api/v1/credentials/{namespace}/{name}", h.deleteCredential)
 
+	h.mux.HandleFunc("GET /api/v1/provider-plugins", h.listProviderPlugins)
 	h.mux.HandleFunc("GET /api/v1/providers", h.listProviders)
+	h.mux.HandleFunc("POST /api/v1/providers", h.createProvider)
 	h.mux.HandleFunc("POST /api/v1/providers/http", h.createHTTPProvider)
 	h.mux.HandleFunc("POST /api/v1/providers/stdio", h.createStdioProvider)
 	h.mux.HandleFunc("POST /api/v1/providers/{providerId}/sync", h.syncProvider)
@@ -176,6 +180,7 @@ func writeKnownError(w http.ResponseWriter, err error) {
 		errors.Is(err, credentialapplication.ErrCredentialNotFound),
 		errors.Is(err, profileapplication.ErrProfileNotFound),
 		errors.Is(err, mcpconfigstore.ErrNotFound),
+		errors.Is(err, providerconfigstore.ErrNotFound),
 		errors.Is(err, bootstrap.ErrMCPServerNotFound):
 		writeAPIError(w, http.StatusNotFound, "not_found", err)
 
@@ -197,6 +202,8 @@ func writeKnownError(w http.ResponseWriter, err error) {
 		errors.Is(err, credentialapplication.ErrInvalidSecret),
 		errors.Is(err, credentialapplication.ErrInvalidSource),
 		errors.Is(err, profileapplication.ErrInvalidBinding),
+		errors.Is(err, providerplugin.ErrNotFound),
+		errors.Is(err, providerplugin.ErrUnsupportedConfigVersion),
 		errors.Is(err, bootstrap.ErrInvalidMCPServerAddress):
 		writeAPIError(w, http.StatusBadRequest, "validation_error", err)
 

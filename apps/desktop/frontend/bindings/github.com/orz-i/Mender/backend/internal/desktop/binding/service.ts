@@ -48,6 +48,10 @@ export function CreateProfile(slug: string, displayName: string, mode: string): 
     return $Call.ByID(891700837, slug, displayName, mode);
 }
 
+export function CreateProvider($namespace: string, displayName: string, description: string, pluginID: string, config: { [_ in string]?: any } | null): $CancellablePromise<$models.ProviderMutationResponse> {
+    return $Call.ByID(1616703517, $namespace, displayName, description, pluginID, config);
+}
+
 export function CreateStdioProvider($namespace: string, displayName: string, description: string, executable: string, args: string[] | null, directory: string, credentialEnvironment: $models.CredentialEnvironment[] | null): $CancellablePromise<$models.ProviderMutationResponse> {
     return $Call.ByID(3677167748, $namespace, displayName, description, executable, args, directory, credentialEnvironment);
 }
@@ -108,6 +112,10 @@ export function ListProfiles(): $CancellablePromise<$models.ProfileList> {
     return $Call.ByID(2998135054);
 }
 
+export function ListProviderPlugins(): $CancellablePromise<$models.ProviderPluginList> {
+    return $Call.ByID(787085271);
+}
+
 export function ListProviders(): $CancellablePromise<$models.ProviderList> {
     return $Call.ByID(3638226830);
 }
@@ -150,6 +158,10 @@ export function StopMCPServer(serverID: string): $CancellablePromise<void> {
 
 export function SyncProvider(providerID: string): $CancellablePromise<$models.SyncResult> {
     return $Call.ByID(2246585286, providerID);
+}
+
+export function UpdateConfiguredProvider(providerID: string, displayName: string, description: string, config: { [_ in string]?: any } | null): $CancellablePromise<$models.ProviderMutationResponse> {
+    return $Call.ByID(2684745764, providerID, displayName, description, config);
 }
 
 export function UpdatePolicyRule(ruleID: string, input: $models.PolicyRuleInput): $CancellablePromise<$models.PolicyRule> {
