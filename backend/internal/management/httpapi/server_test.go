@@ -174,6 +174,39 @@ func TestManagementAPIEndToEnd(t *testing.T) {
 		t.Fatalf("tool detail inputSchema = %#v", detail["inputSchema"])
 	}
 
+	credential := requestJSON(
+		t,
+		server.Client(),
+		http.MethodPost,
+		server.URL+"/api/v1/credentials/environment",
+		map[string]any{
+			"namespace":           "demo",
+			"name":                "work",
+			"displayName":         "Demo work token",
+			"environmentVariable": "MENDER_DEMO_WORK_TOKEN",
+		},
+		http.StatusCreated,
+	)
+	if credential["reference"] != "credential://demo/work" ||
+		credential["source"] != "environment" {
+		t.Fatalf("credential response = %#v", credential)
+	}
+	if _, exists := credential["secret"]; exists {
+		t.Fatalf("credential response leaked secret field: %#v", credential)
+	}
+	credentialList := requestJSON(
+		t,
+		server.Client(),
+		http.MethodGet,
+		server.URL+"/api/v1/credentials",
+		nil,
+		http.StatusOK,
+	)
+	credentialItems, ok := credentialList["credentials"].([]any)
+	if !ok || len(credentialItems) != 1 {
+		t.Fatalf("credential list = %#v", credentialList)
+	}
+
 	requestJSON(
 		t,
 		server.Client(),
@@ -238,6 +271,7 @@ func TestManagementAPIEndToEnd(t *testing.T) {
 					"descriptionOverride":   "Echo through the default Profile",
 					"policyConstraint":      "inherit",
 					"concurrencyConstraint": "serial",
+					"credentialRefs":        []string{"credential://demo/work"},
 				},
 			},
 		},
@@ -252,7 +286,8 @@ func TestManagementAPIEndToEnd(t *testing.T) {
 		replacedBinding["titleOverride"] != "Profile Echo" ||
 		replacedBinding["descriptionOverride"] != "Echo through the default Profile" ||
 		replacedBinding["policyConstraint"] != "inherit" ||
-		replacedBinding["concurrencyConstraint"] != "serial" {
+		replacedBinding["concurrencyConstraint"] != "serial" ||
+		len(replacedBinding["credentialRefs"].([]any)) != 1 {
 		t.Fatalf("replace profile binding = %#v", replacedBinding)
 	}
 
@@ -394,6 +429,18 @@ func TestManagementAPIEndToEnd(t *testing.T) {
 		}
 	}
 
+	credentialConflict := requestJSON(
+		t,
+		server.Client(),
+		http.MethodDelete,
+		server.URL+"/api/v1/credentials/demo/work",
+		nil,
+		http.StatusConflict,
+	)
+	if credentialConflict["code"] != "conflict" {
+		t.Fatalf("credential delete conflict = %#v", credentialConflict)
+	}
+
 	conflict := requestJSON(
 		t,
 		server.Client(),
@@ -413,6 +460,13 @@ func TestManagementAPIEndToEnd(t *testing.T) {
 		server.URL+"/api/v1/profiles/default/tools/"+toolID,
 		nil,
 		http.StatusOK,
+	)
+	requestNoContent(
+		t,
+		server.Client(),
+		http.MethodDelete,
+		server.URL+"/api/v1/credentials/demo/work",
+		http.StatusNoContent,
 	)
 	requestNoContent(
 		t,
@@ -441,7 +495,9 @@ func TestManagementAPIEndToEnd(t *testing.T) {
 		nil,
 		http.StatusOK,
 	)
-	if credentials["editable"] != false || credentials["resolver"] != "unavailable" {
+	if credentials["editable"] != true ||
+		credentials["resolver"] != "inventory" ||
+		credentials["persistentStore"] != true {
 		t.Fatalf("credential status = %#v", credentials)
 	}
 }
@@ -527,6 +583,107 @@ func TestManagementAPIResolvesHTTPHeaderTemplatesAtConnectionTime(t *testing.T) 
 func recorderJSON(value any) string {
 	data, _ := json.Marshal(value)
 	return string(data)
+}
+
+func TestManagementAPICredentialBackedProviderAuth(t *testing.T) {
+	const envName = "MENDER_TEST_INVENTORY_API_KEY"
+	t.Setenv(envName, "inventory-secret")
+
+	upstream := mcp.NewServer(
+		&mcp.Implementation{Name: "management-credential-upstream", Version: "1.0.0"},
+		nil,
+	)
+	upstream.AddTool(
+		&mcp.Tool{
+			Name:        "secured_search",
+			Description: "Secured search",
+			InputSchema: json.RawMessage(`{"type":"object"}`),
+		},
+		func(context.Context, *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			return &mcp.CallToolResult{StructuredContent: map[string]any{"ok": true}}, nil
+		},
+	)
+
+	mcpHandler := mcp.NewStreamableHTTPHandler(
+		func(*http.Request) *mcp.Server { return upstream },
+		&mcp.StreamableHTTPOptions{Stateless: true, JSONResponse: true},
+	)
+	upstreamHTTP := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Authorization"); got != "Bearer inventory-secret" {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		mcpHandler.ServeHTTP(w, r)
+	}))
+	t.Cleanup(upstreamHTTP.Close)
+
+	runtime, err := bootstrap.NewRuntime(context.Background(), bootstrap.RuntimeOptions{
+		DatabasePath: filepath.Join(t.TempDir(), "mender.db"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = runtime.Close() })
+
+	server := httptest.NewServer(New(runtime))
+	t.Cleanup(server.Close)
+
+	credential := requestJSON(
+		t,
+		server.Client(),
+		http.MethodPost,
+		server.URL+"/api/v1/credentials/environment",
+		map[string]any{
+			"namespace":           "secured",
+			"name":                "work",
+			"displayName":         "Secured work",
+			"environmentVariable": envName,
+		},
+		http.StatusCreated,
+	)
+	if credential["reference"] != "credential://secured/work" {
+		t.Fatalf("Credential response = %#v", credential)
+	}
+
+	created := requestJSON(
+		t,
+		server.Client(),
+		http.MethodPost,
+		server.URL+"/api/v1/providers/http",
+		map[string]any{
+			"namespace":   "secured",
+			"displayName": "Secured",
+			"endpoint":    upstreamHTTP.URL,
+			"credentialHeaders": []map[string]any{
+				{
+					"name":          "Authorization",
+					"scheme":        "Bearer",
+					"credentialRef": "credential://secured/work",
+				},
+			},
+		},
+		http.StatusCreated,
+	)
+	provider, ok := created["provider"].(map[string]any)
+	if !ok {
+		t.Fatalf("provider response = %#v", created)
+	}
+	authBindings, ok := provider["credentialHeaders"].([]any)
+	if !ok || len(authBindings) != 1 {
+		t.Fatalf("provider credentialHeaders = %#v", provider["credentialHeaders"])
+	}
+	auth, _ := authBindings[0].(map[string]any)
+	if auth["credentialRef"] != "credential://secured/work" ||
+		auth["name"] != "Authorization" ||
+		auth["scheme"] != "Bearer" {
+		t.Fatalf("provider auth binding = %#v", auth)
+	}
+	if _, exists := provider["secret"]; exists {
+		t.Fatalf("provider response leaked secret field: %#v", provider)
+	}
+	if provider["toolCount"] != float64(1) {
+		t.Fatalf("provider toolCount = %#v, want 1", provider["toolCount"])
+	}
 }
 
 func TestManagementAPIRejectsNonLocalRequestProvenance(t *testing.T) {

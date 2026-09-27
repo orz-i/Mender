@@ -6,12 +6,18 @@ vi.mock(
     Service: {
       BrowseTools: vi.fn(),
       CallTool: vi.fn(),
+      CreateEnvironmentCredential: vi.fn(),
+      CreateNativeCredential: vi.fn(),
+      DeleteCredential: vi.fn(),
+      GetCredential: vi.fn(),
       GetSystemStatus: vi.fn(),
       ListAudit: vi.fn(),
+      ListCredentials: vi.fn(),
       ListMCPServers: vi.fn(),
       ListProviders: vi.fn(),
       ReplaceProfileTools: vi.fn(),
       RestartMCPServer: vi.fn(),
+      RotateNativeCredential: vi.fn(),
       SearchTools: vi.fn(),
       StartMCPServer: vi.fn(),
       StopMCPServer: vi.fn(),
@@ -38,9 +44,9 @@ describe("desktop Mender client", () => {
         approval: "fail_closed_when_required",
       },
       credentials: {
-        resolver: "unavailable",
-        persistentStore: false,
-        editable: false,
+        resolver: "inventory",
+        persistentStore: true,
+        editable: true,
       },
       mcp: {
         stdio: true,
@@ -59,9 +65,9 @@ describe("desktop Mender client", () => {
         approval: "fail_closed_when_required",
       },
       credentials: {
-        resolver: "unavailable",
-        persistentStore: false,
-        editable: false,
+        resolver: "inventory",
+        persistentStore: true,
+        editable: true,
       },
       mcp: {
         stdio: true,
@@ -121,8 +127,15 @@ describe("desktop Mender client", () => {
         toolCount: 1,
         endpoint: "https://example.test/mcp",
         headers: {
-          Authorization: "Bearer ${EXAMPLE_API_KEY}",
+          "X-Legacy": "${EXAMPLE_METADATA}",
         },
+        credentialHeaders: [
+          {
+            name: "Authorization",
+            scheme: "Bearer",
+            credentialRef: "credential://github/work",
+          },
+        ],
       },
       sync: { created: 0, updated: 1, removed: 0, total: 1 },
     });
@@ -136,8 +149,15 @@ describe("desktop Mender client", () => {
         description: "Edited",
         endpoint: "https://example.test/mcp",
         headers: {
-          Authorization: "Bearer ${EXAMPLE_API_KEY}",
+          "X-Legacy": "${EXAMPLE_METADATA}",
         },
+        credentialHeaders: [
+          {
+            name: "Authorization",
+            scheme: "Bearer",
+            credentialRef: "credential://github/work",
+          },
+        ],
       },
     );
 
@@ -148,17 +168,32 @@ describe("desktop Mender client", () => {
       "http",
       "https://example.test/mcp",
       {
-        Authorization: "Bearer ${EXAMPLE_API_KEY}",
+        "X-Legacy": "${EXAMPLE_METADATA}",
       },
+      [
+        {
+          name: "Authorization",
+          scheme: "Bearer",
+          credentialRef: "credential://github/work",
+        },
+      ],
       "",
       [],
       "",
+      [],
     );
     expect(result.provider.displayName).toBe("Upstream edited");
     expect(result.provider.toolCount).toBe(1);
     expect(result.provider.headers).toEqual({
-      Authorization: "Bearer ${EXAMPLE_API_KEY}",
+      "X-Legacy": "${EXAMPLE_METADATA}",
     });
+    expect(result.provider.credentialHeaders).toEqual([
+      {
+        name: "Authorization",
+        scheme: "Bearer",
+        credentialRef: "credential://github/work",
+      },
+    ]);
   });
 
   it("browses compact synchronized Tools through Wails", async () => {
@@ -225,6 +260,70 @@ describe("desktop Mender client", () => {
     );
   });
 
+  it("maps Credential inventory without exposing secret values", async () => {
+    vi.mocked(Service.ListCredentials).mockResolvedValue({
+      credentials: [
+        {
+          reference: "credential://demo/work",
+          namespace: "demo",
+          name: "work",
+          displayName: "Demo work",
+          source: "environment",
+          environmentVariable: "DEMO_WORK_TOKEN",
+          createdAt: "2026-09-27T00:00:00Z",
+          updatedAt: "2026-09-27T00:00:00Z",
+        },
+      ],
+    });
+    vi.mocked(Service.CreateEnvironmentCredential).mockResolvedValue({
+      reference: "credential://demo/work",
+      namespace: "demo",
+      name: "work",
+      displayName: "Demo work",
+      source: "environment",
+      environmentVariable: "DEMO_WORK_TOKEN",
+      createdAt: "2026-09-27T00:00:00Z",
+      updatedAt: "2026-09-27T00:00:00Z",
+    });
+
+    const client = createDesktopMenderClient();
+
+    await expect(client.listCredentials()).resolves.toEqual({
+      credentials: [
+        {
+          reference: "credential://demo/work",
+          namespace: "demo",
+          name: "work",
+          displayName: "Demo work",
+          source: "environment",
+          environmentVariable: "DEMO_WORK_TOKEN",
+          createdAt: "2026-09-27T00:00:00Z",
+          updatedAt: "2026-09-27T00:00:00Z",
+        },
+      ],
+    });
+    await expect(
+      client.createEnvironmentCredential({
+        namespace: "demo",
+        name: "work",
+        displayName: "Demo work",
+        environmentVariable: "DEMO_WORK_TOKEN",
+      }),
+    ).resolves.toMatchObject({
+      reference: "credential://demo/work",
+      source: "environment",
+    });
+    await client.deleteCredential("demo", "work");
+
+    expect(Service.CreateEnvironmentCredential).toHaveBeenCalledWith(
+      "demo",
+      "work",
+      "Demo work",
+      "DEMO_WORK_TOKEN",
+    );
+    expect(Service.DeleteCredential).toHaveBeenCalledWith("demo", "work");
+  });
+
   it("replaces Profile Tool membership through Wails", async () => {
     vi.mocked(Service.ReplaceProfileTools).mockResolvedValue({
       profileId: "prof_1",
@@ -240,6 +339,7 @@ describe("desktop Mender client", () => {
           descriptionOverride: "Profile-specific presentation",
           policyConstraint: "deny",
           concurrencyConstraint: "serial",
+          credentialRefs: ["credential://github/work"],
         },
         {
           toolId: "tool_2",
@@ -249,6 +349,7 @@ describe("desktop Mender client", () => {
           descriptionOverride: "",
           policyConstraint: "inherit",
           concurrencyConstraint: "inherit",
+          credentialRefs: [],
         },
       ],
     });
@@ -264,6 +365,7 @@ describe("desktop Mender client", () => {
           descriptionOverride: "Profile-specific presentation",
           policyConstraint: "deny",
           concurrencyConstraint: "serial",
+          credentialRefs: ["credential://github/work"],
         },
         { toolId: "tool_2", direct: false },
       ],
@@ -278,6 +380,7 @@ describe("desktop Mender client", () => {
         descriptionOverride: "Profile-specific presentation",
         policyConstraint: "deny",
         concurrencyConstraint: "serial",
+        credentialRefs: ["credential://github/work"],
       },
       {
         toolId: "tool_2",
@@ -287,6 +390,7 @@ describe("desktop Mender client", () => {
         descriptionOverride: "",
         policyConstraint: "inherit",
         concurrencyConstraint: "inherit",
+        credentialRefs: [],
       },
     ]);
     expect(result.tools).toHaveLength(2);

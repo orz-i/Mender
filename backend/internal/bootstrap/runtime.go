@@ -11,6 +11,7 @@ import (
 	auditapplication "github.com/orz-i/Mender/backend/internal/audit/application"
 	auditsqlite "github.com/orz-i/Mender/backend/internal/audit/infrastructure/sqlite"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
+	credentialapplication "github.com/orz-i/Mender/backend/internal/credential/application"
 	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
 	invocationevents "github.com/orz-i/Mender/backend/internal/invocation/infrastructure/events"
 	invocationexecutionguard "github.com/orz-i/Mender/backend/internal/invocation/infrastructure/executionguard"
@@ -95,6 +96,12 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		_ = catalog.Close()
 		return nil, fmt.Errorf("compose runtime: MCP configs: %w", err)
 	}
+
+	credentials.Delete = credentialapplication.NewDeleteCredential(
+		credentials.store,
+		credentials.secrets,
+		runtimeCredentialUsageChecker{profiles: profiles, configs: configs},
+	)
 
 	executors := invocationrouter.New()
 	ids := invocationidentity.NewGenerator()

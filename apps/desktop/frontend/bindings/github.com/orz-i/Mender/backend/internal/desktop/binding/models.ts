@@ -28,6 +28,32 @@ export interface AuditRecord {
     "failureCode": string;
 }
 
+export interface Credential {
+    "reference": string;
+    "namespace": string;
+    "name": string;
+    "displayName": string;
+    "source": string;
+    "environmentVariable": string;
+    "createdAt": string;
+    "updatedAt": string;
+}
+
+export interface CredentialEnvironment {
+    "name": string;
+    "credentialRef": string;
+}
+
+export interface CredentialHeader {
+    "name": string;
+    "scheme": string;
+    "credentialRef": string;
+}
+
+export interface CredentialList {
+    "credentials": Credential[] | null;
+}
+
 export interface CredentialStatus {
     "resolver": string;
     "persistentStore": boolean;
@@ -93,6 +119,7 @@ export interface ProfileTool {
     "descriptionOverride": string;
     "policyConstraint": string;
     "concurrencyConstraint": string;
+    "credentialRefs": string[] | null;
 }
 
 export interface Provider {
@@ -109,6 +136,8 @@ export interface Provider {
     "executable"?: string;
     "args"?: string[] | null;
     "directory"?: string;
+    "credentialHeaders"?: CredentialHeader[] | null;
+    "credentialEnvironment"?: CredentialEnvironment[] | null;
 }
 
 export interface ProviderList {

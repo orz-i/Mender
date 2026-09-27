@@ -324,6 +324,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/credentials": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listCredentials"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/credentials/native": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["createNativeCredential"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/credentials/environment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["createEnvironmentCredential"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/credentials/{namespace}/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getCredential"];
+        put?: never;
+        post?: never;
+        delete: operations["deleteCredential"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/credentials/{namespace}/{name}/rotate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["rotateCredential"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -352,11 +432,39 @@ export interface components {
         };
         CredentialStatus: {
             /** @enum {string} */
-            resolver: "unavailable";
+            resolver: "inventory";
             /** @constant */
-            persistentStore: false;
+            persistentStore: true;
             /** @constant */
-            editable: false;
+            editable: true;
+        };
+        Credential: {
+            reference: string;
+            namespace: string;
+            name: string;
+            displayName: string;
+            /** @enum {string} */
+            source: "native" | "environment";
+            environmentVariable: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        CreateNativeCredentialRequest: {
+            namespace: string;
+            name: string;
+            displayName: string;
+            secret: string;
+        };
+        CreateEnvironmentCredentialRequest: {
+            namespace: string;
+            name: string;
+            displayName: string;
+            environmentVariable: string;
+        };
+        RotateCredentialRequest: {
+            secret: string;
         };
         Provider: {
             providerId: string;
@@ -372,9 +480,11 @@ export interface components {
             toolCount: number;
             endpoint?: string;
             headers?: components["schemas"]["HeaderTemplates"];
+            credentialHeaders?: components["schemas"]["CredentialHeaderBinding"][];
             executable?: string;
             args?: string[];
             directory?: string;
+            credentialEnvironment?: components["schemas"]["CredentialEnvironmentBinding"][];
         };
         CreateHTTPProviderRequest: {
             namespace: string;
@@ -383,6 +493,7 @@ export interface components {
             /** Format: uri */
             endpoint: string;
             headers?: components["schemas"]["HeaderTemplates"];
+            credentialHeaders?: components["schemas"]["CredentialHeaderBinding"][];
         };
         CreateStdioProviderRequest: {
             namespace: string;
@@ -391,6 +502,7 @@ export interface components {
             executable: string;
             args?: string[];
             directory?: string;
+            credentialEnvironment?: components["schemas"]["CredentialEnvironmentBinding"][];
         };
         UpdateProviderRequest: components["schemas"]["UpdateHTTPProviderRequest"] | components["schemas"]["UpdateStdioProviderRequest"];
         UpdateHTTPProviderRequest: {
@@ -401,6 +513,7 @@ export interface components {
             /** Format: uri */
             endpoint: string;
             headers?: components["schemas"]["HeaderTemplates"];
+            credentialHeaders?: components["schemas"]["CredentialHeaderBinding"][];
         };
         UpdateStdioProviderRequest: {
             /** @constant */
@@ -410,6 +523,16 @@ export interface components {
             executable: string;
             args?: string[];
             directory?: string;
+            credentialEnvironment?: components["schemas"]["CredentialEnvironmentBinding"][];
+        };
+        CredentialHeaderBinding: {
+            name: string;
+            scheme: string;
+            credentialRef: string;
+        };
+        CredentialEnvironmentBinding: {
+            name: string;
+            credentialRef: string;
         };
         /** @description Persisted HTTP header templates. Sensitive headers must reference environment variables, for example "Bearer ${ANYSEARCH_API_KEY}". */
         HeaderTemplates: {
@@ -479,6 +602,7 @@ export interface components {
             policyConstraint?: "inherit" | "require_approval" | "deny";
             /** @enum {string} */
             concurrencyConstraint?: "inherit" | "serial";
+            credentialRefs?: string[];
         };
         ReplaceProfileToolsRequest: {
             tools: components["schemas"]["ProfileToolInput"][];
@@ -493,6 +617,7 @@ export interface components {
             policyConstraint?: "inherit" | "require_approval" | "deny";
             /** @enum {string} */
             concurrencyConstraint?: "inherit" | "serial";
+            credentialRefs?: string[];
         };
         ProfileTool: {
             toolId: string;
@@ -504,6 +629,7 @@ export interface components {
             policyConstraint: "inherit" | "require_approval" | "deny";
             /** @enum {string} */
             concurrencyConstraint: "inherit" | "serial";
+            credentialRefs: string[];
         };
         Profile: {
             profileId: string;
@@ -609,6 +735,8 @@ export interface components {
         ToolId: string;
         ProfileSlug: string;
         ServerId: string;
+        CredentialNamespace: string;
+        CredentialName: string;
     };
     requestBodies: never;
     headers: never;
@@ -1230,6 +1358,157 @@ export interface operations {
                 };
             };
             403: components["responses"]["Forbidden"];
+        };
+    };
+    listCredentials: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Non-secret Credential inventory */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        credentials: components["schemas"]["Credential"][];
+                    };
+                };
+            };
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    createNativeCredential: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateNativeCredentialRequest"];
+            };
+        };
+        responses: {
+            /** @description Credential created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Credential"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    createEnvironmentCredential: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateEnvironmentCredentialRequest"];
+            };
+        };
+        responses: {
+            /** @description Credential created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Credential"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getCredential: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                namespace: components["parameters"]["CredentialNamespace"];
+                name: components["parameters"]["CredentialName"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Credential metadata */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Credential"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteCredential: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                namespace: components["parameters"]["CredentialNamespace"];
+                name: components["parameters"]["CredentialName"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Credential deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    rotateCredential: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                namespace: components["parameters"]["CredentialNamespace"];
+                name: components["parameters"]["CredentialName"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RotateCredentialRequest"];
+            };
+        };
+        responses: {
+            /** @description Credential metadata after rotation */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Credential"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
         };
     };
 }

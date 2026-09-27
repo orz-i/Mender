@@ -10,6 +10,7 @@ import (
 
 	"github.com/orz-i/Mender/backend/internal/bootstrap"
 	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
+	credentialapplication "github.com/orz-i/Mender/backend/internal/credential/application"
 	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	mcpconfigstore "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/configstore"
@@ -28,6 +29,7 @@ const (
 )
 
 type Options struct {
+	Stdin       io.Reader
 	Stdout      io.Writer
 	Stderr      io.Writer
 	OpenRuntime func(context.Context, string) (*bootstrap.Runtime, error)
@@ -81,6 +83,7 @@ func NewRootCommand(options Options) *cobra.Command {
 			return nil
 		},
 	}
+	root.SetIn(options.Stdin)
 	root.SetOut(options.Stdout)
 	root.SetErr(options.Stderr)
 	root.PersistentFlags().StringVar(&a.dbPath, "db", "", "path to Mender SQLite database")
@@ -89,6 +92,7 @@ func NewRootCommand(options Options) *cobra.Command {
 		return usageError{err: err}
 	})
 
+	root.AddCommand(a.newCredentialCommand())
 	root.AddCommand(a.newProviderCommand())
 	root.AddCommand(a.newProfileCommand())
 	root.AddCommand(a.newToolCommand())
@@ -108,6 +112,9 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 }
 
 func normalizeOptions(options Options) Options {
+	if options.Stdin == nil {
+		options.Stdin = os.Stdin
+	}
 	if options.Stdout == nil {
 		options.Stdout = io.Discard
 	}
@@ -204,6 +211,8 @@ func exitCode(err error) int {
 	var outcomeErr invocationOutcomeError
 	switch {
 	case errors.As(err, &usage),
+		errors.Is(err, credentialapplication.ErrInvalidSecret),
+		errors.Is(err, credentialapplication.ErrInvalidSource),
 		errors.Is(err, profileapplication.ErrInvalidBinding),
 		errors.Is(err, profileapplication.ErrBindingNameConflict):
 		return ExitUsage
@@ -213,6 +222,9 @@ func exitCode(err error) int {
 		return invocationOutcomeExitCode(outcomeErr.outcome)
 	case errors.Is(err, catalogapplication.ErrProviderNotFound),
 		errors.Is(err, catalogapplication.ErrToolNotFound),
+		errors.Is(err, credentialapplication.ErrCredentialNotFound),
+		errors.Is(err, credentialapplication.ErrReferenceConflict),
+		errors.Is(err, credentialapplication.ErrCredentialInUse),
 		errors.Is(err, profileapplication.ErrProfileNotFound),
 		errors.Is(err, mcpconfigstore.ErrNotFound):
 		return ExitConfig

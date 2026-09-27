@@ -57,7 +57,7 @@ func credentialStatusProjection(resolver string, persistent bool) map[string]any
 	return map[string]any{
 		"resolver":        resolver,
 		"persistentStore": persistent,
-		"editable":        false,
+		"editable":        true,
 	}
 }
 

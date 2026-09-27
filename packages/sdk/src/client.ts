@@ -12,6 +12,13 @@ export type AuditRecord = components["schemas"]["AuditRecord"];
 export type SystemStatus = components["schemas"]["SystemStatus"];
 export type PolicyStatus = components["schemas"]["PolicyStatus"];
 export type CredentialStatus = components["schemas"]["CredentialStatus"];
+export type Credential = components["schemas"]["Credential"];
+export type CreateNativeCredentialRequest =
+  components["schemas"]["CreateNativeCredentialRequest"];
+export type CreateEnvironmentCredentialRequest =
+  components["schemas"]["CreateEnvironmentCredentialRequest"];
+export type RotateCredentialRequest =
+  components["schemas"]["RotateCredentialRequest"];
 export type MCPServerInstance = components["schemas"]["MCPServerInstance"];
 export type StartMCPServerRequest =
   components["schemas"]["StartMCPServerRequest"];
@@ -79,6 +86,18 @@ export interface MenderClient {
   listAudit(limit?: number): Promise<{ records: AuditRecord[] }>;
   getPolicyStatus(): Promise<PolicyStatus>;
   getCredentialStatus(): Promise<CredentialStatus>;
+  listCredentials(): Promise<{ credentials: Credential[] }>;
+  getCredential(namespace: string, name: string): Promise<Credential>;
+  createNativeCredential(body: CreateNativeCredentialRequest): Promise<Credential>;
+  createEnvironmentCredential(
+    body: CreateEnvironmentCredentialRequest,
+  ): Promise<Credential>;
+  rotateCredential(
+    namespace: string,
+    name: string,
+    body: RotateCredentialRequest,
+  ): Promise<Credential>;
+  deleteCredential(namespace: string, name: string): Promise<void>;
 }
 
 type FetchLike = (input: Request) => Promise<Response>;
@@ -282,6 +301,49 @@ export function createMenderClient(
     async getCredentialStatus() {
       const result = await client.GET("/credentials/status");
       return requireData(result);
+    },
+
+    async listCredentials() {
+      const result = await client.GET("/credentials");
+      return requireData(result);
+    },
+
+    async getCredential(namespace: string, name: string) {
+      const result = await client.GET("/credentials/{namespace}/{name}", {
+        params: { path: { namespace, name } },
+      });
+      return requireData(result);
+    },
+
+    async createNativeCredential(body: CreateNativeCredentialRequest) {
+      const result = await client.POST("/credentials/native", { body });
+      return requireData(result);
+    },
+
+    async createEnvironmentCredential(body: CreateEnvironmentCredentialRequest) {
+      const result = await client.POST("/credentials/environment", { body });
+      return requireData(result);
+    },
+
+    async rotateCredential(
+      namespace: string,
+      name: string,
+      body: RotateCredentialRequest,
+    ) {
+      const result = await client.POST("/credentials/{namespace}/{name}/rotate", {
+        params: { path: { namespace, name } },
+        body,
+      });
+      return requireData(result);
+    },
+
+    async deleteCredential(namespace: string, name: string) {
+      const result = await client.DELETE("/credentials/{namespace}/{name}", {
+        params: { path: { namespace, name } },
+      });
+      if (!result.response.ok) {
+        throwApiError(result.error, result.response);
+      }
     },
   };
 }

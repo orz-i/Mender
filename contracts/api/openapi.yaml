@@ -427,6 +427,95 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CredentialStatus'
+  /credentials:
+    get:
+      operationId: listCredentials
+      responses:
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '200':
+          description: Non-secret Credential inventory
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [credentials]
+                properties:
+                  credentials:
+                    type: array
+                    items: { $ref: '#/components/schemas/Credential' }
+  /credentials/native:
+    post:
+      operationId: createNativeCredential
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateNativeCredentialRequest' }
+      responses:
+        '201':
+          description: Credential created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Credential' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /credentials/environment:
+    post:
+      operationId: createEnvironmentCredential
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateEnvironmentCredentialRequest' }
+      responses:
+        '201':
+          description: Credential created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Credential' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /credentials/{namespace}/{name}:
+    get:
+      operationId: getCredential
+      parameters:
+        - $ref: '#/components/parameters/CredentialNamespace'
+        - $ref: '#/components/parameters/CredentialName'
+      responses:
+        '200':
+          description: Credential metadata
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Credential' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      operationId: deleteCredential
+      parameters:
+        - $ref: '#/components/parameters/CredentialNamespace'
+        - $ref: '#/components/parameters/CredentialName'
+      responses:
+        '204': { description: Credential deleted }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /credentials/{namespace}/{name}/rotate:
+    post:
+      operationId: rotateCredential
+      parameters:
+        - $ref: '#/components/parameters/CredentialNamespace'
+        - $ref: '#/components/parameters/CredentialName'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RotateCredentialRequest' }
+      responses:
+        '200':
+          description: Credential metadata after rotation
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Credential' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
 components:
   parameters:
     ProviderId:
@@ -446,6 +535,16 @@ components:
       schema: { type: string }
     ServerId:
       name: serverId
+      in: path
+      required: true
+      schema: { type: string }
+    CredentialNamespace:
+      name: namespace
+      in: path
+      required: true
+      schema: { type: string }
+    CredentialName:
+      name: name
       in: path
       required: true
       schema: { type: string }
@@ -510,9 +609,45 @@ components:
       type: object
       required: [resolver, persistentStore, editable]
       properties:
-        resolver: { type: string, enum: [unavailable] }
-        persistentStore: { type: boolean, const: false }
-        editable: { type: boolean, const: false }
+        resolver: { type: string, enum: [inventory] }
+        persistentStore: { type: boolean, const: true }
+        editable: { type: boolean, const: true }
+    Credential:
+      type: object
+      required: [reference, namespace, name, displayName, source, environmentVariable, createdAt, updatedAt]
+      properties:
+        reference: { type: string }
+        namespace: { type: string }
+        name: { type: string }
+        displayName: { type: string }
+        source: { type: string, enum: [native, environment] }
+        environmentVariable: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    CreateNativeCredentialRequest:
+      type: object
+      required: [namespace, name, displayName, secret]
+      properties:
+        namespace: { type: string }
+        name: { type: string }
+        displayName: { type: string }
+        secret: { type: string, writeOnly: true }
+      additionalProperties: false
+    CreateEnvironmentCredentialRequest:
+      type: object
+      required: [namespace, name, displayName, environmentVariable]
+      properties:
+        namespace: { type: string }
+        name: { type: string }
+        displayName: { type: string }
+        environmentVariable: { type: string }
+      additionalProperties: false
+    RotateCredentialRequest:
+      type: object
+      required: [secret]
+      properties:
+        secret: { type: string, writeOnly: true }
+      additionalProperties: false
     Provider:
       type: object
       required: [providerId, namespace, displayName, description, createdAt, updatedAt, transport, toolCount]
@@ -528,11 +663,17 @@ components:
         endpoint: { type: string }
         headers:
           $ref: '#/components/schemas/HeaderTemplates'
+        credentialHeaders:
+          type: array
+          items: { $ref: '#/components/schemas/CredentialHeaderBinding' }
         executable: { type: string }
         args:
           type: array
           items: { type: string }
         directory: { type: string }
+        credentialEnvironment:
+          type: array
+          items: { $ref: '#/components/schemas/CredentialEnvironmentBinding' }
     CreateHTTPProviderRequest:
       type: object
       required: [namespace, displayName, endpoint]
@@ -543,6 +684,9 @@ components:
         endpoint: { type: string, format: uri }
         headers:
           $ref: '#/components/schemas/HeaderTemplates'
+        credentialHeaders:
+          type: array
+          items: { $ref: '#/components/schemas/CredentialHeaderBinding' }
       additionalProperties: false
     CreateStdioProviderRequest:
       type: object
@@ -556,6 +700,9 @@ components:
           type: array
           items: { type: string }
         directory: { type: string }
+        credentialEnvironment:
+          type: array
+          items: { $ref: '#/components/schemas/CredentialEnvironmentBinding' }
       additionalProperties: false
     UpdateProviderRequest:
       oneOf:
@@ -571,6 +718,9 @@ components:
         endpoint: { type: string, format: uri }
         headers:
           $ref: '#/components/schemas/HeaderTemplates'
+        credentialHeaders:
+          type: array
+          items: { $ref: '#/components/schemas/CredentialHeaderBinding' }
       additionalProperties: false
     UpdateStdioProviderRequest:
       type: object
@@ -584,6 +734,24 @@ components:
           type: array
           items: { type: string }
         directory: { type: string }
+        credentialEnvironment:
+          type: array
+          items: { $ref: '#/components/schemas/CredentialEnvironmentBinding' }
+      additionalProperties: false
+    CredentialHeaderBinding:
+      type: object
+      required: [name, scheme, credentialRef]
+      properties:
+        name: { type: string }
+        scheme: { type: string }
+        credentialRef: { type: string }
+      additionalProperties: false
+    CredentialEnvironmentBinding:
+      type: object
+      required: [name, credentialRef]
+      properties:
+        name: { type: string }
+        credentialRef: { type: string }
       additionalProperties: false
     HeaderTemplates:
       type: object
@@ -670,6 +838,9 @@ components:
         descriptionOverride: { type: string }
         policyConstraint: { type: string, enum: [inherit, require_approval, deny] }
         concurrencyConstraint: { type: string, enum: [inherit, serial] }
+        credentialRefs:
+          type: array
+          items: { type: string }
       additionalProperties: false
     ReplaceProfileToolsRequest:
       type: object
@@ -691,10 +862,13 @@ components:
         descriptionOverride: { type: string }
         policyConstraint: { type: string, enum: [inherit, require_approval, deny] }
         concurrencyConstraint: { type: string, enum: [inherit, serial] }
+        credentialRefs:
+          type: array
+          items: { type: string }
       additionalProperties: false
     ProfileTool:
       type: object
-      required: [toolId, direct, alias, titleOverride, descriptionOverride, policyConstraint, concurrencyConstraint]
+      required: [toolId, direct, alias, titleOverride, descriptionOverride, policyConstraint, concurrencyConstraint, credentialRefs]
       properties:
         toolId: { type: string }
         direct: { type: boolean }
@@ -703,6 +877,9 @@ components:
         descriptionOverride: { type: string }
         policyConstraint: { type: string, enum: [inherit, require_approval, deny] }
         concurrencyConstraint: { type: string, enum: [inherit, serial] }
+        credentialRefs:
+          type: array
+          items: { type: string }
     Profile:
       type: object
       required: [profileId, slug, displayName, mode, tools]

@@ -4,37 +4,54 @@ import (
 	"fmt"
 	"net/http"
 
+	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
+
 	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	mcpconfigstore "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/configstore"
 )
 
+type credentialHeaderRequest struct {
+	Name          string `json:"name"`
+	Scheme        string `json:"scheme"`
+	CredentialRef string `json:"credentialRef"`
+}
+
+type credentialEnvironmentRequest struct {
+	Name          string `json:"name"`
+	CredentialRef string `json:"credentialRef"`
+}
+
 type createHTTPProviderRequest struct {
-	Namespace   string            `json:"namespace"`
-	DisplayName string            `json:"displayName"`
-	Description string            `json:"description"`
-	Endpoint    string            `json:"endpoint"`
-	Headers     map[string]string `json:"headers"`
+	Namespace         string                    `json:"namespace"`
+	DisplayName       string                    `json:"displayName"`
+	Description       string                    `json:"description"`
+	Endpoint          string                    `json:"endpoint"`
+	Headers           map[string]string         `json:"headers"`
+	CredentialHeaders []credentialHeaderRequest `json:"credentialHeaders"`
 }
 
 type createStdioProviderRequest struct {
-	Namespace   string   `json:"namespace"`
-	DisplayName string   `json:"displayName"`
-	Description string   `json:"description"`
-	Executable  string   `json:"executable"`
-	Args        []string `json:"args"`
-	Directory   string   `json:"directory"`
+	Namespace             string                         `json:"namespace"`
+	DisplayName           string                         `json:"displayName"`
+	Description           string                         `json:"description"`
+	Executable            string                         `json:"executable"`
+	Args                  []string                       `json:"args"`
+	Directory             string                         `json:"directory"`
+	CredentialEnvironment []credentialEnvironmentRequest `json:"credentialEnvironment"`
 }
 
 type updateProviderRequest struct {
-	Transport   string            `json:"transport"`
-	DisplayName string            `json:"displayName"`
-	Description string            `json:"description"`
-	Endpoint    string            `json:"endpoint"`
-	Headers     map[string]string `json:"headers"`
-	Executable  string            `json:"executable"`
-	Args        []string          `json:"args"`
-	Directory   string            `json:"directory"`
+	Transport             string                         `json:"transport"`
+	DisplayName           string                         `json:"displayName"`
+	Description           string                         `json:"description"`
+	Endpoint              string                         `json:"endpoint"`
+	Headers               map[string]string              `json:"headers"`
+	CredentialHeaders     []credentialHeaderRequest      `json:"credentialHeaders"`
+	Executable            string                         `json:"executable"`
+	Args                  []string                       `json:"args"`
+	Directory             string                         `json:"directory"`
+	CredentialEnvironment []credentialEnvironmentRequest `json:"credentialEnvironment"`
 }
 
 func (h *Handler) listProviders(w http.ResponseWriter, r *http.Request) {
@@ -89,6 +106,12 @@ func (h *Handler) createHTTPProvider(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	credentialHeaders, err := parseCredentialHeaders(input.CredentialHeaders)
+	if err != nil {
+		writeAPIError(w, http.StatusBadRequest, "validation_error", err)
+		return
+	}
+
 	provider, err := h.runtime.RegisterMCPProvider(
 		r.Context(),
 		catalogapplication.RegisterProviderRequest{
@@ -97,9 +120,10 @@ func (h *Handler) createHTTPProvider(w http.ResponseWriter, r *http.Request) {
 			Description: input.Description,
 		},
 		mcpconfigstore.Config{
-			Transport: mcpconfigstore.TransportHTTP,
-			Endpoint:  input.Endpoint,
-			Headers:   cloneHeaders(input.Headers),
+			Transport:         mcpconfigstore.TransportHTTP,
+			Endpoint:          input.Endpoint,
+			Headers:           cloneHeaders(input.Headers),
+			CredentialHeaders: credentialHeaders,
 		},
 	)
 	if err != nil {
@@ -136,6 +160,12 @@ func (h *Handler) createStdioProvider(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	credentialEnvironment, err := parseCredentialEnvironment(input.CredentialEnvironment)
+	if err != nil {
+		writeAPIError(w, http.StatusBadRequest, "validation_error", err)
+		return
+	}
+
 	provider, err := h.runtime.RegisterMCPProvider(
 		r.Context(),
 		catalogapplication.RegisterProviderRequest{
@@ -144,10 +174,11 @@ func (h *Handler) createStdioProvider(w http.ResponseWriter, r *http.Request) {
 			Description: input.Description,
 		},
 		mcpconfigstore.Config{
-			Transport:  mcpconfigstore.TransportStdio,
-			Executable: input.Executable,
-			Args:       append([]string(nil), input.Args...),
-			Directory:  input.Directory,
+			Transport:             mcpconfigstore.TransportStdio,
+			Executable:            input.Executable,
+			Args:                  append([]string(nil), input.Args...),
+			Directory:             input.Directory,
+			CredentialEnvironment: credentialEnvironment,
 		},
 	)
 	if err != nil {
@@ -202,10 +233,16 @@ func (h *Handler) updateProvider(w http.ResponseWriter, r *http.Request) {
 			)
 			return
 		}
+		credentialHeaders, parseErr := parseCredentialHeaders(input.CredentialHeaders)
+		if parseErr != nil {
+			writeAPIError(w, http.StatusBadRequest, "validation_error", parseErr)
+			return
+		}
 		config = mcpconfigstore.Config{
-			Transport: mcpconfigstore.TransportHTTP,
-			Endpoint:  input.Endpoint,
-			Headers:   cloneHeaders(input.Headers),
+			Transport:         mcpconfigstore.TransportHTTP,
+			Endpoint:          input.Endpoint,
+			Headers:           cloneHeaders(input.Headers),
+			CredentialHeaders: credentialHeaders,
 		}
 	case string(mcpconfigstore.TransportStdio):
 		if input.Executable == "" {
@@ -217,11 +254,17 @@ func (h *Handler) updateProvider(w http.ResponseWriter, r *http.Request) {
 			)
 			return
 		}
+		credentialEnvironment, parseErr := parseCredentialEnvironment(input.CredentialEnvironment)
+		if parseErr != nil {
+			writeAPIError(w, http.StatusBadRequest, "validation_error", parseErr)
+			return
+		}
 		config = mcpconfigstore.Config{
-			Transport:  mcpconfigstore.TransportStdio,
-			Executable: input.Executable,
-			Args:       append([]string(nil), input.Args...),
-			Directory:  input.Directory,
+			Transport:             mcpconfigstore.TransportStdio,
+			Executable:            input.Executable,
+			Args:                  append([]string(nil), input.Args...),
+			Directory:             input.Directory,
+			CredentialEnvironment: credentialEnvironment,
 		}
 	default:
 		writeAPIError(
@@ -307,11 +350,75 @@ func providerProjection(
 		result["transport"] = "http"
 		result["endpoint"] = config.Endpoint
 		result["headers"] = cloneHeaders(config.Headers)
+		result["credentialHeaders"] = credentialHeadersProjection(config.CredentialHeaders)
 	case mcpconfigstore.TransportStdio:
 		result["transport"] = "stdio"
 		result["executable"] = config.Executable
 		result["args"] = append([]string(nil), config.Args...)
 		result["directory"] = config.Directory
+		result["credentialEnvironment"] = credentialEnvironmentProjection(config.CredentialEnvironment)
+	}
+	return result
+}
+
+func parseCredentialHeaders(
+	input []credentialHeaderRequest,
+) ([]mcpconfigstore.CredentialHeader, error) {
+	result := make([]mcpconfigstore.CredentialHeader, 0, len(input))
+	for _, item := range input {
+		ref, err := credentialdomain.ParseReference(item.CredentialRef)
+		if err != nil {
+			return nil, fmt.Errorf("credential header %q: %w", item.Name, err)
+		}
+		result = append(result, mcpconfigstore.CredentialHeader{
+			Name:      item.Name,
+			Scheme:    item.Scheme,
+			Reference: ref,
+		})
+	}
+	return result, nil
+}
+
+func parseCredentialEnvironment(
+	input []credentialEnvironmentRequest,
+) ([]mcpconfigstore.CredentialEnvironment, error) {
+	result := make([]mcpconfigstore.CredentialEnvironment, 0, len(input))
+	for _, item := range input {
+		ref, err := credentialdomain.ParseReference(item.CredentialRef)
+		if err != nil {
+			return nil, fmt.Errorf("credential environment %q: %w", item.Name, err)
+		}
+		result = append(result, mcpconfigstore.CredentialEnvironment{
+			Name:      item.Name,
+			Reference: ref,
+		})
+	}
+	return result, nil
+}
+
+func credentialHeadersProjection(
+	items []mcpconfigstore.CredentialHeader,
+) []map[string]any {
+	result := make([]map[string]any, 0, len(items))
+	for _, item := range items {
+		result = append(result, map[string]any{
+			"name":          item.Name,
+			"scheme":        item.Scheme,
+			"credentialRef": item.Reference.String(),
+		})
+	}
+	return result
+}
+
+func credentialEnvironmentProjection(
+	items []mcpconfigstore.CredentialEnvironment,
+) []map[string]any {
+	result := make([]map[string]any, 0, len(items))
+	for _, item := range items {
+		result = append(result, map[string]any{
+			"name":          item.Name,
+			"credentialRef": item.Reference.String(),
+		})
 	}
 	return result
 }

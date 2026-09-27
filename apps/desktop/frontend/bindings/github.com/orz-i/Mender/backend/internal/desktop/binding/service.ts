@@ -28,20 +28,36 @@ export function CallTool(toolID: string, $arguments: { [_ in string]?: any } | n
     return $Call.ByID(3440826094, toolID, $arguments);
 }
 
-export function CreateHTTPProvider($namespace: string, displayName: string, description: string, endpoint: string, headers: { [_ in string]?: string } | null): $CancellablePromise<$models.ProviderMutationResponse> {
-    return $Call.ByID(2466151773, $namespace, displayName, description, endpoint, headers);
+export function CreateEnvironmentCredential($namespace: string, name: string, displayName: string, environmentVariable: string): $CancellablePromise<$models.Credential> {
+    return $Call.ByID(3148533732, $namespace, name, displayName, environmentVariable);
+}
+
+export function CreateHTTPProvider($namespace: string, displayName: string, description: string, endpoint: string, headers: { [_ in string]?: string } | null, credentialHeaders: $models.CredentialHeader[] | null): $CancellablePromise<$models.ProviderMutationResponse> {
+    return $Call.ByID(2466151773, $namespace, displayName, description, endpoint, headers, credentialHeaders);
+}
+
+export function CreateNativeCredential($namespace: string, name: string, displayName: string, secret: string): $CancellablePromise<$models.Credential> {
+    return $Call.ByID(46061890, $namespace, name, displayName, secret);
 }
 
 export function CreateProfile(slug: string, displayName: string, mode: string): $CancellablePromise<$models.Profile> {
     return $Call.ByID(891700837, slug, displayName, mode);
 }
 
-export function CreateStdioProvider($namespace: string, displayName: string, description: string, executable: string, args: string[] | null, directory: string): $CancellablePromise<$models.ProviderMutationResponse> {
-    return $Call.ByID(3677167748, $namespace, displayName, description, executable, args, directory);
+export function CreateStdioProvider($namespace: string, displayName: string, description: string, executable: string, args: string[] | null, directory: string, credentialEnvironment: $models.CredentialEnvironment[] | null): $CancellablePromise<$models.ProviderMutationResponse> {
+    return $Call.ByID(3677167748, $namespace, displayName, description, executable, args, directory, credentialEnvironment);
+}
+
+export function DeleteCredential($namespace: string, name: string): $CancellablePromise<void> {
+    return $Call.ByID(3995507350, $namespace, name);
 }
 
 export function DeleteProvider(providerID: string): $CancellablePromise<void> {
     return $Call.ByID(1608019374, providerID);
+}
+
+export function GetCredential($namespace: string, name: string): $CancellablePromise<$models.Credential> {
+    return $Call.ByID(1803203361, $namespace, name);
 }
 
 export function GetCredentialStatus(): $CancellablePromise<$models.CredentialStatus> {
@@ -68,6 +84,10 @@ export function ListAudit(limit: number): $CancellablePromise<$models.AuditList>
     return $Call.ByID(938849691, limit);
 }
 
+export function ListCredentials(): $CancellablePromise<$models.CredentialList> {
+    return $Call.ByID(3050037706);
+}
+
 export function ListMCPServers(): $CancellablePromise<$models.MCPServerList> {
     return $Call.ByID(3824735736);
 }
@@ -92,6 +112,10 @@ export function RestartMCPServer(serverID: string): $CancellablePromise<$models.
     return $Call.ByID(2194966826, serverID);
 }
 
+export function RotateNativeCredential($namespace: string, name: string, secret: string): $CancellablePromise<$models.Credential> {
+    return $Call.ByID(3563376993, $namespace, name, secret);
+}
+
 export function SearchTools(query: string, limit: number, providerID: string, profile: string): $CancellablePromise<$models.ToolList> {
     return $Call.ByID(1688287699, query, limit, providerID, profile);
 }
@@ -108,6 +132,6 @@ export function SyncProvider(providerID: string): $CancellablePromise<$models.Sy
     return $Call.ByID(2246585286, providerID);
 }
 
-export function UpdateProvider(providerID: string, displayName: string, description: string, transport: string, endpoint: string, headers: { [_ in string]?: string } | null, executable: string, args: string[] | null, directory: string): $CancellablePromise<$models.ProviderMutationResponse> {
-    return $Call.ByID(2087755724, providerID, displayName, description, transport, endpoint, headers, executable, args, directory);
+export function UpdateProvider(providerID: string, displayName: string, description: string, transport: string, endpoint: string, headers: { [_ in string]?: string } | null, credentialHeaders: $models.CredentialHeader[] | null, executable: string, args: string[] | null, directory: string, credentialEnvironment: $models.CredentialEnvironment[] | null): $CancellablePromise<$models.ProviderMutationResponse> {
+    return $Call.ByID(2087755724, providerID, displayName, description, transport, endpoint, headers, credentialHeaders, executable, args, directory, credentialEnvironment);
 }

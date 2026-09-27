@@ -6,6 +6,7 @@ import (
 
 	"github.com/orz-i/Mender/backend/internal/bootstrap"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
+	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
 	profileapplication "github.com/orz-i/Mender/backend/internal/profile/application"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 	"github.com/spf13/cobra"
@@ -142,6 +143,7 @@ func (a *app) newProfileAddToolCommand() *cobra.Command {
 	var descriptionOverride string
 	var policyValue string
 	var concurrencyValue string
+	var credentialRefValues []string
 
 	command := &cobra.Command{
 		Use:   "add-tool <profile> <tool-id>",
@@ -160,6 +162,10 @@ func (a *app) newProfileAddToolCommand() *cobra.Command {
 			if err != nil {
 				return usageError{err: err}
 			}
+			credentialRefs, err := parseCredentialRefValues(credentialRefValues)
+			if err != nil {
+				return usageError{err: err}
+			}
 
 			return a.withRuntime(cmd.Context(), func(runtime *bootstrap.Runtime) error {
 				profile, err := runtime.Profiles.AddTool.Execute(
@@ -173,6 +179,7 @@ func (a *app) newProfileAddToolCommand() *cobra.Command {
 						DescriptionOverride:   descriptionOverride,
 						PolicyConstraint:      policy,
 						ConcurrencyConstraint: concurrency,
+						CredentialRefs:        credentialRefs,
 					},
 				)
 				if err != nil {
@@ -200,6 +207,12 @@ func (a *app) newProfileAddToolCommand() *cobra.Command {
 		"concurrency",
 		"inherit",
 		"binding concurrency: inherit or serial",
+	)
+	command.Flags().StringArrayVar(
+		&credentialRefValues,
+		"credential-ref",
+		nil,
+		"allow one inventory Credential Reference for this binding; may be repeated",
 	)
 	return command
 }
@@ -269,6 +282,26 @@ func parseProfileConcurrencyConstraint(value string) (profiledomain.ConcurrencyC
 	}
 }
 
+func parseCredentialRefValues(values []string) ([]credentialdomain.Reference, error) {
+	result := make([]credentialdomain.Reference, 0, len(values))
+	for _, value := range values {
+		ref, err := credentialdomain.ParseReference(value)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, ref)
+	}
+	return result, nil
+}
+
+func credentialRefStrings(values []credentialdomain.Reference) []string {
+	result := make([]string, 0, len(values))
+	for _, ref := range values {
+		result = append(result, ref.String())
+	}
+	return result
+}
+
 func parseProfileToolArgs(
 	args []string,
 ) (profiledomain.Slug, catalogdomain.ToolID, error) {
@@ -294,6 +327,7 @@ func profileProjection(profile profiledomain.Profile) map[string]any {
 			"descriptionOverride":   binding.DescriptionOverride(),
 			"policyConstraint":      string(binding.PolicyConstraint()),
 			"concurrencyConstraint": string(binding.ConcurrencyConstraint()),
+			"credentialRefs":        credentialRefStrings(binding.CredentialRefs()),
 		})
 	}
 	return map[string]any{

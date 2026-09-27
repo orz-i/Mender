@@ -8,6 +8,7 @@ import (
 
 	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
+	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	profileapplication "github.com/orz-i/Mender/backend/internal/profile/application"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
@@ -254,13 +255,14 @@ func (h *Handler) getProfile(w http.ResponseWriter, r *http.Request) {
 }
 
 type addProfileToolRequest struct {
-	ToolID                string `json:"toolId"`
-	Direct                bool   `json:"direct"`
-	Alias                 string `json:"alias"`
-	TitleOverride         string `json:"titleOverride"`
-	DescriptionOverride   string `json:"descriptionOverride"`
-	PolicyConstraint      string `json:"policyConstraint"`
-	ConcurrencyConstraint string `json:"concurrencyConstraint"`
+	ToolID                string   `json:"toolId"`
+	Direct                bool     `json:"direct"`
+	Alias                 string   `json:"alias"`
+	TitleOverride         string   `json:"titleOverride"`
+	DescriptionOverride   string   `json:"descriptionOverride"`
+	PolicyConstraint      string   `json:"policyConstraint"`
+	ConcurrencyConstraint string   `json:"concurrencyConstraint"`
+	CredentialRefs        []string `json:"credentialRefs"`
 }
 
 type replaceProfileToolsRequest struct {
@@ -283,6 +285,11 @@ func (h *Handler) addProfileTool(w http.ResponseWriter, r *http.Request) {
 		writeAPIError(w, http.StatusBadRequest, "validation_error", err)
 		return
 	}
+	credentialRefs, err := parseCredentialReferences(input.CredentialRefs)
+	if err != nil {
+		writeAPIError(w, http.StatusBadRequest, "validation_error", err)
+		return
+	}
 
 	profile, err := h.runtime.Profiles.AddTool.Execute(
 		r.Context(),
@@ -295,6 +302,7 @@ func (h *Handler) addProfileTool(w http.ResponseWriter, r *http.Request) {
 			DescriptionOverride:   input.DescriptionOverride,
 			PolicyConstraint:      profiledomain.PolicyConstraint(input.PolicyConstraint),
 			ConcurrencyConstraint: profiledomain.ConcurrencyConstraint(input.ConcurrencyConstraint),
+			CredentialRefs:        credentialRefs,
 		},
 	)
 	if err != nil {
@@ -323,6 +331,11 @@ func (h *Handler) replaceProfileTools(w http.ResponseWriter, r *http.Request) {
 			writeAPIError(w, http.StatusBadRequest, "validation_error", err)
 			return
 		}
+		credentialRefs, err := parseCredentialReferences(item.CredentialRefs)
+		if err != nil {
+			writeAPIError(w, http.StatusBadRequest, "validation_error", err)
+			return
+		}
 		tools = append(tools, profileapplication.ToolBindingInput{
 			ToolID:                toolID,
 			Direct:                item.Direct,
@@ -331,6 +344,7 @@ func (h *Handler) replaceProfileTools(w http.ResponseWriter, r *http.Request) {
 			DescriptionOverride:   item.DescriptionOverride,
 			PolicyConstraint:      profiledomain.PolicyConstraint(item.PolicyConstraint),
 			ConcurrencyConstraint: profiledomain.ConcurrencyConstraint(item.ConcurrencyConstraint),
+			CredentialRefs:        credentialRefs,
 		})
 	}
 
@@ -398,6 +412,26 @@ func toolProjection(tool catalogdomain.Tool) (map[string]any, error) {
 	}, nil
 }
 
+func parseCredentialReferences(values []string) ([]credentialdomain.Reference, error) {
+	result := make([]credentialdomain.Reference, 0, len(values))
+	for _, value := range values {
+		ref, err := credentialdomain.ParseReference(value)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, ref)
+	}
+	return result, nil
+}
+
+func credentialReferenceStrings(values []credentialdomain.Reference) []string {
+	result := make([]string, 0, len(values))
+	for _, ref := range values {
+		result = append(result, ref.String())
+	}
+	return result
+}
+
 func profileProjection(profile profiledomain.Profile) map[string]any {
 	tools := make([]map[string]any, 0, len(profile.Bindings()))
 	for _, binding := range profile.Bindings() {
@@ -409,6 +443,7 @@ func profileProjection(profile profiledomain.Profile) map[string]any {
 			"descriptionOverride":   binding.DescriptionOverride(),
 			"policyConstraint":      string(binding.PolicyConstraint()),
 			"concurrencyConstraint": string(binding.ConcurrencyConstraint()),
+			"credentialRefs":        credentialReferenceStrings(binding.CredentialRefs()),
 		})
 	}
 	return map[string]any{

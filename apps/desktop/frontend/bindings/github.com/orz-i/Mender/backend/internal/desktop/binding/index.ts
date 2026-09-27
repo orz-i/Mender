@@ -9,6 +9,10 @@ export {
 export type {
     AuditList,
     AuditRecord,
+    Credential,
+    CredentialEnvironment,
+    CredentialHeader,
+    CredentialList,
     CredentialStatus,
     InvocationResult,
     MCPServerInstance,

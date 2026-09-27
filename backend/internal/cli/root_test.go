@@ -4,12 +4,76 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/orz-i/Mender/backend/internal/buildinfo"
 )
+
+func TestCredentialNativeCommandDoesNotExposeSecretFlag(t *testing.T) {
+	t.Parallel()
+
+	root := NewRootCommand(Options{Stdin: strings.NewReader("secret"), Stdout: io.Discard, Stderr: io.Discard})
+	command, _, err := root.Find([]string{"credential", "add", "native"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if command.Flags().Lookup("secret") != nil {
+		t.Fatal("native Credential command exposes a secret command-line flag")
+	}
+	if command.Flags().Lookup("secret-stdin") == nil {
+		t.Fatal("native Credential command is missing --secret-stdin")
+	}
+}
+
+func TestCredentialEnvironmentCLIWorkflow(t *testing.T) {
+	t.Parallel()
+
+	dbPath := filepath.Join(t.TempDir(), "mender.db")
+	var stdout, stderr bytes.Buffer
+	root := NewRootCommand(Options{Stdin: strings.NewReader(""), Stdout: &stdout, Stderr: &stderr})
+	root.SetArgs([]string{
+		"--db", dbPath,
+		"--output", "json",
+		"credential", "add", "environment",
+		"demo", "work",
+		"--display-name", "Demo work",
+		"--env", "DEMO_WORK_TOKEN",
+	})
+	if err := root.ExecuteContext(context.Background()); err != nil {
+		t.Fatalf("credential add error = %v stderr=%q", err, stderr.String())
+	}
+	var created map[string]any
+	if err := json.Unmarshal(stdout.Bytes(), &created); err != nil {
+		t.Fatal(err)
+	}
+	if created["reference"] != "credential://demo/work" ||
+		created["source"] != "environment" ||
+		created["environmentVariable"] != "DEMO_WORK_TOKEN" {
+		t.Fatalf("created Credential = %#v", created)
+	}
+	if _, exists := created["secret"]; exists {
+		t.Fatalf("created Credential leaked secret field: %#v", created)
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	root = NewRootCommand(Options{Stdout: &stdout, Stderr: &stderr})
+	root.SetArgs([]string{"--db", dbPath, "--output", "json", "credential", "list"})
+	if err := root.ExecuteContext(context.Background()); err != nil {
+		t.Fatalf("credential list error = %v stderr=%q", err, stderr.String())
+	}
+	var listed map[string]any
+	if err := json.Unmarshal(stdout.Bytes(), &listed); err != nil {
+		t.Fatal(err)
+	}
+	items, ok := listed["credentials"].([]any)
+	if !ok || len(items) != 1 {
+		t.Fatalf("credential list = %#v", listed)
+	}
+}
 
 func TestDatabasePathResolution(t *testing.T) {
 	t.Parallel()

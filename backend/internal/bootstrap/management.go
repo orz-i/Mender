@@ -28,8 +28,8 @@ func (r *Runtime) Status() RuntimeStatus {
 		Ready:                true,
 		PolicyMode:           "local_allow_all",
 		ApprovalMode:         "fail_closed_when_required",
-		CredentialResolver:   "unavailable",
-		CredentialPersistent: false,
+		CredentialResolver:   "inventory",
+		CredentialPersistent: true,
 	}
 }
 

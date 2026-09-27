@@ -1,5 +1,6 @@
 import type {
   AuditRecord,
+  Credential,
   CredentialStatus,
   InvocationResult,
   MCPServerInstance,
@@ -17,6 +18,7 @@ import type {
 import {
   Service,
   type AuditRecord as BindingAuditRecord,
+  type Credential as BindingCredential,
   type CredentialStatus as BindingCredentialStatus,
   type InvocationResult as BindingInvocationResult,
   type MCPServerInstance as BindingMCPServerInstance,
@@ -49,6 +51,7 @@ export function createDesktopMenderClient(): MenderClient {
           body.description ?? "",
           body.endpoint,
           body.headers ?? {},
+          body.credentialHeaders ?? [],
         ),
       );
     },
@@ -62,6 +65,7 @@ export function createDesktopMenderClient(): MenderClient {
           body.executable,
           body.args ?? [],
           body.directory ?? "",
+          body.credentialEnvironment ?? [],
         ),
       );
     },
@@ -76,9 +80,11 @@ export function createDesktopMenderClient(): MenderClient {
             "http",
             body.endpoint,
             body.headers ?? {},
+            body.credentialHeaders ?? [],
             "",
             [],
             "",
+            [],
           ),
         );
       }
@@ -90,9 +96,11 @@ export function createDesktopMenderClient(): MenderClient {
           "stdio",
           "",
           {},
+          [],
           body.executable,
           body.args ?? [],
           body.directory ?? "",
+          body.credentialEnvironment ?? [],
         ),
       );
     },
@@ -196,6 +204,47 @@ export function createDesktopMenderClient(): MenderClient {
     async getCredentialStatus() {
       return credentialStatus(await Service.GetCredentialStatus());
     },
+
+    async listCredentials() {
+      const result = await Service.ListCredentials();
+      return { credentials: (result.credentials ?? []).map(credential) };
+    },
+
+    async getCredential(namespace, name) {
+      return credential(await Service.GetCredential(namespace, name));
+    },
+
+    async createNativeCredential(body) {
+      return credential(
+        await Service.CreateNativeCredential(
+          body.namespace,
+          body.name,
+          body.displayName,
+          body.secret,
+        ),
+      );
+    },
+
+    async createEnvironmentCredential(body) {
+      return credential(
+        await Service.CreateEnvironmentCredential(
+          body.namespace,
+          body.name,
+          body.displayName,
+          body.environmentVariable,
+        ),
+      );
+    },
+
+    async rotateCredential(namespace, name, body) {
+      return credential(
+        await Service.RotateNativeCredential(namespace, name, body.secret),
+      );
+    },
+
+    async deleteCredential(namespace, name) {
+      await Service.DeleteCredential(namespace, name);
+    },
   };
 }
 
@@ -230,20 +279,36 @@ function policyStatus(value: BindingPolicyStatus): PolicyStatus {
 }
 
 function credentialStatus(value: BindingCredentialStatus): CredentialStatus {
-  if (value.resolver !== "unavailable") {
+  if (value.resolver !== "inventory") {
     throw new Error(
       `Unsupported desktop credential resolver: ${value.resolver}`,
     );
   }
-  if (value.persistentStore || value.editable) {
+  if (!value.persistentStore || !value.editable) {
     throw new Error(
-      "Desktop credential state unexpectedly reported persistence or editing",
+      "Desktop credential inventory unexpectedly reported disabled persistence or editing",
     );
   }
   return {
-    resolver: value.resolver,
-    persistentStore: false,
-    editable: false,
+    resolver: "inventory",
+    persistentStore: true,
+    editable: true,
+  };
+}
+
+function credential(value: BindingCredential): Credential {
+  if (value.source !== "native" && value.source !== "environment") {
+    throw new Error(`Unsupported desktop Credential source: ${value.source}`);
+  }
+  return {
+    reference: value.reference,
+    namespace: value.namespace,
+    name: value.name,
+    displayName: value.displayName,
+    source: value.source,
+    environmentVariable: value.environmentVariable,
+    createdAt: value.createdAt,
+    updatedAt: value.updatedAt,
   };
 }
 
@@ -275,6 +340,13 @@ function provider(value: BindingProvider): Provider {
       ? {}
       : { args: value.args }),
     ...(value.directory === undefined ? {} : { directory: value.directory }),
+    ...(value.credentialHeaders === undefined || value.credentialHeaders === null
+      ? {}
+      : { credentialHeaders: value.credentialHeaders }),
+    ...(value.credentialEnvironment === undefined ||
+    value.credentialEnvironment === null
+      ? {}
+      : { credentialEnvironment: value.credentialEnvironment }),
   };
 }
 
@@ -360,6 +432,7 @@ function profile(value: BindingProfile): Profile {
       concurrencyConstraint: profileConcurrencyConstraint(
         tool.concurrencyConstraint,
       ),
+      credentialRefs: tool.credentialRefs ?? [],
     })),
   };
 }
@@ -372,6 +445,7 @@ function bindingProfileTool(tool: {
   descriptionOverride?: string;
   policyConstraint?: "inherit" | "require_approval" | "deny";
   concurrencyConstraint?: "inherit" | "serial";
+  credentialRefs?: string[];
 }) {
   return {
     toolId: tool.toolId,
@@ -381,6 +455,7 @@ function bindingProfileTool(tool: {
     descriptionOverride: tool.descriptionOverride ?? "",
     policyConstraint: tool.policyConstraint ?? "inherit",
     concurrencyConstraint: tool.concurrencyConstraint ?? "inherit",
+    credentialRefs: tool.credentialRefs ?? [],
   };
 }
 

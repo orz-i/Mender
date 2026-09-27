@@ -13,6 +13,7 @@ import (
 	"github.com/orz-i/Mender/backend/internal/bootstrap"
 	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
+	credentialapplication "github.com/orz-i/Mender/backend/internal/credential/application"
 	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
 	mcpconfigstore "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/configstore"
 	profileapplication "github.com/orz-i/Mender/backend/internal/profile/application"
@@ -44,6 +45,12 @@ func (h *Handler) routes() {
 	h.mux.HandleFunc("GET /api/v1/system/status", h.getSystemStatus)
 	h.mux.HandleFunc("GET /api/v1/policy/status", h.getPolicyStatus)
 	h.mux.HandleFunc("GET /api/v1/credentials/status", h.getCredentialStatus)
+	h.mux.HandleFunc("GET /api/v1/credentials", h.listCredentials)
+	h.mux.HandleFunc("POST /api/v1/credentials/native", h.createNativeCredential)
+	h.mux.HandleFunc("POST /api/v1/credentials/environment", h.createEnvironmentCredential)
+	h.mux.HandleFunc("GET /api/v1/credentials/{namespace}/{name}", h.getCredential)
+	h.mux.HandleFunc("POST /api/v1/credentials/{namespace}/{name}/rotate", h.rotateCredential)
+	h.mux.HandleFunc("DELETE /api/v1/credentials/{namespace}/{name}", h.deleteCredential)
 
 	h.mux.HandleFunc("GET /api/v1/providers", h.listProviders)
 	h.mux.HandleFunc("POST /api/v1/providers/http", h.createHTTPProvider)
@@ -157,12 +164,15 @@ func writeKnownError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, catalogapplication.ErrProviderNotFound),
 		errors.Is(err, catalogapplication.ErrToolNotFound),
+		errors.Is(err, credentialapplication.ErrCredentialNotFound),
 		errors.Is(err, profileapplication.ErrProfileNotFound),
 		errors.Is(err, mcpconfigstore.ErrNotFound),
 		errors.Is(err, bootstrap.ErrMCPServerNotFound):
 		writeAPIError(w, http.StatusNotFound, "not_found", err)
 
 	case errors.Is(err, catalogapplication.ErrNamespaceConflict),
+		errors.Is(err, credentialapplication.ErrReferenceConflict),
+		errors.Is(err, credentialapplication.ErrCredentialInUse),
 		errors.Is(err, profileapplication.ErrSlugConflict),
 		errors.Is(err, profileapplication.ErrBindingNameConflict),
 		errors.Is(err, bootstrap.ErrProviderInUse):
@@ -170,9 +180,15 @@ func writeKnownError(w http.ResponseWriter, err error) {
 
 	case errors.Is(err, catalogapplication.ErrInvalidSearchLimit),
 		errors.Is(err, catalogapplication.ErrInvalidSearchQuery),
+		errors.Is(err, credentialapplication.ErrInvalidSecret),
+		errors.Is(err, credentialapplication.ErrInvalidSource),
 		errors.Is(err, profileapplication.ErrInvalidBinding),
 		errors.Is(err, bootstrap.ErrInvalidMCPServerAddress):
 		writeAPIError(w, http.StatusBadRequest, "validation_error", err)
+
+	case errors.Is(err, credentialapplication.ErrSecretSourceUnavailable),
+		errors.Is(err, credentialapplication.ErrEnvironmentMissing):
+		writeAPIError(w, http.StatusServiceUnavailable, "credential_unavailable", err)
 
 	case errors.Is(err, invocationapplication.ErrPolicyDenied),
 		errors.Is(err, invocationapplication.ErrApprovalDenied):

@@ -58,7 +58,7 @@ func TestServiceEndToEndUsesSharedRuntime(t *testing.T) {
 	service := NewService(context.Background(), runtime)
 
 	status := service.GetSystemStatus()
-	if !status.Ready || status.Policy.Editable || status.Credentials.Editable {
+	if !status.Ready || status.Policy.Editable || !status.Credentials.Editable {
 		t.Fatalf("system status = %#v", status)
 	}
 
@@ -67,6 +67,7 @@ func TestServiceEndToEndUsesSharedRuntime(t *testing.T) {
 		"Upstream",
 		"",
 		upstreamHTTP.URL,
+		nil,
 		nil,
 	)
 	if err != nil {
@@ -86,9 +87,11 @@ func TestServiceEndToEndUsesSharedRuntime(t *testing.T) {
 		"http",
 		upstreamHTTP.URL,
 		nil,
+		nil,
 		"",
 		nil,
 		"",
+		nil,
 	)
 	if err != nil {
 		t.Fatalf("UpdateProvider() error = %v", err)

@@ -25,20 +25,48 @@ type CredentialStatus struct {
 	Editable        bool   `json:"editable"`
 }
 
+type Credential struct {
+	Reference           string `json:"reference"`
+	Namespace           string `json:"namespace"`
+	Name                string `json:"name"`
+	DisplayName         string `json:"displayName"`
+	Source              string `json:"source"`
+	EnvironmentVariable string `json:"environmentVariable"`
+	CreatedAt           string `json:"createdAt"`
+	UpdatedAt           string `json:"updatedAt"`
+}
+
+type CredentialList struct {
+	Credentials []Credential `json:"credentials"`
+}
+
+type CredentialHeader struct {
+	Name          string `json:"name"`
+	Scheme        string `json:"scheme"`
+	CredentialRef string `json:"credentialRef"`
+}
+
+type CredentialEnvironment struct {
+	Name          string `json:"name"`
+	CredentialRef string `json:"credentialRef"`
+}
+
 type Provider struct {
-	ProviderID  string            `json:"providerId"`
-	Namespace   string            `json:"namespace"`
-	DisplayName string            `json:"displayName"`
-	Description string            `json:"description"`
-	CreatedAt   string            `json:"createdAt"`
-	UpdatedAt   string            `json:"updatedAt"`
-	Transport   string            `json:"transport"`
-	ToolCount   int               `json:"toolCount"`
-	Endpoint    string            `json:"endpoint,omitempty"`
-	Headers     map[string]string `json:"headers,omitempty"`
-	Executable  string            `json:"executable,omitempty"`
-	Args        []string          `json:"args,omitempty"`
-	Directory   string            `json:"directory,omitempty"`
+	ProviderID            string                  `json:"providerId"`
+	Namespace             string                  `json:"namespace"`
+	DisplayName           string                  `json:"displayName"`
+	Description           string                  `json:"description"`
+	CreatedAt             string                  `json:"createdAt"`
+	UpdatedAt             string                  `json:"updatedAt"`
+	Transport             string                  `json:"transport"`
+	ToolCount             int                     `json:"toolCount"`
+	Endpoint              string                  `json:"endpoint,omitempty"`
+	Headers               map[string]string       `json:"headers,omitempty"`
+	Executable            string                  `json:"executable,omitempty"`
+	Args                  []string                `json:"args,omitempty"`
+	Directory             string                  `json:"directory,omitempty"`
+	CredentialHeaders     []CredentialHeader      `json:"credentialHeaders,omitempty"`
+	CredentialEnvironment []CredentialEnvironment `json:"credentialEnvironment,omitempty"`
 }
 
 type ProviderList struct {
@@ -110,13 +138,14 @@ type InvocationResult struct {
 }
 
 type ProfileTool struct {
-	ToolID                string `json:"toolId"`
-	Direct                bool   `json:"direct"`
-	Alias                 string `json:"alias"`
-	TitleOverride         string `json:"titleOverride"`
-	DescriptionOverride   string `json:"descriptionOverride"`
-	PolicyConstraint      string `json:"policyConstraint"`
-	ConcurrencyConstraint string `json:"concurrencyConstraint"`
+	ToolID                string   `json:"toolId"`
+	Direct                bool     `json:"direct"`
+	Alias                 string   `json:"alias"`
+	TitleOverride         string   `json:"titleOverride"`
+	DescriptionOverride   string   `json:"descriptionOverride"`
+	PolicyConstraint      string   `json:"policyConstraint"`
+	ConcurrencyConstraint string   `json:"concurrencyConstraint"`
+	CredentialRefs        []string `json:"credentialRefs"`
 }
 
 type Profile struct {

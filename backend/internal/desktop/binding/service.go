@@ -11,6 +11,8 @@ import (
 	"github.com/orz-i/Mender/backend/internal/bootstrap"
 	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
+	credentialapplication "github.com/orz-i/Mender/backend/internal/credential/application"
+	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	mcpconfigstore "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/configstore"
 	profileapplication "github.com/orz-i/Mender/backend/internal/profile/application"
@@ -57,6 +59,96 @@ func (s *Service) GetCredentialStatus() CredentialStatus {
 	return credentialStatus(s.runtime.Status())
 }
 
+func (s *Service) ListCredentials() (CredentialList, error) {
+	items, err := s.runtime.Credentials.List.Execute(s.ctx)
+	if err != nil {
+		return CredentialList{}, err
+	}
+	result := make([]Credential, 0, len(items))
+	for _, item := range items {
+		result = append(result, credentialProjection(item))
+	}
+	return CredentialList{Credentials: result}, nil
+}
+
+func (s *Service) GetCredential(namespace string, name string) (Credential, error) {
+	ref, err := credentialdomain.NewReference(namespace, name)
+	if err != nil {
+		return Credential{}, err
+	}
+	item, err := s.runtime.Credentials.Get.Execute(s.ctx, ref)
+	if err != nil {
+		return Credential{}, err
+	}
+	return credentialProjection(item), nil
+}
+
+func (s *Service) CreateNativeCredential(
+	namespace string,
+	name string,
+	displayName string,
+	secret string,
+) (Credential, error) {
+	item, err := s.runtime.Credentials.CreateNative.Execute(
+		s.ctx,
+		credentialapplication.CreateNativeRequest{
+			Namespace:   namespace,
+			Name:        name,
+			DisplayName: displayName,
+			Secret:      []byte(secret),
+		},
+	)
+	if err != nil {
+		return Credential{}, err
+	}
+	return credentialProjection(item), nil
+}
+
+func (s *Service) CreateEnvironmentCredential(
+	namespace string,
+	name string,
+	displayName string,
+	environmentVariable string,
+) (Credential, error) {
+	item, err := s.runtime.Credentials.CreateEnvironment.Execute(
+		s.ctx,
+		credentialapplication.CreateEnvironmentRequest{
+			Namespace:           namespace,
+			Name:                name,
+			DisplayName:         displayName,
+			EnvironmentVariable: environmentVariable,
+		},
+	)
+	if err != nil {
+		return Credential{}, err
+	}
+	return credentialProjection(item), nil
+}
+
+func (s *Service) RotateNativeCredential(
+	namespace string,
+	name string,
+	secret string,
+) (Credential, error) {
+	ref, err := credentialdomain.NewReference(namespace, name)
+	if err != nil {
+		return Credential{}, err
+	}
+	item, err := s.runtime.Credentials.RotateNative.Execute(s.ctx, ref, []byte(secret))
+	if err != nil {
+		return Credential{}, err
+	}
+	return credentialProjection(item), nil
+}
+
+func (s *Service) DeleteCredential(namespace string, name string) error {
+	ref, err := credentialdomain.NewReference(namespace, name)
+	if err != nil {
+		return err
+	}
+	return s.runtime.Credentials.Delete.Execute(s.ctx, ref)
+}
+
 func (s *Service) ListProviders() (ProviderList, error) {
 	providers, err := s.runtime.Catalog.ListProviders.Execute(s.ctx)
 	if err != nil {
@@ -91,6 +183,7 @@ func (s *Service) CreateHTTPProvider(
 	description string,
 	endpoint string,
 	headers map[string]string,
+	credentialHeaders []CredentialHeader,
 ) (ProviderMutationResponse, error) {
 	if strings.TrimSpace(namespace) == "" ||
 		strings.TrimSpace(displayName) == "" ||
@@ -100,6 +193,10 @@ func (s *Service) CreateHTTPProvider(
 		)
 	}
 
+	parsedCredentialHeaders, err := parseCredentialHeaders(credentialHeaders)
+	if err != nil {
+		return ProviderMutationResponse{}, err
+	}
 	provider, err := s.runtime.RegisterMCPProvider(
 		s.ctx,
 		catalogapplication.RegisterProviderRequest{
@@ -108,9 +205,10 @@ func (s *Service) CreateHTTPProvider(
 			Description: description,
 		},
 		mcpconfigstore.Config{
-			Transport: mcpconfigstore.TransportHTTP,
-			Endpoint:  endpoint,
-			Headers:   cloneHeaders(headers),
+			Transport:         mcpconfigstore.TransportHTTP,
+			Endpoint:          endpoint,
+			Headers:           cloneHeaders(headers),
+			CredentialHeaders: parsedCredentialHeaders,
 		},
 	)
 	if err != nil {
@@ -137,6 +235,7 @@ func (s *Service) CreateStdioProvider(
 	executable string,
 	args []string,
 	directory string,
+	credentialEnvironment []CredentialEnvironment,
 ) (ProviderMutationResponse, error) {
 	if strings.TrimSpace(namespace) == "" ||
 		strings.TrimSpace(displayName) == "" ||
@@ -146,6 +245,10 @@ func (s *Service) CreateStdioProvider(
 		)
 	}
 
+	parsedCredentialEnvironment, err := parseCredentialEnvironment(credentialEnvironment)
+	if err != nil {
+		return ProviderMutationResponse{}, err
+	}
 	provider, err := s.runtime.RegisterMCPProvider(
 		s.ctx,
 		catalogapplication.RegisterProviderRequest{
@@ -154,10 +257,11 @@ func (s *Service) CreateStdioProvider(
 			Description: description,
 		},
 		mcpconfigstore.Config{
-			Transport:  mcpconfigstore.TransportStdio,
-			Executable: executable,
-			Args:       append([]string(nil), args...),
-			Directory:  directory,
+			Transport:             mcpconfigstore.TransportStdio,
+			Executable:            executable,
+			Args:                  append([]string(nil), args...),
+			Directory:             directory,
+			CredentialEnvironment: parsedCredentialEnvironment,
 		},
 	)
 	if err != nil {
@@ -184,9 +288,11 @@ func (s *Service) UpdateProvider(
 	transport string,
 	endpoint string,
 	headers map[string]string,
+	credentialHeaders []CredentialHeader,
 	executable string,
 	args []string,
 	directory string,
+	credentialEnvironment []CredentialEnvironment,
 ) (ProviderMutationResponse, error) {
 	id, err := catalogdomain.ParseProviderID(providerID)
 	if err != nil {
@@ -199,17 +305,27 @@ func (s *Service) UpdateProvider(
 	var config mcpconfigstore.Config
 	switch transport {
 	case string(mcpconfigstore.TransportHTTP):
+		parsedCredentialHeaders, parseErr := parseCredentialHeaders(credentialHeaders)
+		if parseErr != nil {
+			return ProviderMutationResponse{}, parseErr
+		}
 		config = mcpconfigstore.Config{
-			Transport: mcpconfigstore.TransportHTTP,
-			Endpoint:  endpoint,
-			Headers:   cloneHeaders(headers),
+			Transport:         mcpconfigstore.TransportHTTP,
+			Endpoint:          endpoint,
+			Headers:           cloneHeaders(headers),
+			CredentialHeaders: parsedCredentialHeaders,
 		}
 	case string(mcpconfigstore.TransportStdio):
+		parsedCredentialEnvironment, parseErr := parseCredentialEnvironment(credentialEnvironment)
+		if parseErr != nil {
+			return ProviderMutationResponse{}, parseErr
+		}
 		config = mcpconfigstore.Config{
-			Transport:  mcpconfigstore.TransportStdio,
-			Executable: executable,
-			Args:       append([]string(nil), args...),
-			Directory:  directory,
+			Transport:             mcpconfigstore.TransportStdio,
+			Executable:            executable,
+			Args:                  append([]string(nil), args...),
+			Directory:             directory,
+			CredentialEnvironment: parsedCredentialEnvironment,
 		}
 	default:
 		return ProviderMutationResponse{}, fmt.Errorf("transport must be http or stdio")
@@ -474,6 +590,10 @@ func (s *Service) AddProfileTool(
 	if err != nil {
 		return Profile{}, err
 	}
+	credentialRefs, err := parseCredentialReferences(tool.CredentialRefs)
+	if err != nil {
+		return Profile{}, err
+	}
 	profile, err := s.runtime.Profiles.AddTool.Execute(
 		s.ctx,
 		profileapplication.AddToolRequest{
@@ -485,6 +605,7 @@ func (s *Service) AddProfileTool(
 			DescriptionOverride:   tool.DescriptionOverride,
 			PolicyConstraint:      profiledomain.PolicyConstraint(tool.PolicyConstraint),
 			ConcurrencyConstraint: profiledomain.ConcurrencyConstraint(tool.ConcurrencyConstraint),
+			CredentialRefs:        credentialRefs,
 		},
 	)
 	if err != nil {
@@ -508,6 +629,10 @@ func (s *Service) ReplaceProfileTools(
 		if err != nil {
 			return Profile{}, err
 		}
+		credentialRefs, err := parseCredentialReferences(item.CredentialRefs)
+		if err != nil {
+			return Profile{}, err
+		}
 		bindings = append(bindings, profileapplication.ToolBindingInput{
 			ToolID:                id,
 			Direct:                item.Direct,
@@ -516,6 +641,7 @@ func (s *Service) ReplaceProfileTools(
 			DescriptionOverride:   item.DescriptionOverride,
 			PolicyConstraint:      profiledomain.PolicyConstraint(item.PolicyConstraint),
 			ConcurrencyConstraint: profiledomain.ConcurrencyConstraint(item.ConcurrencyConstraint),
+			CredentialRefs:        credentialRefs,
 		})
 	}
 
@@ -581,8 +707,52 @@ func credentialStatus(status bootstrap.RuntimeStatus) CredentialStatus {
 	return CredentialStatus{
 		Resolver:        status.CredentialResolver,
 		PersistentStore: status.CredentialPersistent,
-		Editable:        false,
+		Editable:        true,
 	}
+}
+
+func credentialProjection(item credentialdomain.Credential) Credential {
+	return Credential{
+		Reference:           item.Reference().String(),
+		Namespace:           item.Reference().Namespace(),
+		Name:                item.Reference().Name(),
+		DisplayName:         item.DisplayName(),
+		Source:              string(item.Source()),
+		EnvironmentVariable: item.EnvironmentVariable(),
+		CreatedAt:           item.CreatedAt().Format(timeFormat),
+		UpdatedAt:           item.UpdatedAt().Format(timeFormat),
+	}
+}
+
+func parseCredentialHeaders(items []CredentialHeader) ([]mcpconfigstore.CredentialHeader, error) {
+	result := make([]mcpconfigstore.CredentialHeader, 0, len(items))
+	for _, item := range items {
+		ref, err := credentialdomain.ParseReference(item.CredentialRef)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, mcpconfigstore.CredentialHeader{
+			Name:      item.Name,
+			Scheme:    item.Scheme,
+			Reference: ref,
+		})
+	}
+	return result, nil
+}
+
+func parseCredentialEnvironment(items []CredentialEnvironment) ([]mcpconfigstore.CredentialEnvironment, error) {
+	result := make([]mcpconfigstore.CredentialEnvironment, 0, len(items))
+	for _, item := range items {
+		ref, err := credentialdomain.ParseReference(item.CredentialRef)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, mcpconfigstore.CredentialEnvironment{
+			Name:      item.Name,
+			Reference: ref,
+		})
+	}
+	return result, nil
 }
 
 func providerProjection(
@@ -605,11 +775,26 @@ func providerProjection(
 		result.Transport = "http"
 		result.Endpoint = config.Endpoint
 		result.Headers = cloneHeaders(config.Headers)
+		result.CredentialHeaders = make([]CredentialHeader, 0, len(config.CredentialHeaders))
+		for _, binding := range config.CredentialHeaders {
+			result.CredentialHeaders = append(result.CredentialHeaders, CredentialHeader{
+				Name:          binding.Name,
+				Scheme:        binding.Scheme,
+				CredentialRef: binding.Reference.String(),
+			})
+		}
 	case mcpconfigstore.TransportStdio:
 		result.Transport = "stdio"
 		result.Executable = config.Executable
 		result.Args = append([]string(nil), config.Args...)
 		result.Directory = config.Directory
+		result.CredentialEnvironment = make([]CredentialEnvironment, 0, len(config.CredentialEnvironment))
+		for _, binding := range config.CredentialEnvironment {
+			result.CredentialEnvironment = append(result.CredentialEnvironment, CredentialEnvironment{
+				Name:          binding.Name,
+				CredentialRef: binding.Reference.String(),
+			})
+		}
 	}
 	return result
 }
@@ -672,6 +857,26 @@ func toolProjection(tool catalogdomain.Tool) (ToolDetail, error) {
 	}, nil
 }
 
+func parseCredentialReferences(values []string) ([]credentialdomain.Reference, error) {
+	result := make([]credentialdomain.Reference, 0, len(values))
+	for _, value := range values {
+		ref, err := credentialdomain.ParseReference(value)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, ref)
+	}
+	return result, nil
+}
+
+func credentialReferenceStrings(values []credentialdomain.Reference) []string {
+	result := make([]string, 0, len(values))
+	for _, ref := range values {
+		result = append(result, ref.String())
+	}
+	return result
+}
+
 func profileProjection(profile profiledomain.Profile) Profile {
 	tools := make([]ProfileTool, 0, len(profile.Bindings()))
 	for _, binding := range profile.Bindings() {
@@ -683,6 +888,7 @@ func profileProjection(profile profiledomain.Profile) Profile {
 			DescriptionOverride:   binding.DescriptionOverride(),
 			PolicyConstraint:      string(binding.PolicyConstraint()),
 			ConcurrencyConstraint: string(binding.ConcurrencyConstraint()),
+			CredentialRefs:        credentialReferenceStrings(binding.CredentialRefs()),
 		})
 	}
 	return Profile{
