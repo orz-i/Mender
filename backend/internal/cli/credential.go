@@ -254,10 +254,10 @@ func readSecretFromStdin(reader io.Reader) ([]byte, error) {
 		return nil, fmt.Errorf("read Credential secret from stdin: %w", err)
 	}
 	if len(raw) == 0 {
-		return nil, fmt.Errorf("Credential secret on stdin must not be empty")
+		return nil, fmt.Errorf("credential secret on stdin must not be empty")
 	}
 	if len(raw) > maxCLISecretBytes {
-		return nil, fmt.Errorf("Credential secret on stdin is too large")
+		return nil, fmt.Errorf("credential secret on stdin is too large")
 	}
 	return raw, nil
 }

@@ -645,22 +645,24 @@ func TestManagementAPICredentialBackedProviderAuth(t *testing.T) {
 		t.Fatalf("Credential response = %#v", credential)
 	}
 
+	// #nosec G101 -- these are non-secret test binding metadata values.
+	credentialHeaders := []map[string]any{
+		{
+			"name":          "Authorization",
+			"scheme":        "Bearer",
+			"credentialRef": "credential://secured/work",
+		},
+	}
 	created := requestJSON(
 		t,
 		server.Client(),
 		http.MethodPost,
 		server.URL+"/api/v1/providers/http",
 		map[string]any{
-			"namespace":   "secured",
-			"displayName": "Secured",
-			"endpoint":    upstreamHTTP.URL,
-			"credentialHeaders": []map[string]any{
-				{
-					"name":          "Authorization",
-					"scheme":        "Bearer",
-					"credentialRef": "credential://secured/work",
-				},
-			},
+			"namespace":         "secured",
+			"displayName":       "Secured",
+			"endpoint":          upstreamHTTP.URL,
+			"credentialHeaders": credentialHeaders,
 		},
 		http.StatusCreated,
 	)

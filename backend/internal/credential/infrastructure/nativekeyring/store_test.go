@@ -2,6 +2,7 @@ package nativekeyring
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	credentialapplication "github.com/orz-i/Mender/backend/internal/credential/application"
@@ -39,7 +40,7 @@ func TestStoreRoundTripWithMockKeyring(t *testing.T) {
 	if err := store.Delete(context.Background(), ref); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.Get(context.Background(), ref); err != credentialapplication.ErrSecretNotFound {
+	if _, err := store.Get(context.Background(), ref); !errors.Is(err, credentialapplication.ErrSecretNotFound) {
 		t.Fatalf("Get(deleted) error = %v", err)
 	}
 }

@@ -47,7 +47,7 @@ const (
 	FailureToolError              FailureCode = "tool_error"
 	FailureProviderError          FailureCode = "provider_error"
 	FailureExecutorUnavailable    FailureCode = "executor_unavailable"
-	FailureCredentialOutsideScope FailureCode = "credential_outside_scope"
+	FailureCredentialOutsideScope FailureCode = "credential_outside_scope" // #nosec G101 -- stable failure classification, not a credential value
 	FailureTimedOut               FailureCode = "timed_out"
 	FailureCancelled              FailureCode = "cancelled"
 	FailureOutputSchemaMismatch   FailureCode = "output_schema_mismatch"
