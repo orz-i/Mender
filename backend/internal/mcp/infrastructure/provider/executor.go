@@ -23,9 +23,29 @@ var (
 func (c *Connection) Execute(
 	ctx context.Context,
 	request invocationapplication.ExecutionRequest,
-	_ invocationapplication.CredentialResolver,
+	credentials invocationapplication.CredentialResolver,
 	_ invocationapplication.ProgressReporter,
 ) (invocationdomain.Outcome, error) {
+	for _, ref := range c.requiredCredentials {
+		if credentials == nil {
+			return invocationdomain.Outcome{}, fmt.Errorf(
+				"authorize upstream MCP credential %s: resolver is unavailable",
+				ref,
+			)
+		}
+		secret, err := credentials.Resolve(ctx, ref)
+		if err != nil {
+			return invocationdomain.Outcome{}, fmt.Errorf(
+				"authorize upstream MCP credential %s: %w",
+				ref,
+				err,
+			)
+		}
+		for i := range secret {
+			secret[i] = 0
+		}
+	}
+
 	arguments := request.Arguments.Bytes()
 	if !isJSONObject(arguments) {
 		return invocationdomain.Outcome{}, ErrArgumentsNotObject

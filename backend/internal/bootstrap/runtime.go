@@ -11,7 +11,6 @@ import (
 	auditapplication "github.com/orz-i/Mender/backend/internal/audit/application"
 	auditsqlite "github.com/orz-i/Mender/backend/internal/audit/infrastructure/sqlite"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
-	credentialunavailable "github.com/orz-i/Mender/backend/internal/credential/infrastructure/unavailable"
 	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
 	invocationevents "github.com/orz-i/Mender/backend/internal/invocation/infrastructure/events"
 	invocationexecutionguard "github.com/orz-i/Mender/backend/internal/invocation/infrastructure/executionguard"
@@ -37,10 +36,11 @@ type RuntimeOptions struct {
 // Runtime composes Catalog, Profile persistence, Provider config persistence,
 // and Mender's shared invocation pipeline.
 type Runtime struct {
-	Catalog    *Catalog
-	Profiles   *Profiles
-	InvokeTool invocationapplication.InvokeTool
-	ListAudit  auditapplication.ListRecords
+	Catalog     *Catalog
+	Credentials *Credentials
+	Profiles    *Profiles
+	InvokeTool  invocationapplication.InvokeTool
+	ListAudit   auditapplication.ListRecords
 
 	audit      *auditsqlite.Store
 	executors  *invocationrouter.Router
@@ -67,8 +67,21 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		return nil, fmt.Errorf("compose runtime: audit: %w", err)
 	}
 
-	profiles, err := NewProfiles(ctx, options.DatabasePath, catalog.store)
+	credentials, err := NewCredentials(ctx, options.DatabasePath)
 	if err != nil {
+		_ = auditStore.Close()
+		_ = catalog.Close()
+		return nil, fmt.Errorf("compose runtime: credentials: %w", err)
+	}
+
+	profiles, err := NewProfiles(
+		ctx,
+		options.DatabasePath,
+		catalog.store,
+		profileCredentialLookup{get: credentials.Get},
+	)
+	if err != nil {
+		_ = credentials.Close()
 		_ = auditStore.Close()
 		_ = catalog.Close()
 		return nil, fmt.Errorf("compose runtime: profiles: %w", err)
@@ -77,6 +90,7 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 	configs, err := mcpconfigstore.Open(ctx, options.DatabasePath)
 	if err != nil {
 		_ = profiles.Close()
+		_ = credentials.Close()
 		_ = auditStore.Close()
 		_ = catalog.Close()
 		return nil, fmt.Errorf("compose runtime: MCP configs: %w", err)
@@ -110,7 +124,7 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		invocationresultguard.New(schemaValidator, options.MaxResultBytes),
 		observer,
 		executors,
-		credentialunavailable.Resolver{},
+		credentials.Resolver,
 		auditStore,
 		ids,
 		systemClock{},
@@ -118,14 +132,15 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 	)
 
 	return &Runtime{
-		Catalog:    catalog,
-		Profiles:   profiles,
-		InvokeTool: invokeTool,
-		ListAudit:  auditapplication.NewListRecords(auditStore),
-		audit:      auditStore,
-		executors:  executors,
-		mcpConfigs: configs,
-		mcpServers: make(map[string]*managedMCPServer),
+		Catalog:     catalog,
+		Credentials: credentials,
+		Profiles:    profiles,
+		InvokeTool:  invokeTool,
+		ListAudit:   auditapplication.NewListRecords(auditStore),
+		audit:       auditStore,
+		executors:   executors,
+		mcpConfigs:  configs,
+		mcpServers:  make(map[string]*managedMCPServer),
 	}, nil
 }
 
@@ -164,6 +179,7 @@ func (r *Runtime) Close() error {
 		errs,
 		r.mcpConfigs.Close(),
 		r.Profiles.Close(),
+		r.Credentials.Close(),
 		r.audit.Close(),
 		r.Catalog.Close(),
 	)

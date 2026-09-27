@@ -26,20 +26,25 @@ func NewProfiles(
 	ctx context.Context,
 	databasePath string,
 	tools profileapplication.ToolLookup,
+	credentials ...profileapplication.CredentialLookup,
 ) (*Profiles, error) {
 	store, err := profilesqlite.Open(ctx, databasePath)
 	if err != nil {
 		return nil, fmt.Errorf("compose profiles: %w", err)
 	}
 	ids := profileidentity.NewGenerator()
+	var credentialLookup profileapplication.CredentialLookup
+	if len(credentials) != 0 {
+		credentialLookup = credentials[0]
+	}
 
 	return &Profiles{
 		Create:       profileapplication.NewCreateProfile(store, ids),
 		Get:          profileapplication.NewGetProfile(store),
 		GetByID:      profileapplication.NewGetProfileByID(store),
 		List:         profileapplication.NewListProfiles(store),
-		AddTool:      profileapplication.NewAddTool(store, tools),
-		ReplaceTools: profileapplication.NewReplaceTools(store, tools),
+		AddTool:      profileapplication.NewAddTool(store, tools, credentialLookup),
+		ReplaceTools: profileapplication.NewReplaceTools(store, tools, credentialLookup),
 		RemoveTool:   profileapplication.NewRemoveTool(store),
 		store:        store,
 	}, nil

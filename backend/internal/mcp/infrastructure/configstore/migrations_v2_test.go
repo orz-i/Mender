@@ -55,8 +55,8 @@ func TestOpenMigratesV1ConfigSchemaToHeadersTemplateColumn(t *testing.T) {
 	).Scan(&version); err != nil {
 		t.Fatal(err)
 	}
-	if version != 2 {
-		t.Fatalf("schema version = %d, want 2", version)
+	if version != 3 {
+		t.Fatalf("schema version = %d, want 3", version)
 	}
 
 	rows, err := store.db.QueryContext(
@@ -69,6 +69,8 @@ func TestOpenMigratesV1ConfigSchemaToHeadersTemplateColumn(t *testing.T) {
 	defer func() { _ = rows.Close() }()
 
 	foundHeaders := false
+	foundCredentialHeaders := false
+	foundCredentialEnvironment := false
 	for rows.Next() {
 		var cid, notNull, primaryKey int
 		var name, columnType string
@@ -83,14 +85,24 @@ func TestOpenMigratesV1ConfigSchemaToHeadersTemplateColumn(t *testing.T) {
 		); err != nil {
 			t.Fatal(err)
 		}
-		if name == "headers_json" {
+		switch name {
+		case "headers_json":
 			foundHeaders = true
+		case "credential_headers_json":
+			foundCredentialHeaders = true
+		case "credential_environment_json":
+			foundCredentialEnvironment = true
 		}
 	}
 	if err := rows.Err(); err != nil {
 		t.Fatal(err)
 	}
-	if !foundHeaders {
-		t.Fatal("headers_json column was not added")
+	if !foundHeaders || !foundCredentialHeaders || !foundCredentialEnvironment {
+		t.Fatalf(
+			"expected migrated auth columns; headers=%v credentialHeaders=%v credentialEnvironment=%v",
+			foundHeaders,
+			foundCredentialHeaders,
+			foundCredentialEnvironment,
+		)
 	}
 }

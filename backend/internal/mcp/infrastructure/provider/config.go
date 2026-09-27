@@ -10,24 +10,27 @@ import (
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
 	"github.com/orz-i/Mender/backend/internal/mcp/infrastructure/transportpolicy"
 )
 
 // CommandConfig configures a local upstream MCP Provider over stdio.
 type CommandConfig struct {
-	Executable  string
-	Args        []string
-	Directory   string
-	Environment map[string]string
-	Stderr      io.Writer
+	Executable          string
+	Args                []string
+	Directory           string
+	Environment         map[string]string
+	RequiredCredentials []credentialdomain.Reference
+	Stderr              io.Writer
 }
 
 // HTTPConfig configures a remote upstream MCP Provider over Streamable HTTP.
 type HTTPConfig struct {
-	Endpoint   string
-	Headers    map[string]string
-	HTTPClient *http.Client
-	MaxRetries int
+	Endpoint            string
+	Headers             map[string]string
+	RequiredCredentials []credentialdomain.Reference
+	HTTPClient          *http.Client
+	MaxRetries          int
 }
 
 // ConnectCommand starts and connects to a local MCP server without invoking a shell.
@@ -52,7 +55,12 @@ func ConnectCommand(ctx context.Context, config CommandConfig) (*Connection, err
 	}
 	command.Env = environment
 
-	return ConnectTransport(ctx, &mcp.CommandTransport{Command: command})
+	connection, err := ConnectTransport(ctx, &mcp.CommandTransport{Command: command})
+	if err != nil {
+		return nil, err
+	}
+	connection.setRequiredCredentials(config.RequiredCredentials)
+	return connection, nil
 }
 
 // ConnectHTTP connects to a remote MCP server over Streamable HTTP.
@@ -77,5 +85,10 @@ func ConnectHTTP(ctx context.Context, config HTTPConfig) (*Connection, error) {
 		MaxRetries:           config.MaxRetries,
 		DisableStandaloneSSE: true,
 	}
-	return ConnectTransport(ctx, transport)
+	connection, err := ConnectTransport(ctx, transport)
+	if err != nil {
+		return nil, err
+	}
+	connection.setRequiredCredentials(config.RequiredCredentials)
+	return connection, nil
 }

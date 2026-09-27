@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
+	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
 )
 
 func TestConfigRoundTripHTTPAndStdio(t *testing.T) {
@@ -18,13 +19,18 @@ func TestConfigRoundTripHTTPAndStdio(t *testing.T) {
 	httpID := mustProviderID(t, "prov_00000000000000000000000000000001")
 	stdioID := mustProviderID(t, "prov_00000000000000000000000000000002")
 
+	httpRef, _ := credentialdomain.NewReference("github", "work")
+	stdioRef, _ := credentialdomain.NewReference("github", "ci")
+
 	httpConfig := Config{
 		ProviderID: httpID,
 		Transport:  TransportHTTP,
 		Endpoint:   "https://example.test/mcp",
 		Headers: map[string]string{
-			"Authorization": "Bearer ${EXAMPLE_API_KEY}",
-			"X-Client":      "mender",
+			"X-Client": "mender",
+		},
+		CredentialHeaders: []CredentialHeader{
+			{Name: "Authorization", Scheme: "Bearer", Reference: httpRef},
 		},
 	}
 	stdioConfig := Config{
@@ -33,6 +39,9 @@ func TestConfigRoundTripHTTPAndStdio(t *testing.T) {
 		Executable: "/usr/local/bin/tool-server",
 		Args:       []string{"--mode", "stdio"},
 		Directory:  "/tmp/work",
+		CredentialEnvironment: []CredentialEnvironment{
+			{Name: "GITHUB_TOKEN", Reference: stdioRef},
+		},
 	}
 
 	for _, config := range []Config{httpConfig, stdioConfig} {
@@ -47,8 +56,10 @@ func TestConfigRoundTripHTTPAndStdio(t *testing.T) {
 	}
 	if loadedHTTP.Endpoint != httpConfig.Endpoint ||
 		loadedHTTP.Transport != TransportHTTP ||
-		loadedHTTP.Headers["Authorization"] != "Bearer ${EXAMPLE_API_KEY}" ||
-		loadedHTTP.Headers["X-Client"] != "mender" {
+		loadedHTTP.Headers["X-Client"] != "mender" ||
+		len(loadedHTTP.CredentialHeaders) != 1 ||
+		loadedHTTP.CredentialHeaders[0].Reference != httpRef ||
+		loadedHTTP.CredentialHeaders[0].Scheme != "Bearer" {
 		t.Fatalf("HTTP config = %+v", loadedHTTP)
 	}
 
@@ -58,7 +69,9 @@ func TestConfigRoundTripHTTPAndStdio(t *testing.T) {
 	}
 	if loadedStdio.Executable != stdioConfig.Executable ||
 		!slices.Equal(loadedStdio.Args, stdioConfig.Args) ||
-		loadedStdio.Directory != stdioConfig.Directory {
+		loadedStdio.Directory != stdioConfig.Directory ||
+		len(loadedStdio.CredentialEnvironment) != 1 ||
+		loadedStdio.CredentialEnvironment[0].Reference != stdioRef {
 		t.Fatalf("stdio config = %+v", loadedStdio)
 	}
 
@@ -75,6 +88,45 @@ func TestConfigRoundTripHTTPAndStdio(t *testing.T) {
 	}
 	if _, err := store.Get(context.Background(), httpID); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("Get(deleted) error = %v", err)
+	}
+}
+
+func TestConfigRejectsDuplicateStaticAndCredentialHeader(t *testing.T) {
+	t.Parallel()
+
+	ref, err := credentialdomain.NewReference("github", "work")
+	if err != nil {
+		t.Fatal(err)
+	}
+	config := Config{
+		ProviderID: mustProviderID(t, "prov_00000000000000000000000000000009"),
+		Transport:  TransportHTTP,
+		Endpoint:   "https://example.test/mcp",
+		Headers: map[string]string{
+			"Authorization": "Bearer ${GITHUB_TOKEN}",
+		},
+		CredentialHeaders: []CredentialHeader{
+			{Name: "authorization", Scheme: "Bearer", Reference: ref},
+		},
+	}
+	if err := config.Validate(); err == nil {
+		t.Fatal("Validate() accepted duplicate static/credential header")
+	}
+}
+
+func TestRequiredCredentialRefsAreUnique(t *testing.T) {
+	t.Parallel()
+
+	ref, _ := credentialdomain.NewReference("github", "work")
+	config := Config{
+		CredentialHeaders: []CredentialHeader{
+			{Name: "Authorization", Scheme: "Bearer", Reference: ref},
+			{Name: "X-API-Key", Reference: ref},
+		},
+	}
+	refs := config.RequiredCredentialRefs()
+	if len(refs) != 1 || refs[0] != ref {
+		t.Fatalf("RequiredCredentialRefs() = %#v", refs)
 	}
 }
 
@@ -95,7 +147,7 @@ func TestConfigRejectsPersistedSensitiveHeaderValue(t *testing.T) {
 	}
 }
 
-func TestConfigSchemaContainsNoSecretOrEnvironmentColumns(t *testing.T) {
+func TestConfigSchemaContainsNoSecretValueColumns(t *testing.T) {
 	t.Parallel()
 
 	store := openTestStore(t)
@@ -132,12 +184,11 @@ func TestConfigSchemaContainsNoSecretOrEnvironmentColumns(t *testing.T) {
 	}
 
 	for _, forbidden := range []string{
-		"env",
-		"environment",
 		"token",
 		"password",
 		"secret",
-		"credential",
+		"credential_value",
+		"resolved_value",
 	} {
 		if slices.Contains(columns, forbidden) {
 			t.Fatalf("config schema contains forbidden column %q: %v", forbidden, columns)

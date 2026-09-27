@@ -70,19 +70,30 @@ func (s *Store) Save(ctx context.Context, config Config) error {
 	if err != nil {
 		return fmt.Errorf("save MCP provider config: encode headers: %w", err)
 	}
+	credentialHeadersJSON, err := json.Marshal(config.CredentialHeaders)
+	if err != nil {
+		return fmt.Errorf("save MCP provider config: encode credential headers: %w", err)
+	}
+	credentialEnvironmentJSON, err := json.Marshal(config.CredentialEnvironment)
+	if err != nil {
+		return fmt.Errorf("save MCP provider config: encode credential environment: %w", err)
+	}
 
 	_, err = s.db.ExecContext(
 		ctx,
 		`INSERT INTO mcp_provider_configs(
-			provider_id, transport, endpoint, executable, args_json, directory, headers_json
-		) VALUES (?, ?, ?, ?, ?, ?, ?)
+			provider_id, transport, endpoint, executable, args_json, directory, headers_json,
+			credential_headers_json, credential_environment_json
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(provider_id) DO UPDATE SET
 			transport = excluded.transport,
 			endpoint = excluded.endpoint,
 			executable = excluded.executable,
 			args_json = excluded.args_json,
 			directory = excluded.directory,
-			headers_json = excluded.headers_json`,
+			headers_json = excluded.headers_json,
+			credential_headers_json = excluded.credential_headers_json,
+			credential_environment_json = excluded.credential_environment_json`,
 		config.ProviderID.String(),
 		string(config.Transport),
 		config.Endpoint,
@@ -90,6 +101,8 @@ func (s *Store) Save(ctx context.Context, config Config) error {
 		string(argsJSON),
 		config.Directory,
 		string(headersJSON),
+		string(credentialHeadersJSON),
+		string(credentialEnvironmentJSON),
 	)
 	if err != nil {
 		return fmt.Errorf("save MCP provider config: %w", err)
@@ -103,7 +116,7 @@ func (s *Store) Get(
 ) (Config, error) {
 	row := s.db.QueryRowContext(
 		ctx,
-		`SELECT provider_id, transport, endpoint, executable, args_json, directory, headers_json
+		`SELECT provider_id, transport, endpoint, executable, args_json, directory, headers_json, credential_headers_json, credential_environment_json
 		FROM mcp_provider_configs
 		WHERE provider_id = ?`,
 		providerID.String(),
@@ -121,7 +134,7 @@ func (s *Store) Get(
 func (s *Store) List(ctx context.Context) ([]Config, error) {
 	rows, err := s.db.QueryContext(
 		ctx,
-		`SELECT provider_id, transport, endpoint, executable, args_json, directory, headers_json
+		`SELECT provider_id, transport, endpoint, executable, args_json, directory, headers_json, credential_headers_json, credential_environment_json
 		FROM mcp_provider_configs
 		ORDER BY provider_id`,
 	)
@@ -162,6 +175,7 @@ type rowScanner interface {
 
 func scanConfig(scanner rowScanner) (Config, error) {
 	var rawProviderID, rawTransport, endpoint, executable, rawArgs, directory, rawHeaders string
+	var rawCredentialHeaders, rawCredentialEnvironment string
 	if err := scanner.Scan(
 		&rawProviderID,
 		&rawTransport,
@@ -170,6 +184,8 @@ func scanConfig(scanner rowScanner) (Config, error) {
 		&rawArgs,
 		&directory,
 		&rawHeaders,
+		&rawCredentialHeaders,
+		&rawCredentialEnvironment,
 	); err != nil {
 		return Config{}, err
 	}
@@ -186,15 +202,25 @@ func scanConfig(scanner rowScanner) (Config, error) {
 	if err := json.Unmarshal([]byte(rawHeaders), &headers); err != nil {
 		return Config{}, fmt.Errorf("parse headers: %w", err)
 	}
+	var credentialHeaders []CredentialHeader
+	if err := json.Unmarshal([]byte(rawCredentialHeaders), &credentialHeaders); err != nil {
+		return Config{}, fmt.Errorf("parse credential headers: %w", err)
+	}
+	var credentialEnvironment []CredentialEnvironment
+	if err := json.Unmarshal([]byte(rawCredentialEnvironment), &credentialEnvironment); err != nil {
+		return Config{}, fmt.Errorf("parse credential environment: %w", err)
+	}
 
 	config := Config{
-		ProviderID: providerID,
-		Transport:  Transport(rawTransport),
-		Endpoint:   endpoint,
-		Headers:    headers,
-		Executable: executable,
-		Args:       args,
-		Directory:  directory,
+		ProviderID:            providerID,
+		Transport:             Transport(rawTransport),
+		Endpoint:              endpoint,
+		Headers:               headers,
+		CredentialHeaders:     credentialHeaders,
+		Executable:            executable,
+		Args:                  args,
+		Directory:             directory,
+		CredentialEnvironment: credentialEnvironment,
 	}
 	if err := config.Validate(); err != nil {
 		return Config{}, err

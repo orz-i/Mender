@@ -9,6 +9,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
+	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
 	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 )
@@ -64,6 +65,92 @@ func TestConnectionExecutesMCPTool(t *testing.T) {
 	if output["echo"] != "hello" {
 		t.Fatalf("output = %#v", output)
 	}
+}
+
+func TestConnectionAuthorizesRequiredCredentialBeforeUpstreamCall(t *testing.T) {
+	t.Parallel()
+
+	var upstreamCalls int
+	connection := connectTestServer(t, func(server *mcp.Server) {
+		server.AddTool(
+			&mcp.Tool{
+				Name:        "secured",
+				InputSchema: json.RawMessage("{\"type\":\"object\"}"),
+			},
+			func(context.Context, *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				upstreamCalls++
+				return &mcp.CallToolResult{
+					StructuredContent: map[string]any{"ok": true},
+				}, nil
+			},
+		)
+	})
+	ref, err := credentialdomain.NewReference("github", "work")
+	if err != nil {
+		t.Fatal(err)
+	}
+	connection.setRequiredCredentials([]credentialdomain.Reference{ref})
+	arguments, _ := invocationdomain.NewJSONValue([]byte("{}"))
+
+	denied := &executorCredentialResolver{err: errors.New("denied")}
+	_, err = connection.Execute(
+		context.Background(),
+		invocationapplication.ExecutionRequest{
+			Tool:      executorTestTool(t, "secured"),
+			Arguments: arguments,
+		},
+		denied,
+		nil,
+	)
+	if err == nil {
+		t.Fatal("Execute() expected Credential authorization error")
+	}
+	if denied.calls != 1 {
+		t.Fatalf("denied resolver calls = %d, want 1", denied.calls)
+	}
+	if upstreamCalls != 0 {
+		t.Fatalf("denied call reached upstream: %d", upstreamCalls)
+	}
+
+	allowed := &executorCredentialResolver{secret: []byte("secret")}
+	outcome, err := connection.Execute(
+		context.Background(),
+		invocationapplication.ExecutionRequest{
+			Tool:      executorTestTool(t, "secured"),
+			Arguments: arguments,
+		},
+		allowed,
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if outcome.Kind() != invocationdomain.OutcomeKindComplete {
+		t.Fatalf("Outcome kind = %q", outcome.Kind())
+	}
+	if allowed.calls != 1 {
+		t.Fatalf("allowed resolver calls = %d, want 1", allowed.calls)
+	}
+	if upstreamCalls != 1 {
+		t.Fatalf("upstream calls = %d, want 1", upstreamCalls)
+	}
+}
+
+type executorCredentialResolver struct {
+	secret []byte
+	err    error
+	calls  int
+}
+
+func (r *executorCredentialResolver) Resolve(
+	context.Context,
+	credentialdomain.Reference,
+) ([]byte, error) {
+	r.calls++
+	if r.err != nil {
+		return nil, r.err
+	}
+	return append([]byte(nil), r.secret...), nil
 }
 
 func TestConnectionMapsMCPErrorResultToToolFailureOutcome(t *testing.T) {

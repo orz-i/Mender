@@ -26,14 +26,11 @@ var forbiddenHeaders = map[string]struct{}{
 
 func Validate(headers map[string]string) error {
 	for name, value := range headers {
-		trimmedName := strings.TrimSpace(name)
-		if trimmedName == "" || !headerNamePattern.MatchString(trimmedName) {
-			return fmt.Errorf("HTTP header name %q is invalid", name)
+		trimmedName, err := ValidateName(name)
+		if err != nil {
+			return err
 		}
 		lowerName := strings.ToLower(trimmedName)
-		if _, forbidden := forbiddenHeaders[lowerName]; forbidden {
-			return fmt.Errorf("HTTP header %q is controlled by the transport", trimmedName)
-		}
 		if strings.ContainsAny(value, "\r\n\x00") {
 			return fmt.Errorf("HTTP header %q contains an invalid value", trimmedName)
 		}
@@ -50,6 +47,30 @@ func Validate(headers map[string]string) error {
 		}
 	}
 	return nil
+}
+
+// ValidateName validates one persisted/configured HTTP header name.
+func ValidateName(name string) (string, error) {
+	trimmedName := strings.TrimSpace(name)
+	if trimmedName == "" || !headerNamePattern.MatchString(trimmedName) {
+		return "", fmt.Errorf("HTTP header name %q is invalid", name)
+	}
+	if _, forbidden := forbiddenHeaders[strings.ToLower(trimmedName)]; forbidden {
+		return "", fmt.Errorf("HTTP header %q is controlled by the transport", trimmedName)
+	}
+	return trimmedName, nil
+}
+
+// ValidateScheme validates an optional HTTP authentication scheme.
+func ValidateScheme(scheme string) (string, error) {
+	scheme = strings.TrimSpace(scheme)
+	if scheme == "" {
+		return "", nil
+	}
+	if !authSchemePattern.MatchString(scheme) {
+		return "", fmt.Errorf("HTTP authentication scheme %q is invalid", scheme)
+	}
+	return scheme, nil
 }
 
 func Resolve(

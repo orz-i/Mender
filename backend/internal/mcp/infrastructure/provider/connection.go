@@ -3,10 +3,12 @@ package provider
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
+	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
 )
 
 const (
@@ -19,7 +21,8 @@ const (
 // It is both a Catalog ToolSource and, in a separate file, an Invocation
 // ToolExecutor. SDK types do not escape this package.
 type Connection struct {
-	session *mcp.ClientSession
+	session             *mcp.ClientSession
+	requiredCredentials []credentialdomain.Reference
 }
 
 // ConnectTransport connects Mender to an MCP Transport.
@@ -42,6 +45,10 @@ func ConnectTransport(ctx context.Context, transport mcp.Transport) (*Connection
 	}
 
 	return &Connection{session: session}, nil
+}
+
+func (c *Connection) setRequiredCredentials(refs []credentialdomain.Reference) {
+	c.requiredCredentials = slices.Clone(refs)
 }
 
 // Close gracefully closes the upstream MCP session.
