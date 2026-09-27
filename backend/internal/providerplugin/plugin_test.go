@@ -2,6 +2,8 @@ package providerplugin
 
 import (
 	"testing"
+
+	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
 )
 
 func TestParseID(t *testing.T) {
@@ -40,6 +42,39 @@ func TestParseID(t *testing.T) {
 				t.Fatalf("ParseID() error = nil, want validation error")
 			}
 		})
+	}
+}
+
+func TestNewConfigMetadataValidatesDeduplicatesAndSorts(t *testing.T) {
+	t.Parallel()
+
+	alpha, err := credentialdomain.NewReference("demo", "alpha")
+	if err != nil {
+		t.Fatal(err)
+	}
+	beta, err := credentialdomain.NewReference("demo", "beta")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	metadata, err := NewConfigMetadata([]credentialdomain.Reference{
+		beta,
+		alpha,
+		beta,
+	})
+	if err != nil {
+		t.Fatalf("NewConfigMetadata() error = %v", err)
+	}
+	if len(metadata.CredentialRefs) != 2 ||
+		metadata.CredentialRefs[0] != alpha ||
+		metadata.CredentialRefs[1] != beta {
+		t.Fatalf("CredentialRefs = %v, want [%s %s]", metadata.CredentialRefs, alpha, beta)
+	}
+
+	if _, err := NewConfigMetadata(
+		[]credentialdomain.Reference{"not-a-reference"},
+	); err == nil {
+		t.Fatal("NewConfigMetadata() accepted invalid Credential Reference")
 	}
 }
 

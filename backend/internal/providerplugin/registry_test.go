@@ -112,6 +112,13 @@ func (stubPlugin) ValidateConfig(context.Context, json.RawMessage) error {
 	return nil
 }
 
+func (stubPlugin) InspectConfig(
+	context.Context,
+	json.RawMessage,
+) (ConfigMetadata, error) {
+	return ConfigMetadata{}, nil
+}
+
 func (stubPlugin) Open(context.Context, OpenRequest) (Instance, error) {
 	return nil, errors.New("not implemented")
 }
@@ -128,6 +135,13 @@ func (p *countingPlugin) Descriptor() Descriptor {
 
 func (*countingPlugin) ValidateConfig(context.Context, json.RawMessage) error {
 	return nil
+}
+
+func (*countingPlugin) InspectConfig(
+	context.Context,
+	json.RawMessage,
+) (ConfigMetadata, error) {
+	return ConfigMetadata{}, nil
 }
 
 func (*countingPlugin) Open(

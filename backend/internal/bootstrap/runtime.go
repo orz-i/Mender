@@ -24,6 +24,7 @@ import (
 	mcpplugin "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/plugin"
 	policylocal "github.com/orz-i/Mender/backend/internal/policy/infrastructure/local"
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
+	providerconfigstore "github.com/orz-i/Mender/backend/internal/providerplugin/configstore"
 )
 
 // RuntimeOptions configures the shared local execution runtime.
@@ -49,6 +50,7 @@ type Runtime struct {
 	audit             *auditsqlite.Store
 	executors         *invocationrouter.Router
 	mcpConfigs        *mcpconfigstore.Store
+	providerConfigs   *providerconfigstore.Store
 	providerInstances *providerplugin.Manager
 
 	closersMu sync.Mutex
@@ -110,15 +112,31 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		return nil, fmt.Errorf("compose runtime: MCP configs: %w", err)
 	}
 
-	credentials.Delete = credentialapplication.NewDeleteCredential(
-		credentials.store,
-		credentials.secrets,
-		runtimeCredentialUsageChecker{profiles: profiles, configs: configs},
-	)
+	providerConfigs, err := providerconfigstore.Open(ctx, options.DatabasePath)
+	if err != nil {
+		_ = configs.Close()
+		_ = policies.Close()
+		_ = profiles.Close()
+		_ = credentials.Close()
+		_ = auditStore.Close()
+		_ = catalog.Close()
+		return nil, fmt.Errorf("compose runtime: provider configs: %w", err)
+	}
+	if err := importLegacyMCPProviderConfigs(ctx, configs, providerConfigs); err != nil {
+		_ = providerConfigs.Close()
+		_ = configs.Close()
+		_ = policies.Close()
+		_ = profiles.Close()
+		_ = credentials.Close()
+		_ = auditStore.Close()
+		_ = catalog.Close()
+		return nil, fmt.Errorf("compose runtime: migrate provider configs: %w", err)
+	}
 
 	executors := invocationrouter.New()
 	providerPlugins := providerplugin.NewRegistry()
 	if err := providerPlugins.Register(mcpplugin.New()); err != nil {
+		_ = providerConfigs.Close()
 		_ = configs.Close()
 		_ = policies.Close()
 		_ = profiles.Close()
@@ -127,13 +145,24 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		_ = catalog.Close()
 		return nil, fmt.Errorf("compose runtime: provider plugins: %w", err)
 	}
+	credentials.Delete = credentialapplication.NewDeleteCredential(
+		credentials.store,
+		credentials.secrets,
+		runtimeCredentialUsageChecker{
+			profiles: profiles,
+			configs:  providerConfigs,
+			plugins:  providerPlugins,
+		},
+	)
+
 	providerInstances, err := providerplugin.NewManager(
 		providerPlugins,
-		legacyMCPConfigurationSource{configs: configs},
+		providerConfigs,
 		executors,
 		credentials.Resolver,
 	)
 	if err != nil {
+		_ = providerConfigs.Close()
 		_ = configs.Close()
 		_ = policies.Close()
 		_ = profiles.Close()
@@ -186,6 +215,7 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		audit:             auditStore,
 		executors:         executors,
 		mcpConfigs:        configs,
+		providerConfigs:   providerConfigs,
 		providerInstances: providerInstances,
 		mcpServers:        make(map[string]*managedMCPServer),
 	}, nil
@@ -225,6 +255,7 @@ func (r *Runtime) Close() error {
 	}
 	errs = append(
 		errs,
+		r.providerConfigs.Close(),
 		r.mcpConfigs.Close(),
 		r.Policy.Close(),
 		r.Profiles.Close(),

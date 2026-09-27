@@ -10,7 +10,7 @@ import (
 	credentialresolver "github.com/orz-i/Mender/backend/internal/credential/infrastructure/resolver"
 	credentialsqlite "github.com/orz-i/Mender/backend/internal/credential/infrastructure/sqlite"
 	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
-	mcpconfigstore "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/configstore"
+	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
 )
 
 // Credentials composes non-secret inventory use cases and the runtime secret resolver.
@@ -61,8 +61,9 @@ func (c *Credentials) Close() error {
 type runtimeCredentialUsageChecker struct {
 	profiles *Profiles
 	configs  interface {
-		List(context.Context) ([]mcpconfigstore.Config, error)
+		List(context.Context) ([]providerplugin.Configuration, error)
 	}
+	plugins *providerplugin.Registry
 }
 
 func (a runtimeCredentialUsageChecker) Usages(
@@ -95,7 +96,23 @@ func (a runtimeCredentialUsageChecker) Usages(
 		return nil, fmt.Errorf("credential usage: list provider configs: %w", err)
 	}
 	for _, config := range configs {
-		for _, configRef := range config.RequiredCredentialRefs() {
+		plugin, err := a.plugins.Lookup(config.PluginID)
+		if err != nil {
+			return nil, fmt.Errorf(
+				"credential usage: resolve provider plugin %s: %w",
+				config.PluginID,
+				err,
+			)
+		}
+		metadata, err := plugin.InspectConfig(ctx, config.Config)
+		if err != nil {
+			return nil, fmt.Errorf(
+				"credential usage: inspect provider %s: %w",
+				config.ProviderID,
+				err,
+			)
+		}
+		for _, configRef := range metadata.CredentialRefs {
 			if configRef == ref {
 				usages = append(usages, credentialapplication.Usage{
 					Kind:        "provider",

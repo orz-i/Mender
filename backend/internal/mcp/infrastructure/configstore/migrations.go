@@ -28,7 +28,7 @@ func migrate(ctx context.Context, db *sql.DB) error {
 	).Scan(&recordedVersion); err != nil {
 		return fmt.Errorf("check MCP config schema version: %w", err)
 	}
-	const latestSupportedVersion = 3
+	const latestSupportedVersion = 4
 	if recordedVersion.Valid && recordedVersion.Int64 > latestSupportedVersion {
 		return fmt.Errorf(
 			"MCP config schema version %d is newer than supported version %d",
@@ -111,6 +111,28 @@ func migrate(ctx context.Context, db *sql.DB) error {
 			time.Now().UTC().Format(time.RFC3339Nano),
 		); err != nil {
 			return fmt.Errorf("record MCP config migration 3: %w", err)
+		}
+	}
+
+	applied = 0
+	if err := tx.QueryRowContext(
+		ctx,
+		"SELECT COUNT(*) FROM mcp_config_schema_migrations WHERE version = 4",
+	).Scan(&applied); err != nil {
+		return fmt.Errorf("check MCP config migration 4: %w", err)
+	}
+	if applied == 0 {
+		// Version 4 is an ownership sentinel. Phase 13 keeps this table as a
+		// compatibility projection while generic provider_configs becomes the
+		// Runtime source of truth. Recording a newer legacy-schema version makes
+		// pre-Phase-13 binaries fail closed instead of mutating the compatibility
+		// projection during an unsupported downgrade.
+		if _, err := tx.ExecContext(
+			ctx,
+			"INSERT INTO mcp_config_schema_migrations(version, applied_at) VALUES (4, ?)",
+			time.Now().UTC().Format(time.RFC3339Nano),
+		); err != nil {
+			return fmt.Errorf("record MCP config migration 4: %w", err)
 		}
 	}
 

@@ -55,8 +55,8 @@ func TestOpenMigratesV1ConfigSchemaToHeadersTemplateColumn(t *testing.T) {
 	).Scan(&version); err != nil {
 		t.Fatal(err)
 	}
-	if version != 3 {
-		t.Fatalf("schema version = %d, want 3", version)
+	if version != 4 {
+		t.Fatalf("schema version = %d, want 4", version)
 	}
 
 	rows, err := store.db.QueryContext(

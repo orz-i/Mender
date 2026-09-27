@@ -428,6 +428,13 @@ func (*managerPlugin) ValidateConfig(context.Context, json.RawMessage) error {
 	return nil
 }
 
+func (*managerPlugin) InspectConfig(
+	context.Context,
+	json.RawMessage,
+) (ConfigMetadata, error) {
+	return ConfigMetadata{}, nil
+}
+
 func (p *managerPlugin) Open(
 	ctx context.Context,
 	request OpenRequest,

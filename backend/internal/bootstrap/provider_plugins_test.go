@@ -1,13 +1,154 @@
 package bootstrap
 
 import (
+	"context"
+	"errors"
+	"path/filepath"
 	"testing"
+	"time"
 
+	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
 	mcpconfigstore "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/configstore"
 	mcpplugin "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/plugin"
+	providerconfigstore "github.com/orz-i/Mender/backend/internal/providerplugin/configstore"
 )
+
+func TestRuntimeImportsLegacyMCPProviderConfig(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	databasePath := filepath.Join(t.TempDir(), "mender.db")
+	providerID := testProviderPluginProviderID(
+		t,
+		"prov_00000000000000000000000000000010",
+	)
+
+	legacy, err := mcpconfigstore.Open(ctx, databasePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := legacy.Save(ctx, mcpconfigstore.Config{
+		ProviderID: providerID,
+		Transport:  mcpconfigstore.TransportHTTP,
+		Endpoint:   "http://127.0.0.1:9876/mcp",
+	}); err != nil {
+		_ = legacy.Close()
+		t.Fatal(err)
+	}
+	if err := legacy.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	runtime, err := NewRuntime(ctx, RuntimeOptions{
+		DatabasePath:   databasePath,
+		DefaultTimeout: time.Second,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = runtime.Close() })
+
+	mapped, err := runtime.providerConfigs.GetProviderConfig(ctx, providerID)
+	if err != nil {
+		t.Fatalf("GetProviderConfig() error = %v", err)
+	}
+	if mapped.PluginID != mcpplugin.ID {
+		t.Fatalf("PluginID = %s, want %s", mapped.PluginID, mcpplugin.ID)
+	}
+	config, err := mcpplugin.DecodeConfig(mapped.Config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if config.Transport.Kind != mcpplugin.TransportStreamableHTTP ||
+		config.Transport.Endpoint != "http://127.0.0.1:9876/mcp" {
+		t.Fatalf("imported MCP config = %+v", config)
+	}
+}
+
+func TestMCPCompatibilityLifecycleKeepsGenericConfigInSync(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	runtime, err := NewRuntime(ctx, RuntimeOptions{
+		DatabasePath:   filepath.Join(t.TempDir(), "mender.db"),
+		DefaultTimeout: time.Second,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = runtime.Close() })
+
+	provider, err := runtime.RegisterMCPProvider(
+		ctx,
+		catalogapplication.RegisterProviderRequest{
+			Namespace:   "compat-provider",
+			DisplayName: "Compat Provider",
+		},
+		mcpconfigstore.Config{
+			Transport:  mcpconfigstore.TransportStdio,
+			Executable: "server-v1",
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	generic, err := runtime.providerConfigs.GetProviderConfig(ctx, provider.ID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	config, err := mcpplugin.DecodeConfig(generic.Config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if config.Transport.Executable != "server-v1" {
+		t.Fatalf("registered executable = %q", config.Transport.Executable)
+	}
+
+	_, err = runtime.UpdateMCPProvider(
+		ctx,
+		provider.ID(),
+		catalogapplication.UpdateProviderRequest{
+			DisplayName: "Compat Provider Updated",
+		},
+		mcpconfigstore.Config{
+			Transport:  mcpconfigstore.TransportStdio,
+			Executable: "server-v2",
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	generic, err = runtime.providerConfigs.GetProviderConfig(ctx, provider.ID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	config, err = mcpplugin.DecodeConfig(generic.Config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if config.Transport.Executable != "server-v2" {
+		t.Fatalf("updated executable = %q", config.Transport.Executable)
+	}
+
+	if err := runtime.DeleteMCPProvider(ctx, provider.ID()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runtime.providerConfigs.GetProviderConfig(
+		ctx,
+		provider.ID(),
+	); !errors.Is(err, providerconfigstore.ErrNotFound) {
+		t.Fatalf("generic config after delete error = %v", err)
+	}
+	if _, err := runtime.mcpConfigs.Get(
+		ctx,
+		provider.ID(),
+	); !errors.Is(err, mcpconfigstore.ErrNotFound) {
+		t.Fatalf("compatibility config after delete error = %v", err)
+	}
+}
 
 func TestLegacyMCPProviderConfigurationMapsHTTP(t *testing.T) {
 	t.Parallel()

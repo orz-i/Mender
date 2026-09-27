@@ -27,15 +27,44 @@ func (r *Runtime) RegisterMCPProvider(
 	}
 
 	config.ProviderID = provider.ID()
-	if err := r.mcpConfigs.Save(ctx, config); err != nil {
+	genericConfig, err := legacyMCPProviderConfiguration(config)
+	if err != nil {
 		removeErr := r.Catalog.RemoveProvider.Execute(ctx, provider.ID())
 		if removeErr != nil {
 			return catalogdomain.Provider{}, errors.Join(
-				fmt.Errorf("register MCP provider: save config: %w", err),
+				fmt.Errorf("register MCP provider: map config: %w", err),
 				fmt.Errorf("register MCP provider: compensate provider removal: %w", removeErr),
 			)
 		}
-		return catalogdomain.Provider{}, fmt.Errorf("register MCP provider: save config: %w", err)
+		return catalogdomain.Provider{}, fmt.Errorf("register MCP provider: map config: %w", err)
+	}
+	if err := r.providerConfigs.Save(ctx, genericConfig); err != nil {
+		removeErr := r.Catalog.RemoveProvider.Execute(ctx, provider.ID())
+		if removeErr != nil {
+			return catalogdomain.Provider{}, errors.Join(
+				fmt.Errorf("register MCP provider: save provider config: %w", err),
+				fmt.Errorf("register MCP provider: compensate provider removal: %w", removeErr),
+			)
+		}
+		return catalogdomain.Provider{}, fmt.Errorf(
+			"register MCP provider: save provider config: %w",
+			err,
+		)
+	}
+	if err := r.mcpConfigs.Save(ctx, config); err != nil {
+		deleteErr := r.providerConfigs.Delete(ctx, provider.ID())
+		removeErr := r.Catalog.RemoveProvider.Execute(ctx, provider.ID())
+		return catalogdomain.Provider{}, errors.Join(
+			fmt.Errorf("register MCP provider: save compatibility config: %w", err),
+			wrapOptionalError(
+				"register MCP provider: compensate provider config removal",
+				deleteErr,
+			),
+			wrapOptionalError(
+				"register MCP provider: compensate provider removal",
+				removeErr,
+			),
+		)
 	}
 
 	return provider, nil

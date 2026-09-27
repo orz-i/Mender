@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"io"
 	"regexp"
+	"slices"
 	"strings"
 
 	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
+	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
 	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
 )
 
@@ -107,10 +109,42 @@ type OpenRequest struct {
 	Credentials   invocationapplication.CredentialResolver
 }
 
-// Plugin validates configuration and opens runtime Provider instances.
+// ConfigMetadata is bounded platform-governed metadata extracted from
+// plugin-owned configuration without activating the Provider.
+type ConfigMetadata struct {
+	CredentialRefs []credentialdomain.Reference
+}
+
+// NewConfigMetadata validates, de-duplicates, sorts, and clones metadata
+// returned across the plugin boundary.
+func NewConfigMetadata(
+	refs []credentialdomain.Reference,
+) (ConfigMetadata, error) {
+	result := make([]credentialdomain.Reference, 0, len(refs))
+	seen := make(map[credentialdomain.Reference]struct{}, len(refs))
+	for _, ref := range refs {
+		parsed, err := credentialdomain.ParseReference(ref.String())
+		if err != nil {
+			return ConfigMetadata{}, fmt.Errorf("provider plugin config metadata: %w", err)
+		}
+		if _, exists := seen[parsed]; exists {
+			continue
+		}
+		seen[parsed] = struct{}{}
+		result = append(result, parsed)
+	}
+	slices.SortFunc(result, func(a, b credentialdomain.Reference) int {
+		return strings.Compare(a.String(), b.String())
+	})
+	return ConfigMetadata{CredentialRefs: result}, nil
+}
+
+// Plugin validates/inspects configuration and opens runtime Provider
+// instances.
 type Plugin interface {
 	Descriptor() Descriptor
 	ValidateConfig(context.Context, json.RawMessage) error
+	InspectConfig(context.Context, json.RawMessage) (ConfigMetadata, error)
 	Open(context.Context, OpenRequest) (Instance, error)
 }
 

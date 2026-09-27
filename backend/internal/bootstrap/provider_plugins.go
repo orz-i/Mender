@@ -2,35 +2,45 @@ package bootstrap
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 
-	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	mcpconfigstore "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/configstore"
 	mcpplugin "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/plugin"
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
+	providerconfigstore "github.com/orz-i/Mender/backend/internal/providerplugin/configstore"
 )
 
-type legacyMCPConfigurationSource struct {
-	configs *mcpconfigstore.Store
-}
+const legacyMCPImportName = "legacy-mcp-v3"
 
-func (s legacyMCPConfigurationSource) GetProviderConfig(
+func importLegacyMCPProviderConfigs(
 	ctx context.Context,
-	providerID catalogdomain.ProviderID,
-) (providerplugin.Configuration, error) {
-	if s.configs == nil {
-		return providerplugin.Configuration{}, fmt.Errorf(
-			"load provider plugin config: MCP config store is unavailable",
-		)
+	legacy *mcpconfigstore.Store,
+	generic *providerconfigstore.Store,
+) error {
+	if legacy == nil || generic == nil {
+		return fmt.Errorf("import legacy MCP provider configs: stores must be available")
 	}
-	legacy, err := s.configs.Get(ctx, providerID)
+	configs, err := legacy.List(ctx)
 	if err != nil {
-		return providerplugin.Configuration{}, err
+		return fmt.Errorf("import legacy MCP provider configs: list: %w", err)
 	}
-	return legacyMCPProviderConfiguration(legacy)
+	mapped := make([]providerplugin.Configuration, 0, len(configs))
+	for _, config := range configs {
+		converted, err := legacyMCPProviderConfiguration(config)
+		if err != nil {
+			return fmt.Errorf(
+				"import legacy MCP provider configs: provider %s: %w",
+				config.ProviderID,
+				err,
+			)
+		}
+		mapped = append(mapped, converted)
+	}
+	if err := generic.ImportOnce(ctx, legacyMCPImportName, mapped); err != nil {
+		return fmt.Errorf("import legacy MCP provider configs: %w", err)
+	}
+	return nil
 }
 
 func legacyMCPProviderConfiguration(
@@ -47,14 +57,19 @@ func legacyMCPProviderConfiguration(
 			err,
 		)
 	}
-	sum := sha256.Sum256(raw)
-	return providerplugin.Configuration{
-		ProviderID:    legacy.ProviderID,
-		PluginID:      mcpplugin.ID,
-		ConfigVersion: mcpplugin.ConfigVersion,
-		Revision:      "sha256:" + hex.EncodeToString(sum[:]),
-		Config:        raw,
-	}, nil
+	configEnvelope, err := providerplugin.NewConfiguration(
+		legacy.ProviderID,
+		mcpplugin.ID,
+		mcpplugin.ConfigVersion,
+		raw,
+	)
+	if err != nil {
+		return providerplugin.Configuration{}, fmt.Errorf(
+			"map MCP provider config: build provider config: %w",
+			err,
+		)
+	}
+	return configEnvelope, nil
 }
 
 func legacyMCPPluginConfig(

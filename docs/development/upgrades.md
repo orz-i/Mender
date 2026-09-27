@@ -2,7 +2,7 @@
 
 Mender uses forward-only, context-owned SQLite migrations.
 
-Catalog, Audit, Profiles, and MCP Provider configuration share the configured SQLite database file but maintain separate schema migration tables.
+Catalog, Audit, Profiles, Provider plugin configuration, and the transitional MCP compatibility configuration share the configured SQLite database file but maintain separate schema migration tables.
 
 ## Migration ownership
 
@@ -11,13 +11,16 @@ Current migration tables are:
 - `catalog_schema_migrations`,
 - `audit_schema_migrations`,
 - `profile_schema_migrations`,
+- `provider_config_schema_migrations`,
 - `mcp_config_schema_migrations`.
 
 Each bounded context applies only its own migrations.
 
 Migration execution is transactional.
 
-The current MCP Provider configuration schema is version 2. Version 2 is an additive migration that adds `headers_json` for HTTP header **templates**. Existing Provider rows receive an empty `{}` header map; no existing endpoint/stdio configuration is rewritten and no resolved secret values are stored in this column.
+The current generic Provider plugin configuration schema is version 1. It stores only the canonical Provider ID, Plugin ID, plugin config version, deterministic revision, and plugin-owned JSON configuration in `provider_configs`. Existing MCP configuration is imported once into this generic store without recreating Provider or Tool identities.
+
+The legacy MCP Provider compatibility schema is version 4. Versions 1–3 contain the historical HTTP/stdio projection, including non-secret header templates and Credential References. Version 4 is an ownership sentinel with no additional secret-bearing columns: generic `provider_configs` is the Runtime source of truth, while the old MCP table is temporarily dual-written for first-party compatibility contracts. Pre-Phase-13 binaries that understand at most version 3 therefore fail closed after this migration instead of modifying the compatibility projection during an unsupported downgrade.
 
 The current Audit schema is version 2. Version 2 adds `error_summary TEXT NOT NULL DEFAULT ''`. Existing Audit rows migrate with an empty summary. New failed Invocations may store only the bounded/redacted diagnostic summary produced at the Invocation boundary; arguments and full result payloads remain absent from Audit storage.
 

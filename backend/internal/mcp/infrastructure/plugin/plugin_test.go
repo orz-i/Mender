@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
 )
 
@@ -24,6 +25,35 @@ func TestPluginDescriptor(t *testing.T) {
 	}
 	if err := descriptor.Validate(); err != nil {
 		t.Fatalf("Descriptor().Validate() error = %v", err)
+	}
+}
+
+func TestPluginInspectConfigReturnsCredentialMetadata(t *testing.T) {
+	t.Parallel()
+
+	ref, err := credentialdomain.NewReference("demo", "token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := json.Marshal(Config{
+		Transport: TransportConfig{
+			Kind:     TransportStreamableHTTP,
+			Endpoint: "https://example.test/mcp",
+			CredentialHeaders: []CredentialHeader{
+				{Name: "Authorization", Scheme: "Bearer", Reference: ref},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	metadata, err := New().InspectConfig(context.Background(), raw)
+	if err != nil {
+		t.Fatalf("InspectConfig() error = %v", err)
+	}
+	if len(metadata.CredentialRefs) != 1 || metadata.CredentialRefs[0] != ref {
+		t.Fatalf("CredentialRefs = %v, want [%s]", metadata.CredentialRefs, ref)
 	}
 }
 

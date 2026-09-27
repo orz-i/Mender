@@ -46,6 +46,19 @@ func (*Plugin) ValidateConfig(
 	return err
 }
 
+// InspectConfig exposes only bounded platform-governed metadata from MCP
+// configuration.
+func (*Plugin) InspectConfig(
+	_ context.Context,
+	raw json.RawMessage,
+) (providerplugin.ConfigMetadata, error) {
+	config, err := DecodeConfig(raw)
+	if err != nil {
+		return providerplugin.ConfigMetadata{}, err
+	}
+	return providerplugin.NewConfigMetadata(config.RequiredCredentialRefs())
+}
+
 // Open resolves connection credentials and opens one MCP client session.
 func (p *Plugin) Open(
 	ctx context.Context,
