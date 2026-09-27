@@ -205,12 +205,6 @@ func (r *Runtime) EnsureConfiguredMCPProvider(
 	ctx context.Context,
 	providerID catalogdomain.ProviderID,
 ) error {
-	r.providerActivationMu.Lock()
-	defer r.providerActivationMu.Unlock()
-
-	if r.executors.HasProvider(providerID) {
-		return nil
-	}
 	return r.ActivateConfiguredMCPProvider(ctx, providerID)
 }
 

@@ -4,13 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
-	"strings"
 
 	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	mcpconfigstore "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/configstore"
-	"github.com/orz-i/Mender/backend/internal/mcp/infrastructure/headertemplate"
 	mcpprovider "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/provider"
 	mcpserver "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/server"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
@@ -68,22 +65,39 @@ func (r *Runtime) ConnectConfiguredMCPProvider(
 	providerID catalogdomain.ProviderID,
 	synchronize bool,
 ) (catalogapplication.SyncProviderToolsResult, error) {
-	config, err := r.mcpConfigs.Get(ctx, providerID)
-	if err != nil {
-		return catalogapplication.SyncProviderToolsResult{}, fmt.Errorf("connect configured MCP provider: %w", err)
+	if _, err := r.Catalog.GetProvider.Execute(ctx, providerID); err != nil {
+		return catalogapplication.SyncProviderToolsResult{}, fmt.Errorf(
+			"connect configured MCP provider: provider: %w",
+			err,
+		)
 	}
 
-	connection, err := r.connectStoredMCP(ctx, config)
-	if err != nil {
-		return catalogapplication.SyncProviderToolsResult{}, err
+	if synchronize {
+		instance, err := r.providerInstances.Reload(ctx, providerID)
+		if err != nil {
+			return catalogapplication.SyncProviderToolsResult{}, fmt.Errorf(
+				"connect configured MCP provider: %w",
+				err,
+			)
+		}
+		syncTools := r.Catalog.SyncProviderTools(instance)
+		result, err := syncTools.Execute(ctx, providerID)
+		if err != nil {
+			return catalogapplication.SyncProviderToolsResult{}, fmt.Errorf(
+				"connect configured MCP provider: synchronize: %w",
+				err,
+			)
+		}
+		return result, nil
 	}
 
-	result, err := r.activateMCPProvider(ctx, providerID, connection, synchronize)
-	if err != nil {
-		_ = connection.Close()
-		return catalogapplication.SyncProviderToolsResult{}, err
+	if _, err := r.providerInstances.Ensure(ctx, providerID); err != nil {
+		return catalogapplication.SyncProviderToolsResult{}, fmt.Errorf(
+			"connect configured MCP provider: %w",
+			err,
+		)
 	}
-	return result, nil
+	return catalogapplication.SyncProviderToolsResult{}, nil
 }
 
 // SyncConfiguredMCPProvider connects and refreshes one Provider's Catalog snapshot.
@@ -101,90 +115,6 @@ func (r *Runtime) ActivateConfiguredMCPProvider(
 ) error {
 	_, err := r.ConnectConfiguredMCPProvider(ctx, providerID, false)
 	return err
-}
-
-func (r *Runtime) connectStoredMCP(
-	ctx context.Context,
-	config mcpconfigstore.Config,
-) (*mcpprovider.Connection, error) {
-	switch config.Transport {
-	case mcpconfigstore.TransportHTTP:
-		headers, err := headertemplate.Resolve(config.Headers, os.LookupEnv)
-		if err != nil {
-			return nil, fmt.Errorf("connect configured MCP HTTP provider: resolve headers: %w", err)
-		}
-		for _, binding := range config.CredentialHeaders {
-			secret, err := r.Credentials.Resolver.Resolve(ctx, binding.Reference)
-			if err != nil {
-				return nil, fmt.Errorf(
-					"connect configured MCP HTTP provider: resolve credential %s: %w",
-					binding.Reference,
-					err,
-				)
-			}
-			value := string(secret)
-			for i := range secret {
-				secret[i] = 0
-			}
-			if strings.ContainsAny(value, "\r\n\x00") {
-				return nil, fmt.Errorf(
-					"connect configured MCP HTTP provider: credential header %q contains an invalid value",
-					binding.Name,
-				)
-			}
-			if strings.TrimSpace(binding.Scheme) != "" {
-				value = strings.TrimSpace(binding.Scheme) + " " + value
-			}
-			headers[strings.TrimSpace(binding.Name)] = value
-		}
-		connection, err := mcpprovider.ConnectHTTP(ctx, mcpprovider.HTTPConfig{
-			Endpoint:            config.Endpoint,
-			Headers:             headers,
-			RequiredCredentials: config.RequiredCredentialRefs(),
-		})
-		if err != nil {
-			return nil, fmt.Errorf("connect configured MCP HTTP provider: %w", err)
-		}
-		return connection, nil
-
-	case mcpconfigstore.TransportStdio:
-		environment := make(map[string]string, len(config.CredentialEnvironment))
-		for _, binding := range config.CredentialEnvironment {
-			secret, err := r.Credentials.Resolver.Resolve(ctx, binding.Reference)
-			if err != nil {
-				return nil, fmt.Errorf(
-					"connect configured MCP stdio provider: resolve credential %s: %w",
-					binding.Reference,
-					err,
-				)
-			}
-			value := string(secret)
-			for i := range secret {
-				secret[i] = 0
-			}
-			if strings.ContainsRune(value, 0) {
-				return nil, fmt.Errorf(
-					"connect configured MCP stdio provider: credential environment %q contains an invalid value",
-					binding.Name,
-				)
-			}
-			environment[strings.TrimSpace(binding.Name)] = value
-		}
-		connection, err := mcpprovider.ConnectCommand(ctx, mcpprovider.CommandConfig{
-			Executable:          config.Executable,
-			Args:                append([]string(nil), config.Args...),
-			Directory:           config.Directory,
-			Environment:         environment,
-			RequiredCredentials: config.RequiredCredentialRefs(),
-		})
-		if err != nil {
-			return nil, fmt.Errorf("connect configured MCP stdio provider: %w", err)
-		}
-		return connection, nil
-
-	default:
-		return nil, fmt.Errorf("connect configured MCP provider: unsupported transport %q", config.Transport)
-	}
 }
 
 // ConnectMCPHTTP connects, synchronizes, and registers a remote MCP Provider.

@@ -201,6 +201,10 @@ func (r *Runtime) DeleteMCPProvider(
 		return fmt.Errorf("delete MCP provider: load config: %w", configErr)
 	}
 
+	if err := r.providerInstances.CloseProvider(providerID); err != nil {
+		return fmt.Errorf("delete MCP provider: close active instance: %w", err)
+	}
+
 	if hadConfig {
 		if err := r.mcpConfigs.Delete(ctx, providerID); err != nil {
 			return fmt.Errorf("delete MCP provider: delete config: %w", err)
