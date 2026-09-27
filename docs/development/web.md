@@ -113,11 +113,26 @@ stdio remains client-launched through:
 mender serve mcp --profile default --stdio
 ```
 
-### Policy and Credentials
+### Policy
 
-Policy remains read-only until a real editable global Policy application model exists.
+Policy is now list-first management over the persistent Runtime-wide PolicySet.
 
-Credentials is now list-first management. Users can create native-keyring or environment-backed Credentials, list non-secret metadata, rotate native secrets, and delete unused Credentials. Native create/rotate requests carry the secret only for that local request; responses never echo it. Environment Credentials persist only the variable name.
+The page separates the main information classes:
+
+- summary cards for Default decision, enabled Rule count, and Approval behavior;
+- a Rule table for compact decision/state/target summaries;
+- a focused Default decision Dialog;
+- one stepped Rule Dialog that shows only one category at a time: Decision, Scope/Targets, or Governance Facts.
+
+Rule ordering is not an authorization control. There is no priority field. The default applies only when no enabled Rule matches; matching Rules combine by `deny > require_approval > allow`.
+
+Profile, Provider, and Tool targets use current inventory selectors. Normal Policy management never asks for RuleID, ProfileID, ProviderID, or ToolID text input. Missing historical Tool targets remain visibly unresolved rather than being retargeted by name.
+
+Governance Fact matching distinguishes `any`, `known`, and `unknown`. Effects/resource matchers apply only to known reviewed Facts; selecting unknown removes those predicates and creates an explicit unknown-fact rule. Resource matching is limited to exact/prefix. `require_approval` clearly reports that the current Approval adapter fails closed until an interactive approval workflow exists.
+
+### Credentials
+
+Credentials is list-first management. Users can create native-keyring or environment-backed Credentials, list non-secret metadata, rotate native secrets, and delete unused Credentials. Native create/rotate requests carry the secret only for that local request; responses never echo it. Environment Credentials persist only the variable name.
 
 Credential deletion returns a conflict while a Profile ToolBinding or Provider authentication binding references the Credential. Normal workflows derive `credential://namespace/name` from namespace/name and use inventory selectors elsewhere rather than asking users to paste raw References.
 

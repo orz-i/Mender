@@ -215,11 +215,13 @@ Desktop currently exposes the same management workflows as the Web UI:
 - Catalog search/describe/invoke,
 - Profiles,
 - managed MCP Servers,
-- Policy status,
+- editable PolicySet / Rule management,
 - Credential inventory/create/rotate/delete,
 - Audit.
 
-Policy remains read-only. Credential management is shared with Web and uses the generated Wails contract: native secret values appear only as Create/Rotate method arguments and never in returned Credential models. Profile ToolBinding management adds a separate Credentials selector beside Presentation/Governance, and Provider connection/authentication use separate Dialogs. The Wails host fills inherited defaults for older ToolID/direct requests and maps normalized Credential References without resolving secret bytes in TypeScript. Desktop Tool calls use the same canonical Invocation outcomes as the management HTTP adapter, including `rejected` and `failed`; Audit details expose the same origin/scope/outcome metadata as Web and do not expose Credential References or secret values.
+Policy management is shared with Web through the generated Wails contract. Desktop exposes the same persistent PolicySet/default/Rule CRUD, validates Wails string enums at the TypeScript host boundary, and uses the same three-step Decision → Scope/Targets → Governance Facts editor with inventory-backed Profile/Provider/Tool selectors. Rule order is never presented as priority, and `require_approval` accurately reports the current fail-closed Approval behavior.
+
+Credential management is also shared with Web: native secret values appear only as Create/Rotate method arguments and never in returned Credential models. Profile ToolBinding management adds a separate Credentials selector beside Presentation/Governance, and Provider connection/authentication use separate Dialogs. The Wails host fills inherited defaults for older ToolID/direct requests and maps normalized Credential References without resolving secret bytes in TypeScript. Desktop Tool calls use the same canonical Invocation outcomes as the management HTTP adapter, including `rejected` and `failed`; Audit details expose the same origin/scope/outcome metadata as Web and do not expose Credential References or secret values.
 
 The Desktop `Servers` page can start a Profile as a loopback Streamable HTTP MCP server without launching a second Mender process. Running servers are ephemeral Runtime state and stop with the Desktop process. The page provides endpoint/config copy plus Restart/Stop controls. stdio serving remains client-launched through the CLI because its lifetime is tied to the external client's stdin/stdout process.
 

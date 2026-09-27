@@ -1,6 +1,6 @@
 # Phase 12 Plan — Persistent Policy Governance
 
-Status: Planned
+Status: Implementation Complete — Security Verification Pending
 
 ## Objective
 
@@ -714,31 +714,68 @@ docs: complete policy governance phase
 
 ## Exit criteria
 
-- [ ] PolicySet is the canonical persistent global Policy model.
-- [ ] Fresh migration preserves current allow behavior.
-- [ ] Rules have no priority/order semantics.
-- [ ] No-match uses DefaultDecision.
-- [ ] Matching rules use deny > require_approval > allow.
-- [ ] Default deny plus explicit allow rules works.
-- [ ] same-decision Rule reason selection is deterministic.
-- [ ] Rule Match supports origin/scope/Profile/Provider/Tool selectors.
-- [ ] FactKnowledge distinguishes any/known/unknown.
-- [ ] known effect/resource exact/prefix rules evaluate correctly.
-- [ ] effect/resource rules do not match unknown facts.
-- [ ] Policy receives no raw arguments, secrets, Caller identity, or CredentialRefs.
-- [ ] reference validation occurs before Rule persistence.
-- [ ] Policy SQLite future/malformed state fails closed.
-- [ ] Runtime uses configured evaluator instead of local AllowAll.
-- [ ] ToolBinding constraint remains a second tightening layer.
-- [ ] require_approval continues through the existing fail-closed ApprovalGate.
-- [ ] Audit records stable effective Policy reasons.
-- [ ] Policy status reports configured/editable/default/rule count.
-- [ ] CLI/OpenAPI/Wails contracts manage the same Policy model.
-- [ ] normal Web/Desktop Rule management uses inventory selectors and no raw IDs.
-- [ ] Policy editor separates Decision, Scope/Targets, and Governance Facts.
-- [ ] Go race tests pass.
-- [ ] pnpm check passes.
+- [x] PolicySet is the canonical persistent global Policy model.
+- [x] Fresh migration preserves current allow behavior.
+- [x] Rules have no priority/order semantics.
+- [x] No-match uses DefaultDecision.
+- [x] Matching rules use deny > require_approval > allow.
+- [x] Default deny plus explicit allow rules works.
+- [x] same-decision Rule reason selection is deterministic.
+- [x] Rule Match supports origin/scope/Profile/Provider/Tool selectors.
+- [x] FactKnowledge distinguishes any/known/unknown.
+- [x] known effect/resource exact/prefix rules evaluate correctly.
+- [x] effect/resource rules do not match unknown facts.
+- [x] Policy receives no raw arguments, secrets, Caller identity, or CredentialRefs.
+- [x] reference validation occurs before Rule persistence.
+- [x] Policy SQLite future/malformed state fails closed.
+- [x] Runtime uses configured evaluator instead of local AllowAll.
+- [x] ToolBinding constraint remains a second tightening layer.
+- [x] require_approval continues through the existing fail-closed ApprovalGate.
+- [x] Audit records stable effective Policy reasons.
+- [x] Policy status reports configured/editable/default/rule count.
+- [x] CLI/OpenAPI/Wails contracts manage the same Policy model.
+- [x] normal Web/Desktop Rule management uses inventory selectors and no raw IDs.
+- [x] Policy editor separates Decision, Scope/Targets, and Governance Facts.
+- [x] Go race tests pass.
+- [x] pnpm check passes.
 - [ ] pnpm security:check passes.
+
+## Pre-closeout verification
+
+Phase 12 implementation completed on 2026-09-27. Final closeout is intentionally blocked only by the current Go vulnerability-database network dependency.
+
+Implementation commits:
+
+~~~text
+939a8fa docs: define policy governance architecture
+6b71077 docs: plan policy governance phase
+268e718 feat(policy): add persistent rule domain and use cases
+7b709e9 feat(policy): persist policy configuration
+8d25bec feat(policy): evaluate configured policy rules
+3353d60 feat(invocation): compose persistent policy evaluation
+f72572d feat(adapters): expose policy governance configuration
+dc15761 feat(app): manage policy rules
+8a06b78 fix(policy): preserve invalid-rule error chains
+65c7d87 test(runtime): cover persistent policy governance end to end
+1ed89a2 fix(app): keep policy profile selectors consistent
+ae1e907 refactor(policy): remove local allow-all placeholder
+~~~
+
+Verification evidence:
+
+- `pnpm check` passed after the final Policy UI consistency fix. OpenAPI SDK regeneration, Wails binding regeneration, desktop architecture checks, golangci-lint, all Go tests, all Go race tests, ESLint, strict TypeScript, 5 Vitest files / 31 tests, and Web/Desktop production builds are green.
+- Policy SQLite v1 initializes `defaultDecision=allow` and zero Rules, preserving pre-Phase-12 execution behavior. Future schema versions, malformed persisted decisions, and malformed Match state fail closed.
+- Policy Rule evaluation is unordered. No-match uses the configured default; matching Rules combine by `deny > require_approval > allow`; same-decision ties use stable RuleID ordering for the Audit reason source.
+- Runtime end-to-end coverage verifies default-deny allowlists, overlapping allow+deny with deny winning before executor execution, explicit unknown-fact require-approval entering the existing fail-closed ApprovalGate, stable Audit reasons, and Profile ToolBinding inability to relax global deny.
+- The Invocation-to-Policy adapter maps only origin, scope, ProviderID, ToolID, and bounded Governance Facts. Caller strings, raw arguments, Credential References, and secret values are not mapped into persistent Policy evaluation.
+- Provider deletion is blocked while a Policy Rule references that Provider. Tool selectors remain canonical ToolIDs and are never retargeted by name.
+- CLI, management HTTP, OpenAPI SDK, Wails bindings, and shared Web/Desktop UI expose the same PolicySet/Rule/Match model. Create Rule contracts do not accept RuleID.
+- Web/Desktop Policy management is list-first; Default decision uses a focused Dialog and Rule Add/Edit uses one three-step Dialog for Decision, Scope/Targets, and Governance Facts. Profile/Provider/Tool selectors are inventory-backed and normal UI has no raw identity fields.
+- `pnpm security:js` passed with no known production vulnerabilities at high severity.
+- `pnpm security:go` / `pnpm security:check` could not be re-completed because `https://vuln.go.dev/index/modules.json.gz` is currently unreachable from the development machine. `govulncheck` reported TLS handshake timeout and direct `curl` to `vuln.go.dev:443` timed out.
+- No Go or JavaScript dependency manifests/lockfiles changed between the Phase 11 security-gate pass and the current Phase 12 implementation. This is useful context but is not treated as a substitute for a fresh Phase 12 Go vulnerability scan.
+
+The Phase remains verification-pending until `pnpm security:check` can run successfully against the external Go vulnerability database.
 
 ## Deferred follow-up
 

@@ -11,7 +11,7 @@ It provides one canonical tool model and execution pipeline, then exposes the sa
 
 ## Status
 
-The architecture-through-Credential-governance roadmap (Phases 0–11) is complete. Phase 12 is planned to replace the local AllowAll placeholder with a persistent, editable PolicySet using deterministic unordered rules over stable execution metadata and bounded Governance Facts, while preserving Profile ToolBinding as a tightening-only layer.
+The architecture-through-Credential-governance roadmap (Phases 0–11) is complete. Phase 12 Policy Governance is implementation-complete: Mender now uses a persistent, editable PolicySet with deterministic unordered rules over stable execution metadata and bounded Governance Facts, while Profile ToolBinding remains tightening-only. Final Phase 12 closeout is pending only because the external Go vulnerability database is currently unreachable for a fresh `pnpm security:check`.
 
 ## Product principles
 

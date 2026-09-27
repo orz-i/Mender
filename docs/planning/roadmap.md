@@ -251,7 +251,7 @@ See `phase-11-credential-governance.md` for implementation evidence and deferred
 
 ## Phase 12 — Persistent Policy governance
 
-Status: Planned
+Status: Implementation Complete — Security Verification Pending
 
 Goals:
 
@@ -262,13 +262,8 @@ Goals:
 - Preserve Profile ToolBinding policy as a second tightening-only layer.
 - Replace the read-only Policy page with list-first Rule management and inventory-backed selectors.
 
-Exit criteria:
+Implementation exit criteria are complete. Fresh migration preserves current allow behavior; default-deny allowlists, deny-over-allow composition, explicit unknown-fact rules, stable Audit reasons, Policy SQLite, CLI/OpenAPI/Wails, and Web/Desktop management are covered by the shared Runtime and tests. `pnpm check` is green.
 
-- fresh migration preserves current allow behavior;
-- default-deny allowlists and deny-over-allow composition are covered end to end;
-- Policy SQLite, CLI/OpenAPI/Wails, and Web/Desktop share one canonical Rule model;
-- unknown Governance Facts remain explicit and cannot satisfy effect/resource predicates;
-- normal UI never requires opaque Rule/Profile/Provider/Tool IDs;
-- `pnpm check` and `pnpm security:check` pass.
+Final phase closeout remains blocked only by a fresh Go vulnerability scan: the development machine cannot currently reach `vuln.go.dev:443`. Production JavaScript audit passed, and dependency manifests/lockfiles did not change since the previous completed security gate, but neither fact is treated as a substitute for `pnpm security:check`.
 
-See `phase-12-policy-governance.md`.
+See `phase-12-policy-governance.md` for verification evidence and the remaining external security-gate dependency.

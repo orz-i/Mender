@@ -69,6 +69,63 @@ Refresh one Provider using ProviderID or namespace:
 mender provider sync github --output json
 ```
 
+## Policy
+
+The CLI manages the same persistent global PolicySet used by MCP, Web, Desktop, and direct Tool invocation.
+
+Show the current default decision and Rules:
+
+```bash
+mender policy show
+mender policy show --output json
+```
+
+Change the decision used only when no enabled Rule matches:
+
+```bash
+mender policy set-default deny
+mender policy set-default allow
+mender policy set-default require_approval
+```
+
+Add a Rule:
+
+```bash
+mender policy rule add \
+  --name "Require approval for MCP release writes" \
+  --decision require_approval \
+  --origin mcp \
+  --scope profile \
+  --profile-ref prof_... \
+  --provider-id prov_... \
+  --tool-id tool_... \
+  --fact-knowledge known \
+  --effect filesystem.write \
+  --resource prefix:path:/workspace/release
+```
+
+Rule selectors are repeatable. Resource matchers use `exact:KIND:VALUE` or `prefix:KIND:VALUE`. Regex/custom expressions are intentionally unsupported.
+
+Enable, disable, or remove a Rule:
+
+```bash
+mender policy rule disable rule_...
+mender policy rule enable rule_...
+mender policy rule remove rule_...
+```
+
+Policy Rule order has no meaning and there is no priority field. If no Rule matches, Mender uses the configured default decision. If multiple enabled Rules match, decisions combine as:
+
+```text
+deny > require_approval > allow
+```
+
+That means a matching deny cannot be overridden by an allow Rule. To build an allowlist, use `default=deny` plus explicit allow Rules.
+
+`fact-knowledge unknown` is explicit. Effect/resource predicates only match known Governance Facts; they do not treat unknown facts as an empty known set. `require_approval` currently enters the existing fail-closed Approval gate, so it rejects until an interactive approval workflow exists.
+
+The CLI is an advanced administrative interface, so stable Rule/Profile/Provider/Tool identities may be supplied as metadata selectors. Normal Web/Desktop Policy management resolves these through inventory selectors instead of asking users to type opaque IDs.
+
 ## Credentials
 
 Credential inventory metadata is stored in Mender; secret values are not stored in the SQLite database.
