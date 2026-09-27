@@ -9,9 +9,14 @@ import (
 )
 
 type AddToolRequest struct {
-	ProfileSlug profiledomain.Slug
-	ToolID      catalogdomain.ToolID
-	Direct      bool
+	ProfileSlug           profiledomain.Slug
+	ToolID                catalogdomain.ToolID
+	Direct                bool
+	Alias                 string
+	TitleOverride         string
+	DescriptionOverride   string
+	PolicyConstraint      profiledomain.PolicyConstraint
+	ConcurrencyConstraint profiledomain.ConcurrencyConstraint
 }
 
 type AddTool struct {
@@ -27,15 +32,27 @@ func (uc AddTool) Execute(
 	ctx context.Context,
 	request AddToolRequest,
 ) (profiledomain.Profile, error) {
-	if _, err := uc.tools.GetTool(ctx, request.ToolID); err != nil {
-		return profiledomain.Profile{}, fmt.Errorf("add profile tool: resolve tool: %w", err)
-	}
 	profile, err := uc.repository.GetProfileBySlug(ctx, request.ProfileSlug)
 	if err != nil {
 		return profiledomain.Profile{}, fmt.Errorf("add profile tool: %w", err)
 	}
-	updated, err := profile.AddTool(request.ToolID, request.Direct)
+	binding, err := newToolBinding(ToolBindingInput{
+		ToolID:                request.ToolID,
+		Direct:                request.Direct,
+		Alias:                 request.Alias,
+		TitleOverride:         request.TitleOverride,
+		DescriptionOverride:   request.DescriptionOverride,
+		PolicyConstraint:      request.PolicyConstraint,
+		ConcurrencyConstraint: request.ConcurrencyConstraint,
+	})
 	if err != nil {
+		return profiledomain.Profile{}, fmt.Errorf("add profile tool: %w", err)
+	}
+	updated, err := profile.AddBinding(binding)
+	if err != nil {
+		return profiledomain.Profile{}, fmt.Errorf("add profile tool: %w", err)
+	}
+	if err := validateBindingToolsAndNames(ctx, updated, uc.tools); err != nil {
 		return profiledomain.Profile{}, fmt.Errorf("add profile tool: %w", err)
 	}
 	if err := uc.repository.SaveProfile(ctx, updated); err != nil {

@@ -4,18 +4,12 @@ import (
 	"context"
 	"fmt"
 
-	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 )
 
-type ReplaceToolSelection struct {
-	ToolID catalogdomain.ToolID
-	Direct bool
-}
-
 type ReplaceToolsRequest struct {
 	ProfileSlug profiledomain.Slug
-	Tools       []ReplaceToolSelection
+	Tools       []ToolBindingInput
 }
 
 type ReplaceTools struct {
@@ -39,23 +33,24 @@ func (uc ReplaceTools) Execute(
 		return profiledomain.Profile{}, fmt.Errorf("replace profile tools: %w", err)
 	}
 
-	selections := make([]profiledomain.ToolSelection, 0, len(request.Tools))
+	bindings := make([]profiledomain.ToolBinding, 0, len(request.Tools))
 	for _, item := range request.Tools {
-		if _, err := uc.tools.GetTool(ctx, item.ToolID); err != nil {
+		binding, err := newToolBinding(item)
+		if err != nil {
 			return profiledomain.Profile{}, fmt.Errorf(
-				"replace profile tools: resolve %s: %w",
+				"replace profile tools: binding %s: %w",
 				item.ToolID,
 				err,
 			)
 		}
-		selections = append(selections, profiledomain.ToolSelection{
-			ToolID: item.ToolID,
-			Direct: item.Direct,
-		})
+		bindings = append(bindings, binding)
 	}
 
-	updated, err := profile.ReplaceTools(selections)
+	updated, err := profile.ReplaceBindings(bindings)
 	if err != nil {
+		return profiledomain.Profile{}, fmt.Errorf("replace profile tools: %w", err)
+	}
+	if err := validateBindingToolsAndNames(ctx, updated, uc.tools); err != nil {
 		return profiledomain.Profile{}, fmt.Errorf("replace profile tools: %w", err)
 	}
 	if err := uc.repository.SaveProfile(ctx, updated); err != nil {
