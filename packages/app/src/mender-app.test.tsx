@@ -42,9 +42,9 @@ function overviewClient(): MenderClient {
         approval: "fail_closed_when_required",
       },
       credentials: {
-        resolver: "unavailable",
-        persistentStore: false,
-        editable: false,
+        resolver: "inventory",
+        persistentStore: true,
+        editable: true,
       },
       mcp: {
         stdio: true,

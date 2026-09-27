@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type {
+  Credential,
   MenderClient,
   Profile,
   Provider,
@@ -57,6 +58,7 @@ type GovernanceForm = Pick<
 export function ProfilesPage({ client }: { client: MenderClient }) {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [providers, setProviders] = useState<Provider[]>([]);
+  const [credentials, setCredentials] = useState<Credential[]>([]);
   const [catalogTools, setCatalogTools] = useState<ToolSummary[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState("");
@@ -87,6 +89,11 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
     policyConstraint: "inherit",
     concurrencyConstraint: "inherit",
   });
+  const [credentialSlug, setCredentialSlug] = useState("");
+  const [credentialToolId, setCredentialToolId] = useState("");
+  const [credentialSelected, setCredentialSelected] = useState<Set<string>>(
+    new Set(),
+  );
 
   const refreshProfiles = useCallback(async () => {
     try {
@@ -105,12 +112,14 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
     void Promise.all([
       client.listProfiles(),
       client.listProviders(),
+      client.listCredentials(),
       client.browseTools({ limit: 100 }),
     ])
-      .then(([profileResult, providerResult, toolResult]) => {
+      .then(([profileResult, providerResult, credentialResult, toolResult]) => {
         if (active) {
           setProfiles(profileResult.profiles);
           setProviders(providerResult.providers);
+          setCredentials(credentialResult.credentials);
           setCatalogTools(toolResult.tools);
           setError("");
           setLoaded(true);
@@ -157,6 +166,17 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
         (binding) => binding.toolId === governanceToolId,
       ) ?? null,
     [governanceProfile, governanceToolId],
+  );
+  const credentialProfile = useMemo(
+    () => profiles.find((profile) => profile.slug === credentialSlug) ?? null,
+    [profiles, credentialSlug],
+  );
+  const credentialBinding = useMemo(
+    () =>
+      credentialProfile?.tools.find(
+        (binding) => binding.toolId === credentialToolId,
+      ) ?? null,
+    [credentialProfile, credentialToolId],
   );
 
   const knownTools = useMemo(() => {
@@ -400,6 +420,57 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
       );
       setGovernanceSlug("");
       setGovernanceToolId("");
+      window.setTimeout(() => setManageSlug(profile.slug), 0);
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function openCredentials(binding: ProfileToolBinding) {
+    if (managedProfile === null) {
+      return;
+    }
+    const slug = managedProfile.slug;
+    setCredentialSelected(new Set(binding.credentialRefs));
+    setManageSlug("");
+    window.setTimeout(() => {
+      setCredentialSlug(slug);
+      setCredentialToolId(binding.toolId);
+    }, 0);
+  }
+
+  function closeCredentials() {
+    const slug = credentialSlug;
+    setCredentialSlug("");
+    setCredentialToolId("");
+    setCredentialSelected(new Set());
+    if (slug) {
+      window.setTimeout(() => setManageSlug(slug), 0);
+    }
+  }
+
+  async function saveCredentials() {
+    if (credentialProfile === null || credentialBinding === null) {
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      const profile = await client.replaceProfileTools(credentialProfile.slug, {
+        tools: credentialProfile.tools.map((binding) =>
+          binding.toolId === credentialBinding.toolId
+            ? { ...binding, credentialRefs: [...credentialSelected] }
+            : binding,
+        ),
+      });
+      setProfiles((current) =>
+        current.map((item) => (item.slug === profile.slug ? profile : item)),
+      );
+      setCredentialSlug("");
+      setCredentialToolId("");
+      setCredentialSelected(new Set());
       window.setTimeout(() => setManageSlug(profile.slug), 0);
     } catch (reason) {
       setError(errorMessage(reason));
@@ -675,6 +746,12 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
                             {selection.concurrencyConstraint === "serial" ? (
                               <Badge variant="secondary">Serial</Badge>
                             ) : null}
+                            {selection.credentialRefs.length ? (
+                              <Badge variant="secondary">
+                                {selection.credentialRefs.length} credential
+                                {selection.credentialRefs.length === 1 ? "" : "s"}
+                              </Badge>
+                            ) : null}
                           </div>
                         </div>
                         <div className="flex shrink-0 flex-wrap justify-end gap-2">
@@ -695,6 +772,15 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
                             onClick={() => openGovernance(selection)}
                           >
                             Governance
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            aria-label={"Credentials for " + title}
+                            disabled={busy}
+                            onClick={() => openCredentials(selection)}
+                          >
+                            Credentials
                           </Button>
                           <Button
                             variant="outline"
@@ -880,6 +966,84 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
             </Button>
             <Button disabled={busy} onClick={() => void saveGovernance()}>
               {busy ? "Saving…" : "Save governance"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={credentialBinding !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            closeCredentials();
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Tool credentials</DialogTitle>
+            <DialogDescription>
+              Allow this Profile binding to resolve selected inventory Credentials at execution time. Secret values remain outside Profile state.
+            </DialogDescription>
+          </DialogHeader>
+
+          {credentialBinding !== null ? (
+            credentials.length ? (
+              <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
+                {credentials.map((item) => {
+                  const checked = credentialSelected.has(item.reference);
+                  return (
+                    <label
+                      key={item.reference}
+                      className="flex cursor-pointer items-start gap-3 rounded-lg border border-border px-3 py-3"
+                    >
+                      <input
+                        type="checkbox"
+                        className="mt-1"
+                        checked={checked}
+                        onChange={(event) =>
+                          setCredentialSelected((current) => {
+                            const next = new Set(current);
+                            if (event.target.checked) {
+                              next.add(item.reference);
+                            } else {
+                              next.delete(item.reference);
+                            }
+                            return next;
+                          })
+                        }
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-medium">
+                          {item.displayName}
+                        </span>
+                        <span className="mt-1 block truncate font-mono text-xs text-muted-foreground">
+                          {item.reference}
+                        </span>
+                        <span className="mt-1 block text-xs text-muted-foreground">
+                          {item.source === "environment"
+                            ? "Environment · " + item.environmentVariable
+                            : "Native OS credential store"}
+                        </span>
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            ) : (
+              <EmptyState
+                title="No Credentials in inventory"
+                description="Create a Credential first, then return here to grant this binding access."
+              />
+            )
+          ) : null}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={closeCredentials}>
+              Cancel
+            </Button>
+            <Button disabled={busy} onClick={() => void saveCredentials()}>
+              {busy ? "Saving…" : "Save credentials"}
             </Button>
           </DialogFooter>
         </DialogContent>

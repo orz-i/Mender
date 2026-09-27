@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import type {
+  Credential,
   MenderClient,
   Provider,
   UpdateProviderRequest,
@@ -37,6 +38,10 @@ import { Textarea } from "@mender/ui/components/textarea";
 import { EmptyState, ErrorNotice, PageHeader } from "../../shared/page";
 
 type ProviderTransport = "http" | "stdio";
+type CredentialHeaderBinding = NonNullable<Provider["credentialHeaders"]>[number];
+type CredentialEnvironmentBinding = NonNullable<
+  Provider["credentialEnvironment"]
+>[number];
 
 interface ProviderFormState {
   transport: ProviderTransport;
@@ -45,10 +50,12 @@ interface ProviderFormState {
   description: string;
   endpoint: string;
   headers: string;
+  credentialHeaders: CredentialHeaderBinding[];
   importJson: string;
   executable: string;
   args: string;
   directory: string;
+  credentialEnvironment: CredentialEnvironmentBinding[];
 }
 
 const emptyProviderForm: ProviderFormState = {
@@ -58,14 +65,17 @@ const emptyProviderForm: ProviderFormState = {
   description: "",
   endpoint: "",
   headers: "",
+  credentialHeaders: [],
   importJson: "",
   executable: "",
   args: "",
   directory: "",
+  credentialEnvironment: [],
 };
 
 export function ProvidersPage({ client }: { client: MenderClient }) {
   const [providers, setProviders] = useState<Provider[]>([]);
+  const [credentials, setCredentials] = useState<Credential[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
@@ -77,6 +87,14 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
   const [viewProvider, setViewProvider] = useState<Provider | null>(null);
   const [editProvider, setEditProvider] = useState<Provider | null>(null);
   const [editForm, setEditForm] = useState<ProviderFormState | null>(null);
+  const [authenticationProvider, setAuthenticationProvider] =
+    useState<Provider | null>(null);
+  const [authenticationForm, setAuthenticationForm] =
+    useState<ProviderFormState | null>(null);
+  const [authenticationReturnsToCreate, setAuthenticationReturnsToCreate] =
+    useState(false);
+  const [authenticationOriginForm, setAuthenticationOriginForm] =
+    useState<ProviderFormState | null>(null);
 
   const refresh = useCallback(async (): Promise<Provider[] | null> => {
     try {
@@ -95,11 +113,11 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
   useEffect(() => {
     let active = true;
 
-    void client
-      .listProviders()
-      .then((result) => {
+    void Promise.all([client.listProviders(), client.listCredentials()])
+      .then(([providerResult, credentialResult]) => {
         if (active) {
-          setProviders(result.providers);
+          setProviders(providerResult.providers);
+          setCredentials(credentialResult.credentials);
           setError("");
           setLoaded(true);
         }
@@ -134,6 +152,9 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
             ? { description: createForm.description }
             : {}),
           ...(Object.keys(headers).length ? { headers } : {}),
+          ...(createForm.credentialHeaders.length
+            ? { credentialHeaders: createForm.credentialHeaders }
+            : {}),
         });
       } else {
         const args = parseArgs(createForm.args);
@@ -146,6 +167,9 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
             : {}),
           ...(createForm.directory ? { directory: createForm.directory } : {}),
           ...(args.length ? { args } : {}),
+          ...(createForm.credentialEnvironment.length
+            ? { credentialEnvironment: createForm.credentialEnvironment }
+            : {}),
         });
       }
 
@@ -185,33 +209,10 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
     setBusy(editProvider.providerId);
     setError("");
     try {
-      let request: UpdateProviderRequest;
-      if (editForm.transport === "http") {
-        const headers = parseHeaders(editForm.headers);
-        request = {
-          transport: "http",
-          displayName: editForm.displayName,
-          endpoint: editForm.endpoint,
-          ...(Object.keys(headers).length ? { headers } : {}),
-          ...(editForm.description
-            ? { description: editForm.description }
-            : {}),
-        };
-      } else {
-        const args = parseArgs(editForm.args);
-        request = {
-          transport: "stdio",
-          displayName: editForm.displayName,
-          executable: editForm.executable,
-          ...(editForm.description
-            ? { description: editForm.description }
-            : {}),
-          ...(editForm.directory ? { directory: editForm.directory } : {}),
-          ...(args.length ? { args } : {}),
-        };
-      }
-
-      await client.updateProvider(editProvider.providerId, request);
+      await client.updateProvider(
+        editProvider.providerId,
+        updateRequestFromForm(editForm),
+      );
       setEditProvider(null);
       setEditForm(null);
       await refresh();
@@ -249,6 +250,71 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
     setError("");
     try {
       await client.deleteProvider(provider.providerId);
+      await refresh();
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
+      setBusy("");
+    }
+  }
+
+  function openCreateAuthentication() {
+    setAuthenticationOriginForm(createForm);
+    setCreateOpen(false);
+    setAuthenticationReturnsToCreate(true);
+    window.setTimeout(() => {
+      setAuthenticationProvider(null);
+      setAuthenticationForm({ ...createForm });
+    }, 0);
+  }
+
+  function openProviderAuthentication(provider: Provider) {
+    if (provider.transport === "unconfigured") {
+      return;
+    }
+    setError("");
+    setAuthenticationReturnsToCreate(false);
+    setAuthenticationProvider(provider);
+    setAuthenticationForm(formFromProvider(provider));
+  }
+
+  function closeAuthentication() {
+    const returnToCreate = authenticationReturnsToCreate;
+    const origin = authenticationOriginForm;
+    setAuthenticationProvider(null);
+    setAuthenticationForm(null);
+    setAuthenticationReturnsToCreate(false);
+    setAuthenticationOriginForm(null);
+    if (returnToCreate) {
+      if (origin !== null) {
+        setCreateForm(origin);
+      }
+      window.setTimeout(() => setCreateOpen(true), 0);
+    }
+  }
+
+  async function saveAuthentication() {
+    if (authenticationForm === null) {
+      return;
+    }
+    if (authenticationProvider === null) {
+      setCreateForm(authenticationForm);
+      setAuthenticationForm(null);
+      setAuthenticationReturnsToCreate(false);
+      setAuthenticationOriginForm(null);
+      window.setTimeout(() => setCreateOpen(true), 0);
+      return;
+    }
+
+    setBusy(authenticationProvider.providerId);
+    setError("");
+    try {
+      await client.updateProvider(
+        authenticationProvider.providerId,
+        updateRequestFromForm(authenticationForm),
+      );
+      setAuthenticationProvider(null);
+      setAuthenticationForm(null);
       await refresh();
     } catch (reason) {
       setError(errorMessage(reason));
@@ -352,6 +418,17 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
                         <Button
                           variant="outline"
                           size="sm"
+                          aria-label={`Authentication ${provider.namespace}`}
+                          disabled={
+                            busy !== "" || provider.transport === "unconfigured"
+                          }
+                          onClick={() => openProviderAuthentication(provider)}
+                        >
+                          Authentication
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
                           aria-label={`Sync ${provider.namespace}`}
                           disabled={busy !== ""}
                           onClick={() => void syncProvider(provider)}
@@ -389,8 +466,30 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
         busy={busy === "create"}
         onOpenChange={setCreateDialogOpen}
         onChange={setCreateForm}
+        onAuthentication={openCreateAuthentication}
         onSubmit={() => void addProvider()}
       />
+
+      {authenticationForm !== null ? (
+        <ProviderAuthenticationDialog
+          open
+          form={authenticationForm}
+          credentials={credentials}
+          busy={busy !== ""}
+          onOpenChange={(open) => {
+            if (!open) {
+              closeAuthentication();
+            }
+          }}
+          onChange={setAuthenticationForm}
+          onSubmit={() => void saveAuthentication()}
+          submitLabel={
+            authenticationProvider === null
+              ? "Use authentication"
+              : "Save authentication"
+          }
+        />
+      ) : null}
 
       <ProviderDetailsDialog
         provider={viewProvider}
@@ -430,6 +529,7 @@ function ProviderFormDialog({
   busy,
   onOpenChange,
   onChange,
+  onAuthentication,
   onSubmit,
 }: {
   open: boolean;
@@ -438,6 +538,7 @@ function ProviderFormDialog({
   busy: boolean;
   onOpenChange: (open: boolean) => void;
   onChange: (value: ProviderFormState) => void;
+  onAuthentication?: () => void;
   onSubmit: () => void;
 }) {
   const [importError, setImportError] = useState("");
@@ -567,7 +668,7 @@ function ProviderFormDialog({
                     value="streamable-http"
                   />
 
-                  <Field label="HTTP header templates" optional>
+                  <Field label="Legacy HTTP header templates" optional>
                     <Textarea
                       aria-label="HTTP header templates"
                       className="min-h-24 font-mono text-xs"
@@ -580,9 +681,9 @@ function ProviderFormDialog({
                       }
                     />
                     <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                      One header per line. Sensitive headers must use environment
+                      Compatibility path only. Sensitive headers must use environment
                       references such as <code>{"${ANYSEARCH_API_KEY}"}</code>.
-                      The resolved secret is never stored in Mender.
+                      Prefer the separate Authentication workflow for inventory-backed, Profile-scoped Credentials.
                     </p>
                   </Field>
 
@@ -680,6 +781,16 @@ function ProviderFormDialog({
           <DialogClose render={<Button variant="outline" />}>
             Cancel
           </DialogClose>
+          {onAuthentication !== undefined ? (
+            <Button
+              type="button"
+              variant="outline"
+              disabled={busy}
+              onClick={onAuthentication}
+            >
+              Configure authentication
+            </Button>
+          ) : null}
           <Button disabled={busy || !valid} onClick={onSubmit}>
             {busy
               ? creating
@@ -688,6 +799,296 @@ function ProviderFormDialog({
               : creating
                 ? "Add provider"
                 : "Save changes"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ProviderAuthenticationDialog({
+  open,
+  form,
+  credentials,
+  busy,
+  onOpenChange,
+  onChange,
+  onSubmit,
+  submitLabel,
+}: {
+  open: boolean;
+  form: ProviderFormState;
+  credentials: Credential[];
+  busy: boolean;
+  onOpenChange: (open: boolean) => void;
+  onChange: (value: ProviderFormState) => void;
+  onSubmit: () => void;
+  submitLabel: string;
+}) {
+  const firstCredential = credentials[0]?.reference ?? "";
+
+  function addHTTPBinding() {
+    if (!firstCredential) {
+      return;
+    }
+    onChange({
+      ...form,
+      credentialHeaders: [
+        ...form.credentialHeaders,
+        {
+          name: "Authorization",
+          scheme: "Bearer",
+          credentialRef: firstCredential,
+        },
+      ],
+    });
+  }
+
+  function addStdioBinding() {
+    if (!firstCredential) {
+      return;
+    }
+    onChange({
+      ...form,
+      credentialEnvironment: [
+        ...form.credentialEnvironment,
+        {
+          name: "TOKEN",
+          credentialRef: firstCredential,
+        },
+      ],
+    });
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Provider authentication</DialogTitle>
+          <DialogDescription>
+            Bind Provider authentication to inventory Credentials. Mender stores
+            only Credential References and resolves secret values at connection
+            and execution boundaries.
+          </DialogDescription>
+        </DialogHeader>
+
+        {credentials.length ? (
+          <div className="space-y-4">
+            {form.transport === "http" ? (
+              <>
+                {form.headers.trim() ? (
+                  <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs leading-5 text-muted-foreground">
+                    Legacy HTTP header templates are still configured. They
+                    remain compatible but are not governed by Profile Credential
+                    scope. Prefer inventory-backed bindings below.
+                  </div>
+                ) : null}
+
+                <div className="space-y-3">
+                  {form.credentialHeaders.map((binding, index) => (
+                    <div
+                      key={index}
+                      className="grid gap-3 rounded-lg border border-border p-3 sm:grid-cols-[1fr_120px_1.4fr_auto]"
+                    >
+                      <Field label="Header">
+                        <Input
+                          aria-label={"Credential header name " + String(index + 1)}
+                          value={binding.name}
+                          onChange={(event) =>
+                            onChange({
+                              ...form,
+                              credentialHeaders: form.credentialHeaders.map(
+                                (item, itemIndex) =>
+                                  itemIndex === index
+                                    ? { ...item, name: event.target.value }
+                                    : item,
+                              ),
+                            })
+                          }
+                        />
+                      </Field>
+                      <Field label="Scheme">
+                        <Input
+                          aria-label={
+                            "Credential header scheme " + String(index + 1)
+                          }
+                          placeholder="Bearer"
+                          value={binding.scheme}
+                          onChange={(event) =>
+                            onChange({
+                              ...form,
+                              credentialHeaders: form.credentialHeaders.map(
+                                (item, itemIndex) =>
+                                  itemIndex === index
+                                    ? { ...item, scheme: event.target.value }
+                                    : item,
+                              ),
+                            })
+                          }
+                        />
+                      </Field>
+                      <Field label="Credential">
+                        <select
+                          aria-label={
+                            "Credential header credential " + String(index + 1)
+                          }
+                          value={binding.credentialRef}
+                          onChange={(event) =>
+                            onChange({
+                              ...form,
+                              credentialHeaders: form.credentialHeaders.map(
+                                (item, itemIndex) =>
+                                  itemIndex === index
+                                    ? {
+                                        ...item,
+                                        credentialRef: event.target.value,
+                                      }
+                                    : item,
+                              ),
+                            })
+                          }
+                          className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus:ring-2 focus:ring-ring/40"
+                        >
+                          {credentials.map((item) => (
+                            <option key={item.reference} value={item.reference}>
+                              {item.displayName} · {item.reference}
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
+                      <div className="flex items-end">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() =>
+                            onChange({
+                              ...form,
+                              credentialHeaders: form.credentialHeaders.filter(
+                                (_, itemIndex) => itemIndex !== index,
+                              ),
+                            })
+                          }
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={addHTTPBinding}
+                >
+                  Add credential header
+                </Button>
+              </>
+            ) : (
+              <>
+                <div className="space-y-3">
+                  {form.credentialEnvironment.map((binding, index) => (
+                    <div
+                      key={index}
+                      className="grid gap-3 rounded-lg border border-border p-3 sm:grid-cols-[1fr_1.4fr_auto]"
+                    >
+                      <Field label="Environment name">
+                        <Input
+                          aria-label={
+                            "Credential environment name " + String(index + 1)
+                          }
+                          value={binding.name}
+                          onChange={(event) =>
+                            onChange({
+                              ...form,
+                              credentialEnvironment:
+                                form.credentialEnvironment.map(
+                                  (item, itemIndex) =>
+                                    itemIndex === index
+                                      ? { ...item, name: event.target.value }
+                                      : item,
+                                ),
+                            })
+                          }
+                        />
+                      </Field>
+                      <Field label="Credential">
+                        <select
+                          aria-label={
+                            "Credential environment credential " +
+                            String(index + 1)
+                          }
+                          value={binding.credentialRef}
+                          onChange={(event) =>
+                            onChange({
+                              ...form,
+                              credentialEnvironment:
+                                form.credentialEnvironment.map(
+                                  (item, itemIndex) =>
+                                    itemIndex === index
+                                      ? {
+                                          ...item,
+                                          credentialRef: event.target.value,
+                                        }
+                                      : item,
+                                ),
+                            })
+                          }
+                          className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus:ring-2 focus:ring-ring/40"
+                        >
+                          {credentials.map((item) => (
+                            <option key={item.reference} value={item.reference}>
+                              {item.displayName} · {item.reference}
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
+                      <div className="flex items-end">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() =>
+                            onChange({
+                              ...form,
+                              credentialEnvironment:
+                                form.credentialEnvironment.filter(
+                                  (_, itemIndex) => itemIndex !== index,
+                                ),
+                            })
+                          }
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={addStdioBinding}
+                >
+                  Add credential environment
+                </Button>
+              </>
+            )}
+          </div>
+        ) : (
+          <EmptyState
+            title="No Credentials in inventory"
+            description="Create a Credential first, then return here to configure Provider authentication."
+          />
+        )}
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button disabled={busy} onClick={onSubmit}>
+            {busy ? "Saving…" : submitLabel}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -840,10 +1241,41 @@ function formFromProvider(provider: Provider): ProviderFormState {
     description: provider.description,
     endpoint: provider.endpoint ?? "",
     headers: formatHeaders(provider.headers ?? {}),
+    credentialHeaders: [...(provider.credentialHeaders ?? [])],
     importJson: "",
     executable: provider.executable ?? "",
     args: provider.args?.join("\n") ?? "",
     directory: provider.directory ?? "",
+    credentialEnvironment: [...(provider.credentialEnvironment ?? [])],
+  };
+}
+
+function updateRequestFromForm(form: ProviderFormState): UpdateProviderRequest {
+  if (form.transport === "http") {
+    const headers = parseHeaders(form.headers);
+    return {
+      transport: "http",
+      displayName: form.displayName,
+      endpoint: form.endpoint,
+      ...(form.description ? { description: form.description } : {}),
+      ...(Object.keys(headers).length ? { headers } : {}),
+      ...(form.credentialHeaders.length
+        ? { credentialHeaders: form.credentialHeaders }
+        : {}),
+    };
+  }
+
+  const args = parseArgs(form.args);
+  return {
+    transport: "stdio",
+    displayName: form.displayName,
+    executable: form.executable,
+    ...(form.description ? { description: form.description } : {}),
+    ...(form.directory ? { directory: form.directory } : {}),
+    ...(args.length ? { args } : {}),
+    ...(form.credentialEnvironment.length
+      ? { credentialEnvironment: form.credentialEnvironment }
+      : {}),
   };
 }
 

@@ -3,14 +3,12 @@ import { Route, Routes } from "react-router";
 
 import { AuditPage } from "./domains/audit/audit-page";
 import { CatalogPage } from "./domains/catalog/catalog-page";
+import { CredentialsPage } from "./domains/credentials/credentials-page";
 import { OverviewPage } from "./domains/overview/overview-page";
 import { ProfilesPage } from "./domains/profiles/profiles-page";
 import { ProvidersPage } from "./domains/providers/providers-page";
 import { ServersPage } from "./domains/servers/servers-page";
-import {
-  CredentialsPage,
-  PolicyPage,
-} from "./domains/status/status-pages";
+import { PolicyPage } from "./domains/status/status-pages";
 import { ManagementShell } from "./shell/management-shell";
 
 export function MenderApp({

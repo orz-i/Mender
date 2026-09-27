@@ -27,6 +27,16 @@ describe("management pages", () => {
       toolCount: 1,
       endpoint: "https://example.test/mcp",
     };
+    const credential = {
+      reference: "credential://demo/work",
+      namespace: "demo",
+      name: "work",
+      displayName: "Demo work",
+      source: "environment" as const,
+      environmentVariable: "DEMO_TOKEN",
+      createdAt: "2026-09-27T00:00:00Z",
+      updatedAt: "2026-09-27T00:00:00Z",
+    };
     const listProviders = vi
       .fn()
       .mockResolvedValueOnce({ providers: [] })
@@ -38,6 +48,7 @@ describe("management pages", () => {
 
     renderApp("/providers", {
       listProviders,
+      listCredentials: vi.fn().mockResolvedValue({ credentials: [credential] }),
       createHTTPProvider,
     });
 
@@ -59,6 +70,28 @@ describe("management pages", () => {
     fireEvent.change(screen.getByLabelText("Endpoint"), {
       target: { value: "https://example.test/mcp" },
     });
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Configure authentication" }),
+    );
+    expect(await screen.findByText("Provider authentication")).toBeTruthy();
+    expect(screen.getAllByRole("dialog")).toHaveLength(1);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Add credential header" }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Use authentication" }),
+    );
+
+    expect(await screen.findByText("Add provider")).toBeTruthy();
+    expect(screen.getAllByRole("dialog")).toHaveLength(1);
+    expect(screen.getByLabelText<HTMLInputElement>("Namespace").value).toBe(
+      "demo",
+    );
+    expect(screen.getByLabelText<HTMLInputElement>("Endpoint").value).toBe(
+      "https://example.test/mcp",
+    );
+
     fireEvent.click(screen.getByRole("button", { name: "Add provider" }));
 
     await waitFor(() => {
@@ -66,6 +99,13 @@ describe("management pages", () => {
         namespace: "demo",
         displayName: "Demo",
         endpoint: "https://example.test/mcp",
+        credentialHeaders: [
+          {
+            name: "Authorization",
+            scheme: "Bearer",
+            credentialRef: "credential://demo/work",
+          },
+        ],
       });
     });
     expect(await screen.findByText("demo")).toBeTruthy();
@@ -271,6 +311,91 @@ describe("management pages", () => {
     expect(await screen.findByText("AnySearch Production")).toBeTruthy();
   });
 
+  it("configures Provider authentication from Credential inventory", async () => {
+    const credential = {
+      reference: "credential://github/work",
+      namespace: "github",
+      name: "work",
+      displayName: "GitHub work",
+      source: "environment" as const,
+      environmentVariable: "GITHUB_TOKEN",
+      createdAt: "2026-09-27T00:00:00Z",
+      updatedAt: "2026-09-27T00:00:00Z",
+    };
+    const provider = {
+      providerId: "prov_1",
+      namespace: "search",
+      displayName: "Search",
+      description: "",
+      createdAt: "2026-09-26T00:00:00Z",
+      updatedAt: "2026-09-26T00:00:00Z",
+      transport: "http" as const,
+      toolCount: 1,
+      endpoint: "https://example.test/mcp",
+    };
+    const updated = {
+      ...provider,
+      credentialHeaders: [
+        {
+          name: "Authorization",
+          scheme: "Bearer",
+          credentialRef: credential.reference,
+        },
+      ],
+    };
+    const listProviders = vi
+      .fn()
+      .mockResolvedValueOnce({ providers: [provider] })
+      .mockResolvedValue({ providers: [updated] });
+    const updateProvider = vi.fn().mockResolvedValue({
+      provider: updated,
+      sync: { created: 0, updated: 1, removed: 0, total: 1 },
+    });
+
+    renderApp("/providers", {
+      listProviders,
+      listCredentials: vi.fn().mockResolvedValue({ credentials: [credential] }),
+      updateProvider,
+    });
+
+    expect(await screen.findByText("Search")).toBeTruthy();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Authentication search" }),
+    );
+
+    expect(await screen.findByText("Provider authentication")).toBeTruthy();
+    expect(screen.getAllByRole("dialog")).toHaveLength(1);
+    expect(screen.queryByLabelText("Credential reference")).toBeNull();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Add credential header" }),
+    );
+    expect(
+      screen.getByLabelText<HTMLSelectElement>(
+        "Credential header credential 1",
+      ).value,
+    ).toBe(credential.reference);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Save authentication" }),
+    );
+
+    await waitFor(() => {
+      expect(updateProvider).toHaveBeenCalledWith("prov_1", {
+        transport: "http",
+        displayName: "Search",
+        endpoint: "https://example.test/mcp",
+        credentialHeaders: [
+          {
+            name: "Authorization",
+            scheme: "Bearer",
+            credentialRef: "credential://github/work",
+          },
+        ],
+      });
+    });
+  });
+
   it("filters Catalog browse and search by Provider", async () => {
     const getTool = vi.fn().mockResolvedValue({
       toolId: "tool_1",
@@ -412,8 +537,19 @@ describe("management pages", () => {
           descriptionOverride: "",
           policyConstraint: "inherit" as const,
           concurrencyConstraint: "serial" as const,
+          credentialRefs: [],
         },
       ],
+    };
+    const credential = {
+      reference: "credential://github/work",
+      namespace: "github",
+      name: "work",
+      displayName: "GitHub work",
+      source: "environment" as const,
+      environmentVariable: "GITHUB_TOKEN",
+      createdAt: "2026-09-27T00:00:00Z",
+      updatedAt: "2026-09-27T00:00:00Z",
     };
     const replaceProfileTools = vi.fn().mockImplementation(
       (_slug: string, body: { tools: Array<Record<string, unknown>> }) =>
@@ -426,6 +562,7 @@ describe("management pages", () => {
             descriptionOverride: "",
             policyConstraint: "inherit" as const,
             concurrencyConstraint: "inherit" as const,
+            credentialRefs: [],
             ...tool,
           })),
         }),
@@ -433,6 +570,7 @@ describe("management pages", () => {
 
     renderApp("/profiles", {
       listProfiles: vi.fn().mockResolvedValue({ profiles: [profile] }),
+      listCredentials: vi.fn().mockResolvedValue({ credentials: [credential] }),
       listProviders: vi.fn().mockResolvedValue({
         providers: [
           {
@@ -511,6 +649,7 @@ describe("management pages", () => {
             descriptionOverride: "",
             policyConstraint: "inherit",
             concurrencyConstraint: "serial",
+            credentialRefs: [],
           },
           { toolId: "tool_2", direct: false },
         ],
@@ -563,6 +702,35 @@ describe("management pages", () => {
     expect(await screen.findByText("Denied")).toBeTruthy();
     expect(screen.getByText("Serial")).toBeTruthy();
     expect(screen.queryByText("tool_1")).toBeNull();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Credentials for Release Search" }),
+    );
+    expect(await screen.findByText("Tool credentials")).toBeTruthy();
+    expect(screen.getAllByRole("dialog")).toHaveLength(1);
+    expect(screen.queryByLabelText("Credential reference")).toBeNull();
+    fireEvent.click(
+      screen.getByRole("checkbox", { name: /GitHub work/ }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Save credentials" }));
+
+    await waitFor(() => {
+      const lastCall = replaceProfileTools.mock.lastCall as unknown as [
+        string,
+        {
+          tools: Array<{
+            toolId: string;
+            credentialRefs?: string[];
+          }>;
+        },
+      ];
+      expect(lastCall[0]).toBe("default");
+      expect(
+        lastCall[1].tools.find((tool) => tool.toolId === "tool_1")
+          ?.credentialRefs,
+      ).toEqual(["credential://github/work"]);
+    });
+    expect(await screen.findByText("1 credential")).toBeTruthy();
   });
 
   it("starts, restarts, and stops a managed MCP server", async () => {
@@ -633,7 +801,7 @@ describe("management pages", () => {
     expect(await screen.findByText("No running MCP servers")).toBeTruthy();
   });
 
-  it("shows Policy and Credential capabilities as read-only", async () => {
+  it("keeps Policy read-only and manages Credential inventory without echoing secrets", async () => {
     const policyClient = renderApp("/policy", {
       getPolicyStatus: vi.fn().mockResolvedValue({
         mode: "local_allow_all",
@@ -645,16 +813,78 @@ describe("management pages", () => {
     expect(screen.getByText("Read only")).toBeTruthy();
     policyClient.unmount();
 
-    renderApp("/credentials", {
-      getCredentialStatus: vi.fn().mockResolvedValue({
-        resolver: "unavailable",
-        persistentStore: false,
-        editable: false,
-      }),
+    const credential = {
+      reference: "credential://github/work",
+      namespace: "github",
+      name: "work",
+      displayName: "GitHub work",
+      source: "native" as const,
+      environmentVariable: "",
+      createdAt: "2026-09-27T00:00:00Z",
+      updatedAt: "2026-09-27T00:00:00Z",
+    };
+    const listCredentials = vi
+      .fn()
+      .mockResolvedValueOnce({ credentials: [] })
+      .mockResolvedValue({ credentials: [credential] });
+    const createNativeCredential = vi.fn().mockResolvedValue(credential);
+    const rotateCredential = vi.fn().mockResolvedValue({
+      ...credential,
+      updatedAt: "2026-09-27T01:00:00Z",
     });
-    expect(await screen.findByText("unavailable")).toBeTruthy();
-    expect(screen.getByText("Read only")).toBeTruthy();
-    expect(screen.queryByRole("button", { name: /add credential/i })).toBeNull();
+
+    renderApp("/credentials", {
+      listCredentials,
+      createNativeCredential,
+      rotateCredential,
+    });
+
+    expect(await screen.findByText("No Credentials")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Add credential" }));
+    expect(screen.getAllByRole("dialog")).toHaveLength(1);
+    expect(screen.queryByLabelText("Credential reference")).toBeNull();
+
+    fireEvent.change(screen.getByLabelText("Credential namespace"), {
+      target: { value: "github" },
+    });
+    fireEvent.change(screen.getByLabelText("Credential name"), {
+      target: { value: "work" },
+    });
+    fireEvent.change(screen.getByLabelText("Credential display name"), {
+      target: { value: "GitHub work" },
+    });
+    fireEvent.change(screen.getByLabelText("Credential secret"), {
+      target: { value: "TOP-SECRET" },
+    });
+    expect(screen.getByText("credential://github/work")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Create credential" }));
+    await waitFor(() => {
+      expect(createNativeCredential).toHaveBeenCalledWith({
+        namespace: "github",
+        name: "work",
+        displayName: "GitHub work",
+        secret: "TOP-SECRET",
+      });
+    });
+
+    expect(await screen.findByText("GitHub work")).toBeTruthy();
+    expect(screen.getByText("credential://github/work")).toBeTruthy();
+    expect(screen.queryByText("TOP-SECRET")).toBeNull();
+    expect(screen.queryByDisplayValue("TOP-SECRET")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Rotate" }));
+    expect(screen.getAllByRole("dialog")).toHaveLength(1);
+    fireEvent.change(screen.getByLabelText("New Credential secret"), {
+      target: { value: "NEW-SECRET" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Rotate secret" }));
+    await waitFor(() => {
+      expect(rotateCredential).toHaveBeenCalledWith("github", "work", {
+        secret: "NEW-SECRET",
+      });
+    });
+    expect(screen.queryByText("NEW-SECRET")).toBeNull();
   });
 
   it("renders only minimized Audit metadata", async () => {
@@ -744,9 +974,13 @@ describe("management pages", () => {
 });
 
 function renderApp(path: string, client: Partial<MenderClient>) {
+  const resolvedClient = {
+    listCredentials: vi.fn().mockResolvedValue({ credentials: [] }),
+    ...client,
+  } as MenderClient;
   return render(
     <MemoryRouter initialEntries={[path]}>
-      <MenderApp client={client as MenderClient} />
+      <MenderApp client={resolvedClient} />
     </MemoryRouter>,
   );
 }

@@ -80,8 +80,8 @@ export function OverviewPage({ client }: { client: MenderClient }) {
         <StatusCard
           title="Credentials"
           value={data?.status.credentials.resolver ?? "Loading"}
-          description="Persistent credential storage is intentionally unavailable."
-          status="warning"
+          description="Inventory-backed Credential resolution is available without storing secret values in Mender's SQLite database."
+          status={data?.status.credentials.editable ? "good" : "warning"}
         />
       </div>
 
