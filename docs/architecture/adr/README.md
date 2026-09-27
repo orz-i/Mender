@@ -47,3 +47,5 @@ Minor implementation choices that remain inside an accepted architectural bounda
 - [ADR-0019: Make Profile ToolBinding the per-Profile governance unit](0019-profile-tool-binding-governance.md)
 - [ADR-0020: Separate Credential inventory metadata from secret material](0020-credential-inventory-secret-backends.md)
 - [ADR-0021: Bind Provider authentication to Credential References and enforce Profile credential scope](0021-provider-credential-bindings.md)
+- [ADR-0022: Persist an unordered PolicySet with deterministic most-restrictive evaluation](0022-persistent-policy-set.md)
+- [ADR-0023: Bound Policy matching to stable execution metadata and reviewed Governance Facts](0023-bounded-policy-match-language.md)
