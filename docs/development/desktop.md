@@ -80,15 +80,17 @@ The parent directory is created before Runtime startup.
 
 CLI and daemon database-path behavior is unchanged.
 
-## Authenticated remote MCP Providers
+## Authenticated MCP Providers
 
-HTTP Provider header templates are resolved from the **Mender desktop process environment** when a Provider connection is created. A typical template is:
+Desktop shares Web's inventory-backed Provider `Authentication` workflow. HTTP authentication binds a Credential Reference to a header name/scheme; stdio authentication binds a Credential Reference to an explicit child environment name. Provider persistence contains References and formatting metadata only. Secret values are resolved at connection/process boundaries and required References are re-authorized before upstream Tool calls.
+
+Legacy HTTP Provider header templates are still resolved from the **Mender desktop process environment** for compatibility. A typical legacy template is:
 
 ```text
 Authorization: Bearer ${ANYSEARCH_API_KEY}
 ```
 
-Only the template is persisted. The resolved secret is not stored in the Mender SQLite database.
+Only the legacy template is persisted. The resolved secret is not stored in the Mender SQLite database. This compatibility path is not represented by Profile Credential scope; new normal authentication should use inventory-backed bindings.
 
 For local development, ensure the variable is present in the process that launches Mender, for example when using `wails3 dev`:
 
@@ -96,7 +98,9 @@ For local development, ensure the variable is present in the process that launch
 ANYSEARCH_API_KEY=... wails3 dev
 ```
 
-On macOS, do not assume an environment variable that exists only in an interactive shell is available to an application launched separately through Finder/Launch Services. If a header template reports a missing variable, launch the development executable from an environment that contains it or configure the user session environment explicitly. Persistent desktop secret storage is not implemented yet.
+On macOS, do not assume an environment variable that exists only in an interactive shell is available to an application launched separately through Finder/Launch Services. If a legacy header template or environment-backed Credential reports a missing variable, launch the development executable from an environment that contains it or configure the user session environment explicitly.
+
+Native Credentials store secret material through the OS credential store. Mender's SQLite database stores only inventory metadata; there is no plaintext fallback if the native keyring is unavailable.
 
 ## Frontend routing
 
@@ -212,10 +216,10 @@ Desktop currently exposes the same management workflows as the Web UI:
 - Profiles,
 - managed MCP Servers,
 - Policy status,
-- Credential resolver status,
+- Credential inventory/create/rotate/delete,
 - Audit.
 
-Policy and Credential remain read-only. Profile ToolBinding management is shared with Web: Catalog-backed membership selection, separate Presentation/Governance dialogs, restrictive binding policy, and binding-local serial execution all use the same generated contract. The Wails host fills inherited defaults for older ToolID/direct requests and validates normalized policy/concurrency values from Go bindings. Desktop Tool calls use the same canonical Invocation outcomes as the management HTTP adapter, including `rejected` and `failed`; Audit details expose the same origin/scope/outcome metadata as Web.
+Policy remains read-only. Credential management is shared with Web and uses the generated Wails contract: native secret values appear only as Create/Rotate method arguments and never in returned Credential models. Profile ToolBinding management adds a separate Credentials selector beside Presentation/Governance, and Provider connection/authentication use separate Dialogs. The Wails host fills inherited defaults for older ToolID/direct requests and maps normalized Credential References without resolving secret bytes in TypeScript. Desktop Tool calls use the same canonical Invocation outcomes as the management HTTP adapter, including `rejected` and `failed`; Audit details expose the same origin/scope/outcome metadata as Web and do not expose Credential References or secret values.
 
 The Desktop `Servers` page can start a Profile as a loopback Streamable HTTP MCP server without launching a second Mender process. Running servers are ephemeral Runtime state and stop with the Desktop process. The page provides endpoint/config copy plus Restart/Stop controls. stdio serving remains client-launched through the CLI because its lifetime is tied to the external client's stdin/stdout process.
 

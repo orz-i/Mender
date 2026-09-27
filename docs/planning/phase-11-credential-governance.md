@@ -1,6 +1,6 @@
 # Phase 11 Plan — Credential Inventory and Scoped Provider Authentication
 
-Status: Planned
+Status: Complete
 
 ## Objective
 
@@ -594,29 +594,67 @@ docs: complete credential governance phase
 
 ## Exit criteria
 
-- [ ] Credential inventory is a real bounded-context model.
-- [ ] Credential SQLite contains metadata only.
-- [ ] native secrets use OS keyring with no plaintext fallback.
-- [ ] environment Credentials resolve without persisting values.
-- [ ] create/list/get/rotate/delete contracts never reveal secret values.
-- [ ] in-use Credential deletion fails safely.
-- [ ] ToolBinding CredentialRefs are inventory-selected and persisted.
-- [ ] old Profile rows migrate to empty CredentialRefs without behavior change.
-- [ ] Profile scope receives an allowlist CredentialResolver.
-- [ ] Catalog scope retains explicit full resolver access.
-- [ ] Provider HTTP auth can use Credential-backed headers.
-- [ ] Provider stdio auth can use Credential-backed environment entries.
-- [ ] Provider config persists References only.
-- [ ] shared MCP connections verify required References before Tool calls.
-- [ ] a Profile lacking Provider-required CredentialRefs cannot use the authenticated connection.
-- [ ] legacy environment header templates remain backward compatible and marked legacy.
-- [ ] OpenAPI/Wails contracts synchronize.
-- [ ] normal Web/Desktop Credential management never requires raw Reference entry.
-- [ ] native secret CLI input is not exposed as a normal flag.
-- [ ] Audit/Policy/events remain free of secret values and CredentialRefs.
-- [ ] Go race tests pass.
-- [ ] pnpm check passes.
-- [ ] pnpm security:check passes.
+- [x] Credential inventory is a real bounded-context model.
+- [x] Credential SQLite contains metadata only.
+- [x] native secrets use OS keyring with no plaintext fallback.
+- [x] environment Credentials resolve without persisting values.
+- [x] create/list/get/rotate/delete contracts never reveal secret values.
+- [x] in-use Credential deletion fails safely.
+- [x] ToolBinding CredentialRefs are inventory-selected and persisted.
+- [x] old Profile rows migrate to empty CredentialRefs without behavior change.
+- [x] Profile scope receives an allowlist CredentialResolver.
+- [x] Catalog scope retains explicit full resolver access.
+- [x] Provider HTTP auth can use Credential-backed headers.
+- [x] Provider stdio auth can use Credential-backed environment entries.
+- [x] Provider config persists References only.
+- [x] shared MCP connections verify required References before Tool calls.
+- [x] a Profile lacking Provider-required CredentialRefs cannot use the authenticated connection.
+- [x] legacy environment header templates remain backward compatible and marked legacy.
+- [x] OpenAPI/Wails contracts synchronize.
+- [x] normal Web/Desktop Credential management never requires raw Reference entry.
+- [x] native secret CLI input is not exposed as a normal flag.
+- [x] Audit/Policy/events remain free of secret values and CredentialRefs.
+- [x] Go race tests pass.
+- [x] pnpm check passes.
+- [x] pnpm security:check passes.
+
+## Closeout
+
+Phase 11 completed on 2026-09-27.
+
+Implementation commits:
+
+~~~text
+82c3779 docs: define credential governance architecture
+18d6ab3 docs: plan credential governance phase
+7c9646f feat(credential): add inventory domain and use cases
+485c7cc feat(credential): persist credential inventory metadata
+cd98585 feat(credential): add native and environment secret sources
+d19f2e7 feat(profile): add credential scope to tool bindings
+4aecad5 feat(invocation): enforce profile credential scope
+c80415e feat(mcp): bind provider authentication to credentials
+99942e3 feat(adapters): expose credential inventory and bindings
+3a1735c feat(app): manage credentials and credential scope
+64460ef fix(credential): satisfy static security gates
+fb9b2fc test(runtime): cover credential governance end to end
+~~~
+
+Verification evidence:
+
+- `pnpm check` passed after the end-to-end Credential governance coverage and static-security cleanup. OpenAPI SDK regeneration, Wails binding regeneration, desktop architecture checks, golangci-lint, all Go tests, all Go race tests, ESLint, strict TypeScript, 5 Vitest files / 30 tests, and Web/Desktop production builds are green.
+- `pnpm security:check` passed. Pinned `govulncheck v1.8.0` found no vulnerabilities in backend or desktop, and production pnpm audit reported no known vulnerabilities at high severity.
+- Credential SQLite persists non-secret metadata only. Native values are stored through the OS keyring adapter with no plaintext fallback; environment-backed Credentials persist only the variable name and resolve the process environment at use time.
+- The local management/OpenAPI/Wails contracts support Credential list/get/create/rotate/delete. Native secret fields are request-only/write-only and never appear in Credential or Provider response models.
+- ToolBinding CredentialRefs are inventory-validated and persisted as non-secret references. Existing Profile rows migrate with an empty allowlist, preserving pre-Phase-11 behavior.
+- Invocation passes the full Runtime CredentialResolver only for explicit Catalog scope. Profile scope receives an allowlist resolver; an outside-scope Reference fails before the underlying secret resolver and before the upstream Tool call.
+- MCP Provider HTTP headers and stdio environment entries can bind to Credential References. Provider persistence stores only References and formatting metadata. Shared authenticated MCP connections re-authorize every required Reference through the Invocation-supplied resolver before each Tool call.
+- The real Runtime integration proves environment Credential -> authenticated HTTP Provider -> allowed Profile success, a Profile without the required Reference fails before upstream execution, and Catalog scope remains explicitly privileged.
+- Credential deletion is blocked while referenced by Profile/Provider configuration. Audit schema inspection confirms no credential/secret columns, and Policy/runtime event contracts remain secret-free.
+- Web/Desktop now expose a list-first Credential inventory, focused native-secret rotation, Profile Credential selectors, and a separate Provider Authentication dialog. Normal management never requires a raw Credential Reference input, and Provider Connection/Authentication dialogs do not overlap.
+- CLI native secret creation/rotation accepts secret bytes only through stdin with `--secret-stdin`; there is no normal `--secret` flag. `profile add-tool --credential-ref` remains an advanced metadata-only CLI path, while normal Web/Desktop management uses inventory selectors.
+- Legacy environment-based HTTP header templates remain executable for backward compatibility but are explicitly labeled a compatibility path; they are not represented as inventory-backed Profile Credential scope.
+
+Phase 11 deliberately does not add per-call account switching for a shared Provider. Different authentication identities should continue to use distinct Provider configurations until a session-pool design is planned.
 
 ## Deferred follow-up
 

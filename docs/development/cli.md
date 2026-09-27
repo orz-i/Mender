@@ -53,7 +53,9 @@ mender provider add stdio \
   --arg --stdio
 ```
 
-Persistent stdio configuration intentionally does not store environment values. Stdio Provider processes also do not inherit Mender's arbitrary ambient environment: only a small non-secret process/runtime allow-list is passed automatically. Credential-bearing environment injection remains an explicit infrastructure-boundary capability rather than persistent Provider configuration.
+Persistent stdio configuration never stores resolved secret environment values. Stdio Provider processes do not inherit Mender's arbitrary ambient environment: only a small non-secret process/runtime allow-list is passed automatically, plus explicit Credential-backed environment entries configured through the management/API surfaces.
+
+Provider Credential bindings are currently configured through Web/Desktop or the structured management API. The Provider CLI intentionally does not yet add a separate authentication-binding flag DSL.
 
 List Providers:
 
@@ -66,6 +68,48 @@ Refresh one Provider using ProviderID or namespace:
 ```bash
 mender provider sync github --output json
 ```
+
+## Credentials
+
+Credential inventory metadata is stored in Mender; secret values are not stored in the SQLite database.
+
+List Credentials:
+
+```bash
+mender credential list --output json
+```
+
+Create an environment-backed Credential:
+
+```bash
+mender credential add environment github work \
+  --display-name "GitHub work" \
+  --env GITHUB_TOKEN
+```
+
+Create a native-keyring Credential by reading secret bytes from stdin:
+
+```bash
+printf '%s' "$GITHUB_TOKEN" | \
+  mender credential add native github work \
+    --display-name "GitHub work" \
+    --secret-stdin
+```
+
+Rotate a native Credential the same way:
+
+```bash
+printf '%s' "$NEW_GITHUB_TOKEN" | \
+  mender credential rotate github work --secret-stdin
+```
+
+Remove an unused Credential:
+
+```bash
+mender credential remove github work
+```
+
+There is deliberately no normal `--secret` flag: native secret values should not be placed in shell history or process arguments. List/create/rotate responses contain metadata only and never echo the secret value.
 
 ## Tool discovery
 
@@ -149,12 +193,13 @@ mender profile add-tool default tool_... \
   --title "Create production issue" \
   --description "Create an issue in the production tracker" \
   --policy require_approval \
-  --concurrency serial
+  --concurrency serial \
+  --credential-ref credential://github/work
 
 mender profile remove-tool default tool_...
 ```
 
-ToolBinding policy accepts `inherit`, `require_approval`, or `deny`; it can only tighten the global Policy decision. Concurrency accepts `inherit` or `serial`, where `serial` applies only to that Profile + Tool binding. Profile JSON always returns normalized binding fields. Existing clients that supply only ToolID/direct retain inherited defaults.
+ToolBinding policy accepts `inherit`, `require_approval`, or `deny`; it can only tighten the global Policy decision. Concurrency accepts `inherit` or `serial`, where `serial` applies only to that Profile + Tool binding. `--credential-ref` is an advanced metadata-only CLI path and may be repeated; the referenced Credential must already exist in inventory. Normal Web/Desktop management uses a selector instead of requiring raw Reference entry. Profile JSON always returns normalized binding fields. Existing clients that supply only ToolID/direct retain inherited defaults and an empty Credential allowlist.
 
 Inspect:
 
@@ -219,6 +264,6 @@ Release builds report version, source commit, and build date. Development builds
 
 ## Current limits
 
-- Persistent stdio environment values are not supported because Credential-backed secret injection has not yet been designed for CLI configuration.
+- Provider Credential authentication bindings are managed through Web/Desktop or the structured management API; the Provider CLI does not yet expose a dedicated authentication-binding flag DSL.
 - MCP input-required results can be represented by the runtime, but CLI continuation is not yet implemented.
 - MCP Tasks extension support remains deferred pending the adapter extension boundary.

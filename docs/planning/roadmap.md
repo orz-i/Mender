@@ -231,7 +231,7 @@ See `phase-10-profile-tool-binding-governance.md` for implementation evidence an
 
 ## Phase 11 — Credential inventory and scoped Provider authentication
 
-Status: Planned
+Status: Complete
 
 Goals:
 
@@ -243,13 +243,8 @@ Goals:
 - Prevent a Profile from borrowing a shared authenticated Provider connection without access to the Provider-required Credential References.
 - Replace the read-only Credentials UI with list/create/rotate/delete workflows and inventory selectors.
 
-Exit criteria:
+Exit criteria are complete. Credential inventory metadata is persistent while secret values remain in native keyring/environment sources, Profile scope enforces an inventory-backed Credential allowlist, authenticated Provider connections re-authorize required References on every Tool call, and Web/Desktop use inventory selectors without raw Reference entry.
 
-- SQLite/Provider/Profile/Audit persistence contains no secret values.
-- native/environment Credential sources resolve through one production CredentialResolver.
-- Profile Credential scope is enforced before executor Credential resolution.
-- Credential-backed Provider authentication stores References only and is authorized on every Tool call.
-- normal Web/Desktop workflows never require users to type a complete Credential Reference.
-- legacy environment header templates remain compatible but are explicitly marked as a legacy exception.
+Legacy environment header templates remain supported as an explicitly labeled compatibility exception rather than inventory-scoped authentication.
 
-See `phase-11-credential-governance.md`.
+See `phase-11-credential-governance.md` for implementation evidence and deferred session-pool/cloud-secret work.

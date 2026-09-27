@@ -47,16 +47,20 @@ The Providers page is list-first. Registration no longer occupies permanent page
 
 Provider ID, namespace, and transport kind remain stable during editing. Editable metadata/connection fields are persisted through the shared Runtime and the Provider is re-synchronized after save.
 
-Remote HTTP Providers support advanced header templates and import of common `mcpServers` / `mcp` JSON shapes. For example:
+Remote HTTP Providers support a separate inventory-backed `Authentication` workflow plus legacy header templates for compatibility. Provider connection fields and authentication are intentionally edited in separate Dialogs.
+
+Normal authentication selects Credentials from inventory. HTTP bindings store header name, optional scheme, and Credential Reference; stdio bindings store environment name and Credential Reference. Resolved values are injected only when connecting/launching the Provider, and shared authenticated MCP connections re-authorize required References before every Tool call.
+
+Legacy header templates and import of common `mcpServers` / `mcp` JSON shapes remain supported. For example:
 
 ```text
 Authorization: Bearer ${ANYSEARCH_API_KEY}
 X-Anysearch-Client: mcp/1.0.0
 ```
 
-Sensitive headers must use an environment-variable reference; Mender persists only the template and resolves the value from the Mender process environment when connecting or reconnecting to the Provider. Plaintext Authorization/API-key/token-like values are rejected. Resolved secret material is not stored or returned by the management surface. Cross-origin redirects are rejected when custom headers are configured.
+Legacy sensitive header templates must use an environment-variable reference; Mender persists only the template and resolves the value from the Mender process environment when connecting or reconnecting to the Provider. Plaintext Authorization/API-key/token-like values are rejected. This path is explicitly labeled legacy because it is not represented by Profile Credential scope. Resolved secret material is not stored or returned by the management surface. Cross-origin redirects are rejected when custom headers are configured.
 
-Persistent stdio configuration does not store environment values or secrets. Local stdio Provider processes receive only a small non-secret ambient environment allow-list rather than Mender's complete process environment.
+Persistent stdio configuration stores only Credential References for secret environment bindings. Local stdio Provider processes receive only a small non-secret ambient environment allow-list plus explicitly configured Credential-backed entries, rather than Mender's complete process environment.
 
 Non-loopback HTTP Provider endpoints must use HTTPS, and Provider URLs cannot contain URL userinfo credentials.
 
@@ -85,7 +89,7 @@ Normal Profile governance never asks the user to type or copy a ToolID. `Choose 
 
 Saving picker selection uses one atomic binding-replacement operation. The application validates every selected Tool before the Profile repository transaction replaces bindings, so a multi-select update cannot intentionally leave a partially saved Profile. Hybrid Profiles expose the Direct export choice; direct/dynamic modes normalize that flag automatically. Existing alias/presentation/policy/concurrency fields are preserved when membership or Direct state changes.
 
-Each selected Tool exposes separate focused `Presentation` and `Governance` actions rather than expanding the picker into a dense form. Presentation edits alias/title/description plus hybrid Direct export; Governance edits restrictive policy (`inherit`, `require approval`, `deny`) and binding-local concurrency (`inherit`, `serial`). Long descriptions stay truncated in the selected-Tool row. The dialogs never overlap the Manage dialog, and normal management still never asks for ToolID.
+Each selected Tool exposes separate focused `Presentation`, `Governance`, and `Credentials` actions rather than expanding the picker into a dense form. Presentation edits alias/title/description plus hybrid Direct export; Governance edits restrictive policy (`inherit`, `require approval`, `deny`) and binding-local concurrency (`inherit`, `serial`); Credentials multi-selects existing inventory items. Long descriptions stay truncated in the selected-Tool row. The dialogs never overlap the Manage dialog, and normal management asks for neither ToolID nor a raw Credential Reference.
 
 ### Servers
 
@@ -111,9 +115,11 @@ mender serve mcp --profile default --stdio
 
 ### Policy and Credentials
 
-These pages are intentionally read-only in Phase 6.
+Policy remains read-only until a real editable global Policy application model exists.
 
-Current runtime behavior is displayed accurately rather than inventing configuration CRUD that the backend does not yet support.
+Credentials is now list-first management. Users can create native-keyring or environment-backed Credentials, list non-secret metadata, rotate native secrets, and delete unused Credentials. Native create/rotate requests carry the secret only for that local request; responses never echo it. Environment Credentials persist only the variable name.
+
+Credential deletion returns a conflict while a Profile ToolBinding or Provider authentication binding references the Credential. Normal workflows derive `credential://namespace/name` from namespace/name and use inventory selectors elsewhere rather than asking users to paste raw References.
 
 ### Audit
 
