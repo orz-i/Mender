@@ -1,6 +1,8 @@
 package providerplugin
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -21,6 +23,29 @@ type Configuration struct {
 	ConfigVersion int
 	Revision      string
 	Config        json.RawMessage
+}
+
+// NewConfiguration constructs a validated configuration with a deterministic
+// revision derived from the plugin-owned JSON bytes.
+func NewConfiguration(
+	providerID catalogdomain.ProviderID,
+	pluginID ID,
+	configVersion int,
+	raw json.RawMessage,
+) (Configuration, error) {
+	config := cloneConfig(raw)
+	sum := sha256.Sum256(config)
+	result := Configuration{
+		ProviderID:    providerID,
+		PluginID:      pluginID,
+		ConfigVersion: configVersion,
+		Revision:      "sha256:" + hex.EncodeToString(sum[:]),
+		Config:        config,
+	}
+	if err := result.Validate(); err != nil {
+		return Configuration{}, err
+	}
+	return result, nil
 }
 
 // Validate checks the generic Provider configuration envelope.

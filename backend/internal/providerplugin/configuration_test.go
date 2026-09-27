@@ -6,6 +6,37 @@ import (
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 )
 
+func TestNewConfigurationBuildsDeterministicRevision(t *testing.T) {
+	t.Parallel()
+
+	providerID, err := catalogdomain.ParseProviderID("prov_00000000000000000000000000000010")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pluginID, err := ParseID("io.mender.provider.mcp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw := []byte(`{"transport":{"kind":"stdio","executable":"server"}}`)
+
+	first, err := NewConfiguration(providerID, pluginID, 1, raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := NewConfiguration(providerID, pluginID, 1, raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.Revision == "" || first.Revision != second.Revision {
+		t.Fatalf("revisions = %q and %q", first.Revision, second.Revision)
+	}
+
+	raw[0] = '['
+	if string(first.Config) == string(raw) {
+		t.Fatal("NewConfiguration() retained caller-owned config bytes")
+	}
+}
+
 func TestConfigurationValidate(t *testing.T) {
 	t.Parallel()
 
