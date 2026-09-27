@@ -31,21 +31,22 @@ type InvokeToolResponse struct {
 
 // InvokeTool implements Mender's shared execution pipeline.
 type InvokeTool struct {
-	tools          ToolLookup
-	profileScopes  ProfileScopeResolver
-	arguments      ArgumentValidator
-	facts          GovernanceFactExtractor
-	policy         PolicyEvaluator
-	approvals      ApprovalGate
-	executionGuard ExecutionGuard
-	resultGuard    ResultGuard
-	observer       InvocationObserver
-	router         ExecutorRouter
-	credentials    CredentialResolver
-	audit          AuditRecorder
-	ids            InvocationIDGenerator
-	clock          Clock
-	defaultTimeout time.Duration
+	tools                 ToolLookup
+	profileScopes         ProfileScopeResolver
+	arguments             ArgumentValidator
+	facts                 GovernanceFactExtractor
+	policy                PolicyEvaluator
+	approvals             ApprovalGate
+	executionGuard        ExecutionGuard
+	bindingExecutionGuard BindingExecutionGuard
+	resultGuard           ResultGuard
+	observer              InvocationObserver
+	router                ExecutorRouter
+	credentials           CredentialResolver
+	audit                 AuditRecorder
+	ids                   InvocationIDGenerator
+	clock                 Clock
+	defaultTimeout        time.Duration
 }
 
 // NewInvokeTool constructs the shared execution pipeline.
@@ -57,6 +58,7 @@ func NewInvokeTool(
 	policy PolicyEvaluator,
 	approvals ApprovalGate,
 	executionGuard ExecutionGuard,
+	bindingExecutionGuard BindingExecutionGuard,
 	resultGuard ResultGuard,
 	observer InvocationObserver,
 	router ExecutorRouter,
@@ -71,21 +73,22 @@ func NewInvokeTool(
 	}
 
 	return InvokeTool{
-		tools:          tools,
-		profileScopes:  profileScopes,
-		arguments:      arguments,
-		facts:          facts,
-		policy:         policy,
-		approvals:      approvals,
-		executionGuard: executionGuard,
-		resultGuard:    resultGuard,
-		observer:       observer,
-		router:         router,
-		credentials:    credentials,
-		audit:          audit,
-		ids:            ids,
-		clock:          clock,
-		defaultTimeout: defaultTimeout,
+		tools:                 tools,
+		profileScopes:         profileScopes,
+		arguments:             arguments,
+		facts:                 facts,
+		policy:                policy,
+		approvals:             approvals,
+		executionGuard:        executionGuard,
+		bindingExecutionGuard: bindingExecutionGuard,
+		resultGuard:           resultGuard,
+		observer:              observer,
+		router:                router,
+		credentials:           credentials,
+		audit:                 audit,
+		ids:                   ids,
+		clock:                 clock,
+		defaultTimeout:        defaultTimeout,
 	}
 }
 
@@ -393,6 +396,7 @@ func (uc InvokeTool) Execute(
 			startedAt,
 			decision,
 			auditdomain.ApprovalApproved,
+			scopeGovernance,
 			emitter,
 		)
 
@@ -406,6 +410,7 @@ func (uc InvokeTool) Execute(
 			startedAt,
 			decision,
 			auditdomain.ApprovalNotRequired,
+			scopeGovernance,
 			emitter,
 		)
 
@@ -628,6 +633,7 @@ func (uc InvokeTool) execute(
 	startedAt time.Time,
 	decision policydomain.Decision,
 	approval auditdomain.ApprovalOutcome,
+	scopeGovernance invocationdomain.ScopedBindingGovernance,
 	emitter *eventEmitter,
 ) (InvokeToolResponse, error) {
 	timeout := request.Timeout
@@ -659,7 +665,7 @@ func (uc InvokeTool) execute(
 		)
 	}
 
-	release, err := uc.executionGuard.Acquire(execCtx, ExecutionGuardRequest{
+	baselineRelease, err := uc.executionGuard.Acquire(execCtx, ExecutionGuardRequest{
 		InvocationID: response.InvocationID,
 		Tool:         tool,
 		Context:      request.Context,
@@ -698,7 +704,7 @@ func (uc InvokeTool) execute(
 			recordErr,
 		)
 	}
-	if release == nil {
+	if baselineRelease == nil {
 		recordErr := uc.record(
 			context.WithoutCancel(parent),
 			response.InvocationID,
@@ -717,6 +723,98 @@ func (uc InvokeTool) execute(
 			fmt.Errorf("invoke tool: execution guard returned no release function"),
 			recordErr,
 		)
+	}
+
+	if uc.bindingExecutionGuard == nil {
+		baselineRelease()
+		recordErr := uc.record(
+			context.WithoutCancel(parent),
+			response.InvocationID,
+			tool,
+			request.Context,
+			startedAt,
+			decision.Kind(),
+			decision.ReasonCode(),
+			approval,
+			auditdomain.StatusFailed,
+			"",
+			auditdomain.ErrorInternal,
+			"",
+		)
+		return response, joinInvocationError(
+			fmt.Errorf("invoke tool: binding execution guard is unavailable"),
+			recordErr,
+		)
+	}
+
+	bindingRelease, err := uc.bindingExecutionGuard.Acquire(
+		execCtx,
+		BindingExecutionGuardRequest{
+			InvocationID: response.InvocationID,
+			Tool:         tool,
+			Context:      request.Context,
+			Governance:   scopeGovernance,
+		},
+	)
+	if err != nil {
+		baselineRelease()
+		if isExecutionContextError(execCtx, err) {
+			return uc.returnExecutionFailure(
+				parent,
+				response,
+				tool,
+				request,
+				startedAt,
+				decision,
+				approval,
+				execCtx,
+				err,
+			)
+		}
+		recordErr := uc.record(
+			context.WithoutCancel(parent),
+			response.InvocationID,
+			tool,
+			request.Context,
+			startedAt,
+			decision.Kind(),
+			decision.ReasonCode(),
+			approval,
+			auditdomain.StatusFailed,
+			"",
+			auditdomain.ErrorInternal,
+			"",
+		)
+		return response, joinInvocationError(
+			fmt.Errorf("invoke tool: acquire binding execution guard: %w", err),
+			recordErr,
+		)
+	}
+	if bindingRelease == nil {
+		baselineRelease()
+		recordErr := uc.record(
+			context.WithoutCancel(parent),
+			response.InvocationID,
+			tool,
+			request.Context,
+			startedAt,
+			decision.Kind(),
+			decision.ReasonCode(),
+			approval,
+			auditdomain.StatusFailed,
+			"",
+			auditdomain.ErrorInternal,
+			"",
+		)
+		return response, joinInvocationError(
+			fmt.Errorf("invoke tool: binding execution guard returned no release function"),
+			recordErr,
+		)
+	}
+
+	release := func() {
+		bindingRelease()
+		baselineRelease()
 	}
 	executor, err := uc.router.ExecutorFor(execCtx, tool)
 	if err != nil {

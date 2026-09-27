@@ -26,11 +26,12 @@ import (
 
 // RuntimeOptions configures the shared local execution runtime.
 type RuntimeOptions struct {
-	DatabasePath       string
-	DefaultTimeout     time.Duration
-	MaxResultBytes     int
-	ExecutionGuard     invocationapplication.ExecutionGuard
-	InvocationObserver invocationapplication.InvocationObserver
+	DatabasePath          string
+	DefaultTimeout        time.Duration
+	MaxResultBytes        int
+	ExecutionGuard        invocationapplication.ExecutionGuard
+	BindingExecutionGuard invocationapplication.BindingExecutionGuard
+	InvocationObserver    invocationapplication.InvocationObserver
 }
 
 // Runtime composes Catalog, Profile persistence, Provider config persistence,
@@ -89,6 +90,10 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 	if executionGuard == nil {
 		executionGuard = invocationexecutionguard.Unlimited{}
 	}
+	bindingExecutionGuard := options.BindingExecutionGuard
+	if bindingExecutionGuard == nil {
+		bindingExecutionGuard = invocationexecutionguard.NewProfileBindingSerial()
+	}
 	observer := options.InvocationObserver
 	if observer == nil {
 		observer = invocationevents.NoopObserver{}
@@ -101,6 +106,7 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		policylocal.AllowAll{},
 		policylocal.RejectApproval{},
 		executionGuard,
+		bindingExecutionGuard,
 		invocationresultguard.New(schemaValidator, options.MaxResultBytes),
 		observer,
 		executors,

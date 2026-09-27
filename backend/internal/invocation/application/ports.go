@@ -60,6 +60,11 @@ type ExecutionGuard interface {
 	Acquire(context.Context, ExecutionGuardRequest) (release func(), err error)
 }
 
+// BindingExecutionGuard applies Profile ToolBinding-local execution constraints.
+type BindingExecutionGuard interface {
+	Acquire(context.Context, BindingExecutionGuardRequest) (release func(), err error)
+}
+
 // ResultGuard applies post-execution governance before adapters receive an outcome.
 type ResultGuard interface {
 	Guard(
@@ -133,6 +138,14 @@ type ExecutionGuardRequest struct {
 	InvocationID invocationdomain.InvocationID
 	Tool         catalogdomain.Tool
 	Context      invocationdomain.InvocationContext
+}
+
+// BindingExecutionGuardRequest identifies one Profile ToolBinding execution constraint.
+type BindingExecutionGuardRequest struct {
+	InvocationID invocationdomain.InvocationID
+	Tool         catalogdomain.Tool
+	Context      invocationdomain.InvocationContext
+	Governance   invocationdomain.ScopedBindingGovernance
 }
 
 // ExecutionRequest is the protocol-independent executor input.

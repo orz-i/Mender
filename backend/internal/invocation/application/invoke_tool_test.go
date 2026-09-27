@@ -934,6 +934,105 @@ func TestObserverPanicDoesNotChangeOutcomeOrAudit(t *testing.T) {
 	}
 }
 
+func TestBindingExecutionGuardReceivesScopedGovernanceAndReleases(t *testing.T) {
+	t.Parallel()
+
+	fixture := newFixture(t)
+	governance, err := invocationdomain.NewScopedBindingGovernance(
+		invocationdomain.BindingPolicyInherit,
+		invocationdomain.BindingConcurrencySerial,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixture.profileScopes.governance = governance
+
+	_, err = fixture.useCase.Execute(context.Background(), InvokeToolRequest{
+		ToolID:    fixture.tool.ID(),
+		Arguments: []byte("{}"),
+		Context: profileInvocationContext(
+			t,
+			"mcp:serial",
+			"prof_00000000000000000000000000000006",
+		),
+	})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if fixture.bindingExecutionGuard.calls != 1 {
+		t.Fatalf(
+			"binding guard calls = %d, want 1",
+			fixture.bindingExecutionGuard.calls,
+		)
+	}
+	if fixture.bindingExecutionGuard.last.Governance.ConcurrencyConstraint() !=
+		invocationdomain.BindingConcurrencySerial {
+		t.Fatalf(
+			"binding guard constraint = %q",
+			fixture.bindingExecutionGuard.last.Governance.ConcurrencyConstraint(),
+		)
+	}
+	if fixture.executionGuard.releases != 1 ||
+		fixture.bindingExecutionGuard.releases != 1 {
+		t.Fatalf(
+			"baseline/binding releases = %d/%d, want 1/1",
+			fixture.executionGuard.releases,
+			fixture.bindingExecutionGuard.releases,
+		)
+	}
+}
+
+func TestBindingExecutionGuardWaitUsesInvocationTimeout(t *testing.T) {
+	t.Parallel()
+
+	fixture := newFixture(t)
+	governance, err := invocationdomain.NewScopedBindingGovernance(
+		invocationdomain.BindingPolicyInherit,
+		invocationdomain.BindingConcurrencySerial,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixture.profileScopes.governance = governance
+	fixture.bindingExecutionGuard.blockUntilDone = true
+
+	response, err := fixture.useCase.Execute(context.Background(), InvokeToolRequest{
+		ToolID:    fixture.tool.ID(),
+		Arguments: []byte("{}"),
+		Context: profileInvocationContext(
+			t,
+			"mcp:serial-timeout",
+			"prof_00000000000000000000000000000007",
+		),
+		Timeout: time.Millisecond,
+	})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if response.Outcome.Kind() != invocationdomain.OutcomeKindFailed ||
+		response.Outcome.FailureSource() != invocationdomain.FailureSourceRuntime ||
+		response.Outcome.FailureCode() != invocationdomain.FailureTimedOut {
+		t.Fatalf(
+			"Outcome = kind %q source %q code %q",
+			response.Outcome.Kind(),
+			response.Outcome.FailureSource(),
+			response.Outcome.FailureCode(),
+		)
+	}
+	if fixture.executionGuard.releases != 1 {
+		t.Fatalf("baseline guard releases = %d, want 1", fixture.executionGuard.releases)
+	}
+	if fixture.bindingExecutionGuard.releases != 0 {
+		t.Fatalf(
+			"binding guard releases = %d, want 0 because acquisition failed",
+			fixture.bindingExecutionGuard.releases,
+		)
+	}
+	if fixture.executor.calls != 0 {
+		t.Fatalf("executor calls = %d, want 0", fixture.executor.calls)
+	}
+}
+
 func TestExecutionGuardWaitUsesInvocationTimeout(t *testing.T) {
 	t.Parallel()
 
@@ -996,6 +1095,9 @@ func TestExecutionGuardReleasesAfterExecutorFailure(t *testing.T) {
 	}
 	if fixture.executionGuard.releases != 1 {
 		t.Fatalf("guard releases = %d, want 1", fixture.executionGuard.releases)
+	}
+	if fixture.bindingExecutionGuard.releases != 1 {
+		t.Fatalf("binding guard releases = %d, want 1", fixture.bindingExecutionGuard.releases)
 	}
 }
 
@@ -1136,20 +1238,21 @@ func TestTimeoutIsAudited(t *testing.T) {
 }
 
 type fixture struct {
-	useCase        InvokeTool
-	tool           catalogdomain.Tool
-	tools          *fakeToolLookup
-	profileScopes  *fakeProfileScopes
-	arguments      *fakeArgumentValidator
-	facts          *fakeFactExtractor
-	policy         *fakePolicy
-	approvals      *fakeApproval
-	executionGuard *fakeExecutionGuard
-	resultGuard    *fakeResultGuard
-	observer       *memoryObserver
-	executor       *fakeExecutor
-	credentials    *fakeCredentials
-	audit          *memoryAudit
+	useCase               InvokeTool
+	tool                  catalogdomain.Tool
+	tools                 *fakeToolLookup
+	profileScopes         *fakeProfileScopes
+	arguments             *fakeArgumentValidator
+	facts                 *fakeFactExtractor
+	policy                *fakePolicy
+	approvals             *fakeApproval
+	executionGuard        *fakeExecutionGuard
+	bindingExecutionGuard *fakeBindingExecutionGuard
+	resultGuard           *fakeResultGuard
+	observer              *memoryObserver
+	executor              *fakeExecutor
+	credentials           *fakeCredentials
+	audit                 *memoryAudit
 }
 
 func newFixture(t *testing.T) fixture {
@@ -1170,6 +1273,7 @@ func newFixture(t *testing.T) fixture {
 	policy := &fakePolicy{decision: allow}
 	approvals := &fakeApproval{approved: true}
 	executionGuard := &fakeExecutionGuard{}
+	bindingExecutionGuard := &fakeBindingExecutionGuard{}
 	resultGuard := &fakeResultGuard{}
 	observer := &memoryObserver{}
 	executor := &fakeExecutor{result: result}
@@ -1193,6 +1297,7 @@ func newFixture(t *testing.T) fixture {
 		policy,
 		approvals,
 		executionGuard,
+		bindingExecutionGuard,
 		resultGuard,
 		observer,
 		fakeRouter{executor: executor},
@@ -1204,20 +1309,21 @@ func newFixture(t *testing.T) fixture {
 	)
 
 	return fixture{
-		useCase:        useCase,
-		tool:           tool,
-		tools:          tools,
-		profileScopes:  profileScopes,
-		arguments:      arguments,
-		facts:          facts,
-		policy:         policy,
-		approvals:      approvals,
-		executionGuard: executionGuard,
-		resultGuard:    resultGuard,
-		observer:       observer,
-		executor:       executor,
-		credentials:    credentials,
-		audit:          audit,
+		useCase:               useCase,
+		tool:                  tool,
+		tools:                 tools,
+		profileScopes:         profileScopes,
+		arguments:             arguments,
+		facts:                 facts,
+		policy:                policy,
+		approvals:             approvals,
+		executionGuard:        executionGuard,
+		bindingExecutionGuard: bindingExecutionGuard,
+		resultGuard:           resultGuard,
+		observer:              observer,
+		executor:              executor,
+		credentials:           credentials,
+		audit:                 audit,
 	}
 }
 
@@ -1324,6 +1430,30 @@ func (f *fakeExecutionGuard) Acquire(
 	_ ExecutionGuardRequest,
 ) (func(), error) {
 	f.calls++
+	if f.blockUntilDone {
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}
+	if f.err != nil {
+		return nil, f.err
+	}
+	return func() { f.releases++ }, nil
+}
+
+type fakeBindingExecutionGuard struct {
+	err            error
+	calls          int
+	releases       int
+	blockUntilDone bool
+	last           BindingExecutionGuardRequest
+}
+
+func (f *fakeBindingExecutionGuard) Acquire(
+	ctx context.Context,
+	request BindingExecutionGuardRequest,
+) (func(), error) {
+	f.calls++
+	f.last = request
 	if f.blockUntilDone {
 		<-ctx.Done()
 		return nil, ctx.Err()
