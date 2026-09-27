@@ -682,10 +682,8 @@ function ScopeStep({
               ...form.match,
               scopeKinds: toggleValue(form.match.scopeKinds, value, checked),
               profileRefs:
-                value === "catalog" &&
-                checked &&
-                form.match.scopeKinds.length === 0
-                  ? form.match.profileRefs
+                value === "profile" && !checked
+                  ? []
                   : form.match.profileRefs,
             },
           })
