@@ -13,7 +13,7 @@ import (
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 )
 
-var ErrProviderInUse = errors.New("provider is referenced by one or more profiles")
+var ErrProviderInUse = errors.New("provider is referenced by a Profile or Policy Rule")
 
 type RuntimeStatus struct {
 	Ready                bool
@@ -26,7 +26,7 @@ type RuntimeStatus struct {
 func (r *Runtime) Status() RuntimeStatus {
 	return RuntimeStatus{
 		Ready:                true,
-		PolicyMode:           "local_allow_all",
+		PolicyMode:           "configured",
 		ApprovalMode:         "fail_closed_when_required",
 		CredentialResolver:   "inventory",
 		CredentialPersistent: true,
@@ -174,6 +174,23 @@ func (r *Runtime) DeleteMCPProvider(
 			}
 			if tool.ProviderID() == providerID {
 				return fmt.Errorf("%w: profile %s selects tool %s", ErrProviderInUse, profile.Slug(), tool.ID())
+			}
+		}
+	}
+
+	policy, err := r.Policy.Get.Execute(ctx)
+	if err != nil {
+		return fmt.Errorf("delete MCP provider: inspect Policy: %w", err)
+	}
+	for _, rule := range policy.Rules() {
+		for _, referencedProviderID := range rule.Match().ProviderIDs() {
+			if referencedProviderID == providerID.String() {
+				return fmt.Errorf(
+					"%w: Policy Rule %s references Provider %s",
+					ErrProviderInUse,
+					rule.ID(),
+					providerID,
+				)
 			}
 		}
 	}

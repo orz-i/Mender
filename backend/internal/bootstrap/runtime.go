@@ -40,6 +40,7 @@ type Runtime struct {
 	Catalog     *Catalog
 	Credentials *Credentials
 	Profiles    *Profiles
+	Policy      *Policies
 	InvokeTool  invocationapplication.InvokeTool
 	ListAudit   auditapplication.ListRecords
 
@@ -88,8 +89,18 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		return nil, fmt.Errorf("compose runtime: profiles: %w", err)
 	}
 
+	policies, err := NewPolicies(ctx, options.DatabasePath, catalog, profiles)
+	if err != nil {
+		_ = profiles.Close()
+		_ = credentials.Close()
+		_ = auditStore.Close()
+		_ = catalog.Close()
+		return nil, fmt.Errorf("compose runtime: policy: %w", err)
+	}
+
 	configs, err := mcpconfigstore.Open(ctx, options.DatabasePath)
 	if err != nil {
+		_ = policies.Close()
 		_ = profiles.Close()
 		_ = credentials.Close()
 		_ = auditStore.Close()
@@ -124,7 +135,7 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		newInvocationProfileScopeResolver(profiles.GetByID),
 		schemaValidator,
 		invocationgovernance.UnknownExtractor{},
-		policylocal.AllowAll{},
+		newInvocationPolicyEvaluator(policies.Evaluate),
 		policylocal.RejectApproval{},
 		executionGuard,
 		bindingExecutionGuard,
@@ -142,6 +153,7 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		Catalog:     catalog,
 		Credentials: credentials,
 		Profiles:    profiles,
+		Policy:      policies,
 		InvokeTool:  invokeTool,
 		ListAudit:   auditapplication.NewListRecords(auditStore),
 		audit:       auditStore,
@@ -185,6 +197,7 @@ func (r *Runtime) Close() error {
 	errs = append(
 		errs,
 		r.mcpConfigs.Close(),
+		r.Policy.Close(),
 		r.Profiles.Close(),
 		r.Credentials.Close(),
 		r.audit.Close(),
