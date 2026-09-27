@@ -56,7 +56,7 @@ func TestCLILocalWorkflowWithPersistedHTTPProvider(t *testing.T) {
 	}
 
 	registered := execute(
-		"provider", "add", "http",
+		"provider", "add", "mcp", "http",
 		"--namespace", "upstream",
 		"--name", "Upstream",
 		"--endpoint", httpServer.URL,

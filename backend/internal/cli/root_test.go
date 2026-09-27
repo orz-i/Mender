@@ -339,6 +339,33 @@ func TestProviderListJSONIsSingleDocument(t *testing.T) {
 	}
 }
 
+func TestProviderPluginsJSONListsBuiltInMCP(t *testing.T) {
+	t.Parallel()
+
+	var stdout, stderr bytes.Buffer
+	root := NewRootCommand(Options{Stdout: &stdout, Stderr: &stderr})
+	root.SetArgs([]string{
+		"--db", filepath.Join(t.TempDir(), "mender.db"),
+		"--output", "json",
+		"provider", "plugins",
+	})
+	if err := root.ExecuteContext(context.Background()); err != nil {
+		t.Fatalf("provider plugins error = %v stderr=%s", err, stderr.String())
+	}
+
+	var value struct {
+		Plugins []struct {
+			PluginID string `json:"pluginId"`
+		} `json:"plugins"`
+	}
+	if err := json.NewDecoder(&stdout).Decode(&value); err != nil {
+		t.Fatalf("provider plugins JSON error = %v output=%q", err, stdout.String())
+	}
+	if len(value.Plugins) != 1 || value.Plugins[0].PluginID != "io.mender.provider.mcp" {
+		t.Fatalf("provider plugins = %#v", value.Plugins)
+	}
+}
+
 func TestProfileAddToolRejectsInvalidBindingPolicyAsUsage(t *testing.T) {
 	t.Parallel()
 

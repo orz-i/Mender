@@ -2,13 +2,15 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"text/tabwriter"
 
 	"github.com/orz-i/Mender/backend/internal/bootstrap"
 	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
-	mcpconfigstore "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/configstore"
+	mcpplugin "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/plugin"
+	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
 	"github.com/spf13/cobra"
 )
 
@@ -18,6 +20,7 @@ func (a *app) newProviderCommand() *cobra.Command {
 		Short: "Manage tool providers",
 	}
 	command.AddCommand(a.newProviderAddCommand())
+	command.AddCommand(a.newProviderPluginsCommand())
 	command.AddCommand(a.newProviderListCommand())
 	command.AddCommand(a.newProviderSyncCommand())
 	return command
@@ -26,64 +29,60 @@ func (a *app) newProviderCommand() *cobra.Command {
 func (a *app) newProviderAddCommand() *cobra.Command {
 	command := &cobra.Command{
 		Use:   "add",
-		Short: "Register an MCP provider",
+		Short: "Register a Provider through a built-in plugin",
 	}
-	command.AddCommand(a.newProviderAddHTTPCommand())
-	command.AddCommand(a.newProviderAddStdioCommand())
+	command.AddCommand(a.newProviderAddMCPCommand())
+
+	// Phase 5 compatibility aliases. They are intentionally hidden so normal
+	// CLI discovery teaches plugin-first Provider semantics.
+	legacyHTTP := a.newProviderAddMCPHTTPCommand()
+	legacyHTTP.Hidden = true
+	command.AddCommand(legacyHTTP)
+
+	legacyStdio := a.newProviderAddMCPStdioCommand()
+	legacyStdio.Hidden = true
+	command.AddCommand(legacyStdio)
 	return command
 }
 
-func (a *app) newProviderAddHTTPCommand() *cobra.Command {
+func (a *app) newProviderAddMCPCommand() *cobra.Command {
+	command := &cobra.Command{
+		Use:   "mcp",
+		Short: "Register an MCP Provider",
+	}
+	command.AddCommand(a.newProviderAddMCPHTTPCommand())
+	command.AddCommand(a.newProviderAddMCPStdioCommand())
+	return command
+}
+
+func (a *app) newProviderAddMCPHTTPCommand() *cobra.Command {
 	var namespace, displayName, description, endpoint string
 
 	command := &cobra.Command{
 		Use:   "http",
-		Short: "Register a remote Streamable HTTP MCP provider",
+		Short: "Register MCP over remote Streamable HTTP",
 		Args:  exactArgs(0),
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if namespace == "" || displayName == "" || endpoint == "" {
 				return usageError{err: fmt.Errorf("--namespace, --name, and --endpoint are required")}
 			}
-
-			return a.withRuntime(cmd.Context(), func(runtime *bootstrap.Runtime) error {
-				provider, err := runtime.RegisterMCPProvider(
-					cmd.Context(),
-					catalogapplication.RegisterProviderRequest{
-						Namespace:   namespace,
-						DisplayName: displayName,
-						Description: description,
-					},
-					mcpconfigstore.Config{
-						Transport: mcpconfigstore.TransportHTTP,
-						Endpoint:  endpoint,
-					},
-				)
-				if err != nil {
-					return err
-				}
-
-				syncResult, syncErr := runtime.SyncConfiguredMCPProvider(cmd.Context(), provider.ID())
-				if syncErr != nil {
-					return fmt.Errorf(
-						"provider %s registered but initial synchronization failed: %w",
-						provider.ID(),
-						syncErr,
-					)
-				}
-
-				return a.writeValue(
-					fmt.Sprintf(
-						"registered %s (%s); synchronized %d tool(s)",
-						provider.ID(),
-						provider.Namespace(),
-						syncResult.Total,
-					),
-					map[string]any{
-						"provider": providerProjection(provider),
-						"sync":     syncProjection(syncResult),
-					},
-				)
+			raw, err := json.Marshal(mcpplugin.Config{
+				Transport: mcpplugin.TransportConfig{
+					Kind:     mcpplugin.TransportStreamableHTTP,
+					Endpoint: endpoint,
+				},
 			})
+			if err != nil {
+				return fmt.Errorf("encode MCP provider config: %w", err)
+			}
+			return a.registerConfiguredProvider(
+				cmd,
+				namespace,
+				displayName,
+				description,
+				mcpplugin.ID,
+				raw,
+			)
 		},
 	}
 	command.Flags().StringVar(&namespace, "namespace", "", "stable provider namespace")
@@ -93,60 +92,37 @@ func (a *app) newProviderAddHTTPCommand() *cobra.Command {
 	return command
 }
 
-func (a *app) newProviderAddStdioCommand() *cobra.Command {
+func (a *app) newProviderAddMCPStdioCommand() *cobra.Command {
 	var namespace, displayName, description, executable, directory string
 	var args []string
 
 	command := &cobra.Command{
 		Use:   "stdio",
-		Short: "Register a local stdio MCP provider",
+		Short: "Register MCP through a local stdio command",
 		Args:  exactArgs(0),
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if namespace == "" || displayName == "" || executable == "" {
 				return usageError{err: fmt.Errorf("--namespace, --name, and --exec are required")}
 			}
-
-			return a.withRuntime(cmd.Context(), func(runtime *bootstrap.Runtime) error {
-				provider, err := runtime.RegisterMCPProvider(
-					cmd.Context(),
-					catalogapplication.RegisterProviderRequest{
-						Namespace:   namespace,
-						DisplayName: displayName,
-						Description: description,
-					},
-					mcpconfigstore.Config{
-						Transport:  mcpconfigstore.TransportStdio,
-						Executable: executable,
-						Args:       append([]string(nil), args...),
-						Directory:  directory,
-					},
-				)
-				if err != nil {
-					return err
-				}
-
-				syncResult, syncErr := runtime.SyncConfiguredMCPProvider(cmd.Context(), provider.ID())
-				if syncErr != nil {
-					return fmt.Errorf(
-						"provider %s registered but initial synchronization failed: %w",
-						provider.ID(),
-						syncErr,
-					)
-				}
-
-				return a.writeValue(
-					fmt.Sprintf(
-						"registered %s (%s); synchronized %d tool(s)",
-						provider.ID(),
-						provider.Namespace(),
-						syncResult.Total,
-					),
-					map[string]any{
-						"provider": providerProjection(provider),
-						"sync":     syncProjection(syncResult),
-					},
-				)
+			raw, err := json.Marshal(mcpplugin.Config{
+				Transport: mcpplugin.TransportConfig{
+					Kind:       mcpplugin.TransportStdio,
+					Executable: executable,
+					Args:       append([]string(nil), args...),
+					Directory:  directory,
+				},
 			})
+			if err != nil {
+				return fmt.Errorf("encode MCP provider config: %w", err)
+			}
+			return a.registerConfiguredProvider(
+				cmd,
+				namespace,
+				displayName,
+				description,
+				mcpplugin.ID,
+				raw,
+			)
 		},
 	}
 	command.Flags().StringVar(&namespace, "namespace", "", "stable provider namespace")
@@ -156,6 +132,109 @@ func (a *app) newProviderAddStdioCommand() *cobra.Command {
 	command.Flags().StringArrayVar(&args, "arg", nil, "argument passed to the executable; may be repeated")
 	command.Flags().StringVar(&directory, "dir", "", "working directory")
 	return command
+}
+
+func (a *app) registerConfiguredProvider(
+	cmd *cobra.Command,
+	namespace string,
+	displayName string,
+	description string,
+	pluginID providerplugin.ID,
+	raw json.RawMessage,
+) error {
+	return a.withRuntime(cmd.Context(), func(runtime *bootstrap.Runtime) error {
+		provider, err := runtime.RegisterConfiguredProvider(
+			cmd.Context(),
+			catalogapplication.RegisterProviderRequest{
+				Namespace:   namespace,
+				DisplayName: displayName,
+				Description: description,
+			},
+			pluginID,
+			raw,
+		)
+		if err != nil {
+			return err
+		}
+
+		syncResult, syncErr := runtime.SyncConfiguredProvider(
+			cmd.Context(),
+			provider.ID(),
+		)
+		if syncErr != nil {
+			return fmt.Errorf(
+				"provider %s registered but initial synchronization failed: %w",
+				provider.ID(),
+				syncErr,
+			)
+		}
+		config, err := runtime.ProviderConfig(cmd.Context(), provider.ID())
+		if err != nil {
+			return err
+		}
+
+		item := providerProjection(provider)
+		item["pluginId"] = config.PluginID.String()
+		item["configVersion"] = config.ConfigVersion
+		if transport, connection, _ := providerConnectionProjection(config); transport != "" {
+			item["transport"] = transport
+			item["connection"] = connection
+		}
+
+		return a.writeValue(
+			fmt.Sprintf(
+				"registered %s (%s) with %s; synchronized %d tool(s)",
+				provider.ID(),
+				provider.Namespace(),
+				config.PluginID,
+				syncResult.Total,
+			),
+			map[string]any{
+				"provider": item,
+				"sync":     syncProjection(syncResult),
+			},
+		)
+	})
+}
+
+func (a *app) newProviderPluginsCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "plugins",
+		Short: "List available Provider plugins",
+		Args:  exactArgs(0),
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return a.withRuntime(cmd.Context(), func(runtime *bootstrap.Runtime) error {
+				descriptors := runtime.ProviderPluginDescriptors()
+				if a.output == "json" {
+					items := make([]map[string]any, 0, len(descriptors))
+					for _, descriptor := range descriptors {
+						items = append(items, map[string]any{
+							"pluginId":      descriptor.ID.String(),
+							"version":       descriptor.Version,
+							"displayName":   descriptor.DisplayName,
+							"description":   descriptor.Description,
+							"configVersion": descriptor.ConfigVersion,
+						})
+					}
+					return a.writeValue("", map[string]any{"plugins": items})
+				}
+
+				writer := tabwriter.NewWriter(a.options.Stdout, 0, 4, 2, ' ', 0)
+				_, _ = fmt.Fprintln(writer, "PLUGIN	VERSION	CONFIG	NAME")
+				for _, descriptor := range descriptors {
+					_, _ = fmt.Fprintf(
+						writer,
+						"%s\t%s\t%d\t%s\n",
+						descriptor.ID,
+						descriptor.Version,
+						descriptor.ConfigVersion,
+						descriptor.DisplayName,
+					)
+				}
+				return writer.Flush()
+			})
+		},
+	}
 }
 
 func (a *app) newProviderListCommand() *cobra.Command {
@@ -169,12 +248,14 @@ func (a *app) newProviderListCommand() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				configs, err := runtime.ListMCPProviderConfigs(cmd.Context())
+				configs, err := runtime.ListProviderConfigs(cmd.Context())
 				if err != nil {
 					return err
 				}
-
-				configByProvider := make(map[catalogdomain.ProviderID]mcpconfigstore.Config, len(configs))
+				configByProvider := make(
+					map[catalogdomain.ProviderID]providerplugin.Configuration,
+					len(configs),
+				)
 				for _, config := range configs {
 					configByProvider[config.ProviderID] = config
 				}
@@ -184,8 +265,12 @@ func (a *app) newProviderListCommand() *cobra.Command {
 					for _, provider := range providers {
 						item := providerProjection(provider)
 						if config, ok := configByProvider[provider.ID()]; ok {
-							item["transport"] = string(config.Transport)
-							item["connection"] = connectionProjection(config)
+							item["pluginId"] = config.PluginID.String()
+							item["configVersion"] = config.ConfigVersion
+							if transport, connection, _ := providerConnectionProjection(config); transport != "" {
+								item["transport"] = transport
+								item["connection"] = connection
+							}
 						}
 						items = append(items, item)
 					}
@@ -193,18 +278,24 @@ func (a *app) newProviderListCommand() *cobra.Command {
 				}
 
 				writer := tabwriter.NewWriter(a.options.Stdout, 0, 4, 2, ' ', 0)
-				_, _ = fmt.Fprintln(writer, "NAMESPACE\tID\tTRANSPORT\tNAME")
+				_, _ = fmt.Fprintln(writer, "NAMESPACE	ID	PLUGIN	CONNECTION	NAME")
 				for _, provider := range providers {
-					transport := "-"
+					pluginID := "-"
+					connection := "-"
 					if config, ok := configByProvider[provider.ID()]; ok {
-						transport = string(config.Transport)
+						pluginID = config.PluginID.String()
+						_, _, connection = providerConnectionProjection(config)
+						if connection == "" {
+							connection = "-"
+						}
 					}
 					_, _ = fmt.Fprintf(
 						writer,
-						"%s\t%s\t%s\t%s\n",
+						"%s\t%s\t%s\t%s\t%s\n",
 						provider.Namespace(),
 						provider.ID(),
-						transport,
+						pluginID,
+						connection,
 						provider.DisplayName(),
 					)
 				}
@@ -226,7 +317,7 @@ func (a *app) newProviderSyncCommand() *cobra.Command {
 					return err
 				}
 
-				result, err := runtime.SyncConfiguredMCPProvider(cmd.Context(), provider.ID())
+				result, err := runtime.SyncConfiguredProvider(cmd.Context(), provider.ID())
 				if err != nil {
 					return err
 				}
@@ -285,19 +376,30 @@ func syncProjection(result catalogapplication.SyncProviderToolsResult) map[strin
 	}
 }
 
-func connectionProjection(config mcpconfigstore.Config) map[string]any {
-	switch config.Transport {
-	case mcpconfigstore.TransportHTTP:
-		return map[string]any{
-			"endpoint": config.Endpoint,
-		}
-	case mcpconfigstore.TransportStdio:
-		return map[string]any{
-			"executable": config.Executable,
-			"args":       append([]string(nil), config.Args...),
-			"directory":  config.Directory,
-		}
+func providerConnectionProjection(
+	config providerplugin.Configuration,
+) (transport string, connection map[string]any, summary string) {
+	if config.PluginID != mcpplugin.ID {
+		return "", nil, ""
+	}
+	mcpConfig, err := mcpplugin.DecodeConfig(config.Config)
+	if err != nil {
+		return "", nil, ""
+	}
+	switch mcpConfig.Transport.Kind {
+	case mcpplugin.TransportStreamableHTTP:
+		return "http", map[string]any{
+			"kind":     string(mcpplugin.TransportStreamableHTTP),
+			"endpoint": mcpConfig.Transport.Endpoint,
+		}, "streamable-http " + mcpConfig.Transport.Endpoint
+	case mcpplugin.TransportStdio:
+		return "stdio", map[string]any{
+			"kind":       string(mcpplugin.TransportStdio),
+			"executable": mcpConfig.Transport.Executable,
+			"args":       append([]string(nil), mcpConfig.Transport.Args...),
+			"directory":  mcpConfig.Transport.Directory,
+		}, "stdio " + mcpConfig.Transport.Executable
 	default:
-		return map[string]any{}
+		return "", nil, ""
 	}
 }
