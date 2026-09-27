@@ -4,6 +4,7 @@ import (
 	"context"
 
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
+	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 )
 
@@ -24,4 +25,12 @@ type ProfileIDGenerator interface {
 // ToolLookup validates cross-context Tool references through Catalog's boundary.
 type ToolLookup interface {
 	GetTool(context.Context, catalogdomain.ToolID) (catalogdomain.Tool, error)
+}
+
+// CredentialLookup validates cross-context Credential references through Credential's boundary.
+type CredentialLookup interface {
+	GetCredential(
+		context.Context,
+		credentialdomain.Reference,
+	) (credentialdomain.Credential, error)
 }

@@ -8,6 +8,7 @@ import (
 
 	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
+	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 )
 
@@ -159,6 +160,124 @@ func TestReplaceToolsValidatesEveryToolBeforeSave(t *testing.T) {
 	if len(stored.Bindings()) != 0 {
 		t.Fatalf("failed validation persisted partial bindings = %#v", stored.Bindings())
 	}
+}
+
+func TestAddToolValidatesCredentialRefsAgainstInventory(t *testing.T) {
+	t.Parallel()
+
+	repository := newMemoryRepository()
+	profile := applicationBindingProfile(
+		t,
+		"prof_00000000000000000000000000000026",
+		"credential-scope",
+	)
+	if err := repository.CreateProfile(context.Background(), profile); err != nil {
+		t.Fatal(err)
+	}
+
+	tool := applicationBindingTool(
+		t,
+		"tool_00000000000000000000000000000026",
+		"prov_00000000000000000000000000000026",
+		"credential_tool",
+	)
+	ref, err := credentialdomain.NewReference("github", "work")
+	if err != nil {
+		t.Fatal(err)
+	}
+	credential, err := credentialdomain.NewCredential(
+		ref,
+		"GitHub Work",
+		credentialdomain.SourceNative,
+		"",
+		time.Date(2026, 9, 27, 12, 0, 0, 0, time.UTC),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	add := NewAddTool(
+		repository,
+		bindingToolLookup{tool.ID(): tool},
+		bindingCredentialLookup{ref: credential},
+	)
+	updated, err := add.Execute(context.Background(), AddToolRequest{
+		ProfileSlug:    profile.Slug(),
+		ToolID:         tool.ID(),
+		CredentialRefs: []credentialdomain.Reference{ref},
+	})
+	if err != nil {
+		t.Fatalf("AddTool.Execute() error = %v", err)
+	}
+	binding, ok := updated.Binding(tool.ID())
+	if !ok || len(binding.CredentialRefs()) != 1 ||
+		binding.CredentialRefs()[0] != ref {
+		t.Fatalf("binding CredentialRefs = %#v", binding.CredentialRefs())
+	}
+}
+
+func TestReplaceToolsRejectsUnknownCredentialWithoutSave(t *testing.T) {
+	t.Parallel()
+
+	repository := newMemoryRepository()
+	profile := applicationBindingProfile(
+		t,
+		"prof_00000000000000000000000000000027",
+		"credential-missing",
+	)
+	if err := repository.CreateProfile(context.Background(), profile); err != nil {
+		t.Fatal(err)
+	}
+	tool := applicationBindingTool(
+		t,
+		"tool_00000000000000000000000000000027",
+		"prov_00000000000000000000000000000027",
+		"credential_tool",
+	)
+	ref, err := credentialdomain.NewReference("github", "missing")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	replace := NewReplaceTools(
+		repository,
+		bindingToolLookup{tool.ID(): tool},
+		bindingCredentialLookup{},
+	)
+	if _, err := replace.Execute(context.Background(), ReplaceToolsRequest{
+		ProfileSlug: profile.Slug(),
+		Tools: []ToolBindingInput{
+			{
+				ToolID:         tool.ID(),
+				CredentialRefs: []credentialdomain.Reference{ref},
+			},
+		},
+	}); err == nil {
+		t.Fatal("ReplaceTools.Execute() accepted unknown Credential")
+	}
+	stored, err := repository.GetProfileBySlug(
+		context.Background(),
+		profile.Slug(),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(stored.Bindings()) != 0 {
+		t.Fatalf("failed replacement persisted bindings = %#v", stored.Bindings())
+	}
+}
+
+type bindingCredentialLookup map[credentialdomain.Reference]credentialdomain.Credential
+
+func (m bindingCredentialLookup) GetCredential(
+	_ context.Context,
+	ref credentialdomain.Reference,
+) (credentialdomain.Credential, error) {
+	credential, ok := m[ref]
+	if !ok {
+		return credentialdomain.Credential{}, errors.New("credential not found")
+	}
+	return credential, nil
 }
 
 type bindingToolLookup map[catalogdomain.ToolID]catalogdomain.Tool

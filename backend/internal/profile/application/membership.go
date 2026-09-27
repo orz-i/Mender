@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
+	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 )
 
@@ -17,15 +18,29 @@ type AddToolRequest struct {
 	DescriptionOverride   string
 	PolicyConstraint      profiledomain.PolicyConstraint
 	ConcurrencyConstraint profiledomain.ConcurrencyConstraint
+	CredentialRefs        []credentialdomain.Reference
 }
 
 type AddTool struct {
-	repository Repository
-	tools      ToolLookup
+	repository  Repository
+	tools       ToolLookup
+	credentials CredentialLookup
 }
 
-func NewAddTool(repository Repository, tools ToolLookup) AddTool {
-	return AddTool{repository: repository, tools: tools}
+func NewAddTool(
+	repository Repository,
+	tools ToolLookup,
+	credentials ...CredentialLookup,
+) AddTool {
+	var credentialLookup CredentialLookup
+	if len(credentials) != 0 {
+		credentialLookup = credentials[0]
+	}
+	return AddTool{
+		repository:  repository,
+		tools:       tools,
+		credentials: credentialLookup,
+	}
 }
 
 func (uc AddTool) Execute(
@@ -44,6 +59,7 @@ func (uc AddTool) Execute(
 		DescriptionOverride:   request.DescriptionOverride,
 		PolicyConstraint:      request.PolicyConstraint,
 		ConcurrencyConstraint: request.ConcurrencyConstraint,
+		CredentialRefs:        append([]credentialdomain.Reference(nil), request.CredentialRefs...),
 	})
 	if err != nil {
 		return profiledomain.Profile{}, fmt.Errorf(
@@ -60,7 +76,7 @@ func (uc AddTool) Execute(
 			err,
 		)
 	}
-	if err := validateBindingToolsAndNames(ctx, updated, uc.tools); err != nil {
+	if err := validateBindings(ctx, updated, uc.tools, uc.credentials); err != nil {
 		return profiledomain.Profile{}, fmt.Errorf("add profile tool: %w", err)
 	}
 	if err := uc.repository.SaveProfile(ctx, updated); err != nil {

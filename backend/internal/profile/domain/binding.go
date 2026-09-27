@@ -3,15 +3,18 @@ package domain
 import (
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
+	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
 )
 
 const (
 	maxBindingAliasLength       = 128
 	maxBindingTitleLength       = 255
 	maxBindingDescriptionLength = 16384
+	maxBindingCredentialRefs    = 32
 )
 
 var bindingAliasPattern = regexp.MustCompile(`^[A-Za-z0-9](?:[A-Za-z0-9_.-]*[A-Za-z0-9])?$`)
@@ -42,6 +45,7 @@ type ToolBindingSpec struct {
 	DescriptionOverride   string
 	PolicyConstraint      PolicyConstraint
 	ConcurrencyConstraint ConcurrencyConstraint
+	CredentialRefs        []credentialdomain.Reference
 }
 
 // ToolBinding is the Profile-owned relationship to one canonical Tool.
@@ -53,6 +57,7 @@ type ToolBinding struct {
 	descriptionOverride   string
 	policyConstraint      PolicyConstraint
 	concurrencyConstraint ConcurrencyConstraint
+	credentialRefs        []credentialdomain.Reference
 }
 
 // NewToolBinding constructs and normalizes one ToolBinding.
@@ -91,6 +96,11 @@ func NewToolBinding(spec ToolBindingSpec) (ToolBinding, error) {
 		return ToolBinding{}, fmt.Errorf("tool binding policy constraint: unknown value %q", policy)
 	}
 
+	credentialRefs, err := normalizeCredentialRefs(spec.CredentialRefs)
+	if err != nil {
+		return ToolBinding{}, err
+	}
+
 	concurrency := spec.ConcurrencyConstraint
 	if concurrency == "" {
 		concurrency = ConcurrencyInherit
@@ -112,6 +122,7 @@ func NewToolBinding(spec ToolBindingSpec) (ToolBinding, error) {
 		descriptionOverride:   description,
 		policyConstraint:      policy,
 		concurrencyConstraint: concurrency,
+		credentialRefs:        credentialRefs,
 	}, nil
 }
 
@@ -151,6 +162,32 @@ func (b ToolBinding) PolicyConstraint() PolicyConstraint {
 
 func (b ToolBinding) ConcurrencyConstraint() ConcurrencyConstraint {
 	return b.concurrencyConstraint
+}
+
+func (b ToolBinding) CredentialRefs() []credentialdomain.Reference {
+	return slices.Clone(b.credentialRefs)
+}
+
+func normalizeCredentialRefs(
+	refs []credentialdomain.Reference,
+) ([]credentialdomain.Reference, error) {
+	if len(refs) > maxBindingCredentialRefs {
+		return nil, fmt.Errorf("tool binding credential refs: too many references")
+	}
+	result := make([]credentialdomain.Reference, 0, len(refs))
+	seen := make(map[credentialdomain.Reference]struct{}, len(refs))
+	for _, ref := range refs {
+		parsed, err := credentialdomain.ParseReference(ref.String())
+		if err != nil {
+			return nil, fmt.Errorf("tool binding credential ref: %w", err)
+		}
+		if _, exists := seen[parsed]; exists {
+			return nil, fmt.Errorf("tool binding credential refs: duplicate %s", parsed)
+		}
+		seen[parsed] = struct{}{}
+		result = append(result, parsed)
+	}
+	return result, nil
 }
 
 func (b ToolBinding) withDirect(direct bool) ToolBinding {

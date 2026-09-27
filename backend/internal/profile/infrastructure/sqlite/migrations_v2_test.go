@@ -82,8 +82,8 @@ func TestOpenMigratesProfileV1ToToolBindingColumns(t *testing.T) {
 	).Scan(&version); err != nil {
 		t.Fatal(err)
 	}
-	if version != 2 {
-		t.Fatalf("schema version = %d, want 2", version)
+	if version != 3 {
+		t.Fatalf("schema version = %d, want 3", version)
 	}
 
 	rows, err := store.db.QueryContext(
@@ -126,6 +126,7 @@ func TestOpenMigratesProfileV1ToToolBindingColumns(t *testing.T) {
 		"description_override",
 		"policy_constraint",
 		"concurrency_constraint",
+		"credential_refs_json",
 	} {
 		if !slices.Contains(columns, expected) {
 			t.Fatalf("profile_tools columns = %v, missing %q", columns, expected)
@@ -147,7 +148,8 @@ func TestOpenMigratesProfileV1ToToolBindingColumns(t *testing.T) {
 		binding.TitleOverride() != "" ||
 		binding.DescriptionOverride() != "" ||
 		binding.PolicyConstraint() != profiledomain.PolicyInherit ||
-		binding.ConcurrencyConstraint() != profiledomain.ConcurrencyInherit {
+		binding.ConcurrencyConstraint() != profiledomain.ConcurrencyInherit ||
+		len(binding.CredentialRefs()) != 0 {
 		t.Fatalf("migrated binding = %#v", binding)
 	}
 }

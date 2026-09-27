@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
+	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 )
 
@@ -17,6 +18,7 @@ type ToolBindingInput struct {
 	DescriptionOverride   string
 	PolicyConstraint      profiledomain.PolicyConstraint
 	ConcurrencyConstraint profiledomain.ConcurrencyConstraint
+	CredentialRefs        []credentialdomain.Reference
 }
 
 // ReplaceToolSelection is retained for source compatibility while adapters migrate.
@@ -32,13 +34,15 @@ func newToolBinding(input ToolBindingInput) (profiledomain.ToolBinding, error) {
 		DescriptionOverride:   input.DescriptionOverride,
 		PolicyConstraint:      input.PolicyConstraint,
 		ConcurrencyConstraint: input.ConcurrencyConstraint,
+		CredentialRefs:        append([]credentialdomain.Reference(nil), input.CredentialRefs...),
 	})
 }
 
-func validateBindingToolsAndNames(
+func validateBindings(
 	ctx context.Context,
 	profile profiledomain.Profile,
 	tools ToolLookup,
+	credentials CredentialLookup,
 ) error {
 	type key struct {
 		providerID catalogdomain.ProviderID
@@ -51,30 +55,37 @@ func validateBindingToolsAndNames(
 		if err != nil {
 			return fmt.Errorf("resolve %s: %w", binding.ToolID(), err)
 		}
-		if !binding.Direct() {
-			continue
+		if binding.Direct() {
+			name := binding.Alias()
+			if name == "" {
+				name = tool.Name()
+			}
+			collisionKey := key{
+				providerID: tool.ProviderID(),
+				name:       name,
+			}
+			if existing, exists := seenDirectNames[collisionKey]; exists &&
+				existing != binding.ToolID() {
+				return fmt.Errorf(
+					"%w: provider %s name %q used by %s and %s",
+					ErrBindingNameConflict,
+					tool.ProviderID(),
+					name,
+					existing,
+					binding.ToolID(),
+				)
+			}
+			seenDirectNames[collisionKey] = binding.ToolID()
 		}
 
-		name := binding.Alias()
-		if name == "" {
-			name = tool.Name()
+		for _, ref := range binding.CredentialRefs() {
+			if credentials == nil {
+				return fmt.Errorf("%w: credential lookup is unavailable", ErrInvalidBinding)
+			}
+			if _, err := credentials.GetCredential(ctx, ref); err != nil {
+				return fmt.Errorf("credential %s: %w", ref, err)
+			}
 		}
-		collisionKey := key{
-			providerID: tool.ProviderID(),
-			name:       name,
-		}
-		if existing, exists := seenDirectNames[collisionKey]; exists &&
-			existing != binding.ToolID() {
-			return fmt.Errorf(
-				"%w: provider %s name %q used by %s and %s",
-				ErrBindingNameConflict,
-				tool.ProviderID(),
-				name,
-				existing,
-				binding.ToolID(),
-			)
-		}
-		seenDirectNames[collisionKey] = binding.ToolID()
 	}
 	return nil
 }

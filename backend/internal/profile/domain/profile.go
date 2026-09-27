@@ -86,6 +86,7 @@ func NewProfileWithBindings(
 			DescriptionOverride:   binding.DescriptionOverride(),
 			PolicyConstraint:      binding.PolicyConstraint(),
 			ConcurrencyConstraint: binding.ConcurrencyConstraint(),
+			CredentialRefs:        binding.CredentialRefs(),
 		})
 		if err != nil {
 			return Profile{}, err

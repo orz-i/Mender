@@ -3,6 +3,8 @@ package domain
 import (
 	"strings"
 	"testing"
+
+	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
 )
 
 func TestToolBindingDefaultsAndNormalization(t *testing.T) {
@@ -116,6 +118,44 @@ func TestToolBindingValidatesPresentationBounds(t *testing.T) {
 		DescriptionOverride: strings.Repeat("d", maxBindingDescriptionLength+1),
 	}); err == nil {
 		t.Fatal("NewToolBinding() accepted oversized description override")
+	}
+}
+
+func TestToolBindingCredentialRefsAreUniqueAndCopied(t *testing.T) {
+	t.Parallel()
+
+	toolID := mustToolID(t, "tool_00000000000000000000000000000031")
+	first, err := credentialdomain.NewReference("github", "work")
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := credentialdomain.NewReference("search", "prod")
+	if err != nil {
+		t.Fatal(err)
+	}
+	input := []credentialdomain.Reference{first, second}
+	binding, err := NewToolBinding(ToolBindingSpec{
+		ToolID:         toolID,
+		CredentialRefs: input,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	input[0] = second
+	got := binding.CredentialRefs()
+	if len(got) != 2 || got[0] != first || got[1] != second {
+		t.Fatalf("CredentialRefs() = %#v", got)
+	}
+	got[0] = second
+	if binding.CredentialRefs()[0] != first {
+		t.Fatal("CredentialRefs() exposed mutable state")
+	}
+
+	if _, err := NewToolBinding(ToolBindingSpec{
+		ToolID:         toolID,
+		CredentialRefs: []credentialdomain.Reference{first, first},
+	}); err == nil {
+		t.Fatal("NewToolBinding() accepted duplicate CredentialRefs")
 	}
 }
 

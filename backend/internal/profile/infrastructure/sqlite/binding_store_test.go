@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
+	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 )
 
@@ -16,6 +17,7 @@ func TestProfileToolBindingGovernanceRoundTrip(t *testing.T) {
 	id, _ := profiledomain.ParseProfileID("prof_00000000000000000000000000000011")
 	slug, _ := profiledomain.NewSlug("governed")
 	toolID, _ := catalogdomain.ParseToolID("tool_00000000000000000000000000000011")
+	credentialRef, _ := credentialdomain.NewReference("github", "work")
 
 	binding, err := profiledomain.NewToolBinding(profiledomain.ToolBindingSpec{
 		ToolID:                toolID,
@@ -25,6 +27,7 @@ func TestProfileToolBindingGovernanceRoundTrip(t *testing.T) {
 		DescriptionOverride:   "Create an issue in the production tracker.",
 		PolicyConstraint:      profiledomain.PolicyRequireApproval,
 		ConcurrencyConstraint: profiledomain.ConcurrencySerial,
+		CredentialRefs:        []credentialdomain.Reference{credentialRef},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -57,7 +60,8 @@ func TestProfileToolBindingGovernanceRoundTrip(t *testing.T) {
 		got.TitleOverride() != "Create production issue" ||
 		got.DescriptionOverride() != "Create an issue in the production tracker." ||
 		got.PolicyConstraint() != profiledomain.PolicyRequireApproval ||
-		got.ConcurrencyConstraint() != profiledomain.ConcurrencySerial {
+		got.ConcurrencyConstraint() != profiledomain.ConcurrencySerial ||
+		len(got.CredentialRefs()) != 1 || got.CredentialRefs()[0] != credentialRef {
 		t.Fatalf("round-trip binding = %#v", got)
 	}
 }

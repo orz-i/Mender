@@ -13,14 +13,24 @@ type ReplaceToolsRequest struct {
 }
 
 type ReplaceTools struct {
-	repository Repository
-	tools      ToolLookup
+	repository  Repository
+	tools       ToolLookup
+	credentials CredentialLookup
 }
 
-func NewReplaceTools(repository Repository, tools ToolLookup) ReplaceTools {
+func NewReplaceTools(
+	repository Repository,
+	tools ToolLookup,
+	credentials ...CredentialLookup,
+) ReplaceTools {
+	var credentialLookup CredentialLookup
+	if len(credentials) != 0 {
+		credentialLookup = credentials[0]
+	}
 	return ReplaceTools{
-		repository: repository,
-		tools:      tools,
+		repository:  repository,
+		tools:       tools,
+		credentials: credentialLookup,
 	}
 }
 
@@ -55,7 +65,7 @@ func (uc ReplaceTools) Execute(
 			err,
 		)
 	}
-	if err := validateBindingToolsAndNames(ctx, updated, uc.tools); err != nil {
+	if err := validateBindings(ctx, updated, uc.tools, uc.credentials); err != nil {
 		return profiledomain.Profile{}, fmt.Errorf("replace profile tools: %w", err)
 	}
 	if err := uc.repository.SaveProfile(ctx, updated); err != nil {

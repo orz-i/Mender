@@ -3,10 +3,12 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
+	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
 	profileapplication "github.com/orz-i/Mender/backend/internal/profile/application"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 )
@@ -160,6 +162,15 @@ func (s *Store) SaveProfile(ctx context.Context, profile profiledomain.Profile) 
 	}
 
 	for _, binding := range profile.Bindings() {
+		credentialRefs := make([]string, 0, len(binding.CredentialRefs()))
+		for _, ref := range binding.CredentialRefs() {
+			credentialRefs = append(credentialRefs, ref.String())
+		}
+		credentialRefsJSON, err := json.Marshal(credentialRefs)
+		if err != nil {
+			return fmt.Errorf("save profile: encode credential refs: %w", err)
+		}
+
 		direct := 0
 		if binding.Direct() {
 			direct = 1
@@ -174,8 +185,9 @@ func (s *Store) SaveProfile(ctx context.Context, profile profiledomain.Profile) 
                 title_override,
                 description_override,
                 policy_constraint,
-                concurrency_constraint
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                concurrency_constraint,
+                credential_refs_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			profile.ID().String(),
 			binding.ToolID().String(),
 			direct,
@@ -184,6 +196,7 @@ func (s *Store) SaveProfile(ctx context.Context, profile profiledomain.Profile) 
 			binding.DescriptionOverride(),
 			string(binding.PolicyConstraint()),
 			string(binding.ConcurrencyConstraint()),
+			string(credentialRefsJSON),
 		); err != nil {
 			return fmt.Errorf("save profile: insert binding %s: %w", binding.ToolID(), err)
 		}
@@ -220,7 +233,8 @@ func (s *Store) restoreProfile(
             title_override,
             description_override,
             policy_constraint,
-            concurrency_constraint
+            concurrency_constraint,
+            credential_refs_json
         FROM profile_tools
         WHERE profile_id = ?
         ORDER BY tool_id`,
@@ -241,6 +255,7 @@ func (s *Store) restoreProfile(
 			descriptionOverride   string
 			policyConstraint      string
 			concurrencyConstraint string
+			rawCredentialRefs     string
 		)
 		if err := rows.Scan(
 			&rawToolID,
@@ -250,6 +265,7 @@ func (s *Store) restoreProfile(
 			&descriptionOverride,
 			&policyConstraint,
 			&concurrencyConstraint,
+			&rawCredentialRefs,
 		); err != nil {
 			return profiledomain.Profile{}, fmt.Errorf("load profile bindings: scan: %w", err)
 		}
@@ -257,6 +273,19 @@ func (s *Store) restoreProfile(
 		if err != nil {
 			return profiledomain.Profile{}, fmt.Errorf("parse profile tool id: %w", err)
 		}
+		var rawRefs []string
+		if err := json.Unmarshal([]byte(rawCredentialRefs), &rawRefs); err != nil {
+			return profiledomain.Profile{}, fmt.Errorf("parse profile credential refs: %w", err)
+		}
+		credentialRefs := make([]credentialdomain.Reference, 0, len(rawRefs))
+		for _, rawRef := range rawRefs {
+			ref, err := credentialdomain.ParseReference(rawRef)
+			if err != nil {
+				return profiledomain.Profile{}, fmt.Errorf("parse profile credential ref: %w", err)
+			}
+			credentialRefs = append(credentialRefs, ref)
+		}
+
 		binding, err := profiledomain.NewToolBinding(profiledomain.ToolBindingSpec{
 			ToolID:                toolID,
 			Direct:                direct == 1,
@@ -265,6 +294,7 @@ func (s *Store) restoreProfile(
 			DescriptionOverride:   descriptionOverride,
 			PolicyConstraint:      profiledomain.PolicyConstraint(policyConstraint),
 			ConcurrencyConstraint: profiledomain.ConcurrencyConstraint(concurrencyConstraint),
+			CredentialRefs:        credentialRefs,
 		})
 		if err != nil {
 			return profiledomain.Profile{}, fmt.Errorf("restore profile tool binding %s: %w", rawToolID, err)
