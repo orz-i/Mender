@@ -1,6 +1,6 @@
 # Phase 12 Plan — Persistent Policy Governance
 
-Status: Implementation Complete — Security Verification Pending
+Status: Complete
 
 ## Objective
 
@@ -738,11 +738,11 @@ docs: complete policy governance phase
 - [x] Policy editor separates Decision, Scope/Targets, and Governance Facts.
 - [x] Go race tests pass.
 - [x] pnpm check passes.
-- [ ] pnpm security:check passes.
+- [x] pnpm security:check passes.
 
-## Pre-closeout verification
+## Closeout
 
-Phase 12 implementation completed on 2026-09-27. Final closeout is intentionally blocked only by the current Go vulnerability-database network dependency.
+Phase 12 completed on 2026-09-27.
 
 Implementation commits:
 
@@ -759,6 +759,7 @@ dc15761 feat(app): manage policy rules
 65c7d87 test(runtime): cover persistent policy governance end to end
 1ed89a2 fix(app): keep policy profile selectors consistent
 ae1e907 refactor(policy): remove local allow-all placeholder
+1a1d73c docs: record policy governance verification status
 ~~~
 
 Verification evidence:
@@ -771,11 +772,8 @@ Verification evidence:
 - Provider deletion is blocked while a Policy Rule references that Provider. Tool selectors remain canonical ToolIDs and are never retargeted by name.
 - CLI, management HTTP, OpenAPI SDK, Wails bindings, and shared Web/Desktop UI expose the same PolicySet/Rule/Match model. Create Rule contracts do not accept RuleID.
 - Web/Desktop Policy management is list-first; Default decision uses a focused Dialog and Rule Add/Edit uses one three-step Dialog for Decision, Scope/Targets, and Governance Facts. Profile/Provider/Tool selectors are inventory-backed and normal UI has no raw identity fields.
-- `pnpm security:js` passed with no known production vulnerabilities at high severity.
-- `pnpm security:go` / `pnpm security:check` could not be re-completed because `https://vuln.go.dev/index/modules.json.gz` is currently unreachable from the development machine. `govulncheck` reported TLS handshake timeout and direct `curl` to `vuln.go.dev:443` timed out.
-- No Go or JavaScript dependency manifests/lockfiles changed between the Phase 11 security-gate pass and the current Phase 12 implementation. This is useful context but is not treated as a substitute for a fresh Phase 12 Go vulnerability scan.
-
-The Phase remains verification-pending until `pnpm security:check` can run successfully against the external Go vulnerability database.
+- `pnpm security:check` passed after the external Go vulnerability database became reachable again. Pinned `govulncheck v1.8.0` reported no vulnerabilities for both `backend` and `apps/desktop`, and production `pnpm audit --prod --audit-level high` reported no known vulnerabilities.
+- The final security verification is fresh for Phase 12 and does not rely on the prior Phase 11 scan.
 
 ## Deferred follow-up
 
