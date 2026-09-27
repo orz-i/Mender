@@ -642,13 +642,15 @@ components:
       required: [invocationId, kind]
       properties:
         invocationId: { type: string }
-        kind: { type: string, enum: [complete, input_required, task] }
+        kind: { type: string, enum: [complete, input_required, task, rejected, failed] }
         content: {}
         requestId: { type: string }
         message: { type: string }
         inputSchema: {}
         taskId: { type: string }
         status: { type: string }
+        source: { type: string, enum: [tool, provider, runtime, result_guard] }
+        code: { type: string }
     CreateProfileRequest:
       type: object
       required: [slug, displayName, mode]
@@ -712,7 +714,7 @@ components:
         startedAt: { type: string, format: date-time }
     AuditRecord:
       type: object
-      required: [invocationId, toolId, caller, startedAt, finishedAt, policyKind, policyReason, approval, status, resultKind, errorClass, errorSummary]
+      required: [invocationId, toolId, caller, startedAt, finishedAt, policyKind, policyReason, approval, status, resultKind, errorClass, errorSummary, origin, scopeKind, scopeReference, outcomeKind, rejectionCode, failureSource, failureCode]
       properties:
         invocationId: { type: string }
         toolId: { type: string }
@@ -729,3 +731,10 @@ components:
         errorSummary:
           type: string
           description: Bounded redacted diagnostic summary. Raw arguments and result payloads are not retained.
+        origin: { type: string }
+        scopeKind: { type: string }
+        scopeReference: { type: string }
+        outcomeKind: { type: string }
+        rejectionCode: { type: string }
+        failureSource: { type: string }
+        failureCode: { type: string }

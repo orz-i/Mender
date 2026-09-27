@@ -28,7 +28,7 @@ For automation and agents, always use:
 --output json
 ```
 
-Successful JSON commands emit exactly one JSON document on stdout. Errors and diagnostics use stderr.
+JSON commands emit exactly one JSON document on stdout whenever Invocation produces a canonical outcome. `rejected` and `failed` outcomes still use a non-zero process exit code; human diagnostics use stderr.
 
 ## Provider management
 
@@ -109,7 +109,18 @@ mender tool call tool_... \
   --output json
 ```
 
-The CLI reloads the Tool's persisted Provider configuration, activates its executor, and enters the shared Invocation pipeline.
+Catalog scope is the default for local administrative use. To invoke through a Profile security boundary, pass a Profile slug or ProfileID:
+
+```bash
+mender tool call tool_... \
+  --profile default \
+  --args '{"title":"Bug"}' \
+  --output json
+```
+
+Profile-scoped calls enforce Tool membership before Provider activation and again inside the shared Invocation pipeline. The CLI activates the persisted Provider only for a Tool that is available in the selected execution scope.
+
+Canonical JSON invocation kinds are `complete`, `input_required`, `task`, `rejected`, and `failed`. A rejected outcome includes `code` and `message`; a failed outcome includes `source`, `code`, and `message`.
 
 ## Profiles
 
@@ -191,10 +202,10 @@ Release builds report version, source commit, and build date. Development builds
 
 - `0`: success
 - `1`: internal/runtime setup failure
-- `2`: usage or validation error
-- `3`: missing configuration/resource
-- `4`: policy or approval denial
-- `5`: provider/execution failure
+- `2`: CLI usage error or `invalid_arguments` Invocation rejection
+- `3`: missing configuration/resource or Tool unavailable in the selected scope
+- `4`: policy or approval rejection
+- `5`: provider/runtime/result-guard execution failure
 
 ## Current limits
 

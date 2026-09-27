@@ -105,6 +105,8 @@ type InvocationResult struct {
 	InputSchema  any    `json:"inputSchema,omitempty"`
 	TaskID       string `json:"taskId,omitempty"`
 	Status       string `json:"status,omitempty"`
+	Source       string `json:"source,omitempty"`
+	Code         string `json:"code,omitempty"`
 }
 
 type ProfileTool struct {
@@ -125,19 +127,26 @@ type ProfileList struct {
 }
 
 type AuditRecord struct {
-	InvocationID string `json:"invocationId"`
-	ToolID       string `json:"toolId"`
-	ProviderID   string `json:"providerId,omitempty"`
-	Caller       string `json:"caller"`
-	StartedAt    string `json:"startedAt"`
-	FinishedAt   string `json:"finishedAt"`
-	PolicyKind   string `json:"policyKind"`
-	PolicyReason string `json:"policyReason"`
-	Approval     string `json:"approval"`
-	Status       string `json:"status"`
-	ResultKind   string `json:"resultKind"`
-	ErrorClass   string `json:"errorClass"`
-	ErrorSummary string `json:"errorSummary"`
+	InvocationID   string `json:"invocationId"`
+	ToolID         string `json:"toolId"`
+	ProviderID     string `json:"providerId,omitempty"`
+	Caller         string `json:"caller"`
+	StartedAt      string `json:"startedAt"`
+	FinishedAt     string `json:"finishedAt"`
+	PolicyKind     string `json:"policyKind"`
+	PolicyReason   string `json:"policyReason"`
+	Approval       string `json:"approval"`
+	Status         string `json:"status"`
+	ResultKind     string `json:"resultKind"`
+	ErrorClass     string `json:"errorClass"`
+	ErrorSummary   string `json:"errorSummary"`
+	Origin         string `json:"origin"`
+	ScopeKind      string `json:"scopeKind"`
+	ScopeReference string `json:"scopeReference"`
+	OutcomeKind    string `json:"outcomeKind"`
+	RejectionCode  string `json:"rejectionCode"`
+	FailureSource  string `json:"failureSource"`
+	FailureCode    string `json:"failureCode"`
 }
 
 type AuditList struct {

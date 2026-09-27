@@ -71,7 +71,7 @@ export function AuditPage({ client }: { client: MenderClient }) {
     <>
       <PageHeader
         title="Audit"
-        description="Data-minimized terminal invocation records. Arguments, full result payloads, credential references, and raw protocol traffic are not retained; failures may include a bounded redacted summary."
+        description="Data-minimized terminal invocation records with execution origin, scope, and canonical outcome classification. Arguments, full result payloads, credentials, progress payloads, and raw protocol traffic are not retained."
         actions={
           <Button variant="outline" onClick={() => void refresh()} disabled={busy}>
             Refresh
@@ -166,7 +166,15 @@ export function AuditPage({ client }: { client: MenderClient }) {
             <div className="space-y-5">
               <div className="grid gap-3 sm:grid-cols-2">
                 <AuditField label="Status" value={selected.status} />
+                <AuditField label="Outcome" value={selected.outcomeKind || "—"} />
+                <AuditField label="Origin" value={selected.origin || "—"} />
                 <AuditField label="Caller" value={selected.caller || "—"} />
+                <AuditField label="Scope" value={selected.scopeKind || "—"} />
+                <AuditField
+                  label="Scope reference"
+                  value={selected.scopeReference || "—"}
+                  mono
+                />
                 <AuditField
                   label="Invocation ID"
                   value={selected.invocationId}
@@ -204,6 +212,18 @@ export function AuditPage({ client }: { client: MenderClient }) {
                 <AuditField
                   label="Error class"
                   value={selected.errorClass || "—"}
+                />
+                <AuditField
+                  label="Rejection code"
+                  value={selected.rejectionCode || "—"}
+                />
+                <AuditField
+                  label="Failure source"
+                  value={selected.failureSource || "—"}
+                />
+                <AuditField
+                  label="Failure code"
+                  value={selected.failureCode || "—"}
                 />
               </div>
 

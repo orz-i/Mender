@@ -212,16 +212,40 @@ func TestServiceEndToEndUsesSharedRuntime(t *testing.T) {
 		t.Fatalf("upstream calls = %d, want 1", upstreamCalls.Load())
 	}
 
+	missing, err := service.CallTool(
+		"tool_ffffffffffffffffffffffffffffffff",
+		map[string]any{},
+	)
+	if err != nil {
+		t.Fatalf("CallTool(missing) error = %v", err)
+	}
+	if missing.Kind != "rejected" || missing.Code != "tool_not_found" {
+		t.Fatalf("missing Tool result = %#v", missing)
+	}
+	if upstreamCalls.Load() != 1 {
+		t.Fatalf("missing Tool unexpectedly reached upstream; calls = %d", upstreamCalls.Load())
+	}
+
 	audit, err := service.ListAudit(10)
 	if err != nil {
 		t.Fatalf("ListAudit() error = %v", err)
 	}
-	if len(audit.Records) != 1 {
+	if len(audit.Records) != 2 {
 		t.Fatalf("audit records = %#v", audit.Records)
 	}
-	record := audit.Records[0]
-	if record.Caller != "desktop" || record.ResultKind != "complete" {
-		t.Fatalf("audit record = %#v", record)
+	rejectedRecord := audit.Records[0]
+	if rejectedRecord.Caller != "desktop" ||
+		rejectedRecord.Origin != "desktop" ||
+		rejectedRecord.ScopeKind != "catalog" ||
+		rejectedRecord.OutcomeKind != "rejected" ||
+		rejectedRecord.RejectionCode != "tool_not_found" {
+		t.Fatalf("rejected audit record = %#v", rejectedRecord)
+	}
+	completedRecord := audit.Records[1]
+	if completedRecord.Caller != "desktop" ||
+		completedRecord.ResultKind != "complete" ||
+		completedRecord.OutcomeKind != "complete" {
+		t.Fatalf("completed audit record = %#v", completedRecord)
 	}
 
 	if err := service.DeleteProvider(created.Provider.ProviderID); !errors.Is(err, bootstrap.ErrProviderInUse) {

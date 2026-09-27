@@ -138,9 +138,6 @@ func (a *Adapter) callHandler(ctx context.Context, request *mcp.CallToolRequest)
 	if err != nil {
 		return nil, fmt.Errorf("mender call tool: %w", err)
 	}
-	if !a.profile.Contains(toolID) {
-		return nil, ErrToolOutsideProfile
-	}
 	if len(input.Arguments) == 0 {
 		input.Arguments = json.RawMessage("{}")
 	}

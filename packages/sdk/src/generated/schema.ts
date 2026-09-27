@@ -452,13 +452,16 @@ export interface components {
         InvocationResult: {
             invocationId: string;
             /** @enum {string} */
-            kind: "complete" | "input_required" | "task";
+            kind: "complete" | "input_required" | "task" | "rejected" | "failed";
             content?: unknown;
             requestId?: string;
             message?: string;
             inputSchema?: unknown;
             taskId?: string;
             status?: string;
+            /** @enum {string} */
+            source?: "tool" | "provider" | "runtime" | "result_guard";
+            code?: string;
         };
         CreateProfileRequest: {
             slug: string;
@@ -520,6 +523,13 @@ export interface components {
             errorClass: string;
             /** @description Bounded redacted diagnostic summary. Raw arguments and result payloads are not retained. */
             errorSummary: string;
+            origin: string;
+            scopeKind: string;
+            scopeReference: string;
+            outcomeKind: string;
+            rejectionCode: string;
+            failureSource: string;
+            failureCode: string;
         };
     };
     responses: {

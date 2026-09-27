@@ -19,6 +19,13 @@ export interface AuditRecord {
     "resultKind": string;
     "errorClass": string;
     "errorSummary": string;
+    "origin": string;
+    "scopeKind": string;
+    "scopeReference": string;
+    "outcomeKind": string;
+    "rejectionCode": string;
+    "failureSource": string;
+    "failureCode": string;
 }
 
 export interface CredentialStatus {
@@ -36,6 +43,8 @@ export interface InvocationResult {
     "inputSchema"?: any;
     "taskId"?: string;
     "status"?: string;
+    "source"?: string;
+    "code"?: string;
 }
 
 export interface MCPServerInstance {

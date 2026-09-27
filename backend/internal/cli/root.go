@@ -11,6 +11,7 @@ import (
 	"github.com/orz-i/Mender/backend/internal/bootstrap"
 	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
 	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
+	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	mcpconfigstore "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/configstore"
 	mcpserver "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/server"
 	profileapplication "github.com/orz-i/Mender/backend/internal/profile/application"
@@ -55,6 +56,14 @@ type internalError struct {
 
 func (e internalError) Error() string { return e.err.Error() }
 func (e internalError) Unwrap() error { return e.err }
+
+type invocationOutcomeError struct {
+	outcome invocationdomain.Outcome
+}
+
+func (e invocationOutcomeError) Error() string {
+	return e.outcome.Message()
+}
 
 func NewRootCommand(options Options) *cobra.Command {
 	options = normalizeOptions(options)
@@ -192,11 +201,14 @@ func exactArgs(count int) cobra.PositionalArgs {
 func exitCode(err error) int {
 	var usage usageError
 	var internal internalError
+	var outcomeErr invocationOutcomeError
 	switch {
 	case errors.As(err, &usage):
 		return ExitUsage
 	case errors.As(err, &internal):
 		return ExitInternal
+	case errors.As(err, &outcomeErr):
+		return invocationOutcomeExitCode(outcomeErr.outcome)
 	case errors.Is(err, catalogapplication.ErrProviderNotFound),
 		errors.Is(err, catalogapplication.ErrToolNotFound),
 		errors.Is(err, profileapplication.ErrProfileNotFound),
@@ -207,4 +219,25 @@ func exitCode(err error) int {
 		return ExitPolicy
 	}
 	return ExitExecution
+}
+
+func invocationOutcomeExitCode(outcome invocationdomain.Outcome) int {
+	if outcome.Kind() == invocationdomain.OutcomeKindFailed {
+		return ExitExecution
+	}
+	if outcome.Kind() != invocationdomain.OutcomeKindRejected {
+		return ExitExecution
+	}
+	switch outcome.RejectionCode() {
+	case invocationdomain.RejectionToolNotFound,
+		invocationdomain.RejectionToolOutsideScope:
+		return ExitConfig
+	case invocationdomain.RejectionInvalidArguments:
+		return ExitUsage
+	case invocationdomain.RejectionPolicyDenied,
+		invocationdomain.RejectionApprovalDenied:
+		return ExitPolicy
+	default:
+		return ExitExecution
+	}
 }

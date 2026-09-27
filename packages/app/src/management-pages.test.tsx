@@ -605,6 +605,13 @@ describe("management pages", () => {
             resultKind: "complete",
             errorClass: "",
             errorSummary: "",
+            origin: "management_http",
+            scopeKind: "catalog",
+            scopeReference: "",
+            outcomeKind: "complete",
+            rejectionCode: "",
+            failureSource: "",
+            failureCode: "",
           },
         ],
       }),
@@ -635,6 +642,13 @@ describe("management pages", () => {
             resultKind: "",
             errorClass: "execution",
             errorSummary: "provider rejected request: missing required query",
+            origin: "desktop",
+            scopeKind: "profile",
+            scopeReference: "prof_1",
+            outcomeKind: "failed",
+            rejectionCode: "",
+            failureSource: "provider",
+            failureCode: "provider_error",
           },
         ],
       }),
@@ -649,9 +663,12 @@ describe("management pages", () => {
     expect(
       screen.getByText("provider rejected request: missing required query"),
     ).toBeTruthy();
-    expect(
-      within(screen.getByRole("dialog")).getByText("execution"),
-    ).toBeTruthy();
+    const dialog = within(screen.getByRole("dialog"));
+    expect(dialog.getByText("execution")).toBeTruthy();
+    expect(dialog.getAllByText("desktop").length).toBeGreaterThanOrEqual(2);
+    expect(dialog.getByText("profile")).toBeTruthy();
+    expect(dialog.getByText("provider")).toBeTruthy();
+    expect(dialog.getByText("provider_error")).toBeTruthy();
     expect(screen.queryByText(/TOP-SECRET/)).toBeNull();
   });
 });

@@ -106,15 +106,18 @@ func TestDynamicProfileExposesMetaToolsAndEnforcesMembership(t *testing.T) {
 		t.Fatal("describe hidden Tool expected error")
 	}
 
-	_, err = client.CallTool(context.Background(), &mcp.CallToolParams{
+	hiddenCall, err := client.CallTool(context.Background(), &mcp.CallToolParams{
 		Name:      metaCallName,
 		Arguments: json.RawMessage(`{"toolId":"` + fixture.tools[2].ID().String() + `","arguments":{}}`),
 	})
-	if err == nil {
-		t.Fatal("call hidden Tool expected error")
+	if err != nil {
+		t.Fatalf("call hidden Tool transport error = %v", err)
 	}
-	if len(fixture.invokedIDs()) != 0 {
-		t.Fatalf("hidden Tool reached InvokeTool: %v", fixture.invokedIDs())
+	if !hiddenCall.IsError {
+		t.Fatal("call hidden Tool did not map Profile rejection to MCP Tool error")
+	}
+	if got := fixture.invokedIDs(); len(got) != 1 || got[0] != fixture.tools[2].ID() {
+		t.Fatalf("hidden Tool did not reach authoritative Invocation boundary: %v", got)
 	}
 
 	callResult, err := client.CallTool(context.Background(), &mcp.CallToolParams{
@@ -127,7 +130,8 @@ func TestDynamicProfileExposesMetaToolsAndEnforcesMembership(t *testing.T) {
 	if callResult.IsError {
 		t.Fatalf("call visible Tool returned IsError")
 	}
-	if got := fixture.invokedIDs(); len(got) != 1 || got[0] != fixture.tools[0].ID() {
+	if got := fixture.invokedIDs(); len(got) != 2 ||
+		got[0] != fixture.tools[2].ID() || got[1] != fixture.tools[0].ID() {
 		t.Fatalf("invoked ToolIDs = %v", got)
 	}
 }
@@ -332,6 +336,17 @@ func (f *serverFixture) adapter(t *testing.T, profile profiledomain.Profile) *Ad
 			f.invoked = append(f.invoked, request.ToolID)
 			f.invocationContexts = append(f.invocationContexts, request.Context)
 			f.mu.Unlock()
+			if request.Context.Scope().Kind() == invocationdomain.ScopeProfile &&
+				!profile.Contains(request.ToolID) {
+				rejected, rejectErr := invocationdomain.Rejected(
+					invocationdomain.RejectionToolOutsideScope,
+					"tool is not available in this execution scope",
+				)
+				if rejectErr != nil {
+					return invocationapplication.InvokeToolResponse{}, rejectErr
+				}
+				return invocationapplication.InvokeToolResponse{Outcome: rejected}, nil
+			}
 			value, err := invocationdomain.NewJSONValue(request.Arguments)
 			if err != nil {
 				return invocationapplication.InvokeToolResponse{}, err

@@ -682,18 +682,25 @@ func profileProjection(profile profiledomain.Profile) Profile {
 
 func auditProjection(record auditdomain.Record) AuditRecord {
 	result := AuditRecord{
-		InvocationID: record.InvocationID().String(),
-		ToolID:       record.ToolID().String(),
-		Caller:       record.Caller(),
-		StartedAt:    record.StartedAt().Format(timeFormat),
-		FinishedAt:   record.FinishedAt().Format(timeFormat),
-		PolicyKind:   string(record.PolicyKind()),
-		PolicyReason: record.PolicyReason(),
-		Approval:     string(record.Approval()),
-		Status:       string(record.Status()),
-		ResultKind:   string(record.ResultKind()),
-		ErrorClass:   string(record.ErrorClass()),
-		ErrorSummary: record.ErrorSummary(),
+		InvocationID:   record.InvocationID().String(),
+		ToolID:         record.ToolID().String(),
+		Caller:         record.Caller(),
+		StartedAt:      record.StartedAt().Format(timeFormat),
+		FinishedAt:     record.FinishedAt().Format(timeFormat),
+		PolicyKind:     string(record.PolicyKind()),
+		PolicyReason:   record.PolicyReason(),
+		Approval:       string(record.Approval()),
+		Status:         string(record.Status()),
+		ResultKind:     string(record.ResultKind()),
+		ErrorClass:     string(record.ErrorClass()),
+		ErrorSummary:   record.ErrorSummary(),
+		Origin:         string(record.Origin()),
+		ScopeKind:      string(record.ScopeKind()),
+		ScopeReference: record.ScopeReference(),
+		OutcomeKind:    string(record.OutcomeKind()),
+		RejectionCode:  string(record.RejectionCode()),
+		FailureSource:  string(record.FailureSource()),
+		FailureCode:    string(record.FailureCode()),
 	}
 	if providerID := record.ProviderID(); providerID != nil {
 		result.ProviderID = providerID.String()
@@ -732,6 +739,13 @@ func invocationProjection(
 	case invocationdomain.OutcomeKindTask:
 		projection.TaskID = result.TaskID()
 		projection.Status = result.TaskStatus()
+		projection.Message = result.Message()
+	case invocationdomain.OutcomeKindRejected:
+		projection.Code = string(result.RejectionCode())
+		projection.Message = result.Message()
+	case invocationdomain.OutcomeKindFailed:
+		projection.Source = string(result.FailureSource())
+		projection.Code = string(result.FailureCode())
 		projection.Message = result.Message()
 	}
 	return projection, nil

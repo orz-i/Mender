@@ -97,6 +97,16 @@ func TestCLILocalWorkflowWithPersistedHTTPProvider(t *testing.T) {
 		"--mode", "hybrid",
 	)
 	execute("profile", "add-tool", "default", toolID, "--direct")
+	restricted := execute(
+		"profile", "create",
+		"--slug", "restricted",
+		"--name", "Restricted",
+		"--mode", "dynamic",
+	)
+	restrictedID, _ := restricted["profileId"].(string)
+	if restrictedID == "" {
+		t.Fatalf("restricted profile = %#v", restricted)
+	}
 
 	scoped := execute("tool", "search", "echo", "--profile", "default")
 	scopedTools, ok := scoped["tools"].([]any)
@@ -117,6 +127,45 @@ func TestCLILocalWorkflowWithPersistedHTTPProvider(t *testing.T) {
 	}
 	if invocationID, ok := called["invocationId"].(string); !ok || invocationID == "" {
 		t.Fatalf("invocationId = %#v", called["invocationId"])
+	}
+
+	profileCalled := execute(
+		"tool", "call", toolID,
+		"--profile", "default",
+		"--args", "{\"value\":\"profile\"}",
+	)
+	if profileCalled["kind"] != "complete" {
+		t.Fatalf("profile tool call output = %#v", profileCalled)
+	}
+
+	var rejectedStdout, rejectedStderr bytes.Buffer
+	rejectedCode := Run(
+		context.Background(),
+		[]string{
+			"--db", dbPath,
+			"--output", "json",
+			"tool", "call", toolID,
+			"--profile", restrictedID,
+			"--args", "{}",
+		},
+		&rejectedStdout,
+		&rejectedStderr,
+	)
+	if rejectedCode != ExitConfig {
+		t.Fatalf(
+			"restricted call exit = %d, want %d; stderr=%q stdout=%q",
+			rejectedCode,
+			ExitConfig,
+			rejectedStderr.String(),
+			rejectedStdout.String(),
+		)
+	}
+	var rejected map[string]any
+	if err := json.Unmarshal(rejectedStdout.Bytes(), &rejected); err != nil {
+		t.Fatalf("restricted call JSON error = %v output=%q", err, rejectedStdout.String())
+	}
+	if rejected["kind"] != "rejected" || rejected["code"] != "tool_outside_scope" {
+		t.Fatalf("restricted call outcome = %#v", rejected)
 	}
 
 	var servedHTTP atomic.Bool
@@ -143,8 +192,8 @@ func TestCLILocalWorkflowWithPersistedHTTPProvider(t *testing.T) {
 		t.Fatal("serve stdio adapter was not invoked")
 	}
 
-	if got := upstreamCalls.Load(); got != 1 {
-		t.Fatalf("upstream call count = %d, want 1", got)
+	if got := upstreamCalls.Load(); got != 2 {
+		t.Fatalf("upstream call count = %d, want 2", got)
 	}
 }
 

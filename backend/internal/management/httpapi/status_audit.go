@@ -86,18 +86,25 @@ func (h *Handler) listAudit(w http.ResponseWriter, r *http.Request) {
 
 func auditProjection(record auditdomain.Record) map[string]any {
 	result := map[string]any{
-		"invocationId": record.InvocationID().String(),
-		"toolId":       record.ToolID().String(),
-		"caller":       record.Caller(),
-		"startedAt":    record.StartedAt(),
-		"finishedAt":   record.FinishedAt(),
-		"policyKind":   string(record.PolicyKind()),
-		"policyReason": record.PolicyReason(),
-		"approval":     string(record.Approval()),
-		"status":       string(record.Status()),
-		"resultKind":   string(record.ResultKind()),
-		"errorClass":   string(record.ErrorClass()),
-		"errorSummary": record.ErrorSummary(),
+		"invocationId":   record.InvocationID().String(),
+		"toolId":         record.ToolID().String(),
+		"caller":         record.Caller(),
+		"startedAt":      record.StartedAt(),
+		"finishedAt":     record.FinishedAt(),
+		"policyKind":     string(record.PolicyKind()),
+		"policyReason":   record.PolicyReason(),
+		"approval":       string(record.Approval()),
+		"status":         string(record.Status()),
+		"resultKind":     string(record.ResultKind()),
+		"errorClass":     string(record.ErrorClass()),
+		"errorSummary":   record.ErrorSummary(),
+		"origin":         string(record.Origin()),
+		"scopeKind":      string(record.ScopeKind()),
+		"scopeReference": record.ScopeReference(),
+		"outcomeKind":    string(record.OutcomeKind()),
+		"rejectionCode":  string(record.RejectionCode()),
+		"failureSource":  string(record.FailureSource()),
+		"failureCode":    string(record.FailureCode()),
 	}
 	if providerID := record.ProviderID(); providerID != nil {
 		result["providerId"] = providerID.String()
@@ -136,6 +143,15 @@ func invocationProjection(
 	case invocationdomain.OutcomeKindTask:
 		projection["taskId"] = result.TaskID()
 		projection["status"] = result.TaskStatus()
+		projection["message"] = result.Message()
+
+	case invocationdomain.OutcomeKindRejected:
+		projection["code"] = string(result.RejectionCode())
+		projection["message"] = result.Message()
+
+	case invocationdomain.OutcomeKindFailed:
+		projection["source"] = string(result.FailureSource())
+		projection["code"] = string(result.FailureCode())
 		projection["message"] = result.Message()
 	}
 

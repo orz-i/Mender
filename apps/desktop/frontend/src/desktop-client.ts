@@ -331,6 +331,10 @@ function invocationResult(value: BindingInvocationResult): InvocationResult {
       : { inputSchema: value.inputSchema }),
     ...(value.taskId === undefined ? {} : { taskId: value.taskId }),
     ...(value.status === undefined ? {} : { status: value.status }),
+    ...(value.source === undefined
+      ? {}
+      : { source: invocationFailureSource(value.source) }),
+    ...(value.code === undefined ? {} : { code: value.code }),
   };
 }
 
@@ -387,6 +391,13 @@ function auditRecord(value: BindingAuditRecord): AuditRecord {
     resultKind: value.resultKind,
     errorClass: value.errorClass,
     errorSummary: value.errorSummary,
+    origin: value.origin,
+    scopeKind: value.scopeKind,
+    scopeReference: value.scopeReference,
+    outcomeKind: value.outcomeKind,
+    rejectionCode: value.rejectionCode,
+    failureSource: value.failureSource,
+    failureCode: value.failureCode,
   };
 }
 
@@ -408,9 +419,29 @@ function providerTransport(
 
 function invocationKind(
   value: string,
-): "complete" | "input_required" | "task" {
-  if (value === "complete" || value === "input_required" || value === "task") {
+): "complete" | "input_required" | "task" | "rejected" | "failed" {
+  if (
+    value === "complete" ||
+    value === "input_required" ||
+    value === "task" ||
+    value === "rejected" ||
+    value === "failed"
+  ) {
     return value;
   }
   throw new Error(`Unsupported desktop invocation result kind: ${value}`);
+}
+
+function invocationFailureSource(
+  value: string,
+): "tool" | "provider" | "runtime" | "result_guard" {
+  if (
+    value === "tool" ||
+    value === "provider" ||
+    value === "runtime" ||
+    value === "result_guard"
+  ) {
+    return value;
+  }
+  throw new Error(`Unsupported desktop invocation failure source: ${value}`);
 }

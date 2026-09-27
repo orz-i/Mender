@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -9,7 +10,6 @@ import (
 	"github.com/orz-i/Mender/backend/internal/bootstrap"
 	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
-	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 	"github.com/spf13/cobra"
@@ -133,6 +133,7 @@ func (a *app) newToolDescribeCommand() *cobra.Command {
 func (a *app) newToolCallCommand() *cobra.Command {
 	var rawArguments string
 	var argumentsFile string
+	var profileValue string
 
 	command := &cobra.Command{
 		Use:   "call <tool-id>",
@@ -150,19 +151,20 @@ func (a *app) newToolCallCommand() *cobra.Command {
 			}
 
 			return a.withRuntime(cmd.Context(), func(runtime *bootstrap.Runtime) error {
-				tool, err := runtime.Catalog.DescribeTool.Execute(cmd.Context(), toolID)
+				executionContext, err := cliInvocationContext(
+					cmd.Context(),
+					runtime,
+					profileValue,
+				)
 				if err != nil {
 					return err
 				}
-				if err := runtime.ActivateConfiguredMCPProvider(cmd.Context(), tool.ProviderID()); err != nil {
-					return fmt.Errorf("activate tool provider: %w", err)
-				}
-
-				request, err := invokeRequest(toolID, arguments)
-				if err != nil {
-					return err
-				}
-				response, err := runtime.InvokeTool.Execute(cmd.Context(), request)
+				response, err := runtime.CallConfiguredTool(
+					cmd.Context(),
+					toolID,
+					arguments,
+					executionContext,
+				)
 				if err != nil {
 					return err
 				}
@@ -172,7 +174,13 @@ func (a *app) newToolCallCommand() *cobra.Command {
 					return err
 				}
 				if a.output == "json" {
-					return a.writeValue("", projection)
+					if err := a.writeValue("", projection); err != nil {
+						return err
+					}
+					if isNonSuccessOutcome(response.Outcome) {
+						return invocationOutcomeError{outcome: response.Outcome}
+					}
+					return nil
 				}
 
 				switch response.Outcome.Kind() {
@@ -192,6 +200,9 @@ func (a *app) newToolCallCommand() *cobra.Command {
 						response.Outcome.TaskID(),
 						response.Outcome.TaskStatus(),
 					)
+				case invocationdomain.OutcomeKindRejected,
+					invocationdomain.OutcomeKindFailed:
+					return invocationOutcomeError{outcome: response.Outcome}
 				}
 				return err
 			})
@@ -199,6 +210,7 @@ func (a *app) newToolCallCommand() *cobra.Command {
 	}
 	command.Flags().StringVar(&rawArguments, "args", "", "tool arguments as a JSON object")
 	command.Flags().StringVar(&argumentsFile, "args-file", "", "read tool arguments from a JSON file")
+	command.Flags().StringVar(&profileValue, "profile", "", "invoke within a Profile slug or Profile ID")
 	command.MarkFlagsMutuallyExclusive("args", "args-file")
 	return command
 }
@@ -223,23 +235,51 @@ func readArguments(raw, path string) ([]byte, error) {
 	return json.Marshal(value)
 }
 
-func invokeRequest(
-	toolID catalogdomain.ToolID,
-	arguments []byte,
-) (invocationapplication.InvokeToolRequest, error) {
+func cliInvocationContext(
+	ctx context.Context,
+	runtime *bootstrap.Runtime,
+	profileValue string,
+) (invocationdomain.InvocationContext, error) {
+	scope := invocationdomain.CatalogExecutionScope()
+	if profileValue != "" {
+		profile, err := resolveProfile(ctx, runtime, profileValue)
+		if err != nil {
+			return invocationdomain.InvocationContext{}, err
+		}
+		scope, err = invocationdomain.ProfileExecutionScope(profile.ID().String())
+		if err != nil {
+			return invocationdomain.InvocationContext{}, fmt.Errorf("construct CLI profile scope: %w", err)
+		}
+	}
 	executionContext, err := invocationdomain.NewInvocationContext(
 		invocationdomain.OriginCLI,
 		"cli",
-		invocationdomain.CatalogExecutionScope(),
+		scope,
 	)
 	if err != nil {
-		return invocationapplication.InvokeToolRequest{}, fmt.Errorf("construct CLI invocation context: %w", err)
+		return invocationdomain.InvocationContext{}, fmt.Errorf("construct CLI invocation context: %w", err)
 	}
-	return invocationapplication.InvokeToolRequest{
-		ToolID:    toolID,
-		Arguments: arguments,
-		Context:   executionContext,
-	}, nil
+	return executionContext, nil
+}
+
+func resolveProfile(
+	ctx context.Context,
+	runtime *bootstrap.Runtime,
+	value string,
+) (profiledomain.Profile, error) {
+	if id, err := profiledomain.ParseProfileID(value); err == nil {
+		return runtime.Profiles.GetByID.Execute(ctx, id)
+	}
+	slug, err := profiledomain.NewSlug(value)
+	if err != nil {
+		return profiledomain.Profile{}, usageError{err: fmt.Errorf("invalid --profile: %w", err)}
+	}
+	return runtime.Profiles.Get.Execute(ctx, slug)
+}
+
+func isNonSuccessOutcome(outcome invocationdomain.Outcome) bool {
+	return outcome.Kind() == invocationdomain.OutcomeKindRejected ||
+		outcome.Kind() == invocationdomain.OutcomeKindFailed
 }
 
 func searchResultProjection(result catalogapplication.ToolSearchResult) map[string]any {
@@ -310,6 +350,15 @@ func invocationProjection(
 	case invocationdomain.OutcomeKindTask:
 		projection["taskId"] = result.TaskID()
 		projection["status"] = result.TaskStatus()
+		projection["message"] = result.Message()
+
+	case invocationdomain.OutcomeKindRejected:
+		projection["code"] = string(result.RejectionCode())
+		projection["message"] = result.Message()
+
+	case invocationdomain.OutcomeKindFailed:
+		projection["source"] = string(result.FailureSource())
+		projection["code"] = string(result.FailureCode())
 		projection["message"] = result.Message()
 	}
 

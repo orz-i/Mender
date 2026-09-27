@@ -314,6 +314,21 @@ func TestManagementAPIEndToEnd(t *testing.T) {
 		t.Fatalf("upstream call count = %d", upstreamCalls.Load())
 	}
 
+	missingCall := requestJSON(
+		t,
+		server.Client(),
+		http.MethodPost,
+		server.URL+"/api/v1/tools/tool_ffffffffffffffffffffffffffffffff/call",
+		map[string]any{"arguments": map[string]any{}},
+		http.StatusOK,
+	)
+	if missingCall["kind"] != "rejected" || missingCall["code"] != "tool_not_found" {
+		t.Fatalf("missing tool call = %#v", missingCall)
+	}
+	if upstreamCalls.Load() != 1 {
+		t.Fatalf("missing Tool unexpectedly reached upstream; calls = %d", upstreamCalls.Load())
+	}
+
 	audit := requestJSON(
 		t,
 		server.Client(),
@@ -323,11 +338,16 @@ func TestManagementAPIEndToEnd(t *testing.T) {
 		http.StatusOK,
 	)
 	records, ok := audit["records"].([]any)
-	if !ok || len(records) != 1 {
+	if !ok || len(records) != 2 {
 		t.Fatalf("audit response = %#v", audit)
 	}
 	record, _ := records[0].(map[string]any)
-	for _, forbidden := range []string{"arguments", "result", "content", "secret", "credential"} {
+	if record["origin"] != "management_http" ||
+		record["scopeKind"] != "catalog" ||
+		record["outcomeKind"] != "rejected" {
+		t.Fatalf("audit governance metadata = %#v", record)
+	}
+	for _, forbidden := range []string{"arguments", "result", "content", "secret", "credential", "progress"} {
 		if _, exists := record[forbidden]; exists {
 			t.Fatalf("audit record contains forbidden field %q: %#v", forbidden, record)
 		}

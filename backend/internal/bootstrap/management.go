@@ -61,18 +61,40 @@ func (r *Runtime) CallConfiguredTool(
 	arguments []byte,
 	executionContext invocationdomain.InvocationContext,
 ) (invocationapplication.InvokeToolResponse, error) {
+	request := invocationapplication.InvokeToolRequest{
+		ToolID:    toolID,
+		Arguments: arguments,
+		Context:   executionContext,
+	}
+
+	if executionContext.Scope().Kind() == invocationdomain.ScopeProfile {
+		profileID, err := profiledomain.ParseProfileID(executionContext.Scope().Reference())
+		if err != nil {
+			return invocationapplication.InvokeToolResponse{}, fmt.Errorf(
+				"call configured tool: profile scope: %w",
+				err,
+			)
+		}
+		profile, err := r.Profiles.GetByID.Execute(ctx, profileID)
+		if err != nil {
+			return invocationapplication.InvokeToolResponse{}, err
+		}
+		if !profile.Contains(toolID) {
+			return r.InvokeTool.Execute(ctx, request)
+		}
+	}
+
 	tool, err := r.Catalog.DescribeTool.Execute(ctx, toolID)
 	if err != nil {
+		if errors.Is(err, catalogapplication.ErrToolNotFound) {
+			return r.InvokeTool.Execute(ctx, request)
+		}
 		return invocationapplication.InvokeToolResponse{}, err
 	}
 	if err := r.ActivateConfiguredMCPProvider(ctx, tool.ProviderID()); err != nil {
 		return invocationapplication.InvokeToolResponse{}, fmt.Errorf("activate tool provider: %w", err)
 	}
-	return r.InvokeTool.Execute(ctx, invocationapplication.InvokeToolRequest{
-		ToolID:    toolID,
-		Arguments: arguments,
-		Context:   executionContext,
-	})
+	return r.InvokeTool.Execute(ctx, request)
 }
 
 func (r *Runtime) UpdateMCPProvider(

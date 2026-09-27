@@ -5,7 +5,9 @@ vi.mock(
   () => ({
     Service: {
       BrowseTools: vi.fn(),
+      CallTool: vi.fn(),
       GetSystemStatus: vi.fn(),
+      ListAudit: vi.fn(),
       ListMCPServers: vi.fn(),
       ListProviders: vi.fn(),
       ReplaceProfileTools: vi.fn(),
@@ -291,6 +293,63 @@ describe("desktop Mender client", () => {
     });
     await client.stopMCPServer("srv_2");
     expect(Service.StopMCPServer).toHaveBeenCalledWith("srv_2");
+  });
+
+  it("maps governed invocation outcomes and Audit metadata through Wails", async () => {
+    vi.mocked(Service.CallTool).mockResolvedValue({
+      invocationId: "inv_1",
+      kind: "failed",
+      message: "tool result does not match the declared output schema",
+      source: "result_guard",
+      code: "output_schema_mismatch",
+    });
+    vi.mocked(Service.ListAudit).mockResolvedValue({
+      records: [
+        {
+          invocationId: "inv_1",
+          toolId: "tool_1",
+          providerId: "prov_1",
+          caller: "desktop",
+          startedAt: "2026-09-26T00:00:00Z",
+          finishedAt: "2026-09-26T00:00:01Z",
+          policyKind: "allow",
+          policyReason: "local.default",
+          approval: "not_required",
+          status: "failed",
+          resultKind: "",
+          errorClass: "result_guard",
+          errorSummary: "",
+          origin: "desktop",
+          scopeKind: "catalog",
+          scopeReference: "",
+          outcomeKind: "failed",
+          rejectionCode: "",
+          failureSource: "result_guard",
+          failureCode: "output_schema_mismatch",
+        },
+      ],
+    });
+
+    const client = createDesktopMenderClient();
+
+    await expect(client.callTool("tool_1", {})).resolves.toEqual({
+      invocationId: "inv_1",
+      kind: "failed",
+      message: "tool result does not match the declared output schema",
+      source: "result_guard",
+      code: "output_schema_mismatch",
+    });
+    await expect(client.listAudit(10)).resolves.toMatchObject({
+      records: [
+        {
+          origin: "desktop",
+          scopeKind: "catalog",
+          outcomeKind: "failed",
+          failureSource: "result_guard",
+          failureCode: "output_schema_mismatch",
+        },
+      ],
+    });
   });
 
   it("rejects unexpected binding enum values at the host boundary", async () => {

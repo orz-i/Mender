@@ -75,6 +75,8 @@ Catalog still follows progressive disclosure:
 
 The Tool overlay is intentionally split into mutually exclusive views so long descriptions, schemas, and invocation controls never compete in one screen. Browse/search never eagerly loads Tool schemas. Catalog filtering is source-oriented: both browse and lexical search can be restricted to one Provider. Profile membership is an exposure/governance concern and is managed only from the Profiles workflow, not used as the Catalog page's primary filter.
 
+Tool calls return the canonical Invocation outcome body even when the outcome is `rejected` or `failed`; those governed outcomes are not reclassified as arbitrary HTTP transport errors. Malformed HTTP envelopes still use 4xx responses and internal server failures remain 5xx.
+
 ### Profiles
 
 Profiles is also list-first. `Create profile` opens a Dialog; Tool membership management opens from each Profile row in a separate Manage Dialog.
@@ -113,9 +115,9 @@ Current runtime behavior is displayed accurately rather than inventing configura
 
 ### Audit
 
-Audit shows data-minimized terminal invocation metadata. Each row can open a read-only detail Dialog containing invocation identity, timing, policy/approval outcome, error class, and an optional bounded/redacted failure summary.
+Audit shows data-minimized terminal invocation metadata. Each row can open a read-only detail Dialog containing invocation identity, execution origin/scope, canonical outcome classification, timing, policy/approval outcome, error class, and an optional bounded/redacted failure summary.
 
-It does not display or retain Tool arguments, full result payloads, Credential references, or raw MCP protocol traffic. Existing Audit v1 records have an empty failure summary because that information was not retained when they were created.
+It does not display or retain Tool arguments, Governance Facts, full result payloads, Credential references, progress payloads, or raw MCP protocol traffic. Historical Audit rows keep empty governance/outcome fields for metadata that was not retained when they were created.
 
 ## API contract
 
