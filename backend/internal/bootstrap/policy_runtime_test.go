@@ -120,6 +120,209 @@ func TestRuntimePersistentPolicyPreservesAllowThenSupportsDefaultDenyAllowlist(
 	}
 }
 
+func TestRuntimeOverlappingPolicyRulesUseMostRestrictiveDecision(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	runtime, toolID, executor := governedRuntimeFixture(t, RuntimeOptions{
+		DatabasePath: filepath.Join(t.TempDir(), "mender.db"),
+	})
+	defer func() { _ = runtime.Close() }()
+
+	match := policydomain.MatchSpec{
+		Origins:    []policydomain.Origin{policydomain.OriginInternal},
+		ScopeKinds: []policydomain.ScopeKind{policydomain.ScopeCatalog},
+	}
+	if _, err := runtime.Policy.CreateRule.Execute(ctx, policyapplication.RuleInput{
+		DisplayName: "Allow internal",
+		Enabled:     true,
+		Decision:    policydomain.DecisionAllow,
+		Match:       match,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	denyRule, err := runtime.Policy.CreateRule.Execute(ctx, policyapplication.RuleInput{
+		DisplayName: "Deny internal",
+		Enabled:     true,
+		Decision:    policydomain.DecisionDeny,
+		Match:       match,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	response, err := runtime.InvokeTool.Execute(
+		ctx,
+		invocationapplication.InvokeToolRequest{
+			ToolID:    toolID,
+			Arguments: []byte(`{"count":1}`),
+			Context: mustGovernanceInvocationContext(
+				t,
+				invocationdomain.OriginInternal,
+				"overlap-test",
+				invocationdomain.CatalogExecutionScope(),
+			),
+		},
+	)
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if response.Outcome.Kind() != invocationdomain.OutcomeKindRejected ||
+		response.Outcome.RejectionCode() != invocationdomain.RejectionPolicyDenied {
+		t.Fatalf("overlap outcome = %#v", response.Outcome)
+	}
+	if executor.Calls() != 0 {
+		t.Fatalf("overlap reached executor; calls = %d", executor.Calls())
+	}
+	record, err := runtime.audit.Get(ctx, response.InvocationID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if record.PolicyKind() != policydomain.DecisionDeny ||
+		!strings.HasSuffix(
+			record.PolicyReason(),
+			strings.TrimPrefix(denyRule.ID().String(), "rule_"),
+		) {
+		t.Fatalf(
+			"overlap Audit policy = %q/%q, deny Rule=%q",
+			record.PolicyKind(),
+			record.PolicyReason(),
+			denyRule.ID(),
+		)
+	}
+}
+
+func TestRuntimeUnknownFactApprovalAndProfileCannotRelaxGlobalDeny(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	runtime, toolID, executor := governedRuntimeFixture(t, RuntimeOptions{
+		DatabasePath: filepath.Join(t.TempDir(), "mender.db"),
+	})
+	defer func() { _ = runtime.Close() }()
+
+	unknownRule, err := runtime.Policy.CreateRule.Execute(
+		ctx,
+		policyapplication.RuleInput{
+			DisplayName: "Unknown facts require approval",
+			Enabled:     true,
+			Decision:    policydomain.DecisionRequireApproval,
+			Match: policydomain.MatchSpec{
+				FactKnowledge: policydomain.FactUnknown,
+			},
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	catalogResponse, err := runtime.InvokeTool.Execute(
+		ctx,
+		invocationapplication.InvokeToolRequest{
+			ToolID:    toolID,
+			Arguments: []byte(`{"count":1}`),
+			Context: mustGovernanceInvocationContext(
+				t,
+				invocationdomain.OriginInternal,
+				"unknown-facts-test",
+				invocationdomain.CatalogExecutionScope(),
+			),
+		},
+	)
+	if err != nil {
+		t.Fatalf("unknown-fact Execute() error = %v", err)
+	}
+	if catalogResponse.Outcome.Kind() != invocationdomain.OutcomeKindRejected ||
+		catalogResponse.Outcome.RejectionCode() !=
+			invocationdomain.RejectionApprovalDenied {
+		t.Fatalf("unknown-fact outcome = %#v", catalogResponse.Outcome)
+	}
+	if executor.Calls() != 0 {
+		t.Fatalf("approval-gated invocation reached executor; calls = %d", executor.Calls())
+	}
+	record, err := runtime.audit.Get(ctx, catalogResponse.InvocationID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if record.PolicyKind() != policydomain.DecisionRequireApproval ||
+		!strings.HasSuffix(
+			record.PolicyReason(),
+			strings.TrimPrefix(unknownRule.ID().String(), "rule_"),
+		) {
+		t.Fatalf(
+			"approval Audit policy = %q/%q",
+			record.PolicyKind(),
+			record.PolicyReason(),
+		)
+	}
+
+	if _, err := runtime.Policy.SetRuleEnabled.Execute(
+		ctx,
+		unknownRule.ID(),
+		false,
+	); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runtime.Policy.SetDefault.Execute(
+		ctx,
+		policydomain.DecisionDeny,
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	profile, err := runtime.Profiles.Create.Execute(
+		ctx,
+		profileapplication.CreateProfileRequest{
+			Slug:        "global-deny",
+			DisplayName: "Global Deny",
+			Mode:        profiledomain.ExposureDynamic,
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile, err = runtime.Profiles.AddTool.Execute(
+		ctx,
+		profileapplication.AddToolRequest{
+			ProfileSlug:      profile.Slug(),
+			ToolID:           toolID,
+			PolicyConstraint: profiledomain.PolicyInherit,
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	scope, err := invocationdomain.ProfileExecutionScope(profile.ID().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	profileResponse, err := runtime.InvokeTool.Execute(
+		ctx,
+		invocationapplication.InvokeToolRequest{
+			ToolID:    toolID,
+			Arguments: []byte(`{"count":1}`),
+			Context: mustGovernanceInvocationContext(
+				t,
+				invocationdomain.OriginMCP,
+				"profile-global-deny-test",
+				scope,
+			),
+		},
+	)
+	if err != nil {
+		t.Fatalf("Profile Execute() error = %v", err)
+	}
+	if profileResponse.Outcome.Kind() != invocationdomain.OutcomeKindRejected ||
+		profileResponse.Outcome.RejectionCode() !=
+			invocationdomain.RejectionPolicyDenied {
+		t.Fatalf("Profile global-deny outcome = %#v", profileResponse.Outcome)
+	}
+	if executor.Calls() != 0 {
+		t.Fatalf("global deny was relaxed; executor calls = %d", executor.Calls())
+	}
+}
+
 func TestProviderDeletionIsBlockedByPolicyReference(t *testing.T) {
 	t.Parallel()
 
