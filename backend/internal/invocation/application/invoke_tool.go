@@ -39,6 +39,7 @@ type InvokeTool struct {
 	approvals      ApprovalGate
 	executionGuard ExecutionGuard
 	resultGuard    ResultGuard
+	observer       InvocationObserver
 	router         ExecutorRouter
 	credentials    CredentialResolver
 	audit          AuditRecorder
@@ -57,6 +58,7 @@ func NewInvokeTool(
 	approvals ApprovalGate,
 	executionGuard ExecutionGuard,
 	resultGuard ResultGuard,
+	observer InvocationObserver,
 	router ExecutorRouter,
 	credentials CredentialResolver,
 	audit AuditRecorder,
@@ -77,6 +79,7 @@ func NewInvokeTool(
 		approvals:      approvals,
 		executionGuard: executionGuard,
 		resultGuard:    resultGuard,
+		observer:       observer,
 		router:         router,
 		credentials:    credentials,
 		audit:          audit,
@@ -90,7 +93,7 @@ func NewInvokeTool(
 func (uc InvokeTool) Execute(
 	ctx context.Context,
 	request InvokeToolRequest,
-) (InvokeToolResponse, error) {
+) (response InvokeToolResponse, retErr error) {
 	if request.Timeout < 0 {
 		return InvokeToolResponse{}, ErrInvalidTimeout
 	}
@@ -102,8 +105,15 @@ func (uc InvokeTool) Execute(
 	if err != nil {
 		return InvokeToolResponse{}, fmt.Errorf("invoke tool: allocate id: %w", err)
 	}
-	response := InvokeToolResponse{InvocationID: invocationID}
+	response = InvokeToolResponse{InvocationID: invocationID}
 	startedAt := uc.clock.Now()
+	emitter := newEventEmitter(uc.observer, invocationID, uc.clock)
+	emitter.lifecycle(invocationdomain.EventAccepted)
+	defer func() {
+		if retErr == nil && response.Outcome.Kind() != "" {
+			emitter.terminalOutcome(response.Outcome)
+		}
+	}()
 
 	scopeOutcome, terminal, scopeErr := uc.enforceExecutionScope(
 		ctx,
@@ -117,6 +127,7 @@ func (uc InvokeTool) Execute(
 	if scopeErr != nil {
 		return response, scopeErr
 	}
+	emitter.lifecycle(invocationdomain.EventScopeResolved)
 	if terminal {
 		return response, nil
 	}
@@ -192,6 +203,7 @@ func (uc InvokeTool) Execute(
 	if !valid {
 		return uc.rejectInvalidArguments(ctx, response, tool, request, startedAt)
 	}
+	emitter.lifecycle(invocationdomain.EventArgumentsValidated)
 
 	if uc.facts == nil {
 		return uc.failPreflight(
@@ -255,6 +267,7 @@ func (uc InvokeTool) Execute(
 			recordErr,
 		)
 	}
+	emitter.lifecycle(invocationdomain.EventPolicyDecided)
 
 	switch decision.Kind() {
 	case policydomain.DecisionDeny:
@@ -314,6 +327,7 @@ func (uc InvokeTool) Execute(
 				recordErr,
 			)
 		}
+		emitter.lifecycle(invocationdomain.EventApprovalResolved)
 		if !approved {
 			outcome, outcomeErr := newRejectedOutcome(
 				invocationdomain.RejectionApprovalDenied,
@@ -351,6 +365,7 @@ func (uc InvokeTool) Execute(
 			startedAt,
 			decision,
 			auditdomain.ApprovalApproved,
+			emitter,
 		)
 
 	case policydomain.DecisionAllow:
@@ -363,6 +378,7 @@ func (uc InvokeTool) Execute(
 			startedAt,
 			decision,
 			auditdomain.ApprovalNotRequired,
+			emitter,
 		)
 
 	default:
@@ -535,6 +551,7 @@ func (uc InvokeTool) execute(
 	startedAt time.Time,
 	decision policydomain.Decision,
 	approval auditdomain.ApprovalOutcome,
+	emitter *eventEmitter,
 ) (InvokeToolResponse, error) {
 	timeout := request.Timeout
 	if timeout == 0 {
@@ -543,6 +560,7 @@ func (uc InvokeTool) execute(
 	execCtx, cancel := context.WithTimeout(parent, timeout)
 	defer cancel()
 
+	emitter.lifecycle(invocationdomain.EventExecutionWaiting)
 	if uc.executionGuard == nil {
 		recordErr := uc.record(
 			context.WithoutCancel(parent),
@@ -650,6 +668,7 @@ func (uc InvokeTool) execute(
 		}
 		return response, nil
 	}
+	emitter.lifecycle(invocationdomain.EventExecutionStarted)
 
 	outcome, err := executeWithGuardRelease(
 		execCtx,
@@ -660,6 +679,7 @@ func (uc InvokeTool) execute(
 			Arguments:    arguments,
 		},
 		uc.credentials,
+		emitter,
 		release,
 	)
 	if err != nil {
@@ -781,10 +801,11 @@ func executeWithGuardRelease(
 	executor ToolExecutor,
 	request ExecutionRequest,
 	credentials CredentialResolver,
+	progress ProgressReporter,
 	release func(),
 ) (invocationdomain.Outcome, error) {
 	defer release()
-	return executor.Execute(ctx, request, credentials)
+	return executor.Execute(ctx, request, credentials, progress)
 }
 
 func (uc InvokeTool) returnExecutionFailure(

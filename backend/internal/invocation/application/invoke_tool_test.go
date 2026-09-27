@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -603,6 +604,144 @@ func TestExecutionDiagnosticSummaryIsAuditedAndReturned(t *testing.T) {
 	}
 }
 
+func TestInvocationLifecycleEventsAndLateProgress(t *testing.T) {
+	t.Parallel()
+
+	fixture := newFixture(t)
+	fixture.executor.progressMessage = "halfway"
+
+	response, err := fixture.useCase.Execute(context.Background(), InvokeToolRequest{
+		ToolID:    fixture.tool.ID(),
+		Arguments: []byte("{}"),
+		Context:   catalogInvocationContext(t, "events-test"),
+	})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if response.Outcome.Kind() != invocationdomain.OutcomeKindComplete {
+		t.Fatalf("Outcome kind = %q", response.Outcome.Kind())
+	}
+
+	events := fixture.observer.snapshot()
+	want := []invocationdomain.EventKind{
+		invocationdomain.EventAccepted,
+		invocationdomain.EventScopeResolved,
+		invocationdomain.EventArgumentsValidated,
+		invocationdomain.EventPolicyDecided,
+		invocationdomain.EventExecutionWaiting,
+		invocationdomain.EventExecutionStarted,
+		invocationdomain.EventProgress,
+		invocationdomain.EventTerminal,
+	}
+	if got := eventKinds(events); !slices.Equal(got, want) {
+		t.Fatalf("event kinds = %v, want %v", got, want)
+	}
+	if events[6].Message() != "halfway" {
+		t.Fatalf("progress message = %q", events[6].Message())
+	}
+	terminal := events[len(events)-1]
+	if terminal.OutcomeKind() != invocationdomain.OutcomeKindComplete {
+		t.Fatalf("terminal outcome kind = %q", terminal.OutcomeKind())
+	}
+
+	if fixture.executor.lastReporter == nil {
+		t.Fatal("executor did not receive progress reporter")
+	}
+	late, err := invocationdomain.NewProgressUpdate("late")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixture.executor.lastReporter.Report(late)
+	if got := len(fixture.observer.snapshot()); got != len(events) {
+		t.Fatalf("late progress appended event: count = %d, want %d", got, len(events))
+	}
+}
+
+func TestRejectedInvocationEmitsTerminalWithoutExecutionStarted(t *testing.T) {
+	t.Parallel()
+
+	fixture := newFixture(t)
+	fixture.policy.decision, _ = policydomain.Deny("test.denied", "denied")
+
+	response, err := fixture.useCase.Execute(context.Background(), InvokeToolRequest{
+		ToolID:    fixture.tool.ID(),
+		Arguments: []byte("{}"),
+		Context:   catalogInvocationContext(t, "events-denied"),
+	})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if response.Outcome.Kind() != invocationdomain.OutcomeKindRejected {
+		t.Fatalf("Outcome kind = %q", response.Outcome.Kind())
+	}
+
+	got := eventKinds(fixture.observer.snapshot())
+	want := []invocationdomain.EventKind{
+		invocationdomain.EventAccepted,
+		invocationdomain.EventScopeResolved,
+		invocationdomain.EventArgumentsValidated,
+		invocationdomain.EventPolicyDecided,
+		invocationdomain.EventTerminal,
+	}
+	if !slices.Equal(got, want) {
+		t.Fatalf("event kinds = %v, want %v", got, want)
+	}
+}
+
+func TestApprovalLifecycleEventPrecedesExecution(t *testing.T) {
+	t.Parallel()
+
+	fixture := newFixture(t)
+	fixture.policy.decision, _ = policydomain.RequireApproval("risk.write", "approval required")
+	fixture.approvals.approved = true
+
+	_, err := fixture.useCase.Execute(context.Background(), InvokeToolRequest{
+		ToolID:    fixture.tool.ID(),
+		Arguments: []byte("{}"),
+		Context:   catalogInvocationContext(t, "events-approval"),
+	})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	got := eventKinds(fixture.observer.snapshot())
+	want := []invocationdomain.EventKind{
+		invocationdomain.EventAccepted,
+		invocationdomain.EventScopeResolved,
+		invocationdomain.EventArgumentsValidated,
+		invocationdomain.EventPolicyDecided,
+		invocationdomain.EventApprovalResolved,
+		invocationdomain.EventExecutionWaiting,
+		invocationdomain.EventExecutionStarted,
+		invocationdomain.EventTerminal,
+	}
+	if !slices.Equal(got, want) {
+		t.Fatalf("event kinds = %v, want %v", got, want)
+	}
+}
+
+func TestObserverPanicDoesNotChangeOutcomeOrAudit(t *testing.T) {
+	t.Parallel()
+
+	fixture := newFixture(t)
+	fixture.useCase.observer = panickingObserver{}
+
+	response, err := fixture.useCase.Execute(context.Background(), InvokeToolRequest{
+		ToolID:    fixture.tool.ID(),
+		Arguments: []byte("{}"),
+		Context:   catalogInvocationContext(t, "observer-panic"),
+	})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if response.Outcome.Kind() != invocationdomain.OutcomeKindComplete {
+		t.Fatalf("Outcome kind = %q", response.Outcome.Kind())
+	}
+	if record := fixture.audit.last(t); record.Status() != auditdomain.StatusCompleted {
+		t.Fatalf("Audit status = %q", record.Status())
+	}
+}
+
 func TestExecutionGuardWaitUsesInvocationTimeout(t *testing.T) {
 	t.Parallel()
 
@@ -805,6 +944,7 @@ type fixture struct {
 	approvals      *fakeApproval
 	executionGuard *fakeExecutionGuard
 	resultGuard    *fakeResultGuard
+	observer       *memoryObserver
 	executor       *fakeExecutor
 	credentials    *fakeCredentials
 	audit          *memoryAudit
@@ -826,6 +966,7 @@ func newFixture(t *testing.T) fixture {
 	approvals := &fakeApproval{approved: true}
 	executionGuard := &fakeExecutionGuard{}
 	resultGuard := &fakeResultGuard{}
+	observer := &memoryObserver{}
 	executor := &fakeExecutor{result: result}
 	credentials := &fakeCredentials{}
 	audit := &memoryAudit{}
@@ -848,6 +989,7 @@ func newFixture(t *testing.T) fixture {
 		approvals,
 		executionGuard,
 		resultGuard,
+		observer,
 		fakeRouter{executor: executor},
 		credentials,
 		audit,
@@ -867,6 +1009,7 @@ func newFixture(t *testing.T) fixture {
 		approvals:      approvals,
 		executionGuard: executionGuard,
 		resultGuard:    resultGuard,
+		observer:       observer,
 		executor:       executor,
 		credentials:    credentials,
 		audit:          audit,
@@ -1021,14 +1164,25 @@ type fakeExecutor struct {
 	calls             int
 	resolveCredential bool
 	blockUntilDone    bool
+	progressMessage   string
+	lastReporter      ProgressReporter
 }
 
 func (f *fakeExecutor) Execute(
 	ctx context.Context,
 	_ ExecutionRequest,
 	credentials CredentialResolver,
+	progress ProgressReporter,
 ) (invocationdomain.Outcome, error) {
 	f.calls++
+	f.lastReporter = progress
+	if f.progressMessage != "" && progress != nil {
+		update, err := invocationdomain.NewProgressUpdate(f.progressMessage)
+		if err != nil {
+			return invocationdomain.Outcome{}, err
+		}
+		progress.Report(update)
+	}
 	if f.blockUntilDone {
 		<-ctx.Done()
 		return invocationdomain.Outcome{}, ctx.Err()
@@ -1060,6 +1214,37 @@ func (f *fakeCredentials) Resolve(
 ) ([]byte, error) {
 	f.calls++
 	return bytes.Clone(f.secret), nil
+}
+
+type memoryObserver struct {
+	mu     sync.Mutex
+	events []invocationdomain.Event
+}
+
+func (m *memoryObserver) Observe(event invocationdomain.Event) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.events = append(m.events, event)
+}
+
+func (m *memoryObserver) snapshot() []invocationdomain.Event {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return slices.Clone(m.events)
+}
+
+type panickingObserver struct{}
+
+func (panickingObserver) Observe(invocationdomain.Event) {
+	panic("observer failure")
+}
+
+func eventKinds(events []invocationdomain.Event) []invocationdomain.EventKind {
+	kinds := make([]invocationdomain.EventKind, 0, len(events))
+	for _, event := range events {
+		kinds = append(kinds, event.Kind())
+	}
+	return kinds
 }
 
 type memoryAudit struct {

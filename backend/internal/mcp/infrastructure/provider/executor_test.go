@@ -48,6 +48,7 @@ func TestConnectionExecutesMCPTool(t *testing.T) {
 			Arguments: arguments,
 		},
 		nil,
+		nil,
 	)
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
@@ -89,6 +90,7 @@ func TestConnectionMapsMCPErrorResultToToolFailureOutcome(t *testing.T) {
 			Tool:      executorTestTool(t, "fail"),
 			Arguments: arguments,
 		},
+		nil,
 		nil,
 	)
 	if err != nil {
@@ -150,6 +152,7 @@ func TestConnectionMapsInputRequiredWithoutAutoRetry(t *testing.T) {
 			Arguments: arguments,
 		},
 		nil,
+		nil,
 	)
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
@@ -172,6 +175,7 @@ func TestConnectionRejectsNonObjectArguments(t *testing.T) {
 			Tool:      executorTestTool(t, "echo"),
 			Arguments: arguments,
 		},
+		nil,
 		nil,
 	)
 	if !errors.Is(err, ErrArgumentsNotObject) {

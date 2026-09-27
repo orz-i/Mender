@@ -24,6 +24,7 @@ func (c *Connection) Execute(
 	ctx context.Context,
 	request invocationapplication.ExecutionRequest,
 	_ invocationapplication.CredentialResolver,
+	_ invocationapplication.ProgressReporter,
 ) (invocationdomain.Outcome, error) {
 	arguments := request.Arguments.Bytes()
 	if !isJSONObject(arguments) {

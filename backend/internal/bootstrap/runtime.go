@@ -13,6 +13,7 @@ import (
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	credentialunavailable "github.com/orz-i/Mender/backend/internal/credential/infrastructure/unavailable"
 	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
+	invocationevents "github.com/orz-i/Mender/backend/internal/invocation/infrastructure/events"
 	invocationexecutionguard "github.com/orz-i/Mender/backend/internal/invocation/infrastructure/executionguard"
 	invocationgovernance "github.com/orz-i/Mender/backend/internal/invocation/infrastructure/governance"
 	invocationidentity "github.com/orz-i/Mender/backend/internal/invocation/infrastructure/identity"
@@ -25,10 +26,11 @@ import (
 
 // RuntimeOptions configures the shared local execution runtime.
 type RuntimeOptions struct {
-	DatabasePath   string
-	DefaultTimeout time.Duration
-	MaxResultBytes int
-	ExecutionGuard invocationapplication.ExecutionGuard
+	DatabasePath       string
+	DefaultTimeout     time.Duration
+	MaxResultBytes     int
+	ExecutionGuard     invocationapplication.ExecutionGuard
+	InvocationObserver invocationapplication.InvocationObserver
 }
 
 // Runtime composes Catalog, Profile persistence, Provider config persistence,
@@ -87,6 +89,10 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 	if executionGuard == nil {
 		executionGuard = invocationexecutionguard.Unlimited{}
 	}
+	observer := options.InvocationObserver
+	if observer == nil {
+		observer = invocationevents.NoopObserver{}
+	}
 	invokeTool := invocationapplication.NewInvokeTool(
 		catalog.store,
 		newInvocationProfileScopeAuthorizer(profiles.GetByID),
@@ -96,6 +102,7 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		policylocal.RejectApproval{},
 		executionGuard,
 		invocationresultguard.New(schemaValidator, options.MaxResultBytes),
+		observer,
 		executors,
 		credentialunavailable.Resolver{},
 		auditStore,

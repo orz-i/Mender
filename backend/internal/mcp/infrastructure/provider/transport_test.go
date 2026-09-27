@@ -204,6 +204,7 @@ func assertConnectionEcho(t *testing.T, connection *Connection) {
 			Arguments: arguments,
 		},
 		nil,
+		nil,
 	)
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)

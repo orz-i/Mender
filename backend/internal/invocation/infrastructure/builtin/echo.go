@@ -16,6 +16,7 @@ func (EchoExecutor) Execute(
 	ctx context.Context,
 	request invocationapplication.ExecutionRequest,
 	_ invocationapplication.CredentialResolver,
+	_ invocationapplication.ProgressReporter,
 ) (invocationdomain.Outcome, error) {
 	if err := ctx.Err(); err != nil {
 		return invocationdomain.Outcome{}, err

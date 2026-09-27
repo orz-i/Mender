@@ -17,6 +17,7 @@ func TestEchoExecutorReturnsArguments(t *testing.T) {
 		context.Background(),
 		invocationapplication.ExecutionRequest{Arguments: arguments},
 		nil,
+		nil,
 	)
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
