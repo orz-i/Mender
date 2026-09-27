@@ -389,6 +389,164 @@ func TestProfileScopeDenialPreventsToolLookupAndExecution(t *testing.T) {
 	}
 }
 
+func TestProfileBindingDenyTightensGlobalAllow(t *testing.T) {
+	t.Parallel()
+
+	fixture := newFixture(t)
+	governance, err := invocationdomain.NewScopedBindingGovernance(
+		invocationdomain.BindingPolicyDeny,
+		invocationdomain.BindingConcurrencyInherit,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixture.profileScopes.governance = governance
+
+	response, err := fixture.useCase.Execute(context.Background(), InvokeToolRequest{
+		ToolID:    fixture.tool.ID(),
+		Arguments: []byte("{}"),
+		Context: profileInvocationContext(
+			t,
+			"mcp:denied",
+			"prof_00000000000000000000000000000003",
+		),
+	})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if response.Outcome.Kind() != invocationdomain.OutcomeKindRejected ||
+		response.Outcome.RejectionCode() != invocationdomain.RejectionPolicyDenied {
+		t.Fatalf(
+			"Outcome = kind %q code %q",
+			response.Outcome.Kind(),
+			response.Outcome.RejectionCode(),
+		)
+	}
+	if fixture.approvals.calls != 0 || fixture.executor.calls != 0 {
+		t.Fatalf(
+			"approval/executor calls = %d/%d, want 0/0",
+			fixture.approvals.calls,
+			fixture.executor.calls,
+		)
+	}
+
+	record := fixture.audit.last(t)
+	if record.PolicyKind() != policydomain.DecisionDeny ||
+		record.PolicyReason() != "profile.binding.deny" {
+		t.Fatalf(
+			"Audit policy = %q/%q",
+			record.PolicyKind(),
+			record.PolicyReason(),
+		)
+	}
+}
+
+func TestProfileBindingRequireApprovalTightensGlobalAllow(t *testing.T) {
+	t.Parallel()
+
+	fixture := newFixture(t)
+	governance, err := invocationdomain.NewScopedBindingGovernance(
+		invocationdomain.BindingPolicyRequireApproval,
+		invocationdomain.BindingConcurrencyInherit,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixture.profileScopes.governance = governance
+	fixture.approvals.approved = false
+
+	response, err := fixture.useCase.Execute(context.Background(), InvokeToolRequest{
+		ToolID:    fixture.tool.ID(),
+		Arguments: []byte("{}"),
+		Context: profileInvocationContext(
+			t,
+			"mcp:approval",
+			"prof_00000000000000000000000000000004",
+		),
+	})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if response.Outcome.Kind() != invocationdomain.OutcomeKindRejected ||
+		response.Outcome.RejectionCode() != invocationdomain.RejectionApprovalDenied {
+		t.Fatalf(
+			"Outcome = kind %q code %q",
+			response.Outcome.Kind(),
+			response.Outcome.RejectionCode(),
+		)
+	}
+	if fixture.approvals.calls != 1 || fixture.executor.calls != 0 {
+		t.Fatalf(
+			"approval/executor calls = %d/%d, want 1/0",
+			fixture.approvals.calls,
+			fixture.executor.calls,
+		)
+	}
+
+	record := fixture.audit.last(t)
+	if record.PolicyKind() != policydomain.DecisionRequireApproval ||
+		record.PolicyReason() != "profile.binding.require_approval" ||
+		record.Approval() != auditdomain.ApprovalDenied {
+		t.Fatalf("Audit record = %#v", record)
+	}
+}
+
+func TestGlobalDenyCannotBeRelaxedByProfileBinding(t *testing.T) {
+	t.Parallel()
+
+	fixture := newFixture(t)
+	fixture.policy.decision, _ = policydomain.Deny(
+		"global.deny",
+		"global policy denied invocation",
+	)
+	governance, err := invocationdomain.NewScopedBindingGovernance(
+		invocationdomain.BindingPolicyRequireApproval,
+		invocationdomain.BindingConcurrencyInherit,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixture.profileScopes.governance = governance
+
+	response, err := fixture.useCase.Execute(context.Background(), InvokeToolRequest{
+		ToolID:    fixture.tool.ID(),
+		Arguments: []byte("{}"),
+		Context: profileInvocationContext(
+			t,
+			"mcp:global-deny",
+			"prof_00000000000000000000000000000005",
+		),
+	})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if response.Outcome.Kind() != invocationdomain.OutcomeKindRejected ||
+		response.Outcome.RejectionCode() != invocationdomain.RejectionPolicyDenied {
+		t.Fatalf(
+			"Outcome = kind %q code %q",
+			response.Outcome.Kind(),
+			response.Outcome.RejectionCode(),
+		)
+	}
+	if fixture.approvals.calls != 0 || fixture.executor.calls != 0 {
+		t.Fatalf(
+			"approval/executor calls = %d/%d, want 0/0",
+			fixture.approvals.calls,
+			fixture.executor.calls,
+		)
+	}
+
+	record := fixture.audit.last(t)
+	if record.PolicyKind() != policydomain.DecisionDeny ||
+		record.PolicyReason() != "global.deny" {
+		t.Fatalf(
+			"Audit policy = %q/%q",
+			record.PolicyKind(),
+			record.PolicyReason(),
+		)
+	}
+}
+
 func TestToolLookupFailureIsAuditedWithoutProvider(t *testing.T) {
 	t.Parallel()
 
@@ -1003,7 +1161,10 @@ func newFixture(t *testing.T) fixture {
 	allow, _ := policydomain.Allow("local.default", "")
 
 	tools := &fakeToolLookup{tool: tool}
-	profileScopes := &fakeProfileScopes{allowed: true}
+	profileScopes := &fakeProfileScopes{
+		allowed:    true,
+		governance: invocationdomain.InheritedScopedBindingGovernance(),
+	}
 	arguments := &fakeArgumentValidator{valid: true}
 	facts := &fakeFactExtractor{facts: invocationdomain.UnknownGovernanceFacts()}
 	policy := &fakePolicy{decision: allow}
@@ -1075,22 +1236,23 @@ func (f *fakeToolLookup) GetTool(
 }
 
 type fakeProfileScopes struct {
-	allowed   bool
-	err       error
-	calls     int
-	reference string
-	toolID    catalogdomain.ToolID
+	allowed    bool
+	governance invocationdomain.ScopedBindingGovernance
+	err        error
+	calls      int
+	reference  string
+	toolID     catalogdomain.ToolID
 }
 
-func (f *fakeProfileScopes) AllowsTool(
+func (f *fakeProfileScopes) ResolveBindingGovernance(
 	_ context.Context,
 	reference string,
 	toolID catalogdomain.ToolID,
-) (bool, error) {
+) (invocationdomain.ScopedBindingGovernance, bool, error) {
 	f.calls++
 	f.reference = reference
 	f.toolID = toolID
-	return f.allowed, f.err
+	return f.governance, f.allowed, f.err
 }
 
 type fakeArgumentValidator struct {

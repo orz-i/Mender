@@ -16,9 +16,13 @@ type ToolLookup interface {
 	GetTool(context.Context, catalogdomain.ToolID) (catalogdomain.Tool, error)
 }
 
-// ProfileScopeAuthorizer resolves Profile membership without exposing Profile persistence.
-type ProfileScopeAuthorizer interface {
-	AllowsTool(context.Context, string, catalogdomain.ToolID) (bool, error)
+// ProfileScopeResolver resolves Profile ToolBinding governance without exposing Profile persistence.
+type ProfileScopeResolver interface {
+	ResolveBindingGovernance(
+		context.Context,
+		string,
+		catalogdomain.ToolID,
+	) (invocationdomain.ScopedBindingGovernance, bool, error)
 }
 
 // ArgumentValidator checks one JSON value against a canonical Tool schema.

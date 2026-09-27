@@ -32,7 +32,7 @@ type InvokeToolResponse struct {
 // InvokeTool implements Mender's shared execution pipeline.
 type InvokeTool struct {
 	tools          ToolLookup
-	profileScopes  ProfileScopeAuthorizer
+	profileScopes  ProfileScopeResolver
 	arguments      ArgumentValidator
 	facts          GovernanceFactExtractor
 	policy         PolicyEvaluator
@@ -51,7 +51,7 @@ type InvokeTool struct {
 // NewInvokeTool constructs the shared execution pipeline.
 func NewInvokeTool(
 	tools ToolLookup,
-	profileScopes ProfileScopeAuthorizer,
+	profileScopes ProfileScopeResolver,
 	arguments ArgumentValidator,
 	facts GovernanceFactExtractor,
 	policy PolicyEvaluator,
@@ -115,7 +115,7 @@ func (uc InvokeTool) Execute(
 		}
 	}()
 
-	scopeOutcome, terminal, scopeErr := uc.enforceExecutionScope(
+	scopeGovernance, scopeOutcome, terminal, scopeErr := uc.enforceExecutionScope(
 		ctx,
 		request,
 		invocationID,
@@ -265,6 +265,30 @@ func (uc InvokeTool) Execute(
 		)
 		return response, joinInvocationError(
 			fmt.Errorf("invoke tool: evaluate policy: %w", err),
+			recordErr,
+		)
+	}
+	decision, err = applyBindingPolicyConstraint(
+		decision,
+		scopeGovernance.PolicyConstraint(),
+	)
+	if err != nil {
+		recordErr := uc.record(
+			context.WithoutCancel(ctx),
+			invocationID,
+			tool,
+			request.Context,
+			startedAt,
+			policydomain.DecisionKind(""),
+			"",
+			auditdomain.ApprovalNotRequired,
+			auditdomain.StatusFailed,
+			"",
+			auditdomain.ErrorInternal,
+			"",
+		)
+		return response, joinInvocationError(
+			fmt.Errorf("invoke tool: apply binding policy constraint: %w", err),
 			recordErr,
 		)
 	}
@@ -480,11 +504,19 @@ func (uc InvokeTool) enforceExecutionScope(
 	request InvokeToolRequest,
 	invocationID invocationdomain.InvocationID,
 	startedAt time.Time,
-) (invocationdomain.Outcome, bool, error) {
+) (
+	invocationdomain.ScopedBindingGovernance,
+	invocationdomain.Outcome,
+	bool,
+	error,
+) {
 	scope := request.Context.Scope()
 	switch scope.Kind() {
 	case invocationdomain.ScopeCatalog:
-		return invocationdomain.Outcome{}, false, nil
+		return invocationdomain.InheritedScopedBindingGovernance(),
+			invocationdomain.Outcome{},
+			false,
+			nil
 
 	case invocationdomain.ScopeProfile:
 		if uc.profileScopes == nil {
@@ -497,13 +529,20 @@ func (uc InvokeTool) enforceExecutionScope(
 				auditdomain.StatusFailed,
 				auditdomain.ErrorInternal,
 			)
-			return invocationdomain.Outcome{}, false, joinInvocationError(
-				fmt.Errorf("invoke tool: resolve profile scope: authorizer is unavailable"),
-				recordErr,
-			)
+			return invocationdomain.ScopedBindingGovernance{},
+				invocationdomain.Outcome{},
+				false,
+				joinInvocationError(
+					fmt.Errorf("invoke tool: resolve profile scope: resolver is unavailable"),
+					recordErr,
+				)
 		}
 
-		allowed, err := uc.profileScopes.AllowsTool(ctx, scope.Reference(), request.ToolID)
+		governance, found, err := uc.profileScopes.ResolveBindingGovernance(
+			ctx,
+			scope.Reference(),
+			request.ToolID,
+		)
 		if err != nil {
 			recordErr := uc.recordUnresolvedTool(
 				context.WithoutCancel(ctx),
@@ -514,18 +553,24 @@ func (uc InvokeTool) enforceExecutionScope(
 				auditdomain.StatusFailed,
 				auditdomain.ErrorInternal,
 			)
-			return invocationdomain.Outcome{}, false, joinInvocationError(
-				fmt.Errorf("invoke tool: resolve profile scope: %w", err),
-				recordErr,
-			)
+			return invocationdomain.ScopedBindingGovernance{},
+				invocationdomain.Outcome{},
+				false,
+				joinInvocationError(
+					fmt.Errorf("invoke tool: resolve profile scope: %w", err),
+					recordErr,
+				)
 		}
-		if !allowed {
+		if !found {
 			outcome, outcomeErr := newRejectedOutcome(
 				invocationdomain.RejectionToolOutsideScope,
 				"tool is not available in this execution scope",
 			)
 			if outcomeErr != nil {
-				return invocationdomain.Outcome{}, false, outcomeErr
+				return invocationdomain.ScopedBindingGovernance{},
+					invocationdomain.Outcome{},
+					false,
+					outcomeErr
 			}
 			recordErr := uc.recordUnresolvedTool(
 				context.WithoutCancel(ctx),
@@ -535,17 +580,42 @@ func (uc InvokeTool) enforceExecutionScope(
 				startedAt,
 				auditdomain.StatusDenied,
 				auditdomain.ErrorPolicy,
+				outcome,
 			)
-			return outcome, true, recordErr
+			return invocationdomain.ScopedBindingGovernance{},
+				outcome,
+				true,
+				recordErr
 		}
-		return invocationdomain.Outcome{}, false, nil
+		if err := governance.Validate(); err != nil {
+			recordErr := uc.recordUnresolvedTool(
+				context.WithoutCancel(ctx),
+				invocationID,
+				request.ToolID,
+				request.Context,
+				startedAt,
+				auditdomain.StatusFailed,
+				auditdomain.ErrorInternal,
+			)
+			return invocationdomain.ScopedBindingGovernance{},
+				invocationdomain.Outcome{},
+				false,
+				joinInvocationError(
+					fmt.Errorf("invoke tool: invalid scoped binding governance: %w", err),
+					recordErr,
+				)
+		}
+		return governance, invocationdomain.Outcome{}, false, nil
 
 	default:
-		return invocationdomain.Outcome{}, false, fmt.Errorf(
-			"%w: unknown scope kind %q",
-			ErrInvalidInvocationContext,
-			scope.Kind(),
-		)
+		return invocationdomain.ScopedBindingGovernance{},
+			invocationdomain.Outcome{},
+			false,
+			fmt.Errorf(
+				"%w: unknown scope kind %q",
+				ErrInvalidInvocationContext,
+				scope.Kind(),
+			)
 	}
 }
 
