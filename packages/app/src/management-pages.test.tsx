@@ -23,6 +23,9 @@ describe("management pages", () => {
       description: "",
       createdAt: "2026-09-26T00:00:00Z",
       updatedAt: "2026-09-26T00:00:00Z",
+      pluginId: "io.mender.provider.mcp",
+      pluginDisplayName: "MCP",
+      configVersion: 1,
       transport: "http" as const,
       toolCount: 1,
       endpoint: "https://example.test/mcp",
@@ -41,7 +44,7 @@ describe("management pages", () => {
       .fn()
       .mockResolvedValueOnce({ providers: [] })
       .mockResolvedValueOnce({ providers: [provider] });
-    const createHTTPProvider = vi.fn().mockResolvedValue({
+    const createProvider = vi.fn().mockResolvedValue({
       provider,
       sync: { created: 1, updated: 0, removed: 0, total: 1 },
     });
@@ -49,17 +52,17 @@ describe("management pages", () => {
     renderApp("/providers", {
       listProviders,
       listCredentials: vi.fn().mockResolvedValue({ credentials: [credential] }),
-      createHTTPProvider,
+      createProvider,
     });
 
     expect(await screen.findByText("No providers")).toBeTruthy();
-    expect(screen.queryByText("Remote MCP")).toBeNull();
-    expect(screen.queryByText("Local MCP")).toBeNull();
+    expect(screen.queryByText("Remote endpoint")).toBeNull();
+    expect(screen.queryByText("Local command")).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Add provider" }));
     expect(screen.getByRole("dialog")).toBeTruthy();
-    expect(screen.getByText("Remote MCP")).toBeTruthy();
-    expect(screen.getByText("Local MCP")).toBeTruthy();
+    expect(screen.getByText("Remote endpoint")).toBeTruthy();
+    expect(screen.getByText("Local command")).toBeTruthy();
 
     fireEvent.change(screen.getByLabelText("Namespace"), {
       target: { value: "demo" },
@@ -95,17 +98,23 @@ describe("management pages", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add provider" }));
 
     await waitFor(() => {
-      expect(createHTTPProvider).toHaveBeenCalledWith({
+      expect(createProvider).toHaveBeenCalledWith({
         namespace: "demo",
         displayName: "Demo",
-        endpoint: "https://example.test/mcp",
-        credentialHeaders: [
-          {
-            name: "Authorization",
-            scheme: "Bearer",
-            credentialRef: "credential://demo/work",
+        pluginId: "io.mender.provider.mcp",
+        config: {
+          transport: {
+            kind: "streamable-http",
+            endpoint: "https://example.test/mcp",
+            credentialHeaders: [
+              {
+                name: "Authorization",
+                scheme: "Bearer",
+                credentialRef: "credential://demo/work",
+              },
+            ],
           },
-        ],
+        },
       });
     });
     expect(await screen.findByText("demo")).toBeTruthy();
@@ -119,6 +128,9 @@ describe("management pages", () => {
       description: "",
       createdAt: "2026-09-26T00:00:00Z",
       updatedAt: "2026-09-26T00:00:00Z",
+      pluginId: "io.mender.provider.mcp",
+      pluginDisplayName: "MCP",
+      configVersion: 1,
       transport: "http" as const,
       toolCount: 4,
       endpoint: "https://api.anysearch.com/mcp",
@@ -130,14 +142,14 @@ describe("management pages", () => {
       .fn()
       .mockResolvedValueOnce({ providers: [] })
       .mockResolvedValueOnce({ providers: [provider] });
-    const createHTTPProvider = vi.fn().mockResolvedValue({
+    const createProvider = vi.fn().mockResolvedValue({
       provider,
       sync: { created: 4, updated: 0, removed: 0, total: 4 },
     });
 
     renderApp("/providers", {
       listProviders,
-      createHTTPProvider,
+      createProvider,
     });
 
     expect(await screen.findByText("No providers")).toBeTruthy();
@@ -176,12 +188,18 @@ describe("management pages", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add provider" }));
 
     await waitFor(() => {
-      expect(createHTTPProvider).toHaveBeenCalledWith({
+      expect(createProvider).toHaveBeenCalledWith({
         namespace: "anysearch",
         displayName: "anysearch",
-        endpoint: "https://api.anysearch.com/mcp",
-        headers: {
-          Authorization: "Bearer ${ANYSEARCH_API_KEY}",
+        pluginId: "io.mender.provider.mcp",
+        config: {
+          transport: {
+            kind: "streamable-http",
+            endpoint: "https://api.anysearch.com/mcp",
+            headers: {
+              Authorization: "Bearer ${ANYSEARCH_API_KEY}",
+            },
+          },
         },
       });
     });
@@ -195,6 +213,9 @@ describe("management pages", () => {
       description: "",
       createdAt: "2026-09-26T00:00:00Z",
       updatedAt: "2026-09-26T00:00:00Z",
+      pluginId: "io.mender.provider.mcp",
+      pluginDisplayName: "MCP",
+      configVersion: 1,
       transport: "stdio" as const,
       toolCount: 1,
       executable: "/usr/local/bin/local-tools",
@@ -204,19 +225,19 @@ describe("management pages", () => {
       .fn()
       .mockResolvedValueOnce({ providers: [] })
       .mockResolvedValueOnce({ providers: [provider] });
-    const createStdioProvider = vi.fn().mockResolvedValue({
+    const createProvider = vi.fn().mockResolvedValue({
       provider,
       sync: { created: 1, updated: 0, removed: 0, total: 1 },
     });
 
     renderApp("/providers", {
       listProviders,
-      createStdioProvider,
+      createProvider,
     });
 
     expect(await screen.findByText("No providers")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Add provider" }));
-    fireEvent.click(screen.getByRole("button", { name: "Local MCP" }));
+    fireEvent.click(screen.getByRole("button", { name: "Local command" }));
 
     fireEvent.change(screen.getByLabelText("Namespace"), {
       target: { value: "local" },
@@ -233,11 +254,17 @@ describe("management pages", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add provider" }));
 
     await waitFor(() => {
-      expect(createStdioProvider).toHaveBeenCalledWith({
+      expect(createProvider).toHaveBeenCalledWith({
         namespace: "local",
         displayName: "Local Tools",
-        executable: "/usr/local/bin/local-tools",
-        args: ["--stdio"],
+        pluginId: "io.mender.provider.mcp",
+        config: {
+          transport: {
+            kind: "stdio",
+            executable: "/usr/local/bin/local-tools",
+            args: ["--stdio"],
+          },
+        },
       });
     });
     expect(await screen.findByText("Local Tools")).toBeTruthy();
@@ -251,6 +278,9 @@ describe("management pages", () => {
       description: "Search provider",
       createdAt: "2026-09-26T00:00:00Z",
       updatedAt: "2026-09-26T00:00:00Z",
+      pluginId: "io.mender.provider.mcp",
+      pluginDisplayName: "MCP",
+      configVersion: 1,
       transport: "http" as const,
       toolCount: 4,
       endpoint: "https://api.anysearch.com/mcp",
@@ -302,10 +332,14 @@ describe("management pages", () => {
 
     await waitFor(() => {
       expect(updateProvider).toHaveBeenCalledWith("prov_1", {
-        transport: "http",
         displayName: "AnySearch Production",
         description: "Production search provider",
-        endpoint: "https://api.anysearch.com/mcp",
+        config: {
+          transport: {
+            kind: "streamable-http",
+            endpoint: "https://api.anysearch.com/mcp",
+          },
+        },
       });
     });
     expect(await screen.findByText("AnySearch Production")).toBeTruthy();
@@ -329,6 +363,9 @@ describe("management pages", () => {
       description: "",
       createdAt: "2026-09-26T00:00:00Z",
       updatedAt: "2026-09-26T00:00:00Z",
+      pluginId: "io.mender.provider.mcp",
+      pluginDisplayName: "MCP",
+      configVersion: 1,
       transport: "http" as const,
       toolCount: 1,
       endpoint: "https://example.test/mcp",
@@ -382,16 +419,20 @@ describe("management pages", () => {
 
     await waitFor(() => {
       expect(updateProvider).toHaveBeenCalledWith("prov_1", {
-        transport: "http",
         displayName: "Search",
-        endpoint: "https://example.test/mcp",
-        credentialHeaders: [
-          {
-            name: "Authorization",
-            scheme: "Bearer",
-            credentialRef: "credential://github/work",
+        config: {
+          transport: {
+            kind: "streamable-http",
+            endpoint: "https://example.test/mcp",
+            credentialHeaders: [
+              {
+                name: "Authorization",
+                scheme: "Bearer",
+                credentialRef: "credential://github/work",
+              },
+            ],
           },
-        ],
+        },
       });
     });
   });
@@ -1115,6 +1156,17 @@ describe("management pages", () => {
 
 function renderApp(path: string, client: Partial<MenderClient>) {
   const resolvedClient = {
+    listProviderPlugins: vi.fn().mockResolvedValue({
+      plugins: [
+        {
+          pluginId: "io.mender.provider.mcp",
+          version: "1.0.0",
+          displayName: "MCP",
+          description: "Model Context Protocol provider",
+          configVersion: 1,
+        },
+      ],
+    }),
     listCredentials: vi.fn().mockResolvedValue({ credentials: [] }),
     ...client,
   } as MenderClient;

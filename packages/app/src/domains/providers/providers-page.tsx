@@ -4,6 +4,7 @@ import type {
   Credential,
   MenderClient,
   Provider,
+  ProviderPlugin,
   UpdateProviderRequest,
 } from "@mender/sdk";
 import { Badge } from "@mender/ui/components/badge";
@@ -37,6 +38,8 @@ import { Textarea } from "@mender/ui/components/textarea";
 
 import { EmptyState, ErrorNotice, PageHeader } from "../../shared/page";
 
+const MCP_PLUGIN_ID = "io.mender.provider.mcp";
+
 type ProviderTransport = "http" | "stdio";
 type CredentialHeaderBinding = NonNullable<Provider["credentialHeaders"]>[number];
 type CredentialEnvironmentBinding = NonNullable<
@@ -44,6 +47,7 @@ type CredentialEnvironmentBinding = NonNullable<
 >[number];
 
 interface ProviderFormState {
+  pluginId: string;
   transport: ProviderTransport;
   namespace: string;
   displayName: string;
@@ -59,6 +63,7 @@ interface ProviderFormState {
 }
 
 const emptyProviderForm: ProviderFormState = {
+  pluginId: MCP_PLUGIN_ID,
   transport: "http",
   namespace: "",
   displayName: "",
@@ -75,6 +80,7 @@ const emptyProviderForm: ProviderFormState = {
 
 export function ProvidersPage({ client }: { client: MenderClient }) {
   const [providers, setProviders] = useState<Provider[]>([]);
+  const [providerPlugins, setProviderPlugins] = useState<ProviderPlugin[]>([]);
   const [credentials, setCredentials] = useState<Credential[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState("");
@@ -113,9 +119,14 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
   useEffect(() => {
     let active = true;
 
-    void Promise.all([client.listProviders(), client.listCredentials()])
-      .then(([providerResult, credentialResult]) => {
+    void Promise.all([
+      client.listProviderPlugins(),
+      client.listProviders(),
+      client.listCredentials(),
+    ])
+      .then(([pluginResult, providerResult, credentialResult]) => {
         if (active) {
+          setProviderPlugins(pluginResult.plugins);
           setProviders(providerResult.providers);
           setCredentials(credentialResult.credentials);
           setError("");
@@ -142,36 +153,15 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
     setBusy("create");
     setError("");
     try {
-      if (createForm.transport === "http") {
-        const headers = parseHeaders(createForm.headers);
-        await client.createHTTPProvider({
-          namespace: createForm.namespace,
-          displayName: createForm.displayName,
-          endpoint: createForm.endpoint,
-          ...(createForm.description
-            ? { description: createForm.description }
-            : {}),
-          ...(Object.keys(headers).length ? { headers } : {}),
-          ...(createForm.credentialHeaders.length
-            ? { credentialHeaders: createForm.credentialHeaders }
-            : {}),
-        });
-      } else {
-        const args = parseArgs(createForm.args);
-        await client.createStdioProvider({
-          namespace: createForm.namespace,
-          displayName: createForm.displayName,
-          executable: createForm.executable,
-          ...(createForm.description
-            ? { description: createForm.description }
-            : {}),
-          ...(createForm.directory ? { directory: createForm.directory } : {}),
-          ...(args.length ? { args } : {}),
-          ...(createForm.credentialEnvironment.length
-            ? { credentialEnvironment: createForm.credentialEnvironment }
-            : {}),
-        });
-      }
+      await client.createProvider({
+        namespace: createForm.namespace,
+        displayName: createForm.displayName,
+        pluginId: createForm.pluginId,
+        config: configFromForm(createForm),
+        ...(createForm.description
+          ? { description: createForm.description }
+          : {}),
+      });
 
       setCreateOpen(false);
       setCreateForm(emptyProviderForm);
@@ -269,7 +259,7 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
   }
 
   function openProviderAuthentication(provider: Provider) {
-    if (provider.transport === "unconfigured") {
+    if (provider.pluginId !== MCP_PLUGIN_ID) {
       return;
     }
     setError("");
@@ -334,7 +324,7 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
     <>
       <PageHeader
         title="Providers"
-        description="Manage the MCP tool sources connected to Mender."
+        description="Manage Provider plugins and the tool sources they connect to Mender."
         actions={
           <Button
             onClick={() => {
@@ -366,7 +356,7 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
               <TableHeader>
                 <TableRow>
                   <TableHead>Provider</TableHead>
-                  <TableHead>Transport</TableHead>
+                  <TableHead>Plugin</TableHead>
                   <TableHead>Connection</TableHead>
                   <TableHead>Tools</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
@@ -382,7 +372,11 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline">{provider.transport}</Badge>
+                      <Badge variant="outline">
+                        {provider.pluginDisplayName ??
+                          provider.pluginId ??
+                          "Unconfigured"}
+                      </Badge>
                     </TableCell>
                     <TableCell className="max-w-[360px] truncate font-mono text-xs">
                       {connectionSummary(provider)}
@@ -408,9 +402,7 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
                           variant="ghost"
                           size="sm"
                           aria-label={`Edit ${provider.namespace}`}
-                          disabled={
-                            busy !== "" || provider.transport === "unconfigured"
-                          }
+                          disabled={busy !== "" || !provider.pluginId}
                           onClick={() => beginEdit(provider)}
                         >
                           Edit
@@ -420,7 +412,7 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
                           size="sm"
                           aria-label={`Authentication ${provider.namespace}`}
                           disabled={
-                            busy !== "" || provider.transport === "unconfigured"
+                            busy !== "" || provider.pluginId !== MCP_PLUGIN_ID
                           }
                           onClick={() => openProviderAuthentication(provider)}
                         >
@@ -453,7 +445,7 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
           ) : (
             <EmptyState
               title="No providers"
-              description="Add an HTTP or stdio MCP Provider to populate the Catalog."
+              description="Add a Provider plugin and configure its connection to populate the Catalog."
             />
           )}
         </CardContent>
@@ -463,6 +455,7 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
         open={createOpen}
         mode="create"
         form={createForm}
+        plugins={providerPlugins}
         busy={busy === "create"}
         onOpenChange={setCreateDialogOpen}
         onChange={setCreateForm}
@@ -505,6 +498,7 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
           open={editProvider !== null}
           mode="edit"
           form={editForm}
+          plugins={providerPlugins}
           busy={
             editProvider !== null && busy === editProvider.providerId
           }
@@ -526,6 +520,7 @@ function ProviderFormDialog({
   open,
   mode,
   form,
+  plugins,
   busy,
   onOpenChange,
   onChange,
@@ -535,6 +530,7 @@ function ProviderFormDialog({
   open: boolean;
   mode: "create" | "edit";
   form: ProviderFormState;
+  plugins: ProviderPlugin[];
   busy: boolean;
   onOpenChange: (open: boolean) => void;
   onChange: (value: ProviderFormState) => void;
@@ -544,6 +540,7 @@ function ProviderFormDialog({
   const [importError, setImportError] = useState("");
   const creating = mode === "create";
   const valid =
+    form.pluginId === MCP_PLUGIN_ID &&
     form.displayName.trim() !== "" &&
     (!creating || form.namespace.trim() !== "") &&
     (form.transport === "http"
@@ -567,46 +564,72 @@ function ProviderFormDialog({
           </DialogTitle>
           <DialogDescription>
             {creating
-              ? "Register one MCP source. Choose the transport, then provide only the connection fields it needs."
-              : "Update mutable metadata and connection settings. Namespace and transport remain stable."}
+              ? "Choose a Provider plugin, then configure how that plugin connects to its source."
+              : "Update mutable metadata and plugin connection settings. Provider identity and plugin remain stable."}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
           {creating ? (
             <div>
-              <div className="mb-2 text-sm font-medium">Transport</div>
-              <div className="grid grid-cols-2 gap-2">
-                <Button
-                  type="button"
-                  variant={form.transport === "http" ? "default" : "outline"}
-                  aria-pressed={form.transport === "http"}
-                  onClick={() =>
-                    onChange({ ...form, transport: "http" })
-                  }
-                >
-                  Remote MCP
-                </Button>
-                <Button
-                  type="button"
-                  variant={form.transport === "stdio" ? "default" : "outline"}
-                  aria-pressed={form.transport === "stdio"}
-                  onClick={() =>
-                    onChange({ ...form, transport: "stdio" })
-                  }
-                >
-                  Local MCP
-                </Button>
+              <div className="mb-2 text-sm font-medium">Provider plugin</div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {plugins.map((plugin) => (
+                  <Button
+                    key={plugin.pluginId}
+                    type="button"
+                    variant={
+                      form.pluginId === plugin.pluginId ? "default" : "outline"
+                    }
+                    aria-pressed={form.pluginId === plugin.pluginId}
+                    onClick={() =>
+                      onChange({ ...form, pluginId: plugin.pluginId })
+                    }
+                  >
+                    {plugin.displayName}
+                  </Button>
+                ))}
               </div>
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-3">
               <ReadOnlyField label="Namespace" value={form.namespace} />
               <ReadOnlyField
-                label="Transport"
-                value={form.transport === "http" ? "HTTP" : "stdio"}
+                label="Provider plugin"
+                value={
+                  plugins.find((plugin) => plugin.pluginId === form.pluginId)
+                    ?.displayName ?? form.pluginId
+                }
               />
             </div>
+          )}
+
+          {form.pluginId === MCP_PLUGIN_ID ? (
+            <div>
+              <div className="mb-2 text-sm font-medium">MCP connection</div>
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  type="button"
+                  variant={form.transport === "http" ? "default" : "outline"}
+                  aria-pressed={form.transport === "http"}
+                  onClick={() => onChange({ ...form, transport: "http" })}
+                >
+                  Remote endpoint
+                </Button>
+                <Button
+                  type="button"
+                  variant={form.transport === "stdio" ? "default" : "outline"}
+                  aria-pressed={form.transport === "stdio"}
+                  onClick={() => onChange({ ...form, transport: "stdio" })}
+                >
+                  Local command
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <p className="rounded-lg border border-border bg-muted/30 p-3 text-sm text-muted-foreground">
+              This plugin does not yet provide a first-party configuration form.
+            </p>
           )}
 
           {creating ? (
@@ -642,7 +665,8 @@ function ProviderFormDialog({
             />
           </Field>
 
-          {form.transport === "http" ? (
+          {form.pluginId === MCP_PLUGIN_ID ? (
+            form.transport === "http" ? (
             <>
               <Field label="Endpoint">
                 <Input
@@ -774,14 +798,15 @@ function ProviderFormDialog({
                 Providers.
               </p>
             </>
-          )}
+            )
+          ) : null}
         </div>
 
         <DialogFooter>
           <DialogClose render={<Button variant="outline" />}>
             Cancel
           </DialogClose>
-          {onAuthentication !== undefined ? (
+          {onAuthentication !== undefined && form.pluginId === MCP_PLUGIN_ID ? (
             <Button
               type="button"
               variant="outline"
@@ -1118,7 +1143,14 @@ function ProviderDetailsDialog({
             <DetailRow label="Display name" value={provider.displayName} />
             <DetailRow label="Namespace" value={provider.namespace} mono />
             <DetailRow label="Provider ID" value={provider.providerId} mono />
-            <DetailRow label="Transport" value={provider.transport} />
+            <DetailRow
+              label="Provider plugin"
+              value={provider.pluginDisplayName ?? provider.pluginId ?? "Unconfigured"}
+            />
+            {provider.pluginId ? (
+              <DetailRow label="Plugin ID" value={provider.pluginId} mono />
+            ) : null}
+            <DetailRow label="MCP transport" value={provider.transport} />
             <DetailRow label="Synced Tools" value={String(provider.toolCount)} />
             <DetailRow
               label="Connection"
@@ -1235,6 +1267,7 @@ function DetailRow({
 
 function formFromProvider(provider: Provider): ProviderFormState {
   return {
+    pluginId: provider.pluginId ?? MCP_PLUGIN_ID,
     transport: provider.transport === "stdio" ? "stdio" : "http",
     namespace: provider.namespace,
     displayName: provider.displayName,
@@ -1251,31 +1284,42 @@ function formFromProvider(provider: Provider): ProviderFormState {
 }
 
 function updateRequestFromForm(form: ProviderFormState): UpdateProviderRequest {
+  return {
+    displayName: form.displayName,
+    ...(form.description ? { description: form.description } : {}),
+    config: configFromForm(form),
+  };
+}
+
+function configFromForm(form: ProviderFormState): Record<string, unknown> {
+  if (form.pluginId !== MCP_PLUGIN_ID) {
+    throw new Error(`Unsupported Provider plugin: ${form.pluginId}`);
+  }
   if (form.transport === "http") {
     const headers = parseHeaders(form.headers);
     return {
-      transport: "http",
-      displayName: form.displayName,
-      endpoint: form.endpoint,
-      ...(form.description ? { description: form.description } : {}),
-      ...(Object.keys(headers).length ? { headers } : {}),
-      ...(form.credentialHeaders.length
-        ? { credentialHeaders: form.credentialHeaders }
-        : {}),
+      transport: {
+        kind: "streamable-http",
+        endpoint: form.endpoint,
+        ...(Object.keys(headers).length ? { headers } : {}),
+        ...(form.credentialHeaders.length
+          ? { credentialHeaders: form.credentialHeaders }
+          : {}),
+      },
     };
   }
 
   const args = parseArgs(form.args);
   return {
-    transport: "stdio",
-    displayName: form.displayName,
-    executable: form.executable,
-    ...(form.description ? { description: form.description } : {}),
-    ...(form.directory ? { directory: form.directory } : {}),
-    ...(args.length ? { args } : {}),
-    ...(form.credentialEnvironment.length
-      ? { credentialEnvironment: form.credentialEnvironment }
-      : {}),
+    transport: {
+      kind: "stdio",
+      executable: form.executable,
+      ...(form.directory ? { directory: form.directory } : {}),
+      ...(args.length ? { args } : {}),
+      ...(form.credentialEnvironment.length
+        ? { credentialEnvironment: form.credentialEnvironment }
+        : {}),
+    },
   };
 }
 
