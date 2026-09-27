@@ -42,6 +42,18 @@ const emptyCreateForm = {
   mode: "hybrid" as Profile["mode"],
 };
 
+type ProfileToolBinding = Profile["tools"][number];
+
+type PresentationForm = Pick<
+  ProfileToolBinding,
+  "direct" | "alias" | "titleOverride" | "descriptionOverride"
+>;
+
+type GovernanceForm = Pick<
+  ProfileToolBinding,
+  "policyConstraint" | "concurrencyConstraint"
+>;
+
 export function ProfilesPage({ client }: { client: MenderClient }) {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [providers, setProviders] = useState<Provider[]>([]);
@@ -60,6 +72,21 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
   const [pickerTools, setPickerTools] = useState<ToolSummary[]>([]);
   const [pickerSelected, setPickerSelected] = useState<Set<string>>(new Set());
   const [pickerDirect, setPickerDirect] = useState<Record<string, boolean>>({});
+
+  const [presentationSlug, setPresentationSlug] = useState("");
+  const [presentationToolId, setPresentationToolId] = useState("");
+  const [presentationForm, setPresentationForm] = useState<PresentationForm>({
+    direct: false,
+    alias: "",
+    titleOverride: "",
+    descriptionOverride: "",
+  });
+  const [governanceSlug, setGovernanceSlug] = useState("");
+  const [governanceToolId, setGovernanceToolId] = useState("");
+  const [governanceForm, setGovernanceForm] = useState<GovernanceForm>({
+    policyConstraint: "inherit",
+    concurrencyConstraint: "inherit",
+  });
 
   const refreshProfiles = useCallback(async () => {
     try {
@@ -108,6 +135,28 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
   const pickerProfile = useMemo(
     () => profiles.find((profile) => profile.slug === pickerSlug) ?? null,
     [profiles, pickerSlug],
+  );
+  const presentationProfile = useMemo(
+    () => profiles.find((profile) => profile.slug === presentationSlug) ?? null,
+    [profiles, presentationSlug],
+  );
+  const presentationBinding = useMemo(
+    () =>
+      presentationProfile?.tools.find(
+        (binding) => binding.toolId === presentationToolId,
+      ) ?? null,
+    [presentationProfile, presentationToolId],
+  );
+  const governanceProfile = useMemo(
+    () => profiles.find((profile) => profile.slug === governanceSlug) ?? null,
+    [profiles, governanceSlug],
+  );
+  const governanceBinding = useMemo(
+    () =>
+      governanceProfile?.tools.find(
+        (binding) => binding.toolId === governanceToolId,
+      ) ?? null,
+    [governanceProfile, governanceToolId],
   );
 
   const knownTools = useMemo(() => {
@@ -201,15 +250,21 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
       return;
     }
 
-    const tools = [...pickerSelected].map((toolId) => ({
-      toolId,
-      direct:
+    const existingById = new Map(
+      pickerProfile.tools.map((binding) => [binding.toolId, binding]),
+    );
+    const tools = [...pickerSelected].map((toolId) => {
+      const existing = existingById.get(toolId);
+      const direct =
         pickerProfile.mode === "direct"
           ? true
           : pickerProfile.mode === "dynamic"
             ? false
-            : (pickerDirect[toolId] ?? false),
-    }));
+            : (pickerDirect[toolId] ?? false);
+      return existing === undefined
+        ? { toolId, direct }
+        : { ...existing, direct };
+    });
 
     setBusy(true);
     setError("");
@@ -241,6 +296,118 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
     }
   }
 
+  function openPresentation(binding: ProfileToolBinding) {
+    if (managedProfile === null) {
+      return;
+    }
+    const slug = managedProfile.slug;
+    setPresentationForm({
+      direct: binding.direct,
+      alias: binding.alias,
+      titleOverride: binding.titleOverride,
+      descriptionOverride: binding.descriptionOverride,
+    });
+    setManageSlug("");
+    window.setTimeout(() => {
+      setPresentationSlug(slug);
+      setPresentationToolId(binding.toolId);
+    }, 0);
+  }
+
+  function closePresentation() {
+    const slug = presentationSlug;
+    setPresentationSlug("");
+    setPresentationToolId("");
+    if (slug) {
+      window.setTimeout(() => setManageSlug(slug), 0);
+    }
+  }
+
+  async function savePresentation() {
+    if (presentationProfile === null || presentationBinding === null) {
+      return;
+    }
+    const direct =
+      presentationProfile.mode === "direct"
+        ? true
+        : presentationProfile.mode === "dynamic"
+          ? false
+          : presentationForm.direct;
+    setBusy(true);
+    setError("");
+    try {
+      const profile = await client.replaceProfileTools(presentationProfile.slug, {
+        tools: presentationProfile.tools.map((binding) =>
+          binding.toolId === presentationBinding.toolId
+            ? { ...binding, ...presentationForm, direct }
+            : binding,
+        ),
+      });
+      setProfiles((current) =>
+        current.map((item) => (item.slug === profile.slug ? profile : item)),
+      );
+      setPresentationSlug("");
+      setPresentationToolId("");
+      window.setTimeout(() => setManageSlug(profile.slug), 0);
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function openGovernance(binding: ProfileToolBinding) {
+    if (managedProfile === null) {
+      return;
+    }
+    const slug = managedProfile.slug;
+    setGovernanceForm({
+      policyConstraint: binding.policyConstraint,
+      concurrencyConstraint: binding.concurrencyConstraint,
+    });
+    setManageSlug("");
+    window.setTimeout(() => {
+      setGovernanceSlug(slug);
+      setGovernanceToolId(binding.toolId);
+    }, 0);
+  }
+
+  function closeGovernance() {
+    const slug = governanceSlug;
+    setGovernanceSlug("");
+    setGovernanceToolId("");
+    if (slug) {
+      window.setTimeout(() => setManageSlug(slug), 0);
+    }
+  }
+
+  async function saveGovernance() {
+    if (governanceProfile === null || governanceBinding === null) {
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      const profile = await client.replaceProfileTools(governanceProfile.slug, {
+        tools: governanceProfile.tools.map((binding) =>
+          binding.toolId === governanceBinding.toolId
+            ? { ...binding, ...governanceForm }
+            : binding,
+        ),
+      });
+      setProfiles((current) =>
+        current.map((item) => (item.slug === profile.slug ? profile : item)),
+      );
+      setGovernanceSlug("");
+      setGovernanceToolId("");
+      window.setTimeout(() => setManageSlug(profile.slug), 0);
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function removeTool(toolId: string) {
     if (managedProfile === null) {
       return;
@@ -250,12 +417,9 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
     setError("");
     try {
       const profile = await client.replaceProfileTools(managedProfile.slug, {
-        tools: managedProfile.tools
-          .filter((selection) => selection.toolId !== toolId)
-          .map((selection) => ({
-            toolId: selection.toolId,
-            direct: selection.direct,
-          })),
+        tools: managedProfile.tools.filter(
+          (selection) => selection.toolId !== toolId,
+        ),
       });
       setProfiles((current) =>
         current.map((item) => (item.slug === profile.slug ? profile : item)),
@@ -267,29 +431,6 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
     }
   }
 
-  async function setDirect(toolId: string, direct: boolean) {
-    if (managedProfile === null || managedProfile.mode !== "hybrid") {
-      return;
-    }
-
-    setBusy(true);
-    setError("");
-    try {
-      const profile = await client.replaceProfileTools(managedProfile.slug, {
-        tools: managedProfile.tools.map((selection) => ({
-          toolId: selection.toolId,
-          direct: selection.toolId === toolId ? direct : selection.direct,
-        })),
-      });
-      setProfiles((current) =>
-        current.map((item) => (item.slug === profile.slug ? profile : item)),
-      );
-    } catch (reason) {
-      setError(errorMessage(reason));
-    } finally {
-      setBusy(false);
-    }
-  }
 
   return (
     <>
@@ -489,54 +630,76 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
                       tool === undefined
                         ? undefined
                         : providerById.get(tool.providerId);
+                    const title =
+                      selection.titleOverride ||
+                      tool?.title ||
+                      tool?.name ||
+                      "Unavailable Tool";
+                    const description =
+                      selection.descriptionOverride || tool?.description || "";
                     return (
                       <div
                         key={selection.toolId}
-                        className="flex items-center justify-between gap-4 px-4 py-3"
+                        className="flex items-start justify-between gap-4 px-4 py-3"
                       >
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-medium">
-                            {tool?.title || tool?.name || "Unavailable Tool"}
-                          </p>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium">{title}</p>
                           <p className="mt-1 truncate text-xs text-muted-foreground">
                             {provider?.displayName ||
                               provider?.namespace ||
                               "Unknown Provider"}
-                            {tool?.description
-                              ? " · " + tool.description
-                              : ""}
+                            {description ? " · " + description : ""}
                           </p>
-                        </div>
-                        <div className="flex shrink-0 items-center gap-3">
-                          {managedProfile.mode === "hybrid" ? (
-                            <label className="flex items-center gap-2 text-xs text-muted-foreground">
-                              <input
-                                type="checkbox"
-                                checked={selection.direct}
-                                disabled={busy}
-                                onChange={(event) =>
-                                  void setDirect(
-                                    selection.toolId,
-                                    event.target.checked,
-                                  )
-                                }
-                              />
-                              Direct export
-                            </label>
-                          ) : (
+                          <div className="mt-2 flex flex-wrap gap-1.5">
                             <Badge variant="outline">
-                              {managedProfile.mode === "direct"
-                                ? "Direct"
-                                : "Dynamic"}
+                              {selection.direct ? "Direct" : "Dynamic"}
                             </Badge>
-                          )}
+                            {selection.alias ? (
+                              <Badge variant="secondary">
+                                Alias: {selection.alias}
+                              </Badge>
+                            ) : null}
+                            {selection.policyConstraint !== "inherit" ? (
+                              <Badge
+                                variant={
+                                  selection.policyConstraint === "deny"
+                                    ? "destructive"
+                                    : "secondary"
+                                }
+                              >
+                                {selection.policyConstraint === "deny"
+                                  ? "Denied"
+                                  : "Approval required"}
+                              </Badge>
+                            ) : null}
+                            {selection.concurrencyConstraint === "serial" ? (
+                              <Badge variant="secondary">Serial</Badge>
+                            ) : null}
+                          </div>
+                        </div>
+                        <div className="flex shrink-0 flex-wrap justify-end gap-2">
                           <Button
                             variant="outline"
                             size="sm"
-                            aria-label={
-                              "Remove " +
-                              (tool?.title || tool?.name || "selected tool")
-                            }
+                            aria-label={"Presentation for " + title}
+                            disabled={busy}
+                            onClick={() => openPresentation(selection)}
+                          >
+                            Presentation
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            aria-label={"Governance for " + title}
+                            disabled={busy}
+                            onClick={() => openGovernance(selection)}
+                          >
+                            Governance
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            aria-label={"Remove " + title}
                             disabled={busy}
                             onClick={() => void removeTool(selection.toolId)}
                           >
@@ -557,6 +720,168 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
           ) : null}
 
           <DialogFooter showCloseButton />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={presentationBinding !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            closePresentation();
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Tool presentation</DialogTitle>
+            <DialogDescription>
+              Configure Profile-specific model-facing presentation without changing the Catalog Tool.
+            </DialogDescription>
+          </DialogHeader>
+
+          {presentationBinding !== null && presentationProfile !== null ? (
+            <div className="space-y-4">
+              <Field label="Alias">
+                <Input
+                  aria-label="Tool binding alias"
+                  placeholder="Inherit canonical Tool name"
+                  value={presentationForm.alias}
+                  onChange={(event) =>
+                    setPresentationForm((current) => ({
+                      ...current,
+                      alias: event.target.value,
+                    }))
+                  }
+                />
+              </Field>
+              <Field label="Title override">
+                <Input
+                  aria-label="Tool binding title override"
+                  placeholder="Inherit canonical title"
+                  value={presentationForm.titleOverride}
+                  onChange={(event) =>
+                    setPresentationForm((current) => ({
+                      ...current,
+                      titleOverride: event.target.value,
+                    }))
+                  }
+                />
+              </Field>
+              <Field label="Description override">
+                <textarea
+                  aria-label="Tool binding description override"
+                  className="min-h-28 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring/40"
+                  placeholder="Inherit canonical description"
+                  value={presentationForm.descriptionOverride}
+                  onChange={(event) =>
+                    setPresentationForm((current) => ({
+                      ...current,
+                      descriptionOverride: event.target.value,
+                    }))
+                  }
+                />
+              </Field>
+              {presentationProfile.mode === "hybrid" ? (
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={presentationForm.direct}
+                    onChange={(event) =>
+                      setPresentationForm((current) => ({
+                        ...current,
+                        direct: event.target.checked,
+                      }))
+                    }
+                  />
+                  Direct export
+                </label>
+              ) : (
+                <p className="text-xs leading-5 text-muted-foreground">
+                  Direct export is controlled by this Profile&apos;s {presentationProfile.mode} exposure mode.
+                </p>
+              )}
+            </div>
+          ) : null}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={closePresentation}>
+              Cancel
+            </Button>
+            <Button disabled={busy} onClick={() => void savePresentation()}>
+              {busy ? "Saving…" : "Save presentation"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={governanceBinding !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            closeGovernance();
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Tool governance</DialogTitle>
+            <DialogDescription>
+              Tighten execution behavior for this Profile binding. Binding policy can never relax the global Policy decision.
+            </DialogDescription>
+          </DialogHeader>
+
+          {governanceBinding !== null ? (
+            <div className="space-y-5">
+              <Field label="Policy constraint">
+                <select
+                  aria-label="Binding policy constraint"
+                  value={governanceForm.policyConstraint}
+                  onChange={(event) =>
+                    setGovernanceForm((current) => ({
+                      ...current,
+                      policyConstraint: event.target.value as GovernanceForm["policyConstraint"],
+                    }))
+                  }
+                  className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
+                >
+                  <option value="inherit">inherit</option>
+                  <option value="require_approval">require approval</option>
+                  <option value="deny">deny</option>
+                </select>
+              </Field>
+              <p className="text-xs leading-5 text-muted-foreground">
+                Inherit keeps normal Runtime behavior. Require approval uses the existing Approval gate and currently fails closed when no approval adapter is configured. Deny keeps the Tool selected but rejects invocation.
+              </p>
+              <Field label="Concurrency constraint">
+                <select
+                  aria-label="Binding concurrency constraint"
+                  value={governanceForm.concurrencyConstraint}
+                  onChange={(event) =>
+                    setGovernanceForm((current) => ({
+                      ...current,
+                      concurrencyConstraint: event.target.value as GovernanceForm["concurrencyConstraint"],
+                    }))
+                  }
+                  className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
+                >
+                  <option value="inherit">inherit</option>
+                  <option value="serial">serial</option>
+                </select>
+              </Field>
+              <p className="text-xs leading-5 text-muted-foreground">
+                Serial prevents overlapping calls for this Profile and Tool binding only.
+              </p>
+            </div>
+          ) : null}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={closeGovernance}>
+              Cancel
+            </Button>
+            <Button disabled={busy} onClick={() => void saveGovernance()}>
+              {busy ? "Saving…" : "Save governance"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

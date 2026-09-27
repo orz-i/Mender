@@ -403,16 +403,33 @@ describe("management pages", () => {
       slug: "default",
       displayName: "Default",
       mode: "hybrid" as const,
-      tools: [{ toolId: "tool_1", direct: true }],
-    };
-    const updated = {
-      ...profile,
       tools: [
-        { toolId: "tool_1", direct: true },
-        { toolId: "tool_2", direct: false },
+        {
+          toolId: "tool_1",
+          direct: true,
+          alias: "search_prod",
+          titleOverride: "",
+          descriptionOverride: "",
+          policyConstraint: "inherit" as const,
+          concurrencyConstraint: "serial" as const,
+        },
       ],
     };
-    const replaceProfileTools = vi.fn().mockResolvedValue(updated);
+    const replaceProfileTools = vi.fn().mockImplementation(
+      (_slug: string, body: { tools: Array<Record<string, unknown>> }) =>
+        Promise.resolve({
+          ...profile,
+          tools: body.tools.map((tool) => ({
+            direct: false,
+            alias: "",
+            titleOverride: "",
+            descriptionOverride: "",
+            policyConstraint: "inherit" as const,
+            concurrencyConstraint: "inherit" as const,
+            ...tool,
+          })),
+        }),
+    );
 
     renderApp("/profiles", {
       listProfiles: vi.fn().mockResolvedValue({ profiles: [profile] }),
@@ -486,13 +503,66 @@ describe("management pages", () => {
     await waitFor(() => {
       expect(replaceProfileTools).toHaveBeenCalledWith("default", {
         tools: [
-          { toolId: "tool_1", direct: true },
+          {
+            toolId: "tool_1",
+            direct: true,
+            alias: "search_prod",
+            titleOverride: "",
+            descriptionOverride: "",
+            policyConstraint: "inherit",
+            concurrencyConstraint: "serial",
+          },
           { toolId: "tool_2", direct: false },
         ],
       });
     });
     expect(await screen.findByText("Extract")).toBeTruthy();
+    expect(screen.getByText("Alias: search_prod")).toBeTruthy();
+    expect(screen.getByText("Serial")).toBeTruthy();
     expect(screen.queryByPlaceholderText("tool_...")).toBeNull();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Presentation for Search" }),
+    );
+    expect(await screen.findByText("Tool presentation")).toBeTruthy();
+    expect(screen.getAllByRole("dialog")).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: "Choose tools" })).toBeNull();
+
+    fireEvent.change(screen.getByLabelText("Tool binding alias"), {
+      target: { value: "search_release" },
+    });
+    fireEvent.change(screen.getByLabelText("Tool binding title override"), {
+      target: { value: "Release Search" },
+    });
+    const longDescription =
+      "Search release documentation with a deliberately long Profile-specific description that remains truncated in the selected Tool row.";
+    fireEvent.change(screen.getByLabelText("Tool binding description override"), {
+      target: { value: longDescription },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save presentation" }));
+
+    expect(await screen.findByText("Release Search")).toBeTruthy();
+    expect(screen.getByText("Alias: search_release")).toBeTruthy();
+    expect(screen.getByText(/Search release documentation/).classList).toContain(
+      "truncate",
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Governance for Release Search" }),
+    );
+    expect(await screen.findByText("Tool governance")).toBeTruthy();
+    expect(screen.getAllByRole("dialog")).toHaveLength(1);
+    fireEvent.change(screen.getByLabelText("Binding policy constraint"), {
+      target: { value: "deny" },
+    });
+    fireEvent.change(screen.getByLabelText("Binding concurrency constraint"), {
+      target: { value: "serial" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save governance" }));
+
+    expect(await screen.findByText("Denied")).toBeTruthy();
+    expect(screen.getByText("Serial")).toBeTruthy();
+    expect(screen.queryByText("tool_1")).toBeNull();
   });
 
   it("starts, restarts, and stops a managed MCP server", async () => {
