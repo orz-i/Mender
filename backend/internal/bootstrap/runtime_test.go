@@ -82,12 +82,20 @@ func TestRuntimeExecutesBuiltInToolThroughFullPipeline(t *testing.T) {
 
 	const sensitivePayload = "SENSITIVE-PAYLOAD-NOT-FOR-AUDIT"
 	arguments := []byte(`{"value":"` + sensitivePayload + `"}`)
+	executionContext, err := invocationdomain.NewInvocationContext(
+		invocationdomain.OriginInternal,
+		"bootstrap-test",
+		invocationdomain.CatalogExecutionScope(),
+	)
+	if err != nil {
+		t.Fatalf("NewInvocationContext() error = %v", err)
+	}
 	response, err := runtime.InvokeTool.Execute(
 		context.Background(),
 		invocationapplication.InvokeToolRequest{
 			ToolID:    searchResults[0].ToolID,
 			Arguments: arguments,
-			Caller:    "bootstrap-test",
+			Context:   executionContext,
 		},
 	)
 	if err != nil {

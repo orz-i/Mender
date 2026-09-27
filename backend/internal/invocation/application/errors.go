@@ -3,6 +3,10 @@ package application
 import "errors"
 
 var (
+	// ErrInvalidInvocationContext indicates that origin/scope context is absent or malformed.
+	ErrInvalidInvocationContext = errors.New("invocation: invalid execution context")
+	// ErrToolOutsideScope indicates that the requested Tool is unavailable in the execution scope.
+	ErrToolOutsideScope = errors.New("invocation: tool is not available in execution scope")
 	// ErrPolicyDenied indicates that policy explicitly rejected execution.
 	ErrPolicyDenied = errors.New("invocation: denied by policy")
 	// ErrApprovalDenied indicates that required human/external approval was rejected.

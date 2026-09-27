@@ -158,10 +158,11 @@ func (a *app) newToolCallCommand() *cobra.Command {
 					return fmt.Errorf("activate tool provider: %w", err)
 				}
 
-				response, err := runtime.InvokeTool.Execute(
-					cmd.Context(),
-					invokeRequest(toolID, arguments),
-				)
+				request, err := invokeRequest(toolID, arguments)
+				if err != nil {
+					return err
+				}
+				response, err := runtime.InvokeTool.Execute(cmd.Context(), request)
 				if err != nil {
 					return err
 				}
@@ -225,12 +226,20 @@ func readArguments(raw, path string) ([]byte, error) {
 func invokeRequest(
 	toolID catalogdomain.ToolID,
 	arguments []byte,
-) invocationapplication.InvokeToolRequest {
+) (invocationapplication.InvokeToolRequest, error) {
+	executionContext, err := invocationdomain.NewInvocationContext(
+		invocationdomain.OriginCLI,
+		"cli",
+		invocationdomain.CatalogExecutionScope(),
+	)
+	if err != nil {
+		return invocationapplication.InvokeToolRequest{}, fmt.Errorf("construct CLI invocation context: %w", err)
+	}
 	return invocationapplication.InvokeToolRequest{
 		ToolID:    toolID,
 		Arguments: arguments,
-		Caller:    "cli",
-	}
+		Context:   executionContext,
+	}, nil
 }
 
 func searchResultProjection(result catalogapplication.ToolSearchResult) map[string]any {

@@ -8,6 +8,7 @@ import (
 
 	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
+	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	profileapplication "github.com/orz-i/Mender/backend/internal/profile/application"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 )
@@ -165,11 +166,21 @@ func (h *Handler) callTool(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	executionContext, err := invocationdomain.NewInvocationContext(
+		invocationdomain.OriginManagementHTTP,
+		"web",
+		invocationdomain.CatalogExecutionScope(),
+	)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, "internal_error", err)
+		return
+	}
+
 	response, err := h.runtime.CallConfiguredTool(
 		r.Context(),
 		toolID,
 		arguments,
-		"web",
+		executionContext,
 	)
 	if err != nil {
 		if isKnownClientError(err) {

@@ -95,6 +95,15 @@ func (m *memoryRepository) CreateProfile(_ context.Context, profile profiledomai
 	return nil
 }
 
+func (m *memoryRepository) GetProfileByID(_ context.Context, id profiledomain.ProfileID) (profiledomain.Profile, error) {
+	for _, profile := range m.bySlug {
+		if profile.ID() == id {
+			return profile, nil
+		}
+	}
+	return profiledomain.Profile{}, ErrProfileNotFound
+}
+
 func (m *memoryRepository) GetProfileBySlug(_ context.Context, slug profiledomain.Slug) (profiledomain.Profile, error) {
 	profile, exists := m.bySlug[slug]
 	if !exists {

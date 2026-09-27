@@ -7,6 +7,25 @@ import (
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 )
 
+type GetProfileByID struct {
+	repository Repository
+}
+
+func NewGetProfileByID(repository Repository) GetProfileByID {
+	return GetProfileByID{repository: repository}
+}
+
+func (uc GetProfileByID) Execute(
+	ctx context.Context,
+	id profiledomain.ProfileID,
+) (profiledomain.Profile, error) {
+	profile, err := uc.repository.GetProfileByID(ctx, id)
+	if err != nil {
+		return profiledomain.Profile{}, fmt.Errorf("get profile by id: %w", err)
+	}
+	return profile, nil
+}
+
 type GetProfile struct {
 	repository Repository
 }

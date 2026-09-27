@@ -40,6 +40,27 @@ func (s *Store) CreateProfile(ctx context.Context, profile profiledomain.Profile
 	return nil
 }
 
+func (s *Store) GetProfileByID(
+	ctx context.Context,
+	id profiledomain.ProfileID,
+) (profiledomain.Profile, error) {
+	var rawID, rawSlug, displayName, rawMode string
+	err := s.db.QueryRowContext(
+		ctx,
+		`SELECT id, slug, display_name, exposure_mode
+        FROM profiles
+        WHERE id = ?`,
+		id.String(),
+	).Scan(&rawID, &rawSlug, &displayName, &rawMode)
+	if errors.Is(err, sql.ErrNoRows) {
+		return profiledomain.Profile{}, profileapplication.ErrProfileNotFound
+	}
+	if err != nil {
+		return profiledomain.Profile{}, fmt.Errorf("get profile by id: %w", err)
+	}
+	return s.restoreProfile(ctx, rawID, rawSlug, displayName, rawMode)
+}
+
 func (s *Store) GetProfileBySlug(
 	ctx context.Context,
 	slug profiledomain.Slug,

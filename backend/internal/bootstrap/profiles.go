@@ -13,6 +13,7 @@ import (
 type Profiles struct {
 	Create       profileapplication.CreateProfile
 	Get          profileapplication.GetProfile
+	GetByID      profileapplication.GetProfileByID
 	List         profileapplication.ListProfiles
 	AddTool      profileapplication.AddTool
 	ReplaceTools profileapplication.ReplaceTools
@@ -35,6 +36,7 @@ func NewProfiles(
 	return &Profiles{
 		Create:       profileapplication.NewCreateProfile(store, ids),
 		Get:          profileapplication.NewGetProfile(store),
+		GetByID:      profileapplication.NewGetProfileByID(store),
 		List:         profileapplication.NewListProfiles(store),
 		AddTool:      profileapplication.NewAddTool(store, tools),
 		ReplaceTools: profileapplication.NewReplaceTools(store, tools),

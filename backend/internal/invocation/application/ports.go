@@ -16,6 +16,11 @@ type ToolLookup interface {
 	GetTool(context.Context, catalogdomain.ToolID) (catalogdomain.Tool, error)
 }
 
+// ProfileScopeAuthorizer resolves Profile membership without exposing Profile persistence.
+type ProfileScopeAuthorizer interface {
+	AllowsTool(context.Context, string, catalogdomain.ToolID) (bool, error)
+}
+
 // PolicyEvaluator decides whether an invocation may execute.
 type PolicyEvaluator interface {
 	Evaluate(context.Context, PolicyRequest) (policydomain.Decision, error)

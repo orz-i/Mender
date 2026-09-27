@@ -10,6 +10,7 @@ import (
 // Repository owns persistent Profile aggregates.
 type Repository interface {
 	CreateProfile(context.Context, profiledomain.Profile) error
+	GetProfileByID(context.Context, profiledomain.ProfileID) (profiledomain.Profile, error)
 	GetProfileBySlug(context.Context, profiledomain.Slug) (profiledomain.Profile, error)
 	ListProfiles(context.Context) ([]profiledomain.Profile, error)
 	SaveProfile(context.Context, profiledomain.Profile) error

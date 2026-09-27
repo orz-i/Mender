@@ -8,6 +8,7 @@ import (
 	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
+	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	mcpconfigstore "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/configstore"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 )
@@ -58,7 +59,7 @@ func (r *Runtime) CallConfiguredTool(
 	ctx context.Context,
 	toolID catalogdomain.ToolID,
 	arguments []byte,
-	caller string,
+	executionContext invocationdomain.InvocationContext,
 ) (invocationapplication.InvokeToolResponse, error) {
 	tool, err := r.Catalog.DescribeTool.Execute(ctx, toolID)
 	if err != nil {
@@ -70,7 +71,7 @@ func (r *Runtime) CallConfiguredTool(
 	return r.InvokeTool.Execute(ctx, invocationapplication.InvokeToolRequest{
 		ToolID:    toolID,
 		Arguments: arguments,
-		Caller:    caller,
+		Context:   executionContext,
 	})
 }
 

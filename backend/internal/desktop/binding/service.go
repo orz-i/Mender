@@ -408,7 +408,15 @@ func (s *Service) CallTool(
 	if err != nil {
 		return InvocationResult{}, fmt.Errorf("encode tool arguments: %w", err)
 	}
-	response, err := s.runtime.CallConfiguredTool(s.ctx, id, payload, "desktop")
+	executionContext, err := invocationdomain.NewInvocationContext(
+		invocationdomain.OriginDesktop,
+		"desktop",
+		invocationdomain.CatalogExecutionScope(),
+	)
+	if err != nil {
+		return InvocationResult{}, err
+	}
+	response, err := s.runtime.CallConfiguredTool(s.ctx, id, payload, executionContext)
 	if err != nil {
 		return InvocationResult{}, err
 	}

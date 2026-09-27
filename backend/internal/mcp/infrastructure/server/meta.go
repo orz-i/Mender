@@ -148,7 +148,7 @@ func (a *Adapter) callHandler(ctx context.Context, request *mcp.CallToolRequest)
 	response, err := a.deps.InvokeTool(ctx, invocationapplication.InvokeToolRequest{
 		ToolID:    toolID,
 		Arguments: input.Arguments,
-		Caller:    "mcp:" + a.profile.Slug().String(),
+		Context:   a.invocationContext,
 	})
 	if err != nil {
 		return nil, err

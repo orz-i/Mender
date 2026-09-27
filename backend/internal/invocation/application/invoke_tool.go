@@ -19,7 +19,7 @@ const fallbackExecutionTimeout = 30 * time.Second
 type InvokeToolRequest struct {
 	ToolID    catalogdomain.ToolID
 	Arguments []byte
-	Caller    string
+	Context   invocationdomain.InvocationContext
 	Timeout   time.Duration
 }
 
@@ -32,6 +32,7 @@ type InvokeToolResponse struct {
 // InvokeTool implements Mender's shared execution pipeline.
 type InvokeTool struct {
 	tools          ToolLookup
+	profileScopes  ProfileScopeAuthorizer
 	policy         PolicyEvaluator
 	approvals      ApprovalGate
 	router         ExecutorRouter
@@ -45,6 +46,7 @@ type InvokeTool struct {
 // NewInvokeTool constructs the shared execution pipeline.
 func NewInvokeTool(
 	tools ToolLookup,
+	profileScopes ProfileScopeAuthorizer,
 	policy PolicyEvaluator,
 	approvals ApprovalGate,
 	router ExecutorRouter,
@@ -60,6 +62,7 @@ func NewInvokeTool(
 
 	return InvokeTool{
 		tools:          tools,
+		profileScopes:  profileScopes,
 		policy:         policy,
 		approvals:      approvals,
 		router:         router,
@@ -79,6 +82,9 @@ func (uc InvokeTool) Execute(
 	if request.Timeout < 0 {
 		return InvokeToolResponse{}, ErrInvalidTimeout
 	}
+	if err := request.Context.Validate(); err != nil {
+		return InvokeToolResponse{}, fmt.Errorf("%w: %w", ErrInvalidInvocationContext, err)
+	}
 
 	arguments, err := invocationdomain.NewJSONValue(request.Arguments)
 	if err != nil {
@@ -92,6 +98,10 @@ func (uc InvokeTool) Execute(
 	response := InvokeToolResponse{InvocationID: invocationID}
 	startedAt := uc.clock.Now()
 
+	if err := uc.enforceExecutionScope(ctx, request, invocationID, startedAt); err != nil {
+		return response, err
+	}
+
 	tool, err := uc.tools.GetTool(ctx, request.ToolID)
 	if err != nil {
 		errorClass := auditdomain.ErrorInternal
@@ -102,8 +112,9 @@ func (uc InvokeTool) Execute(
 			context.WithoutCancel(ctx),
 			invocationID,
 			request.ToolID,
-			request.Caller,
+			request.Context.Caller(),
 			startedAt,
+			auditdomain.StatusFailed,
 			errorClass,
 		)
 		return response, joinInvocationError(
@@ -115,7 +126,7 @@ func (uc InvokeTool) Execute(
 	decision, err := uc.policy.Evaluate(ctx, PolicyRequest{
 		InvocationID:          invocationID,
 		Tool:                  tool,
-		Caller:                request.Caller,
+		Caller:                request.Context.Caller(),
 		HasCredentialResolver: uc.credentials != nil,
 	})
 	if err != nil {
@@ -123,7 +134,7 @@ func (uc InvokeTool) Execute(
 			context.WithoutCancel(ctx),
 			invocationID,
 			tool,
-			request.Caller,
+			request.Context.Caller(),
 			startedAt,
 			policydomain.DecisionKind(""),
 			"",
@@ -144,7 +155,7 @@ func (uc InvokeTool) Execute(
 			context.WithoutCancel(ctx),
 			invocationID,
 			tool,
-			request.Caller,
+			request.Context.Caller(),
 			startedAt,
 			decision.Kind(),
 			decision.ReasonCode(),
@@ -159,7 +170,7 @@ func (uc InvokeTool) Execute(
 		approved, approvalErr := uc.approvals.Approve(ctx, ApprovalRequest{
 			InvocationID: invocationID,
 			Tool:         tool,
-			Caller:       request.Caller,
+			Caller:       request.Context.Caller(),
 			Decision:     decision,
 		})
 		if approvalErr != nil {
@@ -167,7 +178,7 @@ func (uc InvokeTool) Execute(
 				ctx,
 				invocationID,
 				tool,
-				request.Caller,
+				request.Context.Caller(),
 				startedAt,
 				decision.Kind(),
 				decision.ReasonCode(),
@@ -186,7 +197,7 @@ func (uc InvokeTool) Execute(
 				ctx,
 				invocationID,
 				tool,
-				request.Caller,
+				request.Context.Caller(),
 				startedAt,
 				decision.Kind(),
 				decision.ReasonCode(),
@@ -226,7 +237,7 @@ func (uc InvokeTool) Execute(
 			context.WithoutCancel(ctx),
 			invocationID,
 			tool,
-			request.Caller,
+			request.Context.Caller(),
 			startedAt,
 			decision.Kind(),
 			decision.ReasonCode(),
@@ -239,6 +250,69 @@ func (uc InvokeTool) Execute(
 			fmt.Errorf("invoke tool: unknown policy decision %q", decision.Kind()),
 			recordErr,
 		)
+	}
+}
+
+func (uc InvokeTool) enforceExecutionScope(
+	ctx context.Context,
+	request InvokeToolRequest,
+	invocationID invocationdomain.InvocationID,
+	startedAt time.Time,
+) error {
+	scope := request.Context.Scope()
+	switch scope.Kind() {
+	case invocationdomain.ScopeCatalog:
+		return nil
+
+	case invocationdomain.ScopeProfile:
+		if uc.profileScopes == nil {
+			recordErr := uc.recordUnresolvedTool(
+				context.WithoutCancel(ctx),
+				invocationID,
+				request.ToolID,
+				request.Context.Caller(),
+				startedAt,
+				auditdomain.StatusFailed,
+				auditdomain.ErrorInternal,
+			)
+			return joinInvocationError(
+				fmt.Errorf("invoke tool: resolve profile scope: authorizer is unavailable"),
+				recordErr,
+			)
+		}
+
+		allowed, err := uc.profileScopes.AllowsTool(ctx, scope.Reference(), request.ToolID)
+		if err != nil {
+			recordErr := uc.recordUnresolvedTool(
+				context.WithoutCancel(ctx),
+				invocationID,
+				request.ToolID,
+				request.Context.Caller(),
+				startedAt,
+				auditdomain.StatusFailed,
+				auditdomain.ErrorInternal,
+			)
+			return joinInvocationError(
+				fmt.Errorf("invoke tool: resolve profile scope: %w", err),
+				recordErr,
+			)
+		}
+		if !allowed {
+			recordErr := uc.recordUnresolvedTool(
+				context.WithoutCancel(ctx),
+				invocationID,
+				request.ToolID,
+				request.Context.Caller(),
+				startedAt,
+				auditdomain.StatusDenied,
+				auditdomain.ErrorPolicy,
+			)
+			return joinInvocationError(ErrToolOutsideScope, recordErr)
+		}
+		return nil
+
+	default:
+		return fmt.Errorf("%w: unknown scope kind %q", ErrInvalidInvocationContext, scope.Kind())
 	}
 }
 
@@ -258,7 +332,7 @@ func (uc InvokeTool) execute(
 			parent,
 			response.InvocationID,
 			tool,
-			request.Caller,
+			request.Context.Caller(),
 			startedAt,
 			decision.Kind(),
 			decision.ReasonCode(),
@@ -292,7 +366,7 @@ func (uc InvokeTool) execute(
 			context.WithoutCancel(parent),
 			response.InvocationID,
 			tool,
-			request.Caller,
+			request.Context.Caller(),
 			startedAt,
 			decision.Kind(),
 			decision.ReasonCode(),
@@ -314,7 +388,7 @@ func (uc InvokeTool) execute(
 			context.WithoutCancel(parent),
 			response.InvocationID,
 			tool,
-			request.Caller,
+			request.Context.Caller(),
 			startedAt,
 			decision.Kind(),
 			decision.ReasonCode(),
@@ -330,7 +404,7 @@ func (uc InvokeTool) execute(
 		context.WithoutCancel(parent),
 		response.InvocationID,
 		tool,
-		request.Caller,
+		request.Context.Caller(),
 		startedAt,
 		decision.Kind(),
 		decision.ReasonCode(),
@@ -394,6 +468,7 @@ func (uc InvokeTool) recordUnresolvedTool(
 	toolID catalogdomain.ToolID,
 	caller string,
 	startedAt time.Time,
+	status auditdomain.Status,
 	errorClass auditdomain.ErrorClass,
 ) error {
 	record, err := auditdomain.NewRecord(
@@ -406,7 +481,7 @@ func (uc InvokeTool) recordUnresolvedTool(
 		policydomain.DecisionKind(""),
 		"",
 		auditdomain.ApprovalNotRequired,
-		auditdomain.StatusFailed,
+		status,
 		"",
 		errorClass,
 	)

@@ -46,6 +46,19 @@ func TestDirectProfileListsAndCallsOnlySelectedTools(t *testing.T) {
 	if got := fixture.invokedIDs(); len(got) != 1 || got[0] != fixture.tools[0].ID() {
 		t.Fatalf("invoked ToolIDs = %v", got)
 	}
+	invocationContext := fixture.lastInvocationContext(t)
+	if invocationContext.Origin() != invocationdomain.OriginMCP {
+		t.Fatalf("invocation origin = %q", invocationContext.Origin())
+	}
+	if invocationContext.Scope().Kind() != invocationdomain.ScopeProfile ||
+		invocationContext.Scope().Reference() != profile.ID().String() {
+		t.Fatalf(
+			"invocation scope = %q/%q, want profile %q",
+			invocationContext.Scope().Kind(),
+			invocationContext.Scope().Reference(),
+			profile.ID(),
+		)
+	}
 }
 
 func TestDynamicProfileExposesMetaToolsAndEnforcesMembership(t *testing.T) {
@@ -172,9 +185,10 @@ type serverFixture struct {
 	provider catalogdomain.Provider
 	tools    []catalogdomain.Tool
 
-	mu            sync.Mutex
-	invoked       []catalogdomain.ToolID
-	searchAllowed []catalogdomain.ToolID
+	mu                 sync.Mutex
+	invoked            []catalogdomain.ToolID
+	invocationContexts []invocationdomain.InvocationContext
+	searchAllowed      []catalogdomain.ToolID
 }
 
 func newServerFixture(t *testing.T) *serverFixture {
@@ -271,6 +285,7 @@ func (f *serverFixture) adapter(t *testing.T, profile profiledomain.Profile) *Ad
 		InvokeTool: func(_ context.Context, request invocationapplication.InvokeToolRequest) (invocationapplication.InvokeToolResponse, error) {
 			f.mu.Lock()
 			f.invoked = append(f.invoked, request.ToolID)
+			f.invocationContexts = append(f.invocationContexts, request.Context)
 			f.mu.Unlock()
 			value, err := invocationdomain.NewJSONValue(request.Arguments)
 			if err != nil {
@@ -293,6 +308,16 @@ func (f *serverFixture) invokedIDs() []catalogdomain.ToolID {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return append([]catalogdomain.ToolID(nil), f.invoked...)
+}
+
+func (f *serverFixture) lastInvocationContext(t *testing.T) invocationdomain.InvocationContext {
+	t.Helper()
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if len(f.invocationContexts) == 0 {
+		t.Fatal("no invocation contexts")
+	}
+	return f.invocationContexts[len(f.invocationContexts)-1]
 }
 
 func (f *serverFixture) lastSearchAllowed() []catalogdomain.ToolID {

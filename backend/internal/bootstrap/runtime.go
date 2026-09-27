@@ -78,6 +78,7 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 
 	invokeTool := invocationapplication.NewInvokeTool(
 		catalog.store,
+		newInvocationProfileScopeAuthorizer(profiles.GetByID),
 		policylocal.AllowAll{},
 		policylocal.RejectApproval{},
 		executors,

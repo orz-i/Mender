@@ -37,6 +37,14 @@ func TestProfileRoundTripAndMembershipPersistence(t *testing.T) {
 		t.Fatalf("CreateProfile() error = %v", err)
 	}
 
+	loadedByID, err := store.GetProfileByID(context.Background(), id)
+	if err != nil {
+		t.Fatalf("GetProfileByID() error = %v", err)
+	}
+	if loadedByID.Slug() != slug || len(loadedByID.Selections()) != 2 {
+		t.Fatalf("GetProfileByID() = %+v", loadedByID.Selections())
+	}
+
 	loaded, err := store.GetProfileBySlug(context.Background(), slug)
 	if err != nil {
 		t.Fatalf("GetProfileBySlug() error = %v", err)

@@ -50,7 +50,7 @@ func TestInvokeToolSuccessfulResultVariants(t *testing.T) {
 			response, err := fixture.useCase.Execute(context.Background(), InvokeToolRequest{
 				ToolID:    fixture.tool.ID(),
 				Arguments: []byte(`{"input":"value"}`),
-				Caller:    "test",
+				Context:   catalogInvocationContext(t, "test"),
 			})
 			if err != nil {
 				t.Fatalf("Execute() error = %v", err)
@@ -66,15 +66,125 @@ func TestInvokeToolSuccessfulResultVariants(t *testing.T) {
 	}
 }
 
-func TestToolLookupFailureIsAuditedWithoutProvider(t *testing.T) {
+func TestInvokeToolRejectsMissingInvocationContextBeforeLookup(t *testing.T) {
 	t.Parallel()
 
 	fixture := newFixture(t)
-	fixture.useCase.tools = fakeToolLookup{err: catalogapplication.ErrToolNotFound}
 
 	_, err := fixture.useCase.Execute(context.Background(), InvokeToolRequest{
 		ToolID:    fixture.tool.ID(),
 		Arguments: []byte(`{}`),
+	})
+	if !errors.Is(err, ErrInvalidInvocationContext) {
+		t.Fatalf("Execute() error = %v, want ErrInvalidInvocationContext", err)
+	}
+	if fixture.tools.calls != 0 {
+		t.Fatalf("tool lookup calls = %d, want 0", fixture.tools.calls)
+	}
+	if fixture.profileScopes.calls != 0 {
+		t.Fatalf("profile scope calls = %d, want 0", fixture.profileScopes.calls)
+	}
+	if fixture.executor.calls != 0 {
+		t.Fatalf("executor calls = %d, want 0", fixture.executor.calls)
+	}
+}
+
+func TestCatalogScopeDoesNotResolveProfileMembership(t *testing.T) {
+	t.Parallel()
+
+	fixture := newFixture(t)
+
+	_, err := fixture.useCase.Execute(context.Background(), InvokeToolRequest{
+		ToolID:    fixture.tool.ID(),
+		Arguments: []byte(`{}`),
+		Context:   catalogInvocationContext(t, "catalog-test"),
+	})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if fixture.profileScopes.calls != 0 {
+		t.Fatalf("profile scope calls = %d, want 0", fixture.profileScopes.calls)
+	}
+	if fixture.tools.calls != 1 || fixture.executor.calls != 1 {
+		t.Fatalf("tool/executor calls = %d/%d, want 1/1", fixture.tools.calls, fixture.executor.calls)
+	}
+}
+
+func TestProfileScopeAuthorizesBeforeToolLookup(t *testing.T) {
+	t.Parallel()
+
+	fixture := newFixture(t)
+	const profileReference = "prof_00000000000000000000000000000001"
+
+	_, err := fixture.useCase.Execute(context.Background(), InvokeToolRequest{
+		ToolID:    fixture.tool.ID(),
+		Arguments: []byte(`{}`),
+		Context:   profileInvocationContext(t, "mcp:default", profileReference),
+	})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if fixture.profileScopes.calls != 1 {
+		t.Fatalf("profile scope calls = %d, want 1", fixture.profileScopes.calls)
+	}
+	if fixture.profileScopes.reference != profileReference {
+		t.Fatalf("profile reference = %q, want %q", fixture.profileScopes.reference, profileReference)
+	}
+	if fixture.profileScopes.toolID != fixture.tool.ID() {
+		t.Fatalf("profile scope ToolID = %q, want %q", fixture.profileScopes.toolID, fixture.tool.ID())
+	}
+	if fixture.tools.calls != 1 || fixture.executor.calls != 1 {
+		t.Fatalf("tool/executor calls = %d/%d, want 1/1", fixture.tools.calls, fixture.executor.calls)
+	}
+}
+
+func TestProfileScopeDenialPreventsToolLookupAndExecution(t *testing.T) {
+	t.Parallel()
+
+	fixture := newFixture(t)
+	fixture.profileScopes.allowed = false
+
+	_, err := fixture.useCase.Execute(context.Background(), InvokeToolRequest{
+		ToolID:    fixture.tool.ID(),
+		Arguments: []byte(`{}`),
+		Context: profileInvocationContext(
+			t,
+			"mcp:restricted",
+			"prof_00000000000000000000000000000002",
+		),
+	})
+	if !errors.Is(err, ErrToolOutsideScope) {
+		t.Fatalf("Execute() error = %v, want ErrToolOutsideScope", err)
+	}
+	if fixture.profileScopes.calls != 1 {
+		t.Fatalf("profile scope calls = %d, want 1", fixture.profileScopes.calls)
+	}
+	if fixture.tools.calls != 0 {
+		t.Fatalf("tool lookup calls = %d, want 0", fixture.tools.calls)
+	}
+	if fixture.executor.calls != 0 {
+		t.Fatalf("executor calls = %d, want 0", fixture.executor.calls)
+	}
+
+	record := fixture.audit.last(t)
+	if record.ProviderID() != nil {
+		t.Fatalf("ProviderID() = %v, want nil for scope denial before Tool resolution", record.ProviderID())
+	}
+	if record.Status() != auditdomain.StatusDenied || record.ErrorClass() != auditdomain.ErrorPolicy {
+		t.Fatalf("Audit record = %#v", record)
+	}
+}
+
+func TestToolLookupFailureIsAuditedWithoutProvider(t *testing.T) {
+	t.Parallel()
+
+	fixture := newFixture(t)
+	fixture.tools.err = catalogapplication.ErrToolNotFound
+
+	_, err := fixture.useCase.Execute(context.Background(), InvokeToolRequest{
+		ToolID:    fixture.tool.ID(),
+		Arguments: []byte(`{}`),
+		Context:   catalogInvocationContext(t, ""),
 	})
 	if !errors.Is(err, catalogapplication.ErrToolNotFound) {
 		t.Fatalf("Execute() error = %v, want catalog ErrToolNotFound", err)
@@ -98,6 +208,7 @@ func TestPolicyDenyPreventsExecution(t *testing.T) {
 	_, err := fixture.useCase.Execute(context.Background(), InvokeToolRequest{
 		ToolID:    fixture.tool.ID(),
 		Arguments: []byte(`{}`),
+		Context:   catalogInvocationContext(t, ""),
 	})
 	if !errors.Is(err, ErrPolicyDenied) {
 		t.Fatalf("Execute() error = %v, want ErrPolicyDenied", err)
@@ -125,7 +236,7 @@ func TestRequireApprovalCallsGateAndDenialPreventsExecution(t *testing.T) {
 	_, err := fixture.useCase.Execute(context.Background(), InvokeToolRequest{
 		ToolID:    fixture.tool.ID(),
 		Arguments: []byte(`{}`),
-		Caller:    "agent",
+		Context:   catalogInvocationContext(t, "agent"),
 	})
 	if !errors.Is(err, ErrApprovalDenied) {
 		t.Fatalf("Execute() error = %v, want ErrApprovalDenied", err)
@@ -153,6 +264,7 @@ func TestCredentialResolverIsConsumedOnlyByExecutor(t *testing.T) {
 	response, err := fixture.useCase.Execute(context.Background(), InvokeToolRequest{
 		ToolID:    fixture.tool.ID(),
 		Arguments: []byte(`{"credential":"credential://github/work"}`),
+		Context:   catalogInvocationContext(t, ""),
 	})
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
@@ -185,6 +297,7 @@ func TestExecutionDiagnosticSummaryIsAuditedAndReturned(t *testing.T) {
 	_, err := fixture.useCase.Execute(context.Background(), InvokeToolRequest{
 		ToolID:    fixture.tool.ID(),
 		Arguments: []byte(`{}`),
+		Context:   catalogInvocationContext(t, ""),
 	})
 	if err == nil || !strings.Contains(err.Error(), "provider rejected request token=[REDACTED]") {
 		t.Fatalf("Execute() error = %v", err)
@@ -211,6 +324,7 @@ func TestParentCancellationIsAudited(t *testing.T) {
 	_, err := fixture.useCase.Execute(ctx, InvokeToolRequest{
 		ToolID:    fixture.tool.ID(),
 		Arguments: []byte(`{}`),
+		Context:   catalogInvocationContext(t, ""),
 	})
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("Execute() error = %v, want context.Canceled", err)
@@ -231,6 +345,7 @@ func TestTimeoutIsAudited(t *testing.T) {
 	_, err := fixture.useCase.Execute(context.Background(), InvokeToolRequest{
 		ToolID:    fixture.tool.ID(),
 		Arguments: []byte(`{}`),
+		Context:   catalogInvocationContext(t, ""),
 		Timeout:   time.Millisecond,
 	})
 	if !errors.Is(err, context.DeadlineExceeded) {
@@ -244,13 +359,15 @@ func TestTimeoutIsAudited(t *testing.T) {
 }
 
 type fixture struct {
-	useCase     InvokeTool
-	tool        catalogdomain.Tool
-	policy      *fakePolicy
-	approvals   *fakeApproval
-	executor    *fakeExecutor
-	credentials *fakeCredentials
-	audit       *memoryAudit
+	useCase       InvokeTool
+	tool          catalogdomain.Tool
+	tools         *fakeToolLookup
+	profileScopes *fakeProfileScopes
+	policy        *fakePolicy
+	approvals     *fakeApproval
+	executor      *fakeExecutor
+	credentials   *fakeCredentials
+	audit         *memoryAudit
 }
 
 func newFixture(t *testing.T) fixture {
@@ -261,6 +378,8 @@ func newFixture(t *testing.T) fixture {
 	result, _ := invocationdomain.Complete(content)
 	allow, _ := policydomain.Allow("local.default", "")
 
+	tools := &fakeToolLookup{tool: tool}
+	profileScopes := &fakeProfileScopes{allowed: true}
 	policy := &fakePolicy{decision: allow}
 	approvals := &fakeApproval{approved: true}
 	executor := &fakeExecutor{result: result}
@@ -277,7 +396,8 @@ func newFixture(t *testing.T) fixture {
 	}
 
 	useCase := NewInvokeTool(
-		fakeToolLookup{tool: tool},
+		tools,
+		profileScopes,
 		policy,
 		approvals,
 		fakeRouter{executor: executor},
@@ -289,26 +409,49 @@ func newFixture(t *testing.T) fixture {
 	)
 
 	return fixture{
-		useCase:     useCase,
-		tool:        tool,
-		policy:      policy,
-		approvals:   approvals,
-		executor:    executor,
-		credentials: credentials,
-		audit:       audit,
+		useCase:       useCase,
+		tool:          tool,
+		tools:         tools,
+		profileScopes: profileScopes,
+		policy:        policy,
+		approvals:     approvals,
+		executor:      executor,
+		credentials:   credentials,
+		audit:         audit,
 	}
 }
 
 type fakeToolLookup struct {
-	tool catalogdomain.Tool
-	err  error
+	tool  catalogdomain.Tool
+	err   error
+	calls int
 }
 
-func (f fakeToolLookup) GetTool(
+func (f *fakeToolLookup) GetTool(
 	context.Context,
 	catalogdomain.ToolID,
 ) (catalogdomain.Tool, error) {
+	f.calls++
 	return f.tool, f.err
+}
+
+type fakeProfileScopes struct {
+	allowed   bool
+	err       error
+	calls     int
+	reference string
+	toolID    catalogdomain.ToolID
+}
+
+func (f *fakeProfileScopes) AllowsTool(
+	_ context.Context,
+	reference string,
+	toolID catalogdomain.ToolID,
+) (bool, error) {
+	f.calls++
+	f.reference = reference
+	f.toolID = toolID
+	return f.allowed, f.err
 }
 
 type fakePolicy struct {
@@ -465,6 +608,43 @@ func testTool(t *testing.T) catalogdomain.Tool {
 		t.Fatal(err)
 	}
 	return tool
+}
+
+func catalogInvocationContext(
+	t *testing.T,
+	caller string,
+) invocationdomain.InvocationContext {
+	t.Helper()
+	executionContext, err := invocationdomain.NewInvocationContext(
+		invocationdomain.OriginInternal,
+		caller,
+		invocationdomain.CatalogExecutionScope(),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return executionContext
+}
+
+func profileInvocationContext(
+	t *testing.T,
+	caller string,
+	profileReference string,
+) invocationdomain.InvocationContext {
+	t.Helper()
+	scope, err := invocationdomain.ProfileExecutionScope(profileReference)
+	if err != nil {
+		t.Fatal(err)
+	}
+	executionContext, err := invocationdomain.NewInvocationContext(
+		invocationdomain.OriginMCP,
+		caller,
+		scope,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return executionContext
 }
 
 func mustInvocationID(t *testing.T, raw string) invocationdomain.InvocationID {

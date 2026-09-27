@@ -40,10 +40,11 @@ type Dependencies struct {
 
 // Adapter projects one Profile as an MCP server.
 type Adapter struct {
-	profile profiledomain.Profile
-	deps    Dependencies
-	server  *mcp.Server
-	tools   map[catalogdomain.ToolID]catalogdomain.Tool
+	profile           profiledomain.Profile
+	invocationContext invocationdomain.InvocationContext
+	deps              Dependencies
+	server            *mcp.Server
+	tools             map[catalogdomain.ToolID]catalogdomain.Tool
 }
 
 // New constructs a Profile-scoped MCP server.
@@ -52,9 +53,23 @@ func New(ctx context.Context, profile profiledomain.Profile, deps Dependencies) 
 		return nil, fmt.Errorf("build MCP server: all dependencies are required")
 	}
 
+	profileScope, err := invocationdomain.ProfileExecutionScope(profile.ID().String())
+	if err != nil {
+		return nil, fmt.Errorf("build MCP server: profile scope: %w", err)
+	}
+	invocationContext, err := invocationdomain.NewInvocationContext(
+		invocationdomain.OriginMCP,
+		"mcp:"+profile.Slug().String(),
+		profileScope,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("build MCP server: invocation context: %w", err)
+	}
+
 	adapter := &Adapter{
-		profile: profile,
-		deps:    deps,
+		profile:           profile,
+		invocationContext: invocationContext,
+		deps:              deps,
 		server: mcp.NewServer(
 			&mcp.Implementation{Name: serverName, Version: serverVersion},
 			nil,
@@ -115,7 +130,7 @@ func (a *Adapter) addDirectTools(ctx context.Context) error {
 			response, err := a.deps.InvokeTool(ctx, invocationapplication.InvokeToolRequest{
 				ToolID:    toolID,
 				Arguments: request.Params.Arguments,
-				Caller:    "mcp:" + a.profile.Slug().String(),
+				Context:   a.invocationContext,
 			})
 			if err != nil {
 				return nil, err

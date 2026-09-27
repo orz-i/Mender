@@ -14,6 +14,7 @@ import (
 	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	mcpprovider "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/provider"
+	profileapplication "github.com/orz-i/Mender/backend/internal/profile/application"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 )
 
@@ -98,10 +99,18 @@ func TestMCPProviderAndServerShareRuntimePipeline(t *testing.T) {
 	}
 	toolID := search[0].ToolID
 
+	applicationContext, err := invocationdomain.NewInvocationContext(
+		invocationdomain.OriginInternal,
+		"integration-test",
+		invocationdomain.CatalogExecutionScope(),
+	)
+	if err != nil {
+		t.Fatalf("NewInvocationContext() error = %v", err)
+	}
 	applicationResponse, err := runtime.InvokeTool.Execute(ctx, invocationapplication.InvokeToolRequest{
 		ToolID:    toolID,
 		Arguments: []byte(`{"path":"application"}`),
-		Caller:    "integration-test",
+		Context:   applicationContext,
 	})
 	if err != nil {
 		t.Fatalf("InvokeTool.Execute() error = %v", err)
@@ -117,17 +126,21 @@ func TestMCPProviderAndServerShareRuntimePipeline(t *testing.T) {
 		t.Fatalf("audit record = %#v", auditRecord)
 	}
 
-	profileID, _ := profiledomain.ParseProfileID("prof_00000000000000000000000000000001")
-	slug, _ := profiledomain.NewSlug("default")
-	profile, err := profiledomain.NewProfile(
-		profileID,
-		slug,
-		"Default",
-		profiledomain.ExposureDirect,
-		[]profiledomain.ToolSelection{{ToolID: toolID}},
-	)
+	profile, err := runtime.Profiles.Create.Execute(ctx, profileapplication.CreateProfileRequest{
+		Slug:        "default",
+		DisplayName: "Default",
+		Mode:        profiledomain.ExposureDirect,
+	})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("CreateProfile.Execute() error = %v", err)
+	}
+	profile, err = runtime.Profiles.AddTool.Execute(ctx, profileapplication.AddToolRequest{
+		ProfileSlug: profile.Slug(),
+		ToolID:      toolID,
+		Direct:      true,
+	})
+	if err != nil {
+		t.Fatalf("AddTool.Execute() error = %v", err)
 	}
 
 	downstream, err := runtime.NewMCPServer(ctx, profile)
