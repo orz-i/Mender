@@ -19,6 +19,30 @@ func TestAuditRecordRoundTrip(t *testing.T) {
 
 	store := openTestStore(t)
 	record := completedRecord(t)
+	executionContext, err := invocationdomain.NewInvocationContext(
+		invocationdomain.OriginCLI,
+		"cli",
+		invocationdomain.CatalogExecutionScope(),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	record, err = record.WithExecutionContext(executionContext)
+	if err != nil {
+		t.Fatal(err)
+	}
+	content, err := invocationdomain.NewJSONValue([]byte(`{"ok":true}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	outcome, err := invocationdomain.Complete(content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	record, err = record.WithOutcome(outcome)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	if err := store.Record(context.Background(), record); err != nil {
 		t.Fatalf("Record() error = %v", err)
@@ -36,6 +60,18 @@ func TestAuditRecordRoundTrip(t *testing.T) {
 	}
 	if loaded.ProviderID() == nil || *loaded.ProviderID() != *record.ProviderID() {
 		t.Fatalf("ProviderID() = %v, want %v", loaded.ProviderID(), record.ProviderID())
+	}
+	if loaded.Origin() != invocationdomain.OriginCLI ||
+		loaded.ScopeKind() != invocationdomain.ScopeCatalog ||
+		loaded.ScopeReference() != "" ||
+		loaded.OutcomeKind() != invocationdomain.OutcomeKindComplete {
+		t.Fatalf(
+			"governance metadata = origin %q scope %q/%q outcome %q",
+			loaded.Origin(),
+			loaded.ScopeKind(),
+			loaded.ScopeReference(),
+			loaded.OutcomeKind(),
+		)
 	}
 }
 
@@ -161,6 +197,8 @@ func TestAuditSchemaContainsNoPayloadOrCredentialColumns(t *testing.T) {
 		"secret",
 		"request",
 		"response",
+		"governance_facts",
+		"progress",
 	} {
 		if slices.Contains(columns, forbidden) {
 			t.Fatalf("audit schema contains forbidden column %q: %v", forbidden, columns)

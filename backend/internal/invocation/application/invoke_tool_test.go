@@ -62,6 +62,16 @@ func TestInvokeToolSuccessfulResultVariants(t *testing.T) {
 			if record.Status() != tc.wantStatus || record.ResultKind() != tc.result.Kind() {
 				t.Fatalf("Audit record = %#v", record)
 			}
+			if record.Origin() != invocationdomain.OriginInternal ||
+				record.ScopeKind() != invocationdomain.ScopeCatalog ||
+				record.OutcomeKind() != tc.result.Kind() {
+				t.Fatalf(
+					"Audit governance metadata = origin %q scope %q outcome %q",
+					record.Origin(),
+					record.ScopeKind(),
+					record.OutcomeKind(),
+				)
+			}
 		})
 	}
 }
@@ -363,6 +373,20 @@ func TestProfileScopeDenialPreventsToolLookupAndExecution(t *testing.T) {
 	if record.Status() != auditdomain.StatusDenied || record.ErrorClass() != auditdomain.ErrorPolicy {
 		t.Fatalf("Audit record = %#v", record)
 	}
+	if record.Origin() != invocationdomain.OriginMCP ||
+		record.ScopeKind() != invocationdomain.ScopeProfile ||
+		record.ScopeReference() != "prof_00000000000000000000000000000002" ||
+		record.OutcomeKind() != invocationdomain.OutcomeKindRejected ||
+		record.RejectionCode() != invocationdomain.RejectionToolOutsideScope {
+		t.Fatalf(
+			"Audit governance metadata = origin %q scope %q/%q outcome %q rejection %q",
+			record.Origin(),
+			record.ScopeKind(),
+			record.ScopeReference(),
+			record.OutcomeKind(),
+			record.RejectionCode(),
+		)
+	}
 }
 
 func TestToolLookupFailureIsAuditedWithoutProvider(t *testing.T) {
@@ -601,6 +625,16 @@ func TestExecutionDiagnosticSummaryIsAuditedAndReturned(t *testing.T) {
 	}
 	if record.ErrorSummary() != "provider rejected request token=[REDACTED]" {
 		t.Fatalf("ErrorSummary() = %q", record.ErrorSummary())
+	}
+	if record.OutcomeKind() != invocationdomain.OutcomeKindFailed ||
+		record.FailureSource() != invocationdomain.FailureSourceProvider ||
+		record.FailureCode() != invocationdomain.FailureProviderError {
+		t.Fatalf(
+			"Audit failure metadata = outcome %q source %q code %q",
+			record.OutcomeKind(),
+			record.FailureSource(),
+			record.FailureCode(),
+		)
 	}
 }
 
@@ -847,6 +881,16 @@ func TestResultGuardFailureOutcomeIsAuditedAsResultGuard(t *testing.T) {
 	record := fixture.audit.last(t)
 	if record.ErrorClass() != auditdomain.ErrorResultGuard {
 		t.Fatalf("ErrorClass() = %q", record.ErrorClass())
+	}
+	if record.OutcomeKind() != invocationdomain.OutcomeKindFailed ||
+		record.FailureSource() != invocationdomain.FailureSourceResultGuard ||
+		record.FailureCode() != invocationdomain.FailureOutputSchemaMismatch {
+		t.Fatalf(
+			"Audit result-guard metadata = outcome %q source %q code %q",
+			record.OutcomeKind(),
+			record.FailureSource(),
+			record.FailureCode(),
+		)
 	}
 }
 

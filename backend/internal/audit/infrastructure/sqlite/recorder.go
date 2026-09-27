@@ -35,8 +35,15 @@ func (s *Store) Record(ctx context.Context, record auditdomain.Record) error {
 			status,
 			result_kind,
 			error_class,
-			error_summary
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			error_summary,
+			origin,
+			scope_kind,
+			scope_reference,
+			outcome_kind,
+			rejection_code,
+			failure_source,
+			failure_code
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		record.InvocationID().String(),
 		record.ToolID().String(),
 		providerID,
@@ -50,6 +57,13 @@ func (s *Store) Record(ctx context.Context, record auditdomain.Record) error {
 		string(record.ResultKind()),
 		string(record.ErrorClass()),
 		record.ErrorSummary(),
+		string(record.Origin()),
+		string(record.ScopeKind()),
+		record.ScopeReference(),
+		string(record.OutcomeKind()),
+		string(record.RejectionCode()),
+		string(record.FailureSource()),
+		string(record.FailureCode()),
 	)
 	if err != nil {
 		return fmt.Errorf("record invocation audit: %w", err)
@@ -66,21 +80,7 @@ func (s *Store) Get(
 ) (auditdomain.Record, error) {
 	row := s.db.QueryRowContext(
 		ctx,
-		`SELECT
-			invocation_id,
-			tool_id,
-			provider_id,
-			caller,
-			started_at,
-			finished_at,
-			policy_kind,
-			policy_reason,
-			approval,
-			status,
-			result_kind,
-			error_class,
-			error_summary
-		FROM invocation_audit
+		auditSelect+`
 		WHERE invocation_id = ?`,
 		id.String(),
 	)
@@ -105,21 +105,7 @@ func (s *Store) ListRecords(
 ) ([]auditdomain.Record, error) {
 	rows, err := s.db.QueryContext(
 		ctx,
-		`SELECT
-			invocation_id,
-			tool_id,
-			provider_id,
-			caller,
-			started_at,
-			finished_at,
-			policy_kind,
-			policy_reason,
-			approval,
-			status,
-			result_kind,
-			error_class,
-			error_summary
-		FROM invocation_audit
+		auditSelect+`
 		ORDER BY finished_at DESC, invocation_id DESC
 		LIMIT ?`,
 		limit,
@@ -143,6 +129,29 @@ func (s *Store) ListRecords(
 	return records, nil
 }
 
+const auditSelect = `SELECT
+	invocation_id,
+	tool_id,
+	provider_id,
+	caller,
+	started_at,
+	finished_at,
+	policy_kind,
+	policy_reason,
+	approval,
+	status,
+	result_kind,
+	error_class,
+	error_summary,
+	origin,
+	scope_kind,
+	scope_reference,
+	outcome_kind,
+	rejection_code,
+	failure_source,
+	failure_code
+FROM invocation_audit`
+
 func scanRecord(scanner interface{ Scan(...any) error }) (auditdomain.Record, error) {
 	var (
 		rawInvocationID string
@@ -158,6 +167,13 @@ func scanRecord(scanner interface{ Scan(...any) error }) (auditdomain.Record, er
 		resultKind      string
 		errorClass      string
 		errorSummary    string
+		origin          string
+		scopeKind       string
+		scopeReference  string
+		outcomeKind     string
+		rejectionCode   string
+		failureSource   string
+		failureCode     string
 	)
 	if err := scanner.Scan(
 		&rawInvocationID,
@@ -173,6 +189,13 @@ func scanRecord(scanner interface{ Scan(...any) error }) (auditdomain.Record, er
 		&resultKind,
 		&errorClass,
 		&errorSummary,
+		&origin,
+		&scopeKind,
+		&scopeReference,
+		&outcomeKind,
+		&rejectionCode,
+		&failureSource,
+		&failureCode,
 	); err != nil {
 		return auditdomain.Record{}, err
 	}
@@ -221,5 +244,18 @@ func scanRecord(scanner interface{ Scan(...any) error }) (auditdomain.Record, er
 	if err != nil {
 		return auditdomain.Record{}, err
 	}
-	return record.WithErrorSummary(errorSummary), nil
+	record = record.WithErrorSummary(errorSummary)
+	record, err = record.RestoreGovernanceMetadata(
+		invocationdomain.Origin(origin),
+		invocationdomain.ScopeKind(scopeKind),
+		scopeReference,
+		invocationdomain.OutcomeKind(outcomeKind),
+		invocationdomain.RejectionCode(rejectionCode),
+		invocationdomain.FailureSource(failureSource),
+		invocationdomain.FailureCode(failureCode),
+	)
+	if err != nil {
+		return auditdomain.Record{}, err
+	}
+	return record, nil
 }

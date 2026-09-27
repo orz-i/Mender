@@ -28,7 +28,7 @@ func migrate(ctx context.Context, db *sql.DB) error {
 	).Scan(&recordedVersion); err != nil {
 		return fmt.Errorf("check audit schema version: %w", err)
 	}
-	const latestSupportedVersion = 2
+	const latestSupportedVersion = 3
 	if recordedVersion.Valid && recordedVersion.Int64 > latestSupportedVersion {
 		return fmt.Errorf(
 			"audit schema version %d is newer than supported version %d",
@@ -92,6 +92,36 @@ func migrate(ctx context.Context, db *sql.DB) error {
 			time.Now().UTC().Format(time.RFC3339Nano),
 		); err != nil {
 			return fmt.Errorf("record audit migration 2: %w", err)
+		}
+	}
+
+	applied = 0
+	if err := tx.QueryRowContext(
+		ctx,
+		"SELECT COUNT(*) FROM audit_schema_migrations WHERE version = 3",
+	).Scan(&applied); err != nil {
+		return fmt.Errorf("check audit migration 3: %w", err)
+	}
+	if applied == 0 {
+		for _, statement := range []string{
+			"ALTER TABLE invocation_audit ADD COLUMN origin TEXT NOT NULL DEFAULT ''",
+			"ALTER TABLE invocation_audit ADD COLUMN scope_kind TEXT NOT NULL DEFAULT ''",
+			"ALTER TABLE invocation_audit ADD COLUMN scope_reference TEXT NOT NULL DEFAULT ''",
+			"ALTER TABLE invocation_audit ADD COLUMN outcome_kind TEXT NOT NULL DEFAULT ''",
+			"ALTER TABLE invocation_audit ADD COLUMN rejection_code TEXT NOT NULL DEFAULT ''",
+			"ALTER TABLE invocation_audit ADD COLUMN failure_source TEXT NOT NULL DEFAULT ''",
+			"ALTER TABLE invocation_audit ADD COLUMN failure_code TEXT NOT NULL DEFAULT ''",
+		} {
+			if _, err := tx.ExecContext(ctx, statement); err != nil {
+				return fmt.Errorf("apply audit migration 3: %w", err)
+			}
+		}
+		if _, err := tx.ExecContext(
+			ctx,
+			"INSERT INTO audit_schema_migrations(version, applied_at) VALUES (3, ?)",
+			time.Now().UTC().Format(time.RFC3339Nano),
+		); err != nil {
+			return fmt.Errorf("record audit migration 3: %w", err)
 		}
 	}
 

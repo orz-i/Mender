@@ -9,7 +9,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-func TestOpenMigratesAuditV1ToErrorSummaryColumn(t *testing.T) {
+func TestOpenMigratesAuditV1ThroughLatestSchema(t *testing.T) {
 	t.Parallel()
 
 	path := filepath.Join(t.TempDir(), "audit.db")
@@ -61,8 +61,8 @@ func TestOpenMigratesAuditV1ToErrorSummaryColumn(t *testing.T) {
 	).Scan(&version); err != nil {
 		t.Fatal(err)
 	}
-	if version != 2 {
-		t.Fatalf("schema version = %d, want 2", version)
+	if version != 3 {
+		t.Fatalf("schema version = %d, want 3", version)
 	}
 
 	rows, err := store.db.QueryContext(
@@ -74,7 +74,7 @@ func TestOpenMigratesAuditV1ToErrorSummaryColumn(t *testing.T) {
 	}
 	defer func() { _ = rows.Close() }()
 
-	found := false
+	found := map[string]bool{}
 	for rows.Next() {
 		var cid, notNull, primaryKey int
 		var name, columnType string
@@ -89,14 +89,23 @@ func TestOpenMigratesAuditV1ToErrorSummaryColumn(t *testing.T) {
 		); err != nil {
 			t.Fatal(err)
 		}
-		if name == "error_summary" {
-			found = true
-		}
+		found[name] = true
 	}
 	if err := rows.Err(); err != nil {
 		t.Fatal(err)
 	}
-	if !found {
-		t.Fatal("error_summary column was not added")
+	for _, name := range []string{
+		"error_summary",
+		"origin",
+		"scope_kind",
+		"scope_reference",
+		"outcome_kind",
+		"rejection_code",
+		"failure_source",
+		"failure_code",
+	} {
+		if !found[name] {
+			t.Fatalf("%s column was not added", name)
+		}
 	}
 }

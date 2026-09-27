@@ -79,6 +79,43 @@ func TestRecordErrorSummaryIsBoundedAndSingleLine(t *testing.T) {
 	}
 }
 
+func TestRecordRejectsInconsistentGovernanceOutcomeMetadata(t *testing.T) {
+	t.Parallel()
+
+	invocationID, _ := invocationdomain.ParseInvocationID("inv_00000000000000000000000000000004")
+	toolID, _ := catalogdomain.ParseToolID("tool_00000000000000000000000000000004")
+	providerID, _ := catalogdomain.ParseProviderID("prov_00000000000000000000000000000004")
+	now := time.Now().UTC()
+
+	record, err := NewRecord(
+		invocationID,
+		toolID,
+		&providerID,
+		"cli",
+		now,
+		now,
+		policydomain.DecisionAllow,
+		"local.default",
+		ApprovalNotRequired,
+		StatusCompleted,
+		invocationdomain.ResultKindComplete,
+		ErrorNone,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = record.WithOutcomeClassification(
+		invocationdomain.OutcomeKindFailed,
+		"",
+		invocationdomain.FailureSourceProvider,
+		invocationdomain.FailureProviderError,
+	)
+	if err == nil {
+		t.Fatal("WithOutcomeClassification() accepted failure metadata for completed record")
+	}
+}
+
 func TestRecordRejectsInconsistentOutcome(t *testing.T) {
 	t.Parallel()
 
