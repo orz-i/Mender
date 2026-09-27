@@ -23,10 +23,10 @@ type InvokeToolRequest struct {
 	Timeout   time.Duration
 }
 
-// InvokeToolResponse identifies the invocation and its canonical result.
+// InvokeToolResponse identifies the invocation and its canonical outcome.
 type InvokeToolResponse struct {
 	InvocationID invocationdomain.InvocationID
-	Result       invocationdomain.Result
+	Outcome      invocationdomain.Outcome
 }
 
 // InvokeTool implements Mender's shared execution pipeline.
@@ -98,16 +98,48 @@ func (uc InvokeTool) Execute(
 	response := InvokeToolResponse{InvocationID: invocationID}
 	startedAt := uc.clock.Now()
 
-	if err := uc.enforceExecutionScope(ctx, request, invocationID, startedAt); err != nil {
-		return response, err
+	scopeOutcome, terminal, scopeErr := uc.enforceExecutionScope(
+		ctx,
+		request,
+		invocationID,
+		startedAt,
+	)
+	if terminal {
+		response.Outcome = scopeOutcome
+	}
+	if scopeErr != nil {
+		return response, scopeErr
+	}
+	if terminal {
+		return response, nil
 	}
 
 	tool, err := uc.tools.GetTool(ctx, request.ToolID)
 	if err != nil {
-		errorClass := auditdomain.ErrorInternal
 		if errors.Is(err, catalogapplication.ErrToolNotFound) {
-			errorClass = auditdomain.ErrorToolNotFound
+			outcome, outcomeErr := newRejectedOutcome(
+				invocationdomain.RejectionToolNotFound,
+				"tool was not found",
+			)
+			if outcomeErr != nil {
+				return response, outcomeErr
+			}
+			response.Outcome = outcome
+			recordErr := uc.recordUnresolvedTool(
+				context.WithoutCancel(ctx),
+				invocationID,
+				request.ToolID,
+				request.Context.Caller(),
+				startedAt,
+				auditdomain.StatusFailed,
+				auditdomain.ErrorToolNotFound,
+			)
+			if recordErr != nil {
+				return response, recordErr
+			}
+			return response, nil
 		}
+
 		recordErr := uc.recordUnresolvedTool(
 			context.WithoutCancel(ctx),
 			invocationID,
@@ -115,7 +147,7 @@ func (uc InvokeTool) Execute(
 			request.Context.Caller(),
 			startedAt,
 			auditdomain.StatusFailed,
-			errorClass,
+			auditdomain.ErrorInternal,
 		)
 		return response, joinInvocationError(
 			fmt.Errorf("invoke tool: resolve tool: %w", err),
@@ -151,6 +183,18 @@ func (uc InvokeTool) Execute(
 
 	switch decision.Kind() {
 	case policydomain.DecisionDeny:
+		message := decision.Explanation()
+		if message == "" {
+			message = "invocation denied by policy"
+		}
+		outcome, outcomeErr := newRejectedOutcome(
+			invocationdomain.RejectionPolicyDenied,
+			message,
+		)
+		if outcomeErr != nil {
+			return response, outcomeErr
+		}
+		response.Outcome = outcome
 		recordErr := uc.record(
 			context.WithoutCancel(ctx),
 			invocationID,
@@ -164,7 +208,10 @@ func (uc InvokeTool) Execute(
 			"",
 			auditdomain.ErrorPolicy,
 		)
-		return response, joinInvocationError(ErrPolicyDenied, recordErr)
+		if recordErr != nil {
+			return response, recordErr
+		}
+		return response, nil
 
 	case policydomain.DecisionRequireApproval:
 		approved, approvalErr := uc.approvals.Approve(ctx, ApprovalRequest{
@@ -193,6 +240,14 @@ func (uc InvokeTool) Execute(
 			)
 		}
 		if !approved {
+			outcome, outcomeErr := newRejectedOutcome(
+				invocationdomain.RejectionApprovalDenied,
+				"required approval was denied",
+			)
+			if outcomeErr != nil {
+				return response, outcomeErr
+			}
+			response.Outcome = outcome
 			recordErr := uc.record(
 				ctx,
 				invocationID,
@@ -206,7 +261,10 @@ func (uc InvokeTool) Execute(
 				"",
 				auditdomain.ErrorApproval,
 			)
-			return response, joinInvocationError(ErrApprovalDenied, recordErr)
+			if recordErr != nil {
+				return response, recordErr
+			}
+			return response, nil
 		}
 
 		return uc.execute(
@@ -258,11 +316,11 @@ func (uc InvokeTool) enforceExecutionScope(
 	request InvokeToolRequest,
 	invocationID invocationdomain.InvocationID,
 	startedAt time.Time,
-) error {
+) (invocationdomain.Outcome, bool, error) {
 	scope := request.Context.Scope()
 	switch scope.Kind() {
 	case invocationdomain.ScopeCatalog:
-		return nil
+		return invocationdomain.Outcome{}, false, nil
 
 	case invocationdomain.ScopeProfile:
 		if uc.profileScopes == nil {
@@ -275,7 +333,7 @@ func (uc InvokeTool) enforceExecutionScope(
 				auditdomain.StatusFailed,
 				auditdomain.ErrorInternal,
 			)
-			return joinInvocationError(
+			return invocationdomain.Outcome{}, false, joinInvocationError(
 				fmt.Errorf("invoke tool: resolve profile scope: authorizer is unavailable"),
 				recordErr,
 			)
@@ -292,12 +350,19 @@ func (uc InvokeTool) enforceExecutionScope(
 				auditdomain.StatusFailed,
 				auditdomain.ErrorInternal,
 			)
-			return joinInvocationError(
+			return invocationdomain.Outcome{}, false, joinInvocationError(
 				fmt.Errorf("invoke tool: resolve profile scope: %w", err),
 				recordErr,
 			)
 		}
 		if !allowed {
+			outcome, outcomeErr := newRejectedOutcome(
+				invocationdomain.RejectionToolOutsideScope,
+				"tool is not available in this execution scope",
+			)
+			if outcomeErr != nil {
+				return invocationdomain.Outcome{}, false, outcomeErr
+			}
 			recordErr := uc.recordUnresolvedTool(
 				context.WithoutCancel(ctx),
 				invocationID,
@@ -307,12 +372,16 @@ func (uc InvokeTool) enforceExecutionScope(
 				auditdomain.StatusDenied,
 				auditdomain.ErrorPolicy,
 			)
-			return joinInvocationError(ErrToolOutsideScope, recordErr)
+			return outcome, true, recordErr
 		}
-		return nil
+		return invocationdomain.Outcome{}, false, nil
 
 	default:
-		return fmt.Errorf("%w: unknown scope kind %q", ErrInvalidInvocationContext, scope.Kind())
+		return invocationdomain.Outcome{}, false, fmt.Errorf(
+			"%w: unknown scope kind %q",
+			ErrInvalidInvocationContext,
+			scope.Kind(),
+		)
 	}
 }
 
@@ -328,6 +397,15 @@ func (uc InvokeTool) execute(
 ) (InvokeToolResponse, error) {
 	executor, err := uc.router.ExecutorFor(parent, tool)
 	if err != nil {
+		outcome, outcomeErr := newFailedOutcome(
+			invocationdomain.FailureSourceRuntime,
+			invocationdomain.FailureExecutorUnavailable,
+			"tool executor is unavailable",
+		)
+		if outcomeErr != nil {
+			return response, outcomeErr
+		}
+		response.Outcome = outcome
 		recordErr := uc.record(
 			parent,
 			response.InvocationID,
@@ -341,10 +419,10 @@ func (uc InvokeTool) execute(
 			"",
 			auditdomain.ErrorExecutorNotFound,
 		)
-		return response, joinInvocationError(
-			fmt.Errorf("%w: %w", ErrExecutorNotFound, err),
-			recordErr,
-		)
+		if recordErr != nil {
+			return response, recordErr
+		}
+		return response, nil
 	}
 
 	timeout := request.Timeout
@@ -354,13 +432,17 @@ func (uc InvokeTool) execute(
 	execCtx, cancel := context.WithTimeout(parent, timeout)
 	defer cancel()
 
-	result, err := executor.Execute(execCtx, ExecutionRequest{
+	outcome, err := executor.Execute(execCtx, ExecutionRequest{
 		InvocationID: response.InvocationID,
 		Tool:         tool,
 		Arguments:    arguments,
 	}, uc.credentials)
 	if err != nil {
-		status, class := classifyExecutionError(execCtx, err)
+		failed, status, class, outcomeErr := failedOutcomeForExecutionError(execCtx, err)
+		if outcomeErr != nil {
+			return response, outcomeErr
+		}
+		response.Outcome = failed
 		summary := auditErrorSummary(err)
 		recordErr := uc.record(
 			context.WithoutCancel(parent),
@@ -376,13 +458,13 @@ func (uc InvokeTool) execute(
 			class,
 			summary,
 		)
-		return response, joinInvocationError(
-			executionDisplayError(err, summary),
-			recordErr,
-		)
+		if recordErr != nil {
+			return response, recordErr
+		}
+		return response, nil
 	}
 
-	status, ok := auditStatusForResult(result.Kind())
+	status, resultKind, class, ok := auditClassificationForExecutorOutcome(outcome)
 	if !ok {
 		recordErr := uc.record(
 			context.WithoutCancel(parent),
@@ -400,6 +482,10 @@ func (uc InvokeTool) execute(
 		return response, joinInvocationError(ErrInvalidExecutorResult, recordErr)
 	}
 
+	var summary string
+	if outcome.Kind() == invocationdomain.OutcomeKindFailed {
+		summary = redactDiagnosticSummary(outcome.Message())
+	}
 	recordErr := uc.record(
 		context.WithoutCancel(parent),
 		response.InvocationID,
@@ -410,15 +496,102 @@ func (uc InvokeTool) execute(
 		decision.ReasonCode(),
 		approval,
 		status,
-		result.Kind(),
-		auditdomain.ErrorNone,
+		resultKind,
+		class,
+		summary,
 	)
 	if recordErr != nil {
 		return response, recordErr
 	}
 
-	response.Result = result
+	response.Outcome = outcome
 	return response, nil
+}
+
+func newRejectedOutcome(
+	code invocationdomain.RejectionCode,
+	message string,
+) (invocationdomain.Outcome, error) {
+	outcome, err := invocationdomain.Rejected(code, message)
+	if err != nil {
+		return invocationdomain.Outcome{}, fmt.Errorf("invoke tool: construct rejection outcome: %w", err)
+	}
+	return outcome, nil
+}
+
+func newFailedOutcome(
+	source invocationdomain.FailureSource,
+	code invocationdomain.FailureCode,
+	message string,
+) (invocationdomain.Outcome, error) {
+	outcome, err := invocationdomain.Failed(source, code, message)
+	if err != nil {
+		return invocationdomain.Outcome{}, fmt.Errorf("invoke tool: construct failure outcome: %w", err)
+	}
+	return outcome, nil
+}
+
+func failedOutcomeForExecutionError(
+	ctx context.Context,
+	err error,
+) (invocationdomain.Outcome, auditdomain.Status, auditdomain.ErrorClass, error) {
+	status, class := classifyExecutionError(ctx, err)
+	source := invocationdomain.FailureSourceProvider
+	code := invocationdomain.FailureProviderError
+	message := "provider execution failed"
+
+	switch status {
+	case auditdomain.StatusTimedOut:
+		source = invocationdomain.FailureSourceRuntime
+		code = invocationdomain.FailureTimedOut
+		message = "tool execution timed out"
+	case auditdomain.StatusCancelled:
+		source = invocationdomain.FailureSourceRuntime
+		code = invocationdomain.FailureCancelled
+		message = "tool execution was cancelled"
+	default:
+		if summary := auditErrorSummary(err); summary != "" {
+			message = summary
+		}
+	}
+
+	outcome, outcomeErr := newFailedOutcome(source, code, message)
+	return outcome, status, class, outcomeErr
+}
+
+func auditClassificationForExecutorOutcome(
+	outcome invocationdomain.Outcome,
+) (auditdomain.Status, invocationdomain.ResultKind, auditdomain.ErrorClass, bool) {
+	switch outcome.Kind() {
+	case invocationdomain.OutcomeKindComplete:
+		return auditdomain.StatusCompleted, invocationdomain.ResultKindComplete, auditdomain.ErrorNone, true
+	case invocationdomain.OutcomeKindInputRequired:
+		return auditdomain.StatusInputRequired, invocationdomain.ResultKindInputRequired, auditdomain.ErrorNone, true
+	case invocationdomain.OutcomeKindTask:
+		return auditdomain.StatusTask, invocationdomain.ResultKindTask, auditdomain.ErrorNone, true
+	case invocationdomain.OutcomeKindFailed:
+		switch outcome.FailureSource() {
+		case invocationdomain.FailureSourceTool, invocationdomain.FailureSourceProvider:
+			return auditdomain.StatusFailed, "", auditdomain.ErrorExecution, true
+		case invocationdomain.FailureSourceRuntime:
+			switch outcome.FailureCode() {
+			case invocationdomain.FailureExecutorUnavailable:
+				return auditdomain.StatusFailed, "", auditdomain.ErrorExecutorNotFound, true
+			case invocationdomain.FailureTimedOut:
+				return auditdomain.StatusTimedOut, "", auditdomain.ErrorTimedOut, true
+			case invocationdomain.FailureCancelled:
+				return auditdomain.StatusCancelled, "", auditdomain.ErrorCancelled, true
+			default:
+				return "", "", "", false
+			}
+		case invocationdomain.FailureSourceResultGuard:
+			return auditdomain.StatusFailed, "", auditdomain.ErrorExecution, true
+		default:
+			return "", "", "", false
+		}
+	default:
+		return "", "", "", false
+	}
 }
 
 func (uc InvokeTool) record(
@@ -492,19 +665,6 @@ func (uc InvokeTool) recordUnresolvedTool(
 		return fmt.Errorf("%w: persist unresolved tool record: %w", ErrAuditFailed, err)
 	}
 	return nil
-}
-
-func auditStatusForResult(kind invocationdomain.ResultKind) (auditdomain.Status, bool) {
-	switch kind {
-	case invocationdomain.ResultKindComplete:
-		return auditdomain.StatusCompleted, true
-	case invocationdomain.ResultKindInputRequired:
-		return auditdomain.StatusInputRequired, true
-	case invocationdomain.ResultKindTask:
-		return auditdomain.StatusTask, true
-	default:
-		return "", false
-	}
 }
 
 func classifyExecutionError(

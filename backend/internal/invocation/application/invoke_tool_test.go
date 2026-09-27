@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -31,7 +30,7 @@ func TestInvokeToolSuccessfulResultVariants(t *testing.T) {
 
 	tests := []struct {
 		name       string
-		result     invocationdomain.Result
+		result     invocationdomain.Outcome
 		wantStatus auditdomain.Status
 	}{
 		{"complete", complete, auditdomain.StatusCompleted},
@@ -55,8 +54,8 @@ func TestInvokeToolSuccessfulResultVariants(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Execute() error = %v", err)
 			}
-			if response.Result.Kind() != tc.result.Kind() {
-				t.Fatalf("Result kind = %q, want %q", response.Result.Kind(), tc.result.Kind())
+			if response.Outcome.Kind() != tc.result.Kind() {
+				t.Fatalf("Result kind = %q, want %q", response.Outcome.Kind(), tc.result.Kind())
 			}
 			record := fixture.audit.last(t)
 			if record.Status() != tc.wantStatus || record.ResultKind() != tc.result.Kind() {
@@ -144,7 +143,7 @@ func TestProfileScopeDenialPreventsToolLookupAndExecution(t *testing.T) {
 	fixture := newFixture(t)
 	fixture.profileScopes.allowed = false
 
-	_, err := fixture.useCase.Execute(context.Background(), InvokeToolRequest{
+	response, err := fixture.useCase.Execute(context.Background(), InvokeToolRequest{
 		ToolID:    fixture.tool.ID(),
 		Arguments: []byte(`{}`),
 		Context: profileInvocationContext(
@@ -153,8 +152,12 @@ func TestProfileScopeDenialPreventsToolLookupAndExecution(t *testing.T) {
 			"prof_00000000000000000000000000000002",
 		),
 	})
-	if !errors.Is(err, ErrToolOutsideScope) {
-		t.Fatalf("Execute() error = %v, want ErrToolOutsideScope", err)
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if response.Outcome.Kind() != invocationdomain.OutcomeKindRejected ||
+		response.Outcome.RejectionCode() != invocationdomain.RejectionToolOutsideScope {
+		t.Fatalf("Outcome = kind %q code %q", response.Outcome.Kind(), response.Outcome.RejectionCode())
 	}
 	if fixture.profileScopes.calls != 1 {
 		t.Fatalf("profile scope calls = %d, want 1", fixture.profileScopes.calls)
@@ -181,13 +184,17 @@ func TestToolLookupFailureIsAuditedWithoutProvider(t *testing.T) {
 	fixture := newFixture(t)
 	fixture.tools.err = catalogapplication.ErrToolNotFound
 
-	_, err := fixture.useCase.Execute(context.Background(), InvokeToolRequest{
+	response, err := fixture.useCase.Execute(context.Background(), InvokeToolRequest{
 		ToolID:    fixture.tool.ID(),
 		Arguments: []byte(`{}`),
 		Context:   catalogInvocationContext(t, ""),
 	})
-	if !errors.Is(err, catalogapplication.ErrToolNotFound) {
-		t.Fatalf("Execute() error = %v, want catalog ErrToolNotFound", err)
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if response.Outcome.Kind() != invocationdomain.OutcomeKindRejected ||
+		response.Outcome.RejectionCode() != invocationdomain.RejectionToolNotFound {
+		t.Fatalf("Outcome = kind %q code %q", response.Outcome.Kind(), response.Outcome.RejectionCode())
 	}
 
 	record := fixture.audit.last(t)
@@ -205,13 +212,17 @@ func TestPolicyDenyPreventsExecution(t *testing.T) {
 	fixture := newFixture(t)
 	fixture.policy.decision, _ = policydomain.Deny("test.denied", "denied by test")
 
-	_, err := fixture.useCase.Execute(context.Background(), InvokeToolRequest{
+	response, err := fixture.useCase.Execute(context.Background(), InvokeToolRequest{
 		ToolID:    fixture.tool.ID(),
 		Arguments: []byte(`{}`),
 		Context:   catalogInvocationContext(t, ""),
 	})
-	if !errors.Is(err, ErrPolicyDenied) {
-		t.Fatalf("Execute() error = %v, want ErrPolicyDenied", err)
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if response.Outcome.Kind() != invocationdomain.OutcomeKindRejected ||
+		response.Outcome.RejectionCode() != invocationdomain.RejectionPolicyDenied {
+		t.Fatalf("Outcome = kind %q code %q", response.Outcome.Kind(), response.Outcome.RejectionCode())
 	}
 	if fixture.executor.calls != 0 {
 		t.Fatalf("executor calls = %d, want 0", fixture.executor.calls)
@@ -233,13 +244,17 @@ func TestRequireApprovalCallsGateAndDenialPreventsExecution(t *testing.T) {
 	fixture.policy.decision, _ = policydomain.RequireApproval("risk.write", "write operation")
 	fixture.approvals.approved = false
 
-	_, err := fixture.useCase.Execute(context.Background(), InvokeToolRequest{
+	response, err := fixture.useCase.Execute(context.Background(), InvokeToolRequest{
 		ToolID:    fixture.tool.ID(),
 		Arguments: []byte(`{}`),
 		Context:   catalogInvocationContext(t, "agent"),
 	})
-	if !errors.Is(err, ErrApprovalDenied) {
-		t.Fatalf("Execute() error = %v, want ErrApprovalDenied", err)
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if response.Outcome.Kind() != invocationdomain.OutcomeKindRejected ||
+		response.Outcome.RejectionCode() != invocationdomain.RejectionApprovalDenied {
+		t.Fatalf("Outcome = kind %q code %q", response.Outcome.Kind(), response.Outcome.RejectionCode())
 	}
 	if fixture.approvals.calls != 1 {
 		t.Fatalf("approval calls = %d, want 1", fixture.approvals.calls)
@@ -269,8 +284,8 @@ func TestCredentialResolverIsConsumedOnlyByExecutor(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
-	if response.Result.Kind() != invocationdomain.ResultKindComplete {
-		t.Fatalf("Result kind = %q", response.Result.Kind())
+	if response.Outcome.Kind() != invocationdomain.OutcomeKindComplete {
+		t.Fatalf("Result kind = %q", response.Outcome.Kind())
 	}
 	if fixture.credentials.calls != 1 {
 		t.Fatalf("credential resolver calls = %d, want 1", fixture.credentials.calls)
@@ -286,6 +301,87 @@ func TestCredentialResolverIsConsumedOnlyByExecutor(t *testing.T) {
 	}
 }
 
+func TestExecutorUnavailableReturnsRuntimeFailureOutcome(t *testing.T) {
+	t.Parallel()
+
+	fixture := newFixture(t)
+	fixture.useCase.router = fakeRouter{err: ErrExecutorNotFound}
+
+	response, err := fixture.useCase.Execute(context.Background(), InvokeToolRequest{
+		ToolID:    fixture.tool.ID(),
+		Arguments: []byte(`{}`),
+		Context:   catalogInvocationContext(t, ""),
+	})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if response.Outcome.Kind() != invocationdomain.OutcomeKindFailed ||
+		response.Outcome.FailureSource() != invocationdomain.FailureSourceRuntime ||
+		response.Outcome.FailureCode() != invocationdomain.FailureExecutorUnavailable {
+		t.Fatalf(
+			"Outcome = kind %q source %q code %q",
+			response.Outcome.Kind(),
+			response.Outcome.FailureSource(),
+			response.Outcome.FailureCode(),
+		)
+	}
+	if fixture.executor.calls != 0 {
+		t.Fatalf("executor calls = %d, want 0", fixture.executor.calls)
+	}
+
+	record := fixture.audit.last(t)
+	if record.Status() != auditdomain.StatusFailed ||
+		record.ErrorClass() != auditdomain.ErrorExecutorNotFound {
+		t.Fatalf("Audit record = %#v", record)
+	}
+}
+
+func TestToolFailureOutcomeRemainsToolFailure(t *testing.T) {
+	t.Parallel()
+
+	fixture := newFixture(t)
+	failed, err := invocationdomain.Failed(
+		invocationdomain.FailureSourceTool,
+		invocationdomain.FailureToolError,
+		"tool rejected request token=supersecretvalue",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixture.executor.result = failed
+
+	response, err := fixture.useCase.Execute(context.Background(), InvokeToolRequest{
+		ToolID:    fixture.tool.ID(),
+		Arguments: []byte(`{}`),
+		Context:   catalogInvocationContext(t, ""),
+	})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if response.Outcome.Kind() != invocationdomain.OutcomeKindFailed ||
+		response.Outcome.FailureSource() != invocationdomain.FailureSourceTool ||
+		response.Outcome.FailureCode() != invocationdomain.FailureToolError {
+		t.Fatalf(
+			"Outcome = kind %q source %q code %q",
+			response.Outcome.Kind(),
+			response.Outcome.FailureSource(),
+			response.Outcome.FailureCode(),
+		)
+	}
+	if response.Outcome.Message() != "tool rejected request token=supersecretvalue" {
+		t.Fatalf("Outcome message = %q", response.Outcome.Message())
+	}
+
+	record := fixture.audit.last(t)
+	if record.Status() != auditdomain.StatusFailed ||
+		record.ErrorClass() != auditdomain.ErrorExecution {
+		t.Fatalf("Audit record = %#v", record)
+	}
+	if record.ErrorSummary() != "tool rejected request token=[REDACTED]" {
+		t.Fatalf("Audit ErrorSummary() = %q", record.ErrorSummary())
+	}
+}
+
 func TestExecutionDiagnosticSummaryIsAuditedAndReturned(t *testing.T) {
 	t.Parallel()
 
@@ -294,13 +390,21 @@ func TestExecutionDiagnosticSummaryIsAuditedAndReturned(t *testing.T) {
 		message: "provider rejected request token=supersecretvalue",
 	}
 
-	_, err := fixture.useCase.Execute(context.Background(), InvokeToolRequest{
+	response, err := fixture.useCase.Execute(context.Background(), InvokeToolRequest{
 		ToolID:    fixture.tool.ID(),
 		Arguments: []byte(`{}`),
 		Context:   catalogInvocationContext(t, ""),
 	})
-	if err == nil || !strings.Contains(err.Error(), "provider rejected request token=[REDACTED]") {
+	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
+	}
+	if response.Outcome.Kind() != invocationdomain.OutcomeKindFailed ||
+		response.Outcome.FailureSource() != invocationdomain.FailureSourceProvider ||
+		response.Outcome.FailureCode() != invocationdomain.FailureProviderError {
+		t.Fatalf("Outcome = kind %q source %q code %q", response.Outcome.Kind(), response.Outcome.FailureSource(), response.Outcome.FailureCode())
+	}
+	if response.Outcome.Message() != "provider rejected request token=[REDACTED]" {
+		t.Fatalf("Outcome message = %q", response.Outcome.Message())
 	}
 
 	record := fixture.audit.last(t)
@@ -321,13 +425,18 @@ func TestParentCancellationIsAudited(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	_, err := fixture.useCase.Execute(ctx, InvokeToolRequest{
+	response, err := fixture.useCase.Execute(ctx, InvokeToolRequest{
 		ToolID:    fixture.tool.ID(),
 		Arguments: []byte(`{}`),
 		Context:   catalogInvocationContext(t, ""),
 	})
-	if !errors.Is(err, context.Canceled) {
-		t.Fatalf("Execute() error = %v, want context.Canceled", err)
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if response.Outcome.Kind() != invocationdomain.OutcomeKindFailed ||
+		response.Outcome.FailureSource() != invocationdomain.FailureSourceRuntime ||
+		response.Outcome.FailureCode() != invocationdomain.FailureCancelled {
+		t.Fatalf("Outcome = kind %q source %q code %q", response.Outcome.Kind(), response.Outcome.FailureSource(), response.Outcome.FailureCode())
 	}
 
 	record := fixture.audit.last(t)
@@ -342,14 +451,19 @@ func TestTimeoutIsAudited(t *testing.T) {
 	fixture := newFixture(t)
 	fixture.executor.blockUntilDone = true
 
-	_, err := fixture.useCase.Execute(context.Background(), InvokeToolRequest{
+	response, err := fixture.useCase.Execute(context.Background(), InvokeToolRequest{
 		ToolID:    fixture.tool.ID(),
 		Arguments: []byte(`{}`),
 		Context:   catalogInvocationContext(t, ""),
 		Timeout:   time.Millisecond,
 	})
-	if !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatalf("Execute() error = %v, want context.DeadlineExceeded", err)
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if response.Outcome.Kind() != invocationdomain.OutcomeKindFailed ||
+		response.Outcome.FailureSource() != invocationdomain.FailureSourceRuntime ||
+		response.Outcome.FailureCode() != invocationdomain.FailureTimedOut {
+		t.Fatalf("Outcome = kind %q source %q code %q", response.Outcome.Kind(), response.Outcome.FailureSource(), response.Outcome.FailureCode())
 	}
 
 	record := fixture.audit.last(t)
@@ -491,7 +605,7 @@ func (f fakeRouter) ExecutorFor(context.Context, catalogdomain.Tool) (ToolExecut
 }
 
 type fakeExecutor struct {
-	result            invocationdomain.Result
+	result            invocationdomain.Outcome
 	err               error
 	calls             int
 	resolveCredential bool
@@ -502,20 +616,20 @@ func (f *fakeExecutor) Execute(
 	ctx context.Context,
 	_ ExecutionRequest,
 	credentials CredentialResolver,
-) (invocationdomain.Result, error) {
+) (invocationdomain.Outcome, error) {
 	f.calls++
 	if f.blockUntilDone {
 		<-ctx.Done()
-		return invocationdomain.Result{}, ctx.Err()
+		return invocationdomain.Outcome{}, ctx.Err()
 	}
 	if f.resolveCredential {
 		ref, err := credentialdomain.ParseReference("credential://github/work")
 		if err != nil {
-			return invocationdomain.Result{}, err
+			return invocationdomain.Outcome{}, err
 		}
 		secret, err := credentials.Resolve(ctx, ref)
 		if err != nil {
-			return invocationdomain.Result{}, err
+			return invocationdomain.Outcome{}, err
 		}
 		for i := range secret {
 			secret[i] = 0

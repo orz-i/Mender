@@ -420,7 +420,7 @@ func (s *Service) CallTool(
 	if err != nil {
 		return InvocationResult{}, err
 	}
-	return invocationProjection(response.InvocationID.String(), response.Result)
+	return invocationProjection(response.InvocationID.String(), response.Outcome)
 }
 
 func (s *Service) ListProfiles() (ProfileList, error) {
@@ -703,20 +703,20 @@ func auditProjection(record auditdomain.Record) AuditRecord {
 
 func invocationProjection(
 	invocationID string,
-	result invocationdomain.Result,
+	result invocationdomain.Outcome,
 ) (InvocationResult, error) {
 	projection := InvocationResult{
 		InvocationID: invocationID,
 		Kind:         string(result.Kind()),
 	}
 	switch result.Kind() {
-	case invocationdomain.ResultKindComplete:
+	case invocationdomain.OutcomeKindComplete:
 		var content any
 		if err := json.Unmarshal(result.Content().Bytes(), &content); err != nil {
 			return InvocationResult{}, fmt.Errorf("decode invocation content: %w", err)
 		}
 		projection.Content = content
-	case invocationdomain.ResultKindInputRequired:
+	case invocationdomain.OutcomeKindInputRequired:
 		projection.RequestID = result.RequestID()
 		projection.Message = result.Message()
 		if schema := result.InputSchema(); len(schema) != 0 {
@@ -729,7 +729,7 @@ func invocationProjection(
 			}
 			projection.InputSchema = inputSchema
 		}
-	case invocationdomain.ResultKindTask:
+	case invocationdomain.OutcomeKindTask:
 		projection.TaskID = result.TaskID()
 		projection.Status = result.TaskStatus()
 		projection.Message = result.Message()

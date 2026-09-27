@@ -101,11 +101,11 @@ func TestRuntimeExecutesBuiltInToolThroughFullPipeline(t *testing.T) {
 	if err != nil {
 		t.Fatalf("InvokeTool.Execute() error = %v", err)
 	}
-	if response.Result.Kind() != invocationdomain.ResultKindComplete {
-		t.Fatalf("Result kind = %q", response.Result.Kind())
+	if response.Outcome.Kind() != invocationdomain.ResultKindComplete {
+		t.Fatalf("Result kind = %q", response.Outcome.Kind())
 	}
-	if !bytes.Equal(response.Result.Content().Bytes(), arguments) {
-		t.Fatalf("Result = %s, want %s", response.Result.Content().Bytes(), arguments)
+	if !bytes.Equal(response.Outcome.Content().Bytes(), arguments) {
+		t.Fatalf("Result = %s, want %s", response.Outcome.Content().Bytes(), arguments)
 	}
 
 	record, err := runtime.audit.Get(context.Background(), response.InvocationID)

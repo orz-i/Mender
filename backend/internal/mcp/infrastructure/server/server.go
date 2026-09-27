@@ -135,7 +135,7 @@ func (a *Adapter) addDirectTools(ctx context.Context) error {
 			if err != nil {
 				return nil, err
 			}
-			return mcpResult(response.Result)
+			return mcpResult(response.Outcome)
 		})
 	}
 
@@ -193,10 +193,10 @@ func isObjectSchema(raw []byte) bool {
 	return json.Unmarshal(raw, &schema) == nil && schema != nil
 }
 
-func mcpResult(result invocationdomain.Result) (*mcp.CallToolResult, error) {
-	switch result.Kind() {
-	case invocationdomain.ResultKindComplete:
-		raw := result.Content().Bytes()
+func mcpResult(outcome invocationdomain.Outcome) (*mcp.CallToolResult, error) {
+	switch outcome.Kind() {
+	case invocationdomain.OutcomeKindComplete:
+		raw := outcome.Content().Bytes()
 		var structured any
 		if err := json.Unmarshal(raw, &structured); err != nil {
 			return nil, fmt.Errorf("map Mender complete result: %w", err)
@@ -208,13 +208,42 @@ func mcpResult(result invocationdomain.Result) (*mcp.CallToolResult, error) {
 			StructuredContent: structured,
 		}, nil
 
-	case invocationdomain.ResultKindInputRequired:
+	case invocationdomain.OutcomeKindInputRequired:
 		return nil, ErrInputRequiredUnsupported
 
-	case invocationdomain.ResultKindTask:
+	case invocationdomain.OutcomeKindTask:
 		return nil, ErrTaskUnsupported
 
+	case invocationdomain.OutcomeKindRejected:
+		return mcpErrorResult(map[string]any{
+			"kind":    string(outcome.Kind()),
+			"code":    string(outcome.RejectionCode()),
+			"message": outcome.Message(),
+		})
+
+	case invocationdomain.OutcomeKindFailed:
+		return mcpErrorResult(map[string]any{
+			"kind":    string(outcome.Kind()),
+			"source":  string(outcome.FailureSource()),
+			"code":    string(outcome.FailureCode()),
+			"message": outcome.Message(),
+		})
+
 	default:
-		return nil, fmt.Errorf("map Mender result: unknown kind %q", result.Kind())
+		return nil, fmt.Errorf("map Mender outcome: unknown kind %q", outcome.Kind())
 	}
+}
+
+func mcpErrorResult(structured map[string]any) (*mcp.CallToolResult, error) {
+	raw, err := json.Marshal(structured)
+	if err != nil {
+		return nil, fmt.Errorf("map Mender error outcome: %w", err)
+	}
+	return &mcp.CallToolResult{
+		IsError: true,
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: string(raw)},
+		},
+		StructuredContent: structured,
+	}, nil
 }

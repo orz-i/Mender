@@ -41,7 +41,7 @@ type ExecutorRouter interface {
 // Credential resolution is exposed directly to the executor boundary so the
 // orchestration layer never receives resolved secret bytes.
 type ToolExecutor interface {
-	Execute(context.Context, ExecutionRequest, CredentialResolver) (invocationdomain.Result, error)
+	Execute(context.Context, ExecutionRequest, CredentialResolver) (invocationdomain.Outcome, error)
 }
 
 // CredentialResolver resolves an opaque reference into secret bytes.

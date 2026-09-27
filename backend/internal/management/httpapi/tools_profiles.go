@@ -191,7 +191,7 @@ func (h *Handler) callTool(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	projection, err := invocationProjection(response.InvocationID.String(), response.Result)
+	projection, err := invocationProjection(response.InvocationID.String(), response.Outcome)
 	if err != nil {
 		writeKnownError(w, err)
 		return

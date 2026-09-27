@@ -2,7 +2,6 @@ package application
 
 import (
 	"errors"
-	"fmt"
 	"regexp"
 	"strings"
 )
@@ -28,29 +27,6 @@ func auditErrorSummary(err error) string {
 		return ""
 	}
 	return redactDiagnosticSummary(provider.DiagnosticSummary())
-}
-
-func executionDisplayError(err error, summary string) error {
-	if strings.TrimSpace(summary) == "" {
-		return fmt.Errorf("invoke tool: execute: %w", err)
-	}
-	return &summarizedExecutionError{
-		cause:   err,
-		summary: summary,
-	}
-}
-
-type summarizedExecutionError struct {
-	cause   error
-	summary string
-}
-
-func (e *summarizedExecutionError) Error() string {
-	return "invoke tool: execute: " + e.cause.Error() + ": " + e.summary
-}
-
-func (e *summarizedExecutionError) Unwrap() error {
-	return e.cause
 }
 
 func redactDiagnosticSummary(value string) string {

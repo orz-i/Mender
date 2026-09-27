@@ -46,7 +46,7 @@ func (stubExecutor) Execute(
 	context.Context,
 	invocationapplication.ExecutionRequest,
 	invocationapplication.CredentialResolver,
-) (invocationdomain.Result, error) {
+) (invocationdomain.Outcome, error) {
 	value, _ := invocationdomain.NewJSONValue([]byte("null"))
 	return invocationdomain.Complete(value)
 }

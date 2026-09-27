@@ -65,7 +65,7 @@ func TestConnectionExecutesMCPTool(t *testing.T) {
 	}
 }
 
-func TestConnectionMapsMCPErrorResultToExecutionError(t *testing.T) {
+func TestConnectionMapsMCPErrorResultToToolFailureOutcome(t *testing.T) {
 	t.Parallel()
 
 	connection := connectTestServer(t, func(server *mcp.Server) {
@@ -83,7 +83,7 @@ func TestConnectionMapsMCPErrorResultToExecutionError(t *testing.T) {
 	})
 
 	arguments, _ := invocationdomain.NewJSONValue([]byte(`{}`))
-	_, err := connection.Execute(
+	outcome, err := connection.Execute(
 		context.Background(),
 		invocationapplication.ExecutionRequest{
 			Tool:      executorTestTool(t, "fail"),
@@ -91,18 +91,21 @@ func TestConnectionMapsMCPErrorResultToExecutionError(t *testing.T) {
 		},
 		nil,
 	)
-	if !errors.Is(err, ErrToolResult) {
-		t.Fatalf("Execute() error = %v, want ErrToolResult", err)
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
 	}
-	var resultErr *ToolResultError
-	if !errors.As(err, &resultErr) {
-		t.Fatalf("Execute() error = %T, want ToolResultError", err)
+	if outcome.Kind() != invocationdomain.OutcomeKindFailed ||
+		outcome.FailureSource() != invocationdomain.FailureSourceTool ||
+		outcome.FailureCode() != invocationdomain.FailureToolError {
+		t.Fatalf(
+			"outcome = kind %q source %q code %q",
+			outcome.Kind(),
+			outcome.FailureSource(),
+			outcome.FailureCode(),
+		)
 	}
-	if resultErr.DiagnosticSummary() != "provider rejected request" {
-		t.Fatalf("DiagnosticSummary() = %q", resultErr.DiagnosticSummary())
-	}
-	if err.Error() != ErrToolResult.Error() {
-		t.Fatalf("Error() = %q, want generic error", err.Error())
+	if outcome.Message() != "provider rejected request" {
+		t.Fatalf("Message() = %q", outcome.Message())
 	}
 }
 

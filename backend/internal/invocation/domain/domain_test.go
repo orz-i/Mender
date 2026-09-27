@@ -84,4 +84,36 @@ func TestResultVariants(t *testing.T) {
 	if task.Kind() != ResultKindTask || task.TaskID() != "task-1" {
 		t.Fatalf("task = %#v", task)
 	}
+
+	rejected, err := Rejected(RejectionPolicyDenied, "denied by policy")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rejected.Kind() != OutcomeKindRejected || rejected.RejectionCode() != RejectionPolicyDenied {
+		t.Fatalf("rejected = %#v", rejected)
+	}
+
+	failed, err := Failed(FailureSourceProvider, FailureProviderError, "provider execution failed")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if failed.Kind() != OutcomeKindFailed ||
+		failed.FailureSource() != FailureSourceProvider ||
+		failed.FailureCode() != FailureProviderError {
+		t.Fatalf("failed = %#v", failed)
+	}
+}
+
+func TestOutcomeRejectsInvalidFailureCombinations(t *testing.T) {
+	t.Parallel()
+
+	if _, err := Rejected(RejectionCode("unknown"), "no"); err == nil {
+		t.Fatal("Rejected() accepted unknown code")
+	}
+	if _, err := Failed(FailureSourceTool, FailureProviderError, "wrong source"); err == nil {
+		t.Fatal("Failed() accepted mismatched source/code")
+	}
+	if _, err := Failed(FailureSourceProvider, FailureProviderError, ""); err == nil {
+		t.Fatal("Failed() accepted empty message")
+	}
 }

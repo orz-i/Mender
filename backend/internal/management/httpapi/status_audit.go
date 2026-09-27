@@ -107,7 +107,7 @@ func auditProjection(record auditdomain.Record) map[string]any {
 
 func invocationProjection(
 	invocationID string,
-	result invocationdomain.Result,
+	result invocationdomain.Outcome,
 ) (map[string]any, error) {
 	projection := map[string]any{
 		"invocationId": invocationID,
@@ -115,14 +115,14 @@ func invocationProjection(
 	}
 
 	switch result.Kind() {
-	case invocationdomain.ResultKindComplete:
+	case invocationdomain.OutcomeKindComplete:
 		var content any
 		if err := json.Unmarshal(result.Content().Bytes(), &content); err != nil {
 			return nil, fmt.Errorf("decode invocation content: %w", err)
 		}
 		projection["content"] = content
 
-	case invocationdomain.ResultKindInputRequired:
+	case invocationdomain.OutcomeKindInputRequired:
 		projection["requestId"] = result.RequestID()
 		projection["message"] = result.Message()
 		if schema := result.InputSchema(); len(schema) != 0 {
@@ -133,7 +133,7 @@ func invocationProjection(
 			projection["inputSchema"] = inputSchema
 		}
 
-	case invocationdomain.ResultKindTask:
+	case invocationdomain.OutcomeKindTask:
 		projection["taskId"] = result.TaskID()
 		projection["status"] = result.TaskStatus()
 		projection["message"] = result.Message()

@@ -115,8 +115,8 @@ func TestMCPProviderAndServerShareRuntimePipeline(t *testing.T) {
 	if err != nil {
 		t.Fatalf("InvokeTool.Execute() error = %v", err)
 	}
-	if applicationResponse.Result.Kind() != invocationdomain.ResultKindComplete {
-		t.Fatalf("application result kind = %q", applicationResponse.Result.Kind())
+	if applicationResponse.Outcome.Kind() != invocationdomain.ResultKindComplete {
+		t.Fatalf("application result kind = %q", applicationResponse.Outcome.Kind())
 	}
 	auditRecord, err := runtime.audit.Get(ctx, applicationResponse.InvocationID)
 	if err != nil {

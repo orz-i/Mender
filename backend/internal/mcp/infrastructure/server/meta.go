@@ -153,7 +153,7 @@ func (a *Adapter) callHandler(ctx context.Context, request *mcp.CallToolRequest)
 	if err != nil {
 		return nil, err
 	}
-	return mcpResult(response.Result)
+	return mcpResult(response.Outcome)
 }
 
 func structuredResult(value any) (*mcp.CallToolResult, error) {

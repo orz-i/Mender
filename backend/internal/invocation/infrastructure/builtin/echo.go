@@ -16,9 +16,9 @@ func (EchoExecutor) Execute(
 	ctx context.Context,
 	request invocationapplication.ExecutionRequest,
 	_ invocationapplication.CredentialResolver,
-) (invocationdomain.Result, error) {
+) (invocationdomain.Outcome, error) {
 	if err := ctx.Err(); err != nil {
-		return invocationdomain.Result{}, err
+		return invocationdomain.Outcome{}, err
 	}
 	return invocationdomain.Complete(request.Arguments)
 }

@@ -181,6 +181,51 @@ func TestMCPResultRejectsUnsupportedCanonicalVariants(t *testing.T) {
 	}
 }
 
+func TestMCPResultMapsRejectedAndFailedOutcomesToToolErrors(t *testing.T) {
+	t.Parallel()
+
+	rejected, err := invocationdomain.Rejected(
+		invocationdomain.RejectionToolOutsideScope,
+		"tool is not available in this execution scope",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rejectedResult, err := mcpResult(rejected)
+	if err != nil {
+		t.Fatalf("mcpResult(rejected) error = %v", err)
+	}
+	if !rejectedResult.IsError {
+		t.Fatal("rejected outcome did not map to MCP Tool error")
+	}
+	rejectedStructured, ok := rejectedResult.StructuredContent.(map[string]any)
+	if !ok || rejectedStructured["kind"] != "rejected" ||
+		rejectedStructured["code"] != "tool_outside_scope" {
+		t.Fatalf("rejected StructuredContent = %#v", rejectedResult.StructuredContent)
+	}
+
+	failed, err := invocationdomain.Failed(
+		invocationdomain.FailureSourceTool,
+		invocationdomain.FailureToolError,
+		"tool rejected request",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	failedResult, err := mcpResult(failed)
+	if err != nil {
+		t.Fatalf("mcpResult(failed) error = %v", err)
+	}
+	if !failedResult.IsError {
+		t.Fatal("failed outcome did not map to MCP Tool error")
+	}
+	failedStructured, ok := failedResult.StructuredContent.(map[string]any)
+	if !ok || failedStructured["kind"] != "failed" ||
+		failedStructured["source"] != "tool" || failedStructured["code"] != "tool_error" {
+		t.Fatalf("failed StructuredContent = %#v", failedResult.StructuredContent)
+	}
+}
+
 type serverFixture struct {
 	provider catalogdomain.Provider
 	tools    []catalogdomain.Tool
@@ -295,7 +340,7 @@ func (f *serverFixture) adapter(t *testing.T, profile profiledomain.Profile) *Ad
 			if err != nil {
 				return invocationapplication.InvokeToolResponse{}, err
 			}
-			return invocationapplication.InvokeToolResponse{Result: result}, nil
+			return invocationapplication.InvokeToolResponse{Outcome: result}, nil
 		},
 	})
 	if err != nil {
