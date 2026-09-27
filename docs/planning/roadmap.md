@@ -196,7 +196,7 @@ Exit criteria are complete. See `phase-8-hardening-distribution.md` for the hard
 
 ## Phase 9 — Governed invocation execution
 
-Status: Planned
+Status: Complete
 
 Goals:
 
@@ -208,13 +208,6 @@ Goals:
 - Add execution/result guards and data-minimized lifecycle events.
 - Preserve one adapter-independent execution contract across CLI, MCP, Web, and Desktop.
 
-Exit criteria:
+Exit criteria are complete. Profile/Catalog execution scopes, input/output validation, canonical rejection/failure outcomes, execution/result guards, lifecycle events, governed Audit metadata, and cross-adapter mappings are covered by the shared Runtime and end-to-end tests.
 
-- Profile-scoped calls cannot bypass Profile membership through any execution adapter.
-- Invalid Tool arguments never reach ToolExecutor.
-- Upstream Tool failures remain distinguishable from Mender internal failures.
-- Declared output schemas and canonical result limits are enforced before adapter return.
-- Audit records execution scope/origin/outcome classification without retaining Tool payloads or secrets.
-- CLI, MCP, management HTTP, and Desktop map the same governed outcomes consistently.
-
-See `phase-9-governed-invocation.md`.
+See `phase-9-governed-invocation.md` for the final architecture, validation evidence, and deferred governance work.

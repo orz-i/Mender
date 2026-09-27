@@ -1,6 +1,6 @@
 # Phase 9 Plan — Governed Invocation Execution
 
-Status: Planned
+Status: Complete
 
 ## Objective
 
@@ -1128,32 +1128,61 @@ Small corrective commits remain preferable to combining unrelated fixes if imple
 
 Phase 9 is complete only when all of the following are true:
 
-- [ ] Every Invocation request has explicit origin/caller/scope.
-- [ ] Profile-scoped invocation enforces membership inside Invocation.
-- [ ] Downstream MCP calls cannot bypass Profile scope.
-- [ ] Local CLI/control-plane Catalog scope is explicit rather than represented by an absent Profile.
-- [ ] Tool arguments are validated against canonical input schema before Policy/execution.
-- [ ] Invalid arguments never reach ToolExecutor.
-- [ ] Policy receives bounded GovernanceFacts instead of unrestricted raw arguments.
-- [ ] Complete/InputRequired/Task behavior remains supported.
-- [ ] Rejected and Failed are first-class canonical outcomes.
-- [ ] Upstream MCP "isError: true" is a Tool failure outcome, not automatically a Go/server error.
-- [ ] Internal Mender failures remain distinguishable from Tool failures.
-- [ ] Declared output schemas are validated before Complete leaves Invocation.
-- [ ] Canonical result-size limits are enforced without silent JSON truncation.
-- [ ] ExecutionGuard supports tested unlimited/provider/tool semantics.
-- [ ] Guard waiting honors cancellation/timeout.
-- [ ] Runtime lifecycle/progress events are separated from durable Audit.
-- [ ] Audit records scope/origin/outcome classification without arguments/results/facts/secrets.
-- [ ] Audit migration preserves existing rows and future-version fail-closed behavior.
-- [ ] CLI machine JSON exposes governed outcomes deterministically.
-- [ ] CLI supports optional Profile-scoped Tool invocation.
-- [ ] MCP maps safe rejected/failed outcomes to Tool-call error results.
-- [ ] Management HTTP and Desktop expose the same canonical outcome semantics.
-- [ ] OpenAPI and Wails generated contracts are synchronized.
-- [ ] Go race tests pass.
-- [ ] "pnpm check" passes.
-- [ ] Required security checks pass before closeout.
+- [x] Every Invocation request has explicit origin/caller/scope.
+- [x] Profile-scoped invocation enforces membership inside Invocation.
+- [x] Downstream MCP calls cannot bypass Profile scope.
+- [x] Local CLI/control-plane Catalog scope is explicit rather than represented by an absent Profile.
+- [x] Tool arguments are validated against canonical input schema before Policy/execution.
+- [x] Invalid arguments never reach ToolExecutor.
+- [x] Policy receives bounded GovernanceFacts instead of unrestricted raw arguments.
+- [x] Complete/InputRequired/Task behavior remains supported.
+- [x] Rejected and Failed are first-class canonical outcomes.
+- [x] Upstream MCP "isError: true" is a Tool failure outcome, not automatically a Go/server error.
+- [x] Internal Mender failures remain distinguishable from Tool failures.
+- [x] Declared output schemas are validated before Complete leaves Invocation.
+- [x] Canonical result-size limits are enforced without silent JSON truncation.
+- [x] ExecutionGuard supports tested unlimited/provider/tool semantics.
+- [x] Guard waiting honors cancellation/timeout.
+- [x] Runtime lifecycle/progress events are separated from durable Audit.
+- [x] Audit records scope/origin/outcome classification without arguments/results/facts/secrets.
+- [x] Audit migration preserves existing rows and future-version fail-closed behavior.
+- [x] CLI machine JSON exposes governed outcomes deterministically.
+- [x] CLI supports optional Profile-scoped Tool invocation.
+- [x] MCP maps safe rejected/failed outcomes to Tool-call error results.
+- [x] Management HTTP and Desktop expose the same canonical outcome semantics.
+- [x] OpenAPI and Wails generated contracts are synchronized.
+- [x] Go race tests pass.
+- [x] "pnpm check" passes.
+- [x] Required security checks pass before closeout.
+
+## Closeout
+
+Phase 9 completed on 2026-09-26.
+
+The implementation was delivered in reviewable commits matching the planned architectural sequence:
+
+~~~text
+af0530f docs: define governed invocation architecture
+7ee57e8 docs: plan governed invocation execution phase
+ffdc12b refactor(invocation): add execution context and profile scope
+5a02e89 refactor(invocation): introduce canonical invocation outcomes
+c054fbe feat(invocation): validate arguments and derive governance facts
+72231c2 feat(invocation): add execution and result guards
+4a9a077 feat(invocation): add lifecycle progress events
+2a25809 feat(audit): persist governed invocation metadata
+2b0f76c feat(adapters): map governed invocation outcomes
+8b64953 test(runtime): cover governed execution end to end
+~~~
+
+Final verification evidence:
+
+- `pnpm check` passed after the adapter migration and again after the end-to-end governance matrix. This includes OpenAPI SDK regeneration, Wails binding regeneration, desktop architecture checks, golangci-lint, all Go tests, all Go race tests, ESLint, strict TypeScript, 5 Vitest files / 28 tests, and Web/Desktop production builds.
+- End-to-end Runtime tests cover Profile denial before execution, JSON Schema input rejection, output-schema ResultGuard failure, Tool-level failure preservation, Provider-level serialization, and upstream MCP `isError: true` round-tripping through Mender to downstream MCP `isError: true`.
+- Audit SQLite schema v3 persists only governed execution metadata: origin, scope, canonical outcome classification, and bounded/redacted diagnostics. Migration tests preserve older rows and retain future-schema fail-closed behavior.
+- `pnpm security:check` passed: pinned `govulncheck v1.8.0` reported no vulnerabilities for `backend` or `apps/desktop`, and production pnpm audit reported no known vulnerabilities.
+- CLI, management HTTP, downstream MCP, Web, and Desktop now consume one canonical Invocation outcome contract. CLI Profile scope can be selected by slug or ProfileID; local administrative calls remain explicit Catalog scope.
+
+Phase 9 intentionally leaves Profile ToolBinding configuration, editable Policy/Credential governance, authenticated remote principals, public progress streaming, resource-key-specific guards, generic result DLP/redaction, and automatic retry policy for later planning.
 
 ## Deferred follow-up
 
