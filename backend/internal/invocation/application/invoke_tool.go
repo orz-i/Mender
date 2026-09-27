@@ -33,6 +33,8 @@ type InvokeToolResponse struct {
 type InvokeTool struct {
 	tools          ToolLookup
 	profileScopes  ProfileScopeAuthorizer
+	arguments      ArgumentValidator
+	facts          GovernanceFactExtractor
 	policy         PolicyEvaluator
 	approvals      ApprovalGate
 	router         ExecutorRouter
@@ -47,6 +49,8 @@ type InvokeTool struct {
 func NewInvokeTool(
 	tools ToolLookup,
 	profileScopes ProfileScopeAuthorizer,
+	arguments ArgumentValidator,
+	facts GovernanceFactExtractor,
 	policy PolicyEvaluator,
 	approvals ApprovalGate,
 	router ExecutorRouter,
@@ -63,6 +67,8 @@ func NewInvokeTool(
 	return InvokeTool{
 		tools:          tools,
 		profileScopes:  profileScopes,
+		arguments:      arguments,
+		facts:          facts,
 		policy:         policy,
 		approvals:      approvals,
 		router:         router,
@@ -84,11 +90,6 @@ func (uc InvokeTool) Execute(
 	}
 	if err := request.Context.Validate(); err != nil {
 		return InvokeToolResponse{}, fmt.Errorf("%w: %w", ErrInvalidInvocationContext, err)
-	}
-
-	arguments, err := invocationdomain.NewJSONValue(request.Arguments)
-	if err != nil {
-		return InvokeToolResponse{}, fmt.Errorf("invoke tool: arguments: %w", err)
 	}
 
 	invocationID, err := uc.ids.NewInvocationID()
@@ -155,9 +156,77 @@ func (uc InvokeTool) Execute(
 		)
 	}
 
+	arguments, err := invocationdomain.NewJSONValue(request.Arguments)
+	if err != nil {
+		return uc.rejectInvalidArguments(ctx, response, tool, request, startedAt)
+	}
+	if uc.arguments == nil {
+		return uc.failPreflight(
+			ctx,
+			response,
+			tool,
+			request,
+			startedAt,
+			"argument validator is unavailable",
+			nil,
+		)
+	}
+	valid, err := uc.arguments.Validate(ctx, tool.InputSchema(), arguments)
+	if err != nil {
+		return uc.failPreflight(
+			ctx,
+			response,
+			tool,
+			request,
+			startedAt,
+			"validate tool arguments",
+			err,
+		)
+	}
+	if !valid {
+		return uc.rejectInvalidArguments(ctx, response, tool, request, startedAt)
+	}
+
+	if uc.facts == nil {
+		return uc.failPreflight(
+			ctx,
+			response,
+			tool,
+			request,
+			startedAt,
+			"governance fact extractor is unavailable",
+			nil,
+		)
+	}
+	facts, err := uc.facts.Extract(ctx, tool, arguments)
+	if err != nil {
+		return uc.failPreflight(
+			ctx,
+			response,
+			tool,
+			request,
+			startedAt,
+			"derive governance facts",
+			err,
+		)
+	}
+	if err := facts.Validate(); err != nil {
+		return uc.failPreflight(
+			ctx,
+			response,
+			tool,
+			request,
+			startedAt,
+			"validate governance facts",
+			err,
+		)
+	}
+
 	decision, err := uc.policy.Evaluate(ctx, PolicyRequest{
 		InvocationID:          invocationID,
 		Tool:                  tool,
+		Context:               request.Context,
+		Facts:                 facts,
 		Caller:                request.Context.Caller(),
 		HasCredentialResolver: uc.credentials != nil,
 	})
@@ -309,6 +378,72 @@ func (uc InvokeTool) Execute(
 			recordErr,
 		)
 	}
+}
+
+func (uc InvokeTool) rejectInvalidArguments(
+	ctx context.Context,
+	response InvokeToolResponse,
+	tool catalogdomain.Tool,
+	request InvokeToolRequest,
+	startedAt time.Time,
+) (InvokeToolResponse, error) {
+	outcome, err := newRejectedOutcome(
+		invocationdomain.RejectionInvalidArguments,
+		"arguments do not match the tool input schema",
+	)
+	if err != nil {
+		return response, err
+	}
+	response.Outcome = outcome
+	recordErr := uc.record(
+		context.WithoutCancel(ctx),
+		response.InvocationID,
+		tool,
+		request.Context.Caller(),
+		startedAt,
+		policydomain.DecisionKind(""),
+		"",
+		auditdomain.ApprovalNotRequired,
+		auditdomain.StatusFailed,
+		"",
+		auditdomain.ErrorInvalidArguments,
+	)
+	if recordErr != nil {
+		return response, recordErr
+	}
+	return response, nil
+}
+
+func (uc InvokeTool) failPreflight(
+	ctx context.Context,
+	response InvokeToolResponse,
+	tool catalogdomain.Tool,
+	request InvokeToolRequest,
+	startedAt time.Time,
+	stage string,
+	cause error,
+) (InvokeToolResponse, error) {
+	recordErr := uc.record(
+		context.WithoutCancel(ctx),
+		response.InvocationID,
+		tool,
+		request.Context.Caller(),
+		startedAt,
+		policydomain.DecisionKind(""),
+		"",
+		auditdomain.ApprovalNotRequired,
+		auditdomain.StatusFailed,
+		"",
+		auditdomain.ErrorInternal,
+	)
+
+	var primary error
+	if cause == nil {
+		primary = fmt.Errorf("invoke tool: preflight: %s", stage)
+	} else {
+		primary = fmt.Errorf("invoke tool: preflight: %s: %w", stage, cause)
+	}
+	return response, joinInvocationError(primary, recordErr)
 }
 
 func (uc InvokeTool) enforceExecutionScope(

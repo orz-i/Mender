@@ -109,6 +109,192 @@ func TestCatalogScopeDoesNotResolveProfileMembership(t *testing.T) {
 	}
 }
 
+func TestInvalidJSONIsRejectedAfterToolResolutionBeforePolicy(t *testing.T) {
+	t.Parallel()
+
+	fixture := newFixture(t)
+
+	response, err := fixture.useCase.Execute(context.Background(), InvokeToolRequest{
+		ToolID:    fixture.tool.ID(),
+		Arguments: []byte(`{`),
+		Context:   catalogInvocationContext(t, ""),
+	})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if response.Outcome.Kind() != invocationdomain.OutcomeKindRejected ||
+		response.Outcome.RejectionCode() != invocationdomain.RejectionInvalidArguments {
+		t.Fatalf(
+			"Outcome = kind %q code %q",
+			response.Outcome.Kind(),
+			response.Outcome.RejectionCode(),
+		)
+	}
+	if fixture.tools.calls != 1 {
+		t.Fatalf("tool lookup calls = %d, want 1", fixture.tools.calls)
+	}
+	if fixture.arguments.calls != 0 ||
+		fixture.facts.calls != 0 ||
+		fixture.policy.calls != 0 ||
+		fixture.executor.calls != 0 {
+		t.Fatalf(
+			"preflight/policy/executor calls = validator %d facts %d policy %d executor %d",
+			fixture.arguments.calls,
+			fixture.facts.calls,
+			fixture.policy.calls,
+			fixture.executor.calls,
+		)
+	}
+
+	record := fixture.audit.last(t)
+	if record.ErrorClass() != auditdomain.ErrorInvalidArguments {
+		t.Fatalf("ErrorClass() = %q", record.ErrorClass())
+	}
+}
+
+func TestSchemaMismatchIsRejectedBeforeFactsPolicyAndExecution(t *testing.T) {
+	t.Parallel()
+
+	fixture := newFixture(t)
+	fixture.arguments.valid = false
+
+	response, err := fixture.useCase.Execute(context.Background(), InvokeToolRequest{
+		ToolID:    fixture.tool.ID(),
+		Arguments: []byte(`{}`),
+		Context:   catalogInvocationContext(t, ""),
+	})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if response.Outcome.Kind() != invocationdomain.OutcomeKindRejected ||
+		response.Outcome.RejectionCode() != invocationdomain.RejectionInvalidArguments {
+		t.Fatalf(
+			"Outcome = kind %q code %q",
+			response.Outcome.Kind(),
+			response.Outcome.RejectionCode(),
+		)
+	}
+	if fixture.arguments.calls != 1 {
+		t.Fatalf("validator calls = %d, want 1", fixture.arguments.calls)
+	}
+	if fixture.facts.calls != 0 || fixture.policy.calls != 0 || fixture.executor.calls != 0 {
+		t.Fatalf(
+			"facts/policy/executor calls = %d/%d/%d, want 0/0/0",
+			fixture.facts.calls,
+			fixture.policy.calls,
+			fixture.executor.calls,
+		)
+	}
+}
+
+func TestSchemaValidatorFailureRemainsInternalFailure(t *testing.T) {
+	t.Parallel()
+
+	fixture := newFixture(t)
+	fixture.arguments.err = errors.New("schema could not be resolved")
+
+	response, err := fixture.useCase.Execute(context.Background(), InvokeToolRequest{
+		ToolID:    fixture.tool.ID(),
+		Arguments: []byte(`{}`),
+		Context:   catalogInvocationContext(t, ""),
+	})
+	if err == nil {
+		t.Fatal("Execute() expected internal validation error")
+	}
+	if response.Outcome.Kind() != "" {
+		t.Fatalf("Outcome kind = %q, want zero", response.Outcome.Kind())
+	}
+	if fixture.facts.calls != 0 || fixture.policy.calls != 0 || fixture.executor.calls != 0 {
+		t.Fatalf(
+			"facts/policy/executor calls = %d/%d/%d, want 0/0/0",
+			fixture.facts.calls,
+			fixture.policy.calls,
+			fixture.executor.calls,
+		)
+	}
+
+	record := fixture.audit.last(t)
+	if record.ErrorClass() != auditdomain.ErrorInternal {
+		t.Fatalf("ErrorClass() = %q", record.ErrorClass())
+	}
+}
+
+func TestValidatedGovernanceFactsReachPolicyWithoutRawArguments(t *testing.T) {
+	t.Parallel()
+
+	fixture := newFixture(t)
+	resource, err := invocationdomain.NewResourceFact("network.host", "api.example.test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	facts, err := invocationdomain.KnownGovernanceFacts(
+		[]invocationdomain.EffectFact{"read"},
+		[]invocationdomain.ResourceFact{resource},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixture.facts.facts = facts
+
+	response, err := fixture.useCase.Execute(context.Background(), InvokeToolRequest{
+		ToolID:    fixture.tool.ID(),
+		Arguments: []byte(`{"host":"api.example.test"}`),
+		Context:   catalogInvocationContext(t, "facts-test"),
+	})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if response.Outcome.Kind() != invocationdomain.OutcomeKindComplete {
+		t.Fatalf("Outcome kind = %q", response.Outcome.Kind())
+	}
+	if fixture.arguments.calls != 1 || fixture.facts.calls != 1 || fixture.policy.calls != 1 {
+		t.Fatalf(
+			"validator/facts/policy calls = %d/%d/%d, want 1/1/1",
+			fixture.arguments.calls,
+			fixture.facts.calls,
+			fixture.policy.calls,
+		)
+	}
+	if fixture.policy.last.Context.Caller() != "facts-test" ||
+		fixture.policy.last.Context.Scope().Kind() != invocationdomain.ScopeCatalog {
+		t.Fatalf("Policy context = %#v", fixture.policy.last.Context)
+	}
+	if fixture.policy.last.Facts.Knowledge() != invocationdomain.FactKnowledgeKnown {
+		t.Fatalf("Policy facts knowledge = %q", fixture.policy.last.Facts.Knowledge())
+	}
+	resources := fixture.policy.last.Facts.Resources()
+	if len(resources) != 1 || resources[0].Value() != "api.example.test" {
+		t.Fatalf("Policy resources = %#v", resources)
+	}
+}
+
+func TestGovernanceFactExtractorFailureRemainsInternalFailure(t *testing.T) {
+	t.Parallel()
+
+	fixture := newFixture(t)
+	fixture.facts.err = errors.New("fact extraction failed")
+
+	_, err := fixture.useCase.Execute(context.Background(), InvokeToolRequest{
+		ToolID:    fixture.tool.ID(),
+		Arguments: []byte(`{}`),
+		Context:   catalogInvocationContext(t, ""),
+	})
+	if err == nil {
+		t.Fatal("Execute() expected fact extraction error")
+	}
+	if fixture.policy.calls != 0 || fixture.executor.calls != 0 {
+		t.Fatalf(
+			"policy/executor calls = %d/%d, want 0/0",
+			fixture.policy.calls,
+			fixture.executor.calls,
+		)
+	}
+	record := fixture.audit.last(t)
+	if record.ErrorClass() != auditdomain.ErrorInternal {
+		t.Fatalf("ErrorClass() = %q", record.ErrorClass())
+	}
+}
+
 func TestProfileScopeAuthorizesBeforeToolLookup(t *testing.T) {
 	t.Parallel()
 
@@ -290,8 +476,9 @@ func TestCredentialResolverIsConsumedOnlyByExecutor(t *testing.T) {
 	if fixture.credentials.calls != 1 {
 		t.Fatalf("credential resolver calls = %d, want 1", fixture.credentials.calls)
 	}
-	if fixture.policy.sawArguments {
-		t.Fatal("policy evaluator received arguments")
+	if fixture.policy.calls != 1 ||
+		fixture.policy.last.Facts.Knowledge() != invocationdomain.FactKnowledgeUnknown {
+		t.Fatalf("Policy request = %#v", fixture.policy.last)
 	}
 
 	record := fixture.audit.last(t)
@@ -477,6 +664,8 @@ type fixture struct {
 	tool          catalogdomain.Tool
 	tools         *fakeToolLookup
 	profileScopes *fakeProfileScopes
+	arguments     *fakeArgumentValidator
+	facts         *fakeFactExtractor
 	policy        *fakePolicy
 	approvals     *fakeApproval
 	executor      *fakeExecutor
@@ -494,6 +683,8 @@ func newFixture(t *testing.T) fixture {
 
 	tools := &fakeToolLookup{tool: tool}
 	profileScopes := &fakeProfileScopes{allowed: true}
+	arguments := &fakeArgumentValidator{valid: true}
+	facts := &fakeFactExtractor{facts: invocationdomain.UnknownGovernanceFacts()}
 	policy := &fakePolicy{decision: allow}
 	approvals := &fakeApproval{approved: true}
 	executor := &fakeExecutor{result: result}
@@ -512,6 +703,8 @@ func newFixture(t *testing.T) fixture {
 	useCase := NewInvokeTool(
 		tools,
 		profileScopes,
+		arguments,
+		facts,
 		policy,
 		approvals,
 		fakeRouter{executor: executor},
@@ -527,6 +720,8 @@ func newFixture(t *testing.T) fixture {
 		tool:          tool,
 		tools:         tools,
 		profileScopes: profileScopes,
+		arguments:     arguments,
+		facts:         facts,
 		policy:        policy,
 		approvals:     approvals,
 		executor:      executor,
@@ -568,19 +763,49 @@ func (f *fakeProfileScopes) AllowsTool(
 	return f.allowed, f.err
 }
 
+type fakeArgumentValidator struct {
+	valid bool
+	err   error
+	calls int
+}
+
+func (f *fakeArgumentValidator) Validate(
+	context.Context,
+	catalogdomain.Schema,
+	invocationdomain.JSONValue,
+) (bool, error) {
+	f.calls++
+	return f.valid, f.err
+}
+
+type fakeFactExtractor struct {
+	facts invocationdomain.GovernanceFacts
+	err   error
+	calls int
+}
+
+func (f *fakeFactExtractor) Extract(
+	context.Context,
+	catalogdomain.Tool,
+	invocationdomain.JSONValue,
+) (invocationdomain.GovernanceFacts, error) {
+	f.calls++
+	return f.facts, f.err
+}
+
 type fakePolicy struct {
-	decision     policydomain.Decision
-	err          error
-	sawArguments bool
+	decision policydomain.Decision
+	err      error
+	calls    int
+	last     PolicyRequest
 }
 
 func (f *fakePolicy) Evaluate(
 	_ context.Context,
 	request PolicyRequest,
 ) (policydomain.Decision, error) {
-	if request.Tool.ID().String() == "" {
-		f.sawArguments = true
-	}
+	f.calls++
+	f.last = request
 	return f.decision, f.err
 }
 

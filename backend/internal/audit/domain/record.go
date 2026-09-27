@@ -39,6 +39,7 @@ type ErrorClass string
 const (
 	ErrorNone             ErrorClass = ""
 	ErrorToolNotFound     ErrorClass = "tool_not_found"
+	ErrorInvalidArguments ErrorClass = "invalid_arguments"
 	ErrorPolicy           ErrorClass = "policy"
 	ErrorApproval         ErrorClass = "approval"
 	ErrorExecutorNotFound ErrorClass = "executor_not_found"

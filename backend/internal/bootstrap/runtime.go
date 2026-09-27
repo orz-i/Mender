@@ -13,7 +13,9 @@ import (
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	credentialunavailable "github.com/orz-i/Mender/backend/internal/credential/infrastructure/unavailable"
 	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
+	invocationgovernance "github.com/orz-i/Mender/backend/internal/invocation/infrastructure/governance"
 	invocationidentity "github.com/orz-i/Mender/backend/internal/invocation/infrastructure/identity"
+	invocationjsonschema "github.com/orz-i/Mender/backend/internal/invocation/infrastructure/jsonschema"
 	invocationrouter "github.com/orz-i/Mender/backend/internal/invocation/infrastructure/router"
 	mcpconfigstore "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/configstore"
 	policylocal "github.com/orz-i/Mender/backend/internal/policy/infrastructure/local"
@@ -79,6 +81,8 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 	invokeTool := invocationapplication.NewInvokeTool(
 		catalog.store,
 		newInvocationProfileScopeAuthorizer(profiles.GetByID),
+		invocationjsonschema.Validator{},
+		invocationgovernance.UnknownExtractor{},
 		policylocal.AllowAll{},
 		policylocal.RejectApproval{},
 		executors,

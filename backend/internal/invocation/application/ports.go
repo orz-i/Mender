@@ -21,6 +21,26 @@ type ProfileScopeAuthorizer interface {
 	AllowsTool(context.Context, string, catalogdomain.ToolID) (bool, error)
 }
 
+// ArgumentValidator checks one JSON value against a canonical Tool schema.
+// A false result means caller input is invalid; a non-nil error means the
+// validator could not reliably evaluate the schema/instance.
+type ArgumentValidator interface {
+	Validate(
+		context.Context,
+		catalogdomain.Schema,
+		invocationdomain.JSONValue,
+	) (bool, error)
+}
+
+// GovernanceFactExtractor derives bounded Policy facts from validated input.
+type GovernanceFactExtractor interface {
+	Extract(
+		context.Context,
+		catalogdomain.Tool,
+		invocationdomain.JSONValue,
+	) (invocationdomain.GovernanceFacts, error)
+}
+
 // PolicyEvaluator decides whether an invocation may execute.
 type PolicyEvaluator interface {
 	Evaluate(context.Context, PolicyRequest) (policydomain.Decision, error)
@@ -67,10 +87,12 @@ type Clock interface {
 	Now() time.Time
 }
 
-// PolicyRequest intentionally excludes arguments and secret material.
+// PolicyRequest intentionally excludes raw arguments and secret material.
 type PolicyRequest struct {
 	InvocationID          invocationdomain.InvocationID
 	Tool                  catalogdomain.Tool
+	Context               invocationdomain.InvocationContext
+	Facts                 invocationdomain.GovernanceFacts
 	Caller                string
 	HasCredentialResolver bool
 }
