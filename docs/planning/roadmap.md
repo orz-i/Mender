@@ -265,3 +265,21 @@ Goals:
 Exit criteria are complete. Fresh migration preserves current allow behavior; default-deny allowlists, deny-over-allow composition, explicit unknown-fact rules, stable Audit reasons, Policy SQLite, CLI/OpenAPI/Wails, and Web/Desktop management are covered by the shared Runtime and tests. `pnpm check` and `pnpm security:check` are green.
 
 See `phase-12-policy-governance.md` for implementation and verification evidence.
+
+## Phase 13 — Provider Plugin Runtime and MCP unification
+
+Status: In progress
+
+Goals:
+
+- Make Provider plugins the runtime/configuration boundary while preserving canonical Provider and Tool models.
+- Treat upstream MCP as one built-in plugin whose stdio and Streamable HTTP forms are transport variants.
+- Introduce deterministic Provider instance reuse, reload, replacement, and shutdown instead of implicit executor/closer ownership.
+- Replace MCP-specific Provider configuration/orchestration with generic plugin configuration and registry lookup.
+- Preserve ProviderID, ToolID, Profile ToolBindings, Policy targets, Credential References, and Audit history through migration.
+- Migrate CLI/OpenAPI/Wails/Web/Desktop management to plugin-oriented Provider semantics.
+- Leave a stable extension boundary for OpenAPI and model-hosted Tool Providers without implementing them in this phase.
+
+Exit criteria include generic plugin configuration persistence, one built-in MCP plugin, Provider-scoped instance lifecycle/race coverage, migration compatibility for existing MCP configurations, plugin-oriented first-party management contracts, and green repository/security checks.
+
+See `phase-13-provider-plugin-runtime.md`.
