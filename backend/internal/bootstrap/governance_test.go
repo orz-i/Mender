@@ -17,6 +17,7 @@ import (
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	invocationexecutionguard "github.com/orz-i/Mender/backend/internal/invocation/infrastructure/executionguard"
 	mcpprovider "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/provider"
+	policydomain "github.com/orz-i/Mender/backend/internal/policy/domain"
 	profileapplication "github.com/orz-i/Mender/backend/internal/profile/application"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 )
@@ -204,6 +205,254 @@ func TestGovernedRuntimeIntegrationMatrix(t *testing.T) {
 		toolFailureResponse.Outcome.FailureSource() != invocationdomain.FailureSourceTool ||
 		toolFailureResponse.Outcome.FailureCode() != invocationdomain.FailureToolError {
 		t.Fatalf("tool failure outcome = %#v", toolFailureResponse.Outcome)
+	}
+}
+
+func TestProfileBindingPolicyConstraintsEndToEnd(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	runtime, toolID, executor := governedRuntimeFixture(t, RuntimeOptions{
+		DatabasePath:   filepath.Join(t.TempDir(), "mender.db"),
+		DefaultTimeout: time.Second,
+	})
+	defer func() { _ = runtime.Close() }()
+
+	denyProfile, err := runtime.Profiles.Create.Execute(
+		ctx,
+		profileapplication.CreateProfileRequest{
+			Slug:        "binding-deny",
+			DisplayName: "Binding Deny",
+			Mode:        profiledomain.ExposureDynamic,
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	denyProfile, err = runtime.Profiles.AddTool.Execute(
+		ctx,
+		profileapplication.AddToolRequest{
+			ProfileSlug:      denyProfile.Slug(),
+			ToolID:           toolID,
+			PolicyConstraint: profiledomain.PolicyDeny,
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	denyScope, err := invocationdomain.ProfileExecutionScope(denyProfile.ID().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	denyContext := mustGovernanceInvocationContext(
+		t,
+		invocationdomain.OriginMCP,
+		"binding-deny",
+		denyScope,
+	)
+	denyResponse, err := runtime.InvokeTool.Execute(
+		ctx,
+		invocationapplication.InvokeToolRequest{
+			ToolID:    toolID,
+			Arguments: []byte(`{"count":1}`),
+			Context:   denyContext,
+		},
+	)
+	if err != nil {
+		t.Fatalf("deny Execute() error = %v", err)
+	}
+	if denyResponse.Outcome.Kind() != invocationdomain.OutcomeKindRejected ||
+		denyResponse.Outcome.RejectionCode() != invocationdomain.RejectionPolicyDenied {
+		t.Fatalf("deny outcome = %#v", denyResponse.Outcome)
+	}
+	if executor.Calls() != 0 {
+		t.Fatalf("deny binding reached executor; calls = %d", executor.Calls())
+	}
+	denyAudit, err := runtime.audit.Get(ctx, denyResponse.InvocationID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if denyAudit.PolicyKind() != policydomain.DecisionDeny ||
+		denyAudit.PolicyReason() != "profile.binding.deny" {
+		t.Fatalf(
+			"deny audit policy = %q/%q",
+			denyAudit.PolicyKind(),
+			denyAudit.PolicyReason(),
+		)
+	}
+
+	approvalProfile, err := runtime.Profiles.Create.Execute(
+		ctx,
+		profileapplication.CreateProfileRequest{
+			Slug:        "binding-approval",
+			DisplayName: "Binding Approval",
+			Mode:        profiledomain.ExposureDynamic,
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	approvalProfile, err = runtime.Profiles.AddTool.Execute(
+		ctx,
+		profileapplication.AddToolRequest{
+			ProfileSlug:      approvalProfile.Slug(),
+			ToolID:           toolID,
+			PolicyConstraint: profiledomain.PolicyRequireApproval,
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	approvalScope, err := invocationdomain.ProfileExecutionScope(
+		approvalProfile.ID().String(),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	approvalContext := mustGovernanceInvocationContext(
+		t,
+		invocationdomain.OriginMCP,
+		"binding-approval",
+		approvalScope,
+	)
+	approvalResponse, err := runtime.InvokeTool.Execute(
+		ctx,
+		invocationapplication.InvokeToolRequest{
+			ToolID:    toolID,
+			Arguments: []byte(`{"count":1}`),
+			Context:   approvalContext,
+		},
+	)
+	if err != nil {
+		t.Fatalf("approval Execute() error = %v", err)
+	}
+	if approvalResponse.Outcome.Kind() != invocationdomain.OutcomeKindRejected ||
+		approvalResponse.Outcome.RejectionCode() != invocationdomain.RejectionApprovalDenied {
+		t.Fatalf("approval outcome = %#v", approvalResponse.Outcome)
+	}
+	if executor.Calls() != 0 {
+		t.Fatalf("approval rejection reached executor; calls = %d", executor.Calls())
+	}
+	approvalAudit, err := runtime.audit.Get(ctx, approvalResponse.InvocationID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if approvalAudit.PolicyKind() != policydomain.DecisionRequireApproval ||
+		approvalAudit.PolicyReason() != "profile.binding.require_approval" ||
+		approvalAudit.Approval() != auditdomain.ApprovalDenied {
+		t.Fatalf("approval audit = %#v", approvalAudit)
+	}
+
+	catalogContext := mustGovernanceInvocationContext(
+		t,
+		invocationdomain.OriginInternal,
+		"binding-catalog",
+		invocationdomain.CatalogExecutionScope(),
+	)
+	catalogResponse, err := runtime.InvokeTool.Execute(
+		ctx,
+		invocationapplication.InvokeToolRequest{
+			ToolID:    toolID,
+			Arguments: []byte(`{"count":1}`),
+			Context:   catalogContext,
+		},
+	)
+	if err != nil {
+		t.Fatalf("Catalog Execute() error = %v", err)
+	}
+	if catalogResponse.Outcome.Kind() != invocationdomain.OutcomeKindComplete {
+		t.Fatalf("Catalog outcome = %#v", catalogResponse.Outcome)
+	}
+	if executor.Calls() != 1 {
+		t.Fatalf("Catalog scope executor calls = %d, want 1", executor.Calls())
+	}
+}
+
+func TestProfileBindingSerialExecutionEndToEnd(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	runtime, toolID, executor := governedRuntimeFixture(t, RuntimeOptions{
+		DatabasePath:   filepath.Join(t.TempDir(), "mender.db"),
+		DefaultTimeout: time.Second,
+	})
+	defer func() { _ = runtime.Close() }()
+
+	profile, err := runtime.Profiles.Create.Execute(
+		ctx,
+		profileapplication.CreateProfileRequest{
+			Slug:        "binding-serial",
+			DisplayName: "Binding Serial",
+			Mode:        profiledomain.ExposureDynamic,
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile, err = runtime.Profiles.AddTool.Execute(
+		ctx,
+		profileapplication.AddToolRequest{
+			ProfileSlug:           profile.Slug(),
+			ToolID:                toolID,
+			ConcurrencyConstraint: profiledomain.ConcurrencySerial,
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	blocking := newSerialProbeExecutor(t)
+	if err := runtime.RegisterExecutor(executor.providerID, blocking); err != nil {
+		t.Fatal(err)
+	}
+
+	scope, err := invocationdomain.ProfileExecutionScope(profile.ID().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	executionContext := mustGovernanceInvocationContext(
+		t,
+		invocationdomain.OriginMCP,
+		"binding-serial",
+		scope,
+	)
+	request := invocationapplication.InvokeToolRequest{
+		ToolID:    toolID,
+		Arguments: []byte(`{"count":1}`),
+		Context:   executionContext,
+	}
+
+	errs := make(chan error, 2)
+	go func() {
+		_, err := runtime.InvokeTool.Execute(ctx, request)
+		errs <- err
+	}()
+
+	select {
+	case <-blocking.entered:
+	case <-time.After(time.Second):
+		t.Fatal("first binding invocation did not enter executor")
+	}
+
+	go func() {
+		_, err := runtime.InvokeTool.Execute(ctx, request)
+		errs <- err
+	}()
+
+	select {
+	case <-blocking.secondEntered:
+		t.Fatal("second same-binding invocation entered before first released")
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	close(blocking.release)
+	for range 2 {
+		if err := <-errs; err != nil {
+			t.Fatalf("binding serial invocation error = %v", err)
+		}
+	}
+	if blocking.MaxActive() != 1 {
+		t.Fatalf("binding serial max active = %d, want 1", blocking.MaxActive())
 	}
 }
 
