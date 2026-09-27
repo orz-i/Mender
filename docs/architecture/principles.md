@@ -81,9 +81,9 @@ CLI, MCP, Skill, Web, and Desktop clients must not implement independent executi
 
 ## 8. Credentials are references until the execution boundary
 
-Domain and application objects refer to credentials by identifier or reference.
+Domain and application objects refer to Credentials by stable Reference. Inventory metadata may be persisted, but secret bytes must live behind a dedicated secret backend.
 
-Secret material is resolved only at the infrastructure execution boundary and must not be inserted into tool descriptions, tool schemas, model prompts, domain events, or normal audit payloads.
+Secret material is resolved only at infrastructure execution/connection boundaries and must not be inserted into Tool descriptions, Tool schemas, model prompts, domain events, Provider persistence, Profile persistence, or normal Audit payloads. Native keyring failure must not fall back to plaintext storage.
 
 ## 9. Discovery is first-class
 
@@ -99,7 +99,7 @@ Direct enumeration remains available for small profiles and protocol compatibili
 
 ## 10. Profiles are operational and security boundaries
 
-A Profile is more than a list of Tools. Its Profile-to-Tool relationship is a ToolBinding that may define exposure, machine/model presentation, restrictive policy, and execution constraints. Future Credential scope also belongs on this relationship once Credential inventory and validation exist.
+A Profile is more than a list of Tools. Its Profile-to-Tool relationship is a ToolBinding that may define exposure, machine/model presentation, restrictive policy, execution constraints, and an inventory-validated Credential allowlist.
 
 Remote endpoints may bind directly to Profiles. Profile-scoped ToolBinding membership must be enforced by the shared Invocation pipeline; adapter checks may narrow discovery/projection but are not the authoritative execution boundary. Binding policy may tighten global Policy but must never relax it.
 

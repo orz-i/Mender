@@ -22,7 +22,7 @@ Mender should eventually provide:
 - A canonical tool catalog independent from MCP or any other protocol.
 - Search, describe, and invoke workflows for large catalogs.
 - Profiles whose ToolBindings combine membership, exposure, aliases/presentation, and restrictive execution governance.
-- Credential references and runtime-only secret resolution.
+- A non-secret Credential inventory with runtime-only resolution from native OS keyrings or environment-backed sources.
 - Invocation policy and optional approval gates.
 - Auditable execution records.
 - MCP server exposure.

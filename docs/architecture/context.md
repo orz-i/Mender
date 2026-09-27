@@ -87,9 +87,9 @@ Policy may account for profile, identity, tool, provider trust, declared effects
 
 ### Credential
 
-A reference to authentication material required by a provider or tool.
+A human-manageable Reference plus non-secret metadata for authentication material required by a Provider or Tool.
 
-Credential metadata can participate in domain decisions. Secret values remain infrastructure concerns.
+Credential inventory metadata may be persisted and selected by Profile/Provider configuration. Secret values remain infrastructure concerns and are resolved only from native OS credential storage or environment-backed sources at execution/connection boundaries.
 
 ### Audit Record
 

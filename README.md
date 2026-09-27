@@ -11,7 +11,7 @@ It provides one canonical tool model and execution pipeline, then exposes the sa
 
 ## Status
 
-The architecture-through-Profile-governance roadmap (Phases 0–10) is complete. Mender now provides first-class Profile ToolBindings with Profile-specific alias/title/description projection, restrictive inherit/require-approval/deny policy constraints, binding-local serial execution, SQLite v2 persistence, and consistent CLI/MCP/Web/Desktop management while preserving canonical Catalog identity and the shared Invocation pipeline.
+The architecture-through-Profile-governance roadmap (Phases 0–10) is complete. Phase 11 is planned to add a real Credential inventory, native/environment secret sources, Profile Credential scope, and Credential-backed Provider authentication while preserving the rule that secret bytes never enter SQLite, Profile/Provider persistence, Policy, Audit, or normal response models.
 
 ## Product principles
 

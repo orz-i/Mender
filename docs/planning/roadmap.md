@@ -228,3 +228,28 @@ Goals:
 Exit criteria are complete. ToolBinding is now the canonical Profile-to-Tool relationship, Profile SQLite v2 preserves v1 behavior, binding policy only tightens global Policy, binding-local serial execution is enforced inside Invocation, MCP uses effective Profile presentation without mutating Catalog identity/schemas, and all adapters/UI share one normalized binding contract without manual ToolID entry.
 
 See `phase-10-profile-tool-binding-governance.md` for implementation evidence and deferred Credential/global-Policy work.
+
+## Phase 11 — Credential inventory and scoped Provider authentication
+
+Status: Planned
+
+Goals:
+
+- Introduce a real non-secret Credential inventory.
+- Resolve native secrets from the OS keyring and headless secrets from environment-backed sources without plaintext fallback.
+- Add inventory-validated CredentialRefs to Profile ToolBindings.
+- Restrict Profile-scoped executor Credential resolution to the selected allowlist while Catalog scope remains explicitly privileged.
+- Let MCP Provider HTTP headers and stdio environment entries bind to Credential References instead of persisted secret values.
+- Prevent a Profile from borrowing a shared authenticated Provider connection without access to the Provider-required Credential References.
+- Replace the read-only Credentials UI with list/create/rotate/delete workflows and inventory selectors.
+
+Exit criteria:
+
+- SQLite/Provider/Profile/Audit persistence contains no secret values.
+- native/environment Credential sources resolve through one production CredentialResolver.
+- Profile Credential scope is enforced before executor Credential resolution.
+- Credential-backed Provider authentication stores References only and is authorized on every Tool call.
+- normal Web/Desktop workflows never require users to type a complete Credential Reference.
+- legacy environment header templates remain compatible but are explicitly marked as a legacy exception.
+
+See `phase-11-credential-governance.md`.
