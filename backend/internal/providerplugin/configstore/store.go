@@ -80,15 +80,17 @@ func (s *Store) Save(
 	_, err := s.db.ExecContext(
 		ctx,
 		`INSERT INTO provider_configs(
-			provider_id, plugin_id, config_version, revision, config_json
-		) VALUES (?, ?, ?, ?, ?)
+			provider_id, plugin_id, plugin_installation_id, config_version, revision, config_json
+		) VALUES (?, ?, ?, ?, ?, ?)
 		ON CONFLICT(provider_id) DO UPDATE SET
 			plugin_id = excluded.plugin_id,
+			plugin_installation_id = excluded.plugin_installation_id,
 			config_version = excluded.config_version,
 			revision = excluded.revision,
 			config_json = excluded.config_json`,
 		config.ProviderID.String(),
 		config.PluginID.String(),
+		nullableInstallationID(config.InstallationID),
 		config.ConfigVersion,
 		config.Revision,
 		string(config.Config),
@@ -107,7 +109,7 @@ func (s *Store) GetProviderConfig(
 ) (providerplugin.Configuration, error) {
 	row := s.db.QueryRowContext(
 		ctx,
-		`SELECT provider_id, plugin_id, config_version, revision, config_json
+		`SELECT provider_id, plugin_id, plugin_installation_id, config_version, revision, config_json
 		FROM provider_configs
 		WHERE provider_id = ?`,
 		providerID.String(),
@@ -128,7 +130,7 @@ func (s *Store) List(
 ) ([]providerplugin.Configuration, error) {
 	rows, err := s.db.QueryContext(
 		ctx,
-		`SELECT provider_id, plugin_id, config_version, revision, config_json
+		`SELECT provider_id, plugin_id, plugin_installation_id, config_version, revision, config_json
 		FROM provider_configs
 		ORDER BY provider_id`,
 	)
@@ -211,11 +213,12 @@ func (s *Store) ImportOnce(
 		if _, err := tx.ExecContext(
 			ctx,
 			`INSERT INTO provider_configs(
-				provider_id, plugin_id, config_version, revision, config_json
-			) VALUES (?, ?, ?, ?, ?)
+				provider_id, plugin_id, plugin_installation_id, config_version, revision, config_json
+			) VALUES (?, ?, ?, ?, ?, ?)
 			ON CONFLICT(provider_id) DO NOTHING`,
 			config.ProviderID.String(),
 			config.PluginID.String(),
+			nullableInstallationID(config.InstallationID),
 			config.ConfigVersion,
 			config.Revision,
 			string(config.Config),
@@ -249,15 +252,17 @@ func scanConfiguration(
 	scanner rowScanner,
 ) (providerplugin.Configuration, error) {
 	var (
-		rawProviderID string
-		rawPluginID   string
-		configVersion int
-		revision      string
-		rawConfig     string
+		rawProviderID     string
+		rawPluginID       string
+		rawInstallationID sql.NullString
+		configVersion     int
+		revision          string
+		rawConfig         string
 	)
 	if err := scanner.Scan(
 		&rawProviderID,
 		&rawPluginID,
+		&rawInstallationID,
 		&configVersion,
 		&revision,
 		&rawConfig,
@@ -272,17 +277,33 @@ func scanConfiguration(
 	if err != nil {
 		return providerplugin.Configuration{}, fmt.Errorf("parse plugin id: %w", err)
 	}
+	var installationID *providerplugin.InstallationID
+	if rawInstallationID.Valid {
+		parsed, parseErr := providerplugin.ParseInstallationID(rawInstallationID.String)
+		if parseErr != nil {
+			return providerplugin.Configuration{}, fmt.Errorf("parse plugin installation id: %w", parseErr)
+		}
+		installationID = &parsed
+	}
 	config := providerplugin.Configuration{
-		ProviderID:    providerID,
-		PluginID:      pluginID,
-		ConfigVersion: configVersion,
-		Revision:      revision,
-		Config:        []byte(rawConfig),
+		ProviderID:     providerID,
+		PluginID:       pluginID,
+		InstallationID: installationID,
+		ConfigVersion:  configVersion,
+		Revision:       revision,
+		Config:         []byte(rawConfig),
 	}
 	if err := config.Validate(); err != nil {
 		return providerplugin.Configuration{}, err
 	}
 	return config, nil
+}
+
+func nullableInstallationID(id *providerplugin.InstallationID) any {
+	if id == nil {
+		return nil
+	}
+	return id.String()
 }
 
 var _ providerplugin.ConfigurationSource = (*Store)(nil)

@@ -93,6 +93,69 @@ func (r *Runtime) RegisterConfiguredProvider(
 	return provider, nil
 }
 
+// RegisterInstalledProvider persists a Provider pinned to one exact external
+// plugin installation. It is intentionally an internal Runtime primitive until
+// management adapters expose installation-aware creation.
+func (r *Runtime) RegisterInstalledProvider(
+	ctx context.Context,
+	request catalogapplication.RegisterProviderRequest,
+	installationID providerplugin.InstallationID,
+	rawConfig json.RawMessage,
+) (catalogdomain.Provider, error) {
+	if r == nil || r.externalResolver == nil {
+		return catalogdomain.Provider{}, fmt.Errorf(
+			"register installed provider: external plugin resolver is unavailable",
+		)
+	}
+	resolved, err := r.externalResolver.ResolveInstallation(ctx, installationID)
+	if err != nil {
+		return catalogdomain.Provider{}, fmt.Errorf(
+			"register installed provider: %w",
+			err,
+		)
+	}
+	if err := resolved.Plugin.ValidateConfig(ctx, cloneRawJSON(rawConfig)); err != nil {
+		return catalogdomain.Provider{}, fmt.Errorf(
+			"register installed provider: validate config: %w",
+			err,
+		)
+	}
+
+	provider, err := r.Catalog.RegisterProvider.Execute(ctx, request)
+	if err != nil {
+		return catalogdomain.Provider{}, err
+	}
+
+	config, err := providerplugin.NewInstalledConfiguration(
+		provider.ID(),
+		resolved.Descriptor.ID,
+		installationID,
+		resolved.Descriptor.ConfigVersion,
+		rawConfig,
+	)
+	if err != nil {
+		removeErr := r.Catalog.RemoveProvider.Execute(ctx, provider.ID())
+		return catalogdomain.Provider{}, errors.Join(
+			fmt.Errorf("register installed provider: build config: %w", err),
+			wrapOptionalError(
+				"register installed provider: compensate provider removal",
+				removeErr,
+			),
+		)
+	}
+	if err := r.providerConfigs.Save(ctx, config); err != nil {
+		removeErr := r.Catalog.RemoveProvider.Execute(ctx, provider.ID())
+		return catalogdomain.Provider{}, errors.Join(
+			fmt.Errorf("register installed provider: save config: %w", err),
+			wrapOptionalError(
+				"register installed provider: compensate provider removal",
+				removeErr,
+			),
+		)
+	}
+	return provider, nil
+}
+
 // UpdateConfiguredProvider updates canonical metadata and plugin configuration
 // while preserving Provider identity and PluginID.
 func (r *Runtime) UpdateConfiguredProvider(
@@ -120,24 +183,24 @@ func (r *Runtime) UpdateConfiguredProvider(
 			err,
 		)
 	}
-	plugin, descriptor, err := r.resolveProviderPlugin(currentConfig.PluginID)
+	resolved, err := r.providerResolver.Resolve(ctx, currentConfig)
 	if err != nil {
 		return catalogdomain.Provider{}, fmt.Errorf(
-			"update configured provider: %w",
+			"update configured provider: resolve plugin: %w",
 			err,
 		)
 	}
-	if err := plugin.ValidateConfig(ctx, cloneRawJSON(rawConfig)); err != nil {
+	if err := resolved.Plugin.ValidateConfig(ctx, cloneRawJSON(rawConfig)); err != nil {
 		return catalogdomain.Provider{}, fmt.Errorf(
 			"update configured provider: validate config: %w",
 			err,
 		)
 	}
 
-	nextConfig, err := providerplugin.NewConfiguration(
+	nextConfig, err := updatedProviderConfiguration(
 		providerID,
-		currentConfig.PluginID,
-		descriptor.ConfigVersion,
+		currentConfig,
+		resolved.Descriptor.ConfigVersion,
 		rawConfig,
 	)
 	if err != nil {
@@ -304,6 +367,29 @@ func (r *Runtime) ensureProviderUnused(
 		}
 	}
 	return nil
+}
+
+func updatedProviderConfiguration(
+	providerID catalogdomain.ProviderID,
+	current providerplugin.Configuration,
+	configVersion int,
+	rawConfig json.RawMessage,
+) (providerplugin.Configuration, error) {
+	if current.InstallationID == nil {
+		return providerplugin.NewConfiguration(
+			providerID,
+			current.PluginID,
+			configVersion,
+			rawConfig,
+		)
+	}
+	return providerplugin.NewInstalledConfiguration(
+		providerID,
+		current.PluginID,
+		*current.InstallationID,
+		configVersion,
+		rawConfig,
+	)
 }
 
 func (r *Runtime) resolveProviderPlugin(

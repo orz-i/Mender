@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -27,11 +29,15 @@ import (
 	policylocal "github.com/orz-i/Mender/backend/internal/policy/infrastructure/local"
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
 	providerconfigstore "github.com/orz-i/Mender/backend/internal/providerplugin/configstore"
+	providerexternal "github.com/orz-i/Mender/backend/internal/providerplugin/external"
+	installationlocalfs "github.com/orz-i/Mender/backend/internal/providerplugin/installation/infrastructure/localfs"
+	installationsqlite "github.com/orz-i/Mender/backend/internal/providerplugin/installation/infrastructure/sqlite"
 )
 
 // RuntimeOptions configures the shared local execution runtime.
 type RuntimeOptions struct {
 	DatabasePath          string
+	ProviderPluginRoot    string
 	DefaultTimeout        time.Duration
 	MaxResultBytes        int
 	ExecutionGuard        invocationapplication.ExecutionGuard
@@ -49,12 +55,17 @@ type Runtime struct {
 	InvokeTool  invocationapplication.InvokeTool
 	ListAudit   auditapplication.ListRecords
 
-	audit             *auditsqlite.Store
-	executors         *invocationrouter.Router
-	mcpConfigs        *mcpconfigstore.Store
-	providerPlugins   *providerplugin.Registry
-	providerConfigs   *providerconfigstore.Store
-	providerInstances *providerplugin.Manager
+	audit               *auditsqlite.Store
+	executors           *invocationrouter.Router
+	mcpConfigs          *mcpconfigstore.Store
+	providerPlugins     *providerplugin.Registry
+	providerResolver    providerplugin.Resolver
+	externalResolver    *providerexternal.Resolver
+	providerConfigs     *providerconfigstore.Store
+	pluginInstallations *installationsqlite.Store
+	pluginPackages      *installationlocalfs.Store
+	externalProcesses   *providerexternal.Supervisor
+	providerInstances   *providerplugin.Manager
 
 	closersMu sync.Mutex
 	closers   []io.Closer
@@ -168,23 +179,97 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		_ = catalog.Close()
 		return nil, fmt.Errorf("compose runtime: provider plugins: %w", err)
 	}
+	pluginInstallations, err := installationsqlite.Open(ctx, options.DatabasePath)
+	if err != nil {
+		_ = providerConfigs.Close()
+		_ = configs.Close()
+		_ = policies.Close()
+		_ = profiles.Close()
+		_ = credentials.Close()
+		_ = auditStore.Close()
+		_ = catalog.Close()
+		return nil, fmt.Errorf("compose runtime: plugin installations: %w", err)
+	}
+	pluginRoot, err := resolveProviderPluginRoot(
+		options.DatabasePath,
+		options.ProviderPluginRoot,
+	)
+	if err != nil {
+		_ = pluginInstallations.Close()
+		_ = providerConfigs.Close()
+		_ = configs.Close()
+		_ = policies.Close()
+		_ = profiles.Close()
+		_ = credentials.Close()
+		_ = auditStore.Close()
+		_ = catalog.Close()
+		return nil, fmt.Errorf("compose runtime: plugin root: %w", err)
+	}
+	pluginPackages, err := installationlocalfs.New(pluginRoot)
+	if err != nil {
+		_ = pluginInstallations.Close()
+		_ = providerConfigs.Close()
+		_ = configs.Close()
+		_ = policies.Close()
+		_ = profiles.Close()
+		_ = credentials.Close()
+		_ = auditStore.Close()
+		_ = catalog.Close()
+		return nil, fmt.Errorf("compose runtime: plugin packages: %w", err)
+	}
+	externalProcesses, err := providerexternal.NewSupervisor(
+		pluginPackages,
+		providerexternal.DefaultOptions(),
+	)
+	if err != nil {
+		_ = pluginInstallations.Close()
+		_ = providerConfigs.Close()
+		_ = configs.Close()
+		_ = policies.Close()
+		_ = profiles.Close()
+		_ = credentials.Close()
+		_ = auditStore.Close()
+		_ = catalog.Close()
+		return nil, fmt.Errorf("compose runtime: external plugin processes: %w", err)
+	}
+	externalResolver, err := providerexternal.NewResolver(
+		providerPlugins,
+		pluginInstallations,
+		externalProcesses,
+	)
+	if err != nil {
+		_ = externalProcesses.CloseAll()
+		_ = pluginInstallations.Close()
+		_ = providerConfigs.Close()
+		_ = configs.Close()
+		_ = policies.Close()
+		_ = profiles.Close()
+		_ = credentials.Close()
+		_ = auditStore.Close()
+		_ = catalog.Close()
+		return nil, fmt.Errorf("compose runtime: provider resolver: %w", err)
+	}
+	var providerResolver providerplugin.Resolver = externalResolver
+
 	credentials.Delete = credentialapplication.NewDeleteCredential(
 		credentials.store,
 		credentials.secrets,
 		runtimeCredentialUsageChecker{
 			profiles: profiles,
 			configs:  providerConfigs,
-			plugins:  providerPlugins,
+			resolver: providerResolver,
 		},
 	)
 
 	providerInstances, err := providerplugin.NewManager(
-		providerPlugins,
+		providerResolver,
 		providerConfigs,
 		executors,
 		credentials.Resolver,
 	)
 	if err != nil {
+		_ = externalProcesses.CloseAll()
+		_ = pluginInstallations.Close()
 		_ = providerConfigs.Close()
 		_ = configs.Close()
 		_ = policies.Close()
@@ -229,19 +314,24 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 	)
 
 	return &Runtime{
-		Catalog:           catalog,
-		Credentials:       credentials,
-		Profiles:          profiles,
-		Policy:            policies,
-		InvokeTool:        invokeTool,
-		ListAudit:         auditapplication.NewListRecords(auditStore),
-		audit:             auditStore,
-		executors:         executors,
-		mcpConfigs:        configs,
-		providerPlugins:   providerPlugins,
-		providerConfigs:   providerConfigs,
-		providerInstances: providerInstances,
-		mcpServers:        make(map[string]*managedMCPServer),
+		Catalog:             catalog,
+		Credentials:         credentials,
+		Profiles:            profiles,
+		Policy:              policies,
+		InvokeTool:          invokeTool,
+		ListAudit:           auditapplication.NewListRecords(auditStore),
+		audit:               auditStore,
+		executors:           executors,
+		mcpConfigs:          configs,
+		providerPlugins:     providerPlugins,
+		providerResolver:    providerResolver,
+		externalResolver:    externalResolver,
+		providerConfigs:     providerConfigs,
+		pluginInstallations: pluginInstallations,
+		pluginPackages:      pluginPackages,
+		externalProcesses:   externalProcesses,
+		providerInstances:   providerInstances,
+		mcpServers:          make(map[string]*managedMCPServer),
 	}, nil
 }
 
@@ -251,6 +341,24 @@ func (r *Runtime) RegisterExecutor(
 	executor invocationapplication.ToolExecutor,
 ) error {
 	return r.executors.Register(providerID, executor)
+}
+
+func resolveProviderPluginRoot(databasePath, explicit string) (string, error) {
+	if value := strings.TrimSpace(explicit); value != "" {
+		absolute, err := filepath.Abs(value)
+		if err != nil {
+			return "", fmt.Errorf("resolve provider plugin root: %w", err)
+		}
+		return absolute, nil
+	}
+	absoluteDatabase, err := filepath.Abs(strings.TrimSpace(databasePath))
+	if err != nil {
+		return "", fmt.Errorf("resolve provider plugin database path: %w", err)
+	}
+	if strings.TrimSpace(databasePath) == "" {
+		return "", fmt.Errorf("resolve provider plugin root: database path must not be empty")
+	}
+	return filepath.Join(filepath.Dir(absoluteDatabase), "plugins"), nil
 }
 
 func (r *Runtime) addCloser(closer io.Closer) {
@@ -266,19 +374,21 @@ func (r *Runtime) addCloser(closer io.Closer) {
 func (r *Runtime) Close() error {
 	serverErr := r.closeManagedMCPServers()
 	providerErr := r.providerInstances.CloseAll()
+	processErr := r.externalProcesses.CloseAll()
 
 	r.closersMu.Lock()
 	closers := append([]io.Closer(nil), r.closers...)
 	r.closers = nil
 	r.closersMu.Unlock()
 
-	errs := make([]error, 0, len(closers)+6)
-	errs = append(errs, serverErr, providerErr)
+	errs := make([]error, 0, len(closers)+9)
+	errs = append(errs, serverErr, providerErr, processErr)
 	for i := len(closers) - 1; i >= 0; i-- {
 		errs = append(errs, closers[i].Close())
 	}
 	errs = append(
 		errs,
+		r.pluginInstallations.Close(),
 		r.providerConfigs.Close(),
 		r.mcpConfigs.Close(),
 		r.Policy.Close(),

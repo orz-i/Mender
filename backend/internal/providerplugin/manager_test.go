@@ -189,6 +189,73 @@ func TestManagerReplacesChangedRevisionAndReloads(t *testing.T) {
 	}
 }
 
+func TestManagerInstallationPinChangeReplacesInstance(t *testing.T) {
+	t.Parallel()
+
+	providerID := managerProviderID(
+		t,
+		"prov_00000000000000000000000000000015",
+	)
+	plugin := newManagerPlugin()
+	firstInstallation, err := ParseInstallationID(
+		"pinst_00000000000000000000000000000001",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondInstallation, err := ParseInstallationID(
+		"pinst_00000000000000000000000000000002",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	firstConfig := managerConfig(providerID, "same-revision")
+	firstConfig.InstallationID = &firstInstallation
+
+	configs := &managerConfigSource{
+		configs: make(map[catalogdomain.ProviderID]Configuration),
+	}
+	configs.set(firstConfig)
+	routes := &managerRoutes{
+		executors: make(map[catalogdomain.ProviderID]invocationapplication.ToolExecutor),
+	}
+	manager, err := NewManager(
+		managerResolver{plugin: plugin},
+		configs,
+		routes,
+		nil,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = manager.CloseAll() })
+
+	firstRaw, err := manager.Ensure(context.Background(), providerID)
+	if err != nil {
+		t.Fatalf("Ensure(first) error = %v", err)
+	}
+	first := firstRaw.(*managerInstance)
+
+	secondConfig := firstConfig
+	secondConfig.InstallationID = &secondInstallation
+	configs.set(secondConfig)
+
+	secondRaw, err := manager.Ensure(context.Background(), providerID)
+	if err != nil {
+		t.Fatalf("Ensure(second) error = %v", err)
+	}
+	second := secondRaw.(*managerInstance)
+	if second == first {
+		t.Fatal("changed InstallationID reused the old instance")
+	}
+	if first.closeCount() != 1 {
+		t.Fatalf("first Close() count = %d, want 1", first.closeCount())
+	}
+	if plugin.openCount() != 2 {
+		t.Fatalf("Open() count = %d, want 2", plugin.openCount())
+	}
+}
+
 func TestManagerCloseProviderAllowsLaterReactivation(t *testing.T) {
 	t.Parallel()
 
@@ -323,6 +390,21 @@ func newTestManager(
 		_ = manager.CloseAll()
 	})
 	return manager, configs, routes
+}
+
+type managerResolver struct {
+	plugin Plugin
+}
+
+func (r managerResolver) Resolve(
+	_ context.Context,
+	config Configuration,
+) (Resolution, error) {
+	descriptor := r.plugin.Descriptor()
+	if descriptor.ID != config.PluginID {
+		return Resolution{}, errors.New("plugin id mismatch")
+	}
+	return Resolution{Plugin: r.plugin, Descriptor: descriptor}, nil
 }
 
 type managerConfigSource struct {

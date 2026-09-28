@@ -63,7 +63,7 @@ type runtimeCredentialUsageChecker struct {
 	configs  interface {
 		List(context.Context) ([]providerplugin.Configuration, error)
 	}
-	plugins *providerplugin.Registry
+	resolver providerplugin.Resolver
 }
 
 func (a runtimeCredentialUsageChecker) Usages(
@@ -96,7 +96,7 @@ func (a runtimeCredentialUsageChecker) Usages(
 		return nil, fmt.Errorf("credential usage: list provider configs: %w", err)
 	}
 	for _, config := range configs {
-		plugin, err := a.plugins.Lookup(config.PluginID)
+		resolved, err := a.resolver.Resolve(ctx, config)
 		if err != nil {
 			return nil, fmt.Errorf(
 				"credential usage: resolve provider plugin %s: %w",
@@ -104,7 +104,7 @@ func (a runtimeCredentialUsageChecker) Usages(
 				err,
 			)
 		}
-		metadata, err := plugin.InspectConfig(ctx, config.Config)
+		metadata, err := resolved.Plugin.InspectConfig(ctx, config.Config)
 		if err != nil {
 			return nil, fmt.Errorf(
 				"credential usage: inspect provider %s: %w",

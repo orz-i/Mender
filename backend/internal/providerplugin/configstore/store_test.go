@@ -73,6 +73,51 @@ func TestStoreRoundTripListAndDelete(t *testing.T) {
 	}
 }
 
+func TestStoreRoundTripsExternalInstallationPin(t *testing.T) {
+	t.Parallel()
+
+	store := openTestStore(t)
+	providerID, err := catalogdomain.ParseProviderID(
+		"prov_00000000000000000000000000000026",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pluginID, err := providerplugin.ParseID("dev.example.echo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	installationID, err := providerplugin.ParseInstallationID(
+		"pinst_0123456789abcdef0123456789abcdef",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	config, err := providerplugin.NewInstalledConfiguration(
+		providerID,
+		pluginID,
+		installationID,
+		1,
+		[]byte(`{"name":"demo"}`),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Save(context.Background(), config); err != nil {
+		t.Fatal(err)
+	}
+
+	loaded, err := store.GetProviderConfig(context.Background(), providerID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.InstallationID == nil ||
+		*loaded.InstallationID != installationID ||
+		loaded.PluginID != pluginID {
+		t.Fatalf("GetProviderConfig() = %+v", loaded)
+	}
+}
+
 func TestImportOnceDoesNotOverwriteGenericRowsOrRepeat(t *testing.T) {
 	t.Parallel()
 
@@ -187,6 +232,7 @@ func TestProviderConfigSchemaIsProtocolAgnostic(t *testing.T) {
 	for _, expected := range []string{
 		"provider_id",
 		"plugin_id",
+		"plugin_installation_id",
 		"config_version",
 		"revision",
 		"config_json",

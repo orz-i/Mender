@@ -37,6 +37,44 @@ func TestNewConfigurationBuildsDeterministicRevision(t *testing.T) {
 	}
 }
 
+func TestNewInstalledConfigurationPinsInstallation(t *testing.T) {
+	t.Parallel()
+
+	providerID, err := catalogdomain.ParseProviderID(
+		"prov_00000000000000000000000000000011",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pluginID, err := ParseID("dev.example.echo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	installationID, err := ParseInstallationID(
+		"pinst_0123456789abcdef0123456789abcdef",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	config, err := NewInstalledConfiguration(
+		providerID,
+		pluginID,
+		installationID,
+		3,
+		[]byte(`{"name":"demo"}`),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if config.InstallationID == nil || *config.InstallationID != installationID {
+		t.Fatalf("InstallationID = %v, want %s", config.InstallationID, installationID)
+	}
+	if config.PluginID != pluginID || config.ConfigVersion != 3 {
+		t.Fatalf("config = %+v", config)
+	}
+}
+
 func TestConfigurationValidate(t *testing.T) {
 	t.Parallel()
 
@@ -74,6 +112,13 @@ func TestConfigurationValidate(t *testing.T) {
 			name: "invalid plugin",
 			mutate: func(config *Configuration) {
 				config.PluginID = ID("mcp")
+			},
+		},
+		{
+			name: "invalid installation",
+			mutate: func(config *Configuration) {
+				invalid := InstallationID("pinst_bad")
+				config.InstallationID = &invalid
 			},
 		},
 		{

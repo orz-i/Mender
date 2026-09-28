@@ -33,7 +33,7 @@ type ExecutorRoutes interface {
 
 // Manager owns active Provider plugin instances for one Runtime.
 type Manager struct {
-	registry    *Registry
+	resolver    Resolver
 	configs     ConfigurationSource
 	routes      ExecutorRoutes
 	credentials invocationapplication.CredentialResolver
@@ -49,21 +49,22 @@ type instanceSlot struct {
 }
 
 type activeInstance struct {
-	pluginID      ID
-	configVersion int
-	revision      string
-	instance      Instance
+	pluginID       ID
+	installationID *InstallationID
+	configVersion  int
+	revision       string
+	instance       Instance
 }
 
 // NewManager constructs Provider instance lifecycle ownership.
 func NewManager(
-	registry *Registry,
+	resolver Resolver,
 	configs ConfigurationSource,
 	routes ExecutorRoutes,
 	credentials invocationapplication.CredentialResolver,
 ) (*Manager, error) {
-	if registry == nil {
-		return nil, fmt.Errorf("new provider instance manager: registry must not be nil")
+	if resolver == nil {
+		return nil, fmt.Errorf("new provider instance manager: resolver must not be nil")
 	}
 	if configs == nil {
 		return nil, fmt.Errorf("new provider instance manager: configuration source must not be nil")
@@ -72,7 +73,7 @@ func NewManager(
 		return nil, fmt.Errorf("new provider instance manager: executor routes must not be nil")
 	}
 	return &Manager{
-		registry:    registry,
+		resolver:    resolver,
 		configs:     configs,
 		routes:      routes,
 		credentials: credentials,
@@ -130,16 +131,29 @@ func (m *Manager) ensure(
 		)
 	}
 
-	entry, err := m.registry.lookup(config.PluginID)
+	resolved, err := m.resolver.Resolve(ctx, config)
 	if err != nil {
-		return nil, fmt.Errorf("ensure provider instance: %w", err)
+		return nil, fmt.Errorf("ensure provider instance: resolve plugin: %w", err)
 	}
-	if config.ConfigVersion != entry.descriptor.ConfigVersion {
+	if resolved.Plugin == nil {
+		return nil, fmt.Errorf("ensure provider instance: resolver returned nil plugin")
+	}
+	if err := resolved.Descriptor.Validate(); err != nil {
+		return nil, fmt.Errorf("ensure provider instance: descriptor: %w", err)
+	}
+	if resolved.Descriptor.ID != config.PluginID {
+		return nil, fmt.Errorf(
+			"ensure provider instance: resolved plugin id %s does not match config %s",
+			resolved.Descriptor.ID,
+			config.PluginID,
+		)
+	}
+	if config.ConfigVersion != resolved.Descriptor.ConfigVersion {
 		return nil, fmt.Errorf(
 			"%w: plugin %s supports version %d, config is version %d",
 			ErrUnsupportedConfigVersion,
 			config.PluginID,
-			entry.descriptor.ConfigVersion,
+			resolved.Descriptor.ConfigVersion,
 			config.ConfigVersion,
 		)
 	}
@@ -148,11 +162,11 @@ func (m *Manager) ensure(
 		return slot.active.instance, nil
 	}
 
-	if err := entry.plugin.ValidateConfig(ctx, cloneConfig(config.Config)); err != nil {
+	if err := resolved.Plugin.ValidateConfig(ctx, cloneConfig(config.Config)); err != nil {
 		return nil, fmt.Errorf("ensure provider instance: validate plugin config: %w", err)
 	}
 
-	instance, err := entry.plugin.Open(ctx, OpenRequest{
+	instance, err := resolved.Plugin.Open(ctx, OpenRequest{
 		ProviderID:    providerID,
 		ConfigVersion: config.ConfigVersion,
 		Config:        cloneConfig(config.Config),
@@ -178,10 +192,11 @@ func (m *Manager) ensure(
 
 	previous := slot.active
 	slot.active = &activeInstance{
-		pluginID:      config.PluginID,
-		configVersion: config.ConfigVersion,
-		revision:      config.Revision,
-		instance:      instance,
+		pluginID:       config.PluginID,
+		installationID: cloneInstallationID(config.InstallationID),
+		configVersion:  config.ConfigVersion,
+		revision:       config.Revision,
+		instance:       instance,
 	}
 
 	if previous != nil {
@@ -198,8 +213,16 @@ func (m *Manager) ensure(
 func sameActiveConfig(active *activeInstance, config Configuration) bool {
 	return active != nil &&
 		active.pluginID == config.PluginID &&
+		sameInstallationID(active.installationID, config.InstallationID) &&
 		active.configVersion == config.ConfigVersion &&
 		active.revision == config.Revision
+}
+
+func sameInstallationID(a, b *InstallationID) bool {
+	if a == nil || b == nil {
+		return a == nil && b == nil
+	}
+	return *a == *b
 }
 
 func (m *Manager) slot(providerID catalogdomain.ProviderID) (*instanceSlot, error) {

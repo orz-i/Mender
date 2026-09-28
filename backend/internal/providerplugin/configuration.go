@@ -18,11 +18,12 @@ const (
 // Configuration binds one canonical Provider to a Provider plugin and an
 // opaque plugin-owned configuration revision.
 type Configuration struct {
-	ProviderID    catalogdomain.ProviderID
-	PluginID      ID
-	ConfigVersion int
-	Revision      string
-	Config        json.RawMessage
+	ProviderID     catalogdomain.ProviderID
+	PluginID       ID
+	InstallationID *InstallationID
+	ConfigVersion  int
+	Revision       string
+	Config         json.RawMessage
 }
 
 // NewConfiguration constructs a validated configuration with a deterministic
@@ -33,14 +34,38 @@ func NewConfiguration(
 	configVersion int,
 	raw json.RawMessage,
 ) (Configuration, error) {
+	return newConfiguration(providerID, pluginID, nil, configVersion, raw)
+}
+
+// NewInstalledConfiguration binds one Provider configuration to an exact
+// external plugin installation.
+func NewInstalledConfiguration(
+	providerID catalogdomain.ProviderID,
+	pluginID ID,
+	installationID InstallationID,
+	configVersion int,
+	raw json.RawMessage,
+) (Configuration, error) {
+	id := installationID
+	return newConfiguration(providerID, pluginID, &id, configVersion, raw)
+}
+
+func newConfiguration(
+	providerID catalogdomain.ProviderID,
+	pluginID ID,
+	installationID *InstallationID,
+	configVersion int,
+	raw json.RawMessage,
+) (Configuration, error) {
 	config := cloneConfig(raw)
 	sum := sha256.Sum256(config)
 	result := Configuration{
-		ProviderID:    providerID,
-		PluginID:      pluginID,
-		ConfigVersion: configVersion,
-		Revision:      "sha256:" + hex.EncodeToString(sum[:]),
-		Config:        config,
+		ProviderID:     providerID,
+		PluginID:       pluginID,
+		InstallationID: cloneInstallationID(installationID),
+		ConfigVersion:  configVersion,
+		Revision:       "sha256:" + hex.EncodeToString(sum[:]),
+		Config:         config,
 	}
 	if err := result.Validate(); err != nil {
 		return Configuration{}, err
@@ -57,6 +82,11 @@ func (c Configuration) Validate() error {
 	}
 	if _, err := ParseID(c.PluginID.String()); err != nil {
 		return fmt.Errorf("provider configuration: %w", err)
+	}
+	if c.InstallationID != nil {
+		if _, err := ParseInstallationID(c.InstallationID.String()); err != nil {
+			return fmt.Errorf("provider configuration: %w", err)
+		}
 	}
 	if c.ConfigVersion < 1 {
 		return fmt.Errorf("provider configuration: config version must be at least 1")
@@ -86,6 +116,14 @@ func (c Configuration) Validate() error {
 		return fmt.Errorf("provider configuration: config must be valid JSON")
 	}
 	return nil
+}
+
+func cloneInstallationID(id *InstallationID) *InstallationID {
+	if id == nil {
+		return nil
+	}
+	copy := *id
+	return &copy
 }
 
 func cloneConfig(raw json.RawMessage) json.RawMessage {
