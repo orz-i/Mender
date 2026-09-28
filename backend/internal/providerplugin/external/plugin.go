@@ -52,10 +52,15 @@ type processProvider interface {
 	Ensure(context.Context, installationdomain.Installation) (*Process, error)
 }
 
+type controlPlaneTimeoutProvider interface {
+	controlPlaneTimeouts() controlPlaneTimeouts
+}
+
 // Plugin adapts one installed external package to Mender's internal Provider plugin port.
 type Plugin struct {
 	installation installationdomain.Installation
 	processes    processProvider
+	timeouts     controlPlaneTimeouts
 	descriptor   providerplugin.Descriptor
 }
 
@@ -107,9 +112,14 @@ func NewPlugin(
 		descriptor.Version != installation.PackageVersion() {
 		return nil, fmt.Errorf("new external provider plugin: descriptor identity mismatch")
 	}
+	timeouts := defaultControlPlaneTimeouts()
+	if source, ok := processes.(controlPlaneTimeoutProvider); ok {
+		timeouts = source.controlPlaneTimeouts()
+	}
 	return &Plugin{
 		installation: installation,
 		processes:    processes,
+		timeouts:     timeouts,
 		descriptor:   descriptor,
 	}, nil
 }
@@ -137,8 +147,10 @@ func (p *Plugin) ValidateConfig(
 	if err != nil {
 		return fmt.Errorf("validate external provider config: process: %w", err)
 	}
+	rpcCtx, cancel := context.WithTimeout(ctx, p.timeouts.validateConfig)
+	defer cancel()
 	response, err := process.Service().ValidateConfig(
-		ctx,
+		rpcCtx,
 		&providerv1.ValidateConfigRequest{
 			ConfigVersion: uint32(p.descriptor.ConfigVersion), // #nosec G115 -- descriptor config version is positive and bounded during construction.
 			ConfigJson:    append([]byte(nil), raw...),
@@ -170,8 +182,10 @@ func (p *Plugin) InspectConfig(
 			err,
 		)
 	}
+	rpcCtx, cancel := context.WithTimeout(ctx, p.timeouts.inspectConfig)
+	defer cancel()
 	response, err := process.Service().InspectConfig(
-		ctx,
+		rpcCtx,
 		&providerv1.InspectConfigRequest{
 			ConfigVersion: uint32(p.descriptor.ConfigVersion), // #nosec G115 -- bounded during construction.
 			ConfigJson:    append([]byte(nil), raw...),
@@ -251,8 +265,10 @@ func (p *Plugin) Open(
 	}
 	defer zeroProtocolCredentials(discoveryCredentials)
 
+	openCtx, openCancel := context.WithTimeout(ctx, p.timeouts.open)
+	defer openCancel()
 	response, err := process.Service().Open(
-		ctx,
+		openCtx,
 		&providerv1.OpenRequest{
 			InstanceId:           instanceID,
 			ConfigVersion:        uint32(request.ConfigVersion), // #nosec G115 -- request version equals the bounded descriptor version.
@@ -280,8 +296,10 @@ func (p *Plugin) Open(
 		)
 	}
 
+	listCtx, listCancel := context.WithTimeout(ctx, p.timeouts.listTools)
+	defer listCancel()
 	toolsResponse, err := process.Service().ListTools(
-		ctx,
+		listCtx,
 		&providerv1.ListToolsRequest{
 			SessionId:            sessionID,
 			DiscoveryCredentials: discoveryCredentials,

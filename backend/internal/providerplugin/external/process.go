@@ -15,9 +15,13 @@ import (
 )
 
 const (
-	defaultStartTimeout      = 15 * time.Second
-	defaultDescriptorTimeout = 5 * time.Second
-	defaultMaxStderrBytes    = 64 * 1024
+	defaultStartTimeout          = 15 * time.Second
+	defaultDescriptorTimeout     = 5 * time.Second
+	defaultValidateConfigTimeout = 5 * time.Second
+	defaultInspectConfigTimeout  = 5 * time.Second
+	defaultOpenTimeout           = 15 * time.Second
+	defaultListToolsTimeout      = 30 * time.Second
+	defaultMaxStderrBytes        = 64 * 1024
 )
 
 // PackageResolver verifies an installed package before process launch.
@@ -30,17 +34,25 @@ type PackageResolver interface {
 
 // Options configure native external plugin process lifecycle.
 type Options struct {
-	StartTimeout      time.Duration
-	DescriptorTimeout time.Duration
-	MaxStderrBytes    int
+	StartTimeout          time.Duration
+	DescriptorTimeout     time.Duration
+	ValidateConfigTimeout time.Duration
+	InspectConfigTimeout  time.Duration
+	OpenTimeout           time.Duration
+	ListToolsTimeout      time.Duration
+	MaxStderrBytes        int
 }
 
 // DefaultOptions returns bounded native process defaults.
 func DefaultOptions() Options {
 	return Options{
-		StartTimeout:      defaultStartTimeout,
-		DescriptorTimeout: defaultDescriptorTimeout,
-		MaxStderrBytes:    defaultMaxStderrBytes,
+		StartTimeout:          defaultStartTimeout,
+		DescriptorTimeout:     defaultDescriptorTimeout,
+		ValidateConfigTimeout: defaultValidateConfigTimeout,
+		InspectConfigTimeout:  defaultInspectConfigTimeout,
+		OpenTimeout:           defaultOpenTimeout,
+		ListToolsTimeout:      defaultListToolsTimeout,
+		MaxStderrBytes:        defaultMaxStderrBytes,
 	}
 }
 
@@ -121,6 +133,18 @@ func NewSupervisor(
 	if options.DescriptorTimeout <= 0 {
 		options.DescriptorTimeout = defaultDescriptorTimeout
 	}
+	if options.ValidateConfigTimeout <= 0 {
+		options.ValidateConfigTimeout = defaultValidateConfigTimeout
+	}
+	if options.InspectConfigTimeout <= 0 {
+		options.InspectConfigTimeout = defaultInspectConfigTimeout
+	}
+	if options.OpenTimeout <= 0 {
+		options.OpenTimeout = defaultOpenTimeout
+	}
+	if options.ListToolsTimeout <= 0 {
+		options.ListToolsTimeout = defaultListToolsTimeout
+	}
 	if options.MaxStderrBytes <= 0 {
 		options.MaxStderrBytes = defaultMaxStderrBytes
 	}
@@ -129,6 +153,34 @@ func NewSupervisor(
 		options:  options,
 		slots:    make(map[installationdomain.InstallationID]*processSlot),
 	}, nil
+}
+
+type controlPlaneTimeouts struct {
+	validateConfig time.Duration
+	inspectConfig  time.Duration
+	open           time.Duration
+	listTools      time.Duration
+}
+
+func defaultControlPlaneTimeouts() controlPlaneTimeouts {
+	return controlPlaneTimeouts{
+		validateConfig: defaultValidateConfigTimeout,
+		inspectConfig:  defaultInspectConfigTimeout,
+		open:           defaultOpenTimeout,
+		listTools:      defaultListToolsTimeout,
+	}
+}
+
+func (s *Supervisor) controlPlaneTimeouts() controlPlaneTimeouts {
+	if s == nil {
+		return defaultControlPlaneTimeouts()
+	}
+	return controlPlaneTimeouts{
+		validateConfig: s.options.ValidateConfigTimeout,
+		inspectConfig:  s.options.InspectConfigTimeout,
+		open:           s.options.OpenTimeout,
+		listTools:      s.options.ListToolsTimeout,
+	}
 }
 
 // Ensure returns one reusable healthy process for an enabled installation.

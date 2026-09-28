@@ -356,6 +356,85 @@ func TestExternalInstanceFailsClosedWhenExecuteProcessCrashes(t *testing.T) {
 	}
 }
 
+func TestExternalPluginBoundsControlPlaneRPCs(t *testing.T) {
+	t.Parallel()
+
+	providerID, err := catalogdomain.ParseProviderID(
+		"prov_0123456789abcdef0123456789abcdef",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct {
+		name string
+		mode string
+		call func(*Plugin) error
+	}{
+		{
+			name: "validate",
+			mode: "hangvalidate",
+			call: func(plugin *Plugin) error {
+				return plugin.ValidateConfig(context.Background(), json.RawMessage("{}"))
+			},
+		},
+		{
+			name: "inspect",
+			mode: "hanginspect",
+			call: func(plugin *Plugin) error {
+				_, inspectErr := plugin.InspectConfig(context.Background(), json.RawMessage("{}"))
+				return inspectErr
+			},
+		},
+		{
+			name: "open",
+			mode: "hangopen",
+			call: func(plugin *Plugin) error {
+				_, openErr := plugin.Open(context.Background(), providerplugin.OpenRequest{
+					ProviderID:    providerID,
+					ConfigVersion: 1,
+					Config:        json.RawMessage("{}"),
+				})
+				return openErr
+			},
+		},
+		{
+			name: "list-tools",
+			mode: "hanglist",
+			call: func(plugin *Plugin) error {
+				_, openErr := plugin.Open(context.Background(), providerplugin.OpenRequest{
+					ProviderID:    providerID,
+					ConfigVersion: 1,
+					Config:        json.RawMessage("{}"),
+				})
+				return openErr
+			},
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			options := DefaultOptions()
+			options.ValidateConfigTimeout = 75 * time.Millisecond
+			options.InspectConfigTimeout = 75 * time.Millisecond
+			options.OpenTimeout = 75 * time.Millisecond
+			options.ListToolsTimeout = 75 * time.Millisecond
+			plugin, supervisor := newTestExternalPluginWithOptions(t, test.mode, options)
+			t.Cleanup(func() { _ = supervisor.CloseAll() })
+
+			started := time.Now()
+			callErr := test.call(plugin)
+			if callErr == nil {
+				t.Fatal("control-plane RPC error = nil")
+			}
+			if elapsed := time.Since(started); elapsed > 2*time.Second {
+				t.Fatalf("control-plane RPC elapsed = %s, want bounded host deadline", elapsed)
+			}
+			if !strings.Contains(strings.ToLower(callErr.Error()), "deadline") {
+				t.Fatalf("control-plane RPC error = %v, want deadline", callErr)
+			}
+		})
+	}
+}
+
 func TestExternalInstancePropagatesExecutionDeadline(t *testing.T) {
 	t.Parallel()
 
@@ -475,14 +554,23 @@ func newTestExternalPlugin(
 	mode string,
 ) (*Plugin, *Supervisor) {
 	t.Helper()
+	options := DefaultOptions()
+	options.StartTimeout = 10 * time.Second
+	options.DescriptorTimeout = 5 * time.Second
+	options.MaxStderrBytes = 4096
+	return newTestExternalPluginWithOptions(t, mode, options)
+}
+
+func newTestExternalPluginWithOptions(
+	t *testing.T,
+	mode string,
+	options Options,
+) (*Plugin, *Supervisor) {
+	t.Helper()
 
 	installation, resolved := testExternalInstallation(t, mode)
 	resolver := &fakePackageResolver{resolved: resolved}
-	supervisor, err := NewSupervisor(resolver, Options{
-		StartTimeout:      10 * time.Second,
-		DescriptorTimeout: 5 * time.Second,
-		MaxStderrBytes:    4096,
-	})
+	supervisor, err := NewSupervisor(resolver, options)
 	if err != nil {
 		t.Fatal(err)
 	}

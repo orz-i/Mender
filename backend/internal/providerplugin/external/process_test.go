@@ -435,9 +435,13 @@ func (s *helperPluginServer) GetDescriptor(
 }
 
 func (s *helperPluginServer) ValidateConfig(
-	_ context.Context,
+	ctx context.Context,
 	request *providerv1.ValidateConfigRequest,
 ) (*providerv1.ValidateConfigResponse, error) {
+	if strings.Contains(s.mode, "hangvalidate") {
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}
 	if request.GetConfigVersion() != 1 {
 		return &providerv1.ValidateConfigResponse{
 			Valid: false,
@@ -476,9 +480,13 @@ func (s *helperPluginServer) ValidateConfig(
 }
 
 func (s *helperPluginServer) InspectConfig(
-	_ context.Context,
+	ctx context.Context,
 	request *providerv1.InspectConfigRequest,
 ) (*providerv1.InspectConfigResponse, error) {
+	if strings.Contains(s.mode, "hanginspect") {
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}
 	var config map[string]any
 	if err := json.Unmarshal(request.GetConfigJson(), &config); err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid config")
@@ -496,9 +504,13 @@ func (s *helperPluginServer) InspectConfig(
 }
 
 func (s *helperPluginServer) Open(
-	_ context.Context,
+	ctx context.Context,
 	request *providerv1.OpenRequest,
 ) (*providerv1.OpenResponse, error) {
+	if strings.Contains(s.mode, "hangopen") {
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}
 	if strings.TrimSpace(request.GetInstanceId()) == "" {
 		return nil, status.Error(codes.InvalidArgument, "instance id is required")
 	}
@@ -521,9 +533,13 @@ func (s *helperPluginServer) Open(
 }
 
 func (s *helperPluginServer) ListTools(
-	_ context.Context,
+	ctx context.Context,
 	request *providerv1.ListToolsRequest,
 ) (*providerv1.ListToolsResponse, error) {
+	if strings.Contains(s.mode, "hanglist") {
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}
 	if strings.Contains(s.mode, "crashlist") {
 		os.Exit(31)
 	}
