@@ -1,4 +1,5 @@
 import type { MenderClient, ProviderPluginInstallation } from "@mender/sdk";
+import { TooltipProvider } from "@mender/ui/components/tooltip";
 import { Route, Routes } from "react-router";
 
 import { AuditPage } from "./domains/audit/audit-page";
@@ -24,39 +25,41 @@ export function MenderApp({
   useLocale();
 
   return (
-    <Routes>
-      <Route element={<ManagementShell />}>
-        <Route index element={<OverviewPage client={client} />} />
-        <Route
-          path="providers"
-          element={
-            <ProvidersPage
-              client={client}
-              {...(installProviderPlugin === undefined
-                ? {}
-                : { installProviderPlugin })}
-            />
-          }
-        />
-        <Route path="catalog" element={<CatalogPage client={client} />} />
-        <Route path="profiles" element={<ProfilesPage client={client} />} />
-        <Route
-          path="servers"
-          element={
-            <ServersPage
-              client={client}
-              {...(copyText === undefined ? {} : { copyText })}
-            />
-          }
-        />
-        <Route path="policy" element={<PolicyPage client={client} />} />
-        <Route
-          path="credentials"
-          element={<CredentialsPage client={client} />}
-        />
-        <Route path="audit" element={<AuditPage client={client} />} />
-        <Route path="*" element={<OverviewPage client={client} />} />
-      </Route>
-    </Routes>
+    <TooltipProvider>
+      <Routes>
+        <Route element={<ManagementShell />}>
+          <Route index element={<OverviewPage client={client} />} />
+          <Route
+            path="providers"
+            element={
+              <ProvidersPage
+                client={client}
+                {...(installProviderPlugin === undefined
+                  ? {}
+                  : { installProviderPlugin })}
+              />
+            }
+          />
+          <Route path="catalog" element={<CatalogPage client={client} />} />
+          <Route path="profiles" element={<ProfilesPage client={client} />} />
+          <Route
+            path="servers"
+            element={
+              <ServersPage
+                client={client}
+                {...(copyText === undefined ? {} : { copyText })}
+              />
+            }
+          />
+          <Route path="policy" element={<PolicyPage client={client} />} />
+          <Route
+            path="credentials"
+            element={<CredentialsPage client={client} />}
+          />
+          <Route path="audit" element={<AuditPage client={client} />} />
+          <Route path="*" element={<OverviewPage client={client} />} />
+        </Route>
+      </Routes>
+    </TooltipProvider>
   );
 }

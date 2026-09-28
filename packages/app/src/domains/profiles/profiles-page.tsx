@@ -1,4 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  KeyRoundIcon,
+  PresentationIcon,
+  Settings2Icon,
+  ShieldCheckIcon,
+  Trash2Icon,
+} from "lucide-react";
 
 import type {
   Credential,
@@ -35,6 +42,7 @@ import {
   TableRow,
 } from "@mender/ui/components/table";
 
+import { IconButton } from "../../shared/icon-button";
 import { EmptyState, ErrorNotice, PageHeader } from "../../shared/page";
 import { usePagination } from "../../shared/pagination";
 import { TablePagination } from "../../shared/table-pagination";
@@ -562,14 +570,15 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
                     </TableCell>
                     <TableCell>{profile.tools.length}</TableCell>
                     <TableCell className="text-right">
-                      <Button
+                      <IconButton
                         variant="outline"
-                        size="sm"
-                        aria-label={t("Manage {{profile}}", { profile: profile.slug })}
+                        label={t("Manage {{profile}}", {
+                          profile: profile.slug,
+                        })}
                         onClick={() => setManageSlug(profile.slug)}
                       >
-                        {t("Manage")}
-                      </Button>
+                        <Settings2Icon />
+                      </IconButton>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -776,42 +785,38 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
                           </div>
                         </div>
                         <div className="flex shrink-0 flex-wrap justify-end gap-2">
-                          <Button
+                          <IconButton
                             variant="outline"
-                            size="sm"
-                            aria-label={t("Presentation for {{tool}}", { tool: title })}
+                            label={t("Presentation for {{tool}}", { tool: title })}
                             disabled={busy}
                             onClick={() => openPresentation(selection)}
                           >
-                            {t("Presentation")}
-                          </Button>
-                          <Button
+                            <PresentationIcon />
+                          </IconButton>
+                          <IconButton
                             variant="outline"
-                            size="sm"
-                            aria-label={t("Governance for {{tool}}", { tool: title })}
+                            label={t("Governance for {{tool}}", { tool: title })}
                             disabled={busy}
                             onClick={() => openGovernance(selection)}
                           >
-                            {t("Governance")}
-                          </Button>
-                          <Button
+                            <ShieldCheckIcon />
+                          </IconButton>
+                          <IconButton
                             variant="outline"
-                            size="sm"
-                            aria-label={t("Credentials for {{tool}}", { tool: title })}
+                            label={t("Credentials for {{tool}}", { tool: title })}
                             disabled={busy}
                             onClick={() => openCredentials(selection)}
                           >
-                            {t("Credentials")}
-                          </Button>
-                          <Button
+                            <KeyRoundIcon />
+                          </IconButton>
+                          <IconButton
                             variant="outline"
-                            size="sm"
-                            aria-label={t("Remove {{tool}}", { tool: title })}
+                            label={t("Remove {{tool}}", { tool: title })}
                             disabled={busy}
                             onClick={() => void removeTool(selection.toolId)}
                           >
-                            {t("Remove")}
-                          </Button>
+                            <Trash2Icon />
+                          </IconButton>
                         </div>
                       </div>
                     );

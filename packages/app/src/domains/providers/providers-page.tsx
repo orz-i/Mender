@@ -1,4 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
+import {
+  EyeIcon,
+  KeyRoundIcon,
+  Link2Icon,
+  PencilIcon,
+  RefreshCwIcon,
+  Trash2Icon,
+} from "lucide-react";
 
 import type {
   Credential,
@@ -38,6 +46,7 @@ import {
 } from "@mender/ui/components/table";
 import { Textarea } from "@mender/ui/components/textarea";
 
+import { IconButton } from "../../shared/icon-button";
 import { EmptyState, ErrorNotice, PageHeader } from "../../shared/page";
 import { usePagination } from "../../shared/pagination";
 import { TablePagination } from "../../shared/table-pagination";
@@ -666,67 +675,73 @@ export function ProvidersPage({
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
-                        <Button
+                        <IconButton
                           variant="ghost"
-                          size="sm"
-                          aria-label={t("View {{provider}}", { provider: provider.namespace })}
+                          label={t("View {{provider}}", {
+                            provider: provider.namespace,
+                          })}
                           onClick={() => setViewProvider(provider)}
                         >
-                          {t("View")}
-                        </Button>
-                        <Button
+                          <EyeIcon />
+                        </IconButton>
+                        <IconButton
                           variant="ghost"
-                          size="sm"
-                          aria-label={t("Edit {{provider}}", { provider: provider.namespace })}
+                          label={t("Edit {{provider}}", {
+                            provider: provider.namespace,
+                          })}
                           disabled={busy !== "" || !provider.pluginId}
                           onClick={() => beginEdit(provider)}
                         >
-                          {t("Edit")}
-                        </Button>
-                        <Button
+                          <PencilIcon />
+                        </IconButton>
+                        <IconButton
                           variant="outline"
-                          size="sm"
-                          aria-label={t("Authentication {{provider}}", { provider: provider.namespace })}
+                          label={t("Authentication {{provider}}", {
+                            provider: provider.namespace,
+                          })}
                           disabled={
                             busy !== "" ||
                             !providerSupportsFirstPartyAuthentication(provider)
                           }
                           onClick={() => openProviderAuthentication(provider)}
                         >
-                          {t("Authentication")}
-                        </Button>
+                          <KeyRoundIcon />
+                        </IconButton>
                         {providerRebindCandidates(
                           providerPlugins,
                           provider,
                         ).length ? (
-                          <Button
+                          <IconButton
                             variant="outline"
-                            size="sm"
-                            aria-label={t("Rebind {{provider}}", { provider: provider.namespace })}
+                            label={t("Rebind {{provider}}", {
+                              provider: provider.namespace,
+                            })}
                             disabled={busy !== ""}
                             onClick={() => beginRebind(provider)}
                           >
-                            {t("Rebind")}
-                          </Button>
+                            <Link2Icon />
+                          </IconButton>
                         ) : null}
-                        <Button
+                        <IconButton
                           variant="outline"
-                          size="sm"
-                          aria-label={t("Sync {{provider}}", { provider: provider.namespace })}
+                          label={t("Sync {{provider}}", {
+                            provider: provider.namespace,
+                          })}
                           disabled={busy !== ""}
                           onClick={() => void syncProvider(provider)}
                         >
-                          {t("Sync")}
-                        </Button>
-                        <Button
+                          <RefreshCwIcon />
+                        </IconButton>
+                        <IconButton
                           variant="destructive"
-                          size="sm"
-                          aria-label={t("Delete {{provider}}", { provider: provider.namespace })}
+                          label={t("Delete {{provider}}", {
+                            provider: provider.namespace,
+                          })}
                           disabled={busy !== ""}
                           onClick={() => void deleteProvider(provider)}
                         >
-                          {t("Delete")}
-                        </Button>
+                          <Trash2Icon />
+                        </IconButton>
                       </div>
                     </TableCell>
                   </TableRow>

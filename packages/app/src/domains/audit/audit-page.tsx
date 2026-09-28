@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { EyeIcon } from "lucide-react";
 
 import type { AuditRecord, MenderClient } from "@mender/sdk";
 import { Badge } from "@mender/ui/components/badge";
@@ -26,6 +27,7 @@ import {
   TableRow,
 } from "@mender/ui/components/table";
 
+import { IconButton } from "../../shared/icon-button";
 import { EmptyState, ErrorNotice, PageHeader } from "../../shared/page";
 import { usePagination } from "../../shared/pagination";
 import { TablePagination } from "../../shared/table-pagination";
@@ -131,14 +133,15 @@ export function AuditPage({ client }: { client: MenderClient }) {
                       {record.errorClass || "—"}
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button
+                      <IconButton
                         variant="outline"
-                        size="sm"
-                        aria-label={"View audit " + record.invocationId}
+                        label={t("View audit {{id}}", {
+                          id: record.invocationId,
+                        })}
                         onClick={() => setSelected(record)}
                       >
-                        {t("View")}
-                      </Button>
+                        <EyeIcon />
+                      </IconButton>
                     </TableCell>
                   </TableRow>
                 ))}

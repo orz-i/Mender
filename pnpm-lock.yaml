@@ -291,6 +291,9 @@ importers:
       '@mender/ui':
         specifier: workspace:*
         version: link:../ui
+      lucide-react:
+        specifier: ^1.48.0
+        version: 1.48.0(react@19.3.0)
       motion:
         specifier: ^13.4.4
         version: 13.4.4(react-dom@19.3.0(react@19.3.0))(react@19.3.0)

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { RefreshCwIcon, Trash2Icon } from "lucide-react";
 
 import type { Credential, MenderClient } from "@mender/sdk";
 import { Badge } from "@mender/ui/components/badge";
@@ -28,6 +29,7 @@ import {
   TableRow,
 } from "@mender/ui/components/table";
 
+import { IconButton } from "../../shared/icon-button";
 import { EmptyState, ErrorNotice, PageHeader } from "../../shared/page";
 import { usePagination } from "../../shared/pagination";
 import { TablePagination } from "../../shared/table-pagination";
@@ -247,26 +249,26 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
                         {item.source === "native" ? (
-                          <Button
+                          <IconButton
                             variant="outline"
-                            size="sm"
+                            label={t("Rotate")}
                             disabled={busy !== ""}
                             onClick={() => {
                               setRotateSecret("");
                               setRotateCredential(item);
                             }}
                           >
-                            {t("Rotate")}
-                          </Button>
+                            <RefreshCwIcon />
+                          </IconButton>
                         ) : null}
-                        <Button
+                        <IconButton
                           variant="destructive"
-                          size="sm"
+                          label={t("Delete")}
                           disabled={busy !== ""}
                           onClick={() => void remove(item)}
                         >
-                          {t("Delete")}
-                        </Button>
+                          <Trash2Icon />
+                        </IconButton>
                       </div>
                     </TableCell>
                   </TableRow>

@@ -1,4 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  PencilIcon,
+  PowerIcon,
+  PowerOffIcon,
+  Trash2Icon,
+} from "lucide-react";
 
 import type {
   MenderClient,
@@ -38,6 +44,7 @@ import {
   TableRow,
 } from "@mender/ui/components/table";
 
+import { IconButton } from "../../shared/icon-button";
 import { EmptyState, ErrorNotice, PageHeader } from "../../shared/page";
 import { usePagination } from "../../shared/pagination";
 import { TablePagination } from "../../shared/table-pagination";
@@ -396,30 +403,30 @@ export function PolicyPage({ client }: { client: MenderClient }) {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
-                        <Button
-                          size="sm"
+                        <IconButton
                           variant="outline"
+                          label={t("Edit")}
                           disabled={busy !== ""}
                           onClick={() => openEditRule(rule)}
                         >
-                          {t("Edit")}
-                        </Button>
-                        <Button
-                          size="sm"
+                          <PencilIcon />
+                        </IconButton>
+                        <IconButton
                           variant="outline"
+                          label={t(rule.enabled ? "Disable" : "Enable")}
                           disabled={busy !== ""}
                           onClick={() => void toggleRule(rule)}
                         >
-                          {t(rule.enabled ? "Disable" : "Enable")}
-                        </Button>
-                        <Button
-                          size="sm"
+                          {rule.enabled ? <PowerOffIcon /> : <PowerIcon />}
+                        </IconButton>
+                        <IconButton
                           variant="destructive"
+                          label={t("Delete")}
                           disabled={busy !== ""}
                           onClick={() => void removeRule(rule)}
                         >
-                          {t("Delete")}
-                        </Button>
+                          <Trash2Icon />
+                        </IconButton>
                       </div>
                     </TableCell>
                   </TableRow>

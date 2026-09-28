@@ -253,6 +253,7 @@ export const zhCNMessages: Readonly<Record<string, string>> = {
   "Used only when no enabled Rule matches.": "仅在没有已启用规则匹配时使用。",
   "Version": "版本",
   "View": "查看",
+  "View audit {{id}}": "查看审计 {{id}}",
   "View schemas": "查看 Schema",
   "Working directory": "工作目录",
   "allow": "允许",

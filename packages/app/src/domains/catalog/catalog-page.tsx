@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { EyeIcon } from "lucide-react";
 
 import type {
   InvocationResult,
@@ -35,6 +36,7 @@ import {
 } from "@mender/ui/components/table";
 import { Textarea } from "@mender/ui/components/textarea";
 
+import { IconButton } from "../../shared/icon-button";
 import { EmptyState, ErrorNotice, PageHeader } from "../../shared/page";
 import { usePagination } from "../../shared/pagination";
 import { TablePagination } from "../../shared/table-pagination";
@@ -303,17 +305,19 @@ export function CatalogPage({ client }: { client: MenderClient }) {
                       <Badge variant="outline">#{tool.rank}</Badge>
                     </TableCell>
                     <TableCell className="w-20 text-right">
-                      <Button
+                      <IconButton
                         variant="outline"
-                        size="sm"
-                        aria-label={t("View {{tool}}", {
-                          tool: tool.title || tool.name,
-                        })}
+                        label={t(
+                          loadingToolId === tool.toolId
+                            ? "Loading…"
+                            : "View {{tool}}",
+                          { tool: tool.title || tool.name },
+                        )}
                         disabled={loadingToolId !== ""}
                         onClick={() => void viewTool(tool)}
                       >
-                        {t(loadingToolId === tool.toolId ? "Loading…" : "View")}
-                      </Button>
+                        <EyeIcon />
+                      </IconButton>
                     </TableCell>
                   </TableRow>
                 ))}

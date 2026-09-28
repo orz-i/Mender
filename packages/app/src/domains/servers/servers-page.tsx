@@ -1,4 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
+import {
+  CheckIcon,
+  CopyIcon,
+  RefreshCwIcon,
+  SquareIcon,
+} from "lucide-react";
 
 import type { MCPServerInstance, MenderClient, Profile } from "@mender/sdk";
 import { Badge } from "@mender/ui/components/badge";
@@ -29,6 +35,7 @@ import {
   TableRow,
 } from "@mender/ui/components/table";
 
+import { IconButton } from "../../shared/icon-button";
 import { EmptyState, ErrorNotice, PageHeader } from "../../shared/page";
 import { usePagination } from "../../shared/pagination";
 import { TablePagination } from "../../shared/table-pagination";
@@ -248,9 +255,13 @@ export function ServersPage({
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
-                        <Button
+                        <IconButton
                           variant="ghost"
-                          size="sm"
+                          label={t(
+                            copied === server.serverId + ":endpoint"
+                              ? "Copied"
+                              : "Copy endpoint",
+                          )}
                           onClick={() =>
                             void copy(
                               server.endpoint,
@@ -258,15 +269,19 @@ export function ServersPage({
                             )
                           }
                         >
-                          {t(
-                            copied === server.serverId + ":endpoint"
-                              ? "Copied"
-                              : "Copy endpoint",
+                          {copied === server.serverId + ":endpoint" ? (
+                            <CheckIcon />
+                          ) : (
+                            <CopyIcon />
                           )}
-                        </Button>
-                        <Button
+                        </IconButton>
+                        <IconButton
                           variant="ghost"
-                          size="sm"
+                          label={t(
+                            copied === server.serverId + ":config"
+                              ? "Copied"
+                              : "Copy config",
+                          )}
                           onClick={() =>
                             void copy(
                               clientConfig(server),
@@ -274,30 +289,30 @@ export function ServersPage({
                             )
                           }
                         >
-                          {t(
-                            copied === server.serverId + ":config"
-                              ? "Copied"
-                              : "Copy config",
+                          {copied === server.serverId + ":config" ? (
+                            <CheckIcon />
+                          ) : (
+                            <CopyIcon />
                           )}
-                        </Button>
-                        <Button
+                        </IconButton>
+                        <IconButton
                           variant="outline"
-                          size="sm"
+                          label={t(
+                            busy === server.serverId ? "Working…" : "Restart",
+                          )}
                           disabled={busy !== ""}
                           onClick={() => void restartServer(server)}
                         >
-                          {t(
-                            busy === server.serverId ? "Working…" : "Restart",
-                          )}
-                        </Button>
-                        <Button
+                          <RefreshCwIcon />
+                        </IconButton>
+                        <IconButton
                           variant="destructive"
-                          size="sm"
+                          label={t("Stop")}
                           disabled={busy !== ""}
                           onClick={() => void stopServer(server)}
                         >
-                          {t("Stop")}
-                        </Button>
+                          <SquareIcon />
+                        </IconButton>
                       </div>
                     </TableCell>
                   </TableRow>

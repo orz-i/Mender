@@ -1,6 +1,7 @@
-import { Button } from "@mender/ui/components/button";
+import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 
 import { t } from "../i18n/i18n";
+import { IconButton } from "./icon-button";
 import type { PaginationState } from "./pagination";
 
 export function TablePagination<T>({
@@ -54,26 +55,24 @@ export function TablePagination<T>({
         </span>
 
         <div className="flex items-center gap-2">
-          <Button
+          <IconButton
             type="button"
             variant="outline"
-            size="sm"
-            aria-label={t("{{label}} previous page", { label: t(label) })}
+            label={t("{{label}} previous page", { label: t(label) })}
             disabled={pagination.page <= 1}
             onClick={() => pagination.setPage(pagination.page - 1)}
           >
-            {t("Previous")}
-          </Button>
-          <Button
+            <ChevronLeftIcon />
+          </IconButton>
+          <IconButton
             type="button"
             variant="outline"
-            size="sm"
-            aria-label={t("{{label}} next page", { label: t(label) })}
+            label={t("{{label}} next page", { label: t(label) })}
             disabled={pagination.page >= pagination.pageCount}
             onClick={() => pagination.setPage(pagination.page + 1)}
           >
-            {t("Next")}
-          </Button>
+            <ChevronRightIcon />
+          </IconButton>
         </div>
       </div>
     </nav>
