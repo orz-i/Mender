@@ -15,6 +15,72 @@ import (
 	mcpserver "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/server"
 )
 
+func TestCLIAddsOpenAPIProvider(t *testing.T) {
+	t.Parallel()
+
+	var serverURL string
+	mux := http.NewServeMux()
+	mux.HandleFunc("/openapi.yaml", func(w http.ResponseWriter, _ *http.Request) {
+		spec := `openapi: 3.1.2
+info:
+  title: CLI OpenAPI
+  version: "1"
+servers:
+  - url: ` + serverURL + `
+paths:
+  /ping:
+    get:
+      operationId: ping
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+`
+		_, _ = w.Write([]byte(spec))
+	})
+	mux.HandleFunc("/ping", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	})
+	server := httptest.NewServer(mux)
+	serverURL = server.URL
+	t.Cleanup(server.Close)
+
+	dbPath := filepath.Join(t.TempDir(), "mender.db")
+	registered := executeJSONCommand(
+		t,
+		dbPath,
+		"provider", "add", "openapi",
+		"--namespace", "openapi-cli",
+		"--name", "OpenAPI CLI",
+		"--spec-url", server.URL+"/openapi.yaml",
+	)
+	provider, ok := registered["provider"].(map[string]any)
+	if !ok {
+		t.Fatalf("provider add output = %#v", registered)
+	}
+	if provider["pluginId"] != "io.mender.provider.openapi" {
+		t.Fatalf("provider pluginId = %#v", provider["pluginId"])
+	}
+	syncResult, ok := registered["sync"].(map[string]any)
+	if !ok || syncResult["total"] != float64(1) {
+		t.Fatalf("provider sync = %#v", registered["sync"])
+	}
+
+	listed := executeJSONCommand(t, dbPath, "provider", "list")
+	providers, ok := listed["providers"].([]any)
+	if !ok || len(providers) != 1 {
+		t.Fatalf("provider list = %#v", listed)
+	}
+	item, _ := providers[0].(map[string]any)
+	if item["pluginId"] != "io.mender.provider.openapi" {
+		t.Fatalf("listed provider = %#v", item)
+	}
+}
+
 func TestCLILocalWorkflowWithPersistedHTTPProvider(t *testing.T) {
 	t.Parallel()
 

@@ -4,12 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"text/tabwriter"
 
 	"github.com/orz-i/Mender/backend/internal/bootstrap"
 	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
+	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
 	mcpplugin "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/plugin"
+	openapiplugin "github.com/orz-i/Mender/backend/internal/openapi/infrastructure/plugin"
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
 	"github.com/spf13/cobra"
 )
@@ -32,6 +35,7 @@ func (a *app) newProviderAddCommand() *cobra.Command {
 		Short: "Register a Provider through a built-in plugin",
 	}
 	command.AddCommand(a.newProviderAddMCPCommand())
+	command.AddCommand(a.newProviderAddOpenAPICommand())
 
 	// Phase 5 compatibility aliases. They are intentionally hidden so normal
 	// CLI discovery teaches plugin-first Provider semantics.
@@ -132,6 +136,115 @@ func (a *app) newProviderAddMCPStdioCommand() *cobra.Command {
 	command.Flags().StringArrayVar(&args, "arg", nil, "argument passed to the executable; may be repeated")
 	command.Flags().StringVar(&directory, "dir", "", "working directory")
 	return command
+}
+
+func (a *app) newProviderAddOpenAPICommand() *cobra.Command {
+	var namespace, displayName, description, specURL, specFile, serverURL string
+	var include, exclude, credentialBindings []string
+
+	command := &cobra.Command{
+		Use:   "openapi",
+		Short: "Register an OpenAPI Provider",
+		Args:  exactArgs(0),
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if namespace == "" || displayName == "" {
+				return usageError{err: fmt.Errorf("--namespace and --name are required")}
+			}
+			if (specURL == "") == (specFile == "") {
+				return usageError{err: fmt.Errorf("exactly one of --spec-url or --spec-file is required")}
+			}
+
+			credentials, err := parseOpenAPICredentialBindings(credentialBindings)
+			if err != nil {
+				return usageError{err: err}
+			}
+
+			source := openapiplugin.SourceConfig{
+				Kind: openapiplugin.SourceURL,
+				URL:  specURL,
+			}
+			if specFile != "" {
+				source = openapiplugin.SourceConfig{
+					Kind: openapiplugin.SourceFile,
+					Path: specFile,
+				}
+			}
+
+			raw, err := json.Marshal(openapiplugin.Config{
+				Source:    source,
+				ServerURL: serverURL,
+				Operations: openapiplugin.OperationFilter{
+					Include: append([]string(nil), include...),
+					Exclude: append([]string(nil), exclude...),
+				},
+				Credentials: credentials,
+			})
+			if err != nil {
+				return fmt.Errorf("encode OpenAPI provider config: %w", err)
+			}
+
+			return a.registerConfiguredProvider(
+				cmd,
+				namespace,
+				displayName,
+				description,
+				openapiplugin.ID,
+				raw,
+			)
+		},
+	}
+
+	command.Flags().StringVar(&namespace, "namespace", "", "stable provider namespace")
+	command.Flags().StringVar(&displayName, "name", "", "provider display name")
+	command.Flags().StringVar(&description, "description", "", "provider description")
+	command.Flags().StringVar(&specURL, "spec-url", "", "OpenAPI description URL")
+	command.Flags().StringVar(&specFile, "spec-file", "", "absolute OpenAPI description file")
+	command.Flags().StringVar(&serverURL, "server", "", "optional absolute API server override")
+	command.Flags().StringArrayVar(&include, "include", nil, "operation SourceKey to include; may be repeated")
+	command.Flags().StringArrayVar(&exclude, "exclude", nil, "operation SourceKey to exclude; may be repeated")
+	command.Flags().StringArrayVar(
+		&credentialBindings,
+		"credential",
+		nil,
+		"SecurityScheme=credential://namespace/name binding; may be repeated",
+	)
+	return command
+}
+
+func parseOpenAPICredentialBindings(
+	values []string,
+) (map[string]credentialdomain.Reference, error) {
+	if len(values) == 0 {
+		return nil, nil
+	}
+	result := make(map[string]credentialdomain.Reference, len(values))
+	for _, raw := range values {
+		name, reference, ok := strings.Cut(raw, "=")
+		name = strings.TrimSpace(name)
+		reference = strings.TrimSpace(reference)
+		if !ok || name == "" || reference == "" {
+			return nil, fmt.Errorf(
+				"invalid --credential %q; expected SecurityScheme=credential://namespace/name",
+				raw,
+			)
+		}
+		if _, exists := result[name]; exists {
+			return nil, fmt.Errorf(
+				"duplicate --credential binding for Security Scheme %q",
+				name,
+			)
+		}
+		ref, err := credentialdomain.ParseReference(reference)
+		if err != nil {
+			return nil, fmt.Errorf(
+				"invalid --credential binding for Security Scheme %q: %w",
+				name,
+				err,
+			)
+		}
+		result[name] = ref
+	}
+	return result, nil
 }
 
 func (a *app) registerConfiguredProvider(

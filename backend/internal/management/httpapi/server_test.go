@@ -1111,6 +1111,114 @@ func requestNoContent(
 	}
 }
 
+func TestManagementAPICreatesOpenAPIProviderThroughGenericEndpoint(t *testing.T) {
+	t.Parallel()
+
+	var serverURL string
+	mux := http.NewServeMux()
+	mux.HandleFunc("/openapi.yaml", func(w http.ResponseWriter, _ *http.Request) {
+		spec := `openapi: 3.1.2
+info:
+  title: Management OpenAPI
+  version: "1"
+servers:
+  - url: ` + serverURL + `
+paths:
+  /ping:
+    get:
+      operationId: ping
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok: { type: boolean }
+`
+		_, _ = w.Write([]byte(spec))
+	})
+	mux.HandleFunc("/ping", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	})
+	upstream := httptest.NewServer(mux)
+	serverURL = upstream.URL
+	t.Cleanup(upstream.Close)
+
+	runtime, err := bootstrap.NewRuntime(context.Background(), bootstrap.RuntimeOptions{
+		DatabasePath: filepath.Join(t.TempDir(), "mender.db"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = runtime.Close() })
+
+	server := httptest.NewServer(New(runtime))
+	t.Cleanup(server.Close)
+
+	created := requestJSON(
+		t,
+		server.Client(),
+		http.MethodPost,
+		server.URL+"/api/v1/providers",
+		map[string]any{
+			"namespace":   "openapi-management",
+			"displayName": "OpenAPI Management",
+			"pluginId":    "io.mender.provider.openapi",
+			"config": map[string]any{
+				"source": map[string]any{
+					"kind": "url",
+					"url":  upstream.URL + "/openapi.yaml",
+				},
+			},
+		},
+		http.StatusCreated,
+	)
+	provider, ok := created["provider"].(map[string]any)
+	if !ok ||
+		provider["pluginId"] != "io.mender.provider.openapi" ||
+		provider["toolCount"] != float64(1) {
+		t.Fatalf("created OpenAPI provider = %#v", created)
+	}
+
+	browse := requestJSON(
+		t,
+		server.Client(),
+		http.MethodGet,
+		server.URL+"/api/v1/tools/browse?limit=100",
+		nil,
+		http.StatusOK,
+	)
+	tools, ok := browse["tools"].([]any)
+	if !ok || len(tools) != 1 {
+		t.Fatalf("browse = %#v", browse)
+	}
+	tool, _ := tools[0].(map[string]any)
+	toolID, _ := tool["toolId"].(string)
+	if toolID == "" {
+		t.Fatalf("tool = %#v", tool)
+	}
+
+	result := requestJSON(
+		t,
+		server.Client(),
+		http.MethodPost,
+		server.URL+"/api/v1/tools/"+toolID+"/call",
+		map[string]any{"arguments": map[string]any{}},
+		http.StatusOK,
+	)
+	if result["kind"] != "complete" {
+		t.Fatalf("call result = %#v", result)
+	}
+	content, ok := result["content"].(map[string]any)
+	if !ok || content["ok"] != true {
+		t.Fatalf("call content = %#v", result["content"])
+	}
+}
+
 func TestManagementAPIGenericProviderPluginFlow(t *testing.T) {
 	t.Parallel()
 
