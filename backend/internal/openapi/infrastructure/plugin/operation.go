@@ -38,6 +38,7 @@ type operationBinding struct {
 	description string
 	method      string
 	path        string
+	serverURL   string
 	tags        []string
 
 	parameters  []parameterBinding
@@ -103,7 +104,7 @@ func discoverOperationBindings(
 				candidate.method,
 			)
 		}
-		binding, err := buildOperationBinding(parsed, candidate)
+		binding, err := buildOperationBinding(parsed, config, candidate)
 		if err != nil {
 			return nil, fmt.Errorf(
 				"discover OpenAPI operation %q: %w",
@@ -288,6 +289,7 @@ func operationMethodRank(method string) int {
 
 func buildOperationBinding(
 	parsed parsedDocument,
+	config Config,
 	candidate operationCandidate,
 ) (operationBinding, error) {
 	parameters, err := mergedOperationParameters(
@@ -318,6 +320,15 @@ func buildOperationBinding(
 	if err != nil {
 		return operationBinding{}, err
 	}
+	serverURL, err := resolveEffectiveServer(
+		parsed,
+		config,
+		candidate.pathItem,
+		candidate.operation,
+	)
+	if err != nil {
+		return operationBinding{}, err
+	}
 
 	name := operationToolName(
 		candidate.operation.OperationID,
@@ -335,6 +346,7 @@ func buildOperationBinding(
 		description:  description,
 		method:       candidate.method,
 		path:         candidate.path,
+		serverURL:    serverURL,
 		tags:         operationTags(candidate),
 		parameters:   parameterBindings,
 		requestBody:  requestBody,
