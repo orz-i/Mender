@@ -318,3 +318,21 @@ Goals:
 Exit criteria are complete. `io.mender.provider.model-tools` normalizes OpenAI, Anthropic, and Gemini provider-hosted web search into one stable Mender Tool contract; verifies observable hosted-search execution; preserves citations while discarding reasoning/internal provider state; resolves API Credentials only during governed execution; enforces Profile Credential scope before network access; uses generic Provider lifecycle/management surfaces; and passes repository race/build/security verification.
 
 See `phase-15-model-tool-bridge.md` for implementation and verification evidence.
+
+## Phase 16 — External Provider Plugin Host
+
+Status: In Progress
+
+Goals:
+
+- Let users install Provider plugin types without recompiling Mender.
+- Keep external plugin code out of the Mender process behind a versioned protobuf/gRPC protocol.
+- Separate PluginID, package version, protocol version, config version, and installation identity.
+- Pin external Providers to exact managed plugin installations and package digests.
+- Preserve host-owned Invocation, Policy, Profile, Credential, and Audit governance.
+- Render unknown external Provider configuration through Mender-owned JSON-Schema-driven management UI instead of PluginID-specific frontend branches.
+- Provide a public Go SDK and standalone example plugin as the architectural acceptance test.
+
+Exit criteria are defined in `phase-16-external-provider-plugin-host.md`. The phase is complete only when an independently built external Provider can be installed, configured, synchronized, governed, invoked, and removed without adding its PluginID to Mender source code, while existing built-in Providers remain behavior-compatible.
+
+See `phase-16-external-provider-plugin-host.md`.

@@ -52,3 +52,4 @@ Minor implementation choices that remain inside an accepted architectural bounda
 - [ADR-0024: Make Provider plugins the runtime boundary and treat MCP transport as plugin configuration](0024-provider-plugin-runtime.md)
 - [ADR-0025: Map OpenAPI operations into governed Tools through a bounded Provider plugin](0025-openapi-provider-plugin.md)
 - [ADR-0026: Bridge provider-hosted model tools through a normalized agentic Provider](0026-model-tool-bridge-provider.md)
+- [ADR-0027: Host installable Provider plugins out of process behind a versioned Mender protocol](0027-external-provider-plugin-host.md)
