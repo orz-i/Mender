@@ -36,6 +36,8 @@ import {
 import { Textarea } from "@mender/ui/components/textarea";
 
 import { EmptyState, ErrorNotice, PageHeader } from "../../shared/page";
+import { usePagination } from "../../shared/pagination";
+import { TablePagination } from "../../shared/table-pagination";
 
 type ToolView = "overview" | "description" | "schemas" | "invoke";
 
@@ -55,6 +57,8 @@ export function CatalogPage({ client }: { client: MenderClient }) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
   const [loadingToolId, setLoadingToolId] = useState("");
+
+  const catalogPagination = usePagination(results);
 
   useEffect(() => {
     let active = true;
@@ -90,6 +94,7 @@ export function CatalogPage({ client }: { client: MenderClient }) {
         ...(providerId ? { providerId } : {}),
       });
       setResults(response.tools);
+      catalogPagination.reset();
       setSearched(false);
       setSelected(null);
       setToolView(null);
@@ -114,6 +119,7 @@ export function CatalogPage({ client }: { client: MenderClient }) {
         ...(providerId ? { providerId } : {}),
       });
       setResults(response.tools);
+      catalogPagination.reset();
       setSearched(true);
       setSelected(null);
       setToolView(null);
@@ -249,7 +255,8 @@ export function CatalogPage({ client }: { client: MenderClient }) {
         </CardHeader>
         <CardContent>
           {results.length ? (
-            <Table className="table-fixed">
+            <>
+              <Table className="table-fixed">
               <colgroup>
                 <col className="w-[28%]" />
                 <col className="w-[24%]" />
@@ -267,7 +274,7 @@ export function CatalogPage({ client }: { client: MenderClient }) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {results.map((tool) => (
+                {catalogPagination.items.map((tool) => (
                   <TableRow key={tool.toolId}>
                     <TableCell className="min-w-0">
                       <div className="truncate font-medium">
@@ -307,7 +314,12 @@ export function CatalogPage({ client }: { client: MenderClient }) {
                   </TableRow>
                 ))}
               </TableBody>
-            </Table>
+              </Table>
+              <TablePagination
+                label="Catalog tools"
+                pagination={catalogPagination}
+              />
+            </>
           ) : (
             <EmptyState
               title={

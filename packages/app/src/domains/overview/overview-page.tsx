@@ -10,6 +10,8 @@ import type {
 import { Card, CardContent, CardHeader, CardTitle } from "@mender/ui/components/card";
 
 import { ErrorNotice, PageHeader, StatusCard } from "../../shared/page";
+import { usePagination } from "../../shared/pagination";
+import { TablePagination } from "../../shared/table-pagination";
 
 type OverviewState = {
   status: SystemStatus;
@@ -28,7 +30,7 @@ export function OverviewPage({ client }: { client: MenderClient }) {
       client.getSystemStatus(),
       client.listProviders(),
       client.listProfiles(),
-      client.listAudit(5),
+      client.listAudit(50),
     ])
       .then(([status, providers, profiles, audit]) => {
         if (!active) {
@@ -51,6 +53,11 @@ export function OverviewPage({ client }: { client: MenderClient }) {
       active = false;
     };
   }, [client]);
+
+  const invocationPagination = usePagination(data?.records ?? [], {
+    initialPageSize: 5,
+    pageSizeOptions: [5, 10, 25],
+  });
 
   return (
     <>
@@ -91,8 +98,9 @@ export function OverviewPage({ client }: { client: MenderClient }) {
         </CardHeader>
         <CardContent>
           {data?.records.length ? (
-            <div className="divide-y divide-border">
-              {data.records.map((record) => (
+            <>
+              <div className="divide-y divide-border">
+              {invocationPagination.items.map((record) => (
                 <div
                   key={record.invocationId}
                   className="grid grid-cols-[minmax(0,1fr)_120px_170px] gap-4 py-3 text-sm"
@@ -107,7 +115,12 @@ export function OverviewPage({ client }: { client: MenderClient }) {
                   </time>
                 </div>
               ))}
-            </div>
+              </div>
+              <TablePagination
+                label="Recent invocations"
+                pagination={invocationPagination}
+              />
+            </>
           ) : (
             <p className="text-sm text-muted-foreground">
               No invocation records yet.

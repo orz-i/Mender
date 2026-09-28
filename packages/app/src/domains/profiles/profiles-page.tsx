@@ -36,6 +36,8 @@ import {
 } from "@mender/ui/components/table";
 
 import { EmptyState, ErrorNotice, PageHeader } from "../../shared/page";
+import { usePagination } from "../../shared/pagination";
+import { TablePagination } from "../../shared/table-pagination";
 
 const emptyCreateForm = {
   slug: "",
@@ -191,6 +193,8 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
     () => new Map(providers.map((provider) => [provider.providerId, provider])),
     [providers],
   );
+
+  const profilePagination = usePagination(profiles);
 
   async function createProfile() {
     setBusy(true);
@@ -528,7 +532,8 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
               Loading profiles…
             </div>
           ) : profiles.length ? (
-            <Table>
+            <>
+              <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Profile</TableHead>
@@ -538,7 +543,7 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {profiles.map((profile) => (
+                {profilePagination.items.map((profile) => (
                   <TableRow key={profile.profileId}>
                     <TableCell>
                       <div className="font-medium">{profile.displayName}</div>
@@ -563,7 +568,12 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
                   </TableRow>
                 ))}
               </TableBody>
-            </Table>
+              </Table>
+              <TablePagination
+                label="Profiles"
+                pagination={profilePagination}
+              />
+            </>
           ) : (
             <EmptyState
               title="No profiles"

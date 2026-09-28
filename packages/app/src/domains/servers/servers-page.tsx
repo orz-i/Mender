@@ -30,6 +30,8 @@ import {
 } from "@mender/ui/components/table";
 
 import { EmptyState, ErrorNotice, PageHeader } from "../../shared/page";
+import { usePagination } from "../../shared/pagination";
+import { TablePagination } from "../../shared/table-pagination";
 
 const defaultAddress = "127.0.0.1:8765";
 
@@ -117,6 +119,8 @@ export function ServersPage({
       setBusy("");
     }
   }
+
+  const serverPagination = usePagination(servers);
 
   async function restartServer(server: MCPServerInstance) {
     setBusy(server.serverId);
@@ -206,7 +210,8 @@ export function ServersPage({
               Loading servers…
             </div>
           ) : servers.length ? (
-            <Table>
+            <>
+              <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Profile</TableHead>
@@ -217,7 +222,7 @@ export function ServersPage({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {servers.map((server) => (
+                {serverPagination.items.map((server) => (
                   <TableRow key={server.serverId}>
                     <TableCell>
                       <div className="font-medium">{server.profile}</div>
@@ -292,7 +297,12 @@ export function ServersPage({
                   </TableRow>
                 ))}
               </TableBody>
-            </Table>
+              </Table>
+              <TablePagination
+                label="Servers"
+                pagination={serverPagination}
+              />
+            </>
           ) : (
             <EmptyState
               title="No running MCP servers"

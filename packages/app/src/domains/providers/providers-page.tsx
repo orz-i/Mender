@@ -37,6 +37,8 @@ import {
 import { Textarea } from "@mender/ui/components/textarea";
 
 import { EmptyState, ErrorNotice, PageHeader } from "../../shared/page";
+import { usePagination } from "../../shared/pagination";
+import { TablePagination } from "../../shared/table-pagination";
 
 const MCP_PLUGIN_ID = "io.mender.provider.mcp";
 const MODEL_TOOLS_PLUGIN_ID = "io.mender.provider.model-tools";
@@ -173,6 +175,8 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
       active = false;
     };
   }, [client]);
+
+  const providerPagination = usePagination(providers);
 
   async function addProvider() {
     const namespaceExisted = providers.some(
@@ -385,7 +389,8 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
               Loading providers…
             </div>
           ) : providers.length ? (
-            <Table>
+            <>
+              <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Provider</TableHead>
@@ -396,7 +401,7 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {providers.map((provider) => (
+                {providerPagination.items.map((provider) => (
                   <TableRow key={provider.providerId}>
                     <TableCell>
                       <div className="font-medium">{provider.displayName}</div>
@@ -477,7 +482,12 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
                   </TableRow>
                 ))}
               </TableBody>
-            </Table>
+              </Table>
+              <TablePagination
+                label="Providers"
+                pagination={providerPagination}
+              />
+            </>
           ) : (
             <EmptyState
               title="No providers"

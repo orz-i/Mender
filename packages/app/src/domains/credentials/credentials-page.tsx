@@ -29,6 +29,8 @@ import {
 } from "@mender/ui/components/table";
 
 import { EmptyState, ErrorNotice, PageHeader } from "../../shared/page";
+import { usePagination } from "../../shared/pagination";
+import { TablePagination } from "../../shared/table-pagination";
 
 type CredentialSource = Credential["source"];
 
@@ -87,6 +89,8 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
       active = false;
     };
   }, [client]);
+
+  const credentialPagination = usePagination(credentials);
 
   const referencePreview = useMemo(() => {
     const namespace = createForm.namespace.trim();
@@ -209,7 +213,8 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
               Loading Credentials…
             </div>
           ) : credentials.length ? (
-            <Table>
+            <>
+              <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Credential</TableHead>
@@ -219,7 +224,7 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {credentials.map((item) => (
+                {credentialPagination.items.map((item) => (
                   <TableRow key={item.reference}>
                     <TableCell>
                       <div className="font-medium">{item.displayName}</div>
@@ -263,7 +268,12 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
                   </TableRow>
                 ))}
               </TableBody>
-            </Table>
+              </Table>
+              <TablePagination
+                label="Credentials"
+                pagination={credentialPagination}
+              />
+            </>
           ) : (
             <EmptyState
               title="No Credentials"

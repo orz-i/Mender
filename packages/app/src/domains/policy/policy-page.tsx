@@ -39,6 +39,8 @@ import {
 } from "@mender/ui/components/table";
 
 import { EmptyState, ErrorNotice, PageHeader } from "../../shared/page";
+import { usePagination } from "../../shared/pagination";
+import { TablePagination } from "../../shared/table-pagination";
 
 type RuleStep = 0 | 1 | 2;
 
@@ -276,6 +278,7 @@ export function PolicyPage({ client }: { client: MenderClient }) {
   }
 
   const rules = policy?.rules ?? [];
+  const rulePagination = usePagination(rules);
 
   return (
     <>
@@ -352,7 +355,8 @@ export function PolicyPage({ client }: { client: MenderClient }) {
               Loading Policy…
             </div>
           ) : rules.length ? (
-            <Table>
+            <>
+              <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Rule</TableHead>
@@ -363,7 +367,7 @@ export function PolicyPage({ client }: { client: MenderClient }) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {rules.map((rule) => (
+                {rulePagination.items.map((rule) => (
                   <TableRow key={rule.ruleId}>
                     <TableCell>
                       <div className="font-medium">{rule.displayName}</div>
@@ -415,7 +419,12 @@ export function PolicyPage({ client }: { client: MenderClient }) {
                   </TableRow>
                 ))}
               </TableBody>
-            </Table>
+              </Table>
+              <TablePagination
+                label="Policy rules"
+                pagination={rulePagination}
+              />
+            </>
           ) : (
             <EmptyState
               title="No Policy Rules"

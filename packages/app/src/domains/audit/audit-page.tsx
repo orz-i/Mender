@@ -27,6 +27,8 @@ import {
 } from "@mender/ui/components/table";
 
 import { EmptyState, ErrorNotice, PageHeader } from "../../shared/page";
+import { usePagination } from "../../shared/pagination";
+import { TablePagination } from "../../shared/table-pagination";
 
 export function AuditPage({ client }: { client: MenderClient }) {
   const [records, setRecords] = useState<AuditRecord[]>([]);
@@ -67,6 +69,8 @@ export function AuditPage({ client }: { client: MenderClient }) {
     };
   }, [client]);
 
+  const auditPagination = usePagination(records);
+
   return (
     <>
       <PageHeader
@@ -86,7 +90,8 @@ export function AuditPage({ client }: { client: MenderClient }) {
         </CardHeader>
         <CardContent>
           {records.length ? (
-            <Table>
+            <>
+              <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Finished</TableHead>
@@ -99,7 +104,7 @@ export function AuditPage({ client }: { client: MenderClient }) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {records.map((record) => (
+                {auditPagination.items.map((record) => (
                   <TableRow key={record.invocationId}>
                     <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
                       {new Date(record.finishedAt).toLocaleString()}
@@ -136,7 +141,12 @@ export function AuditPage({ client }: { client: MenderClient }) {
                   </TableRow>
                 ))}
               </TableBody>
-            </Table>
+              </Table>
+              <TablePagination
+                label="Audit"
+                pagination={auditPagination}
+              />
+            </>
           ) : (
             <EmptyState
               title="No audit records"
