@@ -357,6 +357,97 @@ func TestExternalInstanceFailsClosedWhenExecuteProcessCrashes(t *testing.T) {
 	}
 }
 
+func TestExternalManagerRecoversAfterExecuteProcessCrash(t *testing.T) {
+	t.Parallel()
+
+	plugin, supervisor := newTestExternalPlugin(t, "crashexec")
+	t.Cleanup(func() { _ = supervisor.CloseAll() })
+
+	providerID, err := catalogdomain.ParseProviderID(
+		"prov_1123456789abcdef0123456789abcdef",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	config, err := providerplugin.NewConfiguration(
+		providerID,
+		plugin.Descriptor().ID,
+		plugin.Descriptor().ConfigVersion,
+		json.RawMessage("{}"),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	registry := providerplugin.NewRegistry()
+	if err := registry.Register(plugin); err != nil {
+		t.Fatal(err)
+	}
+	manager, err := providerplugin.NewManager(
+		registry,
+		externalManagerConfigSource{config: config},
+		externalManagerRoutes{},
+		nil,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = manager.CloseAll() })
+
+	firstRaw, err := manager.Ensure(t.Context(), providerID)
+	if err != nil {
+		t.Fatalf("Ensure(first) error = %v", err)
+	}
+	first := firstRaw.(*Instance)
+	tools, err := first.DiscoverTools(t.Context(), catalogdomain.Provider{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tool := externalToolFromDiscovery(t, providerID, tools[0])
+	if _, err := executeExternalToolRaw(
+		t,
+		first,
+		tool,
+		nil,
+		&testProgressReporter{},
+		map[string]any{"value": "crash"},
+	); err == nil {
+		t.Fatal("crashing execution unexpectedly succeeded")
+	}
+
+	deadline := time.Now().Add(2 * time.Second)
+	for first.Reusable() && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if first.Reusable() {
+		t.Fatal("crashed instance remained reusable")
+	}
+
+	secondRaw, err := manager.Ensure(t.Context(), providerID)
+	if err != nil {
+		t.Fatalf("Ensure(after crash) error = %v", err)
+	}
+	if secondRaw == firstRaw {
+		t.Fatal("Ensure(after crash) reused stale external instance")
+	}
+	second := secondRaw.(*Instance)
+	outcome := executeExternalTool(
+		t,
+		second,
+		tool,
+		nil,
+		&testProgressReporter{},
+		map[string]any{"value": "recovered"},
+	)
+	if outcome.Kind() != invocationdomain.OutcomeKindComplete ||
+		!bytes.Equal(outcome.Content().Bytes(), []byte("{\"echo\":\"recovered\"}")) {
+		t.Fatalf(
+			"recovered outcome = kind=%q content=%s",
+			outcome.Kind(),
+			outcome.Content().Bytes(),
+		)
+	}
+}
+
 func TestExternalPluginBoundsControlPlaneRPCs(t *testing.T) {
 	t.Parallel()
 
@@ -707,6 +798,35 @@ func executeExternalToolRawContext(
 		resolver,
 		reporter,
 	)
+}
+
+type externalManagerConfigSource struct {
+	config providerplugin.Configuration
+}
+
+func (s externalManagerConfigSource) GetProviderConfig(
+	_ context.Context,
+	providerID catalogdomain.ProviderID,
+) (providerplugin.Configuration, error) {
+	if s.config.ProviderID != providerID {
+		return providerplugin.Configuration{}, errors.New("provider config not found")
+	}
+	config := s.config
+	config.Config = append(json.RawMessage(nil), config.Config...)
+	return config, nil
+}
+
+type externalManagerRoutes struct{}
+
+func (externalManagerRoutes) Register(
+	catalogdomain.ProviderID,
+	invocationapplication.ToolExecutor,
+) error {
+	return nil
+}
+
+func (externalManagerRoutes) Unregister(catalogdomain.ProviderID) error {
+	return nil
 }
 
 type testCredentialResolver struct {

@@ -226,6 +226,40 @@ func TestRuntimeInstalledExternalProviderEndToEnd(t *testing.T) {
 	if targetInstallation.ID() == installationID {
 		t.Fatal("rebind target reused source InstallationID")
 	}
+	if _, err := runtime.RebindProviderInstallation(
+		ctx,
+		provider.ID(),
+		targetInstallation.ID(),
+		[]byte(`{"credentialRef":"not-a-credential-reference"}`),
+	); err == nil {
+		t.Fatal("RebindProviderInstallation(invalid config) error = nil")
+	}
+	failedRebindConfig, err := runtime.ProviderConfig(ctx, provider.ID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if failedRebindConfig.InstallationID == nil ||
+		*failedRebindConfig.InstallationID != installationID {
+		t.Fatalf("failed rebind changed installation pin: %+v", failedRebindConfig)
+	}
+	failedRebindSearch, err := runtime.Catalog.SearchTools.Execute(
+		ctx,
+		catalogapplication.SearchToolsRequest{Query: "echo", Limit: 10},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(failedRebindSearch) != 1 || failedRebindSearch[0].ToolID != originalToolID {
+		t.Fatalf(
+			"failed rebind changed Tool identity: before=%s after=%+v",
+			originalToolID,
+			failedRebindSearch,
+		)
+	}
+	if !runtime.executors.HasProvider(provider.ID()) {
+		t.Fatal("failed rebind removed current execution route")
+	}
+
 	rebindResult, err := runtime.RebindProviderInstallation(
 		ctx,
 		provider.ID(),

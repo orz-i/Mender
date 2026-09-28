@@ -1,6 +1,7 @@
 package external
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/json"
@@ -592,7 +593,8 @@ func (s *helperPluginServer) ExecuteTool(
 	request *providerv1.ExecuteToolRequest,
 	stream grpc.ServerStreamingServer[providerv1.ExecuteToolResponse],
 ) error {
-	if strings.Contains(s.mode, "crashexec") {
+	if strings.Contains(s.mode, "crashexec") &&
+		bytes.Contains(request.GetArgumentsJson(), []byte(`"crash"`)) {
 		os.Exit(32)
 	}
 	if strings.Contains(s.mode, "slowexec") {
