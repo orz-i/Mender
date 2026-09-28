@@ -112,6 +112,19 @@ func NewPlugin(
 		descriptor.Version != installation.PackageVersion() {
 		return nil, fmt.Errorf("new external provider plugin: descriptor identity mismatch")
 	}
+	if expected, ok := installation.VerifiedDescriptor(); ok {
+		expectedVerified, expectedErr := installationdomain.NewVerifiedDescriptor(expected)
+		if expectedErr != nil {
+			return nil, fmt.Errorf("new external provider plugin: persisted descriptor: %w", expectedErr)
+		}
+		actualVerified, actualErr := installationdomain.NewVerifiedDescriptor(descriptor)
+		if actualErr != nil {
+			return nil, fmt.Errorf("new external provider plugin: runtime descriptor: %w", actualErr)
+		}
+		if !expectedVerified.Equal(actualVerified) {
+			return nil, fmt.Errorf("new external provider plugin: runtime descriptor changed from verified installation snapshot")
+		}
+	}
 	timeouts := defaultControlPlaneTimeouts()
 	if source, ok := processes.(controlPlaneTimeoutProvider); ok {
 		timeouts = source.controlPlaneTimeouts()

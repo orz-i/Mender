@@ -32,10 +32,11 @@ func (r *Runtime) InstallProviderPlugin(
 		return installationdomain.Installation{}, err
 	}
 
-	if _, err := r.externalResolver.ResolveInstallation(
+	resolved, err := r.externalResolver.ResolveInstallation(
 		ctx,
 		installation.ID(),
-	); err != nil {
+	)
+	if err != nil {
 		processErr := r.externalProcesses.CloseInstallation(installation.ID())
 		removeErr := installationapplication.NewRemoveInstallation(
 			r.pluginInstallations,
@@ -54,6 +55,37 @@ func (r *Runtime) InstallProviderPlugin(
 			),
 		)
 	}
+	if err := r.pluginInstallations.SetVerifiedDescriptor(
+		ctx,
+		installation.ID(),
+		resolved.Descriptor,
+	); err != nil {
+		processErr := r.externalProcesses.CloseInstallation(installation.ID())
+		removeErr := installationapplication.NewRemoveInstallation(
+			r.pluginInstallations,
+			r.pluginPackages,
+			nil,
+		).Execute(context.WithoutCancel(ctx), installation.ID())
+		return installationdomain.Installation{}, errors.Join(
+			fmt.Errorf("install provider plugin: persist verified descriptor: %w", err),
+			wrapOptionalError(
+				"install provider plugin: close verification process",
+				processErr,
+			),
+			wrapOptionalError(
+				"install provider plugin: compensate invalid installation",
+				removeErr,
+			),
+		)
+	}
+	installation, err = installation.WithVerifiedDescriptor(resolved.Descriptor)
+	if err != nil {
+		return installationdomain.Installation{}, fmt.Errorf(
+			"install provider plugin: attach verified descriptor: %w",
+			err,
+		)
+	}
+	r.externalResolver.ForgetInstallation(installation.ID())
 	if err := r.externalProcesses.CloseInstallation(installation.ID()); err != nil {
 		return installationdomain.Installation{}, fmt.Errorf(
 			"install provider plugin: close verification process: %w",

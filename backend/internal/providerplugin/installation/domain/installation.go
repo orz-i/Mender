@@ -35,15 +35,16 @@ const (
 
 // Installation is one immutable external Provider plugin package known to Mender.
 type Installation struct {
-	id              InstallationID
-	pluginID        providerplugin.ID
-	packageVersion  string
-	sourceKind      SourceKind
-	sourceReference string
-	digest          string
-	manifestJSON    []byte
-	status          Status
-	installedAt     time.Time
+	id                 InstallationID
+	pluginID           providerplugin.ID
+	packageVersion     string
+	sourceKind         SourceKind
+	sourceReference    string
+	digest             string
+	manifestJSON       []byte
+	verifiedDescriptor *VerifiedDescriptor
+	status             Status
+	installedAt        time.Time
 }
 
 // NewInstallation constructs a validated installed plugin package record.
@@ -137,7 +138,52 @@ func (i Installation) Validate() error {
 		i.status,
 		i.installedAt,
 	)
-	return err
+	if err != nil {
+		return err
+	}
+	if i.verifiedDescriptor != nil {
+		if err := i.validateVerifiedDescriptor(*i.verifiedDescriptor); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// WithVerifiedDescriptor returns the installation with a validated immutable
+// runtime descriptor snapshot attached.
+func (i Installation) WithVerifiedDescriptor(
+	descriptor providerplugin.Descriptor,
+) (Installation, error) {
+	verified, err := NewVerifiedDescriptor(descriptor)
+	if err != nil {
+		return Installation{}, err
+	}
+	if err := i.validateVerifiedDescriptor(verified); err != nil {
+		return Installation{}, err
+	}
+	i.verifiedDescriptor = &verified
+	return i, nil
+}
+
+func (i Installation) validateVerifiedDescriptor(
+	verified VerifiedDescriptor,
+) error {
+	descriptor := verified.Descriptor()
+	if descriptor.ID != i.pluginID {
+		return fmt.Errorf(
+			"plugin installation verified descriptor: plugin id %s does not match %s",
+			descriptor.ID,
+			i.pluginID,
+		)
+	}
+	if descriptor.Version != i.packageVersion {
+		return fmt.Errorf(
+			"plugin installation verified descriptor: package version %s does not match %s",
+			descriptor.Version,
+			i.packageVersion,
+		)
+	}
+	return nil
 }
 
 // ValidateStatus checks supported administrative installation states.
@@ -185,6 +231,15 @@ func (i Installation) Digest() string {
 
 func (i Installation) ManifestJSON() []byte {
 	return append([]byte(nil), i.manifestJSON...)
+}
+
+// VerifiedDescriptor returns the verified runtime descriptor snapshot when one
+// has been persisted for this installation.
+func (i Installation) VerifiedDescriptor() (providerplugin.Descriptor, bool) {
+	if i.verifiedDescriptor == nil {
+		return providerplugin.Descriptor{}, false
+	}
+	return i.verifiedDescriptor.Descriptor(), true
 }
 
 func (i Installation) Status() Status {

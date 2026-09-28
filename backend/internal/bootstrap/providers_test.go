@@ -11,6 +11,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
@@ -21,6 +22,7 @@ import (
 	openapiplugin "github.com/orz-i/Mender/backend/internal/openapi/infrastructure/plugin"
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
 	providerconfigstore "github.com/orz-i/Mender/backend/internal/providerplugin/configstore"
+	installationdomain "github.com/orz-i/Mender/backend/internal/providerplugin/installation/domain"
 )
 
 func TestRuntimeExposesBuiltInProviderPluginDescriptors(t *testing.T) {
@@ -66,6 +68,62 @@ func TestRuntimeExposesBuiltInProviderPluginDescriptors(t *testing.T) {
 			item.InstallationID != nil ||
 			!item.Enabled {
 			t.Fatalf("built-in available plugin = %+v", item)
+		}
+	}
+}
+
+func TestListAvailableProviderPluginsIsolatesBrokenLegacyInstallation(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	runtime := newProviderTestRuntime(t)
+	installationID, err := providerplugin.ParseInstallationID(
+		"pinst_00000000000000000000000000000099",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pluginID, err := providerplugin.ParseID("dev.example.broken")
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifestJSON := []byte(`{
+		"manifestVersion": 1,
+		"pluginId": "dev.example.broken",
+		"version": "1.0.0",
+		"protocolVersions": [1],
+		"displayName": "Broken",
+		"description": "Missing managed package fixture",
+		"entrypoints": {"linux/amd64": "bin/plugin"}
+	}`)
+	installation, err := installationdomain.NewInstallation(
+		installationID,
+		pluginID,
+		"1.0.0",
+		installationdomain.SourceLocal,
+		"/tmp/mender-broken-provider-fixture",
+		"sha256:"+strings.Repeat("9", 64),
+		manifestJSON,
+		installationdomain.StatusEnabled,
+		time.Date(2026, 9, 28, 12, 0, 0, 0, time.UTC),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := runtime.pluginInstallations.Create(ctx, installation); err != nil {
+		t.Fatal(err)
+	}
+
+	available, err := runtime.ListAvailableProviderPlugins(ctx)
+	if err != nil {
+		t.Fatalf("ListAvailableProviderPlugins() error = %v", err)
+	}
+	if len(available) != 3 {
+		t.Fatalf("available plugins = %d, want 3 healthy built-ins", len(available))
+	}
+	for _, item := range available {
+		if item.SourceKind != ProviderPluginSourceBuiltIn {
+			t.Fatalf("unexpected unavailable external plugin in catalog: %+v", item)
 		}
 	}
 }

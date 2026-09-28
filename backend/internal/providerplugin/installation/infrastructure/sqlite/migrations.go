@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-const latestSchemaVersion = 1
+const latestSchemaVersion = 2
 
 func migrate(ctx context.Context, db *sql.DB) error {
 	tx, err := db.BeginTx(ctx, nil)
@@ -65,6 +65,29 @@ func migrate(ctx context.Context, db *sql.DB) error {
 			time.Now().UTC().Format(time.RFC3339Nano),
 		); err != nil {
 			return fmt.Errorf("record plugin installation migration 1: %w", err)
+		}
+	}
+
+	var appliedV2 int
+	if err := tx.QueryRowContext(
+		ctx,
+		"SELECT COUNT(*) FROM provider_plugin_installation_schema_migrations WHERE version = 2",
+	).Scan(&appliedV2); err != nil {
+		return fmt.Errorf("check plugin installation migration 2: %w", err)
+	}
+	if appliedV2 == 0 {
+		if _, err := tx.ExecContext(
+			ctx,
+			"ALTER TABLE provider_plugin_installations ADD COLUMN verified_descriptor_json TEXT",
+		); err != nil {
+			return fmt.Errorf("apply plugin installation migration 2: %w", err)
+		}
+		if _, err := tx.ExecContext(
+			ctx,
+			"INSERT INTO provider_plugin_installation_schema_migrations(version, applied_at) VALUES (2, ?)",
+			time.Now().UTC().Format(time.RFC3339Nano),
+		); err != nil {
+			return fmt.Errorf("record plugin installation migration 2: %w", err)
 		}
 	}
 

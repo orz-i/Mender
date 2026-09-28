@@ -85,6 +85,17 @@ func (r *Resolver) Resolve(
 	return resolved, nil
 }
 
+// ForgetInstallation drops the cached runtime adapter for one installation.
+// The package process lifecycle remains owned by Supervisor.
+func (r *Resolver) ForgetInstallation(id providerplugin.InstallationID) {
+	if r == nil {
+		return
+	}
+	r.mu.Lock()
+	delete(r.cache, id)
+	r.mu.Unlock()
+}
+
 // ResolveInstallation resolves one exact enabled external plugin package without
 // requiring a Provider configuration. This is used by Provider registration and
 // management discovery before a ProviderID exists.

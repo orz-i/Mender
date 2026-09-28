@@ -69,20 +69,26 @@ func (r *Runtime) ListAvailableProviderPlugins(
 		if installation.Status() != installationdomain.StatusEnabled {
 			continue
 		}
-		resolved, resolveErr := r.externalResolver.ResolveInstallation(
-			ctx,
-			installation.ID(),
-		)
-		if resolveErr != nil {
-			return nil, fmt.Errorf(
-				"list available provider plugins: installation %s: %w",
+		descriptor, verified := installation.VerifiedDescriptor()
+		if !verified {
+			resolved, resolveErr := r.externalResolver.ResolveInstallation(
+				ctx,
 				installation.ID(),
-				resolveErr,
 			)
+			if resolveErr != nil {
+				continue
+			}
+			descriptor = resolved.Descriptor.Clone()
+			_ = r.pluginInstallations.SetVerifiedDescriptor(
+				context.WithoutCancel(ctx),
+				installation.ID(),
+				descriptor,
+			)
+			_ = r.externalProcesses.CloseInstallation(installation.ID())
 		}
 		id := installation.ID()
 		result = append(result, AvailableProviderPlugin{
-			Descriptor:     resolved.Descriptor.Clone(),
+			Descriptor:     descriptor.Clone(),
 			SourceKind:     ProviderPluginSourceExternal,
 			InstallationID: &id,
 			Enabled:        true,

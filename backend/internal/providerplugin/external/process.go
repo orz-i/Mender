@@ -228,6 +228,23 @@ func (s *Supervisor) Ensure(
 	return process, nil
 }
 
+// Running reports whether one installation currently has a live package process.
+// It never starts or probes a process.
+func (s *Supervisor) Running(id installationdomain.InstallationID) bool {
+	if s == nil {
+		return false
+	}
+	s.mu.Lock()
+	slot := s.slots[id]
+	s.mu.Unlock()
+	if slot == nil {
+		return false
+	}
+	slot.mu.Lock()
+	defer slot.mu.Unlock()
+	return slot.process != nil && !slot.process.Exited()
+}
+
 // CloseInstallation closes the reusable process for one installation, if present.
 func (s *Supervisor) CloseInstallation(
 	id installationdomain.InstallationID,

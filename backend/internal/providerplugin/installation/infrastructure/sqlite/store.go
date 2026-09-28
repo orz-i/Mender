@@ -3,6 +3,7 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
@@ -68,7 +69,11 @@ func (s *Store) Create(
 	if err := installation.Validate(); err != nil {
 		return fmt.Errorf("create plugin installation: %w", err)
 	}
-	_, err := s.db.ExecContext(
+	verifiedDescriptorJSON, err := marshalVerifiedDescriptor(installation)
+	if err != nil {
+		return fmt.Errorf("create plugin installation: verified descriptor: %w", err)
+	}
+	_, err = s.db.ExecContext(
 		ctx,
 		`INSERT INTO provider_plugin_installations(
 			installation_id,
@@ -78,9 +83,10 @@ func (s *Store) Create(
 			source_reference,
 			digest,
 			manifest_json,
+			verified_descriptor_json,
 			status,
 			installed_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		installation.ID().String(),
 		installation.PluginID().String(),
 		installation.PackageVersion(),
@@ -88,6 +94,7 @@ func (s *Store) Create(
 		installation.SourceReference(),
 		installation.Digest(),
 		string(installation.ManifestJSON()),
+		verifiedDescriptorJSON,
 		string(installation.Status()),
 		installation.InstalledAt().Format(time.RFC3339Nano),
 	)
@@ -115,6 +122,7 @@ func (s *Store) Get(
 			source_reference,
 			digest,
 			manifest_json,
+			verified_descriptor_json,
 			status,
 			installed_at
 		FROM provider_plugin_installations
@@ -146,6 +154,7 @@ func (s *Store) GetByDigest(
 			source_reference,
 			digest,
 			manifest_json,
+			verified_descriptor_json,
 			status,
 			installed_at
 		FROM provider_plugin_installations
@@ -176,6 +185,7 @@ func (s *Store) List(
 			source_reference,
 			digest,
 			manifest_json,
+			verified_descriptor_json,
 			status,
 			installed_at
 		FROM provider_plugin_installations
@@ -231,6 +241,59 @@ func (s *Store) SetStatus(
 	return nil
 }
 
+// SetVerifiedDescriptor persists the immutable runtime descriptor verified for
+// one installed package. Repeating the same snapshot is idempotent; replacing it
+// with different metadata fails closed.
+func (s *Store) SetVerifiedDescriptor(
+	ctx context.Context,
+	id installationdomain.InstallationID,
+	descriptor providerplugin.Descriptor,
+) error {
+	installation, err := s.Get(ctx, id)
+	if err != nil {
+		return fmt.Errorf("set verified plugin descriptor: %w", err)
+	}
+	updated, err := installation.WithVerifiedDescriptor(descriptor)
+	if err != nil {
+		return fmt.Errorf("set verified plugin descriptor: %w", err)
+	}
+	if existing, ok := installation.VerifiedDescriptor(); ok {
+		existingVerified, existingErr := installationdomain.NewVerifiedDescriptor(existing)
+		if existingErr != nil {
+			return fmt.Errorf("set verified plugin descriptor: existing descriptor: %w", existingErr)
+		}
+		nextVerified, nextErr := installationdomain.NewVerifiedDescriptor(descriptor)
+		if nextErr != nil {
+			return fmt.Errorf("set verified plugin descriptor: next descriptor: %w", nextErr)
+		}
+		if !existingVerified.Equal(nextVerified) {
+			return fmt.Errorf("set verified plugin descriptor: descriptor snapshot is immutable")
+		}
+		return nil
+	}
+	value, err := marshalVerifiedDescriptor(updated)
+	if err != nil {
+		return fmt.Errorf("set verified plugin descriptor: encode: %w", err)
+	}
+	result, err := s.db.ExecContext(
+		ctx,
+		"UPDATE provider_plugin_installations SET verified_descriptor_json = ? WHERE installation_id = ?",
+		value,
+		id.String(),
+	)
+	if err != nil {
+		return fmt.Errorf("set verified plugin descriptor: update: %w", err)
+	}
+	count, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("set verified plugin descriptor: rows affected: %w", err)
+	}
+	if count == 0 {
+		return installationapplication.ErrInstallationNotFound
+	}
+	return nil
+}
+
 // Delete removes plugin installation metadata. Reference guards belong to the application layer.
 func (s *Store) Delete(
 	ctx context.Context,
@@ -272,6 +335,7 @@ func scanInstallation(
 		sourceReference string
 		digest          string
 		rawManifest     string
+		rawDescriptor   sql.NullString
 		rawStatus       string
 		rawInstalledAt  string
 	)
@@ -283,6 +347,7 @@ func scanInstallation(
 		&sourceReference,
 		&digest,
 		&rawManifest,
+		&rawDescriptor,
 		&rawStatus,
 		&rawInstalledAt,
 	); err != nil {
@@ -315,7 +380,86 @@ func scanInstallation(
 	if err != nil {
 		return installationdomain.Installation{}, fmt.Errorf("restore plugin installation: %w", err)
 	}
+	if rawDescriptor.Valid {
+		descriptor, decodeErr := unmarshalVerifiedDescriptor(rawDescriptor.String)
+		if decodeErr != nil {
+			return installationdomain.Installation{}, fmt.Errorf(
+				"restore plugin installation verified descriptor: %w",
+				decodeErr,
+			)
+		}
+		installation, err = installation.WithVerifiedDescriptor(descriptor)
+		if err != nil {
+			return installationdomain.Installation{}, fmt.Errorf(
+				"restore plugin installation verified descriptor: %w",
+				err,
+			)
+		}
+	}
 	return installation, nil
+}
+
+type verifiedDescriptorRecord struct {
+	PluginID        string   `json:"pluginId"`
+	PackageVersion  string   `json:"packageVersion"`
+	ProtocolVersion uint32   `json:"protocolVersion"`
+	ConfigVersion   int      `json:"configVersion"`
+	DisplayName     string   `json:"displayName"`
+	Description     string   `json:"description,omitempty"`
+	ConfigSchema    string   `json:"configSchema,omitempty"`
+	UISchema        string   `json:"uiSchema,omitempty"`
+	Capabilities    []string `json:"capabilities,omitempty"`
+}
+
+func marshalVerifiedDescriptor(
+	installation installationdomain.Installation,
+) (any, error) {
+	descriptor, ok := installation.VerifiedDescriptor()
+	if !ok {
+		return nil, nil
+	}
+	record := verifiedDescriptorRecord{
+		PluginID:        descriptor.ID.String(),
+		PackageVersion:  descriptor.Version,
+		ProtocolVersion: descriptor.ProtocolVersion,
+		ConfigVersion:   descriptor.ConfigVersion,
+		DisplayName:     descriptor.DisplayName,
+		Description:     descriptor.Description,
+		ConfigSchema:    string(descriptor.ConfigSchema),
+		UISchema:        string(descriptor.UISchema),
+		Capabilities:    append([]string(nil), descriptor.Capabilities...),
+	}
+	raw, err := json.Marshal(record)
+	if err != nil {
+		return nil, err
+	}
+	return string(raw), nil
+}
+
+func unmarshalVerifiedDescriptor(raw string) (providerplugin.Descriptor, error) {
+	var record verifiedDescriptorRecord
+	if err := json.Unmarshal([]byte(raw), &record); err != nil {
+		return providerplugin.Descriptor{}, err
+	}
+	pluginID, err := providerplugin.ParseID(record.PluginID)
+	if err != nil {
+		return providerplugin.Descriptor{}, err
+	}
+	descriptor := providerplugin.Descriptor{
+		ID:              pluginID,
+		Version:         record.PackageVersion,
+		DisplayName:     record.DisplayName,
+		Description:     record.Description,
+		ConfigVersion:   record.ConfigVersion,
+		ProtocolVersion: record.ProtocolVersion,
+		ConfigSchema:    json.RawMessage(record.ConfigSchema),
+		UISchema:        json.RawMessage(record.UISchema),
+		Capabilities:    append([]string(nil), record.Capabilities...),
+	}
+	if _, err := installationdomain.NewVerifiedDescriptor(descriptor); err != nil {
+		return providerplugin.Descriptor{}, err
+	}
+	return descriptor, nil
 }
 
 func isUniqueConstraint(err error) bool {

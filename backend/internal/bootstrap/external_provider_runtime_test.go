@@ -85,6 +85,13 @@ func TestRuntimeInstalledExternalProviderEndToEnd(t *testing.T) {
 	}
 	installationID := installation.ID()
 	pluginID := installation.PluginID()
+	verifiedDescriptor, ok := installation.VerifiedDescriptor()
+	if !ok || verifiedDescriptor.ID != pluginID || verifiedDescriptor.ProtocolVersion != 1 {
+		t.Fatalf("installed verified descriptor = %+v, present=%v", verifiedDescriptor, ok)
+	}
+	if runtime.externalProcesses.Running(installationID) {
+		t.Fatal("installation verification left plugin process running")
+	}
 
 	available, err := runtime.ListAvailableProviderPlugins(ctx)
 	if err != nil {
@@ -100,6 +107,9 @@ func TestRuntimeInstalledExternalProviderEndToEnd(t *testing.T) {
 	}
 	if external == nil {
 		t.Fatalf("external installation %s missing from plugin catalog", installationID)
+	}
+	if runtime.externalProcesses.Running(installationID) {
+		t.Fatal("listing verified plugin catalog started external process")
 	}
 	if external.SourceKind != ProviderPluginSourceExternal ||
 		external.Descriptor.ID != pluginID ||

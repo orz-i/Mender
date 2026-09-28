@@ -91,6 +91,69 @@ func TestStoreCreateGetListSetStatusDelete(t *testing.T) {
 	}
 }
 
+func TestStorePersistsVerifiedDescriptorSnapshot(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	store := openTestStore(t)
+	installation := testInstallation(
+		t,
+		"pinst_00000000000000000000000000000003",
+		"dev.example.echo",
+		"1.2.3",
+		"c",
+	)
+	if err := store.Create(ctx, installation); err != nil {
+		t.Fatal(err)
+	}
+
+	descriptor := providerplugin.Descriptor{
+		ID:              installation.PluginID(),
+		Version:         installation.PackageVersion(),
+		DisplayName:     "Echo",
+		Description:     "Verified descriptor",
+		ConfigVersion:   2,
+		ProtocolVersion: 1,
+		ConfigSchema: []byte(`{
+  "type": "object",
+  "properties": {"prefix": {"type": "string"}}
+}`),
+		UISchema:     []byte(`{"properties":{"prefix":{"control":"text"}}}`),
+		Capabilities: []string{"streaming", "credentials"},
+	}
+	if err := store.SetVerifiedDescriptor(ctx, installation.ID(), descriptor); err != nil {
+		t.Fatalf("SetVerifiedDescriptor() error = %v", err)
+	}
+	if err := store.SetVerifiedDescriptor(ctx, installation.ID(), descriptor); err != nil {
+		t.Fatalf("SetVerifiedDescriptor(idempotent) error = %v", err)
+	}
+
+	got, err := store.Get(ctx, installation.ID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot, ok := got.VerifiedDescriptor()
+	if !ok {
+		t.Fatal("VerifiedDescriptor() missing after persistence")
+	}
+	if snapshot.ID != descriptor.ID ||
+		snapshot.Version != descriptor.Version ||
+		snapshot.ProtocolVersion != descriptor.ProtocolVersion ||
+		snapshot.ConfigVersion != descriptor.ConfigVersion ||
+		snapshot.DisplayName != descriptor.DisplayName ||
+		string(snapshot.ConfigSchema) != string(descriptor.ConfigSchema) ||
+		string(snapshot.UISchema) != string(descriptor.UISchema) {
+		t.Fatalf("verified descriptor = %+v, want %+v", snapshot, descriptor)
+	}
+
+	changed := descriptor.Clone()
+	changed.DisplayName = "Changed"
+	if err := store.SetVerifiedDescriptor(ctx, installation.ID(), changed); err == nil ||
+		!strings.Contains(err.Error(), "immutable") {
+		t.Fatalf("SetVerifiedDescriptor(changed) error = %v", err)
+	}
+}
+
 func TestStoreRejectsDuplicateIdentityAndDigest(t *testing.T) {
 	t.Parallel()
 
@@ -150,6 +213,81 @@ func TestStoreMissingAndStatusValidation(t *testing.T) {
 	}
 	if err := store.SetStatus(ctx, id, installationdomain.StatusEnabled); !errors.Is(err, installationapplication.ErrInstallationNotFound) {
 		t.Fatalf("SetStatus(missing) error = %v", err)
+	}
+}
+
+func TestOpenMigratesInstallationSchemaV1ToVerifiedDescriptorV2(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	databasePath := filepath.Join(t.TempDir(), "mender.db")
+	db, err := sql.Open("sqlite", databasePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	statements := []string{
+		`CREATE TABLE provider_plugin_installation_schema_migrations (
+			version INTEGER PRIMARY KEY,
+			applied_at TEXT NOT NULL
+		)`,
+		`CREATE TABLE provider_plugin_installations (
+			installation_id TEXT PRIMARY KEY,
+			plugin_id TEXT NOT NULL,
+			package_version TEXT NOT NULL,
+			source_kind TEXT NOT NULL,
+			source_reference TEXT NOT NULL,
+			digest TEXT NOT NULL UNIQUE,
+			manifest_json TEXT NOT NULL,
+			status TEXT NOT NULL,
+			installed_at TEXT NOT NULL
+		)`,
+	}
+	for _, statement := range statements {
+		if _, err := db.ExecContext(ctx, statement); err != nil {
+			_ = db.Close()
+			t.Fatal(err)
+		}
+	}
+	if _, err := db.ExecContext(
+		ctx,
+		"INSERT INTO provider_plugin_installation_schema_migrations(version, applied_at) VALUES (1, ?)",
+		time.Now().UTC().Format(time.RFC3339Nano),
+	); err != nil {
+		_ = db.Close()
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	store, err := Open(ctx, databasePath)
+	if err != nil {
+		t.Fatalf("Open(v1) error = %v", err)
+	}
+	defer func() { _ = store.Close() }()
+	rows, err := store.db.QueryContext(ctx, "PRAGMA table_info(provider_plugin_installations)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = rows.Close() }()
+	found := false
+	for rows.Next() {
+		var cid int
+		var name, columnType string
+		var notNull, primaryKey int
+		var defaultValue any
+		if err := rows.Scan(&cid, &name, &columnType, &notNull, &defaultValue, &primaryKey); err != nil {
+			t.Fatal(err)
+		}
+		if name == "verified_descriptor_json" {
+			found = true
+		}
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	if !found {
+		t.Fatal("migration v2 did not add verified_descriptor_json")
 	}
 }
 
