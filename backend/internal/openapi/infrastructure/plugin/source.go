@@ -27,9 +27,14 @@ type sourceLoader struct {
 }
 
 func newSourceLoader() sourceLoader {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	// Description sources are explicit Provider configuration. Do not add
+	// ambient proxy routing or proxy credentials from the Mender environment.
+	transport.Proxy = nil
 	return sourceLoader{
 		httpClient: &http.Client{
-			Timeout: sourceHTTPTimeout,
+			Transport: transport,
+			Timeout:   sourceHTTPTimeout,
 			CheckRedirect: func(*http.Request, []*http.Request) error {
 				return http.ErrUseLastResponse
 			},
