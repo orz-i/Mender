@@ -74,6 +74,49 @@ func TestStoreRoundTripListAndDelete(t *testing.T) {
 	}
 }
 
+func TestStoreLoadsHistoricalSensitiveConfigButRejectsResave(t *testing.T) {
+	t.Parallel()
+
+	store := openTestStore(t)
+	providerID, err := catalogdomain.ParseProviderID(
+		"prov_00000000000000000000000000000029",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pluginID, err := providerplugin.ParseID("dev.example.legacy-secret")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = store.db.ExecContext(
+		context.Background(),
+		`INSERT INTO provider_configs(
+			provider_id, plugin_id, plugin_installation_id, config_version, revision, config_json,
+			credential_refs_json, connection_summary
+		) VALUES (?, ?, NULL, ?, ?, ?, NULL, NULL)`,
+		providerID.String(),
+		pluginID.String(),
+		1,
+		"legacy-sensitive-row",
+		`{"apiKey":"plaintext-secret","endpoint":"https://example.test"}`,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	loaded, err := store.GetProviderConfig(context.Background(), providerID)
+	if err != nil {
+		t.Fatalf("GetProviderConfig() error = %v", err)
+	}
+	if string(loaded.Config) !=
+		`{"apiKey":"plaintext-secret","endpoint":"https://example.test"}` {
+		t.Fatalf("loaded config = %s", loaded.Config)
+	}
+	if err := store.Save(context.Background(), loaded); err == nil {
+		t.Fatal("Save() accepted historical plaintext sensitive config")
+	}
+}
+
 func TestStoreRoundTripsNormalizedConfigMetadata(t *testing.T) {
 	t.Parallel()
 

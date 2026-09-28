@@ -76,7 +76,7 @@ func (s *Store) Save(
 	ctx context.Context,
 	config providerplugin.Configuration,
 ) error {
-	if err := config.Validate(); err != nil {
+	if err := config.ValidateForPersistence(); err != nil {
 		return fmt.Errorf("save provider config: %w", err)
 	}
 	credentialRefsJSON, connectionSummary, err := encodeConfigMetadata(config.Metadata)
@@ -199,7 +199,7 @@ func (s *Store) ImportOnce(
 		return fmt.Errorf("import provider configs: invalid import name %q", name)
 	}
 	for _, config := range configs {
-		if err := config.Validate(); err != nil {
+		if err := config.ValidateForPersistence(); err != nil {
 			return fmt.Errorf("import provider configs: %w", err)
 		}
 	}

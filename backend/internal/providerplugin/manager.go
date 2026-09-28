@@ -120,7 +120,7 @@ func (m *Manager) ensure(
 	if err != nil {
 		return nil, fmt.Errorf("ensure provider instance: load config: %w", err)
 	}
-	if err := config.Validate(); err != nil {
+	if err := config.ValidateForPersistence(); err != nil {
 		return nil, fmt.Errorf("ensure provider instance: %w", err)
 	}
 	if config.ProviderID != providerID {

@@ -419,6 +419,11 @@ func (s *helperPluginServer) GetDescriptor(
 		description = strings.Repeat("x", plugintransport.MaxMessageBytes+1024)
 	}
 	configSchema := []byte(`{"type":"object"}`)
+	if strings.Contains(s.mode, "credentialcontrol") {
+		configSchema = []byte(
+			`{"type":"object","properties":{"auth":{"type":"string","x-mender-control":"credential"}}}`,
+		)
+	}
 	if strings.Contains(s.mode, "invalidschema") {
 		configSchema = []byte("{")
 	}
@@ -617,9 +622,13 @@ func (s *helperPluginServer) ExecuteTool(
 	) {
 		return status.Error(codes.Unauthenticated, "missing execution credential")
 	}
+	progressMessage := "working"
+	if strings.Contains(s.mode, "secretprogress") && len(request.GetCredentials()) != 0 {
+		progressMessage = "credential=" + string(request.GetCredentials()[0].GetValue())
+	}
 	if err := stream.Send(&providerv1.ExecuteToolResponse{
 		Event: &providerv1.ExecuteToolResponse_Progress{
-			Progress: &providerv1.Progress{Message: "working"},
+			Progress: &providerv1.Progress{Message: progressMessage},
 		},
 	}); err != nil {
 		return err

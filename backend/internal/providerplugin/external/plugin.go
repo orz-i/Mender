@@ -156,6 +156,9 @@ func (p *Plugin) ValidateConfig(
 	if err := validateExternalConfig(raw); err != nil {
 		return err
 	}
+	if err := providerplugin.ValidateDescriptorConfig(p.descriptor, raw); err != nil {
+		return fmt.Errorf("validate external provider config: host policy: %w", err)
+	}
 	process, err := p.processes.Ensure(ctx, p.installation)
 	if err != nil {
 		return fmt.Errorf("validate external provider config: process: %w", err)
@@ -187,6 +190,12 @@ func (p *Plugin) InspectConfig(
 	}
 	if err := validateExternalConfig(raw); err != nil {
 		return providerplugin.ConfigMetadata{}, err
+	}
+	if err := providerplugin.ValidateDescriptorConfig(p.descriptor, raw); err != nil {
+		return providerplugin.ConfigMetadata{}, fmt.Errorf(
+			"inspect external provider config: host policy: %w",
+			err,
+		)
 	}
 	process, err := p.processes.Ensure(ctx, p.installation)
 	if err != nil {
@@ -485,7 +494,7 @@ func (i *Instance) Execute(
 				)
 			}
 			update, updateErr := invocationdomain.NewProgressUpdate(
-				progressEvent.GetMessage(),
+				sanitizeCredentialText(progressEvent.GetMessage(), credentials),
 			)
 			if updateErr != nil {
 				return invocationdomain.Outcome{}, fmt.Errorf(

@@ -68,7 +68,7 @@ func newConfiguration(
 		Revision:       "sha256:" + hex.EncodeToString(sum[:]),
 		Config:         config,
 	}
-	if err := result.Validate(); err != nil {
+	if err := result.ValidateForPersistence(); err != nil {
 		return Configuration{}, err
 	}
 	return result, nil
@@ -123,6 +123,19 @@ func (c Configuration) Validate() error {
 		); err != nil {
 			return fmt.Errorf("provider configuration: %w", err)
 		}
+	}
+	return nil
+}
+
+// ValidateForPersistence applies host-owned secret-storage policy in addition to
+// the generic envelope checks. Restore/read paths intentionally use Validate so
+// historical unsafe rows can still be projected safely and repaired.
+func (c Configuration) ValidateForPersistence() error {
+	if err := c.Validate(); err != nil {
+		return err
+	}
+	if err := validatePersistedConfigSecrets(c.Config); err != nil {
+		return fmt.Errorf("provider configuration: %w", err)
 	}
 	return nil
 }

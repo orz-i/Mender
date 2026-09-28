@@ -171,6 +171,69 @@ func TestExternalPluginLifecycleAndOutcomeMapping(t *testing.T) {
 	}
 }
 
+func TestExternalInstanceRedactsCredentialsFromProgress(t *testing.T) {
+	t.Parallel()
+
+	plugin, supervisor := newTestExternalPlugin(t, "secretprogress")
+	t.Cleanup(func() { _ = supervisor.CloseAll() })
+
+	providerID, err := catalogdomain.ParseProviderID(
+		"prov_2123456789abcdef0123456789abcdef",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ref, err := credentialdomain.ParseReference("credential://demo/token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolver := &testCredentialResolver{
+		values: map[credentialdomain.Reference][]byte{
+			ref: []byte("progress-secret"),
+		},
+	}
+	instanceRaw, err := plugin.Open(
+		t.Context(),
+		providerplugin.OpenRequest{
+			ProviderID:    providerID,
+			ConfigVersion: 1,
+			Config: json.RawMessage(
+				"{\"credentialRef\":\"credential://demo/token\"}",
+			),
+			Credentials: resolver,
+		},
+	)
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	instance := instanceRaw.(*Instance)
+	t.Cleanup(func() { _ = instance.Close() })
+
+	tools, err := instance.DiscoverTools(t.Context(), catalogdomain.Provider{})
+	if err != nil {
+		t.Fatalf("DiscoverTools() error = %v", err)
+	}
+	tool := externalToolFromDiscovery(t, providerID, tools[0])
+	reporter := &testProgressReporter{}
+	outcome := executeExternalTool(
+		t,
+		instance,
+		tool,
+		resolver,
+		reporter,
+		map[string]any{"value": "ok"},
+	)
+	if outcome.Kind() != invocationdomain.OutcomeKindComplete {
+		t.Fatalf("outcome kind = %q", outcome.Kind())
+	}
+	messages := reporter.Messages()
+	if len(messages) != 1 ||
+		strings.Contains(messages[0], "progress-secret") ||
+		!strings.Contains(messages[0], "[redacted]") {
+		t.Fatalf("progress messages were not redacted: %#v", messages)
+	}
+}
+
 func TestExternalPluginRejectsOversizedConfigBeforeRPC(t *testing.T) {
 	t.Parallel()
 
@@ -178,6 +241,29 @@ func TestExternalPluginRejectsOversizedConfigBeforeRPC(t *testing.T) {
 	if err := validateExternalConfig(raw); err == nil ||
 		!strings.Contains(err.Error(), "exceeds") {
 		t.Fatalf("validateExternalConfig() error = %v", err)
+	}
+}
+
+func TestExternalPluginEnforcesCredentialControlBeforePluginValidation(t *testing.T) {
+	t.Parallel()
+
+	plugin, supervisor := newTestExternalPlugin(t, "credentialcontrol")
+	t.Cleanup(func() { _ = supervisor.CloseAll() })
+
+	err := plugin.ValidateConfig(
+		t.Context(),
+		json.RawMessage(`{"auth":"plaintext-secret"}`),
+	)
+	if err == nil ||
+		!strings.Contains(err.Error(), "host policy") ||
+		!strings.Contains(err.Error(), "Credential Reference") {
+		t.Fatalf("ValidateConfig() error = %v", err)
+	}
+	if err := plugin.ValidateConfig(
+		t.Context(),
+		json.RawMessage(`{"auth":"credential://demo/token"}`),
+	); err != nil {
+		t.Fatalf("ValidateConfig(credential ref) error = %v", err)
 	}
 }
 
