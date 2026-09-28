@@ -75,6 +75,9 @@ func TestOpenMigratesV1ProviderConfigWithNullInstallationPin(t *testing.T) {
 	if config.InstallationID != nil {
 		t.Fatalf("InstallationID = %v, want nil for migrated built-in", config.InstallationID)
 	}
+	if _, ok := config.ConfigMetadata(); ok {
+		t.Fatal("legacy Provider config unexpectedly gained unverified normalized metadata")
+	}
 
 	var version int
 	if err := store.db.QueryRow(

@@ -1,7 +1,9 @@
 package bootstrap
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 
 	credentialapplication "github.com/orz-i/Mender/backend/internal/credential/application"
@@ -63,7 +65,6 @@ type runtimeCredentialUsageChecker struct {
 	configs  interface {
 		List(context.Context) ([]providerplugin.Configuration, error)
 	}
-	resolver providerplugin.Resolver
 }
 
 func (a runtimeCredentialUsageChecker) Usages(
@@ -96,32 +97,80 @@ func (a runtimeCredentialUsageChecker) Usages(
 		return nil, fmt.Errorf("credential usage: list provider configs: %w", err)
 	}
 	for _, config := range configs {
-		resolved, err := a.resolver.Resolve(ctx, config)
-		if err != nil {
-			return nil, fmt.Errorf(
-				"credential usage: resolve provider plugin %s: %w",
-				config.PluginID,
-				err,
-			)
-		}
-		metadata, err := resolved.Plugin.InspectConfig(ctx, config.Config)
-		if err != nil {
-			return nil, fmt.Errorf(
-				"credential usage: inspect provider %s: %w",
-				config.ProviderID,
-				err,
-			)
-		}
-		for _, configRef := range metadata.CredentialRefs {
-			if configRef == ref {
+		metadata, ok := config.ConfigMetadata()
+		if ok {
+			if metadataReferencesCredential(metadata, ref) {
 				usages = append(usages, credentialapplication.Usage{
 					Kind:        "provider",
 					Description: fmt.Sprintf("provider %s", config.ProviderID),
 				})
 			}
+			continue
+		}
+
+		// Forward-migrated rows from before normalized metadata are inspected
+		// locally and conservatively. Protocol v1 external plugins already require
+		// declared Credential References to occur as exact config strings; treating
+		// any exact match as usage can only over-block deletion, never release a
+		// referenced secret because a plugin process is unavailable.
+		contains, err := providerConfigContainsExactString(config.Config, ref.String())
+		if err != nil {
+			return nil, fmt.Errorf(
+				"credential usage: inspect legacy provider config %s: %w",
+				config.ProviderID,
+				err,
+			)
+		}
+		if contains {
+			usages = append(usages, credentialapplication.Usage{
+				Kind:        "provider",
+				Description: fmt.Sprintf("provider %s", config.ProviderID),
+			})
 		}
 	}
 	return usages, nil
+}
+
+func metadataReferencesCredential(
+	metadata providerplugin.ConfigMetadata,
+	ref credentialdomain.Reference,
+) bool {
+	for _, configRef := range metadata.CredentialRefs {
+		if configRef == ref {
+			return true
+		}
+	}
+	return false
+}
+
+func providerConfigContainsExactString(raw []byte, target string) (bool, error) {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	var value any
+	if err := decoder.Decode(&value); err != nil {
+		return false, err
+	}
+	return jsonValueContainsExactString(value, target), nil
+}
+
+func jsonValueContainsExactString(value any, target string) bool {
+	switch typed := value.(type) {
+	case string:
+		return typed == target
+	case []any:
+		for _, item := range typed {
+			if jsonValueContainsExactString(item, target) {
+				return true
+			}
+		}
+	case map[string]any:
+		for _, item := range typed {
+			if jsonValueContainsExactString(item, target) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 type profileCredentialLookup struct {

@@ -3,6 +3,7 @@ package configstore
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
+	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
 	_ "modernc.org/sqlite"
 )
@@ -77,23 +79,32 @@ func (s *Store) Save(
 	if err := config.Validate(); err != nil {
 		return fmt.Errorf("save provider config: %w", err)
 	}
-	_, err := s.db.ExecContext(
+	credentialRefsJSON, connectionSummary, err := encodeConfigMetadata(config.Metadata)
+	if err != nil {
+		return fmt.Errorf("save provider config: metadata: %w", err)
+	}
+	_, err = s.db.ExecContext(
 		ctx,
 		`INSERT INTO provider_configs(
-			provider_id, plugin_id, plugin_installation_id, config_version, revision, config_json
-		) VALUES (?, ?, ?, ?, ?, ?)
+			provider_id, plugin_id, plugin_installation_id, config_version, revision, config_json,
+			credential_refs_json, connection_summary
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(provider_id) DO UPDATE SET
 			plugin_id = excluded.plugin_id,
 			plugin_installation_id = excluded.plugin_installation_id,
 			config_version = excluded.config_version,
 			revision = excluded.revision,
-			config_json = excluded.config_json`,
+			config_json = excluded.config_json,
+			credential_refs_json = excluded.credential_refs_json,
+			connection_summary = excluded.connection_summary`,
 		config.ProviderID.String(),
 		config.PluginID.String(),
 		nullableInstallationID(config.InstallationID),
 		config.ConfigVersion,
 		config.Revision,
 		string(config.Config),
+		credentialRefsJSON,
+		connectionSummary,
 	)
 	if err != nil {
 		return fmt.Errorf("save provider config: %w", err)
@@ -109,7 +120,8 @@ func (s *Store) GetProviderConfig(
 ) (providerplugin.Configuration, error) {
 	row := s.db.QueryRowContext(
 		ctx,
-		`SELECT provider_id, plugin_id, plugin_installation_id, config_version, revision, config_json
+		`SELECT provider_id, plugin_id, plugin_installation_id, config_version, revision, config_json,
+			credential_refs_json, connection_summary
 		FROM provider_configs
 		WHERE provider_id = ?`,
 		providerID.String(),
@@ -130,7 +142,8 @@ func (s *Store) List(
 ) ([]providerplugin.Configuration, error) {
 	rows, err := s.db.QueryContext(
 		ctx,
-		`SELECT provider_id, plugin_id, plugin_installation_id, config_version, revision, config_json
+		`SELECT provider_id, plugin_id, plugin_installation_id, config_version, revision, config_json,
+			credential_refs_json, connection_summary
 		FROM provider_configs
 		ORDER BY provider_id`,
 	)
@@ -210,11 +223,16 @@ func (s *Store) ImportOnce(
 	}
 
 	for _, config := range configs {
+		credentialRefsJSON, connectionSummary, metadataErr := encodeConfigMetadata(config.Metadata)
+		if metadataErr != nil {
+			return fmt.Errorf("import provider configs: metadata %s: %w", config.ProviderID, metadataErr)
+		}
 		if _, err := tx.ExecContext(
 			ctx,
 			`INSERT INTO provider_configs(
-				provider_id, plugin_id, plugin_installation_id, config_version, revision, config_json
-			) VALUES (?, ?, ?, ?, ?, ?)
+				provider_id, plugin_id, plugin_installation_id, config_version, revision, config_json,
+				credential_refs_json, connection_summary
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT(provider_id) DO NOTHING`,
 			config.ProviderID.String(),
 			config.PluginID.String(),
@@ -222,6 +240,8 @@ func (s *Store) ImportOnce(
 			config.ConfigVersion,
 			config.Revision,
 			string(config.Config),
+			credentialRefsJSON,
+			connectionSummary,
 		); err != nil {
 			return fmt.Errorf(
 				"import provider configs: insert %s: %w",
@@ -258,6 +278,8 @@ func scanConfiguration(
 		configVersion     int
 		revision          string
 		rawConfig         string
+		rawCredentialRefs sql.NullString
+		rawSummary        sql.NullString
 	)
 	if err := scanner.Scan(
 		&rawProviderID,
@@ -266,6 +288,8 @@ func scanConfiguration(
 		&configVersion,
 		&revision,
 		&rawConfig,
+		&rawCredentialRefs,
+		&rawSummary,
 	); err != nil {
 		return providerplugin.Configuration{}, err
 	}
@@ -293,10 +317,65 @@ func scanConfiguration(
 		Revision:       revision,
 		Config:         []byte(rawConfig),
 	}
+	if rawCredentialRefs.Valid {
+		metadata, metadataErr := decodeConfigMetadata(
+			rawCredentialRefs.String,
+			rawSummary.String,
+		)
+		if metadataErr != nil {
+			return providerplugin.Configuration{}, fmt.Errorf(
+				"parse provider config metadata: %w",
+				metadataErr,
+			)
+		}
+		config.Metadata = &metadata
+	} else if rawSummary.Valid {
+		return providerplugin.Configuration{}, fmt.Errorf(
+			"parse provider config metadata: connection summary exists without Credential metadata marker",
+		)
+	}
 	if err := config.Validate(); err != nil {
 		return providerplugin.Configuration{}, err
 	}
 	return config, nil
+}
+
+func encodeConfigMetadata(metadata *providerplugin.ConfigMetadata) (any, any, error) {
+	if metadata == nil {
+		return nil, nil, nil
+	}
+	normalized, err := providerplugin.NewConfigMetadataWithSummary(
+		metadata.CredentialRefs,
+		metadata.ConnectionSummary,
+	)
+	if err != nil {
+		return nil, nil, err
+	}
+	refs := make([]string, 0, len(normalized.CredentialRefs))
+	for _, ref := range normalized.CredentialRefs {
+		refs = append(refs, ref.String())
+	}
+	raw, err := json.Marshal(refs)
+	if err != nil {
+		return nil, nil, err
+	}
+	return string(raw), normalized.ConnectionSummary, nil
+}
+
+func decodeConfigMetadata(rawRefs, connectionSummary string) (providerplugin.ConfigMetadata, error) {
+	var values []string
+	if err := json.Unmarshal([]byte(rawRefs), &values); err != nil {
+		return providerplugin.ConfigMetadata{}, err
+	}
+	refs := make([]credentialdomain.Reference, 0, len(values))
+	for _, value := range values {
+		ref, err := credentialdomain.ParseReference(value)
+		if err != nil {
+			return providerplugin.ConfigMetadata{}, err
+		}
+		refs = append(refs, ref)
+	}
+	return providerplugin.NewConfigMetadataWithSummary(refs, connectionSummary)
 }
 
 func nullableInstallationID(id *providerplugin.InstallationID) any {

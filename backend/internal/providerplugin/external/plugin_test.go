@@ -40,7 +40,8 @@ func TestExternalPluginLifecycleAndOutcomeMapping(t *testing.T) {
 		t.Fatalf("InspectConfig() error = %v", err)
 	}
 	if len(metadata.CredentialRefs) != 1 ||
-		metadata.CredentialRefs[0].String() != "credential://demo/token" {
+		metadata.CredentialRefs[0].String() != "credential://demo/token" ||
+		metadata.ConnectionSummary != "helper process" {
 		t.Fatalf("InspectConfig() = %+v", metadata)
 	}
 

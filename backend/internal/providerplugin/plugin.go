@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"unicode/utf8"
 
 	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
@@ -23,6 +24,7 @@ const (
 	maxDescriptorSchemaBytes      = 1024 * 1024
 	maxDescriptorCapabilities     = 64
 	maxDescriptorCapabilityLength = 128
+	maxConnectionSummaryBytes     = 4096
 )
 
 var idPattern = regexp.MustCompile(`^[a-z][a-z0-9-]*(?:\.[a-z][a-z0-9-]*)+$`)
@@ -170,13 +172,23 @@ type OpenRequest struct {
 // ConfigMetadata is bounded platform-governed metadata extracted from
 // plugin-owned configuration without activating the Provider.
 type ConfigMetadata struct {
-	CredentialRefs []credentialdomain.Reference
+	CredentialRefs    []credentialdomain.Reference
+	ConnectionSummary string
 }
 
-// NewConfigMetadata validates, de-duplicates, sorts, and clones metadata
-// returned across the plugin boundary.
+// NewConfigMetadata validates, de-duplicates, sorts, and clones Credential
+// Reference metadata returned across the plugin boundary.
 func NewConfigMetadata(
 	refs []credentialdomain.Reference,
+) (ConfigMetadata, error) {
+	return NewConfigMetadataWithSummary(refs, "")
+}
+
+// NewConfigMetadataWithSummary additionally validates bounded management-safe
+// connection summary metadata.
+func NewConfigMetadataWithSummary(
+	refs []credentialdomain.Reference,
+	connectionSummary string,
 ) (ConfigMetadata, error) {
 	result := make([]credentialdomain.Reference, 0, len(refs))
 	seen := make(map[credentialdomain.Reference]struct{}, len(refs))
@@ -194,7 +206,27 @@ func NewConfigMetadata(
 	slices.SortFunc(result, func(a, b credentialdomain.Reference) int {
 		return strings.Compare(a.String(), b.String())
 	})
-	return ConfigMetadata{CredentialRefs: result}, nil
+	if !utf8.ValidString(connectionSummary) {
+		return ConfigMetadata{}, fmt.Errorf(
+			"provider plugin config metadata: connection summary must be valid UTF-8",
+		)
+	}
+	if len(connectionSummary) > maxConnectionSummaryBytes {
+		return ConfigMetadata{}, fmt.Errorf(
+			"provider plugin config metadata: connection summary must be at most %d bytes",
+			maxConnectionSummaryBytes,
+		)
+	}
+	return ConfigMetadata{
+		CredentialRefs:    result,
+		ConnectionSummary: connectionSummary,
+	}, nil
+}
+
+// Clone returns a defensive copy of normalized config metadata.
+func (m ConfigMetadata) Clone() ConfigMetadata {
+	m.CredentialRefs = append([]credentialdomain.Reference(nil), m.CredentialRefs...)
+	return m
 }
 
 // Plugin validates/inspects configuration and opens runtime Provider

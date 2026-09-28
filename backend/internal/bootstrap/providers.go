@@ -154,6 +154,13 @@ func (r *Runtime) RegisterConfiguredProvider(
 			err,
 		)
 	}
+	metadata, err := plugin.InspectConfig(ctx, cloneRawJSON(rawConfig))
+	if err != nil {
+		return catalogdomain.Provider{}, fmt.Errorf(
+			"register configured provider: inspect config: %w",
+			err,
+		)
+	}
 
 	provider, err := r.Catalog.RegisterProvider.Execute(ctx, request)
 	if err != nil {
@@ -170,6 +177,17 @@ func (r *Runtime) RegisterConfiguredProvider(
 		removeErr := r.Catalog.RemoveProvider.Execute(ctx, provider.ID())
 		return catalogdomain.Provider{}, errors.Join(
 			fmt.Errorf("register configured provider: build config: %w", err),
+			wrapOptionalError(
+				"register configured provider: compensate provider removal",
+				removeErr,
+			),
+		)
+	}
+	config, err = config.WithMetadata(metadata)
+	if err != nil {
+		removeErr := r.Catalog.RemoveProvider.Execute(ctx, provider.ID())
+		return catalogdomain.Provider{}, errors.Join(
+			fmt.Errorf("register configured provider: normalize config metadata: %w", err),
 			wrapOptionalError(
 				"register configured provider: compensate provider removal",
 				removeErr,
@@ -225,6 +243,13 @@ func (r *Runtime) RegisterInstalledProvider(
 			err,
 		)
 	}
+	metadata, err := resolved.Plugin.InspectConfig(ctx, cloneRawJSON(rawConfig))
+	if err != nil {
+		return catalogdomain.Provider{}, fmt.Errorf(
+			"register installed provider: inspect config: %w",
+			err,
+		)
+	}
 
 	provider, err := r.Catalog.RegisterProvider.Execute(ctx, request)
 	if err != nil {
@@ -242,6 +267,17 @@ func (r *Runtime) RegisterInstalledProvider(
 		removeErr := r.Catalog.RemoveProvider.Execute(ctx, provider.ID())
 		return catalogdomain.Provider{}, errors.Join(
 			fmt.Errorf("register installed provider: build config: %w", err),
+			wrapOptionalError(
+				"register installed provider: compensate provider removal",
+				removeErr,
+			),
+		)
+	}
+	config, err = config.WithMetadata(metadata)
+	if err != nil {
+		removeErr := r.Catalog.RemoveProvider.Execute(ctx, provider.ID())
+		return catalogdomain.Provider{}, errors.Join(
+			fmt.Errorf("register installed provider: normalize config metadata: %w", err),
 			wrapOptionalError(
 				"register installed provider: compensate provider removal",
 				removeErr,
@@ -301,6 +337,13 @@ func (r *Runtime) UpdateConfiguredProvider(
 			err,
 		)
 	}
+	metadata, err := resolved.Plugin.InspectConfig(ctx, cloneRawJSON(rawConfig))
+	if err != nil {
+		return catalogdomain.Provider{}, fmt.Errorf(
+			"update configured provider: inspect config: %w",
+			err,
+		)
+	}
 
 	nextConfig, err := updatedProviderConfiguration(
 		providerID,
@@ -311,6 +354,13 @@ func (r *Runtime) UpdateConfiguredProvider(
 	if err != nil {
 		return catalogdomain.Provider{}, fmt.Errorf(
 			"update configured provider: build config: %w",
+			err,
+		)
+	}
+	nextConfig, err = nextConfig.WithMetadata(metadata)
+	if err != nil {
+		return catalogdomain.Provider{}, fmt.Errorf(
+			"update configured provider: normalize config metadata: %w",
 			err,
 		)
 	}

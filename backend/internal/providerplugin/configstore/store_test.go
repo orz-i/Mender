@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
+	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
 )
 
@@ -70,6 +71,51 @@ func TestStoreRoundTripListAndDelete(t *testing.T) {
 		first.ProviderID,
 	); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("GetProviderConfig(deleted) error = %v", err)
+	}
+}
+
+func TestStoreRoundTripsNormalizedConfigMetadata(t *testing.T) {
+	t.Parallel()
+
+	store := openTestStore(t)
+	config := testConfiguration(
+		t,
+		"prov_00000000000000000000000000000027",
+		"dev.example.echo",
+		`{"credentialRef":"credential://demo/token"}`,
+	)
+	ref, err := credentialdomain.ParseReference("credential://demo/token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	metadata, err := providerplugin.NewConfigMetadataWithSummary(
+		[]credentialdomain.Reference{ref, ref},
+		"Example API · production",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	config, err = config.WithMetadata(metadata)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Save(context.Background(), config); err != nil {
+		t.Fatal(err)
+	}
+
+	loaded, err := store.GetProviderConfig(context.Background(), config.ProviderID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, ok := loaded.ConfigMetadata()
+	if !ok {
+		t.Fatal("ConfigMetadata() missing after round trip")
+	}
+	if len(got.CredentialRefs) != 1 || got.CredentialRefs[0] != ref {
+		t.Fatalf("CredentialRefs = %v, want [%s]", got.CredentialRefs, ref)
+	}
+	if got.ConnectionSummary != metadata.ConnectionSummary {
+		t.Fatalf("ConnectionSummary = %q, want %q", got.ConnectionSummary, metadata.ConnectionSummary)
 	}
 }
 
@@ -236,6 +282,8 @@ func TestProviderConfigSchemaIsProtocolAgnostic(t *testing.T) {
 		"config_version",
 		"revision",
 		"config_json",
+		"credential_refs_json",
+		"connection_summary",
 	} {
 		if !slices.Contains(columns, expected) {
 			t.Fatalf("provider config schema missing %q: %v", expected, columns)

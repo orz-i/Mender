@@ -69,6 +69,20 @@ func legacyMCPProviderConfiguration(
 			err,
 		)
 	}
+	metadata, err := providerplugin.NewConfigMetadata(config.RequiredCredentialRefs())
+	if err != nil {
+		return providerplugin.Configuration{}, fmt.Errorf(
+			"map MCP provider config: metadata: %w",
+			err,
+		)
+	}
+	configEnvelope, err = configEnvelope.WithMetadata(metadata)
+	if err != nil {
+		return providerplugin.Configuration{}, fmt.Errorf(
+			"map MCP provider config: attach metadata: %w",
+			err,
+		)
+	}
 	return configEnvelope, nil
 }
 

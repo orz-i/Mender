@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-const latestSchemaVersion = 2
+const latestSchemaVersion = 3
 
 func migrate(ctx context.Context, db *sql.DB) error {
 	tx, err := db.BeginTx(ctx, nil)
@@ -93,6 +93,32 @@ func migrate(ctx context.Context, db *sql.DB) error {
 			time.Now().UTC().Format(time.RFC3339Nano),
 		); err != nil {
 			return fmt.Errorf("record provider config migration 2: %w", err)
+		}
+	}
+
+	var appliedV3 int
+	if err := tx.QueryRowContext(
+		ctx,
+		"SELECT COUNT(*) FROM provider_config_schema_migrations WHERE version = 3",
+	).Scan(&appliedV3); err != nil {
+		return fmt.Errorf("check provider config migration 3: %w", err)
+	}
+	if appliedV3 == 0 {
+		statements := []string{
+			"ALTER TABLE provider_configs ADD COLUMN credential_refs_json TEXT",
+			"ALTER TABLE provider_configs ADD COLUMN connection_summary TEXT",
+		}
+		for _, statement := range statements {
+			if _, err := tx.ExecContext(ctx, statement); err != nil {
+				return fmt.Errorf("apply provider config migration 3: %w", err)
+			}
+		}
+		if _, err := tx.ExecContext(
+			ctx,
+			"INSERT INTO provider_config_schema_migrations(version, applied_at) VALUES (3, ?)",
+			time.Now().UTC().Format(time.RFC3339Nano),
+		); err != nil {
+			return fmt.Errorf("record provider config migration 3: %w", err)
 		}
 	}
 

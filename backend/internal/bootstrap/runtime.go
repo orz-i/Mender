@@ -257,7 +257,6 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		runtimeCredentialUsageChecker{
 			profiles: profiles,
 			configs:  providerConfigs,
-			resolver: providerResolver,
 		},
 	)
 

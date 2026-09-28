@@ -80,6 +80,39 @@ func TestNewConfigMetadataValidatesDeduplicatesAndSorts(t *testing.T) {
 	}
 }
 
+func TestConfigMetadataConnectionSummaryIsBoundedAndCloned(t *testing.T) {
+	t.Parallel()
+
+	ref, err := credentialdomain.NewReference("demo", "token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	metadata, err := NewConfigMetadataWithSummary(
+		[]credentialdomain.Reference{ref},
+		"Example API · production",
+	)
+	if err != nil {
+		t.Fatalf("NewConfigMetadataWithSummary() error = %v", err)
+	}
+	if metadata.ConnectionSummary != "Example API · production" {
+		t.Fatalf("ConnectionSummary = %q", metadata.ConnectionSummary)
+	}
+	clone := metadata.Clone()
+	clone.CredentialRefs[0] = "credential://changed/value"
+	if metadata.CredentialRefs[0] != ref {
+		t.Fatal("Clone() exposed mutable CredentialRefs backing storage")
+	}
+	if _, err := NewConfigMetadataWithSummary(
+		nil,
+		strings.Repeat("x", maxConnectionSummaryBytes+1),
+	); err == nil {
+		t.Fatal("NewConfigMetadataWithSummary() accepted oversized summary")
+	}
+	if _, err := NewConfigMetadataWithSummary(nil, string([]byte{0xff})); err == nil {
+		t.Fatal("NewConfigMetadataWithSummary() accepted invalid UTF-8 summary")
+	}
+}
+
 func TestDescriptorValidate(t *testing.T) {
 	t.Parallel()
 

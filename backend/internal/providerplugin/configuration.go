@@ -24,6 +24,7 @@ type Configuration struct {
 	ConfigVersion  int
 	Revision       string
 	Config         json.RawMessage
+	Metadata       *ConfigMetadata
 }
 
 // NewConfiguration constructs a validated configuration with a deterministic
@@ -115,7 +116,41 @@ func (c Configuration) Validate() error {
 	if !json.Valid(c.Config) {
 		return fmt.Errorf("provider configuration: config must be valid JSON")
 	}
+	if c.Metadata != nil {
+		if _, err := NewConfigMetadataWithSummary(
+			c.Metadata.CredentialRefs,
+			c.Metadata.ConnectionSummary,
+		); err != nil {
+			return fmt.Errorf("provider configuration: %w", err)
+		}
+	}
 	return nil
+}
+
+// WithMetadata returns the configuration with normalized host-owned metadata
+// derived from the same plugin configuration revision.
+func (c Configuration) WithMetadata(metadata ConfigMetadata) (Configuration, error) {
+	normalized, err := NewConfigMetadataWithSummary(
+		metadata.CredentialRefs,
+		metadata.ConnectionSummary,
+	)
+	if err != nil {
+		return Configuration{}, err
+	}
+	c.Metadata = &normalized
+	if err := c.Validate(); err != nil {
+		return Configuration{}, err
+	}
+	return c, nil
+}
+
+// ConfigMetadata returns a defensive metadata copy and whether normalized
+// metadata has been persisted for this configuration.
+func (c Configuration) ConfigMetadata() (ConfigMetadata, bool) {
+	if c.Metadata == nil {
+		return ConfigMetadata{}, false
+	}
+	return c.Metadata.Clone(), true
 }
 
 func cloneInstallationID(id *InstallationID) *InstallationID {

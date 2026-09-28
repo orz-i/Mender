@@ -228,7 +228,10 @@ func (p *Plugin) InspectConfig(
 			err,
 		)
 	}
-	metadata, err := providerplugin.NewConfigMetadata(refs)
+	metadata, err := providerplugin.NewConfigMetadataWithSummary(
+		refs,
+		response.GetConnectionSummary(),
+	)
 	if err != nil {
 		return providerplugin.ConfigMetadata{}, fmt.Errorf(
 			"inspect external provider config: %w",

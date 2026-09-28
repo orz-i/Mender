@@ -13,6 +13,7 @@ import (
 	"time"
 
 	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
+	credentialapplication "github.com/orz-i/Mender/backend/internal/credential/application"
 	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	installationapplication "github.com/orz-i/Mender/backend/internal/providerplugin/installation/application"
@@ -62,6 +63,7 @@ func TestRuntimeInstalledExternalProviderEndToEnd(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	t.Setenv("MENDER_EXTERNAL_ECHO_TOKEN", "external-echo-secret")
 	runtime, err := NewRuntime(ctx, RuntimeOptions{
 		DatabasePath:       databasePath,
 		ProviderPluginRoot: managedRoot,
@@ -118,6 +120,22 @@ func TestRuntimeInstalledExternalProviderEndToEnd(t *testing.T) {
 		t.Fatalf("external available plugin = %+v", *external)
 	}
 
+	credential, err := runtime.Credentials.CreateEnvironment.Execute(
+		ctx,
+		credentialapplication.CreateEnvironmentRequest{
+			Namespace:           "external-echo",
+			Name:                "token",
+			DisplayName:         "External Echo Token",
+			EnvironmentVariable: "MENDER_EXTERNAL_ECHO_TOKEN",
+		},
+	)
+	if err != nil {
+		t.Fatalf("create external Provider Credential: %v", err)
+	}
+	credentialRef := credential.Reference()
+	providerConfig := []byte(
+		"{\"prefix\":\"test: \",\"credentialRef\":\"" + credentialRef.String() + "\"}",
+	)
 	provider, err := runtime.RegisterInstalledProvider(
 		ctx,
 		catalogapplication.RegisterProviderRequest{
@@ -127,7 +145,7 @@ func TestRuntimeInstalledExternalProviderEndToEnd(t *testing.T) {
 		},
 		pluginID,
 		installationID,
-		[]byte("{\"prefix\":\"test: \"}"),
+		providerConfig,
 	)
 	if err != nil {
 		t.Fatalf("RegisterInstalledProvider() error = %v", err)
@@ -140,6 +158,12 @@ func TestRuntimeInstalledExternalProviderEndToEnd(t *testing.T) {
 		*config.InstallationID != installationID ||
 		config.PluginID != pluginID {
 		t.Fatalf("ProviderConfig() = %+v", config)
+	}
+	configMetadata, ok := config.ConfigMetadata()
+	if !ok || len(configMetadata.CredentialRefs) != 1 ||
+		configMetadata.CredentialRefs[0] != credentialRef ||
+		configMetadata.ConnectionSummary != "local example echo plugin" {
+		t.Fatalf("ProviderConfig metadata = %+v, present=%v", configMetadata, ok)
 	}
 
 	syncResult, err := runtime.SyncConfiguredProvider(ctx, provider.ID())
@@ -201,7 +225,7 @@ func TestRuntimeInstalledExternalProviderEndToEnd(t *testing.T) {
 			DisplayName: "External Echo Updated",
 			Description: "Still pinned",
 		},
-		[]byte("{\"prefix\":\"test: \"}"),
+		providerConfig,
 	); err != nil {
 		t.Fatalf("UpdateConfiguredProvider() error = %v", err)
 	}
@@ -230,6 +254,15 @@ func TestRuntimeInstalledExternalProviderEndToEnd(t *testing.T) {
 	}
 	if runtime.executors.HasProvider(provider.ID()) {
 		t.Fatal("disabled installation left active executor route")
+	}
+	if err := runtime.Credentials.Delete.Execute(ctx, credentialRef); !errors.Is(
+		err,
+		credentialapplication.ErrCredentialInUse,
+	) {
+		t.Fatalf("delete Credential while plugin disabled error = %v", err)
+	}
+	if runtime.externalProcesses.Running(installationID) {
+		t.Fatal("offline Credential usage check restarted disabled plugin process")
 	}
 	if err := runtime.EnsureConfiguredProvider(ctx, provider.ID()); err == nil ||
 		!strings.Contains(err.Error(), "disabled") {
