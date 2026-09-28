@@ -286,7 +286,7 @@ See `phase-13-provider-plugin-runtime.md` for implementation and verification ev
 
 ## Phase 14 — OpenAPI Provider Plugin
 
-Status: In progress
+Status: Complete
 
 Goals:
 
@@ -297,6 +297,6 @@ Goals:
 - Reject external references and unsupported media/serialization/authentication semantics rather than silently weakening execution.
 - Reuse generic Provider configuration, lifecycle, CLI/API/Wails/Web/Desktop plugin surfaces without adding OpenAPI branches to Catalog/Invocation Runtime orchestration.
 
-Exit criteria include bounded URL/file description loading, deterministic operation discovery/filtering, apiKey/Bearer execution, Profile Credential scope, runtime end-to-end coverage, plugin-first management UX, and green repository/security checks.
+Exit criteria are complete. `io.mender.provider.openapi` loads bounded URL/file OpenAPI 3.0/3.1/3.2 descriptions with external refs disabled; discovers deterministic canonical Tools with self-contained schemas; executes bounded JSON HTTP operations; supports apiKey/Bearer Security Schemes through scoped Credential References; preserves ToolID across SourceKey-stable refreshes; uses the generic Provider lifecycle/management surfaces; and passes repository race/build/security verification.
 
-See `phase-14-openapi-provider.md`.
+See `phase-14-openapi-provider.md` for implementation and verification evidence.

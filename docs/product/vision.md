@@ -120,7 +120,7 @@ Initial target users are:
 
 A first usable release should allow a user to:
 
-1. Register Providers through built-in Provider plugins, starting with MCP over local stdio or remote Streamable HTTP.
+1. Register Providers through built-in Provider plugins, including MCP over local stdio/remote Streamable HTTP and supported OpenAPI 3 descriptions over governed HTTP execution.
 2. Synchronize their tools into a canonical catalog.
 3. Create a profile containing a subset of tools.
 4. Search, inspect, and invoke tools from the CLI.

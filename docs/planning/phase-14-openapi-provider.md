@@ -1,6 +1,6 @@
 # Phase 14 Plan — OpenAPI Provider Plugin
 
-Status: In progress
+Status: Complete
 
 ## Objective
 
@@ -1226,36 +1226,77 @@ docs: complete openapi provider phase
 
 Phase 14 is complete when:
 
-- [ ] io.mender.provider.openapi is a registered built-in plugin.
-- [ ] kin-openapi is pinned and isolated to OpenAPI infrastructure.
-- [ ] OpenAPI 3.0/3.1/3.2 fixtures parse/validate.
-- [ ] external refs are rejected.
-- [ ] URL/file source reads are bounded.
-- [ ] selected operations produce deterministic SourceKeys and Tool names.
-- [ ] canonical Tool input schemas are object-rooted and self-contained.
-- [ ] OAS 3.0 nullable/exclusive semantics required by fixtures are normalized.
-- [ ] internal component refs/cycles work through Tool-local $defs.
-- [ ] include/exclude filtering is deterministic.
-- [ ] JSON GET/POST/PUT/PATCH/DELETE operations execute.
-- [ ] supported parameter serialization is covered.
-- [ ] application/json and concrete +json bodies work.
-- [ ] apiKey header/query/cookie works through Credential References.
-- [ ] HTTP Bearer works through Credential References.
-- [ ] Security Requirement AND/OR semantics are preserved for supported schemes.
-- [ ] auth secrets never appear in Tool input schemas.
-- [ ] Profile Credential scope blocks unauthorized OpenAPI calls.
-- [ ] redirect behavior cannot leak Provider credentials.
-- [ ] response bodies are bounded and JSON successes normalize to canonical Outcomes.
-- [ ] non-2xx maps to expected Tool failure.
-- [ ] stable SourceKey preserves ToolID across description refresh.
-- [ ] generic Runtime contains no OpenAPI-specific lifecycle branch.
-- [ ] CLI supports plugin-first OpenAPI registration.
-- [ ] Web/Desktop support OpenAPI configuration.
-- [ ] OpenAPI/SDK/Wails contracts remain generated and strict.
-- [ ] large-catalog filtering is covered.
-- [ ] Go race/lint/tests pass.
-- [ ] frontend lint/typecheck/tests/build pass.
-- [ ] security scans pass.
+- [x] io.mender.provider.openapi is a registered built-in plugin.
+- [x] kin-openapi is pinned and isolated to OpenAPI infrastructure.
+- [x] OpenAPI 3.0/3.1/3.2 fixtures parse/validate.
+- [x] external refs are rejected.
+- [x] URL/file source reads are bounded.
+- [x] selected operations produce deterministic SourceKeys and Tool names.
+- [x] canonical Tool input schemas are object-rooted and self-contained.
+- [x] OAS 3.0 nullable/exclusive semantics required by fixtures are normalized.
+- [x] internal component refs/cycles work through Tool-local $defs.
+- [x] include/exclude filtering is deterministic.
+- [x] JSON GET/POST/PUT/PATCH/DELETE operations execute.
+- [x] supported parameter serialization is covered.
+- [x] application/json and concrete +json bodies work.
+- [x] apiKey header/query/cookie works through Credential References.
+- [x] HTTP Bearer works through Credential References.
+- [x] Security Requirement AND/OR semantics are preserved for supported schemes.
+- [x] auth secrets never appear in Tool input schemas.
+- [x] Profile Credential scope blocks unauthorized OpenAPI calls.
+- [x] redirect behavior cannot leak Provider credentials.
+- [x] response bodies are bounded and JSON successes normalize to canonical Outcomes.
+- [x] non-2xx maps to expected Tool failure.
+- [x] stable SourceKey preserves ToolID across description refresh.
+- [x] generic Runtime contains no OpenAPI-specific lifecycle branch.
+- [x] CLI supports plugin-first OpenAPI registration.
+- [x] Web/Desktop support OpenAPI configuration.
+- [x] OpenAPI/SDK/Wails contracts remain generated and strict.
+- [x] large-catalog filtering is covered.
+- [x] Go race/lint/tests pass.
+- [x] frontend lint/typecheck/tests/build pass.
+- [x] security scans pass.
+
+## Closeout
+
+Phase 14 completed on 2026-09-27.
+
+The first non-MCP Provider plugin now validates the Provider Plugin Runtime boundary in production code:
+
+- `io.mender.provider.openapi` is registered beside MCP without adding OpenAPI-specific branches to Catalog, Invocation, Profile, Policy, Audit, or Provider Instance Manager orchestration. Generic Runtime only registers the plugin.
+- `github.com/getkin/kin-openapi v0.145.0` is pinned in the backend module and imported only from `backend/internal/openapi/infrastructure/plugin`. Mender explicitly normalizes the newly released OAS `3.2.1` patch marker for the pinned parser while preserving the source version.
+- Description sources support explicit bounded URL or absolute-file loading. Both source and execution HTTP clients disable ambient proxy routing, do not follow redirects automatically, and enforce byte limits. The OpenAPI Loader has external refs disabled and no custom URI reader, so external URL/file `$ref` values cannot acquire hidden network/filesystem authority.
+- Supported OpenAPI 3.0/3.1/3.2 operations use `operationId` as SourceKey when present and `<method> <path>` otherwise. Tool names are deterministic; location-namespaced input schemas are object-rooted and self-contained through Tool-local `$defs`.
+- OAS 3.0 nullable/exclusive-bound normalization, recursive component refs, request readOnly handling, response writeOnly handling, JSON output schemas, and deterministic include/exclude filtering are covered by fixtures.
+- HTTP execution supports GET/POST/PUT/PATCH/DELETE, bounded path/query/header/cookie serialization, `application/json` and concrete `application/*+json` bodies, explicit server precedence/variables, JSON/null successful Outcomes, response-size bounds, and non-2xx Tool failures without persisting arbitrary upstream error bodies.
+- OpenAPI `apiKey` (header/query/cookie) and HTTP Bearer Security Schemes bind to Credential References. Requirement alternatives preserve OR semantics and schemes inside one requirement preserve AND semantics. Authentication data never enters the Tool input schema.
+- Profile-scoped OpenAPI calls reuse the existing restricted CredentialResolver; a Profile without the Provider-required ref receives `credential_outside_scope` before the upstream execution endpoint is reached. Credential deletion also sees OpenAPI bindings through generic `InspectConfig`.
+- Runtime end-to-end coverage proves Register → Sync → Search → Call, source refresh with stable ToolID for unchanged SourceKey, and Tool removal when an operation disappears.
+- CLI supports `provider add openapi`; generic Management API/Wails contracts need no protocol-specific OpenAPI endpoint; shared Web/Desktop UI provides OpenAPI source/filter/authentication forms under the existing plugin-first Provider workflow.
+- Generated large-catalog coverage uses 1,000 operations and verifies deterministic filtering without eager model-facing schema exposure.
+
+Validation evidence:
+
+~~~text
+pnpm sdk:check                         PASS
+pnpm desktop:bindings:check            PASS
+pnpm desktop:architecture:check        PASS
+pnpm go:lint                           PASS
+pnpm go:test                           PASS
+pnpm go:test:race                      PASS
+pnpm lint                              PASS
+pnpm typecheck                         PASS
+pnpm test                              PASS (5 files / 34 tests)
+pnpm build                             PASS (Web + Desktop; existing chunk-size warnings only)
+pnpm security:go                       PASS (no vulnerabilities: backend + desktop)
+pnpm security:js                       PASS (no known production dependency vulnerabilities)
+~~~
+
+`pnpm check` and `pnpm security:check` are represented by the repository-defined constituent commands above; every constituent command passed.
+
+Phase 14 does not add a SQLite migration. OpenAPI Provider configuration uses generic `provider_configs` v1. A pre-Phase-14 binary that does not register `io.mender.provider.openapi` fails closed when asked to activate/synchronize such a Provider rather than substituting another implementation.
+
+The next Provider-layer work should be chosen deliberately: either extend OpenAPI's bounded feature set (multi-document refs/OAuth/multipart) or start the separate Model Tool Bridge architecture for provider-hosted LLM tools.
 
 ## Deferred follow-up
 

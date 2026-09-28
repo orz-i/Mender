@@ -39,7 +39,7 @@ mender provider plugins
 mender provider plugins --output json
 ```
 
-The initial built-in plugin is `io.mender.provider.mcp`. MCP connection transport is selected below that plugin rather than represented as a top-level Provider kind.
+The built-in plugins currently include `io.mender.provider.mcp` and `io.mender.provider.openapi`. MCP connection transport is selected below the MCP plugin rather than represented as a top-level Provider kind.
 
 Add a remote MCP Provider:
 
@@ -66,9 +66,23 @@ Persistent stdio configuration never stores resolved secret environment values. 
 
 The historical `provider add http` and `provider add stdio` paths remain hidden compatibility aliases for Phase 5 scripts. New scripts should use the plugin-first commands above.
 
-Provider Credential bindings are currently configured through Web/Desktop or the structured management API. The Provider CLI intentionally does not yet add a separate authentication-binding flag DSL.
+Add an OpenAPI Provider from a remote description:
 
-`provider list` reports Plugin identity as the primary implementation dimension; MCP transport appears only as connection detail.
+```bash
+mender provider add openapi \
+  --namespace example-api \
+  --name "Example API" \
+  --spec-url https://example.com/openapi.yaml \
+  --server https://api.example.com \
+  --include getUser \
+  --credential 'BearerAuth=credential://example/work'
+```
+
+Use `--spec-file /absolute/path/openapi.yaml` instead of `--spec-url` for an explicit local file source. `--include` and `--exclude` are repeatable and use canonical operation SourceKeys (`operationId` when present, otherwise values such as `get /users/{id}`). `--credential` is repeatable and maps an OpenAPI Security Scheme name to an existing inventory Credential Reference.
+
+Phase 14 supports OpenAPI 3.0/3.1/3.2 with internal `$ref` only, JSON request/response bodies, standard bounded parameter serialization, `apiKey` security (header/query/cookie), and HTTP Bearer. External refs, OAuth/OIDC, mTLS, multipart/form/binary/streaming are intentionally rejected rather than partially executed.
+
+`provider list` reports Plugin identity as the primary implementation dimension; MCP transport or OpenAPI source location appears only as plugin-specific connection detail.
 
 List Providers:
 

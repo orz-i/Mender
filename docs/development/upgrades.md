@@ -18,7 +18,9 @@ Each bounded context applies only its own migrations.
 
 Migration execution is transactional.
 
-The current generic Provider plugin configuration schema is version 1. It stores only the canonical Provider ID, Plugin ID, plugin config version, deterministic revision, and plugin-owned JSON configuration in `provider_configs`. Existing MCP configuration is imported once into this generic store without recreating Provider or Tool identities.
+The current generic Provider plugin configuration schema is version 1. It stores only the canonical Provider ID, Plugin ID, plugin config version, deterministic revision, and plugin-owned JSON configuration in `provider_configs`. Existing MCP configuration is imported once into this generic store without recreating Provider or Tool identities. Phase 14 adds the OpenAPI built-in Provider plugin without changing this SQLite schema: OpenAPI source/filter/Credential-Reference configuration is stored in the same generic table.
+
+Downgrading to a Phase-13-era binary does not require a reverse database migration because the schema version is unchanged, but that older binary does not contain `io.mender.provider.openapi`. Any persisted OpenAPI Provider therefore fails closed when activation/synchronization is attempted until a binary with the plugin is restored. Do not retag the Plugin ID or rewrite the JSON configuration to force compatibility.
 
 The legacy MCP Provider compatibility schema is version 4. Versions 1–3 contain the historical HTTP/stdio projection, including non-secret header templates and Credential References. Version 4 is an ownership sentinel with no additional secret-bearing columns: generic `provider_configs` is the Runtime source of truth, while the old MCP table is temporarily dual-written for first-party compatibility contracts. Pre-Phase-13 binaries that understand at most version 3 therefore fail closed after this migration instead of modifying the compatibility projection during an unsupported downgrade.
 
