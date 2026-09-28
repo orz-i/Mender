@@ -1,4 +1,4 @@
-import type { MenderClient } from "@mender/sdk";
+import type { MenderClient, ProviderPluginInstallation } from "@mender/sdk";
 import { Route, Routes } from "react-router";
 
 import { AuditPage } from "./domains/audit/audit-page";
@@ -14,15 +14,27 @@ import { ManagementShell } from "./shell/management-shell";
 export function MenderApp({
   client,
   copyText,
+  installProviderPlugin,
 }: {
   client: MenderClient;
   copyText?: (value: string) => Promise<void>;
+  installProviderPlugin?: () => Promise<ProviderPluginInstallation | null>;
 }) {
   return (
     <Routes>
       <Route element={<ManagementShell />}>
         <Route index element={<OverviewPage client={client} />} />
-        <Route path="providers" element={<ProvidersPage client={client} />} />
+        <Route
+          path="providers"
+          element={
+            <ProvidersPage
+              client={client}
+              {...(installProviderPlugin === undefined
+                ? {}
+                : { installProviderPlugin })}
+            />
+          }
+        />
         <Route path="catalog" element={<CatalogPage client={client} />} />
         <Route path="profiles" element={<ProfilesPage client={client} />} />
         <Route

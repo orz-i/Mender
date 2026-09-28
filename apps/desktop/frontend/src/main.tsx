@@ -3,11 +3,14 @@ import { createRoot } from "react-dom/client";
 import { HashRouter } from "react-router";
 
 import { MenderApp } from "@mender/app";
-import { Clipboard } from "@wailsio/runtime";
+import { Clipboard, Dialogs } from "@wailsio/runtime";
 
 import "@mender/ui/globals.css";
 
-import { createDesktopMenderClient } from "./desktop-client";
+import {
+  createDesktopMenderClient,
+  installDesktopProviderPlugin,
+} from "./desktop-client";
 
 const rootElement = document.getElementById("root");
 
@@ -17,10 +20,30 @@ if (rootElement === null) {
 
 const client = createDesktopMenderClient();
 
+async function chooseAndInstallProviderPlugin() {
+  const sourcePath = await Dialogs.OpenFile({
+    AllowsMultipleSelection: false,
+    CanChooseDirectories: true,
+    CanChooseFiles: false,
+    CanCreateDirectories: false,
+    Title: "Install Provider plugin",
+    Message: "Choose a Provider plugin package directory.",
+    ButtonText: "Install",
+  });
+  if (!sourcePath) {
+    return null;
+  }
+  return installDesktopProviderPlugin(sourcePath);
+}
+
 createRoot(rootElement).render(
   <StrictMode>
     <HashRouter>
-      <MenderApp client={client} copyText={Clipboard.SetText} />
+      <MenderApp
+        client={client}
+        copyText={Clipboard.SetText}
+        installProviderPlugin={chooseAndInstallProviderPlugin}
+      />
     </HashRouter>
   </StrictMode>,
 );

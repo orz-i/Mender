@@ -6,7 +6,11 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import type { MenderClient, PolicyRuleInput } from "@mender/sdk";
+import type {
+  MenderClient,
+  PolicyRuleInput,
+  ProviderPluginInstallation,
+} from "@mender/sdk";
 import { MemoryRouter } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -379,6 +383,111 @@ describe("management pages", () => {
       screen.getByRole<HTMLButtonElement>("button", { name: "Add provider" })
         .disabled,
     ).toBe(true);
+  });
+
+  it("manages installed Provider plugins without exposing browser path install", async () => {
+    const installation = {
+      installationId: "pinst_0123456789abcdef0123456789abcdef",
+      pluginId: "dev.example.echo",
+      packageVersion: "1.2.3",
+      sourceKind: "local" as const,
+      digest: "sha256:" + "a".repeat(64),
+      status: "enabled" as const,
+      installedAt: "2026-09-28T00:00:00Z",
+    };
+    const disabled = { ...installation, status: "disabled" as const };
+    const listProviderPluginInstallations = vi
+      .fn()
+      .mockResolvedValueOnce({ installations: [installation] })
+      .mockResolvedValueOnce({ installations: [disabled] })
+      .mockResolvedValueOnce({ installations: [] });
+    const disableProviderPluginInstallation = vi.fn().mockResolvedValue({
+      installation: disabled,
+    });
+    const deleteProviderPluginInstallation = vi.fn().mockResolvedValue(undefined);
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+
+    renderApp("/providers", {
+      listProviders: vi.fn().mockResolvedValue({ providers: [] }),
+      listProviderPluginInstallations,
+      disableProviderPluginInstallation,
+      deleteProviderPluginInstallation,
+    });
+
+    expect(await screen.findByText("No providers")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Manage plugins" }));
+
+    expect(await screen.findByText("dev.example.echo")).toBeTruthy();
+    expect(screen.getByText(installation.installationId)).toBeTruthy();
+    expect(
+      screen.queryByRole("button", { name: "Install package" }),
+    ).toBeNull();
+    expect(
+      screen.getByText(/Browser management never accepts a server filesystem path/),
+    ).toBeTruthy();
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Disable plugin " + installation.installationId,
+      }),
+    );
+    await waitFor(() => {
+      expect(disableProviderPluginInstallation).toHaveBeenCalledWith(
+        installation.installationId,
+      );
+    });
+    expect(await screen.findByText("disabled")).toBeTruthy();
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Remove plugin " + installation.installationId,
+      }),
+    );
+    await waitFor(() => {
+      expect(deleteProviderPluginInstallation).toHaveBeenCalledWith(
+        installation.installationId,
+      );
+    });
+    expect(await screen.findByText("No external plugins installed")).toBeTruthy();
+    confirm.mockRestore();
+  });
+
+  it("shows local Provider plugin install only when a host capability is supplied", async () => {
+    const installed = {
+      installationId: "pinst_fedcba9876543210fedcba9876543210",
+      pluginId: "dev.example.local",
+      packageVersion: "1.0.0",
+      sourceKind: "local" as const,
+      digest: "sha256:" + "b".repeat(64),
+      status: "enabled" as const,
+      installedAt: "2026-09-28T00:00:00Z",
+    };
+    const installProviderPlugin = vi.fn().mockResolvedValue(installed);
+    const listProviderPluginInstallations = vi
+      .fn()
+      .mockResolvedValueOnce({ installations: [] })
+      .mockResolvedValueOnce({ installations: [installed] });
+
+    renderApp(
+      "/providers",
+      {
+        listProviders: vi.fn().mockResolvedValue({ providers: [] }),
+        listProviderPluginInstallations,
+      },
+      { installProviderPlugin },
+    );
+
+    expect(await screen.findByText("No providers")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Manage plugins" }));
+    expect(
+      await screen.findByRole("button", { name: "Install package" }),
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Install package" }));
+
+    await waitFor(() => {
+      expect(installProviderPlugin).toHaveBeenCalledTimes(1);
+    });
+    expect(await screen.findByText("dev.example.local")).toBeTruthy();
   });
 
   it("registers a Model Tools Provider with inventory authentication", async () => {
@@ -1643,7 +1752,13 @@ describe("management pages", () => {
   });
 });
 
-function renderApp(path: string, client: Partial<MenderClient>) {
+function renderApp(
+  path: string,
+  client: Partial<MenderClient>,
+  options: {
+    installProviderPlugin?: () => Promise<ProviderPluginInstallation | null>;
+  } = {},
+) {
   const resolvedClient = {
     listProviderPlugins: vi.fn().mockResolvedValue({
       plugins: [
@@ -1675,7 +1790,12 @@ function renderApp(path: string, client: Partial<MenderClient>) {
   } as MenderClient;
   return render(
     <MemoryRouter initialEntries={[path]}>
-      <MenderApp client={resolvedClient} />
+      <MenderApp
+        client={resolvedClient}
+        {...(options.installProviderPlugin === undefined
+          ? {}
+          : { installProviderPlugin: options.installProviderPlugin })}
+      />
     </MemoryRouter>,
   );
 }
