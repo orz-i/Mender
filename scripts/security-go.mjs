@@ -10,7 +10,7 @@ if (!/^v\d+\.\d+\.\d+$/.test(version)) {
   process.exit(1);
 }
 
-for (const directory of ["backend", "apps/desktop"]) {
+for (const directory of ["backend", "apps/desktop", "sdk/providerplugin/go"]) {
   console.log(`govulncheck ${version}: ${directory}`);
   const result = spawnSync(
     "go",
@@ -21,6 +21,10 @@ for (const directory of ["backend", "apps/desktop"]) {
     ],
     {
       cwd: resolve(root, directory),
+      env: {
+        ...process.env,
+        ...(directory.startsWith("sdk/") ? { GOWORK: "off" } : {}),
+      },
       stdio: "inherit",
     },
   );

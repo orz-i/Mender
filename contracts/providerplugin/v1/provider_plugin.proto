@@ -1,0 +1,157 @@
+syntax = "proto3";
+
+package providerplugin.v1;
+
+option go_package = "github.com/orz-i/Mender/sdk/providerplugin/go/protocol/v1;providerv1";
+
+service ProviderPluginService {
+  rpc GetDescriptor(GetDescriptorRequest) returns (GetDescriptorResponse);
+  rpc ValidateConfig(ValidateConfigRequest) returns (ValidateConfigResponse);
+  rpc InspectConfig(InspectConfigRequest) returns (InspectConfigResponse);
+  rpc Open(OpenRequest) returns (OpenResponse);
+  rpc ListTools(ListToolsRequest) returns (ListToolsResponse);
+  rpc ExecuteTool(ExecuteToolRequest) returns (stream ExecuteToolResponse);
+  rpc Close(CloseRequest) returns (CloseResponse);
+}
+
+message GetDescriptorRequest {}
+
+message GetDescriptorResponse {
+  Descriptor descriptor = 1;
+}
+
+message Descriptor {
+  string plugin_id = 1;
+  string package_version = 2;
+  string display_name = 3;
+  string description = 4;
+  uint32 protocol_version = 5;
+  uint32 config_version = 6;
+  bytes config_schema_json = 7;
+  bytes ui_schema_json = 8;
+  repeated string capabilities = 9;
+}
+
+message ValidateConfigRequest {
+  uint32 config_version = 1;
+  bytes config_json = 2;
+}
+
+message ValidateConfigResponse {
+  bool valid = 1;
+  repeated Diagnostic diagnostics = 2;
+}
+
+message Diagnostic {
+  enum Severity {
+    SEVERITY_UNSPECIFIED = 0;
+    SEVERITY_ERROR = 1;
+    SEVERITY_WARNING = 2;
+  }
+
+  Severity severity = 1;
+  string path = 2;
+  string code = 3;
+  string message = 4;
+}
+
+message InspectConfigRequest {
+  uint32 config_version = 1;
+  bytes config_json = 2;
+}
+
+message InspectConfigResponse {
+  repeated string credential_refs = 1;
+  string connection_summary = 2;
+}
+
+message Credential {
+  string reference = 1;
+  bytes value = 2;
+}
+
+message OpenRequest {
+  string instance_id = 1;
+  uint32 config_version = 2;
+  bytes config_json = 3;
+  repeated Credential discovery_credentials = 4;
+}
+
+message OpenResponse {
+  string session_id = 1;
+}
+
+message ListToolsRequest {
+  string session_id = 1;
+  repeated Credential discovery_credentials = 2;
+}
+
+message ListToolsResponse {
+  repeated ToolDescriptor tools = 1;
+}
+
+message ToolDescriptor {
+  string source_key = 1;
+  string name = 2;
+  string title = 3;
+  string description = 4;
+  bytes input_schema_json = 5;
+  bytes output_schema_json = 6;
+  repeated string tags = 7;
+  repeated string credential_refs = 8;
+}
+
+message ExecuteToolRequest {
+  string session_id = 1;
+  string invocation_id = 2;
+  string source_key = 3;
+  bytes arguments_json = 4;
+  repeated Credential credentials = 5;
+}
+
+message ExecuteToolResponse {
+  oneof event {
+    Progress progress = 1;
+    Complete complete = 2;
+    InputRequired input_required = 3;
+    Task task = 4;
+    Failure failure = 5;
+  }
+}
+
+message Progress {
+  string message = 1;
+}
+
+message Complete {
+  bytes content_json = 1;
+}
+
+message InputRequired {
+  string request_id = 1;
+  string message = 2;
+  bytes input_schema_json = 3;
+}
+
+message Task {
+  string task_id = 1;
+  string status = 2;
+  string message = 3;
+}
+
+message Failure {
+  enum Kind {
+    KIND_UNSPECIFIED = 0;
+    KIND_TOOL_ERROR = 1;
+    KIND_PROVIDER_ERROR = 2;
+  }
+
+  Kind kind = 1;
+  string message = 2;
+}
+
+message CloseRequest {
+  string session_id = 1;
+}
+
+message CloseResponse {}
