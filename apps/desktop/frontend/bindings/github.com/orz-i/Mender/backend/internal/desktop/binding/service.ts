@@ -48,8 +48,8 @@ export function CreateProfile(slug: string, displayName: string, mode: string): 
     return $Call.ByID(891700837, slug, displayName, mode);
 }
 
-export function CreateProvider($namespace: string, displayName: string, description: string, pluginID: string, config: { [_ in string]?: any } | null): $CancellablePromise<$models.ProviderMutationResponse> {
-    return $Call.ByID(1616703517, $namespace, displayName, description, pluginID, config);
+export function CreateProvider($namespace: string, displayName: string, description: string, pluginID: string, installationID: string, config: { [_ in string]?: any } | null): $CancellablePromise<$models.ProviderMutationResponse> {
+    return $Call.ByID(1616703517, $namespace, displayName, description, pluginID, installationID, config);
 }
 
 export function CreateStdioProvider($namespace: string, displayName: string, description: string, executable: string, args: string[] | null, directory: string, credentialEnvironment: $models.CredentialEnvironment[] | null): $CancellablePromise<$models.ProviderMutationResponse> {
@@ -66,6 +66,18 @@ export function DeletePolicyRule(ruleID: string): $CancellablePromise<void> {
 
 export function DeleteProvider(providerID: string): $CancellablePromise<void> {
     return $Call.ByID(1608019374, providerID);
+}
+
+export function DeleteProviderPluginInstallation(installationID: string): $CancellablePromise<void> {
+    return $Call.ByID(4131022889, installationID);
+}
+
+export function DisableProviderPluginInstallation(installationID: string): $CancellablePromise<$models.ProviderPluginInstallation> {
+    return $Call.ByID(3166916010, installationID);
+}
+
+export function EnableProviderPluginInstallation(installationID: string): $CancellablePromise<$models.ProviderPluginInstallation> {
+    return $Call.ByID(2779584597, installationID);
 }
 
 export function GetCredential($namespace: string, name: string): $CancellablePromise<$models.Credential> {
@@ -96,6 +108,10 @@ export function GetTool(toolID: string): $CancellablePromise<$models.ToolDetail>
     return $Call.ByID(973227434, toolID);
 }
 
+export function InstallProviderPlugin(sourcePath: string): $CancellablePromise<$models.ProviderPluginInstallation> {
+    return $Call.ByID(524382217, sourcePath);
+}
+
 export function ListAudit(limit: number): $CancellablePromise<$models.AuditList> {
     return $Call.ByID(938849691, limit);
 }
@@ -110,6 +126,10 @@ export function ListMCPServers(): $CancellablePromise<$models.MCPServerList> {
 
 export function ListProfiles(): $CancellablePromise<$models.ProfileList> {
     return $Call.ByID(2998135054);
+}
+
+export function ListProviderPluginInstallations(): $CancellablePromise<$models.ProviderPluginInstallationList> {
+    return $Call.ByID(2230901543);
 }
 
 export function ListProviderPlugins(): $CancellablePromise<$models.ProviderPluginList> {

@@ -21,6 +21,7 @@ import (
 	profileapplication "github.com/orz-i/Mender/backend/internal/profile/application"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
+	installationdomain "github.com/orz-i/Mender/backend/internal/providerplugin/installation/domain"
 )
 
 const (
@@ -234,19 +235,92 @@ func (s *Service) DeleteCredential(namespace string, name string) error {
 	return s.runtime.Credentials.Delete.Execute(s.ctx, ref)
 }
 
-func (s *Service) ListProviderPlugins() ProviderPluginList {
-	descriptors := s.runtime.ProviderPluginDescriptors()
-	items := make([]ProviderPlugin, 0, len(descriptors))
-	for _, descriptor := range descriptors {
-		items = append(items, ProviderPlugin{
-			PluginID:      descriptor.ID.String(),
-			Version:       descriptor.Version,
-			DisplayName:   descriptor.DisplayName,
-			Description:   descriptor.Description,
-			ConfigVersion: descriptor.ConfigVersion,
-		})
+func (s *Service) ListProviderPlugins() (ProviderPluginList, error) {
+	available, err := s.runtime.ListAvailableProviderPlugins(s.ctx)
+	if err != nil {
+		return ProviderPluginList{}, err
 	}
-	return ProviderPluginList{Plugins: items}
+	items := make([]ProviderPlugin, 0, len(available))
+	for _, item := range available {
+		projected, projectionErr := availableProviderPluginProjection(item)
+		if projectionErr != nil {
+			return ProviderPluginList{}, projectionErr
+		}
+		items = append(items, projected)
+	}
+	return ProviderPluginList{Plugins: items}, nil
+}
+
+func (s *Service) ListProviderPluginInstallations() (
+	ProviderPluginInstallationList,
+	error,
+) {
+	items, err := s.runtime.ListProviderPluginInstallations(s.ctx)
+	if err != nil {
+		return ProviderPluginInstallationList{}, err
+	}
+	result := make([]ProviderPluginInstallation, 0, len(items))
+	for _, item := range items {
+		result = append(result, providerPluginInstallationProjection(item))
+	}
+	return ProviderPluginInstallationList{Installations: result}, nil
+}
+
+func (s *Service) InstallProviderPlugin(
+	sourcePath string,
+) (ProviderPluginInstallation, error) {
+	item, err := s.runtime.InstallProviderPlugin(s.ctx, sourcePath)
+	if err != nil {
+		return ProviderPluginInstallation{}, err
+	}
+	return providerPluginInstallationProjection(item), nil
+}
+
+func (s *Service) EnableProviderPluginInstallation(
+	installationID string,
+) (ProviderPluginInstallation, error) {
+	return s.setProviderPluginInstallationStatus(
+		installationID,
+		installationdomain.StatusEnabled,
+	)
+}
+
+func (s *Service) DisableProviderPluginInstallation(
+	installationID string,
+) (ProviderPluginInstallation, error) {
+	return s.setProviderPluginInstallationStatus(
+		installationID,
+		installationdomain.StatusDisabled,
+	)
+}
+
+func (s *Service) setProviderPluginInstallationStatus(
+	rawID string,
+	status installationdomain.Status,
+) (ProviderPluginInstallation, error) {
+	id, err := providerplugin.ParseInstallationID(rawID)
+	if err != nil {
+		return ProviderPluginInstallation{}, err
+	}
+	item, err := s.runtime.SetProviderPluginInstallationStatus(
+		s.ctx,
+		id,
+		status,
+	)
+	if err != nil {
+		return ProviderPluginInstallation{}, err
+	}
+	return providerPluginInstallationProjection(item), nil
+}
+
+func (s *Service) DeleteProviderPluginInstallation(
+	installationID string,
+) error {
+	id, err := providerplugin.ParseInstallationID(installationID)
+	if err != nil {
+		return err
+	}
+	return s.runtime.RemoveProviderPluginInstallation(s.ctx, id)
 }
 
 func (s *Service) ListProviders() (ProviderList, error) {
@@ -301,6 +375,7 @@ func (s *Service) CreateProvider(
 	displayName string,
 	description string,
 	pluginID string,
+	installationID string,
 	config map[string]any,
 ) (ProviderMutationResponse, error) {
 	id, err := providerplugin.ParseID(pluginID)
@@ -311,16 +386,34 @@ func (s *Service) CreateProvider(
 	if err != nil {
 		return ProviderMutationResponse{}, fmt.Errorf("encode provider config: %w", err)
 	}
-	provider, err := s.runtime.RegisterConfiguredProvider(
-		s.ctx,
-		catalogapplication.RegisterProviderRequest{
-			Namespace:   namespace,
-			DisplayName: displayName,
-			Description: description,
-		},
-		id,
-		raw,
-	)
+	registerRequest := catalogapplication.RegisterProviderRequest{
+		Namespace:   namespace,
+		DisplayName: displayName,
+		Description: description,
+	}
+	var provider catalogdomain.Provider
+	if strings.TrimSpace(installationID) == "" {
+		provider, err = s.runtime.RegisterConfiguredProvider(
+			s.ctx,
+			registerRequest,
+			id,
+			raw,
+		)
+	} else {
+		parsedInstallationID, parseErr := providerplugin.ParseInstallationID(
+			installationID,
+		)
+		if parseErr != nil {
+			return ProviderMutationResponse{}, parseErr
+		}
+		provider, err = s.runtime.RegisterInstalledProvider(
+			s.ctx,
+			registerRequest,
+			id,
+			parsedInstallationID,
+			raw,
+		)
+	}
 	if err != nil {
 		return ProviderMutationResponse{}, err
 	}
@@ -1081,6 +1174,60 @@ func parseCredentialEnvironment(items []CredentialEnvironment) ([]mcpconfigstore
 	return result, nil
 }
 
+func availableProviderPluginProjection(
+	item bootstrap.AvailableProviderPlugin,
+) (ProviderPlugin, error) {
+	descriptor := item.Descriptor
+	result := ProviderPlugin{
+		PluginID:        descriptor.ID.String(),
+		Version:         descriptor.Version,
+		PackageVersion:  descriptor.Version,
+		DisplayName:     descriptor.DisplayName,
+		Description:     descriptor.Description,
+		ConfigVersion:   descriptor.ConfigVersion,
+		SourceKind:      item.SourceKind,
+		ProtocolVersion: descriptor.ProtocolVersion,
+		Capabilities:    append([]string{}, descriptor.Capabilities...),
+		Enabled:         item.Enabled,
+	}
+	if item.InstallationID != nil {
+		result.InstallationID = item.InstallationID.String()
+	}
+	if len(descriptor.ConfigSchema) != 0 {
+		if err := json.Unmarshal(descriptor.ConfigSchema, &result.ConfigSchema); err != nil {
+			return ProviderPlugin{}, fmt.Errorf(
+				"project Provider plugin %s config schema: %w",
+				descriptor.ID,
+				err,
+			)
+		}
+	}
+	if len(descriptor.UISchema) != 0 {
+		if err := json.Unmarshal(descriptor.UISchema, &result.UISchema); err != nil {
+			return ProviderPlugin{}, fmt.Errorf(
+				"project Provider plugin %s UI schema: %w",
+				descriptor.ID,
+				err,
+			)
+		}
+	}
+	return result, nil
+}
+
+func providerPluginInstallationProjection(
+	item installationdomain.Installation,
+) ProviderPluginInstallation {
+	return ProviderPluginInstallation{
+		InstallationID: item.ID().String(),
+		PluginID:       item.PluginID().String(),
+		PackageVersion: item.PackageVersion(),
+		SourceKind:     string(item.SourceKind()),
+		Digest:         item.Digest(),
+		Status:         string(item.Status()),
+		InstalledAt:    item.InstalledAt().Format(timeFormat),
+	}
+}
+
 func providerProjection(
 	provider catalogdomain.Provider,
 	config *providerplugin.Configuration,
@@ -1102,6 +1249,9 @@ func providerProjection(
 	}
 
 	result.PluginID = config.PluginID.String()
+	if config.InstallationID != nil {
+		result.InstallationID = config.InstallationID.String()
+	}
 	result.ConfigVersion = config.ConfigVersion
 	if descriptor != nil {
 		result.PluginVersion = descriptor.Version

@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 
+	"github.com/orz-i/Mender/backend/internal/bootstrap"
 	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
 
 	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
@@ -26,11 +28,12 @@ type credentialEnvironmentRequest struct {
 }
 
 type createProviderRequest struct {
-	Namespace   string          `json:"namespace"`
-	DisplayName string          `json:"displayName"`
-	Description string          `json:"description"`
-	PluginID    string          `json:"pluginId"`
-	Config      json.RawMessage `json:"config"`
+	Namespace      string          `json:"namespace"`
+	DisplayName    string          `json:"displayName"`
+	Description    string          `json:"description"`
+	PluginID       string          `json:"pluginId"`
+	InstallationID string          `json:"installationId"`
+	Config         json.RawMessage `json:"config"`
 }
 
 type createHTTPProviderRequest struct {
@@ -67,17 +70,15 @@ type updateProviderRequest struct {
 	CredentialEnvironment []credentialEnvironmentRequest `json:"credentialEnvironment"`
 }
 
-func (h *Handler) listProviderPlugins(w http.ResponseWriter, _ *http.Request) {
-	descriptors := h.runtime.ProviderPluginDescriptors()
-	items := make([]map[string]any, 0, len(descriptors))
-	for _, descriptor := range descriptors {
-		items = append(items, map[string]any{
-			"pluginId":      descriptor.ID.String(),
-			"version":       descriptor.Version,
-			"displayName":   descriptor.DisplayName,
-			"description":   descriptor.Description,
-			"configVersion": descriptor.ConfigVersion,
-		})
+func (h *Handler) listProviderPlugins(w http.ResponseWriter, r *http.Request) {
+	available, err := h.runtime.ListAvailableProviderPlugins(r.Context())
+	if err != nil {
+		writeKnownError(w, err)
+		return
+	}
+	items := make([]map[string]any, 0, len(available))
+	for _, item := range available {
+		items = append(items, availableProviderPluginProjection(item))
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"plugins": items})
 }
@@ -161,16 +162,35 @@ func (h *Handler) createProvider(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	provider, err := h.runtime.RegisterConfiguredProvider(
-		r.Context(),
-		catalogapplication.RegisterProviderRequest{
-			Namespace:   input.Namespace,
-			DisplayName: input.DisplayName,
-			Description: input.Description,
-		},
-		pluginID,
-		input.Config,
-	)
+	registerRequest := catalogapplication.RegisterProviderRequest{
+		Namespace:   input.Namespace,
+		DisplayName: input.DisplayName,
+		Description: input.Description,
+	}
+	var provider catalogdomain.Provider
+	if strings.TrimSpace(input.InstallationID) == "" {
+		provider, err = h.runtime.RegisterConfiguredProvider(
+			r.Context(),
+			registerRequest,
+			pluginID,
+			input.Config,
+		)
+	} else {
+		installationID, parseErr := providerplugin.ParseInstallationID(
+			input.InstallationID,
+		)
+		if parseErr != nil {
+			writeAPIError(w, http.StatusBadRequest, "validation_error", parseErr)
+			return
+		}
+		provider, err = h.runtime.RegisterInstalledProvider(
+			r.Context(),
+			registerRequest,
+			pluginID,
+			installationID,
+			input.Config,
+		)
+	}
 	if err != nil {
 		writeKnownError(w, err)
 		return
@@ -510,6 +530,9 @@ func providerProjection(
 	}
 
 	result["pluginId"] = config.PluginID.String()
+	if config.InstallationID != nil {
+		result["installationId"] = config.InstallationID.String()
+	}
 	result["configVersion"] = config.ConfigVersion
 	result["config"] = cloneRawMessage(config.Config)
 	if descriptor != nil {
@@ -540,6 +563,36 @@ func providerProjection(
 		result["credentialEnvironment"] = mcpCredentialEnvironmentProjection(
 			mcpConfig.Transport.CredentialEnvironment,
 		)
+	}
+	return result
+}
+
+func availableProviderPluginProjection(
+	item bootstrap.AvailableProviderPlugin,
+) map[string]any {
+	descriptor := item.Descriptor
+	result := map[string]any{
+		"pluginId":       descriptor.ID.String(),
+		"version":        descriptor.Version,
+		"packageVersion": descriptor.Version,
+		"displayName":    descriptor.DisplayName,
+		"description":    descriptor.Description,
+		"configVersion":  descriptor.ConfigVersion,
+		"sourceKind":     item.SourceKind,
+		"enabled":        item.Enabled,
+		"capabilities":   append([]string{}, descriptor.Capabilities...),
+	}
+	if item.InstallationID != nil {
+		result["installationId"] = item.InstallationID.String()
+	}
+	if descriptor.ProtocolVersion != 0 {
+		result["protocolVersion"] = descriptor.ProtocolVersion
+	}
+	if len(descriptor.ConfigSchema) != 0 {
+		result["configSchema"] = append(json.RawMessage(nil), descriptor.ConfigSchema...)
+	}
+	if len(descriptor.UISchema) != 0 {
+		result["uiSchema"] = append(json.RawMessage(nil), descriptor.UISchema...)
 	}
 	return result
 }

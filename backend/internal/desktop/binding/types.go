@@ -94,15 +94,37 @@ type CredentialEnvironment struct {
 }
 
 type ProviderPlugin struct {
-	PluginID      string `json:"pluginId"`
-	Version       string `json:"version"`
-	DisplayName   string `json:"displayName"`
-	Description   string `json:"description"`
-	ConfigVersion int    `json:"configVersion"`
+	PluginID        string   `json:"pluginId"`
+	Version         string   `json:"version"`
+	PackageVersion  string   `json:"packageVersion"`
+	DisplayName     string   `json:"displayName"`
+	Description     string   `json:"description"`
+	ConfigVersion   int      `json:"configVersion"`
+	SourceKind      string   `json:"sourceKind"`
+	InstallationID  string   `json:"installationId,omitempty"`
+	ProtocolVersion uint32   `json:"protocolVersion,omitempty"`
+	ConfigSchema    any      `json:"configSchema,omitempty"`
+	UISchema        any      `json:"uiSchema,omitempty"`
+	Capabilities    []string `json:"capabilities"`
+	Enabled         bool     `json:"enabled"`
 }
 
 type ProviderPluginList struct {
 	Plugins []ProviderPlugin `json:"plugins"`
+}
+
+type ProviderPluginInstallation struct {
+	InstallationID string `json:"installationId"`
+	PluginID       string `json:"pluginId"`
+	PackageVersion string `json:"packageVersion"`
+	SourceKind     string `json:"sourceKind"`
+	Digest         string `json:"digest"`
+	Status         string `json:"status"`
+	InstalledAt    string `json:"installedAt"`
+}
+
+type ProviderPluginInstallationList struct {
+	Installations []ProviderPluginInstallation `json:"installations"`
 }
 
 type Provider struct {
@@ -113,6 +135,7 @@ type Provider struct {
 	CreatedAt             string                  `json:"createdAt"`
 	UpdatedAt             string                  `json:"updatedAt"`
 	PluginID              string                  `json:"pluginId,omitempty"`
+	InstallationID        string                  `json:"installationId,omitempty"`
 	PluginVersion         string                  `json:"pluginVersion,omitempty"`
 	PluginDisplayName     string                  `json:"pluginDisplayName,omitempty"`
 	ConfigVersion         int                     `json:"configVersion,omitempty"`

@@ -5,12 +5,29 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
+	"strings"
 
 	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
 	providerconfigstore "github.com/orz-i/Mender/backend/internal/providerplugin/configstore"
+	installationdomain "github.com/orz-i/Mender/backend/internal/providerplugin/installation/domain"
 )
+
+const (
+	ProviderPluginSourceBuiltIn  = "builtin"
+	ProviderPluginSourceExternal = "external"
+)
+
+// AvailableProviderPlugin is management-safe resolution metadata for one
+// selectable Provider plugin implementation.
+type AvailableProviderPlugin struct {
+	Descriptor     providerplugin.Descriptor
+	SourceKind     string
+	InstallationID *providerplugin.InstallationID
+	Enabled        bool
+}
 
 // ProviderPluginDescriptors returns safe metadata for all built-in Provider
 // plugins available to this Runtime.
@@ -19,6 +36,79 @@ func (r *Runtime) ProviderPluginDescriptors() []providerplugin.Descriptor {
 		return nil
 	}
 	return r.providerPlugins.Descriptors()
+}
+
+// ListAvailableProviderPlugins returns built-in plugins plus enabled external
+// installations, preserving exact installation identity for side-by-side
+// package versions.
+func (r *Runtime) ListAvailableProviderPlugins(
+	ctx context.Context,
+) ([]AvailableProviderPlugin, error) {
+	if r == nil {
+		return nil, fmt.Errorf("list available provider plugins: runtime is nil")
+	}
+
+	builtins := r.providerPlugins.Descriptors()
+	result := make([]AvailableProviderPlugin, 0, len(builtins))
+	for _, descriptor := range builtins {
+		result = append(result, AvailableProviderPlugin{
+			Descriptor: descriptor.Clone(),
+			SourceKind: ProviderPluginSourceBuiltIn,
+			Enabled:    true,
+		})
+	}
+
+	installations, err := r.ListProviderPluginInstallations(ctx)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"list available provider plugins: installations: %w",
+			err,
+		)
+	}
+	for _, installation := range installations {
+		if installation.Status() != installationdomain.StatusEnabled {
+			continue
+		}
+		resolved, resolveErr := r.externalResolver.ResolveInstallation(
+			ctx,
+			installation.ID(),
+		)
+		if resolveErr != nil {
+			return nil, fmt.Errorf(
+				"list available provider plugins: installation %s: %w",
+				installation.ID(),
+				resolveErr,
+			)
+		}
+		id := installation.ID()
+		result = append(result, AvailableProviderPlugin{
+			Descriptor:     resolved.Descriptor.Clone(),
+			SourceKind:     ProviderPluginSourceExternal,
+			InstallationID: &id,
+			Enabled:        true,
+		})
+	}
+
+	slices.SortFunc(result, func(a, b AvailableProviderPlugin) int {
+		if comparison := strings.Compare(
+			a.Descriptor.ID.String(),
+			b.Descriptor.ID.String(),
+		); comparison != 0 {
+			return comparison
+		}
+		if comparison := strings.Compare(a.SourceKind, b.SourceKind); comparison != 0 {
+			return comparison
+		}
+		var aInstallation, bInstallation string
+		if a.InstallationID != nil {
+			aInstallation = a.InstallationID.String()
+		}
+		if b.InstallationID != nil {
+			bInstallation = b.InstallationID.String()
+		}
+		return strings.Compare(aInstallation, bInstallation)
+	})
+	return result, nil
 }
 
 // ProviderConfig returns the generic plugin configuration for one Provider.
@@ -99,6 +189,7 @@ func (r *Runtime) RegisterConfiguredProvider(
 func (r *Runtime) RegisterInstalledProvider(
 	ctx context.Context,
 	request catalogapplication.RegisterProviderRequest,
+	pluginID providerplugin.ID,
 	installationID providerplugin.InstallationID,
 	rawConfig json.RawMessage,
 ) (catalogdomain.Provider, error) {
@@ -112,6 +203,14 @@ func (r *Runtime) RegisterInstalledProvider(
 		return catalogdomain.Provider{}, fmt.Errorf(
 			"register installed provider: %w",
 			err,
+		)
+	}
+	if resolved.Descriptor.ID != pluginID {
+		return catalogdomain.Provider{}, fmt.Errorf(
+			"register installed provider: installation %s owns plugin %s, request uses %s",
+			installationID,
+			resolved.Descriptor.ID,
+			pluginID,
 		)
 	}
 	if err := resolved.Plugin.ValidateConfig(ctx, cloneRawJSON(rawConfig)); err != nil {

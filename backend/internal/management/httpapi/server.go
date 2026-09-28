@@ -20,6 +20,7 @@ import (
 	profileapplication "github.com/orz-i/Mender/backend/internal/profile/application"
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
 	providerconfigstore "github.com/orz-i/Mender/backend/internal/providerplugin/configstore"
+	installationapplication "github.com/orz-i/Mender/backend/internal/providerplugin/installation/application"
 )
 
 type Handler struct {
@@ -63,6 +64,10 @@ func (h *Handler) routes() {
 	h.mux.HandleFunc("DELETE /api/v1/credentials/{namespace}/{name}", h.deleteCredential)
 
 	h.mux.HandleFunc("GET /api/v1/provider-plugins", h.listProviderPlugins)
+	h.mux.HandleFunc("GET /api/v1/provider-plugin-installations", h.listProviderPluginInstallations)
+	h.mux.HandleFunc("POST /api/v1/provider-plugin-installations/{installationId}/enable", h.enableProviderPluginInstallation)
+	h.mux.HandleFunc("POST /api/v1/provider-plugin-installations/{installationId}/disable", h.disableProviderPluginInstallation)
+	h.mux.HandleFunc("DELETE /api/v1/provider-plugin-installations/{installationId}", h.deleteProviderPluginInstallation)
 	h.mux.HandleFunc("GET /api/v1/providers", h.listProviders)
 	h.mux.HandleFunc("POST /api/v1/providers", h.createProvider)
 	h.mux.HandleFunc("POST /api/v1/providers/http", h.createHTTPProvider)
@@ -181,6 +186,7 @@ func writeKnownError(w http.ResponseWriter, err error) {
 		errors.Is(err, profileapplication.ErrProfileNotFound),
 		errors.Is(err, mcpconfigstore.ErrNotFound),
 		errors.Is(err, providerconfigstore.ErrNotFound),
+		errors.Is(err, installationapplication.ErrInstallationNotFound),
 		errors.Is(err, bootstrap.ErrMCPServerNotFound):
 		writeAPIError(w, http.StatusNotFound, "not_found", err)
 
@@ -190,6 +196,9 @@ func writeKnownError(w http.ResponseWriter, err error) {
 		errors.Is(err, credentialapplication.ErrCredentialInUse),
 		errors.Is(err, profileapplication.ErrSlugConflict),
 		errors.Is(err, profileapplication.ErrBindingNameConflict),
+		errors.Is(err, installationapplication.ErrInstallationConflict),
+		errors.Is(err, installationapplication.ErrPackageAlreadyInstalled),
+		errors.Is(err, installationapplication.ErrInstallationInUse),
 		errors.Is(err, bootstrap.ErrProviderInUse):
 		writeAPIError(w, http.StatusConflict, "conflict", err)
 

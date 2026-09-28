@@ -17,6 +17,7 @@ vi.mock(
       GetPolicy: vi.fn(),
       GetPolicyStatus: vi.fn(),
       GetSystemStatus: vi.fn(),
+      InstallProviderPlugin: vi.fn(),
       ListAudit: vi.fn(),
       ListCredentials: vi.fn(),
       ListMCPServers: vi.fn(),
@@ -39,7 +40,10 @@ vi.mock(
 
 import { Service } from "../bindings/github.com/orz-i/Mender/backend/internal/desktop/binding";
 
-import { createDesktopMenderClient } from "./desktop-client";
+import {
+  createDesktopMenderClient,
+  installDesktopProviderPlugin,
+} from "./desktop-client";
 
 describe("desktop Mender client", () => {
   beforeEach(() => {
@@ -94,15 +98,46 @@ describe("desktop Mender client", () => {
     });
   });
 
+  it("installs Provider plugins only through the desktop-local Wails capability", async () => {
+    vi.mocked(Service.InstallProviderPlugin).mockResolvedValue({
+      installationId: "pinst_0123456789abcdef0123456789abcdef",
+      pluginId: "dev.example.echo",
+      packageVersion: "1.0.0",
+      sourceKind: "local",
+      digest: "sha256:" + "a".repeat(64),
+      status: "enabled",
+      installedAt: "2026-09-28T00:00:00Z",
+    });
+
+    await expect(
+      installDesktopProviderPlugin("/tmp/provider-plugin"),
+    ).resolves.toEqual({
+      installationId: "pinst_0123456789abcdef0123456789abcdef",
+      pluginId: "dev.example.echo",
+      packageVersion: "1.0.0",
+      sourceKind: "local",
+      digest: "sha256:" + "a".repeat(64),
+      status: "enabled",
+      installedAt: "2026-09-28T00:00:00Z",
+    });
+    expect(Service.InstallProviderPlugin).toHaveBeenCalledWith(
+      "/tmp/provider-plugin",
+    );
+  });
+
   it("adapts generic Provider plugin discovery and configuration to Wails", async () => {
     vi.mocked(Service.ListProviderPlugins).mockResolvedValue({
       plugins: [
         {
           pluginId: "io.mender.provider.mcp",
           version: "1.0.0",
+          packageVersion: "1.0.0",
           displayName: "MCP",
           description: "Model Context Protocol provider",
           configVersion: 1,
+          sourceKind: "builtin",
+          capabilities: null,
+          enabled: true,
         },
       ],
     });
@@ -137,9 +172,13 @@ describe("desktop Mender client", () => {
         {
           pluginId: "io.mender.provider.mcp",
           version: "1.0.0",
+          packageVersion: "1.0.0",
           displayName: "MCP",
           description: "Model Context Protocol provider",
           configVersion: 1,
+          sourceKind: "builtin",
+          capabilities: [],
+          enabled: true,
         },
       ],
     });
@@ -169,6 +208,7 @@ describe("desktop Mender client", () => {
       "Upstream",
       "",
       "io.mender.provider.mcp",
+      "",
       config,
     );
   });

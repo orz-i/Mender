@@ -53,6 +53,21 @@ func TestRuntimeExposesBuiltInProviderPluginDescriptors(t *testing.T) {
 		descriptors[2].ConfigVersion != openapiplugin.ConfigVersion {
 		t.Fatalf("ProviderPluginDescriptors()[2] = %+v, want OpenAPI", descriptors[2])
 	}
+
+	available, err := runtime.ListAvailableProviderPlugins(context.Background())
+	if err != nil {
+		t.Fatalf("ListAvailableProviderPlugins() error = %v", err)
+	}
+	if len(available) != 3 {
+		t.Fatalf("ListAvailableProviderPlugins() len = %d, want 3", len(available))
+	}
+	for _, item := range available {
+		if item.SourceKind != ProviderPluginSourceBuiltIn ||
+			item.InstallationID != nil ||
+			!item.Enabled {
+			t.Fatalf("built-in available plugin = %+v", item)
+		}
+	}
 }
 
 func TestOpenAPIProviderRuntimeEndToEndAndRefreshPreservesToolID(t *testing.T) {

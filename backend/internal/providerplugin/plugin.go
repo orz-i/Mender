@@ -16,10 +16,13 @@ import (
 )
 
 const (
-	maxIDLength          = 128
-	maxVersionLength     = 128
-	maxDisplayNameLength = 160
-	maxDescriptionLength = 4096
+	maxIDLength                   = 128
+	maxVersionLength              = 128
+	maxDisplayNameLength          = 160
+	maxDescriptionLength          = 4096
+	maxDescriptorSchemaBytes      = 1024 * 1024
+	maxDescriptorCapabilities     = 64
+	maxDescriptorCapabilityLength = 128
 )
 
 var idPattern = regexp.MustCompile(`^[a-z][a-z0-9-]*(?:\.[a-z][a-z0-9-]*)+$`)
@@ -57,11 +60,15 @@ func (id ID) String() string {
 // Reading a Descriptor must not activate a Provider or perform network/process
 // work.
 type Descriptor struct {
-	ID            ID
-	Version       string
-	DisplayName   string
-	Description   string
-	ConfigVersion int
+	ID              ID
+	Version         string
+	DisplayName     string
+	Description     string
+	ConfigVersion   int
+	ProtocolVersion uint32
+	ConfigSchema    json.RawMessage
+	UISchema        json.RawMessage
+	Capabilities    []string
 }
 
 // Validate checks descriptor invariants.
@@ -94,7 +101,58 @@ func (d Descriptor) Validate() error {
 	if d.ConfigVersion < 1 {
 		return fmt.Errorf("provider plugin config version: must be at least 1")
 	}
+	if len(d.ConfigSchema) > maxDescriptorSchemaBytes {
+		return fmt.Errorf(
+			"provider plugin config schema: must be at most %d bytes",
+			maxDescriptorSchemaBytes,
+		)
+	}
+	if len(d.ConfigSchema) != 0 {
+		if _, err := catalogdomain.NewSchema(d.ConfigSchema); err != nil {
+			return fmt.Errorf("provider plugin config schema: %w", err)
+		}
+	}
+	if len(d.UISchema) > maxDescriptorSchemaBytes {
+		return fmt.Errorf(
+			"provider plugin UI schema: must be at most %d bytes",
+			maxDescriptorSchemaBytes,
+		)
+	}
+	if len(d.UISchema) != 0 && !json.Valid(d.UISchema) {
+		return fmt.Errorf("provider plugin UI schema: must be valid JSON")
+	}
+	if len(d.Capabilities) > maxDescriptorCapabilities {
+		return fmt.Errorf(
+			"provider plugin capabilities: must contain at most %d entries",
+			maxDescriptorCapabilities,
+		)
+	}
+	seenCapabilities := make(map[string]struct{}, len(d.Capabilities))
+	for _, rawCapability := range d.Capabilities {
+		capability := strings.TrimSpace(rawCapability)
+		if capability == "" {
+			return fmt.Errorf("provider plugin capability: must not be empty")
+		}
+		if len(capability) > maxDescriptorCapabilityLength {
+			return fmt.Errorf(
+				"provider plugin capability: must be at most %d characters",
+				maxDescriptorCapabilityLength,
+			)
+		}
+		if _, duplicate := seenCapabilities[capability]; duplicate {
+			return fmt.Errorf("provider plugin capability: duplicate %q", capability)
+		}
+		seenCapabilities[capability] = struct{}{}
+	}
 	return nil
+}
+
+// Clone returns a deep copy of descriptor metadata safe for management surfaces.
+func (d Descriptor) Clone() Descriptor {
+	d.ConfigSchema = append(json.RawMessage(nil), d.ConfigSchema...)
+	d.UISchema = append(json.RawMessage(nil), d.UISchema...)
+	d.Capabilities = append([]string(nil), d.Capabilities...)
+	return d
 }
 
 // OpenRequest contains the Mender-owned capabilities needed to open one

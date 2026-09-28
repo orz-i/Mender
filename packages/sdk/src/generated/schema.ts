@@ -36,6 +36,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/provider-plugin-installations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listProviderPluginInstallations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/provider-plugin-installations/{installationId}/enable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["enableProviderPluginInstallation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/provider-plugin-installations/{installationId}/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["disableProviderPluginInstallation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/provider-plugin-installations/{installationId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["deleteProviderPluginInstallation"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/providers": {
         parameters: {
             query?: never;
@@ -629,9 +693,34 @@ export interface components {
         ProviderPlugin: {
             pluginId: string;
             version: string;
+            packageVersion: string;
             displayName: string;
             description: string;
             configVersion: number;
+            /** @enum {string} */
+            sourceKind: "builtin" | "external";
+            installationId?: string;
+            protocolVersion?: number;
+            configSchema?: {
+                [key: string]: unknown;
+            } | boolean;
+            uiSchema?: {
+                [key: string]: unknown;
+            };
+            capabilities: string[];
+            enabled: boolean;
+        };
+        ProviderPluginInstallation: {
+            installationId: string;
+            pluginId: string;
+            packageVersion: string;
+            /** @enum {string} */
+            sourceKind: "local";
+            digest: string;
+            /** @enum {string} */
+            status: "enabled" | "disabled" | "invalid";
+            /** Format: date-time */
+            installedAt: string;
         };
         Provider: {
             providerId: string;
@@ -643,6 +732,7 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
             pluginId?: string;
+            installationId?: string;
             pluginVersion?: string;
             pluginDisplayName?: string;
             configVersion?: number;
@@ -668,6 +758,7 @@ export interface components {
             displayName: string;
             description?: string;
             pluginId: string;
+            installationId?: string;
             config: {
                 [key: string]: unknown;
             };
@@ -925,6 +1016,7 @@ export interface components {
     };
     parameters: {
         ProviderId: string;
+        InstallationId: string;
         ToolId: string;
         ProfileSlug: string;
         ServerId: string;
@@ -968,7 +1060,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Available built-in Provider plugins */
+            /** @description Available built-in and enabled external Provider plugins */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -980,6 +1072,107 @@ export interface operations {
                 };
             };
             403: components["responses"]["Forbidden"];
+        };
+    };
+    listProviderPluginInstallations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Installed external Provider plugin packages */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        installations: components["schemas"]["ProviderPluginInstallation"][];
+                    };
+                };
+            };
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    enableProviderPluginInstallation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                installationId: components["parameters"]["InstallationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Provider plugin installation enabled */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        installation: components["schemas"]["ProviderPluginInstallation"];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    disableProviderPluginInstallation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                installationId: components["parameters"]["InstallationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Provider plugin installation disabled */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        installation: components["schemas"]["ProviderPluginInstallation"];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteProviderPluginInstallation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                installationId: components["parameters"]["InstallationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Provider plugin installation removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
     listProviders: {

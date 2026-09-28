@@ -3,6 +3,8 @@ import createClient from "openapi-fetch";
 import type { components, paths } from "./generated/schema";
 
 export type ProviderPlugin = components["schemas"]["ProviderPlugin"];
+export type ProviderPluginInstallation =
+  components["schemas"]["ProviderPluginInstallation"];
 export type Provider = components["schemas"]["Provider"];
 export type SyncResult = components["schemas"]["SyncResult"];
 export type ToolSummary = components["schemas"]["ToolSummary"];
@@ -64,6 +66,16 @@ export interface SearchToolsInput {
 export interface MenderClient {
   getSystemStatus(): Promise<SystemStatus>;
   listProviderPlugins(): Promise<{ plugins: ProviderPlugin[] }>;
+  listProviderPluginInstallations(): Promise<{
+    installations: ProviderPluginInstallation[];
+  }>;
+  enableProviderPluginInstallation(
+    installationId: string,
+  ): Promise<{ installation: ProviderPluginInstallation }>;
+  disableProviderPluginInstallation(
+    installationId: string,
+  ): Promise<{ installation: ProviderPluginInstallation }>;
+  deleteProviderPluginInstallation(installationId: string): Promise<void>;
   listProviders(): Promise<{ providers: Provider[] }>;
   createProvider(body: CreateProviderRequest): Promise<ProviderMutationResponse>;
   createHTTPProvider(
@@ -157,6 +169,37 @@ export function createMenderClient(
     async listProviderPlugins() {
       const result = await client.GET("/provider-plugins");
       return requireData(result);
+    },
+
+    async listProviderPluginInstallations() {
+      const result = await client.GET("/provider-plugin-installations");
+      return requireData(result);
+    },
+
+    async enableProviderPluginInstallation(installationId: string) {
+      const result = await client.POST(
+        "/provider-plugin-installations/{installationId}/enable",
+        { params: { path: { installationId } } },
+      );
+      return requireData(result);
+    },
+
+    async disableProviderPluginInstallation(installationId: string) {
+      const result = await client.POST(
+        "/provider-plugin-installations/{installationId}/disable",
+        { params: { path: { installationId } } },
+      );
+      return requireData(result);
+    },
+
+    async deleteProviderPluginInstallation(installationId: string) {
+      const result = await client.DELETE(
+        "/provider-plugin-installations/{installationId}",
+        { params: { path: { installationId } } },
+      );
+      if (!result.response.ok) {
+        throwApiError(result.error, result.response);
+      }
     },
 
     async listProviders() {

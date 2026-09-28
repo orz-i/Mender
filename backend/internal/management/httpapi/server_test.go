@@ -17,6 +17,70 @@ import (
 	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
 )
 
+func TestProviderPluginInstallationManagementRejectsServerPathInstall(t *testing.T) {
+	t.Parallel()
+
+	runtime, err := bootstrap.NewRuntime(
+		context.Background(),
+		bootstrap.RuntimeOptions{
+			DatabasePath: filepath.Join(t.TempDir(), "mender.db"),
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = runtime.Close() })
+
+	server := httptest.NewServer(New(runtime))
+	t.Cleanup(server.Close)
+
+	listed := requestJSON(
+		t,
+		server.Client(),
+		http.MethodGet,
+		server.URL+"/api/v1/provider-plugin-installations",
+		nil,
+		http.StatusOK,
+	)
+	installations, ok := listed["installations"].([]any)
+	if !ok || len(installations) != 0 {
+		t.Fatalf("installations = %#v", listed)
+	}
+
+	request, err := http.NewRequestWithContext(
+		context.Background(),
+		http.MethodPost,
+		server.URL+"/api/v1/provider-plugin-installations",
+		strings.NewReader(`{"sourcePath":"/tmp/untrusted"}`),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Content-Type", "application/json")
+	response, err := server.Client().Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode != http.StatusMethodNotAllowed {
+		body, _ := io.ReadAll(response.Body)
+		t.Fatalf(
+			"POST /provider-plugin-installations status = %d body=%q",
+			response.StatusCode,
+			body,
+		)
+	}
+
+	requestJSON(
+		t,
+		server.Client(),
+		http.MethodPost,
+		server.URL+"/api/v1/provider-plugin-installations/not-an-id/disable",
+		nil,
+		http.StatusBadRequest,
+	)
+}
+
 func TestManagementAPIEndToEnd(t *testing.T) {
 	t.Parallel()
 
@@ -1324,8 +1388,15 @@ func TestManagementAPIGenericProviderPluginFlow(t *testing.T) {
 		t.Fatalf("provider plugins = %#v", plugins)
 	}
 	plugin, _ := items[0].(map[string]any)
-	if plugin["pluginId"] != "io.mender.provider.mcp" {
+	if plugin["pluginId"] != "io.mender.provider.mcp" ||
+		plugin["sourceKind"] != "builtin" ||
+		plugin["packageVersion"] == "" ||
+		plugin["enabled"] != true {
 		t.Fatalf("provider plugin = %#v", plugin)
+	}
+	capabilities, ok := plugin["capabilities"].([]any)
+	if !ok || len(capabilities) != 0 {
+		t.Fatalf("provider plugin capabilities = %#v", plugin["capabilities"])
 	}
 	modelToolsPlugin, _ := items[1].(map[string]any)
 	if modelToolsPlugin["pluginId"] != "io.mender.provider.model-tools" {

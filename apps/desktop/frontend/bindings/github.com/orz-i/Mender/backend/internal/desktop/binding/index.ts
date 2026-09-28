@@ -31,6 +31,8 @@ export type {
     ProviderList,
     ProviderMutationResponse,
     ProviderPlugin,
+    ProviderPluginInstallation,
+    ProviderPluginInstallationList,
     ProviderPluginList,
     SyncResult,
     SystemStatus,

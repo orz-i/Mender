@@ -90,11 +90,15 @@ func NewPlugin(
 		return nil, fmt.Errorf("new external provider plugin: descriptor: %w", err)
 	}
 	descriptor := providerplugin.Descriptor{
-		ID:            id,
-		Version:       raw.GetPackageVersion(),
-		DisplayName:   raw.GetDisplayName(),
-		Description:   raw.GetDescription(),
-		ConfigVersion: int(raw.GetConfigVersion()), // #nosec G115 -- bounded above by MaxInt32.
+		ID:              id,
+		Version:         raw.GetPackageVersion(),
+		DisplayName:     raw.GetDisplayName(),
+		Description:     raw.GetDescription(),
+		ConfigVersion:   int(raw.GetConfigVersion()), // #nosec G115 -- bounded above by MaxInt32.
+		ProtocolVersion: raw.GetProtocolVersion(),
+		ConfigSchema:    append(json.RawMessage(nil), raw.GetConfigSchemaJson()...),
+		UISchema:        append(json.RawMessage(nil), raw.GetUiSchemaJson()...),
+		Capabilities:    append([]string(nil), raw.GetCapabilities()...),
 	}
 	if err := descriptor.Validate(); err != nil {
 		return nil, fmt.Errorf("new external provider plugin: descriptor: %w", err)
@@ -115,7 +119,7 @@ func (p *Plugin) Descriptor() providerplugin.Descriptor {
 	if p == nil {
 		return providerplugin.Descriptor{}
 	}
-	return p.descriptor
+	return p.descriptor.Clone()
 }
 
 // ValidateConfig delegates plugin-owned semantic validation across protocol v1.

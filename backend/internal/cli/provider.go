@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 	"text/tabwriter"
 
@@ -38,6 +39,7 @@ func (a *app) newProviderAddCommand() *cobra.Command {
 	command.AddCommand(a.newProviderAddMCPCommand())
 	command.AddCommand(a.newProviderAddOpenAPICommand())
 	command.AddCommand(a.newProviderAddModelToolsCommand())
+	command.AddCommand(a.newProviderAddExternalCommand())
 
 	// Phase 5 compatibility aliases. They are intentionally hidden so normal
 	// CLI discovery teaches plugin-first Provider semantics.
@@ -48,6 +50,131 @@ func (a *app) newProviderAddCommand() *cobra.Command {
 	legacyStdio := a.newProviderAddMCPStdioCommand()
 	legacyStdio.Hidden = true
 	command.AddCommand(legacyStdio)
+	return command
+}
+
+func (a *app) newProviderAddExternalCommand() *cobra.Command {
+	var namespace, displayName, description, installationValue string
+	var configJSON, configFile string
+
+	command := &cobra.Command{
+		Use:   "external",
+		Short: "Register a Provider through an installed external plugin",
+		Args:  exactArgs(0),
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if namespace == "" ||
+				displayName == "" ||
+				installationValue == "" {
+				return usageError{
+					err: fmt.Errorf(
+						"--namespace, --name, and --installation are required",
+					),
+				}
+			}
+			if (configJSON == "") == (configFile == "") {
+				return usageError{
+					err: fmt.Errorf(
+						"exactly one of --config-json or --config-file is required",
+					),
+				}
+			}
+			installationID, err := providerplugin.ParseInstallationID(
+				strings.TrimSpace(installationValue),
+			)
+			if err != nil {
+				return usageError{err: err}
+			}
+			raw := []byte(configJSON)
+			if configFile != "" {
+				// #nosec G304 -- the CLI user explicitly selects the local config file.
+				raw, err = os.ReadFile(configFile)
+				if err != nil {
+					return fmt.Errorf("read Provider config file: %w", err)
+				}
+			}
+			if !json.Valid(raw) {
+				return usageError{err: fmt.Errorf("provider config must be valid JSON")}
+			}
+
+			return a.withRuntime(cmd.Context(), func(runtime *bootstrap.Runtime) error {
+				installation, err := runtime.GetProviderPluginInstallation(
+					cmd.Context(),
+					installationID,
+				)
+				if err != nil {
+					return err
+				}
+				provider, err := runtime.RegisterInstalledProvider(
+					cmd.Context(),
+					catalogapplication.RegisterProviderRequest{
+						Namespace:   namespace,
+						DisplayName: displayName,
+						Description: description,
+					},
+					installation.PluginID(),
+					installationID,
+					raw,
+				)
+				if err != nil {
+					return err
+				}
+				syncResult, err := runtime.SyncConfiguredProvider(
+					cmd.Context(),
+					provider.ID(),
+				)
+				if err != nil {
+					return fmt.Errorf(
+						"provider %s registered but initial synchronization failed: %w",
+						provider.ID(),
+						err,
+					)
+				}
+				config, err := runtime.ProviderConfig(cmd.Context(), provider.ID())
+				if err != nil {
+					return err
+				}
+				item := providerProjection(provider)
+				item["pluginId"] = installation.PluginID().String()
+				item["installationId"] = installationID.String()
+				item["configVersion"] = config.ConfigVersion
+				return a.writeValue(
+					fmt.Sprintf(
+						"registered %s (%s) with %s@%s; synchronized %d tool(s)",
+						provider.ID(),
+						provider.Namespace(),
+						installation.PluginID(),
+						installation.PackageVersion(),
+						syncResult.Total,
+					),
+					map[string]any{
+						"provider": item,
+						"sync":     syncProjection(syncResult),
+					},
+				)
+			})
+		},
+	}
+	command.Flags().StringVar(&namespace, "namespace", "", "stable provider namespace")
+	command.Flags().StringVar(&displayName, "name", "", "provider display name")
+	command.Flags().StringVar(&description, "description", "", "provider description")
+	command.Flags().StringVar(
+		&installationValue,
+		"installation",
+		"",
+		"exact external plugin InstallationID",
+	)
+	command.Flags().StringVar(
+		&configJSON,
+		"config-json",
+		"",
+		"plugin-owned Provider config JSON",
+	)
+	command.Flags().StringVar(
+		&configFile,
+		"config-file",
+		"",
+		"path to plugin-owned Provider config JSON",
+	)
 	return command
 }
 
@@ -451,31 +578,37 @@ func (a *app) newProviderPluginsCommand() *cobra.Command {
 		Args:  exactArgs(0),
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return a.withRuntime(cmd.Context(), func(runtime *bootstrap.Runtime) error {
-				descriptors := runtime.ProviderPluginDescriptors()
+				available, err := runtime.ListAvailableProviderPlugins(cmd.Context())
+				if err != nil {
+					return err
+				}
 				if a.output == "json" {
-					items := make([]map[string]any, 0, len(descriptors))
-					for _, descriptor := range descriptors {
-						items = append(items, map[string]any{
-							"pluginId":      descriptor.ID.String(),
-							"version":       descriptor.Version,
-							"displayName":   descriptor.DisplayName,
-							"description":   descriptor.Description,
-							"configVersion": descriptor.ConfigVersion,
-						})
+					items := make([]map[string]any, 0, len(available))
+					for _, item := range available {
+						items = append(items, availableProviderPluginProjection(item))
 					}
 					return a.writeValue("", map[string]any{"plugins": items})
 				}
 
 				writer := tabwriter.NewWriter(a.options.Stdout, 0, 4, 2, ' ', 0)
-				_, _ = fmt.Fprintln(writer, "PLUGIN	VERSION	CONFIG	NAME")
-				for _, descriptor := range descriptors {
+				_, _ = fmt.Fprintln(
+					writer,
+					"SOURCE	INSTALLATION	PLUGIN	VERSION	CONFIG	NAME",
+				)
+				for _, item := range available {
+					installation := "-"
+					if item.InstallationID != nil {
+						installation = item.InstallationID.String()
+					}
 					_, _ = fmt.Fprintf(
 						writer,
-						"%s\t%s\t%d\t%s\n",
-						descriptor.ID,
-						descriptor.Version,
-						descriptor.ConfigVersion,
-						descriptor.DisplayName,
+						"%s	%s	%s	%s	%d	%s\n",
+						item.SourceKind,
+						installation,
+						item.Descriptor.ID,
+						item.Descriptor.Version,
+						item.Descriptor.ConfigVersion,
+						item.Descriptor.DisplayName,
 					)
 				}
 				return writer.Flush()
@@ -513,6 +646,9 @@ func (a *app) newProviderListCommand() *cobra.Command {
 						item := providerProjection(provider)
 						if config, ok := configByProvider[provider.ID()]; ok {
 							item["pluginId"] = config.PluginID.String()
+							if config.InstallationID != nil {
+								item["installationId"] = config.InstallationID.String()
+							}
 							item["configVersion"] = config.ConfigVersion
 							if transport, connection, _ := providerConnectionProjection(config); transport != "" {
 								item["transport"] = transport
@@ -621,6 +757,36 @@ func syncProjection(result catalogapplication.SyncProviderToolsResult) map[strin
 		"removed": result.Removed,
 		"total":   result.Total,
 	}
+}
+
+func availableProviderPluginProjection(
+	item bootstrap.AvailableProviderPlugin,
+) map[string]any {
+	descriptor := item.Descriptor
+	result := map[string]any{
+		"pluginId":       descriptor.ID.String(),
+		"version":        descriptor.Version,
+		"packageVersion": descriptor.Version,
+		"displayName":    descriptor.DisplayName,
+		"description":    descriptor.Description,
+		"configVersion":  descriptor.ConfigVersion,
+		"sourceKind":     item.SourceKind,
+		"enabled":        item.Enabled,
+		"capabilities":   append([]string{}, descriptor.Capabilities...),
+	}
+	if item.InstallationID != nil {
+		result["installationId"] = item.InstallationID.String()
+	}
+	if descriptor.ProtocolVersion != 0 {
+		result["protocolVersion"] = descriptor.ProtocolVersion
+	}
+	if len(descriptor.ConfigSchema) != 0 {
+		result["configSchema"] = append(json.RawMessage(nil), descriptor.ConfigSchema...)
+	}
+	if len(descriptor.UISchema) != 0 {
+		result["uiSchema"] = append(json.RawMessage(nil), descriptor.UISchema...)
+	}
+	return result
 }
 
 func providerConnectionProjection(

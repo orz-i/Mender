@@ -23,7 +23,7 @@ paths:
       responses:
         '403': { $ref: '#/components/responses/Forbidden' }
         '200':
-          description: Available built-in Provider plugins
+          description: Available built-in and enabled external Provider plugins
           content:
             application/json:
               schema:
@@ -34,6 +34,73 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/ProviderPlugin'
+  /provider-plugin-installations:
+    get:
+      operationId: listProviderPluginInstallations
+      responses:
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '200':
+          description: Installed external Provider plugin packages
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [installations]
+                properties:
+                  installations:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ProviderPluginInstallation'
+  /provider-plugin-installations/{installationId}/enable:
+    post:
+      operationId: enableProviderPluginInstallation
+      parameters:
+        - $ref: '#/components/parameters/InstallationId'
+      responses:
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '200':
+          description: Provider plugin installation enabled
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [installation]
+                properties:
+                  installation:
+                    $ref: '#/components/schemas/ProviderPluginInstallation'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /provider-plugin-installations/{installationId}/disable:
+    post:
+      operationId: disableProviderPluginInstallation
+      parameters:
+        - $ref: '#/components/parameters/InstallationId'
+      responses:
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '200':
+          description: Provider plugin installation disabled
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [installation]
+                properties:
+                  installation:
+                    $ref: '#/components/schemas/ProviderPluginInstallation'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /provider-plugin-installations/{installationId}:
+    delete:
+      operationId: deleteProviderPluginInstallation
+      parameters:
+        - $ref: '#/components/parameters/InstallationId'
+      responses:
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '204':
+          description: Provider plugin installation removed
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
   /providers:
     get:
       operationId: listProviders
@@ -652,6 +719,11 @@ components:
       in: path
       required: true
       schema: { type: string }
+    InstallationId:
+      name: installationId
+      in: path
+      required: true
+      schema: { type: string }
     ToolId:
       name: toolId
       in: path
@@ -859,13 +931,47 @@ components:
       additionalProperties: false
     ProviderPlugin:
       type: object
-      required: [pluginId, version, displayName, description, configVersion]
+      required: [pluginId, version, packageVersion, displayName, description, configVersion, sourceKind, capabilities, enabled]
       properties:
         pluginId: { type: string }
         version: { type: string }
+        packageVersion: { type: string }
         displayName: { type: string }
         description: { type: string }
         configVersion: { type: integer, minimum: 1 }
+        sourceKind:
+          type: string
+          enum: [builtin, external]
+        installationId: { type: string }
+        protocolVersion: { type: integer, minimum: 1 }
+        configSchema:
+          oneOf:
+            - type: object
+              additionalProperties: true
+            - type: boolean
+        uiSchema:
+          type: object
+          additionalProperties: true
+        capabilities:
+          type: array
+          items: { type: string }
+        enabled: { type: boolean }
+      additionalProperties: false
+    ProviderPluginInstallation:
+      type: object
+      required: [installationId, pluginId, packageVersion, sourceKind, digest, status, installedAt]
+      properties:
+        installationId: { type: string }
+        pluginId: { type: string }
+        packageVersion: { type: string }
+        sourceKind:
+          type: string
+          enum: [local]
+        digest: { type: string }
+        status:
+          type: string
+          enum: [enabled, disabled, invalid]
+        installedAt: { type: string, format: date-time }
       additionalProperties: false
     Provider:
       type: object
@@ -878,6 +984,7 @@ components:
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
         pluginId: { type: string }
+        installationId: { type: string }
         pluginVersion: { type: string }
         pluginDisplayName: { type: string }
         configVersion: { type: integer, minimum: 1 }
@@ -911,6 +1018,7 @@ components:
         displayName: { type: string }
         description: { type: string }
         pluginId: { type: string }
+        installationId: { type: string }
         config:
           type: object
           additionalProperties: true

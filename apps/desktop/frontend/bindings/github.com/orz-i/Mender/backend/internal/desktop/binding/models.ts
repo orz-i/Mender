@@ -172,6 +172,7 @@ export interface Provider {
     "createdAt": string;
     "updatedAt": string;
     "pluginId"?: string;
+    "installationId"?: string;
     "pluginVersion"?: string;
     "pluginDisplayName"?: string;
     "configVersion"?: number;
@@ -199,9 +200,31 @@ export interface ProviderMutationResponse {
 export interface ProviderPlugin {
     "pluginId": string;
     "version": string;
+    "packageVersion": string;
     "displayName": string;
     "description": string;
     "configVersion": number;
+    "sourceKind": string;
+    "installationId"?: string;
+    "protocolVersion"?: number;
+    "configSchema"?: any;
+    "uiSchema"?: any;
+    "capabilities": string[] | null;
+    "enabled": boolean;
+}
+
+export interface ProviderPluginInstallation {
+    "installationId": string;
+    "pluginId": string;
+    "packageVersion": string;
+    "sourceKind": string;
+    "digest": string;
+    "status": string;
+    "installedAt": string;
+}
+
+export interface ProviderPluginInstallationList {
+    "installations": ProviderPluginInstallation[] | null;
 }
 
 export interface ProviderPluginList {

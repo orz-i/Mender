@@ -12,6 +12,49 @@ import (
 	"github.com/orz-i/Mender/backend/internal/buildinfo"
 )
 
+func TestProviderPluginCommandSurface(t *testing.T) {
+	t.Parallel()
+
+	root := NewRootCommand(Options{
+		Stdin:  strings.NewReader(""),
+		Stdout: io.Discard,
+		Stderr: io.Discard,
+	})
+	for _, path := range [][]string{
+		{"plugin", "list"},
+		{"plugin", "install"},
+		{"plugin", "inspect"},
+		{"plugin", "enable"},
+		{"plugin", "disable"},
+		{"plugin", "remove"},
+		{"provider", "add", "external"},
+	} {
+		command, _, err := root.Find(path)
+		if err != nil {
+			t.Fatalf("Find(%v) error = %v", path, err)
+		}
+		if command == nil {
+			t.Fatalf("Find(%v) command = nil", path)
+		}
+	}
+
+	external, _, err := root.Find([]string{"provider", "add", "external"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, flag := range []string{
+		"namespace",
+		"name",
+		"installation",
+		"config-json",
+		"config-file",
+	} {
+		if external.Flags().Lookup(flag) == nil {
+			t.Fatalf("provider add external missing --%s", flag)
+		}
+	}
+}
+
 func TestCredentialNativeCommandDoesNotExposeSecretFlag(t *testing.T) {
 	t.Parallel()
 

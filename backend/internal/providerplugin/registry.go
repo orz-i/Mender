@@ -44,13 +44,17 @@ func (r *Registry) Register(plugin Plugin) error {
 		return fmt.Errorf("register provider plugin: plugin must not be nil")
 	}
 
-	descriptor := plugin.Descriptor()
+	descriptor := plugin.Descriptor().Clone()
 	if err := descriptor.Validate(); err != nil {
 		return fmt.Errorf("register provider plugin: %w", err)
 	}
 	descriptor.Version = strings.TrimSpace(descriptor.Version)
 	descriptor.DisplayName = strings.TrimSpace(descriptor.DisplayName)
 	descriptor.Description = strings.TrimSpace(descriptor.Description)
+	for index := range descriptor.Capabilities {
+		descriptor.Capabilities[index] = strings.TrimSpace(descriptor.Capabilities[index])
+	}
+	slices.Sort(descriptor.Capabilities)
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -100,7 +104,7 @@ func (r *Registry) Descriptors() []Descriptor {
 	r.mu.RLock()
 	descriptors := make([]Descriptor, 0, len(r.plugins))
 	for _, entry := range r.plugins {
-		descriptors = append(descriptors, entry.descriptor)
+		descriptors = append(descriptors, entry.descriptor.Clone())
 	}
 	r.mu.RUnlock()
 

@@ -13,6 +13,7 @@ import type {
   Provider,
   ProviderMutationResponse,
   ProviderPlugin,
+  ProviderPluginInstallation,
   SyncResult,
   SystemStatus,
   ToolDetail,
@@ -34,11 +35,20 @@ import {
   type Provider as BindingProvider,
   type ProviderMutationResponse as BindingProviderMutationResponse,
   type ProviderPlugin as BindingProviderPlugin,
+  type ProviderPluginInstallation as BindingProviderPluginInstallation,
   type SyncResult as BindingSyncResult,
   type SystemStatus as BindingSystemStatus,
   type ToolDetail as BindingToolDetail,
   type ToolSummary as BindingToolSummary,
 } from "../bindings/github.com/orz-i/Mender/backend/internal/desktop/binding";
+
+export async function installDesktopProviderPlugin(
+  sourcePath: string,
+): Promise<ProviderPluginInstallation> {
+  return providerPluginInstallation(
+    await Service.InstallProviderPlugin(sourcePath),
+  );
+}
 
 export function createDesktopMenderClient(): MenderClient {
   return {
@@ -49,6 +59,35 @@ export function createDesktopMenderClient(): MenderClient {
     async listProviderPlugins() {
       const result = await Service.ListProviderPlugins();
       return { plugins: (result.plugins ?? []).map(providerPlugin) };
+    },
+
+    async listProviderPluginInstallations() {
+      const result = await Service.ListProviderPluginInstallations();
+      return {
+        installations: (result.installations ?? []).map(
+          providerPluginInstallation,
+        ),
+      };
+    },
+
+    async enableProviderPluginInstallation(installationId) {
+      return {
+        installation: providerPluginInstallation(
+          await Service.EnableProviderPluginInstallation(installationId),
+        ),
+      };
+    },
+
+    async disableProviderPluginInstallation(installationId) {
+      return {
+        installation: providerPluginInstallation(
+          await Service.DisableProviderPluginInstallation(installationId),
+        ),
+      };
+    },
+
+    async deleteProviderPluginInstallation(installationId) {
+      await Service.DeleteProviderPluginInstallation(installationId);
     },
 
     async listProviders() {
@@ -63,6 +102,7 @@ export function createDesktopMenderClient(): MenderClient {
           body.displayName,
           body.description ?? "",
           body.pluginId,
+          body.installationId ?? "",
           body.config,
         ),
       );
@@ -494,10 +534,79 @@ function providerPlugin(value: BindingProviderPlugin): ProviderPlugin {
   return {
     pluginId: value.pluginId,
     version: value.version,
+    packageVersion: value.packageVersion,
     displayName: value.displayName,
     description: value.description,
     configVersion: value.configVersion,
+    sourceKind: providerPluginSourceKind(value.sourceKind),
+    ...(value.installationId === undefined
+      ? {}
+      : { installationId: value.installationId }),
+    ...(value.protocolVersion === undefined
+      ? {}
+      : { protocolVersion: value.protocolVersion }),
+    ...(value.configSchema === undefined
+      ? {}
+      : { configSchema: providerPluginConfigSchema(value.configSchema) }),
+    ...(value.uiSchema === undefined
+      ? {}
+      : { uiSchema: providerPluginUISchema(value.uiSchema) }),
+    capabilities: value.capabilities ?? [],
+    enabled: value.enabled,
   };
+}
+
+function providerPluginSourceKind(
+  value: string,
+): ProviderPlugin["sourceKind"] {
+  if (value === "builtin" || value === "external") {
+    return value;
+  }
+  throw new Error("Unsupported Provider plugin source kind: " + value);
+}
+
+function providerPluginConfigSchema(
+  value: unknown,
+): NonNullable<ProviderPlugin["configSchema"]> {
+  if (typeof value === "boolean") {
+    return value;
+  }
+  if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  throw new Error("Unsupported Provider plugin config schema");
+}
+
+function providerPluginUISchema(
+  value: unknown,
+): NonNullable<ProviderPlugin["uiSchema"]> {
+  if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  throw new Error("Unsupported Provider plugin UI schema");
+}
+
+function providerPluginInstallation(
+  value: BindingProviderPluginInstallation,
+): ProviderPluginInstallation {
+  return {
+    installationId: value.installationId,
+    pluginId: value.pluginId,
+    packageVersion: value.packageVersion,
+    sourceKind: "local",
+    digest: value.digest,
+    status: providerPluginInstallationStatus(value.status),
+    installedAt: value.installedAt,
+  };
+}
+
+function providerPluginInstallationStatus(
+  value: string,
+): ProviderPluginInstallation["status"] {
+  if (value === "enabled" || value === "disabled" || value === "invalid") {
+    return value;
+  }
+  throw new Error("Unsupported Provider plugin installation status: " + value);
 }
 
 function provider(value: BindingProvider): Provider {
@@ -510,6 +619,9 @@ function provider(value: BindingProvider): Provider {
     createdAt: value.createdAt,
     updatedAt: value.updatedAt,
     ...(value.pluginId === undefined ? {} : { pluginId: value.pluginId }),
+    ...(value.installationId === undefined
+      ? {}
+      : { installationId: value.installationId }),
     ...(value.pluginVersion === undefined
       ? {}
       : { pluginVersion: value.pluginVersion }),
