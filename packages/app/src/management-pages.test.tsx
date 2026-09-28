@@ -193,7 +193,14 @@ describe("management pages", () => {
     );
 
     expect(await screen.findByText("Add provider")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Add provider" }));
+    expect(screen.getByLabelText<HTMLInputElement>("Model Tools model").value).toBe(
+      "claude-test",
+    );
+    const addButton = screen.getByRole<HTMLButtonElement>("button", {
+      name: "Add provider",
+    });
+    expect(addButton.disabled).toBe(false);
+    fireEvent.click(addButton);
 
     await waitFor(() => {
       expect(createProvider).toHaveBeenCalledWith({
@@ -308,8 +315,14 @@ describe("management pages", () => {
       screen.getByRole("button", { name: "Use authentication" }),
     );
 
-    expect(await screen.findByText("Add provider")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Add provider" }));
+    expect(
+      await screen.findByLabelText<HTMLInputElement>("OpenAPI description URL"),
+    ).toHaveProperty("value", "https://example.test/openapi.yaml");
+    const addButton = screen.getByRole<HTMLButtonElement>("button", {
+      name: "Add provider",
+    });
+    expect(addButton.disabled).toBe(false);
+    fireEvent.click(addButton);
 
     await waitFor(() => {
       expect(createProvider).toHaveBeenCalledWith({
