@@ -202,18 +202,23 @@ func TestRuntimeInstalledExternalProviderEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(rebindEntrypoint, binary, 0o755); err != nil { // #nosec G306 -- executable fixture.
+	rebindRoot, err := os.OpenRoot(rebindSourceRoot)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(
-		filepath.Join(rebindSourceRoot, manifest.FileName),
-		manifestJSON,
-		0o600,
-	); err != nil { // #nosec G306 -- test fixture manifest.
+	defer func() { _ = rebindRoot.Close() }()
+	if err := rebindRoot.WriteFile(
+		filepath.ToSlash(filepath.Join("bin", examplePluginBinaryName())),
+		binary,
+		0o755,
+	); err != nil { // #nosec G306 -- test-owned executable fixture under t.TempDir.
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(
-		filepath.Join(rebindSourceRoot, "installation-marker.txt"),
+	if err := rebindRoot.WriteFile(manifest.FileName, manifestJSON, 0o600); err != nil { // #nosec G306 -- test fixture manifest.
+		t.Fatal(err)
+	}
+	if err := rebindRoot.WriteFile(
+		"installation-marker.txt",
 		[]byte("second installation"),
 		0o600,
 	); err != nil { // #nosec G306 -- test fixture data.
