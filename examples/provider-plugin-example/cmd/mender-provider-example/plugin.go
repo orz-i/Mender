@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"strings"
 	"sync"
 
@@ -82,13 +84,21 @@ func (*echoPlugin) ValidateConfig(
 			Message:  "unsupported config version",
 		}}, nil
 	}
-	_, err := parseConfig(request.Config)
+	config, err := parseConfig(request.Config)
 	if err != nil {
 		return []providerplugin.Diagnostic{{
 			Severity: providerplugin.DiagnosticError,
 			Path:     "$",
 			Code:     "invalid_config",
 			Message:  err.Error(),
+		}}, nil
+	}
+	if config.CredentialRef != "" && !validCredentialReference(config.CredentialRef) {
+		return []providerplugin.Diagnostic{{
+			Severity: providerplugin.DiagnosticError,
+			Path:     "credentialRef",
+			Code:     "invalid_credential_ref",
+			Message:  "credentialRef must use credential://namespace/name",
 		}}, nil
 	}
 	return nil, nil
@@ -250,12 +260,24 @@ func (p *echoPlugin) session(sessionID string) (echoSession, bool) {
 }
 
 func parseConfig(raw json.RawMessage) (echoConfig, error) {
+	if len(raw) == 0 {
+		raw = json.RawMessage("{}")
+	}
 	var config echoConfig
-	decoder := json.NewDecoder(strings.NewReader(string(raw)))
+	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&config); err != nil {
 		return echoConfig{}, fmt.Errorf("decode config: %w", err)
 	}
+	var trailing any
+	if err := decoder.Decode(&trailing); err != io.EOF {
+		if err == nil {
+			return echoConfig{}, fmt.Errorf("config must contain one JSON document")
+		}
+		return echoConfig{}, fmt.Errorf("decode trailing config: %w", err)
+	}
+	config.Title = strings.TrimSpace(config.Title)
+	config.CredentialRef = strings.TrimSpace(config.CredentialRef)
 	if config.Prefix == "" {
 		config.Prefix = "echo: "
 	}
@@ -263,4 +285,16 @@ func parseConfig(raw json.RawMessage) (echoConfig, error) {
 		config.Title = "Echo"
 	}
 	return config, nil
+}
+
+func validCredentialReference(value string) bool {
+	if !strings.HasPrefix(value, "credential://") {
+		return false
+	}
+	remainder := strings.TrimPrefix(value, "credential://")
+	namespace, name, ok := strings.Cut(remainder, "/")
+	return ok &&
+		strings.TrimSpace(namespace) != "" &&
+		strings.TrimSpace(name) != "" &&
+		!strings.Contains(name, "/")
 }

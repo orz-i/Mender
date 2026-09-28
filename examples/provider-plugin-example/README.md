@@ -14,7 +14,7 @@ From this directory:
 
 ~~~bash
 mkdir -p bin
-go build -o bin/mender-provider-example .
+go build -o bin/mender-provider-example ./cmd/mender-provider-example
 ~~~
 
 On Windows use `bin/mender-provider-example.exe`.

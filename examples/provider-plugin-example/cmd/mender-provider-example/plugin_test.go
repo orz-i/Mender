@@ -116,6 +116,48 @@ func TestEchoPluginLifecycle(t *testing.T) {
 	}
 }
 
+func TestEchoPluginValidationRejectsInvalidCredentialReference(t *testing.T) {
+	t.Parallel()
+
+	plugin := newEchoPlugin()
+	diagnostics, err := plugin.ValidateConfig(
+		context.Background(),
+		providerplugin.ConfigRequest{
+			ConfigVersion: configVersion,
+			Config: json.RawMessage(
+				`{"credentialRef":"not-a-credential-reference"}`,
+			),
+		},
+	)
+	if err != nil {
+		t.Fatalf("ValidateConfig() error = %v", err)
+	}
+	if len(diagnostics) != 1 ||
+		diagnostics[0].Code != "invalid_credential_ref" {
+		t.Fatalf("diagnostics = %+v", diagnostics)
+	}
+}
+
+func TestEchoPluginValidationRejectsTrailingConfigDocument(t *testing.T) {
+	t.Parallel()
+
+	plugin := newEchoPlugin()
+	diagnostics, err := plugin.ValidateConfig(
+		context.Background(),
+		providerplugin.ConfigRequest{
+			ConfigVersion: configVersion,
+			Config:        json.RawMessage(`{} {}`),
+		},
+	)
+	if err != nil {
+		t.Fatalf("ValidateConfig() error = %v", err)
+	}
+	if len(diagnostics) != 1 ||
+		diagnostics[0].Severity != providerplugin.DiagnosticError {
+		t.Fatalf("diagnostics = %+v", diagnostics)
+	}
+}
+
 func TestEchoPluginValidationRejectsUnknownConfig(t *testing.T) {
 	t.Parallel()
 
