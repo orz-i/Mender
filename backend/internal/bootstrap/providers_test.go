@@ -17,6 +17,7 @@ import (
 	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	mcpplugin "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/plugin"
+	modeltoolsplugin "github.com/orz-i/Mender/backend/internal/modeltools/infrastructure/plugin"
 	openapiplugin "github.com/orz-i/Mender/backend/internal/openapi/infrastructure/plugin"
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
 	providerconfigstore "github.com/orz-i/Mender/backend/internal/providerplugin/configstore"
@@ -27,8 +28,8 @@ func TestRuntimeExposesBuiltInProviderPluginDescriptors(t *testing.T) {
 
 	runtime := newProviderTestRuntime(t)
 	descriptors := runtime.ProviderPluginDescriptors()
-	if len(descriptors) != 2 {
-		t.Fatalf("ProviderPluginDescriptors() len = %d, want 2", len(descriptors))
+	if len(descriptors) != 3 {
+		t.Fatalf("ProviderPluginDescriptors() len = %d, want 3", len(descriptors))
 	}
 	if descriptors[0].ID != mcpplugin.ID {
 		t.Fatalf(
@@ -44,9 +45,13 @@ func TestRuntimeExposesBuiltInProviderPluginDescriptors(t *testing.T) {
 			mcpplugin.ConfigVersion,
 		)
 	}
-	if descriptors[1].ID != openapiplugin.ID ||
-		descriptors[1].ConfigVersion != openapiplugin.ConfigVersion {
-		t.Fatalf("ProviderPluginDescriptors()[1] = %+v, want OpenAPI", descriptors[1])
+	if descriptors[1].ID != modeltoolsplugin.ID ||
+		descriptors[1].ConfigVersion != modeltoolsplugin.ConfigVersion {
+		t.Fatalf("ProviderPluginDescriptors()[1] = %+v, want Model Tools", descriptors[1])
+	}
+	if descriptors[2].ID != openapiplugin.ID ||
+		descriptors[2].ConfigVersion != openapiplugin.ConfigVersion {
+		t.Fatalf("ProviderPluginDescriptors()[2] = %+v, want OpenAPI", descriptors[2])
 	}
 }
 

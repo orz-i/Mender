@@ -277,4 +277,11 @@ func parseAnthropicSearchResultContent(
 	return nil, fmt.Errorf("decode Anthropic web search result content: unsupported shape")
 }
 
+func (e *anthropicEngine) Close() error {
+	if e != nil {
+		e.http.closeIdleConnections()
+	}
+	return nil
+}
+
 var _ EngineAdapter = (*anthropicEngine)(nil)

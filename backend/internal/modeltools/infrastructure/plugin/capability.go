@@ -59,6 +59,7 @@ type EngineAdapter interface {
 		WebSearchRequest,
 		[]byte,
 	) (SearchResult, error)
+	Close() error
 }
 
 func discoveredCapabilityTools(config Config) []catalogapplication.DiscoveredTool {

@@ -134,4 +134,11 @@ func (e *openAIEngine) WebSearch(
 	return normalized, nil
 }
 
+func (e *openAIEngine) Close() error {
+	if e != nil {
+		e.http.closeIdleConnections()
+	}
+	return nil
+}
+
 var _ EngineAdapter = (*openAIEngine)(nil)

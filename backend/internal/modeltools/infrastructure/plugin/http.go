@@ -35,6 +35,12 @@ func newEngineHTTPClient() engineHTTPClient {
 	}
 }
 
+func (c engineHTTPClient) closeIdleConnections() {
+	if c.client != nil {
+		c.client.CloseIdleConnections()
+	}
+}
+
 func (c engineHTTPClient) postJSON(
 	ctx context.Context,
 	endpoint string,

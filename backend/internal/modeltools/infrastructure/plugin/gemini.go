@@ -138,4 +138,11 @@ func (e *geminiEngine) WebSearch(
 	return normalized, nil
 }
 
+func (e *geminiEngine) Close() error {
+	if e != nil {
+		e.http.closeIdleConnections()
+	}
+	return nil
+}
+
 var _ EngineAdapter = (*geminiEngine)(nil)

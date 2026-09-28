@@ -22,6 +22,7 @@ import (
 	invocationrouter "github.com/orz-i/Mender/backend/internal/invocation/infrastructure/router"
 	mcpconfigstore "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/configstore"
 	mcpplugin "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/plugin"
+	modeltoolsplugin "github.com/orz-i/Mender/backend/internal/modeltools/infrastructure/plugin"
 	openapiplugin "github.com/orz-i/Mender/backend/internal/openapi/infrastructure/plugin"
 	policylocal "github.com/orz-i/Mender/backend/internal/policy/infrastructure/local"
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
@@ -148,6 +149,16 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		return nil, fmt.Errorf("compose runtime: provider plugins: %w", err)
 	}
 	if err := providerPlugins.Register(openapiplugin.New()); err != nil {
+		_ = providerConfigs.Close()
+		_ = configs.Close()
+		_ = policies.Close()
+		_ = profiles.Close()
+		_ = credentials.Close()
+		_ = auditStore.Close()
+		_ = catalog.Close()
+		return nil, fmt.Errorf("compose runtime: provider plugins: %w", err)
+	}
+	if err := providerPlugins.Register(modeltoolsplugin.New()); err != nil {
 		_ = providerConfigs.Close()
 		_ = configs.Close()
 		_ = policies.Close()
