@@ -20,6 +20,7 @@ import (
 	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	mcpconfigstore "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/configstore"
+	openapiplugin "github.com/orz-i/Mender/backend/internal/openapi/infrastructure/plugin"
 	profileapplication "github.com/orz-i/Mender/backend/internal/profile/application"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 )
@@ -256,6 +257,249 @@ func TestCredentialBackedHTTPProviderEnforcesProfileScope(t *testing.T) {
 		t.Fatalf("audit records = %d, want 3", len(records))
 	}
 	assertAuditSchemaHasNoCredentialFields(t, databasePath)
+}
+
+func TestCredentialBackedOpenAPIProviderEnforcesProfileScope(t *testing.T) {
+	t.Setenv("MENDER_OPENAPI_TOKEN", "openapi-secret")
+
+	ctx := context.Background()
+	var upstreamCalls atomic.Int32
+	var serverURL string
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/openapi.yaml", func(w http.ResponseWriter, _ *http.Request) {
+		spec := `openapi: 3.1.2
+info:
+  title: Secure API
+  version: "1"
+servers:
+  - url: ` + serverURL + `
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+paths:
+  /secure:
+    get:
+      operationId: secure
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok: { type: boolean }
+`
+		_, _ = w.Write([]byte(spec))
+	})
+	mux.HandleFunc("/secure", func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer openapi-secret" {
+			http.Error(w, "missing authentication", http.StatusUnauthorized)
+			return
+		}
+		upstreamCalls.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	})
+	server := httptest.NewServer(mux)
+	serverURL = server.URL
+	t.Cleanup(server.Close)
+
+	databasePath := filepath.Join(t.TempDir(), "mender.db")
+	runtime, err := NewRuntime(ctx, RuntimeOptions{
+		DatabasePath:   databasePath,
+		DefaultTimeout: time.Second,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = runtime.Close() })
+
+	credential, err := runtime.Credentials.CreateEnvironment.Execute(
+		ctx,
+		credentialapplication.CreateEnvironmentRequest{
+			Namespace:           "openapi",
+			Name:                "work",
+			DisplayName:         "OpenAPI Work",
+			EnvironmentVariable: "MENDER_OPENAPI_TOKEN",
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ref := credential.Reference()
+
+	configRaw, err := json.Marshal(openapiplugin.Config{
+		Source: openapiplugin.SourceConfig{
+			Kind: openapiplugin.SourceURL,
+			URL:  server.URL + "/openapi.yaml",
+		},
+		Credentials: map[string]credentialdomain.Reference{
+			"BearerAuth": ref,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider, err := runtime.RegisterConfiguredProvider(
+		ctx,
+		catalogapplication.RegisterProviderRequest{
+			Namespace:   "openapi-secure",
+			DisplayName: "OpenAPI Secure",
+		},
+		openapiplugin.ID,
+		configRaw,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runtime.SyncConfiguredProvider(ctx, provider.ID()); err != nil {
+		t.Fatal(err)
+	}
+	if upstreamCalls.Load() != 0 {
+		t.Fatalf("sync reached execution endpoint; calls = %d", upstreamCalls.Load())
+	}
+
+	if err := runtime.Credentials.Delete.Execute(ctx, ref); !errors.Is(
+		err,
+		credentialapplication.ErrCredentialInUse,
+	) {
+		t.Fatalf("delete Provider-bound Credential error = %v", err)
+	}
+
+	search, err := runtime.Catalog.SearchTools.Execute(
+		ctx,
+		catalogapplication.SearchToolsRequest{
+			Query:      "secure",
+			Limit:      10,
+			ProviderID: providerIDPtr(provider.ID()),
+		},
+	)
+	if err != nil || len(search) != 1 {
+		t.Fatalf("search = %#v err=%v", search, err)
+	}
+	toolID := search[0].ToolID
+
+	allowed, err := runtime.Profiles.Create.Execute(
+		ctx,
+		profileapplication.CreateProfileRequest{
+			Slug:        "openapi-allowed",
+			DisplayName: "OpenAPI Allowed",
+			Mode:        profiledomain.ExposureDynamic,
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	allowed, err = runtime.Profiles.AddTool.Execute(
+		ctx,
+		profileapplication.AddToolRequest{
+			ProfileSlug:    allowed.Slug(),
+			ToolID:         toolID,
+			CredentialRefs: []credentialdomain.Reference{ref},
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	allowedScope, _ := invocationdomain.ProfileExecutionScope(allowed.ID().String())
+	allowedContext, _ := invocationdomain.NewInvocationContext(
+		invocationdomain.OriginMCP,
+		"openapi-allowed",
+		allowedScope,
+	)
+	allowedResponse, err := runtime.InvokeTool.Execute(
+		ctx,
+		invocationapplication.InvokeToolRequest{
+			ToolID:    toolID,
+			Arguments: []byte(`{}`),
+			Context:   allowedContext,
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if allowedResponse.Outcome.Kind() != invocationdomain.OutcomeKindComplete {
+		t.Fatalf("allowed outcome = %#v", allowedResponse.Outcome)
+	}
+	if upstreamCalls.Load() != 1 {
+		t.Fatalf("allowed upstream calls = %d, want 1", upstreamCalls.Load())
+	}
+
+	denied, err := runtime.Profiles.Create.Execute(
+		ctx,
+		profileapplication.CreateProfileRequest{
+			Slug:        "openapi-denied",
+			DisplayName: "OpenAPI Denied",
+			Mode:        profiledomain.ExposureDynamic,
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	denied, err = runtime.Profiles.AddTool.Execute(
+		ctx,
+		profileapplication.AddToolRequest{
+			ProfileSlug: denied.Slug(),
+			ToolID:      toolID,
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	deniedScope, _ := invocationdomain.ProfileExecutionScope(denied.ID().String())
+	deniedContext, _ := invocationdomain.NewInvocationContext(
+		invocationdomain.OriginMCP,
+		"openapi-denied",
+		deniedScope,
+	)
+	deniedResponse, err := runtime.InvokeTool.Execute(
+		ctx,
+		invocationapplication.InvokeToolRequest{
+			ToolID:    toolID,
+			Arguments: []byte(`{}`),
+			Context:   deniedContext,
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if deniedResponse.Outcome.Kind() != invocationdomain.OutcomeKindFailed ||
+		deniedResponse.Outcome.FailureCode() != invocationdomain.FailureCredentialOutsideScope {
+		t.Fatalf("denied outcome = %#v", deniedResponse.Outcome)
+	}
+	if upstreamCalls.Load() != 1 {
+		t.Fatalf("denied Profile reached upstream; calls = %d", upstreamCalls.Load())
+	}
+
+	catalogContext, _ := invocationdomain.NewInvocationContext(
+		invocationdomain.OriginInternal,
+		"openapi-catalog",
+		invocationdomain.CatalogExecutionScope(),
+	)
+	catalogResponse, err := runtime.InvokeTool.Execute(
+		ctx,
+		invocationapplication.InvokeToolRequest{
+			ToolID:    toolID,
+			Arguments: []byte(`{}`),
+			Context:   catalogContext,
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if catalogResponse.Outcome.Kind() != invocationdomain.OutcomeKindComplete {
+		t.Fatalf("catalog outcome = %#v", catalogResponse.Outcome)
+	}
+	if upstreamCalls.Load() != 2 {
+		t.Fatalf("catalog upstream calls = %d, want 2", upstreamCalls.Load())
+	}
 }
 
 func assertAuditSchemaHasNoCredentialFields(t *testing.T, databasePath string) {

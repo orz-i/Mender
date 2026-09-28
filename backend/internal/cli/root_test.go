@@ -361,7 +361,9 @@ func TestProviderPluginsJSONListsBuiltInMCP(t *testing.T) {
 	if err := json.NewDecoder(&stdout).Decode(&value); err != nil {
 		t.Fatalf("provider plugins JSON error = %v output=%q", err, stdout.String())
 	}
-	if len(value.Plugins) != 1 || value.Plugins[0].PluginID != "io.mender.provider.mcp" {
+	if len(value.Plugins) != 2 ||
+		value.Plugins[0].PluginID != "io.mender.provider.mcp" ||
+		value.Plugins[1].PluginID != "io.mender.provider.openapi" {
 		t.Fatalf("provider plugins = %#v", value.Plugins)
 	}
 }

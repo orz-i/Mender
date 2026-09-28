@@ -1161,12 +1161,16 @@ func TestManagementAPIGenericProviderPluginFlow(t *testing.T) {
 		http.StatusOK,
 	)
 	items, ok := plugins["plugins"].([]any)
-	if !ok || len(items) != 1 {
+	if !ok || len(items) != 2 {
 		t.Fatalf("provider plugins = %#v", plugins)
 	}
 	plugin, _ := items[0].(map[string]any)
 	if plugin["pluginId"] != "io.mender.provider.mcp" {
 		t.Fatalf("provider plugin = %#v", plugin)
+	}
+	openAPIPlugin, _ := items[1].(map[string]any)
+	if openAPIPlugin["pluginId"] != "io.mender.provider.openapi" {
+		t.Fatalf("OpenAPI provider plugin = %#v", openAPIPlugin)
 	}
 
 	created := requestJSON(

@@ -4,8 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
@@ -13,6 +17,7 @@ import (
 	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	mcpplugin "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/plugin"
+	openapiplugin "github.com/orz-i/Mender/backend/internal/openapi/infrastructure/plugin"
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
 	providerconfigstore "github.com/orz-i/Mender/backend/internal/providerplugin/configstore"
 )
@@ -22,8 +27,8 @@ func TestRuntimeExposesBuiltInProviderPluginDescriptors(t *testing.T) {
 
 	runtime := newProviderTestRuntime(t)
 	descriptors := runtime.ProviderPluginDescriptors()
-	if len(descriptors) != 1 {
-		t.Fatalf("ProviderPluginDescriptors() len = %d, want 1", len(descriptors))
+	if len(descriptors) != 2 {
+		t.Fatalf("ProviderPluginDescriptors() len = %d, want 2", len(descriptors))
 	}
 	if descriptors[0].ID != mcpplugin.ID {
 		t.Fatalf(
@@ -38,6 +43,189 @@ func TestRuntimeExposesBuiltInProviderPluginDescriptors(t *testing.T) {
 			descriptors[0].ConfigVersion,
 			mcpplugin.ConfigVersion,
 		)
+	}
+	if descriptors[1].ID != openapiplugin.ID ||
+		descriptors[1].ConfigVersion != openapiplugin.ConfigVersion {
+		t.Fatalf("ProviderPluginDescriptors()[1] = %+v, want OpenAPI", descriptors[1])
+	}
+}
+
+func TestOpenAPIProviderRuntimeEndToEndAndRefreshPreservesToolID(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	var sourceRevision atomic.Int32
+	var apiCalls atomic.Int32
+	sourceRevision.Store(1)
+
+	var serverURL string
+	mux := http.NewServeMux()
+	mux.HandleFunc("/openapi.yaml", func(w http.ResponseWriter, _ *http.Request) {
+		revision := sourceRevision.Load()
+		if revision >= 3 {
+			spec := `openapi: 3.1.2
+info:
+  title: Demo
+  version: "1"
+servers:
+  - url: ` + serverURL + `
+paths: {}
+`
+			_, _ = w.Write([]byte(spec))
+			return
+		}
+		summary := "Echo v1"
+		if revision == 2 {
+			summary = "Echo v2"
+		}
+		spec := `openapi: 3.1.2
+info:
+  title: Demo
+  version: "1"
+servers:
+  - url: ` + serverURL + `
+paths:
+  /echo/{id}:
+    get:
+      operationId: echo
+      summary: ` + summary + `
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: q
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, q]
+                properties:
+                  id: { type: string }
+                  q: { type: string }
+`
+		_, _ = w.Write([]byte(spec))
+	})
+	mux.HandleFunc("/echo/", func(w http.ResponseWriter, r *http.Request) {
+		apiCalls.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"id": strings.TrimPrefix(r.URL.Path, "/echo/"),
+			"q":  r.URL.Query().Get("q"),
+		})
+	})
+	server := httptest.NewServer(mux)
+	serverURL = server.URL
+	t.Cleanup(server.Close)
+
+	runtime := newProviderTestRuntime(t)
+	rawConfig, err := json.Marshal(openapiplugin.Config{
+		Source: openapiplugin.SourceConfig{
+			Kind: openapiplugin.SourceURL,
+			URL:  server.URL + "/openapi.yaml",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider, err := runtime.RegisterConfiguredProvider(
+		ctx,
+		catalogapplication.RegisterProviderRequest{
+			Namespace:   "openapi-demo",
+			DisplayName: "OpenAPI Demo",
+		},
+		openapiplugin.ID,
+		rawConfig,
+	)
+	if err != nil {
+		t.Fatalf("RegisterConfiguredProvider() error = %v", err)
+	}
+	syncResult, err := runtime.SyncConfiguredProvider(ctx, provider.ID())
+	if err != nil {
+		t.Fatalf("SyncConfiguredProvider() error = %v", err)
+	}
+	if syncResult.Created != 1 || syncResult.Total != 1 {
+		t.Fatalf("initial sync = %+v", syncResult)
+	}
+
+	search, err := runtime.Catalog.SearchTools.Execute(
+		ctx,
+		catalogapplication.SearchToolsRequest{
+			Query:      "echo",
+			Limit:      10,
+			ProviderID: providerIDPtr(provider.ID()),
+		},
+	)
+	if err != nil || len(search) != 1 {
+		t.Fatalf("search = %+v err=%v", search, err)
+	}
+	toolID := search[0].ToolID
+	if search[0].Title != "Echo v1" {
+		t.Fatalf("initial title = %q", search[0].Title)
+	}
+
+	callContext, err := invocationdomain.NewInvocationContext(
+		invocationdomain.OriginInternal,
+		"openapi-runtime-test",
+		invocationdomain.CatalogExecutionScope(),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response, err := runtime.CallConfiguredTool(
+		ctx,
+		toolID,
+		[]byte(`{"path":{"id":"abc"},"query":{"q":"hello"}}`),
+		callContext,
+	)
+	if err != nil {
+		t.Fatalf("CallConfiguredTool() error = %v", err)
+	}
+	if response.Outcome.Kind() != invocationdomain.OutcomeKindComplete {
+		t.Fatalf("outcome = %#v", response.Outcome)
+	}
+	if apiCalls.Load() != 1 {
+		t.Fatalf("API calls = %d, want 1", apiCalls.Load())
+	}
+
+	sourceRevision.Store(2)
+	syncResult, err = runtime.SyncConfiguredProvider(ctx, provider.ID())
+	if err != nil {
+		t.Fatalf("refresh sync error = %v", err)
+	}
+	if syncResult.Updated != 1 || syncResult.Total != 1 {
+		t.Fatalf("refresh sync = %+v", syncResult)
+	}
+	search, err = runtime.Catalog.SearchTools.Execute(
+		ctx,
+		catalogapplication.SearchToolsRequest{
+			Query:      "echo",
+			Limit:      10,
+			ProviderID: providerIDPtr(provider.ID()),
+		},
+	)
+	if err != nil || len(search) != 1 {
+		t.Fatalf("refresh search = %+v err=%v", search, err)
+	}
+	if search[0].ToolID != toolID {
+		t.Fatalf("ToolID changed across SourceKey-stable refresh: %s -> %s", toolID, search[0].ToolID)
+	}
+	if search[0].Title != "Echo v2" {
+		t.Fatalf("refreshed title = %q", search[0].Title)
+	}
+
+	sourceRevision.Store(3)
+	syncResult, err = runtime.SyncConfiguredProvider(ctx, provider.ID())
+	if err != nil {
+		t.Fatalf("removal sync error = %v", err)
+	}
+	if syncResult.Removed != 1 || syncResult.Total != 0 {
+		t.Fatalf("removal sync = %+v", syncResult)
 	}
 }
 
