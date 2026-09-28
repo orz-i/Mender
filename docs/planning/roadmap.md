@@ -336,3 +336,19 @@ Goals:
 Exit criteria are complete. An independently built external Provider can be packaged, installed into the managed plugin root, discovered/configured through declarative schema metadata, synchronized into the canonical Catalog, invoked through the shared governance pipeline, disabled/enabled, and removed without adding its PluginID to Mender source code. Exact InstallationID pinning prevents silent package retargeting; CLI/OpenAPI/Wails/Web/Desktop management, the public Go SDK/example, process/package/Credential hardening, `pnpm check`, and `pnpm security:check` are all verified.
 
 See `phase-16-external-provider-plugin-host.md`.
+
+## Phase 17 — Provider Plugin Lifecycle & Runtime Resilience
+
+Status: In Progress
+
+Goals:
+
+- Recover configuration-identical external Provider instances after their plugin process exits, without replaying the failed invocation.
+- Bound external plugin control-plane RPCs with host-owned deadlines.
+- Persist verified external plugin descriptor snapshots so normal management discovery does not execute third-party code.
+- Persist normalized Provider configuration metadata such as Credential References and connection summary so Mender-owned governance remains available while plugins are unavailable.
+- Keep administrative enablement separate from runtime process/session health.
+- Add an explicit same-PluginID installation rebind that preserves ProviderID and SourceKey-stable ToolIDs.
+- Preserve exact InstallationID pinning: upgrades remain explicit and never follow latest automatically.
+
+See `phase-17-provider-plugin-resilience.md`.
