@@ -178,6 +178,13 @@ describe("management pages", () => {
       capabilities: [],
       enabled: true,
     };
+    const targetInstallationId = "pinst_1123456789abcdef0123456789abcdef";
+    const targetPlugin = {
+      ...plugin,
+      version: "1.3.0",
+      packageVersion: "1.3.0",
+      installationId: targetInstallationId,
+    };
     const provider = {
       providerId: "prov_external_echo",
       namespace: "external-echo",
@@ -210,6 +217,14 @@ describe("management pages", () => {
       provider,
       sync: { created: 0, updated: 1, removed: 0, total: 1 },
     });
+    const rebindProvider = vi.fn().mockResolvedValue({
+      provider: {
+        ...provider,
+        installationId: targetInstallationId,
+        connectionSummary: "External Echo · upgraded",
+      },
+      sync: { created: 0, updated: 1, removed: 0, total: 1 },
+    });
 
     renderApp("/providers", {
       listProviderPlugins: vi.fn().mockResolvedValue({
@@ -226,12 +241,14 @@ describe("management pages", () => {
             enabled: true,
           },
           plugin,
+          targetPlugin,
         ],
       }),
       listProviders,
       listCredentials: vi.fn().mockResolvedValue({ credentials: [credential] }),
       createProvider,
       updateProvider,
+      rebindProvider,
     });
 
     expect(await screen.findByText("No providers")).toBeTruthy();
@@ -282,6 +299,33 @@ describe("management pages", () => {
     expect(await screen.findByText("External Echo Provider")).toBeTruthy();
     expect(screen.getByText("External Echo · 1.2.3")).toBeTruthy();
     expect(screen.getByText("External Echo · production")).toBeTruthy();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Rebind external-echo" }),
+    );
+    expect(await screen.findByText("Rebind Provider installation")).toBeTruthy();
+    expect(
+      screen.getByLabelText<HTMLSelectElement>(
+        "Target Provider plugin installation",
+      ).value,
+    ).toBe(targetInstallationId);
+    expect(screen.getByLabelText<HTMLInputElement>("Endpoint").value).toBe(
+      "https://example.test/api",
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Rebind installation" }),
+    );
+    await waitFor(() => {
+      expect(rebindProvider).toHaveBeenCalledWith("prov_external_echo", {
+        installationId: targetInstallationId,
+        config: {
+          endpoint: "https://example.test/api",
+          credentialRef: "credential://external/work",
+          mode: "safe",
+          enabled: true,
+        },
+      });
+    });
 
     fireEvent.click(
       screen.getByRole("button", { name: "View external-echo" }),

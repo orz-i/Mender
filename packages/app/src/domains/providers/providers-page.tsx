@@ -169,6 +169,22 @@ function providerIsBuiltIn(provider: Provider, pluginId: string) {
   return provider.installationId === undefined && provider.pluginId === pluginId;
 }
 
+function providerRebindCandidates(
+  plugins: ProviderPlugin[],
+  provider: Provider,
+) {
+  if (!provider.installationId || !provider.pluginId) {
+    return [];
+  }
+  return plugins.filter(
+    (plugin) =>
+      plugin.sourceKind === "external" &&
+      plugin.pluginId === provider.pluginId &&
+      plugin.installationId !== undefined &&
+      plugin.installationId !== provider.installationId,
+  );
+}
+
 function providerSupportsFirstPartyAuthentication(provider: Provider) {
   return (
     provider.installationId === undefined &&
@@ -247,6 +263,9 @@ export function ProvidersPage({
   const [viewProvider, setViewProvider] = useState<Provider | null>(null);
   const [editProvider, setEditProvider] = useState<Provider | null>(null);
   const [editForm, setEditForm] = useState<ProviderFormState | null>(null);
+  const [rebindProvider, setRebindProvider] = useState<Provider | null>(null);
+  const [rebindPlugin, setRebindPlugin] = useState<ProviderPlugin | null>(null);
+  const [rebindConfig, setRebindConfig] = useState<Record<string, unknown>>({});
   const [authenticationProvider, setAuthenticationProvider] =
     useState<Provider | null>(null);
   const [authenticationForm, setAuthenticationForm] =
@@ -379,6 +398,54 @@ export function ProvidersPage({
       const message = errorMessage(reason);
       await refresh();
       setError(message);
+    } finally {
+      setBusy("");
+    }
+  }
+
+  function beginRebind(provider: Provider) {
+    const target = providerRebindCandidates(providerPlugins, provider)[0];
+    if (target === undefined) {
+      return;
+    }
+    const currentConfig = asRecord(provider.config);
+    setError("");
+    setRebindProvider(provider);
+    setRebindPlugin(target);
+    setRebindConfig(
+      currentConfig === null
+        ? genericConfigDefaults(target.configSchema)
+        : JSON.parse(JSON.stringify(currentConfig)) as Record<string, unknown>,
+    );
+  }
+
+  function closeRebind() {
+    setRebindProvider(null);
+    setRebindPlugin(null);
+    setRebindConfig({});
+  }
+
+  async function saveRebind() {
+    if (
+      rebindProvider === null ||
+      rebindPlugin === null ||
+      rebindPlugin.installationId === undefined
+    ) {
+      return;
+    }
+
+    setBusy(rebindProvider.providerId);
+    setError("");
+    try {
+      await client.rebindProvider(rebindProvider.providerId, {
+        installationId: rebindPlugin.installationId,
+        config: JSON.parse(JSON.stringify(rebindConfig)) as Record<string, unknown>,
+      });
+      closeRebind();
+      await refresh();
+      await refreshProviderPlugins();
+    } catch (reason) {
+      setError(errorMessage(reason));
     } finally {
       setBusy("");
     }
@@ -601,6 +668,20 @@ export function ProvidersPage({
                         >
                           Authentication
                         </Button>
+                        {providerRebindCandidates(
+                          providerPlugins,
+                          provider,
+                        ).length ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            aria-label={`Rebind ${provider.namespace}`}
+                            disabled={busy !== ""}
+                            onClick={() => beginRebind(provider)}
+                          >
+                            Rebind
+                          </Button>
+                        ) : null}
                         <Button
                           variant="outline"
                           size="sm"
@@ -713,7 +794,154 @@ export function ProvidersPage({
           onSubmit={() => void saveEdit()}
         />
       ) : null}
+
+      {rebindProvider !== null && rebindPlugin !== null ? (
+        <ProviderRebindDialog
+          open
+          provider={rebindProvider}
+          candidates={providerRebindCandidates(
+            providerPlugins,
+            rebindProvider,
+          )}
+          plugin={rebindPlugin}
+          config={rebindConfig}
+          credentials={credentials}
+          busy={busy === rebindProvider.providerId}
+          onOpenChange={(open) => {
+            if (!open) {
+              closeRebind();
+            }
+          }}
+          onPluginChange={(plugin) => {
+            setRebindPlugin(plugin);
+          }}
+          onConfigChange={setRebindConfig}
+          onSubmit={() => void saveRebind()}
+        />
+      ) : null}
     </>
+  );
+}
+
+function ProviderRebindDialog({
+  open,
+  provider,
+  candidates,
+  plugin,
+  config,
+  credentials,
+  busy,
+  onOpenChange,
+  onPluginChange,
+  onConfigChange,
+  onSubmit,
+}: {
+  open: boolean;
+  provider: Provider;
+  candidates: ProviderPlugin[];
+  plugin: ProviderPlugin;
+  config: Record<string, unknown>;
+  credentials: Credential[];
+  busy: boolean;
+  onOpenChange: (open: boolean) => void;
+  onPluginChange: (plugin: ProviderPlugin) => void;
+  onConfigChange: (value: Record<string, unknown>) => void;
+  onSubmit: () => void;
+}) {
+  const validationError = genericConfigValidationError(
+    plugin.configSchema,
+    config,
+  );
+  const selectedInstallationId = plugin.installationId ?? "";
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-xl">
+        <DialogHeader>
+          <DialogTitle>Rebind Provider installation</DialogTitle>
+          <DialogDescription>
+            Move this Provider to another exact installation of the same plugin.
+            Provider identity and SourceKey-stable Tool identities remain unchanged.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <ReadOnlyField label="Provider" value={provider.namespace} />
+            <ReadOnlyField
+              label="Current installation"
+              value={provider.installationId ?? "Unavailable"}
+            />
+          </div>
+
+          <Field label="Target installation">
+            <select
+              aria-label="Target Provider plugin installation"
+              value={selectedInstallationId}
+              onChange={(event) => {
+                const selected = candidates.find(
+                  (candidate) =>
+                    candidate.installationId === event.target.value,
+                );
+                if (selected !== undefined) {
+                  onPluginChange(selected);
+                }
+              }}
+              className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus:ring-2 focus:ring-ring/40"
+            >
+              {candidates.map((candidate) => (
+                <option
+                  key={providerPluginSelectionKey(candidate)}
+                  value={candidate.installationId}
+                >
+                  {candidate.packageVersion + " · " + candidate.installationId}
+                </option>
+              ))}
+            </select>
+          </Field>
+
+          <div className="grid grid-cols-2 gap-3">
+            <ReadOnlyField label="Plugin" value={plugin.pluginId} />
+            <ReadOnlyField
+              label="Target package version"
+              value={plugin.packageVersion}
+            />
+          </div>
+
+          <div className="rounded-lg border border-border bg-muted/30 p-3">
+            <div className="text-sm font-medium">Target configuration</div>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+              The current configuration is carried forward for review. Update it
+              when the target package requires a different configuration contract.
+            </p>
+          </div>
+
+          <GenericProviderConfigForm
+            key={providerPluginSelectionKey(plugin)}
+            schema={plugin.configSchema}
+            uiSchema={plugin.uiSchema}
+            value={config}
+            credentials={credentials}
+            onChange={onConfigChange}
+          />
+          {validationError ? (
+            <p className="text-xs text-destructive">{validationError}</p>
+          ) : null}
+        </div>
+
+        <DialogFooter>
+          <DialogClose render={<Button variant="outline" />}>
+            Cancel
+          </DialogClose>
+          <Button
+            disabled={busy || validationError !== null}
+            onClick={onSubmit}
+          >
+            {busy ? "Rebinding…" : "Rebind installation"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
