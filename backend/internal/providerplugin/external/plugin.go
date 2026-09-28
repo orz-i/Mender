@@ -405,6 +405,9 @@ func (i *Instance) Execute(
 		},
 	)
 	if err != nil {
+		if ctx.Err() != nil {
+			return invocationdomain.Outcome{}, ctx.Err()
+		}
 		return invocationdomain.Outcome{}, fmt.Errorf(
 			"execute external provider tool %q: rpc: %s",
 			sourceKey,
@@ -425,6 +428,9 @@ func (i *Instance) Execute(
 			break
 		}
 		if recvErr != nil {
+			if ctx.Err() != nil {
+				return invocationdomain.Outcome{}, ctx.Err()
+			}
 			return invocationdomain.Outcome{}, fmt.Errorf(
 				"execute external provider tool %q: receive: %s",
 				sourceKey,

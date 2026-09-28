@@ -33,8 +33,12 @@ func TestMain(m *testing.M) {
 		if strings.Contains(mode, "slow") {
 			time.Sleep(750 * time.Millisecond)
 		}
-		if strings.Contains(mode, "crash") {
+		if strings.Contains(mode, "startupcrash") {
 			os.Exit(23)
+		}
+		if strings.Contains(mode, "badhandshake") {
+			_, _ = fmt.Fprintln(os.Stdout, "not-a-mender-plugin-handshake")
+			os.Exit(25)
 		}
 		server := &helperPluginServer{
 			mode:     mode,
@@ -158,7 +162,7 @@ func TestSupervisorRejectsExecutableChecksumMismatch(t *testing.T) {
 func TestSupervisorReportsPluginCrashDuringStartup(t *testing.T) {
 	t.Parallel()
 
-	installation, resolved := testExternalInstallation(t, "crash")
+	installation, resolved := testExternalInstallation(t, "startupcrash")
 	resolver := &fakePackageResolver{resolved: resolved}
 	supervisor, err := NewSupervisor(resolver, Options{
 		StartTimeout:      time.Second,
@@ -179,7 +183,7 @@ func TestSupervisorReportsPluginCrashDuringStartup(t *testing.T) {
 func TestSupervisorRejectsDescriptorIdentityMismatch(t *testing.T) {
 	t.Parallel()
 
-	installation, resolved := testExternalInstallation(t, "mismatch")
+	installation, resolved := testExternalInstallation(t, "idmismatch")
 	resolver := &fakePackageResolver{resolved: resolved}
 	supervisor, err := NewSupervisor(resolver, DefaultOptions())
 	if err != nil {
@@ -190,6 +194,80 @@ func TestSupervisorRejectsDescriptorIdentityMismatch(t *testing.T) {
 	_, err = supervisor.Ensure(context.Background(), installation)
 	if err == nil || !strings.Contains(err.Error(), "descriptor plugin id mismatch") {
 		t.Fatalf("Ensure() error = %v", err)
+	}
+}
+
+func TestSupervisorRejectsInvalidHandshake(t *testing.T) {
+	t.Parallel()
+
+	installation, resolved := testExternalInstallation(t, "badhandshake")
+	resolver := &fakePackageResolver{resolved: resolved}
+	supervisor, err := NewSupervisor(resolver, Options{
+		StartTimeout:      time.Second,
+		DescriptorTimeout: time.Second,
+		MaxStderrBytes:    1024,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = supervisor.CloseAll() })
+
+	if _, err := supervisor.Ensure(context.Background(), installation); err == nil {
+		t.Fatal("Ensure() error = nil")
+	}
+}
+
+func TestSupervisorRejectsPackageVersionMismatch(t *testing.T) {
+	t.Parallel()
+
+	installation, resolved := testExternalInstallation(t, "versionmismatch")
+	resolver := &fakePackageResolver{resolved: resolved}
+	supervisor, err := NewSupervisor(resolver, DefaultOptions())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = supervisor.CloseAll() })
+
+	_, err = supervisor.Ensure(context.Background(), installation)
+	if err == nil || !strings.Contains(err.Error(), "package version mismatch") {
+		t.Fatalf("Ensure() error = %v", err)
+	}
+}
+
+func TestSupervisorRejectsUnsupportedProtocolBeforeLaunch(t *testing.T) {
+	t.Parallel()
+
+	installation, resolved := testExternalInstallation(t, "good")
+	resolved.Manifest.ProtocolVersions = []uint32{99}
+	resolver := &fakePackageResolver{resolved: resolved}
+	supervisor, err := NewSupervisor(resolver, DefaultOptions())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = supervisor.CloseAll() })
+
+	if _, err := supervisor.Ensure(context.Background(), installation); err == nil ||
+		!strings.Contains(err.Error(), "no mutually supported version") {
+		t.Fatalf("Ensure() error = %v", err)
+	}
+	if resolver.CallCount() != 1 {
+		t.Fatalf("Resolve() calls = %d, want 1", resolver.CallCount())
+	}
+}
+
+func TestSupervisorRejectsOversizedDescriptorMessage(t *testing.T) {
+	t.Parallel()
+
+	installation, resolved := testExternalInstallation(t, "oversizeddescriptor")
+	resolver := &fakePackageResolver{resolved: resolved}
+	supervisor, err := NewSupervisor(resolver, DefaultOptions())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = supervisor.CloseAll() })
+
+	if _, err := supervisor.Ensure(context.Background(), installation); err == nil {
+		t.Fatal("Ensure() error = nil")
 	}
 }
 
@@ -327,17 +405,31 @@ func (s *helperPluginServer) GetDescriptor(
 	_ *providerv1.GetDescriptorRequest,
 ) (*providerv1.GetDescriptorResponse, error) {
 	pluginID := "dev.example.echo"
-	if strings.Contains(s.mode, "mismatch") {
+	if strings.Contains(s.mode, "idmismatch") {
 		pluginID = "dev.example.other"
+	}
+	packageVersion := "1.0.0"
+	if strings.Contains(s.mode, "versionmismatch") ||
+		strings.Contains(s.mode, "version2") {
+		packageVersion = "2.0.0"
+	}
+	description := "Test Provider plugin"
+	if strings.Contains(s.mode, "oversizeddescriptor") {
+		description = strings.Repeat("x", plugintransport.MaxMessageBytes+1024)
+	}
+	configSchema := []byte(`{"type":"object"}`)
+	if strings.Contains(s.mode, "invalidschema") {
+		configSchema = []byte("{")
 	}
 	return &providerv1.GetDescriptorResponse{
 		Descriptor_: &providerv1.Descriptor{
-			PluginId:        pluginID,
-			PackageVersion:  "1.0.0",
-			DisplayName:     "Example Echo",
-			Description:     "Test Provider plugin",
-			ProtocolVersion: pluginprotocol.Version1,
-			ConfigVersion:   1,
+			PluginId:         pluginID,
+			PackageVersion:   packageVersion,
+			DisplayName:      "Example Echo",
+			Description:      description,
+			ProtocolVersion:  pluginprotocol.Version1,
+			ConfigVersion:    1,
+			ConfigSchemaJson: configSchema,
 		},
 	}, nil
 }
@@ -432,6 +524,9 @@ func (s *helperPluginServer) ListTools(
 	_ context.Context,
 	request *providerv1.ListToolsRequest,
 ) (*providerv1.ListToolsResponse, error) {
+	if strings.Contains(s.mode, "crashlist") {
+		os.Exit(31)
+	}
 	session, ok := s.helperSession(request.GetSessionId())
 	if !ok {
 		return nil, status.Error(codes.NotFound, "session not found")
@@ -449,34 +544,48 @@ func (s *helperPluginServer) ListTools(
 	if strings.Contains(s.mode, "toolundeclared") {
 		credentialRefs = append(credentialRefs, "credential://demo/other")
 	}
-	return &providerv1.ListToolsResponse{
-		Tools: []*providerv1.ToolDescriptor{{
-			SourceKey:   "echo",
-			Name:        "echo",
-			Title:       "Echo",
-			Description: "Echo one value through the helper plugin",
-			InputSchemaJson: []byte(`{
-				"type":"object",
-				"additionalProperties":false,
-				"properties":{
-					"value":{},
-					"mode":{"type":"string"}
-				}
-			}`),
-			OutputSchemaJson: []byte(`{
-				"type":"object",
-				"properties":{"echo":{}}
-			}`),
-			Tags:           []string{"external", "test"},
-			CredentialRefs: credentialRefs,
-		}},
-	}, nil
+	inputSchema := []byte(`{
+		"type":"object",
+		"additionalProperties":false,
+		"properties":{
+			"value":{},
+			"mode":{"type":"string"}
+		}
+	}`)
+	if strings.Contains(s.mode, "invalidtoolschema") {
+		inputSchema = []byte("{")
+	}
+	tool := &providerv1.ToolDescriptor{
+		SourceKey:        "echo",
+		Name:             "echo",
+		Title:            "Echo",
+		Description:      "Echo one value through the helper plugin",
+		InputSchemaJson:  inputSchema,
+		OutputSchemaJson: []byte(`{"type":"object","properties":{"echo":{}}}`),
+		Tags:             []string{"external", "test"},
+		CredentialRefs:   credentialRefs,
+	}
+	tools := []*providerv1.ToolDescriptor{tool}
+	if strings.Contains(s.mode, "duplicatetools") {
+		tools = append(tools, tool)
+	}
+	return &providerv1.ListToolsResponse{Tools: tools}, nil
 }
 
 func (s *helperPluginServer) ExecuteTool(
 	request *providerv1.ExecuteToolRequest,
 	stream grpc.ServerStreamingServer[providerv1.ExecuteToolResponse],
 ) error {
+	if strings.Contains(s.mode, "crashexec") {
+		os.Exit(32)
+	}
+	if strings.Contains(s.mode, "slowexec") {
+		select {
+		case <-time.After(time.Second):
+		case <-stream.Context().Done():
+			return stream.Context().Err()
+		}
+	}
 	session, ok := s.helperSession(request.GetSessionId())
 	if !ok {
 		return status.Error(codes.NotFound, "session not found")
@@ -618,6 +727,23 @@ func testExternalInstallation(
 	mode string,
 ) (installationdomain.Installation, installationapplication.ResolvedPackage) {
 	t.Helper()
+	return testExternalInstallationVersion(
+		t,
+		mode,
+		"pinst_0123456789abcdef0123456789abcdef",
+		"1.0.0",
+		"a",
+	)
+}
+
+func testExternalInstallationVersion(
+	t *testing.T,
+	mode string,
+	rawID string,
+	packageVersion string,
+	digestRune string,
+) (installationdomain.Installation, installationapplication.ResolvedPackage) {
+	t.Helper()
 
 	executable := copyTestExecutable(t, mode)
 	content, err := os.ReadFile(executable) // #nosec G304 -- test helper path is created by copyTestExecutable.
@@ -630,9 +756,7 @@ func testExternalInstallation(
 	if err != nil {
 		t.Fatal(err)
 	}
-	id, err := installationdomain.ParseInstallationID(
-		"pinst_0123456789abcdef0123456789abcdef",
-	)
+	id, err := installationdomain.ParseInstallationID(rawID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -643,7 +767,7 @@ func testExternalInstallation(
 	manifestJSON := []byte(`{
 		"manifestVersion": 1,
 		"pluginId": "dev.example.echo",
-		"version": "1.0.0",
+		"version": "` + packageVersion + `",
 		"protocolVersions": [1],
 		"displayName": "Example Echo",
 		"description": "Test Provider plugin",
@@ -652,10 +776,10 @@ func testExternalInstallation(
 	installation, err := installationdomain.NewInstallation(
 		id,
 		pluginID,
-		"1.0.0",
+		packageVersion,
 		installationdomain.SourceLocal,
 		filepath.Dir(executable),
-		"sha256:"+strings.Repeat("a", 64),
+		"sha256:"+strings.Repeat(digestRune, 64),
 		manifestJSON,
 		installationdomain.StatusEnabled,
 		time.Date(2026, 9, 28, 4, 0, 0, 0, time.UTC),

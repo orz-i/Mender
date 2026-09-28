@@ -170,6 +170,16 @@ func TestExternalPluginLifecycleAndOutcomeMapping(t *testing.T) {
 	}
 }
 
+func TestExternalPluginRejectsOversizedConfigBeforeRPC(t *testing.T) {
+	t.Parallel()
+
+	raw := json.RawMessage(bytes.Repeat([]byte(" "), maxExternalConfigBytes+1))
+	if err := validateExternalConfig(raw); err == nil ||
+		!strings.Contains(err.Error(), "exceeds") {
+		t.Fatalf("validateExternalConfig() error = %v", err)
+	}
+}
+
 func TestExternalPluginRejectsInvalidAndUndeclaredCredentialMetadata(t *testing.T) {
 	t.Parallel()
 
@@ -227,6 +237,156 @@ func TestExternalPluginRejectsToolCredentialOutsideProviderDeclaration(t *testin
 	if err == nil ||
 		!strings.Contains(err.Error(), "was not declared by Provider config") {
 		t.Fatalf("Open() error = %v", err)
+	}
+}
+
+func TestExternalPluginRejectsInvalidDescriptorSchema(t *testing.T) {
+	t.Parallel()
+
+	installation, resolved := testExternalInstallation(t, "invalidschema")
+	resolver := &fakePackageResolver{resolved: resolved}
+	supervisor, err := NewSupervisor(resolver, DefaultOptions())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = supervisor.CloseAll() })
+
+	if _, err := NewPlugin(t.Context(), installation, supervisor); err == nil ||
+		!strings.Contains(err.Error(), "config schema") {
+		t.Fatalf("NewPlugin() error = %v", err)
+	}
+}
+
+func TestExternalPluginFailsClosedWhenListToolsProcessCrashes(t *testing.T) {
+	t.Parallel()
+
+	plugin, supervisor := newTestExternalPlugin(t, "crashlist")
+	t.Cleanup(func() { _ = supervisor.CloseAll() })
+
+	providerID, _ := catalogdomain.ParseProviderID(
+		"prov_0123456789abcdef0123456789abcdef",
+	)
+	_, err := plugin.Open(
+		t.Context(),
+		providerplugin.OpenRequest{
+			ProviderID:    providerID,
+			ConfigVersion: 1,
+			Config:        json.RawMessage("{}"),
+		},
+	)
+	if err == nil || !strings.Contains(err.Error(), "list tools") {
+		t.Fatalf("Open() error = %v", err)
+	}
+}
+
+func TestExternalPluginRejectsDuplicateAndInvalidToolDescriptors(t *testing.T) {
+	t.Parallel()
+
+	for _, mode := range []string{"duplicatetools", "invalidtoolschema"} {
+		t.Run(mode, func(t *testing.T) {
+			t.Parallel()
+
+			plugin, supervisor := newTestExternalPlugin(t, mode)
+			t.Cleanup(func() { _ = supervisor.CloseAll() })
+			providerID, _ := catalogdomain.ParseProviderID(
+				"prov_0123456789abcdef0123456789abcdef",
+			)
+			_, err := plugin.Open(
+				t.Context(),
+				providerplugin.OpenRequest{
+					ProviderID:    providerID,
+					ConfigVersion: 1,
+					Config:        json.RawMessage("{}"),
+				},
+			)
+			if err == nil {
+				t.Fatalf("Open(%s) error = nil", mode)
+			}
+		})
+	}
+}
+
+func TestExternalInstanceFailsClosedWhenExecuteProcessCrashes(t *testing.T) {
+	t.Parallel()
+
+	plugin, supervisor := newTestExternalPlugin(t, "crashexec")
+	t.Cleanup(func() { _ = supervisor.CloseAll() })
+
+	providerID, _ := catalogdomain.ParseProviderID(
+		"prov_0123456789abcdef0123456789abcdef",
+	)
+	instanceRaw, err := plugin.Open(
+		t.Context(),
+		providerplugin.OpenRequest{
+			ProviderID:    providerID,
+			ConfigVersion: 1,
+			Config:        json.RawMessage("{}"),
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	instance := instanceRaw.(*Instance)
+	tools, err := instance.DiscoverTools(t.Context(), catalogdomain.Provider{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tool := externalToolFromDiscovery(t, providerID, tools[0])
+
+	_, err = executeExternalToolRaw(
+		t,
+		instance,
+		tool,
+		nil,
+		&testProgressReporter{},
+		map[string]any{"value": "crash"},
+	)
+	if err == nil {
+		t.Fatal("Execute() error = nil")
+	}
+}
+
+func TestExternalInstancePropagatesExecutionDeadline(t *testing.T) {
+	t.Parallel()
+
+	plugin, supervisor := newTestExternalPlugin(t, "slowexec")
+	t.Cleanup(func() { _ = supervisor.CloseAll() })
+
+	providerID, _ := catalogdomain.ParseProviderID(
+		"prov_0123456789abcdef0123456789abcdef",
+	)
+	instanceRaw, err := plugin.Open(
+		t.Context(),
+		providerplugin.OpenRequest{
+			ProviderID:    providerID,
+			ConfigVersion: 1,
+			Config:        json.RawMessage("{}"),
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	instance := instanceRaw.(*Instance)
+	t.Cleanup(func() { _ = instance.Close() })
+	tools, err := instance.DiscoverTools(t.Context(), catalogdomain.Provider{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tool := externalToolFromDiscovery(t, providerID, tools[0])
+
+	ctx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
+	defer cancel()
+	_, err = executeExternalToolRawContext(
+		t,
+		ctx,
+		instance,
+		tool,
+		nil,
+		&testProgressReporter{},
+		map[string]any{"value": "slow"},
+	)
+	if err == nil || !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("Execute() error = %v", err)
 	}
 }
 
@@ -402,6 +562,27 @@ func executeExternalToolRaw(
 	arguments any,
 ) (invocationdomain.Outcome, error) {
 	t.Helper()
+	return executeExternalToolRawContext(
+		t,
+		t.Context(),
+		instance,
+		tool,
+		resolver,
+		reporter,
+		arguments,
+	)
+}
+
+func executeExternalToolRawContext(
+	t *testing.T,
+	ctx context.Context,
+	instance *Instance,
+	tool catalogdomain.Tool,
+	resolver invocationapplication.CredentialResolver,
+	reporter invocationapplication.ProgressReporter,
+	arguments any,
+) (invocationdomain.Outcome, error) {
+	t.Helper()
 
 	raw, err := json.Marshal(arguments)
 	if err != nil {
@@ -418,7 +599,7 @@ func executeExternalToolRaw(
 		t.Fatal(err)
 	}
 	return instance.Execute(
-		t.Context(),
+		ctx,
 		invocationapplication.ExecutionRequest{
 			InvocationID: invocationID,
 			Tool:         tool,

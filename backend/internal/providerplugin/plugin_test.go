@@ -1,6 +1,8 @@
 package providerplugin
 
 import (
+	"encoding/json"
+	"strings"
 	"testing"
 
 	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
@@ -96,5 +98,13 @@ func TestDescriptorValidate(t *testing.T) {
 	invalid.ConfigVersion = 0
 	if err := invalid.Validate(); err == nil {
 		t.Fatal("Validate() error = nil, want invalid config version")
+	}
+
+	oversized := valid
+	oversized.ConfigSchema = json.RawMessage(
+		strings.Repeat(" ", maxDescriptorSchemaBytes+1),
+	)
+	if err := oversized.Validate(); err == nil {
+		t.Fatal("Validate() accepted oversized config schema")
 	}
 }

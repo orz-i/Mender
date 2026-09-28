@@ -11,6 +11,7 @@ import (
 	hclog "github.com/hashicorp/go-hclog"
 	plugin "github.com/hashicorp/go-plugin"
 	providerv1 "github.com/orz-i/Mender/sdk/providerplugin/go/protocol/v1"
+	"google.golang.org/grpc"
 )
 
 // ClientOptions configures one Mender-owned native Provider plugin process.
@@ -69,6 +70,12 @@ func StartClient(options ClientOptions) (*Client, error) {
 		AutoMTLS:            true,
 		SkipHostEnv:         true,
 		GRPCBrokerMultiplex: false,
+		GRPCDialOptions: []grpc.DialOption{
+			grpc.WithDefaultCallOptions(
+				grpc.MaxCallRecvMsgSize(MaxMessageBytes),
+				grpc.MaxCallSendMsgSize(MaxMessageBytes),
+			),
+		},
 	})
 	rpcClient, err := process.Client()
 	if err != nil {

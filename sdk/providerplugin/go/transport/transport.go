@@ -10,7 +10,11 @@ import (
 	"google.golang.org/grpc"
 )
 
-const PluginName = "provider"
+const (
+	PluginName = "provider"
+	// MaxMessageBytes bounds one Provider Plugin Protocol gRPC message in either direction.
+	MaxMessageBytes = 16 * 1024 * 1024
+)
 
 var Handshake = plugin.HandshakeConfig{
 	MagicCookieKey:   "MENDER_PROVIDER_PLUGIN",
@@ -94,6 +98,15 @@ func ServerConfig(
 	return &plugin.ServeConfig{
 		HandshakeConfig:  Handshake,
 		VersionedPlugins: sets,
-		GRPCServer:       plugin.DefaultGRPCServer,
+		GRPCServer:       boundedGRPCServer,
 	}, nil
+}
+
+func boundedGRPCServer(options []grpc.ServerOption) *grpc.Server {
+	options = append(
+		options,
+		grpc.MaxRecvMsgSize(MaxMessageBytes),
+		grpc.MaxSendMsgSize(MaxMessageBytes),
+	)
+	return grpc.NewServer(options...)
 }

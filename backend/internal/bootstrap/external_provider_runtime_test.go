@@ -49,10 +49,11 @@ func TestRuntimeInstalledExternalProviderEndToEnd(t *testing.T) {
 		t.Fatalf("build external plugin example: %v\n%s", err, output)
 	}
 
-	manifestJSON, err := os.ReadFile(filepath.Join(exampleRoot, manifest.FileName))
+	manifestJSON, err := os.ReadFile(filepath.Join(exampleRoot, manifest.FileName)) // #nosec G304 -- fixed repository example manifest path.
 	if err != nil {
 		t.Fatalf("read example manifest: %v", err)
 	}
+	// #nosec G703 -- destination is a fixed filename under t.TempDir.
 	if err := os.WriteFile(
 		filepath.Join(sourceRoot, manifest.FileName),
 		manifestJSON,
@@ -252,16 +253,26 @@ func TestRuntimeInstalledExternalProviderEndToEnd(t *testing.T) {
 	) {
 		t.Fatalf("RemoveProviderPluginInstallation(in use) error = %v", err)
 	}
+	process, err := runtime.externalProcesses.Ensure(ctx, installation)
+	if err != nil {
+		t.Fatalf("ensure external process before Runtime.Close(): %v", err)
+	}
 	if err := runtime.DeleteConfiguredProvider(ctx, provider.ID()); err != nil {
 		t.Fatalf("DeleteConfiguredProvider() error = %v", err)
 	}
-	if err := runtime.RemoveProviderPluginInstallation(ctx, installationID); err != nil {
-		t.Fatalf("RemoveProviderPluginInstallation() error = %v", err)
+	if process.Exited() {
+		t.Fatal("deleting Provider unexpectedly terminated shared package process")
 	}
 	if err := runtime.Close(); err != nil {
 		t.Fatalf("Runtime.Close() error = %v", err)
 	}
 	closed = true
+	if !process.Exited() {
+		t.Fatal("Runtime.Close() left external plugin process running")
+	}
+	if err := runtime.pluginPackages.Remove(context.Background(), installationID); err != nil {
+		t.Fatalf("remove managed package after Runtime.Close(): %v", err)
+	}
 }
 
 func bootstrapRepositoryRoot(t *testing.T) string {

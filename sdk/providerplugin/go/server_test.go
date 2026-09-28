@@ -4,9 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 
 	providerv1 "github.com/orz-i/Mender/sdk/providerplugin/go/protocol/v1"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
 )
 
 func TestProtocolServerMapsDescriptorAndValidation(t *testing.T) {
@@ -66,6 +69,53 @@ func TestCredentialHelpersCopyAndZero(t *testing.T) {
 	}
 }
 
+func TestEventSenderEnforcesExactlyOneTerminalEvent(t *testing.T) {
+	t.Parallel()
+
+	stream := &testExecutionStream{ctx: context.Background()}
+	sender := &streamSender{stream: stream}
+
+	if err := sender.Progress("working"); err != nil {
+		t.Fatal(err)
+	}
+	if err := sender.Complete(json.RawMessage(`{"ok":true}`)); err != nil {
+		t.Fatal(err)
+	}
+	if !sender.terminalSent() {
+		t.Fatal("terminalSent() = false")
+	}
+	if err := sender.ToolFailure("second terminal"); err == nil {
+		t.Fatal("second terminal event error = nil")
+	}
+	if err := sender.Progress("too late"); err == nil {
+		t.Fatal("progress after terminal error = nil")
+	}
+	if len(stream.sent) != 2 {
+		t.Fatalf("sent event count = %d, want 2", len(stream.sent))
+	}
+}
+
+func TestProtocolServerRejectsExecutionWithoutTerminalEvent(t *testing.T) {
+	t.Parallel()
+
+	server := &protocolServer{
+		plugin: &noTerminalPlugin{testPlugin: &testPlugin{}},
+	}
+	stream := &testExecutionStream{ctx: context.Background()}
+	err := server.ExecuteTool(
+		&providerv1.ExecuteToolRequest{
+			SessionId:     "session",
+			InvocationId:  "invocation",
+			SourceKey:     "echo",
+			ArgumentsJson: []byte("{}"),
+		},
+		stream,
+	)
+	if err == nil || !strings.Contains(err.Error(), "without a terminal event") {
+		t.Fatalf("ExecuteTool() error = %v", err)
+	}
+}
+
 func TestValidateDescriptorRejectsInvalidSchema(t *testing.T) {
 	t.Parallel()
 
@@ -74,6 +124,54 @@ func TestValidateDescriptorRejectsInvalidSchema(t *testing.T) {
 	if err := validateDescriptor(descriptor); err == nil {
 		t.Fatal("validateDescriptor() error = nil")
 	}
+}
+
+type testExecutionStream struct {
+	ctx  context.Context
+	sent []*providerv1.ExecuteToolResponse
+}
+
+func (s *testExecutionStream) Send(
+	response *providerv1.ExecuteToolResponse,
+) error {
+	s.sent = append(s.sent, response)
+	return nil
+}
+
+func (*testExecutionStream) SetHeader(metadata.MD) error {
+	return nil
+}
+
+func (*testExecutionStream) SendHeader(metadata.MD) error {
+	return nil
+}
+
+func (*testExecutionStream) SetTrailer(metadata.MD) {}
+
+func (s *testExecutionStream) Context() context.Context {
+	return s.ctx
+}
+
+func (*testExecutionStream) SendMsg(any) error {
+	return nil
+}
+
+func (*testExecutionStream) RecvMsg(any) error {
+	return nil
+}
+
+var _ grpc.ServerStreamingServer[providerv1.ExecuteToolResponse] = (*testExecutionStream)(nil)
+
+type noTerminalPlugin struct {
+	*testPlugin
+}
+
+func (*noTerminalPlugin) ExecuteTool(
+	context.Context,
+	ExecuteRequest,
+	EventSender,
+) error {
+	return nil
 }
 
 type testPlugin struct{}
