@@ -39,9 +39,11 @@ import { Textarea } from "@mender/ui/components/textarea";
 import { EmptyState, ErrorNotice, PageHeader } from "../../shared/page";
 
 const MCP_PLUGIN_ID = "io.mender.provider.mcp";
+const MODEL_TOOLS_PLUGIN_ID = "io.mender.provider.model-tools";
 const OPENAPI_PLUGIN_ID = "io.mender.provider.openapi";
 
 type ProviderTransport = "http" | "stdio";
+type ModelToolsEngine = "openai" | "anthropic" | "gemini";
 type OpenAPISourceKind = "url" | "file";
 type CredentialHeaderBinding = NonNullable<Provider["credentialHeaders"]>[number];
 type CredentialEnvironmentBinding = NonNullable<
@@ -74,6 +76,9 @@ interface ProviderFormState {
   openapiInclude: string;
   openapiExclude: string;
   openapiCredentials: OpenAPICredentialBinding[];
+  modelToolsEngine: ModelToolsEngine;
+  modelToolsModel: string;
+  modelToolsCredentialRef: string;
 }
 
 const emptyProviderForm: ProviderFormState = {
@@ -97,6 +102,9 @@ const emptyProviderForm: ProviderFormState = {
   openapiInclude: "",
   openapiExclude: "",
   openapiCredentials: [],
+  modelToolsEngine: "openai",
+  modelToolsModel: "",
+  modelToolsCredentialRef: "",
 };
 
 export function ProvidersPage({ client }: { client: MenderClient }) {
@@ -282,7 +290,8 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
   function openProviderAuthentication(provider: Provider) {
     if (
       provider.pluginId !== MCP_PLUGIN_ID &&
-      provider.pluginId !== OPENAPI_PLUGIN_ID
+      provider.pluginId !== OPENAPI_PLUGIN_ID &&
+      provider.pluginId !== MODEL_TOOLS_PLUGIN_ID
     ) {
       return;
     }
@@ -438,7 +447,8 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
                           disabled={
                             busy !== "" ||
                             (provider.pluginId !== MCP_PLUGIN_ID &&
-                              provider.pluginId !== OPENAPI_PLUGIN_ID)
+                              provider.pluginId !== OPENAPI_PLUGIN_ID &&
+                              provider.pluginId !== MODEL_TOOLS_PLUGIN_ID)
                           }
                           onClick={() => openProviderAuthentication(provider)}
                         >
@@ -576,7 +586,10 @@ function ProviderFormDialog({
         ? form.openapiSourceKind === "url"
           ? form.openapiSpecUrl.trim() !== ""
           : form.openapiSpecFile.trim() !== ""
-        : false);
+        : form.pluginId === MODEL_TOOLS_PLUGIN_ID
+          ? form.modelToolsModel.trim() !== "" &&
+            form.modelToolsCredentialRef.trim() !== ""
+          : false);
 
   return (
     <Dialog
@@ -657,6 +670,29 @@ function ProviderFormDialog({
                 </Button>
               </div>
             </div>
+          ) : form.pluginId === MODEL_TOOLS_PLUGIN_ID ? (
+            <div>
+              <div className="mb-2 text-sm font-medium">Model tool engine</div>
+              <div className="grid grid-cols-3 gap-2">
+                {(["openai", "anthropic", "gemini"] as const).map(
+                  (engine) => (
+                    <Button
+                      key={engine}
+                      type="button"
+                      variant={
+                        form.modelToolsEngine === engine ? "default" : "outline"
+                      }
+                      aria-pressed={form.modelToolsEngine === engine}
+                      onClick={() =>
+                        onChange({ ...form, modelToolsEngine: engine })
+                      }
+                    >
+                      {modelToolsEngineLabel(engine)}
+                    </Button>
+                  ),
+                )}
+              </div>
+            </div>
           ) : form.pluginId === OPENAPI_PLUGIN_ID ? (
             <div>
               <div className="mb-2 text-sm font-medium">OpenAPI description</div>
@@ -725,6 +761,25 @@ function ProviderFormDialog({
               }
             />
           </Field>
+
+          {form.pluginId === MODEL_TOOLS_PLUGIN_ID ? (
+            <>
+              <Field label="Model">
+                <Input
+                  aria-label="Model Tools model"
+                  placeholder={modelToolsModelPlaceholder(form.modelToolsEngine)}
+                  value={form.modelToolsModel}
+                  onChange={(event) =>
+                    onChange({ ...form, modelToolsModel: event.target.value })
+                  }
+                />
+              </Field>
+              <ReadOnlyField label="Capability" value="Web search" />
+              <p className="text-xs leading-5 text-muted-foreground">
+                Mender exposes one stable web_search Tool. The selected model must execute the provider-hosted search tool; model-only answers are rejected.
+              </p>
+            </>
+          ) : null}
 
           {form.pluginId === MCP_PLUGIN_ID ? (
             form.transport === "http" ? (
@@ -947,7 +1002,8 @@ function ProviderFormDialog({
           </DialogClose>
           {onAuthentication !== undefined &&
           (form.pluginId === MCP_PLUGIN_ID ||
-            form.pluginId === OPENAPI_PLUGIN_ID) ? (
+            form.pluginId === OPENAPI_PLUGIN_ID ||
+            form.pluginId === MODEL_TOOLS_PLUGIN_ID) ? (
             <Button
               type="button"
               variant="outline"
@@ -1056,7 +1112,35 @@ function ProviderAuthenticationDialog({
 
         {credentials.length ? (
           <div className="space-y-4">
-            {form.pluginId === OPENAPI_PLUGIN_ID ? (
+            {form.pluginId === MODEL_TOOLS_PLUGIN_ID ? (
+              <>
+                <p className="text-xs leading-5 text-muted-foreground">
+                  Select the inventory Credential used to authenticate the configured model API. The secret is resolved only during governed Tool execution and remains subject to Profile Credential scope.
+                </p>
+                <Field label="Model API Credential">
+                  <select
+                    aria-label="Model Tools API credential"
+                    value={form.modelToolsCredentialRef}
+                    onChange={(event) =>
+                      onChange({
+                        ...form,
+                        modelToolsCredentialRef: event.target.value,
+                      })
+                    }
+                    className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus:ring-2 focus:ring-ring/40"
+                  >
+                    <option value="" disabled>
+                      Choose a Credential
+                    </option>
+                    {credentials.map((item) => (
+                      <option key={item.reference} value={item.reference}>
+                        {item.displayName} · {item.reference}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              </>
+            ) : form.pluginId === OPENAPI_PLUGIN_ID ? (
               <>
                 <p className="text-xs leading-5 text-muted-foreground">
                   Bind OpenAPI Security Scheme names to inventory Credentials. The scheme name must match the description exactly; Mender keeps the Credential Reference in Provider config and resolves the secret only at execution.
@@ -1402,6 +1486,20 @@ function ProviderDetailsDialog({
             {provider.pluginId === MCP_PLUGIN_ID ? (
               <DetailRow label="MCP transport" value={provider.transport} />
             ) : null}
+            {provider.pluginId === MODEL_TOOLS_PLUGIN_ID ? (
+              <>
+                <DetailRow
+                  label="Engine"
+                  value={modelToolsEngineSummary(provider)}
+                />
+                <DetailRow
+                  label="Model"
+                  value={modelToolsModelSummary(provider)}
+                  mono
+                />
+                <DetailRow label="Capability" value="Web search" />
+              </>
+            ) : null}
             {provider.pluginId === OPENAPI_PLUGIN_ID ? (
               <>
                 <DetailRow
@@ -1579,6 +1677,10 @@ function formFromProvider(provider: Provider): ProviderFormState {
     openapiInclude: stringListFromUnknown(operations?.include).join("\n"),
     openapiExclude: stringListFromUnknown(operations?.exclude).join("\n"),
     openapiCredentials,
+    modelToolsEngine: modelToolsEngineFromUnknown(config?.engine),
+    modelToolsModel: typeof config?.model === "string" ? config.model : "",
+    modelToolsCredentialRef:
+      typeof config?.credentialRef === "string" ? config.credentialRef : "",
   };
 }
 
@@ -1591,6 +1693,18 @@ function updateRequestFromForm(form: ProviderFormState): UpdateProviderRequest {
 }
 
 function configFromForm(form: ProviderFormState): Record<string, unknown> {
+  if (form.pluginId === MODEL_TOOLS_PLUGIN_ID) {
+    if (!form.modelToolsCredentialRef) {
+      throw new Error("Choose a Model API Credential.");
+    }
+    return {
+      engine: form.modelToolsEngine,
+      model: form.modelToolsModel.trim(),
+      credentialRef: form.modelToolsCredentialRef,
+      capabilities: ["web_search"],
+    };
+  }
+
   if (form.pluginId === OPENAPI_PLUGIN_ID) {
     const include = parseLines(form.openapiInclude);
     const exclude = parseLines(form.openapiExclude);
@@ -1797,6 +1911,44 @@ function stringListFromUnknown(value: unknown): string[] {
   return value.filter((item): item is string => typeof item === "string");
 }
 
+function modelToolsEngineFromUnknown(value: unknown): ModelToolsEngine {
+  return value === "anthropic" || value === "gemini" ? value : "openai";
+}
+
+function modelToolsEngineLabel(engine: ModelToolsEngine) {
+  switch (engine) {
+    case "openai":
+      return "OpenAI";
+    case "anthropic":
+      return "Anthropic";
+    case "gemini":
+      return "Gemini";
+  }
+}
+
+function modelToolsModelPlaceholder(engine: ModelToolsEngine) {
+  switch (engine) {
+    case "openai":
+      return "gpt-5.5";
+    case "anthropic":
+      return "claude-opus-5-5";
+    case "gemini":
+      return "gemini-3.8-flash";
+  }
+}
+
+function modelToolsEngineSummary(provider: Provider) {
+  const config = asRecord(provider.config);
+  return modelToolsEngineLabel(modelToolsEngineFromUnknown(config?.engine));
+}
+
+function modelToolsModelSummary(provider: Provider) {
+  const config = asRecord(provider.config);
+  return typeof config?.model === "string" && config.model
+    ? config.model
+    : "—";
+}
+
 function openAPISourceSummary(provider: Provider) {
   const config = asRecord(provider.config);
   const source = asRecord(config?.source);
@@ -1844,6 +1996,13 @@ function openAPISecuritySummary(provider: Provider) {
 }
 
 function connectionSummary(provider: Provider) {
+  if (provider.pluginId === MODEL_TOOLS_PLUGIN_ID) {
+    return (
+      modelToolsEngineSummary(provider) +
+      " · " +
+      modelToolsModelSummary(provider)
+    );
+  }
   if (provider.pluginId === OPENAPI_PLUGIN_ID) {
     const config = asRecord(provider.config);
     const source = asRecord(config?.source);

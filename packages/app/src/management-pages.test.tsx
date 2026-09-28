@@ -120,6 +120,97 @@ describe("management pages", () => {
     expect(await screen.findByText("demo")).toBeTruthy();
   });
 
+  it("registers a Model Tools Provider with inventory authentication", async () => {
+    const credential = {
+      reference: "credential://model/work",
+      namespace: "model",
+      name: "work",
+      displayName: "Model work",
+      source: "environment" as const,
+      environmentVariable: "MODEL_API_KEY",
+      createdAt: "2026-09-27T00:00:00Z",
+      updatedAt: "2026-09-27T00:00:00Z",
+    };
+    const provider = {
+      providerId: "prov_model_tools",
+      namespace: "research",
+      displayName: "Research Search",
+      description: "",
+      createdAt: "2026-09-27T00:00:00Z",
+      updatedAt: "2026-09-27T00:00:00Z",
+      pluginId: "io.mender.provider.model-tools",
+      pluginDisplayName: "Model Tools",
+      configVersion: 1,
+      transport: "unconfigured" as const,
+      toolCount: 1,
+      config: {
+        engine: "anthropic",
+        model: "claude-test",
+        credentialRef: credential.reference,
+        capabilities: ["web_search"],
+      },
+    };
+    const listProviders = vi
+      .fn()
+      .mockResolvedValueOnce({ providers: [] })
+      .mockResolvedValueOnce({ providers: [provider] });
+    const createProvider = vi.fn().mockResolvedValue({
+      provider,
+      sync: { created: 1, updated: 0, removed: 0, total: 1 },
+    });
+
+    renderApp("/providers", {
+      listProviders,
+      listCredentials: vi.fn().mockResolvedValue({ credentials: [credential] }),
+      createProvider,
+    });
+
+    expect(await screen.findByText("No providers")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Add provider" }));
+    fireEvent.click(screen.getByRole("button", { name: "Model Tools" }));
+    fireEvent.click(screen.getByRole("button", { name: "Anthropic" }));
+
+    fireEvent.change(screen.getByLabelText("Namespace"), {
+      target: { value: "research" },
+    });
+    fireEvent.change(screen.getByLabelText("Display name"), {
+      target: { value: "Research Search" },
+    });
+    fireEvent.change(screen.getByLabelText("Model Tools model"), {
+      target: { value: "claude-test" },
+    });
+    expect(screen.getByText("Web search")).toBeTruthy();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Configure authentication" }),
+    );
+    expect(await screen.findByText("Provider authentication")).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Model Tools API credential"), {
+      target: { value: credential.reference },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Use authentication" }),
+    );
+
+    expect(await screen.findByText("Add provider")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Add provider" }));
+
+    await waitFor(() => {
+      expect(createProvider).toHaveBeenCalledWith({
+        namespace: "research",
+        displayName: "Research Search",
+        pluginId: "io.mender.provider.model-tools",
+        config: {
+          engine: "anthropic",
+          model: "claude-test",
+          credentialRef: "credential://model/work",
+          capabilities: ["web_search"],
+        },
+      });
+    });
+    expect(await screen.findByText("Research Search")).toBeTruthy();
+  });
+
   it("registers an OpenAPI Provider with filters and inventory authentication", async () => {
     const credential = {
       reference: "credential://openapi/work",
@@ -1287,6 +1378,13 @@ function renderApp(path: string, client: Partial<MenderClient>) {
           version: "1.0.0",
           displayName: "MCP",
           description: "Model Context Protocol provider",
+          configVersion: 1,
+        },
+        {
+          pluginId: "io.mender.provider.model-tools",
+          version: "1.0.0",
+          displayName: "Model Tools",
+          description: "Bridge provider-hosted model tools into governed Mender Tools",
           configVersion: 1,
         },
         {
