@@ -31,6 +31,7 @@ export type {
   ProviderMutationResponse,
   ProviderPlugin,
   ProviderPluginInstallation,
+  RebindProviderRequest,
   ReplaceProfileToolsRequest,
   RotateCredentialRequest,
   SearchToolsInput,

@@ -37,6 +37,7 @@ export type StartMCPServerRequest =
 export type ProviderMutationResponse =
   components["schemas"]["ProviderMutationResponse"];
 export type CreateProviderRequest = components["schemas"]["CreateProviderRequest"];
+export type RebindProviderRequest = components["schemas"]["RebindProviderRequest"];
 export type CreateHTTPProviderRequest =
   components["schemas"]["CreateHTTPProviderRequest"];
 export type CreateStdioProviderRequest =
@@ -87,6 +88,10 @@ export interface MenderClient {
   updateProvider(
     providerId: string,
     body: UpdateProviderRequest,
+  ): Promise<ProviderMutationResponse>;
+  rebindProvider(
+    providerId: string,
+    body: RebindProviderRequest,
   ): Promise<ProviderMutationResponse>;
   syncProvider(providerId: string): Promise<SyncResult>;
   deleteProvider(providerId: string): Promise<void>;
@@ -224,6 +229,14 @@ export function createMenderClient(
 
     async updateProvider(providerId: string, body: UpdateProviderRequest) {
       const result = await client.PUT("/providers/{providerId}", {
+        params: { path: { providerId } },
+        body,
+      });
+      return requireData(result);
+    },
+
+    async rebindProvider(providerId: string, body: RebindProviderRequest) {
+      const result = await client.POST("/providers/{providerId}/rebind", {
         params: { path: { providerId } },
         body,
       });

@@ -23,6 +23,7 @@ vi.mock(
       ListMCPServers: vi.fn(),
       ListProviderPlugins: vi.fn(),
       ListProviders: vi.fn(),
+      RebindProvider: vi.fn(),
       ReplaceProfileTools: vi.fn(),
       RestartMCPServer: vi.fn(),
       RotateNativeCredential: vi.fn(),
@@ -212,6 +213,47 @@ describe("desktop Mender client", () => {
       "io.mender.provider.mcp",
       "",
       config,
+    );
+  });
+
+  it("rebinds an external Provider through the Wails host", async () => {
+    vi.mocked(Service.RebindProvider).mockResolvedValue({
+      provider: {
+        providerId: "prov_external",
+        namespace: "external",
+        displayName: "External",
+        description: "",
+        createdAt: "2026-09-28T00:00:00Z",
+        updatedAt: "2026-09-28T00:00:00Z",
+        pluginId: "dev.example.echo",
+        installationId: "pinst_22222222222222222222222222222222",
+        configVersion: 1,
+        connectionSummary: "Example Echo",
+        config: { prefix: "next: " },
+        transport: "unconfigured",
+        toolCount: 1,
+      },
+      sync: { created: 0, updated: 1, removed: 0, total: 1 },
+    });
+
+    const client = createDesktopMenderClient();
+    await expect(
+      client.rebindProvider("prov_external", {
+        installationId: "pinst_22222222222222222222222222222222",
+        config: { prefix: "next: " },
+      }),
+    ).resolves.toMatchObject({
+      provider: {
+        providerId: "prov_external",
+        installationId: "pinst_22222222222222222222222222222222",
+        connectionSummary: "Example Echo",
+      },
+      sync: { updated: 1, total: 1 },
+    });
+    expect(Service.RebindProvider).toHaveBeenCalledWith(
+      "prov_external",
+      "pinst_22222222222222222222222222222222",
+      { prefix: "next: " },
     );
   });
 

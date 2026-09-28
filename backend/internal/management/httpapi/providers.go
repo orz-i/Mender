@@ -55,6 +55,11 @@ type createStdioProviderRequest struct {
 	CredentialEnvironment []credentialEnvironmentRequest `json:"credentialEnvironment"`
 }
 
+type rebindProviderRequest struct {
+	InstallationID string          `json:"installationId"`
+	Config         json.RawMessage `json:"config"`
+}
+
 type updateProviderRequest struct {
 	DisplayName string          `json:"displayName"`
 	Description string          `json:"description"`
@@ -475,6 +480,58 @@ func (h *Handler) updateLegacyMCPProvider(
 			syncResult.Total,
 		),
 		"sync": syncProjection(syncResult),
+	})
+}
+
+func (h *Handler) rebindProvider(w http.ResponseWriter, r *http.Request) {
+	providerID, err := catalogdomain.ParseProviderID(r.PathValue("providerId"))
+	if err != nil {
+		writeAPIError(w, http.StatusBadRequest, "validation_error", err)
+		return
+	}
+	var input rebindProviderRequest
+	if err := decodeJSON(r, &input); err != nil {
+		writeAPIError(w, http.StatusBadRequest, "validation_error", err)
+		return
+	}
+	if strings.TrimSpace(input.InstallationID) == "" || len(input.Config) == 0 {
+		writeAPIError(
+			w,
+			http.StatusBadRequest,
+			"validation_error",
+			fmt.Errorf("installationId and config are required"),
+		)
+		return
+	}
+	installationID, err := providerplugin.ParseInstallationID(input.InstallationID)
+	if err != nil {
+		writeAPIError(w, http.StatusBadRequest, "validation_error", err)
+		return
+	}
+	result, err := h.runtime.RebindProviderInstallation(
+		r.Context(),
+		providerID,
+		installationID,
+		input.Config,
+	)
+	if err != nil {
+		writeAPIError(w, http.StatusBadGateway, "provider_error", err)
+		return
+	}
+	provider, err := h.runtime.Catalog.GetProvider.Execute(r.Context(), providerID)
+	if err != nil {
+		writeKnownError(w, err)
+		return
+	}
+	config, err := h.runtime.ProviderConfig(r.Context(), providerID)
+	if err != nil {
+		writeKnownError(w, err)
+		return
+	}
+	descriptor := descriptorForPlugin(h.runtime.ProviderPluginDescriptors(), config.PluginID)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"provider": providerProjection(provider, &config, descriptor, result.Total),
+		"sync":     syncProjection(result),
 	})
 }
 

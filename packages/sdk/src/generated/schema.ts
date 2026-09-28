@@ -150,6 +150,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/providers/{providerId}/rebind": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["rebindProvider"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/providers/{providerId}/sync": {
         parameters: {
             query?: never;
@@ -764,6 +780,12 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        RebindProviderRequest: {
+            installationId: string;
+            config: {
+                [key: string]: unknown;
+            };
+        };
         CreateHTTPProviderRequest: {
             namespace: string;
             displayName: string;
@@ -1279,6 +1301,37 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            502: components["responses"]["BadGateway"];
+        };
+    };
+    rebindProvider: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                providerId: components["parameters"]["ProviderId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RebindProviderRequest"];
+            };
+        };
+        responses: {
+            /** @description Provider rebound to external plugin installation */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderMutationResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
             502: components["responses"]["BadGateway"];
         };

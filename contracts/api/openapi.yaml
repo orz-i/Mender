@@ -179,6 +179,29 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '409': { $ref: '#/components/responses/Conflict' }
         '502': { $ref: '#/components/responses/BadGateway' }
+  /providers/{providerId}/rebind:
+    post:
+      operationId: rebindProvider
+      parameters:
+        - $ref: '#/components/parameters/ProviderId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RebindProviderRequest'
+      responses:
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '200':
+          description: Provider rebound to external plugin installation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderMutationResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '502': { $ref: '#/components/responses/BadGateway' }
   /providers/{providerId}/sync:
     post:
       operationId: syncProvider
@@ -1019,6 +1042,15 @@ components:
         displayName: { type: string }
         description: { type: string }
         pluginId: { type: string }
+        installationId: { type: string }
+        config:
+          type: object
+          additionalProperties: true
+      additionalProperties: false
+    RebindProviderRequest:
+      type: object
+      required: [installationId, config]
+      properties:
         installationId: { type: string }
         config:
           type: object

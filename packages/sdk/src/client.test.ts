@@ -102,6 +102,58 @@ describe("Mender SDK", () => {
     });
   });
 
+  it("rebinds a Provider to an exact external plugin installation", async () => {
+    const fetch = async (request: Request) => {
+      expect(request.method).toBe("POST");
+      expect(request.url).toContain("/api/v1/providers/prov_external/rebind");
+      await expect(request.json()).resolves.toEqual({
+        installationId: "pinst_22222222222222222222222222222222",
+        config: { prefix: "next: " },
+      });
+      return new Response(
+        JSON.stringify({
+          provider: {
+            providerId: "prov_external",
+            namespace: "external",
+            displayName: "External",
+            description: "",
+            createdAt: "2026-09-28T00:00:00Z",
+            updatedAt: "2026-09-28T00:00:00Z",
+            pluginId: "dev.example.echo",
+            installationId: "pinst_22222222222222222222222222222222",
+            configVersion: 1,
+            connectionSummary: "Example Echo",
+            config: { prefix: "next: " },
+            transport: "unconfigured",
+            toolCount: 1,
+          },
+          sync: { created: 0, updated: 1, removed: 0, total: 1 },
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    };
+    const client = createMenderClient({
+      baseUrl: "http://localhost:8080/api/v1",
+      fetch,
+    });
+
+    await expect(
+      client.rebindProvider("prov_external", {
+        installationId: "pinst_22222222222222222222222222222222",
+        config: { prefix: "next: " },
+      }),
+    ).resolves.toMatchObject({
+      provider: {
+        providerId: "prov_external",
+        installationId: "pinst_22222222222222222222222222222222",
+      },
+      sync: { updated: 1 },
+    });
+  });
+
   it("uses the generated provider contract", async () => {
     const fetch = (request: Request) => {
       expect(request.url).toContain("/api/v1/providers");

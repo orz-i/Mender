@@ -27,6 +27,7 @@ func (a *app) newProviderCommand() *cobra.Command {
 	command.AddCommand(a.newProviderAddCommand())
 	command.AddCommand(a.newProviderPluginsCommand())
 	command.AddCommand(a.newProviderListCommand())
+	command.AddCommand(a.newProviderRebindCommand())
 	command.AddCommand(a.newProviderSyncCommand())
 	return command
 }
@@ -686,6 +687,86 @@ func (a *app) newProviderListCommand() *cobra.Command {
 			})
 		},
 	}
+}
+
+func (a *app) newProviderRebindCommand() *cobra.Command {
+	var installationValue, configJSON, configFile string
+	command := &cobra.Command{
+		Use:   "rebind <provider>",
+		Short: "Move an external Provider to another exact plugin installation",
+		Args:  exactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if strings.TrimSpace(installationValue) == "" {
+				return usageError{err: fmt.Errorf("--installation is required")}
+			}
+			if (configJSON == "") == (configFile == "") {
+				return usageError{err: fmt.Errorf(
+					"exactly one of --config-json or --config-file is required",
+				)}
+			}
+			installationID, err := providerplugin.ParseInstallationID(
+				strings.TrimSpace(installationValue),
+			)
+			if err != nil {
+				return usageError{err: err}
+			}
+			raw := []byte(configJSON)
+			if configFile != "" {
+				// #nosec G304 -- the CLI user explicitly selects the local config file.
+				raw, err = os.ReadFile(configFile)
+				if err != nil {
+					return fmt.Errorf("read Provider config file: %w", err)
+				}
+			}
+			if !json.Valid(raw) {
+				return usageError{err: fmt.Errorf("provider config must be valid JSON")}
+			}
+			return a.withRuntime(cmd.Context(), func(runtime *bootstrap.Runtime) error {
+				provider, err := resolveProvider(cmd.Context(), runtime, args[0])
+				if err != nil {
+					return err
+				}
+				result, err := runtime.RebindProviderInstallation(
+					cmd.Context(),
+					provider.ID(),
+					installationID,
+					raw,
+				)
+				if err != nil {
+					return err
+				}
+				config, err := runtime.ProviderConfig(cmd.Context(), provider.ID())
+				if err != nil {
+					return err
+				}
+				item := providerProjection(provider)
+				item["pluginId"] = config.PluginID.String()
+				item["installationId"] = installationID.String()
+				item["configVersion"] = config.ConfigVersion
+				return a.writeValue(
+					fmt.Sprintf(
+						"rebound %s to %s; synchronized %d tool(s)",
+						provider.Namespace(),
+						installationID,
+						result.Total,
+					),
+					map[string]any{
+						"provider": item,
+						"sync":     syncProjection(result),
+					},
+				)
+			})
+		},
+	}
+	command.Flags().StringVar(
+		&installationValue,
+		"installation",
+		"",
+		"target external plugin InstallationID",
+	)
+	command.Flags().StringVar(&configJSON, "config-json", "", "target plugin config JSON")
+	command.Flags().StringVar(&configFile, "config-file", "", "path to target plugin config JSON")
+	return command
 }
 
 func (a *app) newProviderSyncCommand() *cobra.Command {

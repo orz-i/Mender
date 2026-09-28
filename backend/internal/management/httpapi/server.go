@@ -72,6 +72,7 @@ func (h *Handler) routes() {
 	h.mux.HandleFunc("POST /api/v1/providers", h.createProvider)
 	h.mux.HandleFunc("POST /api/v1/providers/http", h.createHTTPProvider)
 	h.mux.HandleFunc("POST /api/v1/providers/stdio", h.createStdioProvider)
+	h.mux.HandleFunc("POST /api/v1/providers/{providerId}/rebind", h.rebindProvider)
 	h.mux.HandleFunc("POST /api/v1/providers/{providerId}/sync", h.syncProvider)
 	h.mux.HandleFunc("PUT /api/v1/providers/{providerId}", h.updateProvider)
 	h.mux.HandleFunc("DELETE /api/v1/providers/{providerId}", h.deleteProvider)

@@ -435,6 +435,50 @@ func (s *Service) CreateProvider(
 	}, nil
 }
 
+func (s *Service) RebindProvider(
+	providerID string,
+	installationID string,
+	config map[string]any,
+) (ProviderMutationResponse, error) {
+	id, err := catalogdomain.ParseProviderID(providerID)
+	if err != nil {
+		return ProviderMutationResponse{}, err
+	}
+	parsedInstallationID, err := providerplugin.ParseInstallationID(installationID)
+	if err != nil {
+		return ProviderMutationResponse{}, err
+	}
+	raw, err := json.Marshal(config)
+	if err != nil {
+		return ProviderMutationResponse{}, fmt.Errorf("encode provider config: %w", err)
+	}
+	result, err := s.runtime.RebindProviderInstallation(
+		s.ctx,
+		id,
+		parsedInstallationID,
+		raw,
+	)
+	if err != nil {
+		return ProviderMutationResponse{}, err
+	}
+	provider, err := s.runtime.Catalog.GetProvider.Execute(s.ctx, id)
+	if err != nil {
+		return ProviderMutationResponse{}, err
+	}
+	stored, err := s.runtime.ProviderConfig(s.ctx, id)
+	if err != nil {
+		return ProviderMutationResponse{}, err
+	}
+	descriptor := desktopDescriptorForPlugin(
+		s.runtime.ProviderPluginDescriptors(),
+		stored.PluginID,
+	)
+	return ProviderMutationResponse{
+		Provider: providerProjection(provider, &stored, descriptor, result.Total),
+		Sync:     syncProjection(result),
+	}, nil
+}
+
 func (s *Service) CreateHTTPProvider(
 	namespace string,
 	displayName string,

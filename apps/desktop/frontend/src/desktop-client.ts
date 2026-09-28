@@ -180,6 +180,16 @@ export function createDesktopMenderClient(): MenderClient {
       );
     },
 
+    async rebindProvider(providerId, body) {
+      return providerMutation(
+        await Service.RebindProvider(
+          providerId,
+          body.installationId,
+          body.config,
+        ),
+      );
+    },
+
     async syncProvider(providerId) {
       return syncResult(await Service.SyncProvider(providerId));
     },

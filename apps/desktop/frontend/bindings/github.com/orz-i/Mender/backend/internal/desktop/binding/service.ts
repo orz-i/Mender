@@ -140,6 +140,10 @@ export function ListProviders(): $CancellablePromise<$models.ProviderList> {
     return $Call.ByID(3638226830);
 }
 
+export function RebindProvider(providerID: string, installationID: string, config: { [_ in string]?: any } | null): $CancellablePromise<$models.ProviderMutationResponse> {
+    return $Call.ByID(1790042971, providerID, installationID, config);
+}
+
 export function RemoveProfileTool(slug: string, toolID: string): $CancellablePromise<$models.Profile> {
     return $Call.ByID(610642707, slug, toolID);
 }
