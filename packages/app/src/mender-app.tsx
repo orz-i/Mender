@@ -9,6 +9,7 @@ import { PolicyPage } from "./domains/policy/policy-page";
 import { ProfilesPage } from "./domains/profiles/profiles-page";
 import { ProvidersPage } from "./domains/providers/providers-page";
 import { ServersPage } from "./domains/servers/servers-page";
+import { useLocale } from "./i18n/i18n";
 import { ManagementShell } from "./shell/management-shell";
 
 export function MenderApp({
@@ -20,6 +21,8 @@ export function MenderApp({
   copyText?: (value: string) => Promise<void>;
   installProviderPlugin?: () => Promise<ProviderPluginInstallation | null>;
 }) {
+  useLocale();
+
   return (
     <Routes>
       <Route element={<ManagementShell />}>

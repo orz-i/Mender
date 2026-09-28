@@ -42,6 +42,8 @@ import { EmptyState, ErrorNotice, PageHeader } from "../../shared/page";
 import { usePagination } from "../../shared/pagination";
 import { TablePagination } from "../../shared/table-pagination";
 
+import { t } from "../../i18n/i18n";
+
 type RuleStep = 0 | 1 | 2;
 
 interface RuleEditorState {
@@ -262,7 +264,11 @@ export function PolicyPage({ client }: { client: MenderClient }) {
   }
 
   async function removeRule(rule: PolicyRule) {
-    if (!window.confirm(`Delete Policy Rule "${rule.displayName}"?`)) {
+    if (
+      !window.confirm(
+        t('Delete Policy Rule "{{name}}"?', { name: rule.displayName }),
+      )
+    ) {
       return;
     }
     setBusy(rule.ruleId);
@@ -285,7 +291,7 @@ export function PolicyPage({ client }: { client: MenderClient }) {
       <PageHeader
         title="Policy"
         description="Define deterministic global execution rules. Rule order has no meaning; matching decisions combine by deny > require approval > allow."
-        actions={<Button onClick={openCreateRule}>Add rule</Button>}
+        actions={<Button onClick={openCreateRule}>{t("Add rule")}</Button>}
       />
 
       {error ? <ErrorNotice message={error} /> : null}
@@ -293,7 +299,7 @@ export function PolicyPage({ client }: { client: MenderClient }) {
       <div className="mb-6 grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="pb-2">
-            <CardDescription>Default decision</CardDescription>
+            <CardDescription>{t("Default decision")}</CardDescription>
             <CardTitle className="flex items-center justify-between gap-3 text-lg">
               <DecisionBadge decision={policy?.defaultDecision ?? "allow"} />
               <Button
@@ -302,40 +308,39 @@ export function PolicyPage({ client }: { client: MenderClient }) {
                 disabled={!loaded || policy === null}
                 onClick={openDefaultEditor}
               >
-                Edit
+                {t("Edit")}
               </Button>
             </CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground">
-              Used only when no enabled Rule matches.
+              {t("Used only when no enabled Rule matches.")}
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="pb-2">
-            <CardDescription>Enabled rules</CardDescription>
+            <CardDescription>{t("Enabled rules")}</CardDescription>
             <CardTitle className="text-lg">
               {status?.enabledRuleCount ?? "—"} / {status?.ruleCount ?? "—"}
             </CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground">
-              Rules are unordered and independently managed.
+              {t("Rules are unordered and independently managed.")}
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="pb-2">
-            <CardDescription>Approval behavior</CardDescription>
-            <CardTitle className="text-lg">Fail closed</CardTitle>
+            <CardDescription>{t("Approval behavior")}</CardDescription>
+            <CardTitle className="text-lg">{t("Fail closed")}</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground">
-              require approval currently rejects when no interactive Approval
-              adapter is configured.
+              {t("require approval currently rejects when no interactive Approval adapter is configured.")}
             </p>
           </CardContent>
         </Card>
@@ -343,27 +348,28 @@ export function PolicyPage({ client }: { client: MenderClient }) {
 
       <Card>
         <CardHeader className="border-b">
-          <CardTitle>Policy rules</CardTitle>
+          <CardTitle>{t("Policy rules")}</CardTitle>
           <CardDescription>
-            {rules.length} configured {rules.length === 1 ? "Rule" : "Rules"}.
-            Matching deny Rules cannot be overridden by allow Rules.
+            {t("{{count}} Policy Rules configured. Matching deny Rules cannot be overridden by allow Rules.", {
+              count: rules.length,
+            })}
           </CardDescription>
         </CardHeader>
         <CardContent>
           {!loaded ? (
             <div className="py-10 text-center text-sm text-muted-foreground">
-              Loading Policy…
+              {t("Loading Policy…")}
             </div>
           ) : rules.length ? (
             <>
               <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Rule</TableHead>
-                  <TableHead>Decision</TableHead>
-                  <TableHead>State</TableHead>
-                  <TableHead>Scope / targets</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead>{t("Rule")}</TableHead>
+                  <TableHead>{t("Decision")}</TableHead>
+                  <TableHead>{t("State")}</TableHead>
+                  <TableHead>{t("Scope / targets")}</TableHead>
+                  <TableHead className="text-right">{t("Actions")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -380,7 +386,7 @@ export function PolicyPage({ client }: { client: MenderClient }) {
                     </TableCell>
                     <TableCell>
                       <Badge variant={rule.enabled ? "outline" : "secondary"}>
-                        {rule.enabled ? "Enabled" : "Disabled"}
+                        {t(rule.enabled ? "Enabled" : "Disabled")}
                       </Badge>
                     </TableCell>
                     <TableCell className="max-w-[340px]">
@@ -396,7 +402,7 @@ export function PolicyPage({ client }: { client: MenderClient }) {
                           disabled={busy !== ""}
                           onClick={() => openEditRule(rule)}
                         >
-                          Edit
+                          {t("Edit")}
                         </Button>
                         <Button
                           size="sm"
@@ -404,7 +410,7 @@ export function PolicyPage({ client }: { client: MenderClient }) {
                           disabled={busy !== ""}
                           onClick={() => void toggleRule(rule)}
                         >
-                          {rule.enabled ? "Disable" : "Enable"}
+                          {t(rule.enabled ? "Disable" : "Enable")}
                         </Button>
                         <Button
                           size="sm"
@@ -412,7 +418,7 @@ export function PolicyPage({ client }: { client: MenderClient }) {
                           disabled={busy !== ""}
                           onClick={() => void removeRule(rule)}
                         >
-                          Delete
+                          {t("Delete")}
                         </Button>
                       </div>
                     </TableCell>
@@ -437,23 +443,23 @@ export function PolicyPage({ client }: { client: MenderClient }) {
       <Dialog open={defaultOpen} onOpenChange={setDefaultOpen}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Edit default decision</DialogTitle>
+            <DialogTitle>{t("Edit default decision")}</DialogTitle>
             <DialogDescription>
-              This decision applies only when no enabled Policy Rule matches.
+              {t("This decision applies only when no enabled Policy Rule matches.")}
             </DialogDescription>
           </DialogHeader>
           <Field label="Default decision">
             <select
-              aria-label="Default Policy decision"
+              aria-label={t("Default Policy decision")}
               value={defaultDecision}
               onChange={(event) =>
                 setDefaultDecision(event.target.value as PolicyDecision)
               }
               className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
             >
-              <option value="allow">allow</option>
-              <option value="require_approval">require approval</option>
-              <option value="deny">deny</option>
+              <option value="allow">{t("allow")}</option>
+              <option value="require_approval">{t("require approval")}</option>
+              <option value="deny">{t("deny")}</option>
             </select>
           </Field>
           {defaultDecision === "require_approval" ? (
@@ -461,10 +467,10 @@ export function PolicyPage({ client }: { client: MenderClient }) {
           ) : null}
           <DialogFooter>
             <Button variant="outline" onClick={() => setDefaultOpen(false)}>
-              Cancel
+              {t("Cancel")}
             </Button>
             <Button disabled={busy !== ""} onClick={() => void saveDefault()}>
-              {busy === "default" ? "Saving…" : "Save default"}
+              {t(busy === "default" ? "Saving…" : "Save default")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -520,15 +526,19 @@ function RuleEditorDialog({
       <DialogContent className="max-h-[88vh] overflow-y-auto sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>
-            {state.ruleId ? "Edit Policy rule" : "Add Policy rule"}
+            {t(state.ruleId ? "Edit Policy rule" : "Add Policy rule")}
           </DialogTitle>
           <DialogDescription>
-            Step {state.step + 1} of 3 ·{" "}
-            {state.step === 0
-              ? "Decision"
-              : state.step === 1
-                ? "Scope and targets"
-                : "Governance Facts"}
+            {t("Step {{step}} of 3 · {{section}}", {
+              step: state.step + 1,
+              section: t(
+                state.step === 0
+                  ? "Decision"
+                  : state.step === 1
+                    ? "Scope and targets"
+                    : "Governance Facts",
+              ),
+            })}
           </DialogDescription>
         </DialogHeader>
 
@@ -554,22 +564,20 @@ function RuleEditorDialog({
 
         {state.step === 2 && isGlobal ? (
           <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs leading-5 text-muted-foreground">
-            This Rule is global because every selector is a wildcard. It will
-            match every valid invocation regardless of origin, scope, Provider,
-            Tool, or Governance Facts.
+            {t("This Rule is global because every selector is a wildcard. It will match every valid invocation regardless of origin, scope, Provider, Tool, or Governance Facts.")}
           </div>
         ) : null}
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>
-            Cancel
+            {t("Cancel")}
           </Button>
           {state.step > 0 ? (
             <Button
               variant="outline"
               onClick={() => setStep((state.step - 1) as RuleStep)}
             >
-              Back
+              {t("Back")}
             </Button>
           ) : null}
           {state.step < 2 ? (
@@ -577,14 +585,14 @@ function RuleEditorDialog({
               disabled={state.step === 0 && !ruleDecisionValid(state.form)}
               onClick={() => setStep((state.step + 1) as RuleStep)}
             >
-              Next
+              {t("Next")}
             </Button>
           ) : (
             <Button
               disabled={busy || !ruleDecisionValid(state.form)}
               onClick={onSave}
             >
-              {busy ? "Saving…" : state.ruleId ? "Save rule" : "Create rule"}
+              {t(busy ? "Saving…" : state.ruleId ? "Save rule" : "Create rule")}
             </Button>
           )}
         </DialogFooter>
@@ -604,8 +612,8 @@ function DecisionStep({
     <div className="space-y-5">
       <Field label="Display name">
         <Input
-          aria-label="Policy Rule display name"
-          placeholder="Require approval for MCP writes"
+          aria-label={t("Policy Rule display name")}
+          placeholder={t("Require approval for MCP writes")}
           value={form.displayName}
           onChange={(event) =>
             onChange({ ...form, displayName: event.target.value })
@@ -614,7 +622,7 @@ function DecisionStep({
       </Field>
       <Field label="Decision">
         <select
-          aria-label="Policy Rule decision"
+          aria-label={t("Policy Rule decision")}
           value={form.decision}
           onChange={(event) =>
             onChange({
@@ -624,9 +632,9 @@ function DecisionStep({
           }
           className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
         >
-          <option value="allow">allow</option>
-          <option value="require_approval">require approval</option>
-          <option value="deny">deny</option>
+          <option value="allow">{t("allow")}</option>
+          <option value="require_approval">{t("require approval")}</option>
+          <option value="deny">{t("deny")}</option>
         </select>
       </Field>
       <label className="flex items-center gap-2 text-sm">
@@ -637,12 +645,11 @@ function DecisionStep({
             onChange({ ...form, enabled: event.target.checked })
           }
         />
-        Enabled
+        {t("Enabled")}
       </label>
       {form.decision === "require_approval" ? <ApprovalWarning /> : null}
       <p className="text-xs leading-5 text-muted-foreground">
-        Rule order is not configurable. If multiple Rules match, Mender applies
-        the most restrictive decision.
+        {t("Rule order is not configurable. If multiple Rules match, Mender applies the most restrictive decision.")}
       </p>
     </div>
   );
@@ -790,7 +797,7 @@ function FactsStep({
     <div className="space-y-5">
       <Field label="Fact knowledge">
         <select
-          aria-label="Policy fact knowledge"
+          aria-label={t("Policy fact knowledge")}
           value={form.match.factKnowledge}
           onChange={(event) => {
             const factKnowledge = event.target
@@ -808,23 +815,21 @@ function FactsStep({
           }}
           className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
         >
-          <option value="any">any</option>
-          <option value="known">known</option>
-          <option value="unknown">unknown</option>
+          <option value="any">{t("any")}</option>
+          <option value="known">{t("known")}</option>
+          <option value="unknown">{t("unknown")}</option>
         </select>
       </Field>
 
       <p className="text-xs leading-5 text-muted-foreground">
-        Effect and resource predicates only match reviewed, known Governance
-        Facts. They never treat unknown facts as an empty known set. Use
-        fact-knowledge = unknown for an explicit fail-closed Rule.
+        {t("Effect and resource predicates only match reviewed, known Governance Facts. They never treat unknown facts as an empty known set. Use fact-knowledge = unknown for an explicit fail-closed Rule.")}
       </p>
 
       {form.match.factKnowledge !== "unknown" ? (
         <>
           <Field label="Effects — one per line" optional>
             <textarea
-              aria-label="Policy effects"
+              aria-label={t("Policy effects")}
               className="min-h-24 w-full rounded-lg border border-input bg-background px-3 py-2 font-mono text-sm outline-none focus:ring-2 focus:ring-ring/40"
               placeholder={"filesystem.write\nnetwork.write"}
               value={form.match.effectsAny.join("\n")}
@@ -843,10 +848,9 @@ function FactsStep({
           <div className="space-y-3">
             <div className="flex items-end justify-between gap-3">
               <div>
-                <p className="text-sm font-medium">Resource matchers</p>
+                <p className="text-sm font-medium">{t("Resource matchers")}</p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  At least one matcher must match. Only exact and prefix are
-                  supported.
+                  {t("At least one matcher must match. Only exact and prefix are supported.")}
                 </p>
               </div>
               <Button
@@ -865,7 +869,7 @@ function FactsStep({
                   })
                 }
               >
-                Add resource
+                {t("Add resource")}
               </Button>
             </div>
 
@@ -877,7 +881,7 @@ function FactsStep({
                 <Field label="Kind">
                   <Input
                     aria-label={"Policy resource kind " + String(index + 1)}
-                    placeholder="path"
+                    placeholder={t("path")}
                     value={resource.kind}
                     onChange={(event) =>
                       onChange({
@@ -921,14 +925,14 @@ function FactsStep({
                     }
                     className="h-9 w-full rounded-lg border border-input bg-background px-2 text-sm"
                   >
-                    <option value="exact">exact</option>
-                    <option value="prefix">prefix</option>
+                    <option value="exact">{t("exact")}</option>
+                    <option value="prefix">{t("prefix")}</option>
                   </select>
                 </Field>
                 <Field label="Value">
                   <Input
                     aria-label={"Policy resource value " + String(index + 1)}
-                    placeholder="/workspace/release"
+                    placeholder={t("/workspace/release")}
                     value={resource.value}
                     onChange={(event) =>
                       onChange({
@@ -962,7 +966,7 @@ function FactsStep({
                       })
                     }
                   >
-                    Remove
+                    {t("Remove")}
                   </Button>
                 </div>
               </div>
@@ -989,8 +993,8 @@ function SelectorSection<T extends string>({
 }) {
   return (
     <section>
-      <p className="text-sm font-medium">{title}</p>
-      <p className="mt-1 text-xs text-muted-foreground">{description}</p>
+      <p className="text-sm font-medium">{t(title)}</p>
+      <p className="mt-1 text-xs text-muted-foreground">{t(description)}</p>
       <div className="mt-3 flex flex-wrap gap-2">
         {options.map((option) => (
           <label
@@ -1004,7 +1008,7 @@ function SelectorSection<T extends string>({
                 onToggle(option.value, event.target.checked)
               }
             />
-            {option.label}
+            {t(option.label)}
           </label>
         ))}
       </div>
@@ -1029,8 +1033,8 @@ function InventorySelector({
 }) {
   return (
     <section>
-      <p className="text-sm font-medium">{title}</p>
-      <p className="mt-1 text-xs text-muted-foreground">{description}</p>
+      <p className="text-sm font-medium">{t(title)}</p>
+      <p className="mt-1 text-xs text-muted-foreground">{t(description)}</p>
       {items.length ? (
         <div className="mt-3 max-h-52 space-y-2 overflow-y-auto pr-1">
           {items.map((item) => (
@@ -1058,7 +1062,7 @@ function InventorySelector({
           ))}
         </div>
       ) : (
-        <p className="mt-3 text-xs text-muted-foreground">{emptyLabel}</p>
+        <p className="mt-3 text-xs text-muted-foreground">{t(emptyLabel)}</p>
       )}
     </section>
   );
@@ -1078,7 +1082,7 @@ function StepIndicator({ step }: { step: RuleStep }) {
               : "border-border text-muted-foreground")
           }
         >
-          {label}
+          {t(label)}
         </div>
       ))}
     </div>
@@ -1096,7 +1100,7 @@ function DecisionBadge({ decision }: { decision: PolicyDecision }) {
             : "outline"
       }
     >
-      {decision === "require_approval" ? "Require approval" : decision}
+      {t(decision === "require_approval" ? "Require approval" : decision)}
     </Badge>
   );
 }
@@ -1104,8 +1108,7 @@ function DecisionBadge({ decision }: { decision: PolicyDecision }) {
 function ApprovalWarning() {
   return (
     <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs leading-5 text-muted-foreground">
-      The current Approval adapter is fail-closed. Invocations requiring
-      approval are rejected until an interactive Approval workflow exists.
+      {t("The current Approval adapter is fail-closed. Invocations requiring approval are rejected until an interactive Approval workflow exists.")}
     </div>
   );
 }
@@ -1122,10 +1125,10 @@ function Field({
   return (
     <label className="block">
       <span className="mb-1.5 flex items-center gap-2 text-sm font-medium">
-        {label}
+        {t(label)}
         {optional ? (
           <span className="text-xs font-normal text-muted-foreground">
-            Optional
+            {t("Optional")}
           </span>
         ) : null}
       </span>
@@ -1172,15 +1175,19 @@ function lines(value: string) {
 function factsSummary(rule: PolicyRule) {
   const parts: string[] = [];
   if (rule.match.factKnowledge !== "any") {
-    parts.push("facts: " + rule.match.factKnowledge);
+    parts.push(
+      t("facts: {{value}}", { value: t(rule.match.factKnowledge) }),
+    );
   }
   if (rule.match.effectsAny.length) {
-    parts.push(rule.match.effectsAny.length + " effect");
+    parts.push(t("{{count}} effects", { count: rule.match.effectsAny.length }));
   }
   if (rule.match.resourcesAny.length) {
-    parts.push(rule.match.resourcesAny.length + " resource");
+    parts.push(
+      t("{{count}} resources", { count: rule.match.resourcesAny.length }),
+    );
   }
-  return parts.length ? parts.join(" · ") : "No Governance Fact predicates";
+  return parts.length ? parts.join(" · ") : t("No Governance Fact predicates");
 }
 
 function targetSummary(
@@ -1191,38 +1198,62 @@ function targetSummary(
 ) {
   const parts: string[] = [];
   if (rule.match.origins.length) {
-    parts.push("origins: " + rule.match.origins.join(", "));
+    parts.push(
+      t("origins: {{value}}", {
+        value: rule.match.origins
+          .map(
+            (origin) =>
+              t(originOptions.find((option) => option.value === origin)?.label ?? origin),
+          )
+          .join(", "),
+      }),
+    );
   }
   if (rule.match.scopeKinds.length) {
-    parts.push("scope: " + rule.match.scopeKinds.join(", "));
+    parts.push(
+      t("scope: {{value}}", {
+        value: rule.match.scopeKinds
+          .map(
+            (scope) =>
+              t(scopeOptions.find((option) => option.value === scope)?.label ?? scope),
+          )
+          .join(", "),
+      }),
+    );
   }
   if (rule.match.profileRefs.length) {
     parts.push(
-      "profiles: " +
-        rule.match.profileRefs
-          .map((id) => profiles.get(id)?.slug ?? "Missing Profile")
+      t("profiles: {{value}}", {
+        value: rule.match.profileRefs
+          .map((id) => profiles.get(id)?.slug ?? t("Missing Profile"))
           .join(", "),
+      }),
     );
   }
   if (rule.match.providerIds.length) {
     parts.push(
-      "providers: " +
-        rule.match.providerIds
-          .map((id) => providers.get(id)?.namespace ?? "Missing Provider")
+      t("providers: {{value}}", {
+        value: rule.match.providerIds
+          .map((id) => providers.get(id)?.namespace ?? t("Missing Provider"))
           .join(", "),
+      }),
     );
   }
   if (rule.match.toolIds.length) {
     parts.push(
-      "tools: " +
-        rule.match.toolIds
-          .map((id) => tools.get(id)?.title || tools.get(id)?.name || "Missing Tool")
+      t("tools: {{value}}", {
+        value: rule.match.toolIds
+          .map(
+            (id) =>
+              tools.get(id)?.title || tools.get(id)?.name || t("Missing Tool"),
+          )
           .join(", "),
+      }),
     );
   }
-  return parts.length ? parts.join(" · ") : "Global wildcard";
+  return parts.length ? parts.join(" · ") : t("Global wildcard");
 }
 
 function errorMessage(reason: unknown) {
-  return reason instanceof Error ? reason.message : "Unexpected error";
+  return reason instanceof Error ? reason.message : t("Unexpected error");
 }

@@ -30,6 +30,8 @@ import { EmptyState, ErrorNotice, PageHeader } from "../../shared/page";
 import { usePagination } from "../../shared/pagination";
 import { TablePagination } from "../../shared/table-pagination";
 
+import { t } from "../../i18n/i18n";
+
 export function AuditPage({ client }: { client: MenderClient }) {
   const [records, setRecords] = useState<AuditRecord[]>([]);
   const [selected, setSelected] = useState<AuditRecord | null>(null);
@@ -78,7 +80,7 @@ export function AuditPage({ client }: { client: MenderClient }) {
         description="Data-minimized terminal invocation records with execution origin, scope, and canonical outcome classification. Arguments, full result payloads, credentials, progress payloads, and raw protocol traffic are not retained."
         actions={
           <Button variant="outline" onClick={() => void refresh()} disabled={busy}>
-            Refresh
+            {t("Refresh")}
           </Button>
         }
       />
@@ -86,7 +88,7 @@ export function AuditPage({ client }: { client: MenderClient }) {
 
       <Card>
         <CardHeader>
-          <CardTitle>Invocation history</CardTitle>
+          <CardTitle>{t("Invocation history")}</CardTitle>
         </CardHeader>
         <CardContent>
           {records.length ? (
@@ -94,13 +96,13 @@ export function AuditPage({ client }: { client: MenderClient }) {
               <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Finished</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Caller</TableHead>
-                  <TableHead>Tool</TableHead>
-                  <TableHead>Policy</TableHead>
-                  <TableHead>Error</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead>{t("Finished")}</TableHead>
+                  <TableHead>{t("Status")}</TableHead>
+                  <TableHead>{t("Caller")}</TableHead>
+                  <TableHead>{t("Tool")}</TableHead>
+                  <TableHead>{t("Policy")}</TableHead>
+                  <TableHead>{t("Error")}</TableHead>
+                  <TableHead className="text-right">{t("Actions")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -135,7 +137,7 @@ export function AuditPage({ client }: { client: MenderClient }) {
                         aria-label={"View audit " + record.invocationId}
                         onClick={() => setSelected(record)}
                       >
-                        View
+                        {t("View")}
                       </Button>
                     </TableCell>
                   </TableRow>
@@ -166,9 +168,9 @@ export function AuditPage({ client }: { client: MenderClient }) {
       >
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Invocation details</DialogTitle>
+            <DialogTitle>{t("Invocation details")}</DialogTitle>
             <DialogDescription>
-              Data-minimized terminal metadata and failure diagnostics.
+              {t("Data-minimized terminal metadata and failure diagnostics.")}
             </DialogDescription>
           </DialogHeader>
 
@@ -239,7 +241,7 @@ export function AuditPage({ client }: { client: MenderClient }) {
 
               {selected.policyReason ? (
                 <div>
-                  <p className="text-sm font-medium">Policy reason</p>
+                  <p className="text-sm font-medium">{t("Policy reason")}</p>
                   <p className="mt-1 text-sm text-muted-foreground">
                     {selected.policyReason}
                   </p>
@@ -248,16 +250,14 @@ export function AuditPage({ client }: { client: MenderClient }) {
 
               {selected.status !== "completed" ? (
                 <div className="rounded-lg border border-border p-4">
-                  <p className="text-sm font-medium">Error summary</p>
+                  <p className="text-sm font-medium">{t("Error summary")}</p>
                   {selected.errorSummary ? (
                     <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-muted-foreground">
                       {selected.errorSummary}
                     </p>
                   ) : (
                     <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                      No diagnostic summary was retained for this record. Older
-                      Audit records and failures without a safe upstream summary
-                      only contain the error class.
+                      {t("No diagnostic summary was retained for this record. Older Audit records and failures without a safe upstream summary only contain the error class.")}
                     </p>
                   )}
                 </div>
@@ -283,7 +283,7 @@ function AuditField({
 }) {
   return (
     <div className="min-w-0 rounded-lg border border-border bg-muted/40 p-3">
-      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="text-xs text-muted-foreground">{t(label)}</p>
       <p
         className={[
           "mt-1 truncate text-sm",
@@ -297,5 +297,5 @@ function AuditField({
 }
 
 function errorMessage(reason: unknown) {
-  return reason instanceof Error ? reason.message : "Unexpected error";
+  return reason instanceof Error ? reason.message : t("Unexpected error");
 }

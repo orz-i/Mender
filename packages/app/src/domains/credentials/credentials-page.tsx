@@ -32,6 +32,8 @@ import { EmptyState, ErrorNotice, PageHeader } from "../../shared/page";
 import { usePagination } from "../../shared/pagination";
 import { TablePagination } from "../../shared/table-pagination";
 
+import { t } from "../../i18n/i18n";
+
 type CredentialSource = Credential["source"];
 
 const emptyCreateForm = {
@@ -97,7 +99,7 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
     const name = createForm.name.trim();
     return namespace && name
       ? "credential://" + namespace + "/" + name
-      : "Derived after namespace and name";
+      : t("Derived after namespace and name");
   }, [createForm.name, createForm.namespace]);
 
   async function createCredential() {
@@ -154,7 +156,9 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
   async function remove(item: Credential) {
     if (
       !window.confirm(
-        `Delete Credential "${item.displayName}"? Profile or Provider references will block deletion.`,
+        t('Delete Credential "{{name}}"? Profile or Provider references will block deletion.', {
+          name: item.displayName,
+        }),
       )
     ) {
       return;
@@ -191,7 +195,7 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
               setCreateOpen(true);
             }}
           >
-            Add credential
+            {t("Add credential")}
           </Button>
         }
       />
@@ -200,27 +204,27 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
 
       <Card>
         <CardHeader className="border-b">
-          <CardTitle>Credential inventory</CardTitle>
+          <CardTitle>{t("Credential inventory")}</CardTitle>
           <CardDescription>
-            {credentials.length} configured{" "}
-            {credentials.length === 1 ? "Credential" : "Credentials"}. Secret
-            values are never displayed here.
+            {t("{{count}} Credentials configured. Secret values are never displayed here.", {
+              count: credentials.length,
+            })}
           </CardDescription>
         </CardHeader>
         <CardContent>
           {!loaded ? (
             <div className="py-10 text-center text-sm text-muted-foreground">
-              Loading Credentials…
+              {t("Loading Credentials…")}
             </div>
           ) : credentials.length ? (
             <>
               <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Credential</TableHead>
-                  <TableHead>Source</TableHead>
-                  <TableHead>Source metadata</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead>{t("Credential")}</TableHead>
+                  <TableHead>{t("Source")}</TableHead>
+                  <TableHead>{t("Source metadata")}</TableHead>
+                  <TableHead className="text-right">{t("Actions")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -233,12 +237,12 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline">{item.source}</Badge>
+                      <Badge variant="outline">{t(item.source)}</Badge>
                     </TableCell>
                     <TableCell className="font-mono text-xs text-muted-foreground">
                       {item.source === "environment"
                         ? item.environmentVariable
-                        : "OS credential store"}
+                        : t("OS credential store")}
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
@@ -252,7 +256,7 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
                               setRotateCredential(item);
                             }}
                           >
-                            Rotate
+                            {t("Rotate")}
                           </Button>
                         ) : null}
                         <Button
@@ -261,7 +265,7 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
                           disabled={busy !== ""}
                           onClick={() => void remove(item)}
                         >
-                          Delete
+                          {t("Delete")}
                         </Button>
                       </div>
                     </TableCell>
@@ -294,18 +298,16 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
       >
         <DialogContent className="sm:max-w-xl">
           <DialogHeader>
-            <DialogTitle>Add credential</DialogTitle>
+            <DialogTitle>{t("Add credential")}</DialogTitle>
             <DialogDescription>
-              Inventory metadata is stored in Mender. Native secret values go
-              directly to the OS credential store; environment-backed
-              Credentials store only the variable name.
+              {t("Inventory metadata is stored in Mender. Native secret values go directly to the OS credential store; environment-backed Credentials store only the variable name.")}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">
             <Field label="Source">
               <select
-                aria-label="Credential source"
+                aria-label={t("Credential source")}
                 value={createForm.source}
                 onChange={(event) =>
                   setCreateForm((current) => ({
@@ -317,16 +319,16 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
                 }
                 className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
               >
-                <option value="native">native keyring</option>
-                <option value="environment">environment variable</option>
+                <option value="native">{t("native keyring")}</option>
+                <option value="environment">{t("environment variable")}</option>
               </select>
             </Field>
 
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Namespace">
                 <Input
-                  aria-label="Credential namespace"
-                  placeholder="github"
+                  aria-label={t("Credential namespace")}
+                  placeholder={t("github")}
                   value={createForm.namespace}
                   onChange={(event) =>
                     setCreateForm((current) => ({
@@ -338,8 +340,8 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
               </Field>
               <Field label="Name">
                 <Input
-                  aria-label="Credential name"
-                  placeholder="work"
+                  aria-label={t("Credential name")}
+                  placeholder={t("work")}
                   value={createForm.name}
                   onChange={(event) =>
                     setCreateForm((current) => ({
@@ -353,8 +355,8 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
 
             <Field label="Display name">
               <Input
-                aria-label="Credential display name"
-                placeholder="GitHub work"
+                aria-label={t("Credential display name")}
+                placeholder={t("GitHub work")}
                 value={createForm.displayName}
                 onChange={(event) =>
                   setCreateForm((current) => ({
@@ -372,7 +374,7 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
                 <Input
                   type="password"
                   autoComplete="new-password"
-                  aria-label="Credential secret"
+                  aria-label={t("Credential secret")}
                   value={createForm.secret}
                   onChange={(event) =>
                     setCreateForm((current) => ({
@@ -382,14 +384,14 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
                   }
                 />
                 <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                  The value is submitted once and is never returned by Mender.
+                  {t("The value is submitted once and is never returned by Mender.")}
                 </p>
               </Field>
             ) : (
               <Field label="Environment variable">
                 <Input
-                  aria-label="Credential environment variable"
-                  placeholder="GITHUB_TOKEN"
+                  aria-label={t("Credential environment variable")}
+                  placeholder={t("GITHUB_TOKEN")}
                   value={createForm.environmentVariable}
                   onChange={(event) =>
                     setCreateForm((current) => ({
@@ -404,13 +406,13 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateOpen(false)}>
-              Cancel
+              {t("Cancel")}
             </Button>
             <Button
               disabled={!createValid || busy !== ""}
               onClick={() => void createCredential()}
             >
-              {busy === "create" ? "Creating…" : "Create credential"}
+              {t(busy === "create" ? "Creating…" : "Create credential")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -427,18 +429,18 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
       >
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Rotate native secret</DialogTitle>
+            <DialogTitle>{t("Rotate native secret")}</DialogTitle>
             <DialogDescription>
-              Replace the secret stored for{" "}
-              {rotateCredential?.displayName ?? "this Credential"}. The current
-              value is never revealed.
+              {t("Replace the secret stored for {{name}}. The current value is never revealed.", {
+                name: rotateCredential?.displayName ?? t("this Credential"),
+              })}
             </DialogDescription>
           </DialogHeader>
           <Field label="New secret">
             <Input
               type="password"
               autoComplete="new-password"
-              aria-label="New Credential secret"
+              aria-label={t("New Credential secret")}
               value={rotateSecret}
               onChange={(event) => setRotateSecret(event.target.value)}
             />
@@ -451,13 +453,13 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
                 setRotateSecret("");
               }}
             >
-              Cancel
+              {t("Cancel")}
             </Button>
             <Button
               disabled={rotateSecret === "" || busy !== ""}
               onClick={() => void rotate()}
             >
-              {busy ? "Rotating…" : "Rotate secret"}
+              {t(busy ? "Rotating…" : "Rotate secret")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -475,7 +477,7 @@ function Field({
 }) {
   return (
     <label className="block">
-      <span className="mb-1.5 block text-sm font-medium">{label}</span>
+      <span className="mb-1.5 block text-sm font-medium">{t(label)}</span>
       {children}
     </label>
   );
@@ -484,7 +486,7 @@ function Field({
 function ReadOnlyField({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <div className="mb-1.5 text-sm font-medium">{label}</div>
+      <div className="mb-1.5 text-sm font-medium">{t(label)}</div>
       <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 font-mono text-xs">
         {value}
       </div>
@@ -493,5 +495,5 @@ function ReadOnlyField({ label, value }: { label: string; value: string }) {
 }
 
 function errorMessage(reason: unknown) {
-  return reason instanceof Error ? reason.message : "Unexpected error";
+  return reason instanceof Error ? reason.message : t("Unexpected error");
 }

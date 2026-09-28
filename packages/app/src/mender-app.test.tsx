@@ -1,9 +1,22 @@
-import { render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { MenderClient } from "@mender/sdk";
 import { MemoryRouter } from "react-router";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { resetLocaleForTesting, setLocale } from "./i18n/i18n";
 import { MenderApp } from "./mender-app";
+
+beforeEach(() => {
+  window.localStorage.clear();
+  resetLocaleForTesting();
+  setLocale("en");
+});
+
+afterEach(() => {
+  cleanup();
+  window.localStorage.clear();
+  resetLocaleForTesting();
+});
 
 describe("MenderApp", () => {
   it("renders the management navigation and overview", () => {
@@ -13,9 +26,7 @@ describe("MenderApp", () => {
       </MemoryRouter>,
     );
 
-    expect(
-      screen.getByRole("heading", { name: "Overview" }),
-    ).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Overview" })).toBeTruthy();
 
     for (const name of [
       "Overview",
@@ -29,6 +40,24 @@ describe("MenderApp", () => {
     ]) {
       expect(screen.getByRole("link", { name })).toBeTruthy();
     }
+  });
+
+  it("switches the active UI to Simplified Chinese without a reload", () => {
+    render(
+      <MemoryRouter>
+        <MenderApp client={overviewClient()} />
+      </MemoryRouter>,
+    );
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Language" }), {
+      target: { value: "zh-CN" },
+    });
+
+    expect(screen.getByRole("heading", { name: "概览" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "提供方" })).toBeTruthy();
+    expect(screen.getByText("本地控制平面状态与近期 Mender 活动。")).toBeTruthy();
+    expect(window.localStorage.getItem("mender.locale")).toBe("zh-CN");
+    expect(document.documentElement.lang).toBe("zh-CN");
   });
 });
 

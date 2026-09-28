@@ -39,6 +39,8 @@ import { EmptyState, ErrorNotice, PageHeader } from "../../shared/page";
 import { usePagination } from "../../shared/pagination";
 import { TablePagination } from "../../shared/table-pagination";
 
+import { t } from "../../i18n/i18n";
+
 const emptyCreateForm = {
   slug: "",
   displayName: "",
@@ -513,33 +515,37 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
         title="Profiles"
         description="Manage Tool exposure boundaries for MCP serving."
         actions={
-          <Button onClick={() => setCreateOpen(true)}>Create profile</Button>
+          <Button onClick={() => setCreateOpen(true)}>{t("Create profile")}</Button>
         }
       />
       {error ? <ErrorNotice message={error} /> : null}
 
       <Card>
         <CardHeader className="border-b">
-          <CardTitle>Profiles</CardTitle>
+          <CardTitle>{t("Profiles")}</CardTitle>
           <CardDescription>
-            {profiles.length} configured{" "}
-            {profiles.length === 1 ? "profile" : "profiles"}
+            {t(
+              profiles.length === 1
+                ? "{{count}} profile configured"
+                : "{{count}} profiles configured",
+              { count: profiles.length },
+            )}
           </CardDescription>
         </CardHeader>
         <CardContent>
           {!loaded ? (
             <div className="py-10 text-center text-sm text-muted-foreground">
-              Loading profiles…
+              {t("Loading profiles…")}
             </div>
           ) : profiles.length ? (
             <>
               <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Profile</TableHead>
-                  <TableHead>Mode</TableHead>
-                  <TableHead>Tools</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead>{t("Profile")}</TableHead>
+                  <TableHead>{t("Mode")}</TableHead>
+                  <TableHead>{t("Tools")}</TableHead>
+                  <TableHead className="text-right">{t("Actions")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -552,17 +558,17 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline">{profile.mode}</Badge>
+                      <Badge variant="outline">{t(profile.mode)}</Badge>
                     </TableCell>
                     <TableCell>{profile.tools.length}</TableCell>
                     <TableCell className="text-right">
                       <Button
                         variant="outline"
                         size="sm"
-                        aria-label={"Manage " + profile.slug}
+                        aria-label={t("Manage {{profile}}", { profile: profile.slug })}
                         onClick={() => setManageSlug(profile.slug)}
                       >
-                        Manage
+                        {t("Manage")}
                       </Button>
                     </TableCell>
                   </TableRow>
@@ -594,17 +600,17 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
       >
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Create profile</DialogTitle>
+            <DialogTitle>{t("Create profile")}</DialogTitle>
             <DialogDescription>
-              Choose an exposure mode, then select Tools from the Catalog.
+              {t("Choose an exposure mode, then select Tools from the Catalog.")}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">
             <Field label="Slug">
               <Input
-                aria-label="Profile slug"
-                placeholder="default"
+                aria-label={t("Profile slug")}
+                placeholder={t("default")}
                 value={createForm.slug}
                 onChange={(event) =>
                   setCreateForm((current) => ({
@@ -616,7 +622,7 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
             </Field>
             <Field label="Display name">
               <Input
-                aria-label="Profile display name"
+                aria-label={t("Profile display name")}
                 value={createForm.displayName}
                 onChange={(event) =>
                   setCreateForm((current) => ({
@@ -628,7 +634,7 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
             </Field>
             <Field label="Exposure mode">
               <select
-                aria-label="Exposure mode"
+                aria-label={t("Exposure mode")}
                 value={createForm.mode}
                 onChange={(event) =>
                   setCreateForm((current) => ({
@@ -638,26 +644,25 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
                 }
                 className="h-8 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
               >
-                <option value="direct">direct</option>
-                <option value="dynamic">dynamic</option>
-                <option value="hybrid">hybrid</option>
+                <option value="direct">{t("direct")}</option>
+                <option value="dynamic">{t("dynamic")}</option>
+                <option value="hybrid">{t("hybrid")}</option>
               </select>
             </Field>
             <p className="text-xs leading-5 text-muted-foreground">
-              Direct exports selected Tools. Dynamic exposes discovery meta-tools.
-              Hybrid supports both and lets selected Tools opt into direct export.
+              {t("Direct exports selected Tools. Dynamic exposes discovery meta-tools. Hybrid supports both and lets selected Tools opt into direct export.")}
             </p>
           </div>
 
           <DialogFooter>
             <DialogClose render={<Button variant="outline" />}>
-              Cancel
+              {t("Cancel")}
             </DialogClose>
             <Button
               disabled={busy || !createForm.slug || !createForm.displayName}
               onClick={() => void createProfile()}
             >
-              {busy ? "Creating…" : "Create profile"}
+              {t(busy ? "Creating…" : "Create profile")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -674,10 +679,10 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
         <DialogContent className="sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle>
-              {managedProfile?.displayName ?? "Manage profile"}
+              {managedProfile?.displayName ?? t("Manage profile")}
             </DialogTitle>
             <DialogDescription>
-              Choose which Catalog Tools this Profile may expose.
+              {t("Choose which Catalog Tools this Profile may expose.")}
             </DialogDescription>
           </DialogHeader>
 
@@ -690,16 +695,16 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
 
               <div className="flex items-center justify-between">
                 <div>
-                  <div className="font-medium">Selected Tools</div>
+                  <div className="font-medium">{t("Selected Tools")}</div>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Tool identity is managed internally; select by name and source.
+                    {t("Tool identity is managed internally; select by name and source.")}
                   </p>
                 </div>
                 <Button
                   disabled={busy}
                   onClick={openToolPicker}
                 >
-                  Choose tools
+                  {t("Choose tools")}
                 </Button>
               </div>
 
@@ -715,7 +720,7 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
                       selection.titleOverride ||
                       tool?.title ||
                       tool?.name ||
-                      "Unavailable Tool";
+                      t("Unavailable Tool");
                     const description =
                       selection.descriptionOverride || tool?.description || "";
                     return (
@@ -728,16 +733,16 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
                           <p className="mt-1 truncate text-xs text-muted-foreground">
                             {provider?.displayName ||
                               provider?.namespace ||
-                              "Unknown Provider"}
+                              t("Unknown Provider")}
                             {description ? " · " + description : ""}
                           </p>
                           <div className="mt-2 flex flex-wrap gap-1.5">
                             <Badge variant="outline">
-                              {selection.direct ? "Direct" : "Dynamic"}
+                              {t(selection.direct ? "Direct" : "Dynamic")}
                             </Badge>
                             {selection.alias ? (
                               <Badge variant="secondary">
-                                Alias: {selection.alias}
+                                {t("Alias:")} {selection.alias}
                               </Badge>
                             ) : null}
                             {selection.policyConstraint !== "inherit" ? (
@@ -748,18 +753,24 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
                                     : "secondary"
                                 }
                               >
-                                {selection.policyConstraint === "deny"
-                                  ? "Denied"
-                                  : "Approval required"}
+                                {t(
+                                  selection.policyConstraint === "deny"
+                                    ? "Denied"
+                                    : "Approval required",
+                                )}
                               </Badge>
                             ) : null}
                             {selection.concurrencyConstraint === "serial" ? (
-                              <Badge variant="secondary">Serial</Badge>
+                              <Badge variant="secondary">{t("Serial")}</Badge>
                             ) : null}
                             {selection.credentialRefs.length ? (
                               <Badge variant="secondary">
-                                {selection.credentialRefs.length} credential
-                                {selection.credentialRefs.length === 1 ? "" : "s"}
+                                {t(
+                                  selection.credentialRefs.length === 1
+                                    ? "{{count}} credential"
+                                    : "{{count}} credentials",
+                                  { count: selection.credentialRefs.length },
+                                )}
                               </Badge>
                             ) : null}
                           </div>
@@ -768,38 +779,38 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
                           <Button
                             variant="outline"
                             size="sm"
-                            aria-label={"Presentation for " + title}
+                            aria-label={t("Presentation for {{tool}}", { tool: title })}
                             disabled={busy}
                             onClick={() => openPresentation(selection)}
                           >
-                            Presentation
+                            {t("Presentation")}
                           </Button>
                           <Button
                             variant="outline"
                             size="sm"
-                            aria-label={"Governance for " + title}
+                            aria-label={t("Governance for {{tool}}", { tool: title })}
                             disabled={busy}
                             onClick={() => openGovernance(selection)}
                           >
-                            Governance
+                            {t("Governance")}
                           </Button>
                           <Button
                             variant="outline"
                             size="sm"
-                            aria-label={"Credentials for " + title}
+                            aria-label={t("Credentials for {{tool}}", { tool: title })}
                             disabled={busy}
                             onClick={() => openCredentials(selection)}
                           >
-                            Credentials
+                            {t("Credentials")}
                           </Button>
                           <Button
                             variant="outline"
                             size="sm"
-                            aria-label={"Remove " + title}
+                            aria-label={t("Remove {{tool}}", { tool: title })}
                             disabled={busy}
                             onClick={() => void removeTool(selection.toolId)}
                           >
-                            Remove
+                            {t("Remove")}
                           </Button>
                         </div>
                       </div>
@@ -829,9 +840,9 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
       >
         <DialogContent className="sm:max-w-xl">
           <DialogHeader>
-            <DialogTitle>Tool presentation</DialogTitle>
+            <DialogTitle>{t("Tool presentation")}</DialogTitle>
             <DialogDescription>
-              Configure Profile-specific model-facing presentation without changing the Catalog Tool.
+              {t("Configure Profile-specific model-facing presentation without changing the Catalog Tool.")}
             </DialogDescription>
           </DialogHeader>
 
@@ -839,8 +850,8 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
             <div className="space-y-4">
               <Field label="Alias">
                 <Input
-                  aria-label="Tool binding alias"
-                  placeholder="Inherit canonical Tool name"
+                  aria-label={t("Tool binding alias")}
+                  placeholder={t("Inherit canonical Tool name")}
                   value={presentationForm.alias}
                   onChange={(event) =>
                     setPresentationForm((current) => ({
@@ -852,8 +863,8 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
               </Field>
               <Field label="Title override">
                 <Input
-                  aria-label="Tool binding title override"
-                  placeholder="Inherit canonical title"
+                  aria-label={t("Tool binding title override")}
+                  placeholder={t("Inherit canonical title")}
                   value={presentationForm.titleOverride}
                   onChange={(event) =>
                     setPresentationForm((current) => ({
@@ -865,9 +876,9 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
               </Field>
               <Field label="Description override">
                 <textarea
-                  aria-label="Tool binding description override"
+                  aria-label={t("Tool binding description override")}
                   className="min-h-28 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring/40"
-                  placeholder="Inherit canonical description"
+                  placeholder={t("Inherit canonical description")}
                   value={presentationForm.descriptionOverride}
                   onChange={(event) =>
                     setPresentationForm((current) => ({
@@ -889,11 +900,13 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
                       }))
                     }
                   />
-                  Direct export
+                  {t("Direct export")}
                 </label>
               ) : (
                 <p className="text-xs leading-5 text-muted-foreground">
-                  Direct export is controlled by this Profile&apos;s {presentationProfile.mode} exposure mode.
+                  {t("Direct export is controlled by this Profile's {{mode}} exposure mode.", {
+                    mode: t(presentationProfile.mode),
+                  })}
                 </p>
               )}
             </div>
@@ -901,10 +914,10 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
 
           <DialogFooter>
             <Button variant="outline" onClick={closePresentation}>
-              Cancel
+              {t("Cancel")}
             </Button>
             <Button disabled={busy} onClick={() => void savePresentation()}>
-              {busy ? "Saving…" : "Save presentation"}
+              {t(busy ? "Saving…" : "Save presentation")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -920,9 +933,9 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
       >
         <DialogContent className="sm:max-w-xl">
           <DialogHeader>
-            <DialogTitle>Tool governance</DialogTitle>
+            <DialogTitle>{t("Tool governance")}</DialogTitle>
             <DialogDescription>
-              Tighten execution behavior for this Profile binding. Binding policy can never relax the global Policy decision.
+              {t("Tighten execution behavior for this Profile binding. Binding policy can never relax the global Policy decision.")}
             </DialogDescription>
           </DialogHeader>
 
@@ -930,7 +943,7 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
             <div className="space-y-5">
               <Field label="Policy constraint">
                 <select
-                  aria-label="Binding policy constraint"
+                  aria-label={t("Binding policy constraint")}
                   value={governanceForm.policyConstraint}
                   onChange={(event) =>
                     setGovernanceForm((current) => ({
@@ -940,17 +953,17 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
                   }
                   className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
                 >
-                  <option value="inherit">inherit</option>
-                  <option value="require_approval">require approval</option>
-                  <option value="deny">deny</option>
+                  <option value="inherit">{t("inherit")}</option>
+                  <option value="require_approval">{t("require approval")}</option>
+                  <option value="deny">{t("deny")}</option>
                 </select>
               </Field>
               <p className="text-xs leading-5 text-muted-foreground">
-                Inherit keeps normal Runtime behavior. Require approval uses the existing Approval gate and currently fails closed when no approval adapter is configured. Deny keeps the Tool selected but rejects invocation.
+                {t("Inherit keeps normal Runtime behavior. Require approval uses the existing Approval gate and currently fails closed when no approval adapter is configured. Deny keeps the Tool selected but rejects invocation.")}
               </p>
               <Field label="Concurrency constraint">
                 <select
-                  aria-label="Binding concurrency constraint"
+                  aria-label={t("Binding concurrency constraint")}
                   value={governanceForm.concurrencyConstraint}
                   onChange={(event) =>
                     setGovernanceForm((current) => ({
@@ -960,22 +973,22 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
                   }
                   className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
                 >
-                  <option value="inherit">inherit</option>
-                  <option value="serial">serial</option>
+                  <option value="inherit">{t("inherit")}</option>
+                  <option value="serial">{t("serial")}</option>
                 </select>
               </Field>
               <p className="text-xs leading-5 text-muted-foreground">
-                Serial prevents overlapping calls for this Profile and Tool binding only.
+                {t("Serial prevents overlapping calls for this Profile and Tool binding only.")}
               </p>
             </div>
           ) : null}
 
           <DialogFooter>
             <Button variant="outline" onClick={closeGovernance}>
-              Cancel
+              {t("Cancel")}
             </Button>
             <Button disabled={busy} onClick={() => void saveGovernance()}>
-              {busy ? "Saving…" : "Save governance"}
+              {t(busy ? "Saving…" : "Save governance")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -991,9 +1004,9 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
       >
         <DialogContent className="sm:max-w-xl">
           <DialogHeader>
-            <DialogTitle>Tool credentials</DialogTitle>
+            <DialogTitle>{t("Tool credentials")}</DialogTitle>
             <DialogDescription>
-              Allow this Profile binding to resolve selected inventory Credentials at execution time. Secret values remain outside Profile state.
+              {t("Allow this Profile binding to resolve selected inventory Credentials at execution time. Secret values remain outside Profile state.")}
             </DialogDescription>
           </DialogHeader>
 
@@ -1032,8 +1045,10 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
                         </span>
                         <span className="mt-1 block text-xs text-muted-foreground">
                           {item.source === "environment"
-                            ? "Environment · " + item.environmentVariable
-                            : "Native OS credential store"}
+                            ? t("Environment · {{name}}", {
+                                name: item.environmentVariable,
+                              })
+                            : t("Native OS credential store")}
                         </span>
                       </span>
                     </label>
@@ -1050,10 +1065,10 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
 
           <DialogFooter>
             <Button variant="outline" onClick={closeCredentials}>
-              Cancel
+              {t("Cancel")}
             </Button>
             <Button disabled={busy} onClick={() => void saveCredentials()}>
-              {busy ? "Saving…" : "Save credentials"}
+              {t(busy ? "Saving…" : "Save credentials")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1131,17 +1146,16 @@ function ToolPickerDialog({
     >
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-4xl">
         <DialogHeader>
-          <DialogTitle>Choose tools</DialogTitle>
+          <DialogTitle>{t("Choose tools")}</DialogTitle>
           <DialogDescription>
-            Browse or search the Catalog, then select the Tools this Profile may
-            expose.
+            {t("Browse or search the Catalog, then select the Tools this Profile may expose.")}
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid grid-cols-[minmax(0,1fr)_220px_auto] gap-3">
           <Input
-            aria-label="Profile tool search"
-            placeholder="Search tools"
+            aria-label={t("Profile tool search")}
+            placeholder={t("Search tools")}
             value={query}
             onChange={(event) => onQueryChange(event.target.value)}
             onKeyDown={(event) => {
@@ -1151,12 +1165,12 @@ function ToolPickerDialog({
             }}
           />
           <select
-            aria-label="Provider filter"
+            aria-label={t("Provider filter")}
             value={providerId}
             onChange={(event) => onProviderChange(event.target.value)}
             className="h-8 rounded-lg border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
           >
-            <option value="">All Providers</option>
+            <option value="">{t("All Providers")}</option>
             {providers.map((provider) => (
               <option key={provider.providerId} value={provider.providerId}>
                 {provider.displayName || provider.namespace}
@@ -1164,13 +1178,13 @@ function ToolPickerDialog({
             ))}
           </select>
           <Button variant="outline" disabled={busy} onClick={onApply}>
-            {busy ? "Loading…" : "Apply"}
+            {t(busy ? "Loading…" : "Apply")}
           </Button>
         </div>
 
         <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <span>{tools.length} visible Tools</span>
-          <span>{selected.size} selected</span>
+          <span>{t("{{count}} visible Tools", { count: tools.length })}</span>
+          <span>{t("{{count}} selected", { count: selected.size })}</span>
         </div>
 
         <div className="max-h-[52vh] divide-y divide-border overflow-y-auto rounded-lg border border-border">
@@ -1184,7 +1198,7 @@ function ToolPickerDialog({
                   className="flex items-start gap-3 px-4 py-3"
                 >
                   <input
-                    aria-label={"Select " + (tool.title || tool.name)}
+                    aria-label={t("Select {{tool}}", { tool: tool.title || tool.name })}
                     type="checkbox"
                     className="mt-1"
                     checked={isSelected}
@@ -1205,7 +1219,7 @@ function ToolPickerDialog({
                     <p className="mt-1 text-xs text-muted-foreground">
                       {provider?.displayName ||
                         provider?.namespace ||
-                        "Unknown Provider"}
+                        t("Unknown Provider")}
                     </p>
                     {tool.description ? (
                       <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">
@@ -1225,7 +1239,7 @@ function ToolPickerDialog({
                           })
                         }
                       />
-                      Direct export
+                      {t("Direct export")}
                     </label>
                   ) : null}
                 </div>
@@ -1233,17 +1247,17 @@ function ToolPickerDialog({
             })
           ) : (
             <div className="p-8 text-center text-sm text-muted-foreground">
-              No matching Tools.
+              {t("No matching Tools.")}
             </div>
           )}
         </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>
-            Cancel
+            {t("Cancel")}
           </Button>
           <Button disabled={busy} onClick={onSave}>
-            {busy ? "Saving…" : "Save selection"}
+            {t(busy ? "Saving…" : "Save selection")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -1271,7 +1285,7 @@ function Field({
 }) {
   return (
     <label className="block space-y-1.5">
-      <span className="text-sm font-medium">{label}</span>
+      <span className="text-sm font-medium">{t(label)}</span>
       {children}
     </label>
   );
@@ -1280,7 +1294,7 @@ function Field({
 function ReadOnlyField({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <div className="mb-1.5 text-sm font-medium">{label}</div>
+      <div className="mb-1.5 text-sm font-medium">{t(label)}</div>
       <div className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
         {value}
       </div>
@@ -1289,5 +1303,5 @@ function ReadOnlyField({ label, value }: { label: string; value: string }) {
 }
 
 function errorMessage(reason: unknown) {
-  return reason instanceof Error ? reason.message : "Unexpected error";
+  return reason instanceof Error ? reason.message : t("Unexpected error");
 }

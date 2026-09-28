@@ -33,6 +33,8 @@ import { EmptyState, ErrorNotice, PageHeader } from "../../shared/page";
 import { usePagination } from "../../shared/pagination";
 import { TablePagination } from "../../shared/table-pagination";
 
+import { t } from "../../i18n/i18n";
+
 const defaultAddress = "127.0.0.1:8765";
 
 export function ServersPage({
@@ -183,13 +185,13 @@ export function ServersPage({
               disabled={busy !== ""}
               onClick={() => void refresh()}
             >
-              Refresh
+              {t("Refresh")}
             </Button>
             <Button
               disabled={profiles.length === 0 || busy !== ""}
               onClick={openStartDialog}
             >
-              Start server
+              {t("Start server")}
             </Button>
           </div>
         }
@@ -199,26 +201,26 @@ export function ServersPage({
 
       <Card>
         <CardHeader className="border-b">
-          <CardTitle>Running MCP servers</CardTitle>
+          <CardTitle>{t("Running MCP servers")}</CardTitle>
           <CardDescription>
-            Runtime-only loopback servers. They stop when Mender exits.
+            {t("Runtime-only loopback servers. They stop when Mender exits.")}
           </CardDescription>
         </CardHeader>
         <CardContent>
           {!loaded ? (
             <div className="py-10 text-center text-sm text-muted-foreground">
-              Loading servers…
+              {t("Loading servers…")}
             </div>
           ) : servers.length ? (
             <>
               <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Profile</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Endpoint</TableHead>
-                  <TableHead>Started</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead>{t("Profile")}</TableHead>
+                  <TableHead>{t("Status")}</TableHead>
+                  <TableHead>{t("Endpoint")}</TableHead>
+                  <TableHead>{t("Started")}</TableHead>
+                  <TableHead className="text-right">{t("Actions")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -227,7 +229,7 @@ export function ServersPage({
                     <TableCell>
                       <div className="font-medium">{server.profile}</div>
                       <div className="mt-1 text-xs text-muted-foreground">
-                        Streamable HTTP
+                        {t("Streamable HTTP")}
                       </div>
                     </TableCell>
                     <TableCell>
@@ -256,9 +258,11 @@ export function ServersPage({
                             )
                           }
                         >
-                          {copied === server.serverId + ":endpoint"
-                            ? "Copied"
-                            : "Copy endpoint"}
+                          {t(
+                            copied === server.serverId + ":endpoint"
+                              ? "Copied"
+                              : "Copy endpoint",
+                          )}
                         </Button>
                         <Button
                           variant="ghost"
@@ -270,9 +274,11 @@ export function ServersPage({
                             )
                           }
                         >
-                          {copied === server.serverId + ":config"
-                            ? "Copied"
-                            : "Copy config"}
+                          {t(
+                            copied === server.serverId + ":config"
+                              ? "Copied"
+                              : "Copy config",
+                          )}
                         </Button>
                         <Button
                           variant="outline"
@@ -280,9 +286,9 @@ export function ServersPage({
                           disabled={busy !== ""}
                           onClick={() => void restartServer(server)}
                         >
-                          {busy === server.serverId
-                            ? "Working…"
-                            : "Restart"}
+                          {t(
+                            busy === server.serverId ? "Working…" : "Restart",
+                          )}
                         </Button>
                         <Button
                           variant="destructive"
@@ -290,7 +296,7 @@ export function ServersPage({
                           disabled={busy !== ""}
                           onClick={() => void stopServer(server)}
                         >
-                          Stop
+                          {t("Stop")}
                         </Button>
                       </div>
                     </TableCell>
@@ -328,24 +334,23 @@ export function ServersPage({
       >
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Start MCP server</DialogTitle>
+            <DialogTitle>{t("Start MCP server")}</DialogTitle>
             <DialogDescription>
-              Expose one Profile over local Streamable HTTP. Remote/wildcard
-              bind addresses are intentionally rejected.
+              {t("Expose one Profile over local Streamable HTTP. Remote/wildcard bind addresses are intentionally rejected.")}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">
             <Field label="Profile">
               <select
-                aria-label="Server profile"
+                aria-label={t("Server profile")}
                 value={startProfile}
                 onChange={(event) => setStartProfile(event.target.value)}
                 className="h-8 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
               >
                 {profiles.map((profile) => (
                   <option key={profile.profileId} value={profile.slug}>
-                    {profile.displayName} ({profile.slug}) · {profile.tools.length} tools
+                    {profile.displayName} ({profile.slug}) · {profile.tools.length} {t("tools")}
                   </option>
                 ))}
               </select>
@@ -353,35 +358,31 @@ export function ServersPage({
 
             {selectedProfile !== null && selectedProfile.tools.length === 0 ? (
               <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-5">
-                This Profile currently contains 0 Tools. The server can start,
-                but downstream discovery will not return Provider Tools until
-                you add Tool membership on the Profiles page and Restart it.
+                {t("This Profile currently contains 0 Tools. The server can start, but downstream discovery will not return Provider Tools until you add Tool membership on the Profiles page and Restart it.")}
               </div>
             ) : null}
 
             <Field label="Listen address">
               <Input
-                aria-label="Listen address"
+                aria-label={t("Listen address")}
                 className="font-mono"
                 value={startAddress}
                 onChange={(event) => setStartAddress(event.target.value)}
               />
               <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                Use a loopback host such as 127.0.0.1 or localhost. Port 0 asks
-                the OS to choose a free port.
+                {t("Use a loopback host such as 127.0.0.1 or localhost. Port 0 asks the OS to choose a free port.")}
               </p>
             </Field>
 
             <div className="rounded-lg border border-border bg-muted/40 p-3 text-xs leading-5 text-muted-foreground">
-              Desktop-managed servers use Streamable HTTP. stdio remains
-              client-launched through{" "}
+              {t("Desktop-managed servers use Streamable HTTP. stdio remains client-launched through")}{" "}
               <code>mender serve mcp --profile … --stdio</code>.
             </div>
           </div>
 
           <DialogFooter>
             <DialogClose render={<Button variant="outline" />}>
-              Cancel
+              {t("Cancel")}
             </DialogClose>
             <Button
               disabled={
@@ -391,7 +392,7 @@ export function ServersPage({
               }
               onClick={() => void startServer()}
             >
-              {busy === "start" ? "Starting…" : "Start server"}
+              {t(busy === "start" ? "Starting…" : "Start server")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -402,7 +403,7 @@ export function ServersPage({
 
 async function browserCopyText(value: string) {
   if (navigator.clipboard === undefined) {
-    throw new Error("Clipboard API is unavailable in this host.");
+    throw new Error(t("Clipboard API is unavailable in this host."));
   }
   await navigator.clipboard.writeText(value);
 }
@@ -416,7 +417,7 @@ function Field({
 }) {
   return (
     <label className="block space-y-1.5">
-      <span className="text-sm font-medium">{label}</span>
+      <span className="text-sm font-medium">{t(label)}</span>
       {children}
     </label>
   );
@@ -446,5 +447,5 @@ function formatTimestamp(value: string) {
 }
 
 function errorMessage(reason: unknown) {
-  return reason instanceof Error ? reason.message : "Unexpected error";
+  return reason instanceof Error ? reason.message : t("Unexpected error");
 }

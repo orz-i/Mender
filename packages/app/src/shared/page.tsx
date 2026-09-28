@@ -9,6 +9,8 @@ import {
   CardTitle,
 } from "@mender/ui/components/card";
 
+import { t } from "../i18n/i18n";
+
 export function PageHeader({
   title,
   description,
@@ -21,9 +23,9 @@ export function PageHeader({
   return (
     <header className="mb-6 flex items-start justify-between gap-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">{t(title)}</h1>
         <p className="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">
-          {description}
+          {t(description)}
         </p>
       </div>
       {actions}
@@ -48,8 +50,8 @@ export function EmptyState({
 }) {
   return (
     <div className="rounded-lg border border-dashed border-border px-6 py-10 text-center">
-      <p className="font-medium">{title}</p>
-      <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+      <p className="font-medium">{t(title)}</p>
+      <p className="mt-1 text-sm text-muted-foreground">{t(description)}</p>
     </div>
   );
 }
@@ -69,15 +71,15 @@ export function StatusCard({
     <Card>
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between gap-3">
-          <CardDescription>{title}</CardDescription>
+          <CardDescription>{t(title)}</CardDescription>
           <Badge variant={status === "warning" ? "secondary" : "outline"}>
-            {status}
+            {t(status)}
           </Badge>
         </div>
         <CardTitle className="text-lg">{value}</CardTitle>
       </CardHeader>
       <CardContent>
-        <p className="text-sm text-muted-foreground">{description}</p>
+        <p className="text-sm text-muted-foreground">{t(description)}</p>
       </CardContent>
     </Card>
   );

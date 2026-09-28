@@ -16,6 +16,7 @@
     "go:modules:check": "node scripts/check-go-modules.mjs",
     "go:test": "go test ./backend/...",
     "go:test:race": "go test -race ./backend/...",
+    "i18n:check": "node scripts/check-i18n.mjs",
     "lint": "eslint apps packages",
     "provider-plugin:example:build": "cd examples/provider-plugin-example && mkdir -p bin && GOWORK=off go build -o bin/mender-provider-example ./cmd/mender-provider-example && rm -rf bin",
     "provider-plugin:example:lint": "cd examples/provider-plugin-example && GOWORK=off golangci-lint run ./...",
@@ -36,7 +37,7 @@
     "security:go": "node scripts/security-go.mjs",
     "security:js": "pnpm audit --prod --audit-level high",
     "sdk:check": "pnpm --filter @mender/sdk generate && git diff --exit-code -- packages/sdk/src/generated/schema.ts",
-    "test": "vitest run",
+    "test": "pnpm i18n:check && vitest run",
     "typecheck": "pnpm -r --if-present run typecheck"
   },
   "devDependencies": {

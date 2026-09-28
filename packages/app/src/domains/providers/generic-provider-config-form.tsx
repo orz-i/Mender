@@ -27,6 +27,8 @@ import type {
   UIHint,
 } from "./generic-provider-config-schema";
 
+import { t } from "../../i18n/i18n";
+
 export function GenericProviderConfigForm({
   schema,
   uiSchema,
@@ -48,7 +50,7 @@ export function GenericProviderConfigForm({
   if (schema === undefined || schema === true) {
     return (
       <RawObjectEditor
-        label="Provider configuration"
+        label={t("Provider configuration")}
         value={value}
         onChange={onChange}
       />
@@ -56,7 +58,7 @@ export function GenericProviderConfigForm({
   }
 
   if (schema === false) {
-    return <SchemaNotice>This plugin schema rejects every configuration.</SchemaNotice>;
+    return <SchemaNotice>{t("This plugin schema rejects every configuration.")}</SchemaNotice>;
   }
 
   return (
@@ -148,14 +150,14 @@ function SchemaField({
   if (depth > MAX_SCHEMA_DEPTH) {
     return (
       <SchemaNotice>
-        {"Configuration field " + name + " exceeds the supported nesting depth."}
+        {t("Configuration field {{name}} exceeds the supported nesting depth.", { name })}
       </SchemaNotice>
     );
   }
   if (schema === false) {
     return (
       <SchemaNotice>
-        {"Configuration field " + name + " cannot be configured."}
+        {t("Configuration field {{name}} cannot be configured.", { name })}
       </SchemaNotice>
     );
   }
@@ -188,10 +190,10 @@ function SchemaField({
           }
           className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus:ring-2 focus:ring-ring/40"
         >
-          {!required ? <option value="">None</option> : null}
+          {!required ? <option value="">{t("None")}</option> : null}
           {required && value === undefined ? (
             <option value="" disabled>
-              Choose a Credential
+              {t("Choose a Credential")}
             </option>
           ) : null}
           {credentials.map((credential) => (
@@ -221,10 +223,10 @@ function SchemaField({
           }}
           className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus:ring-2 focus:ring-ring/40"
         >
-          {!required ? <option value="-1">None</option> : null}
+          {!required ? <option value="-1">{t("None")}</option> : null}
           {required && selectedIndex === "-1" ? (
             <option value="-1" disabled>
-              Choose a value
+              {t("Choose a value")}
             </option>
           ) : null}
           {enumValues.map((item, index) => (
@@ -247,7 +249,7 @@ function SchemaField({
             checked={value === true}
             onChange={(event) => onChange(event.target.checked)}
           />
-          {value === true ? "Enabled" : "Disabled"}
+          {t(value === true ? "Enabled" : "Disabled")}
         </label>
       </FieldShell>
     );
@@ -285,7 +287,7 @@ function SchemaField({
             {label}
             {!required ? (
               <span className="ml-1 font-normal text-muted-foreground">
-                (optional)
+                {t("(optional)")}
               </span>
             ) : null}
           </div>
@@ -391,13 +393,13 @@ function JSONArrayEditor({
           try {
             const parsed: unknown = JSON.parse(nextText);
             if (!Array.isArray(parsed)) {
-              setError("Enter a JSON array.");
+              setError(t("Enter a JSON array."));
               return;
             }
             setError("");
             onChange(parsed);
           } catch {
-            setError("Enter valid JSON.");
+            setError(t("Enter valid JSON."));
           }
         }}
       />
@@ -442,7 +444,7 @@ function JSONValueEditor({
             setError("");
             onChange(JSON.parse(nextText) as unknown);
           } catch {
-            setError("Enter valid JSON.");
+            setError(t("Enter valid JSON."));
           }
         }}
       />
@@ -468,7 +470,7 @@ function RawObjectEditor({
     <FieldShell
       label={label}
       required
-      description="This plugin does not publish a structured form schema. Enter a JSON object."
+      description={t("This plugin does not publish a structured form schema. Enter a JSON object.")}
     >
       <Textarea
         aria-label={label}
@@ -480,13 +482,13 @@ function RawObjectEditor({
           try {
             const parsed: unknown = JSON.parse(nextText);
             if (!isRecord(parsed)) {
-              setError("Provider configuration must be a JSON object.");
+              setError(t("Provider configuration must be a JSON object."));
               return;
             }
             setError("");
             onChange(parsed);
           } catch {
-            setError("Enter valid JSON.");
+            setError(t("Enter valid JSON."));
           }
         }}
       />
@@ -514,11 +516,11 @@ function AdditionalPropertiesEditor({
   return (
     <details className="rounded-lg border border-border">
       <summary className="cursor-pointer select-none px-4 py-3 text-sm font-medium">
-        Additional properties
+        {t("Additional properties")}
       </summary>
       <div className="space-y-2 border-t border-border px-4 py-4">
         <Textarea
-          aria-label="Additional properties"
+          aria-label={t("Additional properties")}
           className="min-h-28 font-mono text-xs"
           value={text}
           onChange={(event) => {
@@ -527,7 +529,7 @@ function AdditionalPropertiesEditor({
             try {
               const parsed: unknown = JSON.parse(nextText);
               if (!isRecord(parsed)) {
-                setError("Additional properties must be a JSON object.");
+                setError(t("Additional properties must be a JSON object."));
                 return;
               }
               const known = Object.fromEntries(
@@ -536,7 +538,7 @@ function AdditionalPropertiesEditor({
               setError("");
               onChange({ ...known, ...parsed });
             } catch {
-              setError("Enter valid JSON.");
+              setError(t("Enter valid JSON."));
             }
           }}
         />
@@ -563,7 +565,7 @@ function FieldShell({
         {label}
         {!required ? (
           <span className="ml-1 font-normal text-muted-foreground">
-            (optional)
+            {t("(optional)")}
           </span>
         ) : null}
       </div>

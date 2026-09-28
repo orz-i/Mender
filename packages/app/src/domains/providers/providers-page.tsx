@@ -47,6 +47,8 @@ import {
   genericConfigValidationError,
 } from "./generic-provider-config-schema";
 
+import { t } from "../../i18n/i18n";
+
 const MCP_PLUGIN_ID = "io.mender.provider.mcp";
 const MODEL_TOOLS_PLUGIN_ID = "io.mender.provider.model-tools";
 const OPENAPI_PLUGIN_ID = "io.mender.provider.openapi";
@@ -163,7 +165,7 @@ function providerPluginLabelForProvider(
   const plugin = providerPluginForProvider(plugins, provider);
   return plugin !== undefined
     ? providerPluginChoiceLabel(plugin)
-    : provider.pluginDisplayName ?? provider.pluginId ?? "Unconfigured";
+    : provider.pluginDisplayName ?? provider.pluginId ?? t("Unconfigured");
 }
 
 function providerIsBuiltIn(provider: Provider, pluginId: string) {
@@ -473,7 +475,9 @@ export function ProvidersPage({
   async function deleteProvider(provider: Provider) {
     if (
       !window.confirm(
-        `Delete provider "${provider.namespace}"? Profile references will block deletion.`,
+        t('Delete provider "{{name}}"? Profile references will block deletion.', {
+          name: provider.namespace,
+        }),
       )
     ) {
       return;
@@ -576,7 +580,7 @@ export function ProvidersPage({
                 setPluginManagerOpen(true);
               }}
             >
-              Manage plugins
+              {t("Manage plugins")}
             </Button>
             <Button
               onClick={() => {
@@ -584,7 +588,7 @@ export function ProvidersPage({
                 setCreateOpen(true);
               }}
             >
-              Add provider
+              {t("Add provider")}
             </Button>
           </div>
         }
@@ -593,40 +597,44 @@ export function ProvidersPage({
       {error ? <ErrorNotice message={error} /> : null}
       {providerPluginIssues.length ? (
         <ErrorNotice
-          message={
-            "Some external Provider plugins are degraded: " +
-            providerPluginIssues
+          message={t("Some external Provider plugins are degraded: {{issues}}", {
+            issues: providerPluginIssues
               .map(
                 (issue) =>
                   issue.installationId + " · " + issue.code + " · " + issue.message,
               )
-              .join("; ")
-          }
+              .join("; "),
+          })}
         />
       ) : null}
 
       <Card>
         <CardHeader className="border-b">
-          <CardTitle>Providers</CardTitle>
+          <CardTitle>{t("Providers")}</CardTitle>
           <CardDescription>
-            {providers.length} configured {providers.length === 1 ? "source" : "sources"}
+            {t(
+              providers.length === 1
+                ? "{{count}} configured source"
+                : "{{count}} configured sources",
+              { count: providers.length },
+            )}
           </CardDescription>
         </CardHeader>
         <CardContent>
           {!loaded ? (
             <div className="py-10 text-center text-sm text-muted-foreground">
-              Loading providers…
+              {t("Loading providers…")}
             </div>
           ) : providers.length ? (
             <>
               <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Provider</TableHead>
-                  <TableHead>Plugin</TableHead>
-                  <TableHead>Connection</TableHead>
-                  <TableHead>Tools</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead>{t("Provider")}</TableHead>
+                  <TableHead>{t("Plugin")}</TableHead>
+                  <TableHead>{t("Connection")}</TableHead>
+                  <TableHead>{t("Tools")}</TableHead>
+                  <TableHead className="text-right">{t("Actions")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -653,7 +661,7 @@ export function ProvidersPage({
                       <Badge
                         variant={provider.toolCount ? "outline" : "secondary"}
                       >
-                        {provider.toolCount} synced
+                        {t("{{count}} synced Tools", { count: provider.toolCount })}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
@@ -661,31 +669,31 @@ export function ProvidersPage({
                         <Button
                           variant="ghost"
                           size="sm"
-                          aria-label={`View ${provider.namespace}`}
+                          aria-label={t("View {{provider}}", { provider: provider.namespace })}
                           onClick={() => setViewProvider(provider)}
                         >
-                          View
+                          {t("View")}
                         </Button>
                         <Button
                           variant="ghost"
                           size="sm"
-                          aria-label={`Edit ${provider.namespace}`}
+                          aria-label={t("Edit {{provider}}", { provider: provider.namespace })}
                           disabled={busy !== "" || !provider.pluginId}
                           onClick={() => beginEdit(provider)}
                         >
-                          Edit
+                          {t("Edit")}
                         </Button>
                         <Button
                           variant="outline"
                           size="sm"
-                          aria-label={`Authentication ${provider.namespace}`}
+                          aria-label={t("Authentication {{provider}}", { provider: provider.namespace })}
                           disabled={
                             busy !== "" ||
                             !providerSupportsFirstPartyAuthentication(provider)
                           }
                           onClick={() => openProviderAuthentication(provider)}
                         >
-                          Authentication
+                          {t("Authentication")}
                         </Button>
                         {providerRebindCandidates(
                           providerPlugins,
@@ -694,30 +702,30 @@ export function ProvidersPage({
                           <Button
                             variant="outline"
                             size="sm"
-                            aria-label={`Rebind ${provider.namespace}`}
+                            aria-label={t("Rebind {{provider}}", { provider: provider.namespace })}
                             disabled={busy !== ""}
                             onClick={() => beginRebind(provider)}
                           >
-                            Rebind
+                            {t("Rebind")}
                           </Button>
                         ) : null}
                         <Button
                           variant="outline"
                           size="sm"
-                          aria-label={`Sync ${provider.namespace}`}
+                          aria-label={t("Sync {{provider}}", { provider: provider.namespace })}
                           disabled={busy !== ""}
                           onClick={() => void syncProvider(provider)}
                         >
-                          Sync
+                          {t("Sync")}
                         </Button>
                         <Button
                           variant="destructive"
                           size="sm"
-                          aria-label={`Delete ${provider.namespace}`}
+                          aria-label={t("Delete {{provider}}", { provider: provider.namespace })}
                           disabled={busy !== ""}
                           onClick={() => void deleteProvider(provider)}
                         >
-                          Delete
+                          {t("Delete")}
                         </Button>
                       </div>
                     </TableCell>
@@ -877,10 +885,9 @@ function ProviderRebindDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>Rebind Provider installation</DialogTitle>
+          <DialogTitle>{t("Rebind Provider installation")}</DialogTitle>
           <DialogDescription>
-            Move this Provider to another exact installation of the same plugin.
-            Provider identity and SourceKey-stable Tool identities remain unchanged.
+            {t("Move this Provider to another exact installation of the same plugin. Provider identity and SourceKey-stable Tool identities remain unchanged.")}
           </DialogDescription>
         </DialogHeader>
 
@@ -889,13 +896,13 @@ function ProviderRebindDialog({
             <ReadOnlyField label="Provider" value={provider.namespace} />
             <ReadOnlyField
               label="Current installation"
-              value={provider.installationId ?? "Unavailable"}
+              value={provider.installationId ?? t("Unavailable")}
             />
           </div>
 
           <Field label="Target installation">
             <select
-              aria-label="Target Provider plugin installation"
+              aria-label={t("Target Provider plugin installation")}
               value={selectedInstallationId}
               onChange={(event) => {
                 const selected = candidates.find(
@@ -928,10 +935,9 @@ function ProviderRebindDialog({
           </div>
 
           <div className="rounded-lg border border-border bg-muted/30 p-3">
-            <div className="text-sm font-medium">Target configuration</div>
+            <div className="text-sm font-medium">{t("Target configuration")}</div>
             <p className="mt-1 text-xs leading-5 text-muted-foreground">
-              The current configuration is carried forward for review. Update it
-              when the target package requires a different configuration contract.
+              {t("The current configuration is carried forward for review. Update it when the target package requires a different configuration contract.")}
             </p>
           </div>
 
@@ -950,13 +956,13 @@ function ProviderRebindDialog({
 
         <DialogFooter>
           <DialogClose render={<Button variant="outline" />}>
-            Cancel
+            {t("Cancel")}
           </DialogClose>
           <Button
             disabled={busy || validationError !== null}
             onClick={onSubmit}
           >
-            {busy ? "Rebinding…" : "Rebind installation"}
+            {t(busy ? "Rebinding…" : "Rebind installation")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -1071,11 +1077,13 @@ function ProviderPluginManagerDialog({
   ) {
     if (
       !window.confirm(
-        "Remove installed plugin " +
-          installation.pluginId +
-          " " +
-          installation.packageVersion +
-          "? Configured Providers will block removal.",
+        t(
+          'Remove installed plugin "{{plugin}}" {{version}}? Configured Providers will block removal.',
+          {
+            plugin: installation.pluginId,
+            version: installation.packageVersion,
+          },
+        ),
       )
     ) {
       return;
@@ -1099,10 +1107,9 @@ function ProviderPluginManagerDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Provider plugins</DialogTitle>
+          <DialogTitle>{t("Provider plugins")}</DialogTitle>
           <DialogDescription>
-            Manage installed external Provider plugin packages. Providers remain
-            pinned to exact installation IDs.
+            {t("Manage installed external Provider plugin packages. Providers remain pinned to exact installation IDs.")}
           </DialogDescription>
         </DialogHeader>
 
@@ -1115,11 +1122,13 @@ function ProviderPluginManagerDialog({
 
           <div className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
             <div>
-              <div className="text-sm font-medium">Local package installation</div>
+              <div className="text-sm font-medium">{t("Local package installation")}</div>
               <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                {installProviderPlugin === undefined
-                  ? "Install new native plugins with the Mender CLI or Desktop app. Browser management never accepts a server filesystem path."
-                  : "Choose a local plugin package directory. Mender copies it into its managed plugin root and verifies the executable before activation."}
+                {t(
+                  installProviderPlugin === undefined
+                    ? "Install new native plugins with the Mender CLI or Desktop app. Browser management never accepts a server filesystem path."
+                    : "Choose a local plugin package directory. Mender copies it into its managed plugin root and verifies the executable before activation.",
+                )}
               </p>
             </div>
             {installProviderPlugin !== undefined ? (
@@ -1129,14 +1138,14 @@ function ProviderPluginManagerDialog({
                 disabled={busy !== ""}
                 onClick={() => void installLocalPlugin()}
               >
-                {busy === "install" ? "Installing…" : "Install package"}
+                {t(busy === "install" ? "Installing…" : "Install package")}
               </Button>
             ) : null}
           </div>
 
           {!loaded ? (
             <div className="py-8 text-center text-sm text-muted-foreground">
-              Loading installed plugins…
+              {t("Loading installed plugins…")}
             </div>
           ) : installations.length ? (
             <div className="space-y-3">
@@ -1163,19 +1172,19 @@ function ProviderPluginManagerDialog({
                             : "secondary"
                         }
                       >
-                        {installation.status}
+                        {t(installation.status)}
                       </Badge>
                     </div>
 
                     <div className="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
                       <div>
-                        Version{" "}
+                        {t("Version")}{" "}
                         <span className="font-mono text-foreground">
                           {installation.packageVersion}
                         </span>
                       </div>
                       <div>
-                        Installed{" "}
+                        {t("Installed")}{" "}
                         <span className="text-foreground">
                           {formatTimestamp(installation.installedAt)}
                         </span>
@@ -1191,43 +1200,43 @@ function ProviderPluginManagerDialog({
                           type="button"
                           variant="outline"
                           size="sm"
-                          aria-label={
-                            "Disable plugin " + installation.installationId
-                          }
+                          aria-label={t("Disable plugin {{installation}}", {
+                            installation: installation.installationId,
+                          })}
                           disabled={busy !== ""}
                           onClick={() =>
                             void setInstallationEnabled(installation, false)
                           }
                         >
-                          {itemBusy ? "Disabling…" : "Disable"}
+                          {t(itemBusy ? "Disabling…" : "Disable")}
                         </Button>
                       ) : (
                         <Button
                           type="button"
                           variant="outline"
                           size="sm"
-                          aria-label={
-                            "Enable plugin " + installation.installationId
-                          }
+                          aria-label={t("Enable plugin {{installation}}", {
+                            installation: installation.installationId,
+                          })}
                           disabled={busy !== ""}
                           onClick={() =>
                             void setInstallationEnabled(installation, true)
                           }
                         >
-                          {itemBusy ? "Enabling…" : "Enable"}
+                          {t(itemBusy ? "Enabling…" : "Enable")}
                         </Button>
                       )}
                       <Button
                         type="button"
                         variant="destructive"
                         size="sm"
-                        aria-label={
-                          "Remove plugin " + installation.installationId
-                        }
+                        aria-label={t("Remove plugin {{installation}}", {
+                          installation: installation.installationId,
+                        })}
                         disabled={busy !== ""}
                         onClick={() => void removeInstallation(installation)}
                       >
-                        Remove
+                        {t("Remove")}
                       </Button>
                     </div>
                   </div>
@@ -1311,19 +1320,21 @@ function ProviderFormDialog({
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>
-            {creating ? "Add provider" : "Edit provider"}
+            {t(creating ? "Add provider" : "Edit provider")}
           </DialogTitle>
           <DialogDescription>
-            {creating
-              ? "Choose a Provider plugin, then configure how that plugin connects to its source."
-              : "Update mutable metadata and plugin connection settings. Provider identity and plugin remain stable."}
+            {t(
+              creating
+                ? "Choose a Provider plugin, then configure how that plugin connects to its source."
+                : "Update mutable metadata and plugin connection settings. Provider identity and plugin remain stable.",
+            )}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
           {creating ? (
             <div>
-              <div className="mb-2 text-sm font-medium">Provider plugin</div>
+              <div className="mb-2 text-sm font-medium">{t("Provider plugin")}</div>
               <div className="grid gap-2 sm:grid-cols-2">
                 {plugins.map((plugin) => {
                   const selected = providerPluginMatchesForm(plugin, form);
@@ -1357,7 +1368,7 @@ function ProviderFormDialog({
 
           {renderer === "mcp" ? (
             <div>
-              <div className="mb-2 text-sm font-medium">MCP connection</div>
+              <div className="mb-2 text-sm font-medium">{t("MCP connection")}</div>
               <div className="grid grid-cols-2 gap-2">
                 <Button
                   type="button"
@@ -1365,7 +1376,7 @@ function ProviderFormDialog({
                   aria-pressed={form.transport === "http"}
                   onClick={() => onChange({ ...form, transport: "http" })}
                 >
-                  Remote endpoint
+                  {t("Remote endpoint")}
                 </Button>
                 <Button
                   type="button"
@@ -1373,13 +1384,13 @@ function ProviderFormDialog({
                   aria-pressed={form.transport === "stdio"}
                   onClick={() => onChange({ ...form, transport: "stdio" })}
                 >
-                  Local command
+                  {t("Local command")}
                 </Button>
               </div>
             </div>
           ) : renderer === "model-tools" ? (
             <div>
-              <div className="mb-2 text-sm font-medium">Model tool engine</div>
+              <div className="mb-2 text-sm font-medium">{t("Model tool engine")}</div>
               <div className="grid grid-cols-3 gap-2">
                 {(["openai", "anthropic", "gemini"] as const).map(
                   (engine) => (
@@ -1402,7 +1413,7 @@ function ProviderFormDialog({
             </div>
           ) : renderer === "openapi" ? (
             <div>
-              <div className="mb-2 text-sm font-medium">OpenAPI description</div>
+              <div className="mb-2 text-sm font-medium">{t("OpenAPI description")}</div>
               <div className="grid grid-cols-2 gap-2">
                 <Button
                   type="button"
@@ -1414,7 +1425,7 @@ function ProviderFormDialog({
                     onChange({ ...form, openapiSourceKind: "url" })
                   }
                 >
-                  Remote URL
+                  {t("Remote URL")}
                 </Button>
                 <Button
                   type="button"
@@ -1426,17 +1437,19 @@ function ProviderFormDialog({
                     onChange({ ...form, openapiSourceKind: "file" })
                   }
                 >
-                  Local file
+                  {t("Local file")}
                 </Button>
               </div>
             </div>
           ) : (
             <div className="rounded-lg border border-border bg-muted/30 p-3 text-sm text-muted-foreground">
-              <div className="font-medium text-foreground">Schema-driven configuration</div>
+              <div className="font-medium text-foreground">{t("Schema-driven configuration")}</div>
               <div className="mt-1 text-xs leading-5">
-                {selectedPlugin?.sourceKind === "external"
-                  ? "This Provider is pinned to an installed external plugin package."
-                  : "This plugin uses Mender's generic configuration renderer."}
+                {t(
+                  selectedPlugin?.sourceKind === "external"
+                    ? "This Provider is pinned to an installed external plugin package."
+                    : "This plugin uses Mender's generic configuration renderer.",
+                )}
               </div>
             </div>
           )}
@@ -1444,8 +1457,8 @@ function ProviderFormDialog({
           {creating ? (
             <Field label="Namespace">
               <Input
-                aria-label="Namespace"
-                placeholder="namespace"
+                aria-label={t("Namespace")}
+                placeholder={t("namespace")}
                 value={form.namespace}
                 onChange={(event) =>
                   onChange({ ...form, namespace: event.target.value })
@@ -1456,7 +1469,7 @@ function ProviderFormDialog({
 
           <Field label="Display name">
             <Input
-              aria-label="Display name"
+              aria-label={t("Display name")}
               value={form.displayName}
               onChange={(event) =>
                 onChange({ ...form, displayName: event.target.value })
@@ -1466,7 +1479,7 @@ function ProviderFormDialog({
 
           <Field label="Description" optional>
             <Input
-              aria-label="Description"
+              aria-label={t("Description")}
               value={form.description}
               onChange={(event) =>
                 onChange({ ...form, description: event.target.value })
@@ -1484,7 +1497,7 @@ function ProviderFormDialog({
                   />
                   <ReadOnlyField
                     label="Package version"
-                    value={selectedPlugin?.packageVersion ?? "Unavailable"}
+                    value={selectedPlugin?.packageVersion ?? t("Unavailable")}
                   />
                 </div>
               ) : null}
@@ -1508,7 +1521,7 @@ function ProviderFormDialog({
             <>
               <Field label="Model">
                 <Input
-                  aria-label="Model Tools model"
+                  aria-label={t("Model Tools model")}
                   placeholder={modelToolsModelPlaceholder(form.modelToolsEngine)}
                   value={form.modelToolsModel}
                   onChange={(event) =>
@@ -1516,9 +1529,9 @@ function ProviderFormDialog({
                   }
                 />
               </Field>
-              <ReadOnlyField label="Capability" value="Web search" />
+              <ReadOnlyField label="Capability" value={t("Web search")} />
               <p className="text-xs leading-5 text-muted-foreground">
-                Mender exposes one stable web_search Tool. The selected model must execute the provider-hosted search tool; model-only answers are rejected.
+                {t("Mender exposes one stable web_search Tool. The selected model must execute the provider-hosted search tool; model-only answers are rejected.")}
               </p>
             </>
           ) : null}
@@ -1528,21 +1541,21 @@ function ProviderFormDialog({
             <>
               <Field label="Endpoint">
                 <Input
-                  aria-label="Endpoint"
-                  placeholder="https://example.com/mcp"
+                  aria-label={t("Endpoint")}
+                  placeholder={t("https://example.com/mcp")}
                   value={form.endpoint}
                   onChange={(event) =>
                     onChange({ ...form, endpoint: event.target.value })
                   }
                 />
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Non-loopback endpoints require HTTPS.
+                  {t("Non-loopback endpoints require HTTPS.")}
                 </p>
               </Field>
 
               <details className="rounded-lg border border-border">
                 <summary className="cursor-pointer select-none px-4 py-3 text-sm font-medium">
-                  Advanced settings
+                  {t("Advanced settings")}
                 </summary>
                 <div className="space-y-4 border-t border-border px-4 py-4">
                   <ReadOnlyField
@@ -1552,7 +1565,7 @@ function ProviderFormDialog({
 
                   <Field label="Legacy HTTP header templates" optional>
                     <Textarea
-                      aria-label="HTTP header templates"
+                      aria-label={t("HTTP header templates")}
                       className="min-h-24 font-mono text-xs"
                       placeholder={
                         "Authorization: Bearer ${ANYSEARCH_API_KEY}\nX-Anysearch-Client: mcp/1.0.0"
@@ -1563,9 +1576,7 @@ function ProviderFormDialog({
                       }
                     />
                     <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                      Compatibility path only. Sensitive headers must use environment
-                      references such as <code>{"${ANYSEARCH_API_KEY}"}</code>.
-                      Prefer the separate Authentication workflow for inventory-backed, Profile-scoped Credentials.
+                      {t("Compatibility path only. Sensitive headers must use environment references such as")} <code>{"${ANYSEARCH_API_KEY}"}</code>{t(". Prefer the separate Authentication workflow for inventory-backed, Profile-scoped Credentials.")}
                     </p>
                   </Field>
 
@@ -1573,7 +1584,7 @@ function ProviderFormDialog({
                     <div className="rounded-lg bg-muted/40 p-3">
                       <Field label="Import MCP JSON" optional>
                         <Textarea
-                          aria-label="MCP JSON"
+                          aria-label={t("MCP JSON")}
                           className="min-h-28 font-mono text-xs"
                           placeholder={
                             '{"mcpServers":{"anysearch":{"type":"streamable-http","url":"https://api.anysearch.com/mcp","headers":{"Authorization":"Bearer ${ANYSEARCH_API_KEY}"}}}}'
@@ -1613,7 +1624,7 @@ function ProviderFormDialog({
                           }
                         }}
                       >
-                        Import configuration
+                        {t("Import configuration")}
                       </Button>
                     </div>
                   ) : null}
@@ -1624,8 +1635,8 @@ function ProviderFormDialog({
             <>
               <Field label="Executable">
                 <Input
-                  aria-label="Executable"
-                  placeholder="/path/to/mcp-server"
+                  aria-label={t("Executable")}
+                  placeholder={t("/path/to/mcp-server")}
                   value={form.executable}
                   onChange={(event) =>
                     onChange({ ...form, executable: event.target.value })
@@ -1634,7 +1645,7 @@ function ProviderFormDialog({
               </Field>
               <Field label="Arguments" optional>
                 <Textarea
-                  aria-label="Arguments"
+                  aria-label={t("Arguments")}
                   placeholder={"One argument per line\n--stdio"}
                   value={form.args}
                   onChange={(event) =>
@@ -1644,7 +1655,7 @@ function ProviderFormDialog({
               </Field>
               <Field label="Working directory" optional>
                 <Input
-                  aria-label="Working directory"
+                  aria-label={t("Working directory")}
                   value={form.directory}
                   onChange={(event) =>
                     onChange({ ...form, directory: event.target.value })
@@ -1652,8 +1663,7 @@ function ProviderFormDialog({
                 />
               </Field>
               <p className="text-xs text-muted-foreground">
-                Mender does not persist environment values or secrets for stdio
-                Providers.
+                {t("Mender does not persist environment values or secrets for stdio Providers.")}
               </p>
             </>
             )
@@ -1664,37 +1674,37 @@ function ProviderFormDialog({
               {form.openapiSourceKind === "url" ? (
                 <Field label="Description URL">
                   <Input
-                    aria-label="OpenAPI description URL"
-                    placeholder="https://example.com/openapi.yaml"
+                    aria-label={t("OpenAPI description URL")}
+                    placeholder={t("https://example.com/openapi.yaml")}
                     value={form.openapiSpecUrl}
                     onChange={(event) =>
                       onChange({ ...form, openapiSpecUrl: event.target.value })
                     }
                   />
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Non-loopback URLs require HTTPS. External $ref retrieval is disabled.
+                    {t("Non-loopback URLs require HTTPS. External $ref retrieval is disabled.")}
                   </p>
                 </Field>
               ) : (
                 <Field label="Description file">
                   <Input
-                    aria-label="OpenAPI description file"
-                    placeholder="/absolute/path/to/openapi.yaml"
+                    aria-label={t("OpenAPI description file")}
+                    placeholder={t("/absolute/path/to/openapi.yaml")}
                     value={form.openapiSpecFile}
                     onChange={(event) =>
                       onChange({ ...form, openapiSpecFile: event.target.value })
                     }
                   />
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Use an absolute local path. External file references are disabled.
+                    {t("Use an absolute local path. External file references are disabled.")}
                   </p>
                 </Field>
               )}
 
               <Field label="API server override" optional>
                 <Input
-                  aria-label="OpenAPI server override"
-                  placeholder="https://api.example.com"
+                  aria-label={t("OpenAPI server override")}
+                  placeholder={t("https://api.example.com")}
                   value={form.openapiServerUrl}
                   onChange={(event) =>
                     onChange({ ...form, openapiServerUrl: event.target.value })
@@ -1704,15 +1714,15 @@ function ProviderFormDialog({
 
               <details className="rounded-lg border border-border">
                 <summary className="cursor-pointer select-none px-4 py-3 text-sm font-medium">
-                  Operations
+                  {t("Operations")}
                 </summary>
                 <div className="space-y-4 border-t border-border px-4 py-4">
                   <p className="text-xs leading-5 text-muted-foreground">
-                    Filters use stable OpenAPI operation SourceKeys. Use operationId when present; otherwise use values such as <code>get /users/{"{id}"}</code>.
+                    {t("Filters use stable OpenAPI operation SourceKeys. Use operationId when present; otherwise use values such as")} <code>get /users/{"{id}"}</code>.
                   </p>
                   <Field label="Include SourceKeys" optional>
                     <Textarea
-                      aria-label="OpenAPI include SourceKeys"
+                      aria-label={t("OpenAPI include SourceKeys")}
                       className="min-h-24 font-mono text-xs"
                       placeholder={"One SourceKey per line\ngetUser"}
                       value={form.openapiInclude}
@@ -1723,7 +1733,7 @@ function ProviderFormDialog({
                   </Field>
                   <Field label="Exclude SourceKeys" optional>
                     <Textarea
-                      aria-label="OpenAPI exclude SourceKeys"
+                      aria-label={t("OpenAPI exclude SourceKeys")}
                       className="min-h-24 font-mono text-xs"
                       placeholder={"One SourceKey per line\ndeleteUser"}
                       value={form.openapiExclude}
@@ -1740,7 +1750,7 @@ function ProviderFormDialog({
 
         <DialogFooter>
           <DialogClose render={<Button variant="outline" />}>
-            Cancel
+            {t("Cancel")}
           </DialogClose>
           {onAuthentication !== undefined && renderer !== "generic" ? (
             <Button
@@ -1749,17 +1759,19 @@ function ProviderFormDialog({
               disabled={busy}
               onClick={onAuthentication}
             >
-              Configure authentication
+              {t("Configure authentication")}
             </Button>
           ) : null}
           <Button disabled={busy || !valid} onClick={onSubmit}>
-            {busy
-              ? creating
-                ? "Adding…"
-                : "Saving…"
-              : creating
-                ? "Add provider"
-                : "Save changes"}
+            {t(
+              busy
+                ? creating
+                  ? "Adding…"
+                  : "Saving…"
+                : creating
+                  ? "Add provider"
+                  : "Save changes",
+            )}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -1841,11 +1853,9 @@ function ProviderAuthenticationDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Provider authentication</DialogTitle>
+          <DialogTitle>{t("Provider authentication")}</DialogTitle>
           <DialogDescription>
-            Bind Provider authentication to inventory Credentials. Mender stores
-            only Credential References and resolves secret values at connection
-            and execution boundaries.
+            {t("Bind Provider authentication to inventory Credentials. Mender stores only Credential References and resolves secret values at connection and execution boundaries.")}
           </DialogDescription>
         </DialogHeader>
 
@@ -1854,11 +1864,11 @@ function ProviderAuthenticationDialog({
             {form.pluginId === MODEL_TOOLS_PLUGIN_ID ? (
               <>
                 <p className="text-xs leading-5 text-muted-foreground">
-                  Select the inventory Credential used to authenticate the configured model API. The secret is resolved only during governed Tool execution and remains subject to Profile Credential scope.
+                  {t("Select the inventory Credential used to authenticate the configured model API. The secret is resolved only during governed Tool execution and remains subject to Profile Credential scope.")}
                 </p>
                 <Field label="Model API Credential">
                   <select
-                    aria-label="Model Tools API credential"
+                    aria-label={t("Model Tools API credential")}
                     value={form.modelToolsCredentialRef}
                     onChange={(event) =>
                       onChange({
@@ -1869,7 +1879,7 @@ function ProviderAuthenticationDialog({
                     className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus:ring-2 focus:ring-ring/40"
                   >
                     <option value="" disabled>
-                      Choose a Credential
+                      {t("Choose a Credential")}
                     </option>
                     {credentials.map((item) => (
                       <option key={item.reference} value={item.reference}>
@@ -1882,7 +1892,7 @@ function ProviderAuthenticationDialog({
             ) : form.pluginId === OPENAPI_PLUGIN_ID ? (
               <>
                 <p className="text-xs leading-5 text-muted-foreground">
-                  Bind OpenAPI Security Scheme names to inventory Credentials. The scheme name must match the description exactly; Mender keeps the Credential Reference in Provider config and resolves the secret only at execution.
+                  {t("Bind OpenAPI Security Scheme names to inventory Credentials. The scheme name must match the description exactly; Mender keeps the Credential Reference in Provider config and resolves the secret only at execution.")}
                 </p>
                 <div className="space-y-3">
                   {form.openapiCredentials.map((binding, index) => (
@@ -1892,10 +1902,10 @@ function ProviderAuthenticationDialog({
                     >
                       <Field label="Security Scheme">
                         <Input
-                          aria-label={
-                            "OpenAPI security scheme " + String(index + 1)
-                          }
-                          placeholder="BearerAuth"
+                          aria-label={t("OpenAPI security scheme {{index}}", {
+                            index: index + 1,
+                          })}
+                          placeholder={t("BearerAuth")}
                           value={binding.schemeName}
                           onChange={(event) =>
                             onChange({
@@ -1915,9 +1925,9 @@ function ProviderAuthenticationDialog({
                       </Field>
                       <Field label="Credential">
                         <select
-                          aria-label={
-                            "OpenAPI security credential " + String(index + 1)
-                          }
+                          aria-label={t("OpenAPI security credential {{index}}", {
+                            index: index + 1,
+                          })}
                           value={binding.credentialRef}
                           onChange={(event) =>
                             onChange({
@@ -1956,7 +1966,7 @@ function ProviderAuthenticationDialog({
                             })
                           }
                         >
-                          Remove
+                          {t("Remove")}
                         </Button>
                       </div>
                     </div>
@@ -1968,16 +1978,14 @@ function ProviderAuthenticationDialog({
                   size="sm"
                   onClick={addOpenAPIBinding}
                 >
-                  Add Security Scheme binding
+                  {t("Add Security Scheme binding")}
                 </Button>
               </>
             ) : form.transport === "http" ? (
               <>
                 {form.headers.trim() ? (
                   <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs leading-5 text-muted-foreground">
-                    Legacy HTTP header templates are still configured. They
-                    remain compatible but are not governed by Profile Credential
-                    scope. Prefer inventory-backed bindings below.
+                    {t("Legacy HTTP header templates are still configured. They remain compatible but are not governed by Profile Credential scope. Prefer inventory-backed bindings below.")}
                   </div>
                 ) : null}
 
@@ -1989,7 +1997,9 @@ function ProviderAuthenticationDialog({
                     >
                       <Field label="Header">
                         <Input
-                          aria-label={"Credential header name " + String(index + 1)}
+                          aria-label={t("Credential header name {{index}}", {
+                            index: index + 1,
+                          })}
                           value={binding.name}
                           onChange={(event) =>
                             onChange({
@@ -2006,10 +2016,10 @@ function ProviderAuthenticationDialog({
                       </Field>
                       <Field label="Scheme">
                         <Input
-                          aria-label={
-                            "Credential header scheme " + String(index + 1)
-                          }
-                          placeholder="Bearer"
+                          aria-label={t("Credential header scheme {{index}}", {
+                            index: index + 1,
+                          })}
+                          placeholder={t("Bearer")}
                           value={binding.scheme}
                           onChange={(event) =>
                             onChange({
@@ -2026,9 +2036,9 @@ function ProviderAuthenticationDialog({
                       </Field>
                       <Field label="Credential">
                         <select
-                          aria-label={
-                            "Credential header credential " + String(index + 1)
-                          }
+                          aria-label={t("Credential header credential {{index}}", {
+                            index: index + 1,
+                          })}
                           value={binding.credentialRef}
                           onChange={(event) =>
                             onChange({
@@ -2067,7 +2077,7 @@ function ProviderAuthenticationDialog({
                             })
                           }
                         >
-                          Remove
+                          {t("Remove")}
                         </Button>
                       </div>
                     </div>
@@ -2079,7 +2089,7 @@ function ProviderAuthenticationDialog({
                   size="sm"
                   onClick={addHTTPBinding}
                 >
-                  Add credential header
+                  {t("Add credential header")}
                 </Button>
               </>
             ) : (
@@ -2092,9 +2102,9 @@ function ProviderAuthenticationDialog({
                     >
                       <Field label="Environment name">
                         <Input
-                          aria-label={
-                            "Credential environment name " + String(index + 1)
-                          }
+                          aria-label={t("Credential environment name {{index}}", {
+                            index: index + 1,
+                          })}
                           value={binding.name}
                           onChange={(event) =>
                             onChange({
@@ -2112,10 +2122,9 @@ function ProviderAuthenticationDialog({
                       </Field>
                       <Field label="Credential">
                         <select
-                          aria-label={
-                            "Credential environment credential " +
-                            String(index + 1)
-                          }
+                          aria-label={t("Credential environment credential {{index}}", {
+                            index: index + 1,
+                          })}
                           value={binding.credentialRef}
                           onChange={(event) =>
                             onChange({
@@ -2156,7 +2165,7 @@ function ProviderAuthenticationDialog({
                             })
                           }
                         >
-                          Remove
+                          {t("Remove")}
                         </Button>
                       </div>
                     </div>
@@ -2168,7 +2177,7 @@ function ProviderAuthenticationDialog({
                   size="sm"
                   onClick={addStdioBinding}
                 >
-                  Add credential environment
+                  {t("Add credential environment")}
                 </Button>
               </>
             )}
@@ -2182,10 +2191,10 @@ function ProviderAuthenticationDialog({
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
+            {t("Cancel")}
           </Button>
           <Button disabled={busy} onClick={onSubmit}>
-            {busy ? "Saving…" : submitLabel}
+            {busy ? t("Saving…") : t(submitLabel)}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -2208,9 +2217,9 @@ function ProviderDetailsDialog({
     <Dialog open={provider !== null} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>Provider details</DialogTitle>
+          <DialogTitle>{t("Provider details")}</DialogTitle>
           <DialogDescription>
-            Identity, connection configuration, and timestamps for this Provider.
+            {t("Identity, connection configuration, and timestamps for this Provider.")}
           </DialogDescription>
         </DialogHeader>
 
@@ -2238,7 +2247,7 @@ function ProviderDetailsDialog({
                   value={
                     selectedPlugin?.packageVersion ??
                     provider.pluginVersion ??
-                    "Unavailable"
+                    t("Unavailable")
                   }
                   mono
                 />
@@ -2264,7 +2273,7 @@ function ProviderDetailsDialog({
                   value={modelToolsModelSummary(provider)}
                   mono
                 />
-                <DetailRow label="Capability" value="Web search" />
+                <DetailRow label="Capability" value={t("Web search")} />
               </>
             ) : null}
             {providerIsBuiltIn(provider, OPENAPI_PLUGIN_ID) ? (
@@ -2357,10 +2366,10 @@ function Field({
   return (
     <label className="block space-y-1.5">
       <span className="text-sm font-medium">
-        {label}
+        {t(label)}
         {optional ? (
           <span className="ml-1 font-normal text-muted-foreground">
-            (optional)
+            {t("(optional)")}
           </span>
         ) : null}
       </span>
@@ -2372,7 +2381,7 @@ function Field({
 function ReadOnlyField({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <div className="mb-1.5 text-sm font-medium">{label}</div>
+      <div className="mb-1.5 text-sm font-medium">{t(label)}</div>
       <div className="rounded-lg border border-border bg-muted/40 px-3 py-2 font-mono text-sm text-muted-foreground">
         {value}
       </div>
@@ -2393,7 +2402,7 @@ function DetailRow({
 }) {
   return (
     <div className="grid grid-cols-[130px_minmax(0,1fr)] gap-4 border-b border-border/60 pb-3 last:border-0 last:pb-0">
-      <div className="text-sm text-muted-foreground">{label}</div>
+      <div className="text-sm text-muted-foreground">{t(label)}</div>
       <div
         className={[
           "min-w-0 break-words text-sm",
@@ -2469,7 +2478,7 @@ function configFromForm(form: ProviderFormState): Record<string, unknown> {
 
   if (renderer === "model-tools") {
     if (!form.modelToolsCredentialRef) {
-      throw new Error("Choose a Model API Credential.");
+      throw new Error(t("Choose a Model API Credential."));
     }
     return {
       engine: form.modelToolsEngine,
@@ -2486,13 +2495,13 @@ function configFromForm(form: ProviderFormState): Record<string, unknown> {
     for (const binding of form.openapiCredentials) {
       const schemeName = binding.schemeName.trim();
       if (!schemeName) {
-        throw new Error("OpenAPI Security Scheme name is required.");
+        throw new Error(t("OpenAPI Security Scheme name is required."));
       }
       if (credentials[schemeName] !== undefined) {
-        throw new Error(`OpenAPI Security Scheme "${schemeName}" is configured more than once.`);
+        throw new Error(t('OpenAPI Security Scheme "{{name}}" is configured more than once.', { name: schemeName }));
       }
       if (!binding.credentialRef) {
-        throw new Error(`Choose a Credential for OpenAPI Security Scheme "${schemeName}".`);
+        throw new Error(t('Choose a Credential for OpenAPI Security Scheme "{{name}}".', { name: schemeName }));
       }
       credentials[schemeName] = binding.credentialRef;
     }
@@ -2518,7 +2527,7 @@ function configFromForm(form: ProviderFormState): Record<string, unknown> {
   }
 
   if (renderer !== "mcp") {
-    throw new Error("Unsupported Provider renderer.");
+    throw new Error(t("Unsupported Provider renderer."));
   }
   if (form.transport === "http") {
     const headers = parseHeaders(form.headers);
@@ -2560,13 +2569,13 @@ function parseHeaders(value: string): Record<string, string> {
     const separator = line.indexOf(":");
     if (separator <= 0) {
       throw new Error(
-        `Header line ${index + 1} must use "Name: value" format.`,
+        t('Header line {{line}} must use "Name: value" format.', { line: index + 1 }),
       );
     }
     const name = line.slice(0, separator).trim();
     const headerValue = line.slice(separator + 1).trim();
     if (!name) {
-      throw new Error(`Header line ${index + 1} has an empty name.`);
+      throw new Error(t("Header line {{line}} has an empty name.", { line: index + 1 }));
     }
     result[name] = headerValue;
   }
@@ -2590,12 +2599,12 @@ function parseMCPJSON(value: string): {
   try {
     parsed = JSON.parse(value);
   } catch {
-    throw new Error("MCP JSON must be valid JSON.");
+    throw new Error(t("MCP JSON must be valid JSON."));
   }
 
   const root = asRecord(parsed);
   if (root === null) {
-    throw new Error("MCP JSON must contain an object.");
+    throw new Error(t("MCP JSON must contain an object."));
   }
 
   let entries: [string, unknown][];
@@ -2611,24 +2620,24 @@ function parseMCPJSON(value: string): {
   ) {
     entries = [["provider", root]];
   } else {
-    throw new Error('Expected an "mcpServers" or "mcp" object.');
+    throw new Error(t('Expected an "mcpServers" or "mcp" object.'));
   }
 
   if (entries.length !== 1) {
-    throw new Error("Paste a configuration containing exactly one MCP server.");
+    throw new Error(t("Paste a configuration containing exactly one MCP server."));
   }
 
   const [namespace, rawConfig] = entries[0]!;
   const config = asRecord(rawConfig);
   if (config === null) {
-    throw new Error("MCP server configuration must be an object.");
+    throw new Error(t("MCP server configuration must be an object."));
   }
 
   if (typeof config.type === "string") {
     const type = config.type.toLowerCase();
     if (!["remote", "streamable-http", "http"].includes(type)) {
       throw new Error(
-        `Unsupported remote MCP type "${config.type}". Expected remote or streamable-http.`,
+        t('Unsupported remote MCP type "{{type}}". Expected remote or streamable-http.', { type: config.type }),
       );
     }
   }
@@ -2640,18 +2649,18 @@ function parseMCPJSON(value: string): {
         ? config.endpoint
         : "";
   if (!endpoint) {
-    throw new Error('Remote MCP configuration requires "url".');
+    throw new Error(t('Remote MCP configuration requires "url".'));
   }
 
   const headers: Record<string, string> = {};
   if (config.headers !== undefined) {
     const rawHeaders = asRecord(config.headers);
     if (rawHeaders === null) {
-      throw new Error('"headers" must be an object of string values.');
+      throw new Error(t('"headers" must be an object of string values.'));
     }
     for (const [name, headerValue] of Object.entries(rawHeaders)) {
       if (typeof headerValue !== "string") {
-        throw new Error(`Header "${name}" must have a string value.`);
+        throw new Error(t('Header "{{name}}" must have a string value.', { name }));
       }
       headers[name] = headerValue;
     }
@@ -2727,10 +2736,10 @@ function openAPISourceSummary(provider: Provider) {
   const config = asRecord(provider.config);
   const source = asRecord(config?.source);
   if (source?.kind === "file" && typeof source.path === "string") {
-    return `File · ${source.path}`;
+    return t("File · {{path}}", { path: source.path });
   }
   if (typeof source?.url === "string") {
-    return `URL · ${source.url}`;
+    return t("URL · {{url}}", { url: source.url });
   }
   return "—";
 }
@@ -2739,7 +2748,7 @@ function openAPIServerSummary(provider: Provider) {
   const config = asRecord(provider.config);
   return typeof config?.serverUrl === "string" && config.serverUrl
     ? config.serverUrl
-    : "Document server";
+    : t("Document server");
 }
 
 function openAPIFilterSummary(provider: Provider) {
@@ -2748,11 +2757,11 @@ function openAPIFilterSummary(provider: Provider) {
   const include = stringListFromUnknown(operations?.include);
   const exclude = stringListFromUnknown(operations?.exclude);
   if (!include.length && !exclude.length) {
-    return "All supported operations";
+    return t("All supported operations");
   }
   const lines = [
-    ...(include.length ? [`Include: ${include.join(", ")}`] : []),
-    ...(exclude.length ? [`Exclude: ${exclude.join(", ")}`] : []),
+    ...(include.length ? [t("Include: {{value}}", { value: include.join(", ") })] : []),
+    ...(exclude.length ? [t("Exclude: {{value}}", { value: exclude.join(", ") })] : []),
   ];
   return lines.join("\n");
 }
@@ -2761,12 +2770,12 @@ function openAPISecuritySummary(provider: Provider) {
   const config = asRecord(provider.config);
   const credentials = asRecord(config?.credentials);
   if (credentials === null) {
-    return "None configured";
+    return t("None configured");
   }
   const names = Object.keys(credentials).sort((left, right) =>
     left.localeCompare(right),
   );
-  return names.length ? names.join("\n") : "None configured";
+  return names.length ? names.join("\n") : t("None configured");
 }
 
 function connectionSummary(provider: Provider) {
@@ -2774,7 +2783,7 @@ function connectionSummary(provider: Provider) {
     return provider.connectionSummary;
   }
   if (provider.installationId) {
-    return "External plugin · " + provider.installationId;
+    return t("External plugin · {{installation}}", { installation: provider.installationId });
   }
   if (provider.pluginId === MODEL_TOOLS_PLUGIN_ID) {
     return (
@@ -2792,15 +2801,15 @@ function connectionSummary(provider: Provider) {
     if (typeof source?.url === "string") {
       return source.url;
     }
-    return "OpenAPI source not configured";
+    return t("OpenAPI source not configured");
   }
   if (provider.transport === "http") {
-    return provider.endpoint ?? "not configured";
+    return provider.endpoint ?? t("not configured");
   }
   if (provider.transport === "stdio") {
-    return provider.executable ?? "not configured";
+    return provider.executable ?? t("not configured");
   }
-  return "not configured";
+  return t("not configured");
 }
 
 function formatTimestamp(value: string) {
@@ -2812,5 +2821,5 @@ function formatTimestamp(value: string) {
 }
 
 function errorMessage(reason: unknown) {
-  return reason instanceof Error ? reason.message : "Unexpected error";
+  return reason instanceof Error ? reason.message : t("Unexpected error");
 }

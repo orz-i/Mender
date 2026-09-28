@@ -39,6 +39,8 @@ import { EmptyState, ErrorNotice, PageHeader } from "../../shared/page";
 import { usePagination } from "../../shared/pagination";
 import { TablePagination } from "../../shared/table-pagination";
 
+import { t } from "../../i18n/i18n";
+
 type ToolView = "overview" | "description" | "schemas" | "invoke";
 
 export function CatalogPage({ client }: { client: MenderClient }) {
@@ -156,7 +158,7 @@ export function CatalogPage({ client }: { client: MenderClient }) {
     try {
       argumentsValue = JSON.parse(argumentsText);
     } catch {
-      setError("Arguments must be valid JSON.");
+      setError(t("Arguments must be valid JSON."));
       return;
     }
     if (
@@ -164,7 +166,7 @@ export function CatalogPage({ client }: { client: MenderClient }) {
       argumentsValue === null ||
       Array.isArray(argumentsValue)
     ) {
-      setError("Arguments must be a JSON object.");
+      setError(t("Arguments must be a JSON object."));
       return;
     }
 
@@ -202,8 +204,8 @@ export function CatalogPage({ client }: { client: MenderClient }) {
         <CardContent className="pt-6">
           <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_180px_auto_auto] xl:grid-cols-[minmax(0,1fr)_220px_auto_auto]">
             <Input
-              aria-label="Catalog search"
-              placeholder="Search intent, e.g. create issue"
+              aria-label={t("Catalog search")}
+              placeholder={t("Search intent, e.g. create issue")}
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               onKeyDown={(event) => {
@@ -213,12 +215,12 @@ export function CatalogPage({ client }: { client: MenderClient }) {
               }}
             />
             <select
-              aria-label="Catalog provider filter"
+              aria-label={t("Catalog provider filter")}
               value={providerId}
               onChange={(event) => setProviderId(event.target.value)}
               className="h-8 rounded-lg border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
             >
-              <option value="">All Providers</option>
+              <option value="">{t("All Providers")}</option>
               {providers.map((provider) => (
                 <option key={provider.providerId} value={provider.providerId}>
                   {provider.displayName || provider.namespace}
@@ -229,14 +231,14 @@ export function CatalogPage({ client }: { client: MenderClient }) {
               onClick={() => void search()}
               disabled={busy !== "" || !query.trim()}
             >
-              {busy === "search" ? "Searching…" : "Search"}
+              {t(busy === "search" ? "Searching…" : "Search")}
             </Button>
             <Button
               variant="outline"
               onClick={() => void browseAll()}
               disabled={busy !== ""}
             >
-              {busy === "browse" ? "Loading…" : "Browse"}
+              {t(busy === "browse" ? "Loading…" : "Browse")}
             </Button>
           </div>
         </CardContent>
@@ -244,13 +246,13 @@ export function CatalogPage({ client }: { client: MenderClient }) {
 
       <Card className="mt-6">
         <CardHeader className="border-b">
-          <CardTitle>Tools</CardTitle>
+          <CardTitle>{t("Tools")}</CardTitle>
           <CardDescription>
             {!loaded
-              ? "Loading synchronized Tools…"
+              ? t("Loading synchronized Tools…")
               : searched
-                ? `${results.length} compact match${results.length === 1 ? "" : "es"}`
-                : `${results.length} synchronized Tool${results.length === 1 ? "" : "s"}`}
+                ? t("{{count}} compact matches", { count: results.length })
+                : t("{{count}} synchronized Tools", { count: results.length })}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -266,11 +268,11 @@ export function CatalogPage({ client }: { client: MenderClient }) {
               </colgroup>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Tool</TableHead>
-                  <TableHead>Provider</TableHead>
-                  <TableHead>Description</TableHead>
-                  <TableHead className="hidden xl:table-cell">Rank</TableHead>
-                  <TableHead className="w-20 text-right">Actions</TableHead>
+                  <TableHead>{t("Tool")}</TableHead>
+                  <TableHead>{t("Provider")}</TableHead>
+                  <TableHead>{t("Description")}</TableHead>
+                  <TableHead className="hidden xl:table-cell">{t("Rank")}</TableHead>
+                  <TableHead className="w-20 text-right">{t("Actions")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -294,7 +296,7 @@ export function CatalogPage({ client }: { client: MenderClient }) {
                     </TableCell>
                     <TableCell className="min-w-0">
                       <div className="truncate text-sm text-muted-foreground">
-                        {tool.description || "No description"}
+                        {tool.description || t("No description")}
                       </div>
                     </TableCell>
                     <TableCell className="hidden xl:table-cell">
@@ -304,11 +306,13 @@ export function CatalogPage({ client }: { client: MenderClient }) {
                       <Button
                         variant="outline"
                         size="sm"
-                        aria-label={`View ${tool.title || tool.name}`}
+                        aria-label={t("View {{tool}}", {
+                          tool: tool.title || tool.name,
+                        })}
                         disabled={loadingToolId !== ""}
                         onClick={() => void viewTool(tool)}
                       >
-                        {loadingToolId === tool.toolId ? "Loading…" : "View"}
+                        {t(loadingToolId === tool.toolId ? "Loading…" : "View")}
                       </Button>
                     </TableCell>
                   </TableRow>
@@ -347,16 +351,16 @@ export function CatalogPage({ client }: { client: MenderClient }) {
           <DialogHeader>
             <DialogTitle>
               {toolView === "description"
-                ? "Tool description"
+                ? t("Tool description")
                 : toolView === "schemas"
-                  ? "Tool schemas"
+                  ? t("Tool schemas")
                   : toolView === "invoke"
-                    ? "Invoke tool"
-                    : selected?.title || selected?.name || "Tool details"}
+                    ? t("Invoke tool")
+                    : selected?.title || selected?.name || t("Tool details")}
             </DialogTitle>
             <DialogDescription>
               {selected === null
-                ? "Canonical Tool detail"
+                ? t("Canonical Tool detail")
                 : toolView === "overview" || toolView === null
                   ? providerLabel(providers, selected.providerId)
                   : selected.title || selected.name}
@@ -373,9 +377,9 @@ export function CatalogPage({ client }: { client: MenderClient }) {
               </div>
 
               <div className="rounded-lg border border-border p-4">
-                <p className="text-sm font-medium">Description</p>
+                <p className="text-sm font-medium">{t("Description")}</p>
                 <p className="mt-2 line-clamp-3 text-sm leading-6 text-muted-foreground">
-                  {selected.description || "No description"}
+                  {selected.description || t("No description")}
                 </p>
                 {selected.description ? (
                   <Button
@@ -384,7 +388,7 @@ export function CatalogPage({ client }: { client: MenderClient }) {
                     size="sm"
                     onClick={() => setToolView("description")}
                   >
-                    Read full description
+                    {t("Read full description")}
                   </Button>
                 ) : null}
               </div>
@@ -404,9 +408,9 @@ export function CatalogPage({ client }: { client: MenderClient }) {
                   variant="outline"
                   onClick={() => setToolView("schemas")}
                 >
-                  View schemas
+                  {t("View schemas")}
                 </Button>
-                <Button onClick={() => setToolView("invoke")}>Invoke tool</Button>
+                <Button onClick={() => setToolView("invoke")}>{t("Invoke tool")}</Button>
               </div>
             </div>
           ) : null}
@@ -414,7 +418,7 @@ export function CatalogPage({ client }: { client: MenderClient }) {
           {selected !== null && toolView === "description" ? (
             <div className="max-h-[58vh] overflow-y-auto rounded-lg border border-border p-4">
               <p className="whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
-                {selected.description || "No description"}
+                {selected.description || t("No description")}
               </p>
             </div>
           ) : null}
@@ -426,9 +430,9 @@ export function CatalogPage({ client }: { client: MenderClient }) {
                 <JsonBlock title="Output schema" value={selected.outputSchema} />
               ) : (
                 <div>
-                  <p className="mb-2 text-sm font-medium">Output schema</p>
+                  <p className="mb-2 text-sm font-medium">{t("Output schema")}</p>
                   <div className="rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground">
-                    Not declared by this Tool.
+                    {t("Not declared by this Tool.")}
                   </div>
                 </div>
               )}
@@ -438,13 +442,12 @@ export function CatalogPage({ client }: { client: MenderClient }) {
           {selected !== null && toolView === "invoke" ? (
             <div className="space-y-4">
               <div className="rounded-lg border border-border p-4">
-                <p className="font-medium">Arguments</p>
+                <p className="font-medium">{t("Arguments")}</p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Invocation passes through Policy, Approval, Credential,
-                  Executor, and Audit.
+                  {t("Invocation passes through Policy, Approval, Credential, Executor, and Audit.")}
                 </p>
                 <Textarea
-                  aria-label="Invocation arguments"
+                  aria-label={t("Invocation arguments")}
                   className="mt-3 min-h-40 font-mono text-xs"
                   value={argumentsText}
                   onChange={(event) => setArgumentsText(event.target.value)}
@@ -454,13 +457,13 @@ export function CatalogPage({ client }: { client: MenderClient }) {
                   onClick={() => void callTool()}
                   disabled={busy === "invoke"}
                 >
-                  {busy === "invoke" ? "Invoking…" : "Invoke through Mender"}
+                  {t(busy === "invoke" ? "Invoking…" : "Invoke through Mender")}
                 </Button>
               </div>
 
               {invocation !== null ? (
                 <JsonBlock
-                  title={`Result · ${invocation.kind}`}
+                  title={t("Result · {{kind}}", { kind: invocation.kind })}
                   value={invocation}
                 />
               ) : null}
@@ -470,7 +473,7 @@ export function CatalogPage({ client }: { client: MenderClient }) {
           <DialogFooter showCloseButton>
             {toolView !== "overview" && toolView !== null ? (
               <Button variant="outline" onClick={() => setToolView("overview")}>
-                Back
+                {t("Back")}
               </Button>
             ) : null}
           </DialogFooter>
@@ -491,7 +494,7 @@ function ToolMeta({
 }) {
   return (
     <div className="min-w-0 rounded-lg border border-border bg-muted/40 p-3">
-      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="text-xs text-muted-foreground">{t(label)}</p>
       <p
         className={[
           "mt-1 truncate text-sm",
@@ -507,7 +510,7 @@ function ToolMeta({
 function JsonBlock({ title, value }: { title: string; value: unknown }) {
   return (
     <div className="min-w-0">
-      <p className="mb-2 text-sm font-medium">{title}</p>
+      <p className="mb-2 text-sm font-medium">{t(title)}</p>
       <pre className="max-h-72 overflow-auto rounded-lg border border-border bg-muted/60 p-3 text-xs leading-5">
         {JSON.stringify(value, null, 2)}
       </pre>
@@ -518,11 +521,11 @@ function JsonBlock({ title, value }: { title: string; value: unknown }) {
 function providerLabel(providers: Provider[], providerId: string) {
   const provider = providers.find((item) => item.providerId === providerId);
   if (provider === undefined) {
-    return "Unknown Provider";
+    return t("Unknown Provider");
   }
   return provider.displayName || provider.namespace;
 }
 
 function errorMessage(reason: unknown) {
-  return reason instanceof Error ? reason.message : "Unexpected error";
+  return reason instanceof Error ? reason.message : t("Unexpected error");
 }

@@ -9,6 +9,7 @@ import type {
 } from "@mender/sdk";
 import { Card, CardContent, CardHeader, CardTitle } from "@mender/ui/components/card";
 
+import { t } from "../../i18n/i18n";
 import { ErrorNotice, PageHeader, StatusCard } from "../../shared/page";
 import { usePagination } from "../../shared/pagination";
 import { TablePagination } from "../../shared/table-pagination";
@@ -70,7 +71,7 @@ export function OverviewPage({ client }: { client: MenderClient }) {
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatusCard
           title="Runtime"
-          value={data?.status.ready ? "Ready" : "Loading"}
+          value={t(data?.status.ready ? "Ready" : "Loading")}
           description="Management operations use the shared local Runtime."
           status={data?.status.ready ? "good" : "neutral"}
         />
@@ -86,7 +87,9 @@ export function OverviewPage({ client }: { client: MenderClient }) {
         />
         <StatusCard
           title="Credentials"
-          value={data?.status.credentials.resolver ?? "Loading"}
+          value={
+            data?.status.credentials.resolver ?? t("Loading")
+          }
           description="Inventory-backed Credential resolution is available without storing secret values in Mender's SQLite database."
           status={data?.status.credentials.editable ? "good" : "warning"}
         />
@@ -94,7 +97,7 @@ export function OverviewPage({ client }: { client: MenderClient }) {
 
       <Card className="mt-6">
         <CardHeader>
-          <CardTitle>Recent invocations</CardTitle>
+          <CardTitle>{t("Recent invocations")}</CardTitle>
         </CardHeader>
         <CardContent>
           {data?.records.length ? (
@@ -107,7 +110,9 @@ export function OverviewPage({ client }: { client: MenderClient }) {
                 >
                   <div className="min-w-0">
                     <p className="truncate font-mono text-xs">{record.toolId}</p>
-                    <p className="mt-1 text-muted-foreground">{record.caller || "unknown caller"}</p>
+                    <p className="mt-1 text-muted-foreground">
+                      {record.caller || t("unknown caller")}
+                    </p>
                   </div>
                   <p>{record.status}</p>
                   <time className="text-right text-muted-foreground">
@@ -123,7 +128,7 @@ export function OverviewPage({ client }: { client: MenderClient }) {
             </>
           ) : (
             <p className="text-sm text-muted-foreground">
-              No invocation records yet.
+              {t("No invocation records yet.")}
             </p>
           )}
         </CardContent>
@@ -133,5 +138,5 @@ export function OverviewPage({ client }: { client: MenderClient }) {
 }
 
 function errorMessage(reason: unknown) {
-  return reason instanceof Error ? reason.message : "Unexpected error";
+  return reason instanceof Error ? reason.message : t("Unexpected error");
 }

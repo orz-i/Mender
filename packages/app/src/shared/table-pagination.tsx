@@ -1,5 +1,6 @@
 import { Button } from "@mender/ui/components/button";
 
+import { t } from "../i18n/i18n";
 import type { PaginationState } from "./pagination";
 
 export function TablePagination<T>({
@@ -15,18 +16,22 @@ export function TablePagination<T>({
 
   return (
     <nav
-      aria-label={`${label} pagination`}
+      aria-label={t("{{label}} pagination", { label: t(label) })}
       className="mt-4 flex flex-col gap-3 border-t border-border pt-4 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between"
     >
       <p aria-live="polite">
-        Rows {pagination.from}–{pagination.to} of {pagination.total}
+        {t("Rows {{from}}–{{to}} of {{total}}", {
+          from: pagination.from,
+          to: pagination.to,
+          total: pagination.total,
+        })}
       </p>
 
       <div className="flex flex-wrap items-center gap-3">
         <label className="flex items-center gap-2 whitespace-nowrap">
-          <span>Rows per page</span>
+          <span>{t("Rows per page")}</span>
           <select
-            aria-label={`${label} rows per page`}
+            aria-label={t("{{label}} rows per page", { label: t(label) })}
             value={pagination.pageSize}
             onChange={(event) =>
               pagination.setPageSize(Number(event.target.value))
@@ -42,7 +47,10 @@ export function TablePagination<T>({
         </label>
 
         <span className="whitespace-nowrap">
-          Page {pagination.page} of {pagination.pageCount}
+          {t("Page {{page}} of {{pageCount}}", {
+            page: pagination.page,
+            pageCount: pagination.pageCount,
+          })}
         </span>
 
         <div className="flex items-center gap-2">
@@ -50,21 +58,21 @@ export function TablePagination<T>({
             type="button"
             variant="outline"
             size="sm"
-            aria-label={`${label} previous page`}
+            aria-label={t("{{label}} previous page", { label: t(label) })}
             disabled={pagination.page <= 1}
             onClick={() => pagination.setPage(pagination.page - 1)}
           >
-            Previous
+            {t("Previous")}
           </Button>
           <Button
             type="button"
             variant="outline"
             size="sm"
-            aria-label={`${label} next page`}
+            aria-label={t("{{label}} next page", { label: t(label) })}
             disabled={pagination.page >= pagination.pageCount}
             onClick={() => pagination.setPage(pagination.page + 1)}
           >
-            Next
+            {t("Next")}
           </Button>
         </div>
       </div>
