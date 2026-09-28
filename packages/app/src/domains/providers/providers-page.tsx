@@ -6,6 +6,7 @@ import type {
   Provider,
   ProviderPlugin,
   ProviderPluginInstallation,
+  ProviderPluginIssue,
   UpdateProviderRequest,
 } from "@mender/sdk";
 import { Badge } from "@mender/ui/components/badge";
@@ -250,6 +251,9 @@ export function ProvidersPage({
 }) {
   const [providers, setProviders] = useState<Provider[]>([]);
   const [providerPlugins, setProviderPlugins] = useState<ProviderPlugin[]>([]);
+  const [providerPluginIssues, setProviderPluginIssues] = useState<
+    ProviderPluginIssue[]
+  >([]);
   const [credentials, setCredentials] = useState<Credential[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState("");
@@ -279,6 +283,7 @@ export function ProvidersPage({
     try {
       const result = await client.listProviderPlugins();
       setProviderPlugins(result.plugins);
+      setProviderPluginIssues(result.issues);
       setError("");
     } catch (reason) {
       setError(errorMessage(reason));
@@ -310,6 +315,7 @@ export function ProvidersPage({
       .then(([pluginResult, providerResult, credentialResult]) => {
         if (active) {
           setProviderPlugins(pluginResult.plugins);
+          setProviderPluginIssues(pluginResult.issues);
           setProviders(providerResult.providers);
           setCredentials(credentialResult.credentials);
           setError("");
@@ -585,6 +591,19 @@ export function ProvidersPage({
       />
 
       {error ? <ErrorNotice message={error} /> : null}
+      {providerPluginIssues.length ? (
+        <ErrorNotice
+          message={
+            "Some external Provider plugins are degraded: " +
+            providerPluginIssues
+              .map(
+                (issue) =>
+                  issue.installationId + " · " + issue.code + " · " + issue.message,
+              )
+              .join("; ")
+          }
+        />
+      ) : null}
 
       <Card>
         <CardHeader className="border-b">

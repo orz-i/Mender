@@ -579,22 +579,34 @@ func (a *app) newProviderPluginsCommand() *cobra.Command {
 		Args:  exactArgs(0),
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return a.withRuntime(cmd.Context(), func(runtime *bootstrap.Runtime) error {
-				available, err := runtime.ListAvailableProviderPlugins(cmd.Context())
+				catalog, err := runtime.ListAvailableProviderPluginCatalog(cmd.Context())
 				if err != nil {
 					return err
 				}
+				available := catalog.Plugins
 				if a.output == "json" {
 					items := make([]map[string]any, 0, len(available))
 					for _, item := range available {
 						items = append(items, availableProviderPluginProjection(item))
 					}
-					return a.writeValue("", map[string]any{"plugins": items})
+					issues := make([]map[string]any, 0, len(catalog.Issues))
+					for _, issue := range catalog.Issues {
+						issues = append(issues, map[string]any{
+							"installationId": issue.InstallationID.String(),
+							"code":           issue.Code,
+							"message":        issue.Message,
+						})
+					}
+					return a.writeValue("", map[string]any{
+						"plugins": items,
+						"issues":  issues,
+					})
 				}
 
 				writer := tabwriter.NewWriter(a.options.Stdout, 0, 4, 2, ' ', 0)
 				_, _ = fmt.Fprintln(
 					writer,
-					"SOURCE	INSTALLATION	PLUGIN	VERSION	CONFIG	NAME",
+					"SOURCE\tINSTALLATION\tPLUGIN\tVERSION\tCONFIG\tNAME",
 				)
 				for _, item := range available {
 					installation := "-"
@@ -603,7 +615,7 @@ func (a *app) newProviderPluginsCommand() *cobra.Command {
 					}
 					_, _ = fmt.Fprintf(
 						writer,
-						"%s	%s	%s	%s	%d	%s\n",
+						"%s\t%s\t%s\t%s\t%d\t%s\n",
 						item.SourceKind,
 						installation,
 						item.Descriptor.ID,
@@ -612,7 +624,19 @@ func (a *app) newProviderPluginsCommand() *cobra.Command {
 						item.Descriptor.DisplayName,
 					)
 				}
-				return writer.Flush()
+				if err := writer.Flush(); err != nil {
+					return err
+				}
+				for _, issue := range catalog.Issues {
+					_, _ = fmt.Fprintf(
+						a.options.Stderr,
+						"warning: Provider plugin %s %s: %s\n",
+						issue.InstallationID,
+						issue.Code,
+						issue.Message,
+					)
+				}
+				return nil
 			})
 		},
 	}

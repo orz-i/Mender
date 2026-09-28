@@ -236,19 +236,27 @@ func (s *Service) DeleteCredential(namespace string, name string) error {
 }
 
 func (s *Service) ListProviderPlugins() (ProviderPluginList, error) {
-	available, err := s.runtime.ListAvailableProviderPlugins(s.ctx)
+	catalog, err := s.runtime.ListAvailableProviderPluginCatalog(s.ctx)
 	if err != nil {
 		return ProviderPluginList{}, err
 	}
-	items := make([]ProviderPlugin, 0, len(available))
-	for _, item := range available {
+	items := make([]ProviderPlugin, 0, len(catalog.Plugins))
+	for _, item := range catalog.Plugins {
 		projected, projectionErr := availableProviderPluginProjection(item)
 		if projectionErr != nil {
 			return ProviderPluginList{}, projectionErr
 		}
 		items = append(items, projected)
 	}
-	return ProviderPluginList{Plugins: items}, nil
+	issues := make([]ProviderPluginIssue, 0, len(catalog.Issues))
+	for _, issue := range catalog.Issues {
+		issues = append(issues, ProviderPluginIssue{
+			InstallationID: issue.InstallationID.String(),
+			Code:           issue.Code,
+			Message:        issue.Message,
+		})
+	}
+	return ProviderPluginList{Plugins: items, Issues: issues}, nil
 }
 
 func (s *Service) ListProviderPluginInstallations() (
@@ -339,10 +347,6 @@ func (s *Service) ListProviders() (ProviderList, error) {
 	for _, config := range configs {
 		configByProvider[config.ProviderID] = config
 	}
-	descriptorByID := make(map[providerplugin.ID]providerplugin.Descriptor)
-	for _, descriptor := range s.runtime.ProviderPluginDescriptors() {
-		descriptorByID[descriptor.ID] = descriptor
-	}
 	toolCounts, err := s.runtime.Catalog.ListProviderToolCounts.Execute(s.ctx)
 	if err != nil {
 		return ProviderList{}, err
@@ -355,10 +359,11 @@ func (s *Service) ListProviders() (ProviderList, error) {
 		if configured {
 			configCopy := config
 			configPtr = &configCopy
-			if descriptor, ok := descriptorByID[config.PluginID]; ok {
-				descriptorCopy := descriptor
-				descriptorPtr = &descriptorCopy
-			}
+			descriptorPtr = desktopDescriptorForProviderConfig(
+				s.ctx,
+				s.runtime,
+				config,
+			)
 		}
 		items = append(items, providerProjection(
 			provider,
@@ -425,10 +430,7 @@ func (s *Service) CreateProvider(
 	if err != nil {
 		return ProviderMutationResponse{}, err
 	}
-	descriptor := desktopDescriptorForPlugin(
-		s.runtime.ProviderPluginDescriptors(),
-		stored.PluginID,
-	)
+	descriptor := desktopDescriptorForProviderConfig(s.ctx, s.runtime, stored)
 	return ProviderMutationResponse{
 		Provider: providerProjection(provider, &stored, descriptor, result.Total),
 		Sync:     syncProjection(result),
@@ -469,10 +471,7 @@ func (s *Service) RebindProvider(
 	if err != nil {
 		return ProviderMutationResponse{}, err
 	}
-	descriptor := desktopDescriptorForPlugin(
-		s.runtime.ProviderPluginDescriptors(),
-		stored.PluginID,
-	)
+	descriptor := desktopDescriptorForProviderConfig(s.ctx, s.runtime, stored)
 	return ProviderMutationResponse{
 		Provider: providerProjection(provider, &stored, descriptor, result.Total),
 		Sync:     syncProjection(result),
@@ -524,10 +523,7 @@ func (s *Service) CreateHTTPProvider(
 	if err != nil {
 		return ProviderMutationResponse{}, err
 	}
-	descriptor := desktopDescriptorForPlugin(
-		s.runtime.ProviderPluginDescriptors(),
-		config.PluginID,
-	)
+	descriptor := desktopDescriptorForProviderConfig(s.ctx, s.runtime, config)
 	return ProviderMutationResponse{
 		Provider: providerProjection(provider, &config, descriptor, result.Total),
 		Sync:     syncProjection(result),
@@ -581,10 +577,7 @@ func (s *Service) CreateStdioProvider(
 	if err != nil {
 		return ProviderMutationResponse{}, err
 	}
-	descriptor := desktopDescriptorForPlugin(
-		s.runtime.ProviderPluginDescriptors(),
-		config.PluginID,
-	)
+	descriptor := desktopDescriptorForProviderConfig(s.ctx, s.runtime, config)
 	return ProviderMutationResponse{
 		Provider: providerProjection(provider, &config, descriptor, result.Total),
 		Sync:     syncProjection(result),
@@ -625,10 +618,7 @@ func (s *Service) UpdateConfiguredProvider(
 	if err != nil {
 		return ProviderMutationResponse{}, err
 	}
-	descriptor := desktopDescriptorForPlugin(
-		s.runtime.ProviderPluginDescriptors(),
-		stored.PluginID,
-	)
+	descriptor := desktopDescriptorForProviderConfig(s.ctx, s.runtime, stored)
 	return ProviderMutationResponse{
 		Provider: providerProjection(provider, &stored, descriptor, result.Total),
 		Sync:     syncProjection(result),
@@ -705,10 +695,7 @@ func (s *Service) UpdateProvider(
 	if err != nil {
 		return ProviderMutationResponse{}, err
 	}
-	descriptor := desktopDescriptorForPlugin(
-		s.runtime.ProviderPluginDescriptors(),
-		stored.PluginID,
-	)
+	descriptor := desktopDescriptorForProviderConfig(s.ctx, s.runtime, stored)
 
 	return ProviderMutationResponse{
 		Provider: providerProjection(provider, &stored, descriptor, result.Total),
@@ -1304,8 +1291,10 @@ func providerProjection(
 		result.PluginVersion = descriptor.Version
 		result.PluginDisplayName = descriptor.DisplayName
 	}
-	if err := json.Unmarshal(config.Config, &result.Config); err != nil {
-		result.Config = nil
+	if safeConfig, err := providerplugin.ManagementSafeConfig(descriptor, config.Config); err == nil {
+		if object, ok := safeConfig.(map[string]any); ok {
+			result.Config = object
+		}
 	}
 
 	if config.PluginID != mcpplugin.ID {
@@ -1358,17 +1347,16 @@ func providerProjection(
 	return result
 }
 
-func desktopDescriptorForPlugin(
-	descriptors []providerplugin.Descriptor,
-	pluginID providerplugin.ID,
+func desktopDescriptorForProviderConfig(
+	ctx context.Context,
+	runtime *bootstrap.Runtime,
+	config providerplugin.Configuration,
 ) *providerplugin.Descriptor {
-	for _, descriptor := range descriptors {
-		if descriptor.ID == pluginID {
-			copy := descriptor
-			return &copy
-		}
+	descriptor, ok, err := runtime.ProviderPluginDescriptorForConfig(ctx, config)
+	if err != nil || !ok {
+		return nil
 	}
-	return nil
+	return &descriptor
 }
 
 func cloneHeaders(headers map[string]string) map[string]string {

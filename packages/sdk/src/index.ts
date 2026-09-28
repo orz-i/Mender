@@ -30,6 +30,7 @@ export type {
   Provider,
   ProviderMutationResponse,
   ProviderPlugin,
+  ProviderPluginIssue,
   ProviderPluginInstallation,
   RebindProviderRequest,
   ReplaceProfileToolsRequest,

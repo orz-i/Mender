@@ -726,6 +726,11 @@ export interface components {
             capabilities: string[];
             enabled: boolean;
         };
+        ProviderPluginIssue: {
+            installationId: string;
+            code: string;
+            message: string;
+        };
         ProviderPluginInstallation: {
             installationId: string;
             pluginId: string;
@@ -1091,6 +1096,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         plugins: components["schemas"]["ProviderPlugin"][];
+                        issues: components["schemas"]["ProviderPluginIssue"][];
                     };
                 };
             };

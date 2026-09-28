@@ -228,8 +228,15 @@ export interface ProviderPluginInstallationList {
     "installations": ProviderPluginInstallation[] | null;
 }
 
+export interface ProviderPluginIssue {
+    "installationId": string;
+    "code": string;
+    "message": string;
+}
+
 export interface ProviderPluginList {
     "plugins": ProviderPlugin[] | null;
+    "issues": ProviderPluginIssue[] | null;
 }
 
 export interface SyncResult {

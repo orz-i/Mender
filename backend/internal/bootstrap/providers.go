@@ -29,6 +29,27 @@ type AvailableProviderPlugin struct {
 	Enabled        bool
 }
 
+// ProviderPluginIssue is one installation-scoped catalog degradation that does
+// not hide unrelated healthy Provider plugins.
+type ProviderPluginIssue struct {
+	InstallationID providerplugin.InstallationID
+	Code           string
+	Message        string
+}
+
+// ProviderPluginCatalog is the complete management projection of selectable
+// plugins plus installation-scoped degradation diagnostics.
+type ProviderPluginCatalog struct {
+	Plugins []AvailableProviderPlugin
+	Issues  []ProviderPluginIssue
+}
+
+const (
+	providerPluginIssueResolveDescriptor = "descriptor_resolution_failed"
+	providerPluginIssuePersistDescriptor = "descriptor_backfill_failed"
+	providerPluginIssueCloseProcess      = "process_cleanup_failed"
+)
+
 // ProviderPluginDescriptors returns safe metadata for all built-in Provider
 // plugins available to this Runtime.
 func (r *Runtime) ProviderPluginDescriptors() []providerplugin.Descriptor {
@@ -38,20 +59,67 @@ func (r *Runtime) ProviderPluginDescriptors() []providerplugin.Descriptor {
 	return r.providerPlugins.Descriptors()
 }
 
-// ListAvailableProviderPlugins returns built-in plugins plus enabled external
-// installations, preserving exact installation identity for side-by-side
-// package versions.
-func (r *Runtime) ListAvailableProviderPlugins(
+// ProviderPluginDescriptorForConfig returns management-safe descriptor metadata
+// for the exact plugin implementation bound by one persisted Provider config.
+// External descriptors are read from the verified installation snapshot and do
+// not start plugin processes.
+func (r *Runtime) ProviderPluginDescriptorForConfig(
 	ctx context.Context,
-) ([]AvailableProviderPlugin, error) {
+	config providerplugin.Configuration,
+) (providerplugin.Descriptor, bool, error) {
 	if r == nil {
-		return nil, fmt.Errorf("list available provider plugins: runtime is nil")
+		return providerplugin.Descriptor{}, false, fmt.Errorf(
+			"provider plugin descriptor for config: runtime is nil",
+		)
+	}
+	if config.InstallationID == nil {
+		for _, descriptor := range r.ProviderPluginDescriptors() {
+			if descriptor.ID == config.PluginID {
+				return descriptor.Clone(), true, nil
+			}
+		}
+		return providerplugin.Descriptor{}, false, nil
+	}
+
+	installation, err := r.pluginInstallations.Get(ctx, *config.InstallationID)
+	if err != nil {
+		return providerplugin.Descriptor{}, false, fmt.Errorf(
+			"provider plugin descriptor for config: installation %s: %w",
+			config.InstallationID,
+			err,
+		)
+	}
+	if installation.PluginID() != config.PluginID {
+		return providerplugin.Descriptor{}, false, fmt.Errorf(
+			"provider plugin descriptor for config: installation %s owns plugin %s, config uses %s",
+			installation.ID(),
+			installation.PluginID(),
+			config.PluginID,
+		)
+	}
+	descriptor, ok := installation.VerifiedDescriptor()
+	if !ok {
+		return providerplugin.Descriptor{}, false, nil
+	}
+	return descriptor.Clone(), true, nil
+}
+
+// ListAvailableProviderPluginCatalog returns built-in plugins plus enabled
+// external installations and preserves installation-scoped backfill failures as
+// diagnostics instead of hiding unrelated healthy plugins.
+func (r *Runtime) ListAvailableProviderPluginCatalog(
+	ctx context.Context,
+) (ProviderPluginCatalog, error) {
+	if r == nil {
+		return ProviderPluginCatalog{}, fmt.Errorf(
+			"list available provider plugins: runtime is nil",
+		)
 	}
 
 	builtins := r.providerPlugins.Descriptors()
-	result := make([]AvailableProviderPlugin, 0, len(builtins))
+	plugins := make([]AvailableProviderPlugin, 0, len(builtins))
 	for _, descriptor := range builtins {
-		result = append(result, AvailableProviderPlugin{
+		plugins = append(plugins, AvailableProviderPlugin{
 			Descriptor: descriptor.Clone(),
 			SourceKind: ProviderPluginSourceBuiltIn,
 			Enabled:    true,
@@ -60,34 +128,34 @@ func (r *Runtime) ListAvailableProviderPlugins(
 
 	installations, err := r.ListProviderPluginInstallations(ctx)
 	if err != nil {
-		return nil, fmt.Errorf(
+		return ProviderPluginCatalog{}, fmt.Errorf(
 			"list available provider plugins: installations: %w",
 			err,
 		)
 	}
+	issues := make([]ProviderPluginIssue, 0)
 	for _, installation := range installations {
 		if installation.Status() != installationdomain.StatusEnabled {
 			continue
 		}
 		descriptor, verified := installation.VerifiedDescriptor()
 		if !verified {
-			resolved, resolveErr := r.externalResolver.ResolveInstallation(
+			var backfillIssues []ProviderPluginIssue
+			descriptor, verified, backfillIssues = backfillProviderPluginDescriptor(
 				ctx,
-				installation.ID(),
+				installation,
+				r.externalResolver,
+				r.pluginInstallations,
+				r.externalProcesses,
 			)
-			if resolveErr != nil {
+			issues = append(issues, backfillIssues...)
+			if !verified {
 				continue
 			}
-			descriptor = resolved.Descriptor.Clone()
-			_ = r.pluginInstallations.SetVerifiedDescriptor(
-				context.WithoutCancel(ctx),
-				installation.ID(),
-				descriptor,
-			)
-			_ = r.externalProcesses.CloseInstallation(installation.ID())
+			r.externalResolver.ForgetInstallation(installation.ID())
 		}
 		id := installation.ID()
-		result = append(result, AvailableProviderPlugin{
+		plugins = append(plugins, AvailableProviderPlugin{
 			Descriptor:     descriptor.Clone(),
 			SourceKind:     ProviderPluginSourceExternal,
 			InstallationID: &id,
@@ -95,7 +163,7 @@ func (r *Runtime) ListAvailableProviderPlugins(
 		})
 	}
 
-	slices.SortFunc(result, func(a, b AvailableProviderPlugin) int {
+	slices.SortFunc(plugins, func(a, b AvailableProviderPlugin) int {
 		if comparison := strings.Compare(
 			a.Descriptor.ID.String(),
 			b.Descriptor.ID.String(),
@@ -114,7 +182,111 @@ func (r *Runtime) ListAvailableProviderPlugins(
 		}
 		return strings.Compare(aInstallation, bInstallation)
 	})
-	return result, nil
+	slices.SortFunc(issues, func(a, b ProviderPluginIssue) int {
+		if comparison := strings.Compare(
+			a.InstallationID.String(),
+			b.InstallationID.String(),
+		); comparison != 0 {
+			return comparison
+		}
+		return strings.Compare(a.Code, b.Code)
+	})
+	return ProviderPluginCatalog{Plugins: plugins, Issues: issues}, nil
+}
+
+// ListAvailableProviderPlugins retains the original plugin-only Runtime API for
+// callers that do not need installation-scoped catalog diagnostics.
+func (r *Runtime) ListAvailableProviderPlugins(
+	ctx context.Context,
+) ([]AvailableProviderPlugin, error) {
+	catalog, err := r.ListAvailableProviderPluginCatalog(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return catalog.Plugins, nil
+}
+
+type providerPluginDescriptorBackfillResolver interface {
+	ResolveInstallation(
+		context.Context,
+		providerplugin.InstallationID,
+	) (providerplugin.Resolution, error)
+}
+
+type providerPluginVerifiedDescriptorStore interface {
+	SetVerifiedDescriptor(
+		context.Context,
+		providerplugin.InstallationID,
+		providerplugin.Descriptor,
+	) error
+}
+
+type providerPluginProcessCloser interface {
+	CloseInstallation(providerplugin.InstallationID) error
+}
+
+func backfillProviderPluginDescriptor(
+	ctx context.Context,
+	installation installationdomain.Installation,
+	resolver providerPluginDescriptorBackfillResolver,
+	store providerPluginVerifiedDescriptorStore,
+	processes providerPluginProcessCloser,
+) (providerplugin.Descriptor, bool, []ProviderPluginIssue) {
+	resolved, err := resolver.ResolveInstallation(ctx, installation.ID())
+	if err != nil {
+		return providerplugin.Descriptor{}, false, []ProviderPluginIssue{
+			newProviderPluginIssue(
+				installation.ID(),
+				providerPluginIssueResolveDescriptor,
+				err,
+			),
+		}
+	}
+	descriptor := resolved.Descriptor.Clone()
+	persistErr := store.SetVerifiedDescriptor(
+		context.WithoutCancel(ctx),
+		installation.ID(),
+		descriptor,
+	)
+	closeErr := processes.CloseInstallation(installation.ID())
+
+	issues := make([]ProviderPluginIssue, 0, 2)
+	if persistErr != nil {
+		issues = append(issues, newProviderPluginIssue(
+			installation.ID(),
+			providerPluginIssuePersistDescriptor,
+			persistErr,
+		))
+	}
+	if closeErr != nil {
+		issues = append(issues, newProviderPluginIssue(
+			installation.ID(),
+			providerPluginIssueCloseProcess,
+			closeErr,
+		))
+	}
+	if persistErr != nil {
+		return providerplugin.Descriptor{}, false, issues
+	}
+	return descriptor, true, issues
+}
+
+func newProviderPluginIssue(
+	installationID providerplugin.InstallationID,
+	code string,
+	err error,
+) ProviderPluginIssue {
+	message := strings.TrimSpace(err.Error())
+	const maxRunes = 512
+	runes := []rune(message)
+	if len(runes) > maxRunes {
+		message = string(runes[:maxRunes]) + "…"
+	}
+	return ProviderPluginIssue{
+		InstallationID: installationID,
+		Code:           code,
+		Message:        message,
+	}
 }
 
 // ProviderConfig returns the generic plugin configuration for one Provider.

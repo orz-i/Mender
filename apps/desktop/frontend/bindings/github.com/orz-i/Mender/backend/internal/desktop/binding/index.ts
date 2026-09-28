@@ -33,6 +33,7 @@ export type {
     ProviderPlugin,
     ProviderPluginInstallation,
     ProviderPluginInstallationList,
+    ProviderPluginIssue,
     ProviderPluginList,
     SyncResult,
     SystemStatus,

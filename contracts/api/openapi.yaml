@@ -28,12 +28,16 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [plugins]
+                required: [plugins, issues]
                 properties:
                   plugins:
                     type: array
                     items:
                       $ref: '#/components/schemas/ProviderPlugin'
+                  issues:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ProviderPluginIssue'
   /provider-plugin-installations:
     get:
       operationId: listProviderPluginInstallations
@@ -979,6 +983,14 @@ components:
           type: array
           items: { type: string }
         enabled: { type: boolean }
+      additionalProperties: false
+    ProviderPluginIssue:
+      type: object
+      required: [installationId, code, message]
+      properties:
+        installationId: { type: string }
+        code: { type: string }
+        message: { type: string, maxLength: 1024 }
       additionalProperties: false
     ProviderPluginInstallation:
       type: object

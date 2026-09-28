@@ -124,6 +124,39 @@ describe("management pages", () => {
     expect(await screen.findByText("demo")).toBeTruthy();
   });
 
+  it("surfaces installation-scoped Provider plugin degradation without hiding healthy plugins", async () => {
+    renderApp("/providers", {
+      listProviderPlugins: vi.fn().mockResolvedValue({
+        plugins: [
+          {
+            pluginId: "io.mender.provider.mcp",
+            version: "1.0.0",
+            packageVersion: "1.0.0",
+            displayName: "MCP",
+            description: "Model Context Protocol provider",
+            configVersion: 1,
+            sourceKind: "builtin",
+            capabilities: [],
+            enabled: true,
+          },
+        ],
+        issues: [
+          {
+            installationId: "pinst_00000000000000000000000000000091",
+            code: "descriptor_backfill_failed",
+            message: "database is read-only",
+          },
+        ],
+      }),
+      listProviders: vi.fn().mockResolvedValue({ providers: [] }),
+    });
+
+    expect(await screen.findByText("No providers")).toBeTruthy();
+    expect(
+      screen.getByText(/descriptor_backfill_failed.*database is read-only/),
+    ).toBeTruthy();
+  });
+
   it("configures an unknown external Provider plugin from its schema", async () => {
     const installationId = "pinst_0123456789abcdef0123456789abcdef";
     const credential = {
@@ -243,6 +276,7 @@ describe("management pages", () => {
           plugin,
           targetPlugin,
         ],
+        issues: [],
       }),
       listProviders,
       listCredentials: vi.fn().mockResolvedValue({ credentials: [credential] }),
@@ -404,6 +438,7 @@ describe("management pages", () => {
             enabled: true,
           },
         ],
+        issues: [],
       }),
       listProviders: vi.fn().mockResolvedValue({ providers: [] }),
     });
@@ -608,10 +643,9 @@ describe("management pages", () => {
       screen.getByRole("button", { name: "Use authentication" }),
     );
 
-    expect(await screen.findByText("Add provider")).toBeTruthy();
-    expect(screen.getByLabelText<HTMLInputElement>("Model Tools model").value).toBe(
-      "claude-test",
-    );
+    expect(
+      (await screen.findByLabelText<HTMLInputElement>("Model Tools model")).value,
+    ).toBe("claude-test");
     const addButton = screen.getByRole<HTMLButtonElement>("button", {
       name: "Add provider",
     });
@@ -1830,6 +1864,7 @@ function renderApp(
           configVersion: 1,
         },
       ],
+      issues: [],
     }),
     listCredentials: vi.fn().mockResolvedValue({ credentials: [] }),
     ...client,

@@ -61,7 +61,9 @@ External plugins may publish JSON Schema Draft 2020-12 configuration metadata. M
 
 The generic v1 UI handles common object/string/number/integer/boolean/enum/array configuration, required/default/additionalProperties, basic bounds, URI format, and bounded nesting. Unsupported composition/dynamic features such as `$ref`, `oneOf`, `anyOf`, `allOf`, conditionals, pattern properties, and unevaluated constructs fail closed rather than being ignored.
 
-The reviewed annotation `x-mender-control: credential` renders an inventory Credential selector. Persisted config stores the Credential Reference, not the secret.
+The reviewed annotation `x-mender-control: credential` renders an inventory Credential selector. The host also enforces this annotation: configured values must be canonical `credential://<namespace>/<name>` references before plugin validation or persistence. Schema fields marked `writeOnly: true` or `format: password` receive the same host treatment.
+
+Provider configuration persistence additionally rejects common secret-bearing field names when their values are literal secret material; Credential References and explicit environment references remain allowed. Management projections omit unsafe sensitive values from historical rows. Historical rows can therefore still be inspected and repaired, but they cannot be saved again or activated until the sensitive values are replaced by governed references.
 
 Built-in MCP/OpenAPI/Model Tools retain first-party Mender-owned renderers. External installations are always identified by exact Installation ID and use the generic renderer.
 
@@ -108,7 +110,9 @@ Rebind validates the target package/configuration and synchronizes its Tool snap
 
 ## Web and Desktop
 
-Web and Desktop can list, enable/disable, remove installations, configure unknown external Provider types from persisted descriptor schema, and explicitly rebind an external Provider when another enabled installation of the same PluginID is available. Provider rows display the persisted connection summary when the plugin supplies one.
+Web and Desktop can list, enable/disable, remove installations, configure unknown external Provider types from persisted descriptor schema, and explicitly rebind an external Provider when another enabled installation of the same PluginID is available. Provider rows display the persisted connection summary when the plugin supplies one. External Provider details use the exact installation's persisted verified descriptor, so package version/display metadata remain available even while that installation is disabled or its process is unavailable.
+
+Legacy installations without a verified descriptor may be backfilled during plugin catalog listing. Backfill persistence and process-cleanup failures are reported as installation-scoped catalog issues; one degraded installation does not hide unrelated healthy plugins. Once a verified descriptor is persisted, normal catalog reads remain process-free.
 
 Browser management deliberately does not accept an arbitrary server filesystem path for installation. Desktop provides one scoped native directory picker and passes that local path only through the Wails host-local binding. Headless/local installation uses the CLI.
 

@@ -72,6 +72,91 @@ func TestRuntimeExposesBuiltInProviderPluginDescriptors(t *testing.T) {
 	}
 }
 
+func TestProviderPluginDescriptorForConfigUsesPersistedExternalSnapshotOffline(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	runtime := newProviderTestRuntime(t)
+	installationID, err := providerplugin.ParseInstallationID(
+		"pinst_00000000000000000000000000000097",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pluginID, err := providerplugin.ParseID("dev.example.offline")
+	if err != nil {
+		t.Fatal(err)
+	}
+	descriptor := providerplugin.Descriptor{
+		ID:              pluginID,
+		Version:         "2.3.4",
+		DisplayName:     "Offline Plugin",
+		Description:     "Persisted descriptor fixture",
+		ConfigVersion:   3,
+		ProtocolVersion: 1,
+		ConfigSchema:    json.RawMessage(`{"type":"object"}`),
+	}
+	installation, err := installationdomain.NewInstallation(
+		installationID,
+		pluginID,
+		"2.3.4",
+		installationdomain.SourceLocal,
+		"/tmp/mender-offline-provider-fixture",
+		"sha256:"+strings.Repeat("7", 64),
+		[]byte(`{
+			"manifestVersion": 1,
+			"pluginId": "dev.example.offline",
+			"version": "2.3.4",
+			"protocolVersions": [1],
+			"displayName": "Offline Plugin",
+			"description": "Persisted descriptor fixture",
+			"entrypoints": {"linux/amd64": "bin/plugin"}
+		}`),
+		installationdomain.StatusDisabled,
+		time.Date(2026, 9, 28, 12, 0, 0, 0, time.UTC),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	installation, err = installation.WithVerifiedDescriptor(descriptor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := runtime.pluginInstallations.Create(ctx, installation); err != nil {
+		t.Fatal(err)
+	}
+
+	providerID, err := catalogdomain.ParseProviderID(
+		"prov_00000000000000000000000000000097",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	config, err := providerplugin.NewInstalledConfiguration(
+		providerID,
+		pluginID,
+		installationID,
+		3,
+		json.RawMessage(`{"name":"offline"}`),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, ok, err := runtime.ProviderPluginDescriptorForConfig(ctx, config)
+	if err != nil {
+		t.Fatalf("ProviderPluginDescriptorForConfig() error = %v", err)
+	}
+	if !ok ||
+		got.ID != descriptor.ID ||
+		got.Version != "2.3.4" ||
+		got.DisplayName != "Offline Plugin" {
+		t.Fatalf("descriptor = %+v present=%v", got, ok)
+	}
+	if runtime.externalProcesses.Running(installationID) {
+		t.Fatal("offline descriptor lookup started external process")
+	}
+}
+
 func TestListAvailableProviderPluginsIsolatesBrokenLegacyInstallation(t *testing.T) {
 	t.Parallel()
 
@@ -114,18 +199,143 @@ func TestListAvailableProviderPluginsIsolatesBrokenLegacyInstallation(t *testing
 		t.Fatal(err)
 	}
 
-	available, err := runtime.ListAvailableProviderPlugins(ctx)
+	catalog, err := runtime.ListAvailableProviderPluginCatalog(ctx)
 	if err != nil {
-		t.Fatalf("ListAvailableProviderPlugins() error = %v", err)
+		t.Fatalf("ListAvailableProviderPluginCatalog() error = %v", err)
 	}
-	if len(available) != 3 {
-		t.Fatalf("available plugins = %d, want 3 healthy built-ins", len(available))
+	if len(catalog.Plugins) != 3 {
+		t.Fatalf("available plugins = %d, want 3 healthy built-ins", len(catalog.Plugins))
 	}
-	for _, item := range available {
+	for _, item := range catalog.Plugins {
 		if item.SourceKind != ProviderPluginSourceBuiltIn {
 			t.Fatalf("unexpected unavailable external plugin in catalog: %+v", item)
 		}
 	}
+	if len(catalog.Issues) != 1 ||
+		catalog.Issues[0].InstallationID != installationID ||
+		catalog.Issues[0].Code != providerPluginIssueResolveDescriptor {
+		t.Fatalf("catalog issues = %+v", catalog.Issues)
+	}
+}
+
+func TestBackfillProviderPluginDescriptorSurfacesPersistenceAndCleanupFailures(t *testing.T) {
+	t.Parallel()
+
+	installationID, err := providerplugin.ParseInstallationID(
+		"pinst_00000000000000000000000000000098",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pluginID, err := providerplugin.ParseID("dev.example.backfill")
+	if err != nil {
+		t.Fatal(err)
+	}
+	installation, err := installationdomain.NewInstallation(
+		installationID,
+		pluginID,
+		"1.0.0",
+		installationdomain.SourceLocal,
+		"/tmp/mender-backfill-provider-fixture",
+		"sha256:"+strings.Repeat("8", 64),
+		[]byte(`{
+			"manifestVersion": 1,
+			"pluginId": "dev.example.backfill",
+			"version": "1.0.0",
+			"protocolVersions": [1],
+			"displayName": "Backfill",
+			"description": "Backfill fixture",
+			"entrypoints": {"linux/amd64": "bin/plugin"}
+		}`),
+		installationdomain.StatusEnabled,
+		time.Date(2026, 9, 28, 12, 0, 0, 0, time.UTC),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	descriptor := providerplugin.Descriptor{
+		ID:              pluginID,
+		Version:         "1.0.0",
+		DisplayName:     "Backfill",
+		ConfigVersion:   1,
+		ProtocolVersion: 1,
+	}
+
+	t.Run("persistence failure still attempts cleanup", func(t *testing.T) {
+		closer := &backfillProcessCloser{err: errors.New("cleanup failed")}
+		_, verified, issues := backfillProviderPluginDescriptor(
+			t.Context(),
+			installation,
+			backfillResolver{descriptor: descriptor},
+			backfillDescriptorStore{err: errors.New("database is read-only")},
+			closer,
+		)
+		if verified {
+			t.Fatal("backfill unexpectedly reported verified descriptor")
+		}
+		if !closer.called {
+			t.Fatal("backfill did not attempt process cleanup after persistence failure")
+		}
+		if len(issues) != 2 ||
+			issues[0].Code != providerPluginIssuePersistDescriptor ||
+			issues[1].Code != providerPluginIssueCloseProcess {
+			t.Fatalf("issues = %+v", issues)
+		}
+	})
+
+	t.Run("cleanup failure remains scoped after durable snapshot", func(t *testing.T) {
+		closer := &backfillProcessCloser{err: errors.New("cleanup failed")}
+		got, verified, issues := backfillProviderPluginDescriptor(
+			t.Context(),
+			installation,
+			backfillResolver{descriptor: descriptor},
+			backfillDescriptorStore{},
+			closer,
+		)
+		if !verified || got.ID != descriptor.ID {
+			t.Fatalf("backfill = descriptor %+v verified=%v", got, verified)
+		}
+		if len(issues) != 1 || issues[0].Code != providerPluginIssueCloseProcess {
+			t.Fatalf("issues = %+v", issues)
+		}
+	})
+}
+
+type backfillResolver struct {
+	descriptor providerplugin.Descriptor
+	err        error
+}
+
+func (r backfillResolver) ResolveInstallation(
+	context.Context,
+	providerplugin.InstallationID,
+) (providerplugin.Resolution, error) {
+	if r.err != nil {
+		return providerplugin.Resolution{}, r.err
+	}
+	return providerplugin.Resolution{Descriptor: r.descriptor}, nil
+}
+
+type backfillDescriptorStore struct {
+	err error
+}
+
+func (s backfillDescriptorStore) SetVerifiedDescriptor(
+	context.Context,
+	providerplugin.InstallationID,
+	providerplugin.Descriptor,
+) error {
+	return s.err
+}
+
+type backfillProcessCloser struct {
+	called bool
+	err    error
+}
+
+func (c *backfillProcessCloser) CloseInstallation(providerplugin.InstallationID) error {
+	c.called = true
+	return c.err
 }
 
 func TestOpenAPIProviderRuntimeEndToEndAndRefreshPreservesToolID(t *testing.T) {

@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -76,16 +77,23 @@ type updateProviderRequest struct {
 }
 
 func (h *Handler) listProviderPlugins(w http.ResponseWriter, r *http.Request) {
-	available, err := h.runtime.ListAvailableProviderPlugins(r.Context())
+	catalog, err := h.runtime.ListAvailableProviderPluginCatalog(r.Context())
 	if err != nil {
 		writeKnownError(w, err)
 		return
 	}
-	items := make([]map[string]any, 0, len(available))
-	for _, item := range available {
+	items := make([]map[string]any, 0, len(catalog.Plugins))
+	for _, item := range catalog.Plugins {
 		items = append(items, availableProviderPluginProjection(item))
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"plugins": items})
+	issues := make([]map[string]any, 0, len(catalog.Issues))
+	for _, issue := range catalog.Issues {
+		issues = append(issues, providerPluginIssueProjection(issue))
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"plugins": items,
+		"issues":  issues,
+	})
 }
 
 func (h *Handler) listProviders(w http.ResponseWriter, r *http.Request) {
@@ -112,11 +120,6 @@ func (h *Handler) listProviders(w http.ResponseWriter, r *http.Request) {
 	for _, config := range configs {
 		configByProvider[config.ProviderID] = config
 	}
-	descriptorByID := make(map[providerplugin.ID]providerplugin.Descriptor)
-	for _, descriptor := range h.runtime.ProviderPluginDescriptors() {
-		descriptorByID[descriptor.ID] = descriptor
-	}
-
 	items := make([]map[string]any, 0, len(providers))
 	for _, provider := range providers {
 		config, configured := configByProvider[provider.ID()]
@@ -125,10 +128,11 @@ func (h *Handler) listProviders(w http.ResponseWriter, r *http.Request) {
 		if configured {
 			configCopy := config
 			configPtr = &configCopy
-			if descriptor, ok := descriptorByID[config.PluginID]; ok {
-				descriptorCopy := descriptor
-				descriptorPtr = &descriptorCopy
-			}
+			descriptorPtr = descriptorForProviderConfig(
+				r.Context(),
+				h.runtime,
+				config,
+			)
 		}
 		items = append(
 			items,
@@ -207,7 +211,7 @@ func (h *Handler) createProvider(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	config, _ := h.runtime.ProviderConfig(r.Context(), provider.ID())
-	descriptor := descriptorForPlugin(h.runtime.ProviderPluginDescriptors(), config.PluginID)
+	descriptor := descriptorForProviderConfig(r.Context(), h.runtime, config)
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"provider": providerProjection(provider, &config, descriptor, syncResult.Total),
 		"sync":     syncProjection(syncResult),
@@ -262,7 +266,7 @@ func (h *Handler) createHTTPProvider(w http.ResponseWriter, r *http.Request) {
 	}
 
 	config, _ := h.runtime.ProviderConfig(r.Context(), provider.ID())
-	descriptor := descriptorForPlugin(h.runtime.ProviderPluginDescriptors(), config.PluginID)
+	descriptor := descriptorForProviderConfig(r.Context(), h.runtime, config)
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"provider": providerProjection(provider, &config, descriptor, syncResult.Total),
 		"sync":     syncProjection(syncResult),
@@ -318,7 +322,7 @@ func (h *Handler) createStdioProvider(w http.ResponseWriter, r *http.Request) {
 	}
 
 	config, _ := h.runtime.ProviderConfig(r.Context(), provider.ID())
-	descriptor := descriptorForPlugin(h.runtime.ProviderPluginDescriptors(), config.PluginID)
+	descriptor := descriptorForProviderConfig(r.Context(), h.runtime, config)
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"provider": providerProjection(provider, &config, descriptor, syncResult.Total),
 		"sync":     syncProjection(syncResult),
@@ -379,7 +383,7 @@ func (h *Handler) updateConfiguredProvider(
 		return
 	}
 	config, _ := h.runtime.ProviderConfig(r.Context(), providerID)
-	descriptor := descriptorForPlugin(h.runtime.ProviderPluginDescriptors(), config.PluginID)
+	descriptor := descriptorForProviderConfig(r.Context(), h.runtime, config)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"provider": providerProjection(provider, &config, descriptor, syncResult.Total),
 		"sync":     syncProjection(syncResult),
@@ -468,10 +472,7 @@ func (h *Handler) updateLegacyMCPProvider(
 		return
 	}
 	genericConfig, _ := h.runtime.ProviderConfig(r.Context(), providerID)
-	descriptor := descriptorForPlugin(
-		h.runtime.ProviderPluginDescriptors(),
-		genericConfig.PluginID,
-	)
+	descriptor := descriptorForProviderConfig(r.Context(), h.runtime, genericConfig)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"provider": providerProjection(
 			provider,
@@ -528,7 +529,7 @@ func (h *Handler) rebindProvider(w http.ResponseWriter, r *http.Request) {
 		writeKnownError(w, err)
 		return
 	}
-	descriptor := descriptorForPlugin(h.runtime.ProviderPluginDescriptors(), config.PluginID)
+	descriptor := descriptorForProviderConfig(r.Context(), h.runtime, config)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"provider": providerProjection(provider, &config, descriptor, result.Total),
 		"sync":     syncProjection(result),
@@ -594,7 +595,9 @@ func providerProjection(
 	if metadata, ok := config.ConfigMetadata(); ok && metadata.ConnectionSummary != "" {
 		result["connectionSummary"] = metadata.ConnectionSummary
 	}
-	result["config"] = cloneRawMessage(config.Config)
+	if safeConfig, err := providerplugin.ManagementSafeConfig(descriptor, config.Config); err == nil {
+		result["config"] = safeConfig
+	}
 	if descriptor != nil {
 		result["pluginVersion"] = descriptor.Version
 		result["pluginDisplayName"] = descriptor.DisplayName
@@ -657,17 +660,24 @@ func availableProviderPluginProjection(
 	return result
 }
 
-func descriptorForPlugin(
-	descriptors []providerplugin.Descriptor,
-	pluginID providerplugin.ID,
-) *providerplugin.Descriptor {
-	for _, descriptor := range descriptors {
-		if descriptor.ID == pluginID {
-			copy := descriptor
-			return &copy
-		}
+func providerPluginIssueProjection(issue bootstrap.ProviderPluginIssue) map[string]any {
+	return map[string]any{
+		"installationId": issue.InstallationID.String(),
+		"code":           issue.Code,
+		"message":        issue.Message,
 	}
-	return nil
+}
+
+func descriptorForProviderConfig(
+	ctx context.Context,
+	runtime *bootstrap.Runtime,
+	config providerplugin.Configuration,
+) *providerplugin.Descriptor {
+	descriptor, ok, err := runtime.ProviderPluginDescriptorForConfig(ctx, config)
+	if err != nil || !ok {
+		return nil
+	}
+	return &descriptor
 }
 
 func parseCredentialHeaders(
@@ -741,13 +751,6 @@ func cloneHeaders(headers map[string]string) map[string]string {
 		result[name] = value
 	}
 	return result
-}
-
-func cloneRawMessage(raw json.RawMessage) json.RawMessage {
-	if raw == nil {
-		return nil
-	}
-	return append(json.RawMessage(nil), raw...)
 }
 
 func syncProjection(result catalogapplication.SyncProviderToolsResult) map[string]any {

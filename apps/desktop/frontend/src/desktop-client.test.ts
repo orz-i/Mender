@@ -141,6 +141,13 @@ describe("desktop Mender client", () => {
           enabled: true,
         },
       ],
+      issues: [
+        {
+          installationId: "pinst_00000000000000000000000000000091",
+          code: "descriptor_backfill_failed",
+          message: "database is read-only",
+        },
+      ],
     });
     vi.mocked(Service.CreateProvider).mockResolvedValue({
       provider: {
@@ -181,6 +188,13 @@ describe("desktop Mender client", () => {
           sourceKind: "builtin",
           capabilities: [],
           enabled: true,
+        },
+      ],
+      issues: [
+        {
+          installationId: "pinst_00000000000000000000000000000091",
+          code: "descriptor_backfill_failed",
+          message: "database is read-only",
         },
       ],
     });

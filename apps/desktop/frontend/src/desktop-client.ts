@@ -14,6 +14,7 @@ import type {
   ProviderMutationResponse,
   ProviderPlugin,
   ProviderPluginInstallation,
+  ProviderPluginIssue,
   SyncResult,
   SystemStatus,
   ToolDetail,
@@ -36,6 +37,7 @@ import {
   type ProviderMutationResponse as BindingProviderMutationResponse,
   type ProviderPlugin as BindingProviderPlugin,
   type ProviderPluginInstallation as BindingProviderPluginInstallation,
+  type ProviderPluginIssue as BindingProviderPluginIssue,
   type SyncResult as BindingSyncResult,
   type SystemStatus as BindingSystemStatus,
   type ToolDetail as BindingToolDetail,
@@ -58,7 +60,10 @@ export function createDesktopMenderClient(): MenderClient {
 
     async listProviderPlugins() {
       const result = await Service.ListProviderPlugins();
-      return { plugins: (result.plugins ?? []).map(providerPlugin) };
+      return {
+        plugins: (result.plugins ?? []).map(providerPlugin),
+        issues: (result.issues ?? []).map(providerPluginIssue),
+      };
     },
 
     async listProviderPluginInstallations() {
@@ -563,6 +568,16 @@ function providerPlugin(value: BindingProviderPlugin): ProviderPlugin {
       : { uiSchema: providerPluginUISchema(value.uiSchema) }),
     capabilities: value.capabilities ?? [],
     enabled: value.enabled,
+  };
+}
+
+function providerPluginIssue(
+  value: BindingProviderPluginIssue,
+): ProviderPluginIssue {
+  return {
+    installationId: value.installationId,
+    code: value.code,
+    message: value.message,
   };
 }
 

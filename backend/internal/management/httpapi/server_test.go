@@ -1387,6 +1387,10 @@ func TestManagementAPIGenericProviderPluginFlow(t *testing.T) {
 	if !ok || len(items) != 3 {
 		t.Fatalf("provider plugins = %#v", plugins)
 	}
+	issues, ok := plugins["issues"].([]any)
+	if !ok || len(issues) != 0 {
+		t.Fatalf("provider plugin issues = %#v", plugins["issues"])
+	}
 	plugin, _ := items[0].(map[string]any)
 	if plugin["pluginId"] != "io.mender.provider.mcp" ||
 		plugin["sourceKind"] != "builtin" ||

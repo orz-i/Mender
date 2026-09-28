@@ -109,8 +109,15 @@ type ProviderPlugin struct {
 	Enabled         bool     `json:"enabled"`
 }
 
+type ProviderPluginIssue struct {
+	InstallationID string `json:"installationId"`
+	Code           string `json:"code"`
+	Message        string `json:"message"`
+}
+
 type ProviderPluginList struct {
-	Plugins []ProviderPlugin `json:"plugins"`
+	Plugins []ProviderPlugin      `json:"plugins"`
+	Issues  []ProviderPluginIssue `json:"issues"`
 }
 
 type ProviderPluginInstallation struct {

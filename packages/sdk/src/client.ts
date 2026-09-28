@@ -3,6 +3,7 @@ import createClient from "openapi-fetch";
 import type { components, paths } from "./generated/schema";
 
 export type ProviderPlugin = components["schemas"]["ProviderPlugin"];
+export type ProviderPluginIssue = components["schemas"]["ProviderPluginIssue"];
 export type ProviderPluginInstallation =
   components["schemas"]["ProviderPluginInstallation"];
 export type Provider = components["schemas"]["Provider"];
@@ -66,7 +67,10 @@ export interface SearchToolsInput {
 
 export interface MenderClient {
   getSystemStatus(): Promise<SystemStatus>;
-  listProviderPlugins(): Promise<{ plugins: ProviderPlugin[] }>;
+  listProviderPlugins(): Promise<{
+    plugins: ProviderPlugin[];
+    issues: ProviderPluginIssue[];
+  }>;
   listProviderPluginInstallations(): Promise<{
     installations: ProviderPluginInstallation[];
   }>;

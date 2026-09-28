@@ -21,6 +21,7 @@ describe("Mender SDK", () => {
                 configVersion: 1,
               },
             ],
+            issues: [],
           }),
           {
             status: 200,
@@ -81,6 +82,7 @@ describe("Mender SDK", () => {
 
     await expect(client.listProviderPlugins()).resolves.toMatchObject({
       plugins: [{ pluginId: "io.mender.provider.mcp" }],
+      issues: [],
     });
     await expect(
       client.createProvider({
