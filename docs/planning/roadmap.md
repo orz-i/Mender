@@ -300,3 +300,21 @@ Goals:
 Exit criteria are complete. `io.mender.provider.openapi` loads bounded URL/file OpenAPI 3.0/3.1/3.2 descriptions with external refs disabled; discovers deterministic canonical Tools with self-contained schemas; executes bounded JSON HTTP operations; supports apiKey/Bearer Security Schemes through scoped Credential References; preserves ToolID across SourceKey-stable refreshes; uses the generic Provider lifecycle/management surfaces; and passes repository race/build/security verification.
 
 See `phase-14-openapi-provider.md` for implementation and verification evidence.
+
+## Phase 15 — Model Tool Bridge Provider
+
+Status: In progress
+
+Goals:
+
+- Add `io.mender.provider.model-tools` for provider-hosted tools executed inside model API agentic loops.
+- Support OpenAI, Anthropic, and Gemini engine adapters behind one Provider plugin.
+- Normalize the common v1 `web_search` capability into one stable Mender Tool schema/result contract.
+- Verify that the provider-hosted search tool actually executed before accepting a successful result.
+- Preserve citations while excluding reasoning/thought/internal provider state from canonical results and Audit.
+- Resolve model API Credentials only during governed execution so Profile Credential scope blocks network access before the provider request.
+- Reuse generic Provider configuration/lifecycle/CLI/API/Wails/Web/Desktop surfaces without engine-specific branches in Catalog/Invocation Runtime orchestration.
+
+Exit criteria include cross-engine web-search normalization, bounded agentic execution/continuation, scoped Credential enforcement, hosted-tool-use verification, plugin-first management UX, and green repository/security checks.
+
+See `phase-15-model-tool-bridge.md`.
