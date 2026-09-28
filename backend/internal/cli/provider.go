@@ -12,6 +12,7 @@ import (
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
 	mcpplugin "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/plugin"
+	modeltoolsplugin "github.com/orz-i/Mender/backend/internal/modeltools/infrastructure/plugin"
 	openapiplugin "github.com/orz-i/Mender/backend/internal/openapi/infrastructure/plugin"
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
 	"github.com/spf13/cobra"
@@ -36,6 +37,7 @@ func (a *app) newProviderAddCommand() *cobra.Command {
 	}
 	command.AddCommand(a.newProviderAddMCPCommand())
 	command.AddCommand(a.newProviderAddOpenAPICommand())
+	command.AddCommand(a.newProviderAddModelToolsCommand())
 
 	// Phase 5 compatibility aliases. They are intentionally hidden so normal
 	// CLI discovery teaches plugin-first Provider semantics.
@@ -136,6 +138,138 @@ func (a *app) newProviderAddMCPStdioCommand() *cobra.Command {
 	command.Flags().StringArrayVar(&args, "arg", nil, "argument passed to the executable; may be repeated")
 	command.Flags().StringVar(&directory, "dir", "", "working directory")
 	return command
+}
+
+func (a *app) newProviderAddModelToolsCommand() *cobra.Command {
+	var namespace, displayName, description, engineValue, model, credentialValue string
+	var capabilities []string
+
+	command := &cobra.Command{
+		Use:   "model-tools",
+		Short: "Register provider-hosted model tools",
+		Args:  exactArgs(0),
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if namespace == "" ||
+				displayName == "" ||
+				engineValue == "" ||
+				model == "" ||
+				credentialValue == "" {
+				return usageError{
+					err: fmt.Errorf(
+						"--namespace, --name, --engine, --model, and --credential are required",
+					),
+				}
+			}
+
+			engine, err := parseModelToolsEngine(engineValue)
+			if err != nil {
+				return usageError{err: err}
+			}
+			ref, err := credentialdomain.ParseReference(
+				strings.TrimSpace(credentialValue),
+			)
+			if err != nil {
+				return usageError{
+					err: fmt.Errorf("invalid --credential: %w", err),
+				}
+			}
+			parsedCapabilities, err := parseModelToolsCapabilities(capabilities)
+			if err != nil {
+				return usageError{err: err}
+			}
+
+			raw, err := json.Marshal(modeltoolsplugin.Config{
+				Engine:        engine,
+				Model:         strings.TrimSpace(model),
+				CredentialRef: ref,
+				Capabilities:  parsedCapabilities,
+			})
+			if err != nil {
+				return fmt.Errorf("encode Model Tools provider config: %w", err)
+			}
+
+			return a.registerConfiguredProvider(
+				cmd,
+				namespace,
+				displayName,
+				description,
+				modeltoolsplugin.ID,
+				raw,
+			)
+		},
+	}
+
+	command.Flags().StringVar(&namespace, "namespace", "", "stable provider namespace")
+	command.Flags().StringVar(&displayName, "name", "", "provider display name")
+	command.Flags().StringVar(&description, "description", "", "provider description")
+	command.Flags().StringVar(
+		&engineValue,
+		"engine",
+		"",
+		"model tool engine: openai, anthropic, or gemini",
+	)
+	command.Flags().StringVar(&model, "model", "", "model identifier")
+	command.Flags().StringVar(
+		&credentialValue,
+		"credential",
+		"",
+		"model API Credential Reference",
+	)
+	command.Flags().StringArrayVar(
+		&capabilities,
+		"capability",
+		nil,
+		"normalized capability; v1 supports web_search",
+	)
+	return command
+}
+
+func parseModelToolsEngine(value string) (modeltoolsplugin.Engine, error) {
+	switch modeltoolsplugin.Engine(strings.ToLower(strings.TrimSpace(value))) {
+	case modeltoolsplugin.EngineOpenAI:
+		return modeltoolsplugin.EngineOpenAI, nil
+	case modeltoolsplugin.EngineAnthropic:
+		return modeltoolsplugin.EngineAnthropic, nil
+	case modeltoolsplugin.EngineGemini:
+		return modeltoolsplugin.EngineGemini, nil
+	default:
+		return "", fmt.Errorf(
+			"invalid --engine %q; expected openai, anthropic, or gemini",
+			value,
+		)
+	}
+}
+
+func parseModelToolsCapabilities(
+	values []string,
+) ([]modeltoolsplugin.Capability, error) {
+	if len(values) == 0 {
+		return []modeltoolsplugin.Capability{
+			modeltoolsplugin.CapabilityWebSearch,
+		}, nil
+	}
+	result := make([]modeltoolsplugin.Capability, 0, len(values))
+	seen := make(map[modeltoolsplugin.Capability]struct{}, len(values))
+	for _, raw := range values {
+		capability := modeltoolsplugin.Capability(
+			strings.ToLower(strings.TrimSpace(raw)),
+		)
+		if capability != modeltoolsplugin.CapabilityWebSearch {
+			return nil, fmt.Errorf(
+				"invalid --capability %q; v1 supports only web_search",
+				raw,
+			)
+		}
+		if _, exists := seen[capability]; exists {
+			return nil, fmt.Errorf(
+				"duplicate --capability %q",
+				capability,
+			)
+		}
+		seen[capability] = struct{}{}
+		result = append(result, capability)
+	}
+	return result, nil
 }
 
 func (a *app) newProviderAddOpenAPICommand() *cobra.Command {

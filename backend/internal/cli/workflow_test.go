@@ -15,6 +15,41 @@ import (
 	mcpserver "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/server"
 )
 
+func TestCLIAddsModelToolsProviderEngines(t *testing.T) {
+	t.Parallel()
+
+	for _, engine := range []string{"openai", "anthropic", "gemini"} {
+		engine := engine
+		t.Run(engine, func(t *testing.T) {
+			t.Parallel()
+
+			dbPath := filepath.Join(t.TempDir(), "mender.db")
+			registered := executeJSONCommand(
+				t,
+				dbPath,
+				"provider", "add", "model-tools",
+				"--namespace", "research-"+engine,
+				"--name", "Research "+engine,
+				"--engine", engine,
+				"--model", engine+"-model",
+				"--credential", "credential://model/api",
+				"--capability", "web_search",
+			)
+			provider, ok := registered["provider"].(map[string]any)
+			if !ok {
+				t.Fatalf("provider add output = %#v", registered)
+			}
+			if provider["pluginId"] != "io.mender.provider.model-tools" {
+				t.Fatalf("provider pluginId = %#v", provider["pluginId"])
+			}
+			syncResult, ok := registered["sync"].(map[string]any)
+			if !ok || syncResult["total"] != float64(1) {
+				t.Fatalf("provider sync = %#v", registered["sync"])
+			}
+		})
+	}
+}
+
 func TestCLIAddsOpenAPIProvider(t *testing.T) {
 	t.Parallel()
 

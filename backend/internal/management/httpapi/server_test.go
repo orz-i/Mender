@@ -14,6 +14,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/orz-i/Mender/backend/internal/bootstrap"
+	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
 )
 
 func TestManagementAPIEndToEnd(t *testing.T) {
@@ -1108,6 +1109,56 @@ func requestNoContent(
 	if response.StatusCode != wantStatus {
 		raw, _ := io.ReadAll(response.Body)
 		t.Fatalf("status = %d, want %d body=%s", response.StatusCode, wantStatus, raw)
+	}
+}
+
+func TestManagementAPICreatesModelToolsProviderThroughGenericEndpoint(t *testing.T) {
+	t.Parallel()
+
+	credentialRef, err := credentialdomain.NewReference("model", "api")
+	if err != nil {
+		t.Fatal(err)
+	}
+	runtime, err := bootstrap.NewRuntime(context.Background(), bootstrap.RuntimeOptions{
+		DatabasePath: filepath.Join(t.TempDir(), "mender.db"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = runtime.Close() })
+
+	server := httptest.NewServer(New(runtime))
+	t.Cleanup(server.Close)
+
+	created := requestJSON(
+		t,
+		server.Client(),
+		http.MethodPost,
+		server.URL+"/api/v1/providers",
+		map[string]any{
+			"namespace":   "model-search",
+			"displayName": "Model Search",
+			"pluginId":    "io.mender.provider.model-tools",
+			"config": map[string]any{
+				"engine":        "openai",
+				"model":         "gpt-test",
+				"credentialRef": credentialRef.String(),
+				"capabilities":  []any{"web_search"},
+			},
+		},
+		http.StatusCreated,
+	)
+	provider, ok := created["provider"].(map[string]any)
+	if !ok ||
+		provider["pluginId"] != "io.mender.provider.model-tools" ||
+		provider["toolCount"] != float64(1) {
+		t.Fatalf("created Model Tools provider = %#v", created)
+	}
+	config, ok := provider["config"].(map[string]any)
+	if !ok ||
+		config["engine"] != "openai" ||
+		config["model"] != "gpt-test" {
+		t.Fatalf("provider config = %#v", provider["config"])
 	}
 }
 
