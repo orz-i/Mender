@@ -1,6 +1,6 @@
 # Phase 16 Plan — External Provider Plugin Host
 
-Status: In Progress
+Status: Complete
 
 ## Objective
 
@@ -1213,34 +1213,63 @@ Commit intent:
 docs: complete external provider plugin phase
 ~~~
 
+## Implementation and verification evidence
+
+Phase 16 shipped in segmented commits:
+
+- `3cd866b` — architecture decision and phase plan;
+- `e15f5dc` — versioned Provider Plugin Protocol and manifest primitives;
+- `0ae64ec` — plugin installation persistence;
+- `64e8a0d` — managed local package installer;
+- `dda34c2` — native subprocess host;
+- `63a7e13` — external Provider adapter;
+- `56999f8` — exact installation resolution and Provider pinning;
+- `b5b2ac1` — CLI/OpenAPI/Wails installation management contracts;
+- `0b0a981` — schema-driven unknown external Provider configuration;
+- `d90c433` / `587cb35` — public Go SDK and standalone example cleanup;
+- `e8aaa78` — process/protocol/package/Credential/multi-version hardening;
+- `a7090a9` — Web/Desktop installation management UI and Desktop native directory install;
+- `b2ac072` — Provider SDK/example transport dependency updated to patched `grpc-go v1.83.2` after `GO-2026-6443` was detected by the final security gate.
+
+Architectural acceptance is covered by `TestRuntimeInstalledExternalProviderEndToEnd`, which builds the standalone public example module with `GOWORK=off`, packages and installs it, resolves its external descriptor/schema, registers an exact pinned Provider, synchronizes its Tool, invokes it through the shared governed Invocation pipeline, verifies disable/enable behavior, blocks in-use removal, and verifies Runtime shutdown reaps the package process.
+
+Additional hardening covers package path/symlink/size limits, digest mutation, failed-install compensation, invalid handshake/protocol/descriptor/schema/Tool metadata, startup and execution deadlines, subprocess crashes during discovery/execution, bounded gRPC messages/logs, malformed terminal-event streams, Credential scope and secret redaction, future SQLite schema fail-closed behavior, and side-by-side package versions pinned by exact InstallationID.
+
+Management security intentionally differs by host: CLI and Desktop can install a local package; Desktop uses a native directory picker. Browser management can list/enable/disable/remove installed packages and configure external Providers, but has no endpoint that accepts an arbitrary server filesystem path.
+
+Final verification on 2026-09-28:
+
+- `pnpm check` — passed, including protocol/schema generation drift checks, SDK/example lint/test/race/build, Wails bindings/architecture, backend lint/test/race, ESLint, strict TypeScript, 43 Vitest tests, and Web/Desktop production builds;
+- `pnpm security:check` — passed; `govulncheck` reported zero reachable vulnerabilities in backend, Desktop, public Provider SDK, and example plugin, and `pnpm audit --prod --audit-level high` reported no known vulnerabilities.
+
 ## Exit criteria
 
 Phase 16 is complete when:
 
-- [ ] ADR-0027 is accepted and implementation matches it.
-- [ ] an external package has manifest/package/protocol/config versions represented separately.
-- [ ] local packages install into a Mender-managed root with digest verification.
-- [ ] external Provider configurations pin an exact InstallationID.
-- [ ] existing built-in Provider configs migrate without identity changes.
-- [ ] unsupported/missing/disabled/digest-mismatched installations fail closed.
-- [ ] external plugins execute in subprocesses rather than the Mender process.
-- [ ] plugin crashes do not crash Mender.
-- [ ] native plugins launch without a shell and with bounded/minimal host process state.
-- [ ] public protobuf protocol is versioned and compatibility-tested.
-- [ ] external plugins cannot receive a general CredentialResolver capability.
-- [ ] Profile Credential scope is enforced before execution secrets cross RPC.
-- [ ] generic Tool discovery maps into canonical Catalog without accepting plugin ToolIDs.
-- [ ] external Tool execution uses the shared InvokeTool pipeline.
-- [ ] Web/Desktop can configure an unknown external PluginID through Mender-owned declarative UI.
-- [ ] external plugins cannot inject arbitrary frontend code.
-- [ ] first-party MCP/OpenAPI/Model Tools management behavior remains covered.
-- [ ] CLI/API/Wails manage plugin installations with machine-readable contracts.
-- [ ] uninstall is blocked while an installation is referenced.
-- [ ] side-by-side plugin versions do not silently retarget existing Providers.
-- [ ] a public Go SDK and standalone example external Provider work without importing backend internals.
-- [ ] targeted process/race/security tests pass without child-process leaks.
-- [ ] pnpm check passes.
-- [ ] pnpm security:check passes.
+- [x] ADR-0027 is accepted and implementation matches it.
+- [x] an external package has manifest/package/protocol/config versions represented separately.
+- [x] local packages install into a Mender-managed root with digest verification.
+- [x] external Provider configurations pin an exact InstallationID.
+- [x] existing built-in Provider configs migrate without identity changes.
+- [x] unsupported/missing/disabled/digest-mismatched installations fail closed.
+- [x] external plugins execute in subprocesses rather than the Mender process.
+- [x] plugin crashes do not crash Mender.
+- [x] native plugins launch without a shell and with bounded/minimal host process state.
+- [x] public protobuf protocol is versioned and compatibility-tested.
+- [x] external plugins cannot receive a general CredentialResolver capability.
+- [x] Profile Credential scope is enforced before execution secrets cross RPC.
+- [x] generic Tool discovery maps into canonical Catalog without accepting plugin ToolIDs.
+- [x] external Tool execution uses the shared InvokeTool pipeline.
+- [x] Web/Desktop can configure an unknown external PluginID through Mender-owned declarative UI.
+- [x] external plugins cannot inject arbitrary frontend code.
+- [x] first-party MCP/OpenAPI/Model Tools management behavior remains covered.
+- [x] CLI/API/Wails manage plugin installations with machine-readable contracts.
+- [x] uninstall is blocked while an installation is referenced.
+- [x] side-by-side plugin versions do not silently retarget existing Providers.
+- [x] a public Go SDK and standalone example external Provider work without importing backend internals.
+- [x] targeted process/race/security tests pass without child-process leaks.
+- [x] pnpm check passes.
+- [x] pnpm security:check passes.
 
 ## Deferred follow-up
 

@@ -62,6 +62,8 @@ apps/web
 
 The desktop process does not start `menderd` and does not use the management HTTP API internally.
 
+Phase 16 adds one deliberately narrow native integration: Provider plugin installation uses the Wails directory picker to select a local plugin package directory, then passes that host-local path directly to the Wails binding. The shared React app receives this as an optional capability, so the Web host does not gain arbitrary server-filesystem path access.
+
 ## Database location
 
 The desktop process resolves its default database under Go's per-user `os.UserConfigDir()`:
@@ -225,4 +227,6 @@ Credential management is also shared with Web: native secret values appear only 
 
 The Desktop `Servers` page can start a Profile as a loopback Streamable HTTP MCP server without launching a second Mender process. Running servers are ephemeral Runtime state and stop with the Desktop process. The page provides endpoint/config copy plus Restart/Stop controls. stdio serving remains client-launched through the CLI because its lifetime is tied to the external client's stdin/stdout process.
 
-Phase 7 intentionally does not add tray behavior, notifications, deep links, file dialogs, auto-start, or other native integrations without a product requirement.
+The `Providers` page also manages external Provider plugin installations. Desktop can choose/install a local package directory, list exact package/Installation identity, enable/disable packages, remove unreferenced packages, and configure unknown Provider types through Mender's schema-driven form. Web shares list/status/remove/configuration management, but does not expose a server-path install field. See [External Provider Plugins](provider-plugins.md).
+
+Phase 7 intentionally did not add tray behavior, notifications, deep links, file dialogs, auto-start, or other native integrations. Phase 16 adds only the scoped Provider-plugin directory picker described above; broader native file-dialog behavior remains out of scope without a separate product requirement.

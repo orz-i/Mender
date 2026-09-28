@@ -32,14 +32,41 @@ JSON commands emit exactly one JSON document on stdout whenever Invocation produ
 
 ## Provider management
 
-List the Provider plugins built into the current Mender binary:
+List Provider plugin implementations currently available to Mender:
 
 ```bash
 mender provider plugins
 mender provider plugins --output json
 ```
 
-The built-in plugins currently include `io.mender.provider.mcp`, `io.mender.provider.model-tools`, and `io.mender.provider.openapi`. MCP connection transport is selected below the MCP plugin rather than represented as a top-level Provider kind.
+The result includes built-in plugins plus enabled external plugin installations. External entries include their exact Installation ID and package version so side-by-side versions remain distinguishable. The built-in plugins currently include `io.mender.provider.mcp`, `io.mender.provider.model-tools`, and `io.mender.provider.openapi`. MCP connection transport is selected below the MCP plugin rather than represented as a top-level Provider kind.
+
+Install and manage a local external Provider plugin package:
+
+```bash
+mender plugin install ./my-provider
+mender plugin list --output json
+mender plugin inspect pinst_...
+mender plugin disable pinst_...
+mender plugin enable pinst_...
+mender plugin remove pinst_...
+```
+
+External plugin packages are copied into Mender's managed plugin root and verified before launch. Removal is blocked while a Provider references that exact Installation ID. Disabling an installation closes its active Provider routes/sessions and fails closed until it is explicitly enabled again.
+
+Create a Provider pinned to one external installation:
+
+```bash
+mender provider add external \
+  --installation pinst_... \
+  --namespace example \
+  --name "Example" \
+  --config-json '{"prefix":"example: "}'
+```
+
+Use `--config-file ./provider-config.json` instead of `--config-json` for larger plugin-owned configuration. Installing a newer package does not silently retarget an existing Provider.
+
+See [External Provider Plugins](provider-plugins.md) for package, SDK, trust, and Credential-boundary details.
 
 Add a remote MCP Provider:
 
@@ -96,7 +123,7 @@ mender provider add model-tools \
 
 `--engine` accepts `openai`, `anthropic`, or `gemini`. Phase 15 exposes one normalized capability, `web_search`; the provider model executes its own hosted/server search tool internally, and Mender verifies that search actually occurred before accepting the final answer. The configured API Credential is resolved only during governed execution, so Profile Credential scope applies before any model-provider network request.
 
-`provider list` reports Plugin identity as the primary implementation dimension; MCP transport, OpenAPI source location, or Model Tools engine/model appears only as plugin-specific connection detail.
+`provider list` reports Plugin identity as the primary implementation dimension. External Providers additionally report their exact Installation ID; MCP transport, OpenAPI source location, or Model Tools engine/model appears only as plugin-specific connection detail.
 
 List Providers:
 

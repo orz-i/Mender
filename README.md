@@ -37,6 +37,7 @@ See:
 - [Release and distribution](docs/development/release.md)
 - [Upgrade and downgrade](docs/development/upgrades.md)
 - [Catalog performance](docs/development/performance.md)
+- [External Provider plugins](docs/development/provider-plugins.md)
 
 ## Development
 

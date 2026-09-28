@@ -321,7 +321,7 @@ See `phase-15-model-tool-bridge.md` for implementation and verification evidence
 
 ## Phase 16 — External Provider Plugin Host
 
-Status: In Progress
+Status: Complete
 
 Goals:
 
@@ -333,6 +333,6 @@ Goals:
 - Render unknown external Provider configuration through Mender-owned JSON-Schema-driven management UI instead of PluginID-specific frontend branches.
 - Provide a public Go SDK and standalone example plugin as the architectural acceptance test.
 
-Exit criteria are defined in `phase-16-external-provider-plugin-host.md`. The phase is complete only when an independently built external Provider can be installed, configured, synchronized, governed, invoked, and removed without adding its PluginID to Mender source code, while existing built-in Providers remain behavior-compatible.
+Exit criteria are complete. An independently built external Provider can be packaged, installed into the managed plugin root, discovered/configured through declarative schema metadata, synchronized into the canonical Catalog, invoked through the shared governance pipeline, disabled/enabled, and removed without adding its PluginID to Mender source code. Exact InstallationID pinning prevents silent package retargeting; CLI/OpenAPI/Wails/Web/Desktop management, the public Go SDK/example, process/package/Credential hardening, `pnpm check`, and `pnpm security:check` are all verified.
 
 See `phase-16-external-provider-plugin-host.md`.

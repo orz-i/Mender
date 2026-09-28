@@ -12,15 +12,20 @@ Current migration tables are:
 - `audit_schema_migrations`,
 - `profile_schema_migrations`,
 - `provider_config_schema_migrations`,
+- `provider_plugin_installation_schema_migrations`,
 - `mcp_config_schema_migrations`.
 
 Each bounded context applies only its own migrations.
 
 Migration execution is transactional.
 
-The current generic Provider plugin configuration schema is version 1. It stores only the canonical Provider ID, Plugin ID, plugin config version, deterministic revision, and plugin-owned JSON configuration in `provider_configs`. Existing MCP configuration is imported once into this generic store without recreating Provider or Tool identities. Phase 14 adds the OpenAPI built-in Provider plugin and Phase 15 adds Model Tools without changing this SQLite schema: OpenAPI source/filter/Credential-Reference configuration and Model Tools engine/model/Credential-Reference configuration both use the same generic table.
+The current generic Provider plugin configuration schema is version 2. Version 2 adds nullable `plugin_installation_id` to `provider_configs`. Existing built-in Provider rows migrate with a null Installation ID and retain their ProviderID, PluginID, config version/revision, plugin-owned JSON, ToolIDs, Profile bindings, Policy targets, and Audit identity. External Provider rows require an exact Installation ID so package upgrades cannot silently retarget a configured Provider.
 
-Downgrading to a binary that predates one of these plugins does not require a reverse database migration because the schema version is unchanged, but the older binary cannot resolve the unknown Plugin ID. Persisted `io.mender.provider.openapi` or `io.mender.provider.model-tools` Providers therefore fail closed when activation/synchronization is attempted until a binary containing the plugin is restored. Do not retag Plugin IDs or rewrite plugin-owned JSON configuration to force compatibility.
+The external Provider plugin installation schema is version 1. `provider_plugin_installations` stores non-secret installation identity and package metadata including PluginID, package version, source kind/reference, content digest, manifest JSON, administrative status, and installation timestamp. Plugin executable/package files live in the managed plugin root rather than SQLite.
+
+Phase 14 OpenAPI and Phase 15 Model Tools still use the generic Provider table as built-in plugins. Phase 16 is the first Provider-config schema migration since Phase 13 because exact external installation pinning requires a new persisted identity.
+
+Downgrading to a binary that supports only provider-config schema version 1 now fails closed during Provider config store startup after version 2 has been recorded. Restore the pre-upgrade database backup before running that older binary; do not delete the migration row or null/rewrite installation IDs to force a downgrade. A binary that understands schema version 2 but lacks a particular built-in or installed external plugin also fails closed when that Provider is activated rather than substituting another implementation.
 
 The legacy MCP Provider compatibility schema is version 4. Versions 1–3 contain the historical HTTP/stdio projection, including non-secret header templates and Credential References. Version 4 is an ownership sentinel with no additional secret-bearing columns: generic `provider_configs` is the Runtime source of truth, while the old MCP table is temporarily dual-written for first-party compatibility contracts. Pre-Phase-13 binaries that understand at most version 3 therefore fail closed after this migration instead of modifying the compatibility projection during an unsupported downgrade.
 
