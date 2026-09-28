@@ -120,6 +120,130 @@ describe("management pages", () => {
     expect(await screen.findByText("demo")).toBeTruthy();
   });
 
+  it("registers an OpenAPI Provider with filters and inventory authentication", async () => {
+    const credential = {
+      reference: "credential://openapi/work",
+      namespace: "openapi",
+      name: "work",
+      displayName: "OpenAPI work",
+      source: "environment" as const,
+      environmentVariable: "OPENAPI_TOKEN",
+      createdAt: "2026-09-27T00:00:00Z",
+      updatedAt: "2026-09-27T00:00:00Z",
+    };
+    const provider = {
+      providerId: "prov_openapi",
+      namespace: "example-api",
+      displayName: "Example API",
+      description: "",
+      createdAt: "2026-09-27T00:00:00Z",
+      updatedAt: "2026-09-27T00:00:00Z",
+      pluginId: "io.mender.provider.openapi",
+      pluginDisplayName: "OpenAPI",
+      configVersion: 1,
+      transport: "unconfigured" as const,
+      toolCount: 1,
+      config: {
+        source: {
+          kind: "url",
+          url: "https://example.test/openapi.yaml",
+        },
+        serverUrl: "https://api.example.test",
+        operations: {
+          include: ["getUser"],
+          exclude: ["updateUser"],
+        },
+        credentials: {
+          BearerAuth: credential.reference,
+        },
+      },
+    };
+    const listProviders = vi
+      .fn()
+      .mockResolvedValueOnce({ providers: [] })
+      .mockResolvedValueOnce({ providers: [provider] });
+    const createProvider = vi.fn().mockResolvedValue({
+      provider,
+      sync: { created: 1, updated: 0, removed: 0, total: 1 },
+    });
+
+    renderApp("/providers", {
+      listProviders,
+      listCredentials: vi.fn().mockResolvedValue({ credentials: [credential] }),
+      createProvider,
+    });
+
+    expect(await screen.findByText("No providers")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Add provider" }));
+    fireEvent.click(screen.getByRole("button", { name: "OpenAPI" }));
+
+    fireEvent.change(screen.getByLabelText("Namespace"), {
+      target: { value: "example-api" },
+    });
+    fireEvent.change(screen.getByLabelText("Display name"), {
+      target: { value: "Example API" },
+    });
+    fireEvent.change(screen.getByLabelText("OpenAPI description URL"), {
+      target: { value: "https://example.test/openapi.yaml" },
+    });
+    fireEvent.change(screen.getByLabelText("OpenAPI server override"), {
+      target: { value: "https://api.example.test" },
+    });
+
+    fireEvent.click(screen.getByText("Operations"));
+    fireEvent.change(screen.getByLabelText("OpenAPI include SourceKeys"), {
+      target: { value: "getUser" },
+    });
+    fireEvent.change(screen.getByLabelText("OpenAPI exclude SourceKeys"), {
+      target: { value: "updateUser" },
+    });
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Configure authentication" }),
+    );
+    expect(await screen.findByText("Provider authentication")).toBeTruthy();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Add Security Scheme binding" }),
+    );
+    fireEvent.change(screen.getByLabelText("OpenAPI security scheme 1"), {
+      target: { value: "BearerAuth" },
+    });
+    expect(
+      screen.getByLabelText<HTMLSelectElement>(
+        "OpenAPI security credential 1",
+      ).value,
+    ).toBe(credential.reference);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Use authentication" }),
+    );
+
+    expect(await screen.findByText("Add provider")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Add provider" }));
+
+    await waitFor(() => {
+      expect(createProvider).toHaveBeenCalledWith({
+        namespace: "example-api",
+        displayName: "Example API",
+        pluginId: "io.mender.provider.openapi",
+        config: {
+          source: {
+            kind: "url",
+            url: "https://example.test/openapi.yaml",
+          },
+          serverUrl: "https://api.example.test",
+          operations: {
+            include: ["getUser"],
+            exclude: ["updateUser"],
+          },
+          credentials: {
+            BearerAuth: "credential://openapi/work",
+          },
+        },
+      });
+    });
+    expect(await screen.findByText("Example API")).toBeTruthy();
+  });
+
   it("imports common remote MCP JSON with env-backed headers", async () => {
     const provider = {
       providerId: "prov_anysearch",
@@ -1163,6 +1287,13 @@ function renderApp(path: string, client: Partial<MenderClient>) {
           version: "1.0.0",
           displayName: "MCP",
           description: "Model Context Protocol provider",
+          configVersion: 1,
+        },
+        {
+          pluginId: "io.mender.provider.openapi",
+          version: "1.0.0",
+          displayName: "OpenAPI",
+          description: "Expose OpenAPI operations as governed Tools",
           configVersion: 1,
         },
       ],

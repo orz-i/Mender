@@ -39,12 +39,19 @@ import { Textarea } from "@mender/ui/components/textarea";
 import { EmptyState, ErrorNotice, PageHeader } from "../../shared/page";
 
 const MCP_PLUGIN_ID = "io.mender.provider.mcp";
+const OPENAPI_PLUGIN_ID = "io.mender.provider.openapi";
 
 type ProviderTransport = "http" | "stdio";
+type OpenAPISourceKind = "url" | "file";
 type CredentialHeaderBinding = NonNullable<Provider["credentialHeaders"]>[number];
 type CredentialEnvironmentBinding = NonNullable<
   Provider["credentialEnvironment"]
 >[number];
+
+interface OpenAPICredentialBinding {
+  schemeName: string;
+  credentialRef: string;
+}
 
 interface ProviderFormState {
   pluginId: string;
@@ -60,6 +67,13 @@ interface ProviderFormState {
   args: string;
   directory: string;
   credentialEnvironment: CredentialEnvironmentBinding[];
+  openapiSourceKind: OpenAPISourceKind;
+  openapiSpecUrl: string;
+  openapiSpecFile: string;
+  openapiServerUrl: string;
+  openapiInclude: string;
+  openapiExclude: string;
+  openapiCredentials: OpenAPICredentialBinding[];
 }
 
 const emptyProviderForm: ProviderFormState = {
@@ -76,6 +90,13 @@ const emptyProviderForm: ProviderFormState = {
   args: "",
   directory: "",
   credentialEnvironment: [],
+  openapiSourceKind: "url",
+  openapiSpecUrl: "",
+  openapiSpecFile: "",
+  openapiServerUrl: "",
+  openapiInclude: "",
+  openapiExclude: "",
+  openapiCredentials: [],
 };
 
 export function ProvidersPage({ client }: { client: MenderClient }) {
@@ -183,7 +204,7 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
   }
 
   function beginEdit(provider: Provider) {
-    if (provider.transport === "unconfigured") {
+    if (!provider.pluginId) {
       return;
     }
     setError("");
@@ -259,7 +280,10 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
   }
 
   function openProviderAuthentication(provider: Provider) {
-    if (provider.pluginId !== MCP_PLUGIN_ID) {
+    if (
+      provider.pluginId !== MCP_PLUGIN_ID &&
+      provider.pluginId !== OPENAPI_PLUGIN_ID
+    ) {
       return;
     }
     setError("");
@@ -412,7 +436,9 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
                           size="sm"
                           aria-label={`Authentication ${provider.namespace}`}
                           disabled={
-                            busy !== "" || provider.pluginId !== MCP_PLUGIN_ID
+                            busy !== "" ||
+                            (provider.pluginId !== MCP_PLUGIN_ID &&
+                              provider.pluginId !== OPENAPI_PLUGIN_ID)
                           }
                           onClick={() => openProviderAuthentication(provider)}
                         >
@@ -540,12 +566,17 @@ function ProviderFormDialog({
   const [importError, setImportError] = useState("");
   const creating = mode === "create";
   const valid =
-    form.pluginId === MCP_PLUGIN_ID &&
     form.displayName.trim() !== "" &&
     (!creating || form.namespace.trim() !== "") &&
-    (form.transport === "http"
-      ? form.endpoint.trim() !== ""
-      : form.executable.trim() !== "");
+    (form.pluginId === MCP_PLUGIN_ID
+      ? form.transport === "http"
+        ? form.endpoint.trim() !== ""
+        : form.executable.trim() !== ""
+      : form.pluginId === OPENAPI_PLUGIN_ID
+        ? form.openapiSourceKind === "url"
+          ? form.openapiSpecUrl.trim() !== ""
+          : form.openapiSpecFile.trim() !== ""
+        : false);
 
   return (
     <Dialog
@@ -623,6 +654,36 @@ function ProviderFormDialog({
                   onClick={() => onChange({ ...form, transport: "stdio" })}
                 >
                   Local command
+                </Button>
+              </div>
+            </div>
+          ) : form.pluginId === OPENAPI_PLUGIN_ID ? (
+            <div>
+              <div className="mb-2 text-sm font-medium">OpenAPI description</div>
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  type="button"
+                  variant={
+                    form.openapiSourceKind === "url" ? "default" : "outline"
+                  }
+                  aria-pressed={form.openapiSourceKind === "url"}
+                  onClick={() =>
+                    onChange({ ...form, openapiSourceKind: "url" })
+                  }
+                >
+                  Remote URL
+                </Button>
+                <Button
+                  type="button"
+                  variant={
+                    form.openapiSourceKind === "file" ? "default" : "outline"
+                  }
+                  aria-pressed={form.openapiSourceKind === "file"}
+                  onClick={() =>
+                    onChange({ ...form, openapiSourceKind: "file" })
+                  }
+                >
+                  Local file
                 </Button>
               </div>
             </div>
@@ -800,13 +861,93 @@ function ProviderFormDialog({
             </>
             )
           ) : null}
+
+          {form.pluginId === OPENAPI_PLUGIN_ID ? (
+            <>
+              {form.openapiSourceKind === "url" ? (
+                <Field label="Description URL">
+                  <Input
+                    aria-label="OpenAPI description URL"
+                    placeholder="https://example.com/openapi.yaml"
+                    value={form.openapiSpecUrl}
+                    onChange={(event) =>
+                      onChange({ ...form, openapiSpecUrl: event.target.value })
+                    }
+                  />
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Non-loopback URLs require HTTPS. External $ref retrieval is disabled.
+                  </p>
+                </Field>
+              ) : (
+                <Field label="Description file">
+                  <Input
+                    aria-label="OpenAPI description file"
+                    placeholder="/absolute/path/to/openapi.yaml"
+                    value={form.openapiSpecFile}
+                    onChange={(event) =>
+                      onChange({ ...form, openapiSpecFile: event.target.value })
+                    }
+                  />
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Use an absolute local path. External file references are disabled.
+                  </p>
+                </Field>
+              )}
+
+              <Field label="API server override" optional>
+                <Input
+                  aria-label="OpenAPI server override"
+                  placeholder="https://api.example.com"
+                  value={form.openapiServerUrl}
+                  onChange={(event) =>
+                    onChange({ ...form, openapiServerUrl: event.target.value })
+                  }
+                />
+              </Field>
+
+              <details className="rounded-lg border border-border">
+                <summary className="cursor-pointer select-none px-4 py-3 text-sm font-medium">
+                  Operations
+                </summary>
+                <div className="space-y-4 border-t border-border px-4 py-4">
+                  <p className="text-xs leading-5 text-muted-foreground">
+                    Filters use stable OpenAPI operation SourceKeys. Use operationId when present; otherwise use values such as <code>get /users/{"{id}"}</code>.
+                  </p>
+                  <Field label="Include SourceKeys" optional>
+                    <Textarea
+                      aria-label="OpenAPI include SourceKeys"
+                      className="min-h-24 font-mono text-xs"
+                      placeholder={"One SourceKey per line\ngetUser"}
+                      value={form.openapiInclude}
+                      onChange={(event) =>
+                        onChange({ ...form, openapiInclude: event.target.value })
+                      }
+                    />
+                  </Field>
+                  <Field label="Exclude SourceKeys" optional>
+                    <Textarea
+                      aria-label="OpenAPI exclude SourceKeys"
+                      className="min-h-24 font-mono text-xs"
+                      placeholder={"One SourceKey per line\ndeleteUser"}
+                      value={form.openapiExclude}
+                      onChange={(event) =>
+                        onChange({ ...form, openapiExclude: event.target.value })
+                      }
+                    />
+                  </Field>
+                </div>
+              </details>
+            </>
+          ) : null}
         </div>
 
         <DialogFooter>
           <DialogClose render={<Button variant="outline" />}>
             Cancel
           </DialogClose>
-          {onAuthentication !== undefined && form.pluginId === MCP_PLUGIN_ID ? (
+          {onAuthentication !== undefined &&
+          (form.pluginId === MCP_PLUGIN_ID ||
+            form.pluginId === OPENAPI_PLUGIN_ID) ? (
             <Button
               type="button"
               variant="outline"
@@ -885,6 +1026,22 @@ function ProviderAuthenticationDialog({
     });
   }
 
+  function addOpenAPIBinding() {
+    if (!firstCredential) {
+      return;
+    }
+    onChange({
+      ...form,
+      openapiCredentials: [
+        ...form.openapiCredentials,
+        {
+          schemeName: "",
+          credentialRef: firstCredential,
+        },
+      ],
+    });
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl">
@@ -899,7 +1056,99 @@ function ProviderAuthenticationDialog({
 
         {credentials.length ? (
           <div className="space-y-4">
-            {form.transport === "http" ? (
+            {form.pluginId === OPENAPI_PLUGIN_ID ? (
+              <>
+                <p className="text-xs leading-5 text-muted-foreground">
+                  Bind OpenAPI Security Scheme names to inventory Credentials. The scheme name must match the description exactly; Mender keeps the Credential Reference in Provider config and resolves the secret only at execution.
+                </p>
+                <div className="space-y-3">
+                  {form.openapiCredentials.map((binding, index) => (
+                    <div
+                      key={index}
+                      className="grid gap-3 rounded-lg border border-border p-3 sm:grid-cols-[1fr_1.4fr_auto]"
+                    >
+                      <Field label="Security Scheme">
+                        <Input
+                          aria-label={
+                            "OpenAPI security scheme " + String(index + 1)
+                          }
+                          placeholder="BearerAuth"
+                          value={binding.schemeName}
+                          onChange={(event) =>
+                            onChange({
+                              ...form,
+                              openapiCredentials: form.openapiCredentials.map(
+                                (item, itemIndex) =>
+                                  itemIndex === index
+                                    ? {
+                                        ...item,
+                                        schemeName: event.target.value,
+                                      }
+                                    : item,
+                              ),
+                            })
+                          }
+                        />
+                      </Field>
+                      <Field label="Credential">
+                        <select
+                          aria-label={
+                            "OpenAPI security credential " + String(index + 1)
+                          }
+                          value={binding.credentialRef}
+                          onChange={(event) =>
+                            onChange({
+                              ...form,
+                              openapiCredentials: form.openapiCredentials.map(
+                                (item, itemIndex) =>
+                                  itemIndex === index
+                                    ? {
+                                        ...item,
+                                        credentialRef: event.target.value,
+                                      }
+                                    : item,
+                              ),
+                            })
+                          }
+                          className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus:ring-2 focus:ring-ring/40"
+                        >
+                          {credentials.map((item) => (
+                            <option key={item.reference} value={item.reference}>
+                              {item.displayName} · {item.reference}
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
+                      <div className="flex items-end">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() =>
+                            onChange({
+                              ...form,
+                              openapiCredentials: form.openapiCredentials.filter(
+                                (_, itemIndex) => itemIndex !== index,
+                              ),
+                            })
+                          }
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={addOpenAPIBinding}
+                >
+                  Add Security Scheme binding
+                </Button>
+              </>
+            ) : form.transport === "http" ? (
               <>
                 {form.headers.trim() ? (
                   <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs leading-5 text-muted-foreground">
@@ -1150,7 +1399,35 @@ function ProviderDetailsDialog({
             {provider.pluginId ? (
               <DetailRow label="Plugin ID" value={provider.pluginId} mono />
             ) : null}
-            <DetailRow label="MCP transport" value={provider.transport} />
+            {provider.pluginId === MCP_PLUGIN_ID ? (
+              <DetailRow label="MCP transport" value={provider.transport} />
+            ) : null}
+            {provider.pluginId === OPENAPI_PLUGIN_ID ? (
+              <>
+                <DetailRow
+                  label="Description source"
+                  value={openAPISourceSummary(provider)}
+                  mono
+                />
+                <DetailRow
+                  label="Server override"
+                  value={openAPIServerSummary(provider)}
+                  mono
+                />
+                <DetailRow
+                  label="Operation filters"
+                  value={openAPIFilterSummary(provider)}
+                  mono
+                  preserve
+                />
+                <DetailRow
+                  label="Security Schemes"
+                  value={openAPISecuritySummary(provider)}
+                  mono
+                  preserve
+                />
+              </>
+            ) : null}
             <DetailRow label="Synced Tools" value={String(provider.toolCount)} />
             <DetailRow
               label="Connection"
@@ -1266,6 +1543,20 @@ function DetailRow({
 }
 
 function formFromProvider(provider: Provider): ProviderFormState {
+  const config = asRecord(provider.config);
+  const source = asRecord(config?.source);
+  const operations = asRecord(config?.operations);
+  const credentialConfig = asRecord(config?.credentials);
+  const sourceKind: OpenAPISourceKind =
+    source?.kind === "file" ? "file" : "url";
+
+  const openapiCredentials: OpenAPICredentialBinding[] = credentialConfig
+    ? Object.entries(credentialConfig)
+        .filter((entry): entry is [string, string] => typeof entry[1] === "string")
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([schemeName, credentialRef]) => ({ schemeName, credentialRef }))
+    : [];
+
   return {
     pluginId: provider.pluginId ?? MCP_PLUGIN_ID,
     transport: provider.transport === "stdio" ? "stdio" : "http",
@@ -1280,6 +1571,14 @@ function formFromProvider(provider: Provider): ProviderFormState {
     args: provider.args?.join("\n") ?? "",
     directory: provider.directory ?? "",
     credentialEnvironment: [...(provider.credentialEnvironment ?? [])],
+    openapiSourceKind: sourceKind,
+    openapiSpecUrl: typeof source?.url === "string" ? source.url : "",
+    openapiSpecFile: typeof source?.path === "string" ? source.path : "",
+    openapiServerUrl:
+      typeof config?.serverUrl === "string" ? config.serverUrl : "",
+    openapiInclude: stringListFromUnknown(operations?.include).join("\n"),
+    openapiExclude: stringListFromUnknown(operations?.exclude).join("\n"),
+    openapiCredentials,
   };
 }
 
@@ -1292,6 +1591,44 @@ function updateRequestFromForm(form: ProviderFormState): UpdateProviderRequest {
 }
 
 function configFromForm(form: ProviderFormState): Record<string, unknown> {
+  if (form.pluginId === OPENAPI_PLUGIN_ID) {
+    const include = parseLines(form.openapiInclude);
+    const exclude = parseLines(form.openapiExclude);
+    const credentials: Record<string, string> = {};
+    for (const binding of form.openapiCredentials) {
+      const schemeName = binding.schemeName.trim();
+      if (!schemeName) {
+        throw new Error("OpenAPI Security Scheme name is required.");
+      }
+      if (credentials[schemeName] !== undefined) {
+        throw new Error(`OpenAPI Security Scheme "${schemeName}" is configured more than once.`);
+      }
+      if (!binding.credentialRef) {
+        throw new Error(`Choose a Credential for OpenAPI Security Scheme "${schemeName}".`);
+      }
+      credentials[schemeName] = binding.credentialRef;
+    }
+
+    return {
+      source:
+        form.openapiSourceKind === "url"
+          ? { kind: "url", url: form.openapiSpecUrl.trim() }
+          : { kind: "file", path: form.openapiSpecFile.trim() },
+      ...(form.openapiServerUrl.trim()
+        ? { serverUrl: form.openapiServerUrl.trim() }
+        : {}),
+      ...(include.length || exclude.length
+        ? {
+            operations: {
+              ...(include.length ? { include } : {}),
+              ...(exclude.length ? { exclude } : {}),
+            },
+          }
+        : {}),
+      ...(Object.keys(credentials).length ? { credentials } : {}),
+    };
+  }
+
   if (form.pluginId !== MCP_PLUGIN_ID) {
     throw new Error(`Unsupported Provider plugin: ${form.pluginId}`);
   }
@@ -1443,13 +1780,81 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 }
 
 function parseArgs(value: string) {
+  return parseLines(value);
+}
+
+function parseLines(value: string) {
   return value
     .split("\n")
     .map((item) => item.trim())
     .filter(Boolean);
 }
 
+function stringListFromUnknown(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.filter((item): item is string => typeof item === "string");
+}
+
+function openAPISourceSummary(provider: Provider) {
+  const config = asRecord(provider.config);
+  const source = asRecord(config?.source);
+  if (source?.kind === "file" && typeof source.path === "string") {
+    return `File · ${source.path}`;
+  }
+  if (typeof source?.url === "string") {
+    return `URL · ${source.url}`;
+  }
+  return "—";
+}
+
+function openAPIServerSummary(provider: Provider) {
+  const config = asRecord(provider.config);
+  return typeof config?.serverUrl === "string" && config.serverUrl
+    ? config.serverUrl
+    : "Document server";
+}
+
+function openAPIFilterSummary(provider: Provider) {
+  const config = asRecord(provider.config);
+  const operations = asRecord(config?.operations);
+  const include = stringListFromUnknown(operations?.include);
+  const exclude = stringListFromUnknown(operations?.exclude);
+  if (!include.length && !exclude.length) {
+    return "All supported operations";
+  }
+  const lines = [
+    ...(include.length ? [`Include: ${include.join(", ")}`] : []),
+    ...(exclude.length ? [`Exclude: ${exclude.join(", ")}`] : []),
+  ];
+  return lines.join("\n");
+}
+
+function openAPISecuritySummary(provider: Provider) {
+  const config = asRecord(provider.config);
+  const credentials = asRecord(config?.credentials);
+  if (credentials === null) {
+    return "None configured";
+  }
+  const names = Object.keys(credentials).sort((left, right) =>
+    left.localeCompare(right),
+  );
+  return names.length ? names.join("\n") : "None configured";
+}
+
 function connectionSummary(provider: Provider) {
+  if (provider.pluginId === OPENAPI_PLUGIN_ID) {
+    const config = asRecord(provider.config);
+    const source = asRecord(config?.source);
+    if (source?.kind === "file" && typeof source.path === "string") {
+      return source.path;
+    }
+    if (typeof source?.url === "string") {
+      return source.url;
+    }
+    return "OpenAPI source not configured";
+  }
   if (provider.transport === "http") {
     return provider.endpoint ?? "not configured";
   }
