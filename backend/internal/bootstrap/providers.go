@@ -386,6 +386,200 @@ func (r *Runtime) UpdateConfiguredProvider(
 	return updated, nil
 }
 
+// RebindProviderInstallation explicitly moves one external Provider to another
+// verified installation of the same PluginID while preserving canonical
+// Provider identity. The target Tool snapshot is proven before the persisted pin
+// and execution route are retired from the current installation.
+func (r *Runtime) RebindProviderInstallation(
+	ctx context.Context,
+	providerID catalogdomain.ProviderID,
+	targetInstallationID providerplugin.InstallationID,
+	rawConfig json.RawMessage,
+) (catalogapplication.SyncProviderToolsResult, error) {
+	if _, err := r.Catalog.GetProvider.Execute(ctx, providerID); err != nil {
+		return catalogapplication.SyncProviderToolsResult{}, fmt.Errorf(
+			"rebind provider installation: provider: %w",
+			err,
+		)
+	}
+	currentConfig, err := r.providerConfigs.GetProviderConfig(ctx, providerID)
+	if err != nil {
+		return catalogapplication.SyncProviderToolsResult{}, fmt.Errorf(
+			"rebind provider installation: load current config: %w",
+			err,
+		)
+	}
+	if currentConfig.InstallationID == nil {
+		return catalogapplication.SyncProviderToolsResult{}, fmt.Errorf(
+			"rebind provider installation: Provider %s uses a built-in plugin",
+			providerID,
+		)
+	}
+	if *currentConfig.InstallationID == targetInstallationID {
+		return catalogapplication.SyncProviderToolsResult{}, fmt.Errorf(
+			"rebind provider installation: Provider %s already uses installation %s",
+			providerID,
+			targetInstallationID,
+		)
+	}
+
+	resolved, err := r.externalResolver.ResolveInstallation(ctx, targetInstallationID)
+	if err != nil {
+		return catalogapplication.SyncProviderToolsResult{}, fmt.Errorf(
+			"rebind provider installation: target: %w",
+			err,
+		)
+	}
+	if resolved.Descriptor.ID != currentConfig.PluginID {
+		return catalogapplication.SyncProviderToolsResult{}, fmt.Errorf(
+			"rebind provider installation: target plugin %s does not match Provider plugin %s",
+			resolved.Descriptor.ID,
+			currentConfig.PluginID,
+		)
+	}
+	if err := resolved.Plugin.ValidateConfig(ctx, cloneRawJSON(rawConfig)); err != nil {
+		return catalogapplication.SyncProviderToolsResult{}, fmt.Errorf(
+			"rebind provider installation: validate config: %w",
+			err,
+		)
+	}
+	metadata, err := resolved.Plugin.InspectConfig(ctx, cloneRawJSON(rawConfig))
+	if err != nil {
+		return catalogapplication.SyncProviderToolsResult{}, fmt.Errorf(
+			"rebind provider installation: inspect config: %w",
+			err,
+		)
+	}
+	targetConfig, err := providerplugin.NewInstalledConfiguration(
+		providerID,
+		currentConfig.PluginID,
+		targetInstallationID,
+		resolved.Descriptor.ConfigVersion,
+		rawConfig,
+	)
+	if err != nil {
+		return catalogapplication.SyncProviderToolsResult{}, fmt.Errorf(
+			"rebind provider installation: build target config: %w",
+			err,
+		)
+	}
+	targetConfig, err = targetConfig.WithMetadata(metadata)
+	if err != nil {
+		return catalogapplication.SyncProviderToolsResult{}, fmt.Errorf(
+			"rebind provider installation: normalize target metadata: %w",
+			err,
+		)
+	}
+
+	previousTools, err := r.Catalog.store.ListProviderTools(ctx, providerID)
+	if err != nil {
+		return catalogapplication.SyncProviderToolsResult{}, fmt.Errorf(
+			"rebind provider installation: snapshot current tools: %w",
+			err,
+		)
+	}
+
+	candidate, err := resolved.Plugin.Open(ctx, providerplugin.OpenRequest{
+		ProviderID:    providerID,
+		ConfigVersion: targetConfig.ConfigVersion,
+		Config:        cloneRawJSON(targetConfig.Config),
+		Credentials:   r.Credentials.Resolver,
+	})
+	if err != nil {
+		return catalogapplication.SyncProviderToolsResult{}, fmt.Errorf(
+			"rebind provider installation: open target: %w",
+			err,
+		)
+	}
+	if candidate == nil {
+		return catalogapplication.SyncProviderToolsResult{}, fmt.Errorf(
+			"rebind provider installation: target returned a nil instance",
+		)
+	}
+	candidateClosed := false
+	closeCandidate := func() error {
+		if candidateClosed {
+			return nil
+		}
+		candidateClosed = true
+		return candidate.Close()
+	}
+	defer func() { _ = closeCandidate() }()
+
+	syncTools := r.Catalog.SyncProviderTools(candidate)
+	result, err := syncTools.Execute(ctx, providerID)
+	if err != nil {
+		return catalogapplication.SyncProviderToolsResult{}, fmt.Errorf(
+			"rebind provider installation: synchronize target: %w",
+			err,
+		)
+	}
+	if err := closeCandidate(); err != nil {
+		restoreErr := r.Catalog.store.ReplaceProviderTools(
+			context.WithoutCancel(ctx),
+			providerID,
+			previousTools,
+		)
+		return catalogapplication.SyncProviderToolsResult{}, errors.Join(
+			fmt.Errorf("rebind provider installation: close prepared target: %w", err),
+			wrapOptionalError(
+				"rebind provider installation: restore Tool snapshot",
+				restoreErr,
+			),
+		)
+	}
+
+	if err := r.providerConfigs.Save(ctx, targetConfig); err != nil {
+		restoreErr := r.Catalog.store.ReplaceProviderTools(
+			context.WithoutCancel(ctx),
+			providerID,
+			previousTools,
+		)
+		return catalogapplication.SyncProviderToolsResult{}, errors.Join(
+			fmt.Errorf("rebind provider installation: save target config: %w", err),
+			wrapOptionalError(
+				"rebind provider installation: restore Tool snapshot",
+				restoreErr,
+			),
+		)
+	}
+
+	if _, err := r.providerInstances.Reload(ctx, providerID); err != nil {
+		restoreConfigErr := r.providerConfigs.Save(
+			context.WithoutCancel(ctx),
+			currentConfig,
+		)
+		restoreToolsErr := r.Catalog.store.ReplaceProviderTools(
+			context.WithoutCancel(ctx),
+			providerID,
+			previousTools,
+		)
+		var restoreRouteErr error
+		if restoreConfigErr == nil {
+			_, restoreRouteErr = r.providerInstances.Reload(
+				context.WithoutCancel(ctx),
+				providerID,
+			)
+		}
+		return catalogapplication.SyncProviderToolsResult{}, errors.Join(
+			fmt.Errorf("rebind provider installation: activate target: %w", err),
+			wrapOptionalError(
+				"rebind provider installation: restore config",
+				restoreConfigErr,
+			),
+			wrapOptionalError(
+				"rebind provider installation: restore Tool snapshot",
+				restoreToolsErr,
+			),
+			wrapOptionalError(
+				"rebind provider installation: restore execution route",
+				restoreRouteErr,
+			),
+		)
+	}
+	return result, nil
+}
+
 // SyncConfiguredProvider reloads the current Provider plugin instance and
 // atomically refreshes its canonical Tool snapshot.
 func (r *Runtime) SyncConfiguredProvider(

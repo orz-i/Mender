@@ -187,6 +187,86 @@ func TestRuntimeInstalledExternalProviderEndToEnd(t *testing.T) {
 	if len(search) != 1 {
 		t.Fatalf("SearchTools = %+v", search)
 	}
+	originalToolID := search[0].ToolID
+
+	rebindSourceRoot := filepath.Join(temp, "source-plugin-rebind")
+	rebindEntrypoint := filepath.Join(
+		rebindSourceRoot,
+		"bin",
+		examplePluginBinaryName(),
+	)
+	if err := os.MkdirAll(filepath.Dir(rebindEntrypoint), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	binary, err := os.ReadFile(entrypoint) // #nosec G304 -- test-owned build output path.
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(rebindEntrypoint, binary, 0o755); err != nil { // #nosec G306 -- executable fixture.
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(
+		filepath.Join(rebindSourceRoot, manifest.FileName),
+		manifestJSON,
+		0o600,
+	); err != nil { // #nosec G306 -- test fixture manifest.
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(
+		filepath.Join(rebindSourceRoot, "installation-marker.txt"),
+		[]byte("second installation"),
+		0o600,
+	); err != nil { // #nosec G306 -- test fixture data.
+		t.Fatal(err)
+	}
+	targetInstallation, err := runtime.InstallProviderPlugin(ctx, rebindSourceRoot)
+	if err != nil {
+		t.Fatalf("install rebind target: %v", err)
+	}
+	if targetInstallation.ID() == installationID {
+		t.Fatal("rebind target reused source InstallationID")
+	}
+	rebindResult, err := runtime.RebindProviderInstallation(
+		ctx,
+		provider.ID(),
+		targetInstallation.ID(),
+		providerConfig,
+	)
+	if err != nil {
+		t.Fatalf("RebindProviderInstallation() error = %v", err)
+	}
+	if rebindResult.Total != 1 || rebindResult.Updated != 1 {
+		t.Fatalf("rebind sync result = %+v", rebindResult)
+	}
+	reboundConfig, err := runtime.ProviderConfig(ctx, provider.ID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reboundConfig.InstallationID == nil ||
+		*reboundConfig.InstallationID != targetInstallation.ID() ||
+		reboundConfig.PluginID != pluginID {
+		t.Fatalf("rebound ProviderConfig() = %+v", reboundConfig)
+	}
+	reboundSearch, err := runtime.Catalog.SearchTools.Execute(
+		ctx,
+		catalogapplication.SearchToolsRequest{Query: "echo", Limit: 10},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(reboundSearch) != 1 || reboundSearch[0].ToolID != originalToolID {
+		t.Fatalf(
+			"rebind changed stable Tool identity: before=%s after=%+v",
+			originalToolID,
+			reboundSearch,
+		)
+	}
+	if err := runtime.RemoveProviderPluginInstallation(ctx, installationID); err != nil {
+		t.Fatalf("remove unreferenced old installation after rebind: %v", err)
+	}
+	installation = targetInstallation
+	installationID = targetInstallation.ID()
+	search = reboundSearch
 
 	invocationContext, err := invocationdomain.NewInvocationContext(
 		invocationdomain.OriginInternal,
