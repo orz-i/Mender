@@ -39,6 +39,11 @@ import { Textarea } from "@mender/ui/components/textarea";
 import { EmptyState, ErrorNotice, PageHeader } from "../../shared/page";
 import { usePagination } from "../../shared/pagination";
 import { TablePagination } from "../../shared/table-pagination";
+import { GenericProviderConfigForm } from "./generic-provider-config-form";
+import {
+  genericConfigDefaults,
+  genericConfigValidationError,
+} from "./generic-provider-config-schema";
 
 const MCP_PLUGIN_ID = "io.mender.provider.mcp";
 const MODEL_TOOLS_PLUGIN_ID = "io.mender.provider.model-tools";
@@ -59,6 +64,8 @@ interface OpenAPICredentialBinding {
 
 interface ProviderFormState {
   pluginId: string;
+  installationId: string;
+  genericConfig: Record<string, unknown>;
   transport: ProviderTransport;
   namespace: string;
   displayName: string;
@@ -83,8 +90,116 @@ interface ProviderFormState {
   modelToolsCredentialRef: string;
 }
 
+type ProviderRenderer = "mcp" | "model-tools" | "openapi" | "generic";
+type FirstPartyProviderRenderer = Exclude<ProviderRenderer, "generic">;
+
+const FIRST_PARTY_PROVIDER_RENDERERS: Partial<
+  Record<string, FirstPartyProviderRenderer>
+> = {
+  [MCP_PLUGIN_ID]: "mcp",
+  [MODEL_TOOLS_PLUGIN_ID]: "model-tools",
+  [OPENAPI_PLUGIN_ID]: "openapi",
+};
+
+function providerRenderer(form: ProviderFormState): ProviderRenderer {
+  if (form.installationId) {
+    return "generic";
+  }
+  return FIRST_PARTY_PROVIDER_RENDERERS[form.pluginId] ?? "generic";
+}
+
+function providerPluginSelectionKey(plugin: ProviderPlugin) {
+  return plugin.installationId
+    ? plugin.pluginId + "@" + plugin.installationId
+    : plugin.pluginId + "@builtin";
+}
+
+function providerFormSelectionKey(form: ProviderFormState) {
+  return form.installationId
+    ? form.pluginId + "@" + form.installationId
+    : form.pluginId + "@builtin";
+}
+
+function providerPluginMatchesForm(
+  plugin: ProviderPlugin,
+  form: ProviderFormState,
+) {
+  return (
+    plugin.pluginId === form.pluginId &&
+    (plugin.installationId ?? "") === form.installationId
+  );
+}
+
+function providerPluginForForm(
+  plugins: ProviderPlugin[],
+  form: ProviderFormState,
+) {
+  return plugins.find((plugin) => providerPluginMatchesForm(plugin, form));
+}
+
+function providerPluginChoiceLabel(plugin: ProviderPlugin) {
+  return plugin.installationId
+    ? plugin.displayName + " · " + plugin.packageVersion
+    : plugin.displayName;
+}
+
+function providerPluginForProvider(
+  plugins: ProviderPlugin[],
+  provider: Provider,
+) {
+  return plugins.find(
+    (plugin) =>
+      plugin.pluginId === provider.pluginId &&
+      (plugin.installationId ?? "") === (provider.installationId ?? ""),
+  );
+}
+
+function providerPluginLabelForProvider(
+  plugins: ProviderPlugin[],
+  provider: Provider,
+) {
+  const plugin = providerPluginForProvider(plugins, provider);
+  return plugin !== undefined
+    ? providerPluginChoiceLabel(plugin)
+    : provider.pluginDisplayName ?? provider.pluginId ?? "Unconfigured";
+}
+
+function providerIsBuiltIn(provider: Provider, pluginId: string) {
+  return provider.installationId === undefined && provider.pluginId === pluginId;
+}
+
+function providerSupportsFirstPartyAuthentication(provider: Provider) {
+  return (
+    provider.installationId === undefined &&
+    (provider.pluginId === MCP_PLUGIN_ID ||
+      provider.pluginId === OPENAPI_PLUGIN_ID ||
+      provider.pluginId === MODEL_TOOLS_PLUGIN_ID)
+  );
+}
+
+function formForProviderPlugin(
+  form: ProviderFormState,
+  plugin: ProviderPlugin,
+): ProviderFormState {
+  const installationId = plugin.installationId ?? "";
+  const next = {
+    ...form,
+    pluginId: plugin.pluginId,
+    installationId,
+  };
+  return {
+    ...next,
+    genericConfig:
+      providerRenderer(next) === "generic"
+        ? genericConfigDefaults(plugin.configSchema)
+        : {},
+  };
+}
+
 const emptyProviderForm: ProviderFormState = {
   pluginId: MCP_PLUGIN_ID,
+  installationId: "",
+  genericConfig: {},
   transport: "http",
   namespace: "",
   displayName: "",
@@ -190,6 +305,9 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
         namespace: createForm.namespace,
         displayName: createForm.displayName,
         pluginId: createForm.pluginId,
+        ...(createForm.installationId
+          ? { installationId: createForm.installationId }
+          : {}),
         config: configFromForm(createForm),
         ...(createForm.description
           ? { description: createForm.description }
@@ -292,11 +410,7 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
   }
 
   function openProviderAuthentication(provider: Provider) {
-    if (
-      provider.pluginId !== MCP_PLUGIN_ID &&
-      provider.pluginId !== OPENAPI_PLUGIN_ID &&
-      provider.pluginId !== MODEL_TOOLS_PLUGIN_ID
-    ) {
+    if (!providerSupportsFirstPartyAuthentication(provider)) {
       return;
     }
     setError("");
@@ -411,9 +525,10 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline">
-                        {provider.pluginDisplayName ??
-                          provider.pluginId ??
-                          "Unconfigured"}
+                        {providerPluginLabelForProvider(
+                          providerPlugins,
+                          provider,
+                        )}
                       </Badge>
                     </TableCell>
                     <TableCell className="max-w-[360px] truncate font-mono text-xs">
@@ -451,9 +566,7 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
                           aria-label={`Authentication ${provider.namespace}`}
                           disabled={
                             busy !== "" ||
-                            (provider.pluginId !== MCP_PLUGIN_ID &&
-                              provider.pluginId !== OPENAPI_PLUGIN_ID &&
-                              provider.pluginId !== MODEL_TOOLS_PLUGIN_ID)
+                            !providerSupportsFirstPartyAuthentication(provider)
                           }
                           onClick={() => openProviderAuthentication(provider)}
                         >
@@ -502,6 +615,7 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
         mode="create"
         form={createForm}
         plugins={providerPlugins}
+        credentials={credentials}
         busy={busy === "create"}
         onOpenChange={setCreateDialogOpen}
         onChange={setCreateForm}
@@ -532,6 +646,7 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
 
       <ProviderDetailsDialog
         provider={viewProvider}
+        plugins={providerPlugins}
         onOpenChange={(open) => {
           if (!open) {
             setViewProvider(null);
@@ -545,6 +660,7 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
           mode="edit"
           form={editForm}
           plugins={providerPlugins}
+          credentials={credentials}
           busy={
             editProvider !== null && busy === editProvider.providerId
           }
@@ -567,6 +683,7 @@ function ProviderFormDialog({
   mode,
   form,
   plugins,
+  credentials,
   busy,
   onOpenChange,
   onChange,
@@ -577,6 +694,7 @@ function ProviderFormDialog({
   mode: "create" | "edit";
   form: ProviderFormState;
   plugins: ProviderPlugin[];
+  credentials: Credential[];
   busy: boolean;
   onOpenChange: (open: boolean) => void;
   onChange: (value: ProviderFormState) => void;
@@ -585,21 +703,30 @@ function ProviderFormDialog({
 }) {
   const [importError, setImportError] = useState("");
   const creating = mode === "create";
+  const selectedPlugin = providerPluginForForm(plugins, form);
+  const renderer = providerRenderer(form);
+  const genericError =
+    renderer === "generic"
+      ? genericConfigValidationError(
+          selectedPlugin?.configSchema,
+          form.genericConfig,
+        )
+      : null;
   const valid =
     form.displayName.trim() !== "" &&
     (!creating || form.namespace.trim() !== "") &&
-    (form.pluginId === MCP_PLUGIN_ID
+    (renderer === "mcp"
       ? form.transport === "http"
         ? form.endpoint.trim() !== ""
         : form.executable.trim() !== ""
-      : form.pluginId === OPENAPI_PLUGIN_ID
+      : renderer === "openapi"
         ? form.openapiSourceKind === "url"
           ? form.openapiSpecUrl.trim() !== ""
           : form.openapiSpecFile.trim() !== ""
-        : form.pluginId === MODEL_TOOLS_PLUGIN_ID
+        : renderer === "model-tools"
           ? form.modelToolsModel.trim() !== "" &&
             form.modelToolsCredentialRef.trim() !== ""
-          : false);
+          : selectedPlugin !== undefined && genericError === null);
 
   return (
     <Dialog
@@ -628,21 +755,20 @@ function ProviderFormDialog({
             <div>
               <div className="mb-2 text-sm font-medium">Provider plugin</div>
               <div className="grid gap-2 sm:grid-cols-2">
-                {plugins.map((plugin) => (
-                  <Button
-                    key={plugin.pluginId}
-                    type="button"
-                    variant={
-                      form.pluginId === plugin.pluginId ? "default" : "outline"
-                    }
-                    aria-pressed={form.pluginId === plugin.pluginId}
-                    onClick={() =>
-                      onChange({ ...form, pluginId: plugin.pluginId })
-                    }
-                  >
-                    {plugin.displayName}
-                  </Button>
-                ))}
+                {plugins.map((plugin) => {
+                  const selected = providerPluginMatchesForm(plugin, form);
+                  return (
+                    <Button
+                      key={providerPluginSelectionKey(plugin)}
+                      type="button"
+                      variant={selected ? "default" : "outline"}
+                      aria-pressed={selected}
+                      onClick={() => onChange(formForProviderPlugin(form, plugin))}
+                    >
+                      {providerPluginChoiceLabel(plugin)}
+                    </Button>
+                  );
+                })}
               </div>
             </div>
           ) : (
@@ -651,14 +777,15 @@ function ProviderFormDialog({
               <ReadOnlyField
                 label="Provider plugin"
                 value={
-                  plugins.find((plugin) => plugin.pluginId === form.pluginId)
-                    ?.displayName ?? form.pluginId
+                  selectedPlugin !== undefined
+                    ? providerPluginChoiceLabel(selectedPlugin)
+                    : form.pluginId
                 }
               />
             </div>
           )}
 
-          {form.pluginId === MCP_PLUGIN_ID ? (
+          {renderer === "mcp" ? (
             <div>
               <div className="mb-2 text-sm font-medium">MCP connection</div>
               <div className="grid grid-cols-2 gap-2">
@@ -680,7 +807,7 @@ function ProviderFormDialog({
                 </Button>
               </div>
             </div>
-          ) : form.pluginId === MODEL_TOOLS_PLUGIN_ID ? (
+          ) : renderer === "model-tools" ? (
             <div>
               <div className="mb-2 text-sm font-medium">Model tool engine</div>
               <div className="grid grid-cols-3 gap-2">
@@ -703,7 +830,7 @@ function ProviderFormDialog({
                 )}
               </div>
             </div>
-          ) : form.pluginId === OPENAPI_PLUGIN_ID ? (
+          ) : renderer === "openapi" ? (
             <div>
               <div className="mb-2 text-sm font-medium">OpenAPI description</div>
               <div className="grid grid-cols-2 gap-2">
@@ -734,9 +861,14 @@ function ProviderFormDialog({
               </div>
             </div>
           ) : (
-            <p className="rounded-lg border border-border bg-muted/30 p-3 text-sm text-muted-foreground">
-              This plugin does not yet provide a first-party configuration form.
-            </p>
+            <div className="rounded-lg border border-border bg-muted/30 p-3 text-sm text-muted-foreground">
+              <div className="font-medium text-foreground">Schema-driven configuration</div>
+              <div className="mt-1 text-xs leading-5">
+                {selectedPlugin?.sourceKind === "external"
+                  ? "This Provider is pinned to an installed external plugin package."
+                  : "This plugin uses Mender's generic configuration renderer."}
+              </div>
+            </div>
           )}
 
           {creating ? (
@@ -772,7 +904,37 @@ function ProviderFormDialog({
             />
           </Field>
 
-          {form.pluginId === MODEL_TOOLS_PLUGIN_ID ? (
+          {renderer === "generic" ? (
+            <div className="space-y-3">
+              {form.installationId ? (
+                <div className="grid grid-cols-2 gap-3">
+                  <ReadOnlyField
+                    label="Installation"
+                    value={form.installationId}
+                  />
+                  <ReadOnlyField
+                    label="Package version"
+                    value={selectedPlugin?.packageVersion ?? "Unavailable"}
+                  />
+                </div>
+              ) : null}
+              <GenericProviderConfigForm
+                key={providerFormSelectionKey(form)}
+                schema={selectedPlugin?.configSchema}
+                uiSchema={selectedPlugin?.uiSchema}
+                value={form.genericConfig}
+                credentials={credentials}
+                onChange={(genericConfig) =>
+                  onChange({ ...form, genericConfig })
+                }
+              />
+              {genericError ? (
+                <p className="text-xs text-destructive">{genericError}</p>
+              ) : null}
+            </div>
+          ) : null}
+
+          {renderer === "model-tools" ? (
             <>
               <Field label="Model">
                 <Input
@@ -791,7 +953,7 @@ function ProviderFormDialog({
             </>
           ) : null}
 
-          {form.pluginId === MCP_PLUGIN_ID ? (
+          {renderer === "mcp" ? (
             form.transport === "http" ? (
             <>
               <Field label="Endpoint">
@@ -927,7 +1089,7 @@ function ProviderFormDialog({
             )
           ) : null}
 
-          {form.pluginId === OPENAPI_PLUGIN_ID ? (
+          {renderer === "openapi" ? (
             <>
               {form.openapiSourceKind === "url" ? (
                 <Field label="Description URL">
@@ -1010,10 +1172,7 @@ function ProviderFormDialog({
           <DialogClose render={<Button variant="outline" />}>
             Cancel
           </DialogClose>
-          {onAuthentication !== undefined &&
-          (form.pluginId === MCP_PLUGIN_ID ||
-            form.pluginId === OPENAPI_PLUGIN_ID ||
-            form.pluginId === MODEL_TOOLS_PLUGIN_ID) ? (
+          {onAuthentication !== undefined && renderer !== "generic" ? (
             <Button
               type="button"
               variant="outline"
@@ -1466,11 +1625,15 @@ function ProviderAuthenticationDialog({
 
 function ProviderDetailsDialog({
   provider,
+  plugins,
   onOpenChange,
 }: {
   provider: Provider | null;
+  plugins: ProviderPlugin[];
   onOpenChange: (open: boolean) => void;
 }) {
+  const selectedPlugin =
+    provider === null ? undefined : providerPluginForProvider(plugins, provider);
   return (
     <Dialog open={provider !== null} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-xl">
@@ -1488,15 +1651,39 @@ function ProviderDetailsDialog({
             <DetailRow label="Provider ID" value={provider.providerId} mono />
             <DetailRow
               label="Provider plugin"
-              value={provider.pluginDisplayName ?? provider.pluginId ?? "Unconfigured"}
+              value={providerPluginLabelForProvider(plugins, provider)}
             />
             {provider.pluginId ? (
               <DetailRow label="Plugin ID" value={provider.pluginId} mono />
             ) : null}
-            {provider.pluginId === MCP_PLUGIN_ID ? (
+            {provider.installationId ? (
+              <>
+                <DetailRow
+                  label="Installation"
+                  value={provider.installationId}
+                  mono
+                />
+                <DetailRow
+                  label="Package version"
+                  value={
+                    selectedPlugin?.packageVersion ??
+                    provider.pluginVersion ??
+                    "Unavailable"
+                  }
+                  mono
+                />
+                <DetailRow
+                  label="Configuration"
+                  value={JSON.stringify(provider.config ?? {}, null, 2)}
+                  mono
+                  preserve
+                />
+              </>
+            ) : null}
+            {providerIsBuiltIn(provider, MCP_PLUGIN_ID) ? (
               <DetailRow label="MCP transport" value={provider.transport} />
             ) : null}
-            {provider.pluginId === MODEL_TOOLS_PLUGIN_ID ? (
+            {providerIsBuiltIn(provider, MODEL_TOOLS_PLUGIN_ID) ? (
               <>
                 <DetailRow
                   label="Engine"
@@ -1510,7 +1697,7 @@ function ProviderDetailsDialog({
                 <DetailRow label="Capability" value="Web search" />
               </>
             ) : null}
-            {provider.pluginId === OPENAPI_PLUGIN_ID ? (
+            {providerIsBuiltIn(provider, OPENAPI_PLUGIN_ID) ? (
               <>
                 <DetailRow
                   label="Description source"
@@ -1667,6 +1854,8 @@ function formFromProvider(provider: Provider): ProviderFormState {
 
   return {
     pluginId: provider.pluginId ?? MCP_PLUGIN_ID,
+    installationId: provider.installationId ?? "",
+    genericConfig: config ?? {},
     transport: provider.transport === "stdio" ? "stdio" : "http",
     namespace: provider.namespace,
     displayName: provider.displayName,
@@ -1703,7 +1892,12 @@ function updateRequestFromForm(form: ProviderFormState): UpdateProviderRequest {
 }
 
 function configFromForm(form: ProviderFormState): Record<string, unknown> {
-  if (form.pluginId === MODEL_TOOLS_PLUGIN_ID) {
+  const renderer = providerRenderer(form);
+  if (renderer === "generic") {
+    return JSON.parse(JSON.stringify(form.genericConfig)) as Record<string, unknown>;
+  }
+
+  if (renderer === "model-tools") {
     if (!form.modelToolsCredentialRef) {
       throw new Error("Choose a Model API Credential.");
     }
@@ -1715,7 +1909,7 @@ function configFromForm(form: ProviderFormState): Record<string, unknown> {
     };
   }
 
-  if (form.pluginId === OPENAPI_PLUGIN_ID) {
+  if (renderer === "openapi") {
     const include = parseLines(form.openapiInclude);
     const exclude = parseLines(form.openapiExclude);
     const credentials: Record<string, string> = {};
@@ -1753,8 +1947,8 @@ function configFromForm(form: ProviderFormState): Record<string, unknown> {
     };
   }
 
-  if (form.pluginId !== MCP_PLUGIN_ID) {
-    throw new Error(`Unsupported Provider plugin: ${form.pluginId}`);
+  if (renderer !== "mcp") {
+    throw new Error("Unsupported Provider renderer.");
   }
   if (form.transport === "http") {
     const headers = parseHeaders(form.headers);
@@ -2006,6 +2200,9 @@ function openAPISecuritySummary(provider: Provider) {
 }
 
 function connectionSummary(provider: Provider) {
+  if (provider.installationId) {
+    return "External plugin · " + provider.installationId;
+  }
   if (provider.pluginId === MODEL_TOOLS_PLUGIN_ID) {
     return (
       modelToolsEngineSummary(provider) +

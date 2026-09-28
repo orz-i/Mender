@@ -120,6 +120,267 @@ describe("management pages", () => {
     expect(await screen.findByText("demo")).toBeTruthy();
   });
 
+  it("configures an unknown external Provider plugin from its schema", async () => {
+    const installationId = "pinst_0123456789abcdef0123456789abcdef";
+    const credential = {
+      reference: "credential://external/work",
+      namespace: "external",
+      name: "work",
+      displayName: "External work",
+      source: "environment" as const,
+      environmentVariable: "EXTERNAL_TOKEN",
+      createdAt: "2026-09-28T00:00:00Z",
+      updatedAt: "2026-09-28T00:00:00Z",
+    };
+    const plugin = {
+      pluginId: "dev.example.echo",
+      version: "1.2.3",
+      packageVersion: "1.2.3",
+      displayName: "External Echo",
+      description: "Example external Provider",
+      configVersion: 1,
+      sourceKind: "external" as const,
+      installationId,
+      protocolVersion: 1,
+      configSchema: {
+        type: "object",
+        additionalProperties: false,
+        required: ["endpoint", "credentialRef"],
+        properties: {
+          endpoint: {
+            type: "string",
+            title: "Endpoint",
+            format: "uri",
+            default: "https://example.test/api",
+          },
+          credentialRef: {
+            type: "string",
+            title: "Credential",
+            "x-mender-control": "credential",
+          },
+          mode: {
+            type: "string",
+            title: "Mode",
+            enum: ["fast", "safe"],
+            default: "safe",
+          },
+          enabled: {
+            type: "boolean",
+            title: "Enabled",
+            default: true,
+          },
+        },
+      },
+      capabilities: [],
+      enabled: true,
+    };
+    const provider = {
+      providerId: "prov_external_echo",
+      namespace: "external-echo",
+      displayName: "External Echo Provider",
+      description: "",
+      createdAt: "2026-09-28T00:00:00Z",
+      updatedAt: "2026-09-28T00:00:00Z",
+      pluginId: plugin.pluginId,
+      installationId,
+      configVersion: 1,
+      config: {
+        endpoint: "https://example.test/api",
+        credentialRef: credential.reference,
+        mode: "safe",
+        enabled: true,
+      },
+      transport: "unconfigured" as const,
+      toolCount: 1,
+    };
+    const listProviders = vi
+      .fn()
+      .mockResolvedValueOnce({ providers: [] })
+      .mockResolvedValue({ providers: [provider] });
+    const createProvider = vi.fn().mockResolvedValue({
+      provider,
+      sync: { created: 1, updated: 0, removed: 0, total: 1 },
+    });
+    const updateProvider = vi.fn().mockResolvedValue({
+      provider,
+      sync: { created: 0, updated: 1, removed: 0, total: 1 },
+    });
+
+    renderApp("/providers", {
+      listProviderPlugins: vi.fn().mockResolvedValue({
+        plugins: [
+          {
+            pluginId: "io.mender.provider.mcp",
+            version: "1.0.0",
+            packageVersion: "1.0.0",
+            displayName: "MCP",
+            description: "Model Context Protocol provider",
+            configVersion: 1,
+            sourceKind: "builtin",
+            capabilities: [],
+            enabled: true,
+          },
+          plugin,
+        ],
+      }),
+      listProviders,
+      listCredentials: vi.fn().mockResolvedValue({ credentials: [credential] }),
+      createProvider,
+      updateProvider,
+    });
+
+    expect(await screen.findByText("No providers")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Add provider" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "External Echo · 1.2.3" }),
+    );
+
+    expect(
+      screen.queryByRole("button", { name: "Configure authentication" }),
+    ).toBeNull();
+    expect(screen.getByLabelText<HTMLInputElement>("Endpoint").value).toBe(
+      "https://example.test/api",
+    );
+    expect(screen.getByLabelText<HTMLSelectElement>("Mode").value).toBe("1");
+    expect(screen.getByLabelText<HTMLInputElement>("Enabled").checked).toBe(true);
+
+    fireEvent.change(screen.getByLabelText("Namespace"), {
+      target: { value: "external-echo" },
+    });
+    fireEvent.change(screen.getByLabelText("Display name"), {
+      target: { value: "External Echo Provider" },
+    });
+    fireEvent.change(screen.getByLabelText("Credential"), {
+      target: { value: credential.reference },
+    });
+
+    const addButton = screen.getByRole<HTMLButtonElement>("button", {
+      name: "Add provider",
+    });
+    expect(addButton.disabled).toBe(false);
+    fireEvent.click(addButton);
+
+    await waitFor(() => {
+      expect(createProvider).toHaveBeenCalledWith({
+        namespace: "external-echo",
+        displayName: "External Echo Provider",
+        pluginId: "dev.example.echo",
+        installationId,
+        config: {
+          endpoint: "https://example.test/api",
+          credentialRef: "credential://external/work",
+          mode: "safe",
+          enabled: true,
+        },
+      });
+    });
+    expect(await screen.findByText("External Echo Provider")).toBeTruthy();
+    expect(screen.getByText("External Echo · 1.2.3")).toBeTruthy();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "View external-echo" }),
+    );
+    const details = within(screen.getByRole("dialog"));
+    expect(details.getByText(installationId)).toBeTruthy();
+    expect(details.getByText("1.2.3")).toBeTruthy();
+    expect(details.getByText(/credential:\/\/external\/work/)).toBeTruthy();
+
+    fireEvent.click(
+      details.getAllByRole("button", { name: "Close" })[0]!,
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Edit external-echo" }),
+    );
+    expect(
+      screen.getByLabelText<HTMLInputElement>("Endpoint").value,
+    ).toBe("https://example.test/api");
+    fireEvent.change(screen.getByLabelText("Endpoint"), {
+      target: { value: "https://example.test/v2" },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Save changes" }),
+    );
+
+    await waitFor(() => {
+      expect(updateProvider).toHaveBeenCalledWith(
+        "prov_external_echo",
+        {
+          displayName: "External Echo Provider",
+          config: {
+            endpoint: "https://example.test/v2",
+            credentialRef: "credential://external/work",
+            mode: "safe",
+            enabled: true,
+          },
+        },
+      );
+    });
+  });
+
+  it("fails closed on unsupported external Provider JSON Schema features", async () => {
+    const installationId = "pinst_fedcba9876543210fedcba9876543210";
+    renderApp("/providers", {
+      listProviderPlugins: vi.fn().mockResolvedValue({
+        plugins: [
+          {
+            pluginId: "io.mender.provider.mcp",
+            version: "1.0.0",
+            packageVersion: "1.0.0",
+            displayName: "MCP",
+            description: "Model Context Protocol provider",
+            configVersion: 1,
+            sourceKind: "builtin",
+            capabilities: [],
+            enabled: true,
+          },
+          {
+            pluginId: "io.mender.provider.mcp",
+            version: "1.0.0",
+            packageVersion: "1.0.0",
+            displayName: "Unsupported External",
+            description: "Uses unsupported schema composition",
+            configVersion: 1,
+            sourceKind: "external",
+            installationId,
+            protocolVersion: 1,
+            configSchema: {
+              type: "object",
+              oneOf: [
+                { properties: { mode: { const: "a" } } },
+                { properties: { mode: { const: "b" } } },
+              ],
+            },
+            capabilities: [],
+            enabled: true,
+          },
+        ],
+      }),
+      listProviders: vi.fn().mockResolvedValue({ providers: [] }),
+    });
+
+    expect(await screen.findByText("No providers")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Add provider" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Unsupported External · 1.0.0" }),
+    );
+
+    expect(screen.queryByText("Remote endpoint")).toBeNull();
+    expect(screen.queryByText("Local command")).toBeNull();
+    expect(
+      screen.getAllByText(/unsupported JSON Schema keyword "oneOf"/).length,
+    ).toBeGreaterThanOrEqual(1);
+    fireEvent.change(screen.getByLabelText("Namespace"), {
+      target: { value: "unsupported" },
+    });
+    fireEvent.change(screen.getByLabelText("Display name"), {
+      target: { value: "Unsupported" },
+    });
+    expect(
+      screen.getByRole<HTMLButtonElement>("button", { name: "Add provider" })
+        .disabled,
+    ).toBe(true);
+  });
+
   it("registers a Model Tools Provider with inventory authentication", async () => {
     const credential = {
       reference: "credential://model/work",
