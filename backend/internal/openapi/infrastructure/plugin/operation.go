@@ -43,6 +43,7 @@ type operationBinding struct {
 
 	parameters  []parameterBinding
 	requestBody *requestBodyBinding
+	security    []securityBinding
 
 	inputSchema  []byte
 	outputSchema []byte
@@ -329,6 +330,14 @@ func buildOperationBinding(
 	if err != nil {
 		return operationBinding{}, err
 	}
+	security, err := selectOperationSecurity(
+		parsed.document,
+		candidate.operation,
+		config.Credentials,
+	)
+	if err != nil {
+		return operationBinding{}, err
+	}
 
 	name := operationToolName(
 		candidate.operation.OperationID,
@@ -350,6 +359,7 @@ func buildOperationBinding(
 		tags:         operationTags(candidate),
 		parameters:   parameterBindings,
 		requestBody:  requestBody,
+		security:     security,
 		inputSchema:  inputSchema,
 		outputSchema: outputSchema,
 		pathItem:     candidate.pathItem,
