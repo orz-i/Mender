@@ -1,0 +1,15 @@
+{
+  "manifestVersion": 1,
+  "pluginId": "dev.mender.example.echo",
+  "version": "0.1.0",
+  "protocolVersions": [1],
+  "displayName": "Example Echo",
+  "description": "Standalone external Provider plugin built with the public Mender Go SDK.",
+  "entrypoints": {
+    "darwin/arm64": "bin/mender-provider-example",
+    "darwin/amd64": "bin/mender-provider-example",
+    "linux/arm64": "bin/mender-provider-example",
+    "linux/amd64": "bin/mender-provider-example",
+    "windows/amd64": "bin/mender-provider-example.exe"
+  }
+}

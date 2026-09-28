@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -28,39 +27,32 @@ func TestRuntimeInstalledExternalProviderEndToEnd(t *testing.T) {
 	databasePath := filepath.Join(temp, "mender.db")
 	managedRoot := filepath.Join(temp, "managed-plugins")
 	sourceRoot := filepath.Join(temp, "source-plugin")
-	entrypoint := filepath.Join(sourceRoot, "bin", externalFixtureBinaryName())
+	entrypoint := filepath.Join(sourceRoot, "bin", examplePluginBinaryName())
 	if err := os.MkdirAll(filepath.Dir(entrypoint), 0o700); err != nil {
 		t.Fatal(err)
 	}
 
-	// #nosec G204 -- test builds a fixed repository fixture; only the output path is under t.TempDir.
+	exampleRoot := filepath.Join(root, "examples", "provider-plugin-example")
+	// #nosec G204 -- test builds a fixed repository example; only the output path is under t.TempDir.
 	command := exec.CommandContext(
 		ctx,
 		"go",
 		"build",
 		"-o",
 		entrypoint,
-		"./backend/internal/bootstrap/testdata/externalplugin",
+		"./cmd/mender-provider-example",
 	)
-	command.Dir = root
+	command.Dir = exampleRoot
+	command.Env = append(os.Environ(), "GOWORK=off")
 	output, err := command.CombinedOutput()
 	if err != nil {
-		t.Fatalf("build external plugin fixture: %v\n%s", err, output)
+		t.Fatalf("build external plugin example: %v\n%s", err, output)
 	}
 
-	manifestJSON := []byte(fmt.Sprintf(
-		"{\n"+
-			"  \"manifestVersion\": 1,\n"+
-			"  \"pluginId\": \"dev.mender.test.echo\",\n"+
-			"  \"version\": \"1.0.0\",\n"+
-			"  \"protocolVersions\": [1],\n"+
-			"  \"displayName\": \"External Echo\",\n"+
-			"  \"description\": \"External runtime integration fixture\",\n"+
-			"  \"entrypoints\": {%q: %q}\n"+
-			"}",
-		goruntime.GOOS+"/"+goruntime.GOARCH,
-		"bin/"+externalFixtureBinaryName(),
-	))
+	manifestJSON, err := os.ReadFile(filepath.Join(exampleRoot, manifest.FileName))
+	if err != nil {
+		t.Fatalf("read example manifest: %v", err)
+	}
 	if err := os.WriteFile(
 		filepath.Join(sourceRoot, manifest.FileName),
 		manifestJSON,
@@ -124,7 +116,7 @@ func TestRuntimeInstalledExternalProviderEndToEnd(t *testing.T) {
 		},
 		pluginID,
 		installationID,
-		[]byte("{}"),
+		[]byte("{\"prefix\":\"test: \"}"),
 	)
 	if err != nil {
 		t.Fatalf("RegisterInstalledProvider() error = %v", err)
@@ -181,8 +173,9 @@ func TestRuntimeInstalledExternalProviderEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatalf("InvokeTool.Execute() error = %v", err)
 	}
+	expected := []byte("{\"echo\":\"test: from-external-process\"}")
 	if response.Outcome.Kind() != invocationdomain.OutcomeKindComplete ||
-		!bytes.Equal(response.Outcome.Content().Bytes(), arguments) {
+		!bytes.Equal(response.Outcome.Content().Bytes(), expected) {
 		t.Fatalf(
 			"external outcome kind=%q content=%s",
 			response.Outcome.Kind(),
@@ -197,7 +190,7 @@ func TestRuntimeInstalledExternalProviderEndToEnd(t *testing.T) {
 			DisplayName: "External Echo Updated",
 			Description: "Still pinned",
 		},
-		[]byte("{}"),
+		[]byte("{\"prefix\":\"test: \"}"),
 	); err != nil {
 		t.Fatalf("UpdateConfiguredProvider() error = %v", err)
 	}
@@ -280,9 +273,9 @@ func bootstrapRepositoryRoot(t *testing.T) string {
 	return root
 }
 
-func externalFixtureBinaryName() string {
+func examplePluginBinaryName() string {
 	if goruntime.GOOS == "windows" {
-		return "external-plugin.exe"
+		return "mender-provider-example.exe"
 	}
-	return "external-plugin"
+	return "mender-provider-example"
 }
