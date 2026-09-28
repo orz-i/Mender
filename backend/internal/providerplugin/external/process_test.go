@@ -3,6 +3,8 @@ package external
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -19,6 +21,9 @@ import (
 	pluginprotocol "github.com/orz-i/Mender/sdk/providerplugin/go/protocol"
 	providerv1 "github.com/orz-i/Mender/sdk/providerplugin/go/protocol/v1"
 	plugintransport "github.com/orz-i/Mender/sdk/providerplugin/go/transport"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func TestMain(m *testing.M) {
@@ -31,7 +36,10 @@ func TestMain(m *testing.M) {
 		if strings.Contains(mode, "crash") {
 			os.Exit(23)
 		}
-		server := &helperPluginServer{mode: mode}
+		server := &helperPluginServer{
+			mode:     mode,
+			sessions: make(map[string]helperSession),
+		}
 		if err := plugintransport.Serve(pluginprotocol.SupportedVersions(), server); err != nil {
 			os.Exit(24)
 		}
@@ -305,7 +313,13 @@ func (r *fakePackageResolver) CallCount() int {
 
 type helperPluginServer struct {
 	providerv1.UnimplementedProviderPluginServiceServer
-	mode string
+	mode     string
+	mu       sync.Mutex
+	sessions map[string]helperSession
+}
+
+type helperSession struct {
+	credentialRef string
 }
 
 func (s *helperPluginServer) GetDescriptor(
@@ -326,6 +340,277 @@ func (s *helperPluginServer) GetDescriptor(
 			ConfigVersion:   1,
 		},
 	}, nil
+}
+
+func (s *helperPluginServer) ValidateConfig(
+	_ context.Context,
+	request *providerv1.ValidateConfigRequest,
+) (*providerv1.ValidateConfigResponse, error) {
+	if request.GetConfigVersion() != 1 {
+		return &providerv1.ValidateConfigResponse{
+			Valid: false,
+			Diagnostics: []*providerv1.Diagnostic{{
+				Severity: providerv1.Diagnostic_SEVERITY_ERROR,
+				Path:     "configVersion",
+				Code:     "unsupported",
+				Message:  "unsupported config version",
+			}},
+		}, nil
+	}
+	var config map[string]any
+	if err := json.Unmarshal(request.GetConfigJson(), &config); err != nil {
+		return &providerv1.ValidateConfigResponse{
+			Valid: false,
+			Diagnostics: []*providerv1.Diagnostic{{
+				Severity: providerv1.Diagnostic_SEVERITY_ERROR,
+				Path:     "$",
+				Code:     "invalid_json",
+				Message:  "invalid JSON",
+			}},
+		}, nil
+	}
+	if invalid, _ := config["invalid"].(bool); invalid {
+		return &providerv1.ValidateConfigResponse{
+			Valid: false,
+			Diagnostics: []*providerv1.Diagnostic{{
+				Severity: providerv1.Diagnostic_SEVERITY_ERROR,
+				Path:     "invalid",
+				Code:     "invalid",
+				Message:  "config was rejected",
+			}},
+		}, nil
+	}
+	return &providerv1.ValidateConfigResponse{Valid: true}, nil
+}
+
+func (s *helperPluginServer) InspectConfig(
+	_ context.Context,
+	request *providerv1.InspectConfigRequest,
+) (*providerv1.InspectConfigResponse, error) {
+	var config map[string]any
+	if err := json.Unmarshal(request.GetConfigJson(), &config); err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid config")
+	}
+	refs := make([]string, 0, 1)
+	if strings.Contains(s.mode, "undeclaredinspect") {
+		refs = append(refs, "credential://demo/missing")
+	} else if ref, ok := config["credentialRef"].(string); ok && strings.TrimSpace(ref) != "" {
+		refs = append(refs, ref)
+	}
+	return &providerv1.InspectConfigResponse{
+		CredentialRefs:    refs,
+		ConnectionSummary: "helper process",
+	}, nil
+}
+
+func (s *helperPluginServer) Open(
+	_ context.Context,
+	request *providerv1.OpenRequest,
+) (*providerv1.OpenResponse, error) {
+	if strings.TrimSpace(request.GetInstanceId()) == "" {
+		return nil, status.Error(codes.InvalidArgument, "instance id is required")
+	}
+	var config map[string]any
+	if err := json.Unmarshal(request.GetConfigJson(), &config); err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid config")
+	}
+	credentialRef, _ := config["credentialRef"].(string)
+	if credentialRef != "" && !helperHasCredential(
+		request.GetDiscoveryCredentials(),
+		credentialRef,
+	) {
+		return nil, status.Error(codes.Unauthenticated, "missing discovery credential")
+	}
+	sessionID := "session:" + request.GetInstanceId()
+	s.mu.Lock()
+	s.sessions[sessionID] = helperSession{credentialRef: credentialRef}
+	s.mu.Unlock()
+	return &providerv1.OpenResponse{SessionId: sessionID}, nil
+}
+
+func (s *helperPluginServer) ListTools(
+	_ context.Context,
+	request *providerv1.ListToolsRequest,
+) (*providerv1.ListToolsResponse, error) {
+	session, ok := s.helperSession(request.GetSessionId())
+	if !ok {
+		return nil, status.Error(codes.NotFound, "session not found")
+	}
+	if session.credentialRef != "" && !helperHasCredential(
+		request.GetDiscoveryCredentials(),
+		session.credentialRef,
+	) {
+		return nil, status.Error(codes.Unauthenticated, "missing discovery credential")
+	}
+	credentialRefs := make([]string, 0, 1)
+	if session.credentialRef != "" {
+		credentialRefs = append(credentialRefs, session.credentialRef)
+	}
+	if strings.Contains(s.mode, "toolundeclared") {
+		credentialRefs = append(credentialRefs, "credential://demo/other")
+	}
+	return &providerv1.ListToolsResponse{
+		Tools: []*providerv1.ToolDescriptor{{
+			SourceKey:   "echo",
+			Name:        "echo",
+			Title:       "Echo",
+			Description: "Echo one value through the helper plugin",
+			InputSchemaJson: []byte(`{
+				"type":"object",
+				"additionalProperties":false,
+				"properties":{
+					"value":{},
+					"mode":{"type":"string"}
+				}
+			}`),
+			OutputSchemaJson: []byte(`{
+				"type":"object",
+				"properties":{"echo":{}}
+			}`),
+			Tags:           []string{"external", "test"},
+			CredentialRefs: credentialRefs,
+		}},
+	}, nil
+}
+
+func (s *helperPluginServer) ExecuteTool(
+	request *providerv1.ExecuteToolRequest,
+	stream grpc.ServerStreamingServer[providerv1.ExecuteToolResponse],
+) error {
+	session, ok := s.helperSession(request.GetSessionId())
+	if !ok {
+		return status.Error(codes.NotFound, "session not found")
+	}
+	if request.GetSourceKey() != "echo" {
+		return status.Error(codes.NotFound, "tool not found")
+	}
+	if session.credentialRef != "" && !helperHasCredential(
+		request.GetCredentials(),
+		session.credentialRef,
+	) {
+		return status.Error(codes.Unauthenticated, "missing execution credential")
+	}
+	if err := stream.Send(&providerv1.ExecuteToolResponse{
+		Event: &providerv1.ExecuteToolResponse_Progress{
+			Progress: &providerv1.Progress{Message: "working"},
+		},
+	}); err != nil {
+		return err
+	}
+
+	var arguments map[string]any
+	if err := json.Unmarshal(request.GetArgumentsJson(), &arguments); err != nil {
+		return status.Error(codes.InvalidArgument, "invalid arguments")
+	}
+	mode, _ := arguments["mode"].(string)
+	switch mode {
+	case "input":
+		return stream.Send(&providerv1.ExecuteToolResponse{
+			Event: &providerv1.ExecuteToolResponse_InputRequired{
+				InputRequired: &providerv1.InputRequired{
+					RequestId:       "request-1",
+					Message:         "Need another value",
+					InputSchemaJson: []byte(`{"type":"string"}`),
+				},
+			},
+		})
+	case "task":
+		return stream.Send(&providerv1.ExecuteToolResponse{
+			Event: &providerv1.ExecuteToolResponse_Task{
+				Task: &providerv1.Task{
+					TaskId:  "task-1",
+					Status:  "queued",
+					Message: "Queued",
+				},
+			},
+		})
+	case "tool_fail":
+		return stream.Send(&providerv1.ExecuteToolResponse{
+			Event: &providerv1.ExecuteToolResponse_Failure{
+				Failure: &providerv1.Failure{
+					Kind:    providerv1.Failure_KIND_TOOL_ERROR,
+					Message: "tool failed",
+				},
+			},
+		})
+	case "provider_fail":
+		return stream.Send(&providerv1.ExecuteToolResponse{
+			Event: &providerv1.ExecuteToolResponse_Failure{
+				Failure: &providerv1.Failure{
+					Kind:    providerv1.Failure_KIND_PROVIDER_ERROR,
+					Message: "provider failed",
+				},
+			},
+		})
+	case "secret_fail":
+		secret := ""
+		if len(request.GetCredentials()) != 0 {
+			secret = string(request.GetCredentials()[0].GetValue())
+		}
+		return stream.Send(&providerv1.ExecuteToolResponse{
+			Event: &providerv1.ExecuteToolResponse_Failure{
+				Failure: &providerv1.Failure{
+					Kind:    providerv1.Failure_KIND_PROVIDER_ERROR,
+					Message: "credential=" + secret,
+				},
+			},
+		})
+	case "no_terminal":
+		return nil
+	case "extra_terminal":
+		if err := stream.Send(helperCompleteEvent(arguments["value"])); err != nil {
+			return err
+		}
+		return stream.Send(helperCompleteEvent("second"))
+	default:
+		return stream.Send(helperCompleteEvent(arguments["value"]))
+	}
+}
+
+func (s *helperPluginServer) Close(
+	_ context.Context,
+	request *providerv1.CloseRequest,
+) (*providerv1.CloseResponse, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, exists := s.sessions[request.GetSessionId()]; !exists {
+		return nil, status.Error(codes.NotFound, "session not found")
+	}
+	delete(s.sessions, request.GetSessionId())
+	return &providerv1.CloseResponse{}, nil
+}
+
+func (s *helperPluginServer) helperSession(sessionID string) (helperSession, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	session, ok := s.sessions[sessionID]
+	return session, ok
+}
+
+func helperHasCredential(
+	credentials []*providerv1.Credential,
+	reference string,
+) bool {
+	for _, credential := range credentials {
+		if credential != nil &&
+			credential.GetReference() == reference &&
+			len(credential.GetValue()) != 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func helperCompleteEvent(value any) *providerv1.ExecuteToolResponse {
+	raw, err := json.Marshal(map[string]any{"echo": value})
+	if err != nil {
+		panic(fmt.Sprintf("marshal helper result: %v", err))
+	}
+	return &providerv1.ExecuteToolResponse{
+		Event: &providerv1.ExecuteToolResponse_Complete{
+			Complete: &providerv1.Complete{ContentJson: raw},
+		},
+	}
 }
 
 func testExternalInstallation(

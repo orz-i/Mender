@@ -51,6 +51,7 @@ type Process struct {
 	client         *plugintransport.Client
 	service        providerv1.ProviderPluginServiceClient
 	protocol       uint32
+	descriptor     *providerv1.Descriptor
 	stderr         *boundedWriter
 }
 
@@ -68,6 +69,14 @@ func (p *Process) ProtocolVersion() uint32 {
 		return 0
 	}
 	return p.protocol
+}
+
+// Descriptor returns a defensive copy of the verified runtime descriptor.
+func (p *Process) Descriptor() *providerv1.Descriptor {
+	if p == nil || p.descriptor == nil {
+		return nil
+	}
+	return cloneDescriptor(p.descriptor)
 }
 
 // Exited reports whether the native plugin process has terminated.
@@ -290,10 +299,12 @@ func (s *Supervisor) start(
 		protocol:       client.ProtocolVersion(),
 		stderr:         stderr,
 	}
-	if err := s.verifyDescriptor(ctx, installation, resolved, process); err != nil {
+	descriptor, err := s.verifyDescriptor(ctx, installation, resolved, process)
+	if err != nil {
 		_ = process.Close()
 		return nil, err
 	}
+	process.descriptor = descriptor
 	return process, nil
 }
 
@@ -302,7 +313,7 @@ func (s *Supervisor) verifyDescriptor(
 	installation installationdomain.Installation,
 	resolved installationapplication.ResolvedPackage,
 	process *Process,
-) error {
+) (*providerv1.Descriptor, error) {
 	timeout := timeoutWithinContext(ctx, s.options.DescriptorTimeout)
 	probeCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
@@ -312,34 +323,51 @@ func (s *Supervisor) verifyDescriptor(
 		&providerv1.GetDescriptorRequest{},
 	)
 	if err != nil {
-		return fmt.Errorf("ensure external plugin process: descriptor: %w", err)
+		return nil, fmt.Errorf("ensure external plugin process: descriptor: %w", err)
 	}
 	descriptor := response.GetDescriptor_()
 	if descriptor == nil {
-		return fmt.Errorf("ensure external plugin process: descriptor is missing")
+		return nil, fmt.Errorf("ensure external plugin process: descriptor is missing")
 	}
 	if descriptor.GetPluginId() != installation.PluginID().String() ||
 		descriptor.GetPluginId() != resolved.Manifest.PluginID {
-		return fmt.Errorf("ensure external plugin process: descriptor plugin id mismatch")
+		return nil, fmt.Errorf("ensure external plugin process: descriptor plugin id mismatch")
 	}
 	if descriptor.GetPackageVersion() != installation.PackageVersion() ||
 		descriptor.GetPackageVersion() != resolved.Manifest.Version {
-		return fmt.Errorf("ensure external plugin process: descriptor package version mismatch")
+		return nil, fmt.Errorf("ensure external plugin process: descriptor package version mismatch")
 	}
 	if descriptor.GetProtocolVersion() != process.protocol {
-		return fmt.Errorf(
+		return nil, fmt.Errorf(
 			"ensure external plugin process: descriptor protocol version %d does not match negotiated version %d",
 			descriptor.GetProtocolVersion(),
 			process.protocol,
 		)
 	}
 	if descriptor.GetConfigVersion() == 0 {
-		return fmt.Errorf("ensure external plugin process: descriptor config version must be positive")
+		return nil, fmt.Errorf("ensure external plugin process: descriptor config version must be positive")
 	}
 	if strings.TrimSpace(descriptor.GetDisplayName()) == "" {
-		return fmt.Errorf("ensure external plugin process: descriptor display name must not be empty")
+		return nil, fmt.Errorf("ensure external plugin process: descriptor display name must not be empty")
 	}
-	return nil
+	return cloneDescriptor(descriptor), nil
+}
+
+func cloneDescriptor(value *providerv1.Descriptor) *providerv1.Descriptor {
+	if value == nil {
+		return nil
+	}
+	return &providerv1.Descriptor{
+		PluginId:         value.GetPluginId(),
+		PackageVersion:   value.GetPackageVersion(),
+		DisplayName:      value.GetDisplayName(),
+		Description:      value.GetDescription(),
+		ProtocolVersion:  value.GetProtocolVersion(),
+		ConfigVersion:    value.GetConfigVersion(),
+		ConfigSchemaJson: append([]byte(nil), value.GetConfigSchemaJson()...),
+		UiSchemaJson:     append([]byte(nil), value.GetUiSchemaJson()...),
+		Capabilities:     append([]string(nil), value.GetCapabilities()...),
+	}
 }
 
 func timeoutWithinContext(ctx context.Context, configured time.Duration) time.Duration {
