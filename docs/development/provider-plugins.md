@@ -2,7 +2,7 @@
 
 Mender supports installable Provider plugin types without recompiling the Mender binary. External plugins run as native subprocesses behind the versioned Provider Plugin Protocol and still enter the canonical Catalog and governed Invocation pipeline.
 
-Architecture is defined by [ADR-0027](../architecture/adr/0027-external-provider-plugin-host.md).
+Architecture is defined by [ADR-0027](../architecture/adr/0027-external-provider-plugin-host.md) and the resilience/governance follow-up [ADR-0028](../architecture/adr/0028-provider-plugin-resilience.md).
 
 ## Trust model
 
@@ -35,7 +35,7 @@ bin/
 
 The manifest declares Plugin ID, package version, supported protocol versions, display metadata, and platform entrypoints. Entrypoints must stay inside the package. Absolute paths, parent escapes, symlinks, unsupported platforms, oversized packages, and non-executable selected entrypoints fail closed.
 
-Installation copies the package into Mender's managed plugin root, records a content digest, and re-verifies managed content before launch.
+Installation copies the package into Mender's managed plugin root, records a content digest, launches the package once to verify its protocol/runtime descriptor, and persists that bounded verified descriptor snapshot. Managed content is re-verified before later launches. Normal Provider-plugin catalog reads use the persisted descriptor snapshot and do not start verified plugin processes.
 
 ## Public Go SDK
 
@@ -67,9 +67,9 @@ Built-in MCP/OpenAPI/Model Tools retain first-party Mender-owned renderers. Exte
 
 ## Credential boundary
 
-`InspectConfig` reports Credential References. Mender validates that external references occur as exact string values in persisted config. Each Tool may narrow that set further.
+`InspectConfig` reports Credential References plus a bounded, management-safe connection summary. Mender validates that external references occur as exact string values in persisted config, normalizes the references, and persists the normalized metadata with the exact Provider config revision. Credential inventory usage/deletion checks therefore remain available when a plugin is disabled, crashed, missing, or otherwise unavailable; they do not start plugin processes. Legacy rows without normalized metadata are inspected conservatively from their persisted JSON only.
 
-During invocation: Profile ToolBinding Credential scope -> scoped host resolver -> Tool-required refs -> ephemeral RPC values -> plugin execution. A reference outside Profile scope fails before secret bytes cross RPC.
+Each Tool may narrow the Provider-level Credential set further. During invocation: Profile ToolBinding Credential scope -> scoped host resolver -> Tool-required refs -> ephemeral RPC values -> plugin execution. A reference outside Profile scope fails before secret bytes cross RPC. Resolved secret values are never persisted in the normalized metadata.
 
 ## CLI workflow
 
@@ -96,23 +96,33 @@ mender provider add external \
 
 Use `--config-file` for larger plugin-owned JSON.
 
+Move an existing Provider to another exact installation of the same PluginID without changing ProviderID:
+
+```bash
+mender provider rebind example \
+  --installation pinst_new... \
+  --config-file ./provider-config.json
+```
+
+Rebind validates the target package/configuration and synchronizes its Tool snapshot before retiring the old pin. SourceKey-stable Tools retain their canonical ToolIDs. The failed invocation or failed rebind is never replayed automatically.
+
 ## Web and Desktop
 
-Web and Desktop can list, enable/disable, remove installations, and configure unknown external Provider types from descriptor schema.
+Web and Desktop can list, enable/disable, remove installations, configure unknown external Provider types from persisted descriptor schema, and explicitly rebind an external Provider when another enabled installation of the same PluginID is available. Provider rows display the persisted connection summary when the plugin supplies one.
 
 Browser management deliberately does not accept an arbitrary server filesystem path for installation. Desktop provides one scoped native directory picker and passes that local path only through the Wails host-local binding. Headless/local installation uses the CLI.
 
 ## Process lifecycle
 
-The host uses one process per exact installed package per Runtime and may host multiple Provider sessions. It launches without a shell, minimizes inherited environment, negotiates protocol versions, enforces package/descriptor identity, applies startup/RPC deadlines, enforces 16 MiB gRPC message limits both directions, bounds stderr, and reaps processes on Runtime shutdown.
+The host uses one process per exact installed package per Runtime and may host multiple Provider sessions. It launches without a shell, minimizes inherited environment, negotiates protocol versions, enforces package/descriptor identity, applies host-owned upper bounds to startup, descriptor, ValidateConfig, InspectConfig, Open, ListTools, and Close operations, enforces 16 MiB gRPC message limits both directions, bounds stderr, and reaps processes on Runtime shutdown. ExecuteTool continues to use the governed Invocation deadline.
 
-Plugin crashes fail the affected operation/package but do not terminate Mender.
+Plugin crashes fail the affected operation/package but do not terminate Mender. Mender does not replay the failed invocation. On a later normal call, the Provider Instance Manager detects that the stale external Instance is no longer reusable; the Supervisor then restarts the package process and the plugin opens a fresh Provider session. This recovery is request-driven—there is no background polling or restart loop.
 
 ## Upgrade behavior
 
-Plugin upgrades are explicit: install the new package, verify its new Installation ID, explicitly move/recreate Provider configuration when supported, verify synchronization/execution, then remove the old installation after references are gone.
+Plugin upgrades are explicit: install the new package, verify its new Installation ID, rebind the existing Provider to that target installation/configuration, verify synchronization/execution, then remove the old installation after references are gone. Successful rebind preserves ProviderID, namespace, Profile/Policy references, and ToolIDs whose SourceKeys remain stable.
 
-Phase 16 does not include automatic update/retargeting.
+Mender never automatically follows a newer or “latest” installation. Package update discovery and automatic retargeting remain out of scope.
 
 ## Deferred work
 

@@ -1,6 +1,6 @@
 # Phase 17 Plan — Provider Plugin Lifecycle & Runtime Resilience
 
-Status: In Progress
+Status: Complete
 
 ## Objective
 
@@ -261,33 +261,58 @@ Commit:
 docs: complete provider plugin resilience phase
 ~~~
 
+## Implementation and verification evidence
+
+Phase 17 shipped in segmented commits:
+
+- `60412ff` — ADR-0028, phase plan, and roadmap entry;
+- `aa6fa33` — health-aware Provider instance reuse and stale external-session recovery;
+- `6bd2ffd` — host-owned external control-plane RPC deadlines;
+- `479ea25` — verified external descriptor snapshots and side-effect-free plugin discovery;
+- `16b2502` — persisted normalized Provider config metadata and offline Credential usage governance;
+- `1ba2c43` — management projection for persisted plugin runtime metadata;
+- `7e90caf` — same-PluginID Provider installation rebind while preserving canonical Provider identity;
+- `3ccd134` — CLI/OpenAPI/Wails/SDK rebind contracts;
+- `319734a` — Web/Desktop rebind workflow;
+- `e1231a8` — crash recovery, unavailable-plugin isolation, metadata, and rebind lifecycle hardening;
+- `03407bf` — rebind E2E fixture writes constrained through a test-owned filesystem root for static-security compliance.
+
+The external Runtime acceptance test now proves installation, descriptor snapshot discovery, Provider creation/sync/invocation, explicit same-PluginID rebind, stable ToolID across unchanged SourceKey, failed-rebind compensation, disable/enable behavior, in-use removal protection, and process cleanup. External process tests additionally prove a crashed session becomes non-reusable and a later Runtime call reopens it rather than replaying the failed invocation.
+
+Provider plugin listing uses persisted verified descriptors and no longer starts already-verified external packages. Provider configuration persistence stores normalized Credential References and bounded connection summary metadata with the config revision, so Credential deletion/reference checks remain available while the plugin is disabled or unavailable. ValidateConfig, InspectConfig, Open, and ListTools receive host-owned maximum deadlines while ExecuteTool remains governed by the shared Invocation timeout.
+
+Final verification on 2026-09-28:
+
+- `pnpm check` — passed, including protobuf/schema generation drift checks, Provider SDK/example lint/test/race/build, Go module isolation, Wails bindings/architecture, backend lint/test/race, ESLint, strict TypeScript, 45 Vitest tests, and Web/Desktop production builds;
+- `pnpm security:check` — passed; `govulncheck` reported zero reachable vulnerabilities in backend, Desktop, public Provider SDK, and example plugin, and `pnpm audit --prod --audit-level high` reported no known vulnerabilities.
+
 ## Exit criteria
 
 Phase 17 is complete when:
 
-1. a crashed external process does not require manual Sync before a later governed call can reopen it;
-2. the failed invocation is never replayed automatically;
-3. control-plane plugin RPCs have host-owned maximum durations;
-4. plugin catalog listing is side-effect free for verified installations;
-5. one broken external installation cannot hide healthy plugins;
-6. Credential deletion/reference governance works without executing plugin code;
-7. normalized metadata contains no secrets and is revision-consistent;
-8. management can display external connection summaries without plugin activation;
-9. a Provider can explicitly move to another installation of the same PluginID without changing ProviderID;
-10. SourceKey-stable Tools preserve ToolID across successful rebind;
-11. upgrades remain explicit and never follow latest automatically;
-12. migrations remain forward-only/fail-closed;
-13. repository, race, build, and security checks are green.
+- [x] a crashed external process does not require manual Sync before a later governed call can reopen it;
+- [x] the failed invocation is never replayed automatically;
+- [x] control-plane plugin RPCs have host-owned maximum durations;
+- [x] plugin catalog listing is side-effect free for verified installations;
+- [x] one broken external installation cannot hide healthy plugins;
+- [x] Credential deletion/reference governance works without executing plugin code;
+- [x] normalized metadata contains no secrets and is revision-consistent;
+- [x] management can display external connection summaries without plugin activation;
+- [x] a Provider can explicitly move to another installation of the same PluginID without changing ProviderID;
+- [x] SourceKey-stable Tools preserve ToolID across successful rebind;
+- [x] upgrades remain explicit and never follow latest automatically;
+- [x] migrations remain forward-only/fail-closed;
+- [x] repository, race, build, and security checks are green.
 
 ## Progress
 
 - [x] Architecture decision recorded in ADR-0028.
 - [x] Phase plan created.
-- [ ] Health-aware Provider instance recovery.
-- [ ] Host-owned control-plane RPC deadlines.
-- [ ] Verified descriptor snapshot persistence.
-- [ ] Offline normalized config metadata/Credential governance.
-- [ ] Management runtime metadata projection.
-- [ ] Explicit installation rebind.
-- [ ] End-to-end lifecycle hardening.
-- [ ] Documentation/verification closeout.
+- [x] Health-aware Provider instance recovery.
+- [x] Host-owned control-plane RPC deadlines.
+- [x] Verified descriptor snapshot persistence.
+- [x] Offline normalized config metadata/Credential governance.
+- [x] Management runtime metadata projection.
+- [x] Explicit installation rebind.
+- [x] End-to-end lifecycle hardening.
+- [x] Documentation/verification closeout.

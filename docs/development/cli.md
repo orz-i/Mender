@@ -66,6 +66,16 @@ mender provider add external \
 
 Use `--config-file ./provider-config.json` instead of `--config-json` for larger plugin-owned configuration. Installing a newer package does not silently retarget an existing Provider.
 
+Explicitly move an existing external Provider to another installation of the same PluginID while preserving Provider identity:
+
+```bash
+mender provider rebind example \
+  --installation pinst_... \
+  --config-file ./provider-config.json
+```
+
+Exactly one of `--config-json` or `--config-file` is required. Rebind validates the target config and synchronizes the target Tool snapshot before changing the persisted installation pin; unchanged SourceKeys keep their ToolIDs.
+
 See [External Provider Plugins](provider-plugins.md) for package, SDK, trust, and Credential-boundary details.
 
 Add a remote MCP Provider:

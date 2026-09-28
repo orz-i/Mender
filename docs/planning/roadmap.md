@@ -339,7 +339,7 @@ See `phase-16-external-provider-plugin-host.md`.
 
 ## Phase 17 — Provider Plugin Lifecycle & Runtime Resilience
 
-Status: In Progress
+Status: Complete
 
 Goals:
 
@@ -350,5 +350,7 @@ Goals:
 - Keep administrative enablement separate from runtime process/session health.
 - Add an explicit same-PluginID installation rebind that preserves ProviderID and SourceKey-stable ToolIDs.
 - Preserve exact InstallationID pinning: upgrades remain explicit and never follow latest automatically.
+
+Exit criteria are complete. External plugin sessions recover on later requests after process failure without replaying failed invocations; control-plane RPCs are host-bounded; verified descriptor and normalized config metadata make management/Credential governance available without executing third-party code; and explicit same-PluginID rebind preserves ProviderID plus SourceKey-stable ToolIDs. CLI/OpenAPI/Wails/Web/Desktop expose the shared rebind lifecycle, and full repository/race/build/security verification is green.
 
 See `phase-17-provider-plugin-resilience.md`.
