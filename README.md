@@ -11,7 +11,7 @@ It provides one canonical tool model and execution pipeline, then exposes the sa
 
 ## Status
 
-Phases 0–14 are complete. Mender combines the governed Invocation pipeline with a Provider Plugin Runtime: canonical Provider/Tool identity stays protocol-independent, upstream MCP is one built-in plugin with stdio and Streamable HTTP transport variants, and OpenAPI is a second built-in plugin that maps supported OpenAPI 3 operations into governed HTTP-backed Tools. Active Provider instances are reused/reloaded/closed through the generic lifecycle manager, while Credential and Policy governance remain shared across CLI, MCP, Web, and Desktop.
+Phases 0–15 are complete. Mender combines the governed Invocation pipeline with a Provider Plugin Runtime: canonical Provider/Tool identity stays protocol-independent, MCP and OpenAPI remain protocol/source adapters, and Model Tools bridges provider-hosted web search from OpenAI, Anthropic, or Gemini into one normalized governed Tool contract. Active Provider instances are reused/reloaded/closed through the generic lifecycle manager, while Credential and Policy governance remain shared across CLI, MCP, Web, and Desktop.
 
 ## Product principles
 

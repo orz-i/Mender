@@ -303,7 +303,7 @@ See `phase-14-openapi-provider.md` for implementation and verification evidence.
 
 ## Phase 15 — Model Tool Bridge Provider
 
-Status: In progress
+Status: Complete
 
 Goals:
 
@@ -315,6 +315,6 @@ Goals:
 - Resolve model API Credentials only during governed execution so Profile Credential scope blocks network access before the provider request.
 - Reuse generic Provider configuration/lifecycle/CLI/API/Wails/Web/Desktop surfaces without engine-specific branches in Catalog/Invocation Runtime orchestration.
 
-Exit criteria include cross-engine web-search normalization, bounded agentic execution/continuation, scoped Credential enforcement, hosted-tool-use verification, plugin-first management UX, and green repository/security checks.
+Exit criteria are complete. `io.mender.provider.model-tools` normalizes OpenAI, Anthropic, and Gemini provider-hosted web search into one stable Mender Tool contract; verifies observable hosted-search execution; preserves citations while discarding reasoning/internal provider state; resolves API Credentials only during governed execution; enforces Profile Credential scope before network access; uses generic Provider lifecycle/management surfaces; and passes repository race/build/security verification.
 
-See `phase-15-model-tool-bridge.md`.
+See `phase-15-model-tool-bridge.md` for implementation and verification evidence.

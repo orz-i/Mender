@@ -39,7 +39,7 @@ mender provider plugins
 mender provider plugins --output json
 ```
 
-The built-in plugins currently include `io.mender.provider.mcp` and `io.mender.provider.openapi`. MCP connection transport is selected below the MCP plugin rather than represented as a top-level Provider kind.
+The built-in plugins currently include `io.mender.provider.mcp`, `io.mender.provider.model-tools`, and `io.mender.provider.openapi`. MCP connection transport is selected below the MCP plugin rather than represented as a top-level Provider kind.
 
 Add a remote MCP Provider:
 
@@ -82,7 +82,21 @@ Use `--spec-file /absolute/path/openapi.yaml` instead of `--spec-url` for an exp
 
 Phase 14 supports OpenAPI 3.0/3.1/3.2 with internal `$ref` only, JSON request/response bodies, standard bounded parameter serialization, `apiKey` security (header/query/cookie), and HTTP Bearer. External refs, OAuth/OIDC, mTLS, multipart/form/binary/streaming are intentionally rejected rather than partially executed.
 
-`provider list` reports Plugin identity as the primary implementation dimension; MCP transport or OpenAPI source location appears only as plugin-specific connection detail.
+Add provider-hosted model web search through the Model Tools bridge:
+
+```bash
+mender provider add model-tools \
+  --namespace research \
+  --name "Research Search" \
+  --engine openai \
+  --model <model-id> \
+  --credential credential://model/work \
+  --capability web_search
+```
+
+`--engine` accepts `openai`, `anthropic`, or `gemini`. Phase 15 exposes one normalized capability, `web_search`; the provider model executes its own hosted/server search tool internally, and Mender verifies that search actually occurred before accepting the final answer. The configured API Credential is resolved only during governed execution, so Profile Credential scope applies before any model-provider network request.
+
+`provider list` reports Plugin identity as the primary implementation dimension; MCP transport, OpenAPI source location, or Model Tools engine/model appears only as plugin-specific connection detail.
 
 List Providers:
 

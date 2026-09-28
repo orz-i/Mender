@@ -1,6 +1,6 @@
 # Phase 15 Plan — Model Tool Bridge Provider
 
-Status: In progress
+Status: Complete
 
 ## Objective
 
@@ -515,33 +515,78 @@ Cover:
 
 ## Exit criteria
 
-- [ ] io.mender.provider.model-tools is registered.
-- [ ] config strictly supports OpenAI/Anthropic/Gemini.
-- [ ] model API Credential is an inventory reference.
-- [ ] Provider sync resolves no Credential and makes no provider API request.
-- [ ] web_search is the only v1 capability.
-- [ ] canonical input/output schemas are stable.
-- [ ] normalized result omits reasoning/raw provider state.
-- [ ] OpenAI requires observable web_search_call.
-- [ ] Anthropic requires observable server web_search call.
-- [ ] Anthropic pause_turn continuation is bounded.
-- [ ] Gemini requires observable google_search_call.
-- [ ] all three normalize answer/sources/queries.
-- [ ] fixed official origins are used in persisted-config path.
-- [ ] redirects are refused and ambient proxy is disabled.
-- [ ] response/error/result bounds are covered.
-- [ ] API keys never enter Tool schema/result/Audit/error.
-- [ ] Profile Credential scope blocks network access before provider execution.
-- [ ] Credential deletion recognizes Model Tool Bridge usage.
-- [ ] stable SourceKey preserves ToolID across config refresh.
-- [ ] generic Runtime has no engine/vendor lifecycle branch.
-- [ ] CLI registers all three engine variants.
-- [ ] generic Management API/SDK/Wails need no engine-specific endpoint.
-- [ ] Web/Desktop manage engine/model/capability/authentication.
-- [ ] cross-engine normalized fixtures are covered.
-- [ ] Go lint/test/race pass.
-- [ ] frontend lint/typecheck/tests/build pass.
-- [ ] security scans pass.
+- [x] io.mender.provider.model-tools is registered.
+- [x] config strictly supports OpenAI/Anthropic/Gemini.
+- [x] model API Credential is an inventory reference.
+- [x] Provider sync resolves no Credential and makes no provider API request.
+- [x] web_search is the only v1 capability.
+- [x] canonical input/output schemas are stable.
+- [x] normalized result omits reasoning/raw provider state.
+- [x] OpenAI requires observable web_search_call.
+- [x] Anthropic requires observable server web_search call.
+- [x] Anthropic pause_turn continuation is bounded.
+- [x] Gemini requires observable google_search_call.
+- [x] all three normalize answer/sources/queries.
+- [x] fixed official origins are used in persisted-config path.
+- [x] redirects are refused and ambient proxy is disabled.
+- [x] response/error/result bounds are covered.
+- [x] API keys never enter Tool schema/result/Audit/error.
+- [x] Profile Credential scope blocks network access before provider execution.
+- [x] Credential deletion recognizes Model Tool Bridge usage.
+- [x] stable SourceKey preserves ToolID across config refresh.
+- [x] generic Runtime has no engine/vendor lifecycle branch.
+- [x] CLI registers all three engine variants.
+- [x] generic Management API/SDK/Wails need no engine-specific endpoint.
+- [x] Web/Desktop manage engine/model/capability/authentication.
+- [x] cross-engine normalized fixtures are covered.
+- [x] Go lint/test/race pass.
+- [x] frontend lint/typecheck/tests/build pass.
+- [x] security scans pass.
+
+## Closeout
+
+Phase 15 completed on 2026-09-27.
+
+The Model Tool Bridge now validates a third Provider execution class: one Mender Tool invocation can delegate to a provider-side model/hosted-tool loop without making that provider model a general agent over Mender's Catalog.
+
+Implemented boundary and behavior:
+
+- `io.mender.provider.model-tools` is registered beside MCP and OpenAPI. Generic Runtime only registers the plugin; OpenAI/Anthropic/Gemini switching remains inside `backend/internal/modeltools/infrastructure/plugin`.
+- Config v1 stores only engine, model identifier, one model API Credential Reference, and reviewed capabilities. V1 exposes only `web_search`. Provider open/sync is local: it selects an engine adapter and emits the static Tool snapshot without resolving the Credential or contacting a model API.
+- The canonical Tool identity is `web_search`. Caller input is only a bounded `query`; provider-generated search queries are normalized output metadata rather than caller-controlled hosted-tool arguments.
+- Canonical output is `{answer, sources, queries}` with deterministic de-duplication/sorting and byte/count bounds. Raw provider JSON, IDs, usage metadata, reasoning/thought blocks, Anthropic encrypted search state, Gemini thought signatures, and search-widget HTML are never emitted as Tool content.
+- The shared engine HTTP boundary uses fixed official production origins in the normal configuration path, disables redirect following and ambient proxy routing, honors invocation context cancellation/timeouts, caps raw responses at 4 MiB, and surfaces non-2xx failures without copying provider response bodies into errors.
+- OpenAI Responses uses hosted `web_search`, requires tool use, verifies an observable `web_search_call`, and normalizes URL citations plus visible search-action query metadata.
+- Anthropic Messages uses the reviewed direct web-search server tool, verifies `server_tool_use` named `web_search`, maps explicit server-tool result errors to Tool failure, and handles `pause_turn` through a bounded continuation loop. Provider-returned encrypted search content is retained only transiently when required for continuation and is not placed in canonical output.
+- Gemini Interactions uses `google_search`, verifies a `google_search_call`, runs statelessly with `store=false`, and normalizes final model text plus URL citations/query metadata while ignoring thought/signature/widget state.
+- Cross-engine fixtures representing the same semantic search result produce byte-identical canonical JSON after normalization. Missing hosted-search markers are rejected as Tool failures rather than accepted as model-memory answers.
+- Model API Credentials are resolved only inside `Instance.Execute` through the Invocation-provided CredentialResolver. The resolved byte slice is zeroed after use. Runtime coverage proves Provider sync succeeds even when the configured environment Credential has no value, Credential deletion recognizes Provider usage, model changes preserve the stable `web_search` ToolID, and a Profile without the Credential receives `credential_outside_scope` before provider network execution.
+- CLI supports `provider add model-tools` for OpenAI, Anthropic, and Gemini. Generic Management API/SDK/Wails configuration requires no vendor-specific endpoint. Shared Web/Desktop UI exposes engine/model/Web Search configuration and a separate inventory-backed Model API Credential selector.
+- Provider authentication-flow tests now wait for the actual reopened configuration Dialog fields rather than matching the page-level `Add provider` label, removing a pre-existing asynchronous test race that became visible under the expanded Provider test suite.
+
+Validation evidence:
+
+~~~text
+pnpm sdk:check                         PASS
+pnpm desktop:bindings:check            PASS
+pnpm desktop:architecture:check        PASS
+pnpm go:lint                           PASS
+pnpm go:test                           PASS
+pnpm go:test:race                      PASS
+pnpm lint                              PASS
+pnpm typecheck                         PASS
+pnpm test                              PASS (5 files / 35 tests)
+pnpm build                             PASS (Web + Desktop; existing chunk-size warnings only)
+backend govulncheck                    PASS (No vulnerabilities found)
+desktop govulncheck                    PASS (No vulnerabilities found)
+pnpm security:js                       PASS (No known production dependency vulnerabilities)
+~~~
+
+The aggregate `pnpm security:go` invocation exceeded the local bridge's synchronous call window. Its backend and desktop govulncheck constituents were run separately; the first desktop attempt hit a transient `vuln.go.dev` network timeout and the immediate retry completed successfully with no vulnerabilities found.
+
+Phase 15 adds no SQLite migration. Model Tools configuration uses generic `provider_configs` v1. A binary that predates `io.mender.provider.model-tools` can still understand the database schema but fails closed when asked to activate/synchronize that unknown plugin.
+
+The bridge intentionally stops at normalized `web_search`. File search, fetch/URL context, code execution, deep research/background tasks, computer use, image generation, and usage/cost observability require separate result/lifecycle/security review rather than inheriting web-search semantics.
 
 ## Deferred follow-up
 
