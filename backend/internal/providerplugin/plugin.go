@@ -212,3 +212,13 @@ type Instance interface {
 	invocationapplication.ToolExecutor
 	io.Closer
 }
+
+// ReusableInstance optionally reports whether an active Instance can still be
+// reused for the same persisted Provider configuration. Manager preserves the
+// historical reuse behavior for Instances that do not implement this capability.
+//
+// Reusable must be a local, side-effect-free liveness check. It must not issue
+// network requests, launch processes, or perform plugin RPCs.
+type ReusableInstance interface {
+	Reusable() bool
+}

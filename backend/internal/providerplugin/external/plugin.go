@@ -490,6 +490,16 @@ func (i *Instance) Execute(
 	return *terminal, nil
 }
 
+// Reusable reports whether this Provider session can be reused without an RPC.
+func (i *Instance) Reusable() bool {
+	if i == nil {
+		return false
+	}
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	return !i.closed && i.process != nil && !i.process.Exited()
+}
+
 // Close releases only this Provider session; the Supervisor owns the package process.
 func (i *Instance) Close() error {
 	if i == nil {
@@ -503,9 +513,10 @@ func (i *Instance) Close() error {
 	i.closed = true
 	service := i.service
 	sessionID := i.sessionID
+	process := i.process
 	i.mu.Unlock()
 
-	if service == nil || strings.TrimSpace(sessionID) == "" {
+	if service == nil || strings.TrimSpace(sessionID) == "" || process == nil || process.Exited() {
 		return nil
 	}
 	if err := closeSession(context.Background(), service, sessionID); err != nil {

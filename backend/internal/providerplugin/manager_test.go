@@ -189,6 +189,47 @@ func TestManagerReplacesChangedRevisionAndReloads(t *testing.T) {
 	}
 }
 
+func TestManagerReplacesNonReusableInstanceWithoutConfigChange(t *testing.T) {
+	t.Parallel()
+
+	providerID := managerProviderID(t, "prov_00000000000000000000000000000016")
+	plugin := newManagerPlugin()
+	first := newManagerReusableInstance(false)
+	second := newManagerReusableInstance(true)
+	var opened atomic.Int32
+	plugin.openHook = func(context.Context, OpenRequest) (Instance, error) {
+		if opened.Add(1) == 1 {
+			return first, nil
+		}
+		return second, nil
+	}
+	manager, _, routes := newTestManager(t, plugin, managerConfig(providerID, "same-revision"))
+
+	firstRaw, err := manager.Ensure(context.Background(), providerID)
+	if err != nil {
+		t.Fatalf("Ensure(first) error = %v", err)
+	}
+	if firstRaw != first {
+		t.Fatal("Ensure(first) returned unexpected instance")
+	}
+	secondRaw, err := manager.Ensure(context.Background(), providerID)
+	if err != nil {
+		t.Fatalf("Ensure(second) error = %v", err)
+	}
+	if secondRaw != second {
+		t.Fatal("Ensure(second) did not replace non-reusable instance")
+	}
+	if first.closeCount() != 1 {
+		t.Fatalf("stale Close() count = %d, want 1", first.closeCount())
+	}
+	if plugin.openCount() != 2 {
+		t.Fatalf("Open() count = %d, want 2", plugin.openCount())
+	}
+	if got := routes.executor(providerID); got != second {
+		t.Fatalf("executor route = %T, want replacement instance", got)
+	}
+}
+
 func TestManagerInstallationPinChangeReplacesInstance(t *testing.T) {
 	t.Parallel()
 
@@ -572,4 +613,19 @@ func (i *managerInstance) Close() error {
 
 func (i *managerInstance) closeCount() int {
 	return int(i.closes.Load())
+}
+
+type managerReusableInstance struct {
+	*managerInstance
+	reusable atomic.Bool
+}
+
+func newManagerReusableInstance(reusable bool) *managerReusableInstance {
+	instance := &managerReusableInstance{managerInstance: newManagerInstance()}
+	instance.reusable.Store(reusable)
+	return instance
+}
+
+func (i *managerReusableInstance) Reusable() bool {
+	return i != nil && i.reusable.Load()
 }

@@ -158,7 +158,7 @@ func (m *Manager) ensure(
 		)
 	}
 
-	if !force && sameActiveConfig(slot.active, config) {
+	if !force && sameActiveConfig(slot.active, config) && instanceReusable(slot.active.instance) {
 		return slot.active.instance, nil
 	}
 
@@ -216,6 +216,16 @@ func sameActiveConfig(active *activeInstance, config Configuration) bool {
 		sameInstallationID(active.installationID, config.InstallationID) &&
 		active.configVersion == config.ConfigVersion &&
 		active.revision == config.Revision
+}
+
+func instanceReusable(instance Instance) bool {
+	if instance == nil {
+		return false
+	}
+	if reusable, ok := instance.(ReusableInstance); ok {
+		return reusable.Reusable()
+	}
+	return true
 }
 
 func sameInstallationID(a, b *InstallationID) bool {

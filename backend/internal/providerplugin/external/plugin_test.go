@@ -344,6 +344,16 @@ func TestExternalInstanceFailsClosedWhenExecuteProcessCrashes(t *testing.T) {
 	if err == nil {
 		t.Fatal("Execute() error = nil")
 	}
+	deadline := time.Now().Add(2 * time.Second)
+	for instance.Reusable() && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if instance.Reusable() {
+		t.Fatal("crashed external instance remained reusable")
+	}
+	if err := instance.Close(); err != nil {
+		t.Fatalf("Close() after process crash error = %v", err)
+	}
 }
 
 func TestExternalInstancePropagatesExecutionDeadline(t *testing.T) {
