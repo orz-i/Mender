@@ -153,6 +153,7 @@ describe("desktop Mender client", () => {
         pluginVersion: "1.0.0",
         pluginDisplayName: "MCP",
         configVersion: 1,
+        connectionSummary: "Remote MCP · example.test",
         config: {
           transport: {
             kind: "streamable-http",
@@ -199,6 +200,7 @@ describe("desktop Mender client", () => {
     ).resolves.toMatchObject({
       provider: {
         pluginId: "io.mender.provider.mcp",
+        connectionSummary: "Remote MCP · example.test",
         config,
         transport: "http",
       },

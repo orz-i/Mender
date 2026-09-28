@@ -736,6 +736,7 @@ export interface components {
             pluginVersion?: string;
             pluginDisplayName?: string;
             configVersion?: number;
+            connectionSummary?: string;
             config?: {
                 [key: string]: unknown;
             };

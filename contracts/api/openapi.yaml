@@ -988,6 +988,7 @@ components:
         pluginVersion: { type: string }
         pluginDisplayName: { type: string }
         configVersion: { type: integer, minimum: 1 }
+        connectionSummary: { type: string, maxLength: 4096 }
         config:
           type: object
           additionalProperties: true

@@ -534,6 +534,9 @@ func providerProjection(
 		result["installationId"] = config.InstallationID.String()
 	}
 	result["configVersion"] = config.ConfigVersion
+	if metadata, ok := config.ConfigMetadata(); ok && metadata.ConnectionSummary != "" {
+		result["connectionSummary"] = metadata.ConnectionSummary
+	}
 	result["config"] = cloneRawMessage(config.Config)
 	if descriptor != nil {
 		result["pluginVersion"] = descriptor.Version

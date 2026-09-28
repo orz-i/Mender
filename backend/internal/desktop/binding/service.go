@@ -1253,6 +1253,9 @@ func providerProjection(
 		result.InstallationID = config.InstallationID.String()
 	}
 	result.ConfigVersion = config.ConfigVersion
+	if metadata, ok := config.ConfigMetadata(); ok {
+		result.ConnectionSummary = metadata.ConnectionSummary
+	}
 	if descriptor != nil {
 		result.PluginVersion = descriptor.Version
 		result.PluginDisplayName = descriptor.DisplayName

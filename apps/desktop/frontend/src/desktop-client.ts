@@ -631,6 +631,9 @@ function provider(value: BindingProvider): Provider {
     ...(value.configVersion === undefined
       ? {}
       : { configVersion: value.configVersion }),
+    ...(value.connectionSummary === undefined
+      ? {}
+      : { connectionSummary: value.connectionSummary }),
     ...(value.config === undefined || value.config === null
       ? {}
       : { config: value.config }),

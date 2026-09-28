@@ -2523,6 +2523,9 @@ function openAPISecuritySummary(provider: Provider) {
 }
 
 function connectionSummary(provider: Provider) {
+  if (provider.connectionSummary?.trim()) {
+    return provider.connectionSummary;
+  }
   if (provider.installationId) {
     return "External plugin · " + provider.installationId;
   }

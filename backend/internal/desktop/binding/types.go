@@ -139,6 +139,7 @@ type Provider struct {
 	PluginVersion         string                  `json:"pluginVersion,omitempty"`
 	PluginDisplayName     string                  `json:"pluginDisplayName,omitempty"`
 	ConfigVersion         int                     `json:"configVersion,omitempty"`
+	ConnectionSummary     string                  `json:"connectionSummary,omitempty"`
 	Config                map[string]any          `json:"config,omitempty"`
 	Transport             string                  `json:"transport"`
 	ToolCount             int                     `json:"toolCount"`

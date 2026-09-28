@@ -176,6 +176,7 @@ export interface Provider {
     "pluginVersion"?: string;
     "pluginDisplayName"?: string;
     "configVersion"?: number;
+    "connectionSummary"?: string;
     "config"?: { [_ in string]?: any } | null;
     "transport": string;
     "toolCount": number;

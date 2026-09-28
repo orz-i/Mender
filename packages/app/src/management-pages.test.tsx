@@ -188,6 +188,7 @@ describe("management pages", () => {
       pluginId: plugin.pluginId,
       installationId,
       configVersion: 1,
+      connectionSummary: "External Echo · production",
       config: {
         endpoint: "https://example.test/api",
         credentialRef: credential.reference,
@@ -280,6 +281,7 @@ describe("management pages", () => {
     });
     expect(await screen.findByText("External Echo Provider")).toBeTruthy();
     expect(screen.getByText("External Echo · 1.2.3")).toBeTruthy();
+    expect(screen.getByText("External Echo · production")).toBeTruthy();
 
     fireEvent.click(
       screen.getByRole("button", { name: "View external-echo" }),
