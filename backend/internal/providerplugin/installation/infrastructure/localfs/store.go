@@ -208,6 +208,119 @@ func (s *Store) InstallLocal(
 	}, nil
 }
 
+// Resolve verifies one managed package immediately before process launch.
+func (s *Store) Resolve(
+	ctx context.Context,
+	installation installationdomain.Installation,
+) (installationapplication.ResolvedPackage, error) {
+	if err := installation.Validate(); err != nil {
+		return installationapplication.ResolvedPackage{}, fmt.Errorf(
+			"resolve local plugin package: installation: %w",
+			err,
+		)
+	}
+	if err := s.ensureRoot(); err != nil {
+		return installationapplication.ResolvedPackage{}, err
+	}
+	packageRoot := filepath.Join(s.root, installation.ID().String())
+	info, err := os.Lstat(packageRoot)
+	if err != nil {
+		return installationapplication.ResolvedPackage{}, fmt.Errorf(
+			"resolve local plugin package: package root: %w",
+			err,
+		)
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+		return installationapplication.ResolvedPackage{}, fmt.Errorf(
+			"resolve local plugin package: package root must be a real directory",
+		)
+	}
+	snapshot, err := s.inspect(ctx, packageRoot)
+	if err != nil {
+		return installationapplication.ResolvedPackage{}, fmt.Errorf(
+			"resolve local plugin package: verify package: %w",
+			err,
+		)
+	}
+	if snapshot.digest != installation.Digest() {
+		return installationapplication.ResolvedPackage{}, fmt.Errorf(
+			"resolve local plugin package: package digest mismatch",
+		)
+	}
+	if snapshot.parsed.PluginID != installation.PluginID().String() ||
+		snapshot.parsed.Version != installation.PackageVersion() {
+		return installationapplication.ResolvedPackage{}, fmt.Errorf(
+			"resolve local plugin package: manifest identity mismatch",
+		)
+	}
+	entrypoint, err := snapshot.parsed.Entrypoint(s.goos, s.goarch)
+	if err != nil {
+		return installationapplication.ResolvedPackage{}, fmt.Errorf(
+			"resolve local plugin package: entrypoint: %w",
+			err,
+		)
+	}
+	checksum, err := executableChecksum(
+		ctx,
+		packageRoot,
+		filepath.FromSlash(entrypoint),
+	)
+	if err != nil {
+		return installationapplication.ResolvedPackage{}, fmt.Errorf(
+			"resolve local plugin package: executable checksum: %w",
+			err,
+		)
+	}
+	return installationapplication.ResolvedPackage{
+		Manifest:           snapshot.parsed,
+		EntrypointPath:     filepath.Join(packageRoot, filepath.FromSlash(entrypoint)),
+		WorkingDirectory:   packageRoot,
+		ExecutableChecksum: checksum,
+	}, nil
+}
+
+func executableChecksum(
+	ctx context.Context,
+	rootPath string,
+	relative string,
+) ([]byte, error) {
+	root, err := os.OpenRoot(rootPath)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = root.Close() }()
+	file, err := root.Open(relative)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = file.Close() }()
+	info, err := file.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("entrypoint is not a regular file")
+	}
+	hasher := sha256.New()
+	buffer := make([]byte, 32*1024)
+	for {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		count, readErr := file.Read(buffer)
+		if count > 0 {
+			_, _ = hasher.Write(buffer[:count])
+		}
+		if errors.Is(readErr, io.EOF) {
+			break
+		}
+		if readErr != nil {
+			return nil, readErr
+		}
+	}
+	return hasher.Sum(nil), nil
+}
+
 // Remove removes one managed package directory. It is idempotent for compensation.
 func (s *Store) Remove(
 	ctx context.Context,

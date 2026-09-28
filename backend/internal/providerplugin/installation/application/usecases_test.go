@@ -290,6 +290,13 @@ func (p *fakePackageStore) InstallLocal(
 	return p.installResult, p.installErr
 }
 
+func (p *fakePackageStore) Resolve(
+	_ context.Context,
+	_ installationdomain.Installation,
+) (ResolvedPackage, error) {
+	return ResolvedPackage{}, nil
+}
+
 func (p *fakePackageStore) Remove(
 	_ context.Context,
 	id installationdomain.InstallationID,

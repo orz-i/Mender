@@ -31,6 +31,14 @@ type ManagedPackage struct {
 	SourceReference string
 }
 
+// ResolvedPackage is a verified immutable package ready for process launch.
+type ResolvedPackage struct {
+	Manifest           manifest.Manifest
+	EntrypointPath     string
+	WorkingDirectory   string
+	ExecutableChecksum []byte
+}
+
 // PackageStore owns managed plugin package files.
 type PackageStore interface {
 	InstallLocal(
@@ -38,6 +46,7 @@ type PackageStore interface {
 		string,
 		installationdomain.InstallationID,
 	) (ManagedPackage, error)
+	Resolve(context.Context, installationdomain.Installation) (ResolvedPackage, error)
 	Remove(context.Context, installationdomain.InstallationID) error
 }
 

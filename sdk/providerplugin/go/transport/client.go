@@ -1,0 +1,128 @@
+package transport
+
+import (
+	"crypto/sha256"
+	"fmt"
+	"io"
+	"os/exec"
+	"path/filepath"
+	"time"
+
+	hclog "github.com/hashicorp/go-hclog"
+	plugin "github.com/hashicorp/go-plugin"
+	providerv1 "github.com/orz-i/Mender/sdk/providerplugin/go/protocol/v1"
+)
+
+// ClientOptions configures one Mender-owned native Provider plugin process.
+type ClientOptions struct {
+	Executable          string
+	WorkingDirectory    string
+	Versions            []uint32
+	ExecutableChecksum  []byte
+	StartTimeout        time.Duration
+	Stderr              io.Writer
+	PluginLogBufferSize int
+}
+
+// Client owns one native Provider plugin process and its gRPC service client.
+type Client struct {
+	process *plugin.Client
+	service providerv1.ProviderPluginServiceClient
+	version uint32
+}
+
+// StartClient launches and connects to one native Provider plugin process.
+func StartClient(options ClientOptions) (*Client, error) {
+	if !filepath.IsAbs(options.Executable) {
+		return nil, fmt.Errorf("provider plugin transport: executable path must be absolute")
+	}
+	if options.WorkingDirectory == "" || !filepath.IsAbs(options.WorkingDirectory) {
+		return nil, fmt.Errorf("provider plugin transport: working directory must be absolute")
+	}
+	if len(options.ExecutableChecksum) != sha256.Size {
+		return nil, fmt.Errorf(
+			"provider plugin transport: executable checksum must be %d bytes",
+			sha256.Size,
+		)
+	}
+	sets, err := VersionedPluginSets(options.Versions, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	command := exec.Command(options.Executable) // #nosec G204 -- exact managed executable, no shell.
+	command.Dir = options.WorkingDirectory
+
+	process := plugin.NewClient(&plugin.ClientConfig{
+		HandshakeConfig:     Handshake,
+		VersionedPlugins:    sets,
+		Cmd:                 command,
+		SecureConfig:        &plugin.SecureConfig{Checksum: append([]byte(nil), options.ExecutableChecksum...), Hash: sha256.New()},
+		Managed:             false,
+		StartTimeout:        options.StartTimeout,
+		Stderr:              options.Stderr,
+		SyncStdout:          io.Discard,
+		SyncStderr:          io.Discard,
+		AllowedProtocols:    []plugin.Protocol{plugin.ProtocolGRPC},
+		Logger:              hclog.NewNullLogger(),
+		PluginLogBufferSize: options.PluginLogBufferSize,
+		AutoMTLS:            true,
+		SkipHostEnv:         true,
+		GRPCBrokerMultiplex: false,
+	})
+	rpcClient, err := process.Client()
+	if err != nil {
+		process.Kill()
+		return nil, fmt.Errorf("provider plugin transport: start client: %w", err)
+	}
+	raw, err := rpcClient.Dispense(PluginName)
+	if err != nil {
+		process.Kill()
+		return nil, fmt.Errorf("provider plugin transport: dispense service: %w", err)
+	}
+	service, ok := raw.(providerv1.ProviderPluginServiceClient)
+	if !ok {
+		process.Kill()
+		return nil, fmt.Errorf("provider plugin transport: unexpected service client %T", raw)
+	}
+	version := process.NegotiatedVersion()
+	if version < 1 {
+		process.Kill()
+		return nil, fmt.Errorf("provider plugin transport: invalid negotiated version %d", version)
+	}
+	return &Client{
+		process: process,
+		service: service,
+		version: uint32(version), // #nosec G115 -- negotiated version comes from VersionedPluginSets, bounded to MaxInt32.
+	}, nil
+}
+
+// Service returns the connected Provider Plugin Protocol client.
+func (c *Client) Service() providerv1.ProviderPluginServiceClient {
+	if c == nil {
+		return nil
+	}
+	return c.service
+}
+
+// ProtocolVersion returns the negotiated Mender Provider Plugin Protocol version.
+func (c *Client) ProtocolVersion() uint32 {
+	if c == nil {
+		return 0
+	}
+	return c.version
+}
+
+// Exited reports whether the plugin process has terminated.
+func (c *Client) Exited() bool {
+	return c == nil || c.process == nil || c.process.Exited()
+}
+
+// Close terminates the plugin process and releases transport resources.
+func (c *Client) Close() error {
+	if c == nil || c.process == nil {
+		return nil
+	}
+	c.process.Kill()
+	return nil
+}

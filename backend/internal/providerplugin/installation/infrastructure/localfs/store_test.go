@@ -8,7 +8,10 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
+	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
+	installationapplication "github.com/orz-i/Mender/backend/internal/providerplugin/installation/application"
 	installationdomain "github.com/orz-i/Mender/backend/internal/providerplugin/installation/domain"
 	"github.com/orz-i/Mender/backend/internal/providerplugin/manifest"
 )
@@ -41,6 +44,16 @@ func TestInstallLocalCopiesAndHardensPackage(t *testing.T) {
 	absoluteSource, _ := filepath.Abs(source)
 	if pkg.SourceReference != absoluteSource {
 		t.Fatalf("SourceReference = %q, want %q", pkg.SourceReference, absoluteSource)
+	}
+	installation := installationFromManagedPackage(t, id, pkg)
+	resolved, err := store.Resolve(context.Background(), installation)
+	if err != nil {
+		t.Fatalf("Resolve() error = %v", err)
+	}
+	if resolved.EntrypointPath != filepath.Join(managedRoot, id.String(), "bin", "plugin") ||
+		resolved.WorkingDirectory != filepath.Join(managedRoot, id.String()) ||
+		len(resolved.ExecutableChecksum) != 32 {
+		t.Fatalf("Resolve() = %+v", resolved)
 	}
 
 	managedPlugin := filepath.Join(managedRoot, id.String(), "bin", "plugin")
@@ -83,6 +96,39 @@ func TestInstallLocalCopiesAndHardensPackage(t *testing.T) {
 	}
 	if err := store.Remove(context.Background(), id); err != nil {
 		t.Fatalf("Remove(idempotent) error = %v", err)
+	}
+}
+
+func TestResolveRejectsMutatedManagedPackage(t *testing.T) {
+	t.Parallel()
+
+	source := writeTestPackage(t, t.TempDir(), "dev.example.echo", "1.0.0", 0o755)
+	managedRoot := filepath.Join(t.TempDir(), "plugins")
+	store, err := newStore(managedRoot, testGOOS(), "amd64", DefaultLimits())
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := testInstallationID(t, "09")
+	t.Cleanup(func() { _ = store.Remove(context.Background(), id) })
+	pkg, err := store.InstallLocal(context.Background(), source, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	installation := installationFromManagedPackage(t, id, pkg)
+	managedData := filepath.Join(managedRoot, id.String(), "data.txt")
+	if err := os.Chmod(managedData, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(managedData, []byte("mutated"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(managedData, 0o400); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := store.Resolve(context.Background(), installation); err == nil ||
+		!strings.Contains(err.Error(), "digest mismatch") {
+		t.Fatalf("Resolve() error = %v", err)
 	}
 }
 
@@ -268,6 +314,33 @@ func writeTestPackage(
 		t.Fatal(err)
 	}
 	return source
+}
+
+func installationFromManagedPackage(
+	t *testing.T,
+	id installationdomain.InstallationID,
+	pkg installationapplication.ManagedPackage,
+) installationdomain.Installation {
+	t.Helper()
+	pluginID, err := providerplugin.ParseID(pkg.Manifest.PluginID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	item, err := installationdomain.NewInstallation(
+		id,
+		pluginID,
+		pkg.Manifest.Version,
+		installationdomain.SourceLocal,
+		pkg.SourceReference,
+		pkg.Digest,
+		pkg.ManifestJSON,
+		installationdomain.StatusEnabled,
+		time.Date(2026, 9, 27, 12, 0, 0, 0, time.UTC),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return item
 }
 
 func testGOOS() string {
