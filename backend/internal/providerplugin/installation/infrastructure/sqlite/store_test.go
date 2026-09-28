@@ -10,6 +10,7 @@ import (
 	"time"
 
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
+	installationapplication "github.com/orz-i/Mender/backend/internal/providerplugin/installation/application"
 	installationdomain "github.com/orz-i/Mender/backend/internal/providerplugin/installation/domain"
 	_ "modernc.org/sqlite"
 )
@@ -82,11 +83,11 @@ func TestStoreCreateGetListSetStatusDelete(t *testing.T) {
 	if err := store.Delete(ctx, first.ID()); err != nil {
 		t.Fatalf("Delete() error = %v", err)
 	}
-	if _, err := store.Get(ctx, first.ID()); !errors.Is(err, ErrNotFound) {
-		t.Fatalf("Get(deleted) error = %v, want ErrNotFound", err)
+	if _, err := store.Get(ctx, first.ID()); !errors.Is(err, installationapplication.ErrInstallationNotFound) {
+		t.Fatalf("Get(deleted) error = %v, want installationapplication.ErrInstallationNotFound", err)
 	}
-	if err := store.Delete(ctx, first.ID()); !errors.Is(err, ErrNotFound) {
-		t.Fatalf("Delete(missing) error = %v, want ErrNotFound", err)
+	if err := store.Delete(ctx, first.ID()); !errors.Is(err, installationapplication.ErrInstallationNotFound) {
+		t.Fatalf("Delete(missing) error = %v, want installationapplication.ErrInstallationNotFound", err)
 	}
 }
 
@@ -113,8 +114,8 @@ func TestStoreRejectsDuplicateIdentityAndDigest(t *testing.T) {
 		"2.0.0",
 		"b",
 	)
-	if err := store.Create(ctx, sameID); !errors.Is(err, ErrConflict) {
-		t.Fatalf("Create(same ID) error = %v, want ErrConflict", err)
+	if err := store.Create(ctx, sameID); !errors.Is(err, installationapplication.ErrInstallationConflict) {
+		t.Fatalf("Create(same ID) error = %v, want installationapplication.ErrInstallationConflict", err)
 	}
 
 	otherID := testInstallation(
@@ -124,8 +125,8 @@ func TestStoreRejectsDuplicateIdentityAndDigest(t *testing.T) {
 		"1.0.0",
 		"a",
 	)
-	if err := store.Create(ctx, otherID); !errors.Is(err, ErrConflict) {
-		t.Fatalf("Create(same digest) error = %v, want ErrConflict", err)
+	if err := store.Create(ctx, otherID); !errors.Is(err, installationapplication.ErrInstallationConflict) {
+		t.Fatalf("Create(same digest) error = %v, want installationapplication.ErrInstallationConflict", err)
 	}
 }
 
@@ -138,16 +139,16 @@ func TestStoreMissingAndStatusValidation(t *testing.T) {
 		"pinst_00000000000000000000000000000001",
 	)
 
-	if _, err := store.Get(ctx, id); !errors.Is(err, ErrNotFound) {
+	if _, err := store.Get(ctx, id); !errors.Is(err, installationapplication.ErrInstallationNotFound) {
 		t.Fatalf("Get(missing) error = %v", err)
 	}
-	if _, err := store.GetByDigest(ctx, "sha256:"+strings.Repeat("f", 64)); !errors.Is(err, ErrNotFound) {
+	if _, err := store.GetByDigest(ctx, "sha256:"+strings.Repeat("f", 64)); !errors.Is(err, installationapplication.ErrInstallationNotFound) {
 		t.Fatalf("GetByDigest(missing) error = %v", err)
 	}
 	if err := store.SetStatus(ctx, id, installationdomain.Status("broken")); err == nil {
 		t.Fatal("SetStatus() accepted invalid status")
 	}
-	if err := store.SetStatus(ctx, id, installationdomain.StatusEnabled); !errors.Is(err, ErrNotFound) {
+	if err := store.SetStatus(ctx, id, installationdomain.StatusEnabled); !errors.Is(err, installationapplication.ErrInstallationNotFound) {
 		t.Fatalf("SetStatus(missing) error = %v", err)
 	}
 }

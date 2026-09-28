@@ -11,15 +11,9 @@ import (
 	"time"
 
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
+	installationapplication "github.com/orz-i/Mender/backend/internal/providerplugin/installation/application"
 	installationdomain "github.com/orz-i/Mender/backend/internal/providerplugin/installation/domain"
 	_ "modernc.org/sqlite"
-)
-
-var (
-	// ErrNotFound indicates no plugin installation exists for the requested identity.
-	ErrNotFound = errors.New("provider plugin installation not found")
-	// ErrConflict indicates an InstallationID or immutable package digest already exists.
-	ErrConflict = errors.New("provider plugin installation conflict")
 )
 
 // Store persists external Provider plugin installation metadata.
@@ -99,7 +93,7 @@ func (s *Store) Create(
 	)
 	if err != nil {
 		if isUniqueConstraint(err) {
-			return ErrConflict
+			return installationapplication.ErrInstallationConflict
 		}
 		return fmt.Errorf("create plugin installation: %w", err)
 	}
@@ -129,7 +123,7 @@ func (s *Store) Get(
 	)
 	installation, err := scanInstallation(row)
 	if errors.Is(err, sql.ErrNoRows) {
-		return installationdomain.Installation{}, ErrNotFound
+		return installationdomain.Installation{}, installationapplication.ErrInstallationNotFound
 	}
 	if err != nil {
 		return installationdomain.Installation{}, fmt.Errorf("get plugin installation: %w", err)
@@ -160,7 +154,7 @@ func (s *Store) GetByDigest(
 	)
 	installation, err := scanInstallation(row)
 	if errors.Is(err, sql.ErrNoRows) {
-		return installationdomain.Installation{}, ErrNotFound
+		return installationdomain.Installation{}, installationapplication.ErrInstallationNotFound
 	}
 	if err != nil {
 		return installationdomain.Installation{}, fmt.Errorf("get plugin installation by digest: %w", err)
@@ -232,7 +226,7 @@ func (s *Store) SetStatus(
 		return fmt.Errorf("set plugin installation status: rows affected: %w", err)
 	}
 	if count == 0 {
-		return ErrNotFound
+		return installationapplication.ErrInstallationNotFound
 	}
 	return nil
 }
@@ -258,7 +252,7 @@ func (s *Store) Delete(
 		return fmt.Errorf("delete plugin installation: rows affected: %w", err)
 	}
 	if count == 0 {
-		return ErrNotFound
+		return installationapplication.ErrInstallationNotFound
 	}
 	return nil
 }

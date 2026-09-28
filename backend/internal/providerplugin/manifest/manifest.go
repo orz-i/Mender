@@ -15,6 +15,8 @@ import (
 )
 
 const (
+	// FileName is the manifest filename at the root of an external plugin package.
+	FileName            = "mender-provider.json"
 	CurrentVersion      = 1
 	maxManifestBytes    = 64 * 1024
 	maxPackageVersion   = 128
