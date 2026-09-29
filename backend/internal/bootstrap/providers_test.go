@@ -18,7 +18,6 @@ import (
 	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	mcpplugin "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/plugin"
-	modeltoolsplugin "github.com/orz-i/Mender/backend/internal/modeltools/infrastructure/plugin"
 	openapiplugin "github.com/orz-i/Mender/backend/internal/openapi/infrastructure/plugin"
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
 	providerconfigstore "github.com/orz-i/Mender/backend/internal/providerplugin/configstore"
@@ -33,27 +32,27 @@ func TestRuntimeExposesBuiltInProviderPluginDescriptors(t *testing.T) {
 	if len(descriptors) != 3 {
 		t.Fatalf("ProviderPluginDescriptors() len = %d, want 3", len(descriptors))
 	}
-	if descriptors[0].ID != mcpplugin.ID {
-		t.Fatalf(
-			"ProviderPluginDescriptors()[0].ID = %s, want %s",
-			descriptors[0].ID,
-			mcpplugin.ID,
-		)
+	wantIDs := []providerplugin.ID{
+		"io.mender.provider.mcp",
+		"io.mender.provider.model-tools",
+		"io.mender.provider.openapi",
 	}
-	if descriptors[0].ConfigVersion != mcpplugin.ConfigVersion {
-		t.Fatalf(
-			"ProviderPluginDescriptors()[0].ConfigVersion = %d, want %d",
-			descriptors[0].ConfigVersion,
-			mcpplugin.ConfigVersion,
-		)
-	}
-	if descriptors[1].ID != modeltoolsplugin.ID ||
-		descriptors[1].ConfigVersion != modeltoolsplugin.ConfigVersion {
-		t.Fatalf("ProviderPluginDescriptors()[1] = %+v, want Model Tools", descriptors[1])
-	}
-	if descriptors[2].ID != openapiplugin.ID ||
-		descriptors[2].ConfigVersion != openapiplugin.ConfigVersion {
-		t.Fatalf("ProviderPluginDescriptors()[2] = %+v, want OpenAPI", descriptors[2])
+	for index, descriptor := range descriptors {
+		if descriptor.ID != wantIDs[index] {
+			t.Fatalf(
+				"ProviderPluginDescriptors()[%d].ID = %s, want %s",
+				index,
+				descriptor.ID,
+				wantIDs[index],
+			)
+		}
+		if descriptor.ConfigVersion != 1 {
+			t.Fatalf(
+				"ProviderPluginDescriptors()[%d].ConfigVersion = %d, want 1",
+				index,
+				descriptor.ConfigVersion,
+			)
+		}
 	}
 
 	available, err := runtime.ListAvailableProviderPlugins(context.Background())

@@ -23,11 +23,9 @@ import (
 	invocationresultguard "github.com/orz-i/Mender/backend/internal/invocation/infrastructure/resultguard"
 	invocationrouter "github.com/orz-i/Mender/backend/internal/invocation/infrastructure/router"
 	mcpconfigstore "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/configstore"
-	mcpplugin "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/plugin"
-	modeltoolsplugin "github.com/orz-i/Mender/backend/internal/modeltools/infrastructure/plugin"
-	openapiplugin "github.com/orz-i/Mender/backend/internal/openapi/infrastructure/plugin"
 	policylocal "github.com/orz-i/Mender/backend/internal/policy/infrastructure/local"
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
+	providerbuiltin "github.com/orz-i/Mender/backend/internal/providerplugin/builtin"
 	providerconfigstore "github.com/orz-i/Mender/backend/internal/providerplugin/configstore"
 	providerexternal "github.com/orz-i/Mender/backend/internal/providerplugin/external"
 	installationlocalfs "github.com/orz-i/Mender/backend/internal/providerplugin/installation/infrastructure/localfs"
@@ -149,27 +147,7 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 
 	executors := invocationrouter.New()
 	providerPlugins := providerplugin.NewRegistry()
-	if err := providerPlugins.Register(mcpplugin.New()); err != nil {
-		_ = providerConfigs.Close()
-		_ = configs.Close()
-		_ = policies.Close()
-		_ = profiles.Close()
-		_ = credentials.Close()
-		_ = auditStore.Close()
-		_ = catalog.Close()
-		return nil, fmt.Errorf("compose runtime: provider plugins: %w", err)
-	}
-	if err := providerPlugins.Register(openapiplugin.New()); err != nil {
-		_ = providerConfigs.Close()
-		_ = configs.Close()
-		_ = policies.Close()
-		_ = profiles.Close()
-		_ = credentials.Close()
-		_ = auditStore.Close()
-		_ = catalog.Close()
-		return nil, fmt.Errorf("compose runtime: provider plugins: %w", err)
-	}
-	if err := providerPlugins.Register(modeltoolsplugin.New()); err != nil {
+	if err := providerbuiltin.Register(providerPlugins); err != nil {
 		_ = providerConfigs.Close()
 		_ = configs.Close()
 		_ = policies.Close()
