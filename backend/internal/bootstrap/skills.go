@@ -11,6 +11,7 @@ import (
 	skillapplication "github.com/orz-i/Mender/backend/internal/skill/application"
 	skillbuiltin "github.com/orz-i/Mender/backend/internal/skill/builtin"
 	skilldomain "github.com/orz-i/Mender/backend/internal/skill/domain"
+	skilldeploymentfs "github.com/orz-i/Mender/backend/internal/skill/infrastructure/deploymentfs"
 	skillidentity "github.com/orz-i/Mender/backend/internal/skill/infrastructure/identity"
 	skilllocalfs "github.com/orz-i/Mender/backend/internal/skill/infrastructure/localfs"
 	skillsqlite "github.com/orz-i/Mender/backend/internal/skill/infrastructure/sqlite"
@@ -49,9 +50,10 @@ type SkillInspection struct {
 // Skills composes the built-in inventory with managed local-directory
 // installations.
 type Skills struct {
-	store    *skillsqlite.Store
-	packages *skilllocalfs.Store
-	builtins []skillbuiltin.Entry
+	store           *skillsqlite.Store
+	packages        *skilllocalfs.Store
+	deploymentFiles *skilldeploymentfs.Store
+	builtins        []skillbuiltin.Entry
 }
 
 // NewSkills composes one Runtime-owned Skill Library.
@@ -75,9 +77,10 @@ func NewSkills(
 		return nil, fmt.Errorf("compose skills: built-ins: %w", err)
 	}
 	return &Skills{
-		store:    store,
-		packages: packages,
-		builtins: builtins,
+		store:           store,
+		packages:        packages,
+		deploymentFiles: skilldeploymentfs.New(),
+		builtins:        builtins,
 	}, nil
 }
 
@@ -176,6 +179,11 @@ func (s *Skills) SetTrust(
 	if s.isBuiltIn(id) {
 		return skilldomain.Installation{}, ErrBuiltInSkillImmutable
 	}
+	if !trusted {
+		if err := s.requireNoDeployments(ctx, id); err != nil {
+			return skilldomain.Installation{}, err
+		}
+	}
 	return skillapplication.NewSetTrust(s.store).Execute(ctx, id, trusted)
 }
 
@@ -191,6 +199,11 @@ func (s *Skills) SetEnabled(
 	}
 	if s.isBuiltIn(id) {
 		return skilldomain.Installation{}, ErrBuiltInSkillImmutable
+	}
+	if !enabled {
+		if err := s.requireNoDeployments(ctx, id); err != nil {
+			return skilldomain.Installation{}, err
+		}
 	}
 	return skillapplication.NewSetEnabled(s.store).Execute(ctx, id, enabled)
 }
@@ -209,8 +222,135 @@ func (s *Skills) Remove(
 	return skillapplication.NewRemoveInstallation(
 		s.store,
 		s.packages,
-		nil,
+		skillapplication.NewDeploymentUsageChecker(s.store),
 	).Execute(ctx, id)
+}
+
+// Deploy materializes one exact trusted+enabled installation to an explicit
+// host target and persists its deployment record.
+func (s *Skills) Deploy(
+	ctx context.Context,
+	id skilldomain.InstallationID,
+	target skilldomain.DeploymentTarget,
+	root string,
+) (skilldomain.Deployment, error) {
+	if s == nil {
+		return skilldomain.Deployment{}, fmt.Errorf("deploy skill: library is nil")
+	}
+	return skillapplication.NewDeployInstallation(
+		runtimeSkillDeploymentSource{skills: s},
+		s.store,
+		s.deploymentFiles,
+		skillidentity.NewGenerator(),
+		systemClock{},
+	).Execute(ctx, id, target, root)
+}
+
+// ListDeployments returns exact deployment records plus current drift state.
+func (s *Skills) ListDeployments(
+	ctx context.Context,
+) ([]skillapplication.DeploymentInspection, error) {
+	if s == nil {
+		return nil, fmt.Errorf("list skill deployments: library is nil")
+	}
+	return skillapplication.NewListDeployments(
+		s.store,
+		s.deploymentFiles,
+	).Execute(ctx)
+}
+
+// InspectDeployment returns one deployment plus current drift state.
+func (s *Skills) InspectDeployment(
+	ctx context.Context,
+	id skilldomain.DeploymentID,
+) (skillapplication.DeploymentInspection, error) {
+	if s == nil {
+		return skillapplication.DeploymentInspection{}, fmt.Errorf(
+			"inspect skill deployment: library is nil",
+		)
+	}
+	return skillapplication.NewInspectDeployment(
+		s.store,
+		s.deploymentFiles,
+	).Execute(ctx, id)
+}
+
+// Undeploy removes the exact materialized deployment and its record.
+func (s *Skills) Undeploy(
+	ctx context.Context,
+	id skilldomain.DeploymentID,
+) error {
+	if s == nil {
+		return fmt.Errorf("undeploy skill: library is nil")
+	}
+	return skillapplication.NewRemoveDeployment(
+		s.store,
+		s.deploymentFiles,
+	).Execute(ctx, id)
+}
+
+func (s *Skills) requireNoDeployments(
+	ctx context.Context,
+	id skilldomain.InstallationID,
+) error {
+	usages, err := skillapplication.NewDeploymentUsageChecker(s.store).Usages(ctx, id)
+	if err != nil {
+		return fmt.Errorf("check skill deployments: %w", err)
+	}
+	if len(usages) != 0 {
+		return fmt.Errorf("%w: %s", skillapplication.ErrInstallationInUse, usages[0].Description)
+	}
+	return nil
+}
+
+type runtimeSkillDeploymentSource struct {
+	skills *Skills
+}
+
+func (s runtimeSkillDeploymentSource) GetDeployable(
+	ctx context.Context,
+	id skilldomain.InstallationID,
+) (skillapplication.DeployableInstallation, error) {
+	for _, entry := range s.skills.builtins {
+		if entry.InstallationID != id {
+			continue
+		}
+		return skillapplication.DeployableInstallation{
+			InstallationID: id,
+			Name:           entry.Snapshot.Metadata.Name,
+			Digest:         entry.Snapshot.Digest,
+			Trusted:        entry.Trusted,
+			Enabled:        entry.Enabled,
+		}, nil
+	}
+	item, err := s.skills.store.Get(ctx, id)
+	if err != nil {
+		return skillapplication.DeployableInstallation{}, err
+	}
+	return skillapplication.DeployableInstallation{
+		InstallationID: id,
+		Name:           item.Name(),
+		Digest:         item.Digest(),
+		Trusted:        item.Trusted(),
+		Enabled:        item.Enabled(),
+	}, nil
+}
+
+func (s runtimeSkillDeploymentSource) Materialize(
+	ctx context.Context,
+	id skilldomain.InstallationID,
+	destination string,
+) error {
+	for _, entry := range s.skills.builtins {
+		if entry.InstallationID == id {
+			return skillbuiltin.Materialize(ctx, id, destination)
+		}
+	}
+	item, err := s.skills.store.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+	return s.skills.packages.Materialize(ctx, item, destination)
 }
 
 func (s *Skills) isBuiltIn(id skilldomain.InstallationID) bool {

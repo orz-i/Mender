@@ -3,10 +3,12 @@ package bootstrap
 import (
 	"context"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
 
+	skillapplication "github.com/orz-i/Mender/backend/internal/skill/application"
 	skilldomain "github.com/orz-i/Mender/backend/internal/skill/domain"
 )
 
@@ -115,6 +117,188 @@ func TestRuntimeSkillLibraryIncludesBuiltInAndManagedInstallations(t *testing.T)
 	}
 	if len(items) != 1 || items[0].Name != "mender-tools" {
 		t.Fatalf("Skills.List() after remove = %+v", items)
+	}
+}
+
+func TestRuntimeSkillDeploymentsDetectDriftAndGuardInstallationState(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	temp := t.TempDir()
+	runtime, err := NewRuntime(ctx, RuntimeOptions{
+		DatabasePath: filepath.Join(temp, "mender.db"),
+		SkillRoot:    filepath.Join(temp, "managed-skills"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = runtime.Close() })
+
+	items, err := runtime.Skills.List(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var builtIn SkillInstallation
+	for _, item := range items {
+		if item.Name == "mender-tools" && item.BuiltIn {
+			builtIn = item
+			break
+		}
+	}
+	if builtIn.InstallationID == "" {
+		t.Fatal("built-in mender-tools not found")
+	}
+
+	projectRoot := filepath.Join(temp, "project")
+	if err := os.MkdirAll(projectRoot, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	builtInDeployment, err := runtime.Skills.Deploy(
+		ctx,
+		builtIn.InstallationID,
+		skilldomain.DeploymentAgentsProject,
+		projectRoot,
+	)
+	if err != nil {
+		t.Fatalf("Deploy(built-in) error = %v", err)
+	}
+	wantBuiltInDestination := filepath.Join(
+		projectRoot,
+		".agents",
+		"skills",
+		"mender-tools",
+	)
+	if builtInDeployment.Destination() != wantBuiltInDestination {
+		t.Fatalf(
+			"built-in destination = %q, want %q",
+			builtInDeployment.Destination(),
+			wantBuiltInDestination,
+		)
+	}
+	builtInInspection, err := runtime.Skills.InspectDeployment(
+		ctx,
+		builtInDeployment.ID(),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if builtInInspection.Drift != skilldomain.DeploymentCurrent {
+		t.Fatalf("built-in deployment drift = %q, want current", builtInInspection.Drift)
+	}
+
+	deploymentRoot, err := os.OpenRoot(wantBuiltInDestination)
+	if err != nil {
+		t.Fatal(err)
+	}
+	skillFile, err := deploymentRoot.Open("SKILL.md")
+	if err != nil {
+		_ = deploymentRoot.Close()
+		t.Fatal(err)
+	}
+	raw, err := io.ReadAll(skillFile)
+	if err != nil {
+		_ = skillFile.Close()
+		_ = deploymentRoot.Close()
+		t.Fatal(err)
+	}
+	if err := skillFile.Close(); err != nil {
+		_ = deploymentRoot.Close()
+		t.Fatal(err)
+	}
+	skillFile, err = deploymentRoot.OpenFile(
+		"SKILL.md",
+		os.O_WRONLY|os.O_TRUNC,
+		0o600,
+	)
+	if err != nil {
+		_ = deploymentRoot.Close()
+		t.Fatal(err)
+	}
+	if _, err := skillFile.Write(append(raw, []byte("\n# local drift\n")...)); err != nil {
+		_ = skillFile.Close()
+		_ = deploymentRoot.Close()
+		t.Fatal(err)
+	}
+	if err := skillFile.Close(); err != nil {
+		_ = deploymentRoot.Close()
+		t.Fatal(err)
+	}
+	if err := deploymentRoot.Close(); err != nil {
+		t.Fatal(err)
+	}
+	builtInInspection, err = runtime.Skills.InspectDeployment(
+		ctx,
+		builtInDeployment.ID(),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if builtInInspection.Drift != skilldomain.DeploymentDrifted {
+		t.Fatalf("drifted built-in deployment = %q, want drifted", builtInInspection.Drift)
+	}
+	if err := runtime.Skills.Undeploy(ctx, builtInDeployment.ID()); err != nil {
+		t.Fatalf("Undeploy(built-in) error = %v", err)
+	}
+	builtInInspection, err = runtime.Skills.InspectDeployment(
+		ctx,
+		builtInDeployment.ID(),
+	)
+	if !errors.Is(err, skillapplication.ErrDeploymentNotFound) {
+		t.Fatalf("InspectDeployment(removed) error = %v", err)
+	}
+
+	source := writeRuntimeSkill(t, filepath.Join(temp, "managed-skill"))
+	managed, err := runtime.Skills.InstallLocal(ctx, source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runtime.Skills.SetTrust(ctx, managed.ID(), true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runtime.Skills.SetEnabled(ctx, managed.ID(), true); err != nil {
+		t.Fatal(err)
+	}
+
+	managedDeployment, err := runtime.Skills.Deploy(
+		ctx,
+		managed.ID(),
+		skilldomain.DeploymentGitHubProject,
+		projectRoot,
+	)
+	if err != nil {
+		t.Fatalf("Deploy(managed) error = %v", err)
+	}
+	if _, err := runtime.Skills.SetEnabled(ctx, managed.ID(), false); !errors.Is(err, skillapplication.ErrInstallationInUse) {
+		t.Fatalf("SetEnabled(false while deployed) error = %v", err)
+	}
+	if _, err := runtime.Skills.SetTrust(ctx, managed.ID(), false); !errors.Is(err, skillapplication.ErrInstallationInUse) {
+		t.Fatalf("SetTrust(false while deployed) error = %v", err)
+	}
+	if err := runtime.Skills.Remove(ctx, managed.ID()); !errors.Is(err, skillapplication.ErrInstallationInUse) {
+		t.Fatalf("Remove(while deployed) error = %v", err)
+	}
+
+	deployments, err := runtime.Skills.ListDeployments(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(deployments) != 1 ||
+		deployments[0].Deployment.ID() != managedDeployment.ID() ||
+		deployments[0].Drift != skilldomain.DeploymentCurrent {
+		t.Fatalf("ListDeployments() = %+v", deployments)
+	}
+
+	if err := runtime.Skills.Undeploy(ctx, managedDeployment.ID()); err != nil {
+		t.Fatalf("Undeploy(managed) error = %v", err)
+	}
+	if _, err := runtime.Skills.SetEnabled(ctx, managed.ID(), false); err != nil {
+		t.Fatalf("SetEnabled(false after undeploy) error = %v", err)
+	}
+	if _, err := runtime.Skills.SetTrust(ctx, managed.ID(), false); err != nil {
+		t.Fatalf("SetTrust(false after undeploy) error = %v", err)
+	}
+	if err := runtime.Skills.Remove(ctx, managed.ID()); err != nil {
+		t.Fatalf("Remove(after undeploy) error = %v", err)
 	}
 }
 

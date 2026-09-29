@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-const currentSchemaVersion = 1
+const currentSchemaVersion = 2
 
 func migrate(ctx context.Context, db *sql.DB) error {
 	tx, err := db.BeginTx(ctx, nil)
@@ -61,6 +61,27 @@ func migrate(ctx context.Context, db *sql.DB) error {
 			time.Now().UTC().Format(time.RFC3339Nano),
 		); err != nil {
 			return fmt.Errorf("record skill installation migration 1: %w", err)
+		}
+		version = 1
+	}
+	if version < 2 {
+		createDeployments := "CREATE TABLE skill_deployments (" +
+			"deployment_id TEXT PRIMARY KEY, " +
+			"installation_id TEXT NOT NULL, " +
+			"target TEXT NOT NULL, " +
+			"root TEXT NOT NULL, " +
+			"destination TEXT NOT NULL UNIQUE, " +
+			"digest TEXT NOT NULL, " +
+			"deployed_at TEXT NOT NULL)"
+		if _, err := tx.ExecContext(ctx, createDeployments); err != nil {
+			return fmt.Errorf("apply skill installation migration 2: %w", err)
+		}
+		if _, err := tx.ExecContext(
+			ctx,
+			"INSERT INTO skill_installation_schema_migrations(version, applied_at) VALUES (2, ?)",
+			time.Now().UTC().Format(time.RFC3339Nano),
+		); err != nil {
+			return fmt.Errorf("record skill installation migration 2: %w", err)
 		}
 	}
 

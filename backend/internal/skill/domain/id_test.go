@@ -20,4 +20,12 @@ func TestSkillIDs(t *testing.T) {
 	if _, err := ParseInstallationID("sinst_short"); err == nil {
 		t.Fatal("ParseInstallationID(invalid) error = nil")
 	}
+
+	if got, err := ParseDeploymentID("sdep_0123456789abcdef0123456789abcdef"); err != nil ||
+		got.String() != "sdep_0123456789abcdef0123456789abcdef" {
+		t.Fatalf("ParseDeploymentID() = %q, %v", got, err)
+	}
+	if _, err := ParseDeploymentID("sdep_short"); err == nil {
+		t.Fatal("ParseDeploymentID(invalid) error = nil")
+	}
 }

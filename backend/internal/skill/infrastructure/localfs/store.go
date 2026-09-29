@@ -195,6 +195,62 @@ func (s *Store) Resolve(
 	return snapshot, nil
 }
 
+// Materialize copies one verified exact managed installation into a
+// deployment destination. The deployment copy is user-writable; the canonical
+// managed installation remains immutable so later edits are detectable drift.
+func (s *Store) Materialize(
+	ctx context.Context,
+	installation skilldomain.Installation,
+	destination string,
+) error {
+	snapshot, err := s.Resolve(ctx, installation)
+	if err != nil {
+		return fmt.Errorf("materialize skill package: %w", err)
+	}
+	destination = filepath.Clean(strings.TrimSpace(destination))
+	if destination == "." || !filepath.IsAbs(destination) {
+		return fmt.Errorf("materialize skill package: destination must be absolute")
+	}
+	if err := os.Mkdir(destination, 0o700); err != nil {
+		if errors.Is(err, os.ErrExist) {
+			return fmt.Errorf(
+				"%w: %s",
+				skillapplication.ErrDeploymentTargetExists,
+				destination,
+			)
+		}
+		return fmt.Errorf("materialize skill package: create destination: %w", err)
+	}
+	complete := false
+	defer func() {
+		if !complete {
+			_ = makeTreeWritable(destination)
+			_ = os.RemoveAll(destination)
+		}
+	}()
+
+	source := filepath.Join(
+		s.root,
+		installation.ID().String(),
+		installation.Name(),
+	)
+	if err := copyResources(ctx, source, destination, snapshot.Resources); err != nil {
+		return fmt.Errorf("materialize skill package: %w", err)
+	}
+	deployed, err := agentskill.LoadDirectory(destination)
+	if err != nil {
+		return fmt.Errorf("materialize skill package: verify destination: %w", err)
+	}
+	if deployed.Digest != snapshot.Digest {
+		return fmt.Errorf("materialize skill package: destination digest mismatch")
+	}
+	if err := makeDeploymentWritable(destination, snapshot.Resources); err != nil {
+		return fmt.Errorf("materialize skill package: set deployment permissions: %w", err)
+	}
+	complete = true
+	return nil
+}
+
 // Remove deletes one managed package directory.
 func (s *Store) Remove(
 	ctx context.Context,
@@ -349,6 +405,28 @@ func hardenTree(root string) error {
 		// Directory access requires owner execute permission; no group/other bits are granted.
 		return rootHandle.Chmod(filepath.FromSlash(path), 0o500)
 	})
+}
+
+func makeDeploymentWritable(
+	root string,
+	resources []skilldomain.Resource,
+) error {
+	rootHandle, err := os.OpenRoot(root)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = rootHandle.Close() }()
+
+	for _, resource := range resources {
+		mode := os.FileMode(0o600)
+		if resource.Executable {
+			mode = 0o700
+		}
+		if err := rootHandle.Chmod(filepath.FromSlash(resource.Path), mode); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func makeTreeWritable(root string) error {
