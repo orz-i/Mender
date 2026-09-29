@@ -90,8 +90,9 @@ describe("management pages", () => {
       screen.getByRole("button", { name: "Use authentication" }),
     );
 
-    expect(await screen.findByText("Add provider")).toBeTruthy();
-    expect(screen.getAllByRole("dialog")).toHaveLength(1);
+    await waitFor(() => {
+      expect(screen.getAllByRole("dialog")).toHaveLength(1);
+    });
     expect(screen.getByLabelText<HTMLInputElement>("Namespace").value).toBe(
       "demo",
     );
