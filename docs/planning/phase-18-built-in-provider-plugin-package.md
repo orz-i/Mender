@@ -224,7 +224,7 @@ pnpm test                                              8 files / 56 tests PASS
 pnpm build                                             Web/Desktop PASS
 ~~~
 
-`pnpm check` was also attempted. Its first network-dependent step, `provider-plugin:proto:check`, reached `buf generate` and failed because the Buf remote plugin service reported `the server hosted at that remote is unavailable`. No generated protocol file changed. All remaining `pnpm check` stages were then executed separately and passed as listed above.
+Final verification was repeated after network access was restored. `pnpm check` completed successfully end to end, including Buf remote protobuf generation, generated protocol drift checks, Provider plugin SDK/example gates, Go lint/test/race, generated OpenAPI/Wails checks, ESLint, TypeScript, Vitest, and Web/Desktop production builds. `pnpm security:check` also passed: govulncheck reported no reachable vulnerabilities in backend, Desktop, Provider SDK, or the example plugin, and `pnpm audit --prod --audit-level high` reported no known vulnerabilities. Generated checks left the working tree clean.
 
 ## Exit criteria
 

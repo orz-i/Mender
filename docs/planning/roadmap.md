@@ -366,6 +366,6 @@ Goals:
 - Remove direct first-party plugin implementation imports from Runtime composition.
 - Preserve all existing PluginID, ProviderID, ToolID, ConfigVersion, management, and external-plugin compatibility semantics.
 
-Exit criteria are complete. `backend/internal/providerplugin/builtin` now owns the deterministic first-party plugin set and registration entrypoint; Runtime performs one built-in registration call and no longer imports MCP/OpenAPI/Model Tools implementations directly. Existing plugin identities/configuration and external installation semantics are unchanged. Focused and repository lint/test/race/typecheck/build gates pass; the only unavailable aggregate-check step was remote Buf code generation because the Buf hosted plugin service was unavailable, with no generated protocol diff.
+Exit criteria are complete. `backend/internal/providerplugin/builtin` now owns the deterministic first-party plugin set and registration entrypoint; Runtime performs one built-in registration call and no longer imports MCP/OpenAPI/Model Tools implementations directly. Existing plugin identities/configuration and external installation semantics are unchanged. Full `pnpm check` and `pnpm security:check` verification is green, including remote Buf protobuf generation, Go lint/test/race, generated OpenAPI/Wails checks, frontend lint/typecheck/tests/builds, govulncheck, and production dependency audit.
 
 See `phase-18-built-in-provider-plugin-package.md`.
