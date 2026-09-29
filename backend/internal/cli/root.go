@@ -17,6 +17,7 @@ import (
 	mcpserver "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/server"
 	policyapplication "github.com/orz-i/Mender/backend/internal/policy/application"
 	profileapplication "github.com/orz-i/Mender/backend/internal/profile/application"
+	skillapplication "github.com/orz-i/Mender/backend/internal/skill/application"
 	"github.com/spf13/cobra"
 )
 
@@ -98,6 +99,7 @@ func NewRootCommand(options Options) *cobra.Command {
 	root.AddCommand(a.newPluginCommand())
 	root.AddCommand(a.newProviderCommand())
 	root.AddCommand(a.newProfileCommand())
+	root.AddCommand(a.newSkillCommand())
 	root.AddCommand(a.newToolCommand())
 	root.AddCommand(a.newServeCommand())
 	root.AddCommand(a.newVersionCommand())
@@ -235,6 +237,11 @@ func exitCode(err error) int {
 		errors.Is(err, credentialapplication.ErrReferenceConflict),
 		errors.Is(err, credentialapplication.ErrCredentialInUse),
 		errors.Is(err, profileapplication.ErrProfileNotFound),
+		errors.Is(err, skillapplication.ErrInstallationNotFound),
+		errors.Is(err, skillapplication.ErrInstallationConflict),
+		errors.Is(err, skillapplication.ErrInstallationInUse),
+		errors.Is(err, skillapplication.ErrPackageAlreadyInstalled),
+		errors.Is(err, bootstrap.ErrBuiltInSkillImmutable),
 		errors.Is(err, mcpconfigstore.ErrNotFound):
 		return ExitConfig
 	case errors.Is(err, invocationapplication.ErrPolicyDenied),
