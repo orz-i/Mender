@@ -328,14 +328,31 @@ docs(skill): complete skill resource management phase
 
 Skill/workflow directories `.agents/`, `.pi/`, and `.intent-loop/` remain outside all commits.
 
+## Current implementation progress
+
+Completed in the first Phase 19 implementation tranche:
+
+- Agent Skills frontmatter/resource validation with bounded ingestion and no execution;
+- deterministic per-resource and installation SHA-256 manifests;
+- stable Mender SkillID / exact InstallationID types;
+- built-in `mender-tools` compiled into release binaries with a parity test against the repository source;
+- immutable managed local-directory snapshots plus SQLite installation metadata;
+- side-by-side exact installations for changed content from one logical source lineage;
+- explicit trust and enablement state (local third-party installations start untrusted/disabled);
+- shared Runtime Skill Library combining built-in and managed installations;
+- CLI `skill list/inspect/validate/install/trust/untrust/enable/disable/remove` with stable JSON output;
+- tranche verification: full `pnpm check` and `pnpm security:check` pass after synchronizing the Desktop module's indirect YAML dependency.
+
+Next work starts with explicit deployment records/adapters and drift detection, then Agent Plugin export and management/Web/Desktop surfaces.
+
 ## Exit criteria
 
-- [ ] Agent Skills-compatible content is validated without execution.
-- [ ] Resource manifest/digest is deterministic and bounded.
-- [ ] Built-in `mender-tools` is represented in the Skill Library.
-- [ ] Managed local-directory installations are immutable and versionable side by side.
-- [ ] Trust and enablement are explicit, separate states.
-- [ ] CLI supports list/inspect/validate/install/lifecycle in JSON mode.
+- [x] Agent Skills-compatible content is validated without execution.
+- [x] Resource manifest/digest is deterministic and bounded.
+- [x] Built-in `mender-tools` is represented in the Skill Library.
+- [x] Managed local-directory installations are immutable and versionable side by side.
+- [x] Trust and enablement are explicit, separate states.
+- [x] CLI supports list/inspect/validate/install/lifecycle in JSON mode.
 - [ ] Local deployment adapters materialize exact installations safely.
 - [ ] Deployment drift is detectable.
 - [ ] Agent Plugin 1.0 export is deterministic.

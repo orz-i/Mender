@@ -359,9 +359,9 @@ mender serve mcp --profile default --http 127.0.0.1:8080
 
 Before serving, Mender ensures every configured Provider referenced by the Profile has an active plugin instance. Downstream serving remains an MCP exposure adapter; upstream Provider activation is plugin-generic.
 
-## Agent Skill
+## Agent Skills
 
-The repository Skill lives at:
+Mender manages portable Agent Skills as exact resources without executing their scripts. The built-in Skill source remains:
 
 ```text
 skills/mender-tools/SKILL.md
@@ -376,6 +376,56 @@ tool search --output json
 ```
 
 The Skill intentionally contains no duplicated Tool Catalog.
+
+List built-in and managed exact Skill installations:
+
+```bash
+mender skill list
+mender skill list --output json
+```
+
+Inspect a Skill by exact Installation ID, or by name/Skill ID when that reference resolves to exactly one installation:
+
+```bash
+mender skill inspect mender-tools --output json
+mender skill inspect sinst_... --output json
+```
+
+Validate a local Agent Skill directory without installing or executing it:
+
+```bash
+mender skill validate ./my-skill --output json
+```
+
+Install a validated local directory into Mender-managed immutable storage:
+
+```bash
+mender skill install ./my-skill --output json
+```
+
+Local third-party installations start **untrusted and disabled**. Trust and enablement are separate administrative decisions:
+
+```bash
+mender skill trust sinst_...
+mender skill enable sinst_...
+
+mender skill disable sinst_...
+mender skill untrust sinst_...
+```
+
+Removing trust also disables the installation. Built-in Skills are trusted/enabled by construction and cannot be removed or have their trust state changed.
+
+Remove an exact managed installation:
+
+```bash
+mender skill remove sinst_...
+```
+
+Changed content from the same local source path is installed side by side under the same logical SkillID with a new exact InstallationID/digest. Mender never follows a `latest` version automatically. If a SkillID/name refers to multiple installations, `skill inspect` requires an exact InstallationID.
+
+Managed Skill files live below the Runtime Skill root (by default a `skills/` sibling of the SQLite database). SQLite stores only bounded installation metadata; Skill files remain in the immutable managed filesystem snapshot.
+
+Skill content remains instructions/resources rather than an authorization mechanism. `allowed-tools` is surfaced as metadata only; Tool execution still goes through Profile, Policy, Credential, Invocation guards, and Audit.
 
 ## Build version
 
