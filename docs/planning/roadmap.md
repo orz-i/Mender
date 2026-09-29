@@ -354,3 +354,16 @@ Goals:
 Exit criteria are complete. External plugin sessions recover on later requests after process failure without replaying failed invocations; control-plane RPCs are host-bounded; verified descriptor and normalized config metadata make management/Credential governance available without executing third-party code; and explicit same-PluginID rebind preserves ProviderID plus SourceKey-stable ToolIDs. CLI/OpenAPI/Wails/Web/Desktop expose the shared rebind lifecycle, and full repository/race/build/security verification is green.
 
 See `phase-17-provider-plugin-resilience.md`.
+
+## Phase 18 — Built-in Provider Plugin Package
+
+Status: In Progress
+
+Goals:
+
+- Make MCP, OpenAPI, and Model Tools one explicit statically linked built-in Provider plugin package at the composition boundary.
+- Keep the generic Provider Plugin Runtime implementation-agnostic.
+- Remove direct first-party plugin implementation imports from Runtime composition.
+- Preserve all existing PluginID, ProviderID, ToolID, ConfigVersion, management, and external-plugin compatibility semantics.
+
+See `phase-18-built-in-provider-plugin-package.md`.
