@@ -5,10 +5,12 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
 	"os"
+	pathpkg "path"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -77,6 +79,57 @@ func LoadDirectory(root string) (skilldomain.Snapshot, error) {
 	return LoadDirectoryWithLimits(root, DefaultLimits())
 }
 
+// LoadFS validates and snapshots a Skill directory from an fs.FS. It is used
+// for immutable embedded/package sources where no host filesystem path is
+// required.
+func LoadFS(source fs.FS, root string) (skilldomain.Snapshot, error) {
+	return LoadFSWithLimits(source, root, DefaultLimits())
+}
+
+// LoadFSWithLimits behaves like LoadFS with explicit host-owned ingestion
+// bounds.
+func LoadFSWithLimits(
+	source fs.FS,
+	root string,
+	limits Limits,
+) (skilldomain.Snapshot, error) {
+	if source == nil {
+		return skilldomain.Snapshot{}, fmt.Errorf("load agent skill: filesystem must not be nil")
+	}
+	if err := validateLimits(limits); err != nil {
+		return skilldomain.Snapshot{}, err
+	}
+	cleanRoot := pathpkg.Clean(root)
+	if cleanRoot == "." || !fs.ValidPath(cleanRoot) {
+		return skilldomain.Snapshot{}, fmt.Errorf("load agent skill: root must be a valid relative filesystem path")
+	}
+	if err := validateFSRoot(source, cleanRoot); err != nil {
+		return skilldomain.Snapshot{}, err
+	}
+
+	rawSkill, err := readFSResource(source, pathpkg.Join(cleanRoot, "SKILL.md"), limits.MaxFileBytes)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return skilldomain.Snapshot{}, fmt.Errorf("load agent skill: SKILL.md is required")
+		}
+		return skilldomain.Snapshot{}, fmt.Errorf("load agent skill: SKILL.md: %w", err)
+	}
+	metadata, err := parseAndValidateMetadata(pathpkg.Base(cleanRoot), rawSkill, limits)
+	if err != nil {
+		return skilldomain.Snapshot{}, err
+	}
+	resources, totalBytes, err := inventoryFSResources(source, cleanRoot, limits)
+	if err != nil {
+		return skilldomain.Snapshot{}, err
+	}
+	return skilldomain.Snapshot{
+		Metadata:   metadata,
+		Resources:  resources,
+		Digest:     snapshotDigest(resources),
+		TotalBytes: totalBytes,
+	}, nil
+}
+
 // LoadDirectoryWithLimits behaves like LoadDirectory with explicit host-owned
 // ingestion bounds.
 func LoadDirectoryWithLimits(
@@ -125,15 +178,7 @@ func LoadDirectoryWithLimits(
 		return skilldomain.Snapshot{}, fmt.Errorf("load agent skill: SKILL.md must be valid UTF-8")
 	}
 
-	rawFrontmatter, err := splitFrontmatter(rawSkill)
-	if err != nil {
-		return skilldomain.Snapshot{}, err
-	}
-	parsed, err := parseFrontmatter(rawFrontmatter)
-	if err != nil {
-		return skilldomain.Snapshot{}, err
-	}
-	metadata, err := validateMetadata(filepath.Base(cleanRoot), parsed, limits)
+	metadata, err := parseAndValidateMetadata(filepath.Base(cleanRoot), rawSkill, limits)
 	if err != nil {
 		return skilldomain.Snapshot{}, err
 	}
@@ -173,6 +218,108 @@ func validateLimits(limits Limits) error {
 	default:
 		return nil
 	}
+}
+
+func parseAndValidateMetadata(
+	directoryName string,
+	rawSkill []byte,
+	limits Limits,
+) (skilldomain.Metadata, error) {
+	if !utf8.Valid(rawSkill) {
+		return skilldomain.Metadata{}, fmt.Errorf("load agent skill: SKILL.md must be valid UTF-8")
+	}
+	rawFrontmatter, err := splitFrontmatter(rawSkill)
+	if err != nil {
+		return skilldomain.Metadata{}, err
+	}
+	parsed, err := parseFrontmatter(rawFrontmatter)
+	if err != nil {
+		return skilldomain.Metadata{}, err
+	}
+	return validateMetadata(directoryName, parsed, limits)
+}
+
+func validateFSRoot(source fs.FS, root string) error {
+	seen := false
+	err := fs.WalkDir(source, root, func(path string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if path != root {
+			return fs.SkipDir
+		}
+		seen = true
+		if entry.Type()&fs.ModeSymlink != 0 {
+			return fmt.Errorf("root must not be a symlink")
+		}
+		if !entry.IsDir() {
+			return fmt.Errorf("root must be a directory")
+		}
+		return fs.SkipDir
+	})
+	if err != nil {
+		return fmt.Errorf("load agent skill: root: %w", err)
+	}
+	if !seen {
+		return fmt.Errorf("load agent skill: root not found")
+	}
+	return nil
+}
+
+func readFSResource(source fs.FS, name string, maxBytes int64) ([]byte, error) {
+	parent := pathpkg.Dir(name)
+	base := pathpkg.Base(name)
+	entries, err := fs.ReadDir(source, parent)
+	if err != nil {
+		return nil, err
+	}
+
+	var target fs.DirEntry
+	for _, entry := range entries {
+		if entry.Name() == base {
+			target = entry
+			break
+		}
+	}
+	if target == nil {
+		return nil, fs.ErrNotExist
+	}
+	if target.Type()&fs.ModeSymlink != 0 {
+		return nil, fmt.Errorf("%s must not be a symlink", name)
+	}
+	if target.IsDir() {
+		return nil, fmt.Errorf("%s must be a regular file", name)
+	}
+	info, err := target.Info()
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("%s must be a regular file", name)
+	}
+	if info.Size() > maxBytes {
+		return nil, fmt.Errorf("%s exceeds %d bytes", name, maxBytes)
+	}
+
+	file, err := source.Open(name)
+	if err != nil {
+		return nil, err
+	}
+	raw, readErr := io.ReadAll(io.LimitReader(file, maxBytes+1))
+	closeErr := file.Close()
+	if readErr != nil {
+		return nil, readErr
+	}
+	if closeErr != nil {
+		return nil, closeErr
+	}
+	if int64(len(raw)) > maxBytes {
+		return nil, fmt.Errorf("%s exceeds %d bytes", name, maxBytes)
+	}
+	if int64(len(raw)) != info.Size() {
+		return nil, fmt.Errorf("%s changed while being inventoried", name)
+	}
+	return raw, nil
 }
 
 func splitFrontmatter(raw []byte) ([]byte, error) {
@@ -369,6 +516,79 @@ func validateMetadata(
 	}, nil
 }
 
+func inventoryFSResources(
+	source fs.FS,
+	root string,
+	limits Limits,
+) ([]skilldomain.Resource, int64, error) {
+	resources := make([]skilldomain.Resource, 0)
+	var totalBytes int64
+
+	err := fs.WalkDir(source, root, func(fullPath string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return fmt.Errorf("walk %q: %w", fullPath, walkErr)
+		}
+		if fullPath == root {
+			if entry.Type()&fs.ModeSymlink != 0 {
+				return fmt.Errorf("root must not be a symlink")
+			}
+			if !entry.IsDir() {
+				return fmt.Errorf("root must be a directory")
+			}
+			return nil
+		}
+		relativePath := strings.TrimPrefix(fullPath, root+"/")
+		if relativePath == fullPath || relativePath == "" {
+			return fmt.Errorf("resource %q is outside skill root", fullPath)
+		}
+		if len(relativePath) > limits.MaxPathBytes {
+			return fmt.Errorf("resource path %q exceeds %d bytes", relativePath, limits.MaxPathBytes)
+		}
+		if entry.Type()&fs.ModeSymlink != 0 {
+			return fmt.Errorf("resource %q must not be a symlink", relativePath)
+		}
+		if entry.IsDir() {
+			return nil
+		}
+
+		info, err := entry.Info()
+		if err != nil {
+			return fmt.Errorf("resource %q info: %w", relativePath, err)
+		}
+		if !info.Mode().IsRegular() {
+			return fmt.Errorf("resource %q must be a regular file", relativePath)
+		}
+		if len(resources)+1 > limits.MaxFiles {
+			return fmt.Errorf("skill contains more than %d files", limits.MaxFiles)
+		}
+		if info.Size() > limits.MaxFileBytes {
+			return fmt.Errorf("resource %q exceeds %d bytes", relativePath, limits.MaxFileBytes)
+		}
+		if totalBytes > limits.MaxTotalBytes-info.Size() {
+			return fmt.Errorf("skill exceeds %d total bytes", limits.MaxTotalBytes)
+		}
+
+		raw, err := readFSResource(source, fullPath, limits.MaxFileBytes)
+		if err != nil {
+			return fmt.Errorf("read resource %q: %w", relativePath, err)
+		}
+		sum := sha256.Sum256(raw)
+		resources = append(resources, skilldomain.Resource{
+			Path:       relativePath,
+			Kind:       classifyResource(relativePath),
+			Size:       info.Size(),
+			SHA256:     "sha256:" + hex.EncodeToString(sum[:]),
+			Executable: info.Mode().Perm()&0o111 != 0,
+		})
+		totalBytes += info.Size()
+		return nil
+	})
+	if err != nil {
+		return nil, 0, fmt.Errorf("load agent skill: %w", err)
+	}
+	return normalizeResources(resources, totalBytes)
+}
+
 func inventoryResources(
 	root string,
 	limits Limits,
@@ -446,6 +666,13 @@ func inventoryResources(
 		return nil, 0, fmt.Errorf("load agent skill: %w", err)
 	}
 
+	return normalizeResources(resources, totalBytes)
+}
+
+func normalizeResources(
+	resources []skilldomain.Resource,
+	totalBytes int64,
+) ([]skilldomain.Resource, int64, error) {
 	slices.SortFunc(resources, func(a, b skilldomain.Resource) int {
 		return strings.Compare(a.Path, b.Path)
 	})
