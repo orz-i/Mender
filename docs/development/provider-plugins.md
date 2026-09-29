@@ -4,6 +4,26 @@ Mender supports installable Provider plugin types without recompiling the Mender
 
 Architecture is defined by [ADR-0027](../architecture/adr/0027-external-provider-plugin-host.md) and the resilience/governance follow-up [ADR-0028](../architecture/adr/0028-provider-plugin-resilience.md).
 
+## Built-in Provider plugin package
+
+Mender's statically linked first-party plugins are composed through one explicit package:
+
+~~~text
+backend/internal/providerplugin/builtin
+~~~
+
+That package owns the built-in set and registration seam only. Today it constructs:
+
+- `io.mender.provider.mcp`;
+- `io.mender.provider.openapi`;
+- `io.mender.provider.model-tools`.
+
+The protocol implementations remain in their existing MCP, OpenAPI, and Model Tools infrastructure packages. The generic `backend/internal/providerplugin` core continues to own only contracts, Registry/Resolver behavior, instance lifecycle, configuration metadata, and external-plugin integration; it does not import first-party implementations.
+
+Runtime composition therefore has one built-in registration dependency instead of one dependency per first-party plugin. Adding another statically linked first-party Provider requires adding it to the built-in package and its focused tests, while external Provider plugins continue to use the installation/package protocol described below.
+
+Built-ins still have `sourceKind=builtin`, no Installation ID, and are enabled by construction. This package boundary does not convert them into filesystem packages or subprocesses and does not change PluginID, ConfigVersion, ProviderID, ToolID, or persisted Provider configuration.
+
 ## Trust model
 
 A v1 external plugin is a native executable explicitly trusted by the local user or administrator. The subprocess boundary provides crash/dependency/ABI isolation, bounded RPC/logging, exact executable checksum verification, and authenticated local gRPC transport. It is not an OS sandbox; the executable can still use OS authority available to the user account.

@@ -1,6 +1,6 @@
 # Phase 18 Plan — Built-in Provider Plugin Package
 
-Status: In Progress
+Status: Complete
 
 ## Goal
 
@@ -194,14 +194,46 @@ This phase is document-first and uses segmented commits:
 
 Skill/workflow directories such as `.agents/`, `.pi/`, and `.intent-loop/` are excluded from all commits.
 
+## Completion evidence
+
+The implementation landed in segmented commits:
+
+- `9db74c6` — document the Phase 18 architecture and migration boundary;
+- `581f919` — add the composition-only `providerplugin/builtin` package and package tests;
+- `df8199d` — make Runtime consume the built-in package instead of importing the three implementations directly;
+- `774b09c` — repair an unrelated pre-existing Providers UI test wait condition exposed by the full repository gate.
+
+The built-in package now constructs MCP, OpenAPI, and Model Tools in one deterministic first-party set. Runtime owns a generic Registry and performs one `providerbuiltin.Register(providerPlugins)` call. The generic `providerplugin` core remains free of implementation imports.
+
+Verification completed:
+
+~~~text
+go test ./backend/internal/providerplugin/... ./backend/internal/bootstrap/...
+golangci-lint run ./backend/...                         PASS
+go test ./backend/...                                  PASS
+go test -race ./backend/...                            PASS
+Provider plugin public SDK lint/test/race              PASS
+Provider plugin example lint/test/race/build           PASS
+Go module isolation                                    PASS
+OpenAPI TypeScript SDK regeneration check              PASS
+Wails binding generation check                         PASS
+Desktop architecture check                             PASS
+ESLint                                                 PASS
+workspace TypeScript                                   PASS
+pnpm test                                              8 files / 56 tests PASS
+pnpm build                                             Web/Desktop PASS
+~~~
+
+`pnpm check` was also attempted. Its first network-dependent step, `provider-plugin:proto:check`, reached `buf generate` and failed because the Buf remote plugin service reported `the server hosted at that remote is unavailable`. No generated protocol file changed. All remaining `pnpm check` stages were then executed separately and passed as listed above.
+
 ## Exit criteria
 
-- [ ] Built-in plugin composition has one explicit package.
-- [ ] Bootstrap no longer imports MCP/OpenAPI/Model Tools plugin implementations individually.
-- [ ] Generic `providerplugin` core remains implementation-agnostic.
-- [ ] Runtime still exposes the same three built-in PluginIDs.
-- [ ] Persisted Provider and Tool identities remain unchanged.
-- [ ] External plugin behavior remains unchanged.
-- [ ] Focused Go tests pass.
-- [ ] Repository lint/typecheck/test/build gates pass.
-- [ ] Development documentation describes the new package boundary.
+- [x] Built-in plugin composition has one explicit package.
+- [x] Bootstrap no longer imports MCP/OpenAPI/Model Tools plugin implementations individually.
+- [x] Generic `providerplugin` core remains implementation-agnostic.
+- [x] Runtime still exposes the same three built-in PluginIDs.
+- [x] Persisted Provider and Tool identities remain unchanged.
+- [x] External plugin behavior remains unchanged.
+- [x] Focused Go tests pass.
+- [x] Repository lint/typecheck/test/build gates pass.
+- [x] Development documentation describes the new package boundary.

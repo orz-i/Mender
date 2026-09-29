@@ -357,7 +357,7 @@ See `phase-17-provider-plugin-resilience.md`.
 
 ## Phase 18 — Built-in Provider Plugin Package
 
-Status: In Progress
+Status: Complete
 
 Goals:
 
@@ -365,5 +365,7 @@ Goals:
 - Keep the generic Provider Plugin Runtime implementation-agnostic.
 - Remove direct first-party plugin implementation imports from Runtime composition.
 - Preserve all existing PluginID, ProviderID, ToolID, ConfigVersion, management, and external-plugin compatibility semantics.
+
+Exit criteria are complete. `backend/internal/providerplugin/builtin` now owns the deterministic first-party plugin set and registration entrypoint; Runtime performs one built-in registration call and no longer imports MCP/OpenAPI/Model Tools implementations directly. Existing plugin identities/configuration and external installation semantics are unchanged. Focused and repository lint/test/race/typecheck/build gates pass; the only unavailable aggregate-check step was remote Buf code generation because the Buf hosted plugin service was unavailable, with no generated protocol diff.
 
 See `phase-18-built-in-provider-plugin-package.md`.
