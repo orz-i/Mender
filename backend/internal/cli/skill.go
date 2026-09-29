@@ -3,6 +3,8 @@ package cli
 import (
 	"context"
 	"fmt"
+	"path/filepath"
+	"strings"
 	"text/tabwriter"
 
 	"github.com/orz-i/Mender/backend/internal/bootstrap"
@@ -25,6 +27,9 @@ func (a *app) newSkillCommand() *cobra.Command {
 	command.AddCommand(a.newSkillTrustCommand(false))
 	command.AddCommand(a.newSkillEnabledCommand(true))
 	command.AddCommand(a.newSkillEnabledCommand(false))
+	command.AddCommand(a.newSkillDeployCommand())
+	command.AddCommand(a.newSkillDeploymentsCommand())
+	command.AddCommand(a.newSkillUndeployCommand())
 	command.AddCommand(a.newSkillRemoveCommand())
 	return command
 }
@@ -220,6 +225,177 @@ func (a *app) newSkillEnabledCommand(enabled bool) *cobra.Command {
 	}
 }
 
+func (a *app) newSkillDeployCommand() *cobra.Command {
+	var targetValue string
+	var projectRoot string
+
+	command := &cobra.Command{
+		Use:   "deploy <installation>",
+		Short: "Deploy one exact trusted and enabled Skill installation",
+		Args:  exactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			id, err := skilldomain.ParseInstallationID(args[0])
+			if err != nil {
+				return usageError{err: err}
+			}
+			target := skilldomain.DeploymentTarget(strings.TrimSpace(targetValue))
+			if err := target.Validate(); err != nil {
+				return usageError{err: err}
+			}
+			root, err := a.resolveSkillDeploymentRoot(target, projectRoot)
+			if err != nil {
+				return usageError{err: err}
+			}
+			return a.withRuntime(cmd.Context(), func(runtime *bootstrap.Runtime) error {
+				item, err := runtime.Skills.Deploy(
+					cmd.Context(),
+					id,
+					target,
+					root,
+				)
+				if err != nil {
+					return err
+				}
+				return a.writeValue(
+					fmt.Sprintf(
+						"deployed %s to %s",
+						item.ID(),
+						item.Destination(),
+					),
+					map[string]any{
+						"deployment": skillDeploymentProjection(
+							skillapplication.DeploymentInspection{
+								Deployment:    item,
+								Drift:         skilldomain.DeploymentCurrent,
+								CurrentDigest: item.Digest(),
+							},
+						),
+					},
+				)
+			})
+		},
+	}
+	command.Flags().StringVar(
+		&targetValue,
+		"target",
+		"",
+		"deployment target: agents-project|github-project|claude-project|agents-user|copilot-user",
+	)
+	command.Flags().StringVar(
+		&projectRoot,
+		"project",
+		"",
+		"project root for project-scoped deployment targets",
+	)
+	_ = command.MarkFlagRequired("target")
+	return command
+}
+
+func (a *app) newSkillDeploymentsCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "deployments",
+		Short: "List Skill deployments and current drift state",
+		Args:  exactArgs(0),
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return a.withRuntime(cmd.Context(), func(runtime *bootstrap.Runtime) error {
+				items, err := runtime.Skills.ListDeployments(cmd.Context())
+				if err != nil {
+					return err
+				}
+				if a.output == "json" {
+					projected := make([]map[string]any, 0, len(items))
+					for _, item := range items {
+						projected = append(
+							projected,
+							skillDeploymentProjection(item),
+						)
+					}
+					return a.writeValue(
+						"",
+						map[string]any{"deployments": projected},
+					)
+				}
+				writer := tabwriter.NewWriter(
+					a.options.Stdout,
+					0,
+					4,
+					2,
+					' ',
+					0,
+				)
+				_, _ = fmt.Fprintln(
+					writer,
+					"DEPLOYMENT\tINSTALLATION\tTARGET\tDRIFT\tDESTINATION",
+				)
+				for _, item := range items {
+					_, _ = fmt.Fprintf(
+						writer,
+						"%s\t%s\t%s\t%s\t%s\n",
+						item.Deployment.ID(),
+						item.Deployment.InstallationID(),
+						item.Deployment.Target(),
+						item.Drift,
+						item.Deployment.Destination(),
+					)
+				}
+				return writer.Flush()
+			})
+		},
+	}
+}
+
+func (a *app) newSkillUndeployCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "undeploy <deployment>",
+		Short: "Remove one exact Skill deployment",
+		Args:  exactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			id, err := skilldomain.ParseDeploymentID(args[0])
+			if err != nil {
+				return usageError{err: err}
+			}
+			return a.withRuntime(cmd.Context(), func(runtime *bootstrap.Runtime) error {
+				if err := runtime.Skills.Undeploy(cmd.Context(), id); err != nil {
+					return err
+				}
+				return a.writeValue(
+					fmt.Sprintf("undeployed %s", id),
+					map[string]any{"deploymentId": id.String()},
+				)
+			})
+		},
+	}
+}
+
+func (a *app) resolveSkillDeploymentRoot(
+	target skilldomain.DeploymentTarget,
+	project string,
+) (string, error) {
+	project = strings.TrimSpace(project)
+	if target.ProjectScoped() {
+		if project == "" {
+			return "", fmt.Errorf("--project is required for target %s", target)
+		}
+		absolute, err := filepath.Abs(project)
+		if err != nil {
+			return "", fmt.Errorf("resolve project root: %w", err)
+		}
+		return absolute, nil
+	}
+	if project != "" {
+		return "", fmt.Errorf("--project is only valid for project-scoped deployment targets")
+	}
+	home, err := a.options.HomeDir()
+	if err != nil {
+		return "", fmt.Errorf("resolve home directory: %w", err)
+	}
+	absolute, err := filepath.Abs(home)
+	if err != nil {
+		return "", fmt.Errorf("resolve home directory: %w", err)
+	}
+	return absolute, nil
+}
+
 func (a *app) newSkillRemoveCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "remove <installation>",
@@ -340,6 +516,26 @@ func skillInspectionProjection(
 	}
 	result["resources"] = resources
 	result["totalBytes"] = inspection.TotalBytes
+	return result
+}
+
+func skillDeploymentProjection(
+	inspection skillapplication.DeploymentInspection,
+) map[string]any {
+	item := inspection.Deployment
+	result := map[string]any{
+		"deploymentId":   item.ID().String(),
+		"installationId": item.InstallationID().String(),
+		"target":         string(item.Target()),
+		"root":           item.Root(),
+		"destination":    item.Destination(),
+		"digest":         item.Digest(),
+		"deployedAt":     item.DeployedAt(),
+		"drift":          string(inspection.Drift),
+	}
+	if inspection.CurrentDigest != "" {
+		result["currentDigest"] = inspection.CurrentDigest
+	}
 	return result
 }
 

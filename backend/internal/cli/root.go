@@ -241,6 +241,11 @@ func exitCode(err error) int {
 		errors.Is(err, skillapplication.ErrInstallationConflict),
 		errors.Is(err, skillapplication.ErrInstallationInUse),
 		errors.Is(err, skillapplication.ErrPackageAlreadyInstalled),
+		errors.Is(err, skillapplication.ErrInstallationUntrusted),
+		errors.Is(err, skillapplication.ErrInstallationDisabled),
+		errors.Is(err, skillapplication.ErrDeploymentNotFound),
+		errors.Is(err, skillapplication.ErrDeploymentConflict),
+		errors.Is(err, skillapplication.ErrDeploymentTargetExists),
 		errors.Is(err, bootstrap.ErrBuiltInSkillImmutable),
 		errors.Is(err, mcpconfigstore.ErrNotFound):
 		return ExitConfig
