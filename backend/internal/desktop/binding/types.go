@@ -134,6 +134,65 @@ type ProviderPluginInstallationList struct {
 	Installations []ProviderPluginInstallation `json:"installations"`
 }
 
+type SkillInstallation struct {
+	SkillID         string `json:"skillId"`
+	InstallationID  string `json:"installationId"`
+	Name            string `json:"name"`
+	Description     string `json:"description"`
+	SourceKind      string `json:"sourceKind"`
+	SourceReference string `json:"sourceReference"`
+	Digest          string `json:"digest"`
+	VersionHint     string `json:"versionHint"`
+	Trusted         bool   `json:"trusted"`
+	Enabled         bool   `json:"enabled"`
+	BuiltIn         bool   `json:"builtIn"`
+	InstalledAt     string `json:"installedAt,omitempty"`
+}
+
+type SkillInstallationList struct {
+	Installations []SkillInstallation `json:"installations"`
+}
+
+type SkillMetadata struct {
+	Name          string            `json:"name"`
+	Description   string            `json:"description"`
+	License       string            `json:"license,omitempty"`
+	Compatibility string            `json:"compatibility,omitempty"`
+	Metadata      map[string]string `json:"metadata"`
+	AllowedTools  string            `json:"allowedTools,omitempty"`
+}
+
+type SkillResource struct {
+	Path       string `json:"path"`
+	Kind       string `json:"kind"`
+	Size       int64  `json:"size"`
+	SHA256     string `json:"sha256"`
+	Executable bool   `json:"executable"`
+}
+
+type SkillInspection struct {
+	Installation SkillInstallation `json:"installation"`
+	Metadata     SkillMetadata     `json:"metadata"`
+	Resources    []SkillResource   `json:"resources"`
+	TotalBytes   int64             `json:"totalBytes"`
+}
+
+type SkillDeployment struct {
+	DeploymentID   string `json:"deploymentId"`
+	InstallationID string `json:"installationId"`
+	Target         string `json:"target"`
+	Root           string `json:"root"`
+	Destination    string `json:"destination"`
+	Digest         string `json:"digest"`
+	DeployedAt     string `json:"deployedAt"`
+	Drift          string `json:"drift"`
+	CurrentDigest  string `json:"currentDigest,omitempty"`
+}
+
+type SkillDeploymentList struct {
+	Deployments []SkillDeployment `json:"deployments"`
+}
+
 type Provider struct {
 	ProviderID            string                  `json:"providerId"`
 	Namespace             string                  `json:"namespace"`

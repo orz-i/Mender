@@ -100,6 +100,134 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/skills": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listSkills"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/skills/{installationId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getSkillInstallation"];
+        put?: never;
+        post?: never;
+        delete: operations["deleteSkillInstallation"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/skills/{installationId}/trust": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["trustSkillInstallation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/skills/{installationId}/untrust": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["untrustSkillInstallation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/skills/{installationId}/enable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["enableSkillInstallation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/skills/{installationId}/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["disableSkillInstallation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/skill-deployments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listSkillDeployments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/skill-deployments/{deploymentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["undeploySkill"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/providers": {
         parameters: {
             query?: never;
@@ -743,6 +871,60 @@ export interface components {
             /** Format: date-time */
             installedAt: string;
         };
+        SkillInstallation: {
+            skillId: string;
+            installationId: string;
+            name: string;
+            description: string;
+            /** @enum {string} */
+            sourceKind: "builtin" | "local-directory";
+            sourceReference: string;
+            digest: string;
+            versionHint: string;
+            trusted: boolean;
+            enabled: boolean;
+            builtIn: boolean;
+            /** Format: date-time */
+            installedAt?: string;
+        };
+        SkillMetadata: {
+            name: string;
+            description: string;
+            license?: string;
+            compatibility?: string;
+            metadata: {
+                [key: string]: string;
+            };
+            allowedTools?: string;
+        };
+        SkillResource: {
+            path: string;
+            /** @enum {string} */
+            kind: "manifest" | "script" | "reference" | "asset" | "other";
+            size: number;
+            sha256: string;
+            executable: boolean;
+        };
+        SkillInspection: {
+            installation: components["schemas"]["SkillInstallation"];
+            metadata: components["schemas"]["SkillMetadata"];
+            resources: components["schemas"]["SkillResource"][];
+            totalBytes: number;
+        };
+        SkillDeployment: {
+            deploymentId: string;
+            installationId: string;
+            /** @enum {string} */
+            target: "agents-project" | "github-project" | "claude-project" | "agents-user" | "copilot-user";
+            root: string;
+            destination: string;
+            digest: string;
+            /** Format: date-time */
+            deployedAt: string;
+            /** @enum {string} */
+            drift: "current" | "drifted" | "missing";
+            currentDigest?: string;
+        };
         Provider: {
             providerId: string;
             namespace: string;
@@ -1045,6 +1227,7 @@ export interface components {
     parameters: {
         ProviderId: string;
         InstallationId: string;
+        DeploymentId: string;
         ToolId: string;
         ProfileSlug: string;
         ServerId: string;
@@ -1202,6 +1385,236 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+        };
+    };
+    listSkills: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Built-in and managed Skill installations */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        installations: components["schemas"]["SkillInstallation"][];
+                    };
+                };
+            };
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    getSkillInstallation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                installationId: components["parameters"]["InstallationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Exact Skill installation and bounded resource inventory */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillInspection"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteSkillInstallation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                installationId: components["parameters"]["InstallationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Managed Skill installation removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    trustSkillInstallation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                installationId: components["parameters"]["InstallationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Skill installation trusted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        installation: components["schemas"]["SkillInstallation"];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    untrustSkillInstallation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                installationId: components["parameters"]["InstallationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Skill installation untrusted and disabled */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        installation: components["schemas"]["SkillInstallation"];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    enableSkillInstallation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                installationId: components["parameters"]["InstallationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Skill installation enabled */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        installation: components["schemas"]["SkillInstallation"];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    disableSkillInstallation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                installationId: components["parameters"]["InstallationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Skill installation disabled */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        installation: components["schemas"]["SkillInstallation"];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    listSkillDeployments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Exact Skill deployments and drift state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        deployments: components["schemas"]["SkillDeployment"][];
+                    };
+                };
+            };
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    undeploySkill: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                deploymentId: components["parameters"]["DeploymentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Skill deployment removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     listProviders: {

@@ -16,6 +16,9 @@ import type {
   ProviderPlugin,
   ProviderPluginInstallation,
   ProviderPluginIssue,
+  SkillDeployment,
+  SkillInspection,
+  SkillInstallation,
   SyncResult,
   SystemStatus,
   ToolDetail,
@@ -39,6 +42,11 @@ import {
   type ProviderPlugin as BindingProviderPlugin,
   type ProviderPluginInstallation as BindingProviderPluginInstallation,
   type ProviderPluginIssue as BindingProviderPluginIssue,
+  type SkillDeployment as BindingSkillDeployment,
+  type SkillInspection as BindingSkillInspection,
+  type SkillInstallation as BindingSkillInstallation,
+  type SkillMetadata as BindingSkillMetadata,
+  type SkillResource as BindingSkillResource,
   type SyncResult as BindingSyncResult,
   type SystemStatus as BindingSystemStatus,
   type ToolDetail as BindingToolDetail,
@@ -50,6 +58,22 @@ export async function installDesktopProviderPlugin(
 ): Promise<ProviderPluginInstallation> {
   return providerPluginInstallation(
     await Service.InstallProviderPlugin(sourcePath),
+  );
+}
+
+export async function installDesktopSkill(
+  sourcePath: string,
+): Promise<SkillInstallation> {
+  return skillInstallation(await Service.InstallSkill(sourcePath));
+}
+
+export async function deployDesktopSkill(
+  installationId: string,
+  target: SkillDeployment["target"],
+  projectRoot = "",
+): Promise<SkillDeployment> {
+  return skillDeployment(
+    await Service.DeploySkill(installationId, target, projectRoot),
   );
 }
 
@@ -94,6 +118,66 @@ export function createDesktopMenderClient(): MenderClient {
 
     async deleteProviderPluginInstallation(installationId) {
       await Service.DeleteProviderPluginInstallation(installationId);
+    },
+
+    async listSkills() {
+      const result = await Service.ListSkills();
+      return {
+        installations: (result.installations ?? []).map(skillInstallation),
+      };
+    },
+
+    async getSkillInstallation(installationId) {
+      return skillInspection(
+        await Service.GetSkillInstallation(installationId),
+      );
+    },
+
+    async trustSkillInstallation(installationId) {
+      return {
+        installation: skillInstallation(
+          await Service.TrustSkillInstallation(installationId),
+        ),
+      };
+    },
+
+    async untrustSkillInstallation(installationId) {
+      return {
+        installation: skillInstallation(
+          await Service.UntrustSkillInstallation(installationId),
+        ),
+      };
+    },
+
+    async enableSkillInstallation(installationId) {
+      return {
+        installation: skillInstallation(
+          await Service.EnableSkillInstallation(installationId),
+        ),
+      };
+    },
+
+    async disableSkillInstallation(installationId) {
+      return {
+        installation: skillInstallation(
+          await Service.DisableSkillInstallation(installationId),
+        ),
+      };
+    },
+
+    async deleteSkillInstallation(installationId) {
+      await Service.DeleteSkillInstallation(installationId);
+    },
+
+    async listSkillDeployments() {
+      const result = await Service.ListSkillDeployments();
+      return {
+        deployments: (result.deployments ?? []).map(skillDeployment),
+      };
+    },
+
+    async undeploySkill(deploymentId) {
+      await Service.UndeploySkill(deploymentId);
     },
 
     async listProviders() {
@@ -633,6 +717,143 @@ function providerPluginInstallationStatus(
     return value;
   }
   throw new MenderClientInvariantError("Unsupported Provider plugin installation status: " + value);
+}
+
+function skillInstallation(
+  value: BindingSkillInstallation,
+): SkillInstallation {
+  return {
+    skillId: value.skillId,
+    installationId: value.installationId,
+    name: value.name,
+    description: value.description,
+    sourceKind: skillSourceKind(value.sourceKind),
+    sourceReference: value.sourceReference,
+    digest: value.digest,
+    versionHint: value.versionHint,
+    trusted: value.trusted,
+    enabled: value.enabled,
+    builtIn: value.builtIn,
+    ...(value.installedAt === undefined
+      ? {}
+      : { installedAt: value.installedAt }),
+  };
+}
+
+function skillSourceKind(
+  value: string,
+): SkillInstallation["sourceKind"] {
+  if (value === "builtin" || value === "local-directory") {
+    return value;
+  }
+  throw new MenderClientInvariantError(
+    "Unsupported Skill source kind: " + value,
+  );
+}
+
+function skillInspection(value: BindingSkillInspection): SkillInspection {
+  return {
+    installation: skillInstallation(value.installation),
+    metadata: skillMetadata(value.metadata),
+    resources: (value.resources ?? []).map(skillResource),
+    totalBytes: value.totalBytes,
+  };
+}
+
+function skillMetadata(
+  value: BindingSkillMetadata,
+): SkillInspection["metadata"] {
+  return {
+    name: value.name,
+    description: value.description,
+    ...(value.license === undefined ? {} : { license: value.license }),
+    ...(value.compatibility === undefined
+      ? {}
+      : { compatibility: value.compatibility }),
+    metadata: Object.fromEntries(
+      Object.entries(value.metadata ?? {}).filter(
+        (entry): entry is [string, string] => typeof entry[1] === "string",
+      ),
+    ),
+    ...(value.allowedTools === undefined
+      ? {}
+      : { allowedTools: value.allowedTools }),
+  };
+}
+
+function skillResource(
+  value: BindingSkillResource,
+): SkillInspection["resources"][number] {
+  return {
+    path: value.path,
+    kind: skillResourceKind(value.kind),
+    size: value.size,
+    sha256: value.sha256,
+    executable: value.executable,
+  };
+}
+
+function skillResourceKind(
+  value: string,
+): SkillInspection["resources"][number]["kind"] {
+  if (
+    value === "manifest" ||
+    value === "script" ||
+    value === "reference" ||
+    value === "asset" ||
+    value === "other"
+  ) {
+    return value;
+  }
+  throw new MenderClientInvariantError(
+    "Unsupported Skill resource kind: " + value,
+  );
+}
+
+function skillDeployment(
+  value: BindingSkillDeployment,
+): SkillDeployment {
+  return {
+    deploymentId: value.deploymentId,
+    installationId: value.installationId,
+    target: skillDeploymentTarget(value.target),
+    root: value.root,
+    destination: value.destination,
+    digest: value.digest,
+    deployedAt: value.deployedAt,
+    drift: skillDeploymentDrift(value.drift),
+    ...(value.currentDigest === undefined
+      ? {}
+      : { currentDigest: value.currentDigest }),
+  };
+}
+
+function skillDeploymentTarget(
+  value: string,
+): SkillDeployment["target"] {
+  if (
+    value === "agents-project" ||
+    value === "github-project" ||
+    value === "claude-project" ||
+    value === "agents-user" ||
+    value === "copilot-user"
+  ) {
+    return value;
+  }
+  throw new MenderClientInvariantError(
+    "Unsupported Skill deployment target: " + value,
+  );
+}
+
+function skillDeploymentDrift(
+  value: string,
+): SkillDeployment["drift"] {
+  if (value === "current" || value === "drifted" || value === "missing") {
+    return value;
+  }
+  throw new MenderClientInvariantError(
+    "Unsupported Skill deployment drift: " + value,
+  );
 }
 
 function provider(value: BindingProvider): Provider {

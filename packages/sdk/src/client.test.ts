@@ -413,6 +413,126 @@ describe("Mender SDK", () => {
     });
   });
 
+  it("manages Skill inventory and deployments through the generated contract", async () => {
+    const installationId = "sinst_0123456789abcdef0123456789abcdef";
+    const deploymentId = "sdep_0123456789abcdef0123456789abcdef";
+    let call = 0;
+    const fetch = (request: Request) => {
+      call += 1;
+      if (call === 1) {
+        expect(request.method).toBe("GET");
+        expect(request.url).toContain("/api/v1/skills");
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              installations: [
+                {
+                  skillId: "skill_0123456789abcdef0123456789abcdef",
+                  installationId,
+                  name: "mender-tools",
+                  description: "Mender tools",
+                  sourceKind: "builtin",
+                  sourceReference: "skills/mender-tools",
+                  digest: "sha256:" + "a".repeat(64),
+                  versionHint: "",
+                  trusted: true,
+                  enabled: true,
+                  builtIn: true,
+                },
+              ],
+            }),
+            {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            },
+          ),
+        );
+      }
+      if (call === 2) {
+        expect(request.method).toBe("POST");
+        expect(request.url).toContain(
+          "/api/v1/skills/" + installationId + "/trust",
+        );
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              installation: {
+                skillId: "skill_0123456789abcdef0123456789abcdef",
+                installationId,
+                name: "example-skill",
+                description: "Example",
+                sourceKind: "local-directory",
+                sourceReference: "/tmp/example-skill",
+                digest: "sha256:" + "b".repeat(64),
+                versionHint: "1.0.0",
+                trusted: true,
+                enabled: false,
+                builtIn: false,
+                installedAt: "2026-09-28T00:00:00Z",
+              },
+            }),
+            {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            },
+          ),
+        );
+      }
+      if (call === 3) {
+        expect(request.method).toBe("GET");
+        expect(request.url).toContain("/api/v1/skill-deployments");
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              deployments: [
+                {
+                  deploymentId,
+                  installationId,
+                  target: "agents-project",
+                  root: "/workspace",
+                  destination: "/workspace/.agents/skills/example-skill",
+                  digest: "sha256:" + "b".repeat(64),
+                  deployedAt: "2026-09-28T00:00:00Z",
+                  drift: "current",
+                  currentDigest: "sha256:" + "b".repeat(64),
+                },
+              ],
+            }),
+            {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            },
+          ),
+        );
+      }
+
+      expect(request.method).toBe("DELETE");
+      expect(request.url).toContain(
+        "/api/v1/skill-deployments/" + deploymentId,
+      );
+      return Promise.resolve(new Response(null, { status: 204 }));
+    };
+
+    const client = createMenderClient({
+      baseUrl: "http://localhost:8080/api/v1",
+      fetch,
+    });
+
+    await expect(client.listSkills()).resolves.toMatchObject({
+      installations: [{ name: "mender-tools", builtIn: true }],
+    });
+    await expect(
+      client.trustSkillInstallation(installationId),
+    ).resolves.toMatchObject({
+      installation: { trusted: true, enabled: false },
+    });
+    await expect(client.listSkillDeployments()).resolves.toMatchObject({
+      deployments: [{ deploymentId, drift: "current" }],
+    });
+    await expect(client.undeploySkill(deploymentId)).resolves.toBeUndefined();
+    expect(call).toBe(4);
+  });
+
   it("maps API error envelopes", async () => {
     const client = createMenderClient({
       baseUrl: "http://localhost:8080/api/v1",

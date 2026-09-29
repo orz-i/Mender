@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -22,6 +24,8 @@ import (
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
 	installationdomain "github.com/orz-i/Mender/backend/internal/providerplugin/installation/domain"
+	skillapplication "github.com/orz-i/Mender/backend/internal/skill/application"
+	skilldomain "github.com/orz-i/Mender/backend/internal/skill/domain"
 )
 
 const (
@@ -329,6 +333,174 @@ func (s *Service) DeleteProviderPluginInstallation(
 		return err
 	}
 	return s.runtime.RemoveProviderPluginInstallation(s.ctx, id)
+}
+
+func (s *Service) ListSkills() (SkillInstallationList, error) {
+	items, err := s.runtime.Skills.List(s.ctx)
+	if err != nil {
+		return SkillInstallationList{}, err
+	}
+	result := make([]SkillInstallation, 0, len(items))
+	for _, item := range items {
+		result = append(result, skillInstallationProjection(item))
+	}
+	return SkillInstallationList{Installations: result}, nil
+}
+
+func (s *Service) GetSkillInstallation(
+	installationID string,
+) (SkillInspection, error) {
+	id, err := skilldomain.ParseInstallationID(installationID)
+	if err != nil {
+		return SkillInspection{}, err
+	}
+	item, err := s.runtime.Skills.Inspect(s.ctx, id)
+	if err != nil {
+		return SkillInspection{}, err
+	}
+	return skillInspectionProjection(item), nil
+}
+
+func (s *Service) InstallSkill(
+	sourcePath string,
+) (SkillInstallation, error) {
+	item, err := s.runtime.Skills.InstallLocal(s.ctx, sourcePath)
+	if err != nil {
+		return SkillInstallation{}, err
+	}
+	return managedSkillInstallationProjection(item), nil
+}
+
+func (s *Service) TrustSkillInstallation(
+	installationID string,
+) (SkillInstallation, error) {
+	return s.setSkillTrust(installationID, true)
+}
+
+func (s *Service) UntrustSkillInstallation(
+	installationID string,
+) (SkillInstallation, error) {
+	return s.setSkillTrust(installationID, false)
+}
+
+func (s *Service) setSkillTrust(
+	rawID string,
+	trusted bool,
+) (SkillInstallation, error) {
+	id, err := skilldomain.ParseInstallationID(rawID)
+	if err != nil {
+		return SkillInstallation{}, err
+	}
+	item, err := s.runtime.Skills.SetTrust(s.ctx, id, trusted)
+	if err != nil {
+		return SkillInstallation{}, err
+	}
+	return managedSkillInstallationProjection(item), nil
+}
+
+func (s *Service) EnableSkillInstallation(
+	installationID string,
+) (SkillInstallation, error) {
+	return s.setSkillEnabled(installationID, true)
+}
+
+func (s *Service) DisableSkillInstallation(
+	installationID string,
+) (SkillInstallation, error) {
+	return s.setSkillEnabled(installationID, false)
+}
+
+func (s *Service) setSkillEnabled(
+	rawID string,
+	enabled bool,
+) (SkillInstallation, error) {
+	id, err := skilldomain.ParseInstallationID(rawID)
+	if err != nil {
+		return SkillInstallation{}, err
+	}
+	item, err := s.runtime.Skills.SetEnabled(s.ctx, id, enabled)
+	if err != nil {
+		return SkillInstallation{}, err
+	}
+	return managedSkillInstallationProjection(item), nil
+}
+
+func (s *Service) DeleteSkillInstallation(
+	installationID string,
+) error {
+	id, err := skilldomain.ParseInstallationID(installationID)
+	if err != nil {
+		return err
+	}
+	return s.runtime.Skills.Remove(s.ctx, id)
+}
+
+func (s *Service) ListSkillDeployments() (SkillDeploymentList, error) {
+	items, err := s.runtime.Skills.ListDeployments(s.ctx)
+	if err != nil {
+		return SkillDeploymentList{}, err
+	}
+	result := make([]SkillDeployment, 0, len(items))
+	for _, item := range items {
+		result = append(result, skillDeploymentProjection(item))
+	}
+	return SkillDeploymentList{Deployments: result}, nil
+}
+
+func (s *Service) DeploySkill(
+	installationID string,
+	targetValue string,
+	projectRoot string,
+) (SkillDeployment, error) {
+	id, err := skilldomain.ParseInstallationID(installationID)
+	if err != nil {
+		return SkillDeployment{}, err
+	}
+	target := skilldomain.DeploymentTarget(strings.TrimSpace(targetValue))
+	if err := target.Validate(); err != nil {
+		return SkillDeployment{}, err
+	}
+
+	root := strings.TrimSpace(projectRoot)
+	if target.ProjectScoped() {
+		if root == "" {
+			return SkillDeployment{}, fmt.Errorf("project root is required for target %s", target)
+		}
+		root, err = filepath.Abs(root)
+		if err != nil {
+			return SkillDeployment{}, fmt.Errorf("resolve project root: %w", err)
+		}
+	} else {
+		if root != "" {
+			return SkillDeployment{}, fmt.Errorf("project root is only valid for project-scoped Skill targets")
+		}
+		root, err = os.UserHomeDir()
+		if err != nil {
+			return SkillDeployment{}, fmt.Errorf("resolve user home: %w", err)
+		}
+		root, err = filepath.Abs(root)
+		if err != nil {
+			return SkillDeployment{}, fmt.Errorf("resolve user home path: %w", err)
+		}
+	}
+
+	item, err := s.runtime.Skills.Deploy(s.ctx, id, target, root)
+	if err != nil {
+		return SkillDeployment{}, err
+	}
+	return skillDeploymentProjection(skillapplication.DeploymentInspection{
+		Deployment:    item,
+		Drift:         skilldomain.DeploymentCurrent,
+		CurrentDigest: item.Digest(),
+	}), nil
+}
+
+func (s *Service) UndeploySkill(deploymentID string) error {
+	id, err := skilldomain.ParseDeploymentID(deploymentID)
+	if err != nil {
+		return err
+	}
+	return s.runtime.Skills.Undeploy(s.ctx, id)
 }
 
 func (s *Service) ListProviders() (ProviderList, error) {
@@ -1256,6 +1428,92 @@ func providerPluginInstallationProjection(
 		Digest:         item.Digest(),
 		Status:         string(item.Status()),
 		InstalledAt:    item.InstalledAt().Format(timeFormat),
+	}
+}
+
+func skillInstallationProjection(
+	item bootstrap.SkillInstallation,
+) SkillInstallation {
+	result := SkillInstallation{
+		SkillID:         item.SkillID.String(),
+		InstallationID:  item.InstallationID.String(),
+		Name:            item.Name,
+		Description:     item.Description,
+		SourceKind:      item.SourceKind,
+		SourceReference: item.SourceReference,
+		Digest:          item.Digest,
+		VersionHint:     item.VersionHint,
+		Trusted:         item.Trusted,
+		Enabled:         item.Enabled,
+		BuiltIn:         item.BuiltIn,
+	}
+	if item.InstalledAt != nil {
+		result.InstalledAt = item.InstalledAt.Format(timeFormat)
+	}
+	return result
+}
+
+func managedSkillInstallationProjection(
+	item skilldomain.Installation,
+) SkillInstallation {
+	return SkillInstallation{
+		SkillID:         item.SkillID().String(),
+		InstallationID:  item.ID().String(),
+		Name:            item.Name(),
+		Description:     item.Description(),
+		SourceKind:      string(item.SourceKind()),
+		SourceReference: item.SourceReference(),
+		Digest:          item.Digest(),
+		VersionHint:     item.VersionHint(),
+		Trusted:         item.Trusted(),
+		Enabled:         item.Enabled(),
+		BuiltIn:         false,
+		InstalledAt:     item.InstalledAt().Format(timeFormat),
+	}
+}
+
+func skillInspectionProjection(
+	item bootstrap.SkillInspection,
+) SkillInspection {
+	resources := make([]SkillResource, 0, len(item.Resources))
+	for _, resource := range item.Resources {
+		resources = append(resources, SkillResource{
+			Path:       resource.Path,
+			Kind:       string(resource.Kind),
+			Size:       resource.Size,
+			SHA256:     resource.SHA256,
+			Executable: resource.Executable,
+		})
+	}
+	return SkillInspection{
+		Installation: skillInstallationProjection(item.Installation),
+		Metadata: SkillMetadata{
+			Name:          item.Metadata.Name,
+			Description:   item.Metadata.Description,
+			License:       item.Metadata.License,
+			Compatibility: item.Metadata.Compatibility,
+			Metadata:      item.Metadata.Values,
+			AllowedTools:  item.Metadata.AllowedTools,
+		},
+		Resources:  resources,
+		TotalBytes: item.TotalBytes,
+	}
+}
+
+func skillDeploymentProjection(
+	item skillapplication.DeploymentInspection,
+) SkillDeployment {
+	deployment := item.Deployment
+	return SkillDeployment{
+		DeploymentID:   deployment.ID().String(),
+		InstallationID: deployment.InstallationID().String(),
+		Target:         string(deployment.Target()),
+		Root:           deployment.Root(),
+		Destination:    deployment.Destination(),
+		Digest:         deployment.Digest(),
+		DeployedAt:     deployment.DeployedAt().Format(timeFormat),
+		Drift:          string(item.Drift),
+		CurrentDigest:  item.CurrentDigest,
 	}
 }
 

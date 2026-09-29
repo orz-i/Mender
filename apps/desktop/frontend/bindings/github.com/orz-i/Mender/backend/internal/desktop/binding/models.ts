@@ -239,6 +239,65 @@ export interface ProviderPluginList {
     "issues": ProviderPluginIssue[] | null;
 }
 
+export interface SkillDeployment {
+    "deploymentId": string;
+    "installationId": string;
+    "target": string;
+    "root": string;
+    "destination": string;
+    "digest": string;
+    "deployedAt": string;
+    "drift": string;
+    "currentDigest"?: string;
+}
+
+export interface SkillDeploymentList {
+    "deployments": SkillDeployment[] | null;
+}
+
+export interface SkillInspection {
+    "installation": SkillInstallation;
+    "metadata": SkillMetadata;
+    "resources": SkillResource[] | null;
+    "totalBytes": number;
+}
+
+export interface SkillInstallation {
+    "skillId": string;
+    "installationId": string;
+    "name": string;
+    "description": string;
+    "sourceKind": string;
+    "sourceReference": string;
+    "digest": string;
+    "versionHint": string;
+    "trusted": boolean;
+    "enabled": boolean;
+    "builtIn": boolean;
+    "installedAt"?: string;
+}
+
+export interface SkillInstallationList {
+    "installations": SkillInstallation[] | null;
+}
+
+export interface SkillMetadata {
+    "name": string;
+    "description": string;
+    "license"?: string;
+    "compatibility"?: string;
+    "metadata": { [_ in string]?: string } | null;
+    "allowedTools"?: string;
+}
+
+export interface SkillResource {
+    "path": string;
+    "kind": string;
+    "size": number;
+    "sha256": string;
+    "executable": boolean;
+}
+
 export interface SyncResult {
     "created": number;
     "updated": number;

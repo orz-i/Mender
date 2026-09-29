@@ -21,6 +21,7 @@ import (
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
 	providerconfigstore "github.com/orz-i/Mender/backend/internal/providerplugin/configstore"
 	installationapplication "github.com/orz-i/Mender/backend/internal/providerplugin/installation/application"
+	skillapplication "github.com/orz-i/Mender/backend/internal/skill/application"
 )
 
 type Handler struct {
@@ -68,6 +69,17 @@ func (h *Handler) routes() {
 	h.mux.HandleFunc("POST /api/v1/provider-plugin-installations/{installationId}/enable", h.enableProviderPluginInstallation)
 	h.mux.HandleFunc("POST /api/v1/provider-plugin-installations/{installationId}/disable", h.disableProviderPluginInstallation)
 	h.mux.HandleFunc("DELETE /api/v1/provider-plugin-installations/{installationId}", h.deleteProviderPluginInstallation)
+
+	h.mux.HandleFunc("GET /api/v1/skills", h.listSkills)
+	h.mux.HandleFunc("GET /api/v1/skills/{installationId}", h.getSkillInstallation)
+	h.mux.HandleFunc("POST /api/v1/skills/{installationId}/trust", h.trustSkillInstallation)
+	h.mux.HandleFunc("POST /api/v1/skills/{installationId}/untrust", h.untrustSkillInstallation)
+	h.mux.HandleFunc("POST /api/v1/skills/{installationId}/enable", h.enableSkillInstallation)
+	h.mux.HandleFunc("POST /api/v1/skills/{installationId}/disable", h.disableSkillInstallation)
+	h.mux.HandleFunc("DELETE /api/v1/skills/{installationId}", h.deleteSkillInstallation)
+	h.mux.HandleFunc("GET /api/v1/skill-deployments", h.listSkillDeployments)
+	h.mux.HandleFunc("DELETE /api/v1/skill-deployments/{deploymentId}", h.undeploySkill)
+
 	h.mux.HandleFunc("GET /api/v1/providers", h.listProviders)
 	h.mux.HandleFunc("POST /api/v1/providers", h.createProvider)
 	h.mux.HandleFunc("POST /api/v1/providers/http", h.createHTTPProvider)
@@ -188,6 +200,8 @@ func writeKnownError(w http.ResponseWriter, err error) {
 		errors.Is(err, mcpconfigstore.ErrNotFound),
 		errors.Is(err, providerconfigstore.ErrNotFound),
 		errors.Is(err, installationapplication.ErrInstallationNotFound),
+		errors.Is(err, skillapplication.ErrInstallationNotFound),
+		errors.Is(err, skillapplication.ErrDeploymentNotFound),
 		errors.Is(err, bootstrap.ErrMCPServerNotFound):
 		writeAPIError(w, http.StatusNotFound, "not_found", err)
 
@@ -200,6 +214,15 @@ func writeKnownError(w http.ResponseWriter, err error) {
 		errors.Is(err, installationapplication.ErrInstallationConflict),
 		errors.Is(err, installationapplication.ErrPackageAlreadyInstalled),
 		errors.Is(err, installationapplication.ErrInstallationInUse),
+		errors.Is(err, skillapplication.ErrInstallationConflict),
+		errors.Is(err, skillapplication.ErrPackageAlreadyInstalled),
+		errors.Is(err, skillapplication.ErrInstallationInUse),
+		errors.Is(err, skillapplication.ErrInstallationUntrusted),
+		errors.Is(err, skillapplication.ErrInstallationDisabled),
+		errors.Is(err, skillapplication.ErrDeploymentConflict),
+		errors.Is(err, skillapplication.ErrDeploymentTargetExists),
+		errors.Is(err, skillapplication.ErrAgentPluginTargetExists),
+		errors.Is(err, bootstrap.ErrBuiltInSkillImmutable),
 		errors.Is(err, bootstrap.ErrProviderInUse):
 		writeAPIError(w, http.StatusConflict, "conflict", err)
 
@@ -214,6 +237,7 @@ func writeKnownError(w http.ResponseWriter, err error) {
 		errors.Is(err, profileapplication.ErrInvalidBinding),
 		errors.Is(err, providerplugin.ErrNotFound),
 		errors.Is(err, providerplugin.ErrUnsupportedConfigVersion),
+		errors.Is(err, skillapplication.ErrInvalidAgentPluginPackage),
 		errors.Is(err, bootstrap.ErrInvalidMCPServerAddress):
 		writeAPIError(w, http.StatusBadRequest, "validation_error", err)
 

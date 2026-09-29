@@ -13,16 +13,24 @@ vi.mock(
       CreatePolicyRule: vi.fn(),
       DeleteCredential: vi.fn(),
       DeletePolicyRule: vi.fn(),
+      DeleteSkillInstallation: vi.fn(),
+      DeploySkill: vi.fn(),
+      DisableSkillInstallation: vi.fn(),
+      EnableSkillInstallation: vi.fn(),
       GetCredential: vi.fn(),
       GetPolicy: vi.fn(),
+      GetSkillInstallation: vi.fn(),
       GetPolicyStatus: vi.fn(),
       GetSystemStatus: vi.fn(),
       InstallProviderPlugin: vi.fn(),
+      InstallSkill: vi.fn(),
       ListAudit: vi.fn(),
       ListCredentials: vi.fn(),
       ListMCPServers: vi.fn(),
       ListProviderPlugins: vi.fn(),
       ListProviders: vi.fn(),
+      ListSkillDeployments: vi.fn(),
+      ListSkills: vi.fn(),
       RebindProvider: vi.fn(),
       ReplaceProfileTools: vi.fn(),
       RestartMCPServer: vi.fn(),
@@ -32,6 +40,9 @@ vi.mock(
       SetPolicyRuleEnabled: vi.fn(),
       StartMCPServer: vi.fn(),
       StopMCPServer: vi.fn(),
+      TrustSkillInstallation: vi.fn(),
+      UndeploySkill: vi.fn(),
+      UntrustSkillInstallation: vi.fn(),
       UpdateConfiguredProvider: vi.fn(),
       UpdatePolicyRule: vi.fn(),
       UpdateProvider: vi.fn(),
@@ -43,7 +54,9 @@ import { Service } from "../bindings/github.com/orz-i/Mender/backend/internal/de
 
 import {
   createDesktopMenderClient,
+  deployDesktopSkill,
   installDesktopProviderPlugin,
+  installDesktopSkill,
 } from "./desktop-client";
 
 describe("desktop Mender client", () => {
@@ -124,6 +137,120 @@ describe("desktop Mender client", () => {
     expect(Service.InstallProviderPlugin).toHaveBeenCalledWith(
       "/tmp/provider-plugin",
     );
+  });
+
+  it("adapts Skill inventory and host-local install/deploy capabilities to Wails", async () => {
+    const installationId = "sinst_0123456789abcdef0123456789abcdef";
+    const deploymentId = "sdep_0123456789abcdef0123456789abcdef";
+    const installation = {
+      skillId: "skill_0123456789abcdef0123456789abcdef",
+      installationId,
+      name: "example-skill",
+      description: "Example Skill",
+      sourceKind: "local-directory",
+      sourceReference: "/tmp/example-skill",
+      digest: "sha256:" + "a".repeat(64),
+      versionHint: "1.0.0",
+      trusted: true,
+      enabled: true,
+      builtIn: false,
+      installedAt: "2026-09-28T00:00:00Z",
+    };
+
+    vi.mocked(Service.InstallSkill).mockResolvedValue(installation);
+    vi.mocked(Service.DeploySkill).mockResolvedValue({
+      deploymentId,
+      installationId,
+      target: "agents-project",
+      root: "/workspace",
+      destination: "/workspace/.agents/skills/example-skill",
+      digest: installation.digest,
+      deployedAt: "2026-09-28T01:00:00Z",
+      drift: "current",
+      currentDigest: installation.digest,
+    });
+    vi.mocked(Service.ListSkills).mockResolvedValue({
+      installations: [installation],
+    });
+    vi.mocked(Service.GetSkillInstallation).mockResolvedValue({
+      installation,
+      metadata: {
+        name: "example-skill",
+        description: "Example Skill",
+        license: "Apache-2.0",
+        compatibility: "Requires git",
+        metadata: { version: "1.0.0" },
+        allowedTools: "Bash(git:*)",
+      },
+      resources: [
+        {
+          path: "SKILL.md",
+          kind: "manifest",
+          size: 123,
+          sha256: "sha256:" + "b".repeat(64),
+          executable: false,
+        },
+      ],
+      totalBytes: 123,
+    });
+    vi.mocked(Service.ListSkillDeployments).mockResolvedValue({
+      deployments: [
+        {
+          deploymentId,
+          installationId,
+          target: "agents-project",
+          root: "/workspace",
+          destination: "/workspace/.agents/skills/example-skill",
+          digest: installation.digest,
+          deployedAt: "2026-09-28T01:00:00Z",
+          drift: "current",
+          currentDigest: installation.digest,
+        },
+      ],
+    });
+
+    await expect(
+      installDesktopSkill("/tmp/example-skill"),
+    ).resolves.toMatchObject({
+      installationId,
+      sourceKind: "local-directory",
+      trusted: true,
+    });
+    expect(Service.InstallSkill).toHaveBeenCalledWith("/tmp/example-skill");
+
+    await expect(
+      deployDesktopSkill(
+        installationId,
+        "agents-project",
+        "/workspace",
+      ),
+    ).resolves.toMatchObject({
+      deploymentId,
+      target: "agents-project",
+      drift: "current",
+    });
+    expect(Service.DeploySkill).toHaveBeenCalledWith(
+      installationId,
+      "agents-project",
+      "/workspace",
+    );
+
+    const client = createDesktopMenderClient();
+    await expect(client.listSkills()).resolves.toMatchObject({
+      installations: [{ installationId, name: "example-skill" }],
+    });
+    await expect(
+      client.getSkillInstallation(installationId),
+    ).resolves.toMatchObject({
+      metadata: {
+        license: "Apache-2.0",
+        allowedTools: "Bash(git:*)",
+      },
+      resources: [{ kind: "manifest", executable: false }],
+    });
+    await expect(client.listSkillDeployments()).resolves.toMatchObject({
+      deployments: [{ deploymentId, drift: "current" }],
+    });
   });
 
   it("adapts generic Provider plugin discovery and configuration to Wails", async () => {

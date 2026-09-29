@@ -6,6 +6,9 @@ export type ProviderPlugin = components["schemas"]["ProviderPlugin"];
 export type ProviderPluginIssue = components["schemas"]["ProviderPluginIssue"];
 export type ProviderPluginInstallation =
   components["schemas"]["ProviderPluginInstallation"];
+export type SkillInstallation = components["schemas"]["SkillInstallation"];
+export type SkillInspection = components["schemas"]["SkillInspection"];
+export type SkillDeployment = components["schemas"]["SkillDeployment"];
 export type Provider = components["schemas"]["Provider"];
 export type SyncResult = components["schemas"]["SyncResult"];
 export type ToolSummary = components["schemas"]["ToolSummary"];
@@ -81,6 +84,23 @@ export interface MenderClient {
     installationId: string,
   ): Promise<{ installation: ProviderPluginInstallation }>;
   deleteProviderPluginInstallation(installationId: string): Promise<void>;
+  listSkills(): Promise<{ installations: SkillInstallation[] }>;
+  getSkillInstallation(installationId: string): Promise<SkillInspection>;
+  trustSkillInstallation(
+    installationId: string,
+  ): Promise<{ installation: SkillInstallation }>;
+  untrustSkillInstallation(
+    installationId: string,
+  ): Promise<{ installation: SkillInstallation }>;
+  enableSkillInstallation(
+    installationId: string,
+  ): Promise<{ installation: SkillInstallation }>;
+  disableSkillInstallation(
+    installationId: string,
+  ): Promise<{ installation: SkillInstallation }>;
+  deleteSkillInstallation(installationId: string): Promise<void>;
+  listSkillDeployments(): Promise<{ deployments: SkillDeployment[] }>;
+  undeploySkill(deploymentId: string): Promise<void>;
   listProviders(): Promise<{ providers: Provider[] }>;
   createProvider(body: CreateProviderRequest): Promise<ProviderMutationResponse>;
   createHTTPProvider(
@@ -205,6 +225,70 @@ export function createMenderClient(
       const result = await client.DELETE(
         "/provider-plugin-installations/{installationId}",
         { params: { path: { installationId } } },
+      );
+      if (!result.response.ok) {
+        throwApiError(result.error, result.response);
+      }
+    },
+
+    async listSkills() {
+      const result = await client.GET("/skills");
+      return requireData(result);
+    },
+
+    async getSkillInstallation(installationId: string) {
+      const result = await client.GET("/skills/{installationId}", {
+        params: { path: { installationId } },
+      });
+      return requireData(result);
+    },
+
+    async trustSkillInstallation(installationId: string) {
+      const result = await client.POST("/skills/{installationId}/trust", {
+        params: { path: { installationId } },
+      });
+      return requireData(result);
+    },
+
+    async untrustSkillInstallation(installationId: string) {
+      const result = await client.POST("/skills/{installationId}/untrust", {
+        params: { path: { installationId } },
+      });
+      return requireData(result);
+    },
+
+    async enableSkillInstallation(installationId: string) {
+      const result = await client.POST("/skills/{installationId}/enable", {
+        params: { path: { installationId } },
+      });
+      return requireData(result);
+    },
+
+    async disableSkillInstallation(installationId: string) {
+      const result = await client.POST("/skills/{installationId}/disable", {
+        params: { path: { installationId } },
+      });
+      return requireData(result);
+    },
+
+    async deleteSkillInstallation(installationId: string) {
+      const result = await client.DELETE("/skills/{installationId}", {
+        params: { path: { installationId } },
+      });
+      if (!result.response.ok) {
+        throwApiError(result.error, result.response);
+      }
+    },
+
+    async listSkillDeployments() {
+      const result = await client.GET("/skill-deployments");
+      return requireData(result);
+    },
+
+    async undeploySkill(deploymentId: string) {
+      const result = await client.DELETE(
+        "/skill-deployments/{deploymentId}",
+        { params: { path: { deploymentId } } },
       );
       if (!result.response.ok) {
         throwApiError(result.error, result.response);

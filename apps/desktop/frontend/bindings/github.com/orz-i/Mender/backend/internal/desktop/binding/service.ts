@@ -72,12 +72,28 @@ export function DeleteProviderPluginInstallation(installationID: string): $Cance
     return $Call.ByID(4131022889, installationID);
 }
 
+export function DeleteSkillInstallation(installationID: string): $CancellablePromise<void> {
+    return $Call.ByID(4128705940, installationID);
+}
+
+export function DeploySkill(installationID: string, targetValue: string, projectRoot: string): $CancellablePromise<$models.SkillDeployment> {
+    return $Call.ByID(1977911452, installationID, targetValue, projectRoot);
+}
+
 export function DisableProviderPluginInstallation(installationID: string): $CancellablePromise<$models.ProviderPluginInstallation> {
     return $Call.ByID(3166916010, installationID);
 }
 
+export function DisableSkillInstallation(installationID: string): $CancellablePromise<$models.SkillInstallation> {
+    return $Call.ByID(3452175237, installationID);
+}
+
 export function EnableProviderPluginInstallation(installationID: string): $CancellablePromise<$models.ProviderPluginInstallation> {
     return $Call.ByID(2779584597, installationID);
+}
+
+export function EnableSkillInstallation(installationID: string): $CancellablePromise<$models.SkillInstallation> {
+    return $Call.ByID(1714532984, installationID);
 }
 
 export function GetCredential($namespace: string, name: string): $CancellablePromise<$models.Credential> {
@@ -100,6 +116,10 @@ export function GetProfile(slug: string): $CancellablePromise<$models.Profile> {
     return $Call.ByID(3495904181, slug);
 }
 
+export function GetSkillInstallation(installationID: string): $CancellablePromise<$models.SkillInspection> {
+    return $Call.ByID(2370910789, installationID);
+}
+
 export function GetSystemStatus(): $CancellablePromise<$models.SystemStatus> {
     return $Call.ByID(2309541875);
 }
@@ -110,6 +130,10 @@ export function GetTool(toolID: string): $CancellablePromise<$models.ToolDetail>
 
 export function InstallProviderPlugin(sourcePath: string): $CancellablePromise<$models.ProviderPluginInstallation> {
     return $Call.ByID(524382217, sourcePath);
+}
+
+export function InstallSkill(sourcePath: string): $CancellablePromise<$models.SkillInstallation> {
+    return $Call.ByID(3234224228, sourcePath);
 }
 
 export function ListAudit(limit: number): $CancellablePromise<$models.AuditList> {
@@ -138,6 +162,14 @@ export function ListProviderPlugins(): $CancellablePromise<$models.ProviderPlugi
 
 export function ListProviders(): $CancellablePromise<$models.ProviderList> {
     return $Call.ByID(3638226830);
+}
+
+export function ListSkillDeployments(): $CancellablePromise<$models.SkillDeploymentList> {
+    return $Call.ByID(2861503963);
+}
+
+export function ListSkills(): $CancellablePromise<$models.SkillInstallationList> {
+    return $Call.ByID(2845482598);
 }
 
 export function RebindProvider(providerID: string, installationID: string, config: { [_ in string]?: any } | null): $CancellablePromise<$models.ProviderMutationResponse> {
@@ -182,6 +214,18 @@ export function StopMCPServer(serverID: string): $CancellablePromise<void> {
 
 export function SyncProvider(providerID: string): $CancellablePromise<$models.SyncResult> {
     return $Call.ByID(2246585286, providerID);
+}
+
+export function TrustSkillInstallation(installationID: string): $CancellablePromise<$models.SkillInstallation> {
+    return $Call.ByID(3977894639, installationID);
+}
+
+export function UndeploySkill(deploymentID: string): $CancellablePromise<void> {
+    return $Call.ByID(1941215937, deploymentID);
+}
+
+export function UntrustSkillInstallation(installationID: string): $CancellablePromise<$models.SkillInstallation> {
+    return $Call.ByID(3196712560, installationID);
 }
 
 export function UpdateConfiguredProvider(providerID: string, displayName: string, description: string, config: { [_ in string]?: any } | null): $CancellablePromise<$models.ProviderMutationResponse> {

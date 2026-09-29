@@ -105,6 +105,157 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
+  /skills:
+    get:
+      operationId: listSkills
+      responses:
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '200':
+          description: Built-in and managed Skill installations
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [installations]
+                properties:
+                  installations:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SkillInstallation'
+  /skills/{installationId}:
+    get:
+      operationId: getSkillInstallation
+      parameters:
+        - $ref: '#/components/parameters/InstallationId'
+      responses:
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '200':
+          description: Exact Skill installation and bounded resource inventory
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SkillInspection'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      operationId: deleteSkillInstallation
+      parameters:
+        - $ref: '#/components/parameters/InstallationId'
+      responses:
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '204':
+          description: Managed Skill installation removed
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /skills/{installationId}/trust:
+    post:
+      operationId: trustSkillInstallation
+      parameters:
+        - $ref: '#/components/parameters/InstallationId'
+      responses:
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '200':
+          description: Skill installation trusted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [installation]
+                properties:
+                  installation:
+                    $ref: '#/components/schemas/SkillInstallation'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /skills/{installationId}/untrust:
+    post:
+      operationId: untrustSkillInstallation
+      parameters:
+        - $ref: '#/components/parameters/InstallationId'
+      responses:
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '200':
+          description: Skill installation untrusted and disabled
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [installation]
+                properties:
+                  installation:
+                    $ref: '#/components/schemas/SkillInstallation'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /skills/{installationId}/enable:
+    post:
+      operationId: enableSkillInstallation
+      parameters:
+        - $ref: '#/components/parameters/InstallationId'
+      responses:
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '200':
+          description: Skill installation enabled
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [installation]
+                properties:
+                  installation:
+                    $ref: '#/components/schemas/SkillInstallation'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /skills/{installationId}/disable:
+    post:
+      operationId: disableSkillInstallation
+      parameters:
+        - $ref: '#/components/parameters/InstallationId'
+      responses:
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '200':
+          description: Skill installation disabled
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [installation]
+                properties:
+                  installation:
+                    $ref: '#/components/schemas/SkillInstallation'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /skill-deployments:
+    get:
+      operationId: listSkillDeployments
+      responses:
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '200':
+          description: Exact Skill deployments and drift state
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [deployments]
+                properties:
+                  deployments:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SkillDeployment'
+  /skill-deployments/{deploymentId}:
+    delete:
+      operationId: undeploySkill
+      parameters:
+        - $ref: '#/components/parameters/DeploymentId'
+      responses:
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '204':
+          description: Skill deployment removed
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /providers:
     get:
       operationId: listProviders
@@ -751,6 +902,11 @@ components:
       in: path
       required: true
       schema: { type: string }
+    DeploymentId:
+      name: deploymentId
+      in: path
+      required: true
+      schema: { type: string }
     ToolId:
       name: toolId
       in: path
@@ -1007,6 +1163,82 @@ components:
           type: string
           enum: [enabled, disabled, invalid]
         installedAt: { type: string, format: date-time }
+      additionalProperties: false
+    SkillInstallation:
+      type: object
+      required: [skillId, installationId, name, description, sourceKind, sourceReference, digest, versionHint, trusted, enabled, builtIn]
+      properties:
+        skillId: { type: string }
+        installationId: { type: string }
+        name: { type: string }
+        description: { type: string }
+        sourceKind:
+          type: string
+          enum: [builtin, local-directory]
+        sourceReference: { type: string }
+        digest: { type: string }
+        versionHint: { type: string }
+        trusted: { type: boolean }
+        enabled: { type: boolean }
+        builtIn: { type: boolean }
+        installedAt: { type: string, format: date-time }
+      additionalProperties: false
+    SkillMetadata:
+      type: object
+      required: [name, description, metadata]
+      properties:
+        name: { type: string }
+        description: { type: string }
+        license: { type: string }
+        compatibility: { type: string }
+        metadata:
+          type: object
+          additionalProperties: { type: string }
+        allowedTools: { type: string }
+      additionalProperties: false
+    SkillResource:
+      type: object
+      required: [path, kind, size, sha256, executable]
+      properties:
+        path: { type: string }
+        kind:
+          type: string
+          enum: [manifest, script, reference, asset, other]
+        size: { type: integer, minimum: 0 }
+        sha256: { type: string }
+        executable: { type: boolean }
+      additionalProperties: false
+    SkillInspection:
+      type: object
+      required: [installation, metadata, resources, totalBytes]
+      properties:
+        installation:
+          $ref: '#/components/schemas/SkillInstallation'
+        metadata:
+          $ref: '#/components/schemas/SkillMetadata'
+        resources:
+          type: array
+          items:
+            $ref: '#/components/schemas/SkillResource'
+        totalBytes: { type: integer, minimum: 0 }
+      additionalProperties: false
+    SkillDeployment:
+      type: object
+      required: [deploymentId, installationId, target, root, destination, digest, deployedAt, drift]
+      properties:
+        deploymentId: { type: string }
+        installationId: { type: string }
+        target:
+          type: string
+          enum: [agents-project, github-project, claude-project, agents-user, copilot-user]
+        root: { type: string }
+        destination: { type: string }
+        digest: { type: string }
+        deployedAt: { type: string, format: date-time }
+        drift:
+          type: string
+          enum: [current, drifted, missing]
+        currentDigest: { type: string }
       additionalProperties: false
     Provider:
       type: object
