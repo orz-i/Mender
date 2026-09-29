@@ -1,4 +1,9 @@
-import type { MenderClient, ProviderPluginInstallation } from "@mender/sdk";
+import type {
+  MenderClient,
+  ProviderPluginInstallation,
+  SkillDeployment,
+  SkillInstallation,
+} from "@mender/sdk";
 import { TooltipProvider } from "@mender/ui/components/tooltip";
 import { Route, Routes } from "react-router";
 
@@ -10,6 +15,7 @@ import { PolicyPage } from "./domains/policy/policy-page";
 import { ProfilesPage } from "./domains/profiles/profiles-page";
 import { ProvidersPage } from "./domains/providers/providers-page";
 import { ServersPage } from "./domains/servers/servers-page";
+import { SkillsPage } from "./domains/skills/skills-page";
 import { useLocale } from "./i18n/i18n";
 import { ManagementShell } from "./shell/management-shell";
 
@@ -17,10 +23,17 @@ export function MenderApp({
   client,
   copyText,
   installProviderPlugin,
+  installSkill,
+  deploySkill,
 }: {
   client: MenderClient;
   copyText?: (value: string) => Promise<void>;
   installProviderPlugin?: () => Promise<ProviderPluginInstallation | null>;
+  installSkill?: () => Promise<SkillInstallation | null>;
+  deploySkill?: (
+    installationId: string,
+    target: SkillDeployment["target"],
+  ) => Promise<SkillDeployment | null>;
 }) {
   useLocale();
 
@@ -37,6 +50,16 @@ export function MenderApp({
                 {...(installProviderPlugin === undefined
                   ? {}
                   : { installProviderPlugin })}
+              />
+            }
+          />
+          <Route
+            path="skills"
+            element={
+              <SkillsPage
+                client={client}
+                {...(installSkill === undefined ? {} : { installSkill })}
+                {...(deploySkill === undefined ? {} : { deploySkill })}
               />
             }
           />

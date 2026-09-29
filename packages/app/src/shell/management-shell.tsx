@@ -11,6 +11,7 @@ import {
 const navigation = [
   { to: "/", label: "Overview", end: true },
   { to: "/providers", label: "Providers" },
+  { to: "/skills", label: "Skills" },
   { to: "/catalog", label: "Catalog" },
   { to: "/profiles", label: "Profiles" },
   { to: "/servers", label: "Servers" },
