@@ -1,10 +1,17 @@
 import { useEffect, useState } from "react";
+import {
+  ActivityIcon,
+  BookOpenIcon,
+  Layers3Icon,
+  PlugIcon,
+} from "lucide-react";
 
 import type {
   AuditRecord,
   MenderClient,
   Profile,
   Provider,
+  SkillInstallation,
   SystemStatus,
 } from "@mender/sdk";
 import { Card, CardContent, CardHeader, CardTitle } from "@mender/ui/components/card";
@@ -19,6 +26,7 @@ type OverviewState = {
   status: SystemStatus;
   providers: Provider[];
   profiles: Profile[];
+  skills: SkillInstallation[];
   records: AuditRecord[];
 };
 
@@ -32,9 +40,10 @@ export function OverviewPage({ client }: { client: MenderClient }) {
       client.getSystemStatus(),
       client.listProviders(),
       client.listProfiles(),
+      client.listSkills(),
       client.listAudit(50),
     ])
-      .then(([status, providers, profiles, audit]) => {
+      .then(([status, providers, profiles, skills, audit]) => {
         if (!active) {
           return;
         }
@@ -42,6 +51,7 @@ export function OverviewPage({ client }: { client: MenderClient }) {
           status,
           providers: providers.providers,
           profiles: profiles.profiles,
+          skills: skills.installations,
           records: audit.records,
         });
         setError("");
@@ -75,29 +85,30 @@ export function OverviewPage({ client }: { client: MenderClient }) {
           value={t(data?.status.ready ? "Ready" : "Loading")}
           description="Management operations use the shared local Runtime."
           status={data?.status.ready ? "good" : "neutral"}
+          icon={<ActivityIcon />}
         />
         <StatusCard
           title="Providers"
           value={formatNumber(data?.providers.length ?? 0)}
           description="Registered tool sources."
+          icon={<PlugIcon />}
+        />
+        <StatusCard
+          title="Skills"
+          value={formatNumber(data?.skills.length ?? 0)}
+          description="Portable agent workflows in the Skill Library."
+          icon={<BookOpenIcon />}
         />
         <StatusCard
           title="Profiles"
           value={formatNumber(data?.profiles.length ?? 0)}
           description="MCP exposure boundaries."
-        />
-        <StatusCard
-          title="Credentials"
-          value={
-            data?.status.credentials.resolver ?? t("Loading")
-          }
-          description="Inventory-backed Credential resolution is available without storing secret values in Mender's SQLite database."
-          status={data?.status.credentials.editable ? "good" : "warning"}
+          icon={<Layers3Icon />}
         />
       </div>
 
-      <Card className="mt-6">
-        <CardHeader>
+      <Card className="mt-5">
+        <CardHeader className="border-b border-border/65">
           <CardTitle>{t("Recent invocations")}</CardTitle>
         </CardHeader>
         <CardContent>

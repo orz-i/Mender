@@ -1,8 +1,20 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import {
+  BookOpenIcon,
+  FileCode2Icon,
   EyeIcon,
+  HardDriveIcon,
+  PackageOpenIcon,
+  PlusIcon,
   PowerIcon,
   PowerOffIcon,
+  RefreshCwIcon,
+  SearchIcon,
   ShieldCheckIcon,
   ShieldOffIcon,
   Trash2Icon,
@@ -18,13 +30,6 @@ import type {
 import { Badge } from "@mender/ui/components/badge";
 import { Button } from "@mender/ui/components/button";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@mender/ui/components/card";
-import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -32,14 +37,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@mender/ui/components/dialog";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@mender/ui/components/table";
 
 import { formatDateTime, formatNumber, t } from "../../i18n/i18n";
 import { errorMessage } from "../../shared/errors";
@@ -52,6 +49,12 @@ type DeploySkill = (
   installationId: string,
   target: SkillDeployment["target"],
 ) => Promise<SkillDeployment | null>;
+
+type SkillFilter = "all" | "builtin" | "installed" | "enabled";
+type SkillSourceFilter = "all" | "builtin" | "local";
+type SkillStatusFilter = "all" | "enabled" | "disabled";
+type SkillSort = "name" | "version";
+type SkillView = "overview" | "resources" | "deployments";
 
 const deploymentTargets: Array<{
   value: SkillDeployment["target"];
@@ -79,7 +82,16 @@ export function SkillsPage({
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
 
+  const [selected, setSelected] = useState<SkillInstallation | null>(null);
   const [inspection, setInspection] = useState<SkillInspection | null>(null);
+  const [skillView, setSkillView] = useState<SkillView>("overview");
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<SkillFilter>("all");
+  const [sourceFilter, setSourceFilter] =
+    useState<SkillSourceFilter>("all");
+  const [statusFilter, setStatusFilter] =
+    useState<SkillStatusFilter>("all");
+  const [sort, setSort] = useState<SkillSort>("name");
   const [deploying, setDeploying] = useState<SkillInstallation | null>(null);
   const [deploymentTarget, setDeploymentTarget] =
     useState<SkillDeployment["target"]>("agents-project");
@@ -92,6 +104,16 @@ export function SkillsPage({
       ]);
       setInstallations(skillResult.installations);
       setDeployments(deploymentResult.deployments);
+      setSelected((current) => {
+        if (current === null) {
+          return null;
+        }
+        return (
+          skillResult.installations.find(
+            (item) => item.installationId === current.installationId,
+          ) ?? null
+        );
+      });
       setError("");
     } catch (reason) {
       setError(errorMessage(reason));
@@ -102,7 +124,10 @@ export function SkillsPage({
 
   useEffect(() => {
     let active = true;
-    void Promise.all([client.listSkills(), client.listSkillDeployments()])
+    void Promise.all([
+      client.listSkills(),
+      client.listSkillDeployments(),
+    ])
       .then(([skillResult, deploymentResult]) => {
         if (!active) {
           return;
@@ -110,11 +135,14 @@ export function SkillsPage({
         setInstallations(skillResult.installations);
         setDeployments(deploymentResult.deployments);
         setError("");
-        setLoaded(true);
       })
       .catch((reason: unknown) => {
         if (active) {
           setError(errorMessage(reason));
+        }
+      })
+      .finally(() => {
+        if (active) {
           setLoaded(true);
         }
       });
@@ -123,15 +151,88 @@ export function SkillsPage({
     };
   }, [client]);
 
-  const installationByID = useMemo(
-    () =>
-      new Map(
-        installations.map((item) => [item.installationId, item] as const),
-      ),
-    [installations],
-  );
-  const skillPagination = usePagination(installations);
-  const deploymentPagination = usePagination(deployments);
+  const visibleInstallations = useMemo(() => {
+    const normalizedQuery = query.trim().toLocaleLowerCase();
+    return installations.filter((item) => {
+      const matchesFilter =
+        filter === "all" ||
+        (filter === "builtin" && item.builtIn) ||
+        (filter === "installed" && !item.builtIn) ||
+        (filter === "enabled" && item.enabled);
+      const matchesSource =
+        sourceFilter === "all" ||
+        (sourceFilter === "builtin" && item.builtIn) ||
+        (sourceFilter === "local" && !item.builtIn);
+      const matchesStatus =
+        statusFilter === "all" ||
+        (statusFilter === "enabled" && item.enabled) ||
+        (statusFilter === "disabled" && !item.enabled);
+      const matchesQuery =
+        !normalizedQuery ||
+        item.name.toLocaleLowerCase().includes(normalizedQuery) ||
+        item.description.toLocaleLowerCase().includes(normalizedQuery);
+      return matchesFilter && matchesSource && matchesStatus && matchesQuery;
+    }).sort((a, b) => {
+      if (a.builtIn !== b.builtIn) {
+        return a.builtIn ? -1 : 1;
+      }
+      if (sort === "version") {
+        return (a.versionHint || "").localeCompare(b.versionHint || "");
+      }
+      return a.name.localeCompare(b.name);
+    });
+  }, [
+    filter,
+    installations,
+    query,
+    sort,
+    sourceFilter,
+    statusFilter,
+  ]);
+
+  useEffect(() => {
+    if (selected === null) {
+      return;
+    }
+
+    let active = true;
+    void client
+      .getSkillInstallation(selected.installationId)
+      .then((item) => {
+        if (active) {
+          setInspection(item);
+          setError("");
+        }
+      })
+      .catch((reason: unknown) => {
+        if (active) {
+          setInspection(null);
+          setError(errorMessage(reason));
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [client, selected]);
+
+  const skillPagination = usePagination(visibleInstallations, {
+    initialPageSize: 10,
+    pageSizeOptions: [10, 25, 50],
+  });
+
+  const selectedDeployments =
+    selected === null
+      ? []
+      : deployments.filter(
+          (item) => item.installationId === selected.installationId,
+        );
+  const selectedInspection =
+    selected !== null &&
+    inspection?.installation.installationId === selected.installationId
+      ? inspection
+      : null;
+  const mutating = busy !== "" && !busy.startsWith("view:");
 
   async function install() {
     if (installSkill === undefined) {
@@ -142,20 +243,11 @@ export function SkillsPage({
     try {
       const installed = await installSkill();
       if (installed !== null) {
+        setSelected(installed);
+        setInspection(null);
+        setSkillView("overview");
         await refresh();
       }
-    } catch (reason) {
-      setError(errorMessage(reason));
-    } finally {
-      setBusy("");
-    }
-  }
-
-  async function view(item: SkillInstallation) {
-    setBusy("view:" + item.installationId);
-    setError("");
-    try {
-      setInspection(await client.getSkillInstallation(item.installationId));
     } catch (reason) {
       setError(errorMessage(reason));
     } finally {
@@ -245,27 +337,41 @@ export function SkillsPage({
     }
   }
 
+  function openSkill(item: SkillInstallation) {
+    setSelected(item);
+    setInspection(null);
+    setSkillView("overview");
+  }
+
+  function closeSkill() {
+    setSelected(null);
+    setInspection(null);
+    setSkillView("overview");
+  }
+
   return (
     <>
       <PageHeader
         title="Skills"
-        description="Manage portable Agent Skills, exact installations, trust, and deployments."
+        description="Install, manage, inspect, and deploy Agent Skills from one governed library."
         actions={
           <div className="flex gap-2">
             <Button
               type="button"
               variant="outline"
               onClick={() => void refresh()}
-              disabled={busy !== ""}
+              disabled={mutating}
             >
+              <RefreshCwIcon data-icon="inline-start" />
               {t("Refresh")}
             </Button>
             {installSkill !== undefined ? (
               <Button
                 type="button"
                 onClick={() => void install()}
-                disabled={busy !== ""}
+                disabled={mutating}
               >
+                <PlusIcon data-icon="inline-start" />
                 {busy === "install" ? t("Installing…") : t("Install Skill")}
               </Button>
             ) : null}
@@ -275,79 +381,190 @@ export function SkillsPage({
 
       {error ? <ErrorNotice message={error} /> : null}
 
-      <Card>
-        <CardHeader className="border-b">
-          <CardTitle>{t("Skill Library")}</CardTitle>
-          <CardDescription>
-            {t(
-              "Built-in Skills are immutable. Local installations must be trusted before they can be enabled or deployed.",
-            )}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {!loaded ? (
-            <p className="text-sm text-muted-foreground">{t("Loading…")}</p>
-          ) : installations.length === 0 ? (
-            <EmptyState
-              title="No Skills"
-              description="Install a local Agent Skill or use a built-in Skill."
-            />
-          ) : (
-            <>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>{t("Skill")}</TableHead>
-                    <TableHead>{t("Source")}</TableHead>
-                    <TableHead>{t("Version")}</TableHead>
-                    <TableHead>{t("Trust")}</TableHead>
-                    <TableHead>{t("Enabled")}</TableHead>
-                    <TableHead className="text-right">
-                      {t("Actions")}
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
+      <section className="min-w-0">
+          <div className="overflow-hidden rounded-2xl border border-border/80 bg-card shadow-[0_1px_2px_rgb(15_23_42/0.03)]">
+            <div className="border-b border-border/70 px-4">
+              <div className="flex min-w-max items-center gap-1 overflow-x-auto">
+                <FilterTab
+                  label="All Skills"
+                  count={installations.length}
+                  active={filter === "all"}
+                  onClick={() => setFilter("all")}
+                />
+                <FilterTab
+                  label="Built-in"
+                  count={installations.filter((item) => item.builtIn).length}
+                  active={filter === "builtin"}
+                  onClick={() => setFilter("builtin")}
+                />
+                <FilterTab
+                  label="Installed Skills"
+                  count={installations.filter((item) => !item.builtIn).length}
+                  active={filter === "installed"}
+                  onClick={() => setFilter("installed")}
+                />
+                <FilterTab
+                  label="Enabled"
+                  count={installations.filter((item) => item.enabled).length}
+                  active={filter === "enabled"}
+                  onClick={() => setFilter("enabled")}
+                />
+              </div>
+            </div>
+
+            <div className="border-b border-border/70 p-4">
+              <div className="flex flex-col gap-2 lg:flex-row">
+                <div className="relative min-w-0 flex-1">
+                  <SearchIcon
+                    className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+                    aria-hidden="true"
+                  />
+                  <input
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                    placeholder={t("Search Skills…")}
+                    aria-label={t("Search Skills")}
+                    className="h-10 w-full rounded-xl border border-input bg-background pl-9 pr-3 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/20"
+                  />
+                </div>
+
+                <select
+                  aria-label={t("Skill source filter")}
+                  value={sourceFilter}
+                  onChange={(event) =>
+                    setSourceFilter(
+                      event.target.value as SkillSourceFilter,
+                    )
+                  }
+                  className="h-10 rounded-xl border border-input bg-background px-3 text-sm text-foreground outline-none focus:border-ring focus:ring-2 focus:ring-ring/20"
+                >
+                  <option value="all">{t("All Sources")}</option>
+                  <option value="builtin">{t("Built-in")}</option>
+                  <option value="local">{t("Local")}</option>
+                </select>
+
+                <select
+                  aria-label={t("Skill status filter")}
+                  value={statusFilter}
+                  onChange={(event) =>
+                    setStatusFilter(
+                      event.target.value as SkillStatusFilter,
+                    )
+                  }
+                  className="h-10 rounded-xl border border-input bg-background px-3 text-sm text-foreground outline-none focus:border-ring focus:ring-2 focus:ring-ring/20"
+                >
+                  <option value="all">{t("All Status")}</option>
+                  <option value="enabled">{t("Enabled")}</option>
+                  <option value="disabled">{t("Disabled")}</option>
+                </select>
+
+                <select
+                  aria-label={t("Skill sort")}
+                  value={sort}
+                  onChange={(event) =>
+                    setSort(event.target.value as SkillSort)
+                  }
+                  className="h-10 rounded-xl border border-input bg-background px-3 text-sm text-foreground outline-none focus:border-ring focus:ring-2 focus:ring-ring/20"
+                >
+                  <option value="name">{t("Name")}</option>
+                  <option value="version">{t("Version")}</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="p-3">
+              {!loaded ? (
+                <p className="px-3 py-10 text-center text-sm text-muted-foreground">
+                  {t("Loading…")}
+                </p>
+              ) : visibleInstallations.length === 0 ? (
+                <EmptyState
+                  title="No matching Skills"
+                  description="Try a different search or filter."
+                />
+              ) : (
+                <div className="space-y-2">
                   {skillPagination.items.map((item) => (
-                    <TableRow key={item.installationId}>
-                      <TableCell>
-                        <div className="min-w-0">
-                          <p className="font-medium">{item.name}</p>
-                          <p className="max-w-[28rem] truncate text-xs text-muted-foreground">
-                            {item.description}
-                          </p>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline">
-                          {item.builtIn ? t("Built-in") : t("Local")}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        {item.versionHint || t("Unversioned")}
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant={item.trusted ? "outline" : "secondary"}
+                      <div
+                        key={item.installationId}
+                        className="group flex min-h-[112px] items-center gap-3 rounded-2xl border border-border/75 bg-background p-4 transition-all hover:border-border hover:bg-muted/20"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => openSkill(item)}
+                          className="flex min-w-0 flex-1 items-center gap-3 text-left outline-none"
                         >
-                          {item.trusted ? t("Trusted") : t("Untrusted")}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant={item.enabled ? "outline" : "secondary"}
-                        >
-                          {item.enabled ? t("Enabled") : t("Disabled")}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex justify-end gap-1">
+                          <span
+                            className={[
+                              "flex size-12 shrink-0 items-center justify-center rounded-xl",
+                              item.builtIn
+                                ? "bg-primary/10 text-primary"
+                                : "bg-muted text-muted-foreground",
+                            ].join(" ")}
+                          >
+                            {item.builtIn ? (
+                              <BookOpenIcon className="size-[22px]" />
+                            ) : (
+                              <FileCode2Icon className="size-[22px]" />
+                            )}
+                          </span>
+
+                          <span className="min-w-0 flex-1">
+                            <span className="flex min-w-0 items-center gap-2">
+                              <span className="truncate text-sm font-semibold tracking-tight">
+                                {item.name}
+                              </span>
+                              <Badge
+                                variant="outline"
+                                className={[
+                                  "shrink-0 rounded-full px-2 py-0 text-[10px] font-medium",
+                                  item.builtIn
+                                    ? "border-primary/15 bg-primary/7 text-primary"
+                                    : "bg-muted/60 text-muted-foreground",
+                                ].join(" ")}
+                              >
+                                {item.builtIn ? t("Built-in") : t("Local")}
+                              </Badge>
+                            </span>
+                            <span className="mt-1 line-clamp-2 block max-w-2xl text-xs leading-5 text-muted-foreground">
+                              {item.description}
+                            </span>
+                          </span>
+
+                          <span className="hidden w-24 shrink-0 text-right sm:block">
+                            <span className="block text-xs text-muted-foreground">
+                              {item.versionHint || t("Unversioned")}
+                            </span>
+                            <span
+                              className={[
+                                "mt-1 inline-flex items-center gap-1.5 text-xs font-medium",
+                                item.enabled
+                                  ? "text-emerald-600"
+                                  : "text-muted-foreground",
+                              ].join(" ")}
+                            >
+                              <span
+                                className={[
+                                  "size-1.5 rounded-full",
+                                  item.enabled
+                                    ? "bg-emerald-500"
+                                    : "bg-muted-foreground/50",
+                                ].join(" ")}
+                              />
+                              {item.enabled ? t("Enabled") : t("Disabled")}
+                            </span>
+                          </span>
+                        </button>
+
+                        <div className="flex shrink-0 items-center gap-0.5">
                           <IconButton
                             type="button"
                             variant="ghost"
-                            label={t("View {{skill}}", { skill: item.name })}
-                            disabled={busy !== ""}
-                            onClick={() => void view(item)}
+                            label={t("View {{skill}}", {
+                              skill: item.name,
+                            })}
+                            disabled={mutating}
+                            onClick={() => openSkill(item)}
                           >
                             <EyeIcon />
                           </IconButton>
@@ -358,7 +575,7 @@ export function SkillsPage({
                               label={t("Deploy {{skill}}", {
                                 skill: item.name,
                               })}
-                              disabled={busy !== ""}
+                              disabled={mutating}
                               onClick={() => setDeploying(item)}
                             >
                               <UploadIcon />
@@ -378,7 +595,7 @@ export function SkillsPage({
                                         skill: item.name,
                                       })
                                 }
-                                disabled={busy !== ""}
+                                disabled={mutating}
                                 onClick={() => void toggleTrust(item)}
                               >
                                 {item.trusted ? (
@@ -399,7 +616,7 @@ export function SkillsPage({
                                         skill: item.name,
                                       })
                                 }
-                                disabled={busy !== "" || !item.trusted}
+                                disabled={mutating || !item.trusted}
                                 onClick={() => void toggleEnabled(item)}
                               >
                                 {item.enabled ? (
@@ -414,7 +631,7 @@ export function SkillsPage({
                                 label={t("Delete {{skill}}", {
                                   skill: item.name,
                                 })}
-                                disabled={busy !== ""}
+                                disabled={mutating}
                                 onClick={() => void remove(item)}
                               >
                                 <Trash2Icon />
@@ -422,166 +639,141 @@ export function SkillsPage({
                             </>
                           ) : null}
                         </div>
-                      </TableCell>
-                    </TableRow>
+                      </div>
                   ))}
-                </TableBody>
-              </Table>
-              <TablePagination label="Skills" pagination={skillPagination} />
-            </>
-          )}
-        </CardContent>
-      </Card>
+                </div>
+              )}
 
-      <Card className="mt-6">
-        <CardHeader className="border-b">
-          <CardTitle>{t("Deployments")}</CardTitle>
-          <CardDescription>
-            {t(
-              "Deployments bind one exact Skill installation to an Agent host directory and report local drift.",
-            )}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {deployments.length === 0 ? (
-            <EmptyState
-              title="No Skill deployments"
-              description="Deploy a trusted Skill from Desktop or the CLI."
-            />
-          ) : (
-            <>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>{t("Skill")}</TableHead>
-                    <TableHead>{t("Target")}</TableHead>
-                    <TableHead>{t("Drift")}</TableHead>
-                    <TableHead>{t("Destination")}</TableHead>
-                    <TableHead>{t("Deployed")}</TableHead>
-                    <TableHead className="text-right">
-                      {t("Actions")}
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {deploymentPagination.items.map((item) => (
-                    <TableRow key={item.deploymentId}>
-                      <TableCell>
-                        {installationByID.get(item.installationId)?.name ??
-                          item.installationId}
-                      </TableCell>
-                      <TableCell>{deploymentTargetLabel(item.target)}</TableCell>
-                      <TableCell>
-                        <Badge
-                          variant={
-                            item.drift === "current"
-                              ? "outline"
-                              : "secondary"
-                          }
-                        >
-                          {deploymentDriftLabel(item.drift)}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <span
-                          className="block max-w-[28rem] truncate font-mono text-xs"
-                          title={item.destination}
-                        >
-                          {item.destination}
-                        </span>
-                      </TableCell>
-                      <TableCell>{formatDateTime(item.deployedAt)}</TableCell>
-                      <TableCell>
-                        <div className="flex justify-end">
-                          <IconButton
-                            type="button"
-                            variant="ghost"
-                            label={t("Undeploy {{skill}}", {
-                              skill:
-                                installationByID.get(item.installationId)
-                                  ?.name ?? item.installationId,
-                            })}
-                            disabled={busy !== ""}
-                            onClick={() => void undeploy(item)}
-                          >
-                            <Trash2Icon />
-                          </IconButton>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-              <TablePagination
-                label="Skill deployments"
-                pagination={deploymentPagination}
-              />
-            </>
-          )}
-        </CardContent>
-      </Card>
+              {visibleInstallations.length ? (
+                <TablePagination label="Skills" pagination={skillPagination} />
+              ) : null}
+            </div>
+          </div>
+        </section>
 
       <Dialog
-        open={inspection !== null}
+        open={selected !== null}
         onOpenChange={(open) => {
           if (!open) {
-            setInspection(null);
+            closeSkill();
           }
         }}
       >
-        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-3xl">
-          {inspection !== null ? (
-            <>
-              <DialogHeader>
-                <DialogTitle>{inspection.installation.name}</DialogTitle>
-                <DialogDescription>
-                  {t("Exact Skill installation and validated resource inventory.")}
-                </DialogDescription>
-              </DialogHeader>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>
+              {skillView === "overview"
+                ? t("Skill details")
+                : skillView === "resources"
+                  ? t("Skill resources")
+                  : t("Skill deployments")}
+            </DialogTitle>
+            <DialogDescription>
+              {selected === null
+                ? t("Exact Skill installation")
+                : t("Exact installation {{installation}} of {{skill}}.", {
+                    installation: selected.installationId,
+                    skill: selected.name,
+                  })}
+            </DialogDescription>
+          </DialogHeader>
+
+          {selected !== null && skillView === "overview" ? (
+            <div className="space-y-5">
+              <div className="flex items-start gap-3 rounded-xl border border-border/70 bg-muted/15 p-4">
+                <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                  {selected.builtIn ? (
+                    <BookOpenIcon className="size-5" />
+                  ) : (
+                    <FileCode2Icon className="size-5" />
+                  )}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-base font-semibold tracking-tight">
+                      {selected.name}
+                    </p>
+                    <Badge
+                      variant="outline"
+                      className="rounded-full px-2 py-0 text-[10px]"
+                    >
+                      {selected.builtIn ? t("Built-in") : t("Local")}
+                    </Badge>
+                    <Badge
+                      variant="outline"
+                      className={[
+                        "rounded-full px-2 py-0 text-[10px]",
+                        selected.enabled
+                          ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                          : "bg-muted text-muted-foreground",
+                      ].join(" ")}
+                    >
+                      {selected.enabled ? t("Enabled") : t("Disabled")}
+                    </Badge>
+                  </div>
+                  <p className="mt-1 text-sm leading-5 text-muted-foreground">
+                    {selected.description}
+                  </p>
+                </div>
+              </div>
 
               <div className="grid gap-3 sm:grid-cols-2">
-                <DetailRow
+                <SkillMeta
                   label="Installation"
-                  value={inspection.installation.installationId}
+                  value={selected.installationId}
                   mono
                 />
-                <DetailRow
-                  label="Skill ID"
-                  value={inspection.installation.skillId}
-                  mono
+                <SkillMeta label="Skill ID" value={selected.skillId} mono />
+                <SkillMeta
+                  label="Version"
+                  value={selected.versionHint || t("Unversioned")}
                 />
-                <DetailRow
+                <SkillMeta
+                  label="Source"
+                  value={selected.builtIn ? t("Built-in") : t("Local")}
+                />
+                <SkillMeta
                   label="Digest"
-                  value={inspection.installation.digest}
+                  value={shortDigest(selected.digest)}
                   mono
                 />
-                <DetailRow
-                  label="Total size"
-                  value={t("{{count}} bytes", {
-                    count: formatNumber(inspection.totalBytes),
-                  })}
-                />
-                <DetailRow
-                  label="License"
-                  value={inspection.metadata.license || t("Not declared")}
-                />
-                <DetailRow
-                  label="Compatibility"
+                <SkillMeta
+                  label="Installed"
                   value={
-                    inspection.metadata.compatibility || t("Not declared")
+                    selected.installedAt
+                      ? formatDateTime(selected.installedAt)
+                      : t("Built-in")
+                  }
+                />
+                <SkillMeta
+                  label="Resources"
+                  value={
+                    selectedInspection === null
+                      ? t("Loading…")
+                      : formatNumber(selectedInspection.resources.length)
+                  }
+                />
+                <SkillMeta
+                  label="Size"
+                  value={
+                    selectedInspection === null
+                      ? t("Loading…")
+                      : t("{{count}} bytes", {
+                          count: formatNumber(selectedInspection.totalBytes),
+                        })
                   }
                 />
               </div>
 
-              {inspection.metadata.allowedTools ? (
-                <div className="rounded-lg border bg-muted/30 p-3">
-                  <p className="text-xs font-medium text-muted-foreground">
+              {selectedInspection?.metadata.allowedTools ? (
+                <div className="rounded-xl border border-border/70 p-4">
+                  <p className="text-sm font-medium">
                     {t("Allowed tools metadata")}
                   </p>
-                  <p className="mt-1 font-mono text-xs">
-                    {inspection.metadata.allowedTools}
+                  <p className="mt-2 truncate font-mono text-xs text-muted-foreground">
+                    {selectedInspection.metadata.allowedTools}
                   </p>
-                  <p className="mt-2 text-xs text-muted-foreground">
+                  <p className="mt-2 text-xs leading-5 text-muted-foreground">
                     {t(
                       "This metadata is informational only. Mender Policy and Profile governance remain authoritative.",
                     )}
@@ -589,41 +781,164 @@ export function SkillsPage({
                 </div>
               ) : null}
 
-              <div>
-                <h3 className="mb-2 text-sm font-medium">
-                  {t("Resources")}
-                </h3>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>{t("Path")}</TableHead>
-                      <TableHead>{t("Kind")}</TableHead>
-                      <TableHead>{t("Size")}</TableHead>
-                      <TableHead>{t("Executable")}</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {inspection.resources.map((resource) => (
-                      <TableRow key={resource.path}>
-                        <TableCell className="font-mono text-xs">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setSkillView("resources")}
+                >
+                  <PackageOpenIcon data-icon="inline-start" />
+                  {t("View resources")}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setSkillView("deployments")}
+                >
+                  <HardDriveIcon data-icon="inline-start" />
+                  {t("View deployments")}
+                </Button>
+              </div>
+            </div>
+          ) : null}
+
+          {selected !== null && skillView === "resources" ? (
+            <div className="max-h-[58vh] overflow-y-auto rounded-xl border border-border/70">
+              {selectedInspection === null ? (
+                <p className="px-4 py-10 text-center text-sm text-muted-foreground">
+                  {t("Loading…")}
+                </p>
+              ) : selectedInspection.resources.length ? (
+                <div className="divide-y divide-border/60">
+                  {selectedInspection.resources.map((resource) => (
+                    <div
+                      key={resource.path}
+                      className="flex items-start gap-3 px-4 py-3"
+                    >
+                      <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                        <FileCode2Icon className="size-4" />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="break-all font-mono text-xs">
                           {resource.path}
-                        </TableCell>
-                        <TableCell>{resourceKindLabel(resource.kind)}</TableCell>
-                        <TableCell>
+                        </p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {resourceKindLabel(resource.kind)} ·{" "}
                           {t("{{count}} bytes", {
                             count: formatNumber(resource.size),
                           })}
-                        </TableCell>
-                        <TableCell>
-                          {resource.executable ? t("Yes") : t("No")}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            </>
+                        </p>
+                      </div>
+                      {resource.executable ? (
+                        <Badge
+                          variant="outline"
+                          className="shrink-0 rounded-full px-2 py-0 text-[10px]"
+                        >
+                          {t("Executable")}
+                        </Badge>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="px-4 py-10 text-center text-sm text-muted-foreground">
+                  {t("No resources in this installation.")}
+                </p>
+              )}
+            </div>
           ) : null}
+
+          {selected !== null && skillView === "deployments" ? (
+            <div className="space-y-3">
+              <div className="max-h-[52vh] overflow-y-auto space-y-2">
+                {selectedDeployments.length ? (
+                  selectedDeployments.map((item) => (
+                    <div
+                      key={item.deploymentId}
+                      className="flex items-start gap-3 rounded-xl border border-border/70 p-4"
+                    >
+                      <HardDriveIcon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-sm font-medium">
+                            {deploymentTargetLabel(item.target)}
+                          </p>
+                          <Badge
+                            variant="outline"
+                            className={[
+                              "rounded-full px-2 py-0 text-[10px]",
+                              item.drift === "current"
+                                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                : "bg-muted text-muted-foreground",
+                            ].join(" ")}
+                          >
+                            {deploymentDriftLabel(item.drift)}
+                          </Badge>
+                        </div>
+                        <p
+                          className="mt-1 break-all font-mono text-xs text-muted-foreground"
+                          title={item.destination}
+                        >
+                          {item.destination}
+                        </p>
+                        <p className="mt-2 text-xs text-muted-foreground">
+                          {formatDateTime(item.deployedAt)}
+                        </p>
+                      </div>
+                      <IconButton
+                        type="button"
+                        variant="ghost"
+                        label={t("Undeploy {{skill}}", {
+                          skill: selected.name,
+                        })}
+                        disabled={mutating}
+                        onClick={() => void undeploy(item)}
+                      >
+                        <Trash2Icon />
+                      </IconButton>
+                    </div>
+                  ))
+                ) : (
+                  <div className="rounded-xl border border-dashed border-border/80 p-8 text-center">
+                    <HardDriveIcon className="mx-auto size-5 text-muted-foreground" />
+                    <p className="mt-2 text-sm font-medium">
+                      {t("No deployments")}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {t("No deployments for this exact installation.")}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {deploySkill !== undefined && selected.enabled ? (
+                <Button
+                  type="button"
+                  className="w-full"
+                  onClick={() => {
+                    setDeploying(selected);
+                    closeSkill();
+                  }}
+                  disabled={mutating}
+                >
+                  <UploadIcon data-icon="inline-start" />
+                  {t("Deploy Skill")}
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
+
+          <DialogFooter showCloseButton>
+            {skillView !== "overview" ? (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setSkillView("overview")}
+              >
+                {t("Back")}
+              </Button>
+            ) : null}
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -658,7 +973,7 @@ export function SkillsPage({
                   event.target.value as SkillDeployment["target"],
                 )
               }
-              className="h-9 rounded-lg border border-input bg-background px-2 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring/40"
+              className="h-10 rounded-xl border border-input bg-background px-3 text-sm text-foreground outline-none focus:border-ring focus:ring-2 focus:ring-ring/20"
             >
               {deploymentTargets.map((item) => (
                 <option key={item.value} value={item.value}>
@@ -689,7 +1004,45 @@ export function SkillsPage({
   );
 }
 
-function DetailRow({
+function FilterTab({
+  label,
+  count,
+  active,
+  onClick,
+}: {
+  label: string;
+  count: number;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={[
+        "relative flex h-12 items-center gap-2 px-3 text-sm font-medium transition-colors",
+        active
+          ? "text-primary"
+          : "text-muted-foreground hover:text-foreground",
+      ].join(" ")}
+    >
+      {t(label)}
+      <span
+        className={[
+          "rounded-full px-1.5 py-0.5 text-[10px] tabular-nums",
+          active ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground",
+        ].join(" ")}
+      >
+        {formatNumber(count)}
+      </span>
+      {active ? (
+        <span className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-primary" />
+      ) : null}
+    </button>
+  );
+}
+
+function SkillMeta({
   label,
   value,
   mono = false,
@@ -699,7 +1052,7 @@ function DetailRow({
   mono?: boolean;
 }) {
   return (
-    <div className="rounded-lg border bg-muted/20 p-3">
+    <div className="min-w-0 rounded-xl border border-border/70 bg-muted/20 p-3">
       <p className="text-xs font-medium text-muted-foreground">{t(label)}</p>
       <p
         className={[
@@ -711,6 +1064,13 @@ function DetailRow({
       </p>
     </div>
   );
+}
+
+function shortDigest(value: string) {
+  if (value.length <= 20) {
+    return value;
+  }
+  return value.slice(0, 14) + "…" + value.slice(-6);
 }
 
 function deploymentTargetLabel(target: SkillDeployment["target"]) {

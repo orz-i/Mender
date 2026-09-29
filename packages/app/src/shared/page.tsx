@@ -1,4 +1,16 @@
 import type { ReactNode } from "react";
+import {
+  BookOpenIcon,
+  KeyRoundIcon,
+  Layers3Icon,
+  LayoutDashboardIcon,
+  PackageSearchIcon,
+  PlugIcon,
+  ScrollTextIcon,
+  ServerCogIcon,
+  ShieldCheckIcon,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
 import { Badge } from "@mender/ui/components/badge";
 import {
@@ -11,6 +23,18 @@ import {
 
 import { t } from "../i18n/i18n";
 
+const pageIcons: Record<string, LucideIcon> = {
+  Overview: LayoutDashboardIcon,
+  Providers: PlugIcon,
+  Skills: BookOpenIcon,
+  Catalog: PackageSearchIcon,
+  Profiles: Layers3Icon,
+  Servers: ServerCogIcon,
+  Policy: ShieldCheckIcon,
+  Credentials: KeyRoundIcon,
+  Audit: ScrollTextIcon,
+};
+
 export function PageHeader({
   title,
   description,
@@ -20,22 +44,33 @@ export function PageHeader({
   description: string;
   actions?: ReactNode;
 }) {
+  const Icon = pageIcons[title];
+
   return (
-    <header className="mb-6 flex items-start justify-between gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">{t(title)}</h1>
-        <p className="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">
-          {t(description)}
-        </p>
+    <header className="mb-5 flex items-start justify-between gap-6 border-b border-border/65 pb-5">
+      <div className="flex min-w-0 items-start gap-3.5">
+        {Icon ? (
+          <span className="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-sm shadow-primary/20">
+            <Icon className="size-6" aria-hidden="true" />
+          </span>
+        ) : null}
+        <div className="min-w-0 pt-0.5">
+          <h1 className="text-[1.7rem] font-semibold tracking-[-0.025em] text-foreground">
+            {t(title)}
+          </h1>
+          <p className="mt-1 max-w-3xl text-sm leading-5 text-muted-foreground">
+            {t(description)}
+          </p>
+        </div>
       </div>
-      {actions}
+      {actions ? <div className="shrink-0 pt-0.5">{actions}</div> : null}
     </header>
   );
 }
 
 export function ErrorNotice({ message }: { message: string }) {
   return (
-    <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+    <div className="mb-5 rounded-xl border border-destructive/25 bg-destructive/8 px-4 py-3 text-sm text-destructive shadow-[0_1px_2px_rgb(15_23_42/0.02)]">
       {message}
     </div>
   );
@@ -49,9 +84,11 @@ export function EmptyState({
   description: string;
 }) {
   return (
-    <div className="rounded-lg border border-dashed border-border px-6 py-10 text-center">
-      <p className="font-medium">{t(title)}</p>
-      <p className="mt-1 text-sm text-muted-foreground">{t(description)}</p>
+    <div className="rounded-2xl border border-dashed border-border/90 bg-muted/15 px-6 py-12 text-center">
+      <p className="font-medium tracking-tight">{t(title)}</p>
+      <p className="mx-auto mt-1 max-w-lg text-sm leading-5 text-muted-foreground">
+        {t(description)}
+      </p>
     </div>
   );
 }
@@ -61,25 +98,45 @@ export function StatusCard({
   value,
   description,
   status = "neutral",
+  icon,
 }: {
   title: string;
   value: string;
   description: string;
   status?: "neutral" | "good" | "warning";
+  icon?: ReactNode;
 }) {
   return (
-    <Card>
-      <CardHeader className="pb-2">
-        <div className="flex items-center justify-between gap-3">
-          <CardDescription>{t(title)}</CardDescription>
-          <Badge variant={status === "warning" ? "secondary" : "outline"}>
+    <Card className="gap-3 py-4">
+      <CardHeader className="gap-2 pb-0">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            {icon ? (
+              <span className="flex size-9 items-center justify-center rounded-xl bg-primary/8 text-primary [&_svg]:size-[17px]">
+                {icon}
+              </span>
+            ) : null}
+            <div>
+              <CardDescription className="font-medium">
+                {t(title)}
+              </CardDescription>
+              <CardTitle className="mt-0.5 text-2xl font-semibold tracking-[-0.03em]">
+                {value}
+              </CardTitle>
+            </div>
+          </div>
+          <Badge
+            variant={status === "warning" ? "secondary" : "outline"}
+            className="rounded-full px-2 py-0.5 text-[10px]"
+          >
             {t(status)}
           </Badge>
         </div>
-        <CardTitle className="text-lg">{value}</CardTitle>
       </CardHeader>
       <CardContent>
-        <p className="text-sm text-muted-foreground">{t(description)}</p>
+        <p className="text-xs leading-5 text-muted-foreground">
+          {t(description)}
+        </p>
       </CardContent>
     </Card>
   );

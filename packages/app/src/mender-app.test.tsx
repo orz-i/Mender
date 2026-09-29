@@ -88,6 +88,7 @@ function overviewClient(): MenderClient {
     }),
     listProviders: () => Promise.resolve({ providers: [] }),
     listProfiles: () => Promise.resolve({ profiles: [] }),
+    listSkills: () => Promise.resolve({ installations: [] }),
     listAudit: () => Promise.resolve({ records: [] }),
   } as unknown as MenderClient;
 }

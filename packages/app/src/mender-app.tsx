@@ -40,7 +40,7 @@ export function MenderApp({
   return (
     <TooltipProvider>
       <Routes>
-        <Route element={<ManagementShell />}>
+        <Route element={<ManagementShell client={client} />}>
           <Route index element={<OverviewPage client={client} />} />
           <Route
             path="providers"

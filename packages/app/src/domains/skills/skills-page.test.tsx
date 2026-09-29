@@ -19,7 +19,7 @@ import { MenderApp } from "../../mender-app";
 afterEach(cleanup);
 
 describe("SkillsPage", () => {
-  it("manages exact Skill inventory and desktop-only host actions", async () => {
+  it("uses one-category-at-a-time Skill detail dialogs", async () => {
     const installation: SkillInstallation = {
       skillId: "skill_0123456789abcdef0123456789abcdef",
       installationId: "sinst_0123456789abcdef0123456789abcdef",
@@ -119,30 +119,76 @@ describe("SkillsPage", () => {
     expect(
       await screen.findByRole("heading", { name: "Skills" }),
     ).toBeTruthy();
-    expect((await screen.findAllByText("example-skill")).length).toBeGreaterThan(0);
-    expect(screen.getByText("mender-tools")).toBeTruthy();
-    expect(
-      screen.getByText("/workspace/.agents/skills/example-skill"),
-    ).toBeTruthy();
+    expect(screen.getAllByText("mender-tools").length).toBeGreaterThan(0);
+
+    fireEvent.change(screen.getByLabelText("Skill source filter"), {
+      target: { value: "local" },
+    });
+    expect(screen.queryByText("mender-tools")).toBeNull();
 
     fireEvent.click(
       screen.getByRole("button", { name: "View example-skill" }),
     );
-    expect(
-      await screen.findByText(
-        "Exact Skill installation and validated resource inventory.",
-      ),
-    ).toBeTruthy();
-    expect(screen.getByText("Apache-2.0")).toBeTruthy();
-    expect(screen.getByText("Bash(git:*)")).toBeTruthy();
-    expect(screen.getByText("SKILL.md")).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(
+      await screen.findByRole("heading", { name: "Skill details" }),
+    ).toBeTruthy();
+    await waitFor(() => {
+      expect(getSkillInstallation).toHaveBeenCalledWith(
+        installation.installationId,
+      );
+    });
+    expect(screen.getByText("Bash(git:*)")).toBeTruthy();
+    expect(screen.queryByText("SKILL.md")).toBeNull();
+    expect(
+      screen.queryByText("/workspace/.agents/skills/example-skill"),
+    ).toBeNull();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "View resources" }),
+    );
+    expect(
+      screen.getByRole("heading", { name: "Skill resources" }),
+    ).toBeTruthy();
+    expect(screen.getByText("SKILL.md")).toBeTruthy();
+    expect(
+      screen.queryByText("/workspace/.agents/skills/example-skill"),
+    ).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    expect(
+      screen.getByRole("heading", { name: "Skill details" }),
+    ).toBeTruthy();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "View deployments" }),
+    );
+    expect(
+      screen.getByRole("heading", { name: "Skill deployments" }),
+    ).toBeTruthy();
+    expect(
+      screen.getByText("/workspace/.agents/skills/example-skill"),
+    ).toBeTruthy();
+    expect(screen.queryByText("SKILL.md")).toBeNull();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Undeploy example-skill" }),
+    );
+    await waitFor(() => {
+      expect(undeploySkill).toHaveBeenCalledWith(deployment.deploymentId);
+    });
+
+    fireEvent.click(
+      screen.getAllByRole("button", { name: "Close" })[0]!,
+    );
 
     fireEvent.click(screen.getByRole("button", { name: "Install Skill" }));
     await waitFor(() => {
       expect(installSkill).toHaveBeenCalledTimes(1);
     });
+    fireEvent.click(
+      screen.getAllByRole("button", { name: "Close" })[0]!,
+    );
 
     fireEvent.click(
       screen.getByRole("button", { name: "Deploy example-skill" }),
@@ -165,13 +211,6 @@ describe("SkillsPage", () => {
       expect(untrustSkillInstallation).toHaveBeenCalledWith(
         installation.installationId,
       );
-    });
-
-    fireEvent.click(
-      screen.getByRole("button", { name: "Undeploy example-skill" }),
-    );
-    await waitFor(() => {
-      expect(undeploySkill).toHaveBeenCalledWith(deployment.deploymentId);
     });
   });
 });
