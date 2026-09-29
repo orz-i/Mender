@@ -1,6 +1,6 @@
 # Phase 19 Plan — Skill Resource Management & Distribution
 
-Status: In Progress
+Status: Complete
 
 ## Objective
 
@@ -328,22 +328,80 @@ docs(skill): complete skill resource management phase
 
 Skill/workflow directories `.agents/`, `.pi/`, and `.intent-loop/` remain outside all commits.
 
-## Current implementation progress
+## Completion evidence
 
-Completed in the first Phase 19 implementation tranche:
+Phase 19 landed in segmented commits covering the complete lifecycle:
 
-- Agent Skills frontmatter/resource validation with bounded ingestion and no execution;
-- deterministic per-resource and installation SHA-256 manifests;
-- stable Mender SkillID / exact InstallationID types;
-- built-in `mender-tools` compiled into release binaries with a parity test against the repository source;
-- immutable managed local-directory snapshots plus SQLite installation metadata;
-- side-by-side exact installations for changed content from one logical source lineage;
-- explicit trust and enablement state (local third-party installations start untrusted/disabled);
-- shared Runtime Skill Library combining built-in and managed installations;
-- CLI `skill list/inspect/validate/install/trust/untrust/enable/disable/remove` with stable JSON output;
-- tranche verification: full `pnpm check` and `pnpm security:check` pass after synchronizing the Desktop module's indirect YAML dependency.
+- `864d1e2` — define ADR-0029 and the Phase 19 governance contract;
+- `0d465d4` — add bounded Agent Skills validation and deterministic resource manifests;
+- `a3deae2` — register release-safe built-in `mender-tools`;
+- `937576a` — persist immutable managed Skill installations;
+- `2e27245` — compose the Runtime Skill Library;
+- `e9c1dfb` — add CLI installation/trust/enable lifecycle;
+- `f1e7db7` — synchronize the Desktop module's indirect YAML dependency;
+- `d4f2950` — document the managed Skill CLI;
+- `668a3d8` — add exact local deployment adapters and drift detection;
+- `dd625ff` — expose deployment lifecycle through the CLI;
+- `0e65125` — export deterministic skills-only Agent Plugins 1.0 packages;
+- `cf4cec1` — add OpenAPI/HTTP/Wails/SDK Skill management contracts;
+- `99b46f7` — add shared Web/Desktop Skill Library UI;
+- `edb92c9` — pin protobuf code generation to local versioned Go plugins;
+- `ec082ce` — add an official Go vulnerability database fallback for unavailable canonical-network paths.
 
-Next work starts with explicit deployment records/adapters and drift detection, then Agent Plugin export and management/Web/Desktop surfaces.
+The resulting Skill lifecycle is:
+
+~~~text
+Agent Skills directory
+  -> bounded validation / no execution
+  -> exact immutable installation + digest
+  -> explicit trust
+  -> explicit enablement
+  -> exact deployment / drift observation
+  -> optional deterministic Agent Plugin export
+~~~
+
+Built-in and managed installations share one Runtime inventory. Local third-party content starts untrusted/disabled. Deployed installations cannot be disabled, untrusted, or removed until exact deployments are removed. Host deployment copies may drift; the managed installation remains canonical and immutable.
+
+Supported deployment targets are:
+
+~~~text
+agents-project
+github-project
+claude-project
+agents-user
+copilot-user
+~~~
+
+Agent Plugin export uses the Agent Plugins 1.0 canonical schema and writes `plugin.json` plus `skills/<name>/...`. It does not implicitly generate `mcp.json`.
+
+Management boundaries are explicit:
+
+- HTTP/Web may list, inspect, trust/untrust, enable/disable, delete managed installations, list deployments, and undeploy;
+- HTTP intentionally has no arbitrary server-path Skill install/deploy endpoint;
+- Desktop adds host-local directory pickers for install and project deployment through Wails;
+- CLI exposes the full local lifecycle, deployment, drift, and Agent Plugin export surface.
+
+Final verification on the completed commit sequence:
+
+~~~text
+pnpm check                         PASS
+pnpm security:check                PASS
+i18n                               626 / 626 zh-CN
+Vitest                              9 files / 59 tests
+Go lint/test/race                   PASS
+OpenAPI SDK drift                   PASS
+Wails binding drift                PASS
+Desktop architecture               PASS
+Web/Desktop production builds      PASS
+Provider SDK/example gates          PASS
+Go module isolation                PASS
+production dependency audit        no known vulnerabilities
+govulncheck                         no reachable vulnerabilities
+~~~
+
+The canonical `vuln.go.dev` endpoint was unreachable from the development network during final verification, so `security-go.mjs` probes it first and falls back only on database/network availability failures to the official Go vulnerability database at `storage.googleapis.com/go-vulndb`. Real vulnerability, compilation, or analysis failures remain fail-closed.
+
+Buf hosted code generation was also intermittently unavailable. `buf.gen.yaml` now invokes the same pinned `protoc-gen-go v1.36.12` and `protoc-gen-go-grpc v1.6.2` via local `go run`. A compatibility check confirmed zero generated protocol diff before this change, and the normal `pnpm provider-plugin:proto:check` plus full `pnpm check` now pass without hosted execution.
 
 ## Exit criteria
 
@@ -353,9 +411,9 @@ Next work starts with explicit deployment records/adapters and drift detection, 
 - [x] Managed local-directory installations are immutable and versionable side by side.
 - [x] Trust and enablement are explicit, separate states.
 - [x] CLI supports list/inspect/validate/install/lifecycle in JSON mode.
-- [ ] Local deployment adapters materialize exact installations safely.
-- [ ] Deployment drift is detectable.
-- [ ] Agent Plugin 1.0 export is deterministic.
-- [ ] Management/Web/Desktop can inspect and manage Skill resources without loading Skill code.
-- [ ] Existing Tool/Profile/Policy/Credential/Invocation behavior is unchanged.
-- [ ] `pnpm check` and `pnpm security:check` pass.
+- [x] Local deployment adapters materialize exact installations safely.
+- [x] Deployment drift is detectable.
+- [x] Agent Plugin 1.0 export is deterministic.
+- [x] Management/Web/Desktop can inspect and manage Skill resources without loading Skill code.
+- [x] Existing Tool/Profile/Policy/Credential/Invocation behavior is unchanged.
+- [x] `pnpm check` and `pnpm security:check` pass.

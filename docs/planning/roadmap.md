@@ -372,7 +372,7 @@ See `phase-18-built-in-provider-plugin-package.md`.
 
 ## Phase 19 — Skill Resource Management & Distribution
 
-Status: In Progress
+Status: Complete
 
 Goals:
 
@@ -382,5 +382,7 @@ Goals:
 - Add CLI lifecycle and explicit deployment adapters for agent-specific Skill directories.
 - Export portable Agent Plugins without conflating them with Mender Provider Plugins.
 - Keep Profile/Policy/Credential/Invocation governance authoritative for all Tool execution initiated by Skills.
+
+Exit criteria are complete. Mender now validates portable Agent Skills without execution, maintains immutable exact installations with separate trust/enablement, exposes the built-in `mender-tools` through the same inventory, materializes exact deployments to supported Agent host directories with drift detection, exports deterministic skills-only Agent Plugins 1.0 packages, and exposes shared CLI/OpenAPI/Wails/Web/Desktop management while keeping arbitrary filesystem ingestion host-local. Profile/Policy/Credential/Invocation governance remains authoritative. Full `pnpm check` and `pnpm security:check` verification is green.
 
 See `phase-19-skill-resource-management.md`.
