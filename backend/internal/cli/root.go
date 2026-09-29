@@ -246,9 +246,12 @@ func exitCode(err error) int {
 		errors.Is(err, skillapplication.ErrDeploymentNotFound),
 		errors.Is(err, skillapplication.ErrDeploymentConflict),
 		errors.Is(err, skillapplication.ErrDeploymentTargetExists),
+		errors.Is(err, skillapplication.ErrAgentPluginTargetExists),
 		errors.Is(err, bootstrap.ErrBuiltInSkillImmutable),
 		errors.Is(err, mcpconfigstore.ErrNotFound):
 		return ExitConfig
+	case errors.Is(err, skillapplication.ErrInvalidAgentPluginPackage):
+		return ExitUsage
 	case errors.Is(err, invocationapplication.ErrPolicyDenied),
 		errors.Is(err, invocationapplication.ErrApprovalDenied):
 		return ExitPolicy

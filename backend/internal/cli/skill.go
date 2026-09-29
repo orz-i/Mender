@@ -30,6 +30,7 @@ func (a *app) newSkillCommand() *cobra.Command {
 	command.AddCommand(a.newSkillDeployCommand())
 	command.AddCommand(a.newSkillDeploymentsCommand())
 	command.AddCommand(a.newSkillUndeployCommand())
+	command.AddCommand(a.newSkillExportCommand())
 	command.AddCommand(a.newSkillRemoveCommand())
 	return command
 }
@@ -394,6 +395,102 @@ func (a *app) resolveSkillDeploymentRoot(
 		return "", fmt.Errorf("resolve home directory: %w", err)
 	}
 	return absolute, nil
+}
+
+func (a *app) newSkillExportCommand() *cobra.Command {
+	var format string
+	var name string
+	var version string
+	var description string
+	var outputDirectory string
+
+	command := &cobra.Command{
+		Use:   "export <installation> [installation...]",
+		Short: "Export exact Skill installations as a portable package",
+		Args: func(_ *cobra.Command, args []string) error {
+			if len(args) == 0 {
+				return usageError{err: fmt.Errorf("at least one Skill InstallationID is required")}
+			}
+			return nil
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if strings.TrimSpace(format) != "agent-plugin" {
+				return usageError{err: fmt.Errorf("format must be agent-plugin")}
+			}
+			if strings.TrimSpace(name) == "" {
+				return usageError{err: fmt.Errorf("--name is required")}
+			}
+			if strings.TrimSpace(outputDirectory) == "" {
+				return usageError{err: fmt.Errorf("--output-dir is required")}
+			}
+			ids := make([]skilldomain.InstallationID, 0, len(args))
+			for _, raw := range args {
+				id, err := skilldomain.ParseInstallationID(raw)
+				if err != nil {
+					return usageError{err: err}
+				}
+				ids = append(ids, id)
+			}
+			destination, err := filepath.Abs(outputDirectory)
+			if err != nil {
+				return usageError{err: fmt.Errorf("resolve output directory: %w", err)}
+			}
+			return a.withRuntime(cmd.Context(), func(runtime *bootstrap.Runtime) error {
+				if err := runtime.Skills.ExportAgentPlugin(
+					cmd.Context(),
+					skillapplication.ExportAgentPluginRequest{
+						Name:            name,
+						Version:         version,
+						Description:     description,
+						Destination:     destination,
+						InstallationIDs: ids,
+					},
+				); err != nil {
+					return err
+				}
+				installationIDs := make([]string, 0, len(ids))
+				for _, id := range ids {
+					installationIDs = append(installationIDs, id.String())
+				}
+				return a.writeValue(
+					fmt.Sprintf(
+						"exported Agent Plugin %s to %s",
+						name,
+						destination,
+					),
+					map[string]any{
+						"format":          "agent-plugin",
+						"name":            name,
+						"version":         version,
+						"description":     description,
+						"outputDirectory": destination,
+						"installationIds": installationIDs,
+					},
+				)
+			})
+		},
+	}
+	command.Flags().StringVar(
+		&format,
+		"format",
+		"agent-plugin",
+		"export format: agent-plugin",
+	)
+	command.Flags().StringVar(&name, "name", "", "Agent Plugin name")
+	command.Flags().StringVar(&version, "version", "", "optional Agent Plugin version")
+	command.Flags().StringVar(
+		&description,
+		"description",
+		"",
+		"optional Agent Plugin description",
+	)
+	command.Flags().StringVar(
+		&outputDirectory,
+		"output-dir",
+		"",
+		"new Agent Plugin output directory",
+	)
+	return command
 }
 
 func (a *app) newSkillRemoveCommand() *cobra.Command {

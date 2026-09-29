@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"os"
@@ -10,6 +11,7 @@ import (
 
 	skillapplication "github.com/orz-i/Mender/backend/internal/skill/application"
 	skilldomain "github.com/orz-i/Mender/backend/internal/skill/domain"
+	"github.com/orz-i/Mender/backend/internal/skill/infrastructure/agentskill"
 )
 
 func TestRuntimeSkillLibraryIncludesBuiltInAndManagedInstallations(t *testing.T) {
@@ -299,6 +301,132 @@ func TestRuntimeSkillDeploymentsDetectDriftAndGuardInstallationState(t *testing.
 	}
 	if err := runtime.Skills.Remove(ctx, managed.ID()); err != nil {
 		t.Fatalf("Remove(after undeploy) error = %v", err)
+	}
+}
+
+func TestRuntimeExportsPortableAgentPlugin(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	temp := t.TempDir()
+	runtime, err := NewRuntime(ctx, RuntimeOptions{
+		DatabasePath: filepath.Join(temp, "mender.db"),
+		SkillRoot:    filepath.Join(temp, "managed-skills"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = runtime.Close() })
+
+	items, err := runtime.Skills.List(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var builtIn SkillInstallation
+	for _, item := range items {
+		if item.Name == "mender-tools" && item.BuiltIn {
+			builtIn = item
+			break
+		}
+	}
+	if builtIn.InstallationID == "" {
+		t.Fatal("built-in mender-tools not found")
+	}
+
+	source := writeRuntimeSkill(t, filepath.Join(temp, "export-skill"))
+	managed, err := runtime.Skills.InstallLocal(ctx, source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runtime.Skills.SetTrust(ctx, managed.ID(), true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runtime.Skills.SetEnabled(ctx, managed.ID(), true); err != nil {
+		t.Fatal(err)
+	}
+
+	exportParent := filepath.Join(temp, "exports")
+	if err := os.MkdirAll(exportParent, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	destination := filepath.Join(exportParent, "mender-skills")
+	request := skillapplication.ExportAgentPluginRequest{
+		Name:        "mender.skills",
+		Version:     "1.0.0",
+		Description: "Mender exported Skills",
+		Destination: destination,
+		InstallationIDs: []skilldomain.InstallationID{
+			managed.ID(),
+			builtIn.InstallationID,
+		},
+	}
+	if err := runtime.Skills.ExportAgentPlugin(ctx, request); err != nil {
+		t.Fatalf("ExportAgentPlugin() error = %v", err)
+	}
+
+	exportRoot, err := os.OpenRoot(destination)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifestFile, err := exportRoot.Open("plugin.json")
+	if err != nil {
+		_ = exportRoot.Close()
+		t.Fatal(err)
+	}
+	rawManifest, err := io.ReadAll(manifestFile)
+	if err != nil {
+		_ = manifestFile.Close()
+		_ = exportRoot.Close()
+		t.Fatal(err)
+	}
+	if err := manifestFile.Close(); err != nil {
+		_ = exportRoot.Close()
+		t.Fatal(err)
+	}
+	var manifest map[string]any
+	if err := json.Unmarshal(rawManifest, &manifest); err != nil {
+		_ = exportRoot.Close()
+		t.Fatal(err)
+	}
+	if manifest["$schema"] != "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json" ||
+		manifest["name"] != "mender.skills" ||
+		manifest["version"] != "1.0.0" {
+		_ = exportRoot.Close()
+		t.Fatalf("plugin.json = %#v", manifest)
+	}
+	if _, err := exportRoot.Lstat("mcp.json"); !errors.Is(err, os.ErrNotExist) {
+		_ = exportRoot.Close()
+		t.Fatalf("mcp.json exists or inspect failed: %v", err)
+	}
+	if err := exportRoot.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, expected := range []SkillInstallation{
+		builtIn,
+		managedSkillProjection(managed),
+	} {
+		snapshot, err := agentskill.LoadDirectory(
+			filepath.Join(destination, "skills", expected.Name),
+		)
+		if err != nil {
+			t.Fatalf("load exported %s: %v", expected.Name, err)
+		}
+		if snapshot.Digest != expected.Digest {
+			t.Fatalf(
+				"exported %s digest = %s, want %s",
+				expected.Name,
+				snapshot.Digest,
+				expected.Digest,
+			)
+		}
+	}
+
+	if err := runtime.Skills.ExportAgentPlugin(ctx, request); !errors.Is(err, skillapplication.ErrAgentPluginTargetExists) {
+		t.Fatalf("ExportAgentPlugin(existing) error = %v", err)
+	}
+	if err := runtime.Skills.Remove(ctx, managed.ID()); err != nil {
+		t.Fatalf("Skills.Remove(managed) cleanup error = %v", err)
 	}
 }
 

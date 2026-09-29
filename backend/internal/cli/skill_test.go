@@ -26,6 +26,7 @@ func TestSkillCommandSurface(t *testing.T) {
 		{"skill", "deploy"},
 		{"skill", "deployments"},
 		{"skill", "undeploy"},
+		{"skill", "export"},
 		{"skill", "remove"},
 	} {
 		command, _, err := root.Find(path)
@@ -160,6 +161,41 @@ func TestSkillCLIManagedLifecycle(t *testing.T) {
 	}
 	if deployments := jsonArray(t, execute("skill", "deployments")["deployments"]); len(deployments) != 0 {
 		t.Fatalf("deployments after undeploy = %#v", deployments)
+	}
+
+	exportDirectory := filepath.Join(temp, "exports", "mender-skills")
+	if err := os.MkdirAll(filepath.Dir(exportDirectory), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	exported := execute(
+		"skill", "export", builtInID, firstID,
+		"--format", "agent-plugin",
+		"--name", "mender.skills",
+		"--version", "1.0.0",
+		"--description", "CLI export test",
+		"--output-dir", exportDirectory,
+	)
+	if exported["format"] != "agent-plugin" ||
+		exported["name"] != "mender.skills" ||
+		exported["version"] != "1.0.0" {
+		t.Fatalf("export result = %#v", exported)
+	}
+	if info, err := os.Stat(filepath.Join(exportDirectory, "plugin.json")); err != nil || !info.Mode().IsRegular() {
+		t.Fatalf("exported plugin.json info=%v err=%v", info, err)
+	}
+	for _, skillName := range []string{"mender-tools", "example-skill"} {
+		if info, err := os.Stat(filepath.Join(exportDirectory, "skills", skillName, "SKILL.md")); err != nil || !info.Mode().IsRegular() {
+			t.Fatalf("exported %s SKILL.md info=%v err=%v", skillName, info, err)
+		}
+	}
+	if _, err := executeSkillJSON(
+		dbPath,
+		"skill", "export", builtInID,
+		"--format", "agent-plugin",
+		"--name", "Bad_Name",
+		"--output-dir", filepath.Join(temp, "exports", "invalid"),
+	); err == nil || !strings.Contains(err.Error(), "invalid Agent Plugin package") {
+		t.Fatalf("invalid Agent Plugin export error = %v", err)
 	}
 
 	bySkillID := jsonObject(t, execute("skill", "inspect", skillID)["skill"])

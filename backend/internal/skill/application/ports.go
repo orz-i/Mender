@@ -113,6 +113,30 @@ type DeploymentIDGenerator interface {
 	NewDeploymentID() (skilldomain.DeploymentID, error)
 }
 
+// AgentPluginSkill is one exact Skill selected for portable Agent Plugin
+// export.
+type AgentPluginSkill struct {
+	InstallationID skilldomain.InstallationID
+	Name           string
+	Digest         string
+}
+
+// AgentPluginPackage is the portable manifest metadata and exact Skill set to
+// export. Destination is a host filesystem directory that must not already
+// contain a package.
+type AgentPluginPackage struct {
+	Name        string
+	Version     string
+	Description string
+	Destination string
+	Skills      []AgentPluginSkill
+}
+
+// AgentPluginExporter writes one portable Agent Plugins package.
+type AgentPluginExporter interface {
+	ExportAgentPlugin(context.Context, AgentPluginPackage) error
+}
+
 // Clock supplies installation/deployment timestamps.
 type Clock interface {
 	Now() time.Time

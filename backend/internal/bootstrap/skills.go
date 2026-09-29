@@ -11,6 +11,7 @@ import (
 	skillapplication "github.com/orz-i/Mender/backend/internal/skill/application"
 	skillbuiltin "github.com/orz-i/Mender/backend/internal/skill/builtin"
 	skilldomain "github.com/orz-i/Mender/backend/internal/skill/domain"
+	skillagentplugin "github.com/orz-i/Mender/backend/internal/skill/infrastructure/agentplugin"
 	skilldeploymentfs "github.com/orz-i/Mender/backend/internal/skill/infrastructure/deploymentfs"
 	skillidentity "github.com/orz-i/Mender/backend/internal/skill/infrastructure/identity"
 	skilllocalfs "github.com/orz-i/Mender/backend/internal/skill/infrastructure/localfs"
@@ -246,6 +247,22 @@ func (s *Skills) Deploy(
 	).Execute(ctx, id, target, root)
 }
 
+// ExportAgentPlugin writes one deterministic skills-only Agent Plugins 1.0
+// package from exact trusted+enabled Skill installations.
+func (s *Skills) ExportAgentPlugin(
+	ctx context.Context,
+	request skillapplication.ExportAgentPluginRequest,
+) error {
+	if s == nil {
+		return fmt.Errorf("export Agent Plugin: library is nil")
+	}
+	source := runtimeSkillDeploymentSource{skills: s}
+	return skillapplication.NewExportAgentPlugin(
+		source,
+		skillagentplugin.New(source),
+	).Execute(ctx, request)
+}
+
 // ListDeployments returns exact deployment records plus current drift state.
 func (s *Skills) ListDeployments(
 	ctx context.Context,
@@ -334,6 +351,14 @@ func (s runtimeSkillDeploymentSource) GetDeployable(
 		Trusted:        item.Trusted(),
 		Enabled:        item.Enabled(),
 	}, nil
+}
+
+func (s runtimeSkillDeploymentSource) MaterializeSkill(
+	ctx context.Context,
+	skill skillapplication.AgentPluginSkill,
+	destination string,
+) error {
+	return s.Materialize(ctx, skill.InstallationID, destination)
 }
 
 func (s runtimeSkillDeploymentSource) Materialize(
