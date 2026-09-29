@@ -11,6 +11,7 @@ require (
 	github.com/zalando/go-keyring v0.2.8
 	golang.org/x/mod v0.38.0
 	google.golang.org/grpc v1.83.2
+	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.59.0
 )
 
