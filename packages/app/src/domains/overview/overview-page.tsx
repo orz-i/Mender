@@ -9,7 +9,8 @@ import type {
 } from "@mender/sdk";
 import { Card, CardContent, CardHeader, CardTitle } from "@mender/ui/components/card";
 
-import { t } from "../../i18n/i18n";
+import { formatDateTime, formatNumber, t } from "../../i18n/i18n";
+import { errorMessage } from "../../shared/errors";
 import { ErrorNotice, PageHeader, StatusCard } from "../../shared/page";
 import { usePagination } from "../../shared/pagination";
 import { TablePagination } from "../../shared/table-pagination";
@@ -77,12 +78,12 @@ export function OverviewPage({ client }: { client: MenderClient }) {
         />
         <StatusCard
           title="Providers"
-          value={String(data?.providers.length ?? 0)}
+          value={formatNumber(data?.providers.length ?? 0)}
           description="Registered tool sources."
         />
         <StatusCard
           title="Profiles"
-          value={String(data?.profiles.length ?? 0)}
+          value={formatNumber(data?.profiles.length ?? 0)}
           description="MCP exposure boundaries."
         />
         <StatusCard
@@ -116,7 +117,7 @@ export function OverviewPage({ client }: { client: MenderClient }) {
                   </div>
                   <p>{record.status}</p>
                   <time className="text-right text-muted-foreground">
-                    {new Date(record.finishedAt).toLocaleString()}
+                    {formatDateTime(record.finishedAt)}
                   </time>
                 </div>
               ))}
@@ -135,8 +136,4 @@ export function OverviewPage({ client }: { client: MenderClient }) {
       </Card>
     </>
   );
-}
-
-function errorMessage(reason: unknown) {
-  return reason instanceof Error ? reason.message : t("Unexpected error");
 }

@@ -29,12 +29,13 @@ import {
   TableRow,
 } from "@mender/ui/components/table";
 
+import { errorMessage } from "../../shared/errors";
 import { IconButton } from "../../shared/icon-button";
 import { EmptyState, ErrorNotice, PageHeader } from "../../shared/page";
 import { usePagination } from "../../shared/pagination";
 import { TablePagination } from "../../shared/table-pagination";
 
-import { t } from "../../i18n/i18n";
+import { t, tCount } from "../../i18n/i18n";
 
 type CredentialSource = Credential["source"];
 
@@ -208,9 +209,11 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
         <CardHeader className="border-b">
           <CardTitle>{t("Credential inventory")}</CardTitle>
           <CardDescription>
-            {t("{{count}} Credentials configured. Secret values are never displayed here.", {
-              count: credentials.length,
-            })}
+            {tCount(
+              credentials.length,
+              "{{count}} Credential configured. Secret values are never displayed here.",
+              "{{count}} Credentials configured. Secret values are never displayed here.",
+            )}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -494,8 +497,4 @@ function ReadOnlyField({ label, value }: { label: string; value: string }) {
       </div>
     </div>
   );
-}
-
-function errorMessage(reason: unknown) {
-  return reason instanceof Error ? reason.message : t("Unexpected error");
 }

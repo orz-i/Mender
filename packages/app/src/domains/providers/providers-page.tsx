@@ -46,6 +46,7 @@ import {
 } from "@mender/ui/components/table";
 import { Textarea } from "@mender/ui/components/textarea";
 
+import { errorMessage } from "../../shared/errors";
 import { IconButton } from "../../shared/icon-button";
 import { EmptyState, ErrorNotice, PageHeader } from "../../shared/page";
 import { usePagination } from "../../shared/pagination";
@@ -56,7 +57,7 @@ import {
   genericConfigValidationError,
 } from "./generic-provider-config-schema";
 
-import { t } from "../../i18n/i18n";
+import { formatDateTime, formatNumber, t, tCount } from "../../i18n/i18n";
 
 const MCP_PLUGIN_ID = "io.mender.provider.mcp";
 const MODEL_TOOLS_PLUGIN_ID = "io.mender.provider.model-tools";
@@ -621,11 +622,10 @@ export function ProvidersPage({
         <CardHeader className="border-b">
           <CardTitle>{t("Providers")}</CardTitle>
           <CardDescription>
-            {t(
-              providers.length === 1
-                ? "{{count}} configured source"
-                : "{{count}} configured sources",
-              { count: providers.length },
+            {tCount(
+              providers.length,
+              "{{count}} configured source",
+              "{{count}} configured sources",
             )}
           </CardDescription>
         </CardHeader>
@@ -670,7 +670,11 @@ export function ProvidersPage({
                       <Badge
                         variant={provider.toolCount ? "outline" : "secondary"}
                       >
-                        {t("{{count}} synced Tools", { count: provider.toolCount })}
+                        {tCount(
+                          provider.toolCount,
+                          "{{count}} synced Tool",
+                          "{{count}} synced Tools",
+                        )}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
@@ -2317,7 +2321,7 @@ function ProviderDetailsDialog({
                 />
               </>
             ) : null}
-            <DetailRow label="Synced Tools" value={String(provider.toolCount)} />
+            <DetailRow label="Synced Tools" value={formatNumber(provider.toolCount)} />
             <DetailRow
               label="Connection"
               value={connectionSummary(provider)}
@@ -2828,13 +2832,5 @@ function connectionSummary(provider: Provider) {
 }
 
 function formatTimestamp(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-  return date.toLocaleString();
-}
-
-function errorMessage(reason: unknown) {
-  return reason instanceof Error ? reason.message : t("Unexpected error");
+  return formatDateTime(value);
 }

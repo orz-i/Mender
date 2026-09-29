@@ -35,12 +35,13 @@ import {
   TableRow,
 } from "@mender/ui/components/table";
 
+import { errorMessage } from "../../shared/errors";
 import { IconButton } from "../../shared/icon-button";
 import { EmptyState, ErrorNotice, PageHeader } from "../../shared/page";
 import { usePagination } from "../../shared/pagination";
 import { TablePagination } from "../../shared/table-pagination";
 
-import { t } from "../../i18n/i18n";
+import { formatDateTime, t, tCount } from "../../i18n/i18n";
 
 const defaultAddress = "127.0.0.1:8765";
 
@@ -365,7 +366,8 @@ export function ServersPage({
               >
                 {profiles.map((profile) => (
                   <option key={profile.profileId} value={profile.slug}>
-                    {profile.displayName} ({profile.slug}) · {profile.tools.length} {t("tools")}
+                    {profile.displayName} ({profile.slug}) ·{" "}
+                    {tCount(profile.tools.length, "{{count}} tool", "{{count}} tools")}
                   </option>
                 ))}
               </select>
@@ -454,13 +456,5 @@ function clientConfig(server: MCPServerInstance) {
 }
 
 function formatTimestamp(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-  return date.toLocaleString();
-}
-
-function errorMessage(reason: unknown) {
-  return reason instanceof Error ? reason.message : t("Unexpected error");
+  return formatDateTime(value);
 }

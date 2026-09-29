@@ -1,4 +1,4 @@
-import type { PolicyRuleInput } from "@mender/sdk";
+import { MenderClientInvariantError, type PolicyRuleInput } from "@mender/sdk";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock(
@@ -814,8 +814,10 @@ describe("desktop Mender client", () => {
     });
 
     const client = createDesktopMenderClient();
+    const request = client.listProviders();
 
-    await expect(client.listProviders()).rejects.toThrow(
+    await expect(request).rejects.toBeInstanceOf(MenderClientInvariantError);
+    await expect(request).rejects.toThrow(
       "Unsupported desktop provider transport",
     );
   });

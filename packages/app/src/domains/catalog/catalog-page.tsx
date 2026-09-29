@@ -36,12 +36,13 @@ import {
 } from "@mender/ui/components/table";
 import { Textarea } from "@mender/ui/components/textarea";
 
+import { errorMessage } from "../../shared/errors";
 import { IconButton } from "../../shared/icon-button";
 import { EmptyState, ErrorNotice, PageHeader } from "../../shared/page";
 import { usePagination } from "../../shared/pagination";
 import { TablePagination } from "../../shared/table-pagination";
 
-import { t } from "../../i18n/i18n";
+import { formatNumber, t, tCount } from "../../i18n/i18n";
 
 type ToolView = "overview" | "description" | "schemas" | "invoke";
 
@@ -253,8 +254,16 @@ export function CatalogPage({ client }: { client: MenderClient }) {
             {!loaded
               ? t("Loading synchronized Tools…")
               : searched
-                ? t("{{count}} compact matches", { count: results.length })
-                : t("{{count}} synchronized Tools", { count: results.length })}
+                ? tCount(
+                    results.length,
+                    "{{count}} compact match",
+                    "{{count}} compact matches",
+                  )
+                : tCount(
+                    results.length,
+                    "{{count}} synchronized Tool",
+                    "{{count}} synchronized Tools",
+                  )}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -302,7 +311,7 @@ export function CatalogPage({ client }: { client: MenderClient }) {
                       </div>
                     </TableCell>
                     <TableCell className="hidden xl:table-cell">
-                      <Badge variant="outline">#{tool.rank}</Badge>
+                      <Badge variant="outline">#{formatNumber(tool.rank)}</Badge>
                     </TableCell>
                     <TableCell className="w-20 text-right">
                       <IconButton
@@ -528,8 +537,4 @@ function providerLabel(providers: Provider[], providerId: string) {
     return t("Unknown Provider");
   }
   return provider.displayName || provider.namespace;
-}
-
-function errorMessage(reason: unknown) {
-  return reason instanceof Error ? reason.message : t("Unexpected error");
 }

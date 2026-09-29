@@ -44,12 +44,13 @@ import {
   TableRow,
 } from "@mender/ui/components/table";
 
+import { errorMessage } from "../../shared/errors";
 import { IconButton } from "../../shared/icon-button";
 import { EmptyState, ErrorNotice, PageHeader } from "../../shared/page";
 import { usePagination } from "../../shared/pagination";
 import { TablePagination } from "../../shared/table-pagination";
 
-import { t } from "../../i18n/i18n";
+import { t, tCount } from "../../i18n/i18n";
 
 type RuleStep = 0 | 1 | 2;
 
@@ -357,9 +358,11 @@ export function PolicyPage({ client }: { client: MenderClient }) {
         <CardHeader className="border-b">
           <CardTitle>{t("Policy rules")}</CardTitle>
           <CardDescription>
-            {t("{{count}} Policy Rules configured. Matching deny Rules cannot be overridden by allow Rules.", {
-              count: rules.length,
-            })}
+            {tCount(
+              rules.length,
+              "{{count}} Policy Rule configured. Matching deny Rules cannot be overridden by allow Rules.",
+              "{{count}} Policy Rules configured. Matching deny Rules cannot be overridden by allow Rules.",
+            )}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -1187,11 +1190,21 @@ function factsSummary(rule: PolicyRule) {
     );
   }
   if (rule.match.effectsAny.length) {
-    parts.push(t("{{count}} effects", { count: rule.match.effectsAny.length }));
+    parts.push(
+      tCount(
+        rule.match.effectsAny.length,
+        "{{count}} effect",
+        "{{count}} effects",
+      ),
+    );
   }
   if (rule.match.resourcesAny.length) {
     parts.push(
-      t("{{count}} resources", { count: rule.match.resourcesAny.length }),
+      tCount(
+        rule.match.resourcesAny.length,
+        "{{count}} resource",
+        "{{count}} resources",
+      ),
     );
   }
   return parts.length ? parts.join(" · ") : t("No Governance Fact predicates");
@@ -1259,8 +1272,4 @@ function targetSummary(
     );
   }
   return parts.length ? parts.join(" · ") : t("Global wildcard");
-}
-
-function errorMessage(reason: unknown) {
-  return reason instanceof Error ? reason.message : t("Unexpected error");
 }

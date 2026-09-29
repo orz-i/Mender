@@ -12,13 +12,33 @@ const listeners = new Set<() => void>();
 
 let currentLocale: Locale | undefined;
 
-export function resolveLocale(value: string | null | undefined): Locale {
+function localeCandidate(value: string | null | undefined): Locale | undefined {
   const normalized = value?.trim().toLowerCase();
 
-  if (normalized?.startsWith("zh") === true) {
+  if (!normalized) {
+    return undefined;
+  }
+
+  if (
+    normalized === "zh" ||
+    normalized === "zh-cn" ||
+    normalized.startsWith("zh-cn-") ||
+    normalized === "zh-sg" ||
+    normalized.startsWith("zh-sg-") ||
+    normalized.includes("-hans")
+  ) {
     return "zh-CN";
   }
-  return "en";
+
+  if (normalized === "en" || normalized.startsWith("en-")) {
+    return "en";
+  }
+
+  return undefined;
+}
+
+export function resolveLocale(value: string | null | undefined): Locale {
+  return localeCandidate(value) ?? "en";
 }
 
 function resolveInitialLocale(): Locale {
@@ -32,11 +52,9 @@ function resolveInitialLocale(): Locale {
   }
 
   for (const language of window.navigator.languages ?? []) {
-    if (language.toLowerCase().startsWith("zh")) {
-      return "zh-CN";
-    }
-    if (language.toLowerCase().startsWith("en")) {
-      return "en";
+    const candidate = localeCandidate(language);
+    if (candidate !== undefined) {
+      return candidate;
     }
   }
 
@@ -94,6 +112,37 @@ export function t(message: string, values: TranslationValues = {}): string {
   return translated.replace(/\{\{(\w+)\}\}/g, (token, name: string) => {
     const value = values[name];
     return value === undefined ? token : String(value);
+  });
+}
+
+export function formatNumber(value: number): string {
+  return new Intl.NumberFormat(getLocale()).format(value);
+}
+
+export function formatDateTime(
+  value: string | number | Date,
+): string {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return String(value);
+  }
+
+  return new Intl.DateTimeFormat(getLocale(), {
+    dateStyle: "medium",
+    timeStyle: "medium",
+  }).format(date);
+}
+
+export function tCount(
+  count: number,
+  one: string,
+  other: string,
+  values: TranslationValues = {},
+): string {
+  const category = new Intl.PluralRules(getLocale()).select(count);
+  return t(category === "one" ? one : other, {
+    ...values,
+    count: formatNumber(count),
   });
 }
 

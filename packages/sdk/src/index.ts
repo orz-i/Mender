@@ -2,6 +2,7 @@ export {
   createMenderClient,
   MenderApiError,
 } from "./client";
+export { MenderClientInvariantError } from "./errors";
 export type {
   AddProfileToolRequest,
   AuditRecord,

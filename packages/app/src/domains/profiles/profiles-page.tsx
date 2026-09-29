@@ -42,12 +42,13 @@ import {
   TableRow,
 } from "@mender/ui/components/table";
 
+import { errorMessage } from "../../shared/errors";
 import { IconButton } from "../../shared/icon-button";
 import { EmptyState, ErrorNotice, PageHeader } from "../../shared/page";
 import { usePagination } from "../../shared/pagination";
 import { TablePagination } from "../../shared/table-pagination";
 
-import { t } from "../../i18n/i18n";
+import { formatNumber, t, tCount } from "../../i18n/i18n";
 
 const emptyCreateForm = {
   slug: "",
@@ -532,11 +533,10 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
         <CardHeader className="border-b">
           <CardTitle>{t("Profiles")}</CardTitle>
           <CardDescription>
-            {t(
-              profiles.length === 1
-                ? "{{count}} profile configured"
-                : "{{count}} profiles configured",
-              { count: profiles.length },
+            {tCount(
+              profiles.length,
+              "{{count}} profile configured",
+              "{{count}} profiles configured",
             )}
           </CardDescription>
         </CardHeader>
@@ -568,7 +568,7 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
                     <TableCell>
                       <Badge variant="outline">{t(profile.mode)}</Badge>
                     </TableCell>
-                    <TableCell>{profile.tools.length}</TableCell>
+                    <TableCell>{formatNumber(profile.tools.length)}</TableCell>
                     <TableCell className="text-right">
                       <IconButton
                         variant="outline"
@@ -774,11 +774,10 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
                             ) : null}
                             {selection.credentialRefs.length ? (
                               <Badge variant="secondary">
-                                {t(
-                                  selection.credentialRefs.length === 1
-                                    ? "{{count}} credential"
-                                    : "{{count}} credentials",
-                                  { count: selection.credentialRefs.length },
+                                {tCount(
+                                  selection.credentialRefs.length,
+                                  "{{count}} credential",
+                                  "{{count}} credentials",
                                 )}
                               </Badge>
                             ) : null}
@@ -1188,8 +1187,10 @@ function ToolPickerDialog({
         </div>
 
         <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <span>{t("{{count}} visible Tools", { count: tools.length })}</span>
-          <span>{t("{{count}} selected", { count: selected.size })}</span>
+          <span>
+            {tCount(tools.length, "{{count}} visible Tool", "{{count}} visible Tools")}
+          </span>
+          <span>{tCount(selected.size, "{{count}} selected", "{{count}} selected")}</span>
         </div>
 
         <div className="max-h-[52vh] divide-y divide-border overflow-y-auto rounded-lg border border-border">
@@ -1305,8 +1306,4 @@ function ReadOnlyField({ label, value }: { label: string; value: string }) {
       </div>
     </div>
   );
-}
-
-function errorMessage(reason: unknown) {
-  return reason instanceof Error ? reason.message : t("Unexpected error");
 }

@@ -1,3 +1,4 @@
+import { MenderClientInvariantError } from "@mender/sdk";
 import type {
   AuditRecord,
   Credential,
@@ -381,16 +382,16 @@ function systemStatus(value: BindingSystemStatus): SystemStatus {
 
 function policyStatus(value: BindingPolicyStatus): PolicyStatus {
   if (value.mode !== "configured") {
-    throw new Error(`Unsupported desktop policy mode: ${value.mode}`);
+    throw new MenderClientInvariantError(`Unsupported desktop policy mode: ${value.mode}`);
   }
   if (value.approval !== "fail_closed_when_required") {
-    throw new Error(`Unsupported desktop approval mode: ${value.approval}`);
+    throw new MenderClientInvariantError(`Unsupported desktop approval mode: ${value.approval}`);
   }
   if (!value.editable) {
-    throw new Error("Desktop policy unexpectedly reported read-only state");
+    throw new MenderClientInvariantError("Desktop policy unexpectedly reported read-only state");
   }
   if (value.ruleCount < 0 || value.enabledRuleCount < 0) {
-    throw new Error("Desktop policy reported invalid Rule counts");
+    throw new MenderClientInvariantError("Desktop policy reported invalid Rule counts");
   }
   return {
     mode: "configured",
@@ -466,7 +467,7 @@ function policyDecision(value: string): Policy["defaultDecision"] {
   ) {
     return value;
   }
-  throw new Error("Unsupported desktop Policy decision: " + value);
+  throw new MenderClientInvariantError("Unsupported desktop Policy decision: " + value);
 }
 
 function policyOrigin(
@@ -481,7 +482,7 @@ function policyOrigin(
   ) {
     return value;
   }
-  throw new Error("Unsupported desktop Policy origin: " + value);
+  throw new MenderClientInvariantError("Unsupported desktop Policy origin: " + value);
 }
 
 function policyScopeKind(
@@ -490,7 +491,7 @@ function policyScopeKind(
   if (value === "catalog" || value === "profile") {
     return value;
   }
-  throw new Error("Unsupported desktop Policy scope kind: " + value);
+  throw new MenderClientInvariantError("Unsupported desktop Policy scope kind: " + value);
 }
 
 function policyFactKnowledge(
@@ -499,7 +500,7 @@ function policyFactKnowledge(
   if (value === "any" || value === "known" || value === "unknown") {
     return value;
   }
-  throw new Error("Unsupported desktop Policy fact knowledge: " + value);
+  throw new MenderClientInvariantError("Unsupported desktop Policy fact knowledge: " + value);
 }
 
 function policyResourceOperator(
@@ -508,17 +509,17 @@ function policyResourceOperator(
   if (value === "exact" || value === "prefix") {
     return value;
   }
-  throw new Error("Unsupported desktop Policy resource operator: " + value);
+  throw new MenderClientInvariantError("Unsupported desktop Policy resource operator: " + value);
 }
 
 function credentialStatus(value: BindingCredentialStatus): CredentialStatus {
   if (value.resolver !== "inventory") {
-    throw new Error(
+    throw new MenderClientInvariantError(
       `Unsupported desktop credential resolver: ${value.resolver}`,
     );
   }
   if (!value.persistentStore || !value.editable) {
-    throw new Error(
+    throw new MenderClientInvariantError(
       "Desktop credential inventory unexpectedly reported disabled persistence or editing",
     );
   }
@@ -531,7 +532,7 @@ function credentialStatus(value: BindingCredentialStatus): CredentialStatus {
 
 function credential(value: BindingCredential): Credential {
   if (value.source !== "native" && value.source !== "environment") {
-    throw new Error(`Unsupported desktop Credential source: ${value.source}`);
+    throw new MenderClientInvariantError(`Unsupported desktop Credential source: ${value.source}`);
   }
   return {
     reference: value.reference,
@@ -587,7 +588,7 @@ function providerPluginSourceKind(
   if (value === "builtin" || value === "external") {
     return value;
   }
-  throw new Error("Unsupported Provider plugin source kind: " + value);
+  throw new MenderClientInvariantError("Unsupported Provider plugin source kind: " + value);
 }
 
 function providerPluginConfigSchema(
@@ -599,7 +600,7 @@ function providerPluginConfigSchema(
   if (typeof value === "object" && value !== null && !Array.isArray(value)) {
     return value as Record<string, unknown>;
   }
-  throw new Error("Unsupported Provider plugin config schema");
+  throw new MenderClientInvariantError("Unsupported Provider plugin config schema");
 }
 
 function providerPluginUISchema(
@@ -608,7 +609,7 @@ function providerPluginUISchema(
   if (typeof value === "object" && value !== null && !Array.isArray(value)) {
     return value as Record<string, unknown>;
   }
-  throw new Error("Unsupported Provider plugin UI schema");
+  throw new MenderClientInvariantError("Unsupported Provider plugin UI schema");
 }
 
 function providerPluginInstallation(
@@ -631,7 +632,7 @@ function providerPluginInstallationStatus(
   if (value === "enabled" || value === "disabled" || value === "invalid") {
     return value;
   }
-  throw new Error("Unsupported Provider plugin installation status: " + value);
+  throw new MenderClientInvariantError("Unsupported Provider plugin installation status: " + value);
 }
 
 function provider(value: BindingProvider): Provider {
@@ -810,7 +811,7 @@ function profilePolicyConstraint(
   ) {
     return value;
   }
-  throw new Error("Unsupported desktop Profile policy constraint: " + value);
+  throw new MenderClientInvariantError("Unsupported desktop Profile policy constraint: " + value);
 }
 
 function profileConcurrencyConstraint(
@@ -819,19 +820,19 @@ function profileConcurrencyConstraint(
   if (value === "inherit" || value === "serial") {
     return value;
   }
-  throw new Error("Unsupported desktop Profile concurrency constraint: " + value);
+  throw new MenderClientInvariantError("Unsupported desktop Profile concurrency constraint: " + value);
 }
 
 function mcpServerInstance(
   value: BindingMCPServerInstance,
 ): MCPServerInstance {
   if (value.transport !== "streamable-http") {
-    throw new Error(
+    throw new MenderClientInvariantError(
       `Unsupported managed MCP server transport: ${value.transport}`,
     );
   }
   if (value.status !== "running") {
-    throw new Error(`Unsupported managed MCP server status: ${value.status}`);
+    throw new MenderClientInvariantError(`Unsupported managed MCP server status: ${value.status}`);
   }
   return {
     serverId: value.serverId,
@@ -875,7 +876,7 @@ function exposureMode(value: string): "direct" | "dynamic" | "hybrid" {
   if (value === "direct" || value === "dynamic" || value === "hybrid") {
     return value;
   }
-  throw new Error(`Unsupported desktop exposure mode: ${value}`);
+  throw new MenderClientInvariantError(`Unsupported desktop exposure mode: ${value}`);
 }
 
 function providerTransport(
@@ -884,7 +885,7 @@ function providerTransport(
   if (value === "http" || value === "stdio" || value === "unconfigured") {
     return value;
   }
-  throw new Error(`Unsupported desktop provider transport: ${value}`);
+  throw new MenderClientInvariantError(`Unsupported desktop provider transport: ${value}`);
 }
 
 function invocationKind(
@@ -899,7 +900,7 @@ function invocationKind(
   ) {
     return value;
   }
-  throw new Error(`Unsupported desktop invocation result kind: ${value}`);
+  throw new MenderClientInvariantError(`Unsupported desktop invocation result kind: ${value}`);
 }
 
 function invocationFailureSource(
@@ -913,5 +914,5 @@ function invocationFailureSource(
   ) {
     return value;
   }
-  throw new Error(`Unsupported desktop invocation failure source: ${value}`);
+  throw new MenderClientInvariantError(`Unsupported desktop invocation failure source: ${value}`);
 }

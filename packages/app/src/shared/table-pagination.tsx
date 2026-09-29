@@ -1,6 +1,6 @@
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 
-import { t } from "../i18n/i18n";
+import { formatNumber, t } from "../i18n/i18n";
 import { IconButton } from "./icon-button";
 import type { PaginationState } from "./pagination";
 
@@ -22,9 +22,9 @@ export function TablePagination<T>({
     >
       <p aria-live="polite">
         {t("Rows {{from}}–{{to}} of {{total}}", {
-          from: pagination.from,
-          to: pagination.to,
-          total: pagination.total,
+          from: formatNumber(pagination.from),
+          to: formatNumber(pagination.to),
+          total: formatNumber(pagination.total),
         })}
       </p>
 
@@ -41,7 +41,7 @@ export function TablePagination<T>({
           >
             {pagination.pageSizeOptions.map((pageSize) => (
               <option key={pageSize} value={pageSize}>
-                {pageSize}
+                {formatNumber(pageSize)}
               </option>
             ))}
           </select>
@@ -49,8 +49,8 @@ export function TablePagination<T>({
 
         <span className="whitespace-nowrap">
           {t("Page {{page}} of {{pageCount}}", {
-            page: pagination.page,
-            pageCount: pagination.pageCount,
+            page: formatNumber(pagination.page),
+            pageCount: formatNumber(pagination.pageCount),
           })}
         </span>
 

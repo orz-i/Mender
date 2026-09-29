@@ -2,7 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { HashRouter } from "react-router";
 
-import { MenderApp } from "@mender/app";
+import { MenderApp, t } from "@mender/app";
 import { Clipboard, Dialogs } from "@wailsio/runtime";
 
 import "@mender/ui/globals.css";
@@ -26,9 +26,9 @@ async function chooseAndInstallProviderPlugin() {
     CanChooseDirectories: true,
     CanChooseFiles: false,
     CanCreateDirectories: false,
-    Title: "Install Provider plugin",
-    Message: "Choose a Provider plugin package directory.",
-    ButtonText: "Install",
+    Title: t("Install Provider plugin"),
+    Message: t("Choose a Provider plugin package directory."),
+    ButtonText: t("Install"),
   });
   if (!sourcePath) {
     return null;

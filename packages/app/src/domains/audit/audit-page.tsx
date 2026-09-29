@@ -27,12 +27,13 @@ import {
   TableRow,
 } from "@mender/ui/components/table";
 
+import { errorMessage } from "../../shared/errors";
 import { IconButton } from "../../shared/icon-button";
 import { EmptyState, ErrorNotice, PageHeader } from "../../shared/page";
 import { usePagination } from "../../shared/pagination";
 import { TablePagination } from "../../shared/table-pagination";
 
-import { t } from "../../i18n/i18n";
+import { formatDateTime, t } from "../../i18n/i18n";
 
 export function AuditPage({ client }: { client: MenderClient }) {
   const [records, setRecords] = useState<AuditRecord[]>([]);
@@ -111,7 +112,7 @@ export function AuditPage({ client }: { client: MenderClient }) {
                 {auditPagination.items.map((record) => (
                   <TableRow key={record.invocationId}>
                     <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                      {new Date(record.finishedAt).toLocaleString()}
+                      {formatDateTime(record.finishedAt)}
                     </TableCell>
                     <TableCell>
                       <Badge
@@ -207,11 +208,11 @@ export function AuditPage({ client }: { client: MenderClient }) {
                 />
                 <AuditField
                   label="Started"
-                  value={new Date(selected.startedAt).toLocaleString()}
+                  value={formatDateTime(selected.startedAt)}
                 />
                 <AuditField
                   label="Finished"
-                  value={new Date(selected.finishedAt).toLocaleString()}
+                  value={formatDateTime(selected.finishedAt)}
                 />
               </div>
 
@@ -297,8 +298,4 @@ function AuditField({
       </p>
     </div>
   );
-}
-
-function errorMessage(reason: unknown) {
-  return reason instanceof Error ? reason.message : t("Unexpected error");
 }
