@@ -369,3 +369,18 @@ Goals:
 Exit criteria are complete. `backend/internal/providerplugin/builtin` now owns the deterministic first-party plugin set and registration entrypoint; Runtime performs one built-in registration call and no longer imports MCP/OpenAPI/Model Tools implementations directly. Existing plugin identities/configuration and external installation semantics are unchanged. Full `pnpm check` and `pnpm security:check` verification is green, including remote Buf protobuf generation, Go lint/test/race, generated OpenAPI/Wails checks, frontend lint/typecheck/tests/builds, govulncheck, and production dependency audit.
 
 See `phase-18-built-in-provider-plugin-package.md`.
+
+## Phase 19 — Skill Resource Management & Distribution
+
+Status: In Progress
+
+Goals:
+
+- Manage Agent Skills as versioned resources while keeping the Agent Skills directory format portable.
+- Add exact installation identity, deterministic content digests, trust/enablement state, and safe managed storage.
+- Register the existing `mender-tools` Skill as the first built-in Skill without duplicating Tool schemas.
+- Add CLI lifecycle and explicit deployment adapters for agent-specific Skill directories.
+- Export portable Agent Plugins without conflating them with Mender Provider Plugins.
+- Keep Profile/Policy/Credential/Invocation governance authoritative for all Tool execution initiated by Skills.
+
+See `phase-19-skill-resource-management.md`.

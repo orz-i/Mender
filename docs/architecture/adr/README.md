@@ -54,3 +54,4 @@ Minor implementation choices that remain inside an accepted architectural bounda
 - [ADR-0026: Bridge provider-hosted model tools through a normalized agentic Provider](0026-model-tool-bridge-provider.md)
 - [ADR-0027: Host installable Provider plugins out of process behind a versioned Mender protocol](0027-external-provider-plugin-host.md)
 - [ADR-0028: Make Provider plugin resilience and governance host-owned](0028-provider-plugin-resilience.md)
+- [ADR-0029: Manage Agent Skills as versioned resources and keep deployment host-specific](0029-skill-resource-management.md)
