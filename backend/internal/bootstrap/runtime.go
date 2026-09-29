@@ -36,6 +36,7 @@ import (
 type RuntimeOptions struct {
 	DatabasePath          string
 	ProviderPluginRoot    string
+	SkillRoot             string
 	DefaultTimeout        time.Duration
 	MaxResultBytes        int
 	ExecutionGuard        invocationapplication.ExecutionGuard
@@ -50,6 +51,7 @@ type Runtime struct {
 	Credentials *Credentials
 	Profiles    *Profiles
 	Policy      *Policies
+	Skills      *Skills
 	InvokeTool  invocationapplication.InvokeTool
 	ListAudit   auditapplication.ListRecords
 
@@ -256,6 +258,35 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		_ = catalog.Close()
 		return nil, fmt.Errorf("compose runtime: provider instances: %w", err)
 	}
+	skillRoot, err := resolveSkillRoot(options.DatabasePath, options.SkillRoot)
+	if err != nil {
+		_ = providerInstances.CloseAll()
+		_ = externalProcesses.CloseAll()
+		_ = pluginInstallations.Close()
+		_ = providerConfigs.Close()
+		_ = configs.Close()
+		_ = policies.Close()
+		_ = profiles.Close()
+		_ = credentials.Close()
+		_ = auditStore.Close()
+		_ = catalog.Close()
+		return nil, fmt.Errorf("compose runtime: skill root: %w", err)
+	}
+	skills, err := NewSkills(ctx, options.DatabasePath, skillRoot)
+	if err != nil {
+		_ = providerInstances.CloseAll()
+		_ = externalProcesses.CloseAll()
+		_ = pluginInstallations.Close()
+		_ = providerConfigs.Close()
+		_ = configs.Close()
+		_ = policies.Close()
+		_ = profiles.Close()
+		_ = credentials.Close()
+		_ = auditStore.Close()
+		_ = catalog.Close()
+		return nil, fmt.Errorf("compose runtime: skills: %w", err)
+	}
+
 	ids := invocationidentity.NewGenerator()
 
 	schemaValidator := invocationjsonschema.Validator{}
@@ -295,6 +326,7 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		Credentials:         credentials,
 		Profiles:            profiles,
 		Policy:              policies,
+		Skills:              skills,
 		InvokeTool:          invokeTool,
 		ListAudit:           auditapplication.NewListRecords(auditStore),
 		audit:               auditStore,
@@ -320,22 +352,35 @@ func (r *Runtime) RegisterExecutor(
 	return r.executors.Register(providerID, executor)
 }
 
+func resolveSkillRoot(databasePath, explicit string) (string, error) {
+	return resolveManagedRoot(databasePath, explicit, "skills", "skill")
+}
+
 func resolveProviderPluginRoot(databasePath, explicit string) (string, error) {
+	return resolveManagedRoot(databasePath, explicit, "plugins", "provider plugin")
+}
+
+func resolveManagedRoot(
+	databasePath string,
+	explicit string,
+	defaultName string,
+	label string,
+) (string, error) {
 	if value := strings.TrimSpace(explicit); value != "" {
 		absolute, err := filepath.Abs(value)
 		if err != nil {
-			return "", fmt.Errorf("resolve provider plugin root: %w", err)
+			return "", fmt.Errorf("resolve %s root: %w", label, err)
 		}
 		return absolute, nil
 	}
+	if strings.TrimSpace(databasePath) == "" {
+		return "", fmt.Errorf("resolve %s root: database path must not be empty", label)
+	}
 	absoluteDatabase, err := filepath.Abs(strings.TrimSpace(databasePath))
 	if err != nil {
-		return "", fmt.Errorf("resolve provider plugin database path: %w", err)
+		return "", fmt.Errorf("resolve %s database path: %w", label, err)
 	}
-	if strings.TrimSpace(databasePath) == "" {
-		return "", fmt.Errorf("resolve provider plugin root: database path must not be empty")
-	}
-	return filepath.Join(filepath.Dir(absoluteDatabase), "plugins"), nil
+	return filepath.Join(filepath.Dir(absoluteDatabase), defaultName), nil
 }
 
 func (r *Runtime) addCloser(closer io.Closer) {
@@ -365,6 +410,7 @@ func (r *Runtime) Close() error {
 	}
 	errs = append(
 		errs,
+		r.Skills.Close(),
 		r.pluginInstallations.Close(),
 		r.providerConfigs.Close(),
 		r.mcpConfigs.Close(),
