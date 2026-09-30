@@ -15,6 +15,42 @@ import (
 	mcpserver "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/server"
 )
 
+func TestCLIAddsWorkspaceProvider(t *testing.T) {
+	t.Parallel()
+
+	dbPath := filepath.Join(t.TempDir(), "mender.db")
+	workspaceRoot := t.TempDir()
+	registered := executeJSONCommand(
+		t,
+		dbPath,
+		"provider", "add", "workspace",
+		"--namespace", "workspace-cli",
+		"--name", "Workspace CLI",
+		"--root", workspaceRoot,
+	)
+	provider, ok := registered["provider"].(map[string]any)
+	if !ok {
+		t.Fatalf("provider add output = %#v", registered)
+	}
+	if provider["pluginId"] != "io.mender.provider.workspace" {
+		t.Fatalf("provider pluginId = %#v", provider["pluginId"])
+	}
+	syncResult, ok := registered["sync"].(map[string]any)
+	if !ok || syncResult["total"] != float64(4) {
+		t.Fatalf("provider sync = %#v", registered["sync"])
+	}
+
+	listed := executeJSONCommand(t, dbPath, "provider", "list")
+	providers, ok := listed["providers"].([]any)
+	if !ok || len(providers) != 1 {
+		t.Fatalf("provider list = %#v", listed)
+	}
+	item, _ := providers[0].(map[string]any)
+	if item["pluginId"] != "io.mender.provider.workspace" {
+		t.Fatalf("listed provider = %#v", item)
+	}
+}
+
 func TestCLIAddsModelToolsProviderEngines(t *testing.T) {
 	t.Parallel()
 

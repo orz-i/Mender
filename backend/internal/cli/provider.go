@@ -16,6 +16,7 @@ import (
 	modeltoolsplugin "github.com/orz-i/Mender/backend/internal/modeltools/infrastructure/plugin"
 	openapiplugin "github.com/orz-i/Mender/backend/internal/openapi/infrastructure/plugin"
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
+	workspaceplugin "github.com/orz-i/Mender/backend/internal/workspace/infrastructure/plugin"
 	"github.com/spf13/cobra"
 )
 
@@ -40,6 +41,7 @@ func (a *app) newProviderAddCommand() *cobra.Command {
 	command.AddCommand(a.newProviderAddMCPCommand())
 	command.AddCommand(a.newProviderAddOpenAPICommand())
 	command.AddCommand(a.newProviderAddModelToolsCommand())
+	command.AddCommand(a.newProviderAddWorkspaceCommand())
 	command.AddCommand(a.newProviderAddExternalCommand())
 
 	// Phase 5 compatibility aliases. They are intentionally hidden so normal
@@ -176,6 +178,38 @@ func (a *app) newProviderAddExternalCommand() *cobra.Command {
 		"",
 		"path to plugin-owned Provider config JSON",
 	)
+	return command
+}
+
+func (a *app) newProviderAddWorkspaceCommand() *cobra.Command {
+	var namespace, displayName, description, root string
+
+	command := &cobra.Command{
+		Use:   "workspace",
+		Short: "Register governed local workspace tools",
+		Args:  exactArgs(0),
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if namespace == "" || displayName == "" || root == "" {
+				return usageError{err: fmt.Errorf("--namespace, --name, and --root are required")}
+			}
+			raw, err := json.Marshal(workspaceplugin.Config{Root: root})
+			if err != nil {
+				return fmt.Errorf("encode Workspace provider config: %w", err)
+			}
+			return a.registerConfiguredProvider(
+				cmd,
+				namespace,
+				displayName,
+				description,
+				workspaceplugin.ID,
+				raw,
+			)
+		},
+	}
+	command.Flags().StringVar(&namespace, "namespace", "", "stable provider namespace")
+	command.Flags().StringVar(&displayName, "name", "", "provider display name")
+	command.Flags().StringVar(&description, "description", "", "provider description")
+	command.Flags().StringVar(&root, "root", "", "absolute local workspace root")
 	return command
 }
 
