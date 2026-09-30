@@ -12,15 +12,6 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
-import { Badge } from "@mender/ui/components/badge";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@mender/ui/components/card";
-
 import { t } from "../i18n/i18n";
 
 const pageIcons: Record<string, LucideIcon> = {
@@ -92,54 +83,5 @@ export function EmptyState({
         {t(description)}
       </p>
     </div>
-  );
-}
-
-export function StatusCard({
-  title,
-  value,
-  description,
-  status = "neutral",
-  icon,
-}: {
-  title: string;
-  value: string;
-  description: string;
-  status?: "neutral" | "good" | "warning";
-  icon?: ReactNode;
-}) {
-  return (
-    <Card className="gap-3 py-4">
-      <CardHeader className="gap-2 pb-0">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-center gap-2.5">
-            {icon ? (
-              <span className="flex size-9 items-center justify-center rounded-xl bg-primary/8 text-primary [&_svg]:size-[17px]">
-                {icon}
-              </span>
-            ) : null}
-            <div>
-              <CardDescription className="font-medium">
-                {t(title)}
-              </CardDescription>
-              <CardTitle className="mt-0.5 text-2xl font-semibold tracking-[-0.03em]">
-                {value}
-              </CardTitle>
-            </div>
-          </div>
-          <Badge
-            variant={status === "warning" ? "secondary" : "outline"}
-            className="rounded-full px-2 py-0.5 text-[10px]"
-          >
-            {t(status)}
-          </Badge>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <p className="text-xs leading-5 text-muted-foreground">
-          {t(description)}
-        </p>
-      </CardContent>
-    </Card>
   );
 }

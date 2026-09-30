@@ -1,10 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  KeyRoundIcon,
   PencilIcon,
   PowerIcon,
   PowerOffIcon,
-  ShieldCheckIcon,
   Trash2Icon,
 } from "lucide-react";
 
@@ -14,7 +12,6 @@ import type {
   PolicyDecision,
   PolicyRule,
   PolicyRuleInput,
-  PolicyStatus,
   Profile,
   Provider,
   ToolSummary,
@@ -47,8 +44,6 @@ import { TablePagination } from "../../shared/table-pagination";
 import {
   DataPanel,
   EmptyPanelState,
-  MetricStrip,
-  MetricTile,
 } from "../../shared/workbench";
 
 import { t, tCount } from "../../i18n/i18n";
@@ -100,7 +95,6 @@ function emptyRuleForm(): PolicyRuleInput {
 
 export function PolicyPage({ client }: { client: MenderClient }) {
   const [policy, setPolicy] = useState<Policy | null>(null);
-  const [status, setStatus] = useState<PolicyStatus | null>(null);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [providers, setProviders] = useState<Provider[]>([]);
   const [tools, setTools] = useState<ToolSummary[]>([]);
@@ -115,16 +109,14 @@ export function PolicyPage({ client }: { client: MenderClient }) {
 
   const refresh = useCallback(async () => {
     try {
-      const [policyResult, statusResult, profileResult, providerResult, toolResult] =
+      const [policyResult, profileResult, providerResult, toolResult] =
         await Promise.all([
           client.getPolicy(),
-          client.getPolicyStatus(),
           client.listProfiles(),
           client.listProviders(),
           client.browseTools({ limit: 100 }),
         ]);
       setPolicy(policyResult);
-      setStatus(statusResult);
       setProfiles(profileResult.profiles);
       setProviders(providerResult.providers);
       setTools(toolResult.tools);
@@ -140,15 +132,13 @@ export function PolicyPage({ client }: { client: MenderClient }) {
     let active = true;
     void Promise.all([
       client.getPolicy(),
-      client.getPolicyStatus(),
       client.listProfiles(),
       client.listProviders(),
       client.browseTools({ limit: 100 }),
     ])
-      .then(([policyResult, statusResult, profileResult, providerResult, toolResult]) => {
+      .then(([policyResult, profileResult, providerResult, toolResult]) => {
         if (active) {
           setPolicy(policyResult);
-          setStatus(statusResult);
           setProfiles(profileResult.profiles);
           setProviders(providerResult.providers);
           setTools(toolResult.tools);
@@ -305,13 +295,24 @@ export function PolicyPage({ client }: { client: MenderClient }) {
 
       {error ? <ErrorNotice message={error} /> : null}
 
-      <MetricStrip>
-        <MetricTile
-          icon={ShieldCheckIcon}
-          label="Default decision"
-          value={<DecisionBadge decision={policy?.defaultDecision ?? "allow"} />}
-          description="Used only when no enabled Rule matches."
-          action={
+      <DataPanel
+        title="Policy rules"
+        description={tCount(
+          rules.length,
+          "{{count}} Policy Rule configured. Matching deny Rules cannot be overridden by allow Rules.",
+          "{{count}} Policy Rules configured. Matching deny Rules cannot be overridden by allow Rules.",
+        )}
+        toolbar={
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-muted-foreground">
+                {t("Default decision")}
+              </span>
+              <DecisionBadge decision={policy?.defaultDecision ?? "allow"} />
+              <span className="hidden text-xs text-muted-foreground lg:inline">
+                {t("Used only when no enabled Rule matches.")}
+              </span>
+            </div>
             <Button
               size="sm"
               variant="outline"
@@ -320,34 +321,8 @@ export function PolicyPage({ client }: { client: MenderClient }) {
             >
               {t("Edit")}
             </Button>
-          }
-        />
-        <MetricTile
-          icon={PowerIcon}
-          label="Enabled rules"
-          value={
-            status === null
-              ? "—"
-              : status.enabledRuleCount + " / " + status.ruleCount
-          }
-          description="Rules are unordered and independently managed."
-        />
-        <MetricTile
-          icon={KeyRoundIcon}
-          label="Approval behavior"
-          value={t("Fail closed")}
-          description="Approval requests reject when no interactive adapter is configured."
-        />
-      </MetricStrip>
-
-      <DataPanel
-        className="mt-5"
-        title="Policy rules"
-        description={tCount(
-          rules.length,
-          "{{count}} Policy Rule configured. Matching deny Rules cannot be overridden by allow Rules.",
-          "{{count}} Policy Rules configured. Matching deny Rules cannot be overridden by allow Rules.",
-        )}
+          </div>
+        }
       >
           {!loaded ? (
             <div className="px-4 py-12 text-center text-sm text-muted-foreground">

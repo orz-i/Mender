@@ -1,15 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import {
-  BlocksIcon,
   EyeIcon,
   KeyRoundIcon,
   Link2Icon,
   PencilIcon,
-  PlugIcon,
   RefreshCwIcon,
-  TriangleAlertIcon,
   Trash2Icon,
-  WrenchIcon,
 } from "lucide-react";
 
 import type {
@@ -51,8 +47,6 @@ import { TablePagination } from "../../shared/table-pagination";
 import {
   DataPanel,
   EmptyPanelState,
-  MetricStrip,
-  MetricTile,
 } from "../../shared/workbench";
 import { GenericProviderConfigForm } from "./generic-provider-config-form";
 import {
@@ -621,42 +615,7 @@ export function ProvidersPage({
         />
       ) : null}
 
-      <MetricStrip>
-        <MetricTile
-          icon={PlugIcon}
-          label="Providers"
-          value={providers.length}
-          description="Configured tool sources"
-        />
-        <MetricTile
-          icon={BlocksIcon}
-          label="Provider plugins"
-          value={providerPlugins.length}
-          description="Available Provider adapters"
-        />
-        <MetricTile
-          icon={WrenchIcon}
-          label="Synchronized Tools"
-          value={providers.reduce(
-            (total, provider) => total + provider.toolCount,
-            0,
-          )}
-          description="Tools currently visible in the Catalog"
-        />
-        <MetricTile
-          icon={TriangleAlertIcon}
-          label="Plugin issues"
-          value={providerPluginIssues.length}
-          description={
-            providerPluginIssues.length
-              ? "Provider attention required"
-              : "No degraded Provider plugins"
-          }
-        />
-      </MetricStrip>
-
       <DataPanel
-        className="mt-5"
         title="Providers"
         description={tCount(
           providers.length,

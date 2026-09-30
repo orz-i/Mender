@@ -47,8 +47,6 @@ import {
   DataPanel,
   EmptyPanelState,
   FilterSelect,
-  MetricStrip,
-  MetricTile,
   SearchField,
   WorkbenchToolbar,
 } from "../../shared/workbench";
@@ -389,35 +387,7 @@ export function SkillsPage({
 
       {error ? <ErrorNotice message={error} /> : null}
 
-      <MetricStrip>
-        <MetricTile
-          icon={BookOpenIcon}
-          label="Total Skills"
-          value={installations.length}
-          description="Exact Skill installations"
-        />
-        <MetricTile
-          icon={PowerIcon}
-          label="Enabled"
-          value={installations.filter((item) => item.enabled).length}
-          description="Ready for deployment or export"
-        />
-        <MetricTile
-          icon={FileCode2Icon}
-          label="Local Skills"
-          value={installations.filter((item) => !item.builtIn).length}
-          description="Managed local installations"
-        />
-        <MetricTile
-          icon={HardDriveIcon}
-          label="Deployments"
-          value={deployments.length}
-          description="Materialized Agent host copies"
-        />
-      </MetricStrip>
-
       <DataPanel
-        className="mt-5"
         title="Skill Library"
         description="Browse exact installations, then open one focused detail view when you need more context."
         toolbar={

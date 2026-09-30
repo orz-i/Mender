@@ -25,7 +25,7 @@ Desktop viewport: 1536 × 1024 CSS px.
 
 Mobile viewport: 390 × 844 CSS px.
 
-The temporary Runtime contained the built-in `mender-tools` Skill and one trusted/enabled local `code-review` installation so that list, metrics, filters, and detail views were audited with real data rather than only empty states.
+The temporary Runtime contained the built-in `mender-tools` Skill and one trusted/enabled local `code-review` installation so that list, filters, and detail views were audited with real data rather than only empty states.
 
 ## Information architecture
 
@@ -33,10 +33,11 @@ The redesign now uses one shared page grammar:
 
 ~~~text
 Page Header
-  -> optional metric strip
-  -> optional filter / action toolbar
+  -> optional filter / configuration toolbar
   -> one primary data workspace
   -> focused layered Dialogs for deeper tasks
+
+Overview is the only page that adds a metric/statistics strip before its primary data workspace.
 ~~~
 
 This grammar is applied across:
@@ -61,8 +62,8 @@ The redesign intentionally reduces nested Card usage. Cards now communicate a me
 
 Strengths:
 
-- Sidebar, global page search, Runtime state, title/action area, metrics, filters, Skill list, and pagination have a clear top-to-bottom hierarchy.
-- Metrics use existing data only: total installations, enabled installations, managed local installations, and deployments.
+- Sidebar, global page search, Runtime state, title/action area, filters, Skill list, and pagination have a clear top-to-bottom hierarchy.
+- Skill statistics were removed from the domain page; aggregate statistics are reserved for Overview.
 - Tabs and filters are grouped into one workbench toolbar instead of multiple visual containers.
 - Built-in and local installations remain visually distinguishable without adding fabricated metadata.
 - Source, status, search, and sort controls are functional.
@@ -127,7 +128,7 @@ Repair:
 - navigation links retain explicit accessible names when labels are visually hidden;
 - language switching remains available on the mobile rail;
 - PageHeader switches to vertical title/action layout;
-- metrics, filters, list, and pagination regain usable content width.
+- filters, list, and pagination regain usable content width.
 
 The repaired mobile page is approximately 1731px tall versus roughly 2782px before the fix, reflecting the removal of the severe horizontal squeeze and resulting excessive wrapping.
 
@@ -144,7 +145,8 @@ Direction 2 is reflected in:
 - subtle active navigation state;
 - reduced Card radius/shadow;
 - unified Dialog overlay, spacing, title hierarchy, and footer;
-- shared `MetricStrip`, `MetricTile`, `DataPanel`, `WorkbenchToolbar`, `SearchField`, and `FilterSelect`.
+- shared `DataPanel`, `WorkbenchToolbar`, `SearchField`, and `FilterSelect` for domain pages;
+- `MetricStrip` and `MetricTile` are reserved for Overview only.
 
 ## Page-specific decisions
 
@@ -161,28 +163,19 @@ Recent invocation activity is presented as one Data Panel.
 
 ### Providers
 
-Uses four real summary metrics:
+Provider statistics were removed from the domain page. The page now enters directly into the Provider inventory after title/actions and error state. Provider lifecycle actions and existing dialogs are unchanged.
 
-- Providers;
-- Provider plugins;
-- synchronized Tools;
-- Provider plugin issues.
+### Skills
 
-Provider lifecycle actions and existing dialogs are unchanged.
+Skill statistics were removed from the domain page. The page now enters directly into the Skill Library with tabs, search, source/status filters, sort, list, pagination, and focused Dialog viewing.
 
 ### Policy
 
-Policy keeps a summary layer because the three values are decision-relevant rather than decorative:
-
-- default decision;
-- enabled rules;
-- approval behavior.
-
-The rules inventory is one primary Data Panel.
+Policy statistics were removed from the domain page. The real configuration action for the default decision remains available as a compact toolbar inside the Policy Rules workspace; enabled-rule counts and approval-behavior summary cards were removed.
 
 ### Profiles / Servers / Credentials / Audit
 
-These are task-oriented inventories. They intentionally do not receive decorative metric strips; each page is centered on one primary data workspace plus focused dialogs.
+These task-oriented inventories remain centered on one primary data workspace plus focused dialogs and do not expose decorative statistics.
 
 ## Audit findings and repairs
 
@@ -197,7 +190,8 @@ These are task-oriented inventories. They intentionally do not receive decorativ
    - Fixed by merging them into one workbench Data Panel.
 
 4. **P2 — card-heavy hierarchy**
-   - Reduced by using Cards only for meaningful grouped surfaces and metrics.
+   - Reduced by using Cards only for meaningful grouped surfaces.
+   - Domain-level statistic cards were later removed entirely; statistics are now reserved for Overview.
 
 5. **P2 — shared Dialog styling lagged behind the new visual system**
    - Updated overlay, border, radius, spacing, heading hierarchy, and footer.
@@ -234,7 +228,7 @@ Current final gate:
 
 - ESLint: PASS
 - Workspace TypeScript: PASS
-- i18n: **651 required / 651 zh-CN**
+- i18n: **634 required / 634 zh-CN**
 - Vitest: **9 files / 59 tests**
 - Web production build: PASS
 - Desktop production build: PASS
