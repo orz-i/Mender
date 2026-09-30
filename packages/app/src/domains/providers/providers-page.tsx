@@ -1,11 +1,15 @@
 import { useCallback, useEffect, useState } from "react";
 import {
+  BlocksIcon,
   EyeIcon,
   KeyRoundIcon,
   Link2Icon,
   PencilIcon,
+  PlugIcon,
   RefreshCwIcon,
+  TriangleAlertIcon,
   Trash2Icon,
+  WrenchIcon,
 } from "lucide-react";
 
 import type {
@@ -19,13 +23,6 @@ import type {
 } from "@mender/sdk";
 import { Badge } from "@mender/ui/components/badge";
 import { Button } from "@mender/ui/components/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@mender/ui/components/card";
 import {
   Dialog,
   DialogClose,
@@ -51,6 +48,12 @@ import { IconButton } from "../../shared/icon-button";
 import { EmptyState, ErrorNotice, PageHeader } from "../../shared/page";
 import { usePagination } from "../../shared/pagination";
 import { TablePagination } from "../../shared/table-pagination";
+import {
+  DataPanel,
+  EmptyPanelState,
+  MetricStrip,
+  MetricTile,
+} from "../../shared/workbench";
 import { GenericProviderConfigForm } from "./generic-provider-config-form";
 import {
   genericConfigDefaults,
@@ -618,25 +621,56 @@ export function ProvidersPage({
         />
       ) : null}
 
-      <Card>
-        <CardHeader className="border-b">
-          <CardTitle>{t("Providers")}</CardTitle>
-          <CardDescription>
-            {tCount(
-              providers.length,
-              "{{count}} configured source",
-              "{{count}} configured sources",
-            )}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {!loaded ? (
-            <div className="py-10 text-center text-sm text-muted-foreground">
-              {t("Loading providers…")}
-            </div>
-          ) : providers.length ? (
-            <>
-              <Table>
+      <MetricStrip>
+        <MetricTile
+          icon={PlugIcon}
+          label="Providers"
+          value={providers.length}
+          description="Configured tool sources"
+        />
+        <MetricTile
+          icon={BlocksIcon}
+          label="Provider plugins"
+          value={providerPlugins.length}
+          description="Available Provider adapters"
+        />
+        <MetricTile
+          icon={WrenchIcon}
+          label="Synchronized Tools"
+          value={providers.reduce(
+            (total, provider) => total + provider.toolCount,
+            0,
+          )}
+          description="Tools currently visible in the Catalog"
+        />
+        <MetricTile
+          icon={TriangleAlertIcon}
+          label="Plugin issues"
+          value={providerPluginIssues.length}
+          description={
+            providerPluginIssues.length
+              ? "Provider attention required"
+              : "No degraded Provider plugins"
+          }
+        />
+      </MetricStrip>
+
+      <DataPanel
+        className="mt-5"
+        title="Providers"
+        description={tCount(
+          providers.length,
+          "{{count}} configured source",
+          "{{count}} configured sources",
+        )}
+      >
+        {!loaded ? (
+          <div className="px-4 py-12 text-center text-sm text-muted-foreground">
+            {t("Loading providers…")}
+          </div>
+        ) : providers.length ? (
+          <>
+            <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>{t("Provider")}</TableHead>
@@ -651,7 +685,7 @@ export function ProvidersPage({
                   <TableRow key={provider.providerId}>
                     <TableCell>
                       <div className="font-medium">{provider.displayName}</div>
-                      <div className="font-mono text-xs text-muted-foreground">
+                      <div className="mt-0.5 font-mono text-xs text-muted-foreground">
                         {provider.namespace}
                       </div>
                     </TableCell>
@@ -751,20 +785,23 @@ export function ProvidersPage({
                   </TableRow>
                 ))}
               </TableBody>
-              </Table>
+            </Table>
+            <div className="px-4 pb-3">
               <TablePagination
                 label="Providers"
                 pagination={providerPagination}
               />
-            </>
-          ) : (
+            </div>
+          </>
+        ) : (
+          <EmptyPanelState>
             <EmptyState
               title="No providers"
               description="Add a Provider plugin and configure its connection to populate the Catalog."
             />
-          )}
-        </CardContent>
-      </Card>
+          </EmptyPanelState>
+        )}
+      </DataPanel>
 
       <ProviderPluginManagerDialog
         open={pluginManagerOpen}

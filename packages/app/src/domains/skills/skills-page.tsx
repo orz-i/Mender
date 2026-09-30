@@ -14,7 +14,6 @@ import {
   PowerIcon,
   PowerOffIcon,
   RefreshCwIcon,
-  SearchIcon,
   ShieldCheckIcon,
   ShieldOffIcon,
   Trash2Icon,
@@ -44,6 +43,15 @@ import { IconButton } from "../../shared/icon-button";
 import { EmptyState, ErrorNotice, PageHeader } from "../../shared/page";
 import { usePagination } from "../../shared/pagination";
 import { TablePagination } from "../../shared/table-pagination";
+import {
+  DataPanel,
+  EmptyPanelState,
+  FilterSelect,
+  MetricStrip,
+  MetricTile,
+  SearchField,
+  WorkbenchToolbar,
+} from "../../shared/workbench";
 
 type DeploySkill = (
   installationId: string,
@@ -381,10 +389,40 @@ export function SkillsPage({
 
       {error ? <ErrorNotice message={error} /> : null}
 
-      <section className="min-w-0">
-          <div className="overflow-hidden rounded-2xl border border-border/80 bg-card shadow-[0_1px_2px_rgb(15_23_42/0.03)]">
-            <div className="border-b border-border/70 px-4">
-              <div className="flex min-w-max items-center gap-1 overflow-x-auto">
+      <MetricStrip>
+        <MetricTile
+          icon={BookOpenIcon}
+          label="Total Skills"
+          value={installations.length}
+          description="Exact Skill installations"
+        />
+        <MetricTile
+          icon={PowerIcon}
+          label="Enabled"
+          value={installations.filter((item) => item.enabled).length}
+          description="Ready for deployment or export"
+        />
+        <MetricTile
+          icon={FileCode2Icon}
+          label="Local Skills"
+          value={installations.filter((item) => !item.builtIn).length}
+          description="Managed local installations"
+        />
+        <MetricTile
+          icon={HardDriveIcon}
+          label="Deployments"
+          value={deployments.length}
+          description="Materialized Agent host copies"
+        />
+      </MetricStrip>
+
+      <DataPanel
+        className="mt-5"
+        title="Skill Library"
+        description="Browse exact installations, then open one focused detail view when you need more context."
+        toolbar={
+          <div className="flex flex-col gap-3">
+            <div className="flex min-w-max items-center gap-1 overflow-x-auto">
                 <FilterTab
                   label="All Skills"
                   count={installations.length}
@@ -409,85 +447,71 @@ export function SkillsPage({
                   active={filter === "enabled"}
                   onClick={() => setFilter("enabled")}
                 />
-              </div>
             </div>
 
-            <div className="border-b border-border/70 p-4">
-              <div className="flex flex-col gap-2 lg:flex-row">
-                <div className="relative min-w-0 flex-1">
-                  <SearchIcon
-                    className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-                    aria-hidden="true"
-                  />
-                  <input
-                    value={query}
-                    onChange={(event) => setQuery(event.target.value)}
-                    placeholder={t("Search Skills…")}
-                    aria-label={t("Search Skills")}
-                    className="h-10 w-full rounded-xl border border-input bg-background pl-9 pr-3 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/20"
-                  />
-                </div>
-
-                <select
-                  aria-label={t("Skill source filter")}
-                  value={sourceFilter}
-                  onChange={(event) =>
-                    setSourceFilter(
-                      event.target.value as SkillSourceFilter,
-                    )
-                  }
-                  className="h-10 rounded-xl border border-input bg-background px-3 text-sm text-foreground outline-none focus:border-ring focus:ring-2 focus:ring-ring/20"
-                >
-                  <option value="all">{t("All Sources")}</option>
-                  <option value="builtin">{t("Built-in")}</option>
-                  <option value="local">{t("Local")}</option>
-                </select>
-
-                <select
-                  aria-label={t("Skill status filter")}
-                  value={statusFilter}
-                  onChange={(event) =>
-                    setStatusFilter(
-                      event.target.value as SkillStatusFilter,
-                    )
-                  }
-                  className="h-10 rounded-xl border border-input bg-background px-3 text-sm text-foreground outline-none focus:border-ring focus:ring-2 focus:ring-ring/20"
-                >
-                  <option value="all">{t("All Status")}</option>
-                  <option value="enabled">{t("Enabled")}</option>
-                  <option value="disabled">{t("Disabled")}</option>
-                </select>
-
-                <select
-                  aria-label={t("Skill sort")}
-                  value={sort}
-                  onChange={(event) =>
-                    setSort(event.target.value as SkillSort)
-                  }
-                  className="h-10 rounded-xl border border-input bg-background px-3 text-sm text-foreground outline-none focus:border-ring focus:ring-2 focus:ring-ring/20"
-                >
-                  <option value="name">{t("Name")}</option>
-                  <option value="version">{t("Version")}</option>
-                </select>
-              </div>
-            </div>
-
+            <WorkbenchToolbar>
+              <SearchField
+                value={query}
+                onChange={setQuery}
+                placeholder="Search Skills…"
+                label="Search Skills"
+                className="md:min-w-64"
+              />
+              <FilterSelect
+                value={sourceFilter}
+                onValueChange={(value) =>
+                  setSourceFilter(value as SkillSourceFilter)
+                }
+                label="Skill source filter"
+                options={[
+                  { value: "all", label: "All Sources" },
+                  { value: "builtin", label: "Built-in" },
+                  { value: "local", label: "Local" },
+                ]}
+              />
+              <FilterSelect
+                value={statusFilter}
+                onValueChange={(value) =>
+                  setStatusFilter(value as SkillStatusFilter)
+                }
+                label="Skill status filter"
+                options={[
+                  { value: "all", label: "All Status" },
+                  { value: "enabled", label: "Enabled" },
+                  { value: "disabled", label: "Disabled" },
+                ]}
+              />
+              <FilterSelect
+                value={sort}
+                onValueChange={(value) => setSort(value as SkillSort)}
+                label="Skill sort"
+                options={[
+                  { value: "name", label: "Name" },
+                  { value: "version", label: "Version" },
+                ]}
+              />
+            </WorkbenchToolbar>
+          </div>
+        }
+      >
             <div className="p-3">
               {!loaded ? (
                 <p className="px-3 py-10 text-center text-sm text-muted-foreground">
                   {t("Loading…")}
                 </p>
               ) : visibleInstallations.length === 0 ? (
-                <EmptyState
-                  title="No matching Skills"
-                  description="Try a different search or filter."
-                />
+                <EmptyPanelState>
+                  <EmptyState
+                    title="No matching Skills"
+                    description="Try a different search or filter."
+                  />
+                </EmptyPanelState>
               ) : (
                 <div className="space-y-2">
                   {skillPagination.items.map((item) => (
                       <div
                         key={item.installationId}
-                        className="group flex min-h-[112px] items-center gap-3 rounded-2xl border border-border/75 bg-background p-4 transition-all hover:border-border hover:bg-muted/20"
+                        className="group flex min-h-[96px] items-center gap-3 rounded-xl border border-border/75 bg-background p-3.5 transition-all hover:border-primary/25 hover:bg-muted/20"
                       >
                         <button
                           type="button"
@@ -535,24 +559,12 @@ export function SkillsPage({
                             <span className="block text-xs text-muted-foreground">
                               {item.versionHint || t("Unversioned")}
                             </span>
-                            <span
-                              className={[
-                                "mt-1 inline-flex items-center gap-1.5 text-xs font-medium",
-                                item.enabled
-                                  ? "text-emerald-600"
-                                  : "text-muted-foreground",
-                              ].join(" ")}
+                            <Badge
+                              variant={item.enabled ? "outline" : "secondary"}
+                              className="mt-1 rounded-full px-2 py-0 text-[10px]"
                             >
-                              <span
-                                className={[
-                                  "size-1.5 rounded-full",
-                                  item.enabled
-                                    ? "bg-emerald-500"
-                                    : "bg-muted-foreground/50",
-                                ].join(" ")}
-                              />
                               {item.enabled ? t("Enabled") : t("Disabled")}
-                            </span>
+                            </Badge>
                           </span>
                         </button>
 
@@ -645,11 +657,12 @@ export function SkillsPage({
               )}
 
               {visibleInstallations.length ? (
-                <TablePagination label="Skills" pagination={skillPagination} />
+                <div className="px-1">
+                  <TablePagination label="Skills" pagination={skillPagination} />
+                </div>
               ) : null}
             </div>
-          </div>
-        </section>
+      </DataPanel>
 
       <Dialog
         open={selected !== null}

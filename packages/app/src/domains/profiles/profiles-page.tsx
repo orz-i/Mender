@@ -17,13 +17,6 @@ import type {
 import { Badge } from "@mender/ui/components/badge";
 import { Button } from "@mender/ui/components/button";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@mender/ui/components/card";
-import {
   Dialog,
   DialogClose,
   DialogContent,
@@ -47,6 +40,7 @@ import { IconButton } from "../../shared/icon-button";
 import { EmptyState, ErrorNotice, PageHeader } from "../../shared/page";
 import { usePagination } from "../../shared/pagination";
 import { TablePagination } from "../../shared/table-pagination";
+import { DataPanel, EmptyPanelState } from "../../shared/workbench";
 
 import { formatNumber, t, tCount } from "../../i18n/i18n";
 
@@ -529,20 +523,16 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
       />
       {error ? <ErrorNotice message={error} /> : null}
 
-      <Card>
-        <CardHeader className="border-b">
-          <CardTitle>{t("Profiles")}</CardTitle>
-          <CardDescription>
-            {tCount(
-              profiles.length,
-              "{{count}} profile configured",
-              "{{count}} profiles configured",
-            )}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+      <DataPanel
+        title="Profiles"
+        description={tCount(
+          profiles.length,
+          "{{count}} profile configured",
+          "{{count}} profiles configured",
+        )}
+      >
           {!loaded ? (
-            <div className="py-10 text-center text-sm text-muted-foreground">
+            <div className="px-4 py-12 text-center text-sm text-muted-foreground">
               {t("Loading profiles…")}
             </div>
           ) : profiles.length ? (
@@ -584,19 +574,22 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
                 ))}
               </TableBody>
               </Table>
-              <TablePagination
-                label="Profiles"
-                pagination={profilePagination}
-              />
+              <div className="px-4 pb-3">
+                <TablePagination
+                  label="Profiles"
+                  pagination={profilePagination}
+                />
+              </div>
             </>
           ) : (
-            <EmptyState
-              title="No profiles"
-              description="Create a Profile before exposing Tools through MCP."
-            />
+            <EmptyPanelState>
+              <EmptyState
+                title="No profiles"
+                description="Create a Profile before exposing Tools through MCP."
+              />
+            </EmptyPanelState>
           )}
-        </CardContent>
-      </Card>
+      </DataPanel>
 
       <Dialog
         open={createOpen}

@@ -11,13 +11,6 @@ import type {
 import { Badge } from "@mender/ui/components/badge";
 import { Button } from "@mender/ui/components/button";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@mender/ui/components/card";
-import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -41,6 +34,11 @@ import { IconButton } from "../../shared/icon-button";
 import { EmptyState, ErrorNotice, PageHeader } from "../../shared/page";
 import { usePagination } from "../../shared/pagination";
 import { TablePagination } from "../../shared/table-pagination";
+import {
+  DataPanel,
+  EmptyPanelState,
+  WorkbenchToolbar,
+} from "../../shared/workbench";
 
 import { formatNumber, t, tCount } from "../../i18n/i18n";
 
@@ -203,9 +201,25 @@ export function CatalogPage({ client }: { client: MenderClient }) {
       />
       {error ? <ErrorNotice message={error} /> : null}
 
-      <Card>
-        <CardContent className="pt-6">
-          <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_180px_auto_auto] xl:grid-cols-[minmax(0,1fr)_220px_auto_auto]">
+      <DataPanel
+        title="Tools"
+        description={
+          !loaded
+            ? t("Loading synchronized Tools…")
+            : searched
+              ? tCount(
+                  results.length,
+                  "{{count}} compact match",
+                  "{{count}} compact matches",
+                )
+              : tCount(
+                  results.length,
+                  "{{count}} synchronized Tool",
+                  "{{count}} synchronized Tools",
+                )
+        }
+        toolbar={
+          <WorkbenchToolbar>
             <Input
               aria-label={t("Catalog search")}
               placeholder={t("Search intent, e.g. create issue")}
@@ -216,12 +230,13 @@ export function CatalogPage({ client }: { client: MenderClient }) {
                   void search();
                 }
               }}
+              className="h-9 min-w-0 flex-1 md:min-w-72"
             />
             <select
               aria-label={t("Catalog provider filter")}
               value={providerId}
               onChange={(event) => setProviderId(event.target.value)}
-              className="h-8 rounded-lg border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
+              className="h-9 min-w-48 rounded-lg border border-input bg-background px-3 text-sm text-foreground outline-none transition-colors focus:border-ring focus:ring-2 focus:ring-ring/20"
             >
               <option value="">{t("All Providers")}</option>
               {providers.map((provider) => (
@@ -243,30 +258,9 @@ export function CatalogPage({ client }: { client: MenderClient }) {
             >
               {t(busy === "browse" ? "Loading…" : "Browse")}
             </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card className="mt-6">
-        <CardHeader className="border-b">
-          <CardTitle>{t("Tools")}</CardTitle>
-          <CardDescription>
-            {!loaded
-              ? t("Loading synchronized Tools…")
-              : searched
-                ? tCount(
-                    results.length,
-                    "{{count}} compact match",
-                    "{{count}} compact matches",
-                  )
-                : tCount(
-                    results.length,
-                    "{{count}} synchronized Tool",
-                    "{{count}} synchronized Tools",
-                  )}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+          </WorkbenchToolbar>
+        }
+      >
           {results.length ? (
             <>
               <Table className="table-fixed">
@@ -332,25 +326,28 @@ export function CatalogPage({ client }: { client: MenderClient }) {
                 ))}
               </TableBody>
               </Table>
-              <TablePagination
-                label="Catalog tools"
-                pagination={catalogPagination}
-              />
+              <div className="px-4 pb-3">
+                <TablePagination
+                  label="Catalog tools"
+                  pagination={catalogPagination}
+                />
+              </div>
             </>
           ) : (
-            <EmptyState
-              title={
-                searched ? "No matching tools" : "No synchronized tools"
-              }
-              description={
-                searched
-                  ? "Try a different search intent or Provider filter."
-                  : "Sync a Provider to populate the Catalog. Schemas load only when you inspect a Tool."
-              }
-            />
+            <EmptyPanelState>
+              <EmptyState
+                title={
+                  searched ? "No matching tools" : "No synchronized tools"
+                }
+                description={
+                  searched
+                    ? "Try a different search intent or Provider filter."
+                    : "Sync a Provider to populate the Catalog. Schemas load only when you inspect a Tool."
+                }
+              />
+            </EmptyPanelState>
           )}
-        </CardContent>
-      </Card>
+      </DataPanel>
 
       <Dialog
         open={selected !== null}

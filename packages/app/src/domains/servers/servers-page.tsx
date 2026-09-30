@@ -10,13 +10,6 @@ import type { MCPServerInstance, MenderClient, Profile } from "@mender/sdk";
 import { Badge } from "@mender/ui/components/badge";
 import { Button } from "@mender/ui/components/button";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@mender/ui/components/card";
-import {
   Dialog,
   DialogClose,
   DialogContent,
@@ -40,6 +33,7 @@ import { IconButton } from "../../shared/icon-button";
 import { EmptyState, ErrorNotice, PageHeader } from "../../shared/page";
 import { usePagination } from "../../shared/pagination";
 import { TablePagination } from "../../shared/table-pagination";
+import { DataPanel, EmptyPanelState } from "../../shared/workbench";
 
 import { formatDateTime, t, tCount } from "../../i18n/i18n";
 
@@ -207,16 +201,12 @@ export function ServersPage({
 
       {error ? <ErrorNotice message={error} /> : null}
 
-      <Card>
-        <CardHeader className="border-b">
-          <CardTitle>{t("Running MCP servers")}</CardTitle>
-          <CardDescription>
-            {t("Runtime-only loopback servers. They stop when Mender exits.")}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+      <DataPanel
+        title="Running MCP servers"
+        description="Runtime-only loopback servers. They stop when Mender exits."
+      >
           {!loaded ? (
-            <div className="py-10 text-center text-sm text-muted-foreground">
+            <div className="px-4 py-12 text-center text-sm text-muted-foreground">
               {t("Loading servers…")}
             </div>
           ) : servers.length ? (
@@ -320,23 +310,26 @@ export function ServersPage({
                 ))}
               </TableBody>
               </Table>
-              <TablePagination
-                label="Servers"
-                pagination={serverPagination}
-              />
+              <div className="px-4 pb-3">
+                <TablePagination
+                  label="Servers"
+                  pagination={serverPagination}
+                />
+              </div>
             </>
           ) : (
-            <EmptyState
-              title="No running MCP servers"
-              description={
-                profiles.length
-                  ? "Start a Profile as a loopback Streamable HTTP server."
-                  : "Create a Profile before starting an MCP server."
-              }
-            />
+            <EmptyPanelState>
+              <EmptyState
+                title="No running MCP servers"
+                description={
+                  profiles.length
+                    ? "Start a Profile as a loopback Streamable HTTP server."
+                    : "Create a Profile before starting an MCP server."
+                }
+              />
+            </EmptyPanelState>
           )}
-        </CardContent>
-      </Card>
+      </DataPanel>
 
       <Dialog
         open={startOpen}

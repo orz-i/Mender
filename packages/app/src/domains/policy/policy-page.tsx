@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  KeyRoundIcon,
   PencilIcon,
   PowerIcon,
   PowerOffIcon,
+  ShieldCheckIcon,
   Trash2Icon,
 } from "lucide-react";
 
@@ -19,13 +21,6 @@ import type {
 } from "@mender/sdk";
 import { Badge } from "@mender/ui/components/badge";
 import { Button } from "@mender/ui/components/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@mender/ui/components/card";
 import {
   Dialog,
   DialogContent,
@@ -49,6 +44,12 @@ import { IconButton } from "../../shared/icon-button";
 import { EmptyState, ErrorNotice, PageHeader } from "../../shared/page";
 import { usePagination } from "../../shared/pagination";
 import { TablePagination } from "../../shared/table-pagination";
+import {
+  DataPanel,
+  EmptyPanelState,
+  MetricStrip,
+  MetricTile,
+} from "../../shared/workbench";
 
 import { t, tCount } from "../../i18n/i18n";
 
@@ -304,70 +305,52 @@ export function PolicyPage({ client }: { client: MenderClient }) {
 
       {error ? <ErrorNotice message={error} /> : null}
 
-      <div className="mb-6 grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>{t("Default decision")}</CardDescription>
-            <CardTitle className="flex items-center justify-between gap-3 text-lg">
-              <DecisionBadge decision={policy?.defaultDecision ?? "allow"} />
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={!loaded || policy === null}
-                onClick={openDefaultEditor}
-              >
-                {t("Edit")}
-              </Button>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground">
-              {t("Used only when no enabled Rule matches.")}
-            </p>
-          </CardContent>
-        </Card>
+      <MetricStrip>
+        <MetricTile
+          icon={ShieldCheckIcon}
+          label="Default decision"
+          value={<DecisionBadge decision={policy?.defaultDecision ?? "allow"} />}
+          description="Used only when no enabled Rule matches."
+          action={
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={!loaded || policy === null}
+              onClick={openDefaultEditor}
+            >
+              {t("Edit")}
+            </Button>
+          }
+        />
+        <MetricTile
+          icon={PowerIcon}
+          label="Enabled rules"
+          value={
+            status === null
+              ? "—"
+              : status.enabledRuleCount + " / " + status.ruleCount
+          }
+          description="Rules are unordered and independently managed."
+        />
+        <MetricTile
+          icon={KeyRoundIcon}
+          label="Approval behavior"
+          value={t("Fail closed")}
+          description="Approval requests reject when no interactive adapter is configured."
+        />
+      </MetricStrip>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>{t("Enabled rules")}</CardDescription>
-            <CardTitle className="text-lg">
-              {status?.enabledRuleCount ?? "—"} / {status?.ruleCount ?? "—"}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground">
-              {t("Rules are unordered and independently managed.")}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>{t("Approval behavior")}</CardDescription>
-            <CardTitle className="text-lg">{t("Fail closed")}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground">
-              {t("require approval currently rejects when no interactive Approval adapter is configured.")}
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card>
-        <CardHeader className="border-b">
-          <CardTitle>{t("Policy rules")}</CardTitle>
-          <CardDescription>
-            {tCount(
-              rules.length,
-              "{{count}} Policy Rule configured. Matching deny Rules cannot be overridden by allow Rules.",
-              "{{count}} Policy Rules configured. Matching deny Rules cannot be overridden by allow Rules.",
-            )}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+      <DataPanel
+        className="mt-5"
+        title="Policy rules"
+        description={tCount(
+          rules.length,
+          "{{count}} Policy Rule configured. Matching deny Rules cannot be overridden by allow Rules.",
+          "{{count}} Policy Rules configured. Matching deny Rules cannot be overridden by allow Rules.",
+        )}
+      >
           {!loaded ? (
-            <div className="py-10 text-center text-sm text-muted-foreground">
+            <div className="px-4 py-12 text-center text-sm text-muted-foreground">
               {t("Loading Policy…")}
             </div>
           ) : rules.length ? (
@@ -436,19 +419,22 @@ export function PolicyPage({ client }: { client: MenderClient }) {
                 ))}
               </TableBody>
               </Table>
-              <TablePagination
-                label="Policy rules"
-                pagination={rulePagination}
-              />
+              <div className="px-4 pb-3">
+                <TablePagination
+                  label="Policy rules"
+                  pagination={rulePagination}
+                />
+              </div>
             </>
           ) : (
-            <EmptyState
-              title="No Policy Rules"
-              description="The default decision currently governs every invocation. Add a Rule to target specific origins, scopes, Tools, Providers, or reviewed Governance Facts."
-            />
+            <EmptyPanelState>
+              <EmptyState
+                title="No Policy Rules"
+                description="The default decision currently governs every invocation. Add a Rule to target specific origins, scopes, Tools, Providers, or reviewed Governance Facts."
+              />
+            </EmptyPanelState>
           )}
-        </CardContent>
-      </Card>
+      </DataPanel>
 
       <Dialog open={defaultOpen} onOpenChange={setDefaultOpen}>
         <DialogContent className="sm:max-w-lg">

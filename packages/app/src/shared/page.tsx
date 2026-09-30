@@ -47,15 +47,15 @@ export function PageHeader({
   const Icon = pageIcons[title];
 
   return (
-    <header className="mb-5 flex items-start justify-between gap-6 border-b border-border/65 pb-5">
-      <div className="flex min-w-0 items-start gap-3.5">
+    <header className="mb-6 flex flex-col items-stretch gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex min-w-0 items-center gap-4">
         {Icon ? (
           <span className="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-sm shadow-primary/20">
             <Icon className="size-6" aria-hidden="true" />
           </span>
         ) : null}
-        <div className="min-w-0 pt-0.5">
-          <h1 className="text-[1.7rem] font-semibold tracking-[-0.025em] text-foreground">
+        <div className="min-w-0">
+          <h1 className="text-[1.75rem] font-semibold tracking-[-0.03em] text-foreground">
             {t(title)}
           </h1>
           <p className="mt-1 max-w-3xl text-sm leading-5 text-muted-foreground">
@@ -63,14 +63,16 @@ export function PageHeader({
           </p>
         </div>
       </div>
-      {actions ? <div className="shrink-0 pt-0.5">{actions}</div> : null}
+      {actions ? (
+        <div className="shrink-0 self-start sm:self-auto">{actions}</div>
+      ) : null}
     </header>
   );
 }
 
 export function ErrorNotice({ message }: { message: string }) {
   return (
-    <div className="mb-5 rounded-xl border border-destructive/25 bg-destructive/8 px-4 py-3 text-sm text-destructive shadow-[0_1px_2px_rgb(15_23_42/0.02)]">
+    <div className="mb-5 rounded-xl border border-destructive/20 bg-destructive/6 px-4 py-3 text-sm text-destructive">
       {message}
     </div>
   );

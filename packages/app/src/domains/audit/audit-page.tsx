@@ -5,12 +5,6 @@ import type { AuditRecord, MenderClient } from "@mender/sdk";
 import { Badge } from "@mender/ui/components/badge";
 import { Button } from "@mender/ui/components/button";
 import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@mender/ui/components/card";
-import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -32,6 +26,7 @@ import { IconButton } from "../../shared/icon-button";
 import { EmptyState, ErrorNotice, PageHeader } from "../../shared/page";
 import { usePagination } from "../../shared/pagination";
 import { TablePagination } from "../../shared/table-pagination";
+import { DataPanel, EmptyPanelState } from "../../shared/workbench";
 
 import { formatDateTime, t } from "../../i18n/i18n";
 
@@ -89,11 +84,10 @@ export function AuditPage({ client }: { client: MenderClient }) {
       />
       {error ? <ErrorNotice message={error} /> : null}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{t("Invocation history")}</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <DataPanel
+        title="Invocation history"
+        description="Recent terminal invocation outcomes and governance decisions."
+      >
           {records.length ? (
             <>
               <Table>
@@ -148,19 +142,22 @@ export function AuditPage({ client }: { client: MenderClient }) {
                 ))}
               </TableBody>
               </Table>
-              <TablePagination
-                label="Audit"
-                pagination={auditPagination}
-              />
+              <div className="px-4 pb-3">
+                <TablePagination
+                  label="Audit"
+                  pagination={auditPagination}
+                />
+              </div>
             </>
           ) : (
-            <EmptyState
-              title="No audit records"
-              description="Invocation outcomes will appear here after Tools are called."
-            />
+            <EmptyPanelState>
+              <EmptyState
+                title="No audit records"
+                description="Invocation outcomes will appear here after Tools are called."
+              />
+            </EmptyPanelState>
           )}
-        </CardContent>
-      </Card>
+      </DataPanel>
 
       <Dialog
         open={selected !== null}

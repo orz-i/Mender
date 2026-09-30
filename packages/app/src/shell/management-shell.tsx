@@ -173,14 +173,6 @@ export function ManagementShell({ client }: { client: MenderClient }) {
       )
     : flatNavigation;
 
-  const activeItem =
-    flatNavigation.find((item) => {
-      if (item.to === "/") {
-        return location.pathname === "/";
-      }
-      return location.pathname.startsWith(item.to);
-    }) ?? flatNavigation[0]!;
-
   function goTo(to: string) {
     void navigate(to);
     setCommandOpen(false);
@@ -193,12 +185,14 @@ export function ManagementShell({ client }: { client: MenderClient }) {
         <aside
           className={[
             "sticky top-0 z-30 flex h-screen shrink-0 flex-col border-r border-border/70 bg-sidebar/95 transition-[width] duration-200 ease-out",
-            collapsed ? "w-[72px]" : "w-[256px]",
+            collapsed
+              ? "w-[68px]"
+              : "w-[68px] md:w-[236px]",
           ].join(" ")}
         >
           <div
             className={[
-              "flex h-16 items-center border-b border-border/60 px-3",
+              "flex h-16 items-center px-3",
               collapsed ? "justify-center" : "gap-3",
             ].join(" ")}
           >
@@ -207,8 +201,8 @@ export function ManagementShell({ client }: { client: MenderClient }) {
             </div>
 
             {!collapsed ? (
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-[15px] font-semibold tracking-tight">
+              <div className="hidden min-w-0 flex-1 md:block">
+                <p className="truncate text-base font-semibold tracking-[-0.02em]">
                   Mender
                 </p>
                 <p className="truncate text-[11px] text-muted-foreground">
@@ -216,43 +210,7 @@ export function ManagementShell({ client }: { client: MenderClient }) {
                 </p>
               </div>
             ) : null}
-
-            {!collapsed ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                aria-label={t("Collapse sidebar")}
-                onClick={() => setCollapsed(true)}
-                className="text-muted-foreground hover:text-foreground"
-              >
-                <PanelLeftCloseIcon />
-              </Button>
-            ) : null}
           </div>
-
-          {collapsed ? (
-            <div className="flex justify-center border-b border-border/50 py-2">
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      aria-label={t("Expand sidebar")}
-                      onClick={() => setCollapsed(false)}
-                    />
-                  }
-                >
-                  <PanelLeftOpenIcon />
-                </TooltipTrigger>
-                <TooltipContent side="right">
-                  {t("Expand sidebar")}
-                </TooltipContent>
-              </Tooltip>
-            </div>
-          ) : null}
 
           <nav
             className={[
@@ -267,7 +225,7 @@ export function ManagementShell({ client }: { client: MenderClient }) {
                 className={groupIndex === 0 ? "" : "mt-5"}
               >
                 {!collapsed ? (
-                  <p className="mb-1.5 px-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/80">
+                  <p className="mb-1.5 hidden px-2 text-[11px] font-medium text-muted-foreground/80 md:block">
                     {t(group.label)}
                   </p>
                 ) : groupIndex !== 0 ? (
@@ -282,16 +240,16 @@ export function ManagementShell({ client }: { client: MenderClient }) {
                         key={item.to}
                         to={item.to}
                         end={item.to === "/"}
-                        aria-label={collapsed ? t(item.label) : undefined}
+                        aria-label={t(item.label)}
                         className={({ isActive }) =>
                           [
                             "group relative flex h-9 items-center rounded-xl text-sm font-medium transition-colors",
                             collapsed
                               ? "justify-center px-0"
-                              : "gap-3 px-2.5",
+                              : "justify-center px-0 md:justify-start md:gap-3 md:px-2.5",
                             isActive
-                              ? "bg-primary/10 text-primary"
-                              : "text-muted-foreground hover:bg-muted/70 hover:text-foreground",
+                              ? "bg-primary/8 text-primary"
+                              : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
                           ].join(" ")
                         }
                       >
@@ -307,19 +265,11 @@ export function ManagementShell({ client }: { client: MenderClient }) {
                               aria-hidden="true"
                             />
                             {!collapsed ? (
-                              <span className="truncate">{t(item.label)}</span>
+                              <span className="hidden truncate md:block">
+                                {t(item.label)}
+                              </span>
                             ) : null}
-                            {isActive ? (
-                              <span
-                                aria-hidden="true"
-                                className={[
-                                  "absolute rounded-full bg-primary",
-                                  collapsed
-                                    ? "-left-2 h-5 w-0.5"
-                                    : "-left-3 h-5 w-0.5",
-                                ].join(" ")}
-                              />
-                            ) : null}
+
                           </>
                         )}
                       </NavLink>
@@ -345,11 +295,11 @@ export function ManagementShell({ client }: { client: MenderClient }) {
 
           <div
             className={[
-              "border-t border-border/60 py-3",
-              collapsed ? "px-2" : "px-3",
+              "border-t border-border/60 py-2.5",
+              collapsed ? "px-2" : "px-2 md:px-3",
             ].join(" ")}
           >
-            {collapsed ? (
+            <div className="md:hidden">
               <Tooltip>
                 <TooltipTrigger
                   render={
@@ -374,38 +324,100 @@ export function ManagementShell({ client }: { client: MenderClient }) {
                     : t("Simplified Chinese")}
                 </TooltipContent>
               </Tooltip>
-            ) : (
-              <label className="grid gap-1.5 px-1 text-[11px] font-medium text-muted-foreground">
-                <span className="flex items-center gap-2">
-                  <LanguagesIcon className="size-3.5" aria-hidden="true" />
-                  {t("Language")}
-                </span>
-                <select
-                  aria-label={t("Language")}
-                  value={locale}
-                  onChange={(event) =>
-                    setLocale(event.target.value as Locale)
-                  }
-                  className="h-8 w-full rounded-lg border border-input bg-background px-2 text-xs text-foreground outline-none transition-colors focus:border-ring focus:ring-2 focus:ring-ring/20"
-                >
-                  <option value="en">{t("English")}</option>
-                  <option value="zh-CN">{t("Simplified Chinese")}</option>
-                </select>
-              </label>
-            )}
+            </div>
+
+            <div className="hidden md:block">
+              {collapsed ? (
+                <div className="grid gap-1">
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          aria-label={t("Language")}
+                          onClick={() =>
+                            setLocale(locale === "en" ? "zh-CN" : "en")
+                          }
+                          className="w-full text-muted-foreground hover:text-foreground"
+                        />
+                      }
+                    >
+                      <LanguagesIcon />
+                    </TooltipTrigger>
+                    <TooltipContent side="right">
+                      {t("Language")}:{" "}
+                      {locale === "en"
+                        ? t("English")
+                        : t("Simplified Chinese")}
+                    </TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          aria-label={t("Expand sidebar")}
+                          onClick={() => setCollapsed(false)}
+                          className="w-full text-muted-foreground hover:text-foreground"
+                        />
+                      }
+                    >
+                      <PanelLeftOpenIcon />
+                    </TooltipTrigger>
+                    <TooltipContent side="right">
+                      {t("Expand sidebar")}
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+              ) : (
+                <div className="grid gap-2">
+                  <label className="grid gap-1.5 px-1 text-[11px] font-medium text-muted-foreground">
+                    <span className="flex items-center gap-2">
+                      <LanguagesIcon className="size-3.5" aria-hidden="true" />
+                      {t("Language")}
+                    </span>
+                    <select
+                      aria-label={t("Language")}
+                      value={locale}
+                      onChange={(event) =>
+                        setLocale(event.target.value as Locale)
+                      }
+                      className="h-8 w-full rounded-lg border border-input bg-background px-2 text-xs text-foreground outline-none transition-colors focus:border-ring focus:ring-2 focus:ring-ring/20"
+                    >
+                      <option value="en">{t("English")}</option>
+                      <option value="zh-CN">{t("Simplified Chinese")}</option>
+                    </select>
+                  </label>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setCollapsed(true)}
+                    className="justify-start text-muted-foreground hover:text-foreground"
+                  >
+                    <PanelLeftCloseIcon data-icon="inline-start" />
+                    {t("Collapse sidebar")}
+                  </Button>
+                </div>
+              )}
+            </div>
           </div>
         </aside>
 
         <div className="min-w-0 flex-1">
-          <header className="sticky top-0 z-20 flex h-[88px] items-center justify-between gap-4 border-b border-border/70 bg-background/92 px-5 backdrop-blur-xl md:px-6 xl:px-8">
+          <header className="sticky top-0 z-20 flex h-16 items-center justify-between gap-4 border-b border-border/70 bg-background/94 px-5 backdrop-blur-xl md:px-6 xl:px-8">
             <button
               type="button"
               onClick={() => setCommandOpen(true)}
-              className="flex h-10 w-full max-w-[620px] items-center gap-2 rounded-xl border border-border/70 bg-muted/35 px-3 text-left text-sm text-muted-foreground transition-colors hover:border-border hover:bg-muted/60"
+              className="flex h-9 w-full max-w-[360px] items-center gap-2 rounded-lg border border-border/80 bg-background px-3 text-left text-sm text-muted-foreground shadow-[0_1px_2px_rgb(15_23_42/0.03)] transition-colors hover:bg-muted/30"
             >
               <CommandIcon className="size-4 shrink-0" aria-hidden="true" />
               <span className="truncate">
-                {t("Jump to a page")}
+                {t("Search pages…")}
               </span>
               <span className="ml-auto hidden rounded-md border border-border/70 bg-background px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground sm:inline">
                 {t("⌘K")}
@@ -413,7 +425,7 @@ export function ManagementShell({ client }: { client: MenderClient }) {
             </button>
 
             <div className="flex shrink-0 items-center gap-2">
-              <div className="hidden items-center gap-2 rounded-xl border border-border/70 bg-card px-3 py-2 text-xs sm:flex">
+              <div className="hidden items-center gap-2 rounded-full border border-border/70 bg-card px-3 py-1.5 text-xs sm:flex">
                 <span
                   className={[
                     "size-2 rounded-full",
@@ -433,9 +445,7 @@ export function ManagementShell({ client }: { client: MenderClient }) {
                       : t("Loading")}
                 </span>
               </div>
-              <div className="hidden rounded-xl border border-border/70 bg-card px-3 py-2 text-xs text-muted-foreground lg:block">
-                {t(activeItem.label)}
-              </div>
+
             </div>
           </header>
 
@@ -445,7 +455,7 @@ export function ManagementShell({ client }: { client: MenderClient }) {
               initial={{ opacity: 0, y: 4 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.16, ease: "easeOut" }}
-              className="mx-auto w-full max-w-[1600px] px-5 py-6 md:px-6 xl:px-8 xl:py-7"
+              className="mx-auto w-full max-w-[1500px] px-5 py-6 md:px-6 xl:px-8"
             >
               <Outlet />
             </motion.div>

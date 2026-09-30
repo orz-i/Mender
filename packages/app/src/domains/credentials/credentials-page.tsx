@@ -5,13 +5,6 @@ import type { Credential, MenderClient } from "@mender/sdk";
 import { Badge } from "@mender/ui/components/badge";
 import { Button } from "@mender/ui/components/button";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@mender/ui/components/card";
-import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -34,6 +27,7 @@ import { IconButton } from "../../shared/icon-button";
 import { EmptyState, ErrorNotice, PageHeader } from "../../shared/page";
 import { usePagination } from "../../shared/pagination";
 import { TablePagination } from "../../shared/table-pagination";
+import { DataPanel, EmptyPanelState } from "../../shared/workbench";
 
 import { t, tCount } from "../../i18n/i18n";
 
@@ -205,20 +199,16 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
 
       {error ? <ErrorNotice message={error} /> : null}
 
-      <Card>
-        <CardHeader className="border-b">
-          <CardTitle>{t("Credential inventory")}</CardTitle>
-          <CardDescription>
-            {tCount(
-              credentials.length,
-              "{{count}} Credential configured. Secret values are never displayed here.",
-              "{{count}} Credentials configured. Secret values are never displayed here.",
-            )}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+      <DataPanel
+        title="Credential inventory"
+        description={tCount(
+          credentials.length,
+          "{{count}} Credential configured. Secret values are never displayed here.",
+          "{{count}} Credentials configured. Secret values are never displayed here.",
+        )}
+      >
           {!loaded ? (
-            <div className="py-10 text-center text-sm text-muted-foreground">
+            <div className="px-4 py-12 text-center text-sm text-muted-foreground">
               {t("Loading Credentials…")}
             </div>
           ) : credentials.length ? (
@@ -278,19 +268,22 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
                 ))}
               </TableBody>
               </Table>
-              <TablePagination
-                label="Credentials"
-                pagination={credentialPagination}
-              />
+              <div className="px-4 pb-3">
+                <TablePagination
+                  label="Credentials"
+                  pagination={credentialPagination}
+                />
+              </div>
             </>
           ) : (
-            <EmptyState
-              title="No Credentials"
-              description="Add a native or environment-backed Credential before configuring Provider authentication or Profile credential scope."
-            />
+            <EmptyPanelState>
+              <EmptyState
+                title="No Credentials"
+                description="Add a native or environment-backed Credential before configuring Provider authentication or Profile credential scope."
+              />
+            </EmptyPanelState>
           )}
-        </CardContent>
-      </Card>
+      </DataPanel>
 
       <Dialog
         open={createOpen}

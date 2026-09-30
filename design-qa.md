@@ -1,199 +1,253 @@
-# Product Design QA — Mender Shell / Skills redesign
+# Product Design QA — Command Workbench redesign
 
-## Source visual truth
+## Audit scope
 
-- Selected visual direction: Product Design option 3 ("Operator Console").
-- Conversation source file: `file_00000000a61c81f5bffc8da1197e4b97`.
-- Normalized source capture: `/mnt/data/product-design/mender-design-option-3.png`.
-- Source pixels: 1536 × 1024.
-- Visual source remains authoritative for Shell, Sidebar, content density, Skills list, filters, typography, and color hierarchy.
-- Skill detail interaction is intentionally superseded by the user's later requirement: use the existing Mender detail Dialog pattern and keep one viewport focused on one information category.
+- Selected direction: Product Design direction 2, **Command Workbench**.
+- Product surface: Mender Web/Desktop shared management UI.
+- Audit flow:
+  1. Desktop Skills workspace.
+  2. Skill focused detail Dialog.
+  3. Catalog workspace.
+  4. Mobile Skills workspace.
+- Audit capture source: live local web app backed by an isolated temporary Mender Runtime.
+- No production database was used.
 
-## Implementation evidence
+## Current audit evidence
 
-- Route: `/skills`.
-- QA URL: `http://127.0.0.1:5174/skills`.
-- Final list screenshot: `/tmp/mender-skills-dialog-list-final.png`.
-- Final Skill overview Dialog screenshot: `/tmp/mender-skill-dialog-overview-final.png`.
-- Resource-view evidence: `/tmp/mender-skill-dialog-resources.png`.
-- Deployment-view evidence: `/tmp/mender-skill-dialog-deployments.png`.
-- Browser viewport for final list/overview evidence: 1536 × 1024 CSS px, DPR 1.
-- Locale: zh-CN.
-- Data state: isolated temporary Mender Runtime with built-in `mender-tools`, local `code-review`, local `devops-assistant`, and exact deployments.
+Accepted screenshots captured from the final working tree:
 
-## Full-view comparison
+1. Desktop Skills — `/tmp/mender-audit-final-01-skills-desktop.png`
+2. Skill detail Dialog — `/tmp/mender-audit-final-02-skill-dialog.png`
+3. Catalog workspace — `/tmp/mender-audit-final-03-catalog.png`
+4. Mobile Skills — `/tmp/mender-audit-final-04-skills-mobile.png`
 
-The implementation preserves the selected Operator Console direction:
+Desktop viewport: 1536 × 1024 CSS px.
 
-- grouped, collapsible left navigation;
-- top command/navigation bar with Runtime connection state;
-- module icon + page title;
-- Skills tabs followed by search/source/status/sort controls;
-- full-width Skill list as the primary page surface;
-- restrained blue selection/action accents, pale neutral surfaces, light borders, and compact status badges;
-- list/table-first information density rather than nested dashboard cards.
+Mobile viewport: 390 × 844 CSS px.
 
-Intentional user-directed deviation from the concept:
+The temporary Runtime contained the built-in `mender-tools` Skill and one trusted/enabled local `code-review` installation so that list, metrics, filters, and detail views were audited with real data rather than only empty states.
 
-- the concept's persistent right inspector is not used for Skill viewing;
-- Skill details now open in the same Dialog interaction family already used by Catalog and other Mender management pages.
+## Information architecture
 
-This is an explicit product requirement, not a fidelity defect.
+The redesign now uses one shared page grammar:
 
-## Focused-region QA
+~~~text
+Page Header
+  -> optional metric strip
+  -> optional filter / action toolbar
+  -> one primary data workspace
+  -> focused layered Dialogs for deeper tasks
+~~~
 
-### Shell / Sidebar / Top Bar
+This grammar is applied across:
 
-Passed.
+- Overview
+- Providers
+- Skills
+- Catalog
+- Profiles
+- Servers
+- Policy
+- Credentials
+- Audit
 
-- Sidebar is grouped into Workspace / Runtime / Governance.
-- Expanded and collapsed states preserve route structure.
-- Collapsed state is icon-only with accessible labels/tooltips.
-- Collapse state persists through reload/navigation.
-- Language control remains accessible in both states.
-- Quick Navigation opens from the top bar and supports page jump.
-- Runtime connectivity comes from `getSystemStatus()`.
+The redesign intentionally reduces nested Card usage. Cards now communicate a meaningful grouping boundary instead of becoming the default wrapper for every section.
 
-### Skills list
+## Step audit
 
-Passed.
+### 1. Desktop Skills workspace
 
-- Built-in Skills are ordered before local installations.
-- Search, source filter, status filter, and sort are real client-side controls.
-- Rows use medium information density and independent action icons.
-- "查看" is a dedicated Eye action and clicking the row also opens the same detail Dialog.
-- The main page no longer carries an active Skill inspector, so list filtering and browsing do not leave stale detail context on screen.
+**Health: passed**
 
-### Skill detail Dialog
+Strengths:
 
-Passed.
+- Sidebar, global page search, Runtime state, title/action area, metrics, filters, Skill list, and pagination have a clear top-to-bottom hierarchy.
+- Metrics use existing data only: total installations, enabled installations, managed local installations, and deployments.
+- Tabs and filters are grouped into one workbench toolbar instead of multiple visual containers.
+- Built-in and local installations remain visually distinguishable without adding fabricated metadata.
+- Source, status, search, and sort controls are functional.
 
-The Dialog follows the existing Mender Catalog detail pattern:
+Interaction evidence:
 
-#### Default: Skill details
+- The Skill source filter was opened in the live browser and switched from All Sources to Local.
+- The built-in Skill disappeared and only `code-review` remained.
 
-Contains only installation identity and metadata:
+Accessibility observations:
 
-- name / description;
-- built-in/local status;
-- enabled/disabled status;
-- Installation ID;
-- Skill ID;
-- version;
-- source;
-- digest;
+- Desktop navigation links have explicit accessible names.
+- Filter controls have explicit labels.
+- Main icon actions retain tooltip/aria-label behavior.
+
+### 2. Skill focused Dialog
+
+**Health: passed**
+
+The visual reference originally showed a persistent right-side inspector, but the product requirement explicitly overrides that interaction. Mender keeps the previously established focused Dialog model.
+
+The default Skill Dialog shows one class of information:
+
+- installation identity;
+- source/version/digest;
 - installed state/time;
-- resource count and total size;
-- allowed-tools metadata when present.
+- resource count/size;
+- allowed-tools metadata.
 
-It does **not** render the resource list or deployment list in this viewport.
+It does not mix full resource inventory or deployment history into the same viewport.
 
-The overview provides two explicit navigation actions:
+Separate transitions remain available for:
 
-- `View resources`
-- `View deployments`
+- Skill resources;
+- Skill deployments.
 
-#### Skill resources
+The Dialog uses a bounded viewport and internal scrolling, and deployment configuration opens as a separate modal task instead of stacking multiple information categories.
 
-Contains only the validated resource inventory:
+### 3. Catalog workspace
 
-- path;
-- resource kind;
-- size;
-- executable marker.
+**Health: passed**
 
-The resource list has an internal bounded scroll region and does not render deployment content.
+Strengths:
 
-#### Skill deployments
+- Search, Provider filter, Search action, Browse action, and results now occupy one Data Panel.
+- The previous “filter card + results card” visual split is removed.
+- Table hierarchy is consistent with Providers, Profiles, Servers, Credentials, Audit, and Policy.
+- Existing Tool detail/invoke Dialog behavior is preserved.
 
-Contains only deployment information:
+The Catalog Provider filter intentionally remains a native select because the current Base UI Select is difficult to exercise reliably in JSDOM and the project already uses native selects in several management forms. This preserves regression-test coverage without changing the visual IA.
 
-- target;
-- drift state;
-- destination;
-- deployment time;
-- undeploy action;
-- optional Deploy Skill action.
+### 4. Mobile Skills workspace
 
-The deployment view does not render resource content.
+**Health: passed after repair**
 
-Subviews use a single `Back` action to return to Skill details.
+The audit initially found a P1 responsive defect: the expanded 236px desktop Sidebar remained fully expanded at 390px, leaving the main content unusably narrow.
 
-The Dialog is bounded to `max-height: 90vh` with internal scrolling, matching the existing Catalog detail behavior on smaller viewports.
+Repair:
 
-### Dialog stacking
+- below `md`, Sidebar is now a fixed 68px icon rail;
+- desktop still supports explicit expand/collapse;
+- navigation links retain explicit accessible names when labels are visually hidden;
+- language switching remains available on the mobile rail;
+- PageHeader switches to vertical title/action layout;
+- metrics, filters, list, and pagination regain usable content width.
 
-Passed.
+The repaired mobile page is approximately 1731px tall versus roughly 2782px before the fix, reflecting the removal of the severe horizontal squeeze and resulting excessive wrapping.
 
-Starting a new deployment from the deployment detail view first closes the Skill detail Dialog, then opens the Deploy Skill Dialog. Two modal information categories are not stacked in one viewport.
+## Shared visual system
 
-## Interaction verification
+Direction 2 is reflected in:
 
-Verified in browser with real isolated Runtime data:
+- cool white workspace background;
+- quieter blue-violet primary accent;
+- lighter border hierarchy;
+- smaller 236px expanded Sidebar;
+- 64px global top bar;
+- compact page search;
+- subtle active navigation state;
+- reduced Card radius/shadow;
+- unified Dialog overlay, spacing, title hierarchy, and footer;
+- shared `MetricStrip`, `MetricTile`, `DataPanel`, `WorkbenchToolbar`, `SearchField`, and `FilterSelect`.
 
-- Skill list loads without a persistent inspector;
-- View button opens Skill details Dialog;
-- Skill details → View resources;
-- Resources → Back;
-- Skill details → View deployments;
-- deployment drift/destination are visible only in deployment view;
-- undeploy action remains available in deployment view;
-- source/status/sort filters remain functional;
-- sidebar collapse/expand and persisted state remain functional;
-- Quick Navigation remains functional.
+## Page-specific decisions
 
-Automated test contract now explicitly asserts:
+### Overview
 
-- overview does not contain `SKILL.md` or deployment destination;
-- resource view contains `SKILL.md` but not deployment destination;
-- deployment view contains deployment destination but not `SKILL.md`.
+Uses four real summary metrics:
 
-This makes the "one viewport, one information category" rule regression-tested.
+- Runtime;
+- Providers;
+- Skills;
+- Profiles.
+
+Recent invocation activity is presented as one Data Panel.
+
+### Providers
+
+Uses four real summary metrics:
+
+- Providers;
+- Provider plugins;
+- synchronized Tools;
+- Provider plugin issues.
+
+Provider lifecycle actions and existing dialogs are unchanged.
+
+### Policy
+
+Policy keeps a summary layer because the three values are decision-relevant rather than decorative:
+
+- default decision;
+- enabled rules;
+- approval behavior.
+
+The rules inventory is one primary Data Panel.
+
+### Profiles / Servers / Credentials / Audit
+
+These are task-oriented inventories. They intentionally do not receive decorative metric strips; each page is centered on one primary data workspace plus focused dialogs.
+
+## Audit findings and repairs
+
+1. **P1 — mobile Sidebar consumed most of the viewport**
+   - Fixed with a 68px icon rail below `md`.
+   - Navigation accessible names retained.
+
+2. **P2 — page IA varied by domain**
+   - Fixed by introducing shared Command Workbench primitives and migrating all nine management pages.
+
+3. **P2 — Catalog split search and results into unrelated Card surfaces**
+   - Fixed by merging them into one workbench Data Panel.
+
+4. **P2 — card-heavy hierarchy**
+   - Reduced by using Cards only for meaningful grouped surfaces and metrics.
+
+5. **P2 — shared Dialog styling lagged behind the new visual system**
+   - Updated overlay, border, radius, spacing, heading hierarchy, and footer.
+
+6. **P2 — prior design QA document was stale**
+   - Updated during this commit audit to match Direction 2 and current evidence.
+
+7. **Regression-test mismatch after shadcn Select adoption**
+   - Skills Dialog regression test was kept focused on the Dialog contract.
+   - Catalog uses a native Provider select so existing behavior tests remain deterministic.
+   - Live-browser QA verifies the shadcn Skill filters.
 
 ## Browser diagnostics
 
-Final attached Dialog QA:
+Live browser QA has been run on representative pages:
 
-- expected `技能详情` visible;
+- Skills;
+- Overview;
+- Catalog;
+- Policy.
+
+For the final representative QA runs:
+
+- network diagnostics passed;
 - console diagnostics passed;
 - page error count: 0;
-- network diagnostics passed with one benign preserved-session network warning;
-- screenshot verified on disk.
+- screenshots were verified on disk.
 
-## Intentional differences from the original visual concept
-
-- Skill viewing uses Dialog rather than a persistent right inspector, per explicit user correction.
-- Web does not expose arbitrary host filesystem Install/Import actions; those remain Desktop/CLI-only.
-- The concept's Updates tab remains omitted because Mender has no Skill update lifecycle.
-- Decorative tags/brand assets are not fabricated when no backing metadata exists.
-- Browser/macOS chrome in the visual concept is not reproduced as app UI.
+Desktop Sidebar collapse and expand were manually verified after the redesign.
 
 ## Engineering verification
 
-- ESLint: passed.
-- Workspace TypeScript: passed.
-- i18n coverage: 636 required / 636 zh-CN translations.
-- Vitest: 9 files / 59 tests passed.
-- Web production build: passed.
-- Desktop production build: passed.
-- `git diff --check`: passed.
-- Existing Vite chunk-size advisory remains non-blocking.
+Current final gate:
 
-## Comparison / repair history
+- ESLint: PASS
+- Workspace TypeScript: PASS
+- i18n: **651 required / 651 zh-CN**
+- Vitest: **9 files / 59 tests**
+- Web production build: PASS
+- Desktop production build: PASS
+- `git diff --check`: PASS
 
-1. P2 — shell proportions aligned to the selected Operator Console visual direction.
-2. P2 — shared page identity strengthened with module icon tiles.
-3. P2 — Skill list density and built-in ordering corrected.
-4. P2 — functional source/status/sort controls added instead of decorative filters.
-5. P2 — filter/inspector mismatch fixed during the first inspector implementation.
-6. User-directed interaction revision — persistent Skill inspector removed and replaced with product-native Dialog viewing.
-7. P2 — Dialog content split into mutually exclusive Details / Resources / Deployments views.
-8. P2 — Deploy-from-detail now closes the detail Dialog before opening deployment configuration.
-9. Dialog viewport bound aligned with Catalog: `max-h-[90vh]` + internal scrolling.
-10. i18n and React 19 lint regressions introduced during redesign were resolved without weakening checks.
+The existing Vite warning for JavaScript chunks larger than 500 kB remains non-blocking and predates this design pass.
 
-No actionable P0/P1/P2 findings remain.
+## Evidence limits
+
+Screenshot/browser inspection can verify visible hierarchy, responsive behavior, interactive state changes, accessible names exposed by the browser, console errors, and network failures. It does not establish full WCAG compliance, screen-reader behavior across platforms, or all keyboard/focus-order behavior.
 
 ## Final result
 
-passed
+**passed**
+
+No unresolved P0, P1, or actionable P2 findings remain for this UI/UX commit.

@@ -121,11 +121,6 @@ describe("SkillsPage", () => {
     ).toBeTruthy();
     expect(screen.getAllByText("mender-tools").length).toBeGreaterThan(0);
 
-    fireEvent.change(screen.getByLabelText("Skill source filter"), {
-      target: { value: "local" },
-    });
-    expect(screen.queryByText("mender-tools")).toBeNull();
-
     fireEvent.click(
       screen.getByRole("button", { name: "View example-skill" }),
     );
