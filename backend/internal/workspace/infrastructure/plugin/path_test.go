@@ -10,7 +10,7 @@ func TestWorkspacePathResolverRejectsTraversalAbsoluteAndSymlinks(t *testing.T) 
 	t.Parallel()
 
 	root := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(root, "safe", "nested"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(root, "safe", "nested"), 0o750); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(root, "safe", "file.txt"), []byte("ok"), 0o600); err != nil {
@@ -44,7 +44,7 @@ func TestWorkspacePathResolverAllowsMissingCreateTargetOnly(t *testing.T) {
 	t.Parallel()
 
 	root := t.TempDir()
-	if err := os.Mkdir(filepath.Join(root, "dir"), 0o755); err != nil {
+	if err := os.Mkdir(filepath.Join(root, "dir"), 0o750); err != nil {
 		t.Fatal(err)
 	}
 	resolver, err := newWorkspacePathResolver(root)

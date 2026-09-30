@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"slices"
 	"unicode/utf8"
 
@@ -17,15 +18,18 @@ import (
 )
 
 type Plugin struct {
-	instanceMarker byte
+	descriptor providerplugin.Descriptor
 }
 
 func New() *Plugin {
-	return &Plugin{}
+	return &Plugin{descriptor: Descriptor()}
 }
 
-func (*Plugin) Descriptor() providerplugin.Descriptor {
-	return Descriptor()
+func (p *Plugin) Descriptor() providerplugin.Descriptor {
+	if p == nil {
+		return Descriptor()
+	}
+	return p.descriptor.Clone()
 }
 
 func (*Plugin) ValidateConfig(ctx context.Context, raw json.RawMessage) error {
@@ -61,9 +65,14 @@ func (*Plugin) Open(
 	if err != nil {
 		return nil, fmt.Errorf("open Workspace plugin: %w", err)
 	}
+	fsRoot, err := os.OpenRoot(root)
+	if err != nil {
+		return nil, fmt.Errorf("open Workspace plugin root: %w", err)
+	}
 	return &Instance{
 		root:     root,
 		resolver: resolver,
+		fsRoot:   fsRoot,
 		tools:    discoveredFileTools(),
 	}, nil
 }
@@ -71,6 +80,7 @@ func (*Plugin) Open(
 type Instance struct {
 	root     string
 	resolver workspacePathResolver
+	fsRoot   *os.Root
 	tools    []catalogapplication.DiscoveredTool
 }
 
@@ -122,8 +132,11 @@ func (i *Instance) Execute(
 	}
 }
 
-func (*Instance) Close() error {
-	return nil
+func (i *Instance) Close() error {
+	if i == nil || i.fsRoot == nil {
+		return nil
+	}
+	return i.fsRoot.Close()
 }
 
 const (

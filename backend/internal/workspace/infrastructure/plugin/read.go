@@ -3,7 +3,7 @@ package plugin
 import (
 	"context"
 	"fmt"
-	"os"
+	"path/filepath"
 	"strings"
 	"unicode/utf8"
 
@@ -57,7 +57,7 @@ func (i *Instance) executeRead(
 		return toolFailure(fmt.Errorf("limit must be between 1 and %d", maxReadLines))
 	}
 
-	relative, path, info, err := i.resolver.resolveExisting(input.Path, false)
+	relative, _, info, err := i.resolver.resolveExisting(input.Path, false)
 	if err != nil {
 		return toolFailure(err)
 	}
@@ -68,7 +68,7 @@ func (i *Instance) executeRead(
 		return toolFailure(fmt.Errorf("file exceeds %d byte read limit", maxReadFileBytes))
 	}
 
-	data, err := os.ReadFile(path) // #nosec G304 -- path is workspace-contained above.
+	data, err := i.fsRoot.ReadFile(filepath.FromSlash(relative))
 	if err != nil {
 		return toolFailure(fmt.Errorf("read workspace file: %w", err))
 	}

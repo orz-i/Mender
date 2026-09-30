@@ -70,7 +70,7 @@ func (i *Instance) executeSearch(
 		input.Path = "."
 	}
 
-	searchRelative, searchRoot, info, err := i.resolver.resolveExisting(input.Path, true)
+	searchRelative, _, info, err := i.resolver.resolveExisting(input.Path, true)
 	if err != nil {
 		return toolFailure(err)
 	}
@@ -107,7 +107,7 @@ func (i *Instance) executeSearch(
 
 	visitedFiles := 0
 	aggregateBytes := int64(0)
-	walkErr := filepath.WalkDir(searchRoot, func(path string, entry fs.DirEntry, walkErr error) error {
+	walkErr := fs.WalkDir(i.fsRoot.FS(), searchRelative, func(path string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}
@@ -117,7 +117,7 @@ func (i *Instance) executeSearch(
 		default:
 		}
 
-		if path == searchRoot {
+		if path == searchRelative {
 			return nil
 		}
 		if entry.Type()&os.ModeSymlink != 0 {
@@ -146,11 +146,7 @@ func (i *Instance) executeSearch(
 			return fs.SkipAll
 		}
 
-		workspaceRelative, err := filepath.Rel(i.root, path)
-		if err != nil {
-			return err
-		}
-		workspaceRelative = filepath.ToSlash(workspaceRelative)
+		workspaceRelative := filepath.ToSlash(path)
 		if pattern != nil && !pattern.MatchString(workspaceRelative) {
 			return nil
 		}
@@ -172,7 +168,7 @@ func (i *Instance) executeSearch(
 			return fs.SkipAll
 		}
 		aggregateBytes += info.Size()
-		data, err := os.ReadFile(path) // #nosec G304 -- WalkDir path is below the validated workspace search root.
+		data, err := i.fsRoot.ReadFile(filepath.FromSlash(workspaceRelative))
 		if err != nil {
 			return err
 		}

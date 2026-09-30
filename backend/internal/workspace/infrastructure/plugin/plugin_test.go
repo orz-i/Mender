@@ -69,7 +69,7 @@ func TestWorkspaceSearchFilesAndContent(t *testing.T) {
 	t.Parallel()
 
 	root := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(root, "src", "nested"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(root, "src", "nested"), 0o750); err != nil {
 		t.Fatal(err)
 	}
 	files := map[string]string{
@@ -80,7 +80,7 @@ func TestWorkspaceSearchFilesAndContent(t *testing.T) {
 	}
 	for name, content := range files {
 		path := filepath.Join(root, filepath.FromSlash(name))
-		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 			t.Fatal(err)
 		}
 		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
@@ -144,10 +144,7 @@ func TestWorkspaceEditCreateReplaceDeleteAndAmbiguity(t *testing.T) {
 		},
 	})
 	requireToolFailure(t, ambiguous)
-	data, err := os.ReadFile(filepath.Join(root, "draft.txt"))
-	if err != nil {
-		t.Fatal(err)
-	}
+	data := readWorkspaceTestFile(t, root, "draft.txt")
 	if string(data) != "alpha beta beta\n" {
 		t.Fatalf("ambiguous edit mutated file: %q", data)
 	}
@@ -164,10 +161,7 @@ func TestWorkspaceEditCreateReplaceDeleteAndAmbiguity(t *testing.T) {
 		},
 	})
 	requireComplete(t, replace)
-	data, err = os.ReadFile(filepath.Join(root, "draft.txt"))
-	if err != nil {
-		t.Fatal(err)
-	}
+	data = readWorkspaceTestFile(t, root, "draft.txt")
 	if string(data) != "alpha gamma gamma\n" {
 		t.Fatalf("replace content = %q", data)
 	}
@@ -286,7 +280,21 @@ func workspaceTestTool(t *testing.T, sourceKey string) catalogdomain.Tool {
 }
 
 func mkdirAllTest(path string) error {
-	return os.MkdirAll(path, 0o755)
+	return os.MkdirAll(path, 0o750)
+}
+
+func readWorkspaceTestFile(t *testing.T, rootPath, relative string) []byte {
+	t.Helper()
+	root, err := os.OpenRoot(rootPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = root.Close() }()
+	data, err := root.ReadFile(filepath.FromSlash(relative))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return data
 }
 
 func unmarshalOutcome(t *testing.T, outcome invocationdomain.Outcome, target any) {

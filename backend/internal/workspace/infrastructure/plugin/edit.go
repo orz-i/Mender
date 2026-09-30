@@ -2,6 +2,9 @@ package plugin
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -79,11 +82,11 @@ func (i *Instance) createFile(input editInput) (invocationdomain.Outcome, error)
 	if !utf8.ValidString(input.Content) {
 		return toolFailure(fmt.Errorf("workspace.edit supports UTF-8 text content only"))
 	}
-	relative, path, err := i.resolver.resolveCreate(input.Path)
+	relative, _, err := i.resolver.resolveCreate(input.Path)
 	if err != nil {
 		return toolFailure(err)
 	}
-	if err := writeNewFile(path, []byte(input.Content)); err != nil {
+	if err := writeNewFile(i.fsRoot, relative, []byte(input.Content)); err != nil {
 		return toolFailure(fmt.Errorf("create workspace file: %w", err))
 	}
 	return completeJSON(editOutput{
@@ -100,7 +103,7 @@ func (i *Instance) replaceFile(input editInput) (invocationdomain.Outcome, error
 	if len(input.Edits) == 0 {
 		return toolFailure(fmt.Errorf("replace requires at least one edit"))
 	}
-	relative, path, info, err := i.resolver.resolveExisting(input.Path, false)
+	relative, _, info, err := i.resolver.resolveExisting(input.Path, false)
 	if err != nil {
 		return toolFailure(err)
 	}
@@ -110,7 +113,7 @@ func (i *Instance) replaceFile(input editInput) (invocationdomain.Outcome, error
 	if info.Size() > maxEditFileBytes {
 		return toolFailure(fmt.Errorf("file exceeds %d byte edit limit", maxEditFileBytes))
 	}
-	data, err := os.ReadFile(path) // #nosec G304 -- path is workspace-contained above.
+	data, err := i.fsRoot.ReadFile(filepath.FromSlash(relative))
 	if err != nil {
 		return toolFailure(fmt.Errorf("read workspace file for edit: %w", err))
 	}
@@ -152,7 +155,7 @@ func (i *Instance) replaceFile(input editInput) (invocationdomain.Outcome, error
 	if !utf8.ValidString(working) {
 		return toolFailure(fmt.Errorf("edited content must remain valid UTF-8"))
 	}
-	if err := replaceFileAtomically(path, []byte(working), info.Mode().Perm()); err != nil {
+	if err := replaceFileAtomically(i.fsRoot, relative, []byte(working), info.Mode().Perm()); err != nil {
 		return toolFailure(fmt.Errorf("replace workspace file: %w", err))
 	}
 	return completeJSON(editOutput{
@@ -168,14 +171,14 @@ func (i *Instance) deleteFile(input editInput) (invocationdomain.Outcome, error)
 	if input.Content != "" || len(input.Edits) != 0 {
 		return toolFailure(fmt.Errorf("delete must not contain content or edits"))
 	}
-	relative, path, info, err := i.resolver.resolveExisting(input.Path, false)
+	relative, _, info, err := i.resolver.resolveExisting(input.Path, false)
 	if err != nil {
 		return toolFailure(err)
 	}
 	if err := regularFile(info); err != nil {
 		return toolFailure(err)
 	}
-	if err := os.Remove(path); err != nil {
+	if err := i.fsRoot.Remove(filepath.FromSlash(relative)); err != nil {
 		return toolFailure(fmt.Errorf("delete workspace file: %w", err))
 	}
 	return completeJSON(editOutput{
@@ -185,8 +188,9 @@ func (i *Instance) deleteFile(input editInput) (invocationdomain.Outcome, error)
 	})
 }
 
-func writeNewFile(path string, content []byte) error {
-	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644) // #nosec G304 -- path is workspace-contained.
+func writeNewFile(root *os.Root, relative string, content []byte) error {
+	name := filepath.FromSlash(relative)
+	file, err := root.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
 		return err
 	}
@@ -194,7 +198,7 @@ func writeNewFile(path string, content []byte) error {
 	defer func() {
 		_ = file.Close()
 		if !success {
-			_ = os.Remove(path)
+			_ = root.Remove(name)
 		}
 	}()
 	if _, err := file.Write(content); err != nil {
@@ -210,18 +214,22 @@ func writeNewFile(path string, content []byte) error {
 	return nil
 }
 
-func replaceFileAtomically(path string, content []byte, mode os.FileMode) error {
-	directory := filepath.Dir(path)
-	temp, err := os.CreateTemp(directory, ".mender-edit-*")
+func replaceFileAtomically(
+	root *os.Root,
+	relative string,
+	content []byte,
+	mode os.FileMode,
+) error {
+	target := filepath.FromSlash(relative)
+	temp, tempName, err := createRootTempFile(root, filepath.Dir(target))
 	if err != nil {
 		return err
 	}
-	tempPath := temp.Name()
 	success := false
 	defer func() {
 		_ = temp.Close()
 		if !success {
-			_ = os.Remove(tempPath)
+			_ = root.Remove(tempName)
 		}
 	}()
 	if err := temp.Chmod(mode); err != nil {
@@ -236,9 +244,28 @@ func replaceFileAtomically(path string, content []byte, mode os.FileMode) error 
 	if err := temp.Close(); err != nil {
 		return err
 	}
-	if err := os.Rename(tempPath, path); err != nil {
+	if err := root.Rename(tempName, target); err != nil {
 		return err
 	}
 	success = true
 	return nil
+}
+
+func createRootTempFile(root *os.Root, directory string) (*os.File, string, error) {
+	for range 16 {
+		var random [8]byte
+		if _, err := rand.Read(random[:]); err != nil {
+			return nil, "", fmt.Errorf("generate edit temp name: %w", err)
+		}
+		name := filepath.Join(directory, ".mender-edit-"+hex.EncodeToString(random[:]))
+		file, err := root.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+		if err == nil {
+			return file, name, nil
+		}
+		if errors.Is(err, os.ErrExist) {
+			continue
+		}
+		return nil, "", err
+	}
+	return nil, "", fmt.Errorf("allocate edit temp file: exhausted collision retries")
 }
