@@ -14,6 +14,7 @@ import (
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
 	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
+	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 )
 
 const (
@@ -236,6 +237,21 @@ type Plugin interface {
 	ValidateConfig(context.Context, json.RawMessage) error
 	InspectConfig(context.Context, json.RawMessage) (ConfigMetadata, error)
 	Open(context.Context, OpenRequest) (Instance, error)
+}
+
+// GovernanceFactProvider is an optional, host-reviewed built-in plugin capability
+// for deriving bounded Policy facts from persisted non-secret Provider config and
+// validated Tool arguments without activating the Provider.
+//
+// External plugin protocol implementations are intentionally not trusted as
+// GovernanceFactProvider inputs merely because they are installable Providers.
+type GovernanceFactProvider interface {
+	ExtractGovernanceFacts(
+		context.Context,
+		json.RawMessage,
+		catalogdomain.Tool,
+		invocationdomain.JSONValue,
+	) (invocationdomain.GovernanceFacts, error)
 }
 
 // Instance is one active Provider implementation behind canonical Mender ports.

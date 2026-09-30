@@ -17,7 +17,6 @@ import (
 	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
 	invocationevents "github.com/orz-i/Mender/backend/internal/invocation/infrastructure/events"
 	invocationexecutionguard "github.com/orz-i/Mender/backend/internal/invocation/infrastructure/executionguard"
-	invocationgovernance "github.com/orz-i/Mender/backend/internal/invocation/infrastructure/governance"
 	invocationidentity "github.com/orz-i/Mender/backend/internal/invocation/infrastructure/identity"
 	invocationjsonschema "github.com/orz-i/Mender/backend/internal/invocation/infrastructure/jsonschema"
 	invocationresultguard "github.com/orz-i/Mender/backend/internal/invocation/infrastructure/resultguard"
@@ -306,7 +305,7 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		catalog.store,
 		newInvocationProfileScopeResolver(profiles.GetByID),
 		schemaValidator,
-		invocationgovernance.UnknownExtractor{},
+		newInvocationGovernanceFactExtractor(providerConfigs, providerPlugins),
 		newInvocationPolicyEvaluator(policies.Evaluate),
 		policylocal.RejectApproval{},
 		executionGuard,
