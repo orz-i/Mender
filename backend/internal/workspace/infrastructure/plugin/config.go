@@ -36,7 +36,7 @@ func Descriptor() providerplugin.Descriptor {
 		Description:   "Expose governed local workspace read, search, edit, and shell capabilities",
 		ConfigVersion: ConfigVersion,
 		ConfigSchema:  append(json.RawMessage(nil), workspaceConfigSchema...),
-		Capabilities:  []string{"workspace.read", "workspace.search", "workspace.edit"},
+		Capabilities:  []string{"workspace.read", "workspace.search", "workspace.edit", "workspace.shell"},
 	}
 }
 

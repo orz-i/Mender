@@ -65,6 +65,22 @@ func (p *Plugin) ExtractGovernanceFacts(
 		effect = "filesystem.write"
 		resourcePath = normalized
 
+	case sourceKeyShell:
+		var input shellInput
+		if err := decodeStrict(arguments.Bytes(), &input, "decode workspace.shell governance arguments"); err != nil {
+			return invocationdomain.GovernanceFacts{}, err
+		}
+		cwd := input.Cwd
+		if cwd == "" {
+			cwd = "."
+		}
+		normalized, err := normalizeRelativePath(cwd, true)
+		if err != nil {
+			return invocationdomain.GovernanceFacts{}, err
+		}
+		effect = "process.execute"
+		resourcePath = normalized
+
 	default:
 		return invocationdomain.UnknownGovernanceFacts(), nil
 	}

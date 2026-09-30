@@ -52,6 +52,14 @@ func TestWorkspaceGovernanceFactsAreStructuredWithoutTouchingWorkspace(t *testin
 			knowledge: invocationdomain.FactKnowledgeKnown,
 		},
 		{
+			name:      "shell",
+			sourceKey: sourceKeyShell,
+			input:     map[string]any{"command": "echo hi", "cwd": "scripts"},
+			effect:    "process.execute",
+			resource:  "scripts",
+			knowledge: invocationdomain.FactKnowledgeKnown,
+		},
+		{
 			name:      "unknown source",
 			sourceKey: "workspace.future",
 			input:     map[string]any{},

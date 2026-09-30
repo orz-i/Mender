@@ -110,6 +110,8 @@ func (i *Instance) Execute(
 		return i.executeSearch(ctx, request.Arguments)
 	case sourceKeyEdit:
 		return i.executeEdit(ctx, request.Arguments)
+	case sourceKeyShell:
+		return i.executeShell(ctx, request.Arguments)
 	default:
 		return invocationdomain.Outcome{}, fmt.Errorf(
 			"execute Workspace Tool %q: capability is unavailable",
@@ -126,6 +128,7 @@ const (
 	sourceKeyRead   = "workspace.read"
 	sourceKeySearch = "workspace.search"
 	sourceKeyEdit   = "workspace.edit"
+	sourceKeyShell  = "workspace.shell"
 )
 
 func discoveredFileTools() []catalogapplication.DiscoveredTool {
@@ -156,6 +159,15 @@ func discoveredFileTools() []catalogapplication.DiscoveredTool {
 			InputSchema:  editInputSchema,
 			OutputSchema: editOutputSchema,
 			Tags:         []string{"workspace", "filesystem", "write"},
+		},
+		{
+			SourceKey:    sourceKeyShell,
+			Name:         "shell",
+			Title:        "Run workspace shell command",
+			Description:  "Run a bounded host shell command from a workspace-contained initial directory. This is not an OS sandbox.",
+			InputSchema:  shellInputSchema,
+			OutputSchema: shellOutputSchema,
+			Tags:         []string{"workspace", "process", "shell"},
 		},
 	}
 }

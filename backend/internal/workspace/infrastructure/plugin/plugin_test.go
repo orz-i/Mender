@@ -27,7 +27,7 @@ func TestWorkspacePluginDiscoversStableFileTools(t *testing.T) {
 	for _, tool := range tools {
 		keys = append(keys, tool.SourceKey)
 	}
-	if !slices.Equal(keys, []string{sourceKeyRead, sourceKeySearch, sourceKeyEdit}) {
+	if !slices.Equal(keys, []string{sourceKeyRead, sourceKeySearch, sourceKeyEdit, sourceKeyShell}) {
 		t.Fatalf("SourceKeys = %v", keys)
 	}
 }
@@ -283,6 +283,17 @@ func workspaceTestTool(t *testing.T, sourceKey string) catalogdomain.Tool {
 		t.Fatal(err)
 	}
 	return tool
+}
+
+func mkdirAllTest(path string) error {
+	return os.MkdirAll(path, 0o755)
+}
+
+func unmarshalOutcome(t *testing.T, outcome invocationdomain.Outcome, target any) {
+	t.Helper()
+	if err := json.Unmarshal(outcome.Content().Bytes(), target); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func requireComplete(t *testing.T, outcome invocationdomain.Outcome) {

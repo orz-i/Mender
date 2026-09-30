@@ -18,8 +18,8 @@ func TestWorkspaceDescriptorAndConfig(t *testing.T) {
 	if err := descriptor.Validate(); err != nil {
 		t.Fatalf("Descriptor().Validate() error = %v", err)
 	}
-	if len(descriptor.Capabilities) != 3 {
-		t.Fatalf("Capabilities = %v, want 3 file capabilities", descriptor.Capabilities)
+	if len(descriptor.Capabilities) != 4 {
+		t.Fatalf("Capabilities = %v, want 4 workspace capabilities", descriptor.Capabilities)
 	}
 
 	root := t.TempDir()

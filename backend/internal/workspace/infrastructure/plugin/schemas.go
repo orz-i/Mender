@@ -116,3 +116,27 @@ var editOutputSchema = []byte(`{
     "bytesAfter":{"type":"integer","minimum":0}
   }
 }`)
+
+var shellInputSchema = []byte(`{
+  "type":"object",
+  "additionalProperties":false,
+  "required":["command"],
+  "properties":{
+    "command":{"type":"string","minLength":1,"maxLength":65536},
+    "cwd":{"type":"string","maxLength":4096},
+    "timeoutMs":{"type":"integer","minimum":1,"maximum":120000}
+  }
+}`)
+
+var shellOutputSchema = []byte(`{
+  "type":"object",
+  "additionalProperties":false,
+  "required":["exitCode","stdout","stderr","timedOut","truncated"],
+  "properties":{
+    "exitCode":{"type":"integer","minimum":-1},
+    "stdout":{"type":"string"},
+    "stderr":{"type":"string"},
+    "timedOut":{"type":"boolean"},
+    "truncated":{"type":"boolean"}
+  }
+}`)
