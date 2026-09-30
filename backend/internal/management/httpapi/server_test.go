@@ -1384,7 +1384,7 @@ func TestManagementAPIGenericProviderPluginFlow(t *testing.T) {
 		http.StatusOK,
 	)
 	items, ok := plugins["plugins"].([]any)
-	if !ok || len(items) != 3 {
+	if !ok || len(items) != 4 {
 		t.Fatalf("provider plugins = %#v", plugins)
 	}
 	issues, ok := plugins["issues"].([]any)
@@ -1409,6 +1409,17 @@ func TestManagementAPIGenericProviderPluginFlow(t *testing.T) {
 	openAPIPlugin, _ := items[2].(map[string]any)
 	if openAPIPlugin["pluginId"] != "io.mender.provider.openapi" {
 		t.Fatalf("OpenAPI provider plugin = %#v", openAPIPlugin)
+	}
+	workspacePlugin, _ := items[3].(map[string]any)
+	if workspacePlugin["pluginId"] != "io.mender.provider.workspace" {
+		t.Fatalf("Workspace provider plugin = %#v", workspacePlugin)
+	}
+	if _, ok := workspacePlugin["configSchema"].(map[string]any); !ok {
+		t.Fatalf("Workspace config schema = %#v", workspacePlugin["configSchema"])
+	}
+	workspaceCapabilities, ok := workspacePlugin["capabilities"].([]any)
+	if !ok || len(workspaceCapabilities) != 4 {
+		t.Fatalf("Workspace capabilities = %#v", workspacePlugin["capabilities"])
 	}
 
 	created := requestJSON(

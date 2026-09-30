@@ -12,7 +12,7 @@ func TestPluginsReturnStableBuiltInSet(t *testing.T) {
 	t.Parallel()
 
 	plugins := Plugins()
-	if got, want := len(plugins), 3; got != want {
+	if got, want := len(plugins), 4; got != want {
 		t.Fatalf("Plugins() count = %d, want %d", got, want)
 	}
 
@@ -20,6 +20,7 @@ func TestPluginsReturnStableBuiltInSet(t *testing.T) {
 		"io.mender.provider.mcp",
 		"io.mender.provider.openapi",
 		"io.mender.provider.model-tools",
+		"io.mender.provider.workspace",
 	}
 	gotIDs := make([]providerplugin.ID, 0, len(plugins))
 	seen := make(map[providerplugin.ID]struct{}, len(plugins))
@@ -58,7 +59,7 @@ func TestRegisterAddsCompleteBuiltInSet(t *testing.T) {
 	}
 
 	descriptors := registry.Descriptors()
-	if got, want := len(descriptors), 3; got != want {
+	if got, want := len(descriptors), 4; got != want {
 		t.Fatalf("Descriptors() count = %d, want %d", got, want)
 	}
 
@@ -66,6 +67,7 @@ func TestRegisterAddsCompleteBuiltInSet(t *testing.T) {
 		"io.mender.provider.mcp",
 		"io.mender.provider.model-tools",
 		"io.mender.provider.openapi",
+		"io.mender.provider.workspace",
 	}
 	gotIDs := make([]providerplugin.ID, 0, len(descriptors))
 	for _, descriptor := range descriptors {

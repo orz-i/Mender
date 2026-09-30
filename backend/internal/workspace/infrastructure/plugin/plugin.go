@@ -16,7 +16,9 @@ import (
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
 )
 
-type Plugin struct{}
+type Plugin struct {
+	instanceMarker byte
+}
 
 func New() *Plugin {
 	return &Plugin{}

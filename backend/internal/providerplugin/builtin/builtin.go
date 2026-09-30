@@ -7,6 +7,7 @@ import (
 	modeltoolsplugin "github.com/orz-i/Mender/backend/internal/modeltools/infrastructure/plugin"
 	openapiplugin "github.com/orz-i/Mender/backend/internal/openapi/infrastructure/plugin"
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
+	workspaceplugin "github.com/orz-i/Mender/backend/internal/workspace/infrastructure/plugin"
 )
 
 // Plugins constructs the statically linked first-party Provider plugins.
@@ -19,6 +20,7 @@ func Plugins() []providerplugin.Plugin {
 		mcpplugin.New(),
 		openapiplugin.New(),
 		modeltoolsplugin.New(),
+		workspaceplugin.New(),
 	}
 }
 
