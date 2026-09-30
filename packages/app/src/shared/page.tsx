@@ -32,7 +32,7 @@ export function PageHeader({
   actions,
 }: {
   title: string;
-  description: string;
+  description?: string;
   actions?: ReactNode;
 }) {
   const Icon = pageIcons[title];
@@ -49,9 +49,11 @@ export function PageHeader({
           <h1 className="text-xl font-semibold tracking-[-0.02em] text-foreground">
             {t(title)}
           </h1>
-          <p className="mt-0.5 max-w-3xl text-[13px] leading-[1.15rem] text-muted-foreground">
-            {t(description)}
-          </p>
+          {description ? (
+            <p className="mt-0.5 max-w-3xl text-[13px] leading-[1.15rem] text-muted-foreground">
+              {t(description)}
+            </p>
+          ) : null}
         </div>
       </div>
       {actions ? (

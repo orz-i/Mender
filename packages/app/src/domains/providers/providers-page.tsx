@@ -577,7 +577,6 @@ export function ProvidersPage({
     <>
       <PageHeader
         title="Providers"
-        description="Manage Provider plugins and the tool sources they connect to Mender."
         actions={
           <div className="flex gap-2">
             <Button
@@ -616,7 +615,7 @@ export function ProvidersPage({
       ) : null}
 
       <DataPanel
-        title="Providers"
+        title="Provider inventory"
         description={tCount(
           providers.length,
           "{{count}} configured source",

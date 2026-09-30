@@ -75,7 +75,6 @@ export function AuditPage({ client }: { client: MenderClient }) {
     <>
       <PageHeader
         title="Audit"
-        description="Data-minimized terminal invocation records with execution origin, scope, and canonical outcome classification. Arguments, full result payloads, credentials, progress payloads, and raw protocol traffic are not retained."
         actions={
           <Button variant="outline" onClick={() => void refresh()} disabled={busy}>
             {t("Refresh")}

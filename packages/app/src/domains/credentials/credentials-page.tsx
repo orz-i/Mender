@@ -184,7 +184,6 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
     <>
       <PageHeader
         title="Credentials"
-        description="Manage non-secret Credential metadata and the secret source used at execution time."
         actions={
           <Button
             onClick={() => {

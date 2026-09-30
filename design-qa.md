@@ -33,12 +33,12 @@ The temporary Runtime contained the built-in `mender-tools` Skill and one truste
 The redesign now uses one shared page grammar:
 
 ~~~text
-Page Header
+Page Header (page identity + primary actions only)
   -> optional filter / configuration toolbar
-  -> one primary data workspace
+  -> one primary data workspace with its own section title/status description
   -> focused layered Dialogs for deeper tasks
 
-Overview is the only page that adds a metric/statistics strip before its primary data workspace.
+Overview is the only page that keeps a short page-level description and adds a metric/statistics strip before its primary data workspace. Domain pages do not repeat explanatory copy in both the Page Header and the main Data Panel.
 ~~~
 
 This grammar is applied across:
@@ -145,7 +145,8 @@ Direction 2 is reflected in:
 - 64px global top bar;
 - compact page search;
 - subtle active navigation state;
-- compact neutral page identity: 36px muted icon tile, 20px title, 13px description;
+- compact neutral page identity: 36px muted icon tile and 20px title;
+- non-Overview domain headers omit explanatory descriptions so the main Data Panel owns the operational context;
 - page identity no longer duplicates the Sidebar's blue active emphasis;
 - reduced Card radius/shadow;
 - unified Dialog overlay, spacing, title hierarchy, and footer;
@@ -210,8 +211,14 @@ These task-oriented inventories remain centered on one primary data workspace pl
 
 8. **P2 — page title/icon competed with the actual workspace**
    - The previous 56px solid-primary icon tile and 28px title read like a hero section on every management page.
-   - Repaired globally through the shared PageHeader: 36px neutral icon tile, 20px title, tighter description spacing, and reduced bottom margin.
+   - Repaired globally through the shared PageHeader: 36px neutral icon tile, 20px title, and reduced bottom margin.
    - Final desktop Skills/Audit and mobile Skills captures confirm that DataPanel/table content is now the primary visual focus.
+
+9. **P2 — page header and main data panel repeated the same title/description hierarchy**
+   - Domain pages previously explained the same resource twice in immediate succession (for example Providers → Providers, Skills → Skill Library with overlapping descriptions).
+   - Repaired by making non-Overview PageHeader descriptions optional and removing them from domain pages.
+   - Main DataPanel headers now own the operational context; exact duplicate panel titles were made specific (`Provider inventory`, `Profile inventory`).
+   - Overview intentionally retains its short description because the next layer is aggregate metrics rather than a same-resource inventory.
 
 ## Browser diagnostics
 

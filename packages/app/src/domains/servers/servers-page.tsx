@@ -179,7 +179,6 @@ export function ServersPage({
     <>
       <PageHeader
         title="Servers"
-        description="Expose a Profile as a local Streamable HTTP MCP server."
         actions={
           <div className="flex gap-2">
             <Button

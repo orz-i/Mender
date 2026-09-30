@@ -195,10 +195,7 @@ export function CatalogPage({ client }: { client: MenderClient }) {
 
   return (
     <>
-      <PageHeader
-        title="Catalog"
-        description="Browse synchronized Tools or search compact metadata. Full schemas and invocation controls open only when you inspect a Tool."
-      />
+      <PageHeader title="Catalog" />
       {error ? <ErrorNotice message={error} /> : null}
 
       <DataPanel

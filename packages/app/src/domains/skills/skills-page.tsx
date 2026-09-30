@@ -359,7 +359,6 @@ export function SkillsPage({
     <>
       <PageHeader
         title="Skills"
-        description="Install, manage, inspect, and deploy Agent Skills from one governed library."
         actions={
           <div className="flex gap-2">
             <Button

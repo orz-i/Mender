@@ -516,7 +516,6 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
     <>
       <PageHeader
         title="Profiles"
-        description="Manage Tool exposure boundaries for MCP serving."
         actions={
           <Button onClick={() => setCreateOpen(true)}>{t("Create profile")}</Button>
         }
@@ -524,7 +523,7 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
       {error ? <ErrorNotice message={error} /> : null}
 
       <DataPanel
-        title="Profiles"
+        title="Profile inventory"
         description={tCount(
           profiles.length,
           "{{count}} profile configured",

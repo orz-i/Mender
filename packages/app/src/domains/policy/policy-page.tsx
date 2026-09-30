@@ -289,7 +289,6 @@ export function PolicyPage({ client }: { client: MenderClient }) {
     <>
       <PageHeader
         title="Policy"
-        description="Define deterministic global execution rules. Rule order has no meaning; matching decisions combine by deny > require approval > allow."
         actions={<Button onClick={openCreateRule}>{t("Add rule")}</Button>}
       />
 
