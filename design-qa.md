@@ -14,12 +14,13 @@
 
 ## Current audit evidence
 
-Accepted screenshots captured from the final working tree:
+Accepted screenshots captured from the final working tree include:
 
-1. Desktop Skills — `/tmp/mender-audit-final-01-skills-desktop.png`
-2. Skill detail Dialog — `/tmp/mender-audit-final-02-skill-dialog.png`
-3. Catalog workspace — `/tmp/mender-audit-final-03-catalog.png`
-4. Mobile Skills — `/tmp/mender-audit-final-04-skills-mobile.png`
+1. Desktop Skills — `/tmp/mender-header-skills-qa.png`
+2. Desktop Audit — `/tmp/mender-header-audit-qa.png`
+3. Mobile Skills — `/tmp/mender-header-skills-mobile-qa.png`
+4. Skill detail Dialog — `/tmp/mender-audit-final-02-skill-dialog.png`
+5. Catalog workspace — `/tmp/mender-audit-final-03-catalog.png`
 
 Desktop viewport: 1536 × 1024 CSS px.
 
@@ -128,6 +129,7 @@ Repair:
 - navigation links retain explicit accessible names when labels are visually hidden;
 - language switching remains available on the mobile rail;
 - PageHeader switches to vertical title/action layout;
+- compact page identity styling remains proportionate on the small viewport;
 - filters, list, and pagination regain usable content width.
 
 The repaired mobile page is approximately 1731px tall versus roughly 2782px before the fix, reflecting the removal of the severe horizontal squeeze and resulting excessive wrapping.
@@ -143,6 +145,8 @@ Direction 2 is reflected in:
 - 64px global top bar;
 - compact page search;
 - subtle active navigation state;
+- compact neutral page identity: 36px muted icon tile, 20px title, 13px description;
+- page identity no longer duplicates the Sidebar's blue active emphasis;
 - reduced Card radius/shadow;
 - unified Dialog overlay, spacing, title hierarchy, and footer;
 - shared `DataPanel`, `WorkbenchToolbar`, `SearchField`, and `FilterSelect` for domain pages;
@@ -204,11 +208,17 @@ These task-oriented inventories remain centered on one primary data workspace pl
    - Catalog uses a native Provider select so existing behavior tests remain deterministic.
    - Live-browser QA verifies the shadcn Skill filters.
 
+8. **P2 — page title/icon competed with the actual workspace**
+   - The previous 56px solid-primary icon tile and 28px title read like a hero section on every management page.
+   - Repaired globally through the shared PageHeader: 36px neutral icon tile, 20px title, tighter description spacing, and reduced bottom margin.
+   - Final desktop Skills/Audit and mobile Skills captures confirm that DataPanel/table content is now the primary visual focus.
+
 ## Browser diagnostics
 
 Live browser QA has been run on representative pages:
 
 - Skills;
+- Audit;
 - Overview;
 - Catalog;
 - Policy.

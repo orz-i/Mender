@@ -38,18 +38,18 @@ export function PageHeader({
   const Icon = pageIcons[title];
 
   return (
-    <header className="mb-6 flex flex-col items-stretch gap-4 sm:flex-row sm:items-center sm:justify-between">
-      <div className="flex min-w-0 items-center gap-4">
+    <header className="mb-4 flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex min-w-0 items-center gap-2.5">
         {Icon ? (
-          <span className="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-sm shadow-primary/20">
-            <Icon className="size-6" aria-hidden="true" />
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-border/70 bg-muted/55 text-muted-foreground">
+            <Icon className="size-4" aria-hidden="true" />
           </span>
         ) : null}
         <div className="min-w-0">
-          <h1 className="text-[1.75rem] font-semibold tracking-[-0.03em] text-foreground">
+          <h1 className="text-xl font-semibold tracking-[-0.02em] text-foreground">
             {t(title)}
           </h1>
-          <p className="mt-1 max-w-3xl text-sm leading-5 text-muted-foreground">
+          <p className="mt-0.5 max-w-3xl text-[13px] leading-[1.15rem] text-muted-foreground">
             {t(description)}
           </p>
         </div>
