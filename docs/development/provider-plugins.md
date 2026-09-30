@@ -16,9 +16,10 @@ That package owns the built-in set and registration seam only. Today it construc
 
 - `io.mender.provider.mcp`;
 - `io.mender.provider.openapi`;
-- `io.mender.provider.model-tools`.
+- `io.mender.provider.model-tools`;
+- `io.mender.provider.workspace`.
 
-The protocol implementations remain in their existing MCP, OpenAPI, and Model Tools infrastructure packages. The generic `backend/internal/providerplugin` core continues to own only contracts, Registry/Resolver behavior, instance lifecycle, configuration metadata, and external-plugin integration; it does not import first-party implementations.
+The protocol/capability implementations remain in their existing MCP, OpenAPI, Model Tools, and Workspace infrastructure packages. The generic `backend/internal/providerplugin` core continues to own only contracts, Registry/Resolver behavior, instance lifecycle, configuration metadata, optional host-reviewed governance-fact contracts, and external-plugin integration; it does not import first-party implementations.
 
 Runtime composition therefore has one built-in registration dependency instead of one dependency per first-party plugin. Adding another statically linked first-party Provider requires adding it to the built-in package and its focused tests, while external Provider plugins continue to use the installation/package protocol described below.
 
@@ -85,7 +86,7 @@ The reviewed annotation `x-mender-control: credential` renders an inventory Cred
 
 Provider configuration persistence additionally rejects common secret-bearing field names when their values are literal secret material; Credential References and explicit environment references remain allowed. Management projections omit unsafe sensitive values from historical rows. Historical rows can therefore still be inspected and repaired, but they cannot be saved again or activated until the sensitive values are replaced by governed references.
 
-Built-in MCP/OpenAPI/Model Tools retain first-party Mender-owned renderers. External installations are always identified by exact Installation ID and use the generic renderer.
+Built-in MCP/OpenAPI/Model Tools retain first-party Mender-owned renderers where needed. Workspace deliberately uses the same schema-driven generic renderer as unknown declarative plugins, proving that adding a first-party capability does not require a PluginID-specific frontend branch. External installations are always identified by exact Installation ID and use the generic renderer.
 
 ## Credential boundary
 

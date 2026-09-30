@@ -120,7 +120,7 @@ Initial target users are:
 
 A first usable release should allow a user to:
 
-1. Register Providers through built-in plugins (including MCP, supported OpenAPI 3 descriptions, and provider-hosted Model Tools) or explicitly installed external Provider plugins, all normalized behind governed Mender Tool contracts.
+1. Register Providers through built-in plugins (including MCP, supported OpenAPI 3 descriptions, provider-hosted Model Tools, and governed local Workspace capabilities) or explicitly installed external Provider plugins, all normalized behind governed Mender Tool contracts.
 2. Synchronize their tools into a canonical catalog.
 3. Create a profile containing a subset of tools.
 4. Search, inspect, and invoke tools from the CLI.

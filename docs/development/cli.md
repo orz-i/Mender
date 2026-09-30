@@ -39,7 +39,7 @@ mender provider plugins
 mender provider plugins --output json
 ```
 
-The result includes built-in plugins plus enabled external plugin installations. External entries include their exact Installation ID and package version so side-by-side versions remain distinguishable. The built-in plugins currently include `io.mender.provider.mcp`, `io.mender.provider.model-tools`, and `io.mender.provider.openapi`. MCP connection transport is selected below the MCP plugin rather than represented as a top-level Provider kind.
+The result includes built-in plugins plus enabled external plugin installations. External entries include their exact Installation ID and package version so side-by-side versions remain distinguishable. The built-in plugins currently include `io.mender.provider.mcp`, `io.mender.provider.model-tools`, `io.mender.provider.openapi`, and `io.mender.provider.workspace`. MCP connection transport is selected below the MCP plugin rather than represented as a top-level Provider kind.
 
 Install and manage a local external Provider plugin package:
 
@@ -133,7 +133,18 @@ mender provider add model-tools \
 
 `--engine` accepts `openai`, `anthropic`, or `gemini`. Phase 15 exposes one normalized capability, `web_search`; the provider model executes its own hosted/server search tool internally, and Mender verifies that search actually occurred before accepting the final answer. The configured API Credential is resolved only during governed execution, so Profile Credential scope applies before any model-provider network request.
 
-`provider list` reports Plugin identity as the primary implementation dimension. External Providers additionally report their exact Installation ID; MCP transport, OpenAPI source location, or Model Tools engine/model appears only as plugin-specific connection detail.
+Add a local Workspace Provider:
+
+```bash
+mender provider add workspace \
+  --namespace project \
+  --name "Project workspace" \
+  --root /absolute/path/to/project
+```
+
+The Workspace plugin exposes four stable canonical capabilities: `workspace.read`, `workspace.search`, `workspace.edit`, and `workspace.shell`. `read`, `search`, and `edit` use bounded structured filesystem operations and reject traversal/symlink escapes outside the configured root. `shell` starts in a workspace-contained directory with a reduced non-secret environment, bounded output, and timeout handling, but it runs with the Mender host user's OS authority and is **not** a filesystem/container sandbox. Profiles can expose any subset of the four Tools. Mender does not add model calls, prompt construction, planning, memory, or an Agent Loop around them.
+
+`provider list` reports Plugin identity as the primary implementation dimension. External Providers additionally report their exact Installation ID; MCP transport, OpenAPI source location, Model Tools engine/model, or Workspace root appears only as plugin-specific connection detail.
 
 List Providers:
 

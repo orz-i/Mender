@@ -93,7 +93,7 @@ Release and upgrade procedures are documented in [Release and Distribution](rele
 
 ## Workspace boundaries
 
-The repository now includes Catalog, the shared Invocation/Policy/Credential/Audit runtime, persistent Profiles, the generic Provider Plugin Runtime with built-in MCP, OpenAPI, and Model Tools Providers, downstream MCP adapters, the local CLI/Agent Skill workflow, the OpenAPI management control plane, typed TypeScript SDK, and shared React management application.
+The repository now includes Catalog, the shared Invocation/Policy/Credential/Audit runtime, persistent Profiles, the generic Provider Plugin Runtime with built-in MCP, OpenAPI, Model Tools, and local Workspace Providers, downstream MCP adapters, the local CLI/Agent Skill workflow, the OpenAPI management control plane, typed TypeScript SDK, and shared React management application.
 
 - `backend/` contains Go executable hosts, domain/application contexts, MCP infrastructure adapters, and composition roots.
 - `apps/web/` is the browser host.
