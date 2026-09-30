@@ -386,3 +386,20 @@ Goals:
 Exit criteria are complete. Mender now validates portable Agent Skills without execution, maintains immutable exact installations with separate trust/enablement, exposes the built-in `mender-tools` through the same inventory, materializes exact deployments to supported Agent host directories with drift detection, exports deterministic skills-only Agent Plugins 1.0 packages, and exposes shared CLI/OpenAPI/Wails/Web/Desktop management while keeping arbitrary filesystem ingestion host-local. Profile/Policy/Credential/Invocation governance remains authoritative. Full `pnpm check` and `pnpm security:check` verification is green.
 
 See `phase-19-skill-resource-management.md`.
+
+## Phase 20 — Workspace Native Tools Provider
+
+Status: Planned
+
+Goals:
+
+- Add the built-in `io.mender.provider.workspace` plugin over one explicit local workspace root.
+- Expose stable `workspace.read`, `workspace.search`, `workspace.edit`, and `workspace.shell` canonical Tools for external agent harnesses.
+- Keep structured filesystem operations root-contained and bounded, while documenting host shell execution as high-authority and not an OS sandbox.
+- Route reviewed, config-aware Governance Facts for trusted built-in Tools without activating Providers; unsupported/external Tools remain unknown by default.
+- Let Profiles compose read-only, editing, coding, writing, research, and other capability surfaces without making Profile an Agent definition.
+- Reuse generic Provider/Profile/Policy/Audit management paths and keep model calls, prompts, planning, memory, retry, compaction, and Agent Loops outside Mender.
+
+Exit criteria require the four stable Workspace SourceKeys, focused containment/edit/shell tests, reviewed Governance Facts reaching Policy without Provider activation, generic CLI/management configuration, shared Profile-scoped Invocation/Audit behavior, and full repository/security verification.
+
+See `phase-20-workspace-native-tools.md`.
