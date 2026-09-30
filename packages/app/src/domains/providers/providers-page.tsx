@@ -59,6 +59,7 @@ import { formatDateTime, formatNumber, t, tCount } from "../../i18n/i18n";
 const MCP_PLUGIN_ID = "io.mender.provider.mcp";
 const MODEL_TOOLS_PLUGIN_ID = "io.mender.provider.model-tools";
 const OPENAPI_PLUGIN_ID = "io.mender.provider.openapi";
+const WORKSPACE_PLUGIN_ID = "io.mender.provider.workspace";
 
 type ProviderTransport = "http" | "stdio";
 type ModelToolsEngine = "openai" | "anthropic" | "gemini";
@@ -170,9 +171,24 @@ function providerPluginLabelForProvider(
   provider: Provider,
 ) {
   const plugin = providerPluginForProvider(plugins, provider);
-  return plugin !== undefined
-    ? providerPluginChoiceLabel(plugin)
-    : provider.pluginDisplayName ?? provider.pluginId ?? t("Unconfigured");
+  if (plugin !== undefined) {
+    return providerPluginChoiceLabel(plugin);
+  }
+  if (provider.pluginDisplayName) {
+    return provider.pluginDisplayName;
+  }
+  switch (provider.pluginId) {
+    case MCP_PLUGIN_ID:
+      return t("MCP");
+    case MODEL_TOOLS_PLUGIN_ID:
+      return "Model Tools";
+    case OPENAPI_PLUGIN_ID:
+      return "OpenAPI";
+    case WORKSPACE_PLUGIN_ID:
+      return t("Workspace");
+    default:
+      return t("Unconfigured");
+  }
 }
 
 function providerIsBuiltIn(provider: Provider, pluginId: string) {
@@ -641,11 +657,8 @@ export function ProvidersPage({
               <TableBody>
                 {providerPagination.items.map((provider) => (
                   <TableRow key={provider.providerId}>
-                    <TableCell>
-                      <div className="font-medium">{provider.displayName}</div>
-                      <div className="mt-0.5 font-mono text-xs text-muted-foreground">
-                        {provider.namespace}
-                      </div>
+                    <TableCell className="font-medium">
+                      {provider.displayName || provider.namespace}
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline">
@@ -674,7 +687,7 @@ export function ProvidersPage({
                         <IconButton
                           variant="ghost"
                           label={t("View {{provider}}", {
-                            provider: provider.namespace,
+                            provider: provider.displayName || provider.namespace,
                           })}
                           onClick={() => setViewProvider(provider)}
                         >
@@ -683,7 +696,7 @@ export function ProvidersPage({
                         <IconButton
                           variant="ghost"
                           label={t("Edit {{provider}}", {
-                            provider: provider.namespace,
+                            provider: provider.displayName || provider.namespace,
                           })}
                           disabled={busy !== "" || !provider.pluginId}
                           onClick={() => beginEdit(provider)}
@@ -693,7 +706,7 @@ export function ProvidersPage({
                         <IconButton
                           variant="outline"
                           label={t("Authentication {{provider}}", {
-                            provider: provider.namespace,
+                            provider: provider.displayName || provider.namespace,
                           })}
                           disabled={
                             busy !== "" ||
@@ -710,7 +723,7 @@ export function ProvidersPage({
                           <IconButton
                             variant="outline"
                             label={t("Rebind {{provider}}", {
-                              provider: provider.namespace,
+                              provider: provider.displayName || provider.namespace,
                             })}
                             disabled={busy !== ""}
                             onClick={() => beginRebind(provider)}
@@ -721,7 +734,7 @@ export function ProvidersPage({
                         <IconButton
                           variant="outline"
                           label={t("Sync {{provider}}", {
-                            provider: provider.namespace,
+                            provider: provider.displayName || provider.namespace,
                           })}
                           disabled={busy !== ""}
                           onClick={() => void syncProvider(provider)}
@@ -731,7 +744,7 @@ export function ProvidersPage({
                         <IconButton
                           variant="destructive"
                           label={t("Delete {{provider}}", {
-                            provider: provider.namespace,
+                            provider: provider.displayName || provider.namespace,
                           })}
                           disabled={busy !== ""}
                           onClick={() => void deleteProvider(provider)}

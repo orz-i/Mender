@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { EyeIcon } from "lucide-react";
 
-import type { AuditRecord, MenderClient } from "@mender/sdk";
+import type { AuditRecord, MenderClient, ToolSummary } from "@mender/sdk";
 import { Badge } from "@mender/ui/components/badge";
 import { Button } from "@mender/ui/components/button";
 import {
@@ -32,6 +32,7 @@ import { formatDateTime, t } from "../../i18n/i18n";
 
 export function AuditPage({ client }: { client: MenderClient }) {
   const [records, setRecords] = useState<AuditRecord[]>([]);
+  const [toolsById, setToolsById] = useState<Record<string, ToolSummary>>({});
   const [selected, setSelected] = useState<AuditRecord | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -39,8 +40,14 @@ export function AuditPage({ client }: { client: MenderClient }) {
   const refresh = useCallback(async () => {
     setBusy(true);
     try {
-      const result = await client.listAudit(100);
+      const [result, toolResult] = await Promise.all([
+        client.listAudit(100),
+        browseAuditTools(client),
+      ]);
       setRecords(result.records);
+      if (toolResult !== null) {
+        setToolsById(indexTools(toolResult.tools));
+      }
       setError("");
     } catch (reason) {
       setError(errorMessage(reason));
@@ -51,11 +58,16 @@ export function AuditPage({ client }: { client: MenderClient }) {
 
   useEffect(() => {
     let active = true;
-    void client
-      .listAudit(100)
-      .then((result) => {
+    void Promise.all([
+      client.listAudit(100),
+      browseAuditTools(client),
+    ])
+      .then(([result, toolResult]) => {
         if (active) {
           setRecords(result.records);
+          if (toolResult !== null) {
+            setToolsById(indexTools(toolResult.tools));
+          }
           setError("");
         }
       })
@@ -117,8 +129,8 @@ export function AuditPage({ client }: { client: MenderClient }) {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-xs">{record.caller || "—"}</TableCell>
-                    <TableCell className="max-w-60 truncate font-mono text-[11px]">
-                      {record.toolId}
+                    <TableCell className="max-w-60 truncate">
+                      {toolLabel(toolsById, record.toolId)}
                     </TableCell>
                     <TableCell className="text-xs">
                       {record.policyKind || "—"}
@@ -129,9 +141,7 @@ export function AuditPage({ client }: { client: MenderClient }) {
                     <TableCell className="text-right">
                       <IconButton
                         variant="outline"
-                        label={t("View audit {{id}}", {
-                          id: record.invocationId,
-                        })}
+                        label={t("View audit record")}
                         onClick={() => setSelected(record)}
                       >
                         <EyeIcon />
@@ -270,6 +280,26 @@ export function AuditPage({ client }: { client: MenderClient }) {
       </Dialog>
     </>
   );
+}
+
+function browseAuditTools(client: MenderClient) {
+  const browseTools = (client as Partial<MenderClient>).browseTools;
+  if (typeof browseTools !== "function") {
+    return Promise.resolve(null);
+  }
+  return browseTools.call(client, { limit: 100 }).catch(() => null);
+}
+
+function indexTools(tools: ToolSummary[]) {
+  return Object.fromEntries(tools.map((tool) => [tool.toolId, tool]));
+}
+
+function toolLabel(
+  toolsById: Record<string, ToolSummary>,
+  toolId: string,
+) {
+  const tool = toolsById[toolId];
+  return tool?.title || tool?.name || t("Unknown Tool");
 }
 
 function AuditField({

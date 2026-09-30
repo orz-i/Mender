@@ -20,7 +20,8 @@ Accepted screenshots captured from the final working tree include:
 2. Desktop Audit — `/tmp/mender-header-audit-qa.png`
 3. Mobile Skills — `/tmp/mender-header-skills-mobile-qa.png`
 4. Skill detail Dialog — `/tmp/mender-audit-final-02-skill-dialog.png`
-5. Catalog workspace — `/tmp/mender-audit-final-03-catalog.png`
+5. Catalog workspace with single-line cells — `/tmp/mender-table-catalog-single-line.png`
+6. Provider inventory with single-line cells — `/tmp/mender-table-providers-single-line.png`
 
 Desktop viewport: 1536 × 1024 CSS px.
 
@@ -112,6 +113,8 @@ Strengths:
 - Search, Provider filter, Search action, Browse action, and results now occupy one Data Panel.
 - The previous “filter card + results card” visual split is removed.
 - Table hierarchy is consistent with Providers, Profiles, Servers, Credentials, Audit, and Policy.
+- Each data cell represents one information point; names no longer stack IDs or secondary diagnostics underneath.
+- ToolID / ProviderID / Profile slug / Credential reference and similar technical identifiers are hidden from primary tables and remain available only in focused detail/configuration contexts.
 - Existing Tool detail/invoke Dialog behavior is preserved.
 
 The Catalog Provider filter intentionally remains a native select because the current Base UI Select is difficult to exercise reliably in JSDOM and the project already uses native selects in several management forms. This preserves regression-test coverage without changing the visual IA.
@@ -220,6 +223,19 @@ These task-oriented inventories remain centered on one primary data workspace pl
    - Main DataPanel headers now own the operational context; exact duplicate panel titles were made specific (`Provider inventory`, `Profile inventory`).
    - Overview intentionally retains its short description because the next layer is aggregate metrics rather than a same-resource inventory.
 
+10. **P2 — table cells mixed primary labels with technical identifiers**
+   - Catalog, Providers, Profiles, Servers, Credentials, and Policy used stacked secondary lines for IDs, namespaces, slugs, transport/address metadata, or fact summaries.
+   - Repaired so each primary table cell carries one scannable information point.
+   - Technical identifiers remain in detail Dialogs/configuration forms where exact identity matters.
+   - Audit resolves Tool IDs to friendly Tool names when Catalog metadata is available and falls back to `Unknown Tool` instead of exposing raw IDs in the main history table.
+   - Provider plugin fallback labels now use user-facing names such as `Workspace`, `MCP`, `OpenAPI`, and `Model Tools` rather than plugin IDs.
+
+11. **P2 — Overview recent invocations still stacked ToolID and caller**
+   - The Overview summary used a custom row layout with raw ToolID on the first line and caller on a second line.
+   - Replaced the custom rows with the shared Table pattern: `Tool / Caller / Status / Finished`.
+   - Overview now resolves Tool IDs to user-facing Tool names when Catalog metadata is available and falls back to `Unknown Tool`; raw Tool IDs are not rendered in the summary table.
+   - Caller is now its own cell, so Overview follows the same one-cell/one-information rule as the domain inventories.
+
 ## Browser diagnostics
 
 Live browser QA has been run on representative pages:
@@ -245,7 +261,7 @@ Current final gate:
 
 - ESLint: PASS
 - Workspace TypeScript: PASS
-- i18n: **634 required / 634 zh-CN**
+- i18n: **622 required / 622 zh-CN**
 - Vitest: **9 files / 59 tests**
 - Web production build: PASS
 - Desktop production build: PASS

@@ -284,16 +284,10 @@ export function CatalogPage({ client }: { client: MenderClient }) {
                       <div className="truncate font-medium">
                         {tool.title || tool.name}
                       </div>
-                      <div className="truncate font-mono text-[11px] text-muted-foreground">
-                        {tool.toolId}
-                      </div>
                     </TableCell>
                     <TableCell className="min-w-0">
                       <div className="truncate text-sm">
                         {providerLabel(providers, tool.providerId)}
-                      </div>
-                      <div className="truncate font-mono text-[11px] text-muted-foreground">
-                        {tool.providerId}
                       </div>
                     </TableCell>
                     <TableCell className="min-w-0">

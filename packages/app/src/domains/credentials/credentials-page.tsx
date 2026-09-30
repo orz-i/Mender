@@ -224,11 +224,8 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
               <TableBody>
                 {credentialPagination.items.map((item) => (
                   <TableRow key={item.reference}>
-                    <TableCell>
-                      <div className="font-medium">{item.displayName}</div>
-                      <div className="mt-1 font-mono text-xs text-muted-foreground">
-                        {item.reference}
-                      </div>
+                    <TableCell className="font-medium">
+                      {item.displayName}
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline">{t(item.source)}</Badge>

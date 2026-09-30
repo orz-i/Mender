@@ -342,11 +342,8 @@ export function PolicyPage({ client }: { client: MenderClient }) {
               <TableBody>
                 {rulePagination.items.map((rule) => (
                   <TableRow key={rule.ruleId}>
-                    <TableCell>
-                      <div className="font-medium">{rule.displayName}</div>
-                      <div className="mt-1 text-xs text-muted-foreground">
-                        {factsSummary(rule)}
-                      </div>
+                    <TableCell className="font-medium">
+                      {rule.displayName}
                     </TableCell>
                     <TableCell>
                       <DecisionBadge decision={rule.decision} />
@@ -1140,34 +1137,6 @@ function lines(value: string) {
     .split("\n")
     .map((item) => item.trim())
     .filter(Boolean);
-}
-
-function factsSummary(rule: PolicyRule) {
-  const parts: string[] = [];
-  if (rule.match.factKnowledge !== "any") {
-    parts.push(
-      t("facts: {{value}}", { value: t(rule.match.factKnowledge) }),
-    );
-  }
-  if (rule.match.effectsAny.length) {
-    parts.push(
-      tCount(
-        rule.match.effectsAny.length,
-        "{{count}} effect",
-        "{{count}} effects",
-      ),
-    );
-  }
-  if (rule.match.resourcesAny.length) {
-    parts.push(
-      tCount(
-        rule.match.resourcesAny.length,
-        "{{count}} resource",
-        "{{count}} resources",
-      ),
-    );
-  }
-  return parts.length ? parts.join(" · ") : t("No Governance Fact predicates");
 }
 
 function targetSummary(

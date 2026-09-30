@@ -223,22 +223,14 @@ export function ServersPage({
               <TableBody>
                 {serverPagination.items.map((server) => (
                   <TableRow key={server.serverId}>
-                    <TableCell>
-                      <div className="font-medium">{server.profile}</div>
-                      <div className="mt-1 text-xs text-muted-foreground">
-                        {t("Streamable HTTP")}
-                      </div>
+                    <TableCell className="font-medium">
+                      {server.profile}
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline">{server.status}</Badge>
                     </TableCell>
-                    <TableCell className="max-w-[360px]">
-                      <div className="truncate font-mono text-xs">
-                        {server.endpoint}
-                      </div>
-                      <div className="mt-1 font-mono text-[11px] text-muted-foreground">
-                        {server.address}
-                      </div>
+                    <TableCell className="max-w-[360px] truncate font-mono text-xs">
+                      {server.endpoint}
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {formatTimestamp(server.startedAt)}

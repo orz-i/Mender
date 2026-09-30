@@ -13,8 +13,17 @@ import type {
   Provider,
   SkillInstallation,
   SystemStatus,
+  ToolSummary,
 } from "@mender/sdk";
 import { Badge } from "@mender/ui/components/badge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@mender/ui/components/table";
 
 import { formatDateTime, t } from "../../i18n/i18n";
 import { errorMessage } from "../../shared/errors";
@@ -34,7 +43,28 @@ type OverviewState = {
   profiles: Profile[];
   skills: SkillInstallation[];
   records: AuditRecord[];
+  toolsById: Record<string, ToolSummary>;
 };
+
+function browseOverviewTools(client: MenderClient) {
+  const browseTools = (client as Partial<MenderClient>).browseTools;
+  if (typeof browseTools !== "function") {
+    return Promise.resolve(null);
+  }
+  return browseTools.call(client, { limit: 100 }).catch(() => null);
+}
+
+function indexTools(tools: ToolSummary[]) {
+  return Object.fromEntries(tools.map((tool) => [tool.toolId, tool]));
+}
+
+function toolLabel(
+  toolsById: Record<string, ToolSummary>,
+  toolId: string,
+) {
+  const tool = toolsById[toolId];
+  return tool?.title || tool?.name || t("Unknown Tool");
+}
 
 export function OverviewPage({ client }: { client: MenderClient }) {
   const [data, setData] = useState<OverviewState | null>(null);
@@ -48,8 +78,9 @@ export function OverviewPage({ client }: { client: MenderClient }) {
       client.listProfiles(),
       client.listSkills(),
       client.listAudit(50),
+      browseOverviewTools(client),
     ])
-      .then(([status, providers, profiles, skills, audit]) => {
+      .then(([status, providers, profiles, skills, audit, toolResult]) => {
         if (!active) {
           return;
         }
@@ -59,6 +90,8 @@ export function OverviewPage({ client }: { client: MenderClient }) {
           profiles: profiles.profiles,
           skills: skills.installations,
           records: audit.records,
+          toolsById:
+            toolResult === null ? {} : indexTools(toolResult.tools),
         });
         setError("");
       })
@@ -119,27 +152,32 @@ export function OverviewPage({ client }: { client: MenderClient }) {
       >
         {data?.records.length ? (
           <>
-            <div className="divide-y divide-border/60">
-              {invocationPagination.items.map((record) => (
-                <div
-                  key={record.invocationId}
-                  className="grid min-h-16 grid-cols-[minmax(0,1fr)_120px_170px] items-center gap-4 px-4 py-3 text-sm hover:bg-muted/20"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate font-mono text-xs">{record.toolId}</p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {record.caller || t("unknown caller")}
-                    </p>
-                  </div>
-                  <div>
-                    <Badge variant="outline">{record.status}</Badge>
-                  </div>
-                  <time className="text-right text-xs text-muted-foreground">
-                    {formatDateTime(record.finishedAt)}
-                  </time>
-                </div>
-              ))}
-            </div>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{t("Tool")}</TableHead>
+                  <TableHead>{t("Caller")}</TableHead>
+                  <TableHead>{t("Status")}</TableHead>
+                  <TableHead className="text-right">{t("Finished")}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {invocationPagination.items.map((record) => (
+                  <TableRow key={record.invocationId}>
+                    <TableCell className="font-medium">
+                      {toolLabel(data.toolsById, record.toolId)}
+                    </TableCell>
+                    <TableCell>{record.caller || t("unknown caller")}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline">{record.status}</Badge>
+                    </TableCell>
+                    <TableCell className="text-right text-xs text-muted-foreground">
+                      {formatDateTime(record.finishedAt)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
             <div className="px-4 pb-3">
               <TablePagination
                 label="Recent invocations"

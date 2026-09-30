@@ -548,11 +548,8 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
               <TableBody>
                 {profilePagination.items.map((profile) => (
                   <TableRow key={profile.profileId}>
-                    <TableCell>
-                      <div className="font-medium">{profile.displayName}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {profile.slug}
-                      </div>
+                    <TableCell className="font-medium">
+                      {profile.displayName || profile.slug}
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline">{t(profile.mode)}</Badge>
@@ -562,7 +559,7 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
                       <IconButton
                         variant="outline"
                         label={t("Manage {{profile}}", {
-                          profile: profile.slug,
+                          profile: profile.displayName || profile.slug,
                         })}
                         onClick={() => setManageSlug(profile.slug)}
                       >

@@ -122,7 +122,8 @@ describe("management pages", () => {
         },
       });
     });
-    expect(await screen.findByText("demo")).toBeTruthy();
+    expect(await screen.findByText("Demo")).toBeTruthy();
+    expect(screen.queryByText("demo")).toBeNull();
   });
 
   it("surfaces installation-scoped Provider plugin degradation without hiding healthy plugins", async () => {
@@ -336,7 +337,7 @@ describe("management pages", () => {
     expect(screen.getByText("External Echo · production")).toBeTruthy();
 
     fireEvent.click(
-      screen.getByRole("button", { name: "Rebind external-echo" }),
+      screen.getByRole("button", { name: "Rebind External Echo Provider" }),
     );
     expect(await screen.findByText("Rebind Provider installation")).toBeTruthy();
     expect(
@@ -363,7 +364,7 @@ describe("management pages", () => {
     });
 
     fireEvent.click(
-      screen.getByRole("button", { name: "View external-echo" }),
+      screen.getByRole("button", { name: "View External Echo Provider" }),
     );
     const details = within(screen.getByRole("dialog"));
     expect(details.getByText(installationId)).toBeTruthy();
@@ -374,7 +375,7 @@ describe("management pages", () => {
       details.getAllByRole("button", { name: "Close" })[0]!,
     );
     fireEvent.click(
-      screen.getByRole("button", { name: "Edit external-echo" }),
+      screen.getByRole("button", { name: "Edit External Echo Provider" }),
     );
     expect(
       screen.getByLabelText<HTMLInputElement>("Endpoint").value,
@@ -987,7 +988,7 @@ describe("management pages", () => {
     expect(await screen.findByText("AnySearch")).toBeTruthy();
     expect(screen.queryByText("prov_1")).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: "View search" }));
+    fireEvent.click(screen.getByRole("button", { name: "View AnySearch" }));
     expect(await screen.findByText("Provider details")).toBeTruthy();
     expect(screen.getByText("prov_1")).toBeTruthy();
     expect(
@@ -997,9 +998,9 @@ describe("management pages", () => {
     const closeButtons = screen.getAllByRole("button", { name: "Close" });
     fireEvent.click(closeButtons[0]!);
 
-    fireEvent.click(screen.getByRole("button", { name: "Edit search" }));
+    fireEvent.click(screen.getByRole("button", { name: "Edit AnySearch" }));
     expect(await screen.findByText("Edit provider")).toBeTruthy();
-    expect(screen.getAllByText("search").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText("search")).toBeTruthy();
 
     fireEvent.change(screen.getByLabelText("Display name"), {
       target: { value: "AnySearch Production" },
@@ -1076,7 +1077,7 @@ describe("management pages", () => {
 
     expect(await screen.findByText("Search")).toBeTruthy();
     fireEvent.click(
-      screen.getByRole("button", { name: "Authentication search" }),
+      screen.getByRole("button", { name: "Authentication Search" }),
     );
 
     expect(await screen.findByText("Provider authentication")).toBeTruthy();
@@ -1333,7 +1334,7 @@ describe("management pages", () => {
     expect(screen.queryByText("tool_1")).toBeNull();
     expect(screen.queryByPlaceholderText("tool_...")).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: "Manage default" }));
+    fireEvent.click(screen.getByRole("button", { name: "Manage Default" }));
     expect(await screen.findByText("Search")).toBeTruthy();
     expect(screen.queryByText("tool_1")).toBeNull();
     expect(screen.getAllByRole("dialog")).toHaveLength(1);
@@ -1729,7 +1730,7 @@ describe("management pages", () => {
     });
 
     expect(await screen.findByText("GitHub work")).toBeTruthy();
-    expect(screen.getByText("credential://github/work")).toBeTruthy();
+    expect(screen.queryByText("credential://github/work")).toBeNull();
     expect(screen.queryByText("TOP-SECRET")).toBeNull();
     expect(screen.queryByDisplayValue("TOP-SECRET")).toBeNull();
 
@@ -1778,7 +1779,8 @@ describe("management pages", () => {
     });
 
     expect(await screen.findByText("completed")).toBeTruthy();
-    expect(screen.getAllByText("tool_1").length).toBeGreaterThan(0);
+    expect(screen.getByText("Unknown Tool")).toBeTruthy();
+    expect(screen.queryByText("tool_1")).toBeNull();
     expect(screen.queryByRole("columnheader", { name: "Arguments" })).toBeNull();
     expect(screen.queryByRole("columnheader", { name: "Result" })).toBeNull();
     expect(screen.queryByRole("columnheader", { name: "Secret" })).toBeNull();
@@ -1816,10 +1818,11 @@ describe("management pages", () => {
 
     expect(await screen.findByText("failed")).toBeTruthy();
     fireEvent.click(
-      screen.getByRole("button", { name: "View audit inv_failed" }),
+      screen.getByRole("button", { name: "View audit record" }),
     );
 
     expect(await screen.findByText("Invocation details")).toBeTruthy();
+    expect(screen.getByText("tool_1")).toBeTruthy();
     expect(
       screen.getByText("provider rejected request: missing required query"),
     ).toBeTruthy();
