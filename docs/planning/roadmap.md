@@ -389,7 +389,7 @@ See `phase-19-skill-resource-management.md`.
 
 ## Phase 20 — Workspace Native Tools Provider
 
-Status: Planned
+Status: Complete
 
 Goals:
 
@@ -400,6 +400,6 @@ Goals:
 - Let Profiles compose read-only, editing, coding, writing, research, and other capability surfaces without making Profile an Agent definition.
 - Reuse generic Provider/Profile/Policy/Audit management paths and keep model calls, prompts, planning, memory, retry, compaction, and Agent Loops outside Mender.
 
-Exit criteria require the four stable Workspace SourceKeys, focused containment/edit/shell tests, reviewed Governance Facts reaching Policy without Provider activation, generic CLI/management configuration, shared Profile-scoped Invocation/Audit behavior, and full repository/security verification.
+Exit criteria are complete. The built-in Workspace Provider exposes four stable SourceKeys, structured filesystem operations are bounded and root-scoped, host shell execution has explicit non-sandbox semantics, reviewed Workspace Governance Facts reach Policy without Provider activation, and external/unreviewed Providers remain unknown by default. CLI plus generic HTTP/Web/Desktop Provider management reuse the existing plugin path, while Profile/Policy/Audit stay authoritative and Mender retains no Agent/LLM loop responsibility. `pnpm check` and `pnpm security:check` are green.
 
 See `phase-20-workspace-native-tools.md`.

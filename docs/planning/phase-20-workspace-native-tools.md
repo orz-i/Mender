@@ -1,6 +1,6 @@
 # Phase 20 Plan — Workspace Native Tools Provider
 
-Status: Planned
+Status: Complete
 
 ## Objective
 
@@ -521,18 +521,73 @@ Expected and acceptable when documented:
 - no shell command semantic analyzer;
 - no automatic Profile templates marketed as Agents.
 
+## Completion evidence
+
+Phase 20 landed in document-first segmented commits:
+
+- `52c28b9` — define ADR-0030, the Phase 20 plan, and roadmap contract;
+- `6134f56` — add non-activating, built-in-only reviewed Governance Fact routing while external/unreviewed Providers remain unknown;
+- `709eda8` — add the Workspace Provider configuration plus bounded `read`, `search`, and deterministic `edit` capabilities;
+- `1a1f071` — add bounded host `shell`, reduced environment inheritance, timeout handling, Unix process-group cancellation, and Windows target support;
+- `5ba043b` — register Workspace as the fourth built-in Provider and prove stable ToolIDs plus Profile/Policy/Audit/generic-management integration;
+- `6f0ab1e` — add `mender provider add workspace --root ...` through the generic registration/synchronization path;
+- `337e875` — document Workspace operation across CLI/Web/provider guidance;
+- `3a6efad` — harden structured filesystem execution with Go `os.Root` root-scoped operations after the repository security linter identified a WalkDir/open TOCTOU risk.
+
+The completed capability surface is:
+
+~~~text
+io.mender.provider.workspace
+  workspace.read
+  workspace.search
+  workspace.edit
+  workspace.shell
+~~~
+
+Structured file operations retain explicit relative-path/symlink checks and use root-scoped open/read/remove/rename operations so filesystem actions cannot escape solely through a check/use race. `edit` refuses stale or ambiguous replacement counts before mutation and uses a same-root temporary file plus rename for replacement. Search remains bounded and in-process.
+
+`workspace.shell` is intentionally different: its initial cwd must be inside the Workspace, its environment/output/timeout are bounded, and Unix cancellation targets the process group, but the command still has the Mender host user's OS authority. It is not presented as a kernel/container sandbox and its Governance Facts claim only `process.execute` plus the initial `workspace_path`, not inferred hidden command effects.
+
+Runtime acceptance proves:
+
+- first sync creates exactly four canonical Tools and later sync preserves SourceKey-stable ToolIDs;
+- a Profile may expose only `read`/`edit`, with `shell` rejected as outside scope;
+- a Policy matching `filesystem.write` plus `workspace_path` rejects `edit` before filesystem mutation;
+- successful Workspace invocation produces the normal Audit record;
+- `/api/v1/provider-plugins` exposes the Workspace ConfigSchema/capabilities through the existing generic management contract;
+- Web/Desktop require no Workspace-specific frontend branch;
+- no model API, prompt, conversation, planner, memory, compaction, retry, or Agent Loop was added.
+
+Final verification:
+
+~~~text
+go test focused Workspace/Invocation/Provider/Bootstrap/CLI/HTTP suites   PASS
+go test -race Workspace + Bootstrap                                       PASS
+golangci-lint ./backend/...                                               0 issues
+Windows Workspace package cross-compile                                   PASS
+pnpm check                                                                PASS
+i18n                                                                      651 / 651 zh-CN
+Vitest                                                                    9 files / 59 tests
+Web/Desktop production builds                                             PASS
+pnpm security:check                                                       PASS
+govulncheck backend/desktop/SDK/example                                   no reachable vulnerabilities
+pnpm audit --prod --audit-level high                                      no known vulnerabilities
+~~~
+
+The pre-existing uncommitted management-UI redesign files remained untouched by Phase 20 commits. `.agents/`, `.pi/`, and `.intent-loop/` also remained outside every commit.
+
 ## Exit criteria
 
-- [ ] ADR-0030 and Phase 20 plan are committed before implementation.
-- [ ] built-in Workspace plugin appears in Provider plugin inventory.
-- [ ] synchronization exposes exactly four stable Workspace SourceKeys.
-- [ ] read/search/edit root containment and I/O bounds have focused tests.
-- [ ] edit stale/ambiguous mutation fails closed.
-- [ ] shell timeout/output/cwd behavior and host-authority limitation have focused tests.
-- [ ] Workspace reviewed Governance Facts reach Policy through non-activating routing.
-- [ ] unsupported/external Tools still produce unknown facts.
-- [ ] Profile-scoped Workspace invocation uses shared Policy/guards/Audit.
-- [ ] CLI and generic management paths can configure the Workspace Provider.
-- [ ] Mender has no new model/Agent Loop responsibility.
-- [ ] `pnpm check` and `pnpm security:check` pass.
-- [ ] protected skill/intent-loop directories and unrelated pre-existing UI work are absent from Phase 20 commits.
+- [x] ADR-0030 and Phase 20 plan are committed before implementation.
+- [x] built-in Workspace plugin appears in Provider plugin inventory.
+- [x] synchronization exposes exactly four stable Workspace SourceKeys.
+- [x] read/search/edit root containment and I/O bounds have focused tests.
+- [x] edit stale/ambiguous mutation fails closed.
+- [x] shell timeout/output/cwd behavior and host-authority limitation have focused tests.
+- [x] Workspace reviewed Governance Facts reach Policy through non-activating routing.
+- [x] unsupported/external Tools still produce unknown facts.
+- [x] Profile-scoped Workspace invocation uses shared Policy/guards/Audit.
+- [x] CLI and generic management paths can configure the Workspace Provider.
+- [x] Mender has no new model/Agent Loop responsibility.
+- [x] `pnpm check` and `pnpm security:check` pass.
+- [x] protected skill/intent-loop directories and unrelated pre-existing UI work are absent from Phase 20 commits.

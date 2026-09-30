@@ -11,7 +11,7 @@ It provides one canonical tool model and execution pipeline, then exposes the sa
 
 ## Status
 
-Phases 0–17 are complete. Mender combines the governed Invocation pipeline with a resilient Provider Plugin Runtime: canonical Provider/Tool identity stays protocol-independent; MCP, OpenAPI, Model Tools, and installable external Provider plugins enter the same governed lifecycle; verified descriptor/config metadata keeps management and Credential governance available without executing third-party code; crashed external sessions recover on later requests without replaying failed invocations; and explicit installation rebind preserves ProviderID plus SourceKey-stable ToolIDs. Credential and Policy governance remain shared across CLI, MCP, Web, and Desktop.
+Phases 0–20 are complete. Mender combines a governed Invocation pipeline, resilient Provider Plugin Runtime, managed Agent Skill resources, and first-party local Workspace capabilities. MCP, OpenAPI, Model Tools, Workspace Tools, and installable external Providers normalize into the same canonical Catalog and Profile/Policy/Credential/Audit lifecycle. Workspace `read`, `search`, `edit`, and `shell` let external agent harnesses compose local capability boundaries without moving model calls, prompts, planning, memory, or Agent Loops into Mender.
 
 ## Product principles
 
