@@ -56,3 +56,4 @@ Minor implementation choices that remain inside an accepted architectural bounda
 - [ADR-0028: Make Provider plugin resilience and governance host-owned](0028-provider-plugin-resilience.md)
 - [ADR-0029: Manage Agent Skills as versioned resources and keep deployment host-specific](0029-skill-resource-management.md)
 - [ADR-0030: Provide governed local workspace capabilities without becoming an Agent harness](0030-workspace-native-tools-provider.md)
+- [ADR-0031: Model external Profile reachability as managed Tunnel adapters](0031-managed-profile-tunnels.md)

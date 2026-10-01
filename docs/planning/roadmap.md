@@ -403,3 +403,20 @@ Goals:
 Exit criteria are complete. The built-in Workspace Provider exposes four stable SourceKeys, structured filesystem operations are bounded and root-scoped, host shell execution has explicit non-sandbox semantics, reviewed Workspace Governance Facts reach Policy without Provider activation, and external/unreviewed Providers remain unknown by default. CLI plus generic HTTP/Web/Desktop Provider management reuse the existing plugin path, while Profile/Policy/Audit stay authoritative and Mender retains no Agent/LLM loop responsibility. `pnpm check` and `pnpm security:check` are green.
 
 See `phase-20-workspace-native-tools.md`.
+
+## Phase 21 — Managed Profile Tunnels
+
+Status: In Progress
+
+Goals:
+
+- Add a first-class Tunnel bounded context for downstream Profile reachability without weakening loopback MCP security.
+- Support OpenAI Secure MCP Tunnel as the first Tunnel provider.
+- Let Profiles select or clear one Tunnel through typed management surfaces and inventory-backed UX.
+- Supervise `tunnel-client` together with the managed MCP HTTP server lifecycle, including rollback, restart, shutdown, and Runtime close.
+- Resolve OpenAI runtime API keys through Mender Credential References without persisting or projecting secret material.
+- Keep OpenAI Tunnel semantics accurate: the private MCP server remains private and becomes reachable through supported OpenAI surfaces rather than a generic public URL.
+
+Exit criteria require persistent Tunnel/Profile binding, fail-closed reference handling, Runtime process supervision, HTTP/OpenAPI/Wails/Web/Desktop parity, and green repository/security checks.
+
+See `phase-21-managed-profile-tunnels.md`.
