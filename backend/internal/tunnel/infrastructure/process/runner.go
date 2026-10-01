@@ -29,6 +29,8 @@ func (Runner) Start(
 		return nil, fmt.Errorf("run tunnel client: runtime API key must not be empty")
 	}
 
+	// #nosec G204 -- executable and arguments are local administrator-owned
+	// Tunnel configuration, and exec.Command does not invoke a shell.
 	command := exec.Command(
 		tunnel.Executable(),
 		"run",

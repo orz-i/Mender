@@ -98,7 +98,7 @@ func TestTunnelManagementAPI(t *testing.T) {
 	server := httptest.NewServer(New(runtime))
 	t.Cleanup(server.Close)
 
-	requestJSON(
+	createdCredential := requestJSON(
 		t,
 		server.Client(),
 		http.MethodPost,
@@ -111,6 +111,10 @@ func TestTunnelManagementAPI(t *testing.T) {
 		},
 		http.StatusCreated,
 	)
+	runtimeCredentialRef, _ := createdCredential["reference"].(string)
+	if runtimeCredentialRef == "" {
+		t.Fatalf("created Credential = %#v", createdCredential)
+	}
 
 	created := requestJSON(
 		t,
@@ -120,7 +124,7 @@ func TestTunnelManagementAPI(t *testing.T) {
 		map[string]any{
 			"displayName":          "OpenAI Work",
 			"externalTunnelId":     "tunnel_external_work",
-			"runtimeCredentialRef": "credential://openai/tunnel-runtime",
+			"runtimeCredentialRef": runtimeCredentialRef,
 		},
 		http.StatusCreated,
 	)

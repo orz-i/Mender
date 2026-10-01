@@ -125,7 +125,8 @@ func (r *Runtime) StartMCPHTTPServer(
 	r.mcpServers[serverID] = managed
 	r.mcpServersMu.Unlock()
 
-	go r.serveManagedMCPServer(serverID, managed)
+	serverLifecycleCtx := context.WithoutCancel(ctx)
+	go r.serveManagedMCPServer(serverLifecycleCtx, serverID, managed)
 
 	if tunnelID, ok := profile.TunnelID(); ok {
 		process, tunnel, tunnelErr := r.Tunnels.Start.Execute(ctx, tunnelID, endpoint)
@@ -252,6 +253,7 @@ func (r *Runtime) EnsureConfiguredMCPProvider(
 }
 
 func (r *Runtime) serveManagedMCPServer(
+	ctx context.Context,
 	serverID string,
 	managed *managedMCPServer,
 ) {
@@ -264,7 +266,9 @@ func (r *Runtime) serveManagedMCPServer(
 	}
 	r.mcpServersMu.Unlock()
 	if ok && current == managed {
-		_ = stopManagedTunnel(context.Background(), managed.tunnelProcess)
+		stopCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+		_ = stopManagedTunnel(stopCtx, managed.tunnelProcess)
 	}
 }
 
