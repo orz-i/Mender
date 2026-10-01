@@ -152,7 +152,7 @@ The Providers page no longer owns:
 
 Providers still loads available Provider plugin descriptors because Provider creation/edit/rebind requires them.
 
-A create-capable Provider plugin detail exposes `Add provider`. That action navigates to the existing Providers creation workflow with the exact built-in or external plugin identity preselected. Marketplace does not duplicate the Provider configuration form.
+A create-capable Provider plugin detail exposes `Add provider`. That action navigates directly to the existing Providers configuration workflow with the exact built-in or external plugin identity fixed for that create session. The Provider-plugin chooser is bypassed, so the resulting Dialog contains only the selected plugin's configuration surface. Marketplace does not duplicate the Provider configuration form.
 
 Provider degradation is summarized in Providers as an attention notice; exact installation diagnostics live in Marketplace.
 
@@ -168,7 +168,7 @@ Provider degradation is summarized in Providers as an attention notice; exact in
 - Local package installation appears only when the current host supplies an installer capability.
 - Web never accepts a server filesystem path.
 - Degraded plugin state is fail-closed for enable actions.
-- `Add` delegates to the configured-resource owner; for Provider plugins this is the existing Providers create flow.
+- `Add` delegates to the configured-resource owner; for Provider plugins this is the existing Providers create flow with the Marketplace plugin fixed and the chooser skipped.
 
 ## Verification
 
@@ -178,7 +178,8 @@ Provider degradation is summarized in Providers as an attention notice; exact in
 - [x] Marketplace uses key-cursor Previous / Next navigation rather than table/page-number pagination.
 - [x] Clicking a card navigates to `/plugins/:pluginKey`.
 - [x] Detail route preserves overview, capabilities, issue, technical metadata, and package lifecycle behavior.
-- [x] Create-capable details expose `Add provider` and open the existing Providers create flow with the exact plugin preselected.
+- [x] Create-capable details expose `Add provider` and open the existing Providers create flow with the exact plugin fixed.
+- [ ] Marketplace-originated Provider creation shows only that plugin's configuration form and never renders unrelated plugin choices.
 - [x] Desktop and mobile rendered QA pass for catalog -> detail -> Add.
 - [x] Targeted tests, i18n, typecheck, lint, Web build, and Desktop build pass.
 

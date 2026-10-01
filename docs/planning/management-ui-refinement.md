@@ -39,14 +39,13 @@ The always-visible Remote MCP and Local MCP registration cards are removed.
 
 ### Add Provider
 
-`Add provider` opens one Dialog.
+`Add provider` is a two-stage focused workflow.
 
-The Dialog selects transport:
+Stage 1 opens a Provider-plugin chooser Dialog. It shows only the available Provider plugins and an explicit `Add` action for each plugin; no plugin-owned configuration fields render in this stage.
 
-- Remote MCP / Streamable HTTP,
-- Local MCP / stdio.
+Stage 2 opens the selected plugin's configuration Dialog. Plugin identity is fixed for that create session, so unrelated Provider-plugin choices are not rendered alongside the form. MCP transport selection (Remote endpoint / Local command), OpenAPI source selection, Model Tools engine selection, and generic schema-driven fields remain plugin-owned configuration inside this second stage.
 
-Only fields for the selected transport are shown.
+When creation originates from a Plugin Marketplace detail, the exact plugin is already known, so Stage 1 is skipped and only the focused Stage-2 configuration Dialog opens. Providers-originated Stage 2 may return to the chooser without losing the separation between selection and configuration.
 
 Creation continues to synchronize the Provider immediately using existing semantics.
 
