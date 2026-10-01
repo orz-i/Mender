@@ -141,11 +141,20 @@ Provider editing required a real end-to-end update contract. Provider ID, namesp
 
 Final validation: `pnpm check` passed with OpenAPI and Wails binding regeneration, architecture checks, Go lint/tests/race, ESLint, strict TypeScript, 4 Vitest files / 15 tests, and Web/Desktop production builds.
 
+### Provider creation follow-up — 2026-10-01
+
+Provider creation now enforces the two-stage interaction described above. Providers-originated creation opens a Provider-plugin chooser first, then a plugin-specific form with plugin identity fixed and a `Back to plugins` action. Marketplace-originated creation already knows the exact plugin, so it bypasses the chooser and opens the same focused form directly; exact external InstallationID pinning is preserved.
+
+Rendered QA covered desktop and 390 x 844 mobile widths for the chooser, MCP-specific form, Back-to-picker transition, and Marketplace direct handoff. `pnpm check` and `pnpm security:check` pass; the current frontend suite is 10 files / 67 tests with 645 / 645 zh-CN messages.
+
 ## Verification
 
 Providers refinement must cover:
 
-- add Dialog for HTTP and stdio,
+- two-stage Add flow: Provider-plugin chooser first, then one plugin-specific configuration Dialog,
+- Marketplace direct creation that skips the chooser and fixes the exact plugin,
+- Back-to-picker only for Providers-originated creation,
+- HTTP and stdio configuration inside the focused MCP form,
 - list-only initial page structure,
 - View Dialog,
 - Edit Dialog and persisted update,

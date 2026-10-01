@@ -179,7 +179,7 @@ Provider degradation is summarized in Providers as an attention notice; exact in
 - [x] Clicking a card navigates to `/plugins/:pluginKey`.
 - [x] Detail route preserves overview, capabilities, issue, technical metadata, and package lifecycle behavior.
 - [x] Create-capable details expose `Add provider` and open the existing Providers create flow with the exact plugin fixed.
-- [ ] Marketplace-originated Provider creation shows only that plugin's configuration form and never renders unrelated plugin choices.
+- [x] Marketplace-originated Provider creation shows only that plugin's configuration form and never renders unrelated plugin choices.
 - [x] Desktop and mobile rendered QA pass for catalog -> detail -> Add.
 - [x] Targeted tests, i18n, typecheck, lint, Web build, and Desktop build pass.
 
@@ -225,13 +225,25 @@ Card catalog / routed-detail iteration captures:
 - `/tmp/mender-marketplace-detail-mobile.png`
 - `/tmp/mender-marketplace-qa.png`
 
-Rendered QA verified the route `Plugin Marketplace -> MCP detail -> Add provider -> Providers create dialog`; the MCP plugin remained preselected after the handoff. The 390 x 844 viewport had no horizontal overflow. The browser QA preset passed with network, console, and page-error checks enabled.
+Rendered QA verified the route `Plugin Marketplace -> MCP detail -> Add provider -> Providers create dialog`. The handoff now opens a focused MCP-only form with no Provider-plugin chooser or unrelated plugin choices. Providers-originated creation separately verifies `Add provider -> Provider plugin chooser -> plugin-specific form -> Back to plugins`, while Marketplace-originated creation intentionally has no Back-to-picker action.
+
+Two-stage Provider creation captures:
+
+- `/tmp/mender-provider-plugin-picker.png`
+- `/tmp/mender-provider-mcp-form.png`
+- `/tmp/mender-marketplace-mcp-direct-form.png`
+- `/tmp/mender-provider-plugin-picker-mobile.png`
+- `/tmp/mender-provider-mcp-form-mobile.png`
+- `/tmp/mender-marketplace-mcp-direct-mobile.png`
+- `/tmp/mender-provider-direct-qa-clean.png`
+
+Desktop and 390 x 844 rendered QA showed no horizontal overflow. A fresh browser QA session passed with network, console, and page-error checks enabled for direct MCP creation.
 
 Final repository verification:
 
 - `pnpm check`: PASS
 - `pnpm security:check`: PASS
-- i18n: 638 / 638 zh-CN
+- i18n: 645 / 645 zh-CN
 - Vitest: 10 files / 67 tests
 - Web production build: PASS
 - Desktop production build: PASS
