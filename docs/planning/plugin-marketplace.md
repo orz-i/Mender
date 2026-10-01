@@ -1,6 +1,6 @@
 # Plugin Marketplace
 
-Status: Complete
+Status: Active iteration — card catalog and routed details
 
 ## Goal
 
@@ -35,6 +35,7 @@ MarketplacePlugin
   capabilities[]
   actions
   technicalDetails[]  # detail only
+  createAction?       # detail-only handoff into the owning resource workflow
   actionRef?          # internal lifecycle reference
   issue?
 ```
@@ -44,7 +45,8 @@ A Marketplace adapter owns:
 - loading one plugin kind;
 - projecting its native data into `MarketplacePlugin`;
 - optional enable/disable lifecycle;
-- optional removal lifecycle.
+- optional removal lifecycle;
+- optional resource-creation handoff for plugins that can create a configured resource.
 
 Provider Plugin is the first adapter.
 
@@ -74,24 +76,31 @@ This keeps disabled/degraded external plugins visually stable instead of falling
 Plugin Marketplace
   -> Search
   -> Type / Source / Status filters
-  -> Plugin inventory table
-  -> Focused Plugin Details Dialog
-     -> overview
-     -> Technical Details
+  -> Responsive Plugin card grid
+  -> Key-cursor Previous / Next navigation
+  -> /plugins/:pluginKey
+     -> Plugin overview
+     -> Capabilities / issue state
+     -> Technical details
+     -> Package lifecycle actions
+     -> Add -> owning configured-resource creation flow
 ```
 
-Primary list columns:
+Primary card anatomy:
 
-- Plugin
-- Type
-- Source
-- Version
-- Status
-- Actions
+- display name;
+- short description, visually clamped so one long description cannot distort the grid;
+- plugin type;
+- source;
+- version;
+- status;
+- concise capability summary.
 
-Technical identifiers are hidden from the primary table.
+Cards are discovery/navigation surfaces rather than lifecycle-control surfaces. Activating a card opens the dedicated detail route.
 
-Plugin ID, Installation ID, digest, installed timestamp, config version, and protocol version are visible only in Technical Details.
+Cursor pagination uses the stable normalized Marketplace plugin `key` as the client cursor. The catalog exposes Previous / Next navigation and does not present page-number semantics.
+
+Technical identifiers are hidden from the catalog cards. Plugin ID, Installation ID, digest, installed timestamp, config version, and protocol version are visible only on the detail page.
 
 ## Lifecycle rules
 
@@ -143,21 +152,37 @@ The Providers page no longer owns:
 
 Providers still loads available Provider plugin descriptors because Provider creation/edit/rebind requires them.
 
+A create-capable Provider plugin detail exposes `Add provider`. That action navigates to the existing Providers creation workflow with the exact built-in or external plugin identity preselected. Marketplace does not duplicate the Provider configuration form.
+
 Provider degradation is summarized in Providers as an attention notice; exact installation diagnostics live in Marketplace.
 
 ## UX rules
 
-- Follow the current Command Workbench visual system.
+- Follow the current Command Workbench visual system and existing shadcn/base-nova component language.
+- Marketplace discovery uses a responsive card grid; cards remain concise and description text is clamped.
 - No statistic cards outside Overview.
-- One table cell = one information point.
-- No technical IDs in primary tables.
-- Details use focused Dialogs.
+- No technical IDs on discovery cards.
+- Plugin details use a dedicated route rather than a Dialog so metadata, lifecycle controls, and the create handoff have stable navigation semantics.
+- Cursor controls expose Previous / Next only; no numeric page selector is shown.
 - Plugin type and source filter options derive from normalized Marketplace data.
 - Local package installation appears only when the current host supplies an installer capability.
 - Web never accepts a server filesystem path.
 - Degraded plugin state is fail-closed for enable actions.
+- `Add` delegates to the configured-resource owner; for Provider plugins this is the existing Providers create flow.
 
 ## Verification
+
+### Card catalog / routed-detail iteration
+
+- [ ] Marketplace results render as a responsive card grid.
+- [ ] Marketplace uses key-cursor Previous / Next navigation rather than table/page-number pagination.
+- [ ] Clicking a card navigates to `/plugins/:pluginKey`.
+- [ ] Detail route preserves overview, capabilities, issue, technical metadata, and package lifecycle behavior.
+- [ ] Create-capable details expose `Add provider` and open the existing Providers create flow with the exact plugin preselected.
+- [ ] Desktop and mobile rendered QA pass for catalog -> detail -> Add.
+- [ ] Targeted tests, i18n, typecheck, lint, Web build, and Desktop build pass.
+
+### Existing baseline
 
 - [x] Marketplace route and Sidebar/Quick Navigation entry exist.
 - [x] Built-in MCP, Model Tools, OpenAPI, and Workspace Provider plugins render.
