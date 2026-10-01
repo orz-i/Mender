@@ -1,6 +1,6 @@
 # Plugin Marketplace
 
-Status: In Progress
+Status: Complete
 
 ## Goal
 
@@ -159,20 +159,20 @@ Provider degradation is summarized in Providers as an attention notice; exact in
 
 ## Verification
 
-- [ ] Marketplace route and Sidebar/Quick Navigation entry exist.
-- [ ] Built-in MCP, Model Tools, OpenAPI, and Workspace Provider plugins render.
-- [ ] External Provider plugin installations render alongside built-ins.
-- [ ] Disabled external installations remain visible.
-- [ ] Verified descriptor metadata keeps external plugin names stable across enable/disable.
-- [ ] PluginID / InstallationID / digest remain detail-only.
-- [ ] Type/source/status filters are available.
-- [ ] Plugin overview and Technical Details are separate Dialog views.
-- [ ] Enable/disable/remove lifecycle uses generic Marketplace actions.
-- [ ] Degraded disabled plugins cannot be enabled.
-- [ ] Desktop local package installation is injected through MarketplaceInstaller.
-- [ ] Web exposes no arbitrary path install action.
-- [ ] Providers no longer exposes duplicate plugin-management UI.
-- [ ] i18n, targeted Go/TS tests, Web build, and Desktop build pass.
+- [x] Marketplace route and Sidebar/Quick Navigation entry exist.
+- [x] Built-in MCP, Model Tools, OpenAPI, and Workspace Provider plugins render.
+- [x] External Provider plugin installations render alongside built-ins.
+- [x] Disabled external installations remain visible.
+- [x] Verified descriptor metadata keeps external plugin names stable across enable/disable.
+- [x] PluginID / InstallationID / digest remain detail-only.
+- [x] Type/source/status filters are available.
+- [x] Plugin overview and Technical Details are separate Dialog views.
+- [x] Enable/disable/remove lifecycle uses generic Marketplace actions.
+- [x] Degraded disabled plugins cannot be enabled.
+- [x] Desktop local package installation is injected through MarketplaceInstaller.
+- [x] Web exposes no arbitrary path install action.
+- [x] Providers no longer exposes duplicate plugin-management UI.
+- [x] i18n, targeted Go/TS tests, Web build, and Desktop build pass.
 
 ## Evidence
 
@@ -185,7 +185,18 @@ The external plugin was disabled and re-enabled through Marketplace. Its display
 
 Representative captures:
 
-- `/tmp/mender-plugin-marketplace-final.png`
-- `/tmp/mender-plugin-marketplace-external.png`
+- `/tmp/mender-plugin-marketplace-final-qa.png`
 - `/tmp/mender-plugin-marketplace-detail.png`
+- `/tmp/mender-plugin-marketplace-technical.png`
 - `/tmp/mender-plugin-marketplace-mobile.png`
+
+Final repository verification:
+
+- `pnpm check`: PASS
+- `pnpm security:check`: PASS
+- i18n: 638 / 638 zh-CN
+- Vitest: 10 files / 62 tests
+- Web production build: PASS
+- Desktop production build: PASS
+- govulncheck: no reachable vulnerabilities
+- production dependency audit: no known vulnerabilities

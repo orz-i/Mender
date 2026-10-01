@@ -5,10 +5,13 @@
 - Selected direction: Product Design direction 2, **Command Workbench**.
 - Product surface: Mender Web/Desktop shared management UI.
 - Audit flow:
-  1. Desktop Skills workspace.
-  2. Skill focused detail Dialog.
-  3. Catalog workspace.
-  4. Mobile Skills workspace.
+  1. Desktop Plugin Marketplace.
+  2. Mobile Plugin Marketplace.
+  3. Providers after plugin-management migration.
+  4. Desktop Skills workspace.
+  5. Skill focused detail Dialog.
+  6. Catalog workspace.
+  7. Mobile Skills workspace.
 - Audit capture source: live local web app backed by an isolated temporary Mender Runtime.
 - No production database was used.
 
@@ -16,18 +19,22 @@
 
 Accepted screenshots captured from the final working tree include:
 
-1. Desktop Providers with Top Bar title — `/tmp/mender-topbar-providers.png`
-2. Desktop Overview with Top Bar title — `/tmp/mender-topbar-overview.png`
-3. Mobile Skills with Top Bar title/search — `/tmp/mender-topbar-mobile-skills.png`
-4. Skill detail Dialog — `/tmp/mender-audit-final-02-skill-dialog.png`
-5. Catalog workspace with single-line cells — `/tmp/mender-table-catalog-single-line.png`
-6. Provider inventory with single-line cells — `/tmp/mender-table-providers-single-line.png`
+1. Desktop Plugin Marketplace — `/tmp/mender-plugin-marketplace-final-qa.png`
+2. Marketplace Plugin Details — `/tmp/mender-plugin-marketplace-detail.png`
+3. Marketplace Technical Details — `/tmp/mender-plugin-marketplace-technical.png`
+4. Mobile Plugin Marketplace — `/tmp/mender-plugin-marketplace-mobile.png`
+5. Desktop Providers with Top Bar title — `/tmp/mender-topbar-providers.png`
+6. Desktop Overview with Top Bar title — `/tmp/mender-topbar-overview.png`
+7. Mobile Skills with Top Bar title/search — `/tmp/mender-topbar-mobile-skills.png`
+8. Skill detail Dialog — `/tmp/mender-audit-final-02-skill-dialog.png`
+9. Catalog workspace with single-line cells — `/tmp/mender-table-catalog-single-line.png`
+10. Provider inventory with single-line cells — `/tmp/mender-table-providers-single-line.png`
 
 Desktop viewport: 1536 × 1024 CSS px.
 
 Mobile viewport: 390 × 844 CSS px.
 
-The temporary Runtime contained the built-in `mender-tools` Skill and one trusted/enabled local `code-review` installation so that list, filters, and detail views were audited with real data rather than only empty states.
+The temporary Runtime contained the built-in `mender-tools` Skill, one trusted/enabled local `code-review` Skill installation, the four built-in Provider plugins, and an external `Example Echo` Provider plugin installation. Marketplace lifecycle QA disabled and re-enabled Example Echo against the isolated Runtime.
 
 ## Information architecture
 
@@ -46,6 +53,7 @@ The current route title exists only in the global Top Bar. Content-area page tit
 This grammar is applied across:
 
 - Overview
+- Plugin Marketplace
 - Providers
 - Skills
 - Catalog
@@ -59,7 +67,28 @@ The redesign intentionally reduces nested Card usage. Cards now communicate a me
 
 ## Step audit
 
-### 1. Desktop Skills workspace
+### 1. Plugin Marketplace
+
+**Health: passed**
+
+Strengths:
+
+- Marketplace is a dedicated package-management surface rather than a second Provider-instance screen.
+- Current Provider Plugins are normalized into a generic Marketplace model so future plugin kinds can add adapters without changing the page structure.
+- Plugin type filter options are generated from normalized Marketplace data rather than hard-coded to Provider Plugin.
+- Built-in MCP, Model Tools, OpenAPI, and Workspace plugins appear in the same inventory.
+- Search and type/source/status filters are grouped in one workbench toolbar.
+- Primary table cells show only user-facing Plugin / Type / Source / Version / Status information; pluginId, installationId, and digest remain detail-only.
+- Plugin Details and Technical Details follow the existing one-viewport/one-information-category Dialog rule.
+- Web does not expose arbitrary server filesystem installation; Desktop receives the host-only Provider plugin package-install action, and the action is explicitly labeled as Provider-specific until additional plugin installers exist.
+- Providers no longer contains a duplicate Manage Plugins workflow.
+
+Responsive repair:
+
+- Desktop renders the complete six-column inventory.
+- Mobile hides Type / Source / Version columns and keeps Plugin / Status / Actions, avoiding horizontal overflow while retaining access to the omitted metadata through details.
+
+### 2. Desktop Skills workspace
 
 **Health: passed**
 
@@ -82,7 +111,7 @@ Accessibility observations:
 - Filter controls have explicit labels.
 - Main icon actions retain tooltip/aria-label behavior.
 
-### 2. Skill focused Dialog
+### 3. Skill focused Dialog
 
 **Health: passed**
 
@@ -105,7 +134,7 @@ Separate transitions remain available for:
 
 The Dialog uses a bounded viewport and internal scrolling, and deployment configuration opens as a separate modal task instead of stacking multiple information categories.
 
-### 3. Catalog workspace
+### 4. Catalog workspace
 
 **Health: passed**
 
@@ -120,7 +149,7 @@ Strengths:
 
 The Catalog Provider filter intentionally remains a native select because the current Base UI Select is difficult to exercise reliably in JSDOM and the project already uses native selects in several management forms. This preserves regression-test coverage without changing the visual IA.
 
-### 4. Mobile Skills workspace
+### 5. Mobile Skills workspace
 
 **Health: passed after repair**
 
@@ -170,9 +199,13 @@ Uses four real summary metrics:
 
 Recent invocation activity is presented as one Data Panel.
 
+### Plugin Marketplace
+
+Marketplace owns plugin package discovery, exact external installation lifecycle, degradation state, and Desktop package installation. Provider Plugin is the first adapter; future plugin kinds extend the normalized Marketplace model.
+
 ### Providers
 
-Provider statistics were removed from the domain page. The page now enters directly into the Provider inventory after title/actions and error state. Provider lifecycle actions and existing dialogs are unchanged.
+Providers now manages configured Provider instances only. The old Manage Plugins Dialog and package-install lifecycle were removed from this page. Provider degradation remains visible as a generic attention notice without exposing installation IDs; exact issue details belong to Marketplace.
 
 ### Skills
 
@@ -242,6 +275,10 @@ These task-oriented inventories remain centered on one primary data workspace pl
 
 Live browser QA has been run on representative pages:
 
+- Plugin Marketplace desktop;
+- Plugin Marketplace mobile;
+- Plugin details / technical details;
+- Providers after plugin-management migration;
 - Skills;
 - Audit;
 - Overview;
@@ -263,11 +300,15 @@ Current final gate:
 
 - ESLint: PASS
 - Workspace TypeScript: PASS
-- i18n: **621 required / 621 zh-CN**
-- Vitest: **9 files / 59 tests**
+- i18n: **638 required / 638 zh-CN**
+- Vitest: **10 files / 62 tests**
 - Web production build: PASS
 - Desktop production build: PASS
 - `git diff --check`: PASS
+- `pnpm check`: PASS
+- `pnpm security:check`: PASS
+- govulncheck: no reachable vulnerabilities
+- production dependency audit: no known vulnerabilities
 
 The existing Vite warning for JavaScript chunks larger than 500 kB remains non-blocking and predates this design pass.
 
