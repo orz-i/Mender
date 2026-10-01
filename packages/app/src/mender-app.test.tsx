@@ -30,6 +30,7 @@ describe("MenderApp", () => {
 
     for (const name of [
       "Overview",
+      "Plugin Marketplace",
       "Providers",
       "Skills",
       "Catalog",
@@ -55,6 +56,7 @@ describe("MenderApp", () => {
     });
 
     expect(screen.getByRole("heading", { name: "概览" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "插件市场" })).toBeTruthy();
     expect(screen.getByRole("link", { name: "提供方" })).toBeTruthy();
     expect(screen.getByRole("link", { name: "技能" })).toBeTruthy();
     expect(

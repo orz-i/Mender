@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import {
+  BlocksIcon,
   BookOpenIcon,
   CommandIcon,
   KeyRoundIcon,
@@ -61,6 +62,11 @@ const navigation: NavigationGroup[] = [
         to: "/",
         label: "Overview",
         icon: LayoutDashboardIcon,
+      },
+      {
+        to: "/plugins",
+        label: "Plugin Marketplace",
+        icon: BlocksIcon,
       },
       {
         to: "/providers",

@@ -13,7 +13,6 @@ import type {
   MenderClient,
   Provider,
   ProviderPlugin,
-  ProviderPluginInstallation,
   ProviderPluginIssue,
   UpdateProviderRequest,
 } from "@mender/sdk";
@@ -269,10 +268,8 @@ const emptyProviderForm: ProviderFormState = {
 
 export function ProvidersPage({
   client,
-  installProviderPlugin,
 }: {
   client: MenderClient;
-  installProviderPlugin?: () => Promise<ProviderPluginInstallation | null>;
 }) {
   const [providers, setProviders] = useState<Provider[]>([]);
   const [providerPlugins, setProviderPlugins] = useState<ProviderPlugin[]>([]);
@@ -283,7 +280,6 @@ export function ProvidersPage({
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
-  const [pluginManagerOpen, setPluginManagerOpen] = useState(false);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [createForm, setCreateForm] =
@@ -593,39 +589,23 @@ export function ProvidersPage({
     <>
       <PageHeader
         actions={
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              onClick={() => {
-                setError("");
-                setPluginManagerOpen(true);
-              }}
-            >
-              {t("Manage plugins")}
-            </Button>
-            <Button
-              onClick={() => {
-                setError("");
-                setCreateOpen(true);
-              }}
-            >
-              {t("Add provider")}
-            </Button>
-          </div>
+          <Button
+            onClick={() => {
+              setError("");
+              setCreateOpen(true);
+            }}
+          >
+            {t("Add provider")}
+          </Button>
         }
       />
 
       {error ? <ErrorNotice message={error} /> : null}
       {providerPluginIssues.length ? (
         <ErrorNotice
-          message={t("Some external Provider plugins are degraded: {{issues}}", {
-            issues: providerPluginIssues
-              .map(
-                (issue) =>
-                  issue.installationId + " · " + issue.code + " · " + issue.message,
-              )
-              .join("; "),
-          })}
+          message={t(
+            "Some Provider plugins need attention. Review Plugin Marketplace for installation details.",
+          )}
         />
       ) : null}
 
@@ -772,16 +752,6 @@ export function ProvidersPage({
           </EmptyPanelState>
         )}
       </DataPanel>
-
-      <ProviderPluginManagerDialog
-        open={pluginManagerOpen}
-        client={client}
-        {...(installProviderPlugin === undefined
-          ? {}
-          : { installProviderPlugin })}
-        onOpenChange={setPluginManagerOpen}
-        onPluginsChanged={() => void refreshProviderPlugins()}
-      />
 
       <ProviderFormDialog
         open={createOpen}
@@ -996,292 +966,6 @@ function ProviderRebindDialog({
   );
 }
 
-function ProviderPluginManagerDialog({
-  open,
-  client,
-  installProviderPlugin,
-  onOpenChange,
-  onPluginsChanged,
-}: {
-  open: boolean;
-  client: MenderClient;
-  installProviderPlugin?: () => Promise<ProviderPluginInstallation | null>;
-  onOpenChange: (open: boolean) => void;
-  onPluginsChanged: () => void;
-}) {
-  const [installations, setInstallations] = useState<
-    ProviderPluginInstallation[]
-  >([]);
-  const [loaded, setLoaded] = useState(false);
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState("");
-
-  const refreshInstallations = useCallback(async () => {
-    try {
-      const result = await client.listProviderPluginInstallations();
-      setInstallations(result.installations);
-      setError("");
-    } catch (reason) {
-      setError(errorMessage(reason));
-    } finally {
-      setLoaded(true);
-    }
-  }, [client]);
-
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-    let active = true;
-    void client
-      .listProviderPluginInstallations()
-      .then((result) => {
-        if (active) {
-          setInstallations(result.installations);
-          setError("");
-          setLoaded(true);
-        }
-      })
-      .catch((reason: unknown) => {
-        if (active) {
-          setError(errorMessage(reason));
-          setLoaded(true);
-        }
-      });
-    return () => {
-      active = false;
-    };
-  }, [client, open]);
-
-  async function installLocalPlugin() {
-    if (installProviderPlugin === undefined) {
-      return;
-    }
-    setBusy("install");
-    setError("");
-    try {
-      const installed = await installProviderPlugin();
-      if (installed === null) {
-        return;
-      }
-      await refreshInstallations();
-      onPluginsChanged();
-    } catch (reason) {
-      setError(errorMessage(reason));
-    } finally {
-      setBusy("");
-    }
-  }
-
-  async function setInstallationEnabled(
-    installation: ProviderPluginInstallation,
-    enabled: boolean,
-  ) {
-    setBusy(installation.installationId);
-    setError("");
-    try {
-      if (enabled) {
-        await client.enableProviderPluginInstallation(
-          installation.installationId,
-        );
-      } else {
-        await client.disableProviderPluginInstallation(
-          installation.installationId,
-        );
-      }
-      await refreshInstallations();
-      onPluginsChanged();
-    } catch (reason) {
-      setError(errorMessage(reason));
-    } finally {
-      setBusy("");
-    }
-  }
-
-  async function removeInstallation(
-    installation: ProviderPluginInstallation,
-  ) {
-    if (
-      !window.confirm(
-        t(
-          'Remove installed plugin "{{plugin}}" {{version}}? Configured Providers will block removal.',
-          {
-            plugin: installation.pluginId,
-            version: installation.packageVersion,
-          },
-        ),
-      )
-    ) {
-      return;
-    }
-    setBusy(installation.installationId);
-    setError("");
-    try {
-      await client.deleteProviderPluginInstallation(
-        installation.installationId,
-      );
-      await refreshInstallations();
-      onPluginsChanged();
-    } catch (reason) {
-      setError(errorMessage(reason));
-    } finally {
-      setBusy("");
-    }
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>{t("Provider plugins")}</DialogTitle>
-          <DialogDescription>
-            {t("Manage installed external Provider plugin packages. Providers remain pinned to exact installation IDs.")}
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-4">
-          {error ? (
-            <p className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
-              {error}
-            </p>
-          ) : null}
-
-          <div className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
-            <div>
-              <div className="text-sm font-medium">{t("Local package installation")}</div>
-              <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                {t(
-                  installProviderPlugin === undefined
-                    ? "Install new native plugins with the Mender CLI or Desktop app. Browser management never accepts a server filesystem path."
-                    : "Choose a local plugin package directory. Mender copies it into its managed plugin root and verifies the executable before activation.",
-                )}
-              </p>
-            </div>
-            {installProviderPlugin !== undefined ? (
-              <Button
-                type="button"
-                variant="outline"
-                disabled={busy !== ""}
-                onClick={() => void installLocalPlugin()}
-              >
-                {t(busy === "install" ? "Installing…" : "Install package")}
-              </Button>
-            ) : null}
-          </div>
-
-          {!loaded ? (
-            <div className="py-8 text-center text-sm text-muted-foreground">
-              {t("Loading installed plugins…")}
-            </div>
-          ) : installations.length ? (
-            <div className="space-y-3">
-              {installations.map((installation) => {
-                const itemBusy = busy === installation.installationId;
-                return (
-                  <div
-                    key={installation.installationId}
-                    className="rounded-lg border border-border p-4"
-                  >
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="font-medium">
-                          {installation.pluginId}
-                        </div>
-                        <div className="mt-1 font-mono text-xs text-muted-foreground">
-                          {installation.installationId}
-                        </div>
-                      </div>
-                      <Badge
-                        variant={
-                          installation.status === "enabled"
-                            ? "outline"
-                            : "secondary"
-                        }
-                      >
-                        {t(installation.status)}
-                      </Badge>
-                    </div>
-
-                    <div className="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
-                      <div>
-                        {t("Version")}{" "}
-                        <span className="font-mono text-foreground">
-                          {installation.packageVersion}
-                        </span>
-                      </div>
-                      <div>
-                        {t("Installed")}{" "}
-                        <span className="text-foreground">
-                          {formatTimestamp(installation.installedAt)}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="mt-2 break-all font-mono text-[11px] text-muted-foreground">
-                      {installation.digest}
-                    </div>
-
-                    <div className="mt-4 flex justify-end gap-2">
-                      {installation.status === "enabled" ? (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          aria-label={t("Disable plugin {{installation}}", {
-                            installation: installation.installationId,
-                          })}
-                          disabled={busy !== ""}
-                          onClick={() =>
-                            void setInstallationEnabled(installation, false)
-                          }
-                        >
-                          {t(itemBusy ? "Disabling…" : "Disable")}
-                        </Button>
-                      ) : (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          aria-label={t("Enable plugin {{installation}}", {
-                            installation: installation.installationId,
-                          })}
-                          disabled={busy !== ""}
-                          onClick={() =>
-                            void setInstallationEnabled(installation, true)
-                          }
-                        >
-                          {t(itemBusy ? "Enabling…" : "Enable")}
-                        </Button>
-                      )}
-                      <Button
-                        type="button"
-                        variant="destructive"
-                        size="sm"
-                        aria-label={t("Remove plugin {{installation}}", {
-                          installation: installation.installationId,
-                        })}
-                        disabled={busy !== ""}
-                        onClick={() => void removeInstallation(installation)}
-                      >
-                        {t("Remove")}
-                      </Button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <EmptyState
-              title="No external plugins installed"
-              description="Install a Provider plugin package to make a custom Provider type available."
-            />
-          )}
-        </div>
-
-        <DialogFooter showCloseButton />
-      </DialogContent>
-    </Dialog>
-  );
-}
 
 function ProviderFormDialog({
   open,

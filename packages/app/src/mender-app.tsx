@@ -11,6 +11,8 @@ import { AuditPage } from "./domains/audit/audit-page";
 import { CatalogPage } from "./domains/catalog/catalog-page";
 import { CredentialsPage } from "./domains/credentials/credentials-page";
 import { OverviewPage } from "./domains/overview/overview-page";
+import { PluginsPage } from "./domains/plugins/plugins-page";
+import { providerPluginInstaller } from "./domains/plugins/marketplace";
 import { PolicyPage } from "./domains/policy/policy-page";
 import { ProfilesPage } from "./domains/profiles/profiles-page";
 import { ProvidersPage } from "./domains/providers/providers-page";
@@ -43,15 +45,21 @@ export function MenderApp({
         <Route element={<ManagementShell client={client} />}>
           <Route index element={<OverviewPage client={client} />} />
           <Route
-            path="providers"
+            path="plugins"
             element={
-              <ProvidersPage
+              <PluginsPage
                 client={client}
-                {...(installProviderPlugin === undefined
-                  ? {}
-                  : { installProviderPlugin })}
+                installers={
+                  installProviderPlugin === undefined
+                    ? []
+                    : [providerPluginInstaller(installProviderPlugin)]
+                }
               />
             }
+          />
+          <Route
+            path="providers"
+            element={<ProvidersPage client={client} />}
           />
           <Route
             path="skills"
