@@ -31,7 +31,7 @@ import { Textarea } from "@mender/ui/components/textarea";
 
 import { errorMessage } from "../../shared/errors";
 import { IconButton } from "../../shared/icon-button";
-import { EmptyState, ErrorNotice, PageHeader } from "../../shared/page";
+import { EmptyState, ErrorNotice } from "../../shared/page";
 import { usePagination } from "../../shared/pagination";
 import { TablePagination } from "../../shared/table-pagination";
 import {
@@ -195,7 +195,6 @@ export function CatalogPage({ client }: { client: MenderClient }) {
 
   return (
     <>
-      <PageHeader title="Catalog" />
       {error ? <ErrorNotice message={error} /> : null}
 
       <DataPanel

@@ -22,7 +22,6 @@ export const zhCNMessages: Readonly<Record<string, string>> = {
   "neutral": "正常",
   "good": "良好",
   "warning": "警告",
-  "Local control-plane status and recent Mender activity.": "本地控制平面状态与近期 Mender 活动。",
   "Runtime": "运行时",
   "Ready": "就绪",
   "Loading": "加载中",

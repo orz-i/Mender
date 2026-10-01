@@ -592,7 +592,6 @@ export function ProvidersPage({
   return (
     <>
       <PageHeader
-        title="Providers"
         actions={
           <div className="flex gap-2">
             <Button

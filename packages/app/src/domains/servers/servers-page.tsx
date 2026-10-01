@@ -178,7 +178,6 @@ export function ServersPage({
   return (
     <>
       <PageHeader
-        title="Servers"
         actions={
           <div className="flex gap-2">
             <Button

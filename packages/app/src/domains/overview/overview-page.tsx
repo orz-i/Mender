@@ -27,7 +27,7 @@ import {
 
 import { formatDateTime, t } from "../../i18n/i18n";
 import { errorMessage } from "../../shared/errors";
-import { ErrorNotice, PageHeader } from "../../shared/page";
+import { ErrorNotice } from "../../shared/page";
 import { usePagination } from "../../shared/pagination";
 import { TablePagination } from "../../shared/table-pagination";
 import {
@@ -112,10 +112,6 @@ export function OverviewPage({ client }: { client: MenderClient }) {
 
   return (
     <>
-      <PageHeader
-        title="Overview"
-        description="Local control-plane status and recent Mender activity."
-      />
       {error ? <ErrorNotice message={error} /> : null}
 
       <MetricStrip>

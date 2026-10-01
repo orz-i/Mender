@@ -86,7 +86,6 @@ export function AuditPage({ client }: { client: MenderClient }) {
   return (
     <>
       <PageHeader
-        title="Audit"
         actions={
           <Button variant="outline" onClick={() => void refresh()} disabled={busy}>
             {t("Refresh")}

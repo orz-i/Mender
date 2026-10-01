@@ -16,9 +16,9 @@
 
 Accepted screenshots captured from the final working tree include:
 
-1. Desktop Skills — `/tmp/mender-header-skills-qa.png`
-2. Desktop Audit — `/tmp/mender-header-audit-qa.png`
-3. Mobile Skills — `/tmp/mender-header-skills-mobile-qa.png`
+1. Desktop Providers with Top Bar title — `/tmp/mender-topbar-providers.png`
+2. Desktop Overview with Top Bar title — `/tmp/mender-topbar-overview.png`
+3. Mobile Skills with Top Bar title/search — `/tmp/mender-topbar-mobile-skills.png`
 4. Skill detail Dialog — `/tmp/mender-audit-final-02-skill-dialog.png`
 5. Catalog workspace with single-line cells — `/tmp/mender-table-catalog-single-line.png`
 6. Provider inventory with single-line cells — `/tmp/mender-table-providers-single-line.png`
@@ -34,12 +34,13 @@ The temporary Runtime contained the built-in `mender-tools` Skill and one truste
 The redesign now uses one shared page grammar:
 
 ~~~text
-Page Header (page identity + primary actions only)
+Top Bar (current page title at left, global search + Runtime state at right)
+  -> optional page action row
   -> optional filter / configuration toolbar
   -> one primary data workspace with its own section title/status description
   -> focused layered Dialogs for deeper tasks
 
-Overview is the only page that keeps a short page-level description and adds a metric/statistics strip before its primary data workspace. Domain pages do not repeat explanatory copy in both the Page Header and the main Data Panel.
+The current route title exists only in the global Top Bar. Content-area page titles and page-level descriptions are removed from every route, including Overview. PageHeader is now an action-only primitive and renders nothing when a page has no primary actions.
 ~~~
 
 This grammar is applied across:
@@ -131,8 +132,8 @@ Repair:
 - desktop still supports explicit expand/collapse;
 - navigation links retain explicit accessible names when labels are visually hidden;
 - language switching remains available on the mobile rail;
-- PageHeader switches to vertical title/action layout;
-- compact page identity styling remains proportionate on the small viewport;
+- Top Bar keeps the current page title at left and the global search affordance at right;
+- page actions remain in the content area without repeating page identity;
 - filters, list, and pagination regain usable content width.
 
 The repaired mobile page is approximately 1731px tall versus roughly 2782px before the fix, reflecting the removal of the severe horizontal squeeze and resulting excessive wrapping.
@@ -146,11 +147,11 @@ Direction 2 is reflected in:
 - lighter border hierarchy;
 - smaller 236px expanded Sidebar;
 - 64px global top bar;
-- compact page search;
+- current route title at the Top Bar left edge;
+- compact global page search aligned to the Top Bar right edge;
+- Runtime connection state remains beside global search on desktop;
 - subtle active navigation state;
-- compact neutral page identity: 36px muted icon tile and 20px title;
-- non-Overview domain headers omit explanatory descriptions so the main Data Panel owns the operational context;
-- page identity no longer duplicates the Sidebar's blue active emphasis;
+- content pages no longer render a second icon/title/description identity block;
 - reduced Card radius/shadow;
 - unified Dialog overlay, spacing, title hierarchy, and footer;
 - shared `DataPanel`, `WorkbenchToolbar`, `SearchField`, and `FilterSelect` for domain pages;
@@ -212,16 +213,17 @@ These task-oriented inventories remain centered on one primary data workspace pl
    - Catalog uses a native Provider select so existing behavior tests remain deterministic.
    - Live-browser QA verifies the shadcn Skill filters.
 
-8. **P2 — page title/icon competed with the actual workspace**
-   - The previous 56px solid-primary icon tile and 28px title read like a hero section on every management page.
-   - Repaired globally through the shared PageHeader: 36px neutral icon tile, 20px title, and reduced bottom margin.
-   - Final desktop Skills/Audit and mobile Skills captures confirm that DataPanel/table content is now the primary visual focus.
+8. **P2 — page identity competed with the actual workspace**
+   - The previous content-area icon/title block read like a hero section on every management page.
+   - A first repair reduced its visual weight, but it still duplicated route identity already available in navigation.
+   - Final repair moves the page title into the global Top Bar and removes the content-area icon/title identity block entirely.
 
 9. **P2 — page header and main data panel repeated the same title/description hierarchy**
-   - Domain pages previously explained the same resource twice in immediate succession (for example Providers → Providers, Skills → Skill Library with overlapping descriptions).
-   - Repaired by making non-Overview PageHeader descriptions optional and removing them from domain pages.
-   - Main DataPanel headers now own the operational context; exact duplicate panel titles were made specific (`Provider inventory`, `Profile inventory`).
-   - Overview intentionally retains its short description because the next layer is aggregate metrics rather than a same-resource inventory.
+   - Domain pages previously explained the same resource twice in immediate succession.
+   - A partial repair removed most domain descriptions but still left a separate content-area title row.
+   - Final repair removes all page-level descriptions and all content-area page titles, including Overview.
+   - Main DataPanel headers own operational context; exact duplicate panel titles remain specific (`Provider inventory`, `Profile inventory`).
+   - PageHeader is now action-only and returns null when no actions exist.
 
 10. **P2 — table cells mixed primary labels with technical identifiers**
    - Catalog, Providers, Profiles, Servers, Credentials, and Policy used stacked secondary lines for IDs, namespaces, slugs, transport/address metadata, or fact summaries.
@@ -261,7 +263,7 @@ Current final gate:
 
 - ESLint: PASS
 - Workspace TypeScript: PASS
-- i18n: **622 required / 622 zh-CN**
+- i18n: **621 required / 621 zh-CN**
 - Vitest: **9 files / 59 tests**
 - Web production build: PASS
 - Desktop production build: PASS

@@ -57,7 +57,9 @@ describe("MenderApp", () => {
     expect(screen.getByRole("heading", { name: "概览" })).toBeTruthy();
     expect(screen.getByRole("link", { name: "提供方" })).toBeTruthy();
     expect(screen.getByRole("link", { name: "技能" })).toBeTruthy();
-    expect(screen.getByText("本地控制平面状态与近期 Mender 活动。")).toBeTruthy();
+    expect(
+      screen.queryByText("本地控制平面状态与近期 Mender 活动。"),
+    ).toBeNull();
     expect(window.localStorage.getItem("mender.locale")).toBe("zh-CN");
     expect(document.documentElement.lang).toBe("zh-CN");
   });

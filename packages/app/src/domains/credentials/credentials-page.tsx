@@ -183,7 +183,6 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
   return (
     <>
       <PageHeader
-        title="Credentials"
         actions={
           <Button
             onClick={() => {

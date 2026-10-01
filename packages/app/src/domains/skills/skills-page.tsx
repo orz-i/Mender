@@ -358,7 +358,6 @@ export function SkillsPage({
   return (
     <>
       <PageHeader
-        title="Skills"
         actions={
           <div className="flex gap-2">
             <Button

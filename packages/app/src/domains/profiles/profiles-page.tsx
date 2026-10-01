@@ -515,7 +515,6 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
   return (
     <>
       <PageHeader
-        title="Profiles"
         actions={
           <Button onClick={() => setCreateOpen(true)}>{t("Create profile")}</Button>
         }

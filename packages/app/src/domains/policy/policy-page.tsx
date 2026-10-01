@@ -288,7 +288,6 @@ export function PolicyPage({ client }: { client: MenderClient }) {
   return (
     <>
       <PageHeader
-        title="Policy"
         actions={<Button onClick={openCreateRule}>{t("Add rule")}</Button>}
       />
 

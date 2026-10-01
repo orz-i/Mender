@@ -166,6 +166,14 @@ export function ManagementShell({ client }: { client: MenderClient }) {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
+  const activeItem =
+    flatNavigation.find((item) => {
+      if (item.to === "/") {
+        return location.pathname === "/";
+      }
+      return location.pathname.startsWith(item.to);
+    }) ?? flatNavigation[0]!;
+
   const normalizedQuery = query.trim().toLocaleLowerCase();
   const filteredNavigation = normalizedQuery
     ? flatNavigation.filter((item) =>
@@ -409,22 +417,26 @@ export function ManagementShell({ client }: { client: MenderClient }) {
         </aside>
 
         <div className="min-w-0 flex-1">
-          <header className="sticky top-0 z-20 flex h-16 items-center justify-between gap-4 border-b border-border/70 bg-background/94 px-5 backdrop-blur-xl md:px-6 xl:px-8">
-            <button
-              type="button"
-              onClick={() => setCommandOpen(true)}
-              className="flex h-9 w-full max-w-[360px] items-center gap-2 rounded-lg border border-border/80 bg-background px-3 text-left text-sm text-muted-foreground shadow-[0_1px_2px_rgb(15_23_42/0.03)] transition-colors hover:bg-muted/30"
-            >
-              <CommandIcon className="size-4 shrink-0" aria-hidden="true" />
-              <span className="truncate">
-                {t("Search pages…")}
-              </span>
-              <span className="ml-auto hidden rounded-md border border-border/70 bg-background px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground sm:inline">
-                {t("⌘K")}
-              </span>
-            </button>
+          <header className="sticky top-0 z-20 flex h-16 items-center justify-between gap-3 border-b border-border/70 bg-background/94 px-5 backdrop-blur-xl md:px-6 xl:px-8">
+            <h1 className="min-w-0 truncate text-sm font-semibold tracking-[-0.01em] text-foreground sm:text-[15px]">
+              {t(activeItem.label)}
+            </h1>
 
-            <div className="flex shrink-0 items-center gap-2">
+            <div className="flex min-w-0 shrink items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setCommandOpen(true)}
+                className="flex h-9 w-[170px] min-w-0 items-center gap-2 rounded-lg border border-border/80 bg-background px-3 text-left text-sm text-muted-foreground shadow-[0_1px_2px_rgb(15_23_42/0.03)] transition-colors hover:bg-muted/30 sm:w-[260px] lg:w-[340px]"
+              >
+                <CommandIcon className="size-4 shrink-0" aria-hidden="true" />
+                <span className="truncate">
+                  {t("Search pages…")}
+                </span>
+                <span className="ml-auto hidden rounded-md border border-border/70 bg-background px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground lg:inline">
+                  {t("⌘K")}
+                </span>
+              </button>
+
               <div className="hidden items-center gap-2 rounded-full border border-border/70 bg-card px-3 py-1.5 text-xs sm:flex">
                 <span
                   className={[
@@ -445,7 +457,6 @@ export function ManagementShell({ client }: { client: MenderClient }) {
                       : t("Loading")}
                 </span>
               </div>
-
             </div>
           </header>
 
