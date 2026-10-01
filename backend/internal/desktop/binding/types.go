@@ -121,13 +121,18 @@ type ProviderPluginList struct {
 }
 
 type ProviderPluginInstallation struct {
-	InstallationID string `json:"installationId"`
-	PluginID       string `json:"pluginId"`
-	PackageVersion string `json:"packageVersion"`
-	SourceKind     string `json:"sourceKind"`
-	Digest         string `json:"digest"`
-	Status         string `json:"status"`
-	InstalledAt    string `json:"installedAt"`
+	InstallationID  string   `json:"installationId"`
+	PluginID        string   `json:"pluginId"`
+	PackageVersion  string   `json:"packageVersion"`
+	SourceKind      string   `json:"sourceKind"`
+	Digest          string   `json:"digest"`
+	Status          string   `json:"status"`
+	InstalledAt     string   `json:"installedAt"`
+	DisplayName     string   `json:"displayName,omitempty"`
+	Description     string   `json:"description,omitempty"`
+	ConfigVersion   int      `json:"configVersion,omitempty"`
+	ProtocolVersion uint32   `json:"protocolVersion,omitempty"`
+	Capabilities    []string `json:"capabilities,omitempty"`
 }
 
 type ProviderPluginInstallationList struct {

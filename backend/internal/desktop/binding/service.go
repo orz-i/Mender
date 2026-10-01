@@ -1420,7 +1420,7 @@ func availableProviderPluginProjection(
 func providerPluginInstallationProjection(
 	item installationdomain.Installation,
 ) ProviderPluginInstallation {
-	return ProviderPluginInstallation{
+	result := ProviderPluginInstallation{
 		InstallationID: item.ID().String(),
 		PluginID:       item.PluginID().String(),
 		PackageVersion: item.PackageVersion(),
@@ -1429,6 +1429,14 @@ func providerPluginInstallationProjection(
 		Status:         string(item.Status()),
 		InstalledAt:    item.InstalledAt().Format(timeFormat),
 	}
+	if descriptor, ok := item.VerifiedDescriptor(); ok {
+		result.DisplayName = descriptor.DisplayName
+		result.Description = descriptor.Description
+		result.ConfigVersion = descriptor.ConfigVersion
+		result.ProtocolVersion = descriptor.ProtocolVersion
+		result.Capabilities = append([]string(nil), descriptor.Capabilities...)
+	}
+	return result
 }
 
 func skillInstallationProjection(

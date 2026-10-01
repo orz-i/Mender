@@ -870,6 +870,11 @@ export interface components {
             status: "enabled" | "disabled" | "invalid";
             /** Format: date-time */
             installedAt: string;
+            displayName?: string;
+            description?: string;
+            configVersion?: number;
+            protocolVersion?: number;
+            capabilities?: string[];
         };
         SkillInstallation: {
             skillId: string;

@@ -121,6 +121,11 @@ describe("desktop Mender client", () => {
       digest: "sha256:" + "a".repeat(64),
       status: "enabled",
       installedAt: "2026-09-28T00:00:00Z",
+      displayName: "Example Echo",
+      description: "Echo Provider plugin",
+      configVersion: 2,
+      protocolVersion: 1,
+      capabilities: ["echo"],
     });
 
     await expect(
@@ -133,6 +138,11 @@ describe("desktop Mender client", () => {
       digest: "sha256:" + "a".repeat(64),
       status: "enabled",
       installedAt: "2026-09-28T00:00:00Z",
+      displayName: "Example Echo",
+      description: "Echo Provider plugin",
+      configVersion: 2,
+      protocolVersion: 1,
+      capabilities: ["echo"],
     });
     expect(Service.InstallProviderPlugin).toHaveBeenCalledWith(
       "/tmp/provider-plugin",

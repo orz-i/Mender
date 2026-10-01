@@ -222,6 +222,11 @@ export interface ProviderPluginInstallation {
     "digest": string;
     "status": string;
     "installedAt": string;
+    "displayName"?: string;
+    "description"?: string;
+    "configVersion"?: number;
+    "protocolVersion"?: number;
+    "capabilities"?: string[] | null;
 }
 
 export interface ProviderPluginInstallationList {

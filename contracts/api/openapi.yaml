@@ -1163,6 +1163,13 @@ components:
           type: string
           enum: [enabled, disabled, invalid]
         installedAt: { type: string, format: date-time }
+        displayName: { type: string }
+        description: { type: string }
+        configVersion: { type: integer, minimum: 1 }
+        protocolVersion: { type: integer, minimum: 1 }
+        capabilities:
+          type: array
+          items: { type: string }
       additionalProperties: false
     SkillInstallation:
       type: object

@@ -98,7 +98,7 @@ func (h *Handler) deleteProviderPluginInstallation(
 func pluginInstallationProjection(
 	item installationdomain.Installation,
 ) map[string]any {
-	return map[string]any{
+	result := map[string]any{
 		"installationId": item.ID().String(),
 		"pluginId":       item.PluginID().String(),
 		"packageVersion": item.PackageVersion(),
@@ -107,4 +107,12 @@ func pluginInstallationProjection(
 		"status":         string(item.Status()),
 		"installedAt":    item.InstalledAt(),
 	}
+	if descriptor, ok := item.VerifiedDescriptor(); ok {
+		result["displayName"] = descriptor.DisplayName
+		result["description"] = descriptor.Description
+		result["configVersion"] = descriptor.ConfigVersion
+		result["protocolVersion"] = descriptor.ProtocolVersion
+		result["capabilities"] = descriptor.Capabilities
+	}
+	return result
 }

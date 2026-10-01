@@ -707,6 +707,21 @@ function providerPluginInstallation(
     digest: value.digest,
     status: providerPluginInstallationStatus(value.status),
     installedAt: value.installedAt,
+    ...(value.displayName === undefined
+      ? {}
+      : { displayName: value.displayName }),
+    ...(value.description === undefined
+      ? {}
+      : { description: value.description }),
+    ...(value.configVersion === undefined
+      ? {}
+      : { configVersion: value.configVersion }),
+    ...(value.protocolVersion === undefined
+      ? {}
+      : { protocolVersion: value.protocolVersion }),
+    ...(Array.isArray(value.capabilities)
+      ? { capabilities: value.capabilities }
+      : {}),
   };
 }
 
