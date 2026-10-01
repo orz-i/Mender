@@ -1,6 +1,6 @@
 # Phase 21 Plan — Managed Profile Tunnels
 
-Status: In Progress
+Status: Complete
 
 ## Objective
 
@@ -131,3 +131,45 @@ Blocking checks:
 - readiness polling and local `/ui` integration;
 - multiple tunnels per Profile;
 - non-OpenAI tunnel providers.
+
+## Completion
+
+Phase 21 is complete.
+
+Implemented:
+
+- dedicated Tunnel bounded context with persistent OpenAI Tunnel configuration;
+- Profile optional Tunnel binding with inventory-backed selection UX;
+- Credential Reference validation and fail-closed Credential/Tunnel deletion checks;
+- Runtime-owned `tunnel-client` process supervision coupled to managed MCP server start/stop/restart/close;
+- startup rollback when Tunnel process launch fails;
+- loopback-only MCP HTTP boundary preserved;
+- Tunnel state projected through management HTTP, OpenAPI/TypeScript SDK, Wails bindings, Web, and Desktop;
+- Runtime -> Tunnels management page, Profile Tunnel selector, and Server Tunnel status;
+- English/Chinese i18n parity.
+
+### Verification evidence
+
+Repository gates completed successfully on 2026-10-01:
+
+- `pnpm check`;
+- `pnpm security:check`;
+- Go unit and race tests, including Tunnel lifecycle/rollback and persistence;
+- management HTTP tests;
+- SDK schema generation and Wails binding drift checks;
+- frontend tests: 69/69;
+- Browser QA against a fresh local Runtime: create OpenAI Tunnel -> bind Profile -> start managed MCP server -> observe Tunnel `running` projection;
+- browser network, console, page-error, and visible-text diagnostics passed.
+
+The browser lifecycle exercise used a local fake executable to verify Mender's supervision contract without requiring a live OpenAI control-plane credential. Connectivity to the real OpenAI Secure MCP Tunnel service remains an environment/integration concern rather than a repository gate.
+
+### V1 operational flow
+
+1. Install OpenAI `tunnel-client` (for example on macOS with `brew install openai/tools/tunnel-client`).
+2. Put the OpenAI tunnel runtime API key in Mender's Credential inventory.
+3. Create Runtime -> Tunnels -> OpenAI Tunnel with the OpenAI Tunnel ID and Credential.
+4. Open Profiles -> Manage and select that Tunnel.
+5. Start the Profile from Servers.
+6. Mender keeps the MCP server on loopback and supervises `tunnel-client` for the same Server lifetime.
+
+OpenAI Secure MCP Tunnel does not create a general public MCP URL. It provides the private MCP server to supported OpenAI surfaces through the OpenAI tunnel service.
