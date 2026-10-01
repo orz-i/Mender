@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
+	tunneldomain "github.com/orz-i/Mender/backend/internal/tunnel/domain"
 )
 
 // AddBinding returns a new Profile with one additional ToolBinding.
@@ -16,12 +17,50 @@ func (p Profile) AddBinding(binding ToolBinding) (Profile, error) {
 	}
 	bindings := p.Bindings()
 	bindings = append(bindings, binding)
-	return NewProfileWithBindings(p.id, p.slug, p.displayName, p.mode, bindings)
+	return NewProfileWithBindingsAndTunnel(
+		p.id,
+		p.slug,
+		p.displayName,
+		p.mode,
+		p.tunnelID,
+		bindings,
+	)
 }
 
 // ReplaceBindings returns the same Profile identity with an exact ToolBinding set.
 func (p Profile) ReplaceBindings(bindings []ToolBinding) (Profile, error) {
-	return NewProfileWithBindings(p.id, p.slug, p.displayName, p.mode, bindings)
+	return NewProfileWithBindingsAndTunnel(
+		p.id,
+		p.slug,
+		p.displayName,
+		p.mode,
+		p.tunnelID,
+		bindings,
+	)
+}
+
+// SetTunnel returns the same Profile with one Tunnel binding.
+func (p Profile) SetTunnel(tunnelID tunneldomain.TunnelID) (Profile, error) {
+	return NewProfileWithBindingsAndTunnel(
+		p.id,
+		p.slug,
+		p.displayName,
+		p.mode,
+		tunnelID,
+		p.bindings,
+	)
+}
+
+// ClearTunnel returns the same Profile with no Tunnel binding.
+func (p Profile) ClearTunnel() (Profile, error) {
+	return NewProfileWithBindingsAndTunnel(
+		p.id,
+		p.slug,
+		p.displayName,
+		p.mode,
+		"",
+		p.bindings,
+	)
 }
 
 // AddTool is the legacy membership mutation retained while application adapters migrate.
@@ -60,5 +99,12 @@ func (p Profile) RemoveTool(toolID catalogdomain.ToolID) (Profile, error) {
 			bindings = append(bindings, binding)
 		}
 	}
-	return NewProfileWithBindings(p.id, p.slug, p.displayName, p.mode, bindings)
+	return NewProfileWithBindingsAndTunnel(
+		p.id,
+		p.slug,
+		p.displayName,
+		p.mode,
+		p.tunnelID,
+		bindings,
+	)
 }

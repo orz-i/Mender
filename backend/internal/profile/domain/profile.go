@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
+	tunneldomain "github.com/orz-i/Mender/backend/internal/tunnel/domain"
 )
 
 // ExposureMode controls how Profile Tools are projected through MCP.
@@ -23,6 +24,7 @@ type Profile struct {
 	slug        Slug
 	displayName string
 	mode        ExposureMode
+	tunnelID    tunneldomain.TunnelID
 	bindings    []ToolBinding
 }
 
@@ -54,6 +56,25 @@ func NewProfileWithBindings(
 	mode ExposureMode,
 	bindings []ToolBinding,
 ) (Profile, error) {
+	return NewProfileWithBindingsAndTunnel(
+		id,
+		slug,
+		displayName,
+		mode,
+		"",
+		bindings,
+	)
+}
+
+// NewProfileWithBindingsAndTunnel restores a Profile including its optional Tunnel binding.
+func NewProfileWithBindingsAndTunnel(
+	id ProfileID,
+	slug Slug,
+	displayName string,
+	mode ExposureMode,
+	tunnelID tunneldomain.TunnelID,
+	bindings []ToolBinding,
+) (Profile, error) {
 	if _, err := ParseProfileID(id.String()); err != nil {
 		return Profile{}, err
 	}
@@ -73,6 +94,11 @@ func NewProfileWithBindings(
 	case ExposureDirect, ExposureDynamic, ExposureHybrid:
 	default:
 		return Profile{}, fmt.Errorf("exposure_mode: unknown mode %q", mode)
+	}
+	if tunnelID != "" {
+		if _, err := tunneldomain.ParseTunnelID(tunnelID.String()); err != nil {
+			return Profile{}, fmt.Errorf("tunnel_id: %w", err)
+		}
 	}
 
 	normalized := make([]ToolBinding, 0, len(bindings))
@@ -114,6 +140,7 @@ func NewProfileWithBindings(
 		slug:        slug,
 		displayName: displayName,
 		mode:        mode,
+		tunnelID:    tunnelID,
 		bindings:    normalized,
 	}, nil
 }
@@ -132,6 +159,10 @@ func (p Profile) DisplayName() string {
 
 func (p Profile) Mode() ExposureMode {
 	return p.mode
+}
+
+func (p Profile) TunnelID() (tunneldomain.TunnelID, bool) {
+	return p.tunnelID, p.tunnelID != ""
 }
 
 func (p Profile) Bindings() []ToolBinding {

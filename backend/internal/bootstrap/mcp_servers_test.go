@@ -8,13 +8,17 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
+	credentialapplication "github.com/orz-i/Mender/backend/internal/credential/application"
 	mcpconfigstore "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/configstore"
 	profileapplication "github.com/orz-i/Mender/backend/internal/profile/application"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
+	tunnelapplication "github.com/orz-i/Mender/backend/internal/tunnel/application"
+	tunneldomain "github.com/orz-i/Mender/backend/internal/tunnel/domain"
 )
 
 func TestManagedMCPHTTPServerLifecycle(t *testing.T) {
@@ -223,6 +227,265 @@ func TestRuntimeCloseStopsManagedMCPServers(t *testing.T) {
 	if len(runtime.ListMCPServers()) != 0 {
 		t.Fatal("managed servers remain after Runtime.Close")
 	}
+}
+
+func TestManagedMCPHTTPServerSupervisesProfileTunnel(t *testing.T) {
+	t.Setenv("MENDER_TUNNEL_RUNTIME_KEY", "runtime-secret")
+
+	ctx := context.Background()
+	runner := &fakeTunnelRunner{}
+	runtime, err := NewRuntime(ctx, RuntimeOptions{
+		DatabasePath:        filepath.Join(t.TempDir(), "mender.db"),
+		TunnelProcessRunner: runner,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = runtime.Close() })
+
+	credential, err := runtime.Credentials.CreateEnvironment.Execute(
+		ctx,
+		credentialapplication.CreateEnvironmentRequest{
+			Namespace:           "openai",
+			Name:                "tunnel-runtime",
+			DisplayName:         "OpenAI Tunnel Runtime",
+			EnvironmentVariable: "MENDER_TUNNEL_RUNTIME_KEY",
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tunnel, err := runtime.Tunnels.Create.Execute(
+		ctx,
+		tunnelapplication.CreateOpenAITunnelRequest{
+			DisplayName:          "OpenAI Work",
+			ExternalTunnelID:     "tunnel_external_work",
+			RuntimeCredentialRef: credential.Reference(),
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tunnel.Executable() != "tunnel-client" {
+		t.Fatalf("Tunnel executable = %q", tunnel.Executable())
+	}
+
+	profile, err := runtime.Profiles.Create.Execute(
+		ctx,
+		profileapplication.CreateProfileRequest{
+			Slug:        "tunneled",
+			DisplayName: "Tunneled",
+			Mode:        profiledomain.ExposureDynamic,
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile, err = runtime.Profiles.SetTunnel.Execute(
+		ctx,
+		profileapplication.SetTunnelRequest{
+			ProfileSlug: profile.Slug(),
+			TunnelID:    tunnel.ID(),
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := runtime.Tunnels.Delete.Execute(ctx, tunnel.ID()); !errors.Is(
+		err,
+		tunnelapplication.ErrTunnelInUse,
+	) {
+		t.Fatalf("Delete in-use Tunnel error = %v", err)
+	}
+	if err := runtime.Credentials.Delete.Execute(
+		ctx,
+		credential.Reference(),
+	); !errors.Is(err, credentialapplication.ErrCredentialInUse) {
+		t.Fatalf("Delete in-use Tunnel Credential error = %v", err)
+	}
+
+	instance, err := runtime.StartMCPHTTPServer(
+		ctx,
+		profile.Slug(),
+		"127.0.0.1:0",
+	)
+	if err != nil {
+		t.Fatalf("StartMCPHTTPServer() error = %v", err)
+	}
+	if instance.TunnelID != tunnel.ID().String() ||
+		instance.TunnelDisplayName != tunnel.DisplayName() ||
+		instance.TunnelProvider != string(tunneldomain.ProviderOpenAI) ||
+		instance.TunnelExternalID != tunnel.ExternalTunnelID() ||
+		instance.TunnelStatus != "running" {
+		t.Fatalf("tunneled instance = %#v", instance)
+	}
+	first := runner.processAt(t, 0)
+	if first.endpoint != instance.Endpoint || first.secret != "runtime-secret" {
+		t.Fatalf("runner start = endpoint %q secret %q", first.endpoint, first.secret)
+	}
+
+	restarted, err := runtime.RestartMCPServer(ctx, instance.ServerID)
+	if err != nil {
+		t.Fatalf("RestartMCPServer() error = %v", err)
+	}
+	if !first.stopped {
+		t.Fatal("restart did not stop original tunnel process")
+	}
+	if restarted.TunnelStatus != "running" {
+		t.Fatalf("restarted tunnel status = %q", restarted.TunnelStatus)
+	}
+	second := runner.processAt(t, 1)
+	if err := runtime.StopMCPServer(ctx, restarted.ServerID); err != nil {
+		t.Fatal(err)
+	}
+	if !second.stopped {
+		t.Fatal("stop did not stop restarted tunnel process")
+	}
+
+	profile, err = runtime.Profiles.SetTunnel.Execute(
+		ctx,
+		profileapplication.SetTunnelRequest{ProfileSlug: profile.Slug()},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := profile.TunnelID(); ok {
+		t.Fatal("Profile TunnelID remains after clear")
+	}
+	if err := runtime.Tunnels.Delete.Execute(ctx, tunnel.ID()); err != nil {
+		t.Fatalf("Delete Tunnel after clear error = %v", err)
+	}
+	if err := runtime.Credentials.Delete.Execute(ctx, credential.Reference()); err != nil {
+		t.Fatalf("Delete Tunnel Credential after Tunnel removal error = %v", err)
+	}
+}
+
+func TestManagedMCPHTTPServerRollsBackWhenTunnelStartFails(t *testing.T) {
+	t.Setenv("MENDER_TUNNEL_RUNTIME_KEY", "runtime-secret")
+
+	ctx := context.Background()
+	runner := &fakeTunnelRunner{startErr: errors.New("fake tunnel start failure")}
+	runtime, err := NewRuntime(ctx, RuntimeOptions{
+		DatabasePath:        filepath.Join(t.TempDir(), "mender.db"),
+		TunnelProcessRunner: runner,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = runtime.Close() })
+
+	credential, err := runtime.Credentials.CreateEnvironment.Execute(
+		ctx,
+		credentialapplication.CreateEnvironmentRequest{
+			Namespace:           "openai",
+			Name:                "failed-tunnel",
+			DisplayName:         "Failed Tunnel Runtime",
+			EnvironmentVariable: "MENDER_TUNNEL_RUNTIME_KEY",
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tunnel, err := runtime.Tunnels.Create.Execute(
+		ctx,
+		tunnelapplication.CreateOpenAITunnelRequest{
+			DisplayName:          "Failing Tunnel",
+			ExternalTunnelID:     "tunnel_failure",
+			RuntimeCredentialRef: credential.Reference(),
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile, err := runtime.Profiles.Create.Execute(
+		ctx,
+		profileapplication.CreateProfileRequest{
+			Slug:        "failing-tunnel",
+			DisplayName: "Failing Tunnel",
+			Mode:        profiledomain.ExposureDynamic,
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runtime.Profiles.SetTunnel.Execute(
+		ctx,
+		profileapplication.SetTunnelRequest{
+			ProfileSlug: profile.Slug(),
+			TunnelID:    tunnel.ID(),
+		},
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := runtime.StartMCPHTTPServer(
+		ctx,
+		profile.Slug(),
+		"127.0.0.1:0",
+	); err == nil || !strings.Contains(err.Error(), "fake tunnel start failure") {
+		t.Fatalf("StartMCPHTTPServer() error = %v", err)
+	}
+	if servers := runtime.ListMCPServers(); len(servers) != 0 {
+		t.Fatalf("servers after failed tunnel start = %#v", servers)
+	}
+}
+
+type fakeTunnelRunner struct {
+	mu        sync.Mutex
+	processes []*fakeTunnelProcess
+	startErr  error
+}
+
+func (r *fakeTunnelRunner) Start(
+	_ tunneldomain.Tunnel,
+	endpoint string,
+	apiKey []byte,
+) (tunnelapplication.Process, error) {
+	if r.startErr != nil {
+		return nil, r.startErr
+	}
+	process := &fakeTunnelProcess{
+		endpoint: endpoint,
+		secret:   string(apiKey),
+		done:     make(chan error),
+	}
+	r.mu.Lock()
+	r.processes = append(r.processes, process)
+	r.mu.Unlock()
+	return process, nil
+}
+
+func (r *fakeTunnelRunner) processAt(t *testing.T, index int) *fakeTunnelProcess {
+	t.Helper()
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if index >= len(r.processes) {
+		t.Fatalf("process index %d missing from %#v", index, r.processes)
+	}
+	return r.processes[index]
+}
+
+type fakeTunnelProcess struct {
+	mu       sync.Mutex
+	endpoint string
+	secret   string
+	stopped  bool
+	done     chan error
+	once     sync.Once
+}
+
+func (p *fakeTunnelProcess) Stop(context.Context) error {
+	p.mu.Lock()
+	p.stopped = true
+	p.mu.Unlock()
+	p.once.Do(func() { close(p.done) })
+	return nil
+}
+
+func (p *fakeTunnelProcess) Done() <-chan error {
+	return p.done
 }
 
 func assertManagedServerRejectsHost(

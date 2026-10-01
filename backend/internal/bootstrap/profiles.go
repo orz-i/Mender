@@ -18,6 +18,7 @@ type Profiles struct {
 	AddTool      profileapplication.AddTool
 	ReplaceTools profileapplication.ReplaceTools
 	RemoveTool   profileapplication.RemoveTool
+	SetTunnel    profileapplication.SetTunnel
 
 	store *profilesqlite.Store
 }
@@ -28,24 +29,51 @@ func NewProfiles(
 	tools profileapplication.ToolLookup,
 	credentials ...profileapplication.CredentialLookup,
 ) (*Profiles, error) {
+	var credentialLookup profileapplication.CredentialLookup
+	if len(credentials) != 0 {
+		credentialLookup = credentials[0]
+	}
+	return newProfiles(
+		ctx,
+		databasePath,
+		tools,
+		credentialLookup,
+		nil,
+	)
+}
+
+func NewProfilesWithTunnelLookup(
+	ctx context.Context,
+	databasePath string,
+	tools profileapplication.ToolLookup,
+	credentials profileapplication.CredentialLookup,
+	tunnels profileapplication.TunnelLookup,
+) (*Profiles, error) {
+	return newProfiles(ctx, databasePath, tools, credentials, tunnels)
+}
+
+func newProfiles(
+	ctx context.Context,
+	databasePath string,
+	tools profileapplication.ToolLookup,
+	credentials profileapplication.CredentialLookup,
+	tunnels profileapplication.TunnelLookup,
+) (*Profiles, error) {
 	store, err := profilesqlite.Open(ctx, databasePath)
 	if err != nil {
 		return nil, fmt.Errorf("compose profiles: %w", err)
 	}
 	ids := profileidentity.NewGenerator()
-	var credentialLookup profileapplication.CredentialLookup
-	if len(credentials) != 0 {
-		credentialLookup = credentials[0]
-	}
 
 	return &Profiles{
 		Create:       profileapplication.NewCreateProfile(store, ids),
 		Get:          profileapplication.NewGetProfile(store),
 		GetByID:      profileapplication.NewGetProfileByID(store),
 		List:         profileapplication.NewListProfiles(store),
-		AddTool:      profileapplication.NewAddTool(store, tools, credentialLookup),
-		ReplaceTools: profileapplication.NewReplaceTools(store, tools, credentialLookup),
+		AddTool:      profileapplication.NewAddTool(store, tools, credentials),
+		ReplaceTools: profileapplication.NewReplaceTools(store, tools, credentials),
 		RemoveTool:   profileapplication.NewRemoveTool(store),
+		SetTunnel:    profileapplication.NewSetTunnel(store, tunnels),
 		store:        store,
 	}, nil
 }

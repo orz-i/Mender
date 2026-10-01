@@ -446,11 +446,15 @@ func profileProjection(profile profiledomain.Profile) map[string]any {
 			"credentialRefs":        credentialReferenceStrings(binding.CredentialRefs()),
 		})
 	}
-	return map[string]any{
+	result := map[string]any{
 		"profileId":   profile.ID().String(),
 		"slug":        profile.Slug().String(),
 		"displayName": profile.DisplayName(),
 		"mode":        string(profile.Mode()),
 		"tools":       tools,
 	}
+	if tunnelID, ok := profile.TunnelID(); ok {
+		result["tunnelId"] = tunnelID.String()
+	}
+	return result
 }

@@ -29,6 +29,8 @@ import (
 	providerexternal "github.com/orz-i/Mender/backend/internal/providerplugin/external"
 	installationlocalfs "github.com/orz-i/Mender/backend/internal/providerplugin/installation/infrastructure/localfs"
 	installationsqlite "github.com/orz-i/Mender/backend/internal/providerplugin/installation/infrastructure/sqlite"
+	tunnelapplication "github.com/orz-i/Mender/backend/internal/tunnel/application"
+	tunnelprocess "github.com/orz-i/Mender/backend/internal/tunnel/infrastructure/process"
 )
 
 // RuntimeOptions configures the shared local execution runtime.
@@ -41,6 +43,7 @@ type RuntimeOptions struct {
 	ExecutionGuard        invocationapplication.ExecutionGuard
 	BindingExecutionGuard invocationapplication.BindingExecutionGuard
 	InvocationObserver    invocationapplication.InvocationObserver
+	TunnelProcessRunner   tunnelapplication.ProcessRunner
 }
 
 // Runtime composes Catalog, Profile persistence, Provider config persistence,
@@ -49,6 +52,7 @@ type Runtime struct {
 	Catalog     *Catalog
 	Credentials *Credentials
 	Profiles    *Profiles
+	Tunnels     *Tunnels
 	Policy      *Policies
 	Skills      *Skills
 	InvokeTool  invocationapplication.InvokeTool
@@ -93,11 +97,36 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		return nil, fmt.Errorf("compose runtime: credentials: %w", err)
 	}
 
-	profiles, err := NewProfiles(
+	tunnelRunner := options.TunnelProcessRunner
+	if tunnelRunner == nil {
+		tunnelRunner = tunnelprocess.Runner{}
+	}
+	tunnels, err := NewTunnels(
+		ctx,
+		options.DatabasePath,
+		profileCredentialLookup{get: credentials.Get},
+		credentials.Resolver,
+		tunnelRunner,
+	)
+	if err != nil {
+		_ = credentials.Close()
+		_ = auditStore.Close()
+		_ = catalog.Close()
+		return nil, fmt.Errorf("compose runtime: tunnels: %w", err)
+	}
+	tunnelsOwned := true
+	defer func() {
+		if tunnelsOwned {
+			_ = tunnels.Close()
+		}
+	}()
+
+	profiles, err := NewProfilesWithTunnelLookup(
 		ctx,
 		options.DatabasePath,
 		catalog.store,
 		profileCredentialLookup{get: credentials.Get},
+		profileTunnelLookup{get: tunnels.Get},
 	)
 	if err != nil {
 		_ = credentials.Close()
@@ -105,6 +134,10 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		_ = catalog.Close()
 		return nil, fmt.Errorf("compose runtime: profiles: %w", err)
 	}
+	tunnels.Delete = tunnelapplication.NewDeleteTunnel(
+		tunnels.store,
+		runtimeTunnelUsageChecker{profiles: profiles},
+	)
 
 	policies, err := NewPolicies(ctx, options.DatabasePath, catalog, profiles)
 	if err != nil {
@@ -235,6 +268,7 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		credentials.secrets,
 		runtimeCredentialUsageChecker{
 			profiles: profiles,
+			tunnels:  tunnels,
 			configs:  providerConfigs,
 		},
 	)
@@ -320,10 +354,12 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		options.DefaultTimeout,
 	)
 
+	tunnelsOwned = false
 	return &Runtime{
 		Catalog:             catalog,
 		Credentials:         credentials,
 		Profiles:            profiles,
+		Tunnels:             tunnels,
 		Policy:              policies,
 		Skills:              skills,
 		InvokeTool:          invokeTool,
@@ -415,6 +451,7 @@ func (r *Runtime) Close() error {
 		r.mcpConfigs.Close(),
 		r.Policy.Close(),
 		r.Profiles.Close(),
+		r.Tunnels.Close(),
 		r.Credentials.Close(),
 		r.audit.Close(),
 		r.Catalog.Close(),

@@ -9,6 +9,7 @@ import (
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	profileapplication "github.com/orz-i/Mender/backend/internal/profile/application"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
+	tunneldomain "github.com/orz-i/Mender/backend/internal/tunnel/domain"
 )
 
 func TestProfileRoundTripAndMembershipPersistence(t *testing.T) {
@@ -28,11 +29,13 @@ func TestProfileRoundTripAndMembershipPersistence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	profile, err := profiledomain.NewProfileWithBindings(
+	tunnelID, _ := tunneldomain.ParseTunnelID("tun_00000000000000000000000000000001")
+	profile, err := profiledomain.NewProfileWithBindingsAndTunnel(
 		id,
 		slug,
 		"Default",
 		profiledomain.ExposureHybrid,
+		tunnelID,
 		[]profiledomain.ToolBinding{firstBinding, secondBinding},
 	)
 	if err != nil {
@@ -46,8 +49,10 @@ func TestProfileRoundTripAndMembershipPersistence(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetProfileByID() error = %v", err)
 	}
-	if loadedByID.Slug() != slug || len(loadedByID.Bindings()) != 2 {
-		t.Fatalf("GetProfileByID() = %+v", loadedByID.Bindings())
+	loadedTunnelID, hasTunnel := loadedByID.TunnelID()
+	if loadedByID.Slug() != slug || len(loadedByID.Bindings()) != 2 ||
+		!hasTunnel || loadedTunnelID != tunnelID {
+		t.Fatalf("GetProfileByID() = %+v, tunnel = %q", loadedByID.Bindings(), loadedTunnelID)
 	}
 
 	loaded, err := store.GetProfileBySlug(context.Background(), slug)

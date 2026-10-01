@@ -23,6 +23,7 @@ import type {
   SystemStatus,
   ToolDetail,
   ToolSummary,
+  Tunnel,
 } from "@mender/sdk";
 
 import {
@@ -51,6 +52,7 @@ import {
   type SystemStatus as BindingSystemStatus,
   type ToolDetail as BindingToolDetail,
   type ToolSummary as BindingToolSummary,
+  type Tunnel as BindingTunnel,
 } from "../bindings/github.com/orz-i/Mender/backend/internal/desktop/binding";
 
 export async function installDesktopProviderPlugin(
@@ -346,6 +348,30 @@ export function createDesktopMenderClient(): MenderClient {
 
     async removeProfileTool(slug, toolId) {
       return profile(await Service.RemoveProfileTool(slug, toolId));
+    },
+
+    async setProfileTunnel(slug, body) {
+      return profile(await Service.SetProfileTunnel(slug, body.tunnelId));
+    },
+
+    async listTunnels() {
+      const result = await Service.ListTunnels();
+      return { tunnels: (result.tunnels ?? []).map(tunnel) };
+    },
+
+    async createOpenAITunnel(body) {
+      return tunnel(
+        await Service.CreateOpenAITunnel(
+          body.displayName,
+          body.externalTunnelId,
+          body.runtimeCredentialRef,
+          body.executable ?? "",
+        ),
+      );
+    },
+
+    async deleteTunnel(tunnelId) {
+      await Service.DeleteTunnel(tunnelId);
     },
 
     async listMCPServers() {
@@ -1000,6 +1026,7 @@ function profile(value: BindingProfile): Profile {
     slug: value.slug,
     displayName: value.displayName,
     mode,
+    ...(value.tunnelId === undefined ? {} : { tunnelId: value.tunnelId }),
     tools: (value.tools ?? []).map((tool) => ({
       toolId: tool.toolId,
       direct: tool.direct,
@@ -1078,7 +1105,45 @@ function mcpServerInstance(
     endpoint: value.endpoint,
     status: "running",
     startedAt: value.startedAt,
+    ...(value.tunnelId === undefined ? {} : { tunnelId: value.tunnelId }),
+    ...(value.tunnelDisplayName === undefined
+      ? {}
+      : { tunnelDisplayName: value.tunnelDisplayName }),
+    ...(value.tunnelProvider === undefined
+      ? {}
+      : { tunnelProvider: tunnelProvider(value.tunnelProvider) }),
+    ...(value.tunnelExternalId === undefined
+      ? {}
+      : { tunnelExternalId: value.tunnelExternalId }),
+    ...(value.tunnelStatus === undefined
+      ? {}
+      : { tunnelStatus: tunnelStatus(value.tunnelStatus) }),
   };
+}
+
+function tunnel(value: BindingTunnel): Tunnel {
+  return {
+    tunnelId: value.tunnelId,
+    displayName: value.displayName,
+    provider: tunnelProvider(value.provider),
+    externalTunnelId: value.externalTunnelId,
+    runtimeCredentialRef: value.runtimeCredentialRef,
+    executable: value.executable,
+  };
+}
+
+function tunnelProvider(value: string): "openai" {
+  if (value === "openai") {
+    return value;
+  }
+  throw new MenderClientInvariantError("Unsupported Tunnel provider: " + value);
+}
+
+function tunnelStatus(value: string): "running" | "exited" {
+  if (value === "running" || value === "exited") {
+    return value;
+  }
+  throw new MenderClientInvariantError("Unsupported Tunnel status: " + value);
 }
 
 function auditRecord(value: BindingAuditRecord): AuditRecord {

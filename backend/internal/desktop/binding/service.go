@@ -26,6 +26,8 @@ import (
 	installationdomain "github.com/orz-i/Mender/backend/internal/providerplugin/installation/domain"
 	skillapplication "github.com/orz-i/Mender/backend/internal/skill/application"
 	skilldomain "github.com/orz-i/Mender/backend/internal/skill/domain"
+	tunnelapplication "github.com/orz-i/Mender/backend/internal/tunnel/application"
+	tunneldomain "github.com/orz-i/Mender/backend/internal/tunnel/domain"
 )
 
 const (
@@ -1201,6 +1203,76 @@ func (s *Service) RemoveProfileTool(slug string, toolID string) (Profile, error)
 	return profileProjection(profile), nil
 }
 
+func (s *Service) SetProfileTunnel(slug string, tunnelID string) (Profile, error) {
+	profileSlug, err := profiledomain.NewSlug(slug)
+	if err != nil {
+		return Profile{}, err
+	}
+	var id tunneldomain.TunnelID
+	if tunnelID != "" {
+		id, err = tunneldomain.ParseTunnelID(tunnelID)
+		if err != nil {
+			return Profile{}, err
+		}
+	}
+	profile, err := s.runtime.Profiles.SetTunnel.Execute(
+		s.ctx,
+		profileapplication.SetTunnelRequest{
+			ProfileSlug: profileSlug,
+			TunnelID:    id,
+		},
+	)
+	if err != nil {
+		return Profile{}, err
+	}
+	return profileProjection(profile), nil
+}
+
+func (s *Service) ListTunnels() (TunnelList, error) {
+	items, err := s.runtime.Tunnels.List.Execute(s.ctx)
+	if err != nil {
+		return TunnelList{}, err
+	}
+	tunnels := make([]Tunnel, 0, len(items))
+	for _, item := range items {
+		tunnels = append(tunnels, tunnelProjection(item))
+	}
+	return TunnelList{Tunnels: tunnels}, nil
+}
+
+func (s *Service) CreateOpenAITunnel(
+	displayName string,
+	externalTunnelID string,
+	runtimeCredentialRef string,
+	executable string,
+) (Tunnel, error) {
+	ref, err := credentialdomain.ParseReference(runtimeCredentialRef)
+	if err != nil {
+		return Tunnel{}, err
+	}
+	item, err := s.runtime.Tunnels.Create.Execute(
+		s.ctx,
+		tunnelapplication.CreateOpenAITunnelRequest{
+			DisplayName:          displayName,
+			ExternalTunnelID:     externalTunnelID,
+			RuntimeCredentialRef: ref,
+			Executable:           executable,
+		},
+	)
+	if err != nil {
+		return Tunnel{}, err
+	}
+	return tunnelProjection(item), nil
+}
+
+func (s *Service) DeleteTunnel(tunnelID string) error {
+	id, err := tunneldomain.ParseTunnelID(tunnelID)
+	if err != nil {
+		return err
+	}
+	return s.runtime.Tunnels.Delete.Execute(s.ctx, id)
+}
+
 func (s *Service) ListAudit(limit int) (AuditList, error) {
 	if limit == 0 {
 		limit = defaultAuditLimit
@@ -1640,13 +1712,18 @@ func mcpServerProjection(
 	instance bootstrap.MCPServerInstance,
 ) MCPServerInstance {
 	return MCPServerInstance{
-		ServerID:  instance.ServerID,
-		Profile:   instance.Profile,
-		Transport: instance.Transport,
-		Address:   instance.Address,
-		Endpoint:  instance.Endpoint,
-		Status:    instance.Status,
-		StartedAt: instance.StartedAt.Format(timeFormat),
+		ServerID:          instance.ServerID,
+		Profile:           instance.Profile,
+		Transport:         instance.Transport,
+		Address:           instance.Address,
+		Endpoint:          instance.Endpoint,
+		Status:            instance.Status,
+		StartedAt:         instance.StartedAt.Format(timeFormat),
+		TunnelID:          instance.TunnelID,
+		TunnelDisplayName: instance.TunnelDisplayName,
+		TunnelProvider:    instance.TunnelProvider,
+		TunnelExternalID:  instance.TunnelExternalID,
+		TunnelStatus:      instance.TunnelStatus,
 	}
 }
 
@@ -1717,12 +1794,27 @@ func profileProjection(profile profiledomain.Profile) Profile {
 			CredentialRefs:        credentialReferenceStrings(binding.CredentialRefs()),
 		})
 	}
-	return Profile{
+	result := Profile{
 		ProfileID:   profile.ID().String(),
 		Slug:        profile.Slug().String(),
 		DisplayName: profile.DisplayName(),
 		Mode:        string(profile.Mode()),
 		Tools:       tools,
+	}
+	if tunnelID, ok := profile.TunnelID(); ok {
+		result.TunnelID = tunnelID.String()
+	}
+	return result
+}
+
+func tunnelProjection(item tunneldomain.Tunnel) Tunnel {
+	return Tunnel{
+		TunnelID:             item.ID().String(),
+		DisplayName:          item.DisplayName(),
+		Provider:             string(item.Provider()),
+		ExternalTunnelID:     item.ExternalTunnelID(),
+		RuntimeCredentialRef: item.RuntimeCredentialRef().String(),
+		Executable:           item.Executable(),
 	}
 }
 

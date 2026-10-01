@@ -81,6 +81,136 @@ func TestProviderPluginInstallationManagementRejectsServerPathInstall(t *testing
 	)
 }
 
+func TestTunnelManagementAPI(t *testing.T) {
+	t.Parallel()
+
+	runtime, err := bootstrap.NewRuntime(
+		context.Background(),
+		bootstrap.RuntimeOptions{
+			DatabasePath: filepath.Join(t.TempDir(), "mender.db"),
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = runtime.Close() })
+
+	server := httptest.NewServer(New(runtime))
+	t.Cleanup(server.Close)
+
+	requestJSON(
+		t,
+		server.Client(),
+		http.MethodPost,
+		server.URL+"/api/v1/credentials/environment",
+		map[string]any{
+			"namespace":           "openai",
+			"name":                "tunnel-runtime",
+			"displayName":         "OpenAI Tunnel Runtime",
+			"environmentVariable": "OPENAI_TUNNEL_RUNTIME_KEY",
+		},
+		http.StatusCreated,
+	)
+
+	created := requestJSON(
+		t,
+		server.Client(),
+		http.MethodPost,
+		server.URL+"/api/v1/tunnels/openai",
+		map[string]any{
+			"displayName":          "OpenAI Work",
+			"externalTunnelId":     "tunnel_external_work",
+			"runtimeCredentialRef": "credential://openai/tunnel-runtime",
+		},
+		http.StatusCreated,
+	)
+	tunnelID, _ := created["tunnelId"].(string)
+	if tunnelID == "" ||
+		created["provider"] != "openai" ||
+		created["executable"] != "tunnel-client" {
+		t.Fatalf("created Tunnel = %#v", created)
+	}
+	if _, ok := created["secret"]; ok {
+		t.Fatalf("Tunnel response leaked secret = %#v", created)
+	}
+
+	listed := requestJSON(
+		t,
+		server.Client(),
+		http.MethodGet,
+		server.URL+"/api/v1/tunnels",
+		nil,
+		http.StatusOK,
+	)
+	items, ok := listed["tunnels"].([]any)
+	if !ok || len(items) != 1 {
+		t.Fatalf("Tunnel list = %#v", listed)
+	}
+
+	requestJSON(
+		t,
+		server.Client(),
+		http.MethodPost,
+		server.URL+"/api/v1/profiles",
+		map[string]any{
+			"slug":        "external",
+			"displayName": "External",
+			"mode":        "dynamic",
+		},
+		http.StatusCreated,
+	)
+	profile := requestJSON(
+		t,
+		server.Client(),
+		http.MethodPut,
+		server.URL+"/api/v1/profiles/external/tunnel",
+		map[string]any{"tunnelId": tunnelID},
+		http.StatusOK,
+	)
+	if profile["tunnelId"] != tunnelID {
+		t.Fatalf("Profile Tunnel binding = %#v", profile)
+	}
+
+	conflict := requestJSON(
+		t,
+		server.Client(),
+		http.MethodDelete,
+		server.URL+"/api/v1/tunnels/"+tunnelID,
+		nil,
+		http.StatusConflict,
+	)
+	if conflict["code"] != "conflict" {
+		t.Fatalf("delete in-use Tunnel response = %#v", conflict)
+	}
+
+	cleared := requestJSON(
+		t,
+		server.Client(),
+		http.MethodPut,
+		server.URL+"/api/v1/profiles/external/tunnel",
+		map[string]any{"tunnelId": ""},
+		http.StatusOK,
+	)
+	if _, ok := cleared["tunnelId"]; ok {
+		t.Fatalf("cleared Profile still has tunnelId = %#v", cleared)
+	}
+
+	requestNoContent(
+		t,
+		server.Client(),
+		http.MethodDelete,
+		server.URL+"/api/v1/tunnels/"+tunnelID,
+		http.StatusNoContent,
+	)
+	requestNoContent(
+		t,
+		server.Client(),
+		http.MethodDelete,
+		server.URL+"/api/v1/credentials/openai/tunnel-runtime",
+		http.StatusNoContent,
+	)
+}
+
 func TestManagementAPIEndToEnd(t *testing.T) {
 	t.Parallel()
 

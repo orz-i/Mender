@@ -454,6 +454,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/profiles/{slug}/tunnel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["setProfileTunnel"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tunnels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listTunnels"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tunnels/openai": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["createOpenAITunnel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tunnels/{tunnelId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["deleteTunnel"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/mcp/servers": {
         parameters: {
             query?: never;
@@ -1136,7 +1200,30 @@ export interface components {
             displayName: string;
             /** @enum {string} */
             mode: "direct" | "dynamic" | "hybrid";
+            tunnelId?: string;
             tools: components["schemas"]["ProfileTool"][];
+        };
+        SetProfileTunnelRequest: {
+            /** @description Mender Tunnel ID. Send an empty string to clear the binding. */
+            tunnelId: string;
+        };
+        CreateOpenAITunnelRequest: {
+            displayName: string;
+            /** @description OpenAI Secure MCP Tunnel ID. */
+            externalTunnelId: string;
+            /** @description Mender Credential Reference containing the OpenAI tunnel runtime API key. */
+            runtimeCredentialRef: string;
+            /** @description Optional tunnel-client executable path or name. Defaults to tunnel-client. */
+            executable?: string;
+        };
+        Tunnel: {
+            tunnelId: string;
+            displayName: string;
+            /** @enum {string} */
+            provider: "openai";
+            externalTunnelId: string;
+            runtimeCredentialRef: string;
+            executable: string;
         };
         StartMCPServerRequest: {
             profile: string;
@@ -1155,6 +1242,13 @@ export interface components {
             status: "running";
             /** Format: date-time */
             startedAt: string;
+            tunnelId?: string;
+            tunnelDisplayName?: string;
+            /** @enum {string} */
+            tunnelProvider?: "openai";
+            tunnelExternalId?: string;
+            /** @enum {string} */
+            tunnelStatus?: "running" | "exited";
         };
         AuditRecord: {
             invocationId: string;
@@ -2109,6 +2203,110 @@ export interface operations {
             };
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    setProfileTunnel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: components["parameters"]["ProfileSlug"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetProfileTunnelRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated Profile Tunnel binding */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Profile"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listTunnels: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tunnel configurations */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        tunnels: components["schemas"]["Tunnel"][];
+                    };
+                };
+            };
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    createOpenAITunnel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateOpenAITunnelRequest"];
+            };
+        };
+        responses: {
+            /** @description OpenAI Tunnel configuration created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Tunnel"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    deleteTunnel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tunnelId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tunnel configuration deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
     listMCPServers: {

@@ -15,6 +15,11 @@ export type ToolSummary = components["schemas"]["ToolSummary"];
 export type ToolDetail = components["schemas"]["ToolDetail"];
 export type InvocationResult = components["schemas"]["InvocationResult"];
 export type Profile = components["schemas"]["Profile"];
+export type Tunnel = components["schemas"]["Tunnel"];
+export type CreateOpenAITunnelRequest =
+  components["schemas"]["CreateOpenAITunnelRequest"];
+export type SetProfileTunnelRequest =
+  components["schemas"]["SetProfileTunnelRequest"];
 export type AuditRecord = components["schemas"]["AuditRecord"];
 export type SystemStatus = components["schemas"]["SystemStatus"];
 export type PolicyStatus = components["schemas"]["PolicyStatus"];
@@ -135,6 +140,10 @@ export interface MenderClient {
     body: ReplaceProfileToolsRequest,
   ): Promise<Profile>;
   removeProfileTool(slug: string, toolId: string): Promise<Profile>;
+  setProfileTunnel(slug: string, body: SetProfileTunnelRequest): Promise<Profile>;
+  listTunnels(): Promise<{ tunnels: Tunnel[] }>;
+  createOpenAITunnel(body: CreateOpenAITunnelRequest): Promise<Tunnel>;
+  deleteTunnel(tunnelId: string): Promise<void>;
   listMCPServers(): Promise<{ servers: MCPServerInstance[] }>;
   startMCPServer(body: StartMCPServerRequest): Promise<MCPServerInstance>;
   restartMCPServer(serverId: string): Promise<MCPServerInstance>;
@@ -433,6 +442,33 @@ export function createMenderClient(
         params: { path: { slug, toolId } },
       });
       return requireData(result);
+    },
+
+    async setProfileTunnel(slug: string, body: SetProfileTunnelRequest) {
+      const result = await client.PUT("/profiles/{slug}/tunnel", {
+        params: { path: { slug } },
+        body,
+      });
+      return requireData(result);
+    },
+
+    async listTunnels() {
+      const result = await client.GET("/tunnels");
+      return requireData(result);
+    },
+
+    async createOpenAITunnel(body: CreateOpenAITunnelRequest) {
+      const result = await client.POST("/tunnels/openai", { body });
+      return requireData(result);
+    },
+
+    async deleteTunnel(tunnelId: string) {
+      const result = await client.DELETE("/tunnels/{tunnelId}", {
+        params: { path: { tunnelId } },
+      });
+      if (!result.response.ok) {
+        throwApiError(result.error, result.response);
+      }
     },
 
     async listMCPServers() {

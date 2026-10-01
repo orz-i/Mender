@@ -81,6 +81,11 @@ export interface MCPServerInstance {
     "endpoint": string;
     "status": string;
     "startedAt": string;
+    "tunnelId"?: string;
+    "tunnelDisplayName"?: string;
+    "tunnelProvider"?: string;
+    "tunnelExternalId"?: string;
+    "tunnelStatus"?: string;
 }
 
 export interface MCPServerList {
@@ -146,6 +151,7 @@ export interface Profile {
     "slug": string;
     "displayName": string;
     "mode": string;
+    "tunnelId"?: string;
     "tools": ProfileTool[] | null;
 }
 
@@ -340,4 +346,17 @@ export interface ToolSummary {
     "name": string;
     "title": string;
     "description": string;
+}
+
+export interface Tunnel {
+    "tunnelId": string;
+    "displayName": string;
+    "provider": string;
+    "externalTunnelId": string;
+    "runtimeCredentialRef": string;
+    "executable": string;
+}
+
+export interface TunnelList {
+    "tunnels": Tunnel[] | null;
 }

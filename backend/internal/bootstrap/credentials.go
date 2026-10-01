@@ -62,6 +62,7 @@ func (c *Credentials) Close() error {
 
 type runtimeCredentialUsageChecker struct {
 	profiles *Profiles
+	tunnels  *Tunnels
 	configs  interface {
 		List(context.Context) ([]providerplugin.Configuration, error)
 	}
@@ -89,6 +90,20 @@ func (a runtimeCredentialUsageChecker) Usages(
 						),
 					})
 				}
+			}
+		}
+	}
+	if a.tunnels != nil {
+		tunnels, err := a.tunnels.List.Execute(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("credential usage: list tunnels: %w", err)
+		}
+		for _, tunnel := range tunnels {
+			if tunnel.RuntimeCredentialRef() == ref {
+				usages = append(usages, credentialapplication.Usage{
+					Kind:        "tunnel",
+					Description: fmt.Sprintf("tunnel %s", tunnel.DisplayName()),
+				})
 			}
 		}
 	}

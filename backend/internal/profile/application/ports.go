@@ -6,6 +6,7 @@ import (
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
+	tunneldomain "github.com/orz-i/Mender/backend/internal/tunnel/domain"
 )
 
 // Repository owns persistent Profile aggregates.
@@ -33,4 +34,12 @@ type CredentialLookup interface {
 		context.Context,
 		credentialdomain.Reference,
 	) (credentialdomain.Credential, error)
+}
+
+// TunnelLookup validates cross-context Tunnel references through Tunnel's boundary.
+type TunnelLookup interface {
+	GetTunnel(
+		context.Context,
+		tunneldomain.TunnelID,
+	) (tunneldomain.Tunnel, error)
 }

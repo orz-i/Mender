@@ -79,7 +79,7 @@ func (h *Handler) stopMCPServer(w http.ResponseWriter, r *http.Request) {
 }
 
 func mcpServerProjection(instance bootstrap.MCPServerInstance) map[string]any {
-	return map[string]any{
+	result := map[string]any{
 		"serverId":  instance.ServerID,
 		"profile":   instance.Profile,
 		"transport": instance.Transport,
@@ -88,4 +88,12 @@ func mcpServerProjection(instance bootstrap.MCPServerInstance) map[string]any {
 		"status":    instance.Status,
 		"startedAt": instance.StartedAt,
 	}
+	if instance.TunnelID != "" {
+		result["tunnelId"] = instance.TunnelID
+		result["tunnelDisplayName"] = instance.TunnelDisplayName
+		result["tunnelProvider"] = instance.TunnelProvider
+		result["tunnelExternalId"] = instance.TunnelExternalID
+		result["tunnelStatus"] = instance.TunnelStatus
+	}
+	return result
 }

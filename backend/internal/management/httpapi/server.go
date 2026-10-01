@@ -22,6 +22,7 @@ import (
 	providerconfigstore "github.com/orz-i/Mender/backend/internal/providerplugin/configstore"
 	installationapplication "github.com/orz-i/Mender/backend/internal/providerplugin/installation/application"
 	skillapplication "github.com/orz-i/Mender/backend/internal/skill/application"
+	tunnelapplication "github.com/orz-i/Mender/backend/internal/tunnel/application"
 )
 
 type Handler struct {
@@ -100,6 +101,11 @@ func (h *Handler) routes() {
 	h.mux.HandleFunc("POST /api/v1/profiles/{slug}/tools", h.addProfileTool)
 	h.mux.HandleFunc("PUT /api/v1/profiles/{slug}/tools", h.replaceProfileTools)
 	h.mux.HandleFunc("DELETE /api/v1/profiles/{slug}/tools/{toolId}", h.removeProfileTool)
+	h.mux.HandleFunc("PUT /api/v1/profiles/{slug}/tunnel", h.setProfileTunnel)
+
+	h.mux.HandleFunc("GET /api/v1/tunnels", h.listTunnels)
+	h.mux.HandleFunc("POST /api/v1/tunnels/openai", h.createOpenAITunnel)
+	h.mux.HandleFunc("DELETE /api/v1/tunnels/{tunnelId}", h.deleteTunnel)
 
 	h.mux.HandleFunc("GET /api/v1/mcp/servers", h.listMCPServers)
 	h.mux.HandleFunc("POST /api/v1/mcp/servers", h.startMCPServer)
@@ -202,6 +208,7 @@ func writeKnownError(w http.ResponseWriter, err error) {
 		errors.Is(err, installationapplication.ErrInstallationNotFound),
 		errors.Is(err, skillapplication.ErrInstallationNotFound),
 		errors.Is(err, skillapplication.ErrDeploymentNotFound),
+		errors.Is(err, tunnelapplication.ErrTunnelNotFound),
 		errors.Is(err, bootstrap.ErrMCPServerNotFound):
 		writeAPIError(w, http.StatusNotFound, "not_found", err)
 
@@ -223,6 +230,8 @@ func writeKnownError(w http.ResponseWriter, err error) {
 		errors.Is(err, skillapplication.ErrDeploymentTargetExists),
 		errors.Is(err, skillapplication.ErrAgentPluginTargetExists),
 		errors.Is(err, bootstrap.ErrBuiltInSkillImmutable),
+		errors.Is(err, tunnelapplication.ErrTunnelConflict),
+		errors.Is(err, tunnelapplication.ErrTunnelInUse),
 		errors.Is(err, bootstrap.ErrProviderInUse):
 		writeAPIError(w, http.StatusConflict, "conflict", err)
 

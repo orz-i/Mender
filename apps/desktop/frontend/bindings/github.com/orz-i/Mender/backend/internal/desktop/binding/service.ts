@@ -40,6 +40,10 @@ export function CreateNativeCredential($namespace: string, name: string, display
     return $Call.ByID(46061890, $namespace, name, displayName, secret);
 }
 
+export function CreateOpenAITunnel(displayName: string, externalTunnelID: string, runtimeCredentialRef: string, executable: string): $CancellablePromise<$models.Tunnel> {
+    return $Call.ByID(1567044800, displayName, externalTunnelID, runtimeCredentialRef, executable);
+}
+
 export function CreatePolicyRule(input: $models.PolicyRuleInput): $CancellablePromise<$models.PolicyRule> {
     return $Call.ByID(2018955356, input);
 }
@@ -74,6 +78,10 @@ export function DeleteProviderPluginInstallation(installationID: string): $Cance
 
 export function DeleteSkillInstallation(installationID: string): $CancellablePromise<void> {
     return $Call.ByID(4128705940, installationID);
+}
+
+export function DeleteTunnel(tunnelID: string): $CancellablePromise<void> {
+    return $Call.ByID(1992939505, tunnelID);
 }
 
 export function DeploySkill(installationID: string, targetValue: string, projectRoot: string): $CancellablePromise<$models.SkillDeployment> {
@@ -172,6 +180,10 @@ export function ListSkills(): $CancellablePromise<$models.SkillInstallationList>
     return $Call.ByID(2845482598);
 }
 
+export function ListTunnels(): $CancellablePromise<$models.TunnelList> {
+    return $Call.ByID(3666209663);
+}
+
 export function RebindProvider(providerID: string, installationID: string, config: { [_ in string]?: any } | null): $CancellablePromise<$models.ProviderMutationResponse> {
     return $Call.ByID(1790042971, providerID, installationID, config);
 }
@@ -202,6 +214,10 @@ export function SetPolicyDefault(decision: string): $CancellablePromise<$models.
 
 export function SetPolicyRuleEnabled(ruleID: string, enabled: boolean): $CancellablePromise<$models.PolicyRule> {
     return $Call.ByID(2414471985, ruleID, enabled);
+}
+
+export function SetProfileTunnel(slug: string, tunnelID: string): $CancellablePromise<$models.Profile> {
+    return $Call.ByID(1012038523, slug, tunnelID);
 }
 
 export function StartMCPServer(profile: string, address: string): $CancellablePromise<$models.MCPServerInstance> {

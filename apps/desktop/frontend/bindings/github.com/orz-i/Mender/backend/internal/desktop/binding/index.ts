@@ -46,5 +46,7 @@ export type {
     SystemStatus,
     ToolDetail,
     ToolList,
-    ToolSummary
+    ToolSummary,
+    Tunnel,
+    TunnelList
 } from "./models.js";

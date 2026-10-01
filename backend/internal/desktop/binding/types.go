@@ -253,13 +253,18 @@ type ToolList struct {
 }
 
 type MCPServerInstance struct {
-	ServerID  string `json:"serverId"`
-	Profile   string `json:"profile"`
-	Transport string `json:"transport"`
-	Address   string `json:"address"`
-	Endpoint  string `json:"endpoint"`
-	Status    string `json:"status"`
-	StartedAt string `json:"startedAt"`
+	ServerID          string `json:"serverId"`
+	Profile           string `json:"profile"`
+	Transport         string `json:"transport"`
+	Address           string `json:"address"`
+	Endpoint          string `json:"endpoint"`
+	Status            string `json:"status"`
+	StartedAt         string `json:"startedAt"`
+	TunnelID          string `json:"tunnelId,omitempty"`
+	TunnelDisplayName string `json:"tunnelDisplayName,omitempty"`
+	TunnelProvider    string `json:"tunnelProvider,omitempty"`
+	TunnelExternalID  string `json:"tunnelExternalId,omitempty"`
+	TunnelStatus      string `json:"tunnelStatus,omitempty"`
 }
 
 type MCPServerList struct {
@@ -307,7 +312,21 @@ type Profile struct {
 	Slug        string        `json:"slug"`
 	DisplayName string        `json:"displayName"`
 	Mode        string        `json:"mode"`
+	TunnelID    string        `json:"tunnelId,omitempty"`
 	Tools       []ProfileTool `json:"tools"`
+}
+
+type Tunnel struct {
+	TunnelID             string `json:"tunnelId"`
+	DisplayName          string `json:"displayName"`
+	Provider             string `json:"provider"`
+	ExternalTunnelID     string `json:"externalTunnelId"`
+	RuntimeCredentialRef string `json:"runtimeCredentialRef"`
+	Executable           string `json:"executable"`
+}
+
+type TunnelList struct {
+	Tunnels []Tunnel `json:"tunnels"`
 }
 
 type ProfileList struct {

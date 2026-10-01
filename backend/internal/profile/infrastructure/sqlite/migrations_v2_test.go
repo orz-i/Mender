@@ -82,8 +82,8 @@ func TestOpenMigratesProfileV1ToToolBindingColumns(t *testing.T) {
 	).Scan(&version); err != nil {
 		t.Fatal(err)
 	}
-	if version != 3 {
-		t.Fatalf("schema version = %d, want 3", version)
+	if version != 4 {
+		t.Fatalf("schema version = %d, want 4", version)
 	}
 
 	rows, err := store.db.QueryContext(
@@ -131,6 +131,17 @@ func TestOpenMigratesProfileV1ToToolBindingColumns(t *testing.T) {
 		if !slices.Contains(columns, expected) {
 			t.Fatalf("profile_tools columns = %v, missing %q", columns, expected)
 		}
+	}
+
+	var tunnelID string
+	if err := store.db.QueryRowContext(
+		context.Background(),
+		"SELECT tunnel_id FROM profiles WHERE slug = 'default'",
+	).Scan(&tunnelID); err != nil {
+		t.Fatal(err)
+	}
+	if tunnelID != "" {
+		t.Fatalf("migrated tunnel_id = %q, want empty", tunnelID)
 	}
 
 	slug, _ := profiledomain.NewSlug("default")

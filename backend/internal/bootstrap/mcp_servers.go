@@ -15,6 +15,7 @@ import (
 
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
+	tunnelapplication "github.com/orz-i/Mender/backend/internal/tunnel/application"
 )
 
 var (
@@ -23,13 +24,18 @@ var (
 )
 
 type MCPServerInstance struct {
-	ServerID  string
-	Profile   string
-	Transport string
-	Address   string
-	Endpoint  string
-	Status    string
-	StartedAt time.Time
+	ServerID          string
+	Profile           string
+	Transport         string
+	Address           string
+	Endpoint          string
+	Status            string
+	StartedAt         time.Time
+	TunnelID          string
+	TunnelDisplayName string
+	TunnelProvider    string
+	TunnelExternalID  string
+	TunnelStatus      string
 }
 
 type managedMCPServer struct {
@@ -37,6 +43,7 @@ type managedMCPServer struct {
 	desiredAddress string
 	server         *http.Server
 	listener       net.Listener
+	tunnelProcess  tunnelapplication.Process
 }
 
 func (r *Runtime) ListMCPServers() []MCPServerInstance {
@@ -119,6 +126,38 @@ func (r *Runtime) StartMCPHTTPServer(
 	r.mcpServersMu.Unlock()
 
 	go r.serveManagedMCPServer(serverID, managed)
+
+	if tunnelID, ok := profile.TunnelID(); ok {
+		process, tunnel, tunnelErr := r.Tunnels.Start.Execute(ctx, tunnelID, endpoint)
+		if tunnelErr != nil {
+			stopErr := r.StopMCPServer(ctx, serverID)
+			return MCPServerInstance{}, errors.Join(
+				fmt.Errorf("start MCP server: tunnel: %w", tunnelErr),
+				stopErr,
+			)
+		}
+
+		r.mcpServersMu.Lock()
+		current, stillRunning := r.mcpServers[serverID]
+		if stillRunning && current == managed {
+			managed.tunnelProcess = process
+			managed.info.TunnelID = tunnel.ID().String()
+			managed.info.TunnelDisplayName = tunnel.DisplayName()
+			managed.info.TunnelProvider = string(tunnel.Provider())
+			managed.info.TunnelExternalID = tunnel.ExternalTunnelID()
+			managed.info.TunnelStatus = "running"
+			instance = managed.info
+		}
+		r.mcpServersMu.Unlock()
+		if !stillRunning || current != managed {
+			_ = process.Stop(context.Background())
+			return MCPServerInstance{}, fmt.Errorf(
+				"start MCP server: local server stopped before tunnel attached",
+			)
+		}
+		go r.watchManagedTunnel(serverID, managed, process)
+	}
+
 	return instance, nil
 }
 
@@ -136,7 +175,9 @@ func (r *Runtime) StopMCPServer(
 	if !ok {
 		return ErrMCPServerNotFound
 	}
-	if err := shutdownHTTPServer(ctx, managed.server); err != nil {
+	tunnelErr := stopManagedTunnel(ctx, managed.tunnelProcess)
+	serverErr := shutdownHTTPServer(ctx, managed.server)
+	if err := errors.Join(tunnelErr, serverErr); err != nil {
 		return fmt.Errorf("stop MCP server %s: %w", serverID, err)
 	}
 	return nil
@@ -217,10 +258,29 @@ func (r *Runtime) serveManagedMCPServer(
 	_ = managed.server.Serve(managed.listener)
 
 	r.mcpServersMu.Lock()
-	if current, ok := r.mcpServers[serverID]; ok && current == managed {
+	current, ok := r.mcpServers[serverID]
+	if ok && current == managed {
 		delete(r.mcpServers, serverID)
 	}
 	r.mcpServersMu.Unlock()
+	if ok && current == managed {
+		_ = stopManagedTunnel(context.Background(), managed.tunnelProcess)
+	}
+}
+
+func (r *Runtime) watchManagedTunnel(
+	serverID string,
+	managed *managedMCPServer,
+	process tunnelapplication.Process,
+) {
+	<-process.Done()
+
+	r.mcpServersMu.Lock()
+	defer r.mcpServersMu.Unlock()
+	if current, ok := r.mcpServers[serverID]; ok && current == managed &&
+		managed.tunnelProcess == process {
+		managed.info.TunnelStatus = "exited"
+	}
 }
 
 func (r *Runtime) closeManagedMCPServers() error {
@@ -232,11 +292,28 @@ func (r *Runtime) closeManagedMCPServers() error {
 	r.mcpServers = make(map[string]*managedMCPServer)
 	r.mcpServersMu.Unlock()
 
-	errs := make([]error, 0, len(servers))
+	errs := make([]error, 0, len(servers)*2)
 	for _, server := range servers {
-		errs = append(errs, shutdownHTTPServer(context.Background(), server.server))
+		errs = append(
+			errs,
+			stopManagedTunnel(context.Background(), server.tunnelProcess),
+			shutdownHTTPServer(context.Background(), server.server),
+		)
 	}
 	return errors.Join(errs...)
+}
+
+func stopManagedTunnel(
+	ctx context.Context,
+	process tunnelapplication.Process,
+) error {
+	if process == nil {
+		return nil
+	}
+	if err := process.Stop(ctx); err != nil {
+		return fmt.Errorf("stop tunnel: %w", err)
+	}
+	return nil
 }
 
 func shutdownHTTPServer(ctx context.Context, server *http.Server) error {
