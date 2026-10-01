@@ -21,6 +21,7 @@ import { ProfilesPage } from "./domains/profiles/profiles-page";
 import { ProvidersPage } from "./domains/providers/providers-page";
 import { ServersPage } from "./domains/servers/servers-page";
 import { SkillsPage } from "./domains/skills/skills-page";
+import { TunnelsPage } from "./domains/tunnels/tunnels-page";
 import { useLocale } from "./i18n/i18n";
 import { ManagementShell } from "./shell/management-shell";
 
@@ -80,6 +81,7 @@ export function MenderApp({
           />
           <Route path="catalog" element={<CatalogPage client={client} />} />
           <Route path="profiles" element={<ProfilesPage client={client} />} />
+          <Route path="tunnels" element={<TunnelsPage client={client} />} />
           <Route
             path="servers"
             element={

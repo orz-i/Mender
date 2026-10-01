@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import {
   BlocksIcon,
   BookOpenIcon,
+  CableIcon,
   CommandIcon,
   KeyRoundIcon,
   LanguagesIcon,
@@ -92,6 +93,11 @@ const navigation: NavigationGroup[] = [
         to: "/profiles",
         label: "Profiles",
         icon: Layers3Icon,
+      },
+      {
+        to: "/tunnels",
+        label: "Tunnels",
+        icon: CableIcon,
       },
       {
         to: "/servers",

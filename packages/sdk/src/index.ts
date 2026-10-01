@@ -11,6 +11,7 @@ export type {
   CreateProviderRequest,
   CreateHTTPProviderRequest,
   CreateNativeCredentialRequest,
+  CreateOpenAITunnelRequest,
   CreateProfileRequest,
   CreateStdioProviderRequest,
   Credential,
@@ -28,6 +29,7 @@ export type {
   PolicyRuleInput,
   PolicyStatus,
   Profile,
+  SetProfileTunnelRequest,
   Provider,
   ProviderMutationResponse,
   ProviderPlugin,
@@ -45,6 +47,7 @@ export type {
   SystemStatus,
   ToolDetail,
   ToolSummary,
+  Tunnel,
   UpdateConfiguredProviderRequest,
   UpdateProviderRequest,
 } from "./client";

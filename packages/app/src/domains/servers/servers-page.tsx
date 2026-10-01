@@ -214,6 +214,7 @@ export function ServersPage({
                 <TableRow>
                   <TableHead>{t("Profile")}</TableHead>
                   <TableHead>{t("Status")}</TableHead>
+                  <TableHead>{t("Tunnel")}</TableHead>
                   <TableHead>{t("Endpoint")}</TableHead>
                   <TableHead>{t("Started")}</TableHead>
                   <TableHead className="text-right">{t("Actions")}</TableHead>
@@ -226,7 +227,34 @@ export function ServersPage({
                       {server.profile}
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline">{server.status}</Badge>
+                      <Badge variant="outline">{t(server.status)}</Badge>
+                    </TableCell>
+                    <TableCell>
+                      {server.tunnelId ? (
+                        <div className="flex min-w-0 flex-col gap-1">
+                          <span className="max-w-[180px] truncate text-sm font-medium">
+                            {server.tunnelDisplayName ?? t("OpenAI Tunnel")}
+                          </span>
+                          <div className="flex gap-1.5">
+                            <Badge variant="outline">{t("OpenAI")}</Badge>
+                            {server.tunnelStatus ? (
+                              <Badge
+                                variant={
+                                  server.tunnelStatus === "running"
+                                    ? "secondary"
+                                    : "destructive"
+                                }
+                              >
+                                {t(server.tunnelStatus)}
+                              </Badge>
+                            ) : null}
+                          </div>
+                        </div>
+                      ) : (
+                        <span className="text-sm text-muted-foreground">
+                          {t("Local only")}
+                        </span>
+                      )}
                     </TableCell>
                     <TableCell className="max-w-[360px] truncate font-mono text-xs">
                       {server.endpoint}
@@ -359,6 +387,14 @@ export function ServersPage({
             {selectedProfile !== null && selectedProfile.tools.length === 0 ? (
               <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-5">
                 {t("This Profile currently contains 0 Tools. The server can start, but downstream discovery will not return Provider Tools until you add Tool membership on the Profiles page and Restart it.")}
+              </div>
+            ) : null}
+
+            {selectedProfile?.tunnelId ? (
+              <div className="rounded-lg border border-border bg-muted/40 p-3 text-xs leading-5 text-muted-foreground">
+                {t(
+                  "Starting this Profile also starts its configured OpenAI Secure MCP Tunnel. The MCP server itself remains loopback-only.",
+                )}
               </div>
             ) : null}
 

@@ -1397,6 +1397,131 @@ describe("management pages", () => {
     expect(screen.queryByText("Input schema")).toBeNull();
   });
 
+  it("creates an OpenAI Tunnel from Credential inventory without raw secret input", async () => {
+    const credential = {
+      reference: "credential://openai/tunnel-runtime",
+      namespace: "openai",
+      name: "tunnel-runtime",
+      displayName: "OpenAI Tunnel Runtime",
+      source: "environment" as const,
+      environmentVariable: "OPENAI_TUNNEL_RUNTIME_KEY",
+      createdAt: "2026-10-01T00:00:00Z",
+      updatedAt: "2026-10-01T00:00:00Z",
+    };
+    const tunnel = {
+      tunnelId: "tun_00000000000000000000000000000001",
+      displayName: "OpenAI Work",
+      provider: "openai" as const,
+      externalTunnelId: "tunnel_external_work",
+      runtimeCredentialRef: credential.reference,
+      executable: "tunnel-client",
+    };
+    const listTunnels = vi
+      .fn()
+      .mockResolvedValueOnce({ tunnels: [] })
+      .mockResolvedValue({ tunnels: [tunnel] });
+    const createOpenAITunnel = vi.fn().mockResolvedValue(tunnel);
+
+    renderApp("/tunnels", {
+      listTunnels,
+      listCredentials: vi.fn().mockResolvedValue({ credentials: [credential] }),
+      createOpenAITunnel,
+    });
+
+    expect(await screen.findByText("No Tunnels")).toBeTruthy();
+    expect(
+      screen.getByText(/does not create a general public MCP URL/),
+    ).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Add tunnel" }));
+    expect(await screen.findByText("Create OpenAI Tunnel")).toBeTruthy();
+    expect(screen.queryByLabelText("Credential reference")).toBeNull();
+
+    fireEvent.change(screen.getByLabelText("Tunnel display name"), {
+      target: { value: "OpenAI Work" },
+    });
+    fireEvent.change(screen.getByLabelText("OpenAI Tunnel ID"), {
+      target: { value: "tunnel_external_work" },
+    });
+    expect(
+      screen.getByLabelText<HTMLSelectElement>("Runtime API-key Credential")
+        .value,
+    ).toBe(credential.reference);
+
+    fireEvent.click(screen.getByRole("button", { name: "Create tunnel" }));
+
+    await waitFor(() => {
+      expect(createOpenAITunnel).toHaveBeenCalledWith({
+        displayName: "OpenAI Work",
+        externalTunnelId: "tunnel_external_work",
+        runtimeCredentialRef: credential.reference,
+      });
+    });
+    expect(await screen.findByText("OpenAI Work")).toBeTruthy();
+  });
+
+  it("binds and clears a Profile Tunnel through inventory selection", async () => {
+    const profile = {
+      profileId: "prof_1",
+      slug: "default",
+      displayName: "Default",
+      mode: "hybrid" as const,
+      tools: [],
+    };
+    const tunnel = {
+      tunnelId: "tun_00000000000000000000000000000001",
+      displayName: "OpenAI Work",
+      provider: "openai" as const,
+      externalTunnelId: "tunnel_external_work",
+      runtimeCredentialRef: "credential://openai/tunnel-runtime",
+      executable: "tunnel-client",
+    };
+    const setProfileTunnel = vi
+      .fn()
+      .mockImplementation((_slug: string, body: { tunnelId: string }) =>
+        Promise.resolve(
+          body.tunnelId
+            ? { ...profile, tunnelId: body.tunnelId }
+            : { ...profile },
+        ),
+      );
+
+    renderApp("/profiles", {
+      listProfiles: vi.fn().mockResolvedValue({ profiles: [profile] }),
+      listProviders: vi.fn().mockResolvedValue({ providers: [] }),
+      listTunnels: vi.fn().mockResolvedValue({ tunnels: [tunnel] }),
+      browseTools: vi.fn().mockResolvedValue({ tools: [] }),
+      setProfileTunnel,
+    });
+
+    expect((await screen.findAllByText("Default")).length).toBeGreaterThan(0);
+    expect(screen.getByText("Local only")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Manage Default" }));
+    const tunnelSelect =
+      await screen.findByLabelText<HTMLSelectElement>("Profile tunnel");
+    expect(tunnelSelect.value).toBe("");
+
+    fireEvent.change(tunnelSelect, { target: { value: tunnel.tunnelId } });
+    await waitFor(() => {
+      expect(setProfileTunnel).toHaveBeenLastCalledWith("default", {
+        tunnelId: tunnel.tunnelId,
+      });
+    });
+    expect(
+      screen.getByLabelText<HTMLSelectElement>("Profile tunnel").value,
+    ).toBe(tunnel.tunnelId);
+
+    fireEvent.change(screen.getByLabelText("Profile tunnel"), {
+      target: { value: "" },
+    });
+    await waitFor(() => {
+      expect(setProfileTunnel).toHaveBeenLastCalledWith("default", {
+        tunnelId: "",
+      });
+    });
+  });
+
   it("manages Profile membership through a Tool picker without ToolID input", async () => {
     const profile = {
       profileId: "prof_1",
@@ -1614,6 +1739,7 @@ describe("management pages", () => {
       slug: "default",
       displayName: "Default",
       mode: "hybrid" as const,
+      tunnelId: "tun_00000000000000000000000000000001",
       tools: [{ toolId: "tool_1", direct: true }],
     };
     const started = {
@@ -1624,6 +1750,11 @@ describe("management pages", () => {
       endpoint: "http://127.0.0.1:8765/mcp",
       status: "running" as const,
       startedAt: "2026-09-26T09:00:00Z",
+      tunnelId: "tun_00000000000000000000000000000001",
+      tunnelDisplayName: "OpenAI Work",
+      tunnelProvider: "openai" as const,
+      tunnelExternalId: "tunnel_external_work",
+      tunnelStatus: "running" as const,
     };
     const restarted = {
       ...started,
@@ -1652,6 +1783,9 @@ describe("management pages", () => {
     expect(
       screen.getByLabelText<HTMLSelectElement>("Server profile").value,
     ).toBe("default");
+    expect(
+      screen.getByText(/Starting this Profile also starts/),
+    ).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Start server" }));
 
@@ -1662,6 +1796,7 @@ describe("management pages", () => {
       });
     });
     expect(await screen.findByText(started.endpoint)).toBeTruthy();
+    expect(screen.getByText("OpenAI Work")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Restart" }));
     await waitFor(() => {
@@ -2052,6 +2187,7 @@ function renderApp(
       .fn()
       .mockResolvedValue({ installations: [] }),
     listCredentials: vi.fn().mockResolvedValue({ credentials: [] }),
+    listTunnels: vi.fn().mockResolvedValue({ tunnels: [] }),
     ...client,
   } as MenderClient;
   return render(

@@ -13,6 +13,7 @@ import type {
   Profile,
   Provider,
   ToolSummary,
+  Tunnel,
 } from "@mender/sdk";
 import { Badge } from "@mender/ui/components/badge";
 import { Button } from "@mender/ui/components/button";
@@ -66,6 +67,7 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [providers, setProviders] = useState<Provider[]>([]);
   const [credentials, setCredentials] = useState<Credential[]>([]);
+  const [tunnels, setTunnels] = useState<Tunnel[]>([]);
   const [catalogTools, setCatalogTools] = useState<ToolSummary[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState("");
@@ -120,13 +122,21 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
       client.listProfiles(),
       client.listProviders(),
       client.listCredentials(),
+      client.listTunnels(),
       client.browseTools({ limit: 100 }),
     ])
-      .then(([profileResult, providerResult, credentialResult, toolResult]) => {
+      .then(([
+        profileResult,
+        providerResult,
+        credentialResult,
+        tunnelResult,
+        toolResult,
+      ]) => {
         if (active) {
           setProfiles(profileResult.profiles);
           setProviders(providerResult.providers);
           setCredentials(credentialResult.credentials);
+          setTunnels(tunnelResult.tunnels);
           setCatalogTools(toolResult.tools);
           setError("");
           setLoaded(true);
@@ -488,6 +498,27 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
     }
   }
 
+  async function setProfileTunnel(tunnelId: string) {
+    if (managedProfile === null) {
+      return;
+    }
+
+    setBusy(true);
+    setError("");
+    try {
+      const profile = await client.setProfileTunnel(managedProfile.slug, {
+        tunnelId,
+      });
+      setProfiles((current) =>
+        current.map((item) => (item.slug === profile.slug ? profile : item)),
+      );
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function removeTool(toolId: string) {
     if (managedProfile === null) {
       return;
@@ -541,6 +572,7 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
                   <TableHead>{t("Profile")}</TableHead>
                   <TableHead>{t("Mode")}</TableHead>
                   <TableHead>{t("Tools")}</TableHead>
+                  <TableHead>{t("Tunnel")}</TableHead>
                   <TableHead className="text-right">{t("Actions")}</TableHead>
                 </TableRow>
               </TableHeader>
@@ -554,6 +586,19 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
                       <Badge variant="outline">{t(profile.mode)}</Badge>
                     </TableCell>
                     <TableCell>{formatNumber(profile.tools.length)}</TableCell>
+                    <TableCell>
+                      {profile.tunnelId ? (
+                        <Badge variant="outline">
+                          {tunnels.find(
+                            (tunnel) => tunnel.tunnelId === profile.tunnelId,
+                          )?.displayName ?? t("Configured")}
+                        </Badge>
+                      ) : (
+                        <span className="text-sm text-muted-foreground">
+                          {t("Local only")}
+                        </span>
+                      )}
+                    </TableCell>
                     <TableCell className="text-right">
                       <IconButton
                         variant="outline"
@@ -688,6 +733,32 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
               <div className="grid grid-cols-2 gap-3">
                 <ReadOnlyField label="Profile" value={managedProfile.slug} />
                 <ReadOnlyField label="Mode" value={managedProfile.mode} />
+              </div>
+
+              <div className="rounded-lg border border-border bg-muted/30 p-4">
+                <Field label="Tunnel">
+                  <select
+                    aria-label={t("Profile tunnel")}
+                    value={managedProfile.tunnelId ?? ""}
+                    disabled={busy}
+                    onChange={(event) =>
+                      void setProfileTunnel(event.target.value)
+                    }
+                    className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
+                  >
+                    <option value="">{t("Local only (no Tunnel)")}</option>
+                    {tunnels.map((tunnel) => (
+                      <option key={tunnel.tunnelId} value={tunnel.tunnelId}>
+                        {tunnel.displayName} · {t("OpenAI")}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                    {t(
+                      "Select a Tunnel to make this Profile's managed MCP server reachable through that provider. Mender still binds the MCP server to loopback.",
+                    )}
+                  </p>
+                </Field>
               </div>
 
               <div className="flex items-center justify-between">
