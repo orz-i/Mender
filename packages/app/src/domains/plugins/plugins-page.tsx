@@ -1,38 +1,33 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  EyeIcon,
+  ArrowLeftIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
   PackagePlusIcon,
+  PlusIcon,
   PowerIcon,
   PowerOffIcon,
   Trash2Icon,
 } from "lucide-react";
+import { Link, useNavigate, useParams } from "react-router";
 
 import type { MenderClient } from "@mender/sdk";
 import { Badge } from "@mender/ui/components/badge";
 import { Button } from "@mender/ui/components/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@mender/ui/components/dialog";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@mender/ui/components/table";
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@mender/ui/components/card";
 
-import { formatDateTime, t } from "../../i18n/i18n";
+import { formatDateTime, formatNumber, t } from "../../i18n/i18n";
 import { errorMessage } from "../../shared/errors";
 import { IconButton } from "../../shared/icon-button";
 import { EmptyState, ErrorNotice, PageHeader } from "../../shared/page";
-import { usePagination } from "../../shared/pagination";
-import { TablePagination } from "../../shared/table-pagination";
 import {
   DataPanel,
   EmptyPanelState,
@@ -45,6 +40,7 @@ import {
   type MarketplacePlugin,
   type MarketplacePluginStatus,
   loadMarketplacePlugins,
+  marketplaceCursorPage,
   removeMarketplacePlugin,
   setMarketplacePluginEnabled,
 } from "./marketplace";
@@ -52,7 +48,8 @@ import {
 type SourceFilter = string;
 type StatusFilter = "all" | MarketplacePluginStatus;
 type KindFilter = string;
-type PluginDetailView = "overview" | "technical";
+
+const MARKETPLACE_PAGE_SIZE = 12;
 
 export function PluginsPage({
   client,
@@ -61,57 +58,16 @@ export function PluginsPage({
   client: MenderClient;
   installers?: MarketplaceInstaller[];
 }) {
-  const [plugins, setPlugins] = useState<MarketplacePlugin[]>([]);
-  const [loaded, setLoaded] = useState(false);
-  const [error, setError] = useState("");
+  const { plugins, loaded, error, setError, refresh } =
+    useMarketplacePlugins(client);
   const [busy, setBusy] = useState("");
   const [query, setQuery] = useState("");
   const [kindFilter, setKindFilter] = useState<KindFilter>("all");
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
-  const [selected, setSelected] = useState<MarketplacePlugin | null>(null);
-  const [detailView, setDetailView] =
-    useState<PluginDetailView>("overview");
-
-  const refresh = useCallback(async () => {
-    try {
-      const marketplace = await loadMarketplacePlugins(client);
-      setPlugins(marketplace);
-      setSelected((current) => {
-        if (current === null) {
-          return null;
-        }
-        return marketplace.find((item) => item.key === current.key) ?? null;
-      });
-      setError("");
-    } catch (reason) {
-      setError(errorMessage(reason));
-    } finally {
-      setLoaded(true);
-    }
-  }, [client]);
-
-  useEffect(() => {
-    let active = true;
-    void loadMarketplacePlugins(client)
-      .then((marketplace) => {
-        if (!active) {
-          return;
-        }
-        setPlugins(marketplace);
-        setError("");
-        setLoaded(true);
-      })
-      .catch((reason: unknown) => {
-        if (active) {
-          setError(errorMessage(reason));
-          setLoaded(true);
-        }
-      });
-    return () => {
-      active = false;
-    };
-  }, [client]);
+  const [cursorHistory, setCursorHistory] = useState<Array<string | null>>([
+    null,
+  ]);
 
   const kindOptions = useMemo(() => {
     const labelsByKind = new Map<string, string>();
@@ -152,10 +108,16 @@ export function PluginsPage({
     });
   }, [kindFilter, plugins, query, sourceFilter, statusFilter]);
 
-  const pagination = usePagination(visiblePlugins, {
-    initialPageSize: 10,
-    pageSizeOptions: [10, 25, 50],
-  });
+  const cursor = cursorHistory.at(-1) ?? null;
+  const page = useMemo(
+    () =>
+      marketplaceCursorPage(
+        visiblePlugins,
+        cursor,
+        MARKETPLACE_PAGE_SIZE,
+      ),
+    [cursor, visiblePlugins],
+  );
 
   async function installPlugin(installer: MarketplaceInstaller) {
     setBusy("install:" + installer.key);
@@ -169,54 +131,6 @@ export function PluginsPage({
     } finally {
       setBusy("");
     }
-  }
-
-  async function setEnabled(plugin: MarketplacePlugin, enabled: boolean) {
-    setBusy(plugin.key);
-    setError("");
-    try {
-      await setMarketplacePluginEnabled(client, plugin, enabled);
-      await refresh();
-    } catch (reason) {
-      setError(errorMessage(reason));
-    } finally {
-      setBusy("");
-    }
-  }
-
-  async function remove(plugin: MarketplacePlugin) {
-    if (
-      !window.confirm(
-        t(
-          'Remove installed plugin "{{plugin}}" {{version}}? Configured Providers will block removal.',
-          {
-            plugin: plugin.displayName,
-            version: plugin.version,
-          },
-        ),
-      )
-    ) {
-      return;
-    }
-
-    setBusy(plugin.key);
-    setError("");
-    try {
-      await removeMarketplacePlugin(client, plugin);
-      if (selected?.key === plugin.key) {
-        setSelected(null);
-      }
-      await refresh();
-    } catch (reason) {
-      setError(errorMessage(reason));
-    } finally {
-      setBusy("");
-    }
-  }
-
-  function openPlugin(plugin: MarketplacePlugin) {
-    setSelected(plugin);
-    setDetailView("overview");
   }
 
   return (
@@ -254,28 +168,38 @@ export function PluginsPage({
           <WorkbenchToolbar>
             <SearchField
               value={query}
-              onChange={setQuery}
+              onChange={(value) => {
+                setQuery(value);
+                setCursorHistory([null]);
+              }}
               label="Search plugins"
               placeholder="Search plugins…"
               className="md:min-w-64"
             />
             <FilterSelect
               value={kindFilter}
-              onValueChange={setKindFilter}
+              onValueChange={(value) => {
+                setKindFilter(value);
+                setCursorHistory([null]);
+              }}
               label="Plugin type filter"
               options={kindOptions}
             />
             <FilterSelect
               value={sourceFilter}
-              onValueChange={setSourceFilter}
+              onValueChange={(value) => {
+                setSourceFilter(value);
+                setCursorHistory([null]);
+              }}
               label="Plugin source filter"
               options={sourceOptions}
             />
             <FilterSelect
               value={statusFilter}
-              onValueChange={(value) =>
-                setStatusFilter(value as StatusFilter)
-              }
+              onValueChange={(value) => {
+                setStatusFilter(value as StatusFilter);
+                setCursorHistory([null]);
+              }}
               label="Plugin status filter"
               options={[
                 { value: "all", label: "All plugin statuses" },
@@ -293,111 +217,30 @@ export function PluginsPage({
             {t("Loading plugins…")}
           </div>
         ) : visiblePlugins.length ? (
-          <>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{t("Plugin")}</TableHead>
-                  <TableHead className="hidden md:table-cell">
-                    {t("Type")}
-                  </TableHead>
-                  <TableHead className="hidden md:table-cell">
-                    {t("Source")}
-                  </TableHead>
-                  <TableHead className="hidden md:table-cell">
-                    {t("Version")}
-                  </TableHead>
-                  <TableHead>{t("Status")}</TableHead>
-                  <TableHead className="text-right">{t("Actions")}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {pagination.items.map((plugin) => (
-                  <TableRow key={plugin.key}>
-                    <TableCell className="font-medium">
-                      {plugin.displayName}
-                    </TableCell>
-                    <TableCell className="hidden md:table-cell">
-                      {pluginKindLabel(plugin)}
-                    </TableCell>
-                    <TableCell className="hidden md:table-cell">
-                      {pluginSourceLabel(plugin)}
-                    </TableCell>
-                    <TableCell className="hidden md:table-cell">
-                      {plugin.version}
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={
-                          plugin.status === "enabled"
-                            ? "outline"
-                            : "secondary"
-                        }
-                      >
-                        {pluginStatusLabel(plugin)}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-1">
-                        <IconButton
-                          variant="ghost"
-                          label={t("View {{plugin}}", {
-                            plugin: plugin.displayName,
-                          })}
-                          onClick={() => openPlugin(plugin)}
-                        >
-                          <EyeIcon />
-                        </IconButton>
-
-                        {plugin.actions.disable ? (
-                          <IconButton
-                            variant="outline"
-                            label={t("Disable {{plugin}}", {
-                              plugin: plugin.displayName,
-                            })}
-                            disabled={busy !== ""}
-                            onClick={() => void setEnabled(plugin, false)}
-                          >
-                            <PowerOffIcon />
-                          </IconButton>
-                        ) : plugin.actions.enable ? (
-                          <IconButton
-                            variant="outline"
-                            label={t("Enable {{plugin}}", {
-                              plugin: plugin.displayName,
-                            })}
-                            disabled={busy !== ""}
-                            onClick={() => void setEnabled(plugin, true)}
-                          >
-                            <PowerIcon />
-                          </IconButton>
-                        ) : null}
-
-                        {plugin.actions.remove ? (
-                          <IconButton
-                            variant="destructive"
-                            label={t("Remove {{plugin}}", {
-                              plugin: plugin.displayName,
-                            })}
-                            disabled={busy !== ""}
-                            onClick={() => void remove(plugin)}
-                          >
-                            <Trash2Icon />
-                          </IconButton>
-                        ) : null}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-            <div className="px-4 pb-3">
-              <TablePagination
-                label="Plugin Marketplace"
-                pagination={pagination}
-              />
+          <div className="p-4">
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {page.items.map((plugin) => (
+                <PluginCard key={plugin.key} plugin={plugin} />
+              ))}
             </div>
-          </>
+            <MarketplaceCursorPagination
+              page={page}
+              canGoPrevious={cursorHistory.length > 1}
+              onPrevious={() =>
+                setCursorHistory((history) =>
+                  history.length > 1 ? history.slice(0, -1) : history,
+                )
+              }
+              onNext={() => {
+                if (page.nextCursor !== null) {
+                  setCursorHistory((history) => [
+                    ...history,
+                    page.nextCursor,
+                  ]);
+                }
+              }}
+            />
+          </div>
         ) : (
           <EmptyPanelState>
             <EmptyState
@@ -407,109 +250,201 @@ export function PluginsPage({
           </EmptyPanelState>
         )}
       </DataPanel>
+    </>
+  );
+}
 
-      <Dialog
-        open={selected !== null}
-        onOpenChange={(open) => {
-          if (!open) {
-            setSelected(null);
-            setDetailView("overview");
-          }
-        }}
-      >
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>
-              {detailView === "overview"
-                ? t("Plugin details")
-                : t("Technical details")}
-            </DialogTitle>
-            <DialogDescription>
-              {selected === null
-                ? t("Plugin package")
-                : selected.displayName}
-            </DialogDescription>
-          </DialogHeader>
+export function PluginDetailPage({ client }: { client: MenderClient }) {
+  const navigate = useNavigate();
+  const { pluginKey = "" } = useParams();
+  const { plugins, loaded, error, setError, refresh } =
+    useMarketplacePlugins(client);
+  const [busy, setBusy] = useState("");
+  const plugin = plugins.find((item) => item.key === pluginKey) ?? null;
+  const createAction = plugin?.createAction;
 
-          {selected !== null && detailView === "overview" ? (
-            <div className="flex flex-col gap-5">
-              <div className="rounded-xl border border-border/70 bg-muted/15 p-4">
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="text-base font-semibold">
-                    {selected.displayName}
-                  </p>
-                  <Badge variant="outline">
-                    {pluginKindLabel(selected)}
-                  </Badge>
-                  <Badge
-                    variant={
-                      selected.status === "enabled"
-                        ? "outline"
-                        : "secondary"
-                    }
-                  >
-                    {pluginStatusLabel(selected)}
-                  </Badge>
-                </div>
-                <p className="mt-2 text-sm leading-5 text-muted-foreground">
-                  {selected.description || t("No plugin description.")}
-                </p>
-              </div>
+  async function setEnabled(
+    current: MarketplacePlugin,
+    enabled: boolean,
+  ) {
+    setBusy(current.key);
+    setError("");
+    try {
+      await setMarketplacePluginEnabled(client, current, enabled);
+      await refresh();
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
+      setBusy("");
+    }
+  }
 
-              <div className="grid gap-3 sm:grid-cols-2">
-                <DetailField
-                  label="Type"
-                  value={pluginKindLabel(selected)}
-                />
-                <DetailField
-                  label="Source"
-                  value={pluginSourceLabel(selected)}
-                />
-                <DetailField label="Version" value={selected.version} />
-                <DetailField
-                  label="Status"
-                  value={pluginStatusLabel(selected)}
-                />
-              </div>
+  async function remove(current: MarketplacePlugin) {
+    if (
+      !window.confirm(
+        t(
+          'Remove installed plugin "{{plugin}}" {{version}}? Configured Providers will block removal.',
+          {
+            plugin: current.displayName,
+            version: current.version,
+          },
+        ),
+      )
+    ) {
+      return;
+    }
 
-              <div>
-                <p className="mb-2 text-sm font-medium">{t("Capabilities")}</p>
-                {selected.capabilities.length ? (
-                  <div className="flex flex-wrap gap-2">
-                    {selected.capabilities.map((capability) => (
-                      <Badge key={capability} variant="outline">
-                        {capability}
-                      </Badge>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    {t("No declared capabilities.")}
-                  </p>
-                )}
-              </div>
+    setBusy(current.key);
+    setError("");
+    try {
+      await removeMarketplacePlugin(client, current);
+      void navigate("/plugins", { replace: true });
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
+      setBusy("");
+    }
+  }
 
-              {selected.issue !== undefined ? (
-                <ErrorNotice
-                  message={t("Plugin issue: {{message}}", {
-                    message: selected.issue.message,
-                  })}
-                />
-              ) : null}
-
+  return (
+    <>
+      <PageHeader
+        actions={
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => void navigate("/plugins")}
+            >
+              <ArrowLeftIcon data-icon="inline-start" />
+              {t("Back")}
+            </Button>
+            {createAction !== undefined ? (
               <Button
                 type="button"
-                variant="outline"
-                onClick={() => setDetailView("technical")}
+                disabled={busy !== ""}
+                onClick={() => void navigate(createAction.href)}
               >
-                {t("View technical details")}
+                <PlusIcon data-icon="inline-start" />
+                {t(createAction.label)}
               </Button>
+            ) : null}
+            {plugin?.actions.disable ? (
+              <IconButton
+                type="button"
+                variant="outline"
+                label={t("Disable {{plugin}}", {
+                  plugin: plugin.displayName,
+                })}
+                disabled={busy !== ""}
+                onClick={() => void setEnabled(plugin, false)}
+              >
+                <PowerOffIcon />
+              </IconButton>
+            ) : plugin?.actions.enable ? (
+              <IconButton
+                type="button"
+                variant="outline"
+                label={t("Enable {{plugin}}", {
+                  plugin: plugin.displayName,
+                })}
+                disabled={busy !== ""}
+                onClick={() => void setEnabled(plugin, true)}
+              >
+                <PowerIcon />
+              </IconButton>
+            ) : null}
+            {plugin?.actions.remove ? (
+              <IconButton
+                type="button"
+                variant="destructive"
+                label={t("Remove {{plugin}}", {
+                  plugin: plugin.displayName,
+                })}
+                disabled={busy !== ""}
+                onClick={() => void remove(plugin)}
+              >
+                <Trash2Icon />
+              </IconButton>
+            ) : null}
+          </div>
+        }
+      />
+
+      {error ? <ErrorNotice message={error} /> : null}
+
+      {!loaded ? (
+        <DataPanel title="Plugin details" description="Plugin package">
+          <div className="px-4 py-12 text-center text-sm text-muted-foreground">
+            {t("Loading plugins…")}
+          </div>
+        </DataPanel>
+      ) : plugin === null ? (
+        <DataPanel title="Plugin details" description="Plugin package">
+          <EmptyPanelState>
+            <EmptyState
+              title="No matching plugins"
+              description="The requested item was not found."
+            />
+          </EmptyPanelState>
+        </DataPanel>
+      ) : (
+        <div className="flex flex-col gap-4">
+          <DataPanel
+            title={plugin.displayName}
+            description={plugin.description || t("No plugin description.")}
+          >
+            <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-4">
+              <DetailField
+                label="Type"
+                value={pluginKindLabel(plugin)}
+              />
+              <DetailField
+                label="Source"
+                value={pluginSourceLabel(plugin)}
+              />
+              <DetailField label="Version" value={plugin.version} />
+              <DetailField
+                label="Status"
+                value={pluginStatusLabel(plugin)}
+              />
             </div>
+          </DataPanel>
+
+          {plugin.issue !== undefined ? (
+            <ErrorNotice
+              message={t("Plugin issue: {{message}}", {
+                message: plugin.issue.message,
+              })}
+            />
           ) : null}
 
-          {selected !== null && detailView === "technical" ? (
-            <div className="grid gap-3 sm:grid-cols-2">
-              {selected.technicalDetails.map((detail) => (
+          <DataPanel
+            title="Capabilities"
+            description={
+              plugin.capabilities.length
+                ? undefined
+                : "No declared capabilities."
+            }
+          >
+            <div className="flex min-h-20 flex-wrap items-start gap-2 p-4">
+              {plugin.capabilities.length ? (
+                plugin.capabilities.map((capability) => (
+                  <Badge key={capability} variant="outline">
+                    {capability}
+                  </Badge>
+                ))
+              ) : (
+                <span className="text-sm text-muted-foreground">
+                  {t("No declared capabilities.")}
+                </span>
+              )}
+            </div>
+          </DataPanel>
+
+          <DataPanel title="Technical details">
+            <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
+              {plugin.technicalDetails.map((detail) => (
                 <DetailField
                   key={detail.label}
                   label={detail.label}
@@ -522,22 +457,177 @@ export function PluginsPage({
                 />
               ))}
             </div>
-          ) : null}
-
-          <DialogFooter showCloseButton>
-            {detailView === "technical" ? (
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setDetailView("overview")}
-              >
-                {t("Back")}
-              </Button>
-            ) : null}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </DataPanel>
+        </div>
+      )}
     </>
+  );
+}
+
+function useMarketplacePlugins(client: MenderClient) {
+  const [plugins, setPlugins] = useState<MarketplacePlugin[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const [error, setError] = useState("");
+
+  const refresh = useCallback(async () => {
+    try {
+      const marketplace = await loadMarketplacePlugins(client);
+      setPlugins(marketplace);
+      setError("");
+      return marketplace;
+    } catch (reason) {
+      setError(errorMessage(reason));
+      return null;
+    } finally {
+      setLoaded(true);
+    }
+  }, [client]);
+
+  useEffect(() => {
+    let active = true;
+    void loadMarketplacePlugins(client)
+      .then((marketplace) => {
+        if (!active) {
+          return;
+        }
+        setPlugins(marketplace);
+        setError("");
+        setLoaded(true);
+      })
+      .catch((reason: unknown) => {
+        if (active) {
+          setError(errorMessage(reason));
+          setLoaded(true);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [client]);
+
+  return {
+    plugins,
+    loaded,
+    error,
+    setError,
+    refresh,
+  };
+}
+
+function PluginCard({ plugin }: { plugin: MarketplacePlugin }) {
+  return (
+    <Link
+      to={`/plugins/${encodeURIComponent(plugin.key)}`}
+      aria-label={t("View {{plugin}}", {
+        plugin: plugin.displayName,
+      })}
+      className="group block rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+    >
+      <Card className="h-full transition-shadow group-hover:shadow-md">
+        <CardHeader>
+          <CardTitle>{plugin.displayName}</CardTitle>
+          <CardAction>
+            <Badge
+              variant={
+                plugin.status === "enabled" ? "outline" : "secondary"
+              }
+            >
+              {pluginStatusLabel(plugin)}
+            </Badge>
+          </CardAction>
+          <CardDescription className="min-h-[3.75rem] line-clamp-3">
+            {plugin.description || t("No plugin description.")}
+          </CardDescription>
+        </CardHeader>
+
+        <CardContent className="flex flex-col gap-3">
+          <div className="flex flex-wrap gap-2">
+            <Badge variant="secondary">{pluginKindLabel(plugin)}</Badge>
+            <Badge variant="outline">{pluginSourceLabel(plugin)}</Badge>
+          </div>
+          {plugin.capabilities.length ? (
+            <div className="flex min-h-6 flex-wrap items-center gap-1.5">
+              {plugin.capabilities.slice(0, 3).map((capability) => (
+                <Badge key={capability} variant="ghost">
+                  {capability}
+                </Badge>
+              ))}
+              {plugin.capabilities.length > 3 ? (
+                <span className="text-xs text-muted-foreground">
+                  +{formatNumber(plugin.capabilities.length - 3)}
+                </span>
+              ) : null}
+            </div>
+          ) : (
+            <div className="min-h-6 text-xs text-muted-foreground">
+              {t("No declared capabilities.")}
+            </div>
+          )}
+        </CardContent>
+
+        <CardFooter className="justify-between gap-3">
+          <span className="text-xs text-muted-foreground">
+            {t("Version")}
+          </span>
+          <span className="truncate font-mono text-xs">
+            {plugin.version}
+          </span>
+        </CardFooter>
+      </Card>
+    </Link>
+  );
+}
+
+function MarketplaceCursorPagination({
+  page,
+  canGoPrevious,
+  onPrevious,
+  onNext,
+}: {
+  page: ReturnType<typeof marketplaceCursorPage>;
+  canGoPrevious: boolean;
+  onPrevious: () => void;
+  onNext: () => void;
+}) {
+  return (
+    <nav
+      aria-label={t("{{label}} pagination", {
+        label: t("Plugin Marketplace"),
+      })}
+      className="mt-4 flex items-center justify-between gap-4 border-t border-border pt-4 text-sm text-muted-foreground"
+    >
+      <p aria-live="polite">
+        {t("Plugins {{from}}–{{to}} of {{total}}", {
+          from: formatNumber(page.from),
+          to: formatNumber(page.to),
+          total: formatNumber(page.total),
+        })}
+      </p>
+      <div className="flex items-center gap-2">
+        <IconButton
+          type="button"
+          variant="outline"
+          label={t("{{label}} previous page", {
+            label: t("Plugin Marketplace"),
+          })}
+          disabled={!canGoPrevious}
+          onClick={onPrevious}
+        >
+          <ChevronLeftIcon />
+        </IconButton>
+        <IconButton
+          type="button"
+          variant="outline"
+          label={t("{{label}} next page", {
+            label: t("Plugin Marketplace"),
+          })}
+          disabled={page.nextCursor === null}
+          onClick={onNext}
+        >
+          <ChevronRightIcon />
+        </IconButton>
+      </div>
+    </nav>
   );
 }
 
@@ -552,7 +642,9 @@ function DetailField({
 }) {
   return (
     <div className="rounded-xl border border-border/70 bg-muted/20 p-3">
-      <p className="text-xs font-medium text-muted-foreground">{t(label)}</p>
+      <p className="text-xs font-medium text-muted-foreground">
+        {t(label)}
+      </p>
       <p
         className={[
           "mt-1 break-all text-sm",

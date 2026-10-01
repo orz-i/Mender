@@ -31,6 +31,11 @@ export interface MarketplacePluginIssue {
   message: string;
 }
 
+export interface MarketplaceCreateAction {
+  label: string;
+  href: string;
+}
+
 export interface MarketplacePlugin {
   key: string;
   kind: MarketplacePluginKind;
@@ -45,6 +50,7 @@ export interface MarketplacePlugin {
   capabilities: string[];
   actions: MarketplacePluginActions;
   technicalDetails: MarketplaceTechnicalDetail[];
+  createAction?: MarketplaceCreateAction;
   actionRef?: string;
   issue?: MarketplacePluginIssue;
 }
@@ -121,6 +127,28 @@ export async function loadMarketplacePlugins(client: MenderClient) {
     marketplaceAdapters.map((adapter) => adapter.load(client)),
   );
   return groups.flat().toSorted(compareMarketplacePlugins);
+}
+
+export function marketplaceCursorPage(
+  plugins: MarketplacePlugin[],
+  cursor: string | null,
+  limit = 12,
+) {
+  const cursorIndex =
+    cursor === null
+      ? -1
+      : plugins.findIndex((plugin) => plugin.key === cursor);
+  const startIndex = cursorIndex >= 0 ? cursorIndex + 1 : 0;
+  const items = plugins.slice(startIndex, startIndex + limit);
+  const hasNext = startIndex + items.length < plugins.length;
+
+  return {
+    items,
+    from: items.length ? startIndex + 1 : 0,
+    to: startIndex + items.length,
+    total: plugins.length,
+    nextCursor: hasNext ? (items.at(-1)?.key ?? null) : null,
+  };
 }
 
 export async function setMarketplacePluginEnabled(
@@ -221,6 +249,11 @@ function marketplacePluginFromDescriptor(
   const source =
     sourceOverride ??
     (builtIn ? "builtin" : "local");
+  const createAction = providerCreateAction({
+    pluginId: plugin.pluginId,
+    installationId: plugin.installationId,
+    enabled: plugin.enabled && issue === undefined,
+  });
 
   return {
     key: plugin.installationId
@@ -250,6 +283,7 @@ function marketplacePluginFromDescriptor(
       configVersion: plugin.configVersion,
       protocolVersion: plugin.protocolVersion,
     }),
+    ...(createAction === undefined ? {} : { createAction }),
     ...(issue === undefined
       ? {}
       : { issue: marketplaceIssue(issue) }),
@@ -268,6 +302,11 @@ function marketplacePluginFromInstallation(
         ? "invalid"
         : installation.status;
   const enabled = installation.status === "enabled";
+  const createAction = providerCreateAction({
+    pluginId: installation.pluginId,
+    installationId: installation.installationId,
+    enabled: enabled && descriptor !== undefined && issue === undefined,
+  });
 
   return {
     key: installation.pluginId + "@" + installation.installationId,
@@ -308,6 +347,7 @@ function marketplacePluginFromInstallation(
       protocolVersion:
         installation.protocolVersion ?? descriptor?.protocolVersion,
     }),
+    ...(createAction === undefined ? {} : { createAction }),
     actionRef: installation.installationId,
     ...(issue === undefined
       ? {}
@@ -368,6 +408,32 @@ function compareMarketplacePlugins(
     return left.source === "builtin" ? -1 : 1;
   }
   return left.displayName.localeCompare(right.displayName);
+}
+
+function providerCreateAction({
+  pluginId,
+  installationId,
+  enabled,
+}: {
+  pluginId: string;
+  installationId: string | undefined;
+  enabled: boolean;
+}): MarketplaceCreateAction | undefined {
+  if (!enabled) {
+    return undefined;
+  }
+
+  const search = new URLSearchParams({
+    create: "1",
+    pluginId,
+  });
+  if (installationId !== undefined) {
+    search.set("installationId", installationId);
+  }
+  return {
+    label: "Add provider",
+    href: `/providers?${search.toString()}`,
+  };
 }
 
 function marketplaceIssue(

@@ -486,6 +486,7 @@ describe("management pages", () => {
     const listProviderPluginInstallations = vi
       .fn()
       .mockResolvedValueOnce({ installations: [installation] })
+      .mockResolvedValueOnce({ installations: [installation] })
       .mockResolvedValueOnce({ installations: [disabled] })
       .mockResolvedValueOnce({ installations: [] });
     const disableProviderPluginInstallation = vi.fn().mockResolvedValue({
@@ -510,14 +511,11 @@ describe("management pages", () => {
       }),
     ).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: "View Echo" }));
-    expect(await screen.findByText("Plugin details")).toBeTruthy();
-    fireEvent.click(
-      screen.getByRole("button", { name: "View technical details" }),
-    );
+    fireEvent.click(screen.getByRole("link", { name: "View Echo" }));
+    expect(await screen.findByText("Technical details")).toBeTruthy();
     expect(screen.getByText("dev.example.echo")).toBeTruthy();
     expect(screen.getByText(installation.installationId)).toBeTruthy();
-    fireEvent.click(screen.getAllByRole("button", { name: "Close" })[0]!);
+    expect(screen.queryByRole("button", { name: "Add provider" })).toBeNull();
 
     fireEvent.click(
       screen.getByRole("button", {
@@ -544,8 +542,122 @@ describe("management pages", () => {
     await waitFor(() => {
       expect(screen.queryByText("Echo")).toBeNull();
     });
-    expect(screen.getByText("MCP")).toBeTruthy();
+    expect(await screen.findByText("MCP")).toBeTruthy();
     confirm.mockRestore();
+  });
+
+  it("uses cursor navigation for the Marketplace card grid", async () => {
+    const plugins = Array.from({ length: 13 }, (_, index) => ({
+      pluginId: `dev.example.plugin-${String(index + 1).padStart(2, "0")}`,
+      version: "1.0.0",
+      packageVersion: "1.0.0",
+      displayName: `Plugin ${String(index + 1).padStart(2, "0")}`,
+      description: "Test Provider plugin",
+      configVersion: 1,
+      sourceKind: "builtin" as const,
+      capabilities: [],
+      enabled: true,
+    }));
+
+    renderApp("/plugins", {
+      listProviderPlugins: vi.fn().mockResolvedValue({
+        plugins,
+        issues: [],
+      }),
+    });
+
+    expect(
+      await screen.findByRole("link", { name: "View Plugin 01" }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("link", { name: "View Plugin 12" }),
+    ).toBeTruthy();
+    expect(
+      screen.queryByRole("link", { name: "View Plugin 13" }),
+    ).toBeNull();
+    expect(screen.queryByText(/Page \d+ of/)).toBeNull();
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Plugin Marketplace next page",
+      }),
+    );
+
+    expect(
+      await screen.findByRole("link", { name: "View Plugin 13" }),
+    ).toBeTruthy();
+    expect(
+      screen.queryByRole("link", { name: "View Plugin 01" }),
+    ).toBeNull();
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Plugin Marketplace previous page",
+      }),
+    );
+    expect(
+      await screen.findByRole("link", { name: "View Plugin 01" }),
+    ).toBeTruthy();
+  });
+
+  it("opens the existing Provider create flow from a Marketplace detail", async () => {
+    renderApp("/plugins", {
+      listProviders: vi.fn().mockResolvedValue({ providers: [] }),
+    });
+
+    fireEvent.click(
+      await screen.findByRole("link", { name: "View MCP" }),
+    );
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Add provider" }),
+    );
+
+    const dialog = await screen.findByRole("dialog");
+    expect(
+      within(dialog)
+        .getByRole("button", { name: "MCP" })
+        .getAttribute("aria-pressed"),
+    ).toBe("true");
+  });
+
+  it("preselects the exact external installation from a Provider create link", async () => {
+    const installationId = "pinst_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const plugin = {
+      pluginId: "dev.example.echo",
+      version: "1.2.3",
+      packageVersion: "1.2.3",
+      displayName: "External Echo",
+      description: "Example external Provider",
+      configVersion: 1,
+      sourceKind: "external" as const,
+      installationId,
+      protocolVersion: 1,
+      configSchema: {
+        type: "object",
+        additionalProperties: false,
+        properties: {},
+      },
+      capabilities: [],
+      enabled: true,
+    };
+
+    renderApp(
+      `/providers?create=1&pluginId=dev.example.echo&installationId=${installationId}`,
+      {
+        listProviderPlugins: vi.fn().mockResolvedValue({
+          plugins: [plugin],
+          issues: [],
+        }),
+        listProviders: vi.fn().mockResolvedValue({ providers: [] }),
+      },
+    );
+
+    const dialog = await screen.findByRole("dialog");
+    expect(
+      within(dialog)
+        .getByRole("button", { name: "External Echo · 1.2.3" })
+        .getAttribute("aria-pressed"),
+    ).toBe("true");
   });
 
   it("shows Marketplace package install only when a host capability is supplied", async () => {

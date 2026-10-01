@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "react-router";
 import {
   EyeIcon,
   KeyRoundIcon,
@@ -271,6 +272,19 @@ export function ProvidersPage({
 }: {
   client: MenderClient;
 }) {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [createRequest] = useState(() => {
+    const remainingSearchParams = new URLSearchParams(searchParams);
+    remainingSearchParams.delete("create");
+    remainingSearchParams.delete("pluginId");
+    remainingSearchParams.delete("installationId");
+    return {
+      requested: searchParams.get("create") === "1",
+      pluginId: searchParams.get("pluginId"),
+      installationId: searchParams.get("installationId") ?? "",
+      remainingSearchParams,
+    };
+  });
   const [providers, setProviders] = useState<Provider[]>([]);
   const [providerPlugins, setProviderPlugins] = useState<ProviderPlugin[]>([]);
   const [providerPluginIssues, setProviderPluginIssues] = useState<
@@ -339,7 +353,32 @@ export function ProvidersPage({
           setProviderPluginIssues(pluginResult.issues);
           setProviders(providerResult.providers);
           setCredentials(credentialResult.credentials);
-          setError("");
+
+          if (createRequest.requested) {
+            const plugin =
+              createRequest.pluginId === null
+                ? undefined
+                : pluginResult.plugins.find(
+                    (candidate) =>
+                      candidate.pluginId === createRequest.pluginId &&
+                      (candidate.installationId ?? "") ===
+                        createRequest.installationId,
+                  );
+            if (plugin === undefined) {
+              setError(t("The requested item was not found."));
+            } else {
+              setError("");
+              setCreateForm(
+                formForProviderPlugin(emptyProviderForm, plugin),
+              );
+              setCreateOpen(true);
+            }
+            setSearchParams(createRequest.remainingSearchParams, {
+              replace: true,
+            });
+          } else {
+            setError("");
+          }
           setLoaded(true);
         }
       })
@@ -353,7 +392,7 @@ export function ProvidersPage({
     return () => {
       active = false;
     };
-  }, [client]);
+  }, [client, createRequest, setSearchParams]);
 
   const providerPagination = usePagination(providers);
 
