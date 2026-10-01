@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "react-router";
 import {
+  ArrowLeftIcon,
   EyeIcon,
   KeyRoundIcon,
   Link2Icon,
   PencilIcon,
+  PlusIcon,
   RefreshCwIcon,
   Trash2Icon,
 } from "lucide-react";
@@ -19,6 +21,14 @@ import type {
 } from "@mender/sdk";
 import { Badge } from "@mender/ui/components/badge";
 import { Button } from "@mender/ui/components/button";
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@mender/ui/components/card";
 import {
   Dialog,
   DialogClose,
@@ -295,7 +305,9 @@ export function ProvidersPage({
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
 
+  const [pluginPickerOpen, setPluginPickerOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+  const [createCanReturnToPicker, setCreateCanReturnToPicker] = useState(false);
   const [createForm, setCreateForm] =
     useState<ProviderFormState>(emptyProviderForm);
 
@@ -371,6 +383,8 @@ export function ProvidersPage({
               setCreateForm(
                 formForProviderPlugin(emptyProviderForm, plugin),
               );
+              setPluginPickerOpen(false);
+              setCreateCanReturnToPicker(false);
               setCreateOpen(true);
             }
             setSearchParams(createRequest.remainingSearchParams, {
@@ -418,6 +432,7 @@ export function ProvidersPage({
       });
 
       setCreateOpen(false);
+      setCreateCanReturnToPicker(false);
       setCreateForm(emptyProviderForm);
       await refresh();
     } catch (reason) {
@@ -429,6 +444,7 @@ export function ProvidersPage({
         current?.some((provider) => provider.namespace === createForm.namespace)
       ) {
         setCreateOpen(false);
+        setCreateCanReturnToPicker(false);
         setCreateForm(emptyProviderForm);
       }
     } finally {
@@ -617,9 +633,33 @@ export function ProvidersPage({
     }
   }
 
+  function openCreatePluginPicker() {
+    setError("");
+    setCreateOpen(false);
+    setCreateCanReturnToPicker(false);
+    setCreateForm(emptyProviderForm);
+    setPluginPickerOpen(true);
+  }
+
+  function chooseCreatePlugin(plugin: ProviderPlugin) {
+    setError("");
+    setCreateForm(formForProviderPlugin(emptyProviderForm, plugin));
+    setPluginPickerOpen(false);
+    setCreateCanReturnToPicker(true);
+    setCreateOpen(true);
+  }
+
+  function returnToCreatePluginPicker() {
+    setCreateOpen(false);
+    setCreateCanReturnToPicker(false);
+    setCreateForm(emptyProviderForm);
+    window.setTimeout(() => setPluginPickerOpen(true), 0);
+  }
+
   function setCreateDialogOpen(open: boolean) {
     setCreateOpen(open);
     if (!open) {
+      setCreateCanReturnToPicker(false);
       setCreateForm(emptyProviderForm);
     }
   }
@@ -628,12 +668,7 @@ export function ProvidersPage({
     <>
       <PageHeader
         actions={
-          <Button
-            onClick={() => {
-              setError("");
-              setCreateOpen(true);
-            }}
-          >
+          <Button onClick={openCreatePluginPicker}>
             {t("Add provider")}
           </Button>
         }
@@ -792,6 +827,13 @@ export function ProvidersPage({
         )}
       </DataPanel>
 
+      <ProviderPluginPickerDialog
+        open={pluginPickerOpen}
+        plugins={providerPlugins}
+        onOpenChange={setPluginPickerOpen}
+        onSelect={chooseCreatePlugin}
+      />
+
       <ProviderFormDialog
         open={createOpen}
         mode="create"
@@ -802,6 +844,9 @@ export function ProvidersPage({
         onOpenChange={setCreateDialogOpen}
         onChange={setCreateForm}
         onAuthentication={openCreateAuthentication}
+        {...(createCanReturnToPicker
+          ? { onBack: returnToCreatePluginPicker }
+          : {})}
         onSubmit={() => void addProvider()}
       />
 
@@ -1005,6 +1050,77 @@ function ProviderRebindDialog({
   );
 }
 
+function ProviderPluginPickerDialog({
+  open,
+  plugins,
+  onOpenChange,
+  onSelect,
+}: {
+  open: boolean;
+  plugins: ProviderPlugin[];
+  onOpenChange: (open: boolean) => void;
+  onSelect: (plugin: ProviderPlugin) => void;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>{t("Choose Provider plugin")}</DialogTitle>
+          <DialogDescription>
+            {t(
+              "Select a Provider plugin first. Configuration opens after you choose a plugin.",
+            )}
+          </DialogDescription>
+        </DialogHeader>
+
+        {plugins.length ? (
+          <div className="flex max-h-[60vh] flex-col gap-3 overflow-y-auto pr-1">
+            {plugins.map((plugin) => (
+              <Card key={providerPluginSelectionKey(plugin)} size="sm">
+                <CardHeader>
+                  <CardTitle>{plugin.displayName}</CardTitle>
+                  <CardAction>
+                    <Button
+                      type="button"
+                      size="sm"
+                      aria-label={t("Add {{plugin}} provider", {
+                        plugin: providerPluginChoiceLabel(plugin),
+                      })}
+                      onClick={() => onSelect(plugin)}
+                    >
+                      <PlusIcon data-icon="inline-start" />
+                      {t("Add")}
+                    </Button>
+                  </CardAction>
+                  <CardDescription className="line-clamp-2">
+                    {plugin.description || t("No plugin description.")}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="flex flex-wrap gap-2">
+                  <Badge variant="outline">
+                    {t(plugin.sourceKind === "builtin" ? "Built-in" : "Local package")}
+                  </Badge>
+                  <Badge variant="secondary">{plugin.packageVersion}</Badge>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <EmptyState
+            title="No Provider plugins"
+            description="Install or enable a Provider plugin before creating a Provider."
+          />
+        )}
+
+        <DialogFooter>
+          <DialogClose render={<Button variant="outline" />}>
+            {t("Cancel")}
+          </DialogClose>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 function ProviderFormDialog({
   open,
@@ -1016,6 +1132,7 @@ function ProviderFormDialog({
   onOpenChange,
   onChange,
   onAuthentication,
+  onBack,
   onSubmit,
 }: {
   open: boolean;
@@ -1027,6 +1144,7 @@ function ProviderFormDialog({
   onOpenChange: (open: boolean) => void;
   onChange: (value: ProviderFormState) => void;
   onAuthentication?: () => void;
+  onBack?: () => void;
   onSubmit: () => void;
 }) {
   const [importError, setImportError] = useState("");
@@ -1069,39 +1187,32 @@ function ProviderFormDialog({
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>
-            {t(creating ? "Add provider" : "Edit provider")}
+            {creating
+              ? selectedPlugin !== undefined
+                ? t("Add {{plugin}} provider", {
+                    plugin: providerPluginChoiceLabel(selectedPlugin),
+                  })
+                : t("Add provider")
+              : t("Edit provider")}
           </DialogTitle>
           <DialogDescription>
-            {t(
-              creating
-                ? "Choose a Provider plugin, then configure how that plugin connects to its source."
-                : "Update mutable metadata and plugin connection settings. Provider identity and plugin remain stable.",
-            )}
+            {creating
+              ? selectedPlugin !== undefined
+                ? t(
+                    "Configure {{plugin}}. This form is scoped to the selected Provider plugin.",
+                    {
+                      plugin: providerPluginChoiceLabel(selectedPlugin),
+                    },
+                  )
+                : t("The requested item was not found.")
+              : t(
+                  "Update mutable metadata and plugin connection settings. Provider identity and plugin remain stable.",
+                )}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
-          {creating ? (
-            <div>
-              <div className="mb-2 text-sm font-medium">{t("Provider plugin")}</div>
-              <div className="grid gap-2 sm:grid-cols-2">
-                {plugins.map((plugin) => {
-                  const selected = providerPluginMatchesForm(plugin, form);
-                  return (
-                    <Button
-                      key={providerPluginSelectionKey(plugin)}
-                      type="button"
-                      variant={selected ? "default" : "outline"}
-                      aria-pressed={selected}
-                      onClick={() => onChange(formForProviderPlugin(form, plugin))}
-                    >
-                      {providerPluginChoiceLabel(plugin)}
-                    </Button>
-                  );
-                })}
-              </div>
-            </div>
-          ) : (
+          {!creating ? (
             <div className="grid grid-cols-2 gap-3">
               <ReadOnlyField label="Namespace" value={form.namespace} />
               <ReadOnlyField
@@ -1113,7 +1224,7 @@ function ProviderFormDialog({
                 }
               />
             </div>
-          )}
+          ) : null}
 
           {renderer === "mcp" ? (
             <div>
@@ -1498,6 +1609,17 @@ function ProviderFormDialog({
         </div>
 
         <DialogFooter>
+          {creating && onBack !== undefined ? (
+            <Button
+              type="button"
+              variant="outline"
+              disabled={busy}
+              onClick={onBack}
+            >
+              <ArrowLeftIcon data-icon="inline-start" />
+              {t("Back to plugins")}
+            </Button>
+          ) : null}
           <DialogClose render={<Button variant="outline" />}>
             {t("Cancel")}
           </DialogClose>

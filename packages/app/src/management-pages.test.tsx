@@ -64,9 +64,38 @@ describe("management pages", () => {
     expect(screen.queryByText("Local command")).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Add provider" }));
-    expect(screen.getByRole("dialog")).toBeTruthy();
-    expect(screen.getByText("Remote endpoint")).toBeTruthy();
-    expect(screen.getByText("Local command")).toBeTruthy();
+    const chooser = screen.getByRole("dialog", {
+      name: "Choose Provider plugin",
+    });
+    expect(within(chooser).queryByText("Remote endpoint")).toBeNull();
+    expect(within(chooser).queryByText("Local command")).toBeNull();
+    fireEvent.click(
+      within(chooser).getByRole("button", { name: "Add MCP provider" }),
+    );
+
+    const createDialog = screen.getByRole("dialog", {
+      name: "Add MCP provider",
+    });
+    expect(within(createDialog).getByText("Remote endpoint")).toBeTruthy();
+    expect(within(createDialog).getByText("Local command")).toBeTruthy();
+    expect(
+      within(createDialog).queryByRole("button", {
+        name: "Add Model Tools provider",
+      }),
+    ).toBeNull();
+
+    fireEvent.click(
+      within(createDialog).getByRole("button", { name: "Back to plugins" }),
+    );
+    const reopenedChooser = await screen.findByRole("dialog", {
+      name: "Choose Provider plugin",
+    });
+    expect(within(reopenedChooser).queryByText("Remote endpoint")).toBeNull();
+    fireEvent.click(
+      within(reopenedChooser).getByRole("button", {
+        name: "Add MCP provider",
+      }),
+    );
 
     fireEvent.change(screen.getByLabelText("Namespace"), {
       target: { value: "demo" },
@@ -292,10 +321,7 @@ describe("management pages", () => {
     });
 
     expect(await screen.findByText("No providers")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Add provider" }));
-    fireEvent.click(
-      screen.getByRole("button", { name: "External Echo · 1.2.3" }),
-    );
+    beginProviderCreate("External Echo · 1.2.3");
 
     expect(
       screen.queryByRole("button", { name: "Configure authentication" }),
@@ -450,10 +476,7 @@ describe("management pages", () => {
     });
 
     expect(await screen.findByText("No providers")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Add provider" }));
-    fireEvent.click(
-      screen.getByRole("button", { name: "Unsupported External · 1.0.0" }),
-    );
+    beginProviderCreate("Unsupported External · 1.0.0");
 
     expect(screen.queryByText("Remote endpoint")).toBeNull();
     expect(screen.queryByText("Local command")).toBeNull();
@@ -612,12 +635,18 @@ describe("management pages", () => {
       await screen.findByRole("button", { name: "Add provider" }),
     );
 
-    const dialog = await screen.findByRole("dialog");
+    const dialog = await screen.findByRole("dialog", {
+      name: "Add MCP provider",
+    });
+    expect(within(dialog).getByText("Remote endpoint")).toBeTruthy();
     expect(
-      within(dialog)
-        .getByRole("button", { name: "MCP" })
-        .getAttribute("aria-pressed"),
-    ).toBe("true");
+      within(dialog).queryByRole("button", {
+        name: "Add Model Tools provider",
+      }),
+    ).toBeNull();
+    expect(
+      within(dialog).queryByRole("button", { name: "Back to plugins" }),
+    ).toBeNull();
   });
 
   it("preselects the exact external installation from a Provider create link", async () => {
@@ -652,12 +681,13 @@ describe("management pages", () => {
       },
     );
 
-    const dialog = await screen.findByRole("dialog");
+    const dialog = await screen.findByRole("dialog", {
+      name: "Add External Echo · 1.2.3 provider",
+    });
+    expect(within(dialog).getByText(installationId)).toBeTruthy();
     expect(
-      within(dialog)
-        .getByRole("button", { name: "External Echo · 1.2.3" })
-        .getAttribute("aria-pressed"),
-    ).toBe("true");
+      within(dialog).queryByRole("button", { name: "Back to plugins" }),
+    ).toBeNull();
   });
 
   it("shows Marketplace package install only when a host capability is supplied", async () => {
@@ -745,8 +775,7 @@ describe("management pages", () => {
     });
 
     expect(await screen.findByText("No providers")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Add provider" }));
-    fireEvent.click(screen.getByRole("button", { name: "Model Tools" }));
+    beginProviderCreate("Model Tools");
     fireEvent.click(screen.getByRole("button", { name: "Anthropic" }));
 
     fireEvent.change(screen.getByLabelText("Namespace"), {
@@ -850,8 +879,7 @@ describe("management pages", () => {
     });
 
     expect(await screen.findByText("No providers")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Add provider" }));
-    fireEvent.click(screen.getByRole("button", { name: "OpenAPI" }));
+    beginProviderCreate("OpenAPI");
 
     fireEvent.change(screen.getByLabelText("Namespace"), {
       target: { value: "example-api" },
@@ -959,7 +987,7 @@ describe("management pages", () => {
     });
 
     expect(await screen.findByText("No providers")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Add provider" }));
+    beginProviderCreate();
     fireEvent.click(screen.getByText("Advanced settings"));
 
     fireEvent.change(screen.getByLabelText("MCP JSON"), {
@@ -1042,7 +1070,7 @@ describe("management pages", () => {
     });
 
     expect(await screen.findByText("No providers")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Add provider" }));
+    beginProviderCreate();
     fireEvent.click(screen.getByRole("button", { name: "Local command" }));
 
     fireEvent.change(screen.getByLabelText("Namespace"), {
@@ -1961,6 +1989,18 @@ describe("management pages", () => {
     expect(screen.queryByText(/TOP-SECRET/)).toBeNull();
   });
 });
+
+function beginProviderCreate(pluginLabel = "MCP") {
+  fireEvent.click(screen.getByRole("button", { name: "Add provider" }));
+  const chooser = screen.getByRole("dialog", {
+    name: "Choose Provider plugin",
+  });
+  fireEvent.click(
+    within(chooser).getByRole("button", {
+      name: `Add ${pluginLabel} provider`,
+    }),
+  );
+}
 
 function renderApp(
   path: string,
