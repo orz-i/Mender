@@ -1,6 +1,6 @@
 # Plugin Marketplace
 
-Status: Active iteration — card catalog and routed details
+Status: Complete
 
 ## Goal
 
@@ -174,13 +174,13 @@ Provider degradation is summarized in Providers as an attention notice; exact in
 
 ### Card catalog / routed-detail iteration
 
-- [ ] Marketplace results render as a responsive card grid.
-- [ ] Marketplace uses key-cursor Previous / Next navigation rather than table/page-number pagination.
-- [ ] Clicking a card navigates to `/plugins/:pluginKey`.
-- [ ] Detail route preserves overview, capabilities, issue, technical metadata, and package lifecycle behavior.
-- [ ] Create-capable details expose `Add provider` and open the existing Providers create flow with the exact plugin preselected.
-- [ ] Desktop and mobile rendered QA pass for catalog -> detail -> Add.
-- [ ] Targeted tests, i18n, typecheck, lint, Web build, and Desktop build pass.
+- [x] Marketplace results render as a responsive card grid.
+- [x] Marketplace uses key-cursor Previous / Next navigation rather than table/page-number pagination.
+- [x] Clicking a card navigates to `/plugins/:pluginKey`.
+- [x] Detail route preserves overview, capabilities, issue, technical metadata, and package lifecycle behavior.
+- [x] Create-capable details expose `Add provider` and open the existing Providers create flow with the exact plugin preselected.
+- [x] Desktop and mobile rendered QA pass for catalog -> detail -> Add.
+- [x] Targeted tests, i18n, typecheck, lint, Web build, and Desktop build pass.
 
 ### Existing baseline
 
@@ -191,7 +191,7 @@ Provider degradation is summarized in Providers as an attention notice; exact in
 - [x] Verified descriptor metadata keeps external plugin names stable across enable/disable.
 - [x] PluginID / InstallationID / digest remain detail-only.
 - [x] Type/source/status filters are available.
-- [x] Plugin overview and Technical Details are separate Dialog views.
+- [x] Plugin overview and Technical Details are available on the dedicated plugin detail route.
 - [x] Enable/disable/remove lifecycle uses generic Marketplace actions.
 - [x] Degraded disabled plugins cannot be enabled.
 - [x] Desktop local package installation is injected through MarketplaceInstaller.
@@ -208,19 +208,30 @@ Browser QA used an isolated Runtime containing:
 
 The external plugin was disabled and re-enabled through Marketplace. Its display name remained `Example Echo` while disabled because the installation management projection now carries the persisted verified descriptor metadata.
 
-Representative captures:
+Representative baseline captures:
 
 - `/tmp/mender-plugin-marketplace-final-qa.png`
 - `/tmp/mender-plugin-marketplace-detail.png`
 - `/tmp/mender-plugin-marketplace-technical.png`
 - `/tmp/mender-plugin-marketplace-mobile.png`
 
+Card catalog / routed-detail iteration captures:
+
+- `/tmp/mender-marketplace-card-grid.png`
+- `/tmp/mender-marketplace-detail.png`
+- `/tmp/mender-marketplace-add-provider.png`
+- `/tmp/mender-marketplace-mobile.png`
+- `/tmp/mender-marketplace-detail-mobile.png`
+- `/tmp/mender-marketplace-qa.png`
+
+Rendered QA verified the route `Plugin Marketplace -> MCP detail -> Add provider -> Providers create dialog`; the MCP plugin remained preselected after the handoff. The 390 x 844 viewport had no horizontal overflow. The browser QA preset passed with network, console, and page-error checks enabled.
+
 Final repository verification:
 
 - `pnpm check`: PASS
 - `pnpm security:check`: PASS
 - i18n: 638 / 638 zh-CN
-- Vitest: 10 files / 62 tests
+- Vitest: 10 files / 67 tests
 - Web production build: PASS
 - Desktop production build: PASS
 - govulncheck: no reachable vulnerabilities
