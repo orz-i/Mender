@@ -54,26 +54,6 @@ func registerInstalledProviderCLI(
 	)
 }
 
-func updateConfiguredProviderCLI(
-	ctx context.Context,
-	runtime *bootstrap.Runtime,
-	providerID catalogdomain.ProviderID,
-	request catalogapplication.UpdateProviderRequest,
-	rawConfig json.RawMessage,
-) (catalogdomain.Provider, error) {
-	governanceContext, err := cliInvocationContext(ctx, runtime, "")
-	if err != nil {
-		return catalogdomain.Provider{}, err
-	}
-	return runtime.UpdateConfiguredProvider(
-		ctx,
-		providerID,
-		request,
-		rawConfig,
-		governanceContext,
-	)
-}
-
 func syncConfiguredProviderCLI(
 	ctx context.Context,
 	runtime *bootstrap.Runtime,

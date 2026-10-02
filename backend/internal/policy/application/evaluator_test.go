@@ -2,10 +2,11 @@ package application
 
 import (
 	"context"
-	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	"strings"
 	"testing"
 	"time"
+
+	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 
 	policydomain "github.com/orz-i/Mender/backend/internal/policy/domain"
 )

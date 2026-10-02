@@ -3,9 +3,9 @@ package application
 import (
 	"context"
 	"fmt"
-	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 
 	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
+	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 )
 

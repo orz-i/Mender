@@ -1,8 +1,9 @@
 package domain
 
 import (
-	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	"testing"
+
+	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 )
 
 func TestMatchSemantics(t *testing.T) {

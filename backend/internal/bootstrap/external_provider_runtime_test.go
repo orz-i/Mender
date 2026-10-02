@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -12,6 +11,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 
 	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
 	credentialapplication "github.com/orz-i/Mender/backend/internal/credential/application"

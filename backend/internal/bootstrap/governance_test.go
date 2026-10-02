@@ -3,12 +3,13 @@ package bootstrap
 import (
 	"context"
 	"encoding/json"
-	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	"path/filepath"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	auditdomain "github.com/orz-i/Mender/backend/internal/audit/domain"

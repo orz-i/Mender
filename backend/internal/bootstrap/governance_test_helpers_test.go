@@ -29,28 +29,6 @@ func testCatalogGovernanceContext(
 	return ctx
 }
 
-func testProfileGovernanceContext(
-	t *testing.T,
-	origin governancedomain.Origin,
-	label string,
-	profileReference string,
-) governancedomain.Context {
-	t.Helper()
-	scope, err := governancedomain.ProfileScope(profileReference)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ctx, err := governancedomain.NewContext(
-		origin,
-		testPrincipal(t, label),
-		scope,
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return ctx
-}
-
 func testPrincipal(t *testing.T, label string) governancedomain.Principal {
 	t.Helper()
 	if label == "" {

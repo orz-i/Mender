@@ -3,8 +3,8 @@ package executionguard
 import (
 	"context"
 	"fmt"
-	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 
+	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 )

@@ -3,11 +3,12 @@ package bootstrap
 import (
 	"bytes"
 	"context"
-	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
+
+	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 
 	"github.com/orz-i/Mender/backend/internal/catalog/application"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"

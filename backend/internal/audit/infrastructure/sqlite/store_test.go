@@ -3,7 +3,6 @@ package sqlite
 import (
 	"context"
 	"database/sql"
-	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	"path/filepath"
 	"slices"
 	"testing"
@@ -11,6 +10,7 @@ import (
 
 	auditdomain "github.com/orz-i/Mender/backend/internal/audit/domain"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
+	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	policydomain "github.com/orz-i/Mender/backend/internal/policy/domain"
 )

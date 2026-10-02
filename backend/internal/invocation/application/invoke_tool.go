@@ -4,13 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	governanceapplication "github.com/orz-i/Mender/backend/internal/governance/application"
-	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	"time"
 
 	auditdomain "github.com/orz-i/Mender/backend/internal/audit/domain"
 	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
+	governanceapplication "github.com/orz-i/Mender/backend/internal/governance/application"
+	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	policydomain "github.com/orz-i/Mender/backend/internal/policy/domain"
 )

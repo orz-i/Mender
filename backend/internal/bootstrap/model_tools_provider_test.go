@@ -4,9 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	"path/filepath"
 	"testing"
+
+	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 
 	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
 	credentialapplication "github.com/orz-i/Mender/backend/internal/credential/application"

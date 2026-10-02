@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -13,6 +12,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 
 	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"

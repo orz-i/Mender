@@ -2,12 +2,12 @@ package domain
 
 import (
 	"fmt"
-	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	"strings"
 	"time"
 	"unicode"
 
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
+	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	policydomain "github.com/orz-i/Mender/backend/internal/policy/domain"
 )

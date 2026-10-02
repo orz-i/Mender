@@ -4,9 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	"os"
 	"text/tabwriter"
+
+	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 
 	"github.com/orz-i/Mender/backend/internal/bootstrap"
 	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"

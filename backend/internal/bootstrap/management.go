@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 
 	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
+	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
 	mcpconfigstore "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/configstore"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"

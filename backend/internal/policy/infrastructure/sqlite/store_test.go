@@ -4,12 +4,12 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	policyapplication "github.com/orz-i/Mender/backend/internal/policy/application"
 	policydomain "github.com/orz-i/Mender/backend/internal/policy/domain"
 	_ "modernc.org/sqlite"

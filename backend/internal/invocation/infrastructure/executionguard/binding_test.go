@@ -2,10 +2,10 @@ package executionguard
 
 import (
 	"context"
-	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	"testing"
 	"time"
 
+	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 )

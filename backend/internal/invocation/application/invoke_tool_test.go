@@ -4,11 +4,12 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	"slices"
 	"sync"
 	"testing"
 	"time"
+
+	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 
 	auditdomain "github.com/orz-i/Mender/backend/internal/audit/domain"
 	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
