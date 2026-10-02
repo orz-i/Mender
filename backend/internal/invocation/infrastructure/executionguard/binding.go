@@ -3,6 +3,7 @@ package executionguard
 import (
 	"context"
 	"fmt"
+	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 
 	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
@@ -31,7 +32,7 @@ func (g *ProfileBindingSerial) Acquire(
 
 	case invocationdomain.BindingConcurrencySerial:
 		scope := request.Context.Scope()
-		if scope.Kind() != invocationdomain.ScopeProfile {
+		if scope.Kind() != governancedomain.ScopeProfile {
 			return nil, fmt.Errorf(
 				"profile binding serial guard: serial constraint requires profile scope",
 			)

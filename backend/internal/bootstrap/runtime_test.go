@@ -3,6 +3,7 @@ package bootstrap
 import (
 	"bytes"
 	"context"
+	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	"os"
 	"path/filepath"
 	"testing"
@@ -82,10 +83,10 @@ func TestRuntimeExecutesBuiltInToolThroughFullPipeline(t *testing.T) {
 
 	const sensitivePayload = "SENSITIVE-PAYLOAD-NOT-FOR-AUDIT"
 	arguments := []byte(`{"value":"` + sensitivePayload + `"}`)
-	executionContext, err := invocationdomain.NewInvocationContext(
-		invocationdomain.OriginInternal,
-		"bootstrap-test",
-		invocationdomain.CatalogExecutionScope(),
+	executionContext, err := governancedomain.NewContext(
+		governancedomain.OriginInternal,
+		testPrincipal(t, "bootstrap-test"),
+		governancedomain.CatalogScope(),
 	)
 	if err != nil {
 		t.Fatalf("NewInvocationContext() error = %v", err)

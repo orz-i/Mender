@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	"strings"
 	"testing"
 	"time"
@@ -22,7 +23,8 @@ func TestEvaluateMapsBoundedRequestIntoConfiguredPolicy(t *testing.T) {
 		t.Fatal(err)
 	}
 	match, err := policydomain.NewMatch(policydomain.MatchSpec{
-		Origins:       []policydomain.Origin{policydomain.OriginMCP},
+		Actions:       []governancedomain.Action{governancedomain.ActionToolInvoke},
+		Origins:       []governancedomain.Origin{governancedomain.OriginMCP},
 		FactKnowledge: policydomain.FactKnown,
 		EffectsAny:    []string{"filesystem.write"},
 		ResourcesAny:  []policydomain.ResourceMatcher{resource},
@@ -48,12 +50,15 @@ func TestEvaluateMapsBoundedRequestIntoConfiguredPolicy(t *testing.T) {
 	decision, err := NewEvaluate(repository).Execute(
 		context.Background(),
 		EvaluateRequest{
-			Origin:        policydomain.OriginMCP,
-			ScopeKind:     policydomain.ScopeCatalog,
-			ProviderID:    "prov_00000000000000000000000000000001",
-			ToolID:        "tool_00000000000000000000000000000001",
-			FactKnowledge: policydomain.FactKnown,
-			Effects:       []string{"filesystem.write"},
+			Action:             governancedomain.ActionToolInvoke,
+			PrincipalKind:      governancedomain.PrincipalLocalUser,
+			PrincipalReference: "test:user",
+			Origin:             governancedomain.OriginMCP,
+			ScopeKind:          governancedomain.ScopeCatalog,
+			ProviderID:         "prov_00000000000000000000000000000001",
+			ToolID:             "tool_00000000000000000000000000000001",
+			FactKnowledge:      policydomain.FactKnown,
+			Effects:            []string{"filesystem.write"},
 			Resources: []ResourceFact{
 				{Kind: "path", Value: "/workspace/release/v1"},
 			},
@@ -75,14 +80,17 @@ func TestEvaluateFailsClosedOnInvalidExecutionMetadata(t *testing.T) {
 	_, err := NewEvaluate(repository).Execute(
 		context.Background(),
 		EvaluateRequest{
-			Origin:        policydomain.Origin("unknown"),
-			ScopeKind:     policydomain.ScopeCatalog,
-			ProviderID:    "prov_00000000000000000000000000000001",
-			ToolID:        "tool_00000000000000000000000000000001",
-			FactKnowledge: policydomain.FactUnknown,
+			Action:             governancedomain.ActionToolInvoke,
+			PrincipalKind:      governancedomain.PrincipalLocalUser,
+			PrincipalReference: "test:user",
+			Origin:             governancedomain.Origin("unknown"),
+			ScopeKind:          governancedomain.ScopeCatalog,
+			ProviderID:         "prov_00000000000000000000000000000001",
+			ToolID:             "tool_00000000000000000000000000000001",
+			FactKnowledge:      policydomain.FactUnknown,
 		},
 	)
-	if err == nil || !strings.Contains(err.Error(), "evaluation.origin") {
+	if err == nil || !strings.Contains(err.Error(), "evaluation.context") {
 		t.Fatalf("Evaluate.Execute() error = %v", err)
 	}
 }
@@ -94,12 +102,15 @@ func TestEvaluateRejectsValuesAttachedToUnknownFacts(t *testing.T) {
 	_, err := NewEvaluate(repository).Execute(
 		context.Background(),
 		EvaluateRequest{
-			Origin:        policydomain.OriginCLI,
-			ScopeKind:     policydomain.ScopeCatalog,
-			ProviderID:    "prov_00000000000000000000000000000001",
-			ToolID:        "tool_00000000000000000000000000000001",
-			FactKnowledge: policydomain.FactUnknown,
-			Effects:       []string{"filesystem.write"},
+			Action:             governancedomain.ActionToolInvoke,
+			PrincipalKind:      governancedomain.PrincipalLocalUser,
+			PrincipalReference: "test:user",
+			Origin:             governancedomain.OriginCLI,
+			ScopeKind:          governancedomain.ScopeCatalog,
+			ProviderID:         "prov_00000000000000000000000000000001",
+			ToolID:             "tool_00000000000000000000000000000001",
+			FactKnowledge:      policydomain.FactUnknown,
+			Effects:            []string{"filesystem.write"},
 		},
 	)
 	if err == nil || !strings.Contains(err.Error(), "unknown facts") {

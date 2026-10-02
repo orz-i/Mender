@@ -6,6 +6,7 @@ import (
 	"text/tabwriter"
 
 	"github.com/orz-i/Mender/backend/internal/bootstrap"
+	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	policyapplication "github.com/orz-i/Mender/backend/internal/policy/application"
 	policydomain "github.com/orz-i/Mender/backend/internal/policy/domain"
 	"github.com/spf13/cobra"
@@ -103,7 +104,10 @@ func (a *app) newPolicyRuleAddCommand() *cobra.Command {
 	var displayName string
 	var decisionValue string
 	var disabled bool
+	var actions []string
 	var origins []string
+	var principalKinds []string
+	var principalRefs []string
 	var scopes []string
 	var profileRefs []string
 	var providerIDs []string
@@ -125,7 +129,10 @@ func (a *app) newPolicyRuleAddCommand() *cobra.Command {
 				return usageError{err: err}
 			}
 			match, err := parsePolicyMatchFlags(
+				actions,
 				origins,
+				principalKinds,
+				principalRefs,
 				scopes,
 				profileRefs,
 				providerIDs,
@@ -166,7 +173,11 @@ func (a *app) newPolicyRuleAddCommand() *cobra.Command {
 		"Rule decision: allow, require_approval, or deny",
 	)
 	command.Flags().BoolVar(&disabled, "disabled", false, "create the Rule disabled")
+	command.Flags().StringArrayVar(&actions, "action", nil, "match governance action tool.invoke/provider.activate; required and may be repeated")
+	_ = command.MarkFlagRequired("action")
 	command.Flags().StringArrayVar(&origins, "origin", nil, "match origin; may be repeated")
+	command.Flags().StringArrayVar(&principalKinds, "principal-kind", nil, "match Principal kind local_user/service; may be repeated")
+	command.Flags().StringArrayVar(&principalRefs, "principal-ref", nil, "advanced Principal reference matcher; may be repeated")
 	command.Flags().StringArrayVar(&scopes, "scope", nil, "match scope kind catalog/profile; may be repeated")
 	command.Flags().StringArrayVar(&profileRefs, "profile-ref", nil, "match ProfileID; may be repeated")
 	command.Flags().StringArrayVar(&providerIDs, "provider-id", nil, "match ProviderID; may be repeated")
@@ -255,7 +266,10 @@ func parsePolicyDecision(value string) (policydomain.DecisionKind, error) {
 }
 
 func parsePolicyMatchFlags(
+	actionValues []string,
 	originValues []string,
+	principalKindValues []string,
+	principalRefs []string,
 	scopeValues []string,
 	profileRefs []string,
 	providerIDs []string,
@@ -264,13 +278,21 @@ func parsePolicyMatchFlags(
 	effects []string,
 	resourceValues []string,
 ) (policydomain.MatchSpec, error) {
-	origins := make([]policydomain.Origin, 0, len(originValues))
-	for _, value := range originValues {
-		origins = append(origins, policydomain.Origin(value))
+	actions := make([]governancedomain.Action, 0, len(actionValues))
+	for _, value := range actionValues {
+		actions = append(actions, governancedomain.Action(value))
 	}
-	scopeKinds := make([]policydomain.ScopeKind, 0, len(scopeValues))
+	origins := make([]governancedomain.Origin, 0, len(originValues))
+	for _, value := range originValues {
+		origins = append(origins, governancedomain.Origin(value))
+	}
+	principalKinds := make([]governancedomain.PrincipalKind, 0, len(principalKindValues))
+	for _, value := range principalKindValues {
+		principalKinds = append(principalKinds, governancedomain.PrincipalKind(value))
+	}
+	scopeKinds := make([]governancedomain.ScopeKind, 0, len(scopeValues))
 	for _, value := range scopeValues {
-		scopeKinds = append(scopeKinds, policydomain.ScopeKind(value))
+		scopeKinds = append(scopeKinds, governancedomain.ScopeKind(value))
 	}
 	resources := make([]policydomain.ResourceMatcher, 0, len(resourceValues))
 	for _, value := range resourceValues {
@@ -291,14 +313,17 @@ func parsePolicyMatchFlags(
 		resources = append(resources, resource)
 	}
 	spec := policydomain.MatchSpec{
-		Origins:       origins,
-		ScopeKinds:    scopeKinds,
-		ProfileRefs:   append([]string(nil), profileRefs...),
-		ProviderIDs:   append([]string(nil), providerIDs...),
-		ToolIDs:       append([]string(nil), toolIDs...),
-		FactKnowledge: policydomain.FactKnowledge(factKnowledgeValue),
-		EffectsAny:    append([]string(nil), effects...),
-		ResourcesAny:  resources,
+		Actions:        actions,
+		Origins:        origins,
+		PrincipalKinds: principalKinds,
+		PrincipalRefs:  append([]string(nil), principalRefs...),
+		ScopeKinds:     scopeKinds,
+		ProfileRefs:    append([]string(nil), profileRefs...),
+		ProviderIDs:    append([]string(nil), providerIDs...),
+		ToolIDs:        append([]string(nil), toolIDs...),
+		FactKnowledge:  policydomain.FactKnowledge(factKnowledgeValue),
+		EffectsAny:     append([]string(nil), effects...),
+		ResourcesAny:   resources,
 	}
 	if _, err := policydomain.NewMatch(spec); err != nil {
 		return policydomain.MatchSpec{}, err
@@ -333,21 +358,24 @@ func policyRuleProjection(rule policydomain.Rule) map[string]any {
 		"enabled":     rule.Enabled(),
 		"decision":    string(rule.Decision()),
 		"match": map[string]any{
-			"origins":       policyOriginStringsCLI(match.Origins()),
-			"scopeKinds":    policyScopeStringsCLI(match.ScopeKinds()),
-			"profileRefs":   match.ProfileRefs(),
-			"providerIds":   match.ProviderIDs(),
-			"toolIds":       match.ToolIDs(),
-			"factKnowledge": string(match.FactKnowledge()),
-			"effectsAny":    match.EffectsAny(),
-			"resourcesAny":  resources,
+			"actions":        policyActionStringsCLI(match.Actions()),
+			"origins":        policyOriginStringsCLI(match.Origins()),
+			"principalKinds": policyPrincipalKindStringsCLI(match.PrincipalKinds()),
+			"principalRefs":  match.PrincipalRefs(),
+			"scopeKinds":     policyScopeStringsCLI(match.ScopeKinds()),
+			"profileRefs":    match.ProfileRefs(),
+			"providerIds":    match.ProviderIDs(),
+			"toolIds":        match.ToolIDs(),
+			"factKnowledge":  string(match.FactKnowledge()),
+			"effectsAny":     match.EffectsAny(),
+			"resourcesAny":   resources,
 		},
 		"createdAt": rule.CreatedAt(),
 		"updatedAt": rule.UpdatedAt(),
 	}
 }
 
-func policyOriginStringsCLI(values []policydomain.Origin) []string {
+func policyActionStringsCLI(values []governancedomain.Action) []string {
 	result := make([]string, 0, len(values))
 	for _, value := range values {
 		result = append(result, string(value))
@@ -355,7 +383,23 @@ func policyOriginStringsCLI(values []policydomain.Origin) []string {
 	return result
 }
 
-func policyScopeStringsCLI(values []policydomain.ScopeKind) []string {
+func policyOriginStringsCLI(values []governancedomain.Origin) []string {
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		result = append(result, string(value))
+	}
+	return result
+}
+
+func policyPrincipalKindStringsCLI(values []governancedomain.PrincipalKind) []string {
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		result = append(result, string(value))
+	}
+	return result
+}
+
+func policyScopeStringsCLI(values []governancedomain.ScopeKind) []string {
 	result := make([]string, 0, len(values))
 	for _, value := range values {
 		result = append(result, string(value))

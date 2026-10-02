@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	policyapplication "github.com/orz-i/Mender/backend/internal/policy/application"
@@ -24,14 +25,6 @@ func (a invocationPolicyEvaluator) Evaluate(
 	ctx context.Context,
 	request invocationapplication.PolicyRequest,
 ) (policydomain.Decision, error) {
-	origin, err := mapPolicyOrigin(request.Context.Origin())
-	if err != nil {
-		return policydomain.Decision{}, err
-	}
-	scopeKind, err := mapPolicyScopeKind(request.Context.Scope().Kind())
-	if err != nil {
-		return policydomain.Decision{}, err
-	}
 	factKnowledge, err := mapPolicyFactKnowledge(request.Facts.Knowledge())
 	if err != nil {
 		return policydomain.Decision{}, err
@@ -49,46 +42,21 @@ func (a invocationPolicyEvaluator) Evaluate(
 		})
 	}
 
+	principal := request.Context.Principal()
+	scope := request.Context.Scope()
 	return a.evaluate.Execute(ctx, policyapplication.EvaluateRequest{
-		Origin:         origin,
-		ScopeKind:      scopeKind,
-		ScopeReference: request.Context.Scope().Reference(),
-		ProviderID:     request.Tool.ProviderID().String(),
-		ToolID:         request.Tool.ID().String(),
-		FactKnowledge:  factKnowledge,
-		Effects:        effects,
-		Resources:      resources,
+		Action:             governancedomain.ActionToolInvoke,
+		Origin:             request.Context.Origin(),
+		PrincipalKind:      principal.Kind(),
+		PrincipalReference: principal.Reference(),
+		ScopeKind:          scope.Kind(),
+		ScopeReference:     scope.Reference(),
+		ProviderID:         request.Tool.ProviderID().String(),
+		ToolID:             request.Tool.ID().String(),
+		FactKnowledge:      factKnowledge,
+		Effects:            effects,
+		Resources:          resources,
 	})
-}
-
-func mapPolicyOrigin(value invocationdomain.Origin) (policydomain.Origin, error) {
-	switch value {
-	case invocationdomain.OriginCLI:
-		return policydomain.OriginCLI, nil
-	case invocationdomain.OriginMCP:
-		return policydomain.OriginMCP, nil
-	case invocationdomain.OriginManagementHTTP:
-		return policydomain.OriginManagementHTTP, nil
-	case invocationdomain.OriginDesktop:
-		return policydomain.OriginDesktop, nil
-	case invocationdomain.OriginInternal:
-		return policydomain.OriginInternal, nil
-	default:
-		return "", fmt.Errorf("map policy origin: unknown value %q", value)
-	}
-}
-
-func mapPolicyScopeKind(
-	value invocationdomain.ScopeKind,
-) (policydomain.ScopeKind, error) {
-	switch value {
-	case invocationdomain.ScopeCatalog:
-		return policydomain.ScopeCatalog, nil
-	case invocationdomain.ScopeProfile:
-		return policydomain.ScopeProfile, nil
-	default:
-		return "", fmt.Errorf("map policy scope: unknown value %q", value)
-	}
 }
 
 func mapPolicyFactKnowledge(

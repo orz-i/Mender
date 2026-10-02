@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"fmt"
+	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 
 	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
@@ -42,13 +43,13 @@ func (r allowlistCredentialResolver) Resolve(
 
 func credentialResolverForScope(
 	delegate CredentialResolver,
-	scope invocationdomain.ExecutionScope,
+	scope governancedomain.Scope,
 	governance invocationdomain.ScopedBindingGovernance,
 ) CredentialResolver {
 	if delegate == nil {
 		return nil
 	}
-	if scope.Kind() == invocationdomain.ScopeProfile {
+	if scope.Kind() == governancedomain.ScopeProfile {
 		return newAllowlistCredentialResolver(
 			delegate,
 			governance.CredentialRefs(),

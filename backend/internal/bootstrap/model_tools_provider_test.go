@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	"path/filepath"
 	"testing"
 
@@ -171,13 +172,13 @@ func TestModelToolsProviderSyncIsLocalAndProfileCredentialScopeBlocksExecution(
 		t.Fatal(err)
 	}
 
-	scope, err := invocationdomain.ProfileExecutionScope(profile.ID().String())
+	scope, err := governancedomain.ProfileScope(profile.ID().String())
 	if err != nil {
 		t.Fatal(err)
 	}
-	invocationContext, err := invocationdomain.NewInvocationContext(
-		invocationdomain.OriginMCP,
-		"model-tools-denied",
+	invocationContext, err := governancedomain.NewContext(
+		governancedomain.OriginMCP,
+		testPrincipal(t, "model-tools-denied"),
 		scope,
 	)
 	if err != nil {

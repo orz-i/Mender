@@ -2,6 +2,7 @@ package domain
 
 import (
 	"fmt"
+	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	"strings"
 	"time"
 	"unicode"
@@ -55,7 +56,8 @@ type Record struct {
 	invocationID   invocationdomain.InvocationID
 	toolID         catalogdomain.ToolID
 	providerID     *catalogdomain.ProviderID
-	caller         string
+	principalKind  string
+	principalRef   string
 	startedAt      time.Time
 	finishedAt     time.Time
 	policyKind     policydomain.DecisionKind
@@ -65,8 +67,8 @@ type Record struct {
 	resultKind     invocationdomain.ResultKind
 	errorClass     ErrorClass
 	errorSummary   string
-	origin         invocationdomain.Origin
-	scopeKind      invocationdomain.ScopeKind
+	origin         governancedomain.Origin
+	scopeKind      governancedomain.ScopeKind
 	scopeReference string
 	outcomeKind    invocationdomain.OutcomeKind
 	rejectionCode  invocationdomain.RejectionCode
@@ -81,7 +83,6 @@ func NewRecord(
 	invocationID invocationdomain.InvocationID,
 	toolID catalogdomain.ToolID,
 	providerID *catalogdomain.ProviderID,
-	caller string,
 	startedAt time.Time,
 	finishedAt time.Time,
 	policyKind policydomain.DecisionKind,
@@ -108,9 +109,6 @@ func NewRecord(
 	if finishedAt.Before(startedAt) {
 		return Record{}, fmt.Errorf("audit finished_at must not be before started_at")
 	}
-	if len(strings.TrimSpace(caller)) > 255 {
-		return Record{}, fmt.Errorf("audit caller is too long")
-	}
 	if err := validateOutcome(status, resultKind, errorClass); err != nil {
 		return Record{}, err
 	}
@@ -119,7 +117,6 @@ func NewRecord(
 		invocationID: invocationID,
 		toolID:       toolID,
 		providerID:   cloneProviderID(providerID),
-		caller:       strings.TrimSpace(caller),
 		startedAt:    startedAt.UTC(),
 		finishedAt:   finishedAt.UTC(),
 		policyKind:   policyKind,
@@ -158,7 +155,8 @@ func validateOutcome(status Status, resultKind invocationdomain.ResultKind, erro
 func (r Record) InvocationID() invocationdomain.InvocationID   { return r.invocationID }
 func (r Record) ToolID() catalogdomain.ToolID                  { return r.toolID }
 func (r Record) ProviderID() *catalogdomain.ProviderID         { return cloneProviderID(r.providerID) }
-func (r Record) Caller() string                                { return r.caller }
+func (r Record) PrincipalKind() string                         { return r.principalKind }
+func (r Record) PrincipalRef() string                          { return r.principalRef }
 func (r Record) StartedAt() time.Time                          { return r.startedAt }
 func (r Record) FinishedAt() time.Time                         { return r.finishedAt }
 func (r Record) PolicyKind() policydomain.DecisionKind         { return r.policyKind }
@@ -168,8 +166,8 @@ func (r Record) Status() Status                                { return r.status
 func (r Record) ResultKind() invocationdomain.ResultKind       { return r.resultKind }
 func (r Record) ErrorClass() ErrorClass                        { return r.errorClass }
 func (r Record) ErrorSummary() string                          { return r.errorSummary }
-func (r Record) Origin() invocationdomain.Origin               { return r.origin }
-func (r Record) ScopeKind() invocationdomain.ScopeKind         { return r.scopeKind }
+func (r Record) Origin() governancedomain.Origin               { return r.origin }
+func (r Record) ScopeKind() governancedomain.ScopeKind         { return r.scopeKind }
 func (r Record) ScopeReference() string                        { return r.scopeReference }
 func (r Record) OutcomeKind() invocationdomain.OutcomeKind     { return r.outcomeKind }
 func (r Record) RejectionCode() invocationdomain.RejectionCode { return r.rejectionCode }
@@ -178,12 +176,15 @@ func (r Record) FailureCode() invocationdomain.FailureCode     { return r.failur
 
 // WithExecutionContext attaches non-secret execution scope/origin metadata.
 func (r Record) WithExecutionContext(
-	executionContext invocationdomain.InvocationContext,
+	executionContext governancedomain.Context,
 ) (Record, error) {
 	if err := executionContext.Validate(); err != nil {
 		return Record{}, fmt.Errorf("audit execution context: %w", err)
 	}
 	scope := executionContext.Scope()
+	principal := executionContext.Principal()
+	r.principalKind = string(principal.Kind())
+	r.principalRef = principal.Reference()
 	r.origin = executionContext.Origin()
 	r.scopeKind = scope.Kind()
 	r.scopeReference = scope.Reference()
@@ -213,56 +214,49 @@ func (r Record) WithOutcomeClassification(
 	return r.withOutcomeMetadata(outcomeKind, rejectionCode, failureSource, failureCode)
 }
 
-// RestoreGovernanceMetadata restores persisted Phase 9 metadata.
-// All-zero metadata is accepted for legacy pre-Phase-9 Audit rows.
+// RestoreGovernanceMetadata restores persisted Principal, scope/origin, and outcome metadata.
 func (r Record) RestoreGovernanceMetadata(
-	origin invocationdomain.Origin,
-	scopeKind invocationdomain.ScopeKind,
+	principalKind string,
+	principalRef string,
+	origin governancedomain.Origin,
+	scopeKind governancedomain.ScopeKind,
 	scopeReference string,
 	outcomeKind invocationdomain.OutcomeKind,
 	rejectionCode invocationdomain.RejectionCode,
 	failureSource invocationdomain.FailureSource,
 	failureCode invocationdomain.FailureCode,
 ) (Record, error) {
-	if origin == "" &&
-		scopeKind == "" &&
-		scopeReference == "" &&
-		outcomeKind == "" &&
-		rejectionCode == "" &&
-		failureSource == "" &&
-		failureCode == "" {
-		return r, nil
+	if err := validatePrincipalSnapshot(principalKind, principalRef); err != nil {
+		return Record{}, err
+	}
+	switch origin {
+	case governancedomain.OriginCLI,
+		governancedomain.OriginMCP,
+		governancedomain.OriginManagementHTTP,
+		governancedomain.OriginDesktop,
+		governancedomain.OriginInternal:
+	default:
+		return Record{}, fmt.Errorf("audit origin %q is invalid", origin)
 	}
 
-	if origin == "" || scopeKind == "" {
-		return Record{}, fmt.Errorf("audit governance metadata requires origin and scope")
-	}
-
-	var scope invocationdomain.ExecutionScope
 	switch scopeKind {
-	case invocationdomain.ScopeCatalog:
+	case governancedomain.ScopeCatalog:
 		if scopeReference != "" {
 			return Record{}, fmt.Errorf("audit catalog scope must not contain a reference")
 		}
-		scope = invocationdomain.CatalogExecutionScope()
-	case invocationdomain.ScopeProfile:
-		var err error
-		scope, err = invocationdomain.ProfileExecutionScope(scopeReference)
-		if err != nil {
+	case governancedomain.ScopeProfile:
+		if _, err := governancedomain.ProfileScope(scopeReference); err != nil {
 			return Record{}, fmt.Errorf("audit profile scope: %w", err)
 		}
 	default:
 		return Record{}, fmt.Errorf("audit scope kind %q is invalid", scopeKind)
 	}
 
-	executionContext, err := invocationdomain.NewInvocationContext(origin, r.caller, scope)
-	if err != nil {
-		return Record{}, fmt.Errorf("audit execution context: %w", err)
-	}
-	r, err = r.WithExecutionContext(executionContext)
-	if err != nil {
-		return Record{}, err
-	}
+	r.principalKind = principalKind
+	r.principalRef = strings.TrimSpace(principalRef)
+	r.origin = origin
+	r.scopeKind = scopeKind
+	r.scopeReference = scopeReference
 
 	if outcomeKind == "" {
 		if rejectionCode != "" || failureSource != "" || failureCode != "" {
@@ -272,6 +266,24 @@ func (r Record) RestoreGovernanceMetadata(
 	}
 
 	return r.withOutcomeMetadata(outcomeKind, rejectionCode, failureSource, failureCode)
+}
+
+func validatePrincipalSnapshot(kind, reference string) error {
+	switch kind {
+	case string(governancedomain.PrincipalLocalUser),
+		string(governancedomain.PrincipalService),
+		"legacy":
+	default:
+		return fmt.Errorf("audit principal kind %q is invalid", kind)
+	}
+	reference = strings.TrimSpace(reference)
+	if reference == "" {
+		return fmt.Errorf("audit principal reference must not be empty")
+	}
+	if len(reference) > 255 {
+		return fmt.Errorf("audit principal reference is too long")
+	}
+	return nil
 }
 
 func (r Record) withOutcomeMetadata(

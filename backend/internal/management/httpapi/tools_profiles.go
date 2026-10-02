@@ -3,13 +3,13 @@ package httpapi
 import (
 	"encoding/json"
 	"fmt"
+	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	"net/http"
 	"strconv"
 
 	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
-	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	profileapplication "github.com/orz-i/Mender/backend/internal/profile/application"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 )
@@ -167,10 +167,10 @@ func (h *Handler) callTool(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	executionContext, err := invocationdomain.NewInvocationContext(
-		invocationdomain.OriginManagementHTTP,
-		"web",
-		invocationdomain.CatalogExecutionScope(),
+	executionContext, err := governancedomain.NewContext(
+		governancedomain.OriginManagementHTTP,
+		h.runtime.OwnerPrincipal(),
+		governancedomain.CatalogScope(),
 	)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, "internal_error", err)

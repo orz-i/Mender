@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	"reflect"
 	"sort"
 	"strings"
@@ -48,10 +49,10 @@ func TestDirectProfileListsAndCallsOnlySelectedTools(t *testing.T) {
 		t.Fatalf("invoked ToolIDs = %v", got)
 	}
 	invocationContext := fixture.lastInvocationContext(t)
-	if invocationContext.Origin() != invocationdomain.OriginMCP {
+	if invocationContext.Origin() != governancedomain.OriginMCP {
 		t.Fatalf("invocation origin = %q", invocationContext.Origin())
 	}
-	if invocationContext.Scope().Kind() != invocationdomain.ScopeProfile ||
+	if invocationContext.Scope().Kind() != governancedomain.ScopeProfile ||
 		invocationContext.Scope().Reference() != profile.ID().String() {
 		t.Fatalf(
 			"invocation scope = %q/%q, want profile %q",
@@ -404,7 +405,7 @@ type serverFixture struct {
 
 	mu                 sync.Mutex
 	invoked            []catalogdomain.ToolID
-	invocationContexts []invocationdomain.InvocationContext
+	invocationContexts []governancedomain.Context
 	searchAllowed      []catalogdomain.ToolID
 }
 
@@ -525,7 +526,7 @@ func (f *serverFixture) adapter(t *testing.T, profile profiledomain.Profile) *Ad
 			f.invoked = append(f.invoked, request.ToolID)
 			f.invocationContexts = append(f.invocationContexts, request.Context)
 			f.mu.Unlock()
-			if request.Context.Scope().Kind() == invocationdomain.ScopeProfile &&
+			if request.Context.Scope().Kind() == governancedomain.ScopeProfile &&
 				!profile.Contains(request.ToolID) {
 				rejected, rejectErr := invocationdomain.Rejected(
 					invocationdomain.RejectionToolOutsideScope,
@@ -559,7 +560,7 @@ func (f *serverFixture) invokedIDs() []catalogdomain.ToolID {
 	return append([]catalogdomain.ToolID(nil), f.invoked...)
 }
 
-func (f *serverFixture) lastInvocationContext(t *testing.T) invocationdomain.InvocationContext {
+func (f *serverFixture) lastInvocationContext(t *testing.T) governancedomain.Context {
 	t.Helper()
 	f.mu.Lock()
 	defer f.mu.Unlock()

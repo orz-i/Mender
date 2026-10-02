@@ -3,6 +3,7 @@ package bootstrap
 import (
 	"context"
 	"encoding/json"
+	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	"path/filepath"
 	"sync"
 	"sync/atomic"
@@ -68,9 +69,9 @@ func TestGovernedRuntimeIntegrationMatrix(t *testing.T) {
 
 	catalogContext := mustGovernanceInvocationContext(
 		t,
-		invocationdomain.OriginInternal,
+		governancedomain.OriginInternal,
 		"matrix-catalog",
-		invocationdomain.CatalogExecutionScope(),
+		governancedomain.CatalogScope(),
 	)
 	validArgs := []byte("{\"count\":2}")
 
@@ -105,13 +106,13 @@ func TestGovernedRuntimeIntegrationMatrix(t *testing.T) {
 		t.Fatalf("invalid input reached executor; calls = %d", executor.Calls())
 	}
 
-	restrictedScope, err := invocationdomain.ProfileExecutionScope(restrictedProfile.ID().String())
+	restrictedScope, err := governancedomain.ProfileScope(restrictedProfile.ID().String())
 	if err != nil {
 		t.Fatal(err)
 	}
 	restrictedContext := mustGovernanceInvocationContext(
 		t,
-		invocationdomain.OriginMCP,
+		governancedomain.OriginMCP,
 		"matrix:restricted",
 		restrictedScope,
 	)
@@ -135,21 +136,21 @@ func TestGovernedRuntimeIntegrationMatrix(t *testing.T) {
 		t.Fatal(err)
 	}
 	if restrictedAudit.ProviderID() != nil ||
-		restrictedAudit.Origin() != invocationdomain.OriginMCP ||
-		restrictedAudit.ScopeKind() != invocationdomain.ScopeProfile ||
+		restrictedAudit.Origin() != governancedomain.OriginMCP ||
+		restrictedAudit.ScopeKind() != governancedomain.ScopeProfile ||
 		restrictedAudit.ScopeReference() != restrictedProfile.ID().String() ||
 		restrictedAudit.OutcomeKind() != invocationdomain.OutcomeKindRejected ||
 		restrictedAudit.RejectionCode() != invocationdomain.RejectionToolOutsideScope {
 		t.Fatalf("restricted audit = %#v", restrictedAudit)
 	}
 
-	allowedScope, err := invocationdomain.ProfileExecutionScope(allowedProfile.ID().String())
+	allowedScope, err := governancedomain.ProfileScope(allowedProfile.ID().String())
 	if err != nil {
 		t.Fatal(err)
 	}
 	allowedContext := mustGovernanceInvocationContext(
 		t,
-		invocationdomain.OriginMCP,
+		governancedomain.OriginMCP,
 		"matrix:allowed",
 		allowedScope,
 	)
@@ -240,13 +241,13 @@ func TestProfileBindingPolicyConstraintsEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	denyScope, err := invocationdomain.ProfileExecutionScope(denyProfile.ID().String())
+	denyScope, err := governancedomain.ProfileScope(denyProfile.ID().String())
 	if err != nil {
 		t.Fatal(err)
 	}
 	denyContext := mustGovernanceInvocationContext(
 		t,
-		invocationdomain.OriginMCP,
+		governancedomain.OriginMCP,
 		"binding-deny",
 		denyScope,
 	)
@@ -303,7 +304,7 @@ func TestProfileBindingPolicyConstraintsEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	approvalScope, err := invocationdomain.ProfileExecutionScope(
+	approvalScope, err := governancedomain.ProfileScope(
 		approvalProfile.ID().String(),
 	)
 	if err != nil {
@@ -311,7 +312,7 @@ func TestProfileBindingPolicyConstraintsEndToEnd(t *testing.T) {
 	}
 	approvalContext := mustGovernanceInvocationContext(
 		t,
-		invocationdomain.OriginMCP,
+		governancedomain.OriginMCP,
 		"binding-approval",
 		approvalScope,
 	)
@@ -345,9 +346,9 @@ func TestProfileBindingPolicyConstraintsEndToEnd(t *testing.T) {
 
 	catalogContext := mustGovernanceInvocationContext(
 		t,
-		invocationdomain.OriginInternal,
+		governancedomain.OriginInternal,
 		"binding-catalog",
-		invocationdomain.CatalogExecutionScope(),
+		governancedomain.CatalogScope(),
 	)
 	catalogResponse, err := runtime.InvokeTool.Execute(
 		ctx,
@@ -406,13 +407,13 @@ func TestProfileBindingSerialExecutionEndToEnd(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	scope, err := invocationdomain.ProfileExecutionScope(profile.ID().String())
+	scope, err := governancedomain.ProfileScope(profile.ID().String())
 	if err != nil {
 		t.Fatal(err)
 	}
 	executionContext := mustGovernanceInvocationContext(
 		t,
-		invocationdomain.OriginMCP,
+		governancedomain.OriginMCP,
 		"binding-serial",
 		scope,
 	)
@@ -627,9 +628,9 @@ func TestRuntimeProviderSerialGuardPreventsOverlap(t *testing.T) {
 
 	executionContext := mustGovernanceInvocationContext(
 		t,
-		invocationdomain.OriginInternal,
+		governancedomain.OriginInternal,
 		"serial-test",
-		invocationdomain.CatalogExecutionScope(),
+		governancedomain.CatalogScope(),
 	)
 	request := invocationapplication.InvokeToolRequest{
 		ToolID:    toolID,
@@ -829,12 +830,13 @@ func (e *serialProbeExecutor) MaxActive() int32 {
 
 func mustGovernanceInvocationContext(
 	t *testing.T,
-	origin invocationdomain.Origin,
+	origin governancedomain.Origin,
 	caller string,
-	scope invocationdomain.ExecutionScope,
-) invocationdomain.InvocationContext {
+	scope governancedomain.Scope,
+) governancedomain.Context {
 	t.Helper()
-	executionContext, err := invocationdomain.NewInvocationContext(origin, caller, scope)
+	principal := testPrincipal(t, caller)
+	executionContext, err := governancedomain.NewContext(origin, principal, scope)
 	if err != nil {
 		t.Fatal(err)
 	}

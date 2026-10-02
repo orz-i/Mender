@@ -4,11 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 
 	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
-	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	mcpconfigstore "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/configstore"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 	providerconfigstore "github.com/orz-i/Mender/backend/internal/providerplugin/configstore"
@@ -60,7 +60,7 @@ func (r *Runtime) CallConfiguredTool(
 	ctx context.Context,
 	toolID catalogdomain.ToolID,
 	arguments []byte,
-	executionContext invocationdomain.InvocationContext,
+	executionContext governancedomain.Context,
 ) (invocationapplication.InvokeToolResponse, error) {
 	request := invocationapplication.InvokeToolRequest{
 		ToolID:    toolID,
@@ -68,7 +68,7 @@ func (r *Runtime) CallConfiguredTool(
 		Context:   executionContext,
 	}
 
-	if executionContext.Scope().Kind() == invocationdomain.ScopeProfile {
+	if executionContext.Scope().Kind() == governancedomain.ScopeProfile {
 		profileID, err := profiledomain.ParseProfileID(executionContext.Scope().Reference())
 		if err != nil {
 			return invocationapplication.InvokeToolResponse{}, fmt.Errorf(

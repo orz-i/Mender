@@ -3,6 +3,7 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	"path/filepath"
 	"slices"
 	"testing"
@@ -19,14 +20,8 @@ func TestAuditRecordRoundTrip(t *testing.T) {
 
 	store := openTestStore(t)
 	record := completedRecord(t)
-	executionContext, err := invocationdomain.NewInvocationContext(
-		invocationdomain.OriginCLI,
-		"cli",
-		invocationdomain.CatalogExecutionScope(),
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
+	executionContext := auditTestContext(t, governancedomain.OriginCLI)
+	var err error
 	record, err = record.WithExecutionContext(executionContext)
 	if err != nil {
 		t.Fatal(err)
@@ -61,8 +56,8 @@ func TestAuditRecordRoundTrip(t *testing.T) {
 	if loaded.ProviderID() == nil || *loaded.ProviderID() != *record.ProviderID() {
 		t.Fatalf("ProviderID() = %v, want %v", loaded.ProviderID(), record.ProviderID())
 	}
-	if loaded.Origin() != invocationdomain.OriginCLI ||
-		loaded.ScopeKind() != invocationdomain.ScopeCatalog ||
+	if loaded.Origin() != governancedomain.OriginCLI ||
+		loaded.ScopeKind() != governancedomain.ScopeCatalog ||
 		loaded.ScopeReference() != "" ||
 		loaded.OutcomeKind() != invocationdomain.OutcomeKindComplete {
 		t.Fatalf(
@@ -88,7 +83,6 @@ func TestAuditErrorSummaryRoundTrip(t *testing.T) {
 		invocationID,
 		toolID,
 		&providerID,
-		"desktop",
 		now,
 		now.Add(time.Millisecond),
 		policydomain.DecisionAllow,
@@ -98,6 +92,10 @@ func TestAuditErrorSummaryRoundTrip(t *testing.T) {
 		"",
 		auditdomain.ErrorExecution,
 	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	record, err = record.WithExecutionContext(auditTestContext(t, governancedomain.OriginDesktop))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,7 +125,6 @@ func TestAuditAllowsUnknownProviderForUnresolvedTool(t *testing.T) {
 		invocationID,
 		toolID,
 		nil,
-		"mcp",
 		now,
 		now.Add(time.Millisecond),
 		"",
@@ -137,6 +134,10 @@ func TestAuditAllowsUnknownProviderForUnresolvedTool(t *testing.T) {
 		"",
 		auditdomain.ErrorToolNotFound,
 	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	record, err = record.WithExecutionContext(auditTestContext(t, governancedomain.OriginMCP))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -218,7 +219,6 @@ func completedRecord(t *testing.T) auditdomain.Record {
 		invocationID,
 		toolID,
 		&providerID,
-		"cli",
 		now,
 		now.Add(10*time.Millisecond),
 		policydomain.DecisionAllow,
@@ -232,6 +232,22 @@ func completedRecord(t *testing.T) auditdomain.Record {
 		t.Fatal(err)
 	}
 	return record
+}
+
+func auditTestContext(t *testing.T, origin governancedomain.Origin) governancedomain.Context {
+	t.Helper()
+	principal, err := governancedomain.NewPrincipal(
+		governancedomain.PrincipalLocalUser,
+		"test:user",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, err := governancedomain.NewContext(origin, principal, governancedomain.CatalogScope())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return ctx
 }
 
 func openTestStore(t *testing.T) *Store {

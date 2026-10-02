@@ -146,14 +146,17 @@ func (r Rule) UpdatedAt() time.Time {
 
 func cloneMatch(match Match) Match {
 	cloned, err := NewMatch(MatchSpec{
-		Origins:       match.Origins(),
-		ScopeKinds:    match.ScopeKinds(),
-		ProfileRefs:   match.ProfileRefs(),
-		ProviderIDs:   match.ProviderIDs(),
-		ToolIDs:       match.ToolIDs(),
-		FactKnowledge: match.FactKnowledge(),
-		EffectsAny:    match.EffectsAny(),
-		ResourcesAny:  match.ResourcesAny(),
+		Actions:        match.Actions(),
+		Origins:        match.Origins(),
+		PrincipalKinds: match.PrincipalKinds(),
+		PrincipalRefs:  match.PrincipalRefs(),
+		ScopeKinds:     match.ScopeKinds(),
+		ProfileRefs:    match.ProfileRefs(),
+		ProviderIDs:    match.ProviderIDs(),
+		ToolIDs:        match.ToolIDs(),
+		FactKnowledge:  match.FactKnowledge(),
+		EffectsAny:     match.EffectsAny(),
+		ResourcesAny:   match.ResourcesAny(),
 	})
 	if err != nil {
 		panic("policy domain: clone validated match: " + err.Error())

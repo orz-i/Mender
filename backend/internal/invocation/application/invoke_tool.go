@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	"time"
 
 	auditdomain "github.com/orz-i/Mender/backend/internal/audit/domain"
@@ -19,7 +20,7 @@ const fallbackExecutionTimeout = 30 * time.Second
 type InvokeToolRequest struct {
 	ToolID    catalogdomain.ToolID
 	Arguments []byte
-	Context   invocationdomain.InvocationContext
+	Context   governancedomain.Context
 	Timeout   time.Duration
 }
 
@@ -248,7 +249,6 @@ func (uc InvokeTool) Execute(
 		Tool:                  tool,
 		Context:               request.Context,
 		Facts:                 facts,
-		Caller:                request.Context.Caller(),
 		HasCredentialResolver: uc.credentials != nil,
 	})
 	if err != nil {
@@ -334,7 +334,7 @@ func (uc InvokeTool) Execute(
 		approved, approvalErr := uc.approvals.Approve(ctx, ApprovalRequest{
 			InvocationID: invocationID,
 			Tool:         tool,
-			Caller:       request.Context.Caller(),
+			Context:      request.Context,
 			Decision:     decision,
 		})
 		if approvalErr != nil {
@@ -517,13 +517,13 @@ func (uc InvokeTool) enforceExecutionScope(
 ) {
 	scope := request.Context.Scope()
 	switch scope.Kind() {
-	case invocationdomain.ScopeCatalog:
+	case governancedomain.ScopeCatalog:
 		return invocationdomain.InheritedScopedBindingGovernance(),
 			invocationdomain.Outcome{},
 			false,
 			nil
 
-	case invocationdomain.ScopeProfile:
+	case governancedomain.ScopeProfile:
 		if uc.profileScopes == nil {
 			recordErr := uc.recordUnresolvedTool(
 				context.WithoutCancel(ctx),
@@ -1137,7 +1137,7 @@ func (uc InvokeTool) record(
 	ctx context.Context,
 	invocationID invocationdomain.InvocationID,
 	tool catalogdomain.Tool,
-	executionContext invocationdomain.InvocationContext,
+	executionContext governancedomain.Context,
 	startedAt time.Time,
 	policyKind policydomain.DecisionKind,
 	policyReason string,
@@ -1153,7 +1153,6 @@ func (uc InvokeTool) record(
 		invocationID,
 		tool.ID(),
 		&providerID,
-		executionContext.Caller(),
 		startedAt,
 		uc.clock.Now(),
 		policyKind,
@@ -1194,7 +1193,7 @@ func (uc InvokeTool) recordUnresolvedTool(
 	ctx context.Context,
 	invocationID invocationdomain.InvocationID,
 	toolID catalogdomain.ToolID,
-	executionContext invocationdomain.InvocationContext,
+	executionContext governancedomain.Context,
 	startedAt time.Time,
 	status auditdomain.Status,
 	errorClass auditdomain.ErrorClass,
@@ -1204,7 +1203,6 @@ func (uc InvokeTool) recordUnresolvedTool(
 		invocationID,
 		toolID,
 		nil,
-		executionContext.Caller(),
 		startedAt,
 		uc.clock.Now(),
 		policydomain.DecisionKind(""),

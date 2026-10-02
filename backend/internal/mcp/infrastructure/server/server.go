@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -41,7 +42,7 @@ type Dependencies struct {
 // Adapter projects one Profile as an MCP server.
 type Adapter struct {
 	profile           profiledomain.Profile
-	invocationContext invocationdomain.InvocationContext
+	invocationContext governancedomain.Context
 	deps              Dependencies
 	server            *mcp.Server
 	tools             map[catalogdomain.ToolID]catalogdomain.Tool
@@ -53,13 +54,20 @@ func New(ctx context.Context, profile profiledomain.Profile, deps Dependencies) 
 		return nil, fmt.Errorf("build MCP server: all dependencies are required")
 	}
 
-	profileScope, err := invocationdomain.ProfileExecutionScope(profile.ID().String())
+	profileScope, err := governancedomain.ProfileScope(profile.ID().String())
 	if err != nil {
 		return nil, fmt.Errorf("build MCP server: profile scope: %w", err)
 	}
-	invocationContext, err := invocationdomain.NewInvocationContext(
-		invocationdomain.OriginMCP,
-		"mcp:"+profile.Slug().String(),
+	principal, err := governancedomain.NewPrincipal(
+		governancedomain.PrincipalService,
+		"profile:"+profile.ID().String(),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("build MCP server: principal: %w", err)
+	}
+	invocationContext, err := governancedomain.NewContext(
+		governancedomain.OriginMCP,
+		principal,
 		profileScope,
 	)
 	if err != nil {

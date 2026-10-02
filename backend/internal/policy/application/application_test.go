@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"errors"
+	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	"testing"
 	"time"
 
@@ -29,7 +30,8 @@ func TestPolicyRuleLifecycleAndReferenceValidation(t *testing.T) {
 		Enabled:     true,
 		Decision:    policydomain.DecisionRequireApproval,
 		Match: policydomain.MatchSpec{
-			Origins:     []policydomain.Origin{policydomain.OriginMCP},
+			Actions:     []governancedomain.Action{governancedomain.ActionToolInvoke},
+			Origins:     []governancedomain.Origin{governancedomain.OriginMCP},
 			ProfileRefs: []string{"prof_00000000000000000000000000000001"},
 			ProviderIDs: []string{"prov_00000000000000000000000000000001"},
 			ToolIDs:     []string{"tool_00000000000000000000000000000001"},
@@ -48,7 +50,8 @@ func TestPolicyRuleLifecycleAndReferenceValidation(t *testing.T) {
 		Enabled:     false,
 		Decision:    policydomain.DecisionDeny,
 		Match: policydomain.MatchSpec{
-			Origins: []policydomain.Origin{policydomain.OriginMCP},
+			Actions: []governancedomain.Action{governancedomain.ActionToolInvoke},
+			Origins: []governancedomain.Origin{governancedomain.OriginMCP},
 		},
 	})
 	if err != nil {
@@ -94,6 +97,7 @@ func TestCreateRuleRejectsMissingReferenceBeforePersistence(t *testing.T) {
 		Enabled:     true,
 		Decision:    policydomain.DecisionDeny,
 		Match: policydomain.MatchSpec{
+			Actions: []governancedomain.Action{governancedomain.ActionToolInvoke},
 			ToolIDs: []string{"tool_00000000000000000000000000000001"},
 		},
 	})
@@ -129,11 +133,14 @@ func TestSetDefaultAndEvaluateUseCurrentPolicySet(t *testing.T) {
 	decision, err := NewEvaluate(repository).Execute(
 		context.Background(),
 		EvaluateRequest{
-			Origin:        policydomain.OriginCLI,
-			ScopeKind:     policydomain.ScopeCatalog,
-			ProviderID:    "prov_00000000000000000000000000000001",
-			ToolID:        "tool_00000000000000000000000000000001",
-			FactKnowledge: policydomain.FactUnknown,
+			Action:             governancedomain.ActionToolInvoke,
+			PrincipalKind:      governancedomain.PrincipalLocalUser,
+			PrincipalReference: "test:user",
+			Origin:             governancedomain.OriginCLI,
+			ScopeKind:          governancedomain.ScopeCatalog,
+			ProviderID:         "prov_00000000000000000000000000000001",
+			ToolID:             "tool_00000000000000000000000000000001",
+			FactKnowledge:      policydomain.FactUnknown,
 		},
 	)
 	if err != nil {

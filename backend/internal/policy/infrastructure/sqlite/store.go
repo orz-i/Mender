@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	policyapplication "github.com/orz-i/Mender/backend/internal/policy/application"
 	policydomain "github.com/orz-i/Mender/backend/internal/policy/domain"
 	_ "modernc.org/sqlite"
@@ -270,14 +271,17 @@ func scanRule(scanner rowScanner) (policydomain.Rule, error) {
 }
 
 type matchRecord struct {
-	Origins       []string         `json:"origins"`
-	ScopeKinds    []string         `json:"scopeKinds"`
-	ProfileRefs   []string         `json:"profileRefs"`
-	ProviderIDs   []string         `json:"providerIds"`
-	ToolIDs       []string         `json:"toolIds"`
-	FactKnowledge string           `json:"factKnowledge"`
-	EffectsAny    []string         `json:"effectsAny"`
-	ResourcesAny  []resourceRecord `json:"resourcesAny"`
+	Actions        []string         `json:"actions"`
+	Origins        []string         `json:"origins"`
+	PrincipalKinds []string         `json:"principalKinds"`
+	PrincipalRefs  []string         `json:"principalRefs"`
+	ScopeKinds     []string         `json:"scopeKinds"`
+	ProfileRefs    []string         `json:"profileRefs"`
+	ProviderIDs    []string         `json:"providerIds"`
+	ToolIDs        []string         `json:"toolIds"`
+	FactKnowledge  string           `json:"factKnowledge"`
+	EffectsAny     []string         `json:"effectsAny"`
+	ResourcesAny   []resourceRecord `json:"resourcesAny"`
 }
 
 type resourceRecord struct {
@@ -288,14 +292,17 @@ type resourceRecord struct {
 
 func encodeMatch(match policydomain.Match) (string, error) {
 	record := matchRecord{
-		Origins:       stringsFromOrigins(match.Origins()),
-		ScopeKinds:    stringsFromScopeKinds(match.ScopeKinds()),
-		ProfileRefs:   match.ProfileRefs(),
-		ProviderIDs:   match.ProviderIDs(),
-		ToolIDs:       match.ToolIDs(),
-		FactKnowledge: string(match.FactKnowledge()),
-		EffectsAny:    match.EffectsAny(),
-		ResourcesAny:  resourceRecords(match.ResourcesAny()),
+		Actions:        stringsFromActions(match.Actions()),
+		Origins:        stringsFromOrigins(match.Origins()),
+		PrincipalKinds: stringsFromPrincipalKinds(match.PrincipalKinds()),
+		PrincipalRefs:  match.PrincipalRefs(),
+		ScopeKinds:     stringsFromScopeKinds(match.ScopeKinds()),
+		ProfileRefs:    match.ProfileRefs(),
+		ProviderIDs:    match.ProviderIDs(),
+		ToolIDs:        match.ToolIDs(),
+		FactKnowledge:  string(match.FactKnowledge()),
+		EffectsAny:     match.EffectsAny(),
+		ResourcesAny:   resourceRecords(match.ResourcesAny()),
 	}
 	raw, err := json.Marshal(record)
 	if err != nil {
@@ -322,18 +329,21 @@ func decodeMatch(raw string) (policydomain.Match, error) {
 		resources = append(resources, matcher)
 	}
 	return policydomain.NewMatch(policydomain.MatchSpec{
-		Origins:       originsFromStrings(record.Origins),
-		ScopeKinds:    scopeKindsFromStrings(record.ScopeKinds),
-		ProfileRefs:   record.ProfileRefs,
-		ProviderIDs:   record.ProviderIDs,
-		ToolIDs:       record.ToolIDs,
-		FactKnowledge: policydomain.FactKnowledge(record.FactKnowledge),
-		EffectsAny:    record.EffectsAny,
-		ResourcesAny:  resources,
+		Actions:        actionsFromStrings(record.Actions),
+		Origins:        originsFromStrings(record.Origins),
+		PrincipalKinds: principalKindsFromStrings(record.PrincipalKinds),
+		PrincipalRefs:  record.PrincipalRefs,
+		ScopeKinds:     scopeKindsFromStrings(record.ScopeKinds),
+		ProfileRefs:    record.ProfileRefs,
+		ProviderIDs:    record.ProviderIDs,
+		ToolIDs:        record.ToolIDs,
+		FactKnowledge:  policydomain.FactKnowledge(record.FactKnowledge),
+		EffectsAny:     record.EffectsAny,
+		ResourcesAny:   resources,
 	})
 }
 
-func stringsFromOrigins(values []policydomain.Origin) []string {
+func stringsFromActions(values []governancedomain.Action) []string {
 	result := make([]string, 0, len(values))
 	for _, value := range values {
 		result = append(result, string(value))
@@ -341,15 +351,15 @@ func stringsFromOrigins(values []policydomain.Origin) []string {
 	return result
 }
 
-func originsFromStrings(values []string) []policydomain.Origin {
-	result := make([]policydomain.Origin, 0, len(values))
+func actionsFromStrings(values []string) []governancedomain.Action {
+	result := make([]governancedomain.Action, 0, len(values))
 	for _, value := range values {
-		result = append(result, policydomain.Origin(value))
+		result = append(result, governancedomain.Action(value))
 	}
 	return result
 }
 
-func stringsFromScopeKinds(values []policydomain.ScopeKind) []string {
+func stringsFromOrigins(values []governancedomain.Origin) []string {
 	result := make([]string, 0, len(values))
 	for _, value := range values {
 		result = append(result, string(value))
@@ -357,10 +367,42 @@ func stringsFromScopeKinds(values []policydomain.ScopeKind) []string {
 	return result
 }
 
-func scopeKindsFromStrings(values []string) []policydomain.ScopeKind {
-	result := make([]policydomain.ScopeKind, 0, len(values))
+func originsFromStrings(values []string) []governancedomain.Origin {
+	result := make([]governancedomain.Origin, 0, len(values))
 	for _, value := range values {
-		result = append(result, policydomain.ScopeKind(value))
+		result = append(result, governancedomain.Origin(value))
+	}
+	return result
+}
+
+func stringsFromPrincipalKinds(values []governancedomain.PrincipalKind) []string {
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		result = append(result, string(value))
+	}
+	return result
+}
+
+func principalKindsFromStrings(values []string) []governancedomain.PrincipalKind {
+	result := make([]governancedomain.PrincipalKind, 0, len(values))
+	for _, value := range values {
+		result = append(result, governancedomain.PrincipalKind(value))
+	}
+	return result
+}
+
+func stringsFromScopeKinds(values []governancedomain.ScopeKind) []string {
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		result = append(result, string(value))
+	}
+	return result
+}
+
+func scopeKindsFromStrings(values []string) []governancedomain.ScopeKind {
+	result := make([]governancedomain.ScopeKind, 0, len(values))
+	for _, value := range values {
+		result = append(result, governancedomain.ScopeKind(value))
 	}
 	return result
 }

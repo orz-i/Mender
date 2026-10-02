@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -457,10 +458,10 @@ paths:
 		t.Fatalf("initial title = %q", search[0].Title)
 	}
 
-	callContext, err := invocationdomain.NewInvocationContext(
-		invocationdomain.OriginInternal,
-		"openapi-runtime-test",
-		invocationdomain.CatalogExecutionScope(),
+	callContext, err := governancedomain.NewContext(
+		governancedomain.OriginInternal,
+		testPrincipal(t, "openapi-runtime-test"),
+		governancedomain.CatalogScope(),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -748,10 +749,10 @@ func TestConfiguredProviderRuntimeReusesAndReplacesPluginInstances(t *testing.T)
 		t.Fatalf("SearchTools.Execute() = %+v, want one Tool", search)
 	}
 
-	invocationContext, err := invocationdomain.NewInvocationContext(
-		invocationdomain.OriginInternal,
-		"provider-plugin-runtime-test",
-		invocationdomain.CatalogExecutionScope(),
+	invocationContext, err := governancedomain.NewContext(
+		governancedomain.OriginInternal,
+		testPrincipal(t, "provider-plugin-runtime-test"),
+		governancedomain.CatalogScope(),
 	)
 	if err != nil {
 		t.Fatal(err)

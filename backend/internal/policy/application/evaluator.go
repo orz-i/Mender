@@ -4,21 +4,24 @@ import (
 	"context"
 	"fmt"
 
+	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	policydomain "github.com/orz-i/Mender/backend/internal/policy/domain"
 )
 
 // EvaluateRequest is the bounded application boundary consumed by Runtime adapters.
-// It intentionally contains no raw Tool arguments, Caller identity, Credential
-// references, or secret material.
+// It intentionally contains no raw Tool arguments, Credential references, or secret material.
 type EvaluateRequest struct {
-	Origin         policydomain.Origin
-	ScopeKind      policydomain.ScopeKind
-	ScopeReference string
-	ProviderID     string
-	ToolID         string
-	FactKnowledge  policydomain.FactKnowledge
-	Effects        []string
-	Resources      []ResourceFact
+	Action             governancedomain.Action
+	Origin             governancedomain.Origin
+	PrincipalKind      governancedomain.PrincipalKind
+	PrincipalReference string
+	ScopeKind          governancedomain.ScopeKind
+	ScopeReference     string
+	ProviderID         string
+	ToolID             string
+	FactKnowledge      policydomain.FactKnowledge
+	Effects            []string
+	Resources          []ResourceFact
 }
 
 // ResourceFact is the Policy-facing bounded resource projection.
@@ -52,14 +55,17 @@ func (uc Evaluate) Execute(
 		return policydomain.Decision{}, fmt.Errorf("evaluate policy: %w", err)
 	}
 	decision, err := policy.Evaluate(policydomain.EvaluationInput{
-		Origin:         request.Origin,
-		ScopeKind:      request.ScopeKind,
-		ScopeReference: request.ScopeReference,
-		ProviderID:     request.ProviderID,
-		ToolID:         request.ToolID,
-		FactKnowledge:  request.FactKnowledge,
-		Effects:        append([]string(nil), request.Effects...),
-		Resources:      resources,
+		Action:             request.Action,
+		Origin:             request.Origin,
+		PrincipalKind:      request.PrincipalKind,
+		PrincipalReference: request.PrincipalReference,
+		ScopeKind:          request.ScopeKind,
+		ScopeReference:     request.ScopeReference,
+		ProviderID:         request.ProviderID,
+		ToolID:             request.ToolID,
+		FactKnowledge:      request.FactKnowledge,
+		Effects:            append([]string(nil), request.Effects...),
+		Resources:          resources,
 	})
 	if err != nil {
 		return policydomain.Decision{}, fmt.Errorf("evaluate policy: %w", err)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	"os"
 	"text/tabwriter"
 
@@ -239,25 +240,25 @@ func cliInvocationContext(
 	ctx context.Context,
 	runtime *bootstrap.Runtime,
 	profileValue string,
-) (invocationdomain.InvocationContext, error) {
-	scope := invocationdomain.CatalogExecutionScope()
+) (governancedomain.Context, error) {
+	scope := governancedomain.CatalogScope()
 	if profileValue != "" {
 		profile, err := resolveProfile(ctx, runtime, profileValue)
 		if err != nil {
-			return invocationdomain.InvocationContext{}, err
+			return governancedomain.Context{}, err
 		}
-		scope, err = invocationdomain.ProfileExecutionScope(profile.ID().String())
+		scope, err = governancedomain.ProfileScope(profile.ID().String())
 		if err != nil {
-			return invocationdomain.InvocationContext{}, fmt.Errorf("construct CLI profile scope: %w", err)
+			return governancedomain.Context{}, fmt.Errorf("construct CLI profile scope: %w", err)
 		}
 	}
-	executionContext, err := invocationdomain.NewInvocationContext(
-		invocationdomain.OriginCLI,
-		"cli",
+	executionContext, err := governancedomain.NewContext(
+		governancedomain.OriginCLI,
+		runtime.OwnerPrincipal(),
 		scope,
 	)
 	if err != nil {
-		return invocationdomain.InvocationContext{}, fmt.Errorf("construct CLI invocation context: %w", err)
+		return governancedomain.Context{}, fmt.Errorf("construct CLI invocation context: %w", err)
 	}
 	return executionContext, nil
 }

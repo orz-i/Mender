@@ -28,7 +28,7 @@ func migrate(ctx context.Context, db *sql.DB) error {
 	).Scan(&recordedVersion); err != nil {
 		return fmt.Errorf("check audit schema version: %w", err)
 	}
-	const latestSupportedVersion = 3
+	const latestSupportedVersion = 4
 	if recordedVersion.Valid && recordedVersion.Int64 > latestSupportedVersion {
 		return fmt.Errorf(
 			"audit schema version %d is newer than supported version %d",
@@ -122,6 +122,108 @@ func migrate(ctx context.Context, db *sql.DB) error {
 			time.Now().UTC().Format(time.RFC3339Nano),
 		); err != nil {
 			return fmt.Errorf("record audit migration 3: %w", err)
+		}
+	}
+
+	applied = 0
+	if err := tx.QueryRowContext(
+		ctx,
+		"SELECT COUNT(*) FROM audit_schema_migrations WHERE version = 4",
+	).Scan(&applied); err != nil {
+		return fmt.Errorf("check audit migration 4: %w", err)
+	}
+	if applied == 0 {
+		if _, err := tx.ExecContext(ctx, `CREATE TABLE invocation_audit_v4 (
+			invocation_id TEXT PRIMARY KEY,
+			tool_id TEXT NOT NULL,
+			provider_id TEXT,
+			principal_kind TEXT NOT NULL,
+			principal_ref TEXT NOT NULL,
+			started_at TEXT NOT NULL,
+			finished_at TEXT NOT NULL,
+			policy_kind TEXT NOT NULL,
+			policy_reason TEXT NOT NULL,
+			approval TEXT NOT NULL,
+			status TEXT NOT NULL,
+			result_kind TEXT NOT NULL,
+			error_class TEXT NOT NULL,
+			error_summary TEXT NOT NULL,
+			origin TEXT NOT NULL,
+			scope_kind TEXT NOT NULL,
+			scope_reference TEXT NOT NULL,
+			outcome_kind TEXT NOT NULL,
+			rejection_code TEXT NOT NULL,
+			failure_source TEXT NOT NULL,
+			failure_code TEXT NOT NULL
+		)`); err != nil {
+			return fmt.Errorf("create invocation audit v4: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO invocation_audit_v4(
+			invocation_id,
+			tool_id,
+			provider_id,
+			principal_kind,
+			principal_ref,
+			started_at,
+			finished_at,
+			policy_kind,
+			policy_reason,
+			approval,
+			status,
+			result_kind,
+			error_class,
+			error_summary,
+			origin,
+			scope_kind,
+			scope_reference,
+			outcome_kind,
+			rejection_code,
+			failure_source,
+			failure_code
+		)
+		SELECT
+			invocation_id,
+			tool_id,
+			provider_id,
+			'legacy',
+			CASE
+				WHEN length(trim(caller)) > 0 THEN substr(trim(caller), 1, 255)
+				ELSE 'historical-unknown'
+			END,
+			started_at,
+			finished_at,
+			policy_kind,
+			policy_reason,
+			approval,
+			status,
+			result_kind,
+			error_class,
+			error_summary,
+			CASE WHEN trim(origin) = '' THEN 'internal' ELSE origin END,
+			CASE WHEN trim(scope_kind) = '' THEN 'catalog' ELSE scope_kind END,
+			CASE WHEN trim(scope_kind) = '' THEN '' ELSE scope_reference END,
+			outcome_kind,
+			rejection_code,
+			failure_source,
+			failure_code
+		FROM invocation_audit`); err != nil {
+			return fmt.Errorf("copy invocation audit v4: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx, "DROP TABLE invocation_audit"); err != nil {
+			return fmt.Errorf("drop invocation audit v3: %w", err)
+		}
+		if _, err := tx.ExecContext(
+			ctx,
+			"ALTER TABLE invocation_audit_v4 RENAME TO invocation_audit",
+		); err != nil {
+			return fmt.Errorf("rename invocation audit v4: %w", err)
+		}
+		if _, err := tx.ExecContext(
+			ctx,
+			"INSERT INTO audit_schema_migrations(version, applied_at) VALUES (4, ?)",
+			time.Now().UTC().Format(time.RFC3339Nano),
+		); err != nil {
+			return fmt.Errorf("record audit migration 4: %w", err)
 		}
 	}
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -30,11 +31,14 @@ func TestFreshStoreDefaultsToAllowWithNoRules(t *testing.T) {
 	}
 
 	decision, err := policy.Evaluate(policydomain.EvaluationInput{
-		Origin:        policydomain.OriginCLI,
-		ScopeKind:     policydomain.ScopeCatalog,
-		ProviderID:    "prov_00000000000000000000000000000001",
-		ToolID:        "tool_00000000000000000000000000000001",
-		FactKnowledge: policydomain.FactUnknown,
+		Action:             governancedomain.ActionToolInvoke,
+		PrincipalKind:      governancedomain.PrincipalLocalUser,
+		PrincipalReference: "test:user",
+		Origin:             governancedomain.OriginCLI,
+		ScopeKind:          governancedomain.ScopeCatalog,
+		ProviderID:         "prov_00000000000000000000000000000001",
+		ToolID:             "tool_00000000000000000000000000000001",
+		FactKnowledge:      policydomain.FactUnknown,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -61,8 +65,9 @@ func TestPolicyRuleRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	match, err := policydomain.NewMatch(policydomain.MatchSpec{
-		Origins:       []policydomain.Origin{policydomain.OriginMCP},
-		ScopeKinds:    []policydomain.ScopeKind{policydomain.ScopeProfile},
+		Actions:       []governancedomain.Action{governancedomain.ActionToolInvoke},
+		Origins:       []governancedomain.Origin{governancedomain.OriginMCP},
+		ScopeKinds:    []governancedomain.ScopeKind{governancedomain.ScopeProfile},
 		ProfileRefs:   []string{"prof_00000000000000000000000000000001"},
 		ProviderIDs:   []string{"prov_00000000000000000000000000000001"},
 		ToolIDs:       []string{"tool_00000000000000000000000000000001"},
@@ -108,7 +113,7 @@ func TestPolicyRuleRoundTrip(t *testing.T) {
 	}
 	loadedMatch := loaded.Match()
 	if len(loadedMatch.Origins()) != 1 ||
-		loadedMatch.Origins()[0] != policydomain.OriginMCP ||
+		loadedMatch.Origins()[0] != governancedomain.OriginMCP ||
 		len(loadedMatch.ProfileRefs()) != 1 ||
 		loadedMatch.FactKnowledge() != policydomain.FactKnown ||
 		len(loadedMatch.ResourcesAny()) != 1 ||
@@ -166,7 +171,8 @@ func TestCreateRuleMapsDuplicateToConflict(t *testing.T) {
 	t.Parallel()
 
 	store := openTestStore(t)
-	match, err := policydomain.NewMatch(policydomain.MatchSpec{})
+	match, err := policydomain.NewMatch(policydomain.MatchSpec{
+		Actions: []governancedomain.Action{governancedomain.ActionToolInvoke}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -242,7 +248,8 @@ func TestPolicyRestoreFailsClosedOnMalformedMatch(t *testing.T) {
 	t.Parallel()
 
 	store := openTestStore(t)
-	match, err := policydomain.NewMatch(policydomain.MatchSpec{})
+	match, err := policydomain.NewMatch(policydomain.MatchSpec{
+		Actions: []governancedomain.Action{governancedomain.ActionToolInvoke}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -264,7 +271,7 @@ func TestPolicyRestoreFailsClosedOnMalformedMatch(t *testing.T) {
 	if _, err := store.db.ExecContext(
 		context.Background(),
 		`UPDATE policy_rules
-		SET match_json = '{"origins":["not_an_origin"],"factKnowledge":"any"}'
+		SET match_json = '{"actions":["tool.invoke"],"origins":["not_an_origin"],"principalKinds":[],"principalRefs":[],"factKnowledge":"any"}'
 		WHERE rule_id = ?`,
 		id.String(),
 	); err != nil {

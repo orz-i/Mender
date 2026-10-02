@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -307,10 +308,10 @@ func TestRuntimeInstalledExternalProviderEndToEnd(t *testing.T) {
 	installationID = targetInstallation.ID()
 	search = reboundSearch
 
-	invocationContext, err := invocationdomain.NewInvocationContext(
-		invocationdomain.OriginInternal,
-		"external-runtime-test",
-		invocationdomain.CatalogExecutionScope(),
+	invocationContext, err := governancedomain.NewContext(
+		governancedomain.OriginInternal,
+		testPrincipal(t, "external-runtime-test"),
+		governancedomain.CatalogScope(),
 	)
 	if err != nil {
 		t.Fatal(err)

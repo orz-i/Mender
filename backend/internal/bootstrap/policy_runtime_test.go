@@ -3,6 +3,7 @@ package bootstrap
 import (
 	"context"
 	"errors"
+	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -46,9 +47,9 @@ func TestRuntimePersistentPolicyPreservesAllowThenSupportsDefaultDenyAllowlist(
 
 	executionContext := mustGovernanceInvocationContext(
 		t,
-		invocationdomain.OriginInternal,
+		governancedomain.OriginInternal,
 		"policy-runtime-test",
-		invocationdomain.CatalogExecutionScope(),
+		governancedomain.CatalogScope(),
 	)
 	request := invocationapplication.InvokeToolRequest{
 		ToolID:    toolID,
@@ -86,8 +87,9 @@ func TestRuntimePersistentPolicyPreservesAllowThenSupportsDefaultDenyAllowlist(
 		Enabled:     true,
 		Decision:    policydomain.DecisionAllow,
 		Match: policydomain.MatchSpec{
-			Origins:    []policydomain.Origin{policydomain.OriginInternal},
-			ScopeKinds: []policydomain.ScopeKind{policydomain.ScopeCatalog},
+			Actions:    []governancedomain.Action{governancedomain.ActionToolInvoke},
+			Origins:    []governancedomain.Origin{governancedomain.OriginInternal},
+			ScopeKinds: []governancedomain.ScopeKind{governancedomain.ScopeCatalog},
 		},
 	})
 	if err != nil {
@@ -130,8 +132,9 @@ func TestRuntimeOverlappingPolicyRulesUseMostRestrictiveDecision(t *testing.T) {
 	defer func() { _ = runtime.Close() }()
 
 	match := policydomain.MatchSpec{
-		Origins:    []policydomain.Origin{policydomain.OriginInternal},
-		ScopeKinds: []policydomain.ScopeKind{policydomain.ScopeCatalog},
+		Actions:    []governancedomain.Action{governancedomain.ActionToolInvoke},
+		Origins:    []governancedomain.Origin{governancedomain.OriginInternal},
+		ScopeKinds: []governancedomain.ScopeKind{governancedomain.ScopeCatalog},
 	}
 	if _, err := runtime.Policy.CreateRule.Execute(ctx, policyapplication.RuleInput{
 		DisplayName: "Allow internal",
@@ -158,9 +161,9 @@ func TestRuntimeOverlappingPolicyRulesUseMostRestrictiveDecision(t *testing.T) {
 			Arguments: []byte(`{"count":1}`),
 			Context: mustGovernanceInvocationContext(
 				t,
-				invocationdomain.OriginInternal,
+				governancedomain.OriginInternal,
 				"overlap-test",
-				invocationdomain.CatalogExecutionScope(),
+				governancedomain.CatalogScope(),
 			),
 		},
 	)
@@ -208,6 +211,7 @@ func TestRuntimeUnknownFactApprovalAndProfileCannotRelaxGlobalDeny(t *testing.T)
 			Enabled:     true,
 			Decision:    policydomain.DecisionRequireApproval,
 			Match: policydomain.MatchSpec{
+				Actions:       []governancedomain.Action{governancedomain.ActionToolInvoke},
 				FactKnowledge: policydomain.FactUnknown,
 			},
 		},
@@ -223,9 +227,9 @@ func TestRuntimeUnknownFactApprovalAndProfileCannotRelaxGlobalDeny(t *testing.T)
 			Arguments: []byte(`{"count":1}`),
 			Context: mustGovernanceInvocationContext(
 				t,
-				invocationdomain.OriginInternal,
+				governancedomain.OriginInternal,
 				"unknown-facts-test",
-				invocationdomain.CatalogExecutionScope(),
+				governancedomain.CatalogScope(),
 			),
 		},
 	)
@@ -292,7 +296,7 @@ func TestRuntimeUnknownFactApprovalAndProfileCannotRelaxGlobalDeny(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	scope, err := invocationdomain.ProfileExecutionScope(profile.ID().String())
+	scope, err := governancedomain.ProfileScope(profile.ID().String())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -304,7 +308,7 @@ func TestRuntimeUnknownFactApprovalAndProfileCannotRelaxGlobalDeny(t *testing.T)
 			Arguments: []byte(`{"count":1}`),
 			Context: mustGovernanceInvocationContext(
 				t,
-				invocationdomain.OriginMCP,
+				governancedomain.OriginMCP,
 				"profile-global-deny-test",
 				scope,
 			),
@@ -341,6 +345,7 @@ func TestProviderDeletionIsBlockedByPolicyReference(t *testing.T) {
 		Enabled:     true,
 		Decision:    policydomain.DecisionDeny,
 		Match: policydomain.MatchSpec{
+			Actions:     []governancedomain.Action{governancedomain.ActionToolInvoke},
 			ProviderIDs: []string{tool.ProviderID().String()},
 		},
 	})
@@ -392,8 +397,9 @@ func TestInvocationPolicyAdapterMapsOnlyBoundedGovernanceContext(t *testing.T) {
 		Enabled:     true,
 		Decision:    policydomain.DecisionDeny,
 		Match: policydomain.MatchSpec{
-			Origins:       []policydomain.Origin{policydomain.OriginMCP},
-			ScopeKinds:    []policydomain.ScopeKind{policydomain.ScopeProfile},
+			Actions:       []governancedomain.Action{governancedomain.ActionToolInvoke},
+			Origins:       []governancedomain.Origin{governancedomain.OriginMCP},
+			ScopeKinds:    []governancedomain.ScopeKind{governancedomain.ScopeProfile},
 			ProfileRefs:   []string{profile.ID().String()},
 			ProviderIDs:   []string{tool.ProviderID().String()},
 			ToolIDs:       []string{tool.ID().String()},
@@ -420,13 +426,13 @@ func TestInvocationPolicyAdapterMapsOnlyBoundedGovernanceContext(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	scope, err := invocationdomain.ProfileExecutionScope(profile.ID().String())
+	scope, err := governancedomain.ProfileScope(profile.ID().String())
 	if err != nil {
 		t.Fatal(err)
 	}
 	executionContext := mustGovernanceInvocationContext(
 		t,
-		invocationdomain.OriginMCP,
+		governancedomain.OriginMCP,
 		"untrusted-descriptive-caller",
 		scope,
 	)
@@ -437,7 +443,6 @@ func TestInvocationPolicyAdapterMapsOnlyBoundedGovernanceContext(t *testing.T) {
 			Tool:                  tool,
 			Context:               executionContext,
 			Facts:                 facts,
-			Caller:                "caller-must-not-be-identity",
 			HasCredentialResolver: true,
 		},
 	)

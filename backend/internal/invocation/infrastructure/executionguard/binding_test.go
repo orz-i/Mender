@@ -2,6 +2,7 @@ package executionguard
 
 import (
 	"context"
+	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	"testing"
 	"time"
 
@@ -71,10 +72,17 @@ func TestProfileBindingSerialRequiresProfileScopeForSerial(t *testing.T) {
 	t.Parallel()
 
 	request := bindingGuardRequest(t, 1, "prof_00000000000000000000000000000001")
-	catalogContext, err := invocationdomain.NewInvocationContext(
-		invocationdomain.OriginInternal,
-		"test",
-		invocationdomain.CatalogExecutionScope(),
+	principal, err := governancedomain.NewPrincipal(
+		governancedomain.PrincipalService,
+		"test:binding-guard",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	catalogContext, err := governancedomain.NewContext(
+		governancedomain.OriginInternal,
+		principal,
+		governancedomain.CatalogScope(),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -109,13 +117,20 @@ func bindingGuardRequestWithConstraint(
 	t.Helper()
 
 	request := guardRequest(t, toolNumber, 1)
-	scope, err := invocationdomain.ProfileExecutionScope(profileReference)
+	scope, err := governancedomain.ProfileScope(profileReference)
 	if err != nil {
 		t.Fatal(err)
 	}
-	executionContext, err := invocationdomain.NewInvocationContext(
-		invocationdomain.OriginMCP,
-		"binding-guard-test",
+	principal, err := governancedomain.NewPrincipal(
+		governancedomain.PrincipalService,
+		"test:binding-guard",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	executionContext, err := governancedomain.NewContext(
+		governancedomain.OriginMCP,
+		principal,
 		scope,
 	)
 	if err != nil {

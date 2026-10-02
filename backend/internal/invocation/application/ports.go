@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	"time"
 
 	auditdomain "github.com/orz-i/Mender/backend/internal/audit/domain"
@@ -119,9 +120,8 @@ type Clock interface {
 type PolicyRequest struct {
 	InvocationID          invocationdomain.InvocationID
 	Tool                  catalogdomain.Tool
-	Context               invocationdomain.InvocationContext
+	Context               governancedomain.Context
 	Facts                 invocationdomain.GovernanceFacts
-	Caller                string
 	HasCredentialResolver bool
 }
 
@@ -129,7 +129,7 @@ type PolicyRequest struct {
 type ApprovalRequest struct {
 	InvocationID invocationdomain.InvocationID
 	Tool         catalogdomain.Tool
-	Caller       string
+	Context      governancedomain.Context
 	Decision     policydomain.Decision
 }
 
@@ -137,14 +137,14 @@ type ApprovalRequest struct {
 type ExecutionGuardRequest struct {
 	InvocationID invocationdomain.InvocationID
 	Tool         catalogdomain.Tool
-	Context      invocationdomain.InvocationContext
+	Context      governancedomain.Context
 }
 
 // BindingExecutionGuardRequest identifies one Profile ToolBinding execution constraint.
 type BindingExecutionGuardRequest struct {
 	InvocationID invocationdomain.InvocationID
 	Tool         catalogdomain.Tool
-	Context      invocationdomain.InvocationContext
+	Context      governancedomain.Context
 	Governance   invocationdomain.ScopedBindingGovernance
 }
 

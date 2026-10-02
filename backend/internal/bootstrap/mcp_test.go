@@ -3,6 +3,7 @@ package bootstrap
 import (
 	"context"
 	"encoding/json"
+	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	"path/filepath"
 	"sync/atomic"
 	"testing"
@@ -99,10 +100,10 @@ func TestMCPProviderAndServerShareRuntimePipeline(t *testing.T) {
 	}
 	toolID := search[0].ToolID
 
-	applicationContext, err := invocationdomain.NewInvocationContext(
-		invocationdomain.OriginInternal,
-		"integration-test",
-		invocationdomain.CatalogExecutionScope(),
+	applicationContext, err := governancedomain.NewContext(
+		governancedomain.OriginInternal,
+		testPrincipal(t, "integration-test"),
+		governancedomain.CatalogScope(),
 	)
 	if err != nil {
 		t.Fatalf("NewInvocationContext() error = %v", err)

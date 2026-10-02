@@ -1,6 +1,7 @@
 package domain
 
 import (
+	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	"testing"
 	"time"
 )
@@ -12,7 +13,7 @@ func TestPolicySetUsesDefaultOnlyWhenNoRuleMatches(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	decision, err := denyDefault.Evaluate(validEvaluationInput(OriginCLI, FactUnknown))
+	decision, err := denyDefault.Evaluate(validEvaluationInput(governancedomain.OriginCLI, FactUnknown))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -25,13 +26,14 @@ func TestPolicySetUsesDefaultOnlyWhenNoRuleMatches(t *testing.T) {
 		"rule_00000000000000000000000000000002",
 		"Allow MCP",
 		DecisionAllow,
-		MatchSpec{Origins: []Origin{OriginMCP}},
+		MatchSpec{
+			Actions: []governancedomain.Action{governancedomain.ActionToolInvoke}, Origins: []governancedomain.Origin{governancedomain.OriginMCP}},
 	)
 	allowList, err := NewPolicySet(DecisionDeny, []Rule{allowRule})
 	if err != nil {
 		t.Fatal(err)
 	}
-	decision, err = allowList.Evaluate(validEvaluationInput(OriginMCP, FactUnknown))
+	decision, err = allowList.Evaluate(validEvaluationInput(governancedomain.OriginMCP, FactUnknown))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,21 +50,24 @@ func TestPolicySetMatchingRulesUseMostRestrictiveDecisionWithoutOrder(t *testing
 		"rule_00000000000000000000000000000003",
 		"Allow",
 		DecisionAllow,
-		MatchSpec{Origins: []Origin{OriginMCP}},
+		MatchSpec{
+			Actions: []governancedomain.Action{governancedomain.ActionToolInvoke}, Origins: []governancedomain.Origin{governancedomain.OriginMCP}},
 	)
 	approval := mustPolicyRule(
 		t,
 		"rule_00000000000000000000000000000002",
 		"Approval",
 		DecisionRequireApproval,
-		MatchSpec{Origins: []Origin{OriginMCP}},
+		MatchSpec{
+			Actions: []governancedomain.Action{governancedomain.ActionToolInvoke}, Origins: []governancedomain.Origin{governancedomain.OriginMCP}},
 	)
 	deny := mustPolicyRule(
 		t,
 		"rule_00000000000000000000000000000001",
 		"Deny",
 		DecisionDeny,
-		MatchSpec{Origins: []Origin{OriginMCP}},
+		MatchSpec{
+			Actions: []governancedomain.Action{governancedomain.ActionToolInvoke}, Origins: []governancedomain.Origin{governancedomain.OriginMCP}},
 	)
 
 	for _, rules := range [][]Rule{
@@ -74,7 +79,7 @@ func TestPolicySetMatchingRulesUseMostRestrictiveDecisionWithoutOrder(t *testing
 		if err != nil {
 			t.Fatal(err)
 		}
-		decision, err := policy.Evaluate(validEvaluationInput(OriginMCP, FactUnknown))
+		decision, err := policy.Evaluate(validEvaluationInput(governancedomain.OriginMCP, FactUnknown))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -95,20 +100,22 @@ func TestPolicySetSameDecisionTieBreaksByRuleID(t *testing.T) {
 		"rule_00000000000000000000000000000001",
 		"First",
 		DecisionDeny,
-		MatchSpec{},
+		MatchSpec{
+			Actions: []governancedomain.Action{governancedomain.ActionToolInvoke}},
 	)
 	second := mustPolicyRule(
 		t,
 		"rule_00000000000000000000000000000002",
 		"Second",
 		DecisionDeny,
-		MatchSpec{},
+		MatchSpec{
+			Actions: []governancedomain.Action{governancedomain.ActionToolInvoke}},
 	)
 	policy, err := NewPolicySet(DecisionAllow, []Rule{second, first})
 	if err != nil {
 		t.Fatal(err)
 	}
-	decision, err := policy.Evaluate(validEvaluationInput(OriginCLI, FactUnknown))
+	decision, err := policy.Evaluate(validEvaluationInput(governancedomain.OriginCLI, FactUnknown))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,7 +132,8 @@ func TestDisabledRuleDoesNotMatch(t *testing.T) {
 		"rule_00000000000000000000000000000001",
 		"Disabled deny",
 		DecisionDeny,
-		MatchSpec{},
+		MatchSpec{
+			Actions: []governancedomain.Action{governancedomain.ActionToolInvoke}},
 	)
 	rule, err := rule.SetEnabled(false, time.Date(2026, 9, 27, 1, 0, 0, 0, time.UTC))
 	if err != nil {
@@ -135,7 +143,7 @@ func TestDisabledRuleDoesNotMatch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	decision, err := policy.Evaluate(validEvaluationInput(OriginCLI, FactUnknown))
+	decision, err := policy.Evaluate(validEvaluationInput(governancedomain.OriginCLI, FactUnknown))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -174,12 +182,15 @@ func mustPolicyRule(
 	return rule
 }
 
-func validEvaluationInput(origin Origin, knowledge FactKnowledge) EvaluationInput {
+func validEvaluationInput(origin governancedomain.Origin, knowledge FactKnowledge) EvaluationInput {
 	return EvaluationInput{
-		Origin:        origin,
-		ScopeKind:     ScopeCatalog,
-		ProviderID:    "prov_00000000000000000000000000000001",
-		ToolID:        "tool_00000000000000000000000000000001",
-		FactKnowledge: knowledge,
+		Action:             governancedomain.ActionToolInvoke,
+		PrincipalKind:      governancedomain.PrincipalLocalUser,
+		PrincipalReference: "test:user",
+		Origin:             origin,
+		ScopeKind:          governancedomain.ScopeCatalog,
+		ProviderID:         "prov_00000000000000000000000000000001",
+		ToolID:             "tool_00000000000000000000000000000001",
+		FactKnowledge:      knowledge,
 	}
 }

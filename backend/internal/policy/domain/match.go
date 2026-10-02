@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+
+	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 )
 
 const (
@@ -13,23 +15,6 @@ const (
 	maxResourceMatchers = 64
 	maxFactKindLen      = 64
 	maxFactValueLen     = 1024
-)
-
-type Origin string
-
-const (
-	OriginCLI            Origin = "cli"
-	OriginMCP            Origin = "mcp"
-	OriginManagementHTTP Origin = "management_http"
-	OriginDesktop        Origin = "desktop"
-	OriginInternal       Origin = "internal"
-)
-
-type ScopeKind string
-
-const (
-	ScopeCatalog ScopeKind = "catalog"
-	ScopeProfile ScopeKind = "profile"
 )
 
 type FactKnowledge string
@@ -80,17 +65,9 @@ func NewResourceMatcher(
 	return ResourceMatcher{kind: kind, operator: operator, value: value}, nil
 }
 
-func (m ResourceMatcher) Kind() string {
-	return m.kind
-}
-
-func (m ResourceMatcher) Operator() ResourceOperator {
-	return m.operator
-}
-
-func (m ResourceMatcher) Value() string {
-	return m.value
-}
+func (m ResourceMatcher) Kind() string               { return m.kind }
+func (m ResourceMatcher) Operator() ResourceOperator { return m.operator }
+func (m ResourceMatcher) Value() string              { return m.value }
 
 type ResourceFact struct {
 	Kind  string
@@ -98,29 +75,52 @@ type ResourceFact struct {
 }
 
 type MatchSpec struct {
-	Origins       []Origin
-	ScopeKinds    []ScopeKind
-	ProfileRefs   []string
-	ProviderIDs   []string
-	ToolIDs       []string
-	FactKnowledge FactKnowledge
-	EffectsAny    []string
-	ResourcesAny  []ResourceMatcher
+	Actions        []governancedomain.Action
+	Origins        []governancedomain.Origin
+	PrincipalKinds []governancedomain.PrincipalKind
+	PrincipalRefs  []string
+	ScopeKinds     []governancedomain.ScopeKind
+	ProfileRefs    []string
+	ProviderIDs    []string
+	ToolIDs        []string
+	FactKnowledge  FactKnowledge
+	EffectsAny     []string
+	ResourcesAny   []ResourceMatcher
 }
 
 type Match struct {
-	origins       []Origin
-	scopeKinds    []ScopeKind
-	profileRefs   []string
-	providerIDs   []string
-	toolIDs       []string
-	factKnowledge FactKnowledge
-	effectsAny    []string
-	resourcesAny  []ResourceMatcher
+	actions        []governancedomain.Action
+	origins        []governancedomain.Origin
+	principalKinds []governancedomain.PrincipalKind
+	principalRefs  []string
+	scopeKinds     []governancedomain.ScopeKind
+	profileRefs    []string
+	providerIDs    []string
+	toolIDs        []string
+	factKnowledge  FactKnowledge
+	effectsAny     []string
+	resourcesAny   []ResourceMatcher
 }
 
 func NewMatch(spec MatchSpec) (Match, error) {
+	actions, err := normalizeActions(spec.Actions)
+	if err != nil {
+		return Match{}, err
+	}
 	origins, err := normalizeOrigins(spec.Origins)
+	if err != nil {
+		return Match{}, err
+	}
+	principalKinds, err := normalizePrincipalKinds(spec.PrincipalKinds)
+	if err != nil {
+		return Match{}, err
+	}
+	principalRefs, err := normalizeStrings(
+		"principal_refs",
+		spec.PrincipalRefs,
+		maxSelectorValues,
+		maxSelectorValueLen,
+	)
 	if err != nil {
 		return Match{}, err
 	}
@@ -128,18 +128,34 @@ func NewMatch(spec MatchSpec) (Match, error) {
 	if err != nil {
 		return Match{}, err
 	}
-	profileRefs, err := normalizeStrings("profile_refs", spec.ProfileRefs, maxSelectorValues, maxSelectorValueLen)
+	profileRefs, err := normalizeStrings(
+		"profile_refs",
+		spec.ProfileRefs,
+		maxSelectorValues,
+		maxSelectorValueLen,
+	)
 	if err != nil {
 		return Match{}, err
 	}
-	providerIDs, err := normalizeStrings("provider_ids", spec.ProviderIDs, maxSelectorValues, maxSelectorValueLen)
+	providerIDs, err := normalizeStrings(
+		"provider_ids",
+		spec.ProviderIDs,
+		maxSelectorValues,
+		maxSelectorValueLen,
+	)
 	if err != nil {
 		return Match{}, err
 	}
-	toolIDs, err := normalizeStrings("tool_ids", spec.ToolIDs, maxSelectorValues, maxSelectorValueLen)
+	toolIDs, err := normalizeStrings(
+		"tool_ids",
+		spec.ToolIDs,
+		maxSelectorValues,
+		maxSelectorValueLen,
+	)
 	if err != nil {
 		return Match{}, err
 	}
+
 	factKnowledge := spec.FactKnowledge
 	if factKnowledge == "" {
 		factKnowledge = FactAny
@@ -149,7 +165,13 @@ func NewMatch(spec MatchSpec) (Match, error) {
 	default:
 		return Match{}, fmt.Errorf("fact_knowledge: unknown value %q", factKnowledge)
 	}
-	effects, err := normalizeStrings("effects_any", spec.EffectsAny, maxEffectValues, maxFactKindLen)
+
+	effects, err := normalizeStrings(
+		"effects_any",
+		spec.EffectsAny,
+		maxEffectValues,
+		maxFactKindLen,
+	)
 	if err != nil {
 		return Match{}, err
 	}
@@ -159,11 +181,17 @@ func NewMatch(spec MatchSpec) (Match, error) {
 	resources := make([]ResourceMatcher, 0, len(spec.ResourcesAny))
 	seenResources := make(map[string]struct{}, len(spec.ResourcesAny))
 	for i, resource := range spec.ResourcesAny {
-		validated, err := NewResourceMatcher(resource.Kind(), resource.Operator(), resource.Value())
-		if err != nil {
-			return Match{}, fmt.Errorf("resources_any[%d]: %w", i, err)
+		validated, validateErr := NewResourceMatcher(
+			resource.Kind(),
+			resource.Operator(),
+			resource.Value(),
+		)
+		if validateErr != nil {
+			return Match{}, fmt.Errorf("resources_any[%d]: %w", i, validateErr)
 		}
-		key := validated.Kind() + "\x00" + string(validated.Operator()) + "\x00" + validated.Value()
+		key := validated.Kind() + "\x00" +
+			string(validated.Operator()) + "\x00" +
+			validated.Value()
 		if _, exists := seenResources[key]; exists {
 			continue
 		}
@@ -182,7 +210,7 @@ func NewMatch(spec MatchSpec) (Match, error) {
 
 	if len(profileRefs) != 0 &&
 		len(scopeKinds) != 0 &&
-		!slices.Contains(scopeKinds, ScopeProfile) {
+		!slices.Contains(scopeKinds, governancedomain.ScopeProfile) {
 		return Match{}, fmt.Errorf("profile_refs: require profile scope")
 	}
 	if factKnowledge == FactUnknown && (len(effects) != 0 || len(resources) != 0) {
@@ -190,24 +218,48 @@ func NewMatch(spec MatchSpec) (Match, error) {
 			"fact_knowledge: unknown cannot be combined with effect/resource predicates",
 		)
 	}
+	if slices.Contains(actions, governancedomain.ActionProviderActivate) &&
+		(len(toolIDs) != 0 ||
+			factKnowledge != FactAny ||
+			len(effects) != 0 ||
+			len(resources) != 0) {
+		return Match{}, fmt.Errorf(
+			"provider.activate rules cannot contain tool or governance-fact predicates",
+		)
+	}
 
 	return Match{
-		origins:       origins,
-		scopeKinds:    scopeKinds,
-		profileRefs:   profileRefs,
-		providerIDs:   providerIDs,
-		toolIDs:       toolIDs,
-		factKnowledge: factKnowledge,
-		effectsAny:    effects,
-		resourcesAny:  resources,
+		actions:        actions,
+		origins:        origins,
+		principalKinds: principalKinds,
+		principalRefs:  principalRefs,
+		scopeKinds:     scopeKinds,
+		profileRefs:    profileRefs,
+		providerIDs:    providerIDs,
+		toolIDs:        toolIDs,
+		factKnowledge:  factKnowledge,
+		effectsAny:     effects,
+		resourcesAny:   resources,
 	}, nil
 }
 
-func (m Match) Origins() []Origin {
+func (m Match) Actions() []governancedomain.Action {
+	return slices.Clone(m.actions)
+}
+
+func (m Match) Origins() []governancedomain.Origin {
 	return slices.Clone(m.origins)
 }
 
-func (m Match) ScopeKinds() []ScopeKind {
+func (m Match) PrincipalKinds() []governancedomain.PrincipalKind {
+	return slices.Clone(m.principalKinds)
+}
+
+func (m Match) PrincipalRefs() []string {
+	return slices.Clone(m.principalRefs)
+}
+
+func (m Match) ScopeKinds() []governancedomain.ScopeKind {
 	return slices.Clone(m.scopeKinds)
 }
 
@@ -235,8 +287,12 @@ func (m Match) ResourcesAny() []ResourceMatcher {
 	return slices.Clone(m.resourcesAny)
 }
 
+// IsWildcard reports whether all selectors except the mandatory Action selector are wildcards.
 func (m Match) IsWildcard() bool {
-	return len(m.origins) == 0 &&
+	return len(m.actions) != 0 &&
+		len(m.origins) == 0 &&
+		len(m.principalKinds) == 0 &&
+		len(m.principalRefs) == 0 &&
 		len(m.scopeKinds) == 0 &&
 		len(m.profileRefs) == 0 &&
 		len(m.providerIDs) == 0 &&
@@ -247,48 +303,82 @@ func (m Match) IsWildcard() bool {
 }
 
 type EvaluationInput struct {
-	Origin         Origin
-	ScopeKind      ScopeKind
-	ScopeReference string
-	ProviderID     string
-	ToolID         string
-	FactKnowledge  FactKnowledge
-	Effects        []string
-	Resources      []ResourceFact
+	Action             governancedomain.Action
+	Origin             governancedomain.Origin
+	PrincipalKind      governancedomain.PrincipalKind
+	PrincipalReference string
+	ScopeKind          governancedomain.ScopeKind
+	ScopeReference     string
+	ProviderID         string
+	ToolID             string
+	FactKnowledge      FactKnowledge
+	Effects            []string
+	Resources          []ResourceFact
 }
 
 func (i EvaluationInput) Validate() error {
-	switch i.Origin {
-	case OriginCLI, OriginMCP, OriginManagementHTTP, OriginDesktop, OriginInternal:
-	default:
-		return fmt.Errorf("evaluation.origin: unknown value %q", i.Origin)
+	if err := i.Action.Validate(); err != nil {
+		return fmt.Errorf("evaluation.action: %w", err)
 	}
+	principal, err := governancedomain.NewPrincipal(
+		i.PrincipalKind,
+		i.PrincipalReference,
+	)
+	if err != nil {
+		return fmt.Errorf("evaluation.principal: %w", err)
+	}
+	var scope governancedomain.Scope
 	switch i.ScopeKind {
-	case ScopeCatalog:
+	case governancedomain.ScopeCatalog:
 		if strings.TrimSpace(i.ScopeReference) != "" {
 			return fmt.Errorf("evaluation.scope_reference: must be empty for catalog scope")
 		}
-	case ScopeProfile:
-		if strings.TrimSpace(i.ScopeReference) == "" {
-			return fmt.Errorf("evaluation.scope_reference: must not be empty for profile scope")
-		}
-		if len(i.ScopeReference) > maxSelectorValueLen {
-			return fmt.Errorf("evaluation.scope_reference: is too long")
+		scope = governancedomain.CatalogScope()
+	case governancedomain.ScopeProfile:
+		scope, err = governancedomain.ProfileScope(i.ScopeReference)
+		if err != nil {
+			return fmt.Errorf("evaluation.scope_reference: %w", err)
 		}
 	default:
 		return fmt.Errorf("evaluation.scope_kind: unknown value %q", i.ScopeKind)
 	}
+	if _, err := governancedomain.NewContext(i.Origin, principal, scope); err != nil {
+		return fmt.Errorf("evaluation.context: %w", err)
+	}
 	if strings.TrimSpace(i.ProviderID) == "" || len(i.ProviderID) > maxSelectorValueLen {
 		return fmt.Errorf("evaluation.provider_id: must be non-empty and bounded")
 	}
-	if strings.TrimSpace(i.ToolID) == "" || len(i.ToolID) > maxSelectorValueLen {
-		return fmt.Errorf("evaluation.tool_id: must be non-empty and bounded")
+
+	switch i.Action {
+	case governancedomain.ActionToolInvoke:
+		if strings.TrimSpace(i.ToolID) == "" || len(i.ToolID) > maxSelectorValueLen {
+			return fmt.Errorf("evaluation.tool_id: must be non-empty and bounded")
+		}
+		switch i.FactKnowledge {
+		case FactKnown, FactUnknown:
+		default:
+			return fmt.Errorf(
+				"evaluation.fact_knowledge: unknown value %q",
+				i.FactKnowledge,
+			)
+		}
+		if err := validateEvaluationFacts(i); err != nil {
+			return err
+		}
+	case governancedomain.ActionProviderActivate:
+		if strings.TrimSpace(i.ToolID) != "" {
+			return fmt.Errorf("evaluation.tool_id: must be empty for provider.activate")
+		}
+		if i.FactKnowledge != "" || len(i.Effects) != 0 || len(i.Resources) != 0 {
+			return fmt.Errorf(
+				"evaluation: provider.activate must not contain governance facts",
+			)
+		}
 	}
-	switch i.FactKnowledge {
-	case FactKnown, FactUnknown:
-	default:
-		return fmt.Errorf("evaluation.fact_knowledge: unknown value %q", i.FactKnowledge)
-	}
+	return nil
+}
+
+func validateEvaluationFacts(i EvaluationInput) error {
 	if len(i.Effects) > maxEffectValues {
 		return fmt.Errorf("evaluation.effects: contains too many entries")
 	}
@@ -304,25 +394,45 @@ func (i EvaluationInput) Validate() error {
 	for index, resource := range i.Resources {
 		kind := strings.TrimSpace(resource.Kind)
 		value := strings.TrimSpace(resource.Value)
-		if kind == "" || len(kind) > maxFactKindLen || value == "" || len(value) > maxFactValueLen {
-			return fmt.Errorf("evaluation.resources[%d]: contains invalid value", index)
+		if kind == "" ||
+			len(kind) > maxFactKindLen ||
+			value == "" ||
+			len(value) > maxFactValueLen {
+			return fmt.Errorf(
+				"evaluation.resources[%d]: contains invalid value",
+				index,
+			)
 		}
 	}
-	if i.FactKnowledge == FactUnknown && (len(i.Effects) != 0 || len(i.Resources) != 0) {
-		return fmt.Errorf("evaluation: unknown facts must not contain effect/resource values")
+	if i.FactKnowledge == FactUnknown &&
+		(len(i.Effects) != 0 || len(i.Resources) != 0) {
+		return fmt.Errorf(
+			"evaluation: unknown facts must not contain effect/resource values",
+		)
 	}
 	return nil
 }
 
 func (m Match) Matches(input EvaluationInput) bool {
+	if !slices.Contains(m.actions, input.Action) {
+		return false
+	}
 	if len(m.origins) != 0 && !slices.Contains(m.origins, input.Origin) {
+		return false
+	}
+	if len(m.principalKinds) != 0 &&
+		!slices.Contains(m.principalKinds, input.PrincipalKind) {
+		return false
+	}
+	if len(m.principalRefs) != 0 &&
+		!slices.Contains(m.principalRefs, input.PrincipalReference) {
 		return false
 	}
 	if len(m.scopeKinds) != 0 && !slices.Contains(m.scopeKinds, input.ScopeKind) {
 		return false
 	}
 	if len(m.profileRefs) != 0 {
-		if input.ScopeKind != ScopeProfile ||
+		if input.ScopeKind != governancedomain.ScopeProfile ||
 			!slices.Contains(m.profileRefs, input.ScopeReference) {
 			return false
 		}
@@ -333,20 +443,158 @@ func (m Match) Matches(input EvaluationInput) bool {
 	if len(m.toolIDs) != 0 && !slices.Contains(m.toolIDs, input.ToolID) {
 		return false
 	}
-	if m.factKnowledge != FactAny && m.factKnowledge != input.FactKnowledge {
-		return false
-	}
-	if len(m.effectsAny) != 0 {
-		if input.FactKnowledge != FactKnown || !hasAnyEffect(m.effectsAny, input.Effects) {
+	if input.Action == governancedomain.ActionToolInvoke {
+		if m.factKnowledge != FactAny && m.factKnowledge != input.FactKnowledge {
 			return false
 		}
-	}
-	if len(m.resourcesAny) != 0 {
-		if input.FactKnowledge != FactKnown || !hasAnyResource(m.resourcesAny, input.Resources) {
-			return false
+		if len(m.effectsAny) != 0 {
+			if input.FactKnowledge != FactKnown ||
+				!hasAnyEffect(m.effectsAny, input.Effects) {
+				return false
+			}
+		}
+		if len(m.resourcesAny) != 0 {
+			if input.FactKnowledge != FactKnown ||
+				!hasAnyResource(m.resourcesAny, input.Resources) {
+				return false
+			}
 		}
 	}
 	return true
+}
+
+func normalizeActions(values []governancedomain.Action) ([]governancedomain.Action, error) {
+	if len(values) == 0 {
+		return nil, fmt.Errorf("actions: must contain at least one action")
+	}
+	if len(values) > maxSelectorValues {
+		return nil, fmt.Errorf("actions: contains too many entries")
+	}
+	result := make([]governancedomain.Action, 0, len(values))
+	seen := make(map[governancedomain.Action]struct{}, len(values))
+	for _, value := range values {
+		if err := value.Validate(); err != nil {
+			return nil, fmt.Errorf("actions: %w", err)
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		result = append(result, value)
+	}
+	slices.SortFunc(result, func(a, b governancedomain.Action) int {
+		return strings.Compare(string(a), string(b))
+	})
+	return result, nil
+}
+
+func normalizeOrigins(values []governancedomain.Origin) ([]governancedomain.Origin, error) {
+	if len(values) > maxSelectorValues {
+		return nil, fmt.Errorf("origins: contains too many entries")
+	}
+	result := make([]governancedomain.Origin, 0, len(values))
+	seen := make(map[governancedomain.Origin]struct{}, len(values))
+	for _, value := range values {
+		switch value {
+		case governancedomain.OriginCLI,
+			governancedomain.OriginMCP,
+			governancedomain.OriginManagementHTTP,
+			governancedomain.OriginDesktop,
+			governancedomain.OriginInternal:
+		default:
+			return nil, fmt.Errorf("origins: unknown value %q", value)
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		result = append(result, value)
+	}
+	slices.SortFunc(result, func(a, b governancedomain.Origin) int {
+		return strings.Compare(string(a), string(b))
+	})
+	return result, nil
+}
+
+func normalizePrincipalKinds(
+	values []governancedomain.PrincipalKind,
+) ([]governancedomain.PrincipalKind, error) {
+	if len(values) > maxSelectorValues {
+		return nil, fmt.Errorf("principal_kinds: contains too many entries")
+	}
+	result := make([]governancedomain.PrincipalKind, 0, len(values))
+	seen := make(map[governancedomain.PrincipalKind]struct{}, len(values))
+	for _, value := range values {
+		switch value {
+		case governancedomain.PrincipalLocalUser, governancedomain.PrincipalService:
+		default:
+			return nil, fmt.Errorf("principal_kinds: unknown value %q", value)
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		result = append(result, value)
+	}
+	slices.SortFunc(result, func(a, b governancedomain.PrincipalKind) int {
+		return strings.Compare(string(a), string(b))
+	})
+	return result, nil
+}
+
+func normalizeScopeKinds(
+	values []governancedomain.ScopeKind,
+) ([]governancedomain.ScopeKind, error) {
+	if len(values) > maxSelectorValues {
+		return nil, fmt.Errorf("scope_kinds: contains too many entries")
+	}
+	result := make([]governancedomain.ScopeKind, 0, len(values))
+	seen := make(map[governancedomain.ScopeKind]struct{}, len(values))
+	for _, value := range values {
+		switch value {
+		case governancedomain.ScopeCatalog, governancedomain.ScopeProfile:
+		default:
+			return nil, fmt.Errorf("scope_kinds: unknown value %q", value)
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		result = append(result, value)
+	}
+	slices.SortFunc(result, func(a, b governancedomain.ScopeKind) int {
+		return strings.Compare(string(a), string(b))
+	})
+	return result, nil
+}
+
+func normalizeStrings(
+	field string,
+	values []string,
+	maxValues int,
+	maxLength int,
+) ([]string, error) {
+	if len(values) > maxValues {
+		return nil, fmt.Errorf("%s: contains too many entries", field)
+	}
+	result := make([]string, 0, len(values))
+	seen := make(map[string]struct{}, len(values))
+	for _, raw := range values {
+		value := strings.TrimSpace(raw)
+		if value == "" {
+			return nil, fmt.Errorf("%s: contains an empty value", field)
+		}
+		if len(value) > maxLength {
+			return nil, fmt.Errorf("%s: contains a value that is too long", field)
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		result = append(result, value)
+	}
+	slices.Sort(result)
+	return result, nil
 }
 
 func hasAnyEffect(expected, actual []string) bool {
@@ -377,77 +625,4 @@ func hasAnyResource(matchers []ResourceMatcher, facts []ResourceFact) bool {
 		}
 	}
 	return false
-}
-
-func normalizeOrigins(values []Origin) ([]Origin, error) {
-	if len(values) > maxSelectorValues {
-		return nil, fmt.Errorf("origins: contains too many entries")
-	}
-	result := make([]Origin, 0, len(values))
-	seen := make(map[Origin]struct{}, len(values))
-	for _, value := range values {
-		switch value {
-		case OriginCLI, OriginMCP, OriginManagementHTTP, OriginDesktop, OriginInternal:
-		default:
-			return nil, fmt.Errorf("origins: unknown value %q", value)
-		}
-		if _, exists := seen[value]; exists {
-			continue
-		}
-		seen[value] = struct{}{}
-		result = append(result, value)
-	}
-	slices.Sort(result)
-	return result, nil
-}
-
-func normalizeScopeKinds(values []ScopeKind) ([]ScopeKind, error) {
-	if len(values) > maxSelectorValues {
-		return nil, fmt.Errorf("scope_kinds: contains too many entries")
-	}
-	result := make([]ScopeKind, 0, len(values))
-	seen := make(map[ScopeKind]struct{}, len(values))
-	for _, value := range values {
-		switch value {
-		case ScopeCatalog, ScopeProfile:
-		default:
-			return nil, fmt.Errorf("scope_kinds: unknown value %q", value)
-		}
-		if _, exists := seen[value]; exists {
-			continue
-		}
-		seen[value] = struct{}{}
-		result = append(result, value)
-	}
-	slices.Sort(result)
-	return result, nil
-}
-
-func normalizeStrings(
-	field string,
-	values []string,
-	maxItems int,
-	maxLength int,
-) ([]string, error) {
-	if len(values) > maxItems {
-		return nil, fmt.Errorf("%s: contains too many entries", field)
-	}
-	result := make([]string, 0, len(values))
-	seen := make(map[string]struct{}, len(values))
-	for _, value := range values {
-		value = strings.TrimSpace(value)
-		if value == "" {
-			return nil, fmt.Errorf("%s: contains empty value", field)
-		}
-		if len(value) > maxLength {
-			return nil, fmt.Errorf("%s: contains value that is too long", field)
-		}
-		if _, exists := seen[value]; exists {
-			continue
-		}
-		seen[value] = struct{}{}
-		result = append(result, value)
-	}
-	slices.Sort(result)
-	return result, nil
 }

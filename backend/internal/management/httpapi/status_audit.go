@@ -117,7 +117,8 @@ func auditProjection(record auditdomain.Record) map[string]any {
 	result := map[string]any{
 		"invocationId":   record.InvocationID().String(),
 		"toolId":         record.ToolID().String(),
-		"caller":         record.Caller(),
+		"principalKind":  record.PrincipalKind(),
+		"principalRef":   record.PrincipalRef(),
 		"startedAt":      record.StartedAt(),
 		"finishedAt":     record.FinishedAt(),
 		"policyKind":     string(record.PolicyKind()),

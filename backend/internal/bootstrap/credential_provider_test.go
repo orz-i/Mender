@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -156,10 +157,10 @@ func TestCredentialBackedHTTPProviderEnforcesProfileScope(t *testing.T) {
 		t.Fatalf("delete in-use Credential error = %v", err)
 	}
 
-	allowedScope, _ := invocationdomain.ProfileExecutionScope(allowed.ID().String())
-	allowedContext, _ := invocationdomain.NewInvocationContext(
-		invocationdomain.OriginMCP,
-		"credential-allowed",
+	allowedScope, _ := governancedomain.ProfileScope(allowed.ID().String())
+	allowedContext, _ := governancedomain.NewContext(
+		governancedomain.OriginMCP,
+		testPrincipal(t, "credential-allowed"),
 		allowedScope,
 	)
 	allowedResponse, err := runtime.InvokeTool.Execute(
@@ -201,10 +202,10 @@ func TestCredentialBackedHTTPProviderEnforcesProfileScope(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	deniedScope, _ := invocationdomain.ProfileExecutionScope(denied.ID().String())
-	deniedContext, _ := invocationdomain.NewInvocationContext(
-		invocationdomain.OriginMCP,
-		"credential-denied",
+	deniedScope, _ := governancedomain.ProfileScope(denied.ID().String())
+	deniedContext, _ := governancedomain.NewContext(
+		governancedomain.OriginMCP,
+		testPrincipal(t, "credential-denied"),
 		deniedScope,
 	)
 	deniedResponse, err := runtime.InvokeTool.Execute(
@@ -226,10 +227,10 @@ func TestCredentialBackedHTTPProviderEnforcesProfileScope(t *testing.T) {
 		t.Fatalf("denied profile reached upstream; calls = %d", upstreamCalls.Load())
 	}
 
-	catalogContext, _ := invocationdomain.NewInvocationContext(
-		invocationdomain.OriginInternal,
-		"credential-catalog",
-		invocationdomain.CatalogExecutionScope(),
+	catalogContext, _ := governancedomain.NewContext(
+		governancedomain.OriginInternal,
+		testPrincipal(t, "credential-catalog"),
+		governancedomain.CatalogScope(),
 	)
 	catalogResponse, err := runtime.InvokeTool.Execute(
 		ctx,
@@ -408,10 +409,10 @@ paths:
 	if err != nil {
 		t.Fatal(err)
 	}
-	allowedScope, _ := invocationdomain.ProfileExecutionScope(allowed.ID().String())
-	allowedContext, _ := invocationdomain.NewInvocationContext(
-		invocationdomain.OriginMCP,
-		"openapi-allowed",
+	allowedScope, _ := governancedomain.ProfileScope(allowed.ID().String())
+	allowedContext, _ := governancedomain.NewContext(
+		governancedomain.OriginMCP,
+		testPrincipal(t, "openapi-allowed"),
 		allowedScope,
 	)
 	allowedResponse, err := runtime.InvokeTool.Execute(
@@ -453,10 +454,10 @@ paths:
 	if err != nil {
 		t.Fatal(err)
 	}
-	deniedScope, _ := invocationdomain.ProfileExecutionScope(denied.ID().String())
-	deniedContext, _ := invocationdomain.NewInvocationContext(
-		invocationdomain.OriginMCP,
-		"openapi-denied",
+	deniedScope, _ := governancedomain.ProfileScope(denied.ID().String())
+	deniedContext, _ := governancedomain.NewContext(
+		governancedomain.OriginMCP,
+		testPrincipal(t, "openapi-denied"),
 		deniedScope,
 	)
 	deniedResponse, err := runtime.InvokeTool.Execute(
@@ -478,10 +479,10 @@ paths:
 		t.Fatalf("denied Profile reached upstream; calls = %d", upstreamCalls.Load())
 	}
 
-	catalogContext, _ := invocationdomain.NewInvocationContext(
-		invocationdomain.OriginInternal,
-		"openapi-catalog",
-		invocationdomain.CatalogExecutionScope(),
+	catalogContext, _ := governancedomain.NewContext(
+		governancedomain.OriginInternal,
+		testPrincipal(t, "openapi-catalog"),
+		governancedomain.CatalogScope(),
 	)
 	catalogResponse, err := runtime.InvokeTool.Execute(
 		ctx,

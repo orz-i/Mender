@@ -9,11 +9,12 @@ import (
 
 	auditdomain "github.com/orz-i/Mender/backend/internal/audit/domain"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
+	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	policydomain "github.com/orz-i/Mender/backend/internal/policy/domain"
 )
 
-// Record persists one terminal Audit record.
+// Record persists one terminal Invocation Audit record.
 func (s *Store) Record(ctx context.Context, record auditdomain.Record) error {
 	var providerID any
 	if id := record.ProviderID(); id != nil {
@@ -26,7 +27,8 @@ func (s *Store) Record(ctx context.Context, record auditdomain.Record) error {
 			invocation_id,
 			tool_id,
 			provider_id,
-			caller,
+			principal_kind,
+			principal_ref,
 			started_at,
 			finished_at,
 			policy_kind,
@@ -43,11 +45,12 @@ func (s *Store) Record(ctx context.Context, record auditdomain.Record) error {
 			rejection_code,
 			failure_source,
 			failure_code
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		record.InvocationID().String(),
 		record.ToolID().String(),
 		providerID,
-		record.Caller(),
+		record.PrincipalKind(),
+		record.PrincipalRef(),
 		formatTime(record.StartedAt()),
 		formatTime(record.FinishedAt()),
 		string(record.PolicyKind()),
@@ -71,9 +74,6 @@ func (s *Store) Record(ctx context.Context, record auditdomain.Record) error {
 	return nil
 }
 
-// Get returns one Audit record by InvocationID.
-//
-// It is currently used by infrastructure tests and future management queries.
 func (s *Store) Get(
 	ctx context.Context,
 	id invocationdomain.InvocationID,
@@ -98,7 +98,6 @@ func formatTime(value time.Time) string {
 	return value.UTC().Format(time.RFC3339Nano)
 }
 
-// ListRecords returns the newest terminal Audit records first.
 func (s *Store) ListRecords(
 	ctx context.Context,
 	limit int,
@@ -133,7 +132,8 @@ const auditSelect = `SELECT
 	invocation_id,
 	tool_id,
 	provider_id,
-	caller,
+	principal_kind,
+	principal_ref,
 	started_at,
 	finished_at,
 	policy_kind,
@@ -157,7 +157,8 @@ func scanRecord(scanner interface{ Scan(...any) error }) (auditdomain.Record, er
 		rawInvocationID string
 		rawToolID       string
 		rawProviderID   sql.NullString
-		caller          string
+		principalKind   string
+		principalRef    string
 		rawStarted      string
 		rawFinished     string
 		policyKind      string
@@ -179,7 +180,8 @@ func scanRecord(scanner interface{ Scan(...any) error }) (auditdomain.Record, er
 		&rawInvocationID,
 		&rawToolID,
 		&rawProviderID,
-		&caller,
+		&principalKind,
+		&principalRef,
 		&rawStarted,
 		&rawFinished,
 		&policyKind,
@@ -231,7 +233,6 @@ func scanRecord(scanner interface{ Scan(...any) error }) (auditdomain.Record, er
 		invocationID,
 		toolID,
 		providerID,
-		caller,
 		startedAt,
 		finishedAt,
 		policydomain.DecisionKind(policyKind),
@@ -246,8 +247,10 @@ func scanRecord(scanner interface{ Scan(...any) error }) (auditdomain.Record, er
 	}
 	record = record.WithErrorSummary(errorSummary)
 	record, err = record.RestoreGovernanceMetadata(
-		invocationdomain.Origin(origin),
-		invocationdomain.ScopeKind(scopeKind),
+		principalKind,
+		principalRef,
+		governancedomain.Origin(origin),
+		governancedomain.ScopeKind(scopeKind),
 		scopeReference,
 		invocationdomain.OutcomeKind(outcomeKind),
 		invocationdomain.RejectionCode(rejectionCode),

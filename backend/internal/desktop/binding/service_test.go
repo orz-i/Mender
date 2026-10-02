@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -261,7 +262,8 @@ func TestServiceEndToEndUsesSharedRuntime(t *testing.T) {
 		t.Fatalf("audit records = %#v", audit.Records)
 	}
 	rejectedRecord := audit.Records[0]
-	if rejectedRecord.Caller != "desktop" ||
+	if rejectedRecord.PrincipalKind != "local_user" ||
+		!strings.HasPrefix(rejectedRecord.PrincipalRef, "os:") ||
 		rejectedRecord.Origin != "desktop" ||
 		rejectedRecord.ScopeKind != "catalog" ||
 		rejectedRecord.OutcomeKind != "rejected" ||
@@ -269,7 +271,8 @@ func TestServiceEndToEndUsesSharedRuntime(t *testing.T) {
 		t.Fatalf("rejected audit record = %#v", rejectedRecord)
 	}
 	completedRecord := audit.Records[1]
-	if completedRecord.Caller != "desktop" ||
+	if completedRecord.PrincipalKind != "local_user" ||
+		!strings.HasPrefix(completedRecord.PrincipalRef, "os:") ||
 		completedRecord.ResultKind != "complete" ||
 		completedRecord.OutcomeKind != "complete" {
 		t.Fatalf("completed audit record = %#v", completedRecord)

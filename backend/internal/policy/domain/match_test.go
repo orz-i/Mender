@@ -1,6 +1,9 @@
 package domain
 
-import "testing"
+import (
+	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
+	"testing"
+)
 
 func TestMatchSemantics(t *testing.T) {
 	t.Parallel()
@@ -14,8 +17,9 @@ func TestMatchSemantics(t *testing.T) {
 		t.Fatal(err)
 	}
 	match, err := NewMatch(MatchSpec{
-		Origins:       []Origin{OriginMCP},
-		ScopeKinds:    []ScopeKind{ScopeProfile},
+		Actions:       []governancedomain.Action{governancedomain.ActionToolInvoke},
+		Origins:       []governancedomain.Origin{governancedomain.OriginMCP},
+		ScopeKinds:    []governancedomain.ScopeKind{governancedomain.ScopeProfile},
 		ProfileRefs:   []string{"prof_00000000000000000000000000000001"},
 		ProviderIDs:   []string{"prov_00000000000000000000000000000001"},
 		ToolIDs:       []string{"tool_00000000000000000000000000000001"},
@@ -28,13 +32,16 @@ func TestMatchSemantics(t *testing.T) {
 	}
 
 	input := EvaluationInput{
-		Origin:         OriginMCP,
-		ScopeKind:      ScopeProfile,
-		ScopeReference: "prof_00000000000000000000000000000001",
-		ProviderID:     "prov_00000000000000000000000000000001",
-		ToolID:         "tool_00000000000000000000000000000001",
-		FactKnowledge:  FactKnown,
-		Effects:        []string{"filesystem.write"},
+		Action:             governancedomain.ActionToolInvoke,
+		PrincipalKind:      governancedomain.PrincipalLocalUser,
+		PrincipalReference: "test:user",
+		Origin:             governancedomain.OriginMCP,
+		ScopeKind:          governancedomain.ScopeProfile,
+		ScopeReference:     "prof_00000000000000000000000000000001",
+		ProviderID:         "prov_00000000000000000000000000000001",
+		ToolID:             "tool_00000000000000000000000000000001",
+		FactKnowledge:      FactKnown,
+		Effects:            []string{"filesystem.write"},
 		Resources: []ResourceFact{
 			{Kind: "path", Value: "/workspace/release"},
 		},
@@ -54,18 +61,26 @@ func TestMatchSemantics(t *testing.T) {
 func TestUnknownFactRuleAndCrossFieldValidation(t *testing.T) {
 	t.Parallel()
 
-	unknown, err := NewMatch(MatchSpec{FactKnowledge: FactUnknown})
+	unknown, err := NewMatch(MatchSpec{
+		Actions: []governancedomain.Action{governancedomain.ActionToolInvoke}, FactKnowledge: FactUnknown})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !unknown.Matches(EvaluationInput{FactKnowledge: FactUnknown}) {
+	if !unknown.Matches(EvaluationInput{
+		Action:             governancedomain.ActionToolInvoke,
+		PrincipalKind:      governancedomain.PrincipalLocalUser,
+		PrincipalReference: "test:user", FactKnowledge: FactUnknown}) {
 		t.Fatal("explicit unknown-fact match did not match unknown facts")
 	}
-	if unknown.Matches(EvaluationInput{FactKnowledge: FactKnown}) {
+	if unknown.Matches(EvaluationInput{
+		Action:             governancedomain.ActionToolInvoke,
+		PrincipalKind:      governancedomain.PrincipalLocalUser,
+		PrincipalReference: "test:user", FactKnowledge: FactKnown}) {
 		t.Fatal("unknown-fact match accepted known facts")
 	}
 
 	if _, err := NewMatch(MatchSpec{
+		Actions:       []governancedomain.Action{governancedomain.ActionToolInvoke},
 		FactKnowledge: FactUnknown,
 		EffectsAny:    []string{"network.write"},
 	}); err == nil {
@@ -73,7 +88,8 @@ func TestUnknownFactRuleAndCrossFieldValidation(t *testing.T) {
 	}
 
 	if _, err := NewMatch(MatchSpec{
-		ScopeKinds:  []ScopeKind{ScopeCatalog},
+		Actions:     []governancedomain.Action{governancedomain.ActionToolInvoke},
+		ScopeKinds:  []governancedomain.ScopeKind{governancedomain.ScopeCatalog},
 		ProfileRefs: []string{"prof_00000000000000000000000000000001"},
 	}); err == nil {
 		t.Fatal("catalog-only match accepted ProfileRefs")
@@ -84,7 +100,8 @@ func TestMatchNormalizesDuplicatesAndWildcard(t *testing.T) {
 	t.Parallel()
 
 	match, err := NewMatch(MatchSpec{
-		Origins:       []Origin{OriginMCP, OriginMCP},
+		Actions:       []governancedomain.Action{governancedomain.ActionToolInvoke},
+		Origins:       []governancedomain.Origin{governancedomain.OriginMCP, governancedomain.OriginMCP},
 		FactKnowledge: "",
 		EffectsAny:    []string{"network.read", "network.read"},
 	})
@@ -101,7 +118,8 @@ func TestMatchNormalizesDuplicatesAndWildcard(t *testing.T) {
 		t.Fatalf("FactKnowledge() = %q", match.FactKnowledge())
 	}
 
-	wildcard, err := NewMatch(MatchSpec{})
+	wildcard, err := NewMatch(MatchSpec{
+		Actions: []governancedomain.Action{governancedomain.ActionToolInvoke}})
 	if err != nil {
 		t.Fatal(err)
 	}

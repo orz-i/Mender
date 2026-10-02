@@ -3,6 +3,7 @@ package bootstrap
 import (
 	"context"
 	"encoding/json"
+	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	"os"
 	"path/filepath"
 	"testing"
@@ -128,13 +129,13 @@ func TestWorkspaceProviderRuntimeComposesProfilePolicyAndAudit(t *testing.T) {
 		}
 	}
 
-	scope, err := invocationdomain.ProfileExecutionScope(profile.ID().String())
+	scope, err := governancedomain.ProfileScope(profile.ID().String())
 	if err != nil {
 		t.Fatal(err)
 	}
-	invocationContext, err := invocationdomain.NewInvocationContext(
-		invocationdomain.OriginInternal,
-		"workspace-runtime-test",
+	invocationContext, err := governancedomain.NewContext(
+		governancedomain.OriginInternal,
+		testPrincipal(t, "workspace-runtime-test"),
 		scope,
 	)
 	if err != nil {
@@ -190,6 +191,7 @@ func TestWorkspaceProviderRuntimeComposesProfilePolicyAndAudit(t *testing.T) {
 		Enabled:     true,
 		Decision:    policydomain.DecisionDeny,
 		Match: policydomain.MatchSpec{
+			Actions:       []governancedomain.Action{governancedomain.ActionToolInvoke},
 			ProviderIDs:   []string{provider.ID().String()},
 			FactKnowledge: policydomain.FactKnown,
 			EffectsAny:    []string{"filesystem.write"},

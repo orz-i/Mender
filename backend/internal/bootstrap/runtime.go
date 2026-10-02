@@ -14,6 +14,8 @@ import (
 	auditsqlite "github.com/orz-i/Mender/backend/internal/audit/infrastructure/sqlite"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	credentialapplication "github.com/orz-i/Mender/backend/internal/credential/application"
+	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
+	governancelocaluser "github.com/orz-i/Mender/backend/internal/governance/infrastructure/localuser"
 	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
 	invocationevents "github.com/orz-i/Mender/backend/internal/invocation/infrastructure/events"
 	invocationexecutionguard "github.com/orz-i/Mender/backend/internal/invocation/infrastructure/executionguard"
@@ -69,6 +71,7 @@ type Runtime struct {
 	pluginPackages      *installationlocalfs.Store
 	externalProcesses   *providerexternal.Supervisor
 	providerInstances   *providerplugin.Manager
+	ownerPrincipal      governancedomain.Principal
 
 	closersMu sync.Mutex
 	closers   []io.Closer
@@ -79,6 +82,11 @@ type Runtime struct {
 
 // NewRuntime constructs the protocol-independent local runtime.
 func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
+	ownerPrincipal, err := governancelocaluser.CurrentPrincipal()
+	if err != nil {
+		return nil, fmt.Errorf("compose runtime: principal: %w", err)
+	}
+
 	catalog, err := NewCatalog(ctx, CatalogOptions{DatabasePath: options.DatabasePath})
 	if err != nil {
 		return nil, fmt.Errorf("compose runtime: catalog: %w", err)
@@ -375,6 +383,7 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		pluginPackages:      pluginPackages,
 		externalProcesses:   externalProcesses,
 		providerInstances:   providerInstances,
+		ownerPrincipal:      ownerPrincipal,
 		mcpServers:          make(map[string]*managedMCPServer),
 	}, nil
 }

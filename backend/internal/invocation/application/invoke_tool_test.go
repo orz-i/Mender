@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	"slices"
 	"sync"
 	"testing"
@@ -62,8 +63,8 @@ func TestInvokeToolSuccessfulResultVariants(t *testing.T) {
 			if record.Status() != tc.wantStatus || record.ResultKind() != tc.result.Kind() {
 				t.Fatalf("Audit record = %#v", record)
 			}
-			if record.Origin() != invocationdomain.OriginInternal ||
-				record.ScopeKind() != invocationdomain.ScopeCatalog ||
+			if record.Origin() != governancedomain.OriginInternal ||
+				record.ScopeKind() != governancedomain.ScopeCatalog ||
 				record.OutcomeKind() != tc.result.Kind() {
 				t.Fatalf(
 					"Audit governance metadata = origin %q scope %q outcome %q",
@@ -266,8 +267,8 @@ func TestValidatedGovernanceFactsReachPolicyWithoutRawArguments(t *testing.T) {
 			fixture.policy.calls,
 		)
 	}
-	if fixture.policy.last.Context.Caller() != "facts-test" ||
-		fixture.policy.last.Context.Scope().Kind() != invocationdomain.ScopeCatalog {
+	if fixture.policy.last.Context.Principal().Reference() != "test:facts-test" ||
+		fixture.policy.last.Context.Scope().Kind() != governancedomain.ScopeCatalog {
 		t.Fatalf("Policy context = %#v", fixture.policy.last.Context)
 	}
 	if fixture.policy.last.Facts.Knowledge() != invocationdomain.FactKnowledgeKnown {
@@ -373,8 +374,8 @@ func TestProfileScopeDenialPreventsToolLookupAndExecution(t *testing.T) {
 	if record.Status() != auditdomain.StatusDenied || record.ErrorClass() != auditdomain.ErrorPolicy {
 		t.Fatalf("Audit record = %#v", record)
 	}
-	if record.Origin() != invocationdomain.OriginMCP ||
-		record.ScopeKind() != invocationdomain.ScopeProfile ||
+	if record.Origin() != governancedomain.OriginMCP ||
+		record.ScopeKind() != governancedomain.ScopeProfile ||
 		record.ScopeReference() != "prof_00000000000000000000000000000002" ||
 		record.OutcomeKind() != invocationdomain.OutcomeKindRejected ||
 		record.RejectionCode() != invocationdomain.RejectionToolOutsideScope {
@@ -665,7 +666,7 @@ func TestCredentialResolverIsConsumedOnlyByExecutor(t *testing.T) {
 	}
 
 	record := fixture.audit.last(t)
-	if bytes.Contains([]byte(record.Caller()), fixture.credentials.secret) ||
+	if bytes.Contains([]byte(record.PrincipalRef()), fixture.credentials.secret) ||
 		bytes.Contains([]byte(record.PolicyReason()), fixture.credentials.secret) {
 		t.Fatal("audit record exposed secret material")
 	}
@@ -1762,15 +1763,30 @@ func testTool(t *testing.T) catalogdomain.Tool {
 	return tool
 }
 
+func testPrincipal(t *testing.T, label string) governancedomain.Principal {
+	t.Helper()
+	if label == "" {
+		label = "default"
+	}
+	principal, err := governancedomain.NewPrincipal(
+		governancedomain.PrincipalService,
+		"test:"+label,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return principal
+}
+
 func catalogInvocationContext(
 	t *testing.T,
-	caller string,
-) invocationdomain.InvocationContext {
+	label string,
+) governancedomain.Context {
 	t.Helper()
-	executionContext, err := invocationdomain.NewInvocationContext(
-		invocationdomain.OriginInternal,
-		caller,
-		invocationdomain.CatalogExecutionScope(),
+	executionContext, err := governancedomain.NewContext(
+		governancedomain.OriginInternal,
+		testPrincipal(t, label),
+		governancedomain.CatalogScope(),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -1780,17 +1796,17 @@ func catalogInvocationContext(
 
 func profileInvocationContext(
 	t *testing.T,
-	caller string,
+	label string,
 	profileReference string,
-) invocationdomain.InvocationContext {
+) governancedomain.Context {
 	t.Helper()
-	scope, err := invocationdomain.ProfileExecutionScope(profileReference)
+	scope, err := governancedomain.ProfileScope(profileReference)
 	if err != nil {
 		t.Fatal(err)
 	}
-	executionContext, err := invocationdomain.NewInvocationContext(
-		invocationdomain.OriginMCP,
-		caller,
+	executionContext, err := governancedomain.NewContext(
+		governancedomain.OriginMCP,
+		testPrincipal(t, label),
 		scope,
 	)
 	if err != nil {

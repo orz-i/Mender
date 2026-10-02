@@ -95,8 +95,8 @@ func TestOpenMigratesAuditV2AndPreservesLegacyRows(t *testing.T) {
 	).Scan(&version); err != nil {
 		t.Fatal(err)
 	}
-	if version != 3 {
-		t.Fatalf("schema version = %d, want 3", version)
+	if version != 4 {
+		t.Fatalf("schema version = %d, want 4", version)
 	}
 
 	invocationID, err := invocationdomain.ParseInvocationID(
@@ -109,15 +109,19 @@ func TestOpenMigratesAuditV2AndPreservesLegacyRows(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get() legacy row error = %v", err)
 	}
-	if record.Origin() != "" ||
-		record.ScopeKind() != "" ||
+	if record.PrincipalKind() != "legacy" ||
+		record.PrincipalRef() != "legacy-cli" ||
+		record.Origin() != "internal" ||
+		record.ScopeKind() != "catalog" ||
 		record.ScopeReference() != "" ||
 		record.OutcomeKind() != "" ||
 		record.RejectionCode() != "" ||
 		record.FailureSource() != "" ||
 		record.FailureCode() != "" {
 		t.Fatalf(
-			"legacy governance metadata = origin %q scope %q/%q outcome %q rejection %q failure %q/%q",
+			"legacy governance metadata = principal %q/%q origin %q scope %q/%q outcome %q rejection %q failure %q/%q",
+			record.PrincipalKind(),
+			record.PrincipalRef(),
 			record.Origin(),
 			record.ScopeKind(),
 			record.ScopeReference(),

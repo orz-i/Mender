@@ -106,6 +106,7 @@ func TestPolicyCLIWorkflow(t *testing.T) {
 
 	rule := execute(
 		"policy", "rule", "add",
+		"--action", "tool.invoke",
 		"--name", "Allow internal Catalog",
 		"--decision", "allow",
 		"--origin", "internal",
@@ -150,6 +151,7 @@ func TestPolicyRuleAddRejectsInvalidResourceAsUsage(t *testing.T) {
 		context.Background(),
 		[]string{
 			"policy", "rule", "add",
+			"--action", "tool.invoke",
 			"--name", "Invalid",
 			"--decision", "deny",
 			"--resource", "regex:path:.*",

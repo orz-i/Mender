@@ -61,8 +61,8 @@ func TestOpenMigratesAuditV1ThroughLatestSchema(t *testing.T) {
 	).Scan(&version); err != nil {
 		t.Fatal(err)
 	}
-	if version != 3 {
-		t.Fatalf("schema version = %d, want 3", version)
+	if version != 4 {
+		t.Fatalf("schema version = %d, want 4", version)
 	}
 
 	rows, err := store.db.QueryContext(
@@ -95,6 +95,8 @@ func TestOpenMigratesAuditV1ThroughLatestSchema(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, name := range []string{
+		"principal_kind",
+		"principal_ref",
 		"error_summary",
 		"origin",
 		"scope_kind",
@@ -107,5 +109,8 @@ func TestOpenMigratesAuditV1ThroughLatestSchema(t *testing.T) {
 		if !found[name] {
 			t.Fatalf("%s column was not added", name)
 		}
+	}
+	if found["caller"] {
+		t.Fatal("caller column survived Principal hard cut")
 	}
 }

@@ -45,14 +45,17 @@ type PolicyRuleInput struct {
 }
 
 type PolicyMatch struct {
-	Origins       []string                `json:"origins"`
-	ScopeKinds    []string                `json:"scopeKinds"`
-	ProfileRefs   []string                `json:"profileRefs"`
-	ProviderIDs   []string                `json:"providerIds"`
-	ToolIDs       []string                `json:"toolIds"`
-	FactKnowledge string                  `json:"factKnowledge"`
-	EffectsAny    []string                `json:"effectsAny"`
-	ResourcesAny  []PolicyResourceMatcher `json:"resourcesAny"`
+	Actions        []string                `json:"actions"`
+	Origins        []string                `json:"origins"`
+	PrincipalKinds []string                `json:"principalKinds"`
+	PrincipalRefs  []string                `json:"principalRefs"`
+	ScopeKinds     []string                `json:"scopeKinds"`
+	ProfileRefs    []string                `json:"profileRefs"`
+	ProviderIDs    []string                `json:"providerIds"`
+	ToolIDs        []string                `json:"toolIds"`
+	FactKnowledge  string                  `json:"factKnowledge"`
+	EffectsAny     []string                `json:"effectsAny"`
+	ResourcesAny   []PolicyResourceMatcher `json:"resourcesAny"`
 }
 
 type PolicyResourceMatcher struct {
@@ -337,7 +340,8 @@ type AuditRecord struct {
 	InvocationID   string `json:"invocationId"`
 	ToolID         string `json:"toolId"`
 	ProviderID     string `json:"providerId,omitempty"`
-	Caller         string `json:"caller"`
+	PrincipalKind  string `json:"principalKind"`
+	PrincipalRef   string `json:"principalRef"`
 	StartedAt      string `json:"startedAt"`
 	FinishedAt     string `json:"finishedAt"`
 	PolicyKind     string `json:"policyKind"`

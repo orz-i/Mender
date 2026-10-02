@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1047,10 +1048,10 @@ func (s *Service) CallTool(
 	if err != nil {
 		return InvocationResult{}, fmt.Errorf("encode tool arguments: %w", err)
 	}
-	executionContext, err := invocationdomain.NewInvocationContext(
-		invocationdomain.OriginDesktop,
-		"desktop",
-		invocationdomain.CatalogExecutionScope(),
+	executionContext, err := governancedomain.NewContext(
+		governancedomain.OriginDesktop,
+		s.runtime.OwnerPrincipal(),
+		governancedomain.CatalogScope(),
 	)
 	if err != nil {
 		return InvocationResult{}, err
@@ -1322,13 +1323,21 @@ func parsePolicyRuleInput(input PolicyRuleInput) (policyapplication.RuleInput, e
 		resources = append(resources, resource)
 	}
 
-	origins := make([]policydomain.Origin, 0, len(input.Match.Origins))
-	for _, value := range input.Match.Origins {
-		origins = append(origins, policydomain.Origin(value))
+	actions := make([]governancedomain.Action, 0, len(input.Match.Actions))
+	for _, value := range input.Match.Actions {
+		actions = append(actions, governancedomain.Action(value))
 	}
-	scopeKinds := make([]policydomain.ScopeKind, 0, len(input.Match.ScopeKinds))
+	origins := make([]governancedomain.Origin, 0, len(input.Match.Origins))
+	for _, value := range input.Match.Origins {
+		origins = append(origins, governancedomain.Origin(value))
+	}
+	principalKinds := make([]governancedomain.PrincipalKind, 0, len(input.Match.PrincipalKinds))
+	for _, value := range input.Match.PrincipalKinds {
+		principalKinds = append(principalKinds, governancedomain.PrincipalKind(value))
+	}
+	scopeKinds := make([]governancedomain.ScopeKind, 0, len(input.Match.ScopeKinds))
 	for _, value := range input.Match.ScopeKinds {
-		scopeKinds = append(scopeKinds, policydomain.ScopeKind(value))
+		scopeKinds = append(scopeKinds, governancedomain.ScopeKind(value))
 	}
 
 	return policyapplication.RuleInput{
@@ -1336,14 +1345,17 @@ func parsePolicyRuleInput(input PolicyRuleInput) (policyapplication.RuleInput, e
 		Enabled:     input.Enabled,
 		Decision:    policydomain.DecisionKind(input.Decision),
 		Match: policydomain.MatchSpec{
-			Origins:       origins,
-			ScopeKinds:    scopeKinds,
-			ProfileRefs:   append([]string(nil), input.Match.ProfileRefs...),
-			ProviderIDs:   append([]string(nil), input.Match.ProviderIDs...),
-			ToolIDs:       append([]string(nil), input.Match.ToolIDs...),
-			FactKnowledge: policydomain.FactKnowledge(input.Match.FactKnowledge),
-			EffectsAny:    append([]string(nil), input.Match.EffectsAny...),
-			ResourcesAny:  resources,
+			Actions:        actions,
+			Origins:        origins,
+			PrincipalKinds: principalKinds,
+			PrincipalRefs:  append([]string(nil), input.Match.PrincipalRefs...),
+			ScopeKinds:     scopeKinds,
+			ProfileRefs:    append([]string(nil), input.Match.ProfileRefs...),
+			ProviderIDs:    append([]string(nil), input.Match.ProviderIDs...),
+			ToolIDs:        append([]string(nil), input.Match.ToolIDs...),
+			FactKnowledge:  policydomain.FactKnowledge(input.Match.FactKnowledge),
+			EffectsAny:     append([]string(nil), input.Match.EffectsAny...),
+			ResourcesAny:   resources,
 		},
 	}, nil
 }
@@ -1361,9 +1373,17 @@ func policyProjection(policy policydomain.PolicySet) Policy {
 
 func policyRuleProjection(rule policydomain.Rule) PolicyRule {
 	match := rule.Match()
+	actions := make([]string, 0, len(match.Actions()))
+	for _, value := range match.Actions() {
+		actions = append(actions, string(value))
+	}
 	origins := make([]string, 0, len(match.Origins()))
 	for _, value := range match.Origins() {
 		origins = append(origins, string(value))
+	}
+	principalKinds := make([]string, 0, len(match.PrincipalKinds()))
+	for _, value := range match.PrincipalKinds() {
+		principalKinds = append(principalKinds, string(value))
 	}
 	scopeKinds := make([]string, 0, len(match.ScopeKinds()))
 	for _, value := range match.ScopeKinds() {
@@ -1383,14 +1403,17 @@ func policyRuleProjection(rule policydomain.Rule) PolicyRule {
 		Enabled:     rule.Enabled(),
 		Decision:    string(rule.Decision()),
 		Match: PolicyMatch{
-			Origins:       origins,
-			ScopeKinds:    scopeKinds,
-			ProfileRefs:   match.ProfileRefs(),
-			ProviderIDs:   match.ProviderIDs(),
-			ToolIDs:       match.ToolIDs(),
-			FactKnowledge: string(match.FactKnowledge()),
-			EffectsAny:    match.EffectsAny(),
-			ResourcesAny:  resources,
+			Actions:        actions,
+			Origins:        origins,
+			PrincipalKinds: principalKinds,
+			PrincipalRefs:  match.PrincipalRefs(),
+			ScopeKinds:     scopeKinds,
+			ProfileRefs:    match.ProfileRefs(),
+			ProviderIDs:    match.ProviderIDs(),
+			ToolIDs:        match.ToolIDs(),
+			FactKnowledge:  string(match.FactKnowledge()),
+			EffectsAny:     match.EffectsAny(),
+			ResourcesAny:   resources,
 		},
 		CreatedAt: rule.CreatedAt().Format(timeFormat),
 		UpdatedAt: rule.UpdatedAt().Format(timeFormat),
@@ -1822,7 +1845,8 @@ func auditProjection(record auditdomain.Record) AuditRecord {
 	result := AuditRecord{
 		InvocationID:   record.InvocationID().String(),
 		ToolID:         record.ToolID().String(),
-		Caller:         record.Caller(),
+		PrincipalKind:  record.PrincipalKind(),
+		PrincipalRef:   record.PrincipalRef(),
 		StartedAt:      record.StartedAt().Format(timeFormat),
 		FinishedAt:     record.FinishedAt().Format(timeFormat),
 		PolicyKind:     string(record.PolicyKind()),
