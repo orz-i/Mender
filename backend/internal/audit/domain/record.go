@@ -43,6 +43,7 @@ const (
 	ErrorInvalidArguments ErrorClass = "invalid_arguments"
 	ErrorPolicy           ErrorClass = "policy"
 	ErrorApproval         ErrorClass = "approval"
+	ErrorBudget           ErrorClass = "budget"
 	ErrorExecutorNotFound ErrorClass = "executor_not_found"
 	ErrorExecution        ErrorClass = "execution"
 	ErrorResultGuard      ErrorClass = "result_guard"
@@ -305,7 +306,8 @@ func (r Record) withOutcomeMetadata(
 			invocationdomain.RejectionToolOutsideScope,
 			invocationdomain.RejectionInvalidArguments,
 			invocationdomain.RejectionPolicyDenied,
-			invocationdomain.RejectionApprovalDenied:
+			invocationdomain.RejectionApprovalDenied,
+			invocationdomain.RejectionRuntimeBudgetExceeded:
 		default:
 			return Record{}, fmt.Errorf("audit rejection code %q is invalid", rejectionCode)
 		}
@@ -409,6 +411,10 @@ func validateGovernanceOutcomeConsistency(
 		case invocationdomain.RejectionApprovalDenied:
 			if status != StatusDenied || errorClass != ErrorApproval {
 				return fmt.Errorf("approval Audit rejection metadata is inconsistent")
+			}
+		case invocationdomain.RejectionRuntimeBudgetExceeded:
+			if status != StatusDenied || errorClass != ErrorBudget {
+				return fmt.Errorf("budget Audit rejection metadata is inconsistent")
 			}
 		}
 	case invocationdomain.OutcomeKindFailed:

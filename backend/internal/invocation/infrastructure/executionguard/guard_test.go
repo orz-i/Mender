@@ -6,7 +6,6 @@ import (
 	"time"
 
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
-	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
 )
 
 func TestProviderSerialBlocksSameProviderButNotDifferentProvider(t *testing.T) {
@@ -93,7 +92,7 @@ func TestUnlimitedHonorsCancelledContext(t *testing.T) {
 	}
 }
 
-func guardRequest(t *testing.T, toolNumber, providerNumber int) invocationapplication.ExecutionGuardRequest {
+func guardRequest(t *testing.T, toolNumber, providerNumber int) Request {
 	t.Helper()
 
 	toolID, err := catalogdomain.ParseToolID(id("tool_", toolNumber))
@@ -122,7 +121,7 @@ func guardRequest(t *testing.T, toolNumber, providerNumber int) invocationapplic
 		t.Fatal(err)
 	}
 
-	return invocationapplication.ExecutionGuardRequest{Tool: tool}
+	return Request{Tool: tool}
 }
 
 func id(prefix string, number int) string {

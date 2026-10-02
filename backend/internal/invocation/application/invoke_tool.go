@@ -13,6 +13,7 @@ import (
 	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	policydomain "github.com/orz-i/Mender/backend/internal/policy/domain"
+	runtimegovernancedomain "github.com/orz-i/Mender/backend/internal/runtimegovernance/domain"
 )
 
 const fallbackExecutionTimeout = 30 * time.Second
@@ -39,7 +40,7 @@ type InvokeTool struct {
 	facts                 GovernanceFactExtractor
 	policy                PolicyEvaluator
 	approvals             governanceapplication.ApprovalGate
-	executionGuard        ExecutionGuard
+	runtimeBudget         RuntimeBudgetController
 	bindingExecutionGuard BindingExecutionGuard
 	resultGuard           ResultGuard
 	observer              InvocationObserver
@@ -59,7 +60,7 @@ func NewInvokeTool(
 	facts GovernanceFactExtractor,
 	policy PolicyEvaluator,
 	approvals governanceapplication.ApprovalGate,
-	executionGuard ExecutionGuard,
+	runtimeBudget RuntimeBudgetController,
 	bindingExecutionGuard BindingExecutionGuard,
 	resultGuard ResultGuard,
 	observer InvocationObserver,
@@ -81,7 +82,7 @@ func NewInvokeTool(
 		facts:                 facts,
 		policy:                policy,
 		approvals:             approvals,
-		executionGuard:        executionGuard,
+		runtimeBudget:         runtimeBudget,
 		bindingExecutionGuard: bindingExecutionGuard,
 		resultGuard:           resultGuard,
 		observer:              observer,
@@ -112,6 +113,46 @@ func (uc InvokeTool) Execute(
 	}
 	response = InvokeToolResponse{InvocationID: invocationID}
 	startedAt := uc.clock.Now()
+	budgetSnapshot, err := uc.runtimeBudgetSnapshot(ctx)
+	if err != nil {
+		recordErr := uc.recordUnresolvedTool(
+			context.WithoutCancel(ctx),
+			invocationID,
+			request.ToolID,
+			request.Context,
+			startedAt,
+			auditdomain.StatusFailed,
+			auditdomain.ErrorInternal,
+		)
+		return response, joinInvocationError(
+			fmt.Errorf("invoke tool: load runtime budget: %w", err),
+			recordErr,
+		)
+	}
+	if len(request.Arguments) > budgetSnapshot.MaxArgumentBytes() {
+		outcome, outcomeErr := newRejectedOutcome(
+			invocationdomain.RejectionRuntimeBudgetExceeded,
+			"tool arguments exceed the configured Runtime budget",
+		)
+		if outcomeErr != nil {
+			return response, outcomeErr
+		}
+		response.Outcome = outcome
+		recordErr := uc.recordUnresolvedTool(
+			context.WithoutCancel(ctx),
+			invocationID,
+			request.ToolID,
+			request.Context,
+			startedAt,
+			auditdomain.StatusDenied,
+			auditdomain.ErrorBudget,
+			outcome,
+		)
+		if recordErr != nil {
+			return response, recordErr
+		}
+		return response, nil
+	}
 	emitter := newEventEmitter(uc.observer, invocationID, uc.clock)
 	emitter.lifecycle(invocationdomain.EventAccepted)
 	defer func() {
@@ -401,6 +442,7 @@ func (uc InvokeTool) Execute(
 			decision,
 			auditdomain.ApprovalApproved,
 			scopeGovernance,
+			budgetSnapshot,
 			emitter,
 		)
 
@@ -415,6 +457,7 @@ func (uc InvokeTool) Execute(
 			decision,
 			auditdomain.ApprovalNotRequired,
 			scopeGovernance,
+			budgetSnapshot,
 			emitter,
 		)
 
@@ -628,6 +671,22 @@ func (uc InvokeTool) enforceExecutionScope(
 	}
 }
 
+func (uc InvokeTool) runtimeBudgetSnapshot(
+	ctx context.Context,
+) (runtimegovernancedomain.Budget, error) {
+	if uc.runtimeBudget == nil {
+		return runtimegovernancedomain.Budget{}, fmt.Errorf("runtime budget controller is unavailable")
+	}
+	snapshot, err := uc.runtimeBudget.Snapshot(ctx)
+	if err != nil {
+		return runtimegovernancedomain.Budget{}, err
+	}
+	if err := snapshot.Validate(); err != nil {
+		return runtimegovernancedomain.Budget{}, fmt.Errorf("invalid Runtime budget snapshot: %w", err)
+	}
+	return snapshot, nil
+}
+
 func (uc InvokeTool) execute(
 	parent context.Context,
 	response InvokeToolResponse,
@@ -638,17 +697,21 @@ func (uc InvokeTool) execute(
 	decision policydomain.Decision,
 	approval auditdomain.ApprovalOutcome,
 	scopeGovernance invocationdomain.ScopedBindingGovernance,
+	budgetSnapshot runtimegovernancedomain.Budget,
 	emitter *eventEmitter,
 ) (InvokeToolResponse, error) {
 	timeout := request.Timeout
 	if timeout == 0 {
 		timeout = uc.defaultTimeout
 	}
+	if maximum := budgetSnapshot.MaxExecutionTimeout(); timeout > maximum {
+		timeout = maximum
+	}
 	execCtx, cancel := context.WithTimeout(parent, timeout)
 	defer cancel()
 
 	emitter.lifecycle(invocationdomain.EventExecutionWaiting)
-	if uc.executionGuard == nil {
+	if uc.runtimeBudget == nil {
 		recordErr := uc.record(
 			context.WithoutCancel(parent),
 			response.InvocationID,
@@ -664,16 +727,48 @@ func (uc InvokeTool) execute(
 			"",
 		)
 		return response, joinInvocationError(
-			fmt.Errorf("invoke tool: execution guard is unavailable"),
+			fmt.Errorf("invoke tool: runtime budget controller is unavailable"),
 			recordErr,
 		)
 	}
 
-	baselineRelease, err := uc.executionGuard.Acquire(execCtx, ExecutionGuardRequest{
-		InvocationID: response.InvocationID,
-		Tool:         tool,
-		Context:      request.Context,
-	})
+	principal := request.Context.Principal()
+	budgetRelease, err := uc.runtimeBudget.AcquireInvocation(
+		execCtx,
+		budgetSnapshot,
+		principal.Reference(),
+		tool.ProviderID().String(),
+		tool.ID().String(),
+	)
+	if errors.Is(err, runtimegovernancedomain.ErrBudgetExceeded) {
+		outcome, outcomeErr := newRejectedOutcome(
+			invocationdomain.RejectionRuntimeBudgetExceeded,
+			"Runtime execution budget is saturated",
+		)
+		if outcomeErr != nil {
+			return response, outcomeErr
+		}
+		response.Outcome = outcome
+		recordErr := uc.record(
+			context.WithoutCancel(parent),
+			response.InvocationID,
+			tool,
+			request.Context,
+			startedAt,
+			decision.Kind(),
+			decision.ReasonCode(),
+			approval,
+			auditdomain.StatusDenied,
+			"",
+			auditdomain.ErrorBudget,
+			"",
+			outcome,
+		)
+		if recordErr != nil {
+			return response, recordErr
+		}
+		return response, nil
+	}
 	if err != nil {
 		if isExecutionContextError(execCtx, err) {
 			return uc.returnExecutionFailure(
@@ -688,7 +783,6 @@ func (uc InvokeTool) execute(
 				err,
 			)
 		}
-
 		recordErr := uc.record(
 			context.WithoutCancel(parent),
 			response.InvocationID,
@@ -704,11 +798,11 @@ func (uc InvokeTool) execute(
 			"",
 		)
 		return response, joinInvocationError(
-			fmt.Errorf("invoke tool: acquire execution guard: %w", err),
+			fmt.Errorf("invoke tool: acquire Runtime budget: %w", err),
 			recordErr,
 		)
 	}
-	if baselineRelease == nil {
+	if budgetRelease == nil {
 		recordErr := uc.record(
 			context.WithoutCancel(parent),
 			response.InvocationID,
@@ -724,13 +818,13 @@ func (uc InvokeTool) execute(
 			"",
 		)
 		return response, joinInvocationError(
-			fmt.Errorf("invoke tool: execution guard returned no release function"),
+			fmt.Errorf("invoke tool: Runtime budget returned no release function"),
 			recordErr,
 		)
 	}
 
 	if uc.bindingExecutionGuard == nil {
-		baselineRelease()
+		budgetRelease()
 		recordErr := uc.record(
 			context.WithoutCancel(parent),
 			response.InvocationID,
@@ -761,7 +855,7 @@ func (uc InvokeTool) execute(
 		},
 	)
 	if err != nil {
-		baselineRelease()
+		budgetRelease()
 		if isExecutionContextError(execCtx, err) {
 			return uc.returnExecutionFailure(
 				parent,
@@ -795,7 +889,7 @@ func (uc InvokeTool) execute(
 		)
 	}
 	if bindingRelease == nil {
-		baselineRelease()
+		budgetRelease()
 		recordErr := uc.record(
 			context.WithoutCancel(parent),
 			response.InvocationID,
@@ -818,7 +912,7 @@ func (uc InvokeTool) execute(
 
 	release := func() {
 		bindingRelease()
-		baselineRelease()
+		budgetRelease()
 	}
 	executor, err := uc.router.ExecutorFor(execCtx, tool)
 	if err != nil {
@@ -905,7 +999,12 @@ func (uc InvokeTool) execute(
 		)
 	}
 
-	guardedOutcome, err := uc.resultGuard.Guard(execCtx, tool, outcome)
+	guardedOutcome, err := uc.resultGuard.Guard(
+		execCtx,
+		tool,
+		outcome,
+		budgetSnapshot.MaxResultBytes(),
+	)
 	if err != nil {
 		if isExecutionContextError(execCtx, err) {
 			return uc.returnExecutionFailure(
@@ -1288,6 +1387,15 @@ func attachInferredAuditOutcome(
 				"",
 			)
 		}
+	case auditdomain.ErrorBudget:
+		if status == auditdomain.StatusDenied {
+			return record.WithOutcomeClassification(
+				invocationdomain.OutcomeKindRejected,
+				invocationdomain.RejectionRuntimeBudgetExceeded,
+				"",
+				"",
+			)
+		}
 	case auditdomain.ErrorExecutorNotFound:
 		return record.WithOutcomeClassification(
 			invocationdomain.OutcomeKindFailed,
@@ -1330,6 +1438,13 @@ func attachInferredUnresolvedOutcome(
 		return record.WithOutcomeClassification(
 			invocationdomain.OutcomeKindRejected,
 			invocationdomain.RejectionToolOutsideScope,
+			"",
+			"",
+		)
+	case errorClass == auditdomain.ErrorBudget && status == auditdomain.StatusDenied:
+		return record.WithOutcomeClassification(
+			invocationdomain.OutcomeKindRejected,
+			invocationdomain.RejectionRuntimeBudgetExceeded,
 			"",
 			"",
 		)

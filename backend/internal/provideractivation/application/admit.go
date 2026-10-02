@@ -12,6 +12,7 @@ import (
 	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	policyapplication "github.com/orz-i/Mender/backend/internal/policy/application"
 	policydomain "github.com/orz-i/Mender/backend/internal/policy/domain"
+	runtimegovernancedomain "github.com/orz-i/Mender/backend/internal/runtimegovernance/domain"
 )
 
 var (
@@ -30,6 +31,14 @@ type PolicyEvaluator interface {
 	Execute(context.Context, policyapplication.EvaluateRequest) (policydomain.Decision, error)
 }
 
+type RuntimeBudgetController interface {
+	Snapshot(context.Context) (runtimegovernancedomain.Budget, error)
+	AcquireActivation(
+		context.Context,
+		runtimegovernancedomain.Budget,
+	) (release func(), err error)
+}
+
 type AuditRecorder interface {
 	RecordProviderActivation(context.Context, auditdomain.ProviderActivationRecord) error
 }
@@ -45,6 +54,7 @@ type Clock interface {
 type Admit struct {
 	policy    PolicyEvaluator
 	approvals governanceapplication.ApprovalGate
+	budget    RuntimeBudgetController
 	audit     AuditRecorder
 	ids       IDGenerator
 	clock     Clock
@@ -53,6 +63,7 @@ type Admit struct {
 func NewAdmit(
 	policy PolicyEvaluator,
 	approvals governanceapplication.ApprovalGate,
+	budget RuntimeBudgetController,
 	audit AuditRecorder,
 	ids IDGenerator,
 	clock Clock,
@@ -60,6 +71,7 @@ func NewAdmit(
 	return Admit{
 		policy:    policy,
 		approvals: approvals,
+		budget:    budget,
 		audit:     audit,
 		ids:       ids,
 		clock:     clock,
@@ -80,7 +92,7 @@ func (uc Admit) Execute(
 	if operation == nil {
 		return fmt.Errorf("admit provider activation: operation is required")
 	}
-	if uc.policy == nil || uc.approvals == nil || uc.audit == nil || uc.ids == nil || uc.clock == nil {
+	if uc.policy == nil || uc.approvals == nil || uc.budget == nil || uc.audit == nil || uc.ids == nil || uc.clock == nil {
 		return fmt.Errorf("admit provider activation: dependencies are unavailable")
 	}
 
@@ -179,66 +191,158 @@ func (uc Admit) Execute(
 			)
 			return errors.Join(ErrApprovalDenied, recordErr)
 		}
-		if err := operation(ctx); err != nil {
-			recordErr := uc.record(
-				context.WithoutCancel(ctx),
-				activationID,
-				request,
-				startedAt,
-				decision.Kind(),
-				decision.ReasonCode(),
-				auditdomain.ApprovalApproved,
-				auditdomain.ProviderActivationFailed,
-				auditdomain.ProviderActivationErrorRuntime,
-				err,
-			)
-			return errors.Join(err, recordErr)
-		}
-		return uc.record(
-			context.WithoutCancel(ctx),
+		return uc.executeAdmitted(
+			ctx,
 			activationID,
 			request,
 			startedAt,
-			decision.Kind(),
-			decision.ReasonCode(),
+			decision,
 			auditdomain.ApprovalApproved,
-			auditdomain.ProviderActivationCompleted,
-			auditdomain.ProviderActivationErrorNone,
-			nil,
+			operation,
 		)
 
 	case policydomain.DecisionAllow:
-		if err := operation(ctx); err != nil {
-			recordErr := uc.record(
-				context.WithoutCancel(ctx),
-				activationID,
-				request,
-				startedAt,
-				decision.Kind(),
-				decision.ReasonCode(),
-				auditdomain.ApprovalNotRequired,
-				auditdomain.ProviderActivationFailed,
-				auditdomain.ProviderActivationErrorRuntime,
-				err,
-			)
-			return errors.Join(err, recordErr)
-		}
-		return uc.record(
-			context.WithoutCancel(ctx),
+		return uc.executeAdmitted(
+			ctx,
 			activationID,
 			request,
 			startedAt,
-			decision.Kind(),
-			decision.ReasonCode(),
+			decision,
 			auditdomain.ApprovalNotRequired,
-			auditdomain.ProviderActivationCompleted,
-			auditdomain.ProviderActivationErrorNone,
-			nil,
+			operation,
 		)
 
 	default:
 		return fmt.Errorf("admit provider activation: unknown policy decision %q", decision.Kind())
 	}
+}
+
+func (uc Admit) executeAdmitted(
+	ctx context.Context,
+	activationID string,
+	request Request,
+	startedAt time.Time,
+	decision policydomain.Decision,
+	approval auditdomain.ApprovalOutcome,
+	operation Operation,
+) error {
+	snapshot, err := uc.budget.Snapshot(ctx)
+	if err != nil {
+		recordErr := uc.record(
+			context.WithoutCancel(ctx),
+			activationID,
+			request,
+			startedAt,
+			decision.Kind(),
+			decision.ReasonCode(),
+			approval,
+			auditdomain.ProviderActivationFailed,
+			auditdomain.ProviderActivationErrorRuntime,
+			err,
+		)
+		return errors.Join(
+			fmt.Errorf("admit provider activation: load Runtime budget: %w", err),
+			recordErr,
+		)
+	}
+	if err := snapshot.Validate(); err != nil {
+		recordErr := uc.record(
+			context.WithoutCancel(ctx),
+			activationID,
+			request,
+			startedAt,
+			decision.Kind(),
+			decision.ReasonCode(),
+			approval,
+			auditdomain.ProviderActivationFailed,
+			auditdomain.ProviderActivationErrorRuntime,
+			err,
+		)
+		return errors.Join(
+			fmt.Errorf("admit provider activation: invalid Runtime budget: %w", err),
+			recordErr,
+		)
+	}
+
+	release, err := uc.budget.AcquireActivation(ctx, snapshot)
+	if errors.Is(err, runtimegovernancedomain.ErrBudgetExceeded) {
+		recordErr := uc.record(
+			context.WithoutCancel(ctx),
+			activationID,
+			request,
+			startedAt,
+			decision.Kind(),
+			decision.ReasonCode(),
+			approval,
+			auditdomain.ProviderActivationDenied,
+			auditdomain.ProviderActivationErrorBudget,
+			nil,
+		)
+		return errors.Join(runtimegovernancedomain.ErrBudgetExceeded, recordErr)
+	}
+	if err != nil {
+		recordErr := uc.record(
+			context.WithoutCancel(ctx),
+			activationID,
+			request,
+			startedAt,
+			decision.Kind(),
+			decision.ReasonCode(),
+			approval,
+			auditdomain.ProviderActivationFailed,
+			auditdomain.ProviderActivationErrorRuntime,
+			err,
+		)
+		return errors.Join(
+			fmt.Errorf("admit provider activation: acquire Runtime budget: %w", err),
+			recordErr,
+		)
+	}
+	if release == nil {
+		err := fmt.Errorf("runtime budget returned no release function")
+		recordErr := uc.record(
+			context.WithoutCancel(ctx),
+			activationID,
+			request,
+			startedAt,
+			decision.Kind(),
+			decision.ReasonCode(),
+			approval,
+			auditdomain.ProviderActivationFailed,
+			auditdomain.ProviderActivationErrorRuntime,
+			err,
+		)
+		return errors.Join(err, recordErr)
+	}
+	defer release()
+
+	if err := operation(ctx); err != nil {
+		recordErr := uc.record(
+			context.WithoutCancel(ctx),
+			activationID,
+			request,
+			startedAt,
+			decision.Kind(),
+			decision.ReasonCode(),
+			approval,
+			auditdomain.ProviderActivationFailed,
+			auditdomain.ProviderActivationErrorRuntime,
+			err,
+		)
+		return errors.Join(err, recordErr)
+	}
+	return uc.record(
+		context.WithoutCancel(ctx),
+		activationID,
+		request,
+		startedAt,
+		decision.Kind(),
+		decision.ReasonCode(),
+		approval,
+		auditdomain.ProviderActivationCompleted,
+		auditdomain.ProviderActivationErrorNone,
+		nil,
+	)
 }
 
 func (uc Admit) record(

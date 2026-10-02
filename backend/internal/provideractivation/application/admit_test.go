@@ -12,6 +12,7 @@ import (
 	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	policyapplication "github.com/orz-i/Mender/backend/internal/policy/application"
 	policydomain "github.com/orz-i/Mender/backend/internal/policy/domain"
+	runtimegovernancedomain "github.com/orz-i/Mender/backend/internal/runtimegovernance/domain"
 )
 
 func TestAdmitDenialPreventsActivationOperation(t *testing.T) {
@@ -100,11 +101,41 @@ func TestAdmitAllowExecutesExactlyOnceAndAudits(t *testing.T) {
 	}
 }
 
+func TestAdmitRuntimeBudgetSaturationPreventsOperation(t *testing.T) {
+	t.Parallel()
+	fixture := newAdmitFixture(t, policydomain.DecisionAllow)
+	fixture.budget.acquireErr = runtimegovernancedomain.BudgetExceededError{
+		Dimension: "provider_activations",
+	}
+
+	calls := 0
+	err := fixture.useCase.Execute(
+		context.Background(),
+		fixture.request,
+		func(context.Context) error {
+			calls++
+			return nil
+		},
+	)
+	if !errors.Is(err, runtimegovernancedomain.ErrBudgetExceeded) {
+		t.Fatalf("Execute() error = %v, want ErrBudgetExceeded", err)
+	}
+	if calls != 0 {
+		t.Fatalf("activation operation calls = %d, want 0", calls)
+	}
+	record := fixture.audit.last(t)
+	if record.Status() != auditdomain.ProviderActivationDenied ||
+		record.ErrorClass() != auditdomain.ProviderActivationErrorBudget {
+		t.Fatalf("audit = %#v", record)
+	}
+}
+
 type admitFixture struct {
 	useCase   Admit
 	request   Request
 	policy    *fakeActivationPolicy
 	approvals *fakeActivationApproval
+	budget    *fakeActivationBudget
 	audit     *fakeActivationAudit
 }
 
@@ -131,10 +162,12 @@ func newAdmitFixture(t *testing.T, decision policydomain.DecisionKind) admitFixt
 	}
 	policy := &fakeActivationPolicy{decision: mustDecision(t, decision)}
 	approvals := &fakeActivationApproval{}
+	budget := &fakeActivationBudget{snapshot: runtimegovernancedomain.DefaultBudget()}
 	audit := &fakeActivationAudit{}
 	useCase := NewAdmit(
 		policy,
 		approvals,
+		budget,
 		audit,
 		fixedActivationIDs{},
 		fixedActivationClock{now: time.Date(2026, 10, 2, 1, 0, 0, 0, time.UTC)},
@@ -144,6 +177,7 @@ func newAdmitFixture(t *testing.T, decision policydomain.DecisionKind) admitFixt
 		request:   Request{ProviderID: providerID, Context: governanceContext},
 		policy:    policy,
 		approvals: approvals,
+		budget:    budget,
 		audit:     audit,
 	}
 }
@@ -196,6 +230,34 @@ func (f *fakeActivationApproval) Approve(
 	f.calls++
 	f.last = request
 	return f.approved, nil
+}
+
+type fakeActivationBudget struct {
+	snapshot    runtimegovernancedomain.Budget
+	snapshotErr error
+	acquireErr  error
+	calls       int
+	releases    int
+}
+
+func (f *fakeActivationBudget) Snapshot(
+	context.Context,
+) (runtimegovernancedomain.Budget, error) {
+	if f.snapshotErr != nil {
+		return runtimegovernancedomain.Budget{}, f.snapshotErr
+	}
+	return f.snapshot, nil
+}
+
+func (f *fakeActivationBudget) AcquireActivation(
+	context.Context,
+	runtimegovernancedomain.Budget,
+) (func(), error) {
+	f.calls++
+	if f.acquireErr != nil {
+		return nil, f.acquireErr
+	}
+	return func() { f.releases++ }, nil
 }
 
 type fakeActivationAudit struct {

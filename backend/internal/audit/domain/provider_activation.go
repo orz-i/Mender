@@ -24,6 +24,7 @@ const (
 	ProviderActivationErrorNone     ProviderActivationErrorClass = ""
 	ProviderActivationErrorPolicy   ProviderActivationErrorClass = "policy"
 	ProviderActivationErrorApproval ProviderActivationErrorClass = "approval"
+	ProviderActivationErrorBudget   ProviderActivationErrorClass = "budget"
 	ProviderActivationErrorRuntime  ProviderActivationErrorClass = "runtime"
 	ProviderActivationErrorAudit    ProviderActivationErrorClass = "audit"
 )

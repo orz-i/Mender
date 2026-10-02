@@ -10,6 +10,7 @@ import (
 	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	policydomain "github.com/orz-i/Mender/backend/internal/policy/domain"
+	runtimegovernancedomain "github.com/orz-i/Mender/backend/internal/runtimegovernance/domain"
 )
 
 // ToolLookup resolves canonical Catalog metadata.
@@ -51,9 +52,16 @@ type PolicyEvaluator interface {
 	Evaluate(context.Context, PolicyRequest) (policydomain.Decision, error)
 }
 
-// ExecutionGuard controls entry into provider execution critical sections.
-type ExecutionGuard interface {
-	Acquire(context.Context, ExecutionGuardRequest) (release func(), err error)
+// RuntimeBudgetController snapshots and acquires hard Runtime capacity.
+type RuntimeBudgetController interface {
+	Snapshot(context.Context) (runtimegovernancedomain.Budget, error)
+	AcquireInvocation(
+		context.Context,
+		runtimegovernancedomain.Budget,
+		string,
+		string,
+		string,
+	) (release func(), err error)
 }
 
 // BindingExecutionGuard applies Profile ToolBinding-local execution constraints.
@@ -67,6 +75,7 @@ type ResultGuard interface {
 		context.Context,
 		catalogdomain.Tool,
 		invocationdomain.Outcome,
+		int,
 	) (invocationdomain.Outcome, error)
 }
 
@@ -118,13 +127,6 @@ type PolicyRequest struct {
 	Context               governancedomain.Context
 	Facts                 invocationdomain.GovernanceFacts
 	HasCredentialResolver bool
-}
-
-// ExecutionGuardRequest identifies the governed execution entering a critical section.
-type ExecutionGuardRequest struct {
-	InvocationID invocationdomain.InvocationID
-	Tool         catalogdomain.Tool
-	Context      governancedomain.Context
 }
 
 // BindingExecutionGuardRequest identifies one Profile ToolBinding execution constraint.

@@ -17,7 +17,6 @@ import (
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
-	invocationexecutionguard "github.com/orz-i/Mender/backend/internal/invocation/infrastructure/executionguard"
 	mcpprovider "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/provider"
 	policydomain "github.com/orz-i/Mender/backend/internal/policy/domain"
 	profileapplication "github.com/orz-i/Mender/backend/internal/profile/application"
@@ -610,17 +609,25 @@ func TestMCPToolFailureRoundTripsThroughMender(t *testing.T) {
 	}
 }
 
-func TestRuntimeProviderSerialGuardPreventsOverlap(t *testing.T) {
+func TestRuntimeProviderBudgetRejectsOverlapWithoutQueue(t *testing.T) {
 	t.Parallel()
 
-	executionGuard := invocationexecutionguard.NewProviderSerial()
 	ctx := context.Background()
 	runtime, toolID, executor := governedRuntimeFixture(t, RuntimeOptions{
 		DatabasePath:   filepath.Join(t.TempDir(), "mender.db"),
 		DefaultTimeout: time.Second,
-		ExecutionGuard: executionGuard,
 	})
 	defer func() { _ = runtime.Close() }()
+
+	current, err := runtime.RuntimeGovernance.GetBudget.Execute(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec := current.Spec()
+	spec.MaxProviderInvocations = 1
+	if _, err := runtime.RuntimeGovernance.UpdateBudget.Execute(ctx, spec); err != nil {
+		t.Fatal(err)
+	}
 
 	blocking := newSerialProbeExecutor(t)
 	if err := runtime.RegisterExecutor(executor.providerID, blocking); err != nil {
@@ -630,7 +637,7 @@ func TestRuntimeProviderSerialGuardPreventsOverlap(t *testing.T) {
 	executionContext := mustGovernanceInvocationContext(
 		t,
 		governancedomain.OriginInternal,
-		"serial-test",
+		"budget-test",
 		governancedomain.CatalogScope(),
 	)
 	request := invocationapplication.InvokeToolRequest{
@@ -639,10 +646,10 @@ func TestRuntimeProviderSerialGuardPreventsOverlap(t *testing.T) {
 		Context:   executionContext,
 	}
 
-	errs := make(chan error, 2)
+	firstErr := make(chan error, 1)
 	go func() {
 		_, err := runtime.InvokeTool.Execute(ctx, request)
-		errs <- err
+		firstErr <- err
 	}()
 
 	select {
@@ -651,27 +658,36 @@ func TestRuntimeProviderSerialGuardPreventsOverlap(t *testing.T) {
 		t.Fatal("first invocation did not enter executor")
 	}
 
-	go func() {
-		_, err := runtime.InvokeTool.Execute(ctx, request)
-		errs <- err
-	}()
-
+	second, err := runtime.InvokeTool.Execute(ctx, request)
+	if err != nil {
+		t.Fatalf("second invocation error = %v", err)
+	}
+	if second.Outcome.Kind() != invocationdomain.OutcomeKindRejected ||
+		second.Outcome.RejectionCode() != invocationdomain.RejectionRuntimeBudgetExceeded {
+		t.Fatalf(
+			"second outcome = kind %q code %q",
+			second.Outcome.Kind(),
+			second.Outcome.RejectionCode(),
+		)
+	}
 	select {
 	case <-blocking.secondEntered:
-		t.Fatal("second invocation entered executor before first released")
-	case <-time.After(50 * time.Millisecond):
+		t.Fatal("second invocation entered executor")
+	default:
 	}
 
 	close(blocking.release)
-
-	for range 2 {
-		if err := <-errs; err != nil {
-			t.Fatalf("concurrent invocation error = %v", err)
-		}
+	if err := <-firstErr; err != nil {
+		t.Fatalf("first invocation error = %v", err)
 	}
 	if blocking.MaxActive() != 1 {
 		t.Fatalf("max active executor calls = %d, want 1", blocking.MaxActive())
 	}
+	usage := runtime.RuntimeGovernance.BudgetUsage()
+	if usage.Invocations != 0 {
+		t.Fatalf("Runtime usage after completion = %#v", usage)
+	}
+
 }
 
 func governedRuntimeFixture(

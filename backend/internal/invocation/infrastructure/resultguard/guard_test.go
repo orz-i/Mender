@@ -13,11 +13,11 @@ import (
 func TestGuardValidatesDeclaredOutputSchema(t *testing.T) {
 	t.Parallel()
 
-	guard := New(invocationjsonschema.Validator{}, DefaultMaxResultBytes)
+	guard := New(invocationjsonschema.Validator{})
 	tool := resultTool(t, []byte(`{"type":"object","properties":{"ok":{"type":"boolean"}},"required":["ok"]}`))
 
 	valid := completeOutcome(t, `{"ok":true}`)
-	got, err := guard.Guard(context.Background(), tool, valid)
+	got, err := guard.Guard(context.Background(), tool, valid, 1<<20)
 	if err != nil {
 		t.Fatalf("Guard(valid) error = %v", err)
 	}
@@ -26,7 +26,7 @@ func TestGuardValidatesDeclaredOutputSchema(t *testing.T) {
 	}
 
 	invalid := completeOutcome(t, `{"ok":"yes"}`)
-	got, err = guard.Guard(context.Background(), tool, invalid)
+	got, err = guard.Guard(context.Background(), tool, invalid, 1<<20)
 	if err != nil {
 		t.Fatalf("Guard(invalid) error = %v", err)
 	}
@@ -45,11 +45,11 @@ func TestGuardValidatesDeclaredOutputSchema(t *testing.T) {
 func TestGuardRejectsOversizedCanonicalResultWithoutTruncation(t *testing.T) {
 	t.Parallel()
 
-	guard := New(invocationjsonschema.Validator{}, 16)
+	guard := New(invocationjsonschema.Validator{})
 	tool := resultTool(t, nil)
 	outcome := completeOutcome(t, `{"message":"this is larger than sixteen bytes"}`)
 
-	got, err := guard.Guard(context.Background(), tool, outcome)
+	got, err := guard.Guard(context.Background(), tool, outcome, 16)
 	if err != nil {
 		t.Fatalf("Guard() error = %v", err)
 	}
@@ -65,7 +65,7 @@ func TestGuardRejectsOversizedCanonicalResultWithoutTruncation(t *testing.T) {
 func TestGuardLeavesNonCompleteOutcomesUnchanged(t *testing.T) {
 	t.Parallel()
 
-	guard := New(invocationjsonschema.Validator{}, 1)
+	guard := New(invocationjsonschema.Validator{})
 	tool := resultTool(t, []byte(`{"type":"object"}`))
 	failed, err := invocationdomain.Failed(
 		invocationdomain.FailureSourceTool,
@@ -76,7 +76,7 @@ func TestGuardLeavesNonCompleteOutcomesUnchanged(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err := guard.Guard(context.Background(), tool, failed)
+	got, err := guard.Guard(context.Background(), tool, failed, 1)
 	if err != nil {
 		t.Fatalf("Guard() error = %v", err)
 	}
@@ -89,14 +89,14 @@ func TestGuardLeavesNonCompleteOutcomesUnchanged(t *testing.T) {
 func TestGuardTreatsUnevaluableOutputSchemaAsInternalFailure(t *testing.T) {
 	t.Parallel()
 
-	guard := New(invocationjsonschema.Validator{}, DefaultMaxResultBytes)
+	guard := New(invocationjsonschema.Validator{})
 	tool := resultTool(t, []byte(`{
 		"$schema":"https://json-schema.org/draft/2019-09/schema",
 		"type":"object"
 	}`))
 	outcome := completeOutcome(t, `{}`)
 
-	if _, err := guard.Guard(context.Background(), tool, outcome); err == nil {
+	if _, err := guard.Guard(context.Background(), tool, outcome, 1<<20); err == nil {
 		t.Fatal("Guard() expected output schema evaluation error")
 	}
 }

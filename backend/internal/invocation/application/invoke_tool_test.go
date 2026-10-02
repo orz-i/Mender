@@ -18,6 +18,7 @@ import (
 	governanceapplication "github.com/orz-i/Mender/backend/internal/governance/application"
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	policydomain "github.com/orz-i/Mender/backend/internal/policy/domain"
+	runtimegovernancedomain "github.com/orz-i/Mender/backend/internal/runtimegovernance/domain"
 )
 
 func TestInvokeToolSuccessfulResultVariants(t *testing.T) {
@@ -99,6 +100,124 @@ func TestInvokeToolRejectsMissingInvocationContextBeforeLookup(t *testing.T) {
 	}
 	if fixture.executor.calls != 0 {
 		t.Fatalf("executor calls = %d, want 0", fixture.executor.calls)
+	}
+}
+
+func TestRuntimeBudgetRejectsOversizeArgumentsBeforeLookupAndValidation(t *testing.T) {
+	t.Parallel()
+
+	fixture := newFixture(t)
+	spec := fixture.runtimeBudget.snapshot.Spec()
+	spec.MaxArgumentBytes = 1
+	budget, err := runtimegovernancedomain.NewBudget(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixture.runtimeBudget.snapshot = budget
+
+	response, err := fixture.useCase.Execute(context.Background(), InvokeToolRequest{
+		ToolID:    fixture.tool.ID(),
+		Arguments: []byte("{}"),
+		Context:   catalogInvocationContext(t, "budget-arguments"),
+	})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if response.Outcome.Kind() != invocationdomain.OutcomeKindRejected ||
+		response.Outcome.RejectionCode() != invocationdomain.RejectionRuntimeBudgetExceeded {
+		t.Fatalf(
+			"Outcome = kind %q code %q",
+			response.Outcome.Kind(),
+			response.Outcome.RejectionCode(),
+		)
+	}
+	if fixture.tools.calls != 0 ||
+		fixture.profileScopes.calls != 0 ||
+		fixture.arguments.calls != 0 ||
+		fixture.policy.calls != 0 ||
+		fixture.executor.calls != 0 {
+		t.Fatalf(
+			"unexpected work = tools %d profiles %d validator %d policy %d executor %d",
+			fixture.tools.calls,
+			fixture.profileScopes.calls,
+			fixture.arguments.calls,
+			fixture.policy.calls,
+			fixture.executor.calls,
+		)
+	}
+	record := fixture.audit.last(t)
+	if record.Status() != auditdomain.StatusDenied ||
+		record.ErrorClass() != auditdomain.ErrorBudget ||
+		record.RejectionCode() != invocationdomain.RejectionRuntimeBudgetExceeded {
+		t.Fatalf("Audit record = %#v", record)
+	}
+}
+
+func TestRuntimeBudgetSaturationRejectsBeforeExecutor(t *testing.T) {
+	t.Parallel()
+
+	fixture := newFixture(t)
+	fixture.runtimeBudget.err = runtimegovernancedomain.BudgetExceededError{
+		Dimension: "global_invocations",
+	}
+
+	response, err := fixture.useCase.Execute(context.Background(), InvokeToolRequest{
+		ToolID:    fixture.tool.ID(),
+		Arguments: []byte("{}"),
+		Context:   catalogInvocationContext(t, "budget-saturation"),
+	})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if response.Outcome.Kind() != invocationdomain.OutcomeKindRejected ||
+		response.Outcome.RejectionCode() != invocationdomain.RejectionRuntimeBudgetExceeded {
+		t.Fatalf(
+			"Outcome = kind %q code %q",
+			response.Outcome.Kind(),
+			response.Outcome.RejectionCode(),
+		)
+	}
+	if fixture.runtimeBudget.calls != 1 ||
+		fixture.bindingExecutionGuard.calls != 0 ||
+		fixture.executor.calls != 0 {
+		t.Fatalf(
+			"budget/binding/executor calls = %d/%d/%d",
+			fixture.runtimeBudget.calls,
+			fixture.bindingExecutionGuard.calls,
+			fixture.executor.calls,
+		)
+	}
+	record := fixture.audit.last(t)
+	if record.ErrorClass() != auditdomain.ErrorBudget {
+		t.Fatalf("ErrorClass() = %q", record.ErrorClass())
+	}
+}
+
+func TestResultGuardReceivesRuntimeBudgetSnapshot(t *testing.T) {
+	t.Parallel()
+
+	fixture := newFixture(t)
+	spec := fixture.runtimeBudget.snapshot.Spec()
+	spec.MaxResultBytes = 17
+	budget, err := runtimegovernancedomain.NewBudget(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixture.runtimeBudget.snapshot = budget
+
+	response, err := fixture.useCase.Execute(context.Background(), InvokeToolRequest{
+		ToolID:    fixture.tool.ID(),
+		Arguments: []byte("{}"),
+		Context:   catalogInvocationContext(t, "budget-result"),
+	})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if response.Outcome.Kind() != invocationdomain.OutcomeKindComplete {
+		t.Fatalf("Outcome kind = %q", response.Outcome.Kind())
+	}
+	if fixture.resultGuard.lastMaxBytes != 17 {
+		t.Fatalf("result guard max bytes = %d, want 17", fixture.resultGuard.lastMaxBytes)
 	}
 }
 
@@ -1081,11 +1200,11 @@ func TestBindingExecutionGuardReceivesScopedGovernanceAndReleases(t *testing.T) 
 			fixture.bindingExecutionGuard.last.Governance.ConcurrencyConstraint(),
 		)
 	}
-	if fixture.executionGuard.releases != 1 ||
+	if fixture.runtimeBudget.releases != 1 ||
 		fixture.bindingExecutionGuard.releases != 1 {
 		t.Fatalf(
 			"baseline/binding releases = %d/%d, want 1/1",
-			fixture.executionGuard.releases,
+			fixture.runtimeBudget.releases,
 			fixture.bindingExecutionGuard.releases,
 		)
 	}
@@ -1128,8 +1247,8 @@ func TestBindingExecutionGuardWaitUsesInvocationTimeout(t *testing.T) {
 			response.Outcome.FailureCode(),
 		)
 	}
-	if fixture.executionGuard.releases != 1 {
-		t.Fatalf("baseline guard releases = %d, want 1", fixture.executionGuard.releases)
+	if fixture.runtimeBudget.releases != 1 {
+		t.Fatalf("baseline guard releases = %d, want 1", fixture.runtimeBudget.releases)
 	}
 	if fixture.bindingExecutionGuard.releases != 0 {
 		t.Fatalf(
@@ -1142,17 +1261,24 @@ func TestBindingExecutionGuardWaitUsesInvocationTimeout(t *testing.T) {
 	}
 }
 
-func TestExecutionGuardWaitUsesInvocationTimeout(t *testing.T) {
+func TestRuntimeBudgetWaitUsesClampedTimeout(t *testing.T) {
 	t.Parallel()
 
 	fixture := newFixture(t)
-	fixture.executionGuard.blockUntilDone = true
+	spec := fixture.runtimeBudget.snapshot.Spec()
+	spec.MaxExecutionTimeoutMS = 1
+	budget, err := runtimegovernancedomain.NewBudget(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixture.runtimeBudget.snapshot = budget
+	fixture.runtimeBudget.blockUntilDone = true
 
 	response, err := fixture.useCase.Execute(context.Background(), InvokeToolRequest{
 		ToolID:    fixture.tool.ID(),
 		Arguments: []byte(`{}`),
 		Context:   catalogInvocationContext(t, ""),
-		Timeout:   time.Millisecond,
+		Timeout:   time.Second,
 	})
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
@@ -1167,10 +1293,10 @@ func TestExecutionGuardWaitUsesInvocationTimeout(t *testing.T) {
 			response.Outcome.FailureCode(),
 		)
 	}
-	if fixture.executionGuard.calls != 1 || fixture.executor.calls != 0 {
+	if fixture.runtimeBudget.calls != 1 || fixture.executor.calls != 0 {
 		t.Fatalf(
 			"guard/executor calls = %d/%d, want 1/0",
-			fixture.executionGuard.calls,
+			fixture.runtimeBudget.calls,
 			fixture.executor.calls,
 		)
 	}
@@ -1202,8 +1328,8 @@ func TestExecutionGuardReleasesAfterExecutorFailure(t *testing.T) {
 	if response.Outcome.Kind() != invocationdomain.OutcomeKindFailed {
 		t.Fatalf("Outcome kind = %q", response.Outcome.Kind())
 	}
-	if fixture.executionGuard.releases != 1 {
-		t.Fatalf("guard releases = %d, want 1", fixture.executionGuard.releases)
+	if fixture.runtimeBudget.releases != 1 {
+		t.Fatalf("guard releases = %d, want 1", fixture.runtimeBudget.releases)
 	}
 	if fixture.bindingExecutionGuard.releases != 1 {
 		t.Fatalf("binding guard releases = %d, want 1", fixture.bindingExecutionGuard.releases)
@@ -1243,8 +1369,8 @@ func TestResultGuardFailureOutcomeIsAuditedAsResultGuard(t *testing.T) {
 	if fixture.resultGuard.calls != 1 {
 		t.Fatalf("result guard calls = %d, want 1", fixture.resultGuard.calls)
 	}
-	if fixture.executionGuard.releases != 1 {
-		t.Fatalf("guard releases = %d, want 1", fixture.executionGuard.releases)
+	if fixture.runtimeBudget.releases != 1 {
+		t.Fatalf("guard releases = %d, want 1", fixture.runtimeBudget.releases)
 	}
 
 	record := fixture.audit.last(t)
@@ -1280,8 +1406,8 @@ func TestResultGuardInternalErrorRemainsGoError(t *testing.T) {
 	if response.Outcome.Kind() != "" {
 		t.Fatalf("Outcome kind = %q, want zero", response.Outcome.Kind())
 	}
-	if fixture.executionGuard.releases != 1 {
-		t.Fatalf("guard releases = %d, want 1", fixture.executionGuard.releases)
+	if fixture.runtimeBudget.releases != 1 {
+		t.Fatalf("guard releases = %d, want 1", fixture.runtimeBudget.releases)
 	}
 
 	record := fixture.audit.last(t)
@@ -1355,7 +1481,7 @@ type fixture struct {
 	facts                 *fakeFactExtractor
 	policy                *fakePolicy
 	approvals             *fakeApproval
-	executionGuard        *fakeExecutionGuard
+	runtimeBudget         *fakeRuntimeBudget
 	bindingExecutionGuard *fakeBindingExecutionGuard
 	resultGuard           *fakeResultGuard
 	observer              *memoryObserver
@@ -1381,7 +1507,7 @@ func newFixture(t *testing.T) fixture {
 	facts := &fakeFactExtractor{facts: invocationdomain.UnknownGovernanceFacts()}
 	policy := &fakePolicy{decision: allow}
 	approvals := &fakeApproval{approved: true}
-	executionGuard := &fakeExecutionGuard{}
+	runtimeBudget := &fakeRuntimeBudget{snapshot: runtimegovernancedomain.DefaultBudget()}
 	bindingExecutionGuard := &fakeBindingExecutionGuard{}
 	resultGuard := &fakeResultGuard{}
 	observer := &memoryObserver{}
@@ -1405,7 +1531,7 @@ func newFixture(t *testing.T) fixture {
 		facts,
 		policy,
 		approvals,
-		executionGuard,
+		runtimeBudget,
 		bindingExecutionGuard,
 		resultGuard,
 		observer,
@@ -1426,7 +1552,7 @@ func newFixture(t *testing.T) fixture {
 		facts:                 facts,
 		policy:                policy,
 		approvals:             approvals,
-		executionGuard:        executionGuard,
+		runtimeBudget:         runtimeBudget,
 		bindingExecutionGuard: bindingExecutionGuard,
 		resultGuard:           resultGuard,
 		observer:              observer,
@@ -1527,16 +1653,30 @@ func (f *fakeApproval) Approve(context.Context, governanceapplication.ApprovalRe
 	return f.approved, f.err
 }
 
-type fakeExecutionGuard struct {
+type fakeRuntimeBudget struct {
+	snapshot       runtimegovernancedomain.Budget
+	snapshotErr    error
 	err            error
 	calls          int
 	releases       int
 	blockUntilDone bool
 }
 
-func (f *fakeExecutionGuard) Acquire(
+func (f *fakeRuntimeBudget) Snapshot(
+	context.Context,
+) (runtimegovernancedomain.Budget, error) {
+	if f.snapshotErr != nil {
+		return runtimegovernancedomain.Budget{}, f.snapshotErr
+	}
+	return f.snapshot, nil
+}
+
+func (f *fakeRuntimeBudget) AcquireInvocation(
 	ctx context.Context,
-	_ ExecutionGuardRequest,
+	_ runtimegovernancedomain.Budget,
+	_ string,
+	_ string,
+	_ string,
 ) (func(), error) {
 	f.calls++
 	if f.blockUntilDone {
@@ -1574,17 +1714,20 @@ func (f *fakeBindingExecutionGuard) Acquire(
 }
 
 type fakeResultGuard struct {
-	outcome invocationdomain.Outcome
-	err     error
-	calls   int
+	outcome      invocationdomain.Outcome
+	err          error
+	calls        int
+	lastMaxBytes int
 }
 
 func (f *fakeResultGuard) Guard(
 	_ context.Context,
 	_ catalogdomain.Tool,
 	outcome invocationdomain.Outcome,
+	maxBytes int,
 ) (invocationdomain.Outcome, error) {
 	f.calls++
+	f.lastMaxBytes = maxBytes
 	if f.err != nil {
 		return invocationdomain.Outcome{}, f.err
 	}

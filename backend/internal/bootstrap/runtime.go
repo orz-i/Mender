@@ -43,8 +43,6 @@ type RuntimeOptions struct {
 	ProviderPluginRoot    string
 	SkillRoot             string
 	DefaultTimeout        time.Duration
-	MaxResultBytes        int
-	ExecutionGuard        invocationapplication.ExecutionGuard
 	BindingExecutionGuard invocationapplication.BindingExecutionGuard
 	InvocationObserver    invocationapplication.InvocationObserver
 	TunnelProcessRunner   tunnelapplication.ProcessRunner
@@ -59,6 +57,7 @@ type Runtime struct {
 	Tunnels                     *Tunnels
 	Policy                      *Policies
 	Skills                      *Skills
+	RuntimeGovernance           *RuntimeGovernance
 	InvokeTool                  invocationapplication.InvokeTool
 	ListAudit                   auditapplication.ListRecords
 	ListProviderActivationAudit auditapplication.ListProviderActivations
@@ -332,21 +331,34 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		return nil, fmt.Errorf("compose runtime: skills: %w", err)
 	}
 
+	runtimeGovernance, err := NewRuntimeGovernance(ctx, options.DatabasePath)
+	if err != nil {
+		_ = skills.Close()
+		_ = providerInstances.CloseAll()
+		_ = externalProcesses.CloseAll()
+		_ = pluginInstallations.Close()
+		_ = providerConfigs.Close()
+		_ = configs.Close()
+		_ = policies.Close()
+		_ = profiles.Close()
+		_ = credentials.Close()
+		_ = auditStore.Close()
+		_ = catalog.Close()
+		return nil, fmt.Errorf("compose runtime: runtime governance: %w", err)
+	}
+
 	ids := invocationidentity.NewGenerator()
 	approvalGate := policylocal.RejectApproval{}
 	providerActivation := provideractivationapplication.NewAdmit(
 		policies.Evaluate,
 		approvalGate,
+		runtimeGovernance.controller,
 		auditStore,
 		provideractivationidentity.NewGenerator(),
 		systemClock{},
 	)
 
 	schemaValidator := invocationjsonschema.Validator{}
-	executionGuard := options.ExecutionGuard
-	if executionGuard == nil {
-		executionGuard = invocationexecutionguard.Unlimited{}
-	}
 	bindingExecutionGuard := options.BindingExecutionGuard
 	if bindingExecutionGuard == nil {
 		bindingExecutionGuard = invocationexecutionguard.NewProfileBindingSerial()
@@ -362,9 +374,9 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		newInvocationGovernanceFactExtractor(providerConfigs, providerPlugins),
 		newInvocationPolicyEvaluator(policies.Evaluate),
 		approvalGate,
-		executionGuard,
+		runtimeGovernance.controller,
 		bindingExecutionGuard,
-		invocationresultguard.New(schemaValidator, options.MaxResultBytes),
+		invocationresultguard.New(schemaValidator),
 		observer,
 		executors,
 		credentials.Resolver,
@@ -382,6 +394,7 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		Tunnels:                     tunnels,
 		Policy:                      policies,
 		Skills:                      skills,
+		RuntimeGovernance:           runtimeGovernance,
 		InvokeTool:                  invokeTool,
 		ListAudit:                   auditapplication.NewListRecords(auditStore),
 		ListProviderActivationAudit: auditapplication.NewListProviderActivations(auditStore),
@@ -469,6 +482,7 @@ func (r *Runtime) Close() error {
 	errs = append(
 		errs,
 		r.Skills.Close(),
+		r.RuntimeGovernance.Close(),
 		r.pluginInstallations.Close(),
 		r.providerConfigs.Close(),
 		r.mcpConfigs.Close(),

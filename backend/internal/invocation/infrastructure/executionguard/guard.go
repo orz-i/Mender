@@ -4,15 +4,19 @@ import (
 	"context"
 	"sync"
 
-	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
+	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 )
+
+type Request struct {
+	Tool catalogdomain.Tool
+}
 
 // Unlimited admits every execution immediately while still honoring cancellation.
 type Unlimited struct{}
 
 func (Unlimited) Acquire(
 	ctx context.Context,
-	_ invocationapplication.ExecutionGuardRequest,
+	_ Request,
 ) (func(), error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -31,7 +35,7 @@ func NewProviderSerial() *ProviderSerial {
 
 func (g *ProviderSerial) Acquire(
 	ctx context.Context,
-	request invocationapplication.ExecutionGuardRequest,
+	request Request,
 ) (func(), error) {
 	return g.serial.acquire(ctx, request.Tool.ProviderID().String())
 }
@@ -47,7 +51,7 @@ func NewToolSerial() *ToolSerial {
 
 func (g *ToolSerial) Acquire(
 	ctx context.Context,
-	request invocationapplication.ExecutionGuardRequest,
+	request Request,
 ) (func(), error) {
 	return g.serial.acquire(ctx, request.Tool.ID().String())
 }

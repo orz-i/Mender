@@ -23,11 +23,12 @@ const (
 type RejectionCode string
 
 const (
-	RejectionToolNotFound     RejectionCode = "tool_not_found"
-	RejectionToolOutsideScope RejectionCode = "tool_outside_scope"
-	RejectionInvalidArguments RejectionCode = "invalid_arguments"
-	RejectionPolicyDenied     RejectionCode = "policy_denied"
-	RejectionApprovalDenied   RejectionCode = "approval_denied"
+	RejectionToolNotFound          RejectionCode = "tool_not_found"
+	RejectionToolOutsideScope      RejectionCode = "tool_outside_scope"
+	RejectionInvalidArguments      RejectionCode = "invalid_arguments"
+	RejectionPolicyDenied          RejectionCode = "policy_denied"
+	RejectionApprovalDenied        RejectionCode = "approval_denied"
+	RejectionRuntimeBudgetExceeded RejectionCode = "runtime_budget_exceeded"
 )
 
 // FailureSource identifies which governed execution boundary failed.
@@ -175,7 +176,8 @@ func validRejectionCode(code RejectionCode) bool {
 		RejectionToolOutsideScope,
 		RejectionInvalidArguments,
 		RejectionPolicyDenied,
-		RejectionApprovalDenied:
+		RejectionApprovalDenied,
+		RejectionRuntimeBudgetExceeded:
 		return true
 	default:
 		return false

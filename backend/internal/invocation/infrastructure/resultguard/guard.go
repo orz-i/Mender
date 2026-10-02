@@ -9,28 +9,20 @@ import (
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 )
 
-const DefaultMaxResultBytes = 1 << 20 // 1 MiB
-
 // Guard enforces canonical post-execution result invariants.
 type Guard struct {
 	validator invocationapplication.ArgumentValidator
-	maxBytes  int
 }
 
-func New(
-	validator invocationapplication.ArgumentValidator,
-	maxBytes int,
-) Guard {
-	if maxBytes <= 0 {
-		maxBytes = DefaultMaxResultBytes
-	}
-	return Guard{validator: validator, maxBytes: maxBytes}
+func New(validator invocationapplication.ArgumentValidator) Guard {
+	return Guard{validator: validator}
 }
 
 func (g Guard) Guard(
 	ctx context.Context,
 	tool catalogdomain.Tool,
 	outcome invocationdomain.Outcome,
+	maxBytes int,
 ) (invocationdomain.Outcome, error) {
 	if err := ctx.Err(); err != nil {
 		return invocationdomain.Outcome{}, err
@@ -39,8 +31,11 @@ func (g Guard) Guard(
 		return outcome, nil
 	}
 
+	if maxBytes <= 0 {
+		return invocationdomain.Outcome{}, fmt.Errorf("result guard: max bytes must be positive")
+	}
 	content := outcome.Content()
-	if len(content.Bytes()) > g.maxBytes {
+	if len(content.Bytes()) > maxBytes {
 		return invocationdomain.Failed(
 			invocationdomain.FailureSourceResultGuard,
 			invocationdomain.FailureResultTooLarge,

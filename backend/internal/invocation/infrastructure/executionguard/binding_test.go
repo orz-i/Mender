@@ -145,7 +145,7 @@ func bindingGuardRequestWithConstraint(
 	}
 
 	return invocationapplication.BindingExecutionGuardRequest{
-		InvocationID: request.InvocationID,
+		InvocationID: "",
 		Tool:         request.Tool,
 		Context:      executionContext,
 		Governance:   governance,
