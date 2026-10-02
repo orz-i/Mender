@@ -420,3 +420,21 @@ Goals:
 Exit criteria require persistent Tunnel/Profile binding, fail-closed reference handling, Runtime process supervision, HTTP/OpenAPI/Wails/Web/Desktop parity, and green repository/security checks.
 
 See `phase-21-managed-profile-tunnels.md`.
+
+## Phase 22 — Provider Activation Governance & Principal
+
+Status: In Progress
+
+Goals:
+
+- Replace descriptive Caller attribution with explicit non-anonymous Principals shared by Invocation and Provider activation.
+- Hard-cut Policy to explicit governance actions, initially `tool.invoke` and `provider.activate`, with Principal kind/reference selectors.
+- Admit Provider activation before Plugin.Open, native process start, discovery Credential resolution, upstream discovery/list calls, or executor-route registration.
+- Remove ungated Runtime Provider activation paths while keeping Provider Manager Ensure as a low-level mechanism.
+- Replace Invocation Audit Caller with Principal snapshots and add dedicated data-minimized Provider activation Audit.
+- One-way migrate existing Policy Rules to `tool.invoke` actions and historical Audit caller values to audit-only legacy Principal snapshots without runtime compatibility parsers.
+- Update CLI/OpenAPI/generated SDK/Wails/Web/Desktop contracts and Policy UX in one hard cut.
+
+Exit criteria require all production activation paths to be governed before Provider side effects, every live Invocation to carry Principal, no Caller-era runtime contracts, queryable activation Audit, adapter parity, and green repository/security checks.
+
+See `phase-22-provider-activation-principal-governance.md`.

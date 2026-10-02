@@ -57,3 +57,4 @@ Minor implementation choices that remain inside an accepted architectural bounda
 - [ADR-0029: Manage Agent Skills as versioned resources and keep deployment host-specific](0029-skill-resource-management.md)
 - [ADR-0030: Provide governed local workspace capabilities without becoming an Agent harness](0030-workspace-native-tools-provider.md)
 - [ADR-0031: Model external Profile reachability as managed Tunnel adapters](0031-managed-profile-tunnels.md)
+- [ADR-0032: Govern Provider activation with explicit Principals and Policy actions](0032-provider-activation-principal-governance.md)

@@ -60,9 +60,9 @@ mcp.Tool -> mapper -> catalog domain Tool
 
 Domain entities must not contain MCP SDK structs, SQL row types, HTTP request types, or Wails-generated types.
 
-## 7. One invocation pipeline
+## 7. One governed execution pipeline
 
-All tool execution paths must converge on the same application pipeline:
+All tool execution paths must converge on the same application pipeline and carry an explicit non-anonymous Principal:
 
 ```text
 Resolve Execution Scope
@@ -79,7 +79,9 @@ Resolve Execution Scope
 
 CLI, MCP, Skill, Web, and Desktop clients must not implement independent execution semantics. Expected Tool/rejection failures are canonical outcomes; internal runtime failures remain distinguishable from those outcomes.
 
-Global Policy must be deterministic and adapter-independent. Persistent rules have no priority/order semantics: the default decision applies only when no enabled rule matches, and matching rules combine by most-restrictive decision. Policy consumes stable execution metadata and bounded Governance Facts rather than raw Tool arguments or secret-bearing context.
+Global Policy must be deterministic and adapter-independent. Persistent rules explicitly select governance actions and have no priority/order semantics: the default decision applies only when no enabled rule matches, and matching rules combine by most-restrictive decision. Policy consumes stable Principal/origin/scope/target metadata and bounded reviewed Governance Facts rather than raw Tool arguments or secret-bearing context.
+
+Provider capability acquisition is also governed. Production paths must admit provider.activate before Plugin.Open, external process launch, discovery Credential resolution, upstream Tool discovery, or executor-route registration. A denied Tool invocation is not sufficient proof if Provider activation already happened outside Policy.
 
 ## 8. Credentials are references until the execution boundary
 
@@ -131,6 +133,6 @@ Composition roots should wire dependencies explicitly.
 
 ## 15. Security is a core runtime responsibility
 
-Provider trust, namespace collision, credential scope, execution limits, policy evaluation, and auditability are core concerns.
+Provider trust, Principal attribution, capability admission, namespace collision, credential scope, execution limits, policy evaluation, and auditability are core concerns.
 
-Security enforcement must not rely solely on metadata supplied by upstream tools.
+Security enforcement must not rely solely on metadata supplied by upstream tools or unauthenticated descriptive caller strings. Adapters may only construct Principals according to an explicit assurance boundary; they must not invent stronger remote identity than the transport actually proves.

@@ -22,12 +22,16 @@
          |           |                     |           |
          v           v                     v           v
       Catalog      Profile             Invocation    Policy
-                                                \
-                                                 v
-                                      Credential / Audit
-                                |
-                                v
-                           Domain Model
+         |                                  ^          ^
+         v                                  |          |
+ Provider Activation -----------------------+----------+
+         |                                             |
+         +----------------> Governance <-------------+
+                              |
+                    Principal / Credential / Audit
+                              |
+                              v
+                         Domain Model
                                 ^
                                 |
               +-----------------+------------------+
@@ -71,19 +75,35 @@ The Profile-owned relationship between one Profile and one canonical Tool.
 
 ToolBinding may customize Profile-facing alias/title/description and may tighten execution policy or serialize calls for that binding. ToolID remains canonical identity; schemas and provenance remain Catalog-owned.
 
+### Principal
+
+A bounded security subject asserted by a trusted Mender adapter or composition root.
+
+Live Principals are explicit and non-anonymous. Initial kinds distinguish the local Runtime owner from Mender-owned service identities such as a downstream Profile MCP endpoint. A Principal is not arbitrary caller text and must not be inferred from unverified transport metadata.
+
+### Governance Context
+
+The shared security context for governed actions. It contains Origin, Principal, and an explicit Catalog/Profile scope. Invocation and Provider activation consume the same vocabulary so Policy can reason about what authority is acquiring or using a capability.
+
 ### Invocation
 
-A governed request to execute a Tool within an explicit origin and execution scope.
+A governed tool.invoke action within one Governance Context.
 
-The scope is either privileged Catalog scope or one Profile scope. Invocation owns Profile membership enforcement for Profile-scoped calls, validates input before Policy/execution, applies execution/result guards, and returns a canonical outcome.
+Invocation owns Profile membership enforcement for Profile-scoped calls, validates input before Policy/execution, derives reviewed Governance Facts, applies ToolBinding tightening and execution/result guards, and returns a canonical outcome.
 
 An invocation may complete immediately, require additional input, be rejected, fail, be cancelled, or become a long-running task.
 
+### Provider Activation
+
+A governed provider.activate action that admits Provider capability acquisition before Plugin.Open, native process start, discovery Credential resolution, upstream discovery/list calls, or executor-route registration.
+
+Provider activation is not modeled as a synthetic Tool invocation because Tool identity and arguments may not exist yet.
+
 ### Policy
 
-A persistent Runtime-wide PolicySet that determines whether and how an Invocation may proceed.
+A persistent Runtime-wide PolicySet that determines whether governed actions may proceed.
 
-Policy rules are unordered and evaluate bounded execution metadata plus reviewed Governance Facts. Matching deny decisions dominate require-approval/allow rules; the default decision applies only when no rule matches. Profile ToolBinding policy remains a second tightening layer. Raw arguments, secrets, Caller identity, and Credential References do not cross the Policy boundary in Phase 12.
+Rules explicitly select actions and may match bounded Origin, Principal, scope, Provider/Tool identity, and reviewed Governance Facts where the action supports them. Matching deny decisions dominate require-approval/allow rules; the default decision applies only when no rule matches. ToolBinding policy remains a second tightening layer for tool.invoke only. Raw arguments, secrets, and Credential References do not cross the Policy boundary.
 
 ### Credential
 
@@ -93,7 +113,7 @@ Credential inventory metadata may be persisted and selected by Profile/Provider 
 
 ### Audit Record
 
-A durable terminal record of an invocation lifecycle, execution scope/origin, outcome classification, and relevant policy decisions, without unnecessarily persisting secret material or Tool payloads.
+Data-minimized durable governance evidence. Invocation Audit records Principal, scope/origin, outcome classification, and relevant Policy decisions. Provider activation has a separate audit record with Principal, Provider, Policy/Approval outcome, and bounded failure metadata. Neither surface stores raw Tool payloads, Provider configs, or secret material.
 
 ## Adapter boundaries
 
