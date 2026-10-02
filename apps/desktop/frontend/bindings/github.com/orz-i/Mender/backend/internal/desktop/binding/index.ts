@@ -28,6 +28,8 @@ export type {
     ProfileList,
     ProfileTool,
     Provider,
+    ProviderActivationAuditList,
+    ProviderActivationAuditRecord,
     ProviderList,
     ProviderMutationResponse,
     ProviderPlugin,

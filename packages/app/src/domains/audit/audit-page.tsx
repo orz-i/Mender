@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { EyeIcon } from "lucide-react";
 
-import type { AuditRecord, MenderClient, ToolSummary } from "@mender/sdk";
+import type {
+  AuditRecord,
+  MenderClient,
+  ProviderActivationAuditRecord,
+  ToolSummary,
+} from "@mender/sdk";
 import { Badge } from "@mender/ui/components/badge";
 import { Button } from "@mender/ui/components/button";
 import {
@@ -32,19 +37,25 @@ import { formatDateTime, t } from "../../i18n/i18n";
 
 export function AuditPage({ client }: { client: MenderClient }) {
   const [records, setRecords] = useState<AuditRecord[]>([]);
+  const [activationRecords, setActivationRecords] =
+    useState<ProviderActivationAuditRecord[]>([]);
   const [toolsById, setToolsById] = useState<Record<string, ToolSummary>>({});
   const [selected, setSelected] = useState<AuditRecord | null>(null);
+  const [selectedActivation, setSelectedActivation] =
+    useState<ProviderActivationAuditRecord | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
   const refresh = useCallback(async () => {
     setBusy(true);
     try {
-      const [result, toolResult] = await Promise.all([
+      const [result, activationResult, toolResult] = await Promise.all([
         client.listAudit(100),
+        client.listProviderActivationAudit(100),
         browseAuditTools(client),
       ]);
       setRecords(result.records);
+      setActivationRecords(activationResult.records);
       if (toolResult !== null) {
         setToolsById(indexTools(toolResult.tools));
       }
@@ -60,11 +71,13 @@ export function AuditPage({ client }: { client: MenderClient }) {
     let active = true;
     void Promise.all([
       client.listAudit(100),
+      client.listProviderActivationAudit(100),
       browseAuditTools(client),
     ])
-      .then(([result, toolResult]) => {
+      .then(([result, activationResult, toolResult]) => {
         if (active) {
           setRecords(result.records);
+          setActivationRecords(activationResult.records);
           if (toolResult !== null) {
             setToolsById(indexTools(toolResult.tools));
           }
@@ -82,6 +95,7 @@ export function AuditPage({ client }: { client: MenderClient }) {
   }, [client]);
 
   const auditPagination = usePagination(records);
+  const activationPagination = usePagination(activationRecords);
 
   return (
     <>
@@ -105,7 +119,7 @@ export function AuditPage({ client }: { client: MenderClient }) {
                 <TableRow>
                   <TableHead>{t("Finished")}</TableHead>
                   <TableHead>{t("Status")}</TableHead>
-                  <TableHead>{t("Caller")}</TableHead>
+                  <TableHead>{t("Principal")}</TableHead>
                   <TableHead>{t("Tool")}</TableHead>
                   <TableHead>{t("Policy")}</TableHead>
                   <TableHead>{t("Error")}</TableHead>
@@ -127,7 +141,7 @@ export function AuditPage({ client }: { client: MenderClient }) {
                         {record.status}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-xs">{record.caller || "—"}</TableCell>
+                    <TableCell className="text-xs">{principalLabel(record.principalKind, record.principalRef)}</TableCell>
                     <TableCell className="max-w-60 truncate">
                       {toolLabel(toolsById, record.toolId)}
                     </TableCell>
@@ -167,6 +181,82 @@ export function AuditPage({ client }: { client: MenderClient }) {
           )}
       </DataPanel>
 
+
+      <DataPanel
+        title="Provider activation history"
+        description="Capability admission outcomes recorded before Provider code, discovery Credentials, or execution routes are activated."
+      >
+        {activationRecords.length ? (
+          <>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{t("Finished")}</TableHead>
+                  <TableHead>{t("Status")}</TableHead>
+                  <TableHead>{t("Principal")}</TableHead>
+                  <TableHead>{t("Provider")}</TableHead>
+                  <TableHead>{t("Policy")}</TableHead>
+                  <TableHead>{t("Error")}</TableHead>
+                  <TableHead className="text-right">{t("Actions")}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {activationPagination.items.map((record) => (
+                  <TableRow key={record.activationId}>
+                    <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                      {formatDateTime(record.finishedAt)}
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant={
+                          record.status === "completed" ? "outline" : "secondary"
+                        }
+                      >
+                        {record.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-xs">
+                      {principalLabel(record.principalKind, record.principalRef)}
+                    </TableCell>
+                    <TableCell className="max-w-60 truncate font-mono text-xs">
+                      {record.providerId}
+                    </TableCell>
+                    <TableCell className="text-xs">
+                      {record.policyKind || "—"}
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {record.errorClass || "—"}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <IconButton
+                        variant="outline"
+                        label={t("View Provider activation record")}
+                        onClick={() => setSelectedActivation(record)}
+                      >
+                        <EyeIcon />
+                      </IconButton>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            <div className="px-4 pb-3">
+              <TablePagination
+                label="Provider activations"
+                pagination={activationPagination}
+              />
+            </div>
+          </>
+        ) : (
+          <EmptyPanelState>
+            <EmptyState
+              title="No Provider activation records"
+              description="Provider activation admission outcomes will appear here when Providers are created, synchronized, rebound, or activated for Tool execution."
+            />
+          </EmptyPanelState>
+        )}
+      </DataPanel>
+
       <Dialog
         open={selected !== null}
         onOpenChange={(open) => {
@@ -189,7 +279,11 @@ export function AuditPage({ client }: { client: MenderClient }) {
                 <AuditField label="Status" value={selected.status} />
                 <AuditField label="Outcome" value={selected.outcomeKind || "—"} />
                 <AuditField label="Origin" value={selected.origin || "—"} />
-                <AuditField label="Caller" value={selected.caller || "—"} />
+                <AuditField
+                  label="Principal"
+                  value={principalLabel(selected.principalKind, selected.principalRef)}
+                  mono
+                />
                 <AuditField label="Scope" value={selected.scopeKind || "—"} />
                 <AuditField
                   label="Scope reference"
@@ -277,6 +371,102 @@ export function AuditPage({ client }: { client: MenderClient }) {
           <DialogFooter showCloseButton />
         </DialogContent>
       </Dialog>
+
+      <Dialog
+        open={selectedActivation !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSelectedActivation(null);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{t("Provider activation details")}</DialogTitle>
+            <DialogDescription>
+              {t("Data-minimized capability admission metadata recorded before Provider activation side effects.")}
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedActivation !== null ? (
+            <div className="space-y-5">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <AuditField label="Status" value={selectedActivation.status} />
+                <AuditField label="Action" value={selectedActivation.action} />
+                <AuditField label="Origin" value={selectedActivation.origin} />
+                <AuditField
+                  label="Principal"
+                  value={principalLabel(
+                    selectedActivation.principalKind,
+                    selectedActivation.principalRef,
+                  )}
+                  mono
+                />
+                <AuditField label="Scope" value={selectedActivation.scopeKind} />
+                <AuditField
+                  label="Scope reference"
+                  value={selectedActivation.scopeReference || "—"}
+                  mono
+                />
+                <AuditField
+                  label="Activation ID"
+                  value={selectedActivation.activationId}
+                  mono
+                />
+                <AuditField
+                  label="Provider ID"
+                  value={selectedActivation.providerId}
+                  mono
+                />
+                <AuditField
+                  label="Started"
+                  value={formatDateTime(selectedActivation.startedAt)}
+                />
+                <AuditField
+                  label="Finished"
+                  value={formatDateTime(selectedActivation.finishedAt)}
+                />
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-3">
+                <AuditField
+                  label="Policy"
+                  value={selectedActivation.policyKind || "—"}
+                />
+                <AuditField
+                  label="Approval"
+                  value={selectedActivation.approval || "—"}
+                />
+                <AuditField
+                  label="Error class"
+                  value={selectedActivation.errorClass || "—"}
+                />
+              </div>
+
+              {selectedActivation.policyReason ? (
+                <div>
+                  <p className="text-sm font-medium">{t("Policy reason")}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {selectedActivation.policyReason}
+                  </p>
+                </div>
+              ) : null}
+
+              {selectedActivation.status !== "completed" ? (
+                <div className="rounded-lg border border-border p-4">
+                  <p className="text-sm font-medium">{t("Error summary")}</p>
+                  <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-muted-foreground">
+                    {selectedActivation.errorSummary ||
+                      t("No diagnostic summary was retained for this record.")}
+                  </p>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          <DialogFooter showCloseButton />
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
@@ -291,6 +481,10 @@ function browseAuditTools(client: MenderClient) {
 
 function indexTools(tools: ToolSummary[]) {
   return Object.fromEntries(tools.map((tool) => [tool.toolId, tool]));
+}
+
+function principalLabel(kind: string, reference: string) {
+  return reference ? kind + ":" + reference : kind || "—";
 }
 
 function toolLabel(

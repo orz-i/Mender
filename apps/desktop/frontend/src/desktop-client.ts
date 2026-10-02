@@ -1,6 +1,7 @@
 import { MenderClientInvariantError } from "@mender/sdk";
 import type {
   AuditRecord,
+  ProviderActivationAuditRecord,
   Credential,
   CredentialStatus,
   InvocationResult,
@@ -29,6 +30,7 @@ import type {
 import {
   Service,
   type AuditRecord as BindingAuditRecord,
+  type ProviderActivationAuditRecord as BindingProviderActivationAuditRecord,
   type Credential as BindingCredential,
   type CredentialStatus as BindingCredentialStatus,
   type InvocationResult as BindingInvocationResult,
@@ -398,6 +400,13 @@ export function createDesktopMenderClient(): MenderClient {
       return { records: (result.records ?? []).map(auditRecord) };
     },
 
+    async listProviderActivationAudit(limit = 50) {
+      const result = await Service.ListProviderActivationAudit(limit);
+      return {
+        records: (result.records ?? []).map(providerActivationAuditRecord),
+      };
+    },
+
     async getPolicyStatus() {
       return policyStatus(await Service.GetPolicyStatus());
     },
@@ -527,7 +536,10 @@ function policyRule(value: BindingPolicyRule): PolicyRule {
     enabled: value.enabled,
     decision: policyDecision(value.decision),
     match: {
+      actions: (value.match.actions ?? []).map(policyAction),
       origins: (value.match.origins ?? []).map(policyOrigin),
+      principalKinds: (value.match.principalKinds ?? []).map(policyPrincipalKind),
+      principalRefs: value.match.principalRefs ?? [],
       scopeKinds: (value.match.scopeKinds ?? []).map(policyScopeKind),
       profileRefs: value.match.profileRefs ?? [],
       providerIds: value.match.providerIds ?? [],
@@ -553,7 +565,10 @@ function bindingPolicyRuleInput(
     enabled: value.enabled,
     decision: value.decision,
     match: {
+      actions: value.match.actions,
       origins: value.match.origins,
+      principalKinds: value.match.principalKinds,
+      principalRefs: value.match.principalRefs,
       scopeKinds: value.match.scopeKinds,
       profileRefs: value.match.profileRefs,
       providerIds: value.match.providerIds,
@@ -578,6 +593,26 @@ function policyDecision(value: string): Policy["defaultDecision"] {
     return value;
   }
   throw new MenderClientInvariantError("Unsupported desktop Policy decision: " + value);
+}
+
+function policyAction(
+  value: string,
+): PolicyRule["match"]["actions"][number] {
+  if (value === "tool.invoke" || value === "provider.activate") {
+    return value;
+  }
+  throw new MenderClientInvariantError("Unsupported desktop Policy action: " + value);
+}
+
+function policyPrincipalKind(
+  value: string,
+): PolicyRule["match"]["principalKinds"][number] {
+  if (value === "local_user" || value === "service") {
+    return value;
+  }
+  throw new MenderClientInvariantError(
+    "Unsupported desktop Policy Principal kind: " + value,
+  );
 }
 
 function policyOrigin(
@@ -1153,7 +1188,8 @@ function auditRecord(value: BindingAuditRecord): AuditRecord {
     ...(value.providerId === undefined
       ? {}
       : { providerId: value.providerId }),
-    caller: value.caller,
+    principalKind: auditPrincipalKind(value.principalKind),
+    principalRef: value.principalRef,
     startedAt: value.startedAt,
     finishedAt: value.finishedAt,
     policyKind: value.policyKind,
@@ -1171,6 +1207,61 @@ function auditRecord(value: BindingAuditRecord): AuditRecord {
     failureSource: value.failureSource,
     failureCode: value.failureCode,
   };
+}
+
+function providerActivationAuditRecord(
+  value: BindingProviderActivationAuditRecord,
+): ProviderActivationAuditRecord {
+  if (value.action !== "provider.activate") {
+    throw new MenderClientInvariantError(
+      `Unsupported Provider activation Audit action: ${value.action}`,
+    );
+  }
+  if (
+    value.status !== "completed" &&
+    value.status !== "denied" &&
+    value.status !== "failed"
+  ) {
+    throw new MenderClientInvariantError(
+      `Unsupported Provider activation Audit status: ${value.status}`,
+    );
+  }
+  return {
+    activationId: value.activationId,
+    providerId: value.providerId,
+    action: "provider.activate",
+    principalKind: livePrincipalKind(value.principalKind),
+    principalRef: value.principalRef,
+    origin: policyOrigin(value.origin),
+    scopeKind: policyScopeKind(value.scopeKind),
+    scopeReference: value.scopeReference,
+    startedAt: value.startedAt,
+    finishedAt: value.finishedAt,
+    policyKind: value.policyKind,
+    policyReason: value.policyReason,
+    approval: value.approval,
+    status: value.status,
+    errorClass: value.errorClass,
+    errorSummary: value.errorSummary,
+  };
+}
+
+function livePrincipalKind(value: string): "local_user" | "service" {
+  if (value === "local_user" || value === "service") {
+    return value;
+  }
+  throw new MenderClientInvariantError(
+    `Unsupported live Principal kind: ${value}`,
+  );
+}
+
+function auditPrincipalKind(
+  value: string,
+): AuditRecord["principalKind"] {
+  if (value === "legacy") {
+    return value;
+  }
+  return livePrincipalKind(value);
 }
 
 function exposureMode(value: string): "direct" | "dynamic" | "hybrid" {

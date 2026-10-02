@@ -363,3 +363,26 @@ type AuditRecord struct {
 type AuditList struct {
 	Records []AuditRecord `json:"records"`
 }
+
+type ProviderActivationAuditRecord struct {
+	ActivationID   string `json:"activationId"`
+	ProviderID     string `json:"providerId"`
+	Action         string `json:"action"`
+	PrincipalKind  string `json:"principalKind"`
+	PrincipalRef   string `json:"principalRef"`
+	Origin         string `json:"origin"`
+	ScopeKind      string `json:"scopeKind"`
+	ScopeReference string `json:"scopeReference"`
+	StartedAt      string `json:"startedAt"`
+	FinishedAt     string `json:"finishedAt"`
+	PolicyKind     string `json:"policyKind"`
+	PolicyReason   string `json:"policyReason"`
+	Approval       string `json:"approval"`
+	Status         string `json:"status"`
+	ErrorClass     string `json:"errorClass"`
+	ErrorSummary   string `json:"errorSummary"`
+}
+
+type ProviderActivationAuditList struct {
+	Records []ProviderActivationAuditRecord `json:"records"`
+}

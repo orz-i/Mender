@@ -56,6 +56,22 @@ interface RuleEditorState {
   form: PolicyRuleInput;
 }
 
+const actionOptions: Array<{
+  value: PolicyRuleInput["match"]["actions"][number];
+  label: string;
+}> = [
+  { value: "tool.invoke", label: "Tool invoke" },
+  { value: "provider.activate", label: "Provider activate" },
+];
+
+const principalKindOptions: Array<{
+  value: PolicyRuleInput["match"]["principalKinds"][number];
+  label: string;
+}> = [
+  { value: "local_user", label: "Local user" },
+  { value: "service", label: "Service" },
+];
+
 const originOptions: Array<{
   value: PolicyRuleInput["match"]["origins"][number];
   label: string;
@@ -81,7 +97,10 @@ function emptyRuleForm(): PolicyRuleInput {
     enabled: true,
     decision: "deny",
     match: {
+      actions: ["tool.invoke"],
       origins: [],
+      principalKinds: [],
+      principalRefs: [],
       scopeKinds: [],
       profileRefs: [],
       providerIds: [],
@@ -212,7 +231,10 @@ export function PolicyPage({ client }: { client: MenderClient }) {
         enabled: rule.enabled,
         decision: rule.decision,
         match: {
+          actions: [...rule.match.actions],
           origins: [...rule.match.origins],
+          principalKinds: [...rule.match.principalKinds],
+          principalRefs: [...rule.match.principalRefs],
           scopeKinds: [...rule.match.scopeKinds],
           profileRefs: [...rule.match.profileRefs],
           providerIds: [...rule.match.providerIds],
@@ -530,7 +552,7 @@ function RuleEditorDialog({
 
         {state.step === 2 && isGlobal ? (
           <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs leading-5 text-muted-foreground">
-            {t("This Rule is global because every selector is a wildcard. It will match every valid invocation regardless of origin, scope, Provider, Tool, or Governance Facts.")}
+            {t("This Rule is broad because every selector other than its explicit action set is a wildcard. It will match every valid selected action regardless of origin, Principal, scope, or target.")}
           </div>
         ) : null}
 
@@ -576,6 +598,31 @@ function DecisionStep({
 }) {
   return (
     <div className="space-y-5">
+      <SelectorSection
+        title="Governance actions"
+        description="Every Rule must explicitly select at least one action. New actions never inherit old Rule intent."
+        options={actionOptions}
+        selected={form.match.actions}
+        onToggle={(value, checked) => {
+          const actions = toggleValue(form.match.actions, value, checked);
+          const includesActivation = actions.includes("provider.activate");
+          onChange({
+            ...form,
+            match: {
+              ...form.match,
+              actions,
+              ...(includesActivation
+                ? {
+                    toolIds: [],
+                    factKnowledge: "any" as const,
+                    effectsAny: [],
+                    resourcesAny: [],
+                  }
+                : {}),
+            },
+          });
+        }}
+      />
       <Field label="Display name">
         <Input
           aria-label={t("Policy Rule display name")}
@@ -653,6 +700,47 @@ function ScopeStep({
       />
 
       <SelectorSection
+        title="Principal kinds"
+        description="Empty means any live Principal kind."
+        options={principalKindOptions}
+        selected={form.match.principalKinds}
+        onToggle={(value, checked) =>
+          onChange({
+            ...form,
+            match: {
+              ...form.match,
+              principalKinds: toggleValue(
+                form.match.principalKinds,
+                value,
+                checked,
+              ),
+            },
+          })
+        }
+      />
+
+      <Field label="Principal references — one per line" optional>
+        <textarea
+          aria-label={t("Policy Principal references")}
+          className="min-h-20 w-full rounded-lg border border-input bg-background px-3 py-2 font-mono text-sm outline-none focus:ring-2 focus:ring-ring/40"
+          placeholder={"os:501\nprofile:prof_..."}
+          value={form.match.principalRefs.join("\n")}
+          onChange={(event) =>
+            onChange({
+              ...form,
+              match: {
+                ...form.match,
+                principalRefs: lines(event.target.value),
+              },
+            })
+          }
+        />
+        <span className="mt-1 block text-xs leading-5 text-muted-foreground">
+          {t("Advanced selector. Mender has no Principal directory yet; use canonical references visible in Audit when an exact subject match is required.")}
+        </span>
+      </Field>
+
+      <SelectorSection
         title="Execution scope"
         description="Empty means Catalog or Profile scope."
         options={scopeOptions}
@@ -726,28 +814,34 @@ function ScopeStep({
         }
       />
 
-      <InventorySelector
-        title="Tools"
-        description="Empty means any Tool."
-        emptyLabel="No synchronized Tools"
-        items={tools.map((tool) => ({
-          value: tool.toolId,
-          label: tool.title || tool.name,
-          detail:
-            providers.find((provider) => provider.providerId === tool.providerId)
-              ?.namespace ?? tool.providerId,
-        }))}
-        selected={form.match.toolIds}
-        onToggle={(value, checked) =>
-          onChange({
-            ...form,
-            match: {
-              ...form.match,
-              toolIds: toggleValue(form.match.toolIds, value, checked),
-            },
-          })
-        }
-      />
+      {form.match.actions.includes("provider.activate") ? (
+        <div className="rounded-lg border border-border px-3 py-2 text-xs leading-5 text-muted-foreground">
+          {t("Tool selectors are unavailable when provider.activate is selected because Provider activation happens before Tool execution and may happen before Tool discovery.")}
+        </div>
+      ) : (
+        <InventorySelector
+          title="Tools"
+          description="Empty means any Tool."
+          emptyLabel="No synchronized Tools"
+          items={tools.map((tool) => ({
+            value: tool.toolId,
+            label: tool.title || tool.name,
+            detail:
+              providers.find((provider) => provider.providerId === tool.providerId)
+                ?.namespace ?? tool.providerId,
+          }))}
+          selected={form.match.toolIds}
+          onToggle={(value, checked) =>
+            onChange({
+              ...form,
+              match: {
+                ...form.match,
+                toolIds: toggleValue(form.match.toolIds, value, checked),
+              },
+            })
+          }
+        />
+      )}
     </div>
   );
 }
@@ -759,6 +853,14 @@ function FactsStep({
   form: PolicyRuleInput;
   onChange: (value: PolicyRuleInput) => void;
 }) {
+  if (form.match.actions.includes("provider.activate")) {
+    return (
+      <div className="rounded-lg border border-border px-4 py-3 text-sm leading-6 text-muted-foreground">
+        {t("Governance Facts apply only to tool.invoke. Rules that include provider.activate cannot contain Tool, Fact knowledge, effect, or resource predicates.")}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-5">
       <Field label="Fact knowledge">
@@ -1074,7 +1176,7 @@ function DecisionBadge({ decision }: { decision: PolicyDecision }) {
 function ApprovalWarning() {
   return (
     <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs leading-5 text-muted-foreground">
-      {t("The current Approval adapter is fail-closed. Invocations requiring approval are rejected until an interactive Approval workflow exists.")}
+      {t("The current Approval adapter is fail-closed. Governed actions requiring approval are rejected until an interactive Approval workflow exists.")}
     </div>
   );
 }
@@ -1104,12 +1206,25 @@ function Field({
 }
 
 function ruleDecisionValid(form: PolicyRuleInput) {
-  return form.displayName.trim() !== "";
+  if (form.displayName.trim() === "" || form.match.actions.length === 0) {
+    return false;
+  }
+  if (form.match.actions.includes("provider.activate")) {
+    return (
+      form.match.toolIds.length === 0 &&
+      form.match.factKnowledge === "any" &&
+      form.match.effectsAny.length === 0 &&
+      form.match.resourcesAny.length === 0
+    );
+  }
+  return true;
 }
 
 function isGlobalWildcard(form: PolicyRuleInput) {
   return (
     form.match.origins.length === 0 &&
+    form.match.principalKinds.length === 0 &&
+    form.match.principalRefs.length === 0 &&
     form.match.scopeKinds.length === 0 &&
     form.match.profileRefs.length === 0 &&
     form.match.providerIds.length === 0 &&
@@ -1145,6 +1260,38 @@ function targetSummary(
   tools: Map<string, ToolSummary>,
 ) {
   const parts: string[] = [];
+  parts.push(
+    t("actions: {{value}}", {
+      value: rule.match.actions
+        .map(
+          (action) =>
+            t(actionOptions.find((option) => option.value === action)?.label ?? action),
+        )
+        .join(", "),
+    }),
+  );
+  if (rule.match.principalKinds.length) {
+    parts.push(
+      t("principals: {{value}}", {
+        value: rule.match.principalKinds
+          .map(
+            (kind) =>
+              t(
+                principalKindOptions.find((option) => option.value === kind)
+                  ?.label ?? kind,
+              ),
+          )
+          .join(", "),
+      }),
+    );
+  }
+  if (rule.match.principalRefs.length) {
+    parts.push(
+      t("principal refs: {{value}}", {
+        value: rule.match.principalRefs.join(", "),
+      }),
+    );
+  }
   if (rule.match.origins.length) {
     parts.push(
       t("origins: {{value}}", {
@@ -1199,5 +1346,5 @@ function targetSummary(
       }),
     );
   }
-  return parts.length ? parts.join(" · ") : t("Global wildcard");
+  return parts.join(" · ");
 }

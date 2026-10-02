@@ -21,6 +21,8 @@ export type CreateOpenAITunnelRequest =
 export type SetProfileTunnelRequest =
   components["schemas"]["SetProfileTunnelRequest"];
 export type AuditRecord = components["schemas"]["AuditRecord"];
+export type ProviderActivationAuditRecord =
+  components["schemas"]["ProviderActivationAuditRecord"];
 export type SystemStatus = components["schemas"]["SystemStatus"];
 export type PolicyStatus = components["schemas"]["PolicyStatus"];
 export type Policy = components["schemas"]["Policy"];
@@ -149,6 +151,9 @@ export interface MenderClient {
   restartMCPServer(serverId: string): Promise<MCPServerInstance>;
   stopMCPServer(serverId: string): Promise<void>;
   listAudit(limit?: number): Promise<{ records: AuditRecord[] }>;
+  listProviderActivationAudit(
+    limit?: number,
+  ): Promise<{ records: ProviderActivationAuditRecord[] }>;
   getPolicyStatus(): Promise<PolicyStatus>;
   getPolicy(): Promise<Policy>;
   setPolicyDefault(body: PolicyDefaultRequest): Promise<Policy>;
@@ -499,6 +504,13 @@ export function createMenderClient(
 
     async listAudit(limit = 50) {
       const result = await client.GET("/audit", {
+        params: { query: { limit } },
+      });
+      return requireData(result);
+    },
+
+    async listProviderActivationAudit(limit = 50) {
+      const result = await client.GET("/audit/provider-activations", {
         params: { query: { limit } },
       });
       return requireData(result);

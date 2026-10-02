@@ -761,6 +761,27 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/AuditRecord'
+  /audit/provider-activations:
+    get:
+      operationId: listProviderActivationAudit
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '200':
+          description: Provider activation Audit records
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [records]
+                properties:
+                  records:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ProviderActivationAuditRecord'
   /policy/status:
     get:
       operationId: getPolicyStatus
@@ -1109,11 +1130,21 @@ components:
       additionalProperties: false
     PolicyMatch:
       type: object
-      required: [origins, scopeKinds, profileRefs, providerIds, toolIds, factKnowledge, effectsAny, resourcesAny]
+      required: [actions, origins, principalKinds, principalRefs, scopeKinds, profileRefs, providerIds, toolIds, factKnowledge, effectsAny, resourcesAny]
       properties:
+        actions:
+          type: array
+          minItems: 1
+          items: { type: string, enum: [tool.invoke, provider.activate] }
         origins:
           type: array
           items: { type: string, enum: [cli, mcp, management_http, desktop, internal] }
+        principalKinds:
+          type: array
+          items: { type: string, enum: [local_user, service] }
+        principalRefs:
+          type: array
+          items: { type: string }
         scopeKinds:
           type: array
           items: { type: string, enum: [catalog, profile] }
@@ -1669,12 +1700,13 @@ components:
         tunnelStatus: { type: string, enum: [running, exited] }
     AuditRecord:
       type: object
-      required: [invocationId, toolId, caller, startedAt, finishedAt, policyKind, policyReason, approval, status, resultKind, errorClass, errorSummary, origin, scopeKind, scopeReference, outcomeKind, rejectionCode, failureSource, failureCode]
+      required: [invocationId, toolId, principalKind, principalRef, startedAt, finishedAt, policyKind, policyReason, approval, status, resultKind, errorClass, errorSummary, origin, scopeKind, scopeReference, outcomeKind, rejectionCode, failureSource, failureCode]
       properties:
         invocationId: { type: string }
         toolId: { type: string }
         providerId: { type: string }
-        caller: { type: string }
+        principalKind: { type: string, enum: [local_user, service, legacy] }
+        principalRef: { type: string }
         startedAt: { type: string, format: date-time }
         finishedAt: { type: string, format: date-time }
         policyKind: { type: string }
@@ -1693,3 +1725,25 @@ components:
         rejectionCode: { type: string }
         failureSource: { type: string }
         failureCode: { type: string }
+    ProviderActivationAuditRecord:
+      type: object
+      required: [activationId, providerId, action, principalKind, principalRef, origin, scopeKind, scopeReference, startedAt, finishedAt, policyKind, policyReason, approval, status, errorClass, errorSummary]
+      properties:
+        activationId: { type: string }
+        providerId: { type: string }
+        action: { type: string, const: provider.activate }
+        principalKind: { type: string, enum: [local_user, service] }
+        principalRef: { type: string }
+        origin: { type: string, enum: [cli, mcp, management_http, desktop, internal] }
+        scopeKind: { type: string, enum: [catalog, profile] }
+        scopeReference: { type: string }
+        startedAt: { type: string, format: date-time }
+        finishedAt: { type: string, format: date-time }
+        policyKind: { type: string }
+        policyReason: { type: string }
+        approval: { type: string }
+        status: { type: string, enum: [completed, denied, failed] }
+        errorClass: { type: string }
+        errorSummary:
+          type: string
+          description: Bounded redacted diagnostic summary. Raw Provider config and Credential material are not retained.

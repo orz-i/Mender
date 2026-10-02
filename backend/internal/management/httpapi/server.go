@@ -114,6 +114,7 @@ func (h *Handler) routes() {
 	h.mux.HandleFunc("DELETE /api/v1/mcp/servers/{serverId}", h.stopMCPServer)
 
 	h.mux.HandleFunc("GET /api/v1/audit", h.listAudit)
+	h.mux.HandleFunc("GET /api/v1/audit/provider-activations", h.listProviderActivationAudit)
 }
 
 type apiError struct {

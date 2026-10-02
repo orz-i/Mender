@@ -152,7 +152,7 @@ export function OverviewPage({ client }: { client: MenderClient }) {
               <TableHeader>
                 <TableRow>
                   <TableHead>{t("Tool")}</TableHead>
-                  <TableHead>{t("Caller")}</TableHead>
+                  <TableHead>{t("Principal")}</TableHead>
                   <TableHead>{t("Status")}</TableHead>
                   <TableHead className="text-right">{t("Finished")}</TableHead>
                 </TableRow>
@@ -163,7 +163,7 @@ export function OverviewPage({ client }: { client: MenderClient }) {
                     <TableCell className="font-medium">
                       {toolLabel(data.toolsById, record.toolId)}
                     </TableCell>
-                    <TableCell>{record.caller || t("unknown caller")}</TableCell>
+                    <TableCell>{record.principalKind + ":" + record.principalRef}</TableCell>
                     <TableCell>
                       <Badge variant="outline">{record.status}</Badge>
                     </TableCell>

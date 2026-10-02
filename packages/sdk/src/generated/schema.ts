@@ -582,6 +582,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/audit/provider-activations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listProviderActivationAudit"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/policy/status": {
         parameters: {
             query?: never;
@@ -846,7 +862,10 @@ export interface components {
             match: components["schemas"]["PolicyMatch"];
         };
         PolicyMatch: {
+            actions: ("tool.invoke" | "provider.activate")[];
             origins: ("cli" | "mcp" | "management_http" | "desktop" | "internal")[];
+            principalKinds: ("local_user" | "service")[];
+            principalRefs: string[];
             scopeKinds: ("catalog" | "profile")[];
             profileRefs: string[];
             providerIds: string[];
@@ -1254,7 +1273,9 @@ export interface components {
             invocationId: string;
             toolId: string;
             providerId?: string;
-            caller: string;
+            /** @enum {string} */
+            principalKind: "local_user" | "service" | "legacy";
+            principalRef: string;
             /** Format: date-time */
             startedAt: string;
             /** Format: date-time */
@@ -1274,6 +1295,32 @@ export interface components {
             rejectionCode: string;
             failureSource: string;
             failureCode: string;
+        };
+        ProviderActivationAuditRecord: {
+            activationId: string;
+            providerId: string;
+            /** @constant */
+            action: "provider.activate";
+            /** @enum {string} */
+            principalKind: "local_user" | "service";
+            principalRef: string;
+            /** @enum {string} */
+            origin: "cli" | "mcp" | "management_http" | "desktop" | "internal";
+            /** @enum {string} */
+            scopeKind: "catalog" | "profile";
+            scopeReference: string;
+            /** Format: date-time */
+            startedAt: string;
+            /** Format: date-time */
+            finishedAt: string;
+            policyKind: string;
+            policyReason: string;
+            approval: string;
+            /** @enum {string} */
+            status: "completed" | "denied" | "failed";
+            errorClass: string;
+            /** @description Bounded redacted diagnostic summary. Raw Provider config and Credential material are not retained. */
+            errorSummary: string;
         };
     };
     responses: {
@@ -2426,6 +2473,31 @@ export interface operations {
                 content: {
                     "application/json": {
                         records: components["schemas"]["AuditRecord"][];
+                    };
+                };
+            };
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    listProviderActivationAudit: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Provider activation Audit records */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        records: components["schemas"]["ProviderActivationAuditRecord"][];
                     };
                 };
             };

@@ -6,6 +6,7 @@ export { MenderClientInvariantError } from "./errors";
 export type {
   AddProfileToolRequest,
   AuditRecord,
+  ProviderActivationAuditRecord,
   BrowseToolsInput,
   CreateEnvironmentCredentialRequest,
   CreateProviderRequest,

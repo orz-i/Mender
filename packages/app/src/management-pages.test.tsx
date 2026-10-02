@@ -1844,7 +1844,10 @@ describe("management pages", () => {
       enabled: true,
       decision: "require_approval" as const,
       match: {
+        actions: ["tool.invoke"] as Array<"tool.invoke">,
         origins: ["mcp"] as Array<"mcp">,
+        principalKinds: ["service"] as Array<"service">,
+        principalRefs: [],
         scopeKinds: ["profile"] as Array<"profile">,
         profileRefs: [policyProfile.profileId],
         providerIds: [policyProvider.providerId],
@@ -1951,7 +1954,10 @@ describe("management pages", () => {
       displayName: "Approve MCP search",
       decision: "require_approval",
       match: {
+        actions: ["tool.invoke"],
         origins: ["mcp"],
+        principalKinds: [],
+        principalRefs: [],
         scopeKinds: ["profile"],
         profileRefs: [policyProfile.profileId],
         providerIds: [policyProvider.providerId],
@@ -2039,13 +2045,15 @@ describe("management pages", () => {
 
   it("renders only minimized Audit metadata", async () => {
     renderApp("/audit", {
+      listProviderActivationAudit: vi.fn().mockResolvedValue({ records: [] }),
       listAudit: vi.fn().mockResolvedValue({
         records: [
           {
             invocationId: "inv_1",
             toolId: "tool_1",
             providerId: "prov_1",
-            caller: "web",
+            principalKind: "local_user",
+            principalRef: "os:501",
             startedAt: "2026-09-26T00:00:00Z",
             finishedAt: "2026-09-26T00:00:01Z",
             policyKind: "allow",
@@ -2077,13 +2085,15 @@ describe("management pages", () => {
 
   it("shows a bounded Audit failure summary in a detail dialog", async () => {
     renderApp("/audit", {
+      listProviderActivationAudit: vi.fn().mockResolvedValue({ records: [] }),
       listAudit: vi.fn().mockResolvedValue({
         records: [
           {
             invocationId: "inv_failed",
             toolId: "tool_1",
             providerId: "prov_1",
-            caller: "desktop",
+            principalKind: "local_user",
+            principalRef: "os:501",
             startedAt: "2026-09-26T00:00:00Z",
             finishedAt: "2026-09-26T00:00:01Z",
             policyKind: "allow",
@@ -2117,7 +2127,8 @@ describe("management pages", () => {
     ).toBeTruthy();
     const dialog = within(screen.getByRole("dialog"));
     expect(dialog.getByText("execution")).toBeTruthy();
-    expect(dialog.getAllByText("desktop").length).toBeGreaterThanOrEqual(2);
+    expect(dialog.getByText("desktop")).toBeTruthy();
+    expect(dialog.getByText("local_user:os:501")).toBeTruthy();
     expect(dialog.getByText("profile")).toBeTruthy();
     expect(dialog.getByText("provider")).toBeTruthy();
     expect(dialog.getByText("provider_error")).toBeTruthy();

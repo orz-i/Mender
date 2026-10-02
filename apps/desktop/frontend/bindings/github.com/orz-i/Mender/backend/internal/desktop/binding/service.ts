@@ -160,6 +160,10 @@ export function ListProfiles(): $CancellablePromise<$models.ProfileList> {
     return $Call.ByID(2998135054);
 }
 
+export function ListProviderActivationAudit(limit: number): $CancellablePromise<$models.ProviderActivationAuditList> {
+    return $Call.ByID(1790781356, limit);
+}
+
 export function ListProviderPluginInstallations(): $CancellablePromise<$models.ProviderPluginInstallationList> {
     return $Call.ByID(2230901543);
 }

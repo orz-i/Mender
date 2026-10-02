@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,6 +15,7 @@ import (
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	credentialapplication "github.com/orz-i/Mender/backend/internal/credential/application"
 	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
+	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	mcpconfigstore "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/configstore"
 	mcpplugin "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/plugin"
@@ -1274,6 +1274,21 @@ func (s *Service) DeleteTunnel(tunnelID string) error {
 	return s.runtime.Tunnels.Delete.Execute(s.ctx, id)
 }
 
+func (s *Service) ListProviderActivationAudit(limit int) (ProviderActivationAuditList, error) {
+	if limit == 0 {
+		limit = defaultAuditLimit
+	}
+	records, err := s.runtime.ListProviderActivationAudit.Execute(s.ctx, limit)
+	if err != nil {
+		return ProviderActivationAuditList{}, err
+	}
+	items := make([]ProviderActivationAuditRecord, 0, len(records))
+	for _, record := range records {
+		items = append(items, providerActivationAuditProjection(record))
+	}
+	return ProviderActivationAuditList{Records: items}, nil
+}
+
 func (s *Service) ListAudit(limit int) (AuditList, error) {
 	if limit == 0 {
 		limit = defaultAuditLimit
@@ -1838,6 +1853,29 @@ func tunnelProjection(item tunneldomain.Tunnel) Tunnel {
 		ExternalTunnelID:     item.ExternalTunnelID(),
 		RuntimeCredentialRef: item.RuntimeCredentialRef().String(),
 		Executable:           item.Executable(),
+	}
+}
+
+func providerActivationAuditProjection(
+	record auditdomain.ProviderActivationRecord,
+) ProviderActivationAuditRecord {
+	return ProviderActivationAuditRecord{
+		ActivationID:   record.ActivationID(),
+		ProviderID:     record.ProviderID().String(),
+		Action:         "provider.activate",
+		PrincipalKind:  record.PrincipalKind(),
+		PrincipalRef:   record.PrincipalRef(),
+		Origin:         string(record.Origin()),
+		ScopeKind:      string(record.ScopeKind()),
+		ScopeReference: record.ScopeReference(),
+		StartedAt:      record.StartedAt().Format(timeFormat),
+		FinishedAt:     record.FinishedAt().Format(timeFormat),
+		PolicyKind:     string(record.PolicyKind()),
+		PolicyReason:   record.PolicyReason(),
+		Approval:       string(record.Approval()),
+		Status:         string(record.Status()),
+		ErrorClass:     string(record.ErrorClass()),
+		ErrorSummary:   record.ErrorSummary(),
 	}
 }
 

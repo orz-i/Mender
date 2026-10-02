@@ -9,7 +9,8 @@ export interface AuditRecord {
     "invocationId": string;
     "toolId": string;
     "providerId"?: string;
-    "caller": string;
+    "principalKind": string;
+    "principalRef": string;
     "startedAt": string;
     "finishedAt": string;
     "policyKind": string;
@@ -104,7 +105,10 @@ export interface Policy {
 }
 
 export interface PolicyMatch {
+    "actions": string[] | null;
     "origins": string[] | null;
+    "principalKinds": string[] | null;
+    "principalRefs": string[] | null;
     "scopeKinds": string[] | null;
     "profileRefs": string[] | null;
     "providerIds": string[] | null;
@@ -193,6 +197,29 @@ export interface Provider {
     "directory"?: string;
     "credentialHeaders"?: CredentialHeader[] | null;
     "credentialEnvironment"?: CredentialEnvironment[] | null;
+}
+
+export interface ProviderActivationAuditList {
+    "records": ProviderActivationAuditRecord[] | null;
+}
+
+export interface ProviderActivationAuditRecord {
+    "activationId": string;
+    "providerId": string;
+    "action": string;
+    "principalKind": string;
+    "principalRef": string;
+    "origin": string;
+    "scopeKind": string;
+    "scopeReference": string;
+    "startedAt": string;
+    "finishedAt": string;
+    "policyKind": string;
+    "policyReason": string;
+    "approval": string;
+    "status": string;
+    "errorClass": string;
+    "errorSummary": string;
 }
 
 export interface ProviderList {

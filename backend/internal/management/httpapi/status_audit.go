@@ -113,6 +113,52 @@ func (h *Handler) listAudit(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"records": items})
 }
 
+func (h *Handler) listProviderActivationAudit(w http.ResponseWriter, r *http.Request) {
+	limit := 50
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil {
+			writeAPIError(w, http.StatusBadRequest, "validation_error", fmt.Errorf("limit must be an integer"))
+			return
+		}
+		limit = parsed
+	}
+
+	records, err := h.runtime.ListProviderActivationAudit.Execute(r.Context(), limit)
+	if err != nil {
+		writeKnownError(w, err)
+		return
+	}
+	items := make([]map[string]any, 0, len(records))
+	for _, record := range records {
+		items = append(items, providerActivationAuditProjection(record))
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"records": items})
+}
+
+func providerActivationAuditProjection(
+	record auditdomain.ProviderActivationRecord,
+) map[string]any {
+	return map[string]any{
+		"activationId":   record.ActivationID(),
+		"providerId":     record.ProviderID().String(),
+		"action":         "provider.activate",
+		"principalKind":  record.PrincipalKind(),
+		"principalRef":   record.PrincipalRef(),
+		"origin":         string(record.Origin()),
+		"scopeKind":      string(record.ScopeKind()),
+		"scopeReference": record.ScopeReference(),
+		"startedAt":      record.StartedAt(),
+		"finishedAt":     record.FinishedAt(),
+		"policyKind":     string(record.PolicyKind()),
+		"policyReason":   record.PolicyReason(),
+		"approval":       string(record.Approval()),
+		"status":         string(record.Status()),
+		"errorClass":     string(record.ErrorClass()),
+		"errorSummary":   record.ErrorSummary(),
+	}
+}
+
 func auditProjection(record auditdomain.Record) map[string]any {
 	result := map[string]any{
 		"invocationId":   record.InvocationID().String(),
