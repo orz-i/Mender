@@ -34,7 +34,7 @@ func (h *Handler) startMCPServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	instance, err := h.runtime.StartMCPHTTPServer(
+	instance, err := h.startMCPHTTPServer(
 		r.Context(),
 		slug,
 		input.Address,
@@ -52,7 +52,7 @@ func (h *Handler) startMCPServer(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) restartMCPServer(w http.ResponseWriter, r *http.Request) {
-	instance, err := h.runtime.RestartMCPServer(
+	instance, err := h.restartManagedMCPServer(
 		r.Context(),
 		r.PathValue("serverId"),
 	)

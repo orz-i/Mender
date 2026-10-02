@@ -137,6 +137,38 @@ func NewPlugin(
 	}, nil
 }
 
+// NewPluginFromVerifiedDescriptor constructs an external plugin adapter without
+// starting the package process. The immutable descriptor must already have been
+// verified and persisted at installation time.
+func NewPluginFromVerifiedDescriptor(
+	installation installationdomain.Installation,
+	processes processProvider,
+) (*Plugin, error) {
+	if processes == nil {
+		return nil, fmt.Errorf("new external provider plugin: process provider must not be nil")
+	}
+	if err := installation.Validate(); err != nil {
+		return nil, fmt.Errorf("new external provider plugin: installation: %w", err)
+	}
+	descriptor, ok := installation.VerifiedDescriptor()
+	if !ok {
+		return nil, fmt.Errorf("new external provider plugin: verified descriptor snapshot is required")
+	}
+	if err := descriptor.Validate(); err != nil {
+		return nil, fmt.Errorf("new external provider plugin: persisted descriptor: %w", err)
+	}
+	timeouts := defaultControlPlaneTimeouts()
+	if source, ok := processes.(controlPlaneTimeoutProvider); ok {
+		timeouts = source.controlPlaneTimeouts()
+	}
+	return &Plugin{
+		installation: installation,
+		processes:    processes,
+		timeouts:     timeouts,
+		descriptor:   descriptor,
+	}, nil
+}
+
 // Descriptor implements providerplugin.Plugin without activating new Provider sessions.
 func (p *Plugin) Descriptor() providerplugin.Descriptor {
 	if p == nil {

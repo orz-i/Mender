@@ -4,7 +4,7 @@ package local
 import (
 	"context"
 
-	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
+	governanceapplication "github.com/orz-i/Mender/backend/internal/governance/application"
 )
 
 // RejectApproval is a fail-closed gate when no interactive approval adapter is configured.
@@ -12,7 +12,7 @@ type RejectApproval struct{}
 
 func (RejectApproval) Approve(
 	context.Context,
-	invocationapplication.ApprovalRequest,
+	governanceapplication.ApprovalRequest,
 ) (bool, error) {
 	return false, nil
 }

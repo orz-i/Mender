@@ -240,5 +240,17 @@ func resolverTestInstallation(
 	if err != nil {
 		t.Fatal(err)
 	}
+	item, err = item.WithVerifiedDescriptor(providerplugin.Descriptor{
+		ID:              pluginID,
+		Version:         version,
+		DisplayName:     "Echo " + version,
+		Description:     "Resolver test plugin",
+		ProtocolVersion: 1,
+		ConfigVersion:   1,
+		ConfigSchema:    []byte("{}"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	return item
 }

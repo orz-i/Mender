@@ -178,7 +178,7 @@ func (h *Handler) createProvider(w http.ResponseWriter, r *http.Request) {
 	}
 	var provider catalogdomain.Provider
 	if strings.TrimSpace(input.InstallationID) == "" {
-		provider, err = h.runtime.RegisterConfiguredProvider(
+		provider, err = h.registerConfiguredProvider(
 			r.Context(),
 			registerRequest,
 			pluginID,
@@ -192,7 +192,7 @@ func (h *Handler) createProvider(w http.ResponseWriter, r *http.Request) {
 			writeAPIError(w, http.StatusBadRequest, "validation_error", parseErr)
 			return
 		}
-		provider, err = h.runtime.RegisterInstalledProvider(
+		provider, err = h.registerInstalledProvider(
 			r.Context(),
 			registerRequest,
 			pluginID,
@@ -205,7 +205,7 @@ func (h *Handler) createProvider(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	syncResult, err := h.runtime.SyncConfiguredProvider(r.Context(), provider.ID())
+	syncResult, err := h.syncConfiguredProvider(r.Context(), provider.ID())
 	if err != nil {
 		writeAPIError(w, http.StatusBadGateway, "provider_error", err)
 		return
@@ -259,7 +259,7 @@ func (h *Handler) createHTTPProvider(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	syncResult, err := h.runtime.SyncConfiguredProvider(r.Context(), provider.ID())
+	syncResult, err := h.syncConfiguredProvider(r.Context(), provider.ID())
 	if err != nil {
 		writeAPIError(w, http.StatusBadGateway, "provider_error", err)
 		return
@@ -315,7 +315,7 @@ func (h *Handler) createStdioProvider(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	syncResult, err := h.runtime.SyncConfiguredProvider(r.Context(), provider.ID())
+	syncResult, err := h.syncConfiguredProvider(r.Context(), provider.ID())
 	if err != nil {
 		writeAPIError(w, http.StatusBadGateway, "provider_error", err)
 		return
@@ -364,7 +364,7 @@ func (h *Handler) updateConfiguredProvider(
 	providerID catalogdomain.ProviderID,
 	input updateProviderRequest,
 ) {
-	provider, err := h.runtime.UpdateConfiguredProvider(
+	provider, err := h.updateConfiguredProviderGoverned(
 		r.Context(),
 		providerID,
 		catalogapplication.UpdateProviderRequest{
@@ -377,7 +377,7 @@ func (h *Handler) updateConfiguredProvider(
 		writeKnownError(w, err)
 		return
 	}
-	syncResult, err := h.runtime.SyncConfiguredProvider(r.Context(), providerID)
+	syncResult, err := h.syncConfiguredProvider(r.Context(), providerID)
 	if err != nil {
 		writeAPIError(w, http.StatusBadGateway, "provider_error", err)
 		return
@@ -466,7 +466,7 @@ func (h *Handler) updateLegacyMCPProvider(
 		writeKnownError(w, err)
 		return
 	}
-	syncResult, err := h.runtime.SyncConfiguredProvider(r.Context(), providerID)
+	syncResult, err := h.syncConfiguredProvider(r.Context(), providerID)
 	if err != nil {
 		writeAPIError(w, http.StatusBadGateway, "provider_error", err)
 		return
@@ -509,7 +509,7 @@ func (h *Handler) rebindProvider(w http.ResponseWriter, r *http.Request) {
 		writeAPIError(w, http.StatusBadRequest, "validation_error", err)
 		return
 	}
-	result, err := h.runtime.RebindProviderInstallation(
+	result, err := h.rebindProviderInstallation(
 		r.Context(),
 		providerID,
 		installationID,
@@ -542,7 +542,7 @@ func (h *Handler) syncProvider(w http.ResponseWriter, r *http.Request) {
 		writeAPIError(w, http.StatusBadRequest, "validation_error", err)
 		return
 	}
-	result, err := h.runtime.SyncConfiguredProvider(r.Context(), providerID)
+	result, err := h.syncConfiguredProvider(r.Context(), providerID)
 	if err != nil {
 		writeAPIError(w, http.StatusBadGateway, "provider_error", err)
 		return

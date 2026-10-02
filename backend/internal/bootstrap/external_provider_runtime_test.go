@@ -137,7 +137,7 @@ func TestRuntimeInstalledExternalProviderEndToEnd(t *testing.T) {
 	providerConfig := []byte(
 		"{\"prefix\":\"test: \",\"credentialRef\":\"" + credentialRef.String() + "\"}",
 	)
-	provider, err := runtime.RegisterInstalledProvider(
+	provider, err := registerInstalledProviderTest(t, runtime,
 		ctx,
 		catalogapplication.RegisterProviderRequest{
 			Namespace:   "external-echo",
@@ -167,7 +167,7 @@ func TestRuntimeInstalledExternalProviderEndToEnd(t *testing.T) {
 		t.Fatalf("ProviderConfig metadata = %+v, present=%v", configMetadata, ok)
 	}
 
-	syncResult, err := runtime.SyncConfiguredProvider(ctx, provider.ID())
+	syncResult, err := syncConfiguredProviderTest(t, runtime, ctx, provider.ID())
 	if err != nil {
 		t.Fatalf("SyncConfiguredProvider() error = %v", err)
 	}
@@ -232,7 +232,7 @@ func TestRuntimeInstalledExternalProviderEndToEnd(t *testing.T) {
 	if targetInstallation.ID() == installationID {
 		t.Fatal("rebind target reused source InstallationID")
 	}
-	if _, err := runtime.RebindProviderInstallation(
+	if _, err := rebindProviderInstallationTest(t, runtime,
 		ctx,
 		provider.ID(),
 		targetInstallation.ID(),
@@ -266,7 +266,7 @@ func TestRuntimeInstalledExternalProviderEndToEnd(t *testing.T) {
 		t.Fatal("failed rebind removed current execution route")
 	}
 
-	rebindResult, err := runtime.RebindProviderInstallation(
+	rebindResult, err := rebindProviderInstallationTest(t, runtime,
 		ctx,
 		provider.ID(),
 		targetInstallation.ID(),
@@ -338,7 +338,7 @@ func TestRuntimeInstalledExternalProviderEndToEnd(t *testing.T) {
 		)
 	}
 
-	if _, err := runtime.UpdateConfiguredProvider(
+	if _, err := updateConfiguredProviderTest(t, runtime,
 		ctx,
 		provider.ID(),
 		catalogapplication.UpdateProviderRequest{
@@ -384,7 +384,7 @@ func TestRuntimeInstalledExternalProviderEndToEnd(t *testing.T) {
 	if runtime.externalProcesses.Running(installationID) {
 		t.Fatal("offline Credential usage check restarted disabled plugin process")
 	}
-	if err := runtime.EnsureConfiguredProvider(ctx, provider.ID()); err == nil ||
+	if err := activateConfiguredProviderTest(t, runtime, ctx, provider.ID()); err == nil ||
 		!strings.Contains(err.Error(), "disabled") {
 		t.Fatalf("EnsureConfiguredProvider(disabled) error = %v", err)
 	}
@@ -403,7 +403,7 @@ func TestRuntimeInstalledExternalProviderEndToEnd(t *testing.T) {
 	if runtime.executors.HasProvider(provider.ID()) {
 		t.Fatal("enable unexpectedly activated Provider before sync")
 	}
-	if _, err := runtime.SyncConfiguredProvider(ctx, provider.ID()); err != nil {
+	if _, err := syncConfiguredProviderTest(t, runtime, ctx, provider.ID()); err != nil {
 		t.Fatalf("SyncConfiguredProvider(after enable) error = %v", err)
 	}
 	if !runtime.executors.HasProvider(provider.ID()) {

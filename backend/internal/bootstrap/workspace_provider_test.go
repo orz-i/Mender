@@ -43,7 +43,7 @@ func TestWorkspaceProviderRuntimeComposesProfilePolicyAndAudit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	provider, err := runtime.RegisterConfiguredProvider(
+	provider, err := registerConfiguredProviderTest(t, runtime,
 		ctx,
 		catalogapplication.RegisterProviderRequest{
 			Namespace:   "local-workspace",
@@ -56,7 +56,7 @@ func TestWorkspaceProviderRuntimeComposesProfilePolicyAndAudit(t *testing.T) {
 		t.Fatalf("RegisterConfiguredProvider() error = %v", err)
 	}
 
-	firstSync, err := runtime.SyncConfiguredProvider(ctx, provider.ID())
+	firstSync, err := syncConfiguredProviderTest(t, runtime, ctx, provider.ID())
 	if err != nil {
 		t.Fatalf("SyncConfiguredProvider() error = %v", err)
 	}
@@ -83,7 +83,7 @@ func TestWorkspaceProviderRuntimeComposesProfilePolicyAndAudit(t *testing.T) {
 		}
 	}
 
-	secondSync, err := runtime.SyncConfiguredProvider(ctx, provider.ID())
+	secondSync, err := syncConfiguredProviderTest(t, runtime, ctx, provider.ID())
 	if err != nil {
 		t.Fatalf("second SyncConfiguredProvider() error = %v", err)
 	}

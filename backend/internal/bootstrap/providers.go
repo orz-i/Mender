@@ -10,6 +10,7 @@ import (
 
 	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
+	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
 	providerconfigstore "github.com/orz-i/Mender/backend/internal/providerplugin/configstore"
 	installationdomain "github.com/orz-i/Mender/backend/internal/providerplugin/installation/domain"
@@ -305,31 +306,19 @@ func (r *Runtime) ListProviderConfigs(
 }
 
 // RegisterConfiguredProvider persists canonical Provider metadata and a
-// plugin-owned configuration. Configuration persistence failure is compensated
-// by removing the newly-created canonical Provider.
+// plugin-owned configuration. Any plugin code runs only after Provider
+// activation admission succeeds.
 func (r *Runtime) RegisterConfiguredProvider(
 	ctx context.Context,
 	request catalogapplication.RegisterProviderRequest,
 	pluginID providerplugin.ID,
 	rawConfig json.RawMessage,
+	governanceContext governancedomain.Context,
 ) (catalogdomain.Provider, error) {
 	plugin, descriptor, err := r.resolveProviderPlugin(pluginID)
 	if err != nil {
 		return catalogdomain.Provider{}, fmt.Errorf(
 			"register configured provider: %w",
-			err,
-		)
-	}
-	if err := plugin.ValidateConfig(ctx, cloneRawJSON(rawConfig)); err != nil {
-		return catalogdomain.Provider{}, fmt.Errorf(
-			"register configured provider: validate config: %w",
-			err,
-		)
-	}
-	metadata, err := plugin.InspectConfig(ctx, cloneRawJSON(rawConfig))
-	if err != nil {
-		return catalogdomain.Provider{}, fmt.Errorf(
-			"register configured provider: inspect config: %w",
 			err,
 		)
 	}
@@ -355,21 +344,54 @@ func (r *Runtime) RegisterConfiguredProvider(
 			),
 		)
 	}
-	config, err = config.WithMetadata(metadata)
-	if err != nil {
-		removeErr := r.Catalog.RemoveProvider.Execute(ctx, provider.ID())
-		return catalogdomain.Provider{}, errors.Join(
-			fmt.Errorf("register configured provider: normalize config metadata: %w", err),
-			wrapOptionalError(
-				"register configured provider: compensate provider removal",
-				removeErr,
-			),
+
+	activationErr := r.admitProviderActivation(
+		ctx,
+		provider.ID(),
+		governanceContext,
+		func(operationCtx context.Context) error {
+			if err := plugin.ValidateConfig(
+				operationCtx,
+				cloneRawJSON(rawConfig),
+			); err != nil {
+				return fmt.Errorf(
+					"register configured provider: validate config: %w",
+					err,
+				)
+			}
+			metadata, err := plugin.InspectConfig(
+				operationCtx,
+				cloneRawJSON(rawConfig),
+			)
+			if err != nil {
+				return fmt.Errorf(
+					"register configured provider: inspect config: %w",
+					err,
+				)
+			}
+			nextConfig, err := config.WithMetadata(metadata)
+			if err != nil {
+				return fmt.Errorf(
+					"register configured provider: normalize config metadata: %w",
+					err,
+				)
+			}
+			if err := r.providerConfigs.Save(operationCtx, nextConfig); err != nil {
+				return fmt.Errorf(
+					"register configured provider: save config: %w",
+					err,
+				)
+			}
+			return nil
+		},
+	)
+	if activationErr != nil {
+		removeErr := r.Catalog.RemoveProvider.Execute(
+			context.WithoutCancel(ctx),
+			provider.ID(),
 		)
-	}
-	if err := r.providerConfigs.Save(ctx, config); err != nil {
-		removeErr := r.Catalog.RemoveProvider.Execute(ctx, provider.ID())
 		return catalogdomain.Provider{}, errors.Join(
-			fmt.Errorf("register configured provider: save config: %w", err),
+			activationErr,
 			wrapOptionalError(
 				"register configured provider: compensate provider removal",
 				removeErr,
@@ -380,14 +402,15 @@ func (r *Runtime) RegisterConfiguredProvider(
 }
 
 // RegisterInstalledProvider persists a Provider pinned to one exact external
-// plugin installation. It is intentionally an internal Runtime primitive until
-// management adapters expose installation-aware creation.
+// plugin installation. Descriptor resolution is offline; any plugin process/RPC
+// runs only after Provider activation admission succeeds.
 func (r *Runtime) RegisterInstalledProvider(
 	ctx context.Context,
 	request catalogapplication.RegisterProviderRequest,
 	pluginID providerplugin.ID,
 	installationID providerplugin.InstallationID,
 	rawConfig json.RawMessage,
+	governanceContext governancedomain.Context,
 ) (catalogdomain.Provider, error) {
 	if r == nil || r.externalResolver == nil {
 		return catalogdomain.Provider{}, fmt.Errorf(
@@ -409,25 +432,11 @@ func (r *Runtime) RegisterInstalledProvider(
 			pluginID,
 		)
 	}
-	if err := resolved.Plugin.ValidateConfig(ctx, cloneRawJSON(rawConfig)); err != nil {
-		return catalogdomain.Provider{}, fmt.Errorf(
-			"register installed provider: validate config: %w",
-			err,
-		)
-	}
-	metadata, err := resolved.Plugin.InspectConfig(ctx, cloneRawJSON(rawConfig))
-	if err != nil {
-		return catalogdomain.Provider{}, fmt.Errorf(
-			"register installed provider: inspect config: %w",
-			err,
-		)
-	}
 
 	provider, err := r.Catalog.RegisterProvider.Execute(ctx, request)
 	if err != nil {
 		return catalogdomain.Provider{}, err
 	}
-
 	config, err := providerplugin.NewInstalledConfiguration(
 		provider.ID(),
 		resolved.Descriptor.ID,
@@ -445,21 +454,54 @@ func (r *Runtime) RegisterInstalledProvider(
 			),
 		)
 	}
-	config, err = config.WithMetadata(metadata)
-	if err != nil {
-		removeErr := r.Catalog.RemoveProvider.Execute(ctx, provider.ID())
-		return catalogdomain.Provider{}, errors.Join(
-			fmt.Errorf("register installed provider: normalize config metadata: %w", err),
-			wrapOptionalError(
-				"register installed provider: compensate provider removal",
-				removeErr,
-			),
+
+	activationErr := r.admitProviderActivation(
+		ctx,
+		provider.ID(),
+		governanceContext,
+		func(operationCtx context.Context) error {
+			if err := resolved.Plugin.ValidateConfig(
+				operationCtx,
+				cloneRawJSON(rawConfig),
+			); err != nil {
+				return fmt.Errorf(
+					"register installed provider: validate config: %w",
+					err,
+				)
+			}
+			metadata, err := resolved.Plugin.InspectConfig(
+				operationCtx,
+				cloneRawJSON(rawConfig),
+			)
+			if err != nil {
+				return fmt.Errorf(
+					"register installed provider: inspect config: %w",
+					err,
+				)
+			}
+			nextConfig, err := config.WithMetadata(metadata)
+			if err != nil {
+				return fmt.Errorf(
+					"register installed provider: normalize config metadata: %w",
+					err,
+				)
+			}
+			if err := r.providerConfigs.Save(operationCtx, nextConfig); err != nil {
+				return fmt.Errorf(
+					"register installed provider: save config: %w",
+					err,
+				)
+			}
+			return nil
+		},
+	)
+	if activationErr != nil {
+		removeErr := r.Catalog.RemoveProvider.Execute(
+			context.WithoutCancel(ctx),
+			provider.ID(),
 		)
-	}
-	if err := r.providerConfigs.Save(ctx, config); err != nil {
-		removeErr := r.Catalog.RemoveProvider.Execute(ctx, provider.ID())
 		return catalogdomain.Provider{}, errors.Join(
-			fmt.Errorf("register installed provider: save config: %w", err),
+			activationErr,
 			wrapOptionalError(
 				"register installed provider: compensate provider removal",
 				removeErr,
@@ -470,12 +512,14 @@ func (r *Runtime) RegisterInstalledProvider(
 }
 
 // UpdateConfiguredProvider updates canonical metadata and plugin configuration
-// while preserving Provider identity and PluginID.
+// while preserving Provider identity and PluginID. Plugin semantic work is
+// admitted as provider.activate before any plugin process/RPC can run.
 func (r *Runtime) UpdateConfiguredProvider(
 	ctx context.Context,
 	providerID catalogdomain.ProviderID,
 	request catalogapplication.UpdateProviderRequest,
 	rawConfig json.RawMessage,
+	governanceContext governancedomain.Context,
 ) (catalogdomain.Provider, error) {
 	currentProvider, err := r.Catalog.GetProvider.Execute(ctx, providerID)
 	if err != nil {
@@ -503,20 +547,6 @@ func (r *Runtime) UpdateConfiguredProvider(
 			err,
 		)
 	}
-	if err := resolved.Plugin.ValidateConfig(ctx, cloneRawJSON(rawConfig)); err != nil {
-		return catalogdomain.Provider{}, fmt.Errorf(
-			"update configured provider: validate config: %w",
-			err,
-		)
-	}
-	metadata, err := resolved.Plugin.InspectConfig(ctx, cloneRawJSON(rawConfig))
-	if err != nil {
-		return catalogdomain.Provider{}, fmt.Errorf(
-			"update configured provider: inspect config: %w",
-			err,
-		)
-	}
-
 	nextConfig, err := updatedProviderConfiguration(
 		providerID,
 		currentConfig,
@@ -529,31 +559,75 @@ func (r *Runtime) UpdateConfiguredProvider(
 			err,
 		)
 	}
-	nextConfig, err = nextConfig.WithMetadata(metadata)
-	if err != nil {
-		return catalogdomain.Provider{}, fmt.Errorf(
-			"update configured provider: normalize config metadata: %w",
-			err,
-		)
-	}
-	if err := r.providerConfigs.Save(ctx, nextConfig); err != nil {
-		return catalogdomain.Provider{}, fmt.Errorf(
-			"update configured provider: save config: %w",
-			err,
-		)
-	}
 
-	request.ProviderID = providerID
-	updated, err := r.Catalog.UpdateProvider.Execute(ctx, request)
-	if err != nil {
-		restoreErr := r.providerConfigs.Save(ctx, currentConfig)
-		return catalogdomain.Provider{}, errors.Join(
-			fmt.Errorf("update configured provider: metadata: %w", err),
-			wrapOptionalError(
-				"update configured provider: restore config",
-				restoreErr,
-			),
-		)
+	var updated catalogdomain.Provider
+	activationErr := r.admitProviderActivation(
+		ctx,
+		providerID,
+		governanceContext,
+		func(operationCtx context.Context) error {
+			if err := resolved.Plugin.ValidateConfig(
+				operationCtx,
+				cloneRawJSON(rawConfig),
+			); err != nil {
+				return fmt.Errorf(
+					"update configured provider: validate config: %w",
+					err,
+				)
+			}
+			metadata, err := resolved.Plugin.InspectConfig(
+				operationCtx,
+				cloneRawJSON(rawConfig),
+			)
+			if err != nil {
+				return fmt.Errorf(
+					"update configured provider: inspect config: %w",
+					err,
+				)
+			}
+			nextConfigWithMetadata, err := nextConfig.WithMetadata(metadata)
+			if err != nil {
+				return fmt.Errorf(
+					"update configured provider: normalize config metadata: %w",
+					err,
+				)
+			}
+			if err := r.providerConfigs.Save(
+				operationCtx,
+				nextConfigWithMetadata,
+			); err != nil {
+				return fmt.Errorf(
+					"update configured provider: save config: %w",
+					err,
+				)
+			}
+
+			request.ProviderID = providerID
+			updated, err = r.Catalog.UpdateProvider.Execute(
+				operationCtx,
+				request,
+			)
+			if err != nil {
+				restoreErr := r.providerConfigs.Save(
+					context.WithoutCancel(operationCtx),
+					currentConfig,
+				)
+				return errors.Join(
+					fmt.Errorf(
+						"update configured provider: metadata: %w",
+						err,
+					),
+					wrapOptionalError(
+						"update configured provider: restore config",
+						restoreErr,
+					),
+				)
+			}
+			return nil
+		},
+	)
+	if activationErr != nil {
+		return catalogdomain.Provider{}, activationErr
 	}
 	return updated, nil
 }
@@ -562,7 +636,7 @@ func (r *Runtime) UpdateConfiguredProvider(
 // verified installation of the same PluginID while preserving canonical
 // Provider identity. The target Tool snapshot is proven before the persisted pin
 // and execution route are retired from the current installation.
-func (r *Runtime) RebindProviderInstallation(
+func (r *Runtime) rebindProviderInstallation(
 	ctx context.Context,
 	providerID catalogdomain.ProviderID,
 	targetInstallationID providerplugin.InstallationID,
@@ -754,7 +828,7 @@ func (r *Runtime) RebindProviderInstallation(
 
 // SyncConfiguredProvider reloads the current Provider plugin instance and
 // atomically refreshes its canonical Tool snapshot.
-func (r *Runtime) SyncConfiguredProvider(
+func (r *Runtime) syncConfiguredProvider(
 	ctx context.Context,
 	providerID catalogdomain.ProviderID,
 ) (catalogapplication.SyncProviderToolsResult, error) {
@@ -781,21 +855,6 @@ func (r *Runtime) SyncConfiguredProvider(
 		)
 	}
 	return result, nil
-}
-
-// EnsureConfiguredProvider makes the Provider's current plugin instance
-// available for execution without refreshing Catalog metadata.
-func (r *Runtime) EnsureConfiguredProvider(
-	ctx context.Context,
-	providerID catalogdomain.ProviderID,
-) error {
-	if _, err := r.Catalog.GetProvider.Execute(ctx, providerID); err != nil {
-		return fmt.Errorf("ensure configured provider: provider: %w", err)
-	}
-	if _, err := r.providerInstances.Ensure(ctx, providerID); err != nil {
-		return fmt.Errorf("ensure configured provider: %w", err)
-	}
-	return nil
 }
 
 // DeleteConfiguredProvider removes generic Provider configuration and canonical

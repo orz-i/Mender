@@ -92,7 +92,7 @@ func (r *Runtime) CallConfiguredTool(
 		}
 		return invocationapplication.InvokeToolResponse{}, err
 	}
-	if err := r.EnsureConfiguredProvider(ctx, tool.ProviderID()); err != nil {
+	if err := r.activateConfiguredProvider(ctx, tool.ProviderID(), executionContext); err != nil {
 		return invocationapplication.InvokeToolResponse{}, fmt.Errorf("activate tool provider: %w", err)
 	}
 	return r.InvokeTool.Execute(ctx, request)

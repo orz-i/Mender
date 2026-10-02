@@ -18,6 +18,7 @@ import (
 	mcpconfigstore "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/configstore"
 	policyapplication "github.com/orz-i/Mender/backend/internal/policy/application"
 	profileapplication "github.com/orz-i/Mender/backend/internal/profile/application"
+	provideractivationapplication "github.com/orz-i/Mender/backend/internal/provideractivation/application"
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
 	providerconfigstore "github.com/orz-i/Mender/backend/internal/providerplugin/configstore"
 	installationapplication "github.com/orz-i/Mender/backend/internal/providerplugin/installation/application"
@@ -255,7 +256,9 @@ func writeKnownError(w http.ResponseWriter, err error) {
 		writeAPIError(w, http.StatusServiceUnavailable, "credential_unavailable", err)
 
 	case errors.Is(err, invocationapplication.ErrPolicyDenied),
-		errors.Is(err, invocationapplication.ErrApprovalDenied):
+		errors.Is(err, invocationapplication.ErrApprovalDenied),
+		errors.Is(err, provideractivationapplication.ErrPolicyDenied),
+		errors.Is(err, provideractivationapplication.ErrApprovalDenied):
 		writeAPIError(w, http.StatusForbidden, "policy_denied", err)
 
 	default:

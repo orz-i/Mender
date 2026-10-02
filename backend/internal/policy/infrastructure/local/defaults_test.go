@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
+	governanceapplication "github.com/orz-i/Mender/backend/internal/governance/application"
 )
 
 func TestRejectApprovalFailsClosed(t *testing.T) {
@@ -12,7 +12,7 @@ func TestRejectApprovalFailsClosed(t *testing.T) {
 
 	approved, err := (RejectApproval{}).Approve(
 		context.Background(),
-		invocationapplication.ApprovalRequest{},
+		governanceapplication.ApprovalRequest{},
 	)
 	if err != nil {
 		t.Fatal(err)

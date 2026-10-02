@@ -422,7 +422,7 @@ paths:
 	if err != nil {
 		t.Fatal(err)
 	}
-	provider, err := runtime.RegisterConfiguredProvider(
+	provider, err := registerConfiguredProviderTest(t, runtime,
 		ctx,
 		catalogapplication.RegisterProviderRequest{
 			Namespace:   "openapi-demo",
@@ -434,7 +434,7 @@ paths:
 	if err != nil {
 		t.Fatalf("RegisterConfiguredProvider() error = %v", err)
 	}
-	syncResult, err := runtime.SyncConfiguredProvider(ctx, provider.ID())
+	syncResult, err := syncConfiguredProviderTest(t, runtime, ctx, provider.ID())
 	if err != nil {
 		t.Fatalf("SyncConfiguredProvider() error = %v", err)
 	}
@@ -483,7 +483,7 @@ paths:
 	}
 
 	sourceRevision.Store(2)
-	syncResult, err = runtime.SyncConfiguredProvider(ctx, provider.ID())
+	syncResult, err = syncConfiguredProviderTest(t, runtime, ctx, provider.ID())
 	if err != nil {
 		t.Fatalf("refresh sync error = %v", err)
 	}
@@ -509,7 +509,7 @@ paths:
 	}
 
 	sourceRevision.Store(3)
-	syncResult, err = runtime.SyncConfiguredProvider(ctx, provider.ID())
+	syncResult, err = syncConfiguredProviderTest(t, runtime, ctx, provider.ID())
 	if err != nil {
 		t.Fatalf("removal sync error = %v", err)
 	}
@@ -531,7 +531,7 @@ func TestRegisterAndUpdateConfiguredProviderPreservePluginIdentity(t *testing.T)
 			Args:       []string{"--stdio"},
 		},
 	})
-	provider, err := runtime.RegisterConfiguredProvider(
+	provider, err := registerConfiguredProviderTest(t, runtime,
 		ctx,
 		catalogapplication.RegisterProviderRequest{
 			Namespace:   "generic",
@@ -559,7 +559,7 @@ func TestRegisterAndUpdateConfiguredProviderPreservePluginIdentity(t *testing.T)
 			Endpoint: "https://example.test/mcp",
 		},
 	})
-	updated, err := runtime.UpdateConfiguredProvider(
+	updated, err := updateConfiguredProviderTest(t, runtime,
 		ctx,
 		provider.ID(),
 		catalogapplication.UpdateProviderRequest{
@@ -607,7 +607,7 @@ func TestRegisterConfiguredProviderRejectsUnknownPlugin(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = runtime.RegisterConfiguredProvider(
+	_, err = registerConfiguredProviderTest(t, runtime,
 		context.Background(),
 		catalogapplication.RegisterProviderRequest{
 			Namespace:   "unknown",
@@ -640,7 +640,7 @@ func TestDeleteConfiguredProviderRemovesGenericState(t *testing.T) {
 			Executable: "mcp-server",
 		},
 	})
-	provider, err := runtime.RegisterConfiguredProvider(
+	provider, err := registerConfiguredProviderTest(t, runtime,
 		ctx,
 		catalogapplication.RegisterProviderRequest{
 			Namespace:   "delete-me",
@@ -711,7 +711,7 @@ func TestConfiguredProviderRuntimeReusesAndReplacesPluginInstances(t *testing.T)
 		t.Fatalf("Register(test plugin) error = %v", err)
 	}
 
-	provider, err := runtime.RegisterConfiguredProvider(
+	provider, err := registerConfiguredProviderTest(t, runtime,
 		ctx,
 		catalogapplication.RegisterProviderRequest{
 			Namespace:   "runtime-test",
@@ -723,7 +723,7 @@ func TestConfiguredProviderRuntimeReusesAndReplacesPluginInstances(t *testing.T)
 	if err != nil {
 		t.Fatalf("RegisterConfiguredProvider() error = %v", err)
 	}
-	syncResult, err := runtime.SyncConfiguredProvider(ctx, provider.ID())
+	syncResult, err := syncConfiguredProviderTest(t, runtime, ctx, provider.ID())
 	if err != nil {
 		t.Fatalf("SyncConfiguredProvider() error = %v", err)
 	}
@@ -782,7 +782,7 @@ func TestConfiguredProviderRuntimeReusesAndReplacesPluginInstances(t *testing.T)
 		)
 	}
 
-	if _, err := runtime.UpdateConfiguredProvider(
+	if _, err := updateConfiguredProviderTest(t, runtime,
 		ctx,
 		provider.ID(),
 		catalogapplication.UpdateProviderRequest{

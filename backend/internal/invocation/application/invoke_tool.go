@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	governanceapplication "github.com/orz-i/Mender/backend/internal/governance/application"
 	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	"time"
 
@@ -37,7 +38,7 @@ type InvokeTool struct {
 	arguments             ArgumentValidator
 	facts                 GovernanceFactExtractor
 	policy                PolicyEvaluator
-	approvals             ApprovalGate
+	approvals             governanceapplication.ApprovalGate
 	executionGuard        ExecutionGuard
 	bindingExecutionGuard BindingExecutionGuard
 	resultGuard           ResultGuard
@@ -57,7 +58,7 @@ func NewInvokeTool(
 	arguments ArgumentValidator,
 	facts GovernanceFactExtractor,
 	policy PolicyEvaluator,
-	approvals ApprovalGate,
+	approvals governanceapplication.ApprovalGate,
 	executionGuard ExecutionGuard,
 	bindingExecutionGuard BindingExecutionGuard,
 	resultGuard ResultGuard,
@@ -331,11 +332,14 @@ func (uc InvokeTool) Execute(
 		return response, nil
 
 	case policydomain.DecisionRequireApproval:
-		approved, approvalErr := uc.approvals.Approve(ctx, ApprovalRequest{
-			InvocationID: invocationID,
-			Tool:         tool,
-			Context:      request.Context,
-			Decision:     decision,
+		toolID := tool.ID()
+		approved, approvalErr := uc.approvals.Approve(ctx, governanceapplication.ApprovalRequest{
+			OperationID: invocationID.String(),
+			Action:      governancedomain.ActionToolInvoke,
+			Context:     request.Context,
+			ProviderID:  tool.ProviderID(),
+			ToolID:      &toolID,
+			Decision:    decision,
 		})
 		if approvalErr != nil {
 			recordErr := uc.record(

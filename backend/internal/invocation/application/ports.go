@@ -51,11 +51,6 @@ type PolicyEvaluator interface {
 	Evaluate(context.Context, PolicyRequest) (policydomain.Decision, error)
 }
 
-// ApprovalGate handles policy decisions that require explicit approval.
-type ApprovalGate interface {
-	Approve(context.Context, ApprovalRequest) (bool, error)
-}
-
 // ExecutionGuard controls entry into provider execution critical sections.
 type ExecutionGuard interface {
 	Acquire(context.Context, ExecutionGuardRequest) (release func(), err error)
@@ -123,14 +118,6 @@ type PolicyRequest struct {
 	Context               governancedomain.Context
 	Facts                 invocationdomain.GovernanceFacts
 	HasCredentialResolver bool
-}
-
-// ApprovalRequest intentionally excludes arguments and secret material.
-type ApprovalRequest struct {
-	InvocationID invocationdomain.InvocationID
-	Tool         catalogdomain.Tool
-	Context      governancedomain.Context
-	Decision     policydomain.Decision
 }
 
 // ExecutionGuardRequest identifies the governed execution entering a critical section.

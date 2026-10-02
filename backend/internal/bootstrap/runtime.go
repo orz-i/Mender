@@ -25,6 +25,8 @@ import (
 	invocationrouter "github.com/orz-i/Mender/backend/internal/invocation/infrastructure/router"
 	mcpconfigstore "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/configstore"
 	policylocal "github.com/orz-i/Mender/backend/internal/policy/infrastructure/local"
+	provideractivationapplication "github.com/orz-i/Mender/backend/internal/provideractivation/application"
+	provideractivationidentity "github.com/orz-i/Mender/backend/internal/provideractivation/infrastructure/identity"
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
 	providerbuiltin "github.com/orz-i/Mender/backend/internal/providerplugin/builtin"
 	providerconfigstore "github.com/orz-i/Mender/backend/internal/providerplugin/configstore"
@@ -51,14 +53,15 @@ type RuntimeOptions struct {
 // Runtime composes Catalog, Profile persistence, Provider config persistence,
 // and Mender's shared invocation pipeline.
 type Runtime struct {
-	Catalog     *Catalog
-	Credentials *Credentials
-	Profiles    *Profiles
-	Tunnels     *Tunnels
-	Policy      *Policies
-	Skills      *Skills
-	InvokeTool  invocationapplication.InvokeTool
-	ListAudit   auditapplication.ListRecords
+	Catalog                     *Catalog
+	Credentials                 *Credentials
+	Profiles                    *Profiles
+	Tunnels                     *Tunnels
+	Policy                      *Policies
+	Skills                      *Skills
+	InvokeTool                  invocationapplication.InvokeTool
+	ListAudit                   auditapplication.ListRecords
+	ListProviderActivationAudit auditapplication.ListProviderActivations
 
 	audit               *auditsqlite.Store
 	executors           *invocationrouter.Router
@@ -71,6 +74,7 @@ type Runtime struct {
 	pluginPackages      *installationlocalfs.Store
 	externalProcesses   *providerexternal.Supervisor
 	providerInstances   *providerplugin.Manager
+	providerActivation  provideractivationapplication.Admit
 	ownerPrincipal      governancedomain.Principal
 
 	closersMu sync.Mutex
@@ -329,6 +333,14 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 	}
 
 	ids := invocationidentity.NewGenerator()
+	approvalGate := policylocal.RejectApproval{}
+	providerActivation := provideractivationapplication.NewAdmit(
+		policies.Evaluate,
+		approvalGate,
+		auditStore,
+		provideractivationidentity.NewGenerator(),
+		systemClock{},
+	)
 
 	schemaValidator := invocationjsonschema.Validator{}
 	executionGuard := options.ExecutionGuard
@@ -349,7 +361,7 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		schemaValidator,
 		newInvocationGovernanceFactExtractor(providerConfigs, providerPlugins),
 		newInvocationPolicyEvaluator(policies.Evaluate),
-		policylocal.RejectApproval{},
+		approvalGate,
 		executionGuard,
 		bindingExecutionGuard,
 		invocationresultguard.New(schemaValidator, options.MaxResultBytes),
@@ -364,27 +376,29 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 
 	tunnelsOwned = false
 	return &Runtime{
-		Catalog:             catalog,
-		Credentials:         credentials,
-		Profiles:            profiles,
-		Tunnels:             tunnels,
-		Policy:              policies,
-		Skills:              skills,
-		InvokeTool:          invokeTool,
-		ListAudit:           auditapplication.NewListRecords(auditStore),
-		audit:               auditStore,
-		executors:           executors,
-		mcpConfigs:          configs,
-		providerPlugins:     providerPlugins,
-		providerResolver:    providerResolver,
-		externalResolver:    externalResolver,
-		providerConfigs:     providerConfigs,
-		pluginInstallations: pluginInstallations,
-		pluginPackages:      pluginPackages,
-		externalProcesses:   externalProcesses,
-		providerInstances:   providerInstances,
-		ownerPrincipal:      ownerPrincipal,
-		mcpServers:          make(map[string]*managedMCPServer),
+		Catalog:                     catalog,
+		Credentials:                 credentials,
+		Profiles:                    profiles,
+		Tunnels:                     tunnels,
+		Policy:                      policies,
+		Skills:                      skills,
+		InvokeTool:                  invokeTool,
+		ListAudit:                   auditapplication.NewListRecords(auditStore),
+		ListProviderActivationAudit: auditapplication.NewListProviderActivations(auditStore),
+		audit:                       auditStore,
+		executors:                   executors,
+		mcpConfigs:                  configs,
+		providerPlugins:             providerPlugins,
+		providerResolver:            providerResolver,
+		externalResolver:            externalResolver,
+		providerConfigs:             providerConfigs,
+		pluginInstallations:         pluginInstallations,
+		pluginPackages:              pluginPackages,
+		externalProcesses:           externalProcesses,
+		providerInstances:           providerInstances,
+		providerActivation:          providerActivation,
+		ownerPrincipal:              ownerPrincipal,
+		mcpServers:                  make(map[string]*managedMCPServer),
 	}, nil
 }
 

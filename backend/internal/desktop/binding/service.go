@@ -573,7 +573,7 @@ func (s *Service) CreateProvider(
 	}
 	var provider catalogdomain.Provider
 	if strings.TrimSpace(installationID) == "" {
-		provider, err = s.runtime.RegisterConfiguredProvider(
+		provider, err = s.registerConfiguredProvider(
 			s.ctx,
 			registerRequest,
 			id,
@@ -586,7 +586,7 @@ func (s *Service) CreateProvider(
 		if parseErr != nil {
 			return ProviderMutationResponse{}, parseErr
 		}
-		provider, err = s.runtime.RegisterInstalledProvider(
+		provider, err = s.registerInstalledProvider(
 			s.ctx,
 			registerRequest,
 			id,
@@ -597,7 +597,7 @@ func (s *Service) CreateProvider(
 	if err != nil {
 		return ProviderMutationResponse{}, err
 	}
-	result, err := s.runtime.SyncConfiguredProvider(s.ctx, provider.ID())
+	result, err := s.syncConfiguredProvider(s.ctx, provider.ID())
 	if err != nil {
 		return ProviderMutationResponse{}, err
 	}
@@ -629,7 +629,7 @@ func (s *Service) RebindProvider(
 	if err != nil {
 		return ProviderMutationResponse{}, fmt.Errorf("encode provider config: %w", err)
 	}
-	result, err := s.runtime.RebindProviderInstallation(
+	result, err := s.rebindProviderInstallation(
 		s.ctx,
 		id,
 		parsedInstallationID,
@@ -690,7 +690,7 @@ func (s *Service) CreateHTTPProvider(
 	if err != nil {
 		return ProviderMutationResponse{}, err
 	}
-	result, err := s.runtime.SyncConfiguredProvider(s.ctx, provider.ID())
+	result, err := s.syncConfiguredProvider(s.ctx, provider.ID())
 	if err != nil {
 		return ProviderMutationResponse{}, err
 	}
@@ -744,7 +744,7 @@ func (s *Service) CreateStdioProvider(
 	if err != nil {
 		return ProviderMutationResponse{}, err
 	}
-	result, err := s.runtime.SyncConfiguredProvider(s.ctx, provider.ID())
+	result, err := s.syncConfiguredProvider(s.ctx, provider.ID())
 	if err != nil {
 		return ProviderMutationResponse{}, err
 	}
@@ -773,7 +773,7 @@ func (s *Service) UpdateConfiguredProvider(
 	if err != nil {
 		return ProviderMutationResponse{}, fmt.Errorf("encode provider config: %w", err)
 	}
-	provider, err := s.runtime.UpdateConfiguredProvider(
+	provider, err := s.updateConfiguredProvider(
 		s.ctx,
 		id,
 		catalogapplication.UpdateProviderRequest{
@@ -785,7 +785,7 @@ func (s *Service) UpdateConfiguredProvider(
 	if err != nil {
 		return ProviderMutationResponse{}, err
 	}
-	result, err := s.runtime.SyncConfiguredProvider(s.ctx, id)
+	result, err := s.syncConfiguredProvider(s.ctx, id)
 	if err != nil {
 		return ProviderMutationResponse{}, err
 	}
@@ -862,7 +862,7 @@ func (s *Service) UpdateProvider(
 	if err != nil {
 		return ProviderMutationResponse{}, err
 	}
-	result, err := s.runtime.SyncConfiguredProvider(s.ctx, id)
+	result, err := s.syncConfiguredProvider(s.ctx, id)
 	if err != nil {
 		return ProviderMutationResponse{}, err
 	}
@@ -883,7 +883,7 @@ func (s *Service) SyncProvider(providerID string) (SyncResult, error) {
 	if err != nil {
 		return SyncResult{}, err
 	}
-	result, err := s.runtime.SyncConfiguredProvider(s.ctx, id)
+	result, err := s.syncConfiguredProvider(s.ctx, id)
 	if err != nil {
 		return SyncResult{}, err
 	}
@@ -915,7 +915,7 @@ func (s *Service) StartMCPServer(
 	if err != nil {
 		return MCPServerInstance{}, err
 	}
-	instance, err := s.runtime.StartMCPHTTPServer(s.ctx, slug, address)
+	instance, err := s.startMCPHTTPServer(s.ctx, slug, address)
 	if err != nil {
 		return MCPServerInstance{}, err
 	}
@@ -925,7 +925,7 @@ func (s *Service) StartMCPServer(
 func (s *Service) RestartMCPServer(
 	serverID string,
 ) (MCPServerInstance, error) {
-	instance, err := s.runtime.RestartMCPServer(s.ctx, serverID)
+	instance, err := s.restartMCPServer(s.ctx, serverID)
 	if err != nil {
 		return MCPServerInstance{}, err
 	}

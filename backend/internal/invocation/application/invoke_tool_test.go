@@ -14,6 +14,7 @@ import (
 	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
+	governanceapplication "github.com/orz-i/Mender/backend/internal/governance/application"
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	policydomain "github.com/orz-i/Mender/backend/internal/policy/domain"
 )
@@ -1520,7 +1521,7 @@ type fakeApproval struct {
 	calls    int
 }
 
-func (f *fakeApproval) Approve(context.Context, ApprovalRequest) (bool, error) {
+func (f *fakeApproval) Approve(context.Context, governanceapplication.ApprovalRequest) (bool, error) {
 	f.calls++
 	return f.approved, f.err
 }

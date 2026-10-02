@@ -111,7 +111,7 @@ func TestCredentialBackedHTTPProviderEnforcesProfileScope(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := runtime.SyncConfiguredMCPProvider(ctx, provider.ID()); err != nil {
+	if _, err := syncConfiguredProviderTest(t, runtime, ctx, provider.ID()); err != nil {
 		t.Fatal(err)
 	}
 	if !authSeen.Load() {
@@ -348,7 +348,7 @@ paths:
 	if err != nil {
 		t.Fatal(err)
 	}
-	provider, err := runtime.RegisterConfiguredProvider(
+	provider, err := registerConfiguredProviderTest(t, runtime,
 		ctx,
 		catalogapplication.RegisterProviderRequest{
 			Namespace:   "openapi-secure",
@@ -360,7 +360,7 @@ paths:
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := runtime.SyncConfiguredProvider(ctx, provider.ID()); err != nil {
+	if _, err := syncConfiguredProviderTest(t, runtime, ctx, provider.ID()); err != nil {
 		t.Fatal(err)
 	}
 	if upstreamCalls.Load() != 0 {

@@ -79,7 +79,7 @@ func TestMCPProviderAndServerShareRuntimePipeline(t *testing.T) {
 		t.Fatalf("ConnectTransport() error = %v", err)
 	}
 
-	syncResult, err := runtime.AttachMCPProvider(ctx, provider.ID(), connection)
+	syncResult, err := runtime.attachMCPProviderMechanism(ctx, provider.ID(), connection)
 	if err != nil {
 		_ = connection.Close()
 		t.Fatalf("AttachMCPProvider() error = %v", err)

@@ -85,86 +85,9 @@ func (r *Runtime) ListMCPProviderConfigs(
 	return r.mcpConfigs.List(ctx)
 }
 
-// ConnectConfiguredMCPProvider connects a persisted Provider configuration.
-//
-// synchronize=false registers an executor without refreshing Catalog metadata.
-// This is used by tool call and serve startup paths.
-func (r *Runtime) ConnectConfiguredMCPProvider(
-	ctx context.Context,
-	providerID catalogdomain.ProviderID,
-	synchronize bool,
-) (catalogapplication.SyncProviderToolsResult, error) {
-	if synchronize {
-		return r.SyncConfiguredProvider(ctx, providerID)
-	}
-	if err := r.EnsureConfiguredProvider(ctx, providerID); err != nil {
-		return catalogapplication.SyncProviderToolsResult{}, err
-	}
-	return catalogapplication.SyncProviderToolsResult{}, nil
-}
-
-// SyncConfiguredMCPProvider connects and refreshes one Provider's Catalog snapshot.
-func (r *Runtime) SyncConfiguredMCPProvider(
-	ctx context.Context,
-	providerID catalogdomain.ProviderID,
-) (catalogapplication.SyncProviderToolsResult, error) {
-	return r.ConnectConfiguredMCPProvider(ctx, providerID, true)
-}
-
-// ActivateConfiguredMCPProvider connects one Provider for execution without resynchronizing.
-func (r *Runtime) ActivateConfiguredMCPProvider(
-	ctx context.Context,
-	providerID catalogdomain.ProviderID,
-) error {
-	_, err := r.ConnectConfiguredMCPProvider(ctx, providerID, false)
-	return err
-}
-
-// ConnectMCPHTTP connects, synchronizes, and registers a remote MCP Provider.
-// On success the Runtime owns the connection and closes it with Runtime.Close.
-func (r *Runtime) ConnectMCPHTTP(
-	ctx context.Context,
-	providerID catalogdomain.ProviderID,
-	config mcpprovider.HTTPConfig,
-) (catalogapplication.SyncProviderToolsResult, error) {
-	connection, err := mcpprovider.ConnectHTTP(ctx, config)
-	if err != nil {
-		return catalogapplication.SyncProviderToolsResult{}, err
-	}
-
-	result, err := r.activateMCPProvider(ctx, providerID, connection, true)
-	if err != nil {
-		_ = connection.Close()
-		return catalogapplication.SyncProviderToolsResult{}, err
-	}
-	return result, nil
-}
-
-// ConnectMCPCommand starts, synchronizes, and registers a local stdio MCP Provider.
-// On success the Runtime owns the process connection and closes it with Runtime.Close.
-func (r *Runtime) ConnectMCPCommand(
-	ctx context.Context,
-	providerID catalogdomain.ProviderID,
-	config mcpprovider.CommandConfig,
-) (catalogapplication.SyncProviderToolsResult, error) {
-	connection, err := mcpprovider.ConnectCommand(ctx, config)
-	if err != nil {
-		return catalogapplication.SyncProviderToolsResult{}, err
-	}
-
-	result, err := r.activateMCPProvider(ctx, providerID, connection, true)
-	if err != nil {
-		_ = connection.Close()
-		return catalogapplication.SyncProviderToolsResult{}, err
-	}
-	return result, nil
-}
-
-// AttachMCPProvider synchronizes and registers an already-connected MCP Provider.
-//
-// This is primarily useful for embedded/in-memory transports. Ownership transfers
-// to Runtime only after successful synchronization and executor registration.
-func (r *Runtime) AttachMCPProvider(
+// attachMCPProviderMechanism is an ungated low-level test/embedding mechanism.
+// Production activation paths must use Provider activation admission.
+func (r *Runtime) attachMCPProviderMechanism(
 	ctx context.Context,
 	providerID catalogdomain.ProviderID,
 	connection *mcpprovider.Connection,

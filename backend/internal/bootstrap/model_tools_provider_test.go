@@ -58,7 +58,7 @@ func TestModelToolsProviderSyncIsLocalAndProfileCredentialScopeBlocksExecution(
 	if err != nil {
 		t.Fatal(err)
 	}
-	provider, err := runtime.RegisterConfiguredProvider(
+	provider, err := registerConfiguredProviderTest(t, runtime,
 		ctx,
 		catalogapplication.RegisterProviderRequest{
 			Namespace:   "research",
@@ -71,7 +71,7 @@ func TestModelToolsProviderSyncIsLocalAndProfileCredentialScopeBlocksExecution(
 		t.Fatalf("RegisterConfiguredProvider() error = %v", err)
 	}
 
-	syncResult, err := runtime.SyncConfiguredProvider(ctx, provider.ID())
+	syncResult, err := syncConfiguredProviderTest(t, runtime, ctx, provider.ID())
 	if err != nil {
 		t.Fatalf(
 			"SyncConfiguredProvider() resolved Credential or contacted provider unexpectedly: %v",
@@ -113,7 +113,7 @@ func TestModelToolsProviderSyncIsLocalAndProfileCredentialScopeBlocksExecution(
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := runtime.UpdateConfiguredProvider(
+	if _, err := updateConfiguredProviderTest(t, runtime,
 		ctx,
 		provider.ID(),
 		catalogapplication.UpdateProviderRequest{
@@ -123,7 +123,7 @@ func TestModelToolsProviderSyncIsLocalAndProfileCredentialScopeBlocksExecution(
 	); err != nil {
 		t.Fatalf("UpdateConfiguredProvider() error = %v", err)
 	}
-	syncResult, err = runtime.SyncConfiguredProvider(ctx, provider.ID())
+	syncResult, err = syncConfiguredProviderTest(t, runtime, ctx, provider.ID())
 	if err != nil {
 		t.Fatalf("SyncConfiguredProvider(after model change) error = %v", err)
 	}

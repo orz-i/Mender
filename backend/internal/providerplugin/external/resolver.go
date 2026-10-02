@@ -96,9 +96,52 @@ func (r *Resolver) ForgetInstallation(id providerplugin.InstallationID) {
 	r.mu.Unlock()
 }
 
-// ResolveInstallation resolves one exact enabled external plugin package without
-// requiring a Provider configuration. This is used by Provider registration and
-// management discovery before a ProviderID exists.
+// ProbeInstallation explicitly executes one newly installed package to verify
+// and snapshot its descriptor before any ProviderID exists. It is installation
+// trust verification, not Provider activation, and must not be used by normal
+// runtime resolution or management discovery.
+func (r *Resolver) ProbeInstallation(
+	ctx context.Context,
+	id providerplugin.InstallationID,
+) (providerplugin.Resolution, error) {
+	installation, err := r.installations.Get(ctx, id)
+	if err != nil {
+		return providerplugin.Resolution{}, fmt.Errorf(
+			"probe provider plugin: installation %s: %w",
+			id,
+			err,
+		)
+	}
+	if err := installation.Validate(); err != nil {
+		return providerplugin.Resolution{}, fmt.Errorf(
+			"probe provider plugin: installation %s: %w",
+			id,
+			err,
+		)
+	}
+	if installation.Status() != installationdomain.StatusEnabled {
+		return providerplugin.Resolution{}, fmt.Errorf(
+			"probe provider plugin: installation %s is %s",
+			installation.ID(),
+			installation.Status(),
+		)
+	}
+	plugin, err := NewPlugin(ctx, installation, r.processes)
+	if err != nil {
+		return providerplugin.Resolution{}, fmt.Errorf(
+			"probe provider plugin: installation %s: %w",
+			installation.ID(),
+			err,
+		)
+	}
+	return providerplugin.Resolution{
+		Plugin:     plugin,
+		Descriptor: plugin.Descriptor(),
+	}, nil
+}
+
+// ResolveInstallation resolves one exact enabled external plugin package from
+// its immutable verified descriptor snapshot without starting plugin code.
 func (r *Resolver) ResolveInstallation(
 	ctx context.Context,
 	id providerplugin.InstallationID,
@@ -142,7 +185,7 @@ func (r *Resolver) ResolveInstallation(
 		}, nil
 	}
 
-	plugin, err := NewPlugin(ctx, installation, r.processes)
+	plugin, err := NewPluginFromVerifiedDescriptor(installation, r.processes)
 	if err != nil {
 		return providerplugin.Resolution{}, fmt.Errorf(
 			"resolve provider plugin: installation %s: %w",

@@ -49,7 +49,7 @@ func (a *app) newServeMCPCommand() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				if err := runtime.ActivateProfileProviders(cmd.Context(), profile); err != nil {
+				if err := activateProfileProvidersCLI(cmd.Context(), runtime, profile); err != nil {
 					return err
 				}
 

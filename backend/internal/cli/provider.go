@@ -107,8 +107,9 @@ func (a *app) newProviderAddExternalCommand() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				provider, err := runtime.RegisterInstalledProvider(
+				provider, err := registerInstalledProviderCLI(
 					cmd.Context(),
+					runtime,
 					catalogapplication.RegisterProviderRequest{
 						Namespace:   namespace,
 						DisplayName: displayName,
@@ -121,8 +122,9 @@ func (a *app) newProviderAddExternalCommand() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				syncResult, err := runtime.SyncConfiguredProvider(
+				syncResult, err := syncConfiguredProviderCLI(
 					cmd.Context(),
+					runtime,
 					provider.ID(),
 				)
 				if err != nil {
@@ -552,8 +554,9 @@ func (a *app) registerConfiguredProvider(
 	raw json.RawMessage,
 ) error {
 	return a.withRuntime(cmd.Context(), func(runtime *bootstrap.Runtime) error {
-		provider, err := runtime.RegisterConfiguredProvider(
+		provider, err := registerConfiguredProviderCLI(
 			cmd.Context(),
+			runtime,
 			catalogapplication.RegisterProviderRequest{
 				Namespace:   namespace,
 				DisplayName: displayName,
@@ -566,8 +569,9 @@ func (a *app) registerConfiguredProvider(
 			return err
 		}
 
-		syncResult, syncErr := runtime.SyncConfiguredProvider(
+		syncResult, syncErr := syncConfiguredProviderCLI(
 			cmd.Context(),
+			runtime,
 			provider.ID(),
 		)
 		if syncErr != nil {
@@ -784,8 +788,9 @@ func (a *app) newProviderRebindCommand() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				result, err := runtime.RebindProviderInstallation(
+				result, err := rebindProviderInstallationCLI(
 					cmd.Context(),
+					runtime,
 					provider.ID(),
 					installationID,
 					raw,
@@ -839,7 +844,7 @@ func (a *app) newProviderSyncCommand() *cobra.Command {
 					return err
 				}
 
-				result, err := runtime.SyncConfiguredProvider(cmd.Context(), provider.ID())
+				result, err := syncConfiguredProviderCLI(cmd.Context(), runtime, provider.ID())
 				if err != nil {
 					return err
 				}

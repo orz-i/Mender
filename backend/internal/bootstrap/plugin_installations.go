@@ -32,7 +32,7 @@ func (r *Runtime) InstallProviderPlugin(
 		return installationdomain.Installation{}, err
 	}
 
-	resolved, err := r.externalResolver.ResolveInstallation(
+	resolved, err := r.externalResolver.ProbeInstallation(
 		ctx,
 		installation.ID(),
 	)

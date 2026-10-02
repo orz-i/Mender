@@ -75,7 +75,7 @@ func TestManagedMCPHTTPServerLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := runtime.SyncConfiguredMCPProvider(ctx, provider.ID()); err != nil {
+	if _, err := syncConfiguredProviderTest(t, runtime, ctx, provider.ID()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -116,7 +116,7 @@ func TestManagedMCPHTTPServerLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	instance, err := runtime.StartMCPHTTPServer(
+	instance, err := startMCPHTTPServerTest(t, runtime,
 		ctx,
 		profile.Slug(),
 		"127.0.0.1:0",
@@ -142,7 +142,7 @@ func TestManagedMCPHTTPServerLifecycle(t *testing.T) {
 	)
 	assertManagedServerExportsTool(t, instance.Endpoint, "upstream__echo")
 
-	restarted, err := runtime.RestartMCPServer(ctx, instance.ServerID)
+	restarted, err := restartMCPServerTest(t, runtime, ctx, instance.ServerID)
 	if err != nil {
 		t.Fatalf("RestartMCPServer() error = %v", err)
 	}
@@ -177,7 +177,7 @@ func TestManagedMCPHTTPServerRejectsNonLoopbackBind(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = runtime.StartMCPHTTPServer(
+	_, err = startMCPHTTPServerTest(t, runtime,
 		context.Background(),
 		slug,
 		"0.0.0.0:8765",
@@ -210,7 +210,7 @@ func TestRuntimeCloseStopsManagedMCPServers(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := runtime.StartMCPHTTPServer(
+	if _, err := startMCPHTTPServerTest(t, runtime,
 		ctx,
 		profile.Slug(),
 		"127.0.0.1:0",
@@ -306,7 +306,7 @@ func TestManagedMCPHTTPServerSupervisesProfileTunnel(t *testing.T) {
 		t.Fatalf("Delete in-use Tunnel Credential error = %v", err)
 	}
 
-	instance, err := runtime.StartMCPHTTPServer(
+	instance, err := startMCPHTTPServerTest(t, runtime,
 		ctx,
 		profile.Slug(),
 		"127.0.0.1:0",
@@ -326,7 +326,7 @@ func TestManagedMCPHTTPServerSupervisesProfileTunnel(t *testing.T) {
 		t.Fatalf("runner start = endpoint %q secret %q", first.endpoint, first.secret)
 	}
 
-	restarted, err := runtime.RestartMCPServer(ctx, instance.ServerID)
+	restarted, err := restartMCPServerTest(t, runtime, ctx, instance.ServerID)
 	if err != nil {
 		t.Fatalf("RestartMCPServer() error = %v", err)
 	}
@@ -420,7 +420,7 @@ func TestManagedMCPHTTPServerRollsBackWhenTunnelStartFails(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := runtime.StartMCPHTTPServer(
+	if _, err := startMCPHTTPServerTest(t, runtime,
 		ctx,
 		profile.Slug(),
 		"127.0.0.1:0",

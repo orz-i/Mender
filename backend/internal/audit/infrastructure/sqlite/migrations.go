@@ -28,7 +28,7 @@ func migrate(ctx context.Context, db *sql.DB) error {
 	).Scan(&recordedVersion); err != nil {
 		return fmt.Errorf("check audit schema version: %w", err)
 	}
-	const latestSupportedVersion = 4
+	const latestSupportedVersion = 5
 	if recordedVersion.Valid && recordedVersion.Int64 > latestSupportedVersion {
 		return fmt.Errorf(
 			"audit schema version %d is newer than supported version %d",
@@ -224,6 +224,43 @@ func migrate(ctx context.Context, db *sql.DB) error {
 			time.Now().UTC().Format(time.RFC3339Nano),
 		); err != nil {
 			return fmt.Errorf("record audit migration 4: %w", err)
+		}
+	}
+
+	applied = 0
+	if err := tx.QueryRowContext(
+		ctx,
+		"SELECT COUNT(*) FROM audit_schema_migrations WHERE version = 5",
+	).Scan(&applied); err != nil {
+		return fmt.Errorf("check audit migration 5: %w", err)
+	}
+	if applied == 0 {
+		if _, err := tx.ExecContext(ctx, `CREATE TABLE provider_activation_audit (
+			activation_id TEXT PRIMARY KEY,
+			provider_id TEXT NOT NULL,
+			action TEXT NOT NULL,
+			principal_kind TEXT NOT NULL,
+			principal_ref TEXT NOT NULL,
+			origin TEXT NOT NULL,
+			scope_kind TEXT NOT NULL,
+			scope_reference TEXT NOT NULL,
+			started_at TEXT NOT NULL,
+			finished_at TEXT NOT NULL,
+			policy_kind TEXT NOT NULL,
+			policy_reason TEXT NOT NULL,
+			approval TEXT NOT NULL,
+			status TEXT NOT NULL,
+			error_class TEXT NOT NULL,
+			error_summary TEXT NOT NULL
+		)`); err != nil {
+			return fmt.Errorf("apply audit migration 5: %w", err)
+		}
+		if _, err := tx.ExecContext(
+			ctx,
+			"INSERT INTO audit_schema_migrations(version, applied_at) VALUES (5, ?)",
+			time.Now().UTC().Format(time.RFC3339Nano),
+		); err != nil {
+			return fmt.Errorf("record audit migration 5: %w", err)
 		}
 	}
 

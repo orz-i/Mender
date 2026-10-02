@@ -513,7 +513,7 @@ func TestMCPToolFailureRoundTripsThroughMender(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	syncResult, err := runtime.AttachMCPProvider(ctx, provider.ID(), connection)
+	syncResult, err := runtime.attachMCPProviderMechanism(ctx, provider.ID(), connection)
 	if err != nil {
 		_ = connection.Close()
 		t.Fatal(err)

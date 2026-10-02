@@ -14,6 +14,7 @@ import (
 	"time"
 
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
+	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 	tunnelapplication "github.com/orz-i/Mender/backend/internal/tunnel/application"
 )
@@ -64,6 +65,7 @@ func (r *Runtime) StartMCPHTTPServer(
 	ctx context.Context,
 	profileSlug profiledomain.Slug,
 	address string,
+	controlContext governancedomain.Context,
 ) (MCPServerInstance, error) {
 	address = strings.TrimSpace(address)
 	if err := validateLoopbackMCPAddress(address); err != nil {
@@ -74,7 +76,11 @@ func (r *Runtime) StartMCPHTTPServer(
 	if err != nil {
 		return MCPServerInstance{}, fmt.Errorf("start MCP server: profile: %w", err)
 	}
-	if err := r.ActivateProfileProviders(ctx, profile); err != nil {
+	activationContext, err := profileActivationContext(controlContext, profile)
+	if err != nil {
+		return MCPServerInstance{}, fmt.Errorf("start MCP server: governance context: %w", err)
+	}
+	if err := r.ActivateProfileProviders(ctx, profile, activationContext); err != nil {
 		return MCPServerInstance{}, fmt.Errorf("start MCP server: %w", err)
 	}
 	adapter, err := r.NewMCPServer(ctx, profile)
@@ -187,6 +193,7 @@ func (r *Runtime) StopMCPServer(
 func (r *Runtime) RestartMCPServer(
 	ctx context.Context,
 	serverID string,
+	controlContext governancedomain.Context,
 ) (MCPServerInstance, error) {
 	r.mcpServersMu.Lock()
 	managed, ok := r.mcpServers[serverID]
@@ -203,13 +210,21 @@ func (r *Runtime) RestartMCPServer(
 	if err := r.StopMCPServer(ctx, serverID); err != nil {
 		return MCPServerInstance{}, err
 	}
-	return r.StartMCPHTTPServer(ctx, profileSlug, address)
+	return r.StartMCPHTTPServer(ctx, profileSlug, address, controlContext)
 }
 
 func (r *Runtime) ActivateProfileProviders(
 	ctx context.Context,
 	profile profiledomain.Profile,
+	governanceContext governancedomain.Context,
 ) error {
+	if err := governanceContext.Validate(); err != nil {
+		return fmt.Errorf("activate profile providers: governance context: %w", err)
+	}
+	if governanceContext.Scope().Kind() != governancedomain.ScopeProfile ||
+		governanceContext.Scope().Reference() != profile.ID().String() {
+		return fmt.Errorf("activate profile providers: governance scope must match Profile %s", profile.ID())
+	}
 	providerSet := make(map[catalogdomain.ProviderID]struct{})
 	for _, toolID := range profile.ToolIDs() {
 		tool, err := r.Catalog.DescribeTool.Execute(ctx, toolID)
@@ -232,7 +247,7 @@ func (r *Runtime) ActivateProfileProviders(
 	})
 
 	for _, providerID := range providerIDs {
-		if err := r.EnsureConfiguredProvider(ctx, providerID); err != nil {
+		if err := r.activateConfiguredProvider(ctx, providerID, governanceContext); err != nil {
 			return fmt.Errorf(
 				"activate profile provider %s: %w",
 				providerID,
@@ -241,15 +256,6 @@ func (r *Runtime) ActivateProfileProviders(
 		}
 	}
 	return nil
-}
-
-// EnsureConfiguredMCPProvider remains a compatibility alias while first-party
-// adapters migrate to generic Provider plugin terminology.
-func (r *Runtime) EnsureConfiguredMCPProvider(
-	ctx context.Context,
-	providerID catalogdomain.ProviderID,
-) error {
-	return r.EnsureConfiguredProvider(ctx, providerID)
 }
 
 func (r *Runtime) serveManagedMCPServer(
