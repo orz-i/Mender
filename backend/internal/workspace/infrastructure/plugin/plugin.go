@@ -18,11 +18,12 @@ import (
 )
 
 type Plugin struct {
-	descriptor providerplugin.Descriptor
+	descriptor    providerplugin.Descriptor
+	shellLauncher ShellLauncher
 }
 
-func New() *Plugin {
-	return &Plugin{descriptor: Descriptor()}
+func New(shellLauncher ShellLauncher) *Plugin {
+	return &Plugin{descriptor: Descriptor(), shellLauncher: shellLauncher}
 }
 
 func (p *Plugin) Descriptor() providerplugin.Descriptor {
@@ -43,7 +44,7 @@ func (*Plugin) InspectConfig(
 	return InspectConfig(ctx, raw)
 }
 
-func (*Plugin) Open(
+func (p *Plugin) Open(
 	_ context.Context,
 	request providerplugin.OpenRequest,
 ) (providerplugin.Instance, error) {
@@ -69,19 +70,25 @@ func (*Plugin) Open(
 	if err != nil {
 		return nil, fmt.Errorf("open Workspace plugin root: %w", err)
 	}
+	if p.shellLauncher == nil {
+		_ = fsRoot.Close()
+		return nil, fmt.Errorf("open Workspace plugin: shell launcher is unavailable")
+	}
 	return &Instance{
-		root:     root,
-		resolver: resolver,
-		fsRoot:   fsRoot,
-		tools:    discoveredFileTools(),
+		root:          root,
+		resolver:      resolver,
+		fsRoot:        fsRoot,
+		tools:         discoveredFileTools(),
+		shellLauncher: p.shellLauncher,
 	}, nil
 }
 
 type Instance struct {
-	root     string
-	resolver workspacePathResolver
-	fsRoot   *os.Root
-	tools    []catalogapplication.DiscoveredTool
+	root          string
+	resolver      workspacePathResolver
+	fsRoot        *os.Root
+	tools         []catalogapplication.DiscoveredTool
+	shellLauncher ShellLauncher
 }
 
 func (i *Instance) DiscoverTools(

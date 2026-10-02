@@ -3,6 +3,7 @@ package external
 import (
 	"context"
 	"fmt"
+	"os/exec"
 	"strings"
 	"sync"
 	"time"
@@ -30,6 +31,25 @@ type PackageResolver interface {
 		context.Context,
 		installationdomain.Installation,
 	) (installationapplication.ResolvedPackage, error)
+}
+
+type ProcessLauncher interface {
+	Command(context.Context, string, string) (*exec.Cmd, error)
+}
+
+type HostProcessLauncher struct{}
+
+func (HostProcessLauncher) Command(
+	ctx context.Context,
+	executable string,
+	workingDirectory string,
+) (*exec.Cmd, error) {
+	if executable == "" || workingDirectory == "" {
+		return nil, fmt.Errorf("external provider host launcher: executable and working directory are required")
+	}
+	cmd := exec.CommandContext(ctx, executable) // #nosec G204 -- exact verified plugin executable, no shell.
+	cmd.Dir = workingDirectory
+	return cmd, nil
 }
 
 // Options configure native external plugin process lifecycle.
@@ -112,6 +132,7 @@ type processSlot struct {
 // Supervisor owns reusable external plugin package processes.
 type Supervisor struct {
 	packages PackageResolver
+	launcher ProcessLauncher
 	options  Options
 
 	mu     sync.Mutex
@@ -122,10 +143,14 @@ type Supervisor struct {
 // NewSupervisor constructs an external plugin process supervisor.
 func NewSupervisor(
 	packages PackageResolver,
+	launcher ProcessLauncher,
 	options Options,
 ) (*Supervisor, error) {
 	if packages == nil {
 		return nil, fmt.Errorf("new external plugin supervisor: package resolver must not be nil")
+	}
+	if launcher == nil {
+		return nil, fmt.Errorf("new external plugin supervisor: process launcher must not be nil")
 	}
 	if options.StartTimeout <= 0 {
 		options.StartTimeout = defaultStartTimeout
@@ -150,6 +175,7 @@ func NewSupervisor(
 	}
 	return &Supervisor{
 		packages: packages,
+		launcher: launcher,
 		options:  options,
 		slots:    make(map[installationdomain.InstallationID]*processSlot),
 	}, nil
@@ -345,6 +371,14 @@ func (s *Supervisor) start(
 		return nil, fmt.Errorf("ensure external plugin process: protocol: %w", err)
 	}
 
+	command, err := s.launcher.Command(
+		ctx,
+		resolved.EntrypointPath,
+		resolved.WorkingDirectory,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("ensure external plugin process: construct command: %w", err)
+	}
 	stderr := newBoundedWriter(s.options.MaxStderrBytes)
 	startTimeout := timeoutWithinContext(ctx, s.options.StartTimeout)
 	client, err := plugintransport.StartClient(plugintransport.ClientOptions{
@@ -355,6 +389,7 @@ func (s *Supervisor) start(
 		StartTimeout:        startTimeout,
 		Stderr:              stderr,
 		PluginLogBufferSize: s.options.MaxStderrBytes,
+		Command:             command,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("ensure external plugin process: start: %w", err)

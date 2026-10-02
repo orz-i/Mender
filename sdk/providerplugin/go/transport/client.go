@@ -1,9 +1,11 @@
 package transport
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"time"
@@ -23,6 +25,7 @@ type ClientOptions struct {
 	StartTimeout        time.Duration
 	Stderr              io.Writer
 	PluginLogBufferSize int
+	Command             *exec.Cmd
 }
 
 // Client owns one native Provider plugin process and its gRPC service client.
@@ -46,19 +49,33 @@ func StartClient(options ClientOptions) (*Client, error) {
 			sha256.Size,
 		)
 	}
+	if err := verifyExecutableChecksum(options.Executable, options.ExecutableChecksum); err != nil {
+		return nil, err
+	}
 	sets, err := VersionedPluginSets(options.Versions, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	command := exec.Command(options.Executable) // #nosec G204 -- exact managed executable, no shell.
+	command := options.Command
+	var secureConfig *plugin.SecureConfig
+	if command == nil {
+		command = exec.Command(options.Executable) // #nosec G204 -- exact managed executable, no shell.
+		secureConfig = &plugin.SecureConfig{
+			Checksum: append([]byte(nil), options.ExecutableChecksum...),
+			Hash:     sha256.New(),
+		}
+	}
+	if command.Path == "" {
+		return nil, fmt.Errorf("provider plugin transport: command path must not be empty")
+	}
 	command.Dir = options.WorkingDirectory
 
 	process := plugin.NewClient(&plugin.ClientConfig{
 		HandshakeConfig:     Handshake,
 		VersionedPlugins:    sets,
 		Cmd:                 command,
-		SecureConfig:        &plugin.SecureConfig{Checksum: append([]byte(nil), options.ExecutableChecksum...), Hash: sha256.New()},
+		SecureConfig:        secureConfig,
 		Managed:             false,
 		StartTimeout:        options.StartTimeout,
 		Stderr:              options.Stderr,
@@ -102,6 +119,24 @@ func StartClient(options ClientOptions) (*Client, error) {
 		service: service,
 		version: uint32(version), // #nosec G115 -- negotiated version comes from VersionedPluginSets, bounded to MaxInt32.
 	}, nil
+}
+
+func verifyExecutableChecksum(path string, expected []byte) error {
+	file, err := os.Open(path) // #nosec G304 -- path is the host-resolved managed plugin executable already required to be absolute.
+	if err != nil {
+		return fmt.Errorf("provider plugin transport: open executable for checksum: %w", err)
+	}
+	defer func() { _ = file.Close() }()
+
+	hash := sha256.New()
+	if _, err := io.Copy(hash, file); err != nil {
+		return fmt.Errorf("provider plugin transport: hash executable: %w", err)
+	}
+	actual := hash.Sum(nil)
+	if !bytes.Equal(actual, expected) {
+		return fmt.Errorf("provider plugin transport: executable checksum mismatch")
+	}
+	return nil
 }
 
 // Service returns the connected Provider Plugin Protocol client.

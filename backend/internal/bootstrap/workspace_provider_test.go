@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
@@ -16,8 +17,165 @@ import (
 	policydomain "github.com/orz-i/Mender/backend/internal/policy/domain"
 	profileapplication "github.com/orz-i/Mender/backend/internal/profile/application"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
+	runtimegovernancedomain "github.com/orz-i/Mender/backend/internal/runtimegovernance/domain"
 	workspaceplugin "github.com/orz-i/Mender/backend/internal/workspace/infrastructure/plugin"
 )
+
+func TestWorkspaceShellIsolationModeUpdatesApplyToNewExecutions(t *testing.T) {
+	ctx := context.Background()
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	root, err := os.MkdirTemp(home, ".mender-workspace-isolation-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.RemoveAll(root) }()
+	secretRoot, err := os.MkdirTemp(home, ".mender-workspace-secret-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.RemoveAll(secretRoot) }()
+	secret := filepath.Join(secretRoot, "secret.txt")
+	if err := os.WriteFile(secret, []byte("TOP-SECRET\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	runtime, err := NewRuntime(ctx, RuntimeOptions{
+		DatabasePath: filepath.Join(t.TempDir(), "mender.db"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = runtime.Close() }()
+	if !runtime.RuntimeGovernance.processIsolation.Info().RestrictedHostAvailable {
+		t.Skip("restricted_host backend unavailable")
+	}
+
+	if _, err := runtime.RuntimeGovernance.UpdateIsolation.Execute(
+		ctx,
+		runtimegovernancedomain.IsolationSpec{
+			WorkspaceShell:   runtimegovernancedomain.IsolationRestrictedHost,
+			ExternalProvider: runtimegovernancedomain.IsolationHost,
+		},
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	rawConfig, err := json.Marshal(workspaceplugin.Config{Root: root})
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider, err := registerConfiguredProviderTest(
+		t,
+		runtime,
+		ctx,
+		catalogapplication.RegisterProviderRequest{
+			Namespace:   "isolation-workspace",
+			DisplayName: "Isolation Workspace",
+		},
+		workspaceplugin.ID,
+		rawConfig,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := syncConfiguredProviderTest(t, runtime, ctx, provider.ID()); err != nil {
+		t.Fatal(err)
+	}
+	tools, err := runtime.Catalog.store.ListProviderTools(ctx, provider.ID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var shellID catalogdomain.ToolID
+	for _, tool := range tools {
+		if tool.SourceKey() == "workspace.shell" {
+			shellID = tool.ID()
+			break
+		}
+	}
+	if shellID == "" {
+		t.Fatal("workspace.shell Tool not found")
+	}
+	governanceContext := testCatalogGovernanceContext(
+		t,
+		governancedomain.OriginInternal,
+		"workspace-isolation",
+	)
+
+	command := "if /bin/cat " + shellDoubleQuote(secret) +
+		" >/dev/null 2>&1; then echo leaked; exit 77; else echo blocked; fi; echo ok > inside.txt"
+	arguments, err := json.Marshal(map[string]any{"command": command})
+	if err != nil {
+		t.Fatal(err)
+	}
+	restricted, err := runtime.CallConfiguredTool(ctx, shellID, arguments, governanceContext)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if restricted.Outcome.Kind() != invocationdomain.OutcomeKindComplete {
+		t.Fatalf("restricted shell outcome = %#v", restricted.Outcome)
+	}
+	var restrictedOutput struct {
+		ExitCode int    `json:"exitCode"`
+		Stdout   string `json:"stdout"`
+	}
+	if err := json.Unmarshal(restricted.Outcome.Content().Bytes(), &restrictedOutput); err != nil {
+		t.Fatal(err)
+	}
+	if restrictedOutput.ExitCode != 0 || !strings.Contains(restrictedOutput.Stdout, "blocked") || strings.Contains(restrictedOutput.Stdout, "leaked") {
+		t.Fatalf("restricted shell output = %+v", restrictedOutput)
+	}
+	rootHandle, err := os.OpenRoot(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, readErr := rootHandle.ReadFile("inside.txt")
+	_ = rootHandle.Close()
+	if readErr != nil || string(data) != "ok\n" {
+		t.Fatalf("restricted workspace write = %q error=%v", data, readErr)
+	}
+
+	if _, err := runtime.RuntimeGovernance.UpdateIsolation.Execute(
+		ctx,
+		runtimegovernancedomain.IsolationSpec{
+			WorkspaceShell:   runtimegovernancedomain.IsolationHost,
+			ExternalProvider: runtimegovernancedomain.IsolationHost,
+		},
+	); err != nil {
+		t.Fatal(err)
+	}
+	hostArgs, err := json.Marshal(map[string]any{
+		"command": "/bin/cat " + shellDoubleQuote(secret),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	host, err := runtime.CallConfiguredTool(ctx, shellID, hostArgs, governanceContext)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var hostOutput struct {
+		ExitCode int    `json:"exitCode"`
+		Stdout   string `json:"stdout"`
+	}
+	if err := json.Unmarshal(host.Outcome.Content().Bytes(), &hostOutput); err != nil {
+		t.Fatal(err)
+	}
+	if hostOutput.ExitCode != 0 || !strings.Contains(hostOutput.Stdout, "TOP-SECRET") {
+		t.Fatalf("host shell output = %+v", hostOutput)
+	}
+}
+
+func shellDoubleQuote(value string) string {
+	return "\"" + strings.NewReplacer(
+		"\\", "\\\\",
+		"\"", "\\\"",
+		"$", "\\$",
+		"`", "\\`",
+	).Replace(value) + "\""
+}
 
 func TestWorkspaceProviderRuntimeComposesProfilePolicyAndAudit(t *testing.T) {
 	t.Parallel()

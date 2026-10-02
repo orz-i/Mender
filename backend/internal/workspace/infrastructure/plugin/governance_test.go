@@ -12,7 +12,7 @@ import (
 func TestWorkspaceGovernanceFactsAreStructuredWithoutTouchingWorkspace(t *testing.T) {
 	t.Parallel()
 
-	plugin := New()
+	plugin := New(HostShellLauncher{})
 	nonexistent := filepath.Join(t.TempDir(), "does-not-exist")
 	config, err := json.Marshal(Config{Root: nonexistent})
 	if err != nil {

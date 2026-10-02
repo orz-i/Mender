@@ -204,7 +204,7 @@ func openWorkspaceTestInstance(t *testing.T, root string) *Instance {
 	if err != nil {
 		t.Fatal(err)
 	}
-	opened, err := New().Open(context.Background(), providerplugin.OpenRequest{
+	opened, err := New(HostShellLauncher{}).Open(context.Background(), providerplugin.OpenRequest{
 		ConfigVersion: ConfigVersion,
 		Config:        raw,
 	})

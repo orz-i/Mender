@@ -21,6 +21,7 @@ import (
 	installationapplication "github.com/orz-i/Mender/backend/internal/providerplugin/installation/application"
 	installationdomain "github.com/orz-i/Mender/backend/internal/providerplugin/installation/domain"
 	"github.com/orz-i/Mender/backend/internal/providerplugin/manifest"
+	runtimegovernancedomain "github.com/orz-i/Mender/backend/internal/runtimegovernance/domain"
 )
 
 func TestRuntimeInstalledExternalProviderEndToEnd(t *testing.T) {
@@ -95,6 +96,22 @@ func TestRuntimeInstalledExternalProviderEndToEnd(t *testing.T) {
 	}
 	if runtime.externalProcesses.Running(installationID) {
 		t.Fatal("installation verification left plugin process running")
+	}
+
+	if runtime.RuntimeGovernance.processIsolation.Info().RestrictedHostAvailable {
+		currentIsolation, err := runtime.RuntimeGovernance.GetIsolation.Execute(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := runtime.RuntimeGovernance.UpdateIsolation.Execute(
+			ctx,
+			runtimegovernancedomain.IsolationSpec{
+				WorkspaceShell:   currentIsolation.WorkspaceShell(),
+				ExternalProvider: runtimegovernancedomain.IsolationRestrictedHost,
+			},
+		); err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	available, err := runtime.ListAvailableProviderPlugins(ctx)

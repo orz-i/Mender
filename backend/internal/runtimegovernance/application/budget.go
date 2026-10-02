@@ -6,14 +6,14 @@ import (
 	runtimegovernancedomain "github.com/orz-i/Mender/backend/internal/runtimegovernance/domain"
 )
 
-type Repository interface {
+type BudgetRepository interface {
 	GetBudget(context.Context) (runtimegovernancedomain.Budget, error)
 	SetBudget(context.Context, runtimegovernancedomain.Budget) error
 }
 
-type GetBudget struct{ repository Repository }
+type GetBudget struct{ repository BudgetRepository }
 
-func NewGetBudget(repository Repository) GetBudget {
+func NewGetBudget(repository BudgetRepository) GetBudget {
 	return GetBudget{repository: repository}
 }
 
@@ -21,9 +21,9 @@ func (uc GetBudget) Execute(ctx context.Context) (runtimegovernancedomain.Budget
 	return uc.repository.GetBudget(ctx)
 }
 
-type UpdateBudget struct{ repository Repository }
+type UpdateBudget struct{ repository BudgetRepository }
 
-func NewUpdateBudget(repository Repository) UpdateBudget {
+func NewUpdateBudget(repository BudgetRepository) UpdateBudget {
 	return UpdateBudget{repository: repository}
 }
 

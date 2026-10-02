@@ -18,7 +18,11 @@ type Store struct {
 	db *sql.DB
 }
 
-func Open(ctx context.Context, path string) (*Store, error) {
+func Open(
+	ctx context.Context,
+	path string,
+	defaultIsolation runtimegovernancedomain.Isolation,
+) (*Store, error) {
 	if strings.TrimSpace(path) == "" {
 		return nil, fmt.Errorf("open runtime governance sqlite: path must not be empty")
 	}
@@ -33,7 +37,7 @@ func Open(ctx context.Context, path string) (*Store, error) {
 	}
 	db.SetMaxOpenConns(1)
 	store := &Store{db: db}
-	if err := migrate(ctx, db); err != nil {
+	if err := migrate(ctx, db, defaultIsolation); err != nil {
 		_ = db.Close()
 		return nil, err
 	}
@@ -123,4 +127,48 @@ func (s *Store) SetBudget(ctx context.Context, value runtimegovernancedomain.Bud
 	return nil
 }
 
-var _ runtimegovernanceapplication.Repository = (*Store)(nil)
+func (s *Store) GetIsolation(ctx context.Context) (runtimegovernancedomain.Isolation, error) {
+	var workspaceShell string
+	var externalProvider string
+	if err := s.db.QueryRowContext(
+		ctx,
+		"SELECT workspace_shell, external_provider FROM runtime_isolation_settings WHERE singleton_id = 1",
+	).Scan(&workspaceShell, &externalProvider); err != nil {
+		return runtimegovernancedomain.Isolation{}, fmt.Errorf("get runtime isolation: %w", err)
+	}
+	value, err := runtimegovernancedomain.NewIsolation(runtimegovernancedomain.IsolationSpec{
+		WorkspaceShell:   runtimegovernancedomain.IsolationMode(workspaceShell),
+		ExternalProvider: runtimegovernancedomain.IsolationMode(externalProvider),
+	})
+	if err != nil {
+		return runtimegovernancedomain.Isolation{}, fmt.Errorf("get runtime isolation: invalid persisted value: %w", err)
+	}
+	return value, nil
+}
+
+func (s *Store) SetIsolation(ctx context.Context, value runtimegovernancedomain.Isolation) error {
+	if err := value.Validate(); err != nil {
+		return fmt.Errorf("set runtime isolation: %w", err)
+	}
+	result, err := s.db.ExecContext(
+		ctx,
+		"UPDATE runtime_isolation_settings SET workspace_shell = ?, external_provider = ?, updated_at = ? WHERE singleton_id = 1",
+		string(value.WorkspaceShell()),
+		string(value.ExternalProvider()),
+		time.Now().UTC().Format(time.RFC3339Nano),
+	)
+	if err != nil {
+		return fmt.Errorf("set runtime isolation: %w", err)
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("set runtime isolation: rows affected: %w", err)
+	}
+	if rows != 1 {
+		return fmt.Errorf("set runtime isolation: singleton row is missing")
+	}
+	return nil
+}
+
+var _ runtimegovernanceapplication.BudgetRepository = (*Store)(nil)
+var _ runtimegovernanceapplication.IsolationRepository = (*Store)(nil)

@@ -190,9 +190,30 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		return nil, fmt.Errorf("compose runtime: migrate provider configs: %w", err)
 	}
 
+	runtimeGovernance, err := NewRuntimeGovernance(ctx, options.DatabasePath)
+	if err != nil {
+		_ = providerConfigs.Close()
+		_ = configs.Close()
+		_ = policies.Close()
+		_ = profiles.Close()
+		_ = credentials.Close()
+		_ = auditStore.Close()
+		_ = catalog.Close()
+		return nil, fmt.Errorf("compose runtime: runtime governance: %w", err)
+	}
+	runtimeGovernanceOwned := true
+	defer func() {
+		if runtimeGovernanceOwned {
+			_ = runtimeGovernance.Close()
+		}
+	}()
+
 	executors := invocationrouter.New()
 	providerPlugins := providerplugin.NewRegistry()
-	if err := providerbuiltin.Register(providerPlugins); err != nil {
+	if err := providerbuiltin.Register(
+		providerPlugins,
+		workspaceShellIsolationLauncher{governance: runtimeGovernance},
+	); err != nil {
 		_ = providerConfigs.Close()
 		_ = configs.Close()
 		_ = policies.Close()
@@ -242,6 +263,7 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 	}
 	externalProcesses, err := providerexternal.NewSupervisor(
 		pluginPackages,
+		externalProviderIsolationLauncher{governance: runtimeGovernance},
 		providerexternal.DefaultOptions(),
 	)
 	if err != nil {
@@ -331,22 +353,6 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		return nil, fmt.Errorf("compose runtime: skills: %w", err)
 	}
 
-	runtimeGovernance, err := NewRuntimeGovernance(ctx, options.DatabasePath)
-	if err != nil {
-		_ = skills.Close()
-		_ = providerInstances.CloseAll()
-		_ = externalProcesses.CloseAll()
-		_ = pluginInstallations.Close()
-		_ = providerConfigs.Close()
-		_ = configs.Close()
-		_ = policies.Close()
-		_ = profiles.Close()
-		_ = credentials.Close()
-		_ = auditStore.Close()
-		_ = catalog.Close()
-		return nil, fmt.Errorf("compose runtime: runtime governance: %w", err)
-	}
-
 	ids := invocationidentity.NewGenerator()
 	approvalGate := policylocal.RejectApproval{}
 	providerActivation := provideractivationapplication.NewAdmit(
@@ -387,6 +393,7 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 	)
 
 	tunnelsOwned = false
+	runtimeGovernanceOwned = false
 	return &Runtime{
 		Catalog:                     catalog,
 		Credentials:                 credentials,

@@ -11,9 +11,17 @@ import (
 	"time"
 )
 
-func newHostShellCommand(ctx context.Context, command string) *exec.Cmd {
+func (HostShellLauncher) Command(
+	ctx context.Context,
+	_ string,
+	workingDirectory string,
+	command string,
+	environment []string,
+) (*exec.Cmd, error) {
 	//nolint:gosec // workspace.shell intentionally executes the caller-supplied command through a shell.
 	cmd := exec.CommandContext(ctx, "/bin/sh", "-lc", command)
+	cmd.Dir = workingDirectory
+	cmd.Env = append([]string(nil), environment...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Cancel = func() error {
 		if cmd.Process == nil {
@@ -26,5 +34,5 @@ func newHostShellCommand(ctx context.Context, command string) *exec.Cmd {
 		return err
 	}
 	cmd.WaitDelay = 2 * time.Second
-	return cmd
+	return cmd, nil
 }

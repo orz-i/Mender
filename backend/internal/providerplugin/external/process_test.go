@@ -58,7 +58,7 @@ func TestSupervisorEnsureReusesHealthyProcess(t *testing.T) {
 
 	installation, resolved := testExternalInstallation(t, "good")
 	resolver := &fakePackageResolver{resolved: resolved}
-	supervisor, err := NewSupervisor(resolver, Options{
+	supervisor, err := NewSupervisor(resolver, HostProcessLauncher{}, Options{
 		StartTimeout:      10 * time.Second,
 		DescriptorTimeout: 5 * time.Second,
 		MaxStderrBytes:    4096,
@@ -99,7 +99,7 @@ func TestSupervisorConcurrentEnsureStartsOneProcess(t *testing.T) {
 
 	installation, resolved := testExternalInstallation(t, "good")
 	resolver := &fakePackageResolver{resolved: resolved}
-	supervisor, err := NewSupervisor(resolver, DefaultOptions())
+	supervisor, err := NewSupervisor(resolver, HostProcessLauncher{}, DefaultOptions())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -148,7 +148,7 @@ func TestSupervisorRejectsExecutableChecksumMismatch(t *testing.T) {
 	installation, resolved := testExternalInstallation(t, "good")
 	resolved.ExecutableChecksum = make([]byte, sha256.Size)
 	resolver := &fakePackageResolver{resolved: resolved}
-	supervisor, err := NewSupervisor(resolver, DefaultOptions())
+	supervisor, err := NewSupervisor(resolver, HostProcessLauncher{}, DefaultOptions())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -165,7 +165,7 @@ func TestSupervisorReportsPluginCrashDuringStartup(t *testing.T) {
 
 	installation, resolved := testExternalInstallation(t, "startupcrash")
 	resolver := &fakePackageResolver{resolved: resolved}
-	supervisor, err := NewSupervisor(resolver, Options{
+	supervisor, err := NewSupervisor(resolver, HostProcessLauncher{}, Options{
 		StartTimeout:      time.Second,
 		DescriptorTimeout: time.Second,
 		MaxStderrBytes:    1024,
@@ -186,7 +186,7 @@ func TestSupervisorRejectsDescriptorIdentityMismatch(t *testing.T) {
 
 	installation, resolved := testExternalInstallation(t, "idmismatch")
 	resolver := &fakePackageResolver{resolved: resolved}
-	supervisor, err := NewSupervisor(resolver, DefaultOptions())
+	supervisor, err := NewSupervisor(resolver, HostProcessLauncher{}, DefaultOptions())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -203,7 +203,7 @@ func TestSupervisorRejectsInvalidHandshake(t *testing.T) {
 
 	installation, resolved := testExternalInstallation(t, "badhandshake")
 	resolver := &fakePackageResolver{resolved: resolved}
-	supervisor, err := NewSupervisor(resolver, Options{
+	supervisor, err := NewSupervisor(resolver, HostProcessLauncher{}, Options{
 		StartTimeout:      time.Second,
 		DescriptorTimeout: time.Second,
 		MaxStderrBytes:    1024,
@@ -223,7 +223,7 @@ func TestSupervisorRejectsPackageVersionMismatch(t *testing.T) {
 
 	installation, resolved := testExternalInstallation(t, "versionmismatch")
 	resolver := &fakePackageResolver{resolved: resolved}
-	supervisor, err := NewSupervisor(resolver, DefaultOptions())
+	supervisor, err := NewSupervisor(resolver, HostProcessLauncher{}, DefaultOptions())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -241,7 +241,7 @@ func TestSupervisorRejectsUnsupportedProtocolBeforeLaunch(t *testing.T) {
 	installation, resolved := testExternalInstallation(t, "good")
 	resolved.Manifest.ProtocolVersions = []uint32{99}
 	resolver := &fakePackageResolver{resolved: resolved}
-	supervisor, err := NewSupervisor(resolver, DefaultOptions())
+	supervisor, err := NewSupervisor(resolver, HostProcessLauncher{}, DefaultOptions())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -261,7 +261,7 @@ func TestSupervisorRejectsOversizedDescriptorMessage(t *testing.T) {
 
 	installation, resolved := testExternalInstallation(t, "oversizeddescriptor")
 	resolver := &fakePackageResolver{resolved: resolved}
-	supervisor, err := NewSupervisor(resolver, DefaultOptions())
+	supervisor, err := NewSupervisor(resolver, HostProcessLauncher{}, DefaultOptions())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -281,7 +281,7 @@ func TestSupervisorRejectsDisabledInstallationBeforeLaunch(t *testing.T) {
 		t.Fatal(err)
 	}
 	resolver := &fakePackageResolver{resolved: resolved}
-	supervisor, err := NewSupervisor(resolver, DefaultOptions())
+	supervisor, err := NewSupervisor(resolver, HostProcessLauncher{}, DefaultOptions())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -301,7 +301,7 @@ func TestSupervisorStartTimeout(t *testing.T) {
 
 	installation, resolved := testExternalInstallation(t, "slow")
 	resolver := &fakePackageResolver{resolved: resolved}
-	supervisor, err := NewSupervisor(resolver, Options{
+	supervisor, err := NewSupervisor(resolver, HostProcessLauncher{}, Options{
 		StartTimeout:      100 * time.Millisecond,
 		DescriptorTimeout: time.Second,
 		MaxStderrBytes:    1024,
@@ -325,7 +325,7 @@ func TestSupervisorCloseAllPreventsFurtherEnsure(t *testing.T) {
 
 	installation, resolved := testExternalInstallation(t, "good")
 	resolver := &fakePackageResolver{resolved: resolved}
-	supervisor, err := NewSupervisor(resolver, DefaultOptions())
+	supervisor, err := NewSupervisor(resolver, HostProcessLauncher{}, DefaultOptions())
 	if err != nil {
 		t.Fatal(err)
 	}

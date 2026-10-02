@@ -332,7 +332,7 @@ func TestExternalPluginRejectsInvalidDescriptorSchema(t *testing.T) {
 
 	installation, resolved := testExternalInstallation(t, "invalidschema")
 	resolver := &fakePackageResolver{resolved: resolved}
-	supervisor, err := NewSupervisor(resolver, DefaultOptions())
+	supervisor, err := NewSupervisor(resolver, HostProcessLauncher{}, DefaultOptions())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -748,7 +748,7 @@ func newTestExternalPluginWithOptions(
 
 	installation, resolved := testExternalInstallation(t, mode)
 	resolver := &fakePackageResolver{resolved: resolved}
-	supervisor, err := NewSupervisor(resolver, options)
+	supervisor, err := NewSupervisor(resolver, HostProcessLauncher{}, options)
 	if err != nil {
 		t.Fatal(err)
 	}

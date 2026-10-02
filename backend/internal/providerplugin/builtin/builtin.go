@@ -15,24 +15,31 @@ import (
 // The returned order is deterministic and intentionally follows the historical
 // Runtime registration order. Callers receive fresh plugin values so tests or
 // future implementation-local state cannot leak across Runtime instances.
-func Plugins() []providerplugin.Plugin {
+func Plugins(workspaceShellLauncher workspaceplugin.ShellLauncher) []providerplugin.Plugin {
 	return []providerplugin.Plugin{
 		mcpplugin.New(),
 		openapiplugin.New(),
 		modeltoolsplugin.New(),
-		workspaceplugin.New(),
+		workspaceplugin.New(workspaceShellLauncher),
 	}
 }
 
 // Register adds the complete statically linked built-in Provider plugin set to
 // registry. It fails closed when any built-in descriptor is invalid or a
 // PluginID is already registered.
-func Register(registry *providerplugin.Registry) error {
+func Register(
+	registry *providerplugin.Registry,
+	workspaceShellLauncher workspaceplugin.ShellLauncher,
+) error {
 	if registry == nil {
 		return fmt.Errorf("register built-in provider plugins: registry must not be nil")
 	}
 
-	for _, plugin := range Plugins() {
+	if workspaceShellLauncher == nil {
+		return fmt.Errorf("register built-in provider plugins: workspace shell launcher must not be nil")
+	}
+
+	for _, plugin := range Plugins(workspaceShellLauncher) {
 		descriptor := plugin.Descriptor()
 		if err := registry.Register(plugin); err != nil {
 			return fmt.Errorf(

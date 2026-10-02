@@ -20,6 +20,18 @@ const (
 	maxShellOutputBytes  = 64 * 1024
 )
 
+type ShellLauncher interface {
+	Command(
+		context.Context,
+		string,
+		string,
+		string,
+		[]string,
+	) (*exec.Cmd, error)
+}
+
+type HostShellLauncher struct{}
+
 type shellInput struct {
 	Command   string `json:"command"`
 	Cwd       string `json:"cwd,omitempty"`
@@ -77,9 +89,19 @@ func (i *Instance) executeShell(
 
 	stdout := newBoundedCapture(maxShellOutputBytes)
 	stderr := newBoundedCapture(maxShellOutputBytes)
-	command := newHostShellCommand(runCtx, input.Command)
-	command.Dir = directory
-	command.Env = shellEnvironment()
+	if i.shellLauncher == nil {
+		return invocationdomain.Outcome{}, fmt.Errorf("execute workspace shell: launcher is unavailable")
+	}
+	command, err := i.shellLauncher.Command(
+		runCtx,
+		i.root,
+		directory,
+		input.Command,
+		shellEnvironment(),
+	)
+	if err != nil {
+		return invocationdomain.Outcome{}, fmt.Errorf("execute workspace shell: construct command: %w", err)
+	}
 	command.Stdout = stdout
 	command.Stderr = stderr
 

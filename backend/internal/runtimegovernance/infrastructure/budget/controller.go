@@ -15,7 +15,7 @@ type Usage struct {
 }
 
 type Controller struct {
-	repository runtimegovernanceapplication.Repository
+	repository runtimegovernanceapplication.BudgetRepository
 
 	mu          sync.Mutex
 	invocations int
@@ -25,7 +25,7 @@ type Controller struct {
 	tools       map[string]int
 }
 
-func NewController(repository runtimegovernanceapplication.Repository) *Controller {
+func NewController(repository runtimegovernanceapplication.BudgetRepository) *Controller {
 	return &Controller{
 		repository: repository,
 		principals: make(map[string]int),

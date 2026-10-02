@@ -6,14 +6,15 @@ import (
 	"testing"
 
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
+	workspaceplugin "github.com/orz-i/Mender/backend/internal/workspace/infrastructure/plugin"
 )
 
 func TestPluginsReturnStableBuiltInSet(t *testing.T) {
 	t.Parallel()
 
-	plugins := Plugins()
+	plugins := Plugins(workspaceplugin.HostShellLauncher{})
 	if got, want := len(plugins), 4; got != want {
-		t.Fatalf("Plugins() count = %d, want %d", got, want)
+		t.Fatalf("Plugins(workspaceplugin.HostShellLauncher{}) count = %d, want %d", got, want)
 	}
 
 	wantIDs := []providerplugin.ID{
@@ -26,26 +27,26 @@ func TestPluginsReturnStableBuiltInSet(t *testing.T) {
 	seen := make(map[providerplugin.ID]struct{}, len(plugins))
 	for _, plugin := range plugins {
 		if plugin == nil {
-			t.Fatal("Plugins() returned nil plugin")
+			t.Fatal("Plugins(workspaceplugin.HostShellLauncher{}) returned nil plugin")
 		}
 		descriptor := plugin.Descriptor()
 		if err := descriptor.Validate(); err != nil {
 			t.Fatalf("descriptor %q invalid: %v", descriptor.ID, err)
 		}
 		if _, duplicate := seen[descriptor.ID]; duplicate {
-			t.Fatalf("Plugins() duplicate PluginID %q", descriptor.ID)
+			t.Fatalf("Plugins(workspaceplugin.HostShellLauncher{}) duplicate PluginID %q", descriptor.ID)
 		}
 		seen[descriptor.ID] = struct{}{}
 		gotIDs = append(gotIDs, descriptor.ID)
 	}
 	if !slices.Equal(gotIDs, wantIDs) {
-		t.Fatalf("Plugins() IDs = %v, want %v", gotIDs, wantIDs)
+		t.Fatalf("Plugins(workspaceplugin.HostShellLauncher{}) IDs = %v, want %v", gotIDs, wantIDs)
 	}
 
-	second := Plugins()
+	second := Plugins(workspaceplugin.HostShellLauncher{})
 	for index := range plugins {
 		if plugins[index] == second[index] {
-			t.Fatalf("Plugins() reused plugin instance at index %d", index)
+			t.Fatalf("Plugins(workspaceplugin.HostShellLauncher{}) reused plugin instance at index %d", index)
 		}
 	}
 }
@@ -54,7 +55,7 @@ func TestRegisterAddsCompleteBuiltInSet(t *testing.T) {
 	t.Parallel()
 
 	registry := providerplugin.NewRegistry()
-	if err := Register(registry); err != nil {
+	if err := Register(registry, workspaceplugin.HostShellLauncher{}); err != nil {
 		t.Fatalf("Register() error = %v", err)
 	}
 
@@ -81,15 +82,15 @@ func TestRegisterAddsCompleteBuiltInSet(t *testing.T) {
 func TestRegisterRejectsInvalidRegistryAndDuplicateRegistration(t *testing.T) {
 	t.Parallel()
 
-	if err := Register(nil); err == nil {
-		t.Fatal("Register(nil) error = nil, want error")
+	if err := Register(nil, workspaceplugin.HostShellLauncher{}); err == nil {
+		t.Fatal("Register(nil, workspaceplugin.HostShellLauncher{}) error = nil, want error")
 	}
 
 	registry := providerplugin.NewRegistry()
-	if err := Register(registry); err != nil {
+	if err := Register(registry, workspaceplugin.HostShellLauncher{}); err != nil {
 		t.Fatalf("first Register() error = %v", err)
 	}
-	err := Register(registry)
+	err := Register(registry, workspaceplugin.HostShellLauncher{})
 	if !errors.Is(err, providerplugin.ErrDuplicate) {
 		t.Fatalf("second Register() error = %v, want ErrDuplicate", err)
 	}
