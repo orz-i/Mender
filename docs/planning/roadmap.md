@@ -438,3 +438,22 @@ Goals:
 Exit criteria are complete. Every production Provider activation path is admitted before Provider side effects; every live Invocation carries an explicit Principal; Policy is action-aware; Caller-era runtime/public contracts are removed through one-way migrations; dedicated Provider activation Audit is queryable; CLI/HTTP/OpenAPI/SDK/Wails/Web/Desktop are aligned; and full repository/race/security verification is green.
 
 See `phase-22-provider-activation-principal-governance.md`.
+
+## Phase 23 — Runtime Budget & Restricted-host Isolation
+
+Status: In Progress
+
+Goals:
+
+- Persist Runtime hard limits for Tool concurrency, Principal/Provider/Tool concurrency, Provider activation concurrency, effective execution timeout, argument bytes, and result bytes.
+- Replace the default unlimited execution baseline with fail-fast hierarchical Runtime Budget leases while preserving Profile-local tightening.
+- Map Runtime saturation/size limits into explicit canonical Invocation/activation outcomes and bounded Audit classifications.
+- Introduce explicit `host` / `restricted_host` local process execution modes with no silent fallback.
+- Route `workspace.shell` through a host-owned process isolation launcher.
+- Route external Provider plugin process launch through the same isolation contract while preserving exact plugin executable checksum verification.
+- Provide macOS Seatbelt and Linux bubblewrap restricted-host backends; unsupported restricted-host selection fails closed.
+- Expose Runtime Budget/Isolation settings, backend availability, and bounded live usage across management HTTP, OpenAPI/SDK, Wails/Desktop, and shared Web/Desktop UX.
+
+Exit criteria require bounded-by-default Runtime capacity, explicit local process isolation semantics, workspace/external Provider integration, management parity, race-safe accounting, and green repository/security checks.
+
+See `phase-23-runtime-budget-isolation.md`.

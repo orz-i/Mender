@@ -58,3 +58,4 @@ Minor implementation choices that remain inside an accepted architectural bounda
 - [ADR-0030: Provide governed local workspace capabilities without becoming an Agent harness](0030-workspace-native-tools-provider.md)
 - [ADR-0031: Model external Profile reachability as managed Tunnel adapters](0031-managed-profile-tunnels.md)
 - [ADR-0032: Govern Provider activation with explicit Principals and Policy actions](0032-provider-activation-principal-governance.md)
+- [ADR-0033: Bound Runtime resource use and isolate local process execution](0033-runtime-budget-restricted-host-isolation.md)

@@ -99,6 +99,14 @@ A governed provider.activate action that admits Provider capability acquisition 
 
 Provider activation is not modeled as a synthetic Tool invocation because Tool identity and arguments may not exist yet.
 
+### Runtime Budget
+
+The persistent Runtime-owned hard limits applied after governance admission and before execution side effects. Runtime Budget caps Tool/Principal/Provider/global concurrency, Provider activation concurrency, effective execution timeout, arguments, and results. Profile constraints may tighten these limits but cannot raise them.
+
+### Execution Environment
+
+The host-owned boundary used when Mender launches local child processes. Local process capabilities explicitly choose host or restricted_host isolation. restricted_host is platform-enforced containment and fails closed when unavailable; it is not presented as VM/container isolation.
+
 ### Policy
 
 A persistent Runtime-wide PolicySet that determines whether governed actions may proceed.
@@ -125,7 +133,7 @@ It may expose a profile in direct, dynamic, or hybrid discovery mode.
 
 ### MCP provider adapter
 
-Connects to upstream MCP servers, maps their tools into the canonical Catalog model, and delegates execution through the Invocation application layer. Remote non-loopback HTTP transport requires TLS; local stdio processes run without a shell and receive a reduced ambient environment. These controls reduce authority but do not claim kernel-level Provider sandboxing.
+Connects to upstream MCP servers, maps their tools into the canonical Catalog model, and delegates execution through the Invocation application layer. Remote non-loopback HTTP transport requires TLS; local stdio processes run without a shell and receive a reduced ambient environment. External Provider process launch additionally uses the Runtime Execution Environment when restricted_host is selected. These controls reduce authority but do not claim VM/container isolation.
 
 ### CLI adapter
 

@@ -70,8 +70,9 @@ Resolve Execution Scope
    -> Validate Arguments
    -> Derive Governance Facts
    -> Evaluate Policy / Approval
-   -> Apply Execution Guard
-   -> Execute
+   -> Apply Runtime Budget
+   -> Apply Profile execution constraints
+   -> Execute in the selected Execution Environment
    -> Apply Result Guard
    -> Record Audit
    -> Return Invocation Outcome
@@ -82,6 +83,8 @@ CLI, MCP, Skill, Web, and Desktop clients must not implement independent executi
 Global Policy must be deterministic and adapter-independent. Persistent rules explicitly select governance actions and have no priority/order semantics: the default decision applies only when no enabled rule matches, and matching rules combine by most-restrictive decision. Policy consumes stable Principal/origin/scope/target metadata and bounded reviewed Governance Facts rather than raw Tool arguments or secret-bearing context.
 
 Provider capability acquisition is also governed. Production paths must admit provider.activate before Plugin.Open, external process launch, discovery Credential resolution, upstream Tool discovery, or executor-route registration. A denied Tool invocation is not sufficient proof if Provider activation already happened outside Policy.
+
+Runtime capacity and local process authority are separate host-owned controls. Runtime Budget must cap admitted execution deterministically, while local subprocess capabilities must use an explicit Execution Environment. restricted_host must never silently fall back to host.
 
 ## 8. Credentials are references until the execution boundary
 
@@ -133,6 +136,6 @@ Composition roots should wire dependencies explicitly.
 
 ## 15. Security is a core runtime responsibility
 
-Provider trust, Principal attribution, capability admission, namespace collision, credential scope, execution limits, policy evaluation, and auditability are core concerns.
+Provider trust, Principal attribution, capability admission, Runtime Budget, local process isolation, namespace collision, credential scope, execution limits, policy evaluation, and auditability are core concerns.
 
 Security enforcement must not rely solely on metadata supplied by upstream tools or unauthenticated descriptive caller strings. Adapters may only construct Principals according to an explicit assurance boundary; they must not invent stronger remote identity than the transport actually proves.
