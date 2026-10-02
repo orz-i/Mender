@@ -3,6 +3,8 @@
 - Status: Accepted
 - Date: 2026-09-27
 
+> **Supersession note (2026-10-02):** ADR-0032 supersedes this ADR's invocation-only Match shape and deferred-Principal decision. Policy now requires explicit governance Actions and may match bounded Principal kind/reference; its raw-argument/secret minimization and reviewed Governance Facts constraints remain active.
+
 ## Context
 
 PolicyRequest currently contains canonical Tool metadata, InvocationContext, bounded Governance Facts, Caller, and a CredentialResolver availability boolean.

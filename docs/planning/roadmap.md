@@ -423,7 +423,7 @@ See `phase-21-managed-profile-tunnels.md`.
 
 ## Phase 22 — Provider Activation Governance & Principal
 
-Status: In Progress
+Status: Complete
 
 Goals:
 
@@ -435,6 +435,6 @@ Goals:
 - One-way migrate existing Policy Rules to `tool.invoke` actions and historical Audit caller values to audit-only legacy Principal snapshots without runtime compatibility parsers.
 - Update CLI/OpenAPI/generated SDK/Wails/Web/Desktop contracts and Policy UX in one hard cut.
 
-Exit criteria require all production activation paths to be governed before Provider side effects, every live Invocation to carry Principal, no Caller-era runtime contracts, queryable activation Audit, adapter parity, and green repository/security checks.
+Exit criteria are complete. Every production Provider activation path is admitted before Provider side effects; every live Invocation carries an explicit Principal; Policy is action-aware; Caller-era runtime/public contracts are removed through one-way migrations; dedicated Provider activation Audit is queryable; CLI/HTTP/OpenAPI/SDK/Wails/Web/Desktop are aligned; and full repository/race/security verification is green.
 
 See `phase-22-provider-activation-principal-governance.md`.

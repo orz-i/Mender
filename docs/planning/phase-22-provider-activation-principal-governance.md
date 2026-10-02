@@ -1,6 +1,6 @@
 # Phase 22 Plan — Provider Activation Governance & Principal
 
-Status: In Progress
+Status: Complete
 
 ## Objective
 
@@ -232,4 +232,41 @@ Blocking scenarios:
 
 ## Completion
 
-Phase 22 is complete only when every production Provider activation path is admitted before Provider side effects, every live Invocation has an explicit Principal, all Caller-era runtime contracts are removed, dedicated activation Audit is queryable, generated/public management contracts use the new shape, and repository/security gates are green.
+Phase 22 is complete.
+
+Implemented:
+
+- added a shared GovernanceContext with mandatory `local_user` / `service` Principal identity, Origin, and Catalog/Profile scope; Invocation no longer owns or exposes Caller;
+- hard-cut Policy to explicit `tool.invoke` / `provider.activate` actions plus Principal kind/reference selectors, with action-specific invariants and no missing-action runtime fallback;
+- one-way migrated existing Policy Rules to `actions=["tool.invoke"]` and historical Invocation Audit caller values to audit-only `legacy` Principal snapshots;
+- introduced one Provider activation admission path that evaluates Policy and the shared ApprovalGate before Provider side effects, including Provider synchronization, rebinding, Profile activation, managed MCP startup, and Tool-call lazy activation;
+- removed public ungated `EnsureConfiguredProvider` / MCP compatibility activation entry points; Provider Manager `Ensure` remains an internal low-level mechanism behind admission;
+- changed external Provider resolution to use the persisted verified descriptor snapshot without starting the external plugin process before admission; runtime descriptor verification still occurs once execution is admitted;
+- added dedicated data-minimized Provider activation Audit with a query surface separate from Invocation Audit;
+- hard-cut CLI, management HTTP, OpenAPI, generated TypeScript SDK, Wails bindings, Desktop client, Web/Desktop Policy UX, Overview, and Audit UI to Principal/action contracts with no Caller compatibility fields;
+- Policy management exposes structured action/Principal-kind selectors and an explicitly advanced Principal-reference input while no Principal directory exists;
+- downstream MCP Tool calls use Profile service Principals; local CLI/Desktop/Management control operations use the Runtime owner's OS-backed local-user Principal without claiming peer-process or remote end-user authentication.
+
+### Verification evidence
+
+Repository gates completed successfully on 2026-10-02:
+
+- `pnpm provider-plugin:proto:check`;
+- `pnpm sdk:check`;
+- `pnpm desktop:bindings:check`;
+- full `pnpm check`, including Go/module isolation, Go lint/tests/race, generated-contract drift checks, frontend lint/typecheck/tests/builds, and Provider Plugin SDK/example checks;
+- frontend tests: 69/69;
+- `pnpm security:check`;
+- govulncheck reported no reachable vulnerabilities for backend, Desktop, Provider Plugin SDK, or example plugin;
+- production JavaScript dependency audit reported no known vulnerabilities at the configured high severity threshold;
+- static Caller scan shows no Caller-era field in active backend/public contracts; only historical SQLite migration text and ordinary English uses of “caller” remain.
+
+### Commit sequence
+
+- `0a8feb1` — `docs(governance): define principal activation admission`;
+- `13baaf2` — `refactor(governance): hard cut to principal action policy`;
+- `db436ef` — `feat(governance): admit provider activation before open`;
+- `e62d08a` — `fix(governance): clean phase 22 lint`;
+- `e065493` — `feat(app): expose principal activation governance`.
+
+Deferred items remain exactly the Phase 22 non-goals: interactive approval, remote end-user OAuth/OIDC, Principal directory/groups/roles, OS/container/VM isolation, and runtime quotas/resource budgets.

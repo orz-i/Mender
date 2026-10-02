@@ -3,6 +3,8 @@
 - Status: Accepted
 - Date: 2026-09-26
 
+> **Supersession note (2026-10-02):** ADR-0032 supersedes this ADR's Caller-based execution-context identity semantics. The governed Invocation ordering/scope decisions remain active, but live execution now carries a mandatory Principal through the shared GovernanceContext.
+
 ## Context
 
 ADR-0007 established one shared Invocation pipeline so CLI, MCP, Agent Skills, Web, and Desktop execution cannot bypass policy, credentials, timeout, and Audit.
