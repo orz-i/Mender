@@ -1,6 +1,6 @@
 # Phase 23 Plan — Runtime Budget & Restricted-host Isolation
 
-Status: In Progress
+Status: Complete
 
 ## Objective
 
@@ -167,4 +167,51 @@ No migration rewrites Policy/Profile. Budget and isolation are Runtime-owned cap
 
 ## Completion
 
-Phase 23 completes when Runtime capacity is bounded by default, local subprocess capabilities use an explicit isolation mode with no silent fallback, workspace.shell and external Provider launch are integrated, management contracts expose settings/status, and repository/race/security gates are green.
+Phase 23 is complete.
+
+Implemented:
+
+- introduced a persistent Runtime governance bounded context with validated singleton RuntimeBudget and RuntimeIsolation settings;
+- removed the Runtime's default unlimited baseline execution guard and replaced it with race-safe, fail-fast hierarchical leases for global, Principal, Provider, and Tool invocation capacity;
+- added a separate Provider activation capacity lease acquired only after Policy/Approval admission and before activation side effects;
+- enforced one budget snapshot per Invocation for argument bytes, timeout clamping, concurrency, and canonical result bytes;
+- mapped budget saturation/oversize arguments to canonical `runtime_budget_exceeded` rejection plus bounded Invocation/activation Audit classifications;
+- retained Profile ToolBinding serial execution only as a second tightening layer after Runtime capacity admission;
+- introduced explicit `host` / `restricted_host` process isolation with no silent fallback;
+- implemented macOS Seatbelt and Linux bubblewrap restricted-host backends plus unsupported fail-closed behavior;
+- verified the macOS backend by requiring workspace read/write success and denial of a Runtime-owner HOME sibling secret before reporting availability;
+- routed `workspace.shell` through a host-owned launcher so Tool arguments cannot select isolation or add filesystem roots;
+- routed external Provider plugin processes through the same isolation boundary while independently verifying the exact plugin executable checksum before wrapper launch;
+- persisted isolation independently from Policy/Profile state; workspace shell defaults to restricted_host only when the backend passes its startup probe, while external Providers default to host;
+- added a fail-closed Runtime update boundary so `restricted_host` cannot be persisted when the backend is unavailable;
+- exposed Runtime Budget, isolation, backend availability/name, and live invocation/activation usage through management HTTP, OpenAPI/generated SDK, Wails/Desktop, and the shared Web/Desktop Runtime page;
+- the Runtime page distinguishes unrestricted `host` authority from `restricted_host` containment and explicitly states that restricted_host is not VM/container isolation and does not govern network egress in this phase.
+
+### Verification evidence
+
+Repository gates completed successfully on 2026-10-03:
+
+- `pnpm sdk:check`;
+- `pnpm desktop:bindings:check`;
+- `pnpm provider-plugin:proto:check`;
+- full `pnpm check`, including Provider Plugin SDK/example lint/tests/race/build, Go module isolation, generated-contract drift checks, desktop architecture checks, Go lint/tests/race, frontend lint/typecheck/tests/build;
+- frontend tests: 71/71;
+- `pnpm security:check`;
+- govulncheck reported no reachable vulnerabilities for backend, Desktop, Provider Plugin SDK, or example plugin;
+- production JavaScript dependency audit reported no known vulnerabilities at the configured high severity threshold;
+- hard-cut static scan confirmed no RuntimeOptions `MaxResultBytes`, baseline Invocation `ExecutionGuard`, or Runtime `executionguard.Unlimited` compatibility path was reintroduced.
+
+Focused verification additionally covers invalid budget values, pre-schema argument rejection, timeout clamping, all four invocation capacity dimensions, idempotent/race-safe release, lowered-limit behavior, activation saturation before operation entry, snapshot result-size enforcement, unavailable restricted-host rejection, workspace HOME-boundary containment, host mode, external wrapper checksum verification, and management/Desktop/Web round trips.
+
+### Commit sequence
+
+- `deacedc` — `docs(governance): define runtime budget isolation`;
+- `fbf012b` — `feat(runtime): enforce execution budgets`;
+- `0cd1c32` — `feat(runtime): isolate local process execution`;
+- `5e083e5` — `feat(app): manage runtime budget isolation`.
+
+### Platform implementation note
+
+The ADR originally preferred passing Seatbelt roots through `sandbox-exec -D`. Darwin 27 testing demonstrated unreliable path-filter behavior for that mechanism. The shipped macOS backend instead canonicalizes paths, strictly escapes them, generates the SBPL inside trusted host code, and denies HOME sibling paths outside the permitted root. The security ownership model is unchanged: untrusted Tool/Provider data cannot provide sandbox policy fragments.
+
+Deferred work remains the Phase 23 non-goals: rate-per-window limits, monetary/token budgets, CPU/memory/disk quotas, network egress policy, VM/container provisioning, interactive approval, and terminating already-running actions after settings changes.

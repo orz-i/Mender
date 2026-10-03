@@ -152,7 +152,9 @@ The profile is deliberately restricted_host rather than a claimed hermetic conta
 - writes outside explicit writable roots and bounded temporary/device paths are denied;
 - process execution and network access remain available in Phase 23.
 
-Mender passes roots as sandbox parameters rather than interpolating them into policy source.
+Mender passes roots through a host-owned policy builder rather than accepting policy fragments from Tool or Provider input.
+
+**Implementation note (2026-10-03):** Darwin 27 testing showed that path filters supplied through `sandbox-exec -D` were not reliable for the required read/write boundary. The implemented Seatbelt backend therefore canonicalizes host paths first, applies strict SBPL string escaping, generates literal/subpath rules inside the host, and explicitly denies Runtime-owner HOME siblings outside the permitted root. Tool arguments and Provider protocol/config cannot inject SBPL. The backend probe verifies workspace read/write plus denial of a HOME sibling secret before reporting `restricted_host` as available.
 
 #### Linux
 

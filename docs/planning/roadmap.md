@@ -441,7 +441,7 @@ See `phase-22-provider-activation-principal-governance.md`.
 
 ## Phase 23 — Runtime Budget & Restricted-host Isolation
 
-Status: In Progress
+Status: Complete
 
 Goals:
 
@@ -454,6 +454,6 @@ Goals:
 - Provide macOS Seatbelt and Linux bubblewrap restricted-host backends; unsupported restricted-host selection fails closed.
 - Expose Runtime Budget/Isolation settings, backend availability, and bounded live usage across management HTTP, OpenAPI/SDK, Wails/Desktop, and shared Web/Desktop UX.
 
-Exit criteria require bounded-by-default Runtime capacity, explicit local process isolation semantics, workspace/external Provider integration, management parity, race-safe accounting, and green repository/security checks.
+Exit criteria are complete. Runtime capacity is bounded by default with race-safe hierarchical leases; `workspace.shell` and external Provider processes use explicit host/restricted-host execution environments with no silent fallback; macOS Seatbelt and Linux bubblewrap backends are integrated; Runtime settings/backend/usage are exposed across HTTP/OpenAPI/SDK/Wails/Web/Desktop; and full repository/race/security verification is green.
 
 See `phase-23-runtime-budget-isolation.md`.
