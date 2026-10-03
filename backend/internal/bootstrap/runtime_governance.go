@@ -13,11 +13,11 @@ import (
 
 // RuntimeGovernance composes persistent Runtime capacity governance.
 type RuntimeGovernance struct {
-	GetBudget       runtimegovernanceapplication.GetBudget
-	UpdateBudget    runtimegovernanceapplication.UpdateBudget
-	GetIsolation    runtimegovernanceapplication.GetIsolation
-	UpdateIsolation runtimegovernanceapplication.UpdateIsolation
+	GetBudget    runtimegovernanceapplication.GetBudget
+	UpdateBudget runtimegovernanceapplication.UpdateBudget
+	GetIsolation runtimegovernanceapplication.GetIsolation
 
+	updateIsolation  runtimegovernanceapplication.UpdateIsolation
 	controller       *runtimebudget.Controller
 	processIsolation *runtimeprocessisolation.Launcher
 	store            *runtimegovernancesqlite.Store
@@ -39,7 +39,7 @@ func NewRuntimeGovernance(
 		GetBudget:        runtimegovernanceapplication.NewGetBudget(store),
 		UpdateBudget:     runtimegovernanceapplication.NewUpdateBudget(store),
 		GetIsolation:     runtimegovernanceapplication.NewGetIsolation(store),
-		UpdateIsolation:  runtimegovernanceapplication.NewUpdateIsolation(store),
+		updateIsolation:  runtimegovernanceapplication.NewUpdateIsolation(store),
 		controller:       runtimebudget.NewController(store),
 		processIsolation: processIsolation,
 		store:            store,
@@ -51,6 +51,28 @@ func (g *RuntimeGovernance) Close() error {
 		return nil
 	}
 	return g.store.Close()
+}
+
+func (g *RuntimeGovernance) UpdateIsolation(
+	ctx context.Context,
+	spec runtimegovernancedomain.IsolationSpec,
+) (runtimegovernancedomain.Isolation, error) {
+	if g == nil || g.processIsolation == nil {
+		return runtimegovernancedomain.Isolation{}, fmt.Errorf("runtime isolation backend is unavailable")
+	}
+	if (spec.WorkspaceShell == runtimegovernancedomain.IsolationRestrictedHost ||
+		spec.ExternalProvider == runtimegovernancedomain.IsolationRestrictedHost) &&
+		!g.processIsolation.Info().RestrictedHostAvailable {
+		return runtimegovernancedomain.Isolation{}, fmt.Errorf("restricted_host process isolation is unavailable on this Runtime")
+	}
+	return g.updateIsolation.Execute(ctx, spec)
+}
+
+func (g *RuntimeGovernance) IsolationBackend() runtimeprocessisolation.BackendInfo {
+	if g == nil || g.processIsolation == nil {
+		return runtimeprocessisolation.BackendInfo{Name: "none"}
+	}
+	return g.processIsolation.Info()
 }
 
 func (g *RuntimeGovernance) BudgetUsage() runtimebudget.Usage {

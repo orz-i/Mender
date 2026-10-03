@@ -50,6 +50,9 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) routes() {
 	h.mux.HandleFunc("GET /api/v1/system/status", h.getSystemStatus)
+	h.mux.HandleFunc("GET /api/v1/runtime-governance", h.getRuntimeGovernance)
+	h.mux.HandleFunc("PUT /api/v1/runtime-governance/budget", h.updateRuntimeBudget)
+	h.mux.HandleFunc("PUT /api/v1/runtime-governance/isolation", h.updateRuntimeIsolation)
 	h.mux.HandleFunc("GET /api/v1/policy/status", h.getPolicyStatus)
 	h.mux.HandleFunc("GET /api/v1/policy", h.getPolicy)
 	h.mux.HandleFunc("PUT /api/v1/policy/default", h.setPolicyDefault)

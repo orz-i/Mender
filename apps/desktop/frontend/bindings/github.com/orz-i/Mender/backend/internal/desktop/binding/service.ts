@@ -124,6 +124,10 @@ export function GetProfile(slug: string): $CancellablePromise<$models.Profile> {
     return $Call.ByID(3495904181, slug);
 }
 
+export function GetRuntimeGovernance(): $CancellablePromise<$models.RuntimeGovernanceStatus> {
+    return $Call.ByID(4089393752);
+}
+
 export function GetSkillInstallation(installationID: string): $CancellablePromise<$models.SkillInspection> {
     return $Call.ByID(2370910789, installationID);
 }
@@ -258,4 +262,12 @@ export function UpdatePolicyRule(ruleID: string, input: $models.PolicyRuleInput)
 
 export function UpdateProvider(providerID: string, displayName: string, description: string, transport: string, endpoint: string, headers: { [_ in string]?: string } | null, credentialHeaders: $models.CredentialHeader[] | null, executable: string, args: string[] | null, directory: string, credentialEnvironment: $models.CredentialEnvironment[] | null): $CancellablePromise<$models.ProviderMutationResponse> {
     return $Call.ByID(2087755724, providerID, displayName, description, transport, endpoint, headers, credentialHeaders, executable, args, directory, credentialEnvironment);
+}
+
+export function UpdateRuntimeBudget(input: $models.RuntimeBudget): $CancellablePromise<$models.RuntimeGovernanceStatus> {
+    return $Call.ByID(2267284358, input);
+}
+
+export function UpdateRuntimeIsolation(input: $models.RuntimeIsolation): $CancellablePromise<$models.RuntimeGovernanceStatus> {
+    return $Call.ByID(455640737, input);
 }

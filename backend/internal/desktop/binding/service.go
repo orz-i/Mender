@@ -25,6 +25,7 @@ import (
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
 	installationdomain "github.com/orz-i/Mender/backend/internal/providerplugin/installation/domain"
+	runtimegovernancedomain "github.com/orz-i/Mender/backend/internal/runtimegovernance/domain"
 	skillapplication "github.com/orz-i/Mender/backend/internal/skill/application"
 	skilldomain "github.com/orz-i/Mender/backend/internal/skill/domain"
 	tunnelapplication "github.com/orz-i/Mender/backend/internal/tunnel/application"
@@ -65,6 +66,60 @@ func (s *Service) GetSystemStatus() (SystemStatus, error) {
 			ExposureModes:  []string{"direct", "dynamic", "hybrid"},
 		},
 	}, nil
+}
+
+func (s *Service) GetRuntimeGovernance() (RuntimeGovernanceStatus, error) {
+	budget, err := s.runtime.RuntimeGovernance.GetBudget.Execute(s.ctx)
+	if err != nil {
+		return RuntimeGovernanceStatus{}, err
+	}
+	isolation, err := s.runtime.RuntimeGovernance.GetIsolation.Execute(s.ctx)
+	if err != nil {
+		return RuntimeGovernanceStatus{}, err
+	}
+	return runtimeGovernanceStatus(s.runtime, budget, isolation), nil
+}
+
+func (s *Service) UpdateRuntimeBudget(input RuntimeBudget) (RuntimeGovernanceStatus, error) {
+	budget, err := s.runtime.RuntimeGovernance.UpdateBudget.Execute(
+		s.ctx,
+		runtimegovernancedomain.BudgetSpec{
+			MaxInvocations:          input.MaxInvocations,
+			MaxPrincipalInvocations: input.MaxPrincipalInvocations,
+			MaxProviderInvocations:  input.MaxProviderInvocations,
+			MaxToolInvocations:      input.MaxToolInvocations,
+			MaxProviderActivations:  input.MaxProviderActivations,
+			MaxExecutionTimeoutMS:   input.MaxExecutionTimeoutMS,
+			MaxArgumentBytes:        input.MaxArgumentBytes,
+			MaxResultBytes:          input.MaxResultBytes,
+		},
+	)
+	if err != nil {
+		return RuntimeGovernanceStatus{}, err
+	}
+	isolation, err := s.runtime.RuntimeGovernance.GetIsolation.Execute(s.ctx)
+	if err != nil {
+		return RuntimeGovernanceStatus{}, err
+	}
+	return runtimeGovernanceStatus(s.runtime, budget, isolation), nil
+}
+
+func (s *Service) UpdateRuntimeIsolation(input RuntimeIsolation) (RuntimeGovernanceStatus, error) {
+	isolation, err := s.runtime.RuntimeGovernance.UpdateIsolation(
+		s.ctx,
+		runtimegovernancedomain.IsolationSpec{
+			WorkspaceShell:   runtimegovernancedomain.IsolationMode(input.WorkspaceShell),
+			ExternalProvider: runtimegovernancedomain.IsolationMode(input.ExternalProvider),
+		},
+	)
+	if err != nil {
+		return RuntimeGovernanceStatus{}, err
+	}
+	budget, err := s.runtime.RuntimeGovernance.GetBudget.Execute(s.ctx)
+	if err != nil {
+		return RuntimeGovernanceStatus{}, err
+	}
+	return runtimeGovernanceStatus(s.runtime, budget, isolation), nil
 }
 
 func (s *Service) GetPolicyStatus() (PolicyStatus, error) {
@@ -1843,6 +1898,40 @@ func profileProjection(profile profiledomain.Profile) Profile {
 		result.TunnelID = tunnelID.String()
 	}
 	return result
+}
+
+func runtimeGovernanceStatus(
+	runtime *bootstrap.Runtime,
+	budget runtimegovernancedomain.Budget,
+	isolation runtimegovernancedomain.Isolation,
+) RuntimeGovernanceStatus {
+	spec := budget.Spec()
+	backend := runtime.RuntimeGovernance.IsolationBackend()
+	usage := runtime.RuntimeGovernance.BudgetUsage()
+	return RuntimeGovernanceStatus{
+		Budget: RuntimeBudget{
+			MaxInvocations:          spec.MaxInvocations,
+			MaxPrincipalInvocations: spec.MaxPrincipalInvocations,
+			MaxProviderInvocations:  spec.MaxProviderInvocations,
+			MaxToolInvocations:      spec.MaxToolInvocations,
+			MaxProviderActivations:  spec.MaxProviderActivations,
+			MaxExecutionTimeoutMS:   spec.MaxExecutionTimeoutMS,
+			MaxArgumentBytes:        spec.MaxArgumentBytes,
+			MaxResultBytes:          spec.MaxResultBytes,
+		},
+		Isolation: RuntimeIsolation{
+			WorkspaceShell:   string(isolation.WorkspaceShell()),
+			ExternalProvider: string(isolation.ExternalProvider()),
+		},
+		Backend: RuntimeBackend{
+			Name:                    backend.Name,
+			RestrictedHostAvailable: backend.RestrictedHostAvailable,
+		},
+		Usage: RuntimeUsage{
+			Invocations: usage.Invocations,
+			Activations: usage.Activations,
+		},
+	}
 }
 
 func tunnelProjection(item tunneldomain.Tunnel) Tunnel {

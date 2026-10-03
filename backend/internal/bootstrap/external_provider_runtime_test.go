@@ -103,7 +103,7 @@ func TestRuntimeInstalledExternalProviderEndToEnd(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err := runtime.RuntimeGovernance.UpdateIsolation.Execute(
+		if _, err := runtime.RuntimeGovernance.UpdateIsolation(
 			ctx,
 			runtimegovernancedomain.IsolationSpec{
 				WorkspaceShell:   currentIsolation.WorkspaceShell(),

@@ -8,6 +8,28 @@ import (
 	runtimegovernancedomain "github.com/orz-i/Mender/backend/internal/runtimegovernance/domain"
 )
 
+func TestRuntimeGovernanceRejectsRestrictedHostWhenBackendUnavailable(t *testing.T) {
+	governance, err := NewRuntimeGovernance(
+		context.Background(),
+		filepath.Join(t.TempDir(), "mender.db"),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = governance.Close() }()
+
+	governance.processIsolation = nil
+	if _, err := governance.UpdateIsolation(
+		context.Background(),
+		runtimegovernancedomain.IsolationSpec{
+			WorkspaceShell:   runtimegovernancedomain.IsolationRestrictedHost,
+			ExternalProvider: runtimegovernancedomain.IsolationHost,
+		},
+	); err == nil {
+		t.Fatal("UpdateIsolation accepted restricted_host without backend")
+	}
+}
+
 func TestRuntimeGovernanceInitialIsolationFollowsBackendAvailability(t *testing.T) {
 	t.Parallel()
 

@@ -17,6 +17,63 @@ import (
 	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
 )
 
+func TestRuntimeGovernanceManagementAPI(t *testing.T) {
+	t.Parallel()
+
+	runtime, err := bootstrap.NewRuntime(
+		context.Background(),
+		bootstrap.RuntimeOptions{DatabasePath: filepath.Join(t.TempDir(), "mender.db")},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = runtime.Close() })
+
+	server := httptest.NewServer(New(runtime))
+	t.Cleanup(server.Close)
+
+	current := requestJSON(t, server.Client(), http.MethodGet, server.URL+"/api/v1/runtime-governance", nil, http.StatusOK)
+	budget, ok := current["budget"].(map[string]any)
+	if !ok || budget["maxInvocations"] != float64(32) {
+		t.Fatalf("runtime budget = %#v", current)
+	}
+	backend, ok := current["backend"].(map[string]any)
+	if !ok || backend["name"] == "" {
+		t.Fatalf("runtime backend = %#v", current)
+	}
+
+	updated := requestJSON(t, server.Client(), http.MethodPut, server.URL+"/api/v1/runtime-governance/budget", map[string]any{
+		"maxInvocations":          12,
+		"maxPrincipalInvocations": 8,
+		"maxProviderInvocations":  8,
+		"maxToolInvocations":      4,
+		"maxProviderActivations":  4,
+		"maxExecutionTimeoutMs":   120000,
+		"maxArgumentBytes":        1048576,
+		"maxResultBytes":          1048576,
+	}, http.StatusOK)
+	updatedBudget := updated["budget"].(map[string]any)
+	if updatedBudget["maxInvocations"] != float64(12) {
+		t.Fatalf("updated runtime budget = %#v", updated)
+	}
+
+	requestJSON(t, server.Client(), http.MethodPut, server.URL+"/api/v1/runtime-governance/budget", map[string]any{
+		"maxInvocations":          0,
+		"maxPrincipalInvocations": 8,
+		"maxProviderInvocations":  8,
+		"maxToolInvocations":      4,
+		"maxProviderActivations":  4,
+		"maxExecutionTimeoutMs":   120000,
+		"maxArgumentBytes":        1048576,
+		"maxResultBytes":          1048576,
+	}, http.StatusBadRequest)
+
+	requestJSON(t, server.Client(), http.MethodPut, server.URL+"/api/v1/runtime-governance/isolation", map[string]any{
+		"workspaceShell":   "host",
+		"externalProvider": "host",
+	}, http.StatusOK)
+}
+
 func TestProviderPluginInstallationManagementRejectsServerPathInstall(t *testing.T) {
 	t.Parallel()
 

@@ -4,6 +4,7 @@ import {
   BookOpenIcon,
   CableIcon,
   CommandIcon,
+  GaugeIcon,
   KeyRoundIcon,
   LanguagesIcon,
   Layers3Icon,
@@ -89,6 +90,11 @@ const navigation: NavigationGroup[] = [
   {
     label: "Runtime",
     items: [
+      {
+        to: "/runtime",
+        label: "Runtime",
+        icon: GaugeIcon,
+      },
       {
         to: "/profiles",
         label: "Profiles",

@@ -24,6 +24,9 @@ export type AuditRecord = components["schemas"]["AuditRecord"];
 export type ProviderActivationAuditRecord =
   components["schemas"]["ProviderActivationAuditRecord"];
 export type SystemStatus = components["schemas"]["SystemStatus"];
+export type RuntimeGovernanceStatus = components["schemas"]["RuntimeGovernanceStatus"];
+export type RuntimeBudget = components["schemas"]["RuntimeBudget"];
+export type RuntimeIsolation = components["schemas"]["RuntimeIsolation"];
 export type PolicyStatus = components["schemas"]["PolicyStatus"];
 export type Policy = components["schemas"]["Policy"];
 export type PolicyDecision = components["schemas"]["PolicyDecision"];
@@ -154,6 +157,9 @@ export interface MenderClient {
   listProviderActivationAudit(
     limit?: number,
   ): Promise<{ records: ProviderActivationAuditRecord[] }>;
+  getRuntimeGovernance(): Promise<RuntimeGovernanceStatus>;
+  updateRuntimeBudget(body: RuntimeBudget): Promise<RuntimeGovernanceStatus>;
+  updateRuntimeIsolation(body: RuntimeIsolation): Promise<RuntimeGovernanceStatus>;
   getPolicyStatus(): Promise<PolicyStatus>;
   getPolicy(): Promise<Policy>;
   setPolicyDefault(body: PolicyDefaultRequest): Promise<Policy>;
@@ -513,6 +519,21 @@ export function createMenderClient(
       const result = await client.GET("/audit/provider-activations", {
         params: { query: { limit } },
       });
+      return requireData(result);
+    },
+
+    async getRuntimeGovernance() {
+      const result = await client.GET("/runtime-governance");
+      return requireData(result);
+    },
+
+    async updateRuntimeBudget(body: RuntimeBudget) {
+      const result = await client.PUT("/runtime-governance/budget", { body });
+      return requireData(result);
+    },
+
+    async updateRuntimeIsolation(body: RuntimeIsolation) {
+      const result = await client.PUT("/runtime-governance/isolation", { body });
       return requireData(result);
     },
 

@@ -7,6 +7,39 @@ type SystemStatus struct {
 	MCP         MCPStatus        `json:"mcp"`
 }
 
+type RuntimeBudget struct {
+	MaxInvocations          int   `json:"maxInvocations"`
+	MaxPrincipalInvocations int   `json:"maxPrincipalInvocations"`
+	MaxProviderInvocations  int   `json:"maxProviderInvocations"`
+	MaxToolInvocations      int   `json:"maxToolInvocations"`
+	MaxProviderActivations  int   `json:"maxProviderActivations"`
+	MaxExecutionTimeoutMS   int64 `json:"maxExecutionTimeoutMs"`
+	MaxArgumentBytes        int   `json:"maxArgumentBytes"`
+	MaxResultBytes          int   `json:"maxResultBytes"`
+}
+
+type RuntimeIsolation struct {
+	WorkspaceShell   string `json:"workspaceShell"`
+	ExternalProvider string `json:"externalProvider"`
+}
+
+type RuntimeBackend struct {
+	Name                    string `json:"name"`
+	RestrictedHostAvailable bool   `json:"restrictedHostAvailable"`
+}
+
+type RuntimeUsage struct {
+	Invocations int `json:"invocations"`
+	Activations int `json:"activations"`
+}
+
+type RuntimeGovernanceStatus struct {
+	Budget    RuntimeBudget    `json:"budget"`
+	Isolation RuntimeIsolation `json:"isolation"`
+	Backend   RuntimeBackend   `json:"backend"`
+	Usage     RuntimeUsage     `json:"usage"`
+}
+
 type MCPStatus struct {
 	Stdio          bool     `json:"stdio"`
 	StreamableHTTP bool     `json:"streamableHttp"`

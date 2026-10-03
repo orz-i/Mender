@@ -53,7 +53,7 @@ func TestWorkspaceShellIsolationModeUpdatesApplyToNewExecutions(t *testing.T) {
 		t.Skip("restricted_host backend unavailable")
 	}
 
-	if _, err := runtime.RuntimeGovernance.UpdateIsolation.Execute(
+	if _, err := runtime.RuntimeGovernance.UpdateIsolation(
 		ctx,
 		runtimegovernancedomain.IsolationSpec{
 			WorkspaceShell:   runtimegovernancedomain.IsolationRestrictedHost,
@@ -137,7 +137,7 @@ func TestWorkspaceShellIsolationModeUpdatesApplyToNewExecutions(t *testing.T) {
 		t.Fatalf("restricted workspace write = %q error=%v", data, readErr)
 	}
 
-	if _, err := runtime.RuntimeGovernance.UpdateIsolation.Execute(
+	if _, err := runtime.RuntimeGovernance.UpdateIsolation(
 		ctx,
 		runtimegovernancedomain.IsolationSpec{
 			WorkspaceShell:   runtimegovernancedomain.IsolationHost,

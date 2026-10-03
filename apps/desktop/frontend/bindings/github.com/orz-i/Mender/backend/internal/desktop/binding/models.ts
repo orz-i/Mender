@@ -277,6 +277,39 @@ export interface ProviderPluginList {
     "issues": ProviderPluginIssue[] | null;
 }
 
+export interface RuntimeBackend {
+    "name": string;
+    "restrictedHostAvailable": boolean;
+}
+
+export interface RuntimeBudget {
+    "maxInvocations": number;
+    "maxPrincipalInvocations": number;
+    "maxProviderInvocations": number;
+    "maxToolInvocations": number;
+    "maxProviderActivations": number;
+    "maxExecutionTimeoutMs": number;
+    "maxArgumentBytes": number;
+    "maxResultBytes": number;
+}
+
+export interface RuntimeGovernanceStatus {
+    "budget": RuntimeBudget;
+    "isolation": RuntimeIsolation;
+    "backend": RuntimeBackend;
+    "usage": RuntimeUsage;
+}
+
+export interface RuntimeIsolation {
+    "workspaceShell": string;
+    "externalProvider": string;
+}
+
+export interface RuntimeUsage {
+    "invocations": number;
+    "activations": number;
+}
+
 export interface SkillDeployment {
     "deploymentId": string;
     "installationId": string;

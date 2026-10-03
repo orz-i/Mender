@@ -598,6 +598,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/runtime-governance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getRuntimeGovernance"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/runtime-governance/budget": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["updateRuntimeBudget"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/runtime-governance/isolation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["updateRuntimeIsolation"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/policy/status": {
         parameters: {
             query?: never;
@@ -823,6 +871,37 @@ export interface components {
                 streamableHttp: boolean;
                 exposureModes: ("direct" | "dynamic" | "hybrid")[];
             };
+        };
+        RuntimeGovernanceStatus: {
+            budget: components["schemas"]["RuntimeBudget"];
+            isolation: components["schemas"]["RuntimeIsolation"];
+            backend: components["schemas"]["RuntimeBackend"];
+            usage: components["schemas"]["RuntimeUsage"];
+        };
+        RuntimeBudget: {
+            maxInvocations: number;
+            maxPrincipalInvocations: number;
+            maxProviderInvocations: number;
+            maxToolInvocations: number;
+            maxProviderActivations: number;
+            /** Format: int64 */
+            maxExecutionTimeoutMs: number;
+            maxArgumentBytes: number;
+            maxResultBytes: number;
+        };
+        RuntimeIsolation: {
+            /** @enum {string} */
+            workspaceShell: "host" | "restricted_host";
+            /** @enum {string} */
+            externalProvider: "host" | "restricted_host";
+        };
+        RuntimeBackend: {
+            name: string;
+            restrictedHostAvailable: boolean;
+        };
+        RuntimeUsage: {
+            invocations: number;
+            activations: number;
         };
         PolicyStatus: {
             /** @enum {string} */
@@ -2502,6 +2581,77 @@ export interface operations {
                 };
             };
             403: components["responses"]["Forbidden"];
+        };
+    };
+    getRuntimeGovernance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Runtime budget, isolation, backend availability, and live usage */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RuntimeGovernanceStatus"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    updateRuntimeBudget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RuntimeBudget"];
+            };
+        };
+        responses: {
+            /** @description Updated Runtime governance */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RuntimeGovernanceStatus"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+        };
+    };
+    updateRuntimeIsolation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RuntimeIsolation"];
+            };
+        };
+        responses: {
+            /** @description Updated Runtime governance */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RuntimeGovernanceStatus"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
         };
     };
     getPolicyStatus: {

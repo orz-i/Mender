@@ -69,6 +69,30 @@ func TestServiceEndToEndUsesSharedRuntime(t *testing.T) {
 		t.Fatalf("system status = %#v", status)
 	}
 
+	runtimeStatus, err := service.GetRuntimeGovernance()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if runtimeStatus.Budget.MaxInvocations != 32 || runtimeStatus.Backend.Name == "" {
+		t.Fatalf("runtime governance = %#v", runtimeStatus)
+	}
+	updatedRuntime, err := service.UpdateRuntimeBudget(RuntimeBudget{
+		MaxInvocations:          12,
+		MaxPrincipalInvocations: runtimeStatus.Budget.MaxPrincipalInvocations,
+		MaxProviderInvocations:  runtimeStatus.Budget.MaxProviderInvocations,
+		MaxToolInvocations:      runtimeStatus.Budget.MaxToolInvocations,
+		MaxProviderActivations:  runtimeStatus.Budget.MaxProviderActivations,
+		MaxExecutionTimeoutMS:   runtimeStatus.Budget.MaxExecutionTimeoutMS,
+		MaxArgumentBytes:        runtimeStatus.Budget.MaxArgumentBytes,
+		MaxResultBytes:          runtimeStatus.Budget.MaxResultBytes,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updatedRuntime.Budget.MaxInvocations != 12 {
+		t.Fatalf("updated runtime governance = %#v", updatedRuntime)
+	}
+
 	created, err := service.CreateHTTPProvider(
 		"upstream",
 		"Upstream",

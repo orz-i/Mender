@@ -11,6 +11,9 @@ import type {
   PolicyRule,
   PolicyRuleInput,
   PolicyStatus,
+  RuntimeBudget,
+  RuntimeGovernanceStatus,
+  RuntimeIsolation,
   Profile,
   Provider,
   ProviderMutationResponse,
@@ -39,6 +42,9 @@ import {
   type PolicyRule as BindingPolicyRule,
   type PolicyRuleInput as BindingPolicyRuleInput,
   type PolicyStatus as BindingPolicyStatus,
+  type RuntimeBudget as BindingRuntimeBudget,
+  type RuntimeGovernanceStatus as BindingRuntimeGovernanceStatus,
+  type RuntimeIsolation as BindingRuntimeIsolation,
   type Profile as BindingProfile,
   type Provider as BindingProvider,
   type ProviderMutationResponse as BindingProviderMutationResponse,
@@ -407,6 +413,22 @@ export function createDesktopMenderClient(): MenderClient {
       };
     },
 
+    async getRuntimeGovernance() {
+      return runtimeGovernanceStatus(await Service.GetRuntimeGovernance());
+    },
+
+    async updateRuntimeBudget(body) {
+      return runtimeGovernanceStatus(
+        await Service.UpdateRuntimeBudget(bindingRuntimeBudget(body)),
+      );
+    },
+
+    async updateRuntimeIsolation(body) {
+      return runtimeGovernanceStatus(
+        await Service.UpdateRuntimeIsolation(bindingRuntimeIsolation(body)),
+      );
+    },
+
     async getPolicyStatus() {
       return policyStatus(await Service.GetPolicyStatus());
     },
@@ -497,6 +519,50 @@ function systemStatus(value: BindingSystemStatus): SystemStatus {
       exposureModes: (value.mcp.exposureModes ?? []).map(exposureMode),
     },
   };
+}
+
+function runtimeGovernanceStatus(
+  value: BindingRuntimeGovernanceStatus,
+): RuntimeGovernanceStatus {
+  return {
+    budget: {
+      maxInvocations: value.budget.maxInvocations,
+      maxPrincipalInvocations: value.budget.maxPrincipalInvocations,
+      maxProviderInvocations: value.budget.maxProviderInvocations,
+      maxToolInvocations: value.budget.maxToolInvocations,
+      maxProviderActivations: value.budget.maxProviderActivations,
+      maxExecutionTimeoutMs: value.budget.maxExecutionTimeoutMs,
+      maxArgumentBytes: value.budget.maxArgumentBytes,
+      maxResultBytes: value.budget.maxResultBytes,
+    },
+    isolation: {
+      workspaceShell: isolationMode(value.isolation.workspaceShell),
+      externalProvider: isolationMode(value.isolation.externalProvider),
+    },
+    backend: {
+      name: value.backend.name,
+      restrictedHostAvailable: value.backend.restrictedHostAvailable,
+    },
+    usage: {
+      invocations: value.usage.invocations,
+      activations: value.usage.activations,
+    },
+  };
+}
+
+function bindingRuntimeBudget(value: RuntimeBudget): BindingRuntimeBudget {
+  return { ...value };
+}
+
+function bindingRuntimeIsolation(value: RuntimeIsolation): BindingRuntimeIsolation {
+  return { ...value };
+}
+
+function isolationMode(value: string): "host" | "restricted_host" {
+  if (value === "host" || value === "restricted_host") {
+    return value;
+  }
+  throw new MenderClientInvariantError(`Unsupported desktop isolation mode: ${value}`);
 }
 
 function policyStatus(value: BindingPolicyStatus): PolicyStatus {

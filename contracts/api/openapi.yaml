@@ -782,6 +782,46 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/ProviderActivationAuditRecord'
+  /runtime-governance:
+    get:
+      operationId: getRuntimeGovernance
+      responses:
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '200':
+          description: Runtime budget, isolation, backend availability, and live usage
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RuntimeGovernanceStatus' }
+  /runtime-governance/budget:
+    put:
+      operationId: updateRuntimeBudget
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RuntimeBudget' }
+      responses:
+        '200':
+          description: Updated Runtime governance
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RuntimeGovernanceStatus' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+  /runtime-governance/isolation:
+    put:
+      operationId: updateRuntimeIsolation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RuntimeIsolation' }
+      responses:
+        '200':
+          description: Updated Runtime governance
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RuntimeGovernanceStatus' }
+        '400': { $ref: '#/components/responses/BadRequest' }
   /policy/status:
     get:
       operationId: getPolicyStatus
@@ -1081,6 +1121,49 @@ components:
             exposureModes:
               type: array
               items: { type: string, enum: [direct, dynamic, hybrid] }
+    RuntimeGovernanceStatus:
+      type: object
+      required: [budget, isolation, backend, usage]
+      properties:
+        budget: { $ref: '#/components/schemas/RuntimeBudget' }
+        isolation: { $ref: '#/components/schemas/RuntimeIsolation' }
+        backend: { $ref: '#/components/schemas/RuntimeBackend' }
+        usage: { $ref: '#/components/schemas/RuntimeUsage' }
+      additionalProperties: false
+    RuntimeBudget:
+      type: object
+      required: [maxInvocations, maxPrincipalInvocations, maxProviderInvocations, maxToolInvocations, maxProviderActivations, maxExecutionTimeoutMs, maxArgumentBytes, maxResultBytes]
+      properties:
+        maxInvocations: { type: integer, minimum: 1, maximum: 4096 }
+        maxPrincipalInvocations: { type: integer, minimum: 1, maximum: 4096 }
+        maxProviderInvocations: { type: integer, minimum: 1, maximum: 4096 }
+        maxToolInvocations: { type: integer, minimum: 1, maximum: 4096 }
+        maxProviderActivations: { type: integer, minimum: 1, maximum: 4096 }
+        maxExecutionTimeoutMs: { type: integer, format: int64, minimum: 1, maximum: 86400000 }
+        maxArgumentBytes: { type: integer, minimum: 1, maximum: 67108864 }
+        maxResultBytes: { type: integer, minimum: 1, maximum: 67108864 }
+      additionalProperties: false
+    RuntimeIsolation:
+      type: object
+      required: [workspaceShell, externalProvider]
+      properties:
+        workspaceShell: { type: string, enum: [host, restricted_host] }
+        externalProvider: { type: string, enum: [host, restricted_host] }
+      additionalProperties: false
+    RuntimeBackend:
+      type: object
+      required: [name, restrictedHostAvailable]
+      properties:
+        name: { type: string }
+        restrictedHostAvailable: { type: boolean }
+      additionalProperties: false
+    RuntimeUsage:
+      type: object
+      required: [invocations, activations]
+      properties:
+        invocations: { type: integer, minimum: 0 }
+        activations: { type: integer, minimum: 0 }
+      additionalProperties: false
     PolicyStatus:
       type: object
       required: [mode, editable, approval, defaultDecision, ruleCount, enabledRuleCount]

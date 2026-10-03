@@ -19,6 +19,7 @@ vi.mock(
       EnableSkillInstallation: vi.fn(),
       GetCredential: vi.fn(),
       GetPolicy: vi.fn(),
+      GetRuntimeGovernance: vi.fn(),
       GetSkillInstallation: vi.fn(),
       GetPolicyStatus: vi.fn(),
       GetSystemStatus: vi.fn(),
@@ -45,6 +46,8 @@ vi.mock(
       UntrustSkillInstallation: vi.fn(),
       UpdateConfiguredProvider: vi.fn(),
       UpdatePolicyRule: vi.fn(),
+      UpdateRuntimeBudget: vi.fn(),
+      UpdateRuntimeIsolation: vi.fn(),
       UpdateProvider: vi.fn(),
     },
   }),
@@ -110,6 +113,35 @@ describe("desktop Mender client", () => {
         exposureModes: ["direct", "dynamic", "hybrid"],
       },
     });
+  });
+
+  it("maps Runtime governance and forwards updates", async () => {
+    const status = {
+      budget: {
+        maxInvocations: 32,
+        maxPrincipalInvocations: 8,
+        maxProviderInvocations: 8,
+        maxToolInvocations: 4,
+        maxProviderActivations: 4,
+        maxExecutionTimeoutMs: 120000,
+        maxArgumentBytes: 1048576,
+        maxResultBytes: 1048576,
+      },
+      isolation: { workspaceShell: "restricted_host" as const, externalProvider: "host" as const },
+      backend: { name: "seatbelt", restrictedHostAvailable: true },
+      usage: { invocations: 2, activations: 1 },
+    };
+    vi.mocked(Service.GetRuntimeGovernance).mockResolvedValue(status);
+    vi.mocked(Service.UpdateRuntimeBudget).mockResolvedValue(status);
+    vi.mocked(Service.UpdateRuntimeIsolation).mockResolvedValue(status);
+
+    const client = createDesktopMenderClient();
+    await expect(client.getRuntimeGovernance()).resolves.toEqual(status);
+    await client.updateRuntimeBudget(status.budget);
+    await client.updateRuntimeIsolation(status.isolation);
+
+    expect(Service.UpdateRuntimeBudget).toHaveBeenCalledWith(status.budget);
+    expect(Service.UpdateRuntimeIsolation).toHaveBeenCalledWith(status.isolation);
   });
 
   it("installs Provider plugins only through the desktop-local Wails capability", async () => {

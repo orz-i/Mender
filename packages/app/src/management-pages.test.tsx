@@ -2043,6 +2043,47 @@ describe("management pages", () => {
     expect(screen.queryByText("NEW-SECRET")).toBeNull();
   });
 
+  it("edits Runtime budget and reports restricted-host availability", async () => {
+    const status = {
+      budget: {
+        maxInvocations: 32,
+        maxPrincipalInvocations: 8,
+        maxProviderInvocations: 8,
+        maxToolInvocations: 4,
+        maxProviderActivations: 4,
+        maxExecutionTimeoutMs: 120000,
+        maxArgumentBytes: 1048576,
+        maxResultBytes: 1048576,
+      },
+      isolation: { workspaceShell: "host" as const, externalProvider: "host" as const },
+      backend: { name: "none", restrictedHostAvailable: false },
+      usage: { invocations: 1, activations: 0 },
+    };
+    const updateRuntimeBudget = vi
+      .fn<MenderClient["updateRuntimeBudget"]>()
+      .mockImplementation((budget) => Promise.resolve({ ...status, budget }));
+
+    renderApp("/runtime", {
+      getRuntimeGovernance: vi.fn().mockResolvedValue(status),
+      updateRuntimeBudget,
+      updateRuntimeIsolation: vi.fn().mockResolvedValue(status),
+    });
+
+    expect(await screen.findByText("Runtime governance")).toBeTruthy();
+    expect(screen.getByText("restricted_host is unavailable on this Runtime. Host mode keeps the local process authority of the Runtime user.")).toBeTruthy();
+
+    const globalInput = screen.getByLabelText("Global invocations");
+    fireEvent.change(globalInput, { target: { value: "12" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save budget" }));
+
+    await waitFor(() => {
+      expect(updateRuntimeBudget).toHaveBeenCalledWith({
+        ...status.budget,
+        maxInvocations: 12,
+      });
+    });
+  });
+
   it("renders only minimized Audit metadata", async () => {
     renderApp("/audit", {
       listProviderActivationAudit: vi.fn().mockResolvedValue({ records: [] }),
