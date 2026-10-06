@@ -109,9 +109,6 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 	}
 
 	tunnelRunner := options.TunnelProcessRunner
-	if tunnelRunner == nil {
-		tunnelRunner = tunnelprocess.Runner{}
-	}
 	tunnels, err := NewTunnels(
 		ctx,
 		options.DatabasePath,
@@ -207,6 +204,16 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 			_ = runtimeGovernance.Close()
 		}
 	}()
+	if tunnelRunner == nil {
+		tunnelRunner = tunnelprocess.NewRunner(
+			tunnelClientIsolationLauncher{governance: runtimeGovernance},
+		)
+		tunnels.Start = tunnelapplication.NewStartTunnel(
+			tunnels.store,
+			credentials.Resolver,
+			tunnelRunner,
+		)
+	}
 
 	executors := invocationrouter.New()
 	providerPlugins := providerplugin.NewRegistry()

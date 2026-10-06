@@ -130,15 +130,17 @@ func (s *Store) SetBudget(ctx context.Context, value runtimegovernancedomain.Bud
 func (s *Store) GetIsolation(ctx context.Context) (runtimegovernancedomain.Isolation, error) {
 	var workspaceShell string
 	var externalProvider string
+	var tunnelClient string
 	if err := s.db.QueryRowContext(
 		ctx,
-		"SELECT workspace_shell, external_provider FROM runtime_isolation_settings WHERE singleton_id = 1",
-	).Scan(&workspaceShell, &externalProvider); err != nil {
+		"SELECT workspace_shell, external_provider, tunnel_client FROM runtime_isolation_settings WHERE singleton_id = 1",
+	).Scan(&workspaceShell, &externalProvider, &tunnelClient); err != nil {
 		return runtimegovernancedomain.Isolation{}, fmt.Errorf("get runtime isolation: %w", err)
 	}
 	value, err := runtimegovernancedomain.NewIsolation(runtimegovernancedomain.IsolationSpec{
 		WorkspaceShell:   runtimegovernancedomain.IsolationMode(workspaceShell),
 		ExternalProvider: runtimegovernancedomain.IsolationMode(externalProvider),
+		TunnelClient:     runtimegovernancedomain.IsolationMode(tunnelClient),
 	})
 	if err != nil {
 		return runtimegovernancedomain.Isolation{}, fmt.Errorf("get runtime isolation: invalid persisted value: %w", err)
@@ -152,9 +154,10 @@ func (s *Store) SetIsolation(ctx context.Context, value runtimegovernancedomain.
 	}
 	result, err := s.db.ExecContext(
 		ctx,
-		"UPDATE runtime_isolation_settings SET workspace_shell = ?, external_provider = ?, updated_at = ? WHERE singleton_id = 1",
+		"UPDATE runtime_isolation_settings SET workspace_shell = ?, external_provider = ?, tunnel_client = ?, updated_at = ? WHERE singleton_id = 1",
 		string(value.WorkspaceShell()),
 		string(value.ExternalProvider()),
+		string(value.TunnelClient()),
 		time.Now().UTC().Format(time.RFC3339Nano),
 	)
 	if err != nil {

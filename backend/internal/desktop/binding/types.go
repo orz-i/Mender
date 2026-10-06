@@ -21,6 +21,7 @@ type RuntimeBudget struct {
 type RuntimeIsolation struct {
 	WorkspaceShell   string `json:"workspaceShell"`
 	ExternalProvider string `json:"externalProvider"`
+	TunnelClient     string `json:"tunnelClient"`
 }
 
 type RuntimeBackend struct {
@@ -358,7 +359,6 @@ type Tunnel struct {
 	Provider             string `json:"provider"`
 	ExternalTunnelID     string `json:"externalTunnelId"`
 	RuntimeCredentialRef string `json:"runtimeCredentialRef"`
-	Executable           string `json:"executable"`
 }
 
 type TunnelList struct {

@@ -21,11 +21,13 @@ func (m IsolationMode) Validate() error {
 type IsolationSpec struct {
 	WorkspaceShell   IsolationMode
 	ExternalProvider IsolationMode
+	TunnelClient     IsolationMode
 }
 
 type Isolation struct {
 	workspaceShell   IsolationMode
 	externalProvider IsolationMode
+	tunnelClient     IsolationMode
 }
 
 func DefaultIsolation(restrictedHostAvailable bool) Isolation {
@@ -36,6 +38,7 @@ func DefaultIsolation(restrictedHostAvailable bool) Isolation {
 	value, err := NewIsolation(IsolationSpec{
 		WorkspaceShell:   workspace,
 		ExternalProvider: IsolationHost,
+		TunnelClient:     workspace,
 	})
 	if err != nil {
 		panic("runtime governance: invalid default isolation: " + err.Error())
@@ -50,9 +53,13 @@ func NewIsolation(spec IsolationSpec) (Isolation, error) {
 	if err := spec.ExternalProvider.Validate(); err != nil {
 		return Isolation{}, fmt.Errorf("external_provider: %w", err)
 	}
+	if err := spec.TunnelClient.Validate(); err != nil {
+		return Isolation{}, fmt.Errorf("tunnel_client: %w", err)
+	}
 	return Isolation{
 		workspaceShell:   spec.WorkspaceShell,
 		externalProvider: spec.ExternalProvider,
+		tunnelClient:     spec.TunnelClient,
 	}, nil
 }
 
@@ -65,8 +72,10 @@ func (i Isolation) Spec() IsolationSpec {
 	return IsolationSpec{
 		WorkspaceShell:   i.workspaceShell,
 		ExternalProvider: i.externalProvider,
+		TunnelClient:     i.tunnelClient,
 	}
 }
 
 func (i Isolation) WorkspaceShell() IsolationMode   { return i.workspaceShell }
 func (i Isolation) ExternalProvider() IsolationMode { return i.externalProvider }
+func (i Isolation) TunnelClient() IsolationMode     { return i.tunnelClient }

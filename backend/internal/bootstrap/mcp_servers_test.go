@@ -267,10 +267,6 @@ func TestManagedMCPHTTPServerSupervisesProfileTunnel(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if tunnel.Executable() != "tunnel-client" {
-		t.Fatalf("Tunnel executable = %q", tunnel.Executable())
-	}
-
 	profile, err := runtime.Profiles.Create.Execute(
 		ctx,
 		profileapplication.CreateProfileRequest{
@@ -439,6 +435,7 @@ type fakeTunnelRunner struct {
 }
 
 func (r *fakeTunnelRunner) Start(
+	_ context.Context,
 	_ tunneldomain.Tunnel,
 	endpoint string,
 	apiKey []byte,

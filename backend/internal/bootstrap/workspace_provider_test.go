@@ -58,6 +58,7 @@ func TestWorkspaceShellIsolationModeUpdatesApplyToNewExecutions(t *testing.T) {
 		runtimegovernancedomain.IsolationSpec{
 			WorkspaceShell:   runtimegovernancedomain.IsolationRestrictedHost,
 			ExternalProvider: runtimegovernancedomain.IsolationHost,
+			TunnelClient:     runtimegovernancedomain.IsolationHost,
 		},
 	); err != nil {
 		t.Fatal(err)
@@ -142,6 +143,7 @@ func TestWorkspaceShellIsolationModeUpdatesApplyToNewExecutions(t *testing.T) {
 		runtimegovernancedomain.IsolationSpec{
 			WorkspaceShell:   runtimegovernancedomain.IsolationHost,
 			ExternalProvider: runtimegovernancedomain.IsolationHost,
+			TunnelClient:     runtimegovernancedomain.IsolationHost,
 		},
 	); err != nil {
 		t.Fatal(err)

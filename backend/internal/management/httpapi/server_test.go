@@ -71,6 +71,7 @@ func TestRuntimeGovernanceManagementAPI(t *testing.T) {
 	requestJSON(t, server.Client(), http.MethodPut, server.URL+"/api/v1/runtime-governance/isolation", map[string]any{
 		"workspaceShell":   "host",
 		"externalProvider": "host",
+		"tunnelClient":     "host",
 	}, http.StatusOK)
 }
 
@@ -187,8 +188,7 @@ func TestTunnelManagementAPI(t *testing.T) {
 	)
 	tunnelID, _ := created["tunnelId"].(string)
 	if tunnelID == "" ||
-		created["provider"] != "openai" ||
-		created["executable"] != "tunnel-client" {
+		created["provider"] != "openai" {
 		t.Fatalf("created Tunnel = %#v", created)
 	}
 	if _, ok := created["secret"]; ok {

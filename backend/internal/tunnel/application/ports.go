@@ -44,5 +44,5 @@ type Process interface {
 }
 
 type ProcessRunner interface {
-	Start(tunneldomain.Tunnel, string, []byte) (Process, error)
+	Start(context.Context, tunneldomain.Tunnel, string, []byte) (Process, error)
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"path/filepath"
 
 	runtimegovernance "github.com/orz-i/Mender/backend/internal/runtimegovernance/infrastructure/processisolation"
 )
@@ -68,6 +69,49 @@ func (a externalProviderIsolationLauncher) Command(
 			WorkingDirectory: workingDirectory,
 			PermittedRoot:    workingDirectory,
 			RootWritable:     false,
+		},
+	)
+}
+
+type tunnelClientIsolationLauncher struct {
+	governance *RuntimeGovernance
+}
+
+func (a tunnelClientIsolationLauncher) Command(
+	ctx context.Context,
+	arguments []string,
+	environment []string,
+) (*exec.Cmd, error) {
+	if a.governance == nil || a.governance.processIsolation == nil {
+		return nil, fmt.Errorf("tunnel client isolation launcher is unavailable")
+	}
+	resolved, err := exec.LookPath("tunnel-client")
+	if err != nil {
+		return nil, fmt.Errorf("resolve tunnel-client executable: %w", err)
+	}
+	absolute, err := filepath.Abs(resolved)
+	if err != nil {
+		return nil, fmt.Errorf("resolve tunnel-client absolute path: %w", err)
+	}
+	executable, err := filepath.EvalSymlinks(absolute)
+	if err != nil {
+		return nil, fmt.Errorf("resolve tunnel-client canonical path: %w", err)
+	}
+	root := filepath.Dir(executable)
+	isolation, err := a.governance.GetIsolation.Execute(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("tunnel client isolation: load settings: %w", err)
+	}
+	return a.governance.processIsolation.Command(
+		ctx,
+		isolation.TunnelClient(),
+		runtimegovernance.CommandSpec{
+			Executable:       executable,
+			Arguments:        arguments,
+			WorkingDirectory: root,
+			PermittedRoot:    root,
+			RootWritable:     false,
+			Environment:      environment,
 		},
 	)
 }

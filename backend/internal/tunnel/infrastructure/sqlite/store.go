@@ -61,15 +61,13 @@ func (s *Store) Create(ctx context.Context, tunnel tunneldomain.Tunnel) error {
 			display_name,
 			provider,
 			external_tunnel_id,
-			runtime_credential_ref,
-			executable
-		) VALUES (?, ?, ?, ?, ?, ?)`,
+			runtime_credential_ref
+		) VALUES (?, ?, ?, ?, ?)`,
 		tunnel.ID().String(),
 		tunnel.DisplayName(),
 		string(tunnel.Provider()),
 		tunnel.ExternalTunnelID(),
 		tunnel.RuntimeCredentialRef().String(),
-		tunnel.Executable(),
 	)
 	if err != nil {
 		lower := strings.ToLower(err.Error())
@@ -92,8 +90,7 @@ func (s *Store) Get(
 			display_name,
 			provider,
 			external_tunnel_id,
-			runtime_credential_ref,
-			executable
+			runtime_credential_ref
 		FROM tunnels
 		WHERE id = ?`,
 		id.String(),
@@ -115,8 +112,7 @@ func (s *Store) List(ctx context.Context) ([]tunneldomain.Tunnel, error) {
 			display_name,
 			provider,
 			external_tunnel_id,
-			runtime_credential_ref,
-			executable
+			runtime_credential_ref
 		FROM tunnels
 		ORDER BY display_name, id`,
 	)
@@ -159,14 +155,13 @@ type rowScanner interface {
 }
 
 func scanTunnel(scanner rowScanner) (tunneldomain.Tunnel, error) {
-	var rawID, displayName, provider, externalID, rawCredentialRef, executable string
+	var rawID, displayName, provider, externalID, rawCredentialRef string
 	if err := scanner.Scan(
 		&rawID,
 		&displayName,
 		&provider,
 		&externalID,
 		&rawCredentialRef,
-		&executable,
 	); err != nil {
 		return tunneldomain.Tunnel{}, err
 	}
@@ -184,6 +179,5 @@ func scanTunnel(scanner rowScanner) (tunneldomain.Tunnel, error) {
 		tunneldomain.Provider(provider),
 		externalID,
 		ref,
-		executable,
 	)
 }

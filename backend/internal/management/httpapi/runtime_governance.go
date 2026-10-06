@@ -20,6 +20,7 @@ type runtimeBudgetRequest struct {
 type runtimeIsolationRequest struct {
 	WorkspaceShell   string `json:"workspaceShell"`
 	ExternalProvider string `json:"externalProvider"`
+	TunnelClient     string `json:"tunnelClient"`
 }
 
 func (h *Handler) getRuntimeGovernance(w http.ResponseWriter, r *http.Request) {
@@ -78,6 +79,7 @@ func (h *Handler) updateRuntimeIsolation(w http.ResponseWriter, r *http.Request)
 		runtimegovernancedomain.IsolationSpec{
 			WorkspaceShell:   runtimegovernancedomain.IsolationMode(input.WorkspaceShell),
 			ExternalProvider: runtimegovernancedomain.IsolationMode(input.ExternalProvider),
+			TunnelClient:     runtimegovernancedomain.IsolationMode(input.TunnelClient),
 		},
 	)
 	if err != nil {
@@ -114,6 +116,7 @@ func runtimeGovernanceProjection(
 		"isolation": map[string]any{
 			"workspaceShell":   string(isolation.WorkspaceShell()),
 			"externalProvider": string(isolation.ExternalProvider()),
+			"tunnelClient":     string(isolation.TunnelClient()),
 		},
 		"backend": map[string]any{
 			"name":                    backend.Name,

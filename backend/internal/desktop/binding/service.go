@@ -110,6 +110,7 @@ func (s *Service) UpdateRuntimeIsolation(input RuntimeIsolation) (RuntimeGoverna
 		runtimegovernancedomain.IsolationSpec{
 			WorkspaceShell:   runtimegovernancedomain.IsolationMode(input.WorkspaceShell),
 			ExternalProvider: runtimegovernancedomain.IsolationMode(input.ExternalProvider),
+			TunnelClient:     runtimegovernancedomain.IsolationMode(input.TunnelClient),
 		},
 	)
 	if err != nil {
@@ -1300,7 +1301,6 @@ func (s *Service) CreateOpenAITunnel(
 	displayName string,
 	externalTunnelID string,
 	runtimeCredentialRef string,
-	executable string,
 ) (Tunnel, error) {
 	ref, err := credentialdomain.ParseReference(runtimeCredentialRef)
 	if err != nil {
@@ -1312,7 +1312,6 @@ func (s *Service) CreateOpenAITunnel(
 			DisplayName:          displayName,
 			ExternalTunnelID:     externalTunnelID,
 			RuntimeCredentialRef: ref,
-			Executable:           executable,
 		},
 	)
 	if err != nil {
@@ -1922,6 +1921,7 @@ func runtimeGovernanceStatus(
 		Isolation: RuntimeIsolation{
 			WorkspaceShell:   string(isolation.WorkspaceShell()),
 			ExternalProvider: string(isolation.ExternalProvider()),
+			TunnelClient:     string(isolation.TunnelClient()),
 		},
 		Backend: RuntimeBackend{
 			Name:                    backend.Name,
@@ -1941,7 +1941,6 @@ func tunnelProjection(item tunneldomain.Tunnel) Tunnel {
 		Provider:             string(item.Provider()),
 		ExternalTunnelID:     item.ExternalTunnelID(),
 		RuntimeCredentialRef: item.RuntimeCredentialRef().String(),
-		Executable:           item.Executable(),
 	}
 }
 

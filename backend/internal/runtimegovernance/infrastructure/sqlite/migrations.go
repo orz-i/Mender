@@ -34,7 +34,7 @@ func migrate(
 	).Scan(&recordedVersion); err != nil {
 		return fmt.Errorf("check runtime governance schema version: %w", err)
 	}
-	const latestSupportedVersion = 2
+	const latestSupportedVersion = 3
 	if recordedVersion.Valid && recordedVersion.Int64 > latestSupportedVersion {
 		return fmt.Errorf(
 			"runtime governance schema version %d is newer than supported version %d",
@@ -137,6 +137,40 @@ func migrate(
 			now,
 		); err != nil {
 			return fmt.Errorf("record runtime governance migration 2: %w", err)
+		}
+	}
+
+	applied = 0
+	if err := tx.QueryRowContext(
+		ctx,
+		"SELECT COUNT(*) FROM runtime_governance_schema_migrations WHERE version = 3",
+	).Scan(&applied); err != nil {
+		return fmt.Errorf("check runtime governance migration 3: %w", err)
+	}
+	if applied == 0 {
+		if err := defaultIsolation.Validate(); err != nil {
+			return fmt.Errorf("runtime governance migration 3 default isolation: %w", err)
+		}
+		if _, err := tx.ExecContext(
+			ctx,
+			"ALTER TABLE runtime_isolation_settings ADD COLUMN tunnel_client TEXT NOT NULL DEFAULT 'host'",
+		); err != nil {
+			return fmt.Errorf("apply runtime governance migration 3: %w", err)
+		}
+		if _, err := tx.ExecContext(
+			ctx,
+			"UPDATE runtime_isolation_settings SET tunnel_client = ? WHERE singleton_id = 1",
+			string(defaultIsolation.TunnelClient()),
+		); err != nil {
+			return fmt.Errorf("initialize tunnel client isolation: %w", err)
+		}
+		now := time.Now().UTC().Format(time.RFC3339Nano)
+		if _, err := tx.ExecContext(
+			ctx,
+			"INSERT INTO runtime_governance_schema_migrations(version, applied_at) VALUES (3, ?)",
+			now,
+		); err != nil {
+			return fmt.Errorf("record runtime governance migration 3: %w", err)
 		}
 	}
 

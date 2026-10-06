@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-const latestSupportedVersion = 1
+const latestSupportedVersion = 2
 
 func migrate(ctx context.Context, db *sql.DB) error {
 	tx, err := db.BeginTx(ctx, nil)
@@ -63,6 +63,26 @@ func migrate(ctx context.Context, db *sql.DB) error {
 			time.Now().UTC().Format(time.RFC3339Nano),
 		); err != nil {
 			return fmt.Errorf("record tunnel migration 1: %w", err)
+		}
+	}
+
+	applied = 0
+	if err := tx.QueryRowContext(
+		ctx,
+		"SELECT COUNT(*) FROM tunnel_schema_migrations WHERE version = 2",
+	).Scan(&applied); err != nil {
+		return fmt.Errorf("check tunnel migration 2: %w", err)
+	}
+	if applied == 0 {
+		if _, err := tx.ExecContext(ctx, "ALTER TABLE tunnels DROP COLUMN executable"); err != nil {
+			return fmt.Errorf("apply tunnel migration 2: %w", err)
+		}
+		if _, err := tx.ExecContext(
+			ctx,
+			"INSERT INTO tunnel_schema_migrations(version, applied_at) VALUES (2, ?)",
+			time.Now().UTC().Format(time.RFC3339Nano),
+		); err != nil {
+			return fmt.Errorf("record tunnel migration 2: %w", err)
 		}
 	}
 

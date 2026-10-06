@@ -61,7 +61,8 @@ func (g *RuntimeGovernance) UpdateIsolation(
 		return runtimegovernancedomain.Isolation{}, fmt.Errorf("runtime isolation backend is unavailable")
 	}
 	if (spec.WorkspaceShell == runtimegovernancedomain.IsolationRestrictedHost ||
-		spec.ExternalProvider == runtimegovernancedomain.IsolationRestrictedHost) &&
+		spec.ExternalProvider == runtimegovernancedomain.IsolationRestrictedHost ||
+		spec.TunnelClient == runtimegovernancedomain.IsolationRestrictedHost) &&
 		!g.processIsolation.Info().RestrictedHostAvailable {
 		return runtimegovernancedomain.Isolation{}, fmt.Errorf("restricted_host process isolation is unavailable on this Runtime")
 	}

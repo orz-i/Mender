@@ -24,6 +24,7 @@ func TestRuntimeGovernanceRejectsRestrictedHostWhenBackendUnavailable(t *testing
 		runtimegovernancedomain.IsolationSpec{
 			WorkspaceShell:   runtimegovernancedomain.IsolationRestrictedHost,
 			ExternalProvider: runtimegovernancedomain.IsolationHost,
+			TunnelClient:     runtimegovernancedomain.IsolationHost,
 		},
 	); err == nil {
 		t.Fatal("UpdateIsolation accepted restricted_host without backend")
@@ -60,5 +61,13 @@ func TestRuntimeGovernanceInitialIsolationFollowsBackendAvailability(t *testing.
 	}
 	if isolation.ExternalProvider() != runtimegovernancedomain.IsolationHost {
 		t.Fatalf("external Provider isolation = %q, want host", isolation.ExternalProvider())
+	}
+	if isolation.TunnelClient() != expectedWorkspace {
+		t.Fatalf(
+			"Tunnel client isolation = %q, want %q (backend=%+v)",
+			isolation.TunnelClient(),
+			expectedWorkspace,
+			governance.processIsolation.Info(),
+		)
 	}
 }

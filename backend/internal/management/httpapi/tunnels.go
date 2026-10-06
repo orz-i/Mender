@@ -14,7 +14,6 @@ type createOpenAITunnelRequest struct {
 	DisplayName          string `json:"displayName"`
 	ExternalTunnelID     string `json:"externalTunnelId"`
 	RuntimeCredentialRef string `json:"runtimeCredentialRef"`
-	Executable           string `json:"executable"`
 }
 
 type setProfileTunnelRequest struct {
@@ -51,7 +50,6 @@ func (h *Handler) createOpenAITunnel(w http.ResponseWriter, r *http.Request) {
 			DisplayName:          input.DisplayName,
 			ExternalTunnelID:     input.ExternalTunnelID,
 			RuntimeCredentialRef: ref,
-			Executable:           input.Executable,
 		},
 	)
 	if err != nil {
@@ -115,6 +113,5 @@ func tunnelProjection(item tunneldomain.Tunnel) map[string]any {
 		"provider":             string(item.Provider()),
 		"externalTunnelId":     item.ExternalTunnelID(),
 		"runtimeCredentialRef": item.RuntimeCredentialRef().String(),
-		"executable":           item.Executable(),
 	}
 }

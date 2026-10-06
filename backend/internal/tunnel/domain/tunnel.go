@@ -10,7 +10,6 @@ import (
 const (
 	maxTunnelDisplayNameLength = 160
 	maxExternalTunnelIDLength  = 256
-	maxExecutableLength        = 4096
 )
 
 type Provider string
@@ -26,7 +25,6 @@ type Tunnel struct {
 	provider             Provider
 	externalTunnelID     string
 	runtimeCredentialRef credentialdomain.Reference
-	executable           string
 }
 
 func NewTunnel(
@@ -35,7 +33,6 @@ func NewTunnel(
 	provider Provider,
 	externalTunnelID string,
 	runtimeCredentialRef credentialdomain.Reference,
-	executable string,
 ) (Tunnel, error) {
 	if _, err := ParseTunnelID(id.String()); err != nil {
 		return Tunnel{}, err
@@ -67,21 +64,12 @@ func NewTunnel(
 		return Tunnel{}, fmt.Errorf("tunnel runtime_credential_ref: %w", err)
 	}
 
-	executable = strings.TrimSpace(executable)
-	if executable == "" {
-		return Tunnel{}, fmt.Errorf("tunnel executable: must not be empty")
-	}
-	if len(executable) > maxExecutableLength {
-		return Tunnel{}, fmt.Errorf("tunnel executable: is too long")
-	}
-
 	return Tunnel{
 		id:                   id,
 		displayName:          displayName,
 		provider:             provider,
 		externalTunnelID:     externalTunnelID,
 		runtimeCredentialRef: runtimeCredentialRef,
-		executable:           executable,
 	}, nil
 }
 
@@ -103,8 +91,4 @@ func (t Tunnel) ExternalTunnelID() string {
 
 func (t Tunnel) RuntimeCredentialRef() credentialdomain.Reference {
 	return t.runtimeCredentialRef
-}
-
-func (t Tunnel) Executable() string {
-	return t.executable
 }

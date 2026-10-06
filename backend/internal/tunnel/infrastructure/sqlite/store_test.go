@@ -29,7 +29,6 @@ func TestTunnelRoundTripConflictAndDelete(t *testing.T) {
 		tunneldomain.ProviderOpenAI,
 		"tunnel_external_1",
 		ref,
-		"tunnel-client",
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -46,8 +45,7 @@ func TestTunnelRoundTripConflictAndDelete(t *testing.T) {
 		loaded.DisplayName() != first.DisplayName() ||
 		loaded.Provider() != first.Provider() ||
 		loaded.ExternalTunnelID() != first.ExternalTunnelID() ||
-		loaded.RuntimeCredentialRef() != first.RuntimeCredentialRef() ||
-		loaded.Executable() != first.Executable() {
+		loaded.RuntimeCredentialRef() != first.RuntimeCredentialRef() {
 		t.Fatalf("loaded tunnel = %#v", loaded)
 	}
 
@@ -57,7 +55,6 @@ func TestTunnelRoundTripConflictAndDelete(t *testing.T) {
 		tunneldomain.ProviderOpenAI,
 		first.ExternalTunnelID(),
 		ref,
-		"tunnel-client",
 	)
 	if err := store.Create(context.Background(), conflict); !errors.Is(
 		err,

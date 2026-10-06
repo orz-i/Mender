@@ -3,19 +3,15 @@ package application
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
 	tunneldomain "github.com/orz-i/Mender/backend/internal/tunnel/domain"
 )
 
-const defaultOpenAIExecutable = "tunnel-client"
-
 type CreateOpenAITunnelRequest struct {
 	DisplayName          string
 	ExternalTunnelID     string
 	RuntimeCredentialRef credentialdomain.Reference
-	Executable           string
 }
 
 type CreateOpenAITunnel struct {
@@ -55,17 +51,12 @@ func (uc CreateOpenAITunnel) Execute(
 	if err != nil {
 		return tunneldomain.Tunnel{}, fmt.Errorf("create tunnel: allocate id: %w", err)
 	}
-	executable := strings.TrimSpace(request.Executable)
-	if executable == "" {
-		executable = defaultOpenAIExecutable
-	}
 	tunnel, err := tunneldomain.NewTunnel(
 		id,
 		request.DisplayName,
 		tunneldomain.ProviderOpenAI,
 		request.ExternalTunnelID,
 		request.RuntimeCredentialRef,
-		executable,
 	)
 	if err != nil {
 		return tunneldomain.Tunnel{}, fmt.Errorf("create tunnel: %w", err)
@@ -178,7 +169,7 @@ func (uc StartTunnel) Execute(
 	}
 	defer clear(secret)
 
-	process, err := uc.runner.Start(tunnel, endpoint, secret)
+	process, err := uc.runner.Start(ctx, tunnel, endpoint, secret)
 	if err != nil {
 		return nil, tunneldomain.Tunnel{}, fmt.Errorf("start tunnel: %w", err)
 	}

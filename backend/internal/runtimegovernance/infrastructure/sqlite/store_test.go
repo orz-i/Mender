@@ -23,6 +23,7 @@ func TestStorePersistsRestrictedIsolationWithoutDefaultFallback(t *testing.T) {
 		runtimegovernancedomain.IsolationSpec{
 			WorkspaceShell:   runtimegovernancedomain.IsolationRestrictedHost,
 			ExternalProvider: runtimegovernancedomain.IsolationRestrictedHost,
+			TunnelClient:     runtimegovernancedomain.IsolationRestrictedHost,
 		},
 	)
 	if err != nil {
@@ -104,6 +105,7 @@ func TestStoreDefaultsAndUpdatesBudget(t *testing.T) {
 		runtimegovernancedomain.IsolationSpec{
 			WorkspaceShell:   runtimegovernancedomain.IsolationRestrictedHost,
 			ExternalProvider: runtimegovernancedomain.IsolationRestrictedHost,
+			TunnelClient:     runtimegovernancedomain.IsolationRestrictedHost,
 		},
 	)
 	if err != nil {

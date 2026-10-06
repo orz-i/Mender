@@ -108,6 +108,7 @@ func TestRuntimeInstalledExternalProviderEndToEnd(t *testing.T) {
 			runtimegovernancedomain.IsolationSpec{
 				WorkspaceShell:   currentIsolation.WorkspaceShell(),
 				ExternalProvider: runtimegovernancedomain.IsolationRestrictedHost,
+				TunnelClient:     currentIsolation.TunnelClient(),
 			},
 		); err != nil {
 			t.Fatal(err)

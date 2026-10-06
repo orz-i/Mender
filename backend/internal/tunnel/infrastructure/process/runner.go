@@ -14,9 +14,22 @@ import (
 	tunneldomain "github.com/orz-i/Mender/backend/internal/tunnel/domain"
 )
 
-type Runner struct{}
+const controlPlaneAPIKeyEnvironment = "CONTROL_PLANE_API_KEY"
 
-func (Runner) Start(
+type CommandLauncher interface {
+	Command(context.Context, []string, []string) (*exec.Cmd, error)
+}
+
+type Runner struct {
+	launcher CommandLauncher
+}
+
+func NewRunner(launcher CommandLauncher) Runner {
+	return Runner{launcher: launcher}
+}
+
+func (r Runner) Start(
+	ctx context.Context,
 	tunnel tunneldomain.Tunnel,
 	endpoint string,
 	apiKey []byte,
@@ -28,24 +41,37 @@ func (Runner) Start(
 	if len(apiKey) == 0 {
 		return nil, fmt.Errorf("run tunnel client: runtime API key must not be empty")
 	}
+	if r.launcher == nil {
+		return nil, fmt.Errorf("run tunnel client: command launcher is unavailable")
+	}
 
-	// #nosec G204 -- executable and arguments are local administrator-owned
-	// Tunnel configuration, and exec.Command does not invoke a shell.
-	command := exec.Command(
-		tunnel.Executable(),
-		"run",
-		"--control-plane.tunnel-id="+tunnel.ExternalTunnelID(),
-		"--control-plane.api-key=env:CONTROL_PLANE_API_KEY",
-		"--mcp.server-url="+endpoint,
-		"--health.listen-addr=127.0.0.1:0",
+	command, err := r.launcher.Command(
+		ctx,
+		[]string{
+			"run",
+			"--control-plane.tunnel-id=" + tunnel.ExternalTunnelID(),
+			"--control-plane.api-key=env:" + controlPlaneAPIKeyEnvironment,
+			"--mcp.server-url=" + endpoint,
+			"--health.listen-addr=127.0.0.1:0",
+		},
+		[]string{controlPlaneAPIKeyEnvironment + "=" + string(apiKey)},
 	)
-	command.Env = append(os.Environ(), "CONTROL_PLANE_API_KEY="+string(apiKey))
+	if err != nil {
+		return nil, fmt.Errorf("run tunnel client: construct command: %w", err)
+	}
+	if command == nil {
+		return nil, fmt.Errorf("run tunnel client: command launcher returned nil command")
+	}
 	command.Stdout = io.Discard
 	command.Stderr = io.Discard
 
 	if err := command.Start(); err != nil {
+		command.Env = nil
 		return nil, fmt.Errorf("run tunnel client: start: %w", err)
 	}
+	// The environment has already been copied into the child by Start. Do not
+	// retain the API key on the parent-owned exec.Cmd for the process lifetime.
+	command.Env = nil
 
 	child := &childProcess{
 		command: command,
@@ -94,3 +120,5 @@ func (p *childProcess) Stop(ctx context.Context) error {
 		return fmt.Errorf("stop tunnel client: %w", ctx.Err())
 	}
 }
+
+var _ tunnelapplication.ProcessRunner = Runner{}
