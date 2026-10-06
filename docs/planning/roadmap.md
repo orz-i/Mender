@@ -457,3 +457,21 @@ Goals:
 Exit criteria are complete. Runtime capacity is bounded by default with race-safe hierarchical leases; `workspace.shell` and external Provider processes use explicit host/restricted-host execution environments with no silent fallback; macOS Seatbelt and Linux bubblewrap backends are integrated; Runtime settings/backend/usage are exposed across HTTP/OpenAPI/SDK/Wails/Web/Desktop; and full repository/race/security verification is green.
 
 See `phase-23-runtime-budget-isolation.md`.
+
+
+## Phase 24 — Runtime Process Governance Closure
+
+Status: In Progress
+
+Goals:
+
+- Extend the host-owned process isolation boundary to OpenAI `tunnel-client` so every current Runtime-owned native process class is governed consistently.
+- Add an independent Tunnel client `host | restricted_host` Runtime isolation setting with backend-aware secure defaults and no silent fallback.
+- Remove persisted/configurable Tunnel executable authority in a hard cut and resolve the fixed client executable at the host execution boundary.
+- Remove full host environment inheritance from Tunnel children while keeping the runtime API key execution-only.
+- Preserve loopback MCP security, Profile/Tunnel lifecycle coupling, and Credential Reference semantics.
+- Hard-cut HTTP/OpenAPI/SDK/Wails/Web/Desktop contracts to the new Runtime isolation and Tunnel configuration shapes.
+
+Exit criteria require forward-only Runtime/Tunnel migrations, governed Tunnel process launch through the shared isolation backend, bounded child environment, typed management parity, unchanged loopback/lifecycle protections, and green repository/race/security verification.
+
+See `phase-24-runtime-process-governance.md`.
