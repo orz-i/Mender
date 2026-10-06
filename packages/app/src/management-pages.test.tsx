@@ -1414,7 +1414,6 @@ describe("management pages", () => {
       provider: "openai" as const,
       externalTunnelId: "tunnel_external_work",
       runtimeCredentialRef: credential.reference,
-      executable: "tunnel-client",
     };
     const listTunnels = vi
       .fn()
@@ -1436,6 +1435,7 @@ describe("management pages", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add tunnel" }));
     expect(await screen.findByText("Create OpenAI Tunnel")).toBeTruthy();
     expect(screen.queryByLabelText("Credential reference")).toBeNull();
+    expect(screen.queryByLabelText("Tunnel client executable")).toBeNull();
 
     fireEvent.change(screen.getByLabelText("Tunnel display name"), {
       target: { value: "OpenAI Work" },
@@ -1474,7 +1474,6 @@ describe("management pages", () => {
       provider: "openai" as const,
       externalTunnelId: "tunnel_external_work",
       runtimeCredentialRef: "credential://openai/tunnel-runtime",
-      executable: "tunnel-client",
     };
     const setProfileTunnel = vi
       .fn()
@@ -2055,21 +2054,29 @@ describe("management pages", () => {
         maxArgumentBytes: 1048576,
         maxResultBytes: 1048576,
       },
-      isolation: { workspaceShell: "host" as const, externalProvider: "host" as const },
+      isolation: {
+        workspaceShell: "host" as const,
+        externalProvider: "host" as const,
+        tunnelClient: "host" as const,
+      },
       backend: { name: "none", restrictedHostAvailable: false },
       usage: { invocations: 1, activations: 0 },
     };
     const updateRuntimeBudget = vi
       .fn<MenderClient["updateRuntimeBudget"]>()
       .mockImplementation((budget) => Promise.resolve({ ...status, budget }));
+    const updateRuntimeIsolation = vi
+      .fn<MenderClient["updateRuntimeIsolation"]>()
+      .mockImplementation((isolation) => Promise.resolve({ ...status, isolation }));
 
     renderApp("/runtime", {
       getRuntimeGovernance: vi.fn().mockResolvedValue(status),
       updateRuntimeBudget,
-      updateRuntimeIsolation: vi.fn().mockResolvedValue(status),
+      updateRuntimeIsolation,
     });
 
     expect(await screen.findByText("Runtime governance")).toBeTruthy();
+    expect(screen.getByLabelText("Tunnel client")).toBeTruthy();
     expect(screen.getByText("restricted_host is unavailable on this Runtime. Host mode keeps the local process authority of the Runtime user.")).toBeTruthy();
 
     const globalInput = screen.getByLabelText("Global invocations");
@@ -2081,6 +2088,11 @@ describe("management pages", () => {
         ...status.budget,
         maxInvocations: 12,
       });
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Save isolation" }));
+    await waitFor(() => {
+      expect(updateRuntimeIsolation).toHaveBeenCalledWith(status.isolation);
     });
   });
 

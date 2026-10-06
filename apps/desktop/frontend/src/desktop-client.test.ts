@@ -127,7 +127,11 @@ describe("desktop Mender client", () => {
         maxArgumentBytes: 1048576,
         maxResultBytes: 1048576,
       },
-      isolation: { workspaceShell: "restricted_host" as const, externalProvider: "host" as const },
+      isolation: {
+        workspaceShell: "restricted_host" as const,
+        externalProvider: "host" as const,
+        tunnelClient: "restricted_host" as const,
+      },
       backend: { name: "seatbelt", restrictedHostAvailable: true },
       usage: { invocations: 2, activations: 1 },
     };

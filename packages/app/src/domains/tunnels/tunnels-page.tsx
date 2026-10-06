@@ -35,7 +35,6 @@ const emptyCreateForm = {
   displayName: "",
   externalTunnelId: "",
   runtimeCredentialRef: "",
-  executable: "",
 };
 
 export function TunnelsPage({ client }: { client: MenderClient }) {
@@ -101,9 +100,6 @@ export function TunnelsPage({ client }: { client: MenderClient }) {
         displayName: createForm.displayName,
         externalTunnelId: createForm.externalTunnelId,
         runtimeCredentialRef: createForm.runtimeCredentialRef,
-        ...(createForm.executable.trim()
-          ? { executable: createForm.executable.trim() }
-          : {}),
       });
       setCreateOpen(false);
       setCreateForm(emptyCreateForm);
@@ -203,7 +199,6 @@ export function TunnelsPage({ client }: { client: MenderClient }) {
                   <TableHead>{t("Provider")}</TableHead>
                   <TableHead>{t("OpenAI Tunnel ID")}</TableHead>
                   <TableHead>{t("Runtime credential")}</TableHead>
-                  <TableHead>{t("Executable")}</TableHead>
                   <TableHead className="text-right">{t("Actions")}</TableHead>
                 </TableRow>
               </TableHeader>
@@ -221,9 +216,6 @@ export function TunnelsPage({ client }: { client: MenderClient }) {
                     </TableCell>
                     <TableCell className="max-w-[260px] truncate font-mono text-xs text-muted-foreground">
                       {item.runtimeCredentialRef}
-                    </TableCell>
-                    <TableCell className="max-w-[220px] truncate font-mono text-xs text-muted-foreground">
-                      {item.executable}
                     </TableCell>
                     <TableCell className="text-right">
                       <IconButton
@@ -331,24 +323,6 @@ export function TunnelsPage({ client }: { client: MenderClient }) {
                   : t(
                       "Create a Credential first. Tunnel configuration stores only its reference; Mender resolves the secret when starting tunnel-client.",
                     )}
-              </p>
-            </Field>
-
-            <Field label="Tunnel client executable">
-              <Input
-                aria-label={t("Tunnel client executable")}
-                className="font-mono"
-                placeholder="tunnel-client"
-                value={createForm.executable}
-                onChange={(event) =>
-                  setCreateForm((current) => ({
-                    ...current,
-                    executable: event.target.value,
-                  }))
-                }
-              />
-              <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                {t("Leave blank to use tunnel-client from PATH.")}
               </p>
             </Field>
           </div>

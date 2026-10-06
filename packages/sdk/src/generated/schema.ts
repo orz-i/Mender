@@ -894,6 +894,8 @@ export interface components {
             workspaceShell: "host" | "restricted_host";
             /** @enum {string} */
             externalProvider: "host" | "restricted_host";
+            /** @enum {string} */
+            tunnelClient: "host" | "restricted_host";
         };
         RuntimeBackend: {
             name: string;
@@ -1311,8 +1313,6 @@ export interface components {
             externalTunnelId: string;
             /** @description Mender Credential Reference containing the OpenAI tunnel runtime API key. */
             runtimeCredentialRef: string;
-            /** @description Optional tunnel-client executable path or name. Defaults to tunnel-client. */
-            executable?: string;
         };
         Tunnel: {
             tunnelId: string;
@@ -1321,7 +1321,6 @@ export interface components {
             provider: "openai";
             externalTunnelId: string;
             runtimeCredentialRef: string;
-            executable: string;
         };
         StartMCPServerRequest: {
             profile: string;

@@ -40,8 +40,8 @@ export function CreateNativeCredential($namespace: string, name: string, display
     return $Call.ByID(46061890, $namespace, name, displayName, secret);
 }
 
-export function CreateOpenAITunnel(displayName: string, externalTunnelID: string, runtimeCredentialRef: string, executable: string): $CancellablePromise<$models.Tunnel> {
-    return $Call.ByID(1567044800, displayName, externalTunnelID, runtimeCredentialRef, executable);
+export function CreateOpenAITunnel(displayName: string, externalTunnelID: string, runtimeCredentialRef: string): $CancellablePromise<$models.Tunnel> {
+    return $Call.ByID(1567044800, displayName, externalTunnelID, runtimeCredentialRef);
 }
 
 export function CreatePolicyRule(input: $models.PolicyRuleInput): $CancellablePromise<$models.PolicyRule> {

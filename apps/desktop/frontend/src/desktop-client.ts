@@ -373,7 +373,6 @@ export function createDesktopMenderClient(): MenderClient {
           body.displayName,
           body.externalTunnelId,
           body.runtimeCredentialRef,
-          body.executable ?? "",
         ),
       );
     },
@@ -538,6 +537,7 @@ function runtimeGovernanceStatus(
     isolation: {
       workspaceShell: isolationMode(value.isolation.workspaceShell),
       externalProvider: isolationMode(value.isolation.externalProvider),
+      tunnelClient: isolationMode(value.isolation.tunnelClient),
     },
     backend: {
       name: value.backend.name,
@@ -1229,7 +1229,6 @@ function tunnel(value: BindingTunnel): Tunnel {
     provider: tunnelProvider(value.provider),
     externalTunnelId: value.externalTunnelId,
     runtimeCredentialRef: value.runtimeCredentialRef,
-    executable: value.executable,
   };
 }
 

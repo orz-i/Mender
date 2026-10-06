@@ -303,6 +303,7 @@ export interface RuntimeGovernanceStatus {
 export interface RuntimeIsolation {
     "workspaceShell": string;
     "externalProvider": string;
+    "tunnelClient": string;
 }
 
 export interface RuntimeUsage {
@@ -414,7 +415,6 @@ export interface Tunnel {
     "provider": string;
     "externalTunnelId": string;
     "runtimeCredentialRef": string;
-    "executable": string;
 }
 
 export interface TunnelList {

@@ -1145,10 +1145,11 @@ components:
       additionalProperties: false
     RuntimeIsolation:
       type: object
-      required: [workspaceShell, externalProvider]
+      required: [workspaceShell, externalProvider, tunnelClient]
       properties:
         workspaceShell: { type: string, enum: [host, restricted_host] }
         externalProvider: { type: string, enum: [host, restricted_host] }
+        tunnelClient: { type: string, enum: [host, restricted_host] }
       additionalProperties: false
     RuntimeBackend:
       type: object
@@ -1742,20 +1743,16 @@ components:
         runtimeCredentialRef:
           type: string
           description: Mender Credential Reference containing the OpenAI tunnel runtime API key.
-        executable:
-          type: string
-          description: Optional tunnel-client executable path or name. Defaults to tunnel-client.
       additionalProperties: false
     Tunnel:
       type: object
-      required: [tunnelId, displayName, provider, externalTunnelId, runtimeCredentialRef, executable]
+      required: [tunnelId, displayName, provider, externalTunnelId, runtimeCredentialRef]
       properties:
         tunnelId: { type: string }
         displayName: { type: string }
         provider: { type: string, enum: [openai] }
         externalTunnelId: { type: string }
         runtimeCredentialRef: { type: string }
-        executable: { type: string }
     StartMCPServerRequest:
       type: object
       required: [profile, address]

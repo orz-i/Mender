@@ -171,7 +171,7 @@ export function RuntimePage({ client }: { client: MenderClient }) {
         description="Isolation changes host filesystem authority; it does not change Policy decisions."
         actions={<Button disabled={isolation === null || busy !== ""} onClick={() => void saveIsolation()}>{busy === "isolation" ? t("Saving…") : t("Save isolation")}</Button>}
       >
-        <div className="grid gap-4 p-4 md:grid-cols-2">
+        <div className="grid gap-4 p-4 md:grid-cols-3">
           <IsolationField
             label="Workspace shell"
             value={isolation?.workspaceShell ?? "host"}
@@ -183,6 +183,12 @@ export function RuntimePage({ client }: { client: MenderClient }) {
             value={isolation?.externalProvider ?? "host"}
             restrictedAvailable={restrictedAvailable}
             onChange={(value) => setIsolation((current) => current === null ? null : { ...current, externalProvider: value })}
+          />
+          <IsolationField
+            label="Tunnel client"
+            value={isolation?.tunnelClient ?? "host"}
+            restrictedAvailable={restrictedAvailable}
+            onChange={(value) => setIsolation((current) => current === null ? null : { ...current, tunnelClient: value })}
           />
         </div>
         <div className="border-t border-border/65 px-4 py-3 text-xs text-muted-foreground">
