@@ -11,8 +11,8 @@
   "dependencies": {
     "@mender/sdk": "workspace:*",
     "@mender/ui": "workspace:*",
-    "lucide-react": "^1.48.0",
-    "motion": "^13.4.4",
+    "lucide-react": "^1.50.0",
+    "motion": "^14.0.0",
     "react": "^19.3.0",
     "react-router": "^8.4.0"
   }
