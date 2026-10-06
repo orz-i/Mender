@@ -461,7 +461,7 @@ See `phase-23-runtime-budget-isolation.md`.
 
 ## Phase 24 — Runtime Process Governance Closure
 
-Status: In Progress
+Status: Complete
 
 Goals:
 

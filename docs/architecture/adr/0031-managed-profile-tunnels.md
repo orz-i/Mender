@@ -3,6 +3,8 @@
 - Status: Accepted
 - Date: 2026-10-01
 
+> **Supersession note (2026-10-06):** ADR-0034 removes the persisted/configurable Tunnel executable and routes `tunnel-client` through Runtime-owned process governance. ADR-0031 remains authoritative for Tunnel domain, Profile binding, Credential, reachability, and managed MCP lifecycle semantics.
+
 ## Context
 
 Mender can expose a Profile through a Runtime-owned loopback Streamable HTTP MCP server, but ADR-0016 intentionally rejects non-loopback binding. That preserves the local execution boundary, yet it means hosted LLM/agent products cannot directly reach a Profile on a developer machine or private network.

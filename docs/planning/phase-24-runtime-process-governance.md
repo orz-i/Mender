@@ -1,6 +1,6 @@
 # Phase 24 Plan — Runtime Process Governance Closure
 
-Status: In Progress
+Status: Complete
 
 ## Objective
 
@@ -128,4 +128,33 @@ There is no dual-read, dual-write, deprecated API field, or executable fallback.
 
 ## Completion
 
-Pending implementation and verification.
+Phase 24 is complete.
+
+Implemented in segmented commits:
+
+- `a7ac3df` — document the Runtime process-governance hard cut before implementation;
+- `3974d53` — add TunnelClient isolation, forward-only Runtime/Tunnel migrations, remove persisted executable authority, and route Tunnel launch through the shared host-owned process launcher with bounded environment;
+- `8165822` — hard-cut OpenAPI/generated SDK/Wails/Web/Desktop contracts and management UX.
+
+Final properties:
+
+- every current Runtime-owned native process class (`workspace.shell`, external Provider plugins, and Tunnel client) enters a host-owned launcher boundary;
+- Runtime isolation independently governs WorkspaceShell, ExternalProvider, and TunnelClient;
+- TunnelClient defaults to `restricted_host` when the backend is available and otherwise explicit `host`;
+- Tunnel rows/API/SDK/UI no longer contain an executable override;
+- old Tunnel executable data is removed by forward schema migration rather than preserved behind a compatibility parser;
+- the host resolves the fixed `tunnel-client` executable to a canonical absolute path immediately before launch;
+- Tunnel children receive a bounded environment containing the runtime API-key handoff rather than the complete host environment;
+- managed MCP remains loopback-only and its Tunnel start/stop/restart/rollback lifecycle remains intact;
+- secret Credential material remains outside persistent/projection state.
+
+Verification completed on 2026-10-06:
+
+- focused Runtime governance, Tunnel migration, process-launch, and managed MCP lifecycle tests;
+- full `go test ./backend/...` during implementation;
+- `pnpm check`, including Provider Plugin protocol/SDK/example checks, generated SDK/Wails drift checks, desktop architecture check, Go lint/test/race, ESLint, TypeScript, i18n, 71/71 frontend tests, and Web/Desktop production builds;
+- `pnpm security:check`: zero reachable Go vulnerabilities and no high-or-higher production npm vulnerabilities (the primary Go vulnerability DB was temporarily unavailable, so the configured Google storage mirror was used);
+- hard-cut source scan found no production direct `exec.Command` in the Tunnel package and no Tunnel executable field in current typed contracts/UI;
+- `.agents/`, `.pi/`, and `.intent-loop/` remained outside all commits.
+
+The remaining governance audit items—canonical Outcome byte budgeting/Unknown Facts, then verified remote Principal propagation and interactive approval—remain follow-up phases rather than being folded into this process-governance change.

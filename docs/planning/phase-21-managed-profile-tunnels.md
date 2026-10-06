@@ -2,6 +2,8 @@
 
 Status: Complete
 
+> **Phase 24 note (2026-10-06):** the original optional Tunnel executable override described below has been removed. `tunnel-client` selection and launch are now host-owned under ADR-0034; the remaining Phase 21 lifecycle and reachability design is unchanged.
+
 ## Objective
 
 Add a first-class Tunnel management surface so a Profile served by Mender's loopback MCP server can be reached through an external tunnel adapter without weakening the local HTTP security boundary.
