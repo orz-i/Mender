@@ -412,3 +412,31 @@ Status: Pending C1.
 - Workspace Tool execution receives validated Invocation's trusted `GovernanceContext` (never from Tool arguments), resolves the bound Sandbox, acquires the governed lease, delegates to the backend `WorkspaceSession`, then releases it on every outcome. Profile Tool and global Policy must remain authoritative before any sandbox acquisition.
 - Before switching the parser, perform one **transactional forward migration** of Workspace Provider v1 records to local Sandbox rows/run records in the same SQLite file; derive stable Sandbox IDs from Provider IDs, preserve Tool/Provider IDs and bindings, record original roots/selected isolation without weakening it, and fail closed on invalid legacy data. Never auto-provision remote chargeable resources.
 - Hard-cut test matrix must prove migration rollback and restart, catalog/Profile identity stability, shell/files backend consistency, absence of v1 runtime decoding, and CLI/HTTP/Wails/Web parity. No automatic host fallback, even if a bound Sandbox backend is unavailable.
+
+## Implementation checkpoint — Local Workspace backend C1 and migration preparation (2026-10-09)
+
+Status: Local Workspace backend is available as a **governed backend within the Sandbox Router**. Workspace Provider hard-cut is **not yet applied**; Phase 25 remains In Progress.
+
+Commits, in order:
+
+- `649830b` — document C1 extraction and C2 migration invariants before implementation.
+- `e313a4a` — add the Local Workspace backend and WorkspaceSession with root-contained, bounded `read/search/edit/shell` operations, explicit isolation-mode handoff and backend lifecycle checks; preserve the existing provider execution path until hard cut.
+- `2da240a` — introduce a consumer-owned Sandbox Lease/ExecutionRouter port, register Local Workspace in Runtime composition, ensure the persisted selected isolation is sent to the host-owned process-isolation launcher, verify governed access against the real persistent store and explicit no-fallback when a remote backend is not registered.
+- `dd9840b` — add an **unwired**, transactional, idempotent migration helper for legacy Workspace ConfigVersion 1 to stable Local Workspace Sandbox resources and ConfigVersion 2 references; add rollback/retry/restart validation, and deny *all* restricted_host Sandbox operations before opening the filesystem when the required host isolation backend is unavailable.
+
+Validation:
+
+- `go test -race ./backend/internal/sandbox/...`: passed after backend extraction.
+- Focused backend/bootstrap migration, isolation and no-fallback tests: passed.
+- `golangci-lint run ./backend/internal/sandbox/...` and bootstrap-focused lint: zero issues.
+- `pnpm check`: exit code 0 after backend extraction, again after Runtime registration, and after migration helper security preflight (includes Go lint/test/race, TS checks, Wails/OpenAPI generated contract checks, frontend tests/build). Bundler continues to report non-fatal large-chunk warnings.
+- `pnpm security:check`: the previously identified Go 1.27.1 / x/net vulnerability blocker remains open and was not reclassified as passing.
+
+Important honesty and safety boundaries:
+
+1. The migration helper is tested but **not invoked during Runtime startup**. This is deliberate; activating it before converting the Workspace Provider runtime parser, CLI, and frontend contracts would break deployed v1 configurations.
+2. Current Workspace Provider still executes its old v1 tools. The new backend is accessed only through explicitly governed Sandbox Router leases; duplication is temporary and must be removed by the C2 cut, not maintained as a compatibility fallback.
+3. The Local Workspace backend's `host` mode is not a Sandbox security guarantee. `restricted_host` remains OS policy isolation, not a container or VM. A missing required isolation backend fails closed at Sandbox Open, including for structured file operations.
+4. C2 must atomically wire migration + ConfigVersion 2-only Provider + trusted Invocation Context propagation + CLI/Web/Desktop contract support and remove legacy execution files. It must preserve existing stable ProviderID and ToolID identities and reject missing/stale Sandbox bindings.
+5. Docker/Daytona/E2B backend implementations and Sandbox list/create/detail UX remain pending; do not represent those as working features.
+6. `.agents/`, `.pi/`, `.intent-loop/` remain untracked and untouched.
