@@ -149,9 +149,9 @@ export function CreateSandboxPage({client}:{client:MenderClient}) {
       <p className="mt-1 break-words text-xs text-muted-foreground">{dockerStatus||t("Configure MENDER_DOCKER_SOCKET on the Runtime host.")}</p>
      </div>}
      {daytonaConfigured?<button type="button" onClick={()=>{setSelected("daytona");setStep("configure");}} className="rounded-xl border border-primary/50 bg-primary/5 p-5 text-left transition hover:bg-primary/10 focus-visible:outline-2 focus-visible:outline-primary">
-      <BoxIcon className="mb-3 size-6" aria-hidden="true"/><p className="font-medium">{t("Daytona")}</p>
+      <BoxIcon className="mb-3 size-6" aria-hidden="true"/><p className="font-medium">{t("Daytona")} · {t("Experimental")}</p>
       <p className="mt-1 text-xs leading-5 text-muted-foreground">{t("Remote Daytona Sandbox uses a Mender credential and incurs provider charges. Provider availability is verified on creation.")}</p>
-     </button>:<div aria-disabled="true" className="rounded-xl border border-border bg-muted/20 p-5 opacity-65"><BoxIcon className="mb-3 size-6" aria-hidden="true"/><p className="font-medium">{t("Daytona")} · {t("Unavailable")}</p><p className="text-xs text-muted-foreground">{daytonaStatus}</p></div>}
+     </button>:<div aria-disabled="true" className="rounded-xl border border-border bg-muted/20 p-5 opacity-65"><BoxIcon className="mb-3 size-6" aria-hidden="true"/><p className="font-medium">{t("Daytona")} · {t("Unavailable")}</p><p className="text-xs text-muted-foreground">{experimentalDaytonaStatus(daytonaStatus)}</p></div>}
      <div aria-disabled="true" className="rounded-xl border border-border bg-muted/20 p-5 opacity-65"><BoxIcon className="mb-3 size-6" aria-hidden="true"/><p className="font-medium">{t("E2B")} · {t("Planned")}</p><p className="mt-1 text-xs text-muted-foreground">{t("Backend not yet implemented")}</p></div>
     </div>:null}
     {step==="configure"?<div className="max-w-xl space-y-4">
@@ -280,4 +280,17 @@ function Metadata({name,value}:{name:string;value:string}){return <div className
 
 function sandboxStateLabel(state:Sandbox["state"]){
  switch(state){case "ready":return t("Ready");case "stopped":return t("Stopped");case "destroyed":return t("Destroyed");default:return state;}
+}
+
+
+// Backend status comes from the server. Translate only the exact reviewed
+// host-owned states, never interpolate arbitrary remote error strings.
+function experimentalDaytonaStatus(value: string): string {
+ switch (value) {
+ case "Experimental Daytona disabled; local operator must set MENDER_DAYTONA_EXPERIMENTAL=enabled before Runtime startup":
+   return t("Experimental Daytona disabled; local operator must set MENDER_DAYTONA_EXPERIMENTAL=enabled before Runtime startup");
+ case "Experimental Daytona enabled by operator; credential and live provider validation required; may incur charges":
+   return t("Experimental Daytona enabled by operator; credential and live provider validation required; may incur charges");
+ default: return value;
+ }
 }

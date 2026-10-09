@@ -1,4 +1,7 @@
 export const zhCNMessages: Readonly<Record<string, string>> = {
+  "Experimental": "实验性功能",
+  "Experimental Daytona disabled; local operator must set MENDER_DAYTONA_EXPERIMENTAL=enabled before Runtime startup": "实验性 Daytona 默认禁用；本机管理员须在 Runtime 启动前明确设置 MENDER_DAYTONA_EXPERIMENTAL=enabled。",
+  "Experimental Daytona enabled by operator; credential and live provider validation required; may incur charges": "实验性 Daytona 已由管理员启用，但仍需凭证及真实服务验收；可能产生服务商费用。",
   "Activity": "活动历史",
   "Sandbox activity": "沙盒活动历史",
   "Back to sandbox": "返回沙盒详情",

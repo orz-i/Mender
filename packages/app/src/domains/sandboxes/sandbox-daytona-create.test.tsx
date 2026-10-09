@@ -11,7 +11,7 @@ const sample:Sandbox={sandboxId:"sbx_0123456789abcdef0123456789abcdef",name:"Rem
 function renderDaytona(client:Partial<MenderClient>,configured=true){
  const provided:Partial<MenderClient>={
   getRuntimeGovernance:vi.fn().mockResolvedValue({backend:{restrictedHostAvailable:false}}),
-  getSandboxBackends:vi.fn().mockResolvedValue({dockerAvailable:false,dockerStatus:"disabled",daytonaConfigured:configured,daytonaStatus:"credential required"}),
+  getSandboxBackends:vi.fn().mockResolvedValue({dockerAvailable:false,dockerStatus:"disabled",daytonaConfigured:configured,daytonaStatus:configured?"Experimental Daytona enabled by operator; credential and live provider validation required; may incur charges":"Experimental Daytona disabled; local operator must set MENDER_DAYTONA_EXPERIMENTAL=enabled before Runtime startup"}),
   listCredentials:vi.fn().mockResolvedValue({credentials:[]}),
   ...client,
  };
@@ -20,7 +20,7 @@ function renderDaytona(client:Partial<MenderClient>,configured=true){
 describe("Daytona Sandbox creation",()=>{
  it("does not offer remote provisioning when adapter is disabled",async()=>{
   const createDaytonaSandbox=vi.fn();renderDaytona({createDaytonaSandbox},false);
-  expect(await screen.findByText(/credential required/)).toBeTruthy();
+  expect(await screen.findByText(/MENDER_DAYTONA_EXPERIMENTAL=enabled/)).toBeTruthy();
   expect(screen.queryByRole("button",{name:"Daytona"})).toBeNull();
   expect(createDaytonaSandbox).not.toHaveBeenCalled();
  });
