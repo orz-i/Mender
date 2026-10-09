@@ -60,4 +60,4 @@ Minor implementation choices that remain inside an accepted architectural bounda
 - [ADR-0032: Govern Provider activation with explicit Principals and Policy actions](0032-provider-activation-principal-governance.md)
 - [ADR-0033: Bound Runtime resource use and isolate local process execution](0033-runtime-budget-restricted-host-isolation.md)
 - [ADR-0034: Govern every Runtime-owned native process through one host-owned process boundary](0034-runtime-owned-process-governance.md)
-- [ADR-0035: Separate governed Sandbox resources from Provider execution routing](0035-governed-sandbox-execution-router.md) — Proposed
+- [ADR-0035: Separate governed Sandbox resources from Provider execution routing](0035-governed-sandbox-execution-router.md) — Accepted

@@ -1,8 +1,8 @@
 # Phase 25 Plan — Sandbox Execution Router and Sandbox Workspace Tools
 
-Status: Proposed (research/design only; implementation not started)
+Status: In Progress (documentation accepted; implementation in segments)
 
-> Architecture decision: [ADR-0035](../architecture/adr/0035-governed-sandbox-execution-router.md) (Proposed). This phase must not proceed to implementation before the ADR is accepted.
+> Architecture decision: [ADR-0035](../architecture/adr/0035-governed-sandbox-execution-router.md) (Accepted on commencement of Phase 25). Each implementation cluster requires focused automated checks before its separate commit.
 
 ## Objective
 
@@ -250,6 +250,8 @@ Always label `host` as high-authority, non-sandbox execution. Explain `restricte
 - No runtime implementation until architecture accepted.
 
 **Cluster B — Domain / contracts / persistence**
+
+First landed slice: stable Sandbox identity, strict backend/isolation/capability classification, typed transition and run-generation model, persistence with forward/future-version migration checks, side-effect-free placement resolver and explicit lease contract. This slice must not register a remote backend or claim that Workspace was already migrated.
 - `backend/internal/sandbox/{domain,application,infrastructure}` contexts, backend registry, lifecycle state machine, connection/resources/mount schema.
 - Host-owned policy actions, Principal/Scope, migration, resource/cost budget, typed DTOs and deterministic test fakes.
 - Adapters expose backend capabilities and safe list/get operations.

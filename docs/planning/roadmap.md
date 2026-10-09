@@ -478,7 +478,7 @@ See `phase-24-runtime-process-governance.md`.
 
 ## Phase 25 — Sandbox Execution Router & Sandbox Workspace Tools
 
-Status: Proposed (research/design only)
+Status: In Progress (architecture accepted; implementation staged)
 
 Goals:
 
@@ -489,6 +489,6 @@ Goals:
 - Start with honest Local Workspace semantics and a managed local Docker backend; evaluate Daytona as first remote integration and E2B as next.
 - Establish resource/mount/network/credential, cancellation, reconciliation, idempotency, and remote cost safeguards before claiming Sandbox security properties.
 
-Proposed exit criteria: ADR-0035 accepted; backend/file/shell parity verified; governance denial-before-side-effects and no unsafe host fallback proved; Workspace v1 forward migration preserves identities; Sandbox lifecycle/UI/API are operational; full repository/race/security gates pass.
+Exit criteria: ADR-0035 accepted; backend/file/shell parity verified; governance denial-before-side-effects and no unsafe host fallback proved; Workspace v1 forward migration preserves identities; Sandbox lifecycle/UI/API are operational; full repository/race/security gates pass.
 
 See `phase-25-sandbox-execution-router.md`. The phase plan is a proposal, not an implementation completion claim.

@@ -1,6 +1,6 @@
 # ADR-0035: Separate governed Sandbox resources from Provider execution routing
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-08
 
 ## Context
@@ -11,7 +11,7 @@ The current `invocation/infrastructure/router` resolves a canonical ProviderID t
 
 We need multiple local and remote sandbox backends while keeping canonical Tool identity, Profile/Policy authority, credential isolation, audit, and adapter consistency.
 
-## Decision (proposed)
+## Decision
 
 ### 1. Distinct domain concepts
 
