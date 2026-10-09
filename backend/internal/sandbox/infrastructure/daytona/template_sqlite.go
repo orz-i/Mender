@@ -61,14 +61,25 @@ func (s *TemplateStore) CreateDefinedSandbox(ctx context.Context, item sandboxdo
 	if err := t.Validate(); err != nil {
 		return err
 	}
-	tx, err := s.db.BeginTx(ctx, nil)
+	// BEGIN IMMEDIATE serializes the capacity read and insertion across all
+	// SQLite connections. A deferred read transaction can fail to promote to a
+	// writer under contention even when the second slot remains available.
+	conn, err := s.db.Conn(ctx)
 	if err != nil {
-		return fmt.Errorf("daytona reserve: begin: %w", err)
+		return fmt.Errorf("daytona reserve: connect: %w", err)
 	}
-	defer func() { _ = tx.Rollback() }()
+	defer func() { _ = conn.Close() }()
+	if _, err = conn.ExecContext(ctx, "BEGIN IMMEDIATE"); err != nil {
+		return fmt.Errorf("daytona reserve: serialize: %w", err)
+	}
+	defer func() {
+		rollback, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		defer cancel()
+		_, _ = conn.ExecContext(rollback, "ROLLBACK")
+	}()
 	spec := item.Spec()
 	var count int
-	err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM sandboxes s JOIN sandbox_runs r ON s.id=r.sandbox_id WHERE s.backend='daytona' AND s.owner_kind=? AND s.owner_ref=? AND r.state NOT IN ('destroyed','failed')`, spec.OwnerKind, spec.OwnerRef).Scan(&count)
+	err = conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM sandboxes s JOIN sandbox_runs r ON s.id=r.sandbox_id WHERE s.backend='daytona' AND s.owner_kind=? AND s.owner_ref=? AND r.state NOT IN ('destroyed','failed')`, spec.OwnerKind, spec.OwnerRef).Scan(&count)
 	if err != nil {
 		return fmt.Errorf("daytona reserve: capacity check: %w", err)
 	}
@@ -76,16 +87,16 @@ func (s *TemplateStore) CreateDefinedSandbox(ctx context.Context, item sandboxdo
 		return sandboxdomain.ErrConflict
 	}
 	timestamp := time.Now().UTC().Format(time.RFC3339Nano)
-	if _, err = tx.ExecContext(ctx, `INSERT INTO sandboxes(id,display_name,backend,isolation,local_root,owner_kind,owner_ref,created_at) VALUES(?,?,?,?,?,?,?,?)`, spec.ID.String(), spec.Name, string(spec.Backend), string(spec.Isolation), "", spec.OwnerKind, spec.OwnerRef, timestamp); err != nil {
+	if _, err = conn.ExecContext(ctx, `INSERT INTO sandboxes(id,display_name,backend,isolation,local_root,owner_kind,owner_ref,created_at) VALUES(?,?,?,?,?,?,?,?)`, spec.ID.String(), spec.Name, string(spec.Backend), string(spec.Isolation), "", spec.OwnerKind, spec.OwnerRef, timestamp); err != nil {
 		return fmt.Errorf("daytona reserve: Sandbox unavailable: %w", sandboxdomain.ErrConflict)
 	}
-	if _, err = tx.ExecContext(ctx, `INSERT INTO sandbox_runs(sandbox_id,generation,state,external_id,updated_at) VALUES(?,1,'defined','',?)`, spec.ID.String(), timestamp); err != nil {
+	if _, err = conn.ExecContext(ctx, `INSERT INTO sandbox_runs(sandbox_id,generation,state,external_id,updated_at) VALUES(?,1,'defined','',?)`, spec.ID.String(), timestamp); err != nil {
 		return fmt.Errorf("daytona reserve: run: %w", err)
 	}
-	if _, err = tx.ExecContext(ctx, `INSERT INTO sandbox_daytona_templates(sandbox_id,credential_ref,image_digest,target,cpu,memory_gib,disk_gib,ttl_minutes,created_at) VALUES(?,?,?,?,?,?,?,?,?)`, spec.ID.String(), t.CredentialRef.String(), t.ImageDigest, t.Target, t.CPU, t.MemoryGiB, t.DiskGiB, t.TTLMinutes, timestamp); err != nil {
+	if _, err = conn.ExecContext(ctx, `INSERT INTO sandbox_daytona_templates(sandbox_id,credential_ref,image_digest,target,cpu,memory_gib,disk_gib,ttl_minutes,created_at) VALUES(?,?,?,?,?,?,?,?,?)`, spec.ID.String(), t.CredentialRef.String(), t.ImageDigest, t.Target, t.CPU, t.MemoryGiB, t.DiskGiB, t.TTLMinutes, timestamp); err != nil {
 		return fmt.Errorf("daytona reserve: template: %w", err)
 	}
-	if err = tx.Commit(); err != nil {
+	if _, err = conn.ExecContext(ctx, "COMMIT"); err != nil {
 		return fmt.Errorf("daytona reserve: commit: %w", err)
 	}
 	return nil
