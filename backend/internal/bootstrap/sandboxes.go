@@ -142,3 +142,71 @@ func (s *Sandboxes) GetRun(ctx context.Context, id sandboxdomain.ID) (sandboxdom
 	}
 	return s.store.GetRun(ctx, id)
 }
+
+// ChangeLocalLifecycle governs local availability, never deleting workspace data.
+// Remote/container adapters require their own explicit lifecycle implementations.
+func (s *Sandboxes) ChangeLocalLifecycle(ctx context.Context, id sandboxdomain.ID, action governancedomain.Action, caller governancedomain.Context) (sandboxdomain.Run, error) {
+	if s == nil || s.store == nil {
+		return sandboxdomain.Run{}, sandboxdomain.ErrBackendUnavailable
+	}
+	if err := caller.Validate(); err != nil {
+		return sandboxdomain.Run{}, err
+	}
+	item, err := s.store.Get(ctx, id)
+	if err != nil {
+		return sandboxdomain.Run{}, err
+	}
+	if item.Backend() != sandboxdomain.BackendLocalWorkspace {
+		return sandboxdomain.Run{}, sandboxdomain.ErrBackendUnavailable
+	}
+	switch action {
+	case governancedomain.ActionSandboxStart, governancedomain.ActionSandboxStop, governancedomain.ActionSandboxDestroy:
+	default:
+		return sandboxdomain.Run{}, fmt.Errorf("unsupported local Sandbox lifecycle action %q", action)
+	}
+	expected, err := s.store.GetRun(ctx, id)
+	if err != nil {
+		return sandboxdomain.Run{}, err
+	}
+	if err := s.admission.AdmitAction(ctx, caller, item, action); err != nil {
+		return sandboxdomain.Run{}, err
+	}
+	if err := ctx.Err(); err != nil {
+		return sandboxdomain.Run{}, err
+	}
+	if action == governancedomain.ActionSandboxStart {
+		root := item.Spec().LocalRoot
+		canonical, err := filepath.EvalSymlinks(root)
+		if err != nil {
+			return sandboxdomain.Run{}, fmt.Errorf("start local Sandbox: root unavailable: %w", err)
+		}
+		if canonical != root {
+			return sandboxdomain.Run{}, fmt.Errorf("start local Sandbox: canonical root changed")
+		}
+		info, err := os.Stat(root)
+		if err != nil {
+			return sandboxdomain.Run{}, fmt.Errorf("start local Sandbox: root inspection: %w", err)
+		}
+		if !info.IsDir() {
+			return sandboxdomain.Run{}, fmt.Errorf("start local Sandbox: root is not a directory")
+		}
+		if err := s.launcher.CheckIsolation(item.Isolation()); err != nil {
+			return sandboxdomain.Run{}, fmt.Errorf("start local Sandbox: pinned isolation unavailable: %w", err)
+		}
+	}
+	return s.store.ChangeLocalLifecycle(ctx, expected, action, caller)
+}
+
+func (s *Sandboxes) ActiveLeases(ctx context.Context, id sandboxdomain.ID) (int, error) {
+	if s == nil || s.store == nil {
+		return 0, sandboxdomain.ErrBackendUnavailable
+	}
+	return s.store.ActiveLeaseCount(ctx, id)
+}
+
+func (s *Sandboxes) LifecycleEvents(ctx context.Context, id sandboxdomain.ID, limit int) ([]sandboxsqlite.LifecycleEvent, error) {
+	if s == nil || s.store == nil {
+		return nil, sandboxdomain.ErrBackendUnavailable
+	}
+	return s.store.ListLifecycleEvents(ctx, id, limit)
+}

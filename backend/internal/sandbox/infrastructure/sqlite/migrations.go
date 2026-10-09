@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-const latestSchemaVersion = 4
+const latestSchemaVersion = 5
 
 func migrate(ctx context.Context, db *sql.DB) error {
 	tx, err := db.BeginTx(ctx, nil)
@@ -143,6 +143,34 @@ func migrate(ctx context.Context, db *sql.DB) error {
 		}
 		if _, err = tx.ExecContext(ctx, `INSERT INTO sandbox_schema_migrations(version,applied_at) VALUES(4,?)`, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
 			return fmt.Errorf("sandbox migration 4 record: %w", err)
+		}
+	}
+	var lifecycleApplied int
+	if err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM sandbox_schema_migrations WHERE version = 5`).Scan(&lifecycleApplied); err != nil {
+		return fmt.Errorf("sandbox migration 5 presence: %w", err)
+	}
+	if lifecycleApplied == 0 {
+		if _, err = tx.ExecContext(ctx, `CREATE TABLE sandbox_lifecycle_events (
+            event_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sandbox_id TEXT NOT NULL REFERENCES sandboxes(id),
+            action TEXT NOT NULL,
+            previous_state TEXT NOT NULL,
+            next_state TEXT NOT NULL,
+            generation INTEGER NOT NULL CHECK(generation > 0),
+            principal_kind TEXT NOT NULL,
+            principal_ref TEXT NOT NULL,
+            origin TEXT NOT NULL,
+            scope_kind TEXT NOT NULL,
+            scope_ref TEXT NOT NULL,
+            finished_at TEXT NOT NULL
+        )`); err != nil {
+			return fmt.Errorf("sandbox migration 5 lifecycle table: %w", err)
+		}
+		if _, err = tx.ExecContext(ctx, `CREATE INDEX idx_sandbox_lifecycle_events_id ON sandbox_lifecycle_events(sandbox_id,event_id DESC)`); err != nil {
+			return fmt.Errorf("sandbox migration 5 lifecycle index: %w", err)
+		}
+		if _, err = tx.ExecContext(ctx, `INSERT INTO sandbox_schema_migrations(version,applied_at) VALUES(5,?)`, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
+			return fmt.Errorf("sandbox migration 5 record: %w", err)
 		}
 	}
 	if err = tx.Commit(); err != nil {

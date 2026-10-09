@@ -252,6 +252,10 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		closeBootstrapStores()
 		return nil, fmt.Errorf("compose runtime: migrate Workspace Providers to Sandbox: %w", err)
 	}
+	if err := installWorkspaceSandboxBindingGuards(ctx, options.DatabasePath); err != nil {
+		closeBootstrapStores()
+		return nil, fmt.Errorf("compose runtime: Workspace Sandbox binding guards: %w", err)
+	}
 	executors := invocationrouter.New()
 	providerPlugins := providerplugin.NewRegistry()
 	if err := providerbuiltin.Register(

@@ -65,6 +65,9 @@ func (r *Router) Resolve(ctx context.Context, id sandboxdomain.ID, required sand
 	if run.SandboxID != item.ID() {
 		return sandboxapp.Placement{}, fmt.Errorf("sandbox router: run belongs to another sandbox")
 	}
+	if run.State == sandboxdomain.StateDestroying || run.State == sandboxdomain.StateDestroyed {
+		return sandboxapp.Placement{}, sandboxdomain.ErrConflict
+	}
 	return sandboxapp.Placement{Sandbox: item, Run: run, Required: required}, nil
 }
 
