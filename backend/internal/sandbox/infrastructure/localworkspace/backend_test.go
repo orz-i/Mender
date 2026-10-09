@@ -15,7 +15,15 @@ import (
 )
 
 type testLauncher struct {
-	received []sandboxdomain.IsolationClass
+	received        []sandboxdomain.IsolationClass
+	allowRestricted bool
+}
+
+func (l *testLauncher) CheckIsolation(mode sandboxdomain.IsolationClass) error {
+	if mode == sandboxdomain.IsolationHost || (mode == sandboxdomain.IsolationRestrictedHost && l.allowRestricted) {
+		return nil
+	}
+	return errors.New("required isolation unavailable")
 }
 
 func (l *testLauncher) Command(ctx context.Context, mode sandboxdomain.IsolationClass, _ string, dir string, command string, env []string) (*exec.Cmd, error) {
@@ -158,7 +166,7 @@ func TestLocalWorkspaceRejectsSymlinkEscapeAndUnknownOperation(t *testing.T) {
 	}
 }
 func TestRestrictedHostModeIsForwardedAndNeverDowngraded(t *testing.T) {
-	launcher := &testLauncher{}
+	launcher := &testLauncher{allowRestricted: true}
 	backend, _ := New(launcher)
 	item, run := testLocalSandbox(t, t.TempDir(), sandboxdomain.IsolationRestrictedHost)
 	opened, err := backend.Open(context.Background(), item, run)
@@ -172,6 +180,14 @@ func TestRestrictedHostModeIsForwardedAndNeverDowngraded(t *testing.T) {
 		t.Fatalf("restricted host silently downgraded: %v; %+v", err, launcher.received)
 	}
 }
+func TestRestrictedHostBackendUnavailableDeniesFileOperationsToo(t *testing.T) {
+	backend, _ := New(&testLauncher{})
+	item, run := testLocalSandbox(t, t.TempDir(), sandboxdomain.IsolationRestrictedHost)
+	if _, err := backend.Open(context.Background(), item, run); err == nil {
+		t.Fatal("restricted_host unavailable: backend still allowed file access")
+	}
+}
+
 func TestBackendOpenRejectsStaleOrInvalidIdentity(t *testing.T) {
 	backend, _ := New(&testLauncher{})
 	item, run := testLocalSandbox(t, t.TempDir(), sandboxdomain.IsolationHost)

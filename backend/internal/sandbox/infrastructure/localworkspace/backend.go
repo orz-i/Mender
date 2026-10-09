@@ -52,6 +52,9 @@ func (b *Backend) Open(ctx context.Context, sandbox sandboxdomain.Sandbox, run s
 	if sandbox.Isolation() != sandboxdomain.IsolationHost && sandbox.Isolation() != sandboxdomain.IsolationRestrictedHost {
 		return nil, sandboxdomain.ErrBackendUnavailable
 	}
+	if err := b.launcher.CheckIsolation(sandbox.Isolation()); err != nil {
+		return nil, fmt.Errorf("open local workspace: required process isolation unavailable: %w", err)
+	}
 	root := sandbox.Spec().LocalRoot
 	resolved, err := filepath.EvalSymlinks(root)
 	if err != nil {

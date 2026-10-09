@@ -142,3 +142,20 @@ func (a sandboxWorkspaceShellLauncher) Command(ctx context.Context, mode sandbox
 	}
 	return a.governance.processIsolation.Command(ctx, isolation, runtimegovernance.CommandSpec{Executable: executable, Arguments: arguments, WorkingDirectory: workingDirectory, PermittedRoot: root, RootWritable: true, Environment: environment})
 }
+
+func (a sandboxWorkspaceShellLauncher) CheckIsolation(mode sandboxdomain.IsolationClass) error {
+	if a.governance == nil || a.governance.processIsolation == nil {
+		return fmt.Errorf("sandbox isolation launcher unavailable")
+	}
+	switch mode {
+	case sandboxdomain.IsolationHost:
+		return nil
+	case sandboxdomain.IsolationRestrictedHost:
+		if !a.governance.processIsolation.Info().RestrictedHostAvailable {
+			return fmt.Errorf("restricted_host isolation unavailable")
+		}
+		return nil
+	default:
+		return fmt.Errorf("sandbox isolation: unsupported mode %q", mode)
+	}
+}

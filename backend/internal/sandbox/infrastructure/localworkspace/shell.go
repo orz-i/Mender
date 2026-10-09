@@ -22,6 +22,9 @@ const (
 )
 
 type ShellLauncher interface {
+	// CheckIsolation must fail if the selected isolation class cannot actually
+	// be applied. This is checked before *any* structured filesystem access.
+	CheckIsolation(sandboxdomain.IsolationClass) error
 	Command(
 		context.Context,
 		sandboxdomain.IsolationClass,
