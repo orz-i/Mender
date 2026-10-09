@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-const latestSchemaVersion = 5
+const latestSchemaVersion = 6
 
 func migrate(ctx context.Context, db *sql.DB) error {
 	tx, err := db.BeginTx(ctx, nil)
@@ -171,6 +171,34 @@ func migrate(ctx context.Context, db *sql.DB) error {
 		}
 		if _, err = tx.ExecContext(ctx, `INSERT INTO sandbox_schema_migrations(version,applied_at) VALUES(5,?)`, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
 			return fmt.Errorf("sandbox migration 5 record: %w", err)
+		}
+	}
+	var dockerTemplatesApplied int
+	if err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM sandbox_schema_migrations WHERE version = 6`).Scan(&dockerTemplatesApplied); err != nil {
+		return fmt.Errorf("sandbox migration 6 presence: %w", err)
+	}
+	if dockerTemplatesApplied == 0 {
+		for _, statement := range []string{
+			`CREATE TABLE sandbox_docker_templates (
+                sandbox_id TEXT PRIMARY KEY REFERENCES sandboxes(id) ON DELETE RESTRICT,
+                image_digest TEXT NOT NULL,
+                user_id INTEGER NOT NULL CHECK(user_id BETWEEN 1000 AND 65534),
+                group_id INTEGER NOT NULL CHECK(group_id BETWEEN 1000 AND 65534),
+                cpu_milli INTEGER NOT NULL CHECK(cpu_milli BETWEEN 100 AND 8000),
+                memory_mib INTEGER NOT NULL CHECK(memory_mib BETWEEN 256 AND 16384),
+                workspace_mib INTEGER NOT NULL CHECK(workspace_mib BETWEEN 64 AND 2048),
+                pid_limit INTEGER NOT NULL CHECK(pid_limit BETWEEN 16 AND 512),
+                created_at TEXT NOT NULL
+            )`,
+			`CREATE TRIGGER sandbox_docker_template_immutable_update BEFORE UPDATE ON sandbox_docker_templates BEGIN SELECT RAISE(ABORT,'Docker Sandbox template is immutable'); END`,
+			`CREATE TRIGGER sandbox_docker_template_immutable_delete BEFORE DELETE ON sandbox_docker_templates BEGIN SELECT RAISE(ABORT,'Docker Sandbox template cannot be deleted'); END`,
+		} {
+			if _, err = tx.ExecContext(ctx, statement); err != nil {
+				return fmt.Errorf("sandbox migration 6 Docker templates: %w", err)
+			}
+		}
+		if _, err = tx.ExecContext(ctx, `INSERT INTO sandbox_schema_migrations(version,applied_at) VALUES(6,?)`, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
+			return fmt.Errorf("sandbox migration 6 record: %w", err)
 		}
 	}
 	if err = tx.Commit(); err != nil {
