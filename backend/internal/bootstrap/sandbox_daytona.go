@@ -3,6 +3,7 @@ package bootstrap
 import (
 	"context"
 	"fmt"
+	"os"
 
 	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
 	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
@@ -12,6 +13,12 @@ import (
 	sandboxdaytona "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/daytona"
 	sandboxidentity "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/identity"
 )
+
+// DaytonaExperimentalEnvironment requires explicit host-operator opt-in for
+// a remote adapter whose real live provisioning integration is NOT accepted.
+// An HTTP request, Tool invocation or Provider config cannot set this flag.
+const DaytonaExperimentalEnvironment = "MENDER_DAYTONA_EXPERIMENTAL"
+const daytonaExperimentalOptIn = "enabled"
 
 // configureDaytona installs only a credential-gated SDK factory. No API key is
 // resolved or remote request made during Runtime startup or Provider discovery.
@@ -39,13 +46,29 @@ func (s *Sandboxes) configureDaytona(ctx context.Context, db string, resolver in
 	}
 	s.daytona = controller
 	s.daytonaTemplates = templates
+	// Keep immutable inventory available even when the unverified remote
+	// runtime is quarantined; Credential deletion protection still applies.
+	// Do not register the executable Backend until the operator opts in.
+	s.daytonaExperimental = os.Getenv(DaytonaExperimentalEnvironment) == daytonaExperimentalOptIn
+	if !s.daytonaExperimental {
+		return nil, nil
+	}
 	return backend, nil
 }
 
-// DaytonaConfigured reports adapter installation only; it does NOT imply
-// Daytona API credentials, account capacity, live service or billing approval.
+// DaytonaConfigured means explicitly opted-in experimental execution
+// capability, NOT a claim that Daytona service, billing or credentials work.
 func (s *Sandboxes) DaytonaConfigured() bool {
-	return s != nil && s.daytona != nil && s.daytonaTemplates != nil
+	return s != nil && s.daytonaExperimental && s.daytona != nil && s.daytonaTemplates != nil
+}
+
+// DaytonaStatus is an intentionally truthful capability label, not an SDK
+// connectivity or live billing test.
+func (s *Sandboxes) DaytonaStatus() string {
+	if !s.DaytonaConfigured() {
+		return "Experimental Daytona disabled; local operator must set MENDER_DAYTONA_EXPERIMENTAL=enabled before Runtime startup"
+	}
+	return "Experimental Daytona enabled by operator; credential and live provider validation required; may incur charges"
 }
 
 type CreateDaytonaSandboxRequest struct {
@@ -96,7 +119,9 @@ func (s *Sandboxes) ReconcileDaytona(ctx context.Context, id sandboxdomain.ID, c
 }
 
 func (s *Sandboxes) DaytonaCredentialBindings(ctx context.Context, ref credentialdomain.Reference) ([]sandboxdomain.ID, error) {
-	if !s.DaytonaConfigured() {
+	// Read-only inventory remains accessible while remote execution is
+	// disabled, preventing the removal of a still-referenced secret.
+	if s == nil || s.daytonaTemplates == nil {
 		return nil, sandboxdomain.ErrBackendUnavailable
 	}
 	return s.daytonaTemplates.ActiveCredentialBindings(ctx, ref)

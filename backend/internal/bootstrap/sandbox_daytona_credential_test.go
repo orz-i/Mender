@@ -12,12 +12,16 @@ import (
 )
 
 func TestDaytonaSandboxRetainsCredentialUsageUntilDestroyed(t *testing.T) {
+	t.Setenv(DaytonaExperimentalEnvironment, "")
 	ctx := context.Background()
 	runtime, err := NewRuntime(ctx, RuntimeOptions{DatabasePath: filepath.Join(t.TempDir(), "daytona-credentials.db")})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = runtime.Close() }()
+	if runtime.Sandboxes.DaytonaConfigured() {
+		t.Fatal("Daytona remote adapter enabled without operator opt-in")
+	}
 	id := sandboxdomain.ID("sbx_abcdef0123456789abcdef0123456789")
 	owner := runtime.OwnerPrincipal()
 	resource, err := sandboxdomain.NewSandbox(sandboxdomain.Spec{ID: id, Name: "Daytona pending", Backend: sandboxdomain.BackendDaytona, Isolation: sandboxdomain.IsolationRemote, OwnerKind: string(owner.Kind()), OwnerRef: owner.Reference()})

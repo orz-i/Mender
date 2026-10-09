@@ -1517,7 +1517,7 @@ export interface components {
         SandboxBackends: {
             dockerAvailable: boolean;
             dockerStatus: string;
-            /** @description Driver installed only; does not prove live remote account access */
+            /** @description Explicit host-operator experimental execution opt-in; disabled by default */
             daytonaConfigured: boolean;
             daytonaStatus: string;
         };

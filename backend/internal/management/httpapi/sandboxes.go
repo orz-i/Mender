@@ -179,7 +179,7 @@ type createDockerSandboxRequest struct {
 }
 
 func (h *Handler) sandboxBackends(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{"dockerAvailable": h.runtime.Sandboxes.DockerAvailable(), "dockerStatus": h.runtime.Sandboxes.DockerStatus(), "daytonaConfigured": h.runtime.Sandboxes.DaytonaConfigured(), "daytonaStatus": "Credential Reference and live provider availability must be verified during creation"})
+	writeJSON(w, http.StatusOK, map[string]any{"dockerAvailable": h.runtime.Sandboxes.DockerAvailable(), "dockerStatus": h.runtime.Sandboxes.DockerStatus(), "daytonaConfigured": h.runtime.Sandboxes.DaytonaConfigured(), "daytonaStatus": h.runtime.Sandboxes.DaytonaStatus()})
 }
 func (h *Handler) createDockerSandbox(w http.ResponseWriter, r *http.Request) {
 	var input createDockerSandboxRequest

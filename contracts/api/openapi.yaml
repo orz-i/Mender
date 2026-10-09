@@ -1978,7 +1978,7 @@ components:
       properties:
         dockerAvailable: { type: boolean }
         dockerStatus: { type: string }
-        daytonaConfigured: { type: boolean, description: Driver installed only; does not prove live remote account access }
+        daytonaConfigured: { type: boolean, description: Explicit host-operator experimental execution opt-in; disabled by default, never proof of live remote acceptance }
         daytonaStatus: { type: string }
       additionalProperties: false
     CreateDaytonaSandboxRequest:

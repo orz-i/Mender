@@ -32,6 +32,7 @@ type Sandboxes struct {
 	dockerUnavailableReason string
 	daytona                 *sandboxdaytona.Controller
 	daytonaTemplates        *sandboxdaytona.TemplateStore
+	daytonaExperimental     bool
 }
 
 func NewSandboxes(ctx context.Context, databasePath string, policy sandboxapplication.AdmissionPolicy, approval governanceapplication.ApprovalGate, governance *RuntimeGovernance, credentials invocationapplication.CredentialResolver) (*Sandboxes, error) {

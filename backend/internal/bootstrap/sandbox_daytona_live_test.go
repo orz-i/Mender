@@ -36,6 +36,7 @@ func TestDaytonaLiveRuntimeProviderAndCleanup(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
+	t.Setenv(DaytonaExperimentalEnvironment, "enabled")
 	t.Setenv("DAYTONA_JWT_TOKEN", "")
 	t.Setenv("DAYTONA_ORGANIZATION_ID", "")
 	db := filepath.Join(t.TempDir(), "daytona-live-runtime.db")

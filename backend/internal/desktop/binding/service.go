@@ -160,7 +160,7 @@ func (s *Service) changeLocalSandboxLifecycle(rawID string, action governancedom
 }
 
 func (s *Service) GetSandboxBackends() (DockerBackendStatus, error) {
-	return DockerBackendStatus{DockerAvailable: s.runtime.Sandboxes.DockerAvailable(), DockerStatus: s.runtime.Sandboxes.DockerStatus(), DaytonaConfigured: s.runtime.Sandboxes.DaytonaConfigured(), DaytonaStatus: "Credential Reference and live remote availability are verified during creation"}, nil
+	return DockerBackendStatus{DockerAvailable: s.runtime.Sandboxes.DockerAvailable(), DockerStatus: s.runtime.Sandboxes.DockerStatus(), DaytonaConfigured: s.runtime.Sandboxes.DaytonaConfigured(), DaytonaStatus: s.runtime.Sandboxes.DaytonaStatus()}, nil
 }
 func (s *Service) CreateDaytonaSandbox(input CreateDaytonaSandboxInput) (Sandbox, error) {
 	ref, err := credentialdomain.ParseReference(input.CredentialRef)
