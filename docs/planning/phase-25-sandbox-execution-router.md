@@ -440,3 +440,17 @@ Important honesty and safety boundaries:
 4. C2 must atomically wire migration + ConfigVersion 2-only Provider + trusted Invocation Context propagation + CLI/Web/Desktop contract support and remove legacy execution files. It must preserve existing stable ProviderID and ToolID identities and reject missing/stale Sandbox bindings.
 5. Docker/Daytona/E2B backend implementations and Sandbox list/create/detail UX remain pending; do not represent those as working features.
 6. `.agents/`, `.pi/`, `.intent-loop/` remain untracked and untouched.
+
+## C2 execution handoff — hard-cut checklist (2026-10-09)
+
+Implementation gate for this segment:
+
+1. Add `GovernanceContext` to the already policy-admitted canonical `ExecutionRequest`; set it exactly once in `InvokeTool.execute` from trusted invocation context. It is not extracted from JSON Tool arguments or arbitrary Provider metadata.
+2. Workspace Provider ConfigVersion 2 accepts only `{ "sandboxId": "sbx_..." }`. Its activation/discovery remains side-effect free: `Plugin.Open` parses and retains the persistent SandboxID but never acquires a Sandbox, opens a shell, resolves credentials, or touches a filesystem.
+3. Each Workspace tool invocation maps the existing stable SourceKey to a **fixed** Sandbox capability, calls `SandboxRouter.Resolve` and `SandboxRouter.Acquire` with trusted `ExecutionRequest.Context`, executes the selected Sandbox WorkspaceSession, and closes the lease exactly once. The canonical `tool.invoke` Policy/approval, Runtime Budget, Result Guard and Audit stay outside this facade. Missing binding, wrong capability, unavailable backend and denied `sandbox.acquire` fail closed.
+4. Provider ConfigVersion 1 is decoded **only** by the forward-only SQLite startup migration. Creation/update paths and Plugin.Open reject v1 immediately after the hard cut. Existing ProviderIDs, SourceKey-stable ToolIDs, Profile bindings, Policy and historical Audit are not regenerated. The isolation mode is snapshotted from the pre-cut Workspace Runtime setting for existing providers; subsequent global-isolation changes cannot silently elevate a persisted Sandbox.
+5. The end-user Provider form and CLI must stop writing arbitrary `root` into Workspace Provider configuration. Workspace Provider receives an inventory-selected sandbox identifier instead. A governed Sandbox creation/list API and client workflow is a separate management cluster that must not be disguised by a free-form opaque-ID text field.
+6. Remove duplicate host read/edit/search/shell execution from the Workspace Provider package after the cut; keep only reviewed Governance Fact parsing and canonical tool schemas. File operation algorithms live inside Sandbox backends.
+7. Tests must cover v1 persisted DB upgrade on Runtime start, idempotent restart, strict v2 rejection of `root`, denied `tool.invoke` and `sandbox.acquire` (zero backend effects), `read/search/edit/shell` on the same Sandbox root, and stale/missing sandbox bindings. Existing tests must be adapted to the **new** source of authority rather than retaining v1 helpers.
+
+Non-goals: no new compatibility bridge, no Agent loop, no auto provisioning, no remote fallback, no unreviewed executable/mount flags from Tool input. Remain In Progress until management adapter parity and tests are green.
