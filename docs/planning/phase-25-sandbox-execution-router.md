@@ -350,3 +350,18 @@ Still pending before this is end-to-end:
 6. Real Sandboxes navigation, list/create/detail, typed OpenAPI/SDK/Wails/Desktop, English/Chinese parity, and end-to-end tests.
 
 Do not confuse Foundation B1 test green with Sandbox runtime integration. No `.agents/`, `.pi/`, or `.intent-loop/` paths were added to commits.
+
+## Follow-up slice B2 — governed Sandbox admission and Runtime registration
+
+Status: Planned for implementation in separate commits; foundation B1 is already complete.
+
+Contract refinements before code:
+
+1. Extend the existing action-aware Policy vocabulary with `sandbox.acquire`, `sandbox.provision`, `sandbox.start`, `sandbox.stop`, `sandbox.destroy`, rather than introducing a second implicit Policy engine. Sandbox operations carry explicit Principal/Origin/Scope and validated `sandbox_id`/`sandbox_backend`/`sandbox_isolation` **reviewed, bounded resource facts**, never raw Tool arguments, root paths or credentials. ProviderID/ToolID are empty for these actions. Existing Provider/Tool selectors must not accidentally match Sandbox-only actions.
+2. Persist an isolated data-minimized `SandboxActionAudit` for Policy/approval/admission outcomes; denied calls must not reach backend Open, filesystem, external requests, or credential resolution. Approvals must receive the typed SandboxID and Action, not a dummy ProviderID.
+3. Keep the existing `Invocation -> ProviderExecutorRouter` pipeline unchanged until Workspace ConfigVersion 2 is migrated. A new Sandbox Router cannot be reachable from user-controlled Tool arguments or silently bypass the canonical Tool Policy. Parent tool.invoke admission remains the prerequisite for `sandbox.acquire` during the future Workspace hard cut.
+4. Runtime owns the Sandbox SQLite store and backend Registry lifetime. A production AdmissionGate must be present even when no backend is installed; no null/permissive stub is allowed. Add the Local Workspace backend only when both read/edit/search and shell operate within one backend identity. Do not describe `restricted_host` as container/VM isolation.
+5. Existing Global Policy default decision applies to Sandbox actions, *in addition to* immutable owner equality, capability checking and explicit sandbox action audit. Persistent Policy rules support Sandbox-only action + reviewed `sandbox_id` matching and cannot loosen a parent denied tool.invoke.
+6. Segmented commits: B2 governance/domain/tests; B3 Runtime wiring and tests; C1 Local Workspace Session operations/tests; C2 explicit hard cut/migration only after complete cross-entrypoint checks. No UI claims before typed API/client parity.
+
+Remaining gates: introduction of a Sandbox backend cannot start a process or read/write any file prior to Policy authorization; Provider discovery must remain side-effect-free; a rejected Sandbox cannot fall back to Host.
