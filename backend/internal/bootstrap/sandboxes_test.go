@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"os"
@@ -10,6 +11,8 @@ import (
 
 	governance "github.com/orz-i/Mender/backend/internal/governance/domain"
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
+	policyapplication "github.com/orz-i/Mender/backend/internal/policy/application"
+	policydomain "github.com/orz-i/Mender/backend/internal/policy/domain"
 	sandboxapplication "github.com/orz-i/Mender/backend/internal/sandbox/application"
 	sandbox "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 )
@@ -129,5 +132,100 @@ func TestRuntimeSandboxLocalBackendUsesGovernedLeasesAndPersists(t *testing.T) {
 	observed, err := reopened.Sandboxes.store.GetRun(ctx, id)
 	if err != nil || observed != run {
 		t.Fatalf("run %+v %v", observed, err)
+	}
+}
+
+func TestSandboxProvisionDeniedBeforeFilesystemAccessAndAudited(t *testing.T) {
+	ctx := context.Background()
+	databasePath := filepath.Join(t.TempDir(), "provision.db")
+	runtime, err := NewRuntime(ctx, RuntimeOptions{DatabasePath: databasePath})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = runtime.Close() }()
+	if _, err = runtime.Policy.CreateRule.Execute(ctx, policyapplication.RuleInput{
+		DisplayName: "deny Sandbox provision", Enabled: true, Decision: policydomain.DecisionDeny,
+		Match: policydomain.MatchSpec{Actions: []governance.Action{governance.ActionSandboxProvision}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	principal := runtime.OwnerPrincipal()
+	caller, err := governance.NewContext(governance.OriginInternal, principal, governance.CatalogScope())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A missing root would fail only if the denied operation probed the filesystem.
+	_, err = runtime.Sandboxes.CreateLocalSandbox(ctx, CreateLocalSandboxRequest{
+		Name: "Denied", Root: filepath.Join(t.TempDir(), "not-created"), Isolation: sandbox.IsolationHost,
+	}, caller)
+	if !errors.Is(err, sandbox.ErrNotAuthorized) {
+		t.Fatalf("denied action: %v", err)
+	}
+	items, err := runtime.Sandboxes.List(ctx)
+	if err != nil || len(items) != 0 {
+		t.Fatalf("denied creation persisted Sandbox: %+v %v", items, err)
+	}
+	db, err := sql.Open("sqlite", databasePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	var denied int
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM sandbox_admissions WHERE action='sandbox.provision' AND status='denied'`).Scan(&denied); err != nil {
+		t.Fatal(err)
+	}
+	if denied != 1 {
+		t.Fatalf("provision denials audited: %d", denied)
+	}
+}
+
+func TestLocalSandboxProvisionAndSandboxLeaseShareOwner(t *testing.T) {
+	ctx := context.Background()
+	runtime, err := NewRuntime(ctx, RuntimeOptions{DatabasePath: filepath.Join(t.TempDir(), "provision.db")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = runtime.Close() }()
+	principal := runtime.OwnerPrincipal()
+	caller, err := governance.NewContext(governance.OriginInternal, principal, governance.CatalogScope())
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "hello.txt"), []byte("sandbox"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	item, err := runtime.Sandboxes.CreateLocalSandbox(ctx, CreateLocalSandboxRequest{Name: "Local sandbox", Root: root, Isolation: sandbox.IsolationHost}, caller)
+	if err != nil {
+		t.Fatal(err)
+	}
+	run, err := runtime.Sandboxes.store.GetRun(ctx, item.ID())
+	if err != nil || run.State != sandbox.StateReady {
+		t.Fatalf("run %+v, %v", run, err)
+	}
+	placement, err := runtime.Sandboxes.router.Resolve(ctx, item.ID(), sandbox.CapabilityRead)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lease, err := runtime.Sandboxes.router.Acquire(ctx, caller, placement)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = lease.Close() }()
+	ws, ok := lease.Session.(sandboxapplication.WorkspaceSession)
+	if !ok {
+		t.Fatalf("not WorkspaceSession %T", lease.Session)
+	}
+	args, err := invocationdomain.NewJSONValue([]byte(`{"path":"hello.txt"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	outcome, err := ws.ExecuteWorkspace(ctx, sandbox.CapabilityRead, args)
+	if err != nil || outcome.Kind() != invocationdomain.OutcomeKindComplete {
+		t.Fatalf("read %+v %v", outcome, err)
+	}
+	admitted, err := runtime.Sandboxes.store.ListSandboxAdmissions(ctx, item.ID(), 10)
+	if err != nil || len(admitted) != 2 || admitted[0].Action != governance.ActionSandboxAcquire || admitted[1].Action != governance.ActionSandboxProvision {
+		t.Fatalf("admissions %+v %v", admitted, err)
 	}
 }

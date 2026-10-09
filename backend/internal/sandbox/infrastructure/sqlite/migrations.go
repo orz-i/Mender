@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-const latestSchemaVersion = 2
+const latestSchemaVersion = 3
 
 func migrate(ctx context.Context, db *sql.DB) error {
 	tx, err := db.BeginTx(ctx, nil)
@@ -81,6 +81,47 @@ func migrate(ctx context.Context, db *sql.DB) error {
 		}
 		if _, err = tx.ExecContext(ctx, `INSERT INTO sandbox_schema_migrations(version,applied_at) VALUES(2,?)`, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
 			return fmt.Errorf("record sandbox migration 2: %w", err)
+		}
+	}
+	var detached int
+	if err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM sandbox_schema_migrations WHERE version = 3`).Scan(&detached); err != nil {
+		return fmt.Errorf("check sandbox migration 3: %w", err)
+	}
+	if detached == 0 {
+		// An admitted provision must be audited *before* its Sandbox exists;
+		// admission history must also survive resource destruction.
+		if _, err = tx.ExecContext(ctx, `CREATE TABLE sandbox_admissions_v3 (
+			operation_id TEXT PRIMARY KEY,
+			sandbox_id TEXT NOT NULL,
+			action TEXT NOT NULL,
+			principal_kind TEXT NOT NULL,
+			principal_ref TEXT NOT NULL,
+			origin TEXT NOT NULL,
+			scope_kind TEXT NOT NULL,
+			scope_reference TEXT NOT NULL,
+			policy_kind TEXT NOT NULL,
+			policy_reason TEXT NOT NULL,
+			approval TEXT NOT NULL,
+			status TEXT NOT NULL CHECK(status IN ('admitted','denied','failed')),
+			started_at TEXT NOT NULL,
+			finished_at TEXT NOT NULL
+		)`); err != nil {
+			return fmt.Errorf("create sandbox admission v3: %w", err)
+		}
+		if _, err = tx.ExecContext(ctx, `INSERT INTO sandbox_admissions_v3 SELECT * FROM sandbox_admissions`); err != nil {
+			return fmt.Errorf("transfer sandbox admissions: %w", err)
+		}
+		if _, err = tx.ExecContext(ctx, `DROP TABLE sandbox_admissions`); err != nil {
+			return fmt.Errorf("replace sandbox admission table: %w", err)
+		}
+		if _, err = tx.ExecContext(ctx, `ALTER TABLE sandbox_admissions_v3 RENAME TO sandbox_admissions`); err != nil {
+			return fmt.Errorf("rename sandbox admission table: %w", err)
+		}
+		if _, err = tx.ExecContext(ctx, `CREATE INDEX idx_sandbox_admissions_sandbox ON sandbox_admissions (sandbox_id,started_at DESC)`); err != nil {
+			return fmt.Errorf("recreate sandbox admission index: %w", err)
+		}
+		if _, err = tx.ExecContext(ctx, `INSERT INTO sandbox_schema_migrations(version,applied_at) VALUES(3,?)`, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
+			return fmt.Errorf("record sandbox migration 3: %w", err)
 		}
 	}
 	if err = tx.Commit(); err != nil {

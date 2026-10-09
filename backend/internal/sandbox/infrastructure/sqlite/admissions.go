@@ -74,7 +74,11 @@ func validateAdmission(r app.AdmissionAudit) error {
 	if _, err := sand.ParseID(r.SandboxID.String()); err != nil {
 		return err
 	}
-	if r.Action != governance.ActionSandboxAcquire {
+	switch r.Action {
+	case governance.ActionSandboxAcquire, governance.ActionSandboxProvision,
+		governance.ActionSandboxStart, governance.ActionSandboxStop,
+		governance.ActionSandboxDestroy:
+	default:
 		return errors.New("sandbox admission action unsupported")
 	}
 	principal, err := governance.NewPrincipal(r.PrincipalKind, r.PrincipalRef)

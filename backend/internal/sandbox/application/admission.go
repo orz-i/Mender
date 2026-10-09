@@ -61,11 +61,35 @@ func (a Admit) AdmitAcquire(ctx context.Context, governance governancedomain.Con
 	if err := governance.Validate(); err != nil {
 		return fmt.Errorf("admit sandbox: governance: %w", err)
 	}
-	if err := placement.Sandbox.Validate(); err != nil {
-		return fmt.Errorf("admit sandbox: placement: %w", err)
-	}
 	if err := placement.Required.Validate(); err != nil {
 		return fmt.Errorf("admit sandbox: capability: %w", err)
+	}
+	return a.AdmitAction(ctx, governance, placement.Sandbox, governancedomain.ActionSandboxAcquire)
+}
+
+// AdmitAction authorizes one Sandbox control-plane operation before the
+// operation performs filesystem I/O, creates resources or resolves credentials.
+func (a Admit) AdmitAction(ctx context.Context, governance governancedomain.Context, sandbox sandboxdomain.Sandbox, action governancedomain.Action) error {
+	if err := governance.Validate(); err != nil {
+		return fmt.Errorf("admit sandbox: governance: %w", err)
+	}
+	if err := action.Validate(); err != nil {
+		return err
+	}
+	switch action {
+	case governancedomain.ActionSandboxAcquire, governancedomain.ActionSandboxProvision,
+		governancedomain.ActionSandboxStart, governancedomain.ActionSandboxStop,
+		governancedomain.ActionSandboxDestroy:
+	default:
+		return fmt.Errorf("admit sandbox: action %q is not a sandbox action", action)
+	}
+	if err := sandbox.Validate(); err != nil {
+		return fmt.Errorf("admit sandbox: Sandbox: %w", err)
+	}
+	spec := sandbox.Spec()
+	principal := governance.Principal()
+	if spec.OwnerKind != string(principal.Kind()) || spec.OwnerRef != principal.Reference() {
+		return sandboxdomain.ErrNotAuthorized
 	}
 	if a.policy == nil || a.approval == nil || a.audit == nil || a.ids == nil || a.clock == nil {
 		return fmt.Errorf("admit sandbox: governance dependencies unavailable")
@@ -75,10 +99,8 @@ func (a Admit) AdmitAcquire(ctx context.Context, governance governancedomain.Con
 		return fmt.Errorf("admit sandbox: operation id: %w", err)
 	}
 	started := a.clock.Now().UTC()
-	principal := governance.Principal()
 	scope := governance.Scope()
-	spec := placement.Sandbox.Spec()
-	record := AdmissionAudit{OperationID: opID, SandboxID: spec.ID, Action: governancedomain.ActionSandboxAcquire, PrincipalKind: principal.Kind(), PrincipalRef: principal.Reference(), Origin: governance.Origin(), ScopeKind: scope.Kind(), ScopeReference: scope.Reference(), StartedAt: started, Approval: "not_required", Status: "failed"}
+	record := AdmissionAudit{OperationID: opID, SandboxID: spec.ID, Action: action, PrincipalKind: principal.Kind(), PrincipalRef: principal.Reference(), Origin: governance.Origin(), ScopeKind: scope.Kind(), ScopeReference: scope.Reference(), StartedAt: started, Approval: "not_required", Status: "failed"}
 	persist := func() error {
 		record.FinishedAt = a.clock.Now().UTC()
 		auditCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
@@ -86,11 +108,11 @@ func (a Admit) AdmitAcquire(ctx context.Context, governance governancedomain.Con
 		return a.audit.RecordSandboxAdmission(auditCtx, record)
 	}
 	decision, err := a.policy.Execute(ctx, policyapplication.EvaluateRequest{
-		Action: governancedomain.ActionSandboxAcquire,
+		Action: action,
 		Origin: governance.Origin(), PrincipalKind: principal.Kind(), PrincipalReference: principal.Reference(),
 		ScopeKind: scope.Kind(), ScopeReference: scope.Reference(),
 		FactKnowledge: policydomain.FactKnown,
-		Effects:       []string{"sandbox.acquire"},
+		Effects:       []string{string(action)},
 		Resources:     []policyapplication.ResourceFact{{Kind: "sandbox_id", Value: spec.ID.String()}, {Kind: "sandbox_backend", Value: string(spec.Backend)}, {Kind: "sandbox_isolation", Value: string(spec.Isolation)}},
 	})
 	if err != nil {
@@ -103,7 +125,7 @@ func (a Admit) AdmitAcquire(ctx context.Context, governance governancedomain.Con
 		record.Status = "denied"
 		return errors.Join(sandboxdomain.ErrNotAuthorized, persist())
 	case policydomain.DecisionRequireApproval:
-		approved, approvalErr := a.approval.Approve(ctx, governanceapplication.ApprovalRequest{OperationID: opID, Action: governancedomain.ActionSandboxAcquire, Context: governance, SandboxID: spec.ID.String(), Decision: decision})
+		approved, approvalErr := a.approval.Approve(ctx, governanceapplication.ApprovalRequest{OperationID: opID, Action: action, Context: governance, SandboxID: spec.ID.String(), Decision: decision})
 		record.Approval = "denied"
 		if approvalErr != nil {
 			return errors.Join(fmt.Errorf("admit sandbox: approval failed: %w", approvalErr), persist())

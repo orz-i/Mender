@@ -167,3 +167,39 @@ func scanSandbox(row scanner) (sandboxdomain.Sandbox, error) {
 func uniqueError(err error) bool {
 	return strings.Contains(strings.ToLower(err.Error()), "unique constraint failed")
 }
+
+// CreateReady atomically persists an explicitly admitted local Sandbox and its
+// initial run. No partially configured resource can become visible.
+func (s *Store) CreateReady(ctx context.Context, item sandboxdomain.Sandbox, run sandboxdomain.Run) error {
+	if err := item.Validate(); err != nil {
+		return err
+	}
+	if _, err := sandboxdomain.NewRun(run.SandboxID, run.Generation, run.State, run.ExternalID); err != nil {
+		return err
+	}
+	if item.ID() != run.SandboxID || run.State != sandboxdomain.StateReady || run.Generation != 1 {
+		return fmt.Errorf("create ready sandbox: invalid run binding")
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("create ready sandbox: begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	spec := item.Spec()
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	_, err = tx.ExecContext(ctx, `INSERT INTO sandboxes(id,display_name,backend,isolation,local_root,owner_kind,owner_ref,created_at) VALUES(?,?,?,?,?,?,?,?)`, spec.ID.String(), spec.Name, string(spec.Backend), string(spec.Isolation), spec.LocalRoot, spec.OwnerKind, spec.OwnerRef, now)
+	if err != nil {
+		if uniqueError(err) {
+			return sandboxdomain.ErrConflict
+		}
+		return fmt.Errorf("create ready sandbox: record resource: %w", err)
+	}
+	_, err = tx.ExecContext(ctx, `INSERT INTO sandbox_runs(sandbox_id,generation,state,external_id,updated_at) VALUES(?,?,?,?,?)`, run.SandboxID.String(), run.Generation, string(run.State), run.ExternalID, now)
+	if err != nil {
+		return fmt.Errorf("create ready sandbox: record run: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("create ready sandbox: commit: %w", err)
+	}
+	return nil
+}
