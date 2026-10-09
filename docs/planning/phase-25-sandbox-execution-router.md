@@ -312,3 +312,41 @@ Before declaring Phase 25 complete:
 - Remote operation idempotency, cancel semantics and reconciliation after power loss.
 - Usage/billing observation granularity and whether quotas can actually be enforced by each vendor.
 - Tenant/Principal ownership when a Profile is remotely exposed through MCP/Tunnel.
+
+## Implementation checkpoint — Foundation B1 (2026-10-08)
+
+This is **not** Phase 25 completion. The first implementation slice is intentionally isolated from active Invocation and does not create Sandbox instances.
+
+Committed in separate segments:
+
+- `fcbd033` — accept ADR-0035, start Phase 25 governance scope and roadmap.
+- `4614c44` — add `backend/internal/sandbox` domain model, SQLite resource/run persistence, CAS run transitions, explicit Backend/AdmissionGate ports, and side-effect-free Resolve / gated Acquire with bounded and idempotently released leases.
+
+Verified properties for this slice:
+
+- deterministic Sandbox IDs; typed backend and truthful isolation classification;
+- invalid local roots / remote host roots rejected by domain validation;
+- lifecycle transitions typed and persisted, stale transition CAS rejected;
+- future-version SQLite schema rejected; restart preserves run generation/state;
+- placement Resolve performs no backend call;
+- Acquire denies unauthorized Principal or missing gate, missing backend/capability, stale generation and concurrent saturation without host fallback;
+- acquired lease release closes the session at most once.
+
+Verification evidence on the current local workspace:
+
+- `go test -race ./backend/internal/sandbox/...`: passed.
+- `golangci-lint run ./backend/internal/sandbox/...`: 0 issues.
+- `pnpm check`: exit code 0 (includes Go lint/test/race, SDK/proto/bindings checks, frontend lint/typecheck/test/build). Bundler reports existing >500kB chunk warnings.
+- `pnpm security:js`: no known high-severity production dependency vulnerabilities.
+- **`pnpm security:check`: failed**. `govulncheck` reports 12 reachable Go standard-library vulnerabilities in the installed Go 1.27.1 toolchain (fixed in Go 1.27.2) and vulnerable `golang.org/x/net@v0.58.0` entries (fixed in v0.60.0), with some package/module findings marked non-reachable. This is an independent dependency/toolchain remediation gate; do not represent the security scan as green. Review affected module versions and upgrade/re-run the scan in a separate evidence-backed hardening segment.
+
+Still pending before this is end-to-end:
+
+1. Production Sandbox authorization actions (`sandbox.provision/acquire/start/stop/destroy`) and binding to the existing Policy/Approval/Audit chain; currently the gate is a required interface only and has no production implementation.
+2. Wire the Sandbox resource store and execution router into Runtime composition with health/reconciliation and lifetime ownership. No actual backend is registered yet.
+3. Sandbox backend Session operations for one filesystem and shell, plus verified local Workspace backend.
+4. Forward-only Workspace Provider ConfigVersion 1→2 migration, maintaining PluginID/ToolIDs/Profiles and removing direct host file routing in one hard cut.
+5. Managed Docker backend; remote Daytona/E2B backend and cost/resource governance.
+6. Real Sandboxes navigation, list/create/detail, typed OpenAPI/SDK/Wails/Desktop, English/Chinese parity, and end-to-end tests.
+
+Do not confuse Foundation B1 test green with Sandbox runtime integration. No `.agents/`, `.pi/`, or `.intent-loop/` paths were added to commits.
