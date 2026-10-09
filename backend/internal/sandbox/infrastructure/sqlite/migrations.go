@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-const latestSchemaVersion = 1
+const latestSchemaVersion = 2
 
 func migrate(ctx context.Context, db *sql.DB) error {
 	tx, err := db.BeginTx(ctx, nil)
@@ -51,6 +51,36 @@ func migrate(ctx context.Context, db *sql.DB) error {
 		}
 		if _, err = tx.ExecContext(ctx, `INSERT INTO sandbox_schema_migrations(version,applied_at) VALUES(1,?)`, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
 			return fmt.Errorf("record sandbox migration 1: %w", err)
+		}
+	}
+	var admissionApplied int
+	if err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM sandbox_schema_migrations WHERE version = 2`).Scan(&admissionApplied); err != nil {
+		return fmt.Errorf("check sandbox migration 2: %w", err)
+	}
+	if admissionApplied == 0 {
+		if _, err = tx.ExecContext(ctx, `CREATE TABLE sandbox_admissions (
+			operation_id TEXT PRIMARY KEY,
+			sandbox_id TEXT NOT NULL REFERENCES sandboxes(id),
+			action TEXT NOT NULL,
+			principal_kind TEXT NOT NULL,
+			principal_ref TEXT NOT NULL,
+			origin TEXT NOT NULL,
+			scope_kind TEXT NOT NULL,
+			scope_reference TEXT NOT NULL,
+			policy_kind TEXT NOT NULL,
+			policy_reason TEXT NOT NULL,
+			approval TEXT NOT NULL,
+			status TEXT NOT NULL CHECK (status IN ('admitted','denied','failed')),
+			started_at TEXT NOT NULL,
+			finished_at TEXT NOT NULL
+		)`); err != nil {
+			return fmt.Errorf("apply sandbox migration 2: %w", err)
+		}
+		if _, err = tx.ExecContext(ctx, `CREATE INDEX idx_sandbox_admissions_sandbox ON sandbox_admissions (sandbox_id, started_at DESC)`); err != nil {
+			return fmt.Errorf("create sandbox admission index: %w", err)
+		}
+		if _, err = tx.ExecContext(ctx, `INSERT INTO sandbox_schema_migrations(version,applied_at) VALUES(2,?)`, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
+			return fmt.Errorf("record sandbox migration 2: %w", err)
 		}
 	}
 	if err = tx.Commit(); err != nil {

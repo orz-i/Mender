@@ -15,6 +15,7 @@ type ApprovalRequest struct {
 	Context     governancedomain.Context
 	ProviderID  catalogdomain.ProviderID
 	ToolID      *catalogdomain.ToolID
+	SandboxID   string // bounded Sandbox reference for sandbox.* actions; never a ProviderID
 	Decision    policydomain.Decision
 }
 

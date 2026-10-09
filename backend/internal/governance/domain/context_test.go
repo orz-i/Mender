@@ -40,7 +40,7 @@ func TestContextRejectsZeroPrincipal(t *testing.T) {
 
 func TestActionValidation(t *testing.T) {
 	t.Parallel()
-	for _, action := range []Action{ActionToolInvoke, ActionProviderActivate} {
+	for _, action := range []Action{ActionToolInvoke, ActionProviderActivate, ActionSandboxAcquire, ActionSandboxProvision, ActionSandboxStart, ActionSandboxStop, ActionSandboxDestroy} {
 		if err := action.Validate(); err != nil {
 			t.Fatalf("%s: %v", action, err)
 		}

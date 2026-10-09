@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"encoding/hex"
 	"fmt"
 	"slices"
 	"strings"
@@ -218,6 +219,12 @@ func NewMatch(spec MatchSpec) (Match, error) {
 			"fact_knowledge: unknown cannot be combined with effect/resource predicates",
 		)
 	}
+	if hasSandboxAction(actions) &&
+		(len(providerIDs) != 0 || len(toolIDs) != 0 ||
+			(slices.Contains(actions, governancedomain.ActionToolInvoke) ||
+				slices.Contains(actions, governancedomain.ActionProviderActivate))) {
+		return Match{}, fmt.Errorf("sandbox action rules cannot use Provider/Tool selectors or mix with Tool/Provider actions")
+	}
 	if slices.Contains(actions, governancedomain.ActionProviderActivate) &&
 		(len(toolIDs) != 0 ||
 			factKnowledge != FactAny ||
@@ -345,7 +352,8 @@ func (i EvaluationInput) Validate() error {
 	if _, err := governancedomain.NewContext(i.Origin, principal, scope); err != nil {
 		return fmt.Errorf("evaluation.context: %w", err)
 	}
-	if strings.TrimSpace(i.ProviderID) == "" || len(i.ProviderID) > maxSelectorValueLen {
+	if !isSandboxAction(i.Action) &&
+		(strings.TrimSpace(i.ProviderID) == "" || len(i.ProviderID) > maxSelectorValueLen) {
 		return fmt.Errorf("evaluation.provider_id: must be non-empty and bounded")
 	}
 
@@ -364,6 +372,31 @@ func (i EvaluationInput) Validate() error {
 		}
 		if err := validateEvaluationFacts(i); err != nil {
 			return err
+		}
+	case governancedomain.ActionSandboxAcquire, governancedomain.ActionSandboxProvision,
+		governancedomain.ActionSandboxStart, governancedomain.ActionSandboxStop,
+		governancedomain.ActionSandboxDestroy:
+		if i.ProviderID != "" || i.ToolID != "" {
+			return fmt.Errorf("evaluation: sandbox action cannot target Provider or Tool")
+		}
+		if i.FactKnowledge != FactKnown {
+			return fmt.Errorf("evaluation: sandbox action requires reviewed governance facts")
+		}
+		if err := validateEvaluationFacts(i); err != nil {
+			return err
+		}
+		var sandboxID bool
+		for _, resource := range i.Resources {
+			if resource.Kind == "sandbox_id" && len(resource.Value) == 36 &&
+				strings.HasPrefix(resource.Value, "sbx_") &&
+				resource.Value == strings.ToLower(resource.Value) {
+				if _, err := hex.DecodeString(strings.TrimPrefix(resource.Value, "sbx_")); err == nil {
+					sandboxID = true
+				}
+			}
+		}
+		if !sandboxID {
+			return fmt.Errorf("evaluation: sandbox action requires sandbox_id fact")
 		}
 	case governancedomain.ActionProviderActivate:
 		if strings.TrimSpace(i.ToolID) != "" {
@@ -443,7 +476,7 @@ func (m Match) Matches(input EvaluationInput) bool {
 	if len(m.toolIDs) != 0 && !slices.Contains(m.toolIDs, input.ToolID) {
 		return false
 	}
-	if input.Action == governancedomain.ActionToolInvoke {
+	if input.Action == governancedomain.ActionToolInvoke || isSandboxAction(input.Action) {
 		if m.factKnowledge != FactAny && m.factKnowledge != input.FactKnowledge {
 			return false
 		}
@@ -461,6 +494,26 @@ func (m Match) Matches(input EvaluationInput) bool {
 		}
 	}
 	return true
+}
+
+func isSandboxAction(a governancedomain.Action) bool {
+	switch a {
+	case governancedomain.ActionSandboxAcquire, governancedomain.ActionSandboxProvision,
+		governancedomain.ActionSandboxStart, governancedomain.ActionSandboxStop,
+		governancedomain.ActionSandboxDestroy:
+		return true
+	default:
+		return false
+	}
+}
+
+func hasSandboxAction(actions []governancedomain.Action) bool {
+	for _, action := range actions {
+		if isSandboxAction(action) {
+			return true
+		}
+	}
+	return false
 }
 
 func normalizeActions(values []governancedomain.Action) ([]governancedomain.Action, error) {

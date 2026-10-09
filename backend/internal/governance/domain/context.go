@@ -16,11 +16,18 @@ type Action string
 const (
 	ActionToolInvoke       Action = "tool.invoke"
 	ActionProviderActivate Action = "provider.activate"
+	ActionSandboxAcquire   Action = "sandbox.acquire"
+	ActionSandboxProvision Action = "sandbox.provision"
+	ActionSandboxStart     Action = "sandbox.start"
+	ActionSandboxStop      Action = "sandbox.stop"
+	ActionSandboxDestroy   Action = "sandbox.destroy"
 )
 
 func (a Action) Validate() error {
 	switch a {
-	case ActionToolInvoke, ActionProviderActivate:
+	case ActionToolInvoke, ActionProviderActivate,
+		ActionSandboxAcquire, ActionSandboxProvision, ActionSandboxStart,
+		ActionSandboxStop, ActionSandboxDestroy:
 		return nil
 	default:
 		return fmt.Errorf("governance action: unknown value %q", a)

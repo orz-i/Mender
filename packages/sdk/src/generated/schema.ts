@@ -943,7 +943,7 @@ export interface components {
             match: components["schemas"]["PolicyMatch"];
         };
         PolicyMatch: {
-            actions: ("tool.invoke" | "provider.activate")[];
+            actions: ("tool.invoke" | "provider.activate" | "sandbox.acquire" | "sandbox.provision" | "sandbox.start" | "sandbox.stop" | "sandbox.destroy")[];
             origins: ("cli" | "mcp" | "management_http" | "desktop" | "internal")[];
             principalKinds: ("local_user" | "service")[];
             principalRefs: string[];

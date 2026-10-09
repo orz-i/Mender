@@ -62,6 +62,11 @@ const actionOptions: Array<{
 }> = [
   { value: "tool.invoke", label: "Tool invoke" },
   { value: "provider.activate", label: "Provider activate" },
+  { value: "sandbox.acquire", label: "Sandbox acquire" },
+  { value: "sandbox.provision", label: "Sandbox provision" },
+  { value: "sandbox.start", label: "Sandbox start" },
+  { value: "sandbox.stop", label: "Sandbox stop" },
+  { value: "sandbox.destroy", label: "Sandbox destroy" },
 ];
 
 const principalKindOptions: Array<{
@@ -604,13 +609,20 @@ function DecisionStep({
         options={actionOptions}
         selected={form.match.actions}
         onToggle={(value, checked) => {
-          const actions = toggleValue(form.match.actions, value, checked);
+          const selected = toggleValue(form.match.actions, value, checked);
+          const actions = checked && value.startsWith("sandbox.")
+            ? selected.filter((action) => action.startsWith("sandbox."))
+            : checked && !value.startsWith("sandbox.")
+              ? selected.filter((action) => !action.startsWith("sandbox."))
+              : selected;
           const includesActivation = actions.includes("provider.activate");
+          const includesSandbox = actions.some((action) => action.startsWith("sandbox."));
           onChange({
             ...form,
             match: {
               ...form.match,
               actions,
+              ...(includesSandbox ? { providerIds: [], toolIds: [] } : {}),
               ...(includesActivation
                 ? {
                     toolIds: [],
@@ -789,7 +801,7 @@ function ScopeStep({
         }
       />
 
-      <InventorySelector
+      {form.match.actions.some((action) => action.startsWith("sandbox.")) ? null : <InventorySelector
         title="Providers"
         description="Empty means any Provider."
         emptyLabel="No Providers"
@@ -812,11 +824,13 @@ function ScopeStep({
             },
           })
         }
-      />
+      />}
 
-      {form.match.actions.includes("provider.activate") ? (
+      {form.match.actions.includes("provider.activate") || form.match.actions.some((action) => action.startsWith("sandbox.")) ? (
         <div className="rounded-lg border border-border px-3 py-2 text-xs leading-5 text-muted-foreground">
-          {t("Tool selectors are unavailable when provider.activate is selected because Provider activation happens before Tool execution and may happen before Tool discovery.")}
+          {t(form.match.actions.includes("provider.activate")
+            ? "Tool selectors are unavailable when provider.activate is selected because Provider activation happens before Tool execution and may happen before Tool discovery."
+            : "Sandbox actions target reviewed sandbox_id facts, not Provider or Tool IDs.")}
         </div>
       ) : (
         <InventorySelector
@@ -1208,6 +1222,9 @@ function Field({
 function ruleDecisionValid(form: PolicyRuleInput) {
   if (form.displayName.trim() === "" || form.match.actions.length === 0) {
     return false;
+  }
+  if (form.match.actions.some((action) => action.startsWith("sandbox."))) {
+    if (form.match.actions.some((action) => !action.startsWith("sandbox.")) || form.match.providerIds.length > 0 || form.match.toolIds.length > 0) return false;
   }
   if (form.match.actions.includes("provider.activate")) {
     return (

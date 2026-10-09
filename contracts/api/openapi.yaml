@@ -1219,7 +1219,7 @@ components:
         actions:
           type: array
           minItems: 1
-          items: { type: string, enum: [tool.invoke, provider.activate] }
+          items: { type: string, enum: [tool.invoke, provider.activate, sandbox.acquire, sandbox.provision, sandbox.start, sandbox.stop, sandbox.destroy] }
         origins:
           type: array
           items: { type: string, enum: [cli, mcp, management_http, desktop, internal] }
