@@ -41,7 +41,7 @@ func NewSandboxes(ctx context.Context, databasePath string, policy sandboxapplic
 		_ = store.Close()
 		return nil, fmt.Errorf("compose sandboxes: local workspace: %w", err)
 	}
-	router, err := sandboxrouter.New(store, store, gate, localBackend)
+	router, err := sandboxrouter.New(store, store, gate, store, localBackend)
 	if err != nil {
 		_ = store.Close()
 		return nil, fmt.Errorf("compose sandboxes: router: %w", err)

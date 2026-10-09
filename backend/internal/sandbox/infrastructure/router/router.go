@@ -4,30 +4,28 @@ package router
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"sync"
+	"time"
 
 	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	sandboxapp "github.com/orz-i/Mender/backend/internal/sandbox/application"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 )
 
-const maxSandboxLeases = 1 // V1: prevent overlapping mutable local workspace sessions.
-
 type Router struct {
 	definitions sandboxapp.SandboxLookup
 	runs        sandboxapp.RunLookup
 	gate        sandboxapp.AdmissionGate
 	backends    map[sandboxdomain.BackendKind]sandboxapp.Backend
-	mu          sync.Mutex
-	active      map[sandboxdomain.ID]int
+	leases      sandboxapp.ExecutionLeaseStore
 }
 
-func New(definitions sandboxapp.SandboxLookup, runs sandboxapp.RunLookup, gate sandboxapp.AdmissionGate, backends ...sandboxapp.Backend) (*Router, error) {
-	if definitions == nil || runs == nil || gate == nil {
-		return nil, fmt.Errorf("sandbox router: definitions, runs and admission gate required")
+func New(definitions sandboxapp.SandboxLookup, runs sandboxapp.RunLookup, gate sandboxapp.AdmissionGate, leases sandboxapp.ExecutionLeaseStore, backends ...sandboxapp.Backend) (*Router, error) {
+	if definitions == nil || runs == nil || gate == nil || leases == nil {
+		return nil, fmt.Errorf("sandbox router: definitions, runs, admission gate and durable leases required")
 	}
-	router := &Router{definitions: definitions, runs: runs, gate: gate, backends: make(map[sandboxdomain.BackendKind]sandboxapp.Backend), active: make(map[sandboxdomain.ID]int)}
+	router := &Router{definitions: definitions, runs: runs, gate: gate, leases: leases, backends: make(map[sandboxdomain.BackendKind]sandboxapp.Backend)}
 	for _, backend := range backends {
 		if backend == nil {
 			return nil, fmt.Errorf("sandbox router: nil backend")
@@ -120,41 +118,31 @@ func (r *Router) Acquire(ctx context.Context, principal governancedomain.Context
 	if backend.Kind() != spec.Backend {
 		return nil, sandboxdomain.ErrBackendUnavailable
 	}
-	r.mu.Lock()
-	if r.active[spec.ID] >= maxSandboxLeases {
-		r.mu.Unlock()
-		return nil, sandboxdomain.ErrConflict
+	// Reserve from the persistent store before touching a backend; all Runtime
+	// processes sharing the same SQLite database compete for this one lease.
+	token, err := r.leases.ReserveExecution(ctx, spec.ID, run.Generation, principal)
+	if err != nil {
+		return nil, fmt.Errorf("reserve Sandbox execution: %w", err)
 	}
-	r.active[spec.ID]++
-	r.mu.Unlock()
-	releaseBudget := func() {
-		r.mu.Lock()
-		defer r.mu.Unlock()
-		if r.active[spec.ID] <= 1 {
-			delete(r.active, spec.ID)
-		} else {
-			r.active[spec.ID]--
-		}
+	releaseExecution := func() error {
+		releaseCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		defer cancel()
+		return r.leases.ReleaseExecution(releaseCtx, spec.ID, token)
 	}
 	session, err := backend.Open(ctx, current, run)
 	if err != nil {
-		releaseBudget()
-		return nil, fmt.Errorf("acquire sandbox: backend unavailable: %w", err)
+		return nil, errors.Join(fmt.Errorf("acquire Sandbox: open backend: %w", err), releaseExecution())
 	}
 	if session == nil {
-		releaseBudget()
-		return nil, fmt.Errorf("acquire sandbox: backend returned no session")
+		return nil, errors.Join(fmt.Errorf("acquire Sandbox: backend returned no session"), releaseExecution())
 	}
 	if err := ctx.Err(); err != nil {
-		_ = session.Close()
-		releaseBudget()
-		return nil, err
+		return nil, errors.Join(err, session.Close(), releaseExecution())
 	}
 	return sandboxapp.NewLease(spec.ID, run.Generation, session, func() error {
-		defer releaseBudget()
 		if err := session.Close(); err != nil {
-			return fmt.Errorf("release sandbox session: %w", err)
+			return fmt.Errorf("release Sandbox: backend cleanup failed, durable lease retained: %w", err)
 		}
-		return nil
+		return releaseExecution()
 	}), nil
 }

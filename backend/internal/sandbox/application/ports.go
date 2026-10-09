@@ -48,3 +48,11 @@ type Placement struct {
 	Run      sandboxdomain.Run
 	Required sandboxdomain.Capability
 }
+
+// ExecutionLeaseStore serializes Sandbox operations across Runtime processes.
+// One persisted lease is held per Sandbox until successful backend cleanup.
+// A crash must NOT automatically expire an uncertain lease.
+type ExecutionLeaseStore interface {
+	ReserveExecution(context.Context, sandboxdomain.ID, uint64, governancedomain.Context) (string, error)
+	ReleaseExecution(context.Context, sandboxdomain.ID, string) error
+}

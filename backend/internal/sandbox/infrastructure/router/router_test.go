@@ -3,6 +3,8 @@ package router
 import (
 	"context"
 	"errors"
+	"fmt"
+	"sync"
 	"sync/atomic"
 	"testing"
 
@@ -12,8 +14,10 @@ import (
 )
 
 type fakeStore struct {
-	item sandboxdomain.Sandbox
-	run  sandboxdomain.Run
+	item       sandboxdomain.Sandbox
+	run        sandboxdomain.Run
+	leaseMu    sync.Mutex
+	leaseToken string
 }
 
 func (f *fakeStore) Get(context.Context, sandboxdomain.ID) (sandboxdomain.Sandbox, error) {
@@ -21,6 +25,28 @@ func (f *fakeStore) Get(context.Context, sandboxdomain.ID) (sandboxdomain.Sandbo
 }
 func (f *fakeStore) GetRun(context.Context, sandboxdomain.ID) (sandboxdomain.Run, error) {
 	return f.run, nil
+}
+
+func (f *fakeStore) ReserveExecution(_ context.Context, id sandboxdomain.ID, generation uint64, caller gov.Context) (string, error) {
+	f.leaseMu.Lock()
+	defer f.leaseMu.Unlock()
+	if id != f.item.ID() || f.run.State != sandboxdomain.StateReady || generation != f.run.Generation || f.leaseToken != "" {
+		return "", sandboxdomain.ErrConflict
+	}
+	if err := caller.Validate(); err != nil {
+		return "", err
+	}
+	f.leaseToken = "0123456789abcdef0123456789abcdef"
+	return f.leaseToken, nil
+}
+func (f *fakeStore) ReleaseExecution(_ context.Context, id sandboxdomain.ID, token string) error {
+	f.leaseMu.Lock()
+	defer f.leaseMu.Unlock()
+	if id != f.item.ID() || f.leaseToken == "" || token != f.leaseToken {
+		return fmt.Errorf("release wrong Sandbox lease: %w", sandboxdomain.ErrConflict)
+	}
+	f.leaseToken = ""
+	return nil
 }
 
 type gate struct {
@@ -74,7 +100,7 @@ func setup(t *testing.T) (*fakeStore, gov.Context, *gate, *backend, *Router) {
 	f := &fakeStore{item: item, run: run}
 	g := &gate{}
 	b := &backend{session: &session{}, cap: sandboxdomain.Capabilities{Read: true}}
-	r, err := New(f, f, g, b)
+	r, err := New(f, f, g, f, b)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -141,11 +167,11 @@ func TestAcquireCapabilityLifecycleAndNoFallback(t *testing.T) {
 }
 func TestFailClosedWithoutAdmissionGateOrBackend(t *testing.T) {
 	f, caller, _, _, _ := setup(t)
-	if _, err := New(f, f, nil); err == nil {
+	if _, err := New(f, f, nil, f); err == nil {
 		t.Fatal("missing gate accepted")
 	}
 	g := &gate{}
-	r, err := New(f, f, g)
+	r, err := New(f, f, g, f)
 	if err != nil {
 		t.Fatal(err)
 	}

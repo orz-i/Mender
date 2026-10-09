@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-const latestSchemaVersion = 3
+const latestSchemaVersion = 4
 
 func migrate(ctx context.Context, db *sql.DB) error {
 	tx, err := db.BeginTx(ctx, nil)
@@ -122,6 +122,27 @@ func migrate(ctx context.Context, db *sql.DB) error {
 		}
 		if _, err = tx.ExecContext(ctx, `INSERT INTO sandbox_schema_migrations(version,applied_at) VALUES(3,?)`, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
 			return fmt.Errorf("record sandbox migration 3: %w", err)
+		}
+	}
+	var leaseApplied int
+	if err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM sandbox_schema_migrations WHERE version = 4`).Scan(&leaseApplied); err != nil {
+		return fmt.Errorf("sandbox migration 4 presence: %w", err)
+	}
+	if leaseApplied == 0 {
+		if _, err = tx.ExecContext(ctx, `CREATE TABLE sandbox_execution_leases (
+            sandbox_id TEXT PRIMARY KEY REFERENCES sandboxes(id) ON DELETE RESTRICT,
+            lease_token TEXT NOT NULL UNIQUE,
+            generation INTEGER NOT NULL CHECK(generation > 0),
+            principal_kind TEXT NOT NULL,
+            principal_ref TEXT NOT NULL,
+            scope_kind TEXT NOT NULL,
+            scope_ref TEXT NOT NULL,
+            acquired_at TEXT NOT NULL
+        )`); err != nil {
+			return fmt.Errorf("sandbox migration 4 leases: %w", err)
+		}
+		if _, err = tx.ExecContext(ctx, `INSERT INTO sandbox_schema_migrations(version,applied_at) VALUES(4,?)`, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
+			return fmt.Errorf("sandbox migration 4 record: %w", err)
 		}
 	}
 	if err = tx.Commit(); err != nil {
