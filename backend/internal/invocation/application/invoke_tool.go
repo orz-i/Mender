@@ -959,6 +959,7 @@ func (uc InvokeTool) execute(
 			InvocationID: response.InvocationID,
 			Tool:         tool,
 			Arguments:    arguments,
+			Context:      request.Context,
 		},
 		executionCredentials,
 		emitter,

@@ -4,147 +4,116 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
-	"os"
 	"slices"
-	"unicode/utf8"
 
 	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
+	sandboxapplication "github.com/orz-i/Mender/backend/internal/sandbox/application"
+	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 )
 
+// Plugin is a statically discoverable Tool facade over an explicitly bound Sandbox.
+// It neither creates nor opens a Sandbox during Provider activation.
 type Plugin struct {
-	descriptor    providerplugin.Descriptor
-	shellLauncher ShellLauncher
+	descriptor providerplugin.Descriptor
+	router     sandboxapplication.ExecutionRouter
 }
 
-func New(shellLauncher ShellLauncher) *Plugin {
-	return &Plugin{descriptor: Descriptor(), shellLauncher: shellLauncher}
+func New(router sandboxapplication.ExecutionRouter) *Plugin {
+	return &Plugin{descriptor: Descriptor(), router: router}
 }
-
 func (p *Plugin) Descriptor() providerplugin.Descriptor {
 	if p == nil {
 		return Descriptor()
 	}
 	return p.descriptor.Clone()
 }
-
 func (*Plugin) ValidateConfig(ctx context.Context, raw json.RawMessage) error {
 	return ValidateConfig(ctx, raw)
 }
-
-func (*Plugin) InspectConfig(
-	ctx context.Context,
-	raw json.RawMessage,
-) (providerplugin.ConfigMetadata, error) {
+func (*Plugin) InspectConfig(ctx context.Context, raw json.RawMessage) (providerplugin.ConfigMetadata, error) {
 	return InspectConfig(ctx, raw)
 }
-
-func (p *Plugin) Open(
-	_ context.Context,
-	request providerplugin.OpenRequest,
-) (providerplugin.Instance, error) {
+func (p *Plugin) Open(_ context.Context, request providerplugin.OpenRequest) (providerplugin.Instance, error) {
+	if p == nil || p.router == nil {
+		return nil, fmt.Errorf("open Sandbox Workspace Tools: Sandbox Router unavailable")
+	}
 	if request.ConfigVersion != ConfigVersion {
-		return nil, fmt.Errorf(
-			"open Workspace plugin: unsupported config version %d",
-			request.ConfigVersion,
-		)
+		return nil, fmt.Errorf("open Sandbox Workspace Tools: unsupported ConfigVersion %d", request.ConfigVersion)
 	}
 	config, err := DecodeConfig(request.Config)
 	if err != nil {
-		return nil, fmt.Errorf("open Workspace plugin: %w", err)
+		return nil, fmt.Errorf("open Sandbox Workspace Tools: %w", err)
 	}
-	root, err := config.CanonicalRoot()
-	if err != nil {
-		return nil, fmt.Errorf("open Workspace plugin: %w", err)
-	}
-	resolver, err := newWorkspacePathResolver(root)
-	if err != nil {
-		return nil, fmt.Errorf("open Workspace plugin: %w", err)
-	}
-	fsRoot, err := os.OpenRoot(root)
-	if err != nil {
-		return nil, fmt.Errorf("open Workspace plugin root: %w", err)
-	}
-	if p.shellLauncher == nil {
-		_ = fsRoot.Close()
-		return nil, fmt.Errorf("open Workspace plugin: shell launcher is unavailable")
-	}
-	return &Instance{
-		root:          root,
-		resolver:      resolver,
-		fsRoot:        fsRoot,
-		tools:         discoveredFileTools(),
-		shellLauncher: p.shellLauncher,
-	}, nil
+	// Do not resolve or acquire Sandbox on Provider activation or discovery.
+	return &Instance{sandboxID: sandboxdomain.ID(config.SandboxID), router: p.router, tools: discoveredFileTools()}, nil
 }
 
 type Instance struct {
-	root          string
-	resolver      workspacePathResolver
-	fsRoot        *os.Root
-	tools         []catalogapplication.DiscoveredTool
-	shellLauncher ShellLauncher
+	sandboxID sandboxdomain.ID
+	router    sandboxapplication.ExecutionRouter
+	tools     []catalogapplication.DiscoveredTool
 }
 
-func (i *Instance) DiscoverTools(
-	_ context.Context,
-	_ catalogdomain.Provider,
-) ([]catalogapplication.DiscoveredTool, error) {
+func (i *Instance) DiscoverTools(_ context.Context, _ catalogdomain.Provider) ([]catalogapplication.DiscoveredTool, error) {
 	if i == nil {
-		return nil, fmt.Errorf("discover Workspace Tools: instance is nil")
+		return nil, fmt.Errorf("discover Sandbox Workspace Tools: nil instance")
 	}
 	result := make([]catalogapplication.DiscoveredTool, 0, len(i.tools))
-	for _, tool := range i.tools {
-		result = append(result, catalogapplication.DiscoveredTool{
-			SourceKey:    tool.SourceKey,
-			Name:         tool.Name,
-			Title:        tool.Title,
-			Description:  tool.Description,
-			InputSchema:  append([]byte(nil), tool.InputSchema...),
-			OutputSchema: append([]byte(nil), tool.OutputSchema...),
-			Tags:         slices.Clone(tool.Tags),
-		})
+	for _, t := range i.tools {
+		result = append(result, catalogapplication.DiscoveredTool{SourceKey: t.SourceKey, Name: t.Name, Title: t.Title, Description: t.Description, InputSchema: append([]byte(nil), t.InputSchema...), OutputSchema: append([]byte(nil), t.OutputSchema...), Tags: slices.Clone(t.Tags)})
 	}
 	return result, nil
 }
-
-func (i *Instance) Execute(
-	ctx context.Context,
-	request invocationapplication.ExecutionRequest,
-	_ invocationapplication.CredentialResolver,
-	_ invocationapplication.ProgressReporter,
-) (invocationdomain.Outcome, error) {
-	if i == nil {
-		return invocationdomain.Outcome{}, fmt.Errorf("execute Workspace Tool: instance is nil")
+func (i *Instance) Execute(ctx context.Context, request invocationapplication.ExecutionRequest, _ invocationapplication.CredentialResolver, _ invocationapplication.ProgressReporter) (invocationdomain.Outcome, error) {
+	if i == nil || i.router == nil {
+		return invocationdomain.Outcome{}, fmt.Errorf("execute Sandbox Workspace Tool: Router unavailable")
 	}
+	if err := request.Context.Validate(); err != nil {
+		return invocationdomain.Outcome{}, fmt.Errorf("execute Sandbox Workspace Tool: trusted context: %w", err)
+	}
+	var capability sandboxdomain.Capability
 	switch request.Tool.SourceKey() {
 	case sourceKeyRead:
-		return i.executeRead(ctx, request.Arguments)
+		capability = sandboxdomain.CapabilityRead
 	case sourceKeySearch:
-		return i.executeSearch(ctx, request.Arguments)
+		capability = sandboxdomain.CapabilitySearch
 	case sourceKeyEdit:
-		return i.executeEdit(ctx, request.Arguments)
+		capability = sandboxdomain.CapabilityEdit
 	case sourceKeyShell:
-		return i.executeShell(ctx, request.Arguments)
+		capability = sandboxdomain.CapabilityShell
 	default:
-		return invocationdomain.Outcome{}, fmt.Errorf(
-			"execute Workspace Tool %q: capability is unavailable",
-			request.Tool.SourceKey(),
-		)
+		return invocationdomain.Outcome{}, sandboxdomain.ErrCapabilityUnavailable
 	}
-}
-
-func (i *Instance) Close() error {
-	if i == nil || i.fsRoot == nil {
-		return nil
+	placement, err := i.router.Resolve(ctx, i.sandboxID, capability)
+	if err != nil {
+		return invocationdomain.Outcome{}, fmt.Errorf("resolve Sandbox Workspace execution: %w", err)
 	}
-	return i.fsRoot.Close()
+	lease, err := i.router.Acquire(ctx, request.Context, placement)
+	if err != nil {
+		return invocationdomain.Outcome{}, fmt.Errorf("acquire Sandbox Workspace execution: %w", err)
+	}
+	if lease == nil {
+		return invocationdomain.Outcome{}, fmt.Errorf("acquire Sandbox Workspace execution: missing lease")
+	}
+	session, ok := lease.Session.(sandboxapplication.WorkspaceSession)
+	if !ok {
+		return invocationdomain.Outcome{}, errors.Join(sandboxdomain.ErrCapabilityUnavailable, lease.Close())
+	}
+	result, runErr := session.ExecuteWorkspace(ctx, capability, request.Arguments)
+	closeErr := lease.Close()
+	if closeErr != nil {
+		return invocationdomain.Outcome{}, errors.Join(runErr, fmt.Errorf("release Sandbox Workspace lease: %w", closeErr))
+	}
+	return result, runErr
 }
+func (*Instance) Close() error { return nil } // lifecycle owned by Sandbox Router leases
 
 const (
 	sourceKeyRead   = "workspace.read"
@@ -192,35 +161,6 @@ func discoveredFileTools() []catalogapplication.DiscoveredTool {
 			Tags:         []string{"workspace", "process", "shell"},
 		},
 	}
-}
-
-func completeJSON(value any) (invocationdomain.Outcome, error) {
-	raw, err := json.Marshal(value)
-	if err != nil {
-		return invocationdomain.Outcome{}, fmt.Errorf("encode Workspace Tool result: %w", err)
-	}
-	content, err := invocationdomain.NewJSONValue(raw)
-	if err != nil {
-		return invocationdomain.Outcome{}, fmt.Errorf("normalize Workspace Tool result: %w", err)
-	}
-	return invocationdomain.Complete(content)
-}
-
-func toolFailure(err error) (invocationdomain.Outcome, error) {
-	if err == nil {
-		err = fmt.Errorf("workspace tool failed")
-	}
-	message := err.Error()
-	const maxToolFailureRunes = 1800
-	if utf8.RuneCountInString(message) > maxToolFailureRunes {
-		runes := []rune(message)
-		message = string(runes[:maxToolFailureRunes]) + "..."
-	}
-	return invocationdomain.Failed(
-		invocationdomain.FailureSourceTool,
-		invocationdomain.FailureToolError,
-		message,
-	)
 }
 
 func decodeStrict(raw []byte, target any, label string) error {

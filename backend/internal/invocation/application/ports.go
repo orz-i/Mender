@@ -142,4 +142,7 @@ type ExecutionRequest struct {
 	InvocationID invocationdomain.InvocationID
 	Tool         catalogdomain.Tool
 	Arguments    invocationdomain.JSONValue
+	// Context is supplied by canonical Invocation after Policy/approval admission.
+	// Executors must never derive Principal/Scope from Tool arguments.
+	Context governancedomain.Context
 }

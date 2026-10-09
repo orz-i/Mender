@@ -5,14 +5,13 @@ import "encoding/json"
 var workspaceConfigSchema = json.RawMessage(`{
   "type":"object",
   "additionalProperties":false,
-  "required":["root"],
+  "required":["sandboxId"],
   "properties":{
-    "root":{
+    "sandboxId":{
       "type":"string",
-      "minLength":1,
-      "maxLength":4096,
-      "title":"Workspace root",
-      "description":"Absolute local directory exposed by this Provider."
+      "pattern":"^sbx_[0-9a-f]{32}$",
+      "title":"Sandbox",
+      "description":"Select an existing Sandbox. Tools run only in this environment."
     }
   }
 }`)

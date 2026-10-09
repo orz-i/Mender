@@ -3,325 +3,195 @@ package plugin
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"testing"
 	"time"
 
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
-	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
+	gov "github.com/orz-i/Mender/backend/internal/governance/domain"
+	invocationapp "github.com/orz-i/Mender/backend/internal/invocation/application"
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
+	sandboxapp "github.com/orz-i/Mender/backend/internal/sandbox/application"
+	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
+	localworkspace "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/localworkspace"
 )
 
-func TestWorkspacePluginDiscoversStableFileTools(t *testing.T) {
-	t.Parallel()
+type fixtureRouter struct {
+	item               sandboxdomain.Sandbox
+	run                sandboxdomain.Run
+	backend            *localworkspace.Backend
+	resolves, acquires int
+	rejected           bool
+}
 
-	instance := openWorkspaceTestInstance(t, t.TempDir())
-	tools, err := instance.DiscoverTools(context.Background(), catalogdomain.Provider{})
+func (r *fixtureRouter) Resolve(_ context.Context, id sandboxdomain.ID, capability sandboxdomain.Capability) (sandboxapp.Placement, error) {
+	r.resolves++
+	if id != r.item.ID() {
+		return sandboxapp.Placement{}, sandboxdomain.ErrNotFound
+	}
+	if !r.backend.Capabilities().Supports(capability) {
+		return sandboxapp.Placement{}, sandboxdomain.ErrCapabilityUnavailable
+	}
+	return sandboxapp.Placement{Sandbox: r.item, Run: r.run, Required: capability}, nil
+}
+func (r *fixtureRouter) Acquire(ctx context.Context, caller gov.Context, placement sandboxapp.Placement) (*sandboxapp.Lease, error) {
+	r.acquires++
+	if err := caller.Validate(); err != nil {
+		return nil, err
+	}
+	if r.rejected {
+		return nil, sandboxdomain.ErrNotAuthorized
+	}
+	session, err := r.backend.Open(ctx, placement.Sandbox, placement.Run)
 	if err != nil {
-		t.Fatal(err)
+		return nil, err
 	}
-	keys := make([]string, 0, len(tools))
-	for _, tool := range tools {
-		keys = append(keys, tool.SourceKey)
-	}
-	if !slices.Equal(keys, []string{sourceKeyRead, sourceKeySearch, sourceKeyEdit, sourceKeyShell}) {
-		t.Fatalf("SourceKeys = %v", keys)
-	}
+	return sandboxapp.NewLease(r.item.ID(), r.run.Generation, session, session.Close), nil
 }
 
-func TestWorkspaceReadIsBoundedAndRootContained(t *testing.T) {
-	t.Parallel()
+type hostLauncher struct{}
 
-	root := t.TempDir()
-	if err := os.WriteFile(
-		filepath.Join(root, "notes.txt"),
-		[]byte("one\ntwo\nthree\nfour\n"),
-		0o600,
-	); err != nil {
-		t.Fatal(err)
+func (hostLauncher) CheckIsolation(mode sandboxdomain.IsolationClass) error {
+	if mode != sandboxdomain.IsolationHost {
+		return sandboxdomain.ErrBackendUnavailable
 	}
-	instance := openWorkspaceTestInstance(t, root)
-
-	outcome := executeWorkspaceTool(t, instance, sourceKeyRead, map[string]any{
-		"path":   "notes.txt",
-		"offset": 2,
-		"limit":  2,
-	})
-	requireComplete(t, outcome)
-	var result readOutput
-	if err := json.Unmarshal(outcome.Content().Bytes(), &result); err != nil {
-		t.Fatal(err)
-	}
-	if result.Content != "two\nthree" || result.StartLine != 2 || result.EndLine != 3 || !result.Truncated {
-		t.Fatalf("read output = %+v", result)
-	}
-
-	failed := executeWorkspaceTool(t, instance, sourceKeyRead, map[string]any{
-		"path": "../outside.txt",
-	})
-	requireToolFailure(t, failed)
+	return nil
 }
-
-func TestWorkspaceSearchFilesAndContent(t *testing.T) {
-	t.Parallel()
-
-	root := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(root, "src", "nested"), 0o750); err != nil {
-		t.Fatal(err)
-	}
-	files := map[string]string{
-		"main.go":              "package main\n",
-		"src/app.go":           "package app\nfunc GovernanceFactExtractor() {}\n",
-		"src/nested/helper.go": "package nested\n// governancefactextractor\n",
-		"src/readme.md":        "GovernanceFactExtractor docs\n",
-	}
-	for name, content := range files {
-		path := filepath.Join(root, filepath.FromSlash(name))
-		if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	instance := openWorkspaceTestInstance(t, root)
-
-	filesOutcome := executeWorkspaceTool(t, instance, sourceKeySearch, map[string]any{
-		"mode":    "files",
-		"pattern": "**/*.go",
-	})
-	requireComplete(t, filesOutcome)
-	var fileResult searchOutput
-	if err := json.Unmarshal(filesOutcome.Content().Bytes(), &fileResult); err != nil {
-		t.Fatal(err)
-	}
-	gotPaths := make([]string, 0, len(fileResult.Matches))
-	for _, match := range fileResult.Matches {
-		gotPaths = append(gotPaths, match.Path)
-	}
-	wantPaths := []string{"main.go", "src/app.go", "src/nested/helper.go"}
-	if !slices.Equal(gotPaths, wantPaths) {
-		t.Fatalf("file matches = %v, want %v", gotPaths, wantPaths)
-	}
-
-	contentOutcome := executeWorkspaceTool(t, instance, sourceKeySearch, map[string]any{
-		"mode":    "content",
-		"path":    "src",
-		"query":   "governancefactextractor",
-		"pattern": "**/*.go",
-	})
-	requireComplete(t, contentOutcome)
-	var contentResult searchOutput
-	if err := json.Unmarshal(contentOutcome.Content().Bytes(), &contentResult); err != nil {
-		t.Fatal(err)
-	}
-	if len(contentResult.Matches) != 2 {
-		t.Fatalf("content matches = %+v, want 2", contentResult.Matches)
-	}
+func (hostLauncher) Command(ctx context.Context, _ sandboxdomain.IsolationClass, _, workingDirectory, command string, env []string) (*exec.Cmd, error) {
+	// #nosec G204 -- test-only shell for bounded Sandbox integration tests.
+	cmd := exec.CommandContext(ctx, "/bin/sh", "-lc", command)
+	cmd.Dir = workingDirectory
+	cmd.Env = env
+	return cmd, nil
 }
-
-func TestWorkspaceEditCreateReplaceDeleteAndAmbiguity(t *testing.T) {
-	t.Parallel()
-
-	root := t.TempDir()
-	instance := openWorkspaceTestInstance(t, root)
-
-	create := executeWorkspaceTool(t, instance, sourceKeyEdit, map[string]any{
-		"path":      "draft.txt",
-		"operation": "create",
-		"content":   "alpha beta beta\n",
-	})
-	requireComplete(t, create)
-
-	ambiguous := executeWorkspaceTool(t, instance, sourceKeyEdit, map[string]any{
-		"path":      "draft.txt",
-		"operation": "replace",
-		"edits": []map[string]any{
-			{"oldText": "beta", "newText": "gamma"},
-		},
-	})
-	requireToolFailure(t, ambiguous)
-	data := readWorkspaceTestFile(t, root, "draft.txt")
-	if string(data) != "alpha beta beta\n" {
-		t.Fatalf("ambiguous edit mutated file: %q", data)
-	}
-
-	replace := executeWorkspaceTool(t, instance, sourceKeyEdit, map[string]any{
-		"path":      "draft.txt",
-		"operation": "replace",
-		"edits": []map[string]any{
-			{
-				"oldText":              "beta",
-				"newText":              "gamma",
-				"expectedReplacements": 2,
-			},
-		},
-	})
-	requireComplete(t, replace)
-	data = readWorkspaceTestFile(t, root, "draft.txt")
-	if string(data) != "alpha gamma gamma\n" {
-		t.Fatalf("replace content = %q", data)
-	}
-
-	deleteOutcome := executeWorkspaceTool(t, instance, sourceKeyEdit, map[string]any{
-		"path":      "draft.txt",
-		"operation": "delete",
-	})
-	requireComplete(t, deleteOutcome)
-	if _, err := os.Stat(filepath.Join(root, "draft.txt")); !os.IsNotExist(err) {
-		t.Fatalf("deleted file Stat() error = %v", err)
-	}
-}
-
-func TestWorkspaceFileToolsRejectSymlinkTargets(t *testing.T) {
-	t.Parallel()
-
-	root := t.TempDir()
-	outside := t.TempDir()
-	if err := os.WriteFile(filepath.Join(outside, "secret.txt"), []byte("secret"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Symlink(filepath.Join(outside, "secret.txt"), filepath.Join(root, "secret-link")); err != nil {
-		t.Skipf("symlink unavailable: %v", err)
-	}
-	instance := openWorkspaceTestInstance(t, root)
-
-	requireToolFailure(t, executeWorkspaceTool(t, instance, sourceKeyRead, map[string]any{
-		"path": "secret-link",
-	}))
-	requireToolFailure(t, executeWorkspaceTool(t, instance, sourceKeyEdit, map[string]any{
-		"path":      "secret-link",
-		"operation": "delete",
-	}))
-}
-
-func openWorkspaceTestInstance(t *testing.T, root string) *Instance {
+func openWorkspaceTestInstance(t *testing.T, root string) (*Instance, *fixtureRouter) {
 	t.Helper()
-	raw, err := json.Marshal(Config{Root: root})
+	canonical, err := filepath.EvalSymlinks(root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	opened, err := New(HostShellLauncher{}).Open(context.Background(), providerplugin.OpenRequest{
-		ConfigVersion: ConfigVersion,
-		Config:        raw,
-	})
+	item, err := sandboxdomain.NewSandbox(sandboxdomain.Spec{ID: sandboxdomain.ID(testSandboxID), Name: "Workspace", Backend: sandboxdomain.BackendLocalWorkspace, Isolation: sandboxdomain.IsolationHost, LocalRoot: canonical, OwnerKind: "local_user", OwnerRef: "unit"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	instance, ok := opened.(*Instance)
-	if !ok {
-		t.Fatalf("Open() instance = %T", opened)
+	run, err := sandboxdomain.NewRun(item.ID(), 1, sandboxdomain.StateReady, "local")
+	if err != nil {
+		t.Fatal(err)
 	}
+	backend, err := localworkspace.New(hostLauncher{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	router := &fixtureRouter{item: item, run: run, backend: backend}
+	raw, err := json.Marshal(Config{SandboxID: testSandboxID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	opened, err := New(router).Open(context.Background(), providerplugin.OpenRequest{ConfigVersion: ConfigVersion, Config: raw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	instance := opened.(*Instance)
 	t.Cleanup(func() { _ = instance.Close() })
-	return instance
+	return instance, router
 }
-
-func executeWorkspaceTool(
-	t *testing.T,
-	instance *Instance,
-	sourceKey string,
-	input any,
-) invocationdomain.Outcome {
+func workspaceTestTool(t *testing.T, key string) catalogdomain.Tool {
 	t.Helper()
-	raw, err := json.Marshal(input)
-	if err != nil {
-		t.Fatal(err)
-	}
-	arguments, err := invocationdomain.NewJSONValue(raw)
-	if err != nil {
-		t.Fatal(err)
-	}
-	outcome, err := instance.Execute(
-		context.Background(),
-		invocationapplication.ExecutionRequest{
-			Tool:      workspaceTestTool(t, sourceKey),
-			Arguments: arguments,
-		},
-		nil,
-		nil,
-	)
-	if err != nil {
-		t.Fatalf("Execute(%s) error = %v", sourceKey, err)
-	}
-	return outcome
-}
-
-func workspaceTestTool(t *testing.T, sourceKey string) catalogdomain.Tool {
-	t.Helper()
-	providerID, err := catalogdomain.ParseProviderID("prov_00000000000000000000000000000051")
-	if err != nil {
-		t.Fatal(err)
-	}
-	toolID, err := catalogdomain.ParseToolID("tool_00000000000000000000000000000051")
-	if err != nil {
-		t.Fatal(err)
-	}
-	schema, err := catalogdomain.NewSchema([]byte("{\"type\":\"object\"}"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	tool, err := catalogdomain.NewTool(
-		toolID,
-		providerID,
-		catalogdomain.ToolSpec{
-			SourceKey:   sourceKey,
-			Name:        sourceKey,
-			InputSchema: schema,
-		},
-		time.Now(),
-	)
+	providerID, _ := catalogdomain.ParseProviderID("prov_00000000000000000000000000000051")
+	toolID, _ := catalogdomain.ParseToolID("tool_00000000000000000000000000000051")
+	schema, _ := catalogdomain.NewSchema([]byte(`{"type":"object"}`))
+	tool, err := catalogdomain.NewTool(toolID, providerID, catalogdomain.ToolSpec{SourceKey: key, Name: key, InputSchema: schema}, time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
 	return tool
 }
-
-func mkdirAllTest(path string) error {
-	return os.MkdirAll(path, 0o750)
-}
-
-func readWorkspaceTestFile(t *testing.T, rootPath, relative string) []byte {
+func fixtureCaller(t *testing.T) gov.Context {
 	t.Helper()
-	root, err := os.OpenRoot(rootPath)
+	p, err := gov.NewPrincipal(gov.PrincipalLocalUser, "unit")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = root.Close() }()
-	data, err := root.ReadFile(filepath.FromSlash(relative))
+	caller, err := gov.NewContext(gov.OriginInternal, p, gov.CatalogScope())
 	if err != nil {
 		t.Fatal(err)
 	}
-	return data
+	return caller
 }
-
-func unmarshalOutcome(t *testing.T, outcome invocationdomain.Outcome, target any) {
+func runWorkspace(t *testing.T, instance *Instance, key string, args any) (invocationdomain.Outcome, error) {
 	t.Helper()
-	if err := json.Unmarshal(outcome.Content().Bytes(), target); err != nil {
+	raw, err := json.Marshal(args)
+	if err != nil {
 		t.Fatal(err)
 	}
+	val, err := invocationdomain.NewJSONValue(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return instance.Execute(context.Background(), invocationapp.ExecutionRequest{Tool: workspaceTestTool(t, key), Arguments: val, Context: fixtureCaller(t)}, nil, nil)
 }
-
-func requireComplete(t *testing.T, outcome invocationdomain.Outcome) {
-	t.Helper()
-	if outcome.Kind() != invocationdomain.OutcomeKindComplete {
-		t.Fatalf("outcome = %s message=%q", outcome.Kind(), outcome.Message())
+func TestWorkspacePluginV2StaticDiscoverAndGovernedExecution(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "notes.txt"), []byte("alpha\nbeta\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	instance, router := openWorkspaceTestInstance(t, root)
+	tools, err := instance.DiscoverTools(context.Background(), catalogdomain.Provider{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	keys := make([]string, 0, len(tools))
+	for _, item := range tools {
+		keys = append(keys, item.SourceKey)
+	}
+	if !slices.Equal(keys, []string{sourceKeyRead, sourceKeySearch, sourceKeyEdit, sourceKeyShell}) {
+		t.Fatalf("keys %v", keys)
+	}
+	if router.resolves != 0 || router.acquires != 0 {
+		t.Fatal("discovery acquired Sandbox")
+	}
+	for _, item := range []struct {
+		key   string
+		input map[string]any
+	}{
+		{sourceKeyRead, map[string]any{"path": "notes.txt"}},
+		{sourceKeySearch, map[string]any{"mode": "content", "query": "alpha"}},
+		{sourceKeyEdit, map[string]any{"path": "draft.txt", "operation": "create", "content": "hello"}},
+		{sourceKeyShell, map[string]any{"command": "pwd"}},
+	} {
+		out, err := runWorkspace(t, instance, item.key, item.input)
+		if err != nil || out.Kind() != invocationdomain.OutcomeKindComplete {
+			t.Fatalf("%s failed: %v %s", item.key, err, out.Kind())
+		}
+	}
+	if router.resolves != 4 || router.acquires != 4 {
+		t.Fatalf("not routed %+v", router)
 	}
 }
-
-func requireToolFailure(t *testing.T, outcome invocationdomain.Outcome) {
-	t.Helper()
-	if outcome.Kind() != invocationdomain.OutcomeKindFailed ||
-		outcome.FailureSource() != invocationdomain.FailureSourceTool ||
-		outcome.FailureCode() != invocationdomain.FailureToolError {
-		t.Fatalf(
-			"outcome = %s/%s/%s message=%q",
-			outcome.Kind(),
-			outcome.FailureSource(),
-			outcome.FailureCode(),
-			outcome.Message(),
-		)
+func TestDeniedSandboxAcquisitionNeverExecutesTool(t *testing.T) {
+	root := t.TempDir()
+	instance, router := openWorkspaceTestInstance(t, root)
+	router.rejected = true
+	result, err := runWorkspace(t, instance, sourceKeyEdit, map[string]any{"path": "blocked.txt", "operation": "create", "content": "secret"})
+	if !errors.Is(err, sandboxdomain.ErrNotAuthorized) {
+		t.Fatalf("not denied: %v (outcome %s)", err, result.Kind())
+	}
+	if _, err := os.Stat(filepath.Join(root, "blocked.txt")); !os.IsNotExist(err) {
+		t.Fatalf("denied Tool modified filesystem: %v", err)
+	}
+}
+func TestWorkspaceV1OpenFailsClosed(t *testing.T) {
+	_, router := openWorkspaceTestInstance(t, t.TempDir())
+	legacy := json.RawMessage(`{"root":"/tmp"}`)
+	if _, err := New(router).Open(context.Background(), providerplugin.OpenRequest{ConfigVersion: 1, Config: legacy}); err == nil {
+		t.Fatal("v1 Plugin.Open accepted")
+	}
+	if _, err := New(router).Open(context.Background(), providerplugin.OpenRequest{ConfigVersion: 2, Config: legacy}); err == nil {
+		t.Fatal("v1 JSON accepted")
 	}
 }

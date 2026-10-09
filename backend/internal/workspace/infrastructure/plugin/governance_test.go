@@ -3,7 +3,6 @@ package plugin
 import (
 	"context"
 	"encoding/json"
-	"path/filepath"
 	"testing"
 
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
@@ -12,9 +11,8 @@ import (
 func TestWorkspaceGovernanceFactsAreStructuredWithoutTouchingWorkspace(t *testing.T) {
 	t.Parallel()
 
-	plugin := New(HostShellLauncher{})
-	nonexistent := filepath.Join(t.TempDir(), "does-not-exist")
-	config, err := json.Marshal(Config{Root: nonexistent})
+	plugin := New(nil)
+	config, err := json.Marshal(Config{SandboxID: testSandboxID})
 	if err != nil {
 		t.Fatal(err)
 	}

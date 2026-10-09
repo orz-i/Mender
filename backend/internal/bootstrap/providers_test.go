@@ -49,12 +49,12 @@ func TestRuntimeExposesBuiltInProviderPluginDescriptors(t *testing.T) {
 				wantIDs[index],
 			)
 		}
-		if descriptor.ConfigVersion != 1 {
-			t.Fatalf(
-				"ProviderPluginDescriptors()[%d].ConfigVersion = %d, want 1",
-				index,
-				descriptor.ConfigVersion,
-			)
+		wantVersion := 1
+		if descriptor.ID == "io.mender.provider.workspace" {
+			wantVersion = 2
+		}
+		if descriptor.ConfigVersion != wantVersion {
+			t.Fatalf("ProviderPluginDescriptors()[%d].ConfigVersion = %d, want %d", index, descriptor.ConfigVersion, wantVersion)
 		}
 	}
 

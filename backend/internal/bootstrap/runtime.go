@@ -33,6 +33,7 @@ import (
 	providerexternal "github.com/orz-i/Mender/backend/internal/providerplugin/external"
 	installationlocalfs "github.com/orz-i/Mender/backend/internal/providerplugin/installation/infrastructure/localfs"
 	installationsqlite "github.com/orz-i/Mender/backend/internal/providerplugin/installation/infrastructure/sqlite"
+	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 	tunnelapplication "github.com/orz-i/Mender/backend/internal/tunnel/application"
 	tunnelprocess "github.com/orz-i/Mender/backend/internal/tunnel/infrastructure/process"
 )
@@ -216,11 +217,46 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		)
 	}
 
+	// Only the early Sandbox/migration failure paths use this cleanup. Once
+	// normal composition proceeds, the established owner/closer chain applies.
+	closeBootstrapStores := func() {
+		_ = providerConfigs.Close()
+		_ = configs.Close()
+		_ = policies.Close()
+		_ = profiles.Close()
+		_ = credentials.Close()
+		_ = auditStore.Close()
+		_ = catalog.Close()
+	}
+
+	// Sandboxes are composed before Provider plugins so Workspace activation
+	// only observes post-cut Sandbox bindings. Migration is one DB transaction.
+	approvalGate := policylocal.RejectApproval{}
+	sandboxes, err := NewSandboxes(ctx, options.DatabasePath, policies.Evaluate, approvalGate, runtimeGovernance)
+	if err != nil {
+		closeBootstrapStores()
+		return nil, fmt.Errorf("compose runtime: sandbox inventory: %w", err)
+	}
+	sandboxesOwned := true
+	defer func() {
+		if sandboxesOwned {
+			_ = sandboxes.Close()
+		}
+	}()
+	priorIsolation, err := runtimeGovernance.GetIsolation.Execute(ctx)
+	if err != nil {
+		closeBootstrapStores()
+		return nil, fmt.Errorf("compose runtime: load Workspace isolation for migration: %w", err)
+	}
+	if err := migrateWorkspaceProviderV1ToSandbox(ctx, options.DatabasePath, ownerPrincipal, sandboxdomain.IsolationClass(priorIsolation.WorkspaceShell())); err != nil {
+		closeBootstrapStores()
+		return nil, fmt.Errorf("compose runtime: migrate Workspace Providers to Sandbox: %w", err)
+	}
 	executors := invocationrouter.New()
 	providerPlugins := providerplugin.NewRegistry()
 	if err := providerbuiltin.Register(
 		providerPlugins,
-		workspaceShellIsolationLauncher{governance: runtimeGovernance},
+		sandboxes.router,
 	); err != nil {
 		_ = providerConfigs.Close()
 		_ = configs.Close()
@@ -362,22 +398,6 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 	}
 
 	ids := invocationidentity.NewGenerator()
-	approvalGate := policylocal.RejectApproval{}
-	sandboxes, err := NewSandboxes(ctx, options.DatabasePath, policies.Evaluate, approvalGate, runtimeGovernance)
-	if err != nil {
-		_ = skills.Close()
-		_ = providerInstances.CloseAll()
-		_ = externalProcesses.CloseAll()
-		_ = pluginInstallations.Close()
-		_ = providerConfigs.Close()
-		_ = configs.Close()
-		_ = policies.Close()
-		_ = profiles.Close()
-		_ = credentials.Close()
-		_ = auditStore.Close()
-		_ = catalog.Close()
-		return nil, fmt.Errorf("compose runtime: sandboxes: %w", err)
-	}
 	providerActivation := provideractivationapplication.NewAdmit(
 		policies.Evaluate,
 		approvalGate,
@@ -417,6 +437,7 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 
 	tunnelsOwned = false
 	runtimeGovernanceOwned = false
+	sandboxesOwned = false
 	return &Runtime{
 		Catalog:                     catalog,
 		Credentials:                 credentials,

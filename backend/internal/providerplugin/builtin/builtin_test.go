@@ -1,20 +1,23 @@
 package builtin
 
 import (
+	"context"
 	"errors"
 	"slices"
 	"testing"
 
+	governance "github.com/orz-i/Mender/backend/internal/governance/domain"
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
-	workspaceplugin "github.com/orz-i/Mender/backend/internal/workspace/infrastructure/plugin"
+	sandboxapp "github.com/orz-i/Mender/backend/internal/sandbox/application"
+	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 )
 
 func TestPluginsReturnStableBuiltInSet(t *testing.T) {
 	t.Parallel()
 
-	plugins := Plugins(workspaceplugin.HostShellLauncher{})
+	plugins := Plugins(unusedSandboxRouter{})
 	if got, want := len(plugins), 4; got != want {
-		t.Fatalf("Plugins(workspaceplugin.HostShellLauncher{}) count = %d, want %d", got, want)
+		t.Fatalf("Plugins(unusedSandboxRouter{}) count = %d, want %d", got, want)
 	}
 
 	wantIDs := []providerplugin.ID{
@@ -27,26 +30,26 @@ func TestPluginsReturnStableBuiltInSet(t *testing.T) {
 	seen := make(map[providerplugin.ID]struct{}, len(plugins))
 	for _, plugin := range plugins {
 		if plugin == nil {
-			t.Fatal("Plugins(workspaceplugin.HostShellLauncher{}) returned nil plugin")
+			t.Fatal("Plugins(unusedSandboxRouter{}) returned nil plugin")
 		}
 		descriptor := plugin.Descriptor()
 		if err := descriptor.Validate(); err != nil {
 			t.Fatalf("descriptor %q invalid: %v", descriptor.ID, err)
 		}
 		if _, duplicate := seen[descriptor.ID]; duplicate {
-			t.Fatalf("Plugins(workspaceplugin.HostShellLauncher{}) duplicate PluginID %q", descriptor.ID)
+			t.Fatalf("Plugins(unusedSandboxRouter{}) duplicate PluginID %q", descriptor.ID)
 		}
 		seen[descriptor.ID] = struct{}{}
 		gotIDs = append(gotIDs, descriptor.ID)
 	}
 	if !slices.Equal(gotIDs, wantIDs) {
-		t.Fatalf("Plugins(workspaceplugin.HostShellLauncher{}) IDs = %v, want %v", gotIDs, wantIDs)
+		t.Fatalf("Plugins(unusedSandboxRouter{}) IDs = %v, want %v", gotIDs, wantIDs)
 	}
 
-	second := Plugins(workspaceplugin.HostShellLauncher{})
+	second := Plugins(unusedSandboxRouter{})
 	for index := range plugins {
 		if plugins[index] == second[index] {
-			t.Fatalf("Plugins(workspaceplugin.HostShellLauncher{}) reused plugin instance at index %d", index)
+			t.Fatalf("Plugins(unusedSandboxRouter{}) reused plugin instance at index %d", index)
 		}
 	}
 }
@@ -55,7 +58,7 @@ func TestRegisterAddsCompleteBuiltInSet(t *testing.T) {
 	t.Parallel()
 
 	registry := providerplugin.NewRegistry()
-	if err := Register(registry, workspaceplugin.HostShellLauncher{}); err != nil {
+	if err := Register(registry, unusedSandboxRouter{}); err != nil {
 		t.Fatalf("Register() error = %v", err)
 	}
 
@@ -82,16 +85,26 @@ func TestRegisterAddsCompleteBuiltInSet(t *testing.T) {
 func TestRegisterRejectsInvalidRegistryAndDuplicateRegistration(t *testing.T) {
 	t.Parallel()
 
-	if err := Register(nil, workspaceplugin.HostShellLauncher{}); err == nil {
-		t.Fatal("Register(nil, workspaceplugin.HostShellLauncher{}) error = nil, want error")
+	if err := Register(nil, unusedSandboxRouter{}); err == nil {
+		t.Fatal("Register(nil, unusedSandboxRouter{}) error = nil, want error")
 	}
 
 	registry := providerplugin.NewRegistry()
-	if err := Register(registry, workspaceplugin.HostShellLauncher{}); err != nil {
+	if err := Register(registry, unusedSandboxRouter{}); err != nil {
 		t.Fatalf("first Register() error = %v", err)
 	}
-	err := Register(registry, workspaceplugin.HostShellLauncher{})
+	err := Register(registry, unusedSandboxRouter{})
 	if !errors.Is(err, providerplugin.ErrDuplicate) {
 		t.Fatalf("second Register() error = %v, want ErrDuplicate", err)
 	}
+}
+
+// Built-in descriptor tests never activate a Sandbox.
+type unusedSandboxRouter struct{}
+
+func (unusedSandboxRouter) Resolve(context.Context, sandboxdomain.ID, sandboxdomain.Capability) (sandboxapp.Placement, error) {
+	return sandboxapp.Placement{}, sandboxdomain.ErrNotFound
+}
+func (unusedSandboxRouter) Acquire(context.Context, governance.Context, sandboxapp.Placement) (*sandboxapp.Lease, error) {
+	return nil, sandboxdomain.ErrBackendUnavailable
 }

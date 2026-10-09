@@ -20,13 +20,22 @@ func TestCLIAddsWorkspaceProvider(t *testing.T) {
 
 	dbPath := filepath.Join(t.TempDir(), "mender.db")
 	workspaceRoot := t.TempDir()
+	created := executeJSONCommand(t, dbPath, "sandbox", "add", "local", "--name", "CLI workspace", "--root", workspaceRoot, "--isolation", "host")
+	sandboxItem, ok := created["sandbox"].(map[string]any)
+	if !ok {
+		t.Fatalf("sandbox create = %#v", created)
+	}
+	sandboxID, ok := sandboxItem["sandboxId"].(string)
+	if !ok || sandboxID == "" {
+		t.Fatalf("missing SandboxID: %#v", created)
+	}
 	registered := executeJSONCommand(
 		t,
 		dbPath,
 		"provider", "add", "workspace",
 		"--namespace", "workspace-cli",
 		"--name", "Workspace CLI",
-		"--root", workspaceRoot,
+		"--sandbox", sandboxID,
 	)
 	provider, ok := registered["provider"].(map[string]any)
 	if !ok {

@@ -16,6 +16,7 @@ import (
 	modeltoolsplugin "github.com/orz-i/Mender/backend/internal/modeltools/infrastructure/plugin"
 	openapiplugin "github.com/orz-i/Mender/backend/internal/openapi/infrastructure/plugin"
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
+	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 	workspaceplugin "github.com/orz-i/Mender/backend/internal/workspace/infrastructure/plugin"
 	"github.com/spf13/cobra"
 )
@@ -184,34 +185,24 @@ func (a *app) newProviderAddExternalCommand() *cobra.Command {
 }
 
 func (a *app) newProviderAddWorkspaceCommand() *cobra.Command {
-	var namespace, displayName, description, root string
-
-	command := &cobra.Command{
-		Use:   "workspace",
-		Short: "Register governed local workspace tools",
-		Args:  exactArgs(0),
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			if namespace == "" || displayName == "" || root == "" {
-				return usageError{err: fmt.Errorf("--namespace, --name, and --root are required")}
-			}
-			raw, err := json.Marshal(workspaceplugin.Config{Root: root})
-			if err != nil {
-				return fmt.Errorf("encode Workspace provider config: %w", err)
-			}
-			return a.registerConfiguredProvider(
-				cmd,
-				namespace,
-				displayName,
-				description,
-				workspaceplugin.ID,
-				raw,
-			)
-		},
-	}
+	var namespace, displayName, description, sandboxID string
+	command := &cobra.Command{Use: "workspace", Short: "Bind governed Workspace Tools to an existing Sandbox", Args: exactArgs(0), RunE: func(cmd *cobra.Command, _ []string) error {
+		if namespace == "" || displayName == "" || sandboxID == "" {
+			return usageError{err: fmt.Errorf("--namespace, --name, and --sandbox are required")}
+		}
+		if _, err := sandboxdomain.ParseID(sandboxID); err != nil {
+			return usageError{err: err}
+		}
+		raw, err := json.Marshal(workspaceplugin.Config{SandboxID: sandboxID})
+		if err != nil {
+			return err
+		}
+		return a.registerConfiguredProvider(cmd, namespace, displayName, description, workspaceplugin.ID, raw)
+	}}
 	command.Flags().StringVar(&namespace, "namespace", "", "stable provider namespace")
 	command.Flags().StringVar(&displayName, "name", "", "provider display name")
 	command.Flags().StringVar(&description, "description", "", "provider description")
-	command.Flags().StringVar(&root, "root", "", "absolute local workspace root")
+	command.Flags().StringVar(&sandboxID, "sandbox", "", "existing SandboxID from mender sandbox list")
 	return command
 }
 
@@ -554,6 +545,15 @@ func (a *app) registerConfiguredProvider(
 	raw json.RawMessage,
 ) error {
 	return a.withRuntime(cmd.Context(), func(runtime *bootstrap.Runtime) error {
+		if pluginID == workspaceplugin.ID {
+			config, err := workspaceplugin.DecodeConfig(raw)
+			if err != nil {
+				return usageError{err: err}
+			}
+			if _, err := runtime.Sandboxes.Get(cmd.Context(), sandboxdomain.ID(config.SandboxID)); err != nil {
+				return fmt.Errorf("workspace provider requires an existing Sandbox: %w", err)
+			}
+		}
 		provider, err := registerConfiguredProviderCLI(
 			cmd.Context(),
 			runtime,

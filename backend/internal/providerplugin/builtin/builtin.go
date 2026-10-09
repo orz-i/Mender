@@ -7,6 +7,7 @@ import (
 	modeltoolsplugin "github.com/orz-i/Mender/backend/internal/modeltools/infrastructure/plugin"
 	openapiplugin "github.com/orz-i/Mender/backend/internal/openapi/infrastructure/plugin"
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
+	sandboxapplication "github.com/orz-i/Mender/backend/internal/sandbox/application"
 	workspaceplugin "github.com/orz-i/Mender/backend/internal/workspace/infrastructure/plugin"
 )
 
@@ -15,12 +16,12 @@ import (
 // The returned order is deterministic and intentionally follows the historical
 // Runtime registration order. Callers receive fresh plugin values so tests or
 // future implementation-local state cannot leak across Runtime instances.
-func Plugins(workspaceShellLauncher workspaceplugin.ShellLauncher) []providerplugin.Plugin {
+func Plugins(sandboxRouter sandboxapplication.ExecutionRouter) []providerplugin.Plugin {
 	return []providerplugin.Plugin{
 		mcpplugin.New(),
 		openapiplugin.New(),
 		modeltoolsplugin.New(),
-		workspaceplugin.New(workspaceShellLauncher),
+		workspaceplugin.New(sandboxRouter),
 	}
 }
 
@@ -29,17 +30,17 @@ func Plugins(workspaceShellLauncher workspaceplugin.ShellLauncher) []providerplu
 // PluginID is already registered.
 func Register(
 	registry *providerplugin.Registry,
-	workspaceShellLauncher workspaceplugin.ShellLauncher,
+	sandboxRouter sandboxapplication.ExecutionRouter,
 ) error {
 	if registry == nil {
 		return fmt.Errorf("register built-in provider plugins: registry must not be nil")
 	}
 
-	if workspaceShellLauncher == nil {
-		return fmt.Errorf("register built-in provider plugins: workspace shell launcher must not be nil")
+	if sandboxRouter == nil {
+		return fmt.Errorf("register built-in provider plugins: sandbox execution router must not be nil")
 	}
 
-	for _, plugin := range Plugins(workspaceShellLauncher) {
+	for _, plugin := range Plugins(sandboxRouter) {
 		descriptor := plugin.Descriptor()
 		if err := registry.Register(plugin); err != nil {
 			return fmt.Errorf(

@@ -2,6 +2,8 @@ package bootstrap
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -18,10 +20,11 @@ import (
 	profileapplication "github.com/orz-i/Mender/backend/internal/profile/application"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 	runtimegovernancedomain "github.com/orz-i/Mender/backend/internal/runtimegovernance/domain"
+	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 	workspaceplugin "github.com/orz-i/Mender/backend/internal/workspace/infrastructure/plugin"
 )
 
-func TestWorkspaceShellIsolationModeUpdatesApplyToNewExecutions(t *testing.T) {
+func TestWorkspaceSandboxIsolationIsPinnedAcrossGlobalUpdates(t *testing.T) {
 	ctx := context.Background()
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -64,10 +67,7 @@ func TestWorkspaceShellIsolationModeUpdatesApplyToNewExecutions(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rawConfig, err := json.Marshal(workspaceplugin.Config{Root: root})
-	if err != nil {
-		t.Fatal(err)
-	}
+	rawConfig := testWorkspaceSandboxConfig(t, runtime, root, testPrincipal(t, "workspace-isolation"), sandboxdomain.IsolationRestrictedHost)
 	provider, err := registerConfiguredProviderTest(
 		t,
 		runtime,
@@ -165,8 +165,8 @@ func TestWorkspaceShellIsolationModeUpdatesApplyToNewExecutions(t *testing.T) {
 	if err := json.Unmarshal(host.Outcome.Content().Bytes(), &hostOutput); err != nil {
 		t.Fatal(err)
 	}
-	if hostOutput.ExitCode != 0 || !strings.Contains(hostOutput.Stdout, "TOP-SECRET") {
-		t.Fatalf("host shell output = %+v", hostOutput)
+	if hostOutput.ExitCode == 0 || strings.Contains(hostOutput.Stdout, "TOP-SECRET") {
+		t.Fatalf("Sandbox isolation was downgraded by global setting: %+v", hostOutput)
 	}
 }
 
@@ -200,10 +200,7 @@ func TestWorkspaceProviderRuntimeComposesProfilePolicyAndAudit(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = runtime.Close() })
 
-	rawConfig, err := json.Marshal(workspaceplugin.Config{Root: root})
-	if err != nil {
-		t.Fatal(err)
-	}
+	rawConfig := testWorkspaceSandboxConfig(t, runtime, root, testPrincipal(t, "workspace-runtime-test"), sandboxdomain.IsolationHost)
 	provider, err := registerConfiguredProviderTest(t, runtime,
 		ctx,
 		catalogapplication.RegisterProviderRequest{
@@ -378,4 +375,39 @@ func TestWorkspaceProviderRuntimeComposesProfilePolicyAndAudit(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(root, "blocked.txt")); !os.IsNotExist(err) {
 		t.Fatalf("policy-denied edit reached filesystem; Stat() error = %v", err)
 	}
+}
+
+func testWorkspaceSandboxConfig(t *testing.T, runtime *Runtime, root string, principal governancedomain.Principal, isolation sandboxdomain.IsolationClass) json.RawMessage {
+	t.Helper()
+	canonical, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var random [16]byte
+	if _, err = rand.Read(random[:]); err != nil {
+		t.Fatal(err)
+	}
+	id, err := sandboxdomain.ParseID("sbx_" + hex.EncodeToString(random[:]))
+	if err != nil {
+		t.Fatal(err)
+	}
+	item, err := sandboxdomain.NewSandbox(sandboxdomain.Spec{ID: id, Name: "Test workspace", Backend: sandboxdomain.BackendLocalWorkspace, Isolation: isolation, LocalRoot: canonical, OwnerKind: string(principal.Kind()), OwnerRef: principal.Reference()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := runtime.Sandboxes.store.Create(context.Background(), item); err != nil {
+		t.Fatal(err)
+	}
+	run, err := sandboxdomain.NewRun(id, 1, sandboxdomain.StateReady, "local_workspace:"+id.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := runtime.Sandboxes.store.CreateRun(context.Background(), run); err != nil {
+		t.Fatal(err)
+	}
+	config, err := json.Marshal(workspaceplugin.Config{SandboxID: id.String()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return config
 }
