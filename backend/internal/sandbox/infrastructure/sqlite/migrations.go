@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-const latestSchemaVersion = 6
+const latestSchemaVersion = 7
 
 func migrate(ctx context.Context, db *sql.DB) error {
 	tx, err := db.BeginTx(ctx, nil)
@@ -199,6 +199,34 @@ func migrate(ctx context.Context, db *sql.DB) error {
 		}
 		if _, err = tx.ExecContext(ctx, `INSERT INTO sandbox_schema_migrations(version,applied_at) VALUES(6,?)`, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
 			return fmt.Errorf("sandbox migration 6 record: %w", err)
+		}
+	}
+	var daytonaTemplateApplied int
+	if err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM sandbox_schema_migrations WHERE version = 7`).Scan(&daytonaTemplateApplied); err != nil {
+		return fmt.Errorf("sandbox migration 7 presence: %w", err)
+	}
+	if daytonaTemplateApplied == 0 {
+		for _, statement := range []string{
+			`CREATE TABLE sandbox_daytona_templates (
+                sandbox_id TEXT PRIMARY KEY REFERENCES sandboxes(id) ON DELETE RESTRICT,
+                credential_ref TEXT NOT NULL,
+                image_digest TEXT NOT NULL,
+                target TEXT NOT NULL CHECK (target='us'),
+                cpu INTEGER NOT NULL CHECK(cpu BETWEEN 1 AND 2),
+                memory_gib INTEGER NOT NULL CHECK(memory_gib BETWEEN 1 AND 4),
+                disk_gib INTEGER NOT NULL CHECK(disk_gib BETWEEN 3 AND 10),
+                ttl_minutes INTEGER NOT NULL CHECK(ttl_minutes BETWEEN 15 AND 120),
+                created_at TEXT NOT NULL
+            )`,
+			`CREATE TRIGGER sandbox_daytona_template_immutable_update BEFORE UPDATE ON sandbox_daytona_templates BEGIN SELECT RAISE(ABORT,'Daytona Sandbox template is immutable'); END`,
+			`CREATE TRIGGER sandbox_daytona_template_immutable_delete BEFORE DELETE ON sandbox_daytona_templates BEGIN SELECT RAISE(ABORT,'Daytona Sandbox template cannot be deleted'); END`,
+		} {
+			if _, err = tx.ExecContext(ctx, statement); err != nil {
+				return fmt.Errorf("sandbox migration 7 templates: %w", err)
+			}
+		}
+		if _, err = tx.ExecContext(ctx, `INSERT INTO sandbox_schema_migrations(version,applied_at) VALUES(7,?)`, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
+			return fmt.Errorf("sandbox migration 7 record: %w", err)
 		}
 	}
 	if err = tx.Commit(); err != nil {
