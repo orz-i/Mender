@@ -118,6 +118,8 @@ func (s *fakeRemote) SetLabels(_ context.Context, labels map[string]string) erro
 }
 
 type fakeRemoteClient struct {
+	lookupName                                   string
+	hideLabelList                                bool
 	remote                                       *fakeRemote
 	createCalls, getCalls, findCalls, closeCalls int
 	failCreate                                   bool
@@ -133,13 +135,16 @@ func (c *fakeRemoteClient) Create(_ context.Context, t Template, name string, la
 }
 func (c *fakeRemoteClient) Get(_ context.Context, id string) (RemoteSandbox, error) {
 	c.getCalls++
-	if c.remote.info.ID != id {
+	if c.remote.info.ID != id && id != c.lookupName {
 		return nil, sand.ErrNotFound
 	}
 	return c.remote, nil
 }
 func (c *fakeRemoteClient) FindByLabel(_ context.Context, labels map[string]string) ([]RemoteSandbox, error) {
 	c.findCalls++
+	if c.hideLabelList {
+		return nil, nil
+	}
 	if c.remote.info.ID == "" {
 		return nil, nil
 	}
@@ -336,5 +341,68 @@ func TestDaytonaNetworkOrTTLDriftFailsClosed(t *testing.T) {
 	factory.client.remote.info.TTLActive = false
 	if _, err := controller.Reconcile(ctx, caller, id); !errors.Is(err, sand.ErrBackendUnavailable) {
 		t.Fatalf("missing TTL accepted %v", err)
+	}
+}
+
+// When the vendor's label-search index lags a successful remote Create,
+// recovery also checks Mender's deterministic name. The name is only a
+// locator; verified labels and pinned constraints remain mandatory.
+func TestDaytonaReconcileUnknownFallsBackToExactNameWithoutMutation(t *testing.T) {
+	ctx, controller, runs, _, factory, _, caller, id := remoteTestFixture(t)
+	old, err := runs.GetRun(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stage, err := runs.TransitionRun(ctx, old, sand.StateProvisioning, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runs.TransitionRun(ctx, stage, sand.StateUnknown, ""); err != nil {
+		t.Fatal(err)
+	}
+	template := validTemplate()
+	factory.client.remote.info = RemoteSnapshot{
+		ID: "remote-sandbox-123", State: "started", Labels: remoteLabels(id, 1),
+		CPU: template.CPU, MemoryGiB: template.MemoryGiB, DiskGiB: template.DiskGiB,
+		Target: template.Target, NetworkBlocked: true, TTLActive: true,
+	}
+	factory.client.lookupName = remoteName(id, 1)
+	factory.client.hideLabelList = true
+	result, err := controller.Reconcile(ctx, caller, id)
+	if err != nil || result.State != sand.StateReady {
+		t.Fatalf("name-based recovery failed: %v, %+v", err, result)
+	}
+	if factory.client.findCalls != 1 || factory.client.getCalls != 1 || factory.client.createCalls != 0 {
+		t.Fatalf("read-only recovery used incorrect operations find=%d get=%d create=%d", factory.client.findCalls, factory.client.getCalls, factory.client.createCalls)
+	}
+}
+func TestDaytonaNameReconcileRejectsWrongOwnershipLabels(t *testing.T) {
+	ctx, controller, runs, _, factory, _, caller, id := remoteTestFixture(t)
+	old, err := runs.GetRun(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stage, err := runs.TransitionRun(ctx, old, sand.StateProvisioning, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runs.TransitionRun(ctx, stage, sand.StateUnknown, ""); err != nil {
+		t.Fatal(err)
+	}
+	template := validTemplate()
+	labels := remoteLabels(id, 1)
+	labels[labelSandboxID] = "sbx_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	factory.client.remote.info = RemoteSnapshot{ID: "foreign-remote", State: "started", Labels: labels,
+		CPU: template.CPU, MemoryGiB: template.MemoryGiB, DiskGiB: template.DiskGiB,
+		Target: template.Target, NetworkBlocked: true, TTLActive: true,
+	}
+	factory.client.lookupName = remoteName(id, 1)
+	factory.client.hideLabelList = true
+	if _, err := controller.Reconcile(ctx, caller, id); !errors.Is(err, sand.ErrBackendUnavailable) {
+		t.Fatalf("foreign ownership verified from name only: %v", err)
+	}
+	after, err := runs.GetRun(ctx, id)
+	if err != nil || after.State != sand.StateUnknown {
+		t.Fatalf("foreign resource marked ready: %+v %v", after, err)
 	}
 }

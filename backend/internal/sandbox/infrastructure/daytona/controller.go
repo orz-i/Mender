@@ -148,10 +148,22 @@ func (c *Controller) Reconcile(ctx context.Context, caller governancedomain.Cont
 		if findErr != nil {
 			return sandboxdomain.Run{}, findErr
 		}
-		if len(matches) != 1 {
+		if len(matches) > 1 {
 			return sandboxdomain.Run{}, sandboxdomain.ErrConflict
 		}
-		remote = matches[0]
+		if len(matches) == 1 {
+			remote = matches[0]
+		} else {
+			// Daytona label-filtered inventory may lag the direct lookup after
+			// an ambiguous Create response. The deterministic Mender name is
+			// a second *read-only* locator, never authority on its own:
+			// verifySnapshot below still requires exact labels, generation,
+			// target, network, TTL and resource limits before recovery.
+			remote, err = client.Get(ctx, remoteName(id, run.Generation))
+			if err != nil {
+				return sandboxdomain.Run{}, err
+			}
+		}
 	}
 	if remote == nil {
 		return sandboxdomain.Run{}, sandboxdomain.ErrNotFound

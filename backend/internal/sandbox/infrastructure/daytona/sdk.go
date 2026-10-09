@@ -7,10 +7,12 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
 	sdkdaytona "github.com/daytona/clients/sdk-go/pkg/daytona"
+	sdkerrors "github.com/daytona/clients/sdk-go/pkg/errors"
 	"github.com/daytona/clients/sdk-go/pkg/options"
 	"github.com/daytona/clients/sdk-go/pkg/types"
 	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
@@ -223,6 +225,12 @@ func (s *sdkSandbox) Destroy(ctx context.Context) error {
 func (s *sdkSandbox) SetLabels(ctx context.Context, labels map[string]string) error {
 	return safeRemoteError(ctx, s.inner.SetLabels(ctx, labels))
 }
+
+var safeDaytonaErrorCode = regexp.MustCompile(`^[A-Z0-9_-]{1,48}$`)
+
+// Preserve only a bounded numeric status and validated machine code so real
+// API problems are diagnosable without exposing remote error bodies, URLs,
+// request headers, Authorization values or credential material.
 func safeRemoteError(ctx context.Context, err error) error {
 	if err == nil {
 		return nil
@@ -233,7 +241,30 @@ func safeRemoteError(ctx context.Context, err error) error {
 	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		return err
 	}
-	return sandboxdomain.ErrBackendUnavailable // Never leak remote URLs/credentials.
+	var remote *sdkerrors.DaytonaError
+	if errors.As(err, &remote) {
+		code := ""
+		if safeDaytonaErrorCode.MatchString(remote.Code) {
+			code = remote.Code
+		}
+		switch remote.StatusCode {
+		case 401, 403:
+			return fmt.Errorf("daytona remote authorization denied (HTTP %d): %w", remote.StatusCode, sandboxdomain.ErrNotAuthorized)
+		case 404:
+			return fmt.Errorf("daytona remote resource unavailable (HTTP 404): %w", sandboxdomain.ErrNotFound)
+		default:
+			if remote.StatusCode >= 100 && remote.StatusCode <= 599 {
+				if code != "" {
+					return fmt.Errorf("daytona remote request rejected (HTTP %d, code %s): %w", remote.StatusCode, code, sandboxdomain.ErrBackendUnavailable)
+				}
+				return fmt.Errorf("daytona remote request rejected (HTTP %d): %w", remote.StatusCode, sandboxdomain.ErrBackendUnavailable)
+			}
+			if code != "" {
+				return fmt.Errorf("daytona remote SDK rejected request (code %s): %w", code, sandboxdomain.ErrBackendUnavailable)
+			}
+		}
+	}
+	return sandboxdomain.ErrBackendUnavailable
 }
 
 var _ Factory = (*SDKFactory)(nil)
