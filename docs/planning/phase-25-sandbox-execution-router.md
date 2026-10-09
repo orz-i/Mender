@@ -365,3 +365,29 @@ Contract refinements before code:
 6. Segmented commits: B2 governance/domain/tests; B3 Runtime wiring and tests; C1 Local Workspace Session operations/tests; C2 explicit hard cut/migration only after complete cross-entrypoint checks. No UI claims before typed API/client parity.
 
 Remaining gates: introduction of a Sandbox backend cannot start a process or read/write any file prior to Policy authorization; Provider discovery must remain side-effect-free; a rejected Sandbox cannot fall back to Host.
+
+## Follow-up checkpoint — B2/B3 completed (2026-10-08)
+
+Status: Foundation B2/B3 implemented and committed; Phase 25 remains **In Progress**. No Workspace Provider hard cut, Docker/remote backend or Sandbox UI was shipped by these commits.
+
+Segregated commits:
+
+- `b962e12` — document Sandbox actions, reviewed placement facts, audit invariants and Runtime wiring order *before* changing the code.
+- `c2ad1d7` — add `sandbox.acquire/provision/start/stop/destroy` as distinct Policy actions; allow bounded `sandbox_id`, backend and isolation facts for Sandbox action evaluation while preventing mixing Sandbox and Tool/Provider selectors. Add Sandbox-specific fail-closed acquisition approval/admission with an explicit `SandboxID` approval request, bounded durable admission audit (SQLite schema v2), and updated OpenAPI/SDK and bilingual Policy UI. At present the production admission adapter implements only `sandbox.acquire`; other action names are reserved for later admitted lifecycle operations.
+- `7594b49` — compose the Sandbox SQLite inventory and governed, fail-closed Execution Router into the shared Runtime, with close ownership and a restart/persistence test. No sandbox backend is registered by this slice and the existing Workspace Provider still executes through the previous path.
+
+Validation evidence:
+
+- `go test -race ./backend/internal/sandbox/...` passed after B2.
+- `go test -race ./backend/internal/bootstrap ./backend/internal/sandbox/...` passed after B3.
+- `pnpm check` exit code **0** after B2 and again after B3; Go lint/test/race, generated SDK/desktop bindings, frontend lint/typecheck/test/build passed. The frontend continues to emit non-fatal large-bundle warnings.
+- The known `pnpm security:check` blocker (Go 1.27.1 and vulnerable `golang.org/x/net` versions from the earlier Phase 25 scan) has **not** been remediated here. Its status must not be described as green.
+- The only unrelated untracked directories remain `.agents/`, `.pi/` and `.intent-loop/`; none are committed.
+
+Critical limitations and next mandatory gates:
+
+1. Runtime currently registers **zero** actual Sandbox backends; `Acquire` rejects unavailable drivers with no fallback. The new Router is not yet wired into the existing Workspace Plugin and no user-facing Sandbox resource creation/update operation is exposed.
+2. A concrete portable Workspace Session contract must implement safe `read/search/edit/shell` on **one backend filesystem**, with bounded input/output, symlink containment and host-owned shell isolation; only then may Local Workspace be registered.
+3. `sandbox.provision/start/stop/destroy` require their own admitted use cases and lifecycle audit; their Policy action enumerations alone are not implementation of those operations.
+4. Workspace ConfigVersion 1→2 migration must be forward-only, rollback-safe and preserve Provider/Tool identity, existing Profile bindings and governance. No dual parser, default host fallback or silent privilege escalation.
+5. Sandbox management UI/HTTP/OpenAPI/Wails parity is still pending, as are Docker, Daytona/E2B and remote resource/cost controls.
