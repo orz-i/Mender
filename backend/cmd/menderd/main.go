@@ -81,6 +81,8 @@ func resolveDatabasePath(explicit string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("resolve database path: %w", err)
 	}
+	// #nosec G703 -- --db/MENDER_DB are explicit trusted local operator settings;
+	// filepath.Abs normalizes the directory, and no remote request selects it.
 	if err := os.MkdirAll(filepath.Dir(absolute), 0o700); err != nil {
 		return "", fmt.Errorf("create database directory: %w", err)
 	}

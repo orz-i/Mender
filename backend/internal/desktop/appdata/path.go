@@ -30,6 +30,8 @@ func resolveDatabasePath(
 	if err != nil {
 		return "", fmt.Errorf("resolve desktop database path: %w", err)
 	}
+	// #nosec G703 -- MENDER_DB/user config dir is local application startup
+	// configuration, never a Tool argument or untrusted HTTP input.
 	if err := os.MkdirAll(filepath.Dir(absolute), 0o700); err != nil {
 		return "", fmt.Errorf("create desktop database directory: %w", err)
 	}
