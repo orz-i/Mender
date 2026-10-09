@@ -46,7 +46,7 @@ func (a *fakeActionAdmitter) AdmitAction(_ context.Context, caller governancedom
 	if err := caller.Validate(); err != nil {
 		return err
 	}
-	if action != governancedomain.ActionSandboxProvision || sandbox.Backend() != sandboxdomain.BackendDocker {
+	if (action != governancedomain.ActionSandboxProvision && action != governancedomain.ActionSandboxStart && action != governancedomain.ActionSandboxStop && action != governancedomain.ActionSandboxDestroy) || sandbox.Backend() != sandboxdomain.BackendDocker {
 		return sandboxdomain.ErrNotAuthorized
 	}
 	if a.denied {
@@ -383,4 +383,19 @@ func TestDockerReconcileRejectsPreviouslyRecordedContainerIdentityMismatch(t *te
 	if daemon.createCalls != 0 || daemon.startCalls != 0 {
 		t.Fatal("unsafe reconcile caused side effects")
 	}
+}
+
+func (d *fakeMutatingDaemon) ContainerStop(_ context.Context, id string, _ mobyclient.ContainerStopOptions) (mobyclient.ContainerStopResult, error) {
+	if id != strings.Repeat("f", 64) || !d.created {
+		return mobyclient.ContainerStopResult{}, fmt.Errorf("foreign Docker ID")
+	}
+	d.started = false
+	return mobyclient.ContainerStopResult{}, nil
+}
+func (d *fakeMutatingDaemon) ContainerRemove(_ context.Context, id string, _ mobyclient.ContainerRemoveOptions) (mobyclient.ContainerRemoveResult, error) {
+	if id != strings.Repeat("f", 64) || !d.created {
+		return mobyclient.ContainerRemoveResult{}, fmt.Errorf("foreign Docker ID")
+	}
+	d.created = false
+	return mobyclient.ContainerRemoveResult{}, nil
 }

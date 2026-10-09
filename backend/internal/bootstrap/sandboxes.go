@@ -11,6 +11,7 @@ import (
 	governanceapplication "github.com/orz-i/Mender/backend/internal/governance/application"
 	sandboxapplication "github.com/orz-i/Mender/backend/internal/sandbox/application"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
+	sandboxdocker "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/dockerengine"
 	sandboxidentity "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/identity"
 	sandboxlocalworkspace "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/localworkspace"
 	sandboxrouter "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/router"
@@ -20,10 +21,13 @@ import (
 // Sandboxes owns the persistent Sandbox inventory and a fail-closed Execution
 // Router. Provider/Tool execution is not redirected until the Workspace hard cut.
 type Sandboxes struct {
-	store     *sandboxsqlite.Store
-	router    *sandboxrouter.Router
-	admission sandboxapplication.Admit
-	launcher  sandboxWorkspaceShellLauncher
+	store                   *sandboxsqlite.Store
+	router                  *sandboxrouter.Router
+	admission               sandboxapplication.Admit
+	launcher                sandboxWorkspaceShellLauncher
+	docker                  *sandboxdocker.Provisioner
+	dockerTemplates         *sandboxdocker.TemplateStore
+	dockerUnavailableReason string
 }
 
 func NewSandboxes(ctx context.Context, databasePath string, policy sandboxapplication.AdmissionPolicy, approval governanceapplication.ApprovalGate, governance *RuntimeGovernance) (*Sandboxes, error) {
@@ -41,12 +45,20 @@ func NewSandboxes(ctx context.Context, databasePath string, policy sandboxapplic
 		_ = store.Close()
 		return nil, fmt.Errorf("compose sandboxes: local workspace: %w", err)
 	}
-	router, err := sandboxrouter.New(store, store, gate, store, localBackend)
+	component := &Sandboxes{store: store, admission: gate, launcher: launcher, dockerUnavailableReason: "Docker Engine is not configured"}
+	backends := []sandboxapplication.Backend{localBackend}
+	if dockerBackend, err := component.configureDocker(ctx, databasePath, gate); err == nil && dockerBackend != nil {
+		backends = append(backends, dockerBackend)
+	} else if err != nil {
+		component.dockerUnavailableReason = "Docker Engine unavailable or insecure"
+	}
+	router, err := sandboxrouter.New(store, store, gate, store, backends...)
 	if err != nil {
-		_ = store.Close()
+		_ = component.Close()
 		return nil, fmt.Errorf("compose sandboxes: router: %w", err)
 	}
-	return &Sandboxes{store: store, router: router, admission: gate, launcher: launcher}, nil
+	component.router = router
+	return component, nil
 }
 
 // List returns inventory metadata, not a privilege to start a Sandbox.
@@ -65,6 +77,12 @@ func (s *Sandboxes) Get(ctx context.Context, id sandboxdomain.ID) (sandboxdomain
 func (s *Sandboxes) Close() error {
 	if s == nil || s.store == nil {
 		return nil
+	}
+	if s.docker != nil {
+		_ = s.docker.Close()
+	}
+	if s.dockerTemplates != nil {
+		_ = s.dockerTemplates.Close()
 	}
 	return s.store.Close()
 }

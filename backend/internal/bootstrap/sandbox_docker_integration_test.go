@@ -1,0 +1,149 @@
+package bootstrap
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	mobyclient "github.com/moby/moby/client"
+	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
+	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
+	gov "github.com/orz-i/Mender/backend/internal/governance/domain"
+	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
+	sand "github.com/orz-i/Mender/backend/internal/sandbox/domain"
+	sanddocker "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/dockerengine"
+	workspaceplugin "github.com/orz-i/Mender/backend/internal/workspace/infrastructure/plugin"
+)
+
+// This opt-in integration validates the REAL production runtime composition:
+// configured Docker Engine, Policy, Sandbox router, stable Workspace Provider
+// SourceKeys and the same read/search/edit/shell container filesystem.
+func TestRuntimeDockerSandboxProviderEndToEnd(t *testing.T) {
+	socket, image := os.Getenv("MENDER_DOCKER_TEST_SOCKET"), os.Getenv("MENDER_DOCKER_TEST_IMAGE")
+	if socket == "" || image == "" {
+		t.Skip("requires explicit MENDER_DOCKER_TEST_SOCKET and MENDER_DOCKER_TEST_IMAGE")
+	}
+	t.Setenv(DockerSocketEnvironment, socket)
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	runtime, err := NewRuntime(ctx, RuntimeOptions{DatabasePath: filepath.Join(t.TempDir(), "runtime-docker-integration.db")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = runtime.Close() }()
+	if !runtime.Sandboxes.DockerAvailable() {
+		t.Fatal("real Engine unavailable in runtime")
+	}
+	owner := runtime.OwnerPrincipal()
+	caller, err := gov.NewContext(gov.OriginInternal, owner, gov.CatalogScope())
+	if err != nil {
+		t.Fatal(err)
+	}
+	template := sanddocker.Template{ImageDigest: image, UserID: 10001, GroupID: 10001, CPUmilli: 1000, MemoryMiB: 512, WorkspaceMiB: 64, PIDs: 64}
+	item, err := runtime.Sandboxes.CreateDockerSandbox(ctx, CreateDockerSandboxRequest{Name: "Docker End-to-End", Template: template}, caller)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		cleanup, done := context.WithTimeout(context.Background(), 15*time.Second)
+		defer done()
+		// Cleanup ONLY this test's randomly generated uniquely labeled container.
+		endpoint, err := sanddocker.ParseEngineEndpoint(socket)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		cli, err := mobyclient.New(mobyclient.WithHost(endpoint.URL()))
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		defer func() { _ = cli.Close() }()
+		for generation := 1; generation <= 2; generation++ {
+			name := fmt.Sprintf("mender-sbx-%s-g%d", strings.TrimPrefix(item.ID().String(), "sbx_"), generation)
+			inspected, err := cli.ContainerInspect(cleanup, name, mobyclient.ContainerInspectOptions{})
+			if err == nil && inspected.Container.Config != nil && inspected.Container.Config.Labels["io.mender.sandbox.id"] == item.ID().String() {
+				_, err = cli.ContainerRemove(cleanup, inspected.Container.ID, mobyclient.ContainerRemoveOptions{Force: true})
+				if err != nil {
+					t.Errorf("cleanup Docker test sandbox %s: %v", name, err)
+				}
+			}
+		}
+	}()
+	raw, err := json.Marshal(workspaceplugin.Config{SandboxID: item.ID().String()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider, err := runtime.RegisterConfiguredProvider(ctx, catalogapplication.RegisterProviderRequest{Namespace: "docker-test", DisplayName: "Docker Workspace"}, workspaceplugin.ID, raw, caller)
+	if err != nil {
+		t.Fatal(err)
+	}
+	synced, err := runtime.SyncConfiguredProvider(ctx, provider.ID(), caller)
+	if err != nil || synced.Total != 4 {
+		t.Fatalf("Docker provider Sync %+v %v", synced, err)
+	}
+	tools, err := runtime.Catalog.store.ListProviderTools(ctx, provider.ID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids := map[string]catalogdomain.ToolID{}
+	for _, tool := range tools {
+		ids[tool.SourceKey()] = tool.ID()
+	}
+	invoke := func(sourceKey, arguments string) map[string]any {
+		t.Helper()
+		toolID, ok := ids[sourceKey]
+		if !ok {
+			t.Fatalf("missing Tool SourceKey: %s", sourceKey)
+		}
+		response, err := runtime.CallConfiguredTool(ctx, toolID, []byte(arguments), caller)
+		if err != nil || response.Outcome.Kind() != invocationdomain.OutcomeKindComplete {
+			t.Fatalf("%s: outcome %s, err %v", sourceKey, response.Outcome.Kind(), err)
+		}
+		var result map[string]any
+		if err := json.Unmarshal(response.Outcome.Content().Bytes(), &result); err != nil {
+			t.Fatal(err)
+		}
+		return result
+	}
+	invoke("workspace.edit", `{"path":"notes.txt","operation":"create","content":"hello Docker\n"}`)
+	read := invoke("workspace.read", `{"path":"notes.txt"}`)
+	if read["content"] != "hello Docker" {
+		t.Fatalf("Docker read %+v", read)
+	}
+	match := invoke("workspace.search", `{"mode":"content","query":"Docker"}`)
+	if len(match["matches"].([]any)) != 1 {
+		t.Fatalf("Docker search %+v", match)
+	}
+	executed := invoke("workspace.shell", `{"command":"cat notes.txt; id -u; test ! -e /var/run/docker.sock; echo socket=$?"}`)
+	if executed["exitCode"] != float64(0) || !strings.Contains(fmt.Sprint(executed["stdout"]), "hello Docker") || !strings.Contains(fmt.Sprint(executed["stdout"]), "10001") {
+		t.Fatalf("Docker shell %+v", executed)
+	}
+	if _, err := runtime.Sandboxes.ChangeLifecycle(ctx, item.ID(), gov.ActionSandboxDestroy, caller); err == nil {
+		t.Fatal("destroyed Sandbox with live Workspace Provider binding")
+	}
+	if err := runtime.providerConfigs.Delete(ctx, provider.ID()); err != nil {
+		t.Fatal(err)
+	}
+	stopped, err := runtime.Sandboxes.ChangeLifecycle(ctx, item.ID(), gov.ActionSandboxStop, caller)
+	if err != nil || stopped.State != sand.StateStopped {
+		t.Fatalf("Docker stopped state %+v %v", stopped, err)
+	}
+	started, err := runtime.Sandboxes.ChangeLifecycle(ctx, item.ID(), gov.ActionSandboxStart, caller)
+	if err != nil || started.Generation != 2 || started.State != sand.StateReady {
+		t.Fatalf("Docker start %+v %v", started, err)
+	}
+	destroyed, err := runtime.Sandboxes.ChangeLifecycle(ctx, item.ID(), gov.ActionSandboxDestroy, caller)
+	if err != nil || destroyed.State != sand.StateDestroyed {
+		t.Fatalf("Docker destroy %+v %v", destroyed, err)
+	}
+	events, err := runtime.Sandboxes.LifecycleEvents(ctx, item.ID(), 10)
+	if err != nil || len(events) != 3 {
+		t.Fatalf("Docker lifecycle audit %+v %v", events, err)
+	}
+}

@@ -9,18 +9,33 @@ type SystemStatus struct {
 
 // Sandbox is management metadata; state reflects the last persisted observation.
 type Sandbox struct {
-	SandboxID    string `json:"sandboxId"`
-	Name         string `json:"name"`
-	Backend      string `json:"backend"`
-	Isolation    string `json:"isolation"`
-	State        string `json:"state"`
-	LocalRoot    string `json:"localRoot"`
-	OwnerKind    string `json:"ownerKind"`
-	OwnerRef     string `json:"ownerRef"`
-	ActiveLeases int    `json:"activeLeases"`
+	SandboxID        string `json:"sandboxId"`
+	Name             string `json:"name"`
+	Backend          string `json:"backend"`
+	Isolation        string `json:"isolation"`
+	State            string `json:"state"`
+	LocalRoot        string `json:"localRoot"`
+	OwnerKind        string `json:"ownerKind"`
+	OwnerRef         string `json:"ownerRef"`
+	ActiveLeases     int    `json:"activeLeases"`
+	BackendAvailable bool   `json:"backendAvailable"`
 }
 type SandboxList struct {
 	Sandboxes []Sandbox `json:"sandboxes"`
+}
+type DockerBackendStatus struct {
+	DockerAvailable bool   `json:"dockerAvailable"`
+	DockerStatus    string `json:"dockerStatus"`
+}
+type CreateDockerSandboxInput struct {
+	Name         string `json:"name"`
+	ImageDigest  string `json:"imageDigest"`
+	UserID       uint32 `json:"userId"`
+	GroupID      uint32 `json:"groupId"`
+	CPUmilli     uint32 `json:"cpuMilli"`
+	MemoryMiB    uint32 `json:"memoryMiB"`
+	WorkspaceMiB uint32 `json:"workspaceMiB"`
+	PIDs         uint32 `json:"pids"`
 }
 type CreateLocalSandboxInput struct {
 	Name      string `json:"name"`

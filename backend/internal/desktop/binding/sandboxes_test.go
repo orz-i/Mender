@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/orz-i/Mender/backend/internal/bootstrap"
@@ -72,5 +73,28 @@ func TestDesktopSandboxManagementFollowsRuntimeGovernance(t *testing.T) {
 	}
 	if _, err := service.StartSandbox(created.SandboxID); !errors.Is(err, sandboxdomain.ErrConflict) {
 		t.Fatalf("restart tombstone: %v", err)
+	}
+}
+
+func TestDesktopDockerBackendUnavailableWithoutExplicitSocket(t *testing.T) {
+	t.Setenv(bootstrap.DockerSocketEnvironment, "")
+	ctx := context.Background()
+	runtime, err := bootstrap.NewRuntime(ctx, bootstrap.RuntimeOptions{DatabasePath: filepath.Join(t.TempDir(), "docker-desktop-no-endpoint.db")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = runtime.Close() }()
+	service := NewService(ctx, runtime)
+	backends, err := service.GetSandboxBackends()
+	if err != nil || backends.DockerAvailable {
+		t.Fatalf("backend status %+v %v", backends, err)
+	}
+	_, err = service.CreateDockerSandbox(CreateDockerSandboxInput{Name: "No Engine", ImageDigest: "docker.io/library/alpine@sha256:" + strings.Repeat("a", 64), UserID: 10001, GroupID: 10001, CPUmilli: 1000, MemoryMiB: 512, WorkspaceMiB: 64, PIDs: 64})
+	if !errors.Is(err, sandboxdomain.ErrBackendUnavailable) {
+		t.Fatalf("created Docker Sandbox without socket: %v", err)
+	}
+	list, err := service.ListSandboxes()
+	if err != nil || len(list.Sandboxes) != 0 {
+		t.Fatalf("unexpected resources %+v %v", list, err)
 	}
 }

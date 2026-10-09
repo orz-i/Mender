@@ -643,6 +643,38 @@ paths:
                   sandboxes:
                     type: array
                     items: { $ref: '#/components/schemas/Sandbox' }
+  /sandboxes/backends:
+    get:
+      operationId: getSandboxBackends
+      responses:
+        '200':
+          description: Real host-owned Sandbox backend capability status
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SandboxBackends' }
+  /sandboxes/docker:
+    post:
+      operationId: createDockerSandbox
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateDockerSandboxRequest' }
+      responses:
+        '201':
+          description: Governed Docker container provisioned and verified
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Sandbox' }
+        '202':
+          description: Durable Docker Sandbox exists but the Engine outcome is uncertain; inspect state before attempting recovery
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Sandbox' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '503': { description: Docker Engine unavailable }
   /sandboxes/local:
     post:
       operationId: createLocalSandbox
@@ -688,6 +720,21 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
+  /sandboxes/{sandboxId}/reconcile:
+    post:
+      operationId: reconcileDockerSandbox
+      parameters:
+        - $ref: '#/components/parameters/SandboxId'
+      responses:
+        '200':
+          description: Existing unknown Docker container verified, no new container created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Sandbox' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '503': { description: Unavailable Docker Engine }
   /sandboxes/{sandboxId}/start:
     post:
       operationId: startSandbox
@@ -1840,6 +1887,26 @@ components:
           type: string
           description: Mender Credential Reference containing the OpenAI tunnel runtime API key.
       additionalProperties: false
+    SandboxBackends:
+      type: object
+      required: [dockerAvailable, dockerStatus]
+      properties:
+        dockerAvailable: { type: boolean }
+        dockerStatus: { type: string }
+      additionalProperties: false
+    CreateDockerSandboxRequest:
+      type: object
+      required: [name, imageDigest, userId, groupId, cpuMilli, memoryMiB, workspaceMiB, pids]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 160 }
+        imageDigest: { type: string, minLength: 72, maxLength: 320, description: Immutable locally cached registry/image@sha256 digest }
+        userId: { type: integer, minimum: 1000, maximum: 65534 }
+        groupId: { type: integer, minimum: 1000, maximum: 65534 }
+        cpuMilli: { type: integer, minimum: 100, maximum: 8000 }
+        memoryMiB: { type: integer, minimum: 256, maximum: 16384 }
+        workspaceMiB: { type: integer, minimum: 64, maximum: 2048 }
+        pids: { type: integer, minimum: 16, maximum: 512 }
+      additionalProperties: false
     CreateLocalSandboxRequest:
       type: object
       required: [name, root, isolation]
@@ -1850,7 +1917,7 @@ components:
       additionalProperties: false
     Sandbox:
       type: object
-      required: [sandboxId, name, backend, isolation, state, localRoot, ownerKind, ownerRef, activeLeases]
+      required: [sandboxId, name, backend, isolation, state, localRoot, ownerKind, ownerRef, activeLeases, backendAvailable]
       properties:
         sandboxId: { type: string, pattern: '^sbx_[0-9a-f]{32}$' }
         name: { type: string }
@@ -1858,6 +1925,7 @@ components:
         isolation: { type: string, enum: [host, restricted_host, container, remote] }
         state: { type: string, enum: [defined, provisioning, ready, stopping, stopped, destroying, destroyed, failed, unknown, orphaned] }
         activeLeases: { type: integer, minimum: 0, description: Persisted cross-process Sandbox execution leases }
+        backendAvailable: { type: boolean, description: Whether the selected backend is operational on the current Runtime host }
         localRoot: { type: string }
         ownerKind: { type: string, enum: [local_user, service] }
         ownerRef: { type: string }

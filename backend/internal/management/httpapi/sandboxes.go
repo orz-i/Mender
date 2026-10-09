@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	sandboxapplication "github.com/orz-i/Mender/backend/internal/sandbox/application"
+	sandboxdocker "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/dockerengine"
 
 	"github.com/orz-i/Mender/backend/internal/bootstrap"
 	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
@@ -101,15 +102,16 @@ func (h *Handler) sandboxStatus(r *http.Request, item sandboxdomain.Sandbox) (ma
 	}
 	spec := item.Spec()
 	return map[string]any{
-		"activeLeases": leases,
-		"sandboxId":    spec.ID.String(),
-		"name":         spec.Name,
-		"backend":      string(spec.Backend),
-		"isolation":    string(spec.Isolation),
-		"state":        state,
-		"localRoot":    spec.LocalRoot,
-		"ownerKind":    spec.OwnerKind,
-		"ownerRef":     spec.OwnerRef,
+		"activeLeases":     leases,
+		"backendAvailable": h.runtime.Sandboxes.BackendAvailable(item),
+		"sandboxId":        spec.ID.String(),
+		"name":             spec.Name,
+		"backend":          string(spec.Backend),
+		"isolation":        string(spec.Isolation),
+		"state":            state,
+		"localRoot":        spec.LocalRoot,
+		"ownerKind":        spec.OwnerKind,
+		"ownerRef":         spec.OwnerRef,
 	}, nil
 }
 
@@ -133,7 +135,7 @@ func (h *Handler) localSandboxLifecycle(w http.ResponseWriter, r *http.Request, 
 		writeKnownError(w, err)
 		return
 	}
-	if _, err := h.runtime.Sandboxes.ChangeLocalLifecycle(r.Context(), id, action, caller); err != nil {
+	if _, err := h.runtime.Sandboxes.ChangeLifecycle(r.Context(), id, action, caller); err != nil {
 		switch {
 		case errors.Is(err, sandboxdomain.ErrNotFound):
 			writeAPIError(w, http.StatusNotFound, "not_found", err)
@@ -159,4 +161,102 @@ func (h *Handler) localSandboxLifecycle(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 	writeJSON(w, http.StatusOK, projected)
+}
+
+type createDockerSandboxRequest struct {
+	Name         string `json:"name"`
+	ImageDigest  string `json:"imageDigest"`
+	UserID       uint32 `json:"userId"`
+	GroupID      uint32 `json:"groupId"`
+	CPUmilli     uint32 `json:"cpuMilli"`
+	MemoryMiB    uint32 `json:"memoryMiB"`
+	WorkspaceMiB uint32 `json:"workspaceMiB"`
+	PIDs         uint32 `json:"pids"`
+}
+
+func (h *Handler) sandboxBackends(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]any{"dockerAvailable": h.runtime.Sandboxes.DockerAvailable(), "dockerStatus": h.runtime.Sandboxes.DockerStatus()})
+}
+func (h *Handler) createDockerSandbox(w http.ResponseWriter, r *http.Request) {
+	var input createDockerSandboxRequest
+	if err := decodeJSON(r, &input); err != nil {
+		writeAPIError(w, http.StatusBadRequest, "validation_error", err)
+		return
+	}
+	caller, err := governancedomain.NewContext(governancedomain.OriginManagementHTTP, h.runtime.OwnerPrincipal(), governancedomain.CatalogScope())
+	if err != nil {
+		writeKnownError(w, err)
+		return
+	}
+	item, err := h.runtime.Sandboxes.CreateDockerSandbox(r.Context(), bootstrap.CreateDockerSandboxRequest{
+		Name: input.Name, Template: sandboxdocker.Template{ImageDigest: input.ImageDigest, UserID: input.UserID, GroupID: input.GroupID, CPUmilli: input.CPUmilli, MemoryMiB: input.MemoryMiB, WorkspaceMiB: input.WorkspaceMiB, PIDs: input.PIDs},
+	}, caller)
+	if err != nil {
+		// Resource and immutable Template already exist when a nonzero ID is
+		// returned. Expose the observed unknown/defined state, never claim ready.
+		if item.ID() != "" {
+			status, statusErr := h.sandboxStatus(r, item)
+			if statusErr != nil {
+				writeKnownError(w, statusErr)
+				return
+			}
+			writeJSON(w, http.StatusAccepted, status)
+			return
+		}
+		if errors.Is(err, sandboxdomain.ErrNotAuthorized) {
+			writeAPIError(w, http.StatusForbidden, "policy_denied", err)
+			return
+		}
+		if errors.Is(err, sandboxdomain.ErrBackendUnavailable) {
+			writeAPIError(w, http.StatusServiceUnavailable, "backend_unavailable", err)
+			return
+		}
+		if errors.Is(err, sandboxdomain.ErrConflict) {
+			writeAPIError(w, http.StatusConflict, "conflict", err)
+			return
+		}
+		writeAPIError(w, http.StatusBadRequest, "validation_error", err)
+		return
+	}
+	response, err := h.sandboxStatus(r, item)
+	if err != nil {
+		writeKnownError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, response)
+}
+func (h *Handler) reconcileDockerSandbox(w http.ResponseWriter, r *http.Request) {
+	id, err := sandboxdomain.ParseID(r.PathValue("sandboxId"))
+	if err != nil {
+		writeAPIError(w, http.StatusBadRequest, "validation_error", err)
+		return
+	}
+	caller, err := governancedomain.NewContext(governancedomain.OriginManagementHTTP, h.runtime.OwnerPrincipal(), governancedomain.CatalogScope())
+	if err != nil {
+		writeKnownError(w, err)
+		return
+	}
+	if _, err := h.runtime.Sandboxes.ReconcileDocker(r.Context(), id, caller); err != nil {
+		if errors.Is(err, sandboxdomain.ErrConflict) {
+			writeAPIError(w, http.StatusConflict, "conflict", err)
+			return
+		}
+		if errors.Is(err, sandboxdomain.ErrNotAuthorized) {
+			writeAPIError(w, http.StatusForbidden, "policy_denied", err)
+			return
+		}
+		writeAPIError(w, http.StatusServiceUnavailable, "backend_unavailable", err)
+		return
+	}
+	item, err := h.runtime.Sandboxes.Get(r.Context(), id)
+	if err != nil {
+		writeKnownError(w, err)
+		return
+	}
+	result, err := h.sandboxStatus(r, item)
+	if err != nil {
+		writeKnownError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
 }

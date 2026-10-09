@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/orz-i/Mender/backend/internal/bootstrap"
@@ -111,5 +112,29 @@ func TestSandboxManagementLifecycleLocalAndPolicyDeny(t *testing.T) {
 	rows := list["sandboxes"].([]any)
 	if len(rows) != 1 || rows[0].(map[string]any)["state"] != "destroyed" {
 		t.Fatalf("tombstone disappeared %+v", list)
+	}
+}
+
+func TestSandboxManagementDockerFailsClosedWithoutTrustedEngine(t *testing.T) {
+	t.Setenv(bootstrap.DockerSocketEnvironment, "")
+	ctx := context.Background()
+	runtime, err := bootstrap.NewRuntime(ctx, bootstrap.RuntimeOptions{DatabasePath: filepath.Join(t.TempDir(), "docker-unavailable.db")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = runtime.Close() })
+	server := httptest.NewServer(New(runtime))
+	t.Cleanup(server.Close)
+	status := requestJSON(t, server.Client(), http.MethodGet, server.URL+"/api/v1/sandboxes/backends", nil, http.StatusOK)
+	if status["dockerAvailable"] != false {
+		t.Fatalf("Docker unexpectedly enabled %+v", status)
+	}
+	requestJSON(t, server.Client(), http.MethodPost, server.URL+"/api/v1/sandboxes/docker", map[string]any{
+		"name": "Denied Docker", "imageDigest": "docker.io/library/alpine@sha256:" + strings.Repeat("a", 64),
+		"userId": 10001, "groupId": 10001, "cpuMilli": 1000, "memoryMiB": 512, "workspaceMiB": 64, "pids": 64,
+	}, http.StatusServiceUnavailable)
+	list := requestJSON(t, server.Client(), http.MethodGet, server.URL+"/api/v1/sandboxes", nil, http.StatusOK)
+	if arr, ok := list["sandboxes"].([]any); !ok || len(arr) != 0 {
+		t.Fatalf("disabled Docker created resources: %+v", list)
 	}
 }

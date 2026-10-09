@@ -7,6 +7,7 @@ import (
 	"github.com/orz-i/Mender/backend/internal/bootstrap"
 	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
+	sandboxdocker "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/dockerengine"
 	"github.com/spf13/cobra"
 )
 
@@ -18,6 +19,8 @@ func (a *app) newSandboxCommand() *cobra.Command {
 	command.AddCommand(a.newSandboxLifecycleCommand("destroy", governancedomain.ActionSandboxDestroy))
 	add := &cobra.Command{Use: "add", Short: "Provision a Sandbox"}
 	add.AddCommand(a.newSandboxAddLocalCommand())
+	add.AddCommand(a.newSandboxAddDockerCommand())
+	command.AddCommand(a.newSandboxReconcileCommand())
 	command.AddCommand(add)
 	return command
 }
@@ -98,7 +101,7 @@ func (a *app) newSandboxLifecycleCommand(name string, action governancedomain.Ac
 				if err != nil {
 					return err
 				}
-				run, err := runtime.Sandboxes.ChangeLocalLifecycle(cmd.Context(), id, action, caller)
+				run, err := runtime.Sandboxes.ChangeLifecycle(cmd.Context(), id, action, caller)
 				if err != nil {
 					return err
 				}
@@ -114,4 +117,62 @@ func (a *app) newSandboxLifecycleCommand(name string, action governancedomain.Ac
 		command.Flags().BoolVar(&confirm, "confirm", false, "acknowledge irreversible resource tombstone (local directory is NOT removed)")
 	}
 	return command
+}
+
+func (a *app) newSandboxAddDockerCommand() *cobra.Command {
+	var name, image string
+	var uid, gid, cpu, ram, workspace, pids uint32
+	command := &cobra.Command{Use: "docker", Short: "Provision a Docker Sandbox from a locally cached immutable image digest", Args: exactArgs(0), RunE: func(cmd *cobra.Command, _ []string) error {
+		if name == "" || image == "" {
+			return usageError{err: fmt.Errorf("docker Sandbox requires --name and --image-digest")}
+		}
+		template := sandboxdocker.Template{ImageDigest: image, UserID: uid, GroupID: gid, CPUmilli: cpu, MemoryMiB: ram, WorkspaceMiB: workspace, PIDs: pids}
+		if err := template.Validate(); err != nil {
+			return usageError{err: err}
+		}
+		return a.withRuntime(cmd.Context(), func(runtime *bootstrap.Runtime) error {
+			caller, err := governancedomain.NewContext(governancedomain.OriginCLI, runtime.OwnerPrincipal(), governancedomain.CatalogScope())
+			if err != nil {
+				return err
+			}
+			item, err := runtime.Sandboxes.CreateDockerSandbox(cmd.Context(), bootstrap.CreateDockerSandboxRequest{Name: name, Template: template}, caller)
+			if err != nil {
+				return err
+			}
+			return a.writeValue(fmt.Sprintf("Docker Sandbox %s provisioned", item.ID()), map[string]any{"sandbox": sandboxProjection(item)})
+		})
+	}}
+	command.Flags().StringVar(&name, "name", "", "Sandbox display name")
+	command.Flags().StringVar(&image, "image-digest", "", "locally cached immutable repository@sha256 digest; no pulls")
+	command.Flags().Uint32Var(&uid, "user-id", 10001, "non-root numeric UID")
+	command.Flags().Uint32Var(&gid, "group-id", 10001, "non-root numeric GID")
+	command.Flags().Uint32Var(&cpu, "cpu-milli", 1000, "bounded CPU millicores")
+	command.Flags().Uint32Var(&ram, "memory-mib", 512, "bounded memory in MiB")
+	command.Flags().Uint32Var(&workspace, "workspace-mib", 64, "ephemeral in-container tmpfs size MiB")
+	command.Flags().Uint32Var(&pids, "pids", 64, "bounded PID count")
+	return command
+}
+
+func (a *app) newSandboxReconcileCommand() *cobra.Command {
+	return &cobra.Command{Use: "reconcile <sandbox-id>", Short: "Inspect an unknown Docker Sandbox without recreating it", Args: exactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+		id, err := sandboxdomain.ParseID(args[0])
+		if err != nil {
+			return usageError{err: err}
+		}
+		return a.withRuntime(cmd.Context(), func(runtime *bootstrap.Runtime) error {
+			caller, err := governancedomain.NewContext(governancedomain.OriginCLI, runtime.OwnerPrincipal(), governancedomain.CatalogScope())
+			if err != nil {
+				return err
+			}
+			run, err := runtime.Sandboxes.ReconcileDocker(cmd.Context(), id, caller)
+			if err != nil {
+				return err
+			}
+			item, err := runtime.Sandboxes.Get(cmd.Context(), id)
+			if err != nil {
+				return err
+			}
+			return a.writeValue(fmt.Sprintf("Docker Sandbox %s reconciled: %s", id, run.State), map[string]any{"sandbox": sandboxProjection(item), "state": string(run.State), "generation": run.Generation})
+		})
+	}}
 }

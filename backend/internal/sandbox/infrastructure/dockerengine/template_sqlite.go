@@ -112,3 +112,44 @@ func (s *TemplateStore) GetDockerTemplate(ctx context.Context, id sandboxdomain.
 }
 
 var _ TemplateLookup = (*TemplateStore)(nil)
+
+// CreateDefinedSandbox persists one admitted Docker Sandbox, defined Run and
+// immutable Template as ONE SQLite transaction. No daemon/container side
+// effect occurs here. An interrupted create cannot leave half the contract.
+func (s *TemplateStore) CreateDefinedSandbox(ctx context.Context, item sandboxdomain.Sandbox, template Template) error {
+	if s == nil || s.db == nil {
+		return sandboxdomain.ErrBackendUnavailable
+	}
+	if err := item.Validate(); err != nil {
+		return err
+	}
+	if item.Backend() != sandboxdomain.BackendDocker || item.Isolation() != sandboxdomain.IsolationContainer {
+		return sandboxdomain.ErrBackendUnavailable
+	}
+	if err := template.Validate(); err != nil {
+		return err
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("docker template: begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	spec := item.Spec()
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	_, err = tx.ExecContext(ctx, `INSERT INTO sandboxes(id,display_name,backend,isolation,local_root,owner_kind,owner_ref,created_at) VALUES(?,?,?,?,?,?,?,?)`, spec.ID.String(), spec.Name, string(spec.Backend), string(spec.Isolation), spec.LocalRoot, spec.OwnerKind, spec.OwnerRef, now)
+	if err != nil {
+		return sandboxdomain.ErrConflict
+	}
+	_, err = tx.ExecContext(ctx, `INSERT INTO sandbox_runs(sandbox_id,generation,state,external_id,updated_at) VALUES(?,1,'defined','',?)`, spec.ID.String(), now)
+	if err != nil {
+		return fmt.Errorf("docker template: run insert: %w", err)
+	}
+	_, err = tx.ExecContext(ctx, `INSERT INTO sandbox_docker_templates(sandbox_id,image_digest,user_id,group_id,cpu_milli,memory_mib,workspace_mib,pid_limit,created_at) VALUES(?,?,?,?,?,?,?,?,?)`, spec.ID.String(), template.ImageDigest, template.UserID, template.GroupID, template.CPUmilli, template.MemoryMiB, template.WorkspaceMiB, template.PIDs, now)
+	if err != nil {
+		return fmt.Errorf("docker template: immutable config insert: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("docker template: atomic commit: %w", err)
+	}
+	return nil
+}

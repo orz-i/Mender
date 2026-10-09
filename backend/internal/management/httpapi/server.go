@@ -109,6 +109,9 @@ func (h *Handler) routes() {
 
 	h.mux.HandleFunc("GET /api/v1/sandboxes", h.listSandboxes)
 	h.mux.HandleFunc("POST /api/v1/sandboxes/local", h.createLocalSandbox)
+	h.mux.HandleFunc("GET /api/v1/sandboxes/backends", h.sandboxBackends)
+	h.mux.HandleFunc("POST /api/v1/sandboxes/docker", h.createDockerSandbox)
+	h.mux.HandleFunc("POST /api/v1/sandboxes/{sandboxId}/reconcile", h.reconcileDockerSandbox)
 	h.mux.HandleFunc("GET /api/v1/sandboxes/{sandboxId}", h.getSandbox)
 	h.mux.HandleFunc("POST /api/v1/sandboxes/{sandboxId}/start", h.startLocalSandbox)
 	h.mux.HandleFunc("POST /api/v1/sandboxes/{sandboxId}/stop", h.stopLocalSandbox)

@@ -28,6 +28,7 @@ import (
 	installationdomain "github.com/orz-i/Mender/backend/internal/providerplugin/installation/domain"
 	runtimegovernancedomain "github.com/orz-i/Mender/backend/internal/runtimegovernance/domain"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
+	sandboxdocker "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/dockerengine"
 	skillapplication "github.com/orz-i/Mender/backend/internal/skill/application"
 	skilldomain "github.com/orz-i/Mender/backend/internal/skill/domain"
 	tunnelapplication "github.com/orz-i/Mender/backend/internal/tunnel/application"
@@ -125,7 +126,41 @@ func (s *Service) changeLocalSandboxLifecycle(rawID string, action governancedom
 	if err != nil {
 		return Sandbox{}, err
 	}
-	if _, err := s.runtime.Sandboxes.ChangeLocalLifecycle(s.ctx, id, action, caller); err != nil {
+	if _, err := s.runtime.Sandboxes.ChangeLifecycle(s.ctx, id, action, caller); err != nil {
+		return Sandbox{}, err
+	}
+	item, err := s.runtime.Sandboxes.Get(s.ctx, id)
+	if err != nil {
+		return Sandbox{}, err
+	}
+	return s.projectSandbox(item)
+}
+
+func (s *Service) GetSandboxBackends() (DockerBackendStatus, error) {
+	return DockerBackendStatus{DockerAvailable: s.runtime.Sandboxes.DockerAvailable(), DockerStatus: s.runtime.Sandboxes.DockerStatus()}, nil
+}
+func (s *Service) CreateDockerSandbox(input CreateDockerSandboxInput) (Sandbox, error) {
+	caller, err := s.governanceContext()
+	if err != nil {
+		return Sandbox{}, err
+	}
+	item, err := s.runtime.Sandboxes.CreateDockerSandbox(s.ctx, bootstrap.CreateDockerSandboxRequest{Name: input.Name, Template: sandboxdocker.Template{ImageDigest: input.ImageDigest, UserID: input.UserID, GroupID: input.GroupID, CPUmilli: input.CPUmilli, MemoryMiB: input.MemoryMiB, WorkspaceMiB: input.WorkspaceMiB, PIDs: input.PIDs}}, caller)
+	if err != nil && item.ID() == "" {
+		return Sandbox{}, err
+	}
+	// Persisted uncertain runs are projected for operator review, with no retry.
+	return s.projectSandbox(item)
+}
+func (s *Service) ReconcileDockerSandbox(raw string) (Sandbox, error) {
+	id, err := sandboxdomain.ParseID(raw)
+	if err != nil {
+		return Sandbox{}, err
+	}
+	caller, err := s.governanceContext()
+	if err != nil {
+		return Sandbox{}, err
+	}
+	if _, err := s.runtime.Sandboxes.ReconcileDocker(s.ctx, id, caller); err != nil {
 		return Sandbox{}, err
 	}
 	item, err := s.runtime.Sandboxes.Get(s.ctx, id)
@@ -148,7 +183,7 @@ func (s *Service) projectSandbox(item sandboxdomain.Sandbox) (Sandbox, error) {
 	if err != nil {
 		return Sandbox{}, err
 	}
-	return Sandbox{SandboxID: spec.ID.String(), Name: spec.Name, Backend: string(spec.Backend), Isolation: string(spec.Isolation), State: state, LocalRoot: spec.LocalRoot, OwnerKind: spec.OwnerKind, OwnerRef: spec.OwnerRef, ActiveLeases: active}, nil
+	return Sandbox{SandboxID: spec.ID.String(), Name: spec.Name, Backend: string(spec.Backend), Isolation: string(spec.Isolation), State: state, LocalRoot: spec.LocalRoot, OwnerKind: spec.OwnerKind, OwnerRef: spec.OwnerRef, ActiveLeases: active, BackendAvailable: s.runtime.Sandboxes.BackendAvailable(item)}, nil
 }
 
 func (s *Service) GetRuntimeGovernance() (RuntimeGovernanceStatus, error) {

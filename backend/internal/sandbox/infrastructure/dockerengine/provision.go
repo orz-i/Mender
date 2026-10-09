@@ -36,6 +36,8 @@ type mutateAPI interface {
 	ContainerCreate(context.Context, mobyclient.ContainerCreateOptions) (mobyclient.ContainerCreateResult, error)
 	ContainerStart(context.Context, string, mobyclient.ContainerStartOptions) (mobyclient.ContainerStartResult, error)
 	ContainerInspect(context.Context, string, mobyclient.ContainerInspectOptions) (mobyclient.ContainerInspectResult, error)
+	ContainerStop(context.Context, string, mobyclient.ContainerStopOptions) (mobyclient.ContainerStopResult, error)
+	ContainerRemove(context.Context, string, mobyclient.ContainerRemoveOptions) (mobyclient.ContainerRemoveResult, error)
 }
 
 // Provisioner is an internal, not Runtime-registered, D1b controller. It must
@@ -126,6 +128,13 @@ func (p *Provisioner) Provision(ctx context.Context, caller governancedomain.Con
 	if err != nil {
 		return sandboxdomain.Run{}, err
 	}
+	return p.provisionStaged(ctx, caller, sandbox, staged, template, image, false)
+
+}
+
+// provisionStaged makes one Docker Create attempt against a fenced persisted
+// provisioning Run. Unknown responses are never retried.
+func (p *Provisioner) provisionStaged(ctx context.Context, caller governancedomain.Context, sandbox sandboxdomain.Sandbox, staged sandboxdomain.Run, template Template, image LocalImage, isRestart bool) (sandboxdomain.Run, error) {
 	plan, err := NewContainerPlan(sandbox, staged, template, image)
 	if err != nil {
 		return sandboxdomain.Run{}, errors.Join(err, p.makeUnknown(ctx, staged, ""))
@@ -147,7 +156,16 @@ func (p *Provisioner) Provision(ctx context.Context, caller governancedomain.Con
 	if err := plan.VerifyInspect(inspect.Container); err != nil || !inspect.Container.State.Running {
 		return sandboxdomain.Run{}, errors.Join(sandboxdomain.ErrBackendUnavailable, p.makeUnknown(ctx, staged, result.ID))
 	}
-	next, err := p.store.TransitionRun(ctx, staged, sandboxdomain.StateReady, result.ID)
+	var next sandboxdomain.Run
+	if isRestart {
+		lifecycle, ok := p.store.(dockerLifecycleStore)
+		if !ok {
+			return sandboxdomain.Run{}, sandboxdomain.ErrBackendUnavailable
+		}
+		next, err = lifecycle.FinishDockerLifecycle(ctx, staged, sandboxdomain.StateReady, result.ID, governancedomain.ActionSandboxStart, caller)
+	} else {
+		next, err = p.store.TransitionRun(ctx, staged, sandboxdomain.StateReady, result.ID)
+	}
 	if err != nil {
 		return sandboxdomain.Run{}, errors.Join(err, p.makeUnknown(ctx, staged, result.ID))
 	}
@@ -201,4 +219,25 @@ func ifValidContainerID(id string) string {
 		return id
 	}
 	return ""
+}
+
+func (p *Provisioner) WorkspaceBackend() (*Backend, error) {
+	if p == nil || p.observer == nil || p.templates == nil {
+		return nil, sandboxdomain.ErrBackendUnavailable
+	}
+	return NewBackend(p.observer, p.templates)
+}
+func (p *Provisioner) VerifyLocalImage(ctx context.Context, template Template) (LocalImage, error) {
+	if p == nil || p.observer == nil {
+		return LocalImage{}, sandboxdomain.ErrBackendUnavailable
+	}
+	return p.observer.InspectLocalImage(ctx, template)
+}
+
+// Probe validates live local Engine capabilities without mutating resources.
+func (p *Provisioner) Probe(ctx context.Context) (Probe, error) {
+	if p == nil || p.observer == nil {
+		return Probe{}, sandboxdomain.ErrBackendUnavailable
+	}
+	return p.observer.Probe(ctx)
 }

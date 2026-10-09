@@ -17,6 +17,7 @@ import (
 	mobyclient "github.com/moby/moby/client"
 	gov "github.com/orz-i/Mender/backend/internal/governance/domain"
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
+	providerconfigstore "github.com/orz-i/Mender/backend/internal/providerplugin/configstore"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 	sandboxsqlite "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/sqlite"
 )
@@ -38,6 +39,11 @@ func TestDockerLiveWorkspaceParityAndIsolation(t *testing.T) {
 		t.Fatal(err)
 	}
 	db := filepath.Join(t.TempDir(), "docker-live.db")
+	providers, err := providerconfigstore.Open(ctx, db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = providers.Close() }()
 	store, err := sandboxsqlite.Open(ctx, db)
 	if err != nil {
 		t.Fatal(err)
@@ -89,12 +95,14 @@ func TestDockerLiveWorkspaceParityAndIsolation(t *testing.T) {
 		defer cancel()
 		// Test cleanup only removes a uniquely named container created under
 		// this newly generated SandboxID; no arbitrary daemon resources touched.
-		name := "mender-sbx-" + strings.TrimPrefix(id.String(), "sbx_") + "-g1"
-		inspected, err := cli.ContainerInspect(cleanup, name, mobyclient.ContainerInspectOptions{})
-		if err == nil && inspected.Container.Config != nil && inspected.Container.Config.Labels[labelSandboxID] == id.String() {
-			_, err = cli.ContainerRemove(cleanup, inspected.Container.ID, mobyclient.ContainerRemoveOptions{Force: true})
-			if err != nil {
-				t.Errorf("cleanup test Sandbox: %v", err)
+		for _, generation := range []int{1, 2, 3} {
+			name := fmt.Sprintf("mender-sbx-%s-g%d", strings.TrimPrefix(id.String(), "sbx_"), generation)
+			inspected, inspectErr := cli.ContainerInspect(cleanup, name, mobyclient.ContainerInspectOptions{})
+			if inspectErr == nil && inspected.Container.Config != nil && inspected.Container.Config.Labels[labelSandboxID] == id.String() {
+				_, removeErr := cli.ContainerRemove(cleanup, inspected.Container.ID, mobyclient.ContainerRemoveOptions{Force: true})
+				if removeErr != nil {
+					t.Errorf("cleanup test Sandbox: %v", removeErr)
+				}
 			}
 		}
 	}()
@@ -163,5 +171,32 @@ func TestDockerLiveWorkspaceParityAndIsolation(t *testing.T) {
 	call(sandboxdomain.CapabilityEdit, `{"path":"draft.txt","operation":"delete"}`)
 	if _, err := workspace.readFile(ctx, "draft.txt", maxDockerReadBytes); err == nil {
 		t.Fatal("deleted file still exists")
+	}
+	if err := session.Close(); err != nil {
+		t.Fatal(err)
+	}
+	stopped, err := provisioner.ChangeLifecycle(ctx, caller, id, gov.ActionSandboxStop)
+	if err != nil || stopped.State != sandboxdomain.StateStopped {
+		t.Fatalf("real Docker Stop %+v %v", stopped, err)
+	}
+	started, err := provisioner.ChangeLifecycle(ctx, caller, id, gov.ActionSandboxStart)
+	if err != nil || started.State != sandboxdomain.StateReady || started.Generation != 2 {
+		t.Fatalf("real Docker Start %+v %v", started, err)
+	}
+	newSession, err := backend.Open(ctx, item, started)
+	if err != nil {
+		t.Fatalf("restart Backend.Open: %v", err)
+	}
+	newWorkspace := newSession.(*workspaceSession)
+	if oldName := started.ExternalID; oldName == ready.ExternalID {
+		t.Fatal("Start reused stale Docker container identity")
+	}
+	if err := newSession.Close(); err != nil {
+		t.Fatal(err)
+	}
+	_ = newWorkspace
+	destroyed, err := provisioner.ChangeLifecycle(ctx, caller, id, gov.ActionSandboxDestroy)
+	if err != nil || destroyed.State != sandboxdomain.StateDestroyed {
+		t.Fatalf("real Docker Destroy %+v %v", destroyed, err)
 	}
 }
