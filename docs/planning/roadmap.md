@@ -478,7 +478,7 @@ See `phase-24-runtime-process-governance.md`.
 
 ## Phase 25 — Sandbox Execution Router & Sandbox Workspace Tools
 
-Status: In Progress (Stage D complete; Sandbox Activity and security scan green; Stage E live Daytona acceptance pending)
+Status: Complete (bounded core; Daytona experimental, disabled by default; live remote acceptance deferred)
 
 Goals:
 
@@ -486,9 +486,9 @@ Goals:
 - Add a capability-checked Execution Environment Router with host-owned drivers, stateful Sandbox lifecycle, Principal-attributed leases, and strict no-fallback semantics.
 - Hard-cut the built-in Workspace Provider to a Sandbox-bound four-tool facade while preserving its PluginID, canonical SourceKeys, ToolIDs, Profile bindings, and Policy/Audit authority.
 - Add Sandboxes management in the Runtime sidebar, with backend selection, focused configuration, status/detail/security/activity views, and typed HTTP/OpenAPI/SDK/Wails/Desktop parity.
-- Start with honest Local Workspace semantics and a managed local Docker backend; evaluate Daytona as first remote integration and E2B as next.
+- Deliver honest Local Workspace and managed local Docker execution; retain Daytona as a strictly opt-in experimental adapter, with E2B outside Phase 25.
 - Establish resource/mount/network/credential, cancellation, reconciliation, idempotency, and remote cost safeguards before claiming Sandbox security properties.
 
 Exit criteria: ADR-0035 accepted; backend/file/shell parity verified; governance denial-before-side-effects and no unsafe host fallback proved; Workspace v1 forward migration preserves identities; Sandbox lifecycle/UI/API are operational; full repository/race/security gates pass.
 
-See `phase-25-sandbox-execution-router.md` for delivered implementation evidence. Phase 25 remains open solely for the unverified live Daytona Stage E acceptance and remote resource cleanup confirmation; no additional Stage D/E subdivisions are planned.
+See `phase-25-sandbox-execution-router.md` for the final bounded acceptance and per-backend support matrix. Local Workspace, Docker, governance, lifecycle, Activity and full repository/race/security gates are complete. Daytona remains disabled by default and **has NOT passed live create/tool/lifecycle acceptance**; its credential-backed provider smoke, orphan review and cleanup are separate post-phase operational-release requirements, not an open Phase 25 implementation stage. No new D/E subdivisions are planned.

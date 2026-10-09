@@ -1,6 +1,6 @@
 # Phase 25 Plan — Sandbox Execution Router and Sandbox Workspace Tools
 
-Status: In Progress (Stage D — Docker Sandbox functionally complete; Stage E remote adapters pending; independent security release gate open)
+Status: Complete (bounded core; Daytona experimental and disabled by default; real remote acceptance deferred)
 
 > Architecture decision: [ADR-0035](../architecture/adr/0035-governed-sandbox-execution-router.md) (Accepted on commencement of Phase 25). Each implementation cluster requires focused automated checks before its separate commit.
 
@@ -644,7 +644,7 @@ Status: **Implementation contract; do not represent D1b as completed until all t
 
 ## Stage E — Daytona remote Sandbox (single bounded delivery, 2026-10-09)
 
-Status: **In Progress**. Stage E has exactly one implementation target: Daytona. E2B and other cloud adapters are deferred and do not justify E1a/E2/E100-style phases. Completion requires a true Daytona credential-backed remote integration test; a fake SDK passing does **not** imply remotely tested or a completed Phase 25.
+Status: **Implementation delivered (experimental/quarantined); live vendor acceptance deferred outside Phase 25.** This is a historical design checkpoint; the final support decision below supersedes its original completion gate. Stage E has exactly one implementation target: Daytona. E2B and other cloud adapters are deferred and do not justify E1a/E2/E100-style phases. Completion requires a true Daytona credential-backed remote integration test; a fake SDK passing does **not** imply remotely tested or a completed Phase 25.
 
 Current provider reference: [official Daytona Go SDK 0.223 documentation](https://www.daytona.io/docs/en/go-sdk/), module `github.com/daytona/clients/sdk-go@v0.223.0`. The SDK supports `daytona.NewClientWithConfig`, `Client.Create/Get/List/Close`, `Sandbox.Start/Stop/DeleteAndWait`, `FileSystem.DownloadFile/UploadFile/MoveFiles/GetFileInfo/ListFiles`, `Process.ExecuteCommand`, and `types.ImageParams` with CPU/Memory/Disk bounds, network block and wall-clock `TtlMinutes`. This is a managed third-party service with an external billing account, not a locally enforceable cost meter. As of kickoff, **no Daytona credential is available in the developer environment**; never synthesize availability, billable calls or a passing live test.
 
@@ -667,7 +667,7 @@ Current provider reference: [official Daytona Go SDK 0.223 documentation](https:
 
 ### Stage E — Real Daytona credential check and fail-closed provisioning evidence (2026-10-09)
 
-**Status: In Progress; live remote integration NOT yet accepted.** An API Key was made available **ephemerally by the user** for this bounded verification attempt; its plaintext was never added to repository source, tests, docs, Git commits or persisted Mender Credential secrets.
+**Historical acceptance checkpoint: real remote integration NOT accepted.** An API Key was made available **ephemerally by the user** for this bounded verification attempt; its plaintext was never added to repository source, tests, docs, Git commits or persisted Mender Credential secrets.
 
 - **Real SDK read-only authentication passed.** Daytona Go SDK v0.223.0, with an explicit allowlisted HTTPS vendor endpoint and ephemeral environment Credential Resolver, successfully performed an authorized label-filtered inventory query.
 - **One real chargeable provisioning attempt did not succeed.** A resource with CPU=1, RAM=2 GiB, disk=3 GiB and service-side TTL=15 minutes, targeting an immutable Alpine image digest and outbound network blocking, was attempted. The Daytona SDK returned a remote error; Mender preserved the durable result as `unknown` without automatically attempting another Create. Because the initial production error mapper intentionally stripped vendor responses, the actual Daytona HTTP status/code and whether remote allocation occurred **were not observable** from the first attempt. Therefore **do not** describe remote Create, four Workspace tools or Start/Stop/Destroy as live-tested or working on Daytona.
@@ -713,3 +713,42 @@ Implementation commits must be segmented: architecture acceptance, Activity API/
 **Deferred operational acceptance (NOT a reopened Phase 25):** An explicitly authorized, credential-backed short-TTL Daytona live smoke must eventually verify successful create/inspect/read/search/edit/shell/stop/start/destroy, provider-side deletion and empty final inventory, and resolve any ambiguous existing `unknown` allocation. The host operator decides if/when to enable experimental Daytona before this check. This is a release-readiness/support decision for that experimental backend, not a Phase 25 functional-completion claim.
 
 **Completion rule:** mark Phase 25 `Complete (core; Daytona experimental and disabled by default)` only after fail-closed gating and default-denial tests, `pnpm check` and `pnpm security:check` all pass. Preserve the historical Stage E checkpoints as evidence of attempted and incomplete remote acceptance, not as live-success claims. Keep E2B and stronger remote isolation out of scope; no new compatibility bridges, no Agent loop, no remote fallback.
+
+
+## Phase 25 final closeout — core implementation accepted; remote experiment quarantined (2026-10-09)
+
+**Final phase status: COMPLETE within the explicitly frozen core acceptance.** This section supersedes the older, time-ordered implementation and experimental Stage E checkpoint statuses above. The user requested closure without creating further D/E subphases. The final scope is **Local Workspace, Docker, Sandbox governance/router/leases/audit, stable four Workspace Tools, forward-only Workspace Provider hard cut, Activity, HTTP/CLI/OpenAPI/SDK/Wails/Web management parity, and all quality/security checks**. This is not a claim that Daytona's remote service has passed acceptance.
+
+### Release support matrix
+
+| Backend or surface | Phase 25 acceptance | Operational behavior / boundary |
+| --- | --- | --- |
+| Local Workspace | **Complete** | `host` and `restricted_host` are honestly labeled; restricted host is not a microVM. File and shell share the pinned Workspace path and all accesses traverse Principal/Policy/Approval/Lease. |
+| Docker | **Complete (local Engine acceptance)** | Read/search/edit/shell and Create/Stop/Start/Destroy exercised against a real Docker Engine with pinned image and observed non-root/readonly/no-network constraints; requires an explicitly configured local UNIX socket and a cached immutable image. No VM-grade or hostile multi-tenant isolation claim. |
+| Sandbox governance/router/management | **Complete** | Durable generation-fenced leases and admissions, deny-before-side-effects, typed lifecycle and unknown-state behavior, Provider/Tool identity preservation, a bounded non-secret Activity page, and HTTP/CLI/OpenAPI/SDK/Wails/Web parity. |
+| Daytona | **Experimental / NOT remotely accepted** | Go SDK, immutable Template/credential references, quota and lifecycle implementation plus fake-SDK tests are retained. A real authenticated read-only call succeeded; a real Create was ambiguous/unsuccessful and live tools/lifecycle/cleanup were not proven. **No default creation or execution.** |
+| E2B / other remote backends | **Not delivered; outside this Phase** | Remain deferred. No fallback, no compatibility bridge, no automatic remote work. |
+
+### Default-deny quarantine for unaccepted Daytona
+
+- The Runtime constructs only the trusted **read-only inventory/configuration** portion of the Daytona integration by default so persistent Sandbox metadata, Audit and Credential Reference deletion protections remain available.
+- **No Daytona execution Backend is registered, and all remote create/stop/start/destroy/reconcile and Workspace acquire attempts reject**, unless an operator explicitly starts Mender with the *exact* host environment setting `MENDER_DAYTONA_EXPERIMENTAL=enabled`. Other values do not enable the driver.
+- Opt-in is a **local deployment authority**, not a Tool argument, Profile setting, Provider config, HTTP flag, or proof of successful live testing. The UI displays the experimental label only when opted in, and otherwise shows how the local operator can enable it. The remote provider may incur charges after opt-in; its TTL does **not** enforce a dollar budget.
+- Disabled existing Daytona resources remain visible as non-executable inventory. Their active Credential References remain protected against deletion. An operator who later chooses to reconcile or decommission remote allocations must follow separate explicit, reviewed remote procedures.
+- No previously supplied revoked Daytona key is reused. The uncertain earlier allocation and provider-side cleanup **remain unverified**. Never claim those resources were deleted simply because a credential was revoked.
+
+### Objective exit-gate evidence
+
+- **Real local Docker**: four sequential real-Engine Race Test end-to-end paths verified four Workspace capabilities, the normal Mender Runtime+Provider pipeline, HTTP lifecycle and CLI lifecycle; only matching test resource labels were eligible for cleanup.
+- **Default-deny Daytona**: Go Race Tests validate no operator opt-in means no registration, Create, Tool acquire, or lifecycle/remote reconciliation; immutable persisted inventory remains accessible, active leases are not allocated, and Credential Reference usage still blocks deletion. An explicit host opt-in is tested without making network requests. HTTP/Desktop/UI denial and opt-in intent are tested.
+- **Workspace/API/UI**: final plain `pnpm check` exit **0** with Go lint/test/race/module isolation, SDK/proto/Wails generation parity, TypeScript/ESLint/i18n, **15 Vitest files and 85 tests passing**, and Web/Desktop production builds.
+- **Security**: final plain `pnpm security:check` exit **0**; govulncheck reports no findings for Backend, Desktop, Go Provider Plugin SDK and its example; the production JavaScript dependency audit reports no known findings. Minimum Go 1.27.2 and `golang.org/x/net@v0.60.0` apply to the independent Go modules.
+- **Evidence limitations**: a passing local security scan is not an assurance against future disclosures. Nonblocking JS chunk-size warnings remain outside this scope. The unverified Daytona live acceptance is **deliberately excluded** from Phase 25 core completion; it is an **operational release gate for the experimental provider only**.
+
+### Deferred, non-phase operational acceptance for Daytona
+
+If the user later authorizes a **fresh, short-lived credential** and a potentially billable test, review the previous unknown instance in the Daytona console, verify no stranded resources, confirm the actual remote error/status without logging tokens, create one short-TTL pinned-image Sandbox, prove real remote read/search/edit/shell/Stop/Start/Destroy and ownership labels, and independently confirm final remote deletion/charges. Only after that evidence should an operator reconsider removing the default quarantine through a separate, explicitly accepted maintenance change. **Do not re-open Phase 25, create Stage E suffixes, assume missing API credentials are user consent, or auto-retry ambiguous Creates.**
+
+### Source-control closeout
+
+Documentation-first, segmented local commits; no push. Project code and docs committed to `main`. `.agents/`, `.pi/`, and `.intent-loop/` remain untouched and untracked. This completed Phase 25 is an architecture/runtime delivery, not a new Agent orchestration layer.
