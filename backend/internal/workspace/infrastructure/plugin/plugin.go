@@ -34,8 +34,25 @@ func (p *Plugin) Descriptor() providerplugin.Descriptor {
 	}
 	return p.descriptor.Clone()
 }
-func (*Plugin) ValidateConfig(ctx context.Context, raw json.RawMessage) error {
-	return ValidateConfig(ctx, raw)
+func (p *Plugin) ValidateConfig(ctx context.Context, raw json.RawMessage) error {
+	config, err := DecodeConfig(raw)
+	if err != nil {
+		return err
+	}
+	if p == nil || p.router == nil {
+		return fmt.Errorf("validate Sandbox Workspace config: execution router unavailable")
+	}
+	// Resolve reads persisted placement metadata without acquiring a Sandbox,
+	// starting a process or reading the backend filesystem. Reject dangling
+	// bindings during Provider creation and update rather than at first invoke.
+	placement, err := p.router.Resolve(ctx, sandboxdomain.ID(config.SandboxID), sandboxdomain.CapabilityRead)
+	if err != nil {
+		return fmt.Errorf("validate Sandbox Workspace config: lookup: %w", err)
+	}
+	if placement.Sandbox.ID().String() != config.SandboxID {
+		return fmt.Errorf("validate Sandbox Workspace config: placement identity conflict: %w", sandboxdomain.ErrConflict)
+	}
+	return nil
 }
 func (*Plugin) InspectConfig(ctx context.Context, raw json.RawMessage) (providerplugin.ConfigMetadata, error) {
 	return InspectConfig(ctx, raw)

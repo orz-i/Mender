@@ -195,3 +195,31 @@ func TestWorkspaceV1OpenFailsClosed(t *testing.T) {
 		t.Fatal("v1 JSON accepted")
 	}
 }
+
+func TestWorkspaceConfigLookupRejectsDanglingSandboxWithoutBackendOpen(t *testing.T) {
+	instance, router := openWorkspaceTestInstance(t, t.TempDir())
+	_ = instance
+	valid, err := json.Marshal(Config{SandboxID: testSandboxID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := New(router).ValidateConfig(context.Background(), valid); err != nil {
+		t.Fatal(err)
+	}
+	if router.resolves != 1 || router.acquires != 0 {
+		t.Fatalf("config check must be metadata-only: resolves=%d acquires=%d", router.resolves, router.acquires)
+	}
+	unknown, err := json.Marshal(Config{SandboxID: "sbx_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := New(router).ValidateConfig(context.Background(), unknown); !errors.Is(err, sandboxdomain.ErrNotFound) {
+		t.Fatalf("dangling Sandbox reference accepted: %v", err)
+	}
+	if router.acquires != 0 {
+		t.Fatal("validation acquired a Sandbox")
+	}
+	if err := New(nil).ValidateConfig(context.Background(), valid); err == nil {
+		t.Fatal("missing execution router accepted")
+	}
+}

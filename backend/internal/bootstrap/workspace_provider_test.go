@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -410,4 +411,30 @@ func testWorkspaceSandboxConfig(t *testing.T, runtime *Runtime, root string, pri
 		t.Fatal(err)
 	}
 	return config
+}
+
+func TestWorkspaceProviderRegistrationRejectsDanglingSandbox(t *testing.T) {
+	ctx := context.Background()
+	runtime, err := NewRuntime(ctx, RuntimeOptions{DatabasePath: filepath.Join(t.TempDir(), "mender.db")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = runtime.Close() }()
+	raw, err := json.Marshal(workspaceplugin.Config{SandboxID: "sbx_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = registerConfiguredProviderTest(t, runtime, ctx, catalogapplication.RegisterProviderRequest{
+		Namespace: "missing-sandbox", DisplayName: "Missing Sandbox Workspace",
+	}, workspaceplugin.ID, raw)
+	if !errors.Is(err, sandboxdomain.ErrNotFound) {
+		t.Fatalf("invalid Sandbox was configured: %v", err)
+	}
+	configured, err := runtime.ListProviderConfigs(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(configured) != 0 {
+		t.Fatalf("failed Provider activation persisted config: %+v", configured)
+	}
 }
