@@ -29,6 +29,17 @@ export interface AuditRecord {
     "failureCode": string;
 }
 
+export interface CreateDaytonaSandboxInput {
+    "name": string;
+    "credentialRef": string;
+    "imageDigest": string;
+    "target": string;
+    "cpu": number;
+    "memoryGiB": number;
+    "diskGiB": number;
+    "ttlMinutes": number;
+}
+
 export interface CreateDockerSandboxInput {
     "name": string;
     "imageDigest": string;
@@ -79,6 +90,8 @@ export interface CredentialStatus {
 }
 
 export interface DockerBackendStatus {
+    "daytonaConfigured": boolean;
+    "daytonaStatus": string;
     "dockerAvailable": boolean;
     "dockerStatus": string;
 }

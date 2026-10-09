@@ -52,8 +52,8 @@ describe("Sandbox lifecycle management",()=>{
   expect(await screen.findByText("Host files remain untouched after Sandbox destruction.")).toBeTruthy();
   expect(screen.queryByRole("button",{name:"Destroy sandbox"})).toBeNull();
  });
- it("never displays unsupported local lifecycle actions on remote backends",async()=>{
-  mount({getSandbox:vi.fn().mockResolvedValue({...local,backend:"daytona",isolation:"remote"})});
+ it("never displays unsupported lifecycle actions on unregistered E2B backends",async()=>{
+  mount({getSandbox:vi.fn().mockResolvedValue({...local,backend:"e2b",isolation:"remote"})});
   expect(await screen.findByText("Test Sandbox")).toBeTruthy();
   expect(screen.queryByRole("button",{name:"Start sandbox"})).toBeNull();
   expect(screen.queryByRole("button",{name:"Stop sandbox"})).toBeNull();

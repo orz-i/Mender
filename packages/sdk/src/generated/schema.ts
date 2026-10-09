@@ -518,6 +518,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/sandboxes/daytona": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Provision a bounded Daytona remote Sandbox using a Mender Credential Reference. Live provider availability and billing require a connected account. */
+        post: operations["createDaytonaSandbox"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/sandboxes/local": {
         parameters: {
             query?: never;
@@ -545,6 +562,23 @@ export interface paths {
         put?: never;
         post?: never;
         delete: operations["destroySandbox"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sandboxes/{sandboxId}/daytona/reconcile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Read-only reconciliation of a provisioned unknown Daytona Sandbox, no remote create replay */
+        post: operations["reconcileDaytonaSandbox"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1445,6 +1479,22 @@ export interface components {
         SandboxBackends: {
             dockerAvailable: boolean;
             dockerStatus: string;
+            /** @description Driver installed only; does not prove live remote account access */
+            daytonaConfigured: boolean;
+            daytonaStatus: string;
+        };
+        CreateDaytonaSandboxRequest: {
+            name: string;
+            /** @description Reference to Mender's secret inventory */
+            credentialRef: string;
+            imageDigest: string;
+            /** @enum {string} */
+            target: "us";
+            cpu: number;
+            memoryGiB: number;
+            diskGiB: number;
+            /** @description Provider-enforced wall-clock lifetime; not a monetary billing cap */
+            ttlMinutes: number;
         };
         CreateDockerSandboxRequest: {
             name: string;
@@ -2613,6 +2663,49 @@ export interface operations {
             };
         };
     };
+    createDaytonaSandbox: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateDaytonaSandboxRequest"];
+            };
+        };
+        responses: {
+            /** @description Daytona Sandbox observed started */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Sandbox"];
+                };
+            };
+            /** @description Remote outcome is uncertain; resource persisted and must be reviewed, not retried */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Sandbox"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            /** @description Credential or remote service unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     createLocalSandbox: {
         parameters: {
             query?: never;
@@ -2689,6 +2782,38 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+        };
+    };
+    reconcileDaytonaSandbox: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sandboxId: components["parameters"]["SandboxId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Remote state inspected and verified */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Sandbox"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            /** @description Remote API unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     reconcileDockerSandbox: {

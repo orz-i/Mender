@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { BoxIcon, HardDriveIcon, ShieldAlertIcon, SquareTerminalIcon } from "lucide-react";
-import { useNavigate, useParams } from "react-router";
+import { Link, useNavigate, useParams } from "react-router";
 
-import type { MenderClient, Sandbox } from "@mender/sdk";
+import type { Credential, MenderClient, Sandbox } from "@mender/sdk";
 import { Badge } from "@mender/ui/components/badge";
 import { Button } from "@mender/ui/components/button";
 import { Input } from "@mender/ui/components/input";
@@ -87,13 +87,21 @@ export function SandboxesPage({ client }: { client: MenderClient }) {
 export function CreateSandboxPage({client}:{client:MenderClient}) {
  const navigate=useNavigate();
  const [step,setStep]=useState<"backend"|"configure"|"review">("backend");
- const [selected,setSelected]=useState<"local_workspace"|"docker">("local_workspace");
+ const [selected,setSelected]=useState<"local_workspace"|"docker"|"daytona">("local_workspace");
  const [name,setName]=useState("");
  const [root,setRoot]=useState("");
  const [isolation,setIsolation]=useState<""|"host"|"restricted_host">("");
  const [restrictedAvailable,setRestrictedAvailable]=useState(false);
  const [dockerAvailable,setDockerAvailable]=useState(false);
  const [dockerStatus,setDockerStatus]=useState("");
+ const [daytonaConfigured,setDaytonaConfigured]=useState(false);
+ const [daytonaStatus,setDaytonaStatus]=useState("");
+ const [credentials,setCredentials]=useState<Credential[]>([]);
+ const [daytonaCredential,setDaytonaCredential]=useState("");
+ const [daytonaCPU,setDaytonaCPU]=useState(1);
+ const [daytonaMemory,setDaytonaMemory]=useState(2);
+ const [daytonaDisk,setDaytonaDisk]=useState(3);
+ const [daytonaTTL,setDaytonaTTL]=useState(30);
  const [imageDigest,setImageDigest]=useState("");
  const [userId,setUserId]=useState(10001);
  const [groupId,setGroupId]=useState(10001);
@@ -106,17 +114,19 @@ export function CreateSandboxPage({client}:{client:MenderClient}) {
  useEffect(()=>{
   let active=true;
   void client.getRuntimeGovernance().then(info=>{if(active)setRestrictedAvailable(info.backend.restrictedHostAvailable);}).catch((reason:unknown)=>{if(active)setError(errorMessage(reason));});
-  void client.getSandboxBackends().then(info=>{if(active){setDockerAvailable(info.dockerAvailable);setDockerStatus(info.dockerStatus);}}).catch((reason:unknown)=>{if(active)setDockerStatus(errorMessage(reason));});
+  void client.getSandboxBackends().then(info=>{if(active){setDockerAvailable(info.dockerAvailable);setDockerStatus(info.dockerStatus);setDaytonaConfigured(info.daytonaConfigured);setDaytonaStatus(info.daytonaStatus);}}).catch((reason:unknown)=>{if(active)setDockerStatus(errorMessage(reason));});
+  void client.listCredentials().then(result=>{if(active)setCredentials(result.credentials);}).catch((reason:unknown)=>{if(active)setError(errorMessage(reason));});
   return ()=>{active=false;};
  },[client]);
  const digestOK=/^[a-z0-9]+(?:[.-][a-z0-9]+)+(?:\/[a-z0-9]+(?:[._-][a-z0-9]+)*){2,}@sha256:[0-9a-f]{64}$/.test(imageDigest);
  const dockerConfigValid=dockerAvailable && digestOK && userId>=1000 && userId<=65534 && groupId>=1000 && groupId<=65534 && cpuMilli>=100 && cpuMilli<=8000 && memoryMiB>=256 && memoryMiB<=16384 && workspaceMiB>=64 && workspaceMiB<=2048 && workspaceMiB<=memoryMiB && pids>=16 && pids<=512;
- const formValid=Boolean(name.trim()) && (selected==="docker"?dockerConfigValid:Boolean(root.trim()&&isolation));
+ const daytonaValid=daytonaConfigured && digestOK && credentials.some(c=>c.reference===daytonaCredential) && daytonaCPU>=1&&daytonaCPU<=2&&daytonaMemory>=1&&daytonaMemory<=4&&daytonaDisk>=3&&daytonaDisk<=10&&daytonaTTL>=15&&daytonaTTL<=120;
+ const formValid=Boolean(name.trim()) && (selected==="docker"?dockerConfigValid:selected==="daytona"?daytonaValid:Boolean(root.trim()&&isolation));
  async function create(){
   if(!formValid||busy)return;
   setBusy(true);setError("");
   try{
-   const sandbox=selected==="docker"?await client.createDockerSandbox({name:name.trim(),imageDigest,userId,groupId,cpuMilli,memoryMiB,workspaceMiB,pids}):await client.createLocalSandbox({name:name.trim(),root:root.trim(),isolation:isolation as "host"|"restricted_host"});
+   const sandbox=selected==="docker"?await client.createDockerSandbox({name:name.trim(),imageDigest,userId,groupId,cpuMilli,memoryMiB,workspaceMiB,pids}):selected==="daytona"?await client.createDaytonaSandbox({name:name.trim(),credentialRef:daytonaCredential,imageDigest,target:"us",cpu:daytonaCPU,memoryGiB:daytonaMemory,diskGiB:daytonaDisk,ttlMinutes:daytonaTTL}):await client.createLocalSandbox({name:name.trim(),root:root.trim(),isolation:isolation as "host"|"restricted_host"});
    void navigate(`/sandboxes/${sandbox.sandboxId}`);
   }catch(reason){setError(errorMessage(reason));setBusy(false);}
  }
@@ -138,10 +148,11 @@ export function CreateSandboxPage({client}:{client:MenderClient}) {
       <BoxIcon className="mb-3 size-6" aria-hidden="true"/><p className="font-medium">{t("Docker")} · {t("Unavailable")}</p>
       <p className="mt-1 break-words text-xs text-muted-foreground">{dockerStatus||t("Configure MENDER_DOCKER_SOCKET on the Runtime host.")}</p>
      </div>}
-     {(["Daytona","E2B"] as const).map(item=><div key={item} aria-disabled="true" className="rounded-xl border border-border bg-muted/20 p-5 opacity-65">
-      <BoxIcon className="mb-3 size-6" aria-hidden="true"/><p className="font-medium">{item} · {t("Planned")}</p>
-      <p className="mt-1 text-xs text-muted-foreground">{t("Backend not yet implemented")}</p>
-     </div>)}
+     {daytonaConfigured?<button type="button" onClick={()=>{setSelected("daytona");setStep("configure");}} className="rounded-xl border border-primary/50 bg-primary/5 p-5 text-left transition hover:bg-primary/10 focus-visible:outline-2 focus-visible:outline-primary">
+      <BoxIcon className="mb-3 size-6" aria-hidden="true"/><p className="font-medium">{t("Daytona")}</p>
+      <p className="mt-1 text-xs leading-5 text-muted-foreground">{t("Remote Daytona Sandbox uses a Mender credential and incurs provider charges. Provider availability is verified on creation.")}</p>
+     </button>:<div aria-disabled="true" className="rounded-xl border border-border bg-muted/20 p-5 opacity-65"><BoxIcon className="mb-3 size-6" aria-hidden="true"/><p className="font-medium">{t("Daytona")} · {t("Unavailable")}</p><p className="text-xs text-muted-foreground">{daytonaStatus}</p></div>}
+     <div aria-disabled="true" className="rounded-xl border border-border bg-muted/20 p-5 opacity-65"><BoxIcon className="mb-3 size-6" aria-hidden="true"/><p className="font-medium">{t("E2B")} · {t("Planned")}</p><p className="mt-1 text-xs text-muted-foreground">{t("Backend not yet implemented")}</p></div>
     </div>:null}
     {step==="configure"?<div className="max-w-xl space-y-4">
      <label className="block space-y-1.5 text-sm"><span>{t("Sandbox name")}</span><Input aria-label={t("Sandbox name")} value={name} maxLength={160} onChange={e=>setName(e.target.value)}/></label>
@@ -151,7 +162,7 @@ export function CreateSandboxPage({client}:{client:MenderClient}) {
        <option value="">{t("Choose isolation")}</option><option value="restricted_host" disabled={!restrictedAvailable}>{t("Restricted host")}{!restrictedAvailable?` · ${t("Unavailable")}`:""}</option><option value="host">{t("Host (not isolated)")}</option>
       </select></label>
       <p className="text-xs leading-5 text-muted-foreground">{t("Isolation choice is persisted per Sandbox; changing global Runtime settings will not weaken it.")}</p>
-     </>:<>
+     </>:selected==="docker"?<>
       <label className="block space-y-1.5 text-sm"><span>{t("Immutable image digest")}</span><Input aria-label={t("Immutable image digest")} value={imageDigest} onChange={e=>setImageDigest(e.target.value.trim())} placeholder={t("docker.io/library/alpine@sha256:…")} autoComplete="off"/></label>
       <p className="text-xs leading-5 text-muted-foreground">{t("The exact image digest must already be cached locally. Mender never pulls images automatically.")}</p>
       <div className="grid gap-3 sm:grid-cols-2">
@@ -163,16 +174,30 @@ export function CreateSandboxPage({client}:{client:MenderClient}) {
        {numberField(t("PID limit"),pids,setPids,16,512)}
       </div>
       <p className="text-xs leading-5 text-muted-foreground">{t("Docker execution uses read-only rootfs, non-root user, no network or host mounts. Workspace files are ephemeral across restarts.")}</p>
+     </>:<>
+      <label className="block space-y-1.5 text-sm"><span>{t("Mender Credential Reference")}</span>
+       <select aria-label={t("Mender Credential Reference")} className="h-9 w-full rounded-lg border border-input bg-background px-3" value={daytonaCredential} onChange={e=>setDaytonaCredential(e.target.value)}><option value="">{t("Choose a credential")}</option>{credentials.map(c=><option key={c.reference} value={c.reference}>{c.displayName} · {c.reference}</option>)}</select>
+      </label>
+      {credentials.length===0?<p className="text-xs text-muted-foreground">{t("No credentials available. Add a Daytona API credential first.")} <Link to="/credentials" className="text-primary underline-offset-4 hover:underline">{t("Credentials")}</Link></p>:null}
+      <label className="block space-y-1.5 text-sm"><span>{t("Immutable image digest")}</span><Input aria-label={t("Immutable image digest")} value={imageDigest} onChange={e=>setImageDigest(e.target.value.trim())} placeholder={t("docker.io/library/python@sha256:…")} autoComplete="off"/></label>
+      <div className="grid gap-3 sm:grid-cols-2">
+       {numberField(t("Remote CPUs"),daytonaCPU,setDaytonaCPU,1,2)}
+       {numberField(t("Remote memory (GiB)"),daytonaMemory,setDaytonaMemory,1,4)}
+       {numberField(t("Remote disk (GiB)"),daytonaDisk,setDaytonaDisk,3,10)}
+       {numberField(t("TTL (minutes)"),daytonaTTL,setDaytonaTTL,15,120)}
+      </div>
+      <p className="text-xs leading-5 text-muted-foreground">{t("Daytona network egress is blocked. Remote sandbox TTL limits wall-clock lifetime, NOT monetary charges. Creating a sandbox may incur provider fees.")}</p>
      </>}
      <div className="flex gap-2"><Button variant="outline" onClick={()=>setStep("backend")}>{t("Back")}</Button><Button disabled={!formValid} onClick={()=>setStep("review")}>{t("Review")}</Button></div>
     </div>:null}
     {step==="review"?<div className="max-w-xl space-y-4 text-sm">
      <p className="font-medium">{t("Review Sandbox authority")}</p>
-     <Metadata name={t("Name")} value={name}/><Metadata name={t("Backend")} value={selected==="docker"?"Docker":t("Local workspace")}/>
-     {selected==="local_workspace"?<><Metadata name={t("Workspace")} value={root}/><Metadata name={t("Isolation")} value={isolationLabel(isolation)}/></>:<>
+     <Metadata name={t("Name")} value={name}/><Metadata name={t("Backend")} value={selected==="docker"?"Docker":selected==="daytona"?t("Daytona"):t("Local workspace")}/>
+     {selected==="local_workspace"?<><Metadata name={t("Workspace")} value={root}/><Metadata name={t("Isolation")} value={isolationLabel(isolation)}/></>:selected==="docker"?<>
       <Metadata name={t("Immutable image digest")} value={imageDigest}/><Metadata name={t("Isolation")} value={t("Container")}/>
       <p className="rounded-lg border border-amber-500/40 p-3 text-xs">{t("Docker Workspace files are ephemeral; stopping and starting recreates the container and erases scratch files.")}</p>
-     </>}
+     </>:null}
+     {selected==="daytona"?<><Metadata name={t("Immutable image digest")} value={imageDigest}/><Metadata name={t("Mender Credential Reference")} value={daytonaCredential}/><Metadata name={t("TTL (minutes)")} value={String(daytonaTTL)}/><p role="alert" className="rounded-lg border border-amber-500/40 p-3 text-xs">{t("Creating a Daytona Sandbox can incur provider charges. TTL is not a USD spending cap. Maximum 2 active remote sandboxes per Principal.")}</p></>:null}
      {selected==="local_workspace"&&isolation==="host"?<div role="alert" className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-sm">{t("Host mode is not isolated and uses the Runtime user's local file and process permissions.")}</div>:null}
      <div className="flex gap-2"><Button variant="outline" disabled={busy} onClick={()=>setStep("configure")}>{t("Back")}</Button><Button disabled={busy||!formValid} onClick={()=>void create()}>{busy?t("Creating…"):t("Create sandbox")}</Button></div>
     </div>:null}
@@ -205,15 +230,15 @@ export function SandboxDetailPage({client}:{client:MenderClient}) {
     }catch(reason){setError(errorMessage(reason));}
     finally{setBusy(false);}
   }
-  const manageable=Boolean(item?.backendAvailable && (item.backend==="local_workspace" || item.backend==="docker"));
+  const manageable=Boolean(item?.backendAvailable && (item.backend==="local_workspace" || item.backend==="docker" || item.backend==="daytona"));
   const noActiveLeases=item?.activeLeases===0;
   const canStart=manageable && item?.state==="stopped";
   const canStop=manageable && item?.state==="ready";
   const canDestroy=manageable && (item?.state==="ready"||item?.state==="stopped");
   async function reconcile(){
-    if(!item||busy||item.backend!=="docker")return;
+    if(!item||busy||(item.backend!=="docker"&&item.backend!=="daytona"))return;
     setBusy(true);setError("");
-    try{setItem(await client.reconcileDockerSandbox(item.sandboxId));}
+    try{setItem(item.backend==="daytona"?await client.reconcileDaytonaSandbox(item.sandboxId):await client.reconcileDockerSandbox(item.sandboxId));}
     catch(reason){setError(errorMessage(reason));}
     finally{setBusy(false);}
   }
@@ -222,7 +247,7 @@ export function SandboxDetailPage({client}:{client:MenderClient}) {
       {canStart?<Button disabled={busy||!noActiveLeases} onClick={()=>void changeLifecycle("start")}>{t("Start sandbox")}</Button>:null}
       {canStop?<Button variant="outline" disabled={busy||!noActiveLeases} onClick={()=>void changeLifecycle("stop")}>{t("Stop sandbox")}</Button>:null}
       {canDestroy?<Button variant="destructive" disabled={busy||!noActiveLeases} onClick={()=>void changeLifecycle("destroy")}>{t("Destroy sandbox")}</Button>:null}
-      {item?.backend==="docker" && item.backendAvailable && item.state==="unknown"?<Button disabled={busy||!noActiveLeases} onClick={()=>void reconcile()}>{t("Reconcile Docker sandbox")}</Button>:null}
+      {(item?.backend==="docker"||item?.backend==="daytona") && item.backendAvailable && item.state==="unknown"?<Button disabled={busy||!noActiveLeases} onClick={()=>void reconcile()}>{t(item.backend==="daytona"?"Reconcile Daytona sandbox":"Reconcile Docker sandbox")}</Button>:null}
       <Button variant="outline" onClick={()=>{void navigate("/sandboxes");}}>{t("Back to sandboxes")}</Button>
     </div>}/>
     {error || !sandboxId ? <ErrorNotice message={error || t("The requested item was not found.")}/> : null}
@@ -237,6 +262,7 @@ export function SandboxDetailPage({client}:{client:MenderClient}) {
         </div>
         {item.activeLeases>0?<p role="status" className="border-t border-border px-5 py-3 text-xs text-amber-700 dark:text-amber-300">{t("Cannot change lifecycle while a Sandbox execution lease is active.")}</p>:null}
         {item.state==="destroyed"?<p role="status" className="border-t border-border px-5 py-3 text-xs text-muted-foreground">{t("Host files remain untouched after Sandbox destruction.")}</p>:null}
+        {item.backend==="daytona"?<p role="status" className="border-t border-border px-5 py-3 text-xs text-muted-foreground">{t("Remote Sandbox incurs Daytona account charges. TTL is a wall-clock ceiling, not a billing cap.")}</p>:null}
         {item.backend==="docker"?<p role="status" className="border-t border-border px-5 py-3 text-xs text-muted-foreground">{t("Docker Workspace scratch is ephemeral. Stop/Start recreates the container; destruction never removes host files.")}</p>:null}
       </DataPanel>
       <DataPanel title="Security boundary" description="Isolation depends on the actual backend, not the Sandbox name.">

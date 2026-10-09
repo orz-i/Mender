@@ -50,7 +50,7 @@ export function GenericProviderConfigForm({
   // The built-in Workspace plugin uses a resource selector instead of a raw
   // sandboxId input. LLMs/Agents must never be able to select execution placement.
   if (pluginId === "io.mender.provider.workspace") {
-    const available = (sandboxes ?? []).filter((item) => item.state === "ready" && item.backendAvailable && (item.backend === "local_workspace" || item.backend === "docker"));
+    const available = (sandboxes ?? []).filter((item) => item.state === "ready" && item.backendAvailable && (item.backend === "local_workspace" || item.backend === "docker" || item.backend === "daytona"));
     const selected = typeof value.sandboxId === "string" ? value.sandboxId : "";
     return <div className="space-y-3">
       <label className="block space-y-2 text-sm">
@@ -58,7 +58,7 @@ export function GenericProviderConfigForm({
         <select aria-label={t("Sandbox")} className="h-9 w-full rounded-lg border border-input bg-background px-3" value={selected} onChange={(e) => onChange({...value,sandboxId:e.target.value})}>
           <option value="">{t("Choose a sandbox")}</option>
           {!available.some((item)=>item.sandboxId===selected) && selected ? <option value={selected} disabled>{t("Unavailable sandbox")}</option> : null}
-          {available.map((item)=><option key={item.sandboxId} value={item.sandboxId}>{item.name} · {item.backend === "docker" ? t("Docker") : t(item.isolation === "host" ? "Host (not isolated)" : "Restricted host")}</option>)}
+          {available.map((item)=><option key={item.sandboxId} value={item.sandboxId}>{item.name} · {item.backend === "docker" ? t("Docker") : item.backend === "daytona" ? t("Daytona") : t(item.isolation === "host" ? "Host (not isolated)" : "Restricted host")}</option>)}
         </select>
       </label>
       <p className="text-xs leading-5 text-muted-foreground">{t("Workspace Tools share the selected Sandbox filesystem and its fixed isolation boundary.")}</p>

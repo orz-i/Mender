@@ -19,6 +19,7 @@ export type Tunnel = components["schemas"]["Tunnel"];
 export type Sandbox = components["schemas"]["Sandbox"];
 export type CreateLocalSandboxRequest = components["schemas"]["CreateLocalSandboxRequest"];
 export type CreateDockerSandboxRequest = components["schemas"]["CreateDockerSandboxRequest"];
+export type CreateDaytonaSandboxRequest = components["schemas"]["CreateDaytonaSandboxRequest"];
 export type SandboxBackends = components["schemas"]["SandboxBackends"];
 export type CreateOpenAITunnelRequest =
   components["schemas"]["CreateOpenAITunnelRequest"];
@@ -154,6 +155,8 @@ export interface MenderClient {
   getSandbox(sandboxId: string): Promise<Sandbox>;
   createLocalSandbox(body: CreateLocalSandboxRequest): Promise<Sandbox>;
   createDockerSandbox(body: CreateDockerSandboxRequest): Promise<Sandbox>;
+  createDaytonaSandbox(body: CreateDaytonaSandboxRequest): Promise<Sandbox>;
+  reconcileDaytonaSandbox(sandboxId: string): Promise<Sandbox>;
   getSandboxBackends(): Promise<SandboxBackends>;
   reconcileDockerSandbox(sandboxId: string): Promise<Sandbox>;
   startSandbox(sandboxId: string): Promise<Sandbox>;
@@ -493,6 +496,14 @@ export function createMenderClient(
 
     async createDockerSandbox(body: CreateDockerSandboxRequest) {
       const result = await client.POST("/sandboxes/docker", {body});
+      return requireData(result);
+    },
+    async createDaytonaSandbox(body: CreateDaytonaSandboxRequest) {
+      const result = await client.POST("/sandboxes/daytona", {body});
+      return requireData(result);
+    },
+    async reconcileDaytonaSandbox(sandboxId: string) {
+      const result = await client.POST("/sandboxes/{sandboxId}/daytona/reconcile", {params:{path:{sandboxId}}});
       return requireData(result);
     },
     async getSandboxBackends() {

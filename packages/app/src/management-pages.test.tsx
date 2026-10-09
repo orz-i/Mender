@@ -2255,7 +2255,7 @@ function renderApp(
     listSandboxes: vi.fn().mockResolvedValue({ sandboxes: [] }),
     getSandbox: vi.fn(),
     createLocalSandbox: vi.fn(),
-    getSandboxBackends: vi.fn().mockResolvedValue({ dockerAvailable: false, dockerStatus: "unavailable" }),
+    getSandboxBackends: vi.fn().mockResolvedValue({ dockerAvailable: false, dockerStatus: "unavailable", daytonaConfigured: false, daytonaStatus: "credential required" }),
     createDockerSandbox: vi.fn(),
     reconcileDockerSandbox: vi.fn(),
     ...client,

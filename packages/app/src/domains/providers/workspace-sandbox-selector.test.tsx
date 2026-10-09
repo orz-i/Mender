@@ -42,6 +42,7 @@ const remoteSandbox: Sandbox = {
   name: "Remote project",
   backend: "daytona",
   isolation: "remote",
+  backendAvailable: false,
 };
 
 describe("Workspace Sandbox selector", () => {

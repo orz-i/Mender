@@ -28,6 +28,10 @@ export function CallTool(toolID: string, $arguments: { [_ in string]?: any } | n
     return $Call.ByID(3440826094, toolID, $arguments);
 }
 
+export function CreateDaytonaSandbox(input: $models.CreateDaytonaSandboxInput): $CancellablePromise<$models.Sandbox> {
+    return $Call.ByID(1474299265, input);
+}
+
 export function CreateDockerSandbox(input: $models.CreateDockerSandboxInput): $CancellablePromise<$models.Sandbox> {
     return $Call.ByID(364657363, input);
 }
@@ -218,6 +222,10 @@ export function ListTunnels(): $CancellablePromise<$models.TunnelList> {
 
 export function RebindProvider(providerID: string, installationID: string, config: { [_ in string]?: any } | null): $CancellablePromise<$models.ProviderMutationResponse> {
     return $Call.ByID(1790042971, providerID, installationID, config);
+}
+
+export function ReconcileDaytonaSandbox(raw: string): $CancellablePromise<$models.Sandbox> {
+    return $Call.ByID(1361736761, raw);
 }
 
 export function ReconcileDockerSandbox(raw: string): $CancellablePromise<$models.Sandbox> {

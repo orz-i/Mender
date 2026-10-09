@@ -380,6 +380,12 @@ export function createDesktopMenderClient(): MenderClient {
     async getSandboxBackends() {
       return Service.GetSandboxBackends();
     },
+    async createDaytonaSandbox(body) {
+      return sandbox(await Service.CreateDaytonaSandbox(body));
+    },
+    async reconcileDaytonaSandbox(sandboxId) {
+      return sandbox(await Service.ReconcileDaytonaSandbox(sandboxId));
+    },
     async createDockerSandbox(body) {
       return sandbox(await Service.CreateDockerSandbox(body));
     },

@@ -9,6 +9,7 @@ export {
 export type {
     AuditList,
     AuditRecord,
+    CreateDaytonaSandboxInput,
     CreateDockerSandboxInput,
     CreateLocalSandboxInput,
     Credential,

@@ -22,10 +22,14 @@ const created: Sandbox = {
 };
 
 function showCreate(client: Partial<MenderClient>) {
+  const passed: Partial<MenderClient> = {
+    listCredentials: vi.fn().mockResolvedValue({credentials: []}),
+    ...client,
+  };
   render(
     <MemoryRouter initialEntries={["/sandboxes/new"]}>
       <Routes>
-        <Route path="/sandboxes/new" element={<CreateSandboxPage client={client as MenderClient} />} />
+        <Route path="/sandboxes/new" element={<CreateSandboxPage client={passed as MenderClient} />} />
         <Route path="/sandboxes/:sandboxId" element={<div>Sandbox detail route reached</div>} />
       </Routes>
     </MemoryRouter>,
