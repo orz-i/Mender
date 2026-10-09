@@ -478,7 +478,7 @@ See `phase-24-runtime-process-governance.md`.
 
 ## Phase 25 — Sandbox Execution Router & Sandbox Workspace Tools
 
-Status: In Progress (architecture accepted; implementation staged)
+Status: In Progress (Stage D complete; Sandbox Activity and security scan green; Stage E live Daytona acceptance pending)
 
 Goals:
 
@@ -491,4 +491,4 @@ Goals:
 
 Exit criteria: ADR-0035 accepted; backend/file/shell parity verified; governance denial-before-side-effects and no unsafe host fallback proved; Workspace v1 forward migration preserves identities; Sandbox lifecycle/UI/API are operational; full repository/race/security gates pass.
 
-See `phase-25-sandbox-execution-router.md`. The phase plan is a proposal, not an implementation completion claim.
+See `phase-25-sandbox-execution-router.md` for delivered implementation evidence. Phase 25 remains open solely for the unverified live Daytona Stage E acceptance and remote resource cleanup confirmation; no additional Stage D/E subdivisions are planned.
