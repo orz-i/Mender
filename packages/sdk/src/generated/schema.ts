@@ -567,6 +567,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/sandboxes/{sandboxId}/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Last 1-100 non-secret Sandbox admission and successful lifecycle events, newest first. No credential, Tool arguments or principal references. */
+        get: operations["getSandboxActivity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/sandboxes/{sandboxId}/daytona/reconcile": {
         parameters: {
             query?: never;
@@ -1475,6 +1492,27 @@ export interface components {
             externalTunnelId: string;
             /** @description Mender Credential Reference containing the OpenAI tunnel runtime API key. */
             runtimeCredentialRef: string;
+        };
+        SandboxActivity: {
+            sandboxId: string;
+            limit: number;
+            events: components["schemas"]["SandboxActivityEvent"][];
+        };
+        SandboxActivityEvent: {
+            /** @enum {string} */
+            kind: "admission" | "lifecycle";
+            /** @enum {string} */
+            action: "sandbox.provision" | "sandbox.acquire" | "sandbox.start" | "sandbox.stop" | "sandbox.destroy";
+            /** @enum {string} */
+            status: "admitted" | "denied" | "failed" | "completed";
+            /** Format: date-time */
+            occurredAt: string;
+            principalKind: string;
+            origin: string;
+            policyDecision?: string;
+            generation?: number;
+            previousState?: string;
+            nextState?: string;
         };
         SandboxBackends: {
             dockerAvailable: boolean;
@@ -2782,6 +2820,33 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+        };
+    };
+    getSandboxActivity: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                sandboxId: components["parameters"]["SandboxId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Durable Sandbox activity history without private payloads */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SandboxActivity"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     reconcileDaytonaSandbox: {

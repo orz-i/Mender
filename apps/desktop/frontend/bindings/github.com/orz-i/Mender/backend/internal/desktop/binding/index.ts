@@ -47,6 +47,8 @@ export type {
     RuntimeIsolation,
     RuntimeUsage,
     Sandbox,
+    SandboxActivity,
+    SandboxActivityEvent,
     SandboxList,
     SkillDeployment,
     SkillDeploymentList,

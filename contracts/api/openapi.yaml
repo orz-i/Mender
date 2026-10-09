@@ -744,6 +744,25 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
+  /sandboxes/{sandboxId}/activity:
+    get:
+      operationId: getSandboxActivity
+      description: Last 1-100 non-secret Sandbox admission and successful lifecycle events, newest first. No credential, Tool arguments or principal references.
+      parameters:
+        - $ref: '#/components/parameters/SandboxId'
+        - in: query
+          name: limit
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+      responses:
+        '200':
+          description: Durable Sandbox activity history without private payloads
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SandboxActivity' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /sandboxes/{sandboxId}/daytona/reconcile:
     post:
       operationId: reconcileDaytonaSandbox
@@ -1927,6 +1946,32 @@ components:
           type: string
           description: Mender Credential Reference containing the OpenAI tunnel runtime API key.
       additionalProperties: false
+    SandboxActivity:
+      type: object
+      additionalProperties: false
+      required: [sandboxId, limit, events]
+      properties:
+        sandboxId: { type: string, pattern: '^sbx_[0-9a-f]{32}$' }
+        limit: { type: integer, minimum: 1, maximum: 100 }
+        events:
+          type: array
+          maxItems: 100
+          items: { $ref: '#/components/schemas/SandboxActivityEvent' }
+    SandboxActivityEvent:
+      type: object
+      additionalProperties: false
+      required: [kind, action, status, occurredAt, principalKind, origin]
+      properties:
+        kind: { type: string, enum: [admission, lifecycle] }
+        action: { type: string, enum: ['sandbox.provision', 'sandbox.acquire', 'sandbox.start', 'sandbox.stop', 'sandbox.destroy'] }
+        status: { type: string, enum: [admitted, denied, failed, completed] }
+        occurredAt: { type: string, format: date-time }
+        principalKind: { type: string }
+        origin: { type: string }
+        policyDecision: { type: string }
+        generation: { type: integer, minimum: 1 }
+        previousState: { type: string }
+        nextState: { type: string }
     SandboxBackends:
       type: object
       required: [dockerAvailable, dockerStatus, daytonaConfigured, daytonaStatus]

@@ -20,6 +20,25 @@ type Sandbox struct {
 	ActiveLeases     int    `json:"activeLeases"`
 	BackendAvailable bool   `json:"backendAvailable"`
 }
+
+// Activity projection omits subject references, policy reasons and secrets.
+type SandboxActivityEvent struct {
+	Kind           string `json:"kind"`
+	Action         string `json:"action"`
+	Status         string `json:"status"`
+	OccurredAt     string `json:"occurredAt"`
+	PrincipalKind  string `json:"principalKind"`
+	Origin         string `json:"origin"`
+	PolicyDecision string `json:"policyDecision,omitempty"`
+	Generation     uint64 `json:"generation,omitempty"`
+	PreviousState  string `json:"previousState,omitempty"`
+	NextState      string `json:"nextState,omitempty"`
+}
+type SandboxActivity struct {
+	SandboxID string                 `json:"sandboxId"`
+	Events    []SandboxActivityEvent `json:"events"`
+	Limit     int                    `json:"limit"`
+}
 type SandboxList struct {
 	Sandboxes []Sandbox `json:"sandboxes"`
 }

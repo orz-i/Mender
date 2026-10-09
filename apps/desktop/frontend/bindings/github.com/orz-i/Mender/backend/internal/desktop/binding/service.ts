@@ -148,6 +148,10 @@ export function GetSandbox(sandboxID: string): $CancellablePromise<$models.Sandb
     return $Call.ByID(1347185727, sandboxID);
 }
 
+export function GetSandboxActivity(sandboxID: string, limit: number): $CancellablePromise<$models.SandboxActivity> {
+    return $Call.ByID(1389700158, sandboxID, limit);
+}
+
 export function GetSandboxBackends(): $CancellablePromise<$models.DockerBackendStatus> {
     return $Call.ByID(854635658);
 }

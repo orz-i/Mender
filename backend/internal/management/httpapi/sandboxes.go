@@ -2,7 +2,9 @@ package httpapi
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
+	"strconv"
 
 	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
 	sandboxapplication "github.com/orz-i/Mender/backend/internal/sandbox/application"
@@ -354,4 +356,33 @@ func (h *Handler) reconcileDaytonaSandbox(w http.ResponseWriter, r *http.Request
 		return
 	}
 	writeJSON(w, http.StatusOK, state)
+}
+
+// getSandboxActivity is a bounded metadata-only view. No user-supplied path,
+// Principal reference, Policy reason or Tool payload is ever projected.
+func (h *Handler) getSandboxActivity(w http.ResponseWriter, r *http.Request) {
+	id, err := sandboxdomain.ParseID(r.PathValue("sandboxId"))
+	if err != nil {
+		writeAPIError(w, http.StatusBadRequest, "validation_error", err)
+		return
+	}
+	limit := 50
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		parsed, parseErr := strconv.Atoi(raw)
+		if parseErr != nil || parsed < 1 || parsed > 100 {
+			writeAPIError(w, http.StatusBadRequest, "validation_error", fmt.Errorf("sandbox Activity limit must be 1..100"))
+			return
+		}
+		limit = parsed
+	}
+	result, err := h.runtime.Sandboxes.Activity(r.Context(), id, limit)
+	if errors.Is(err, sandboxdomain.ErrNotFound) {
+		writeAPIError(w, http.StatusNotFound, "not_found", err)
+		return
+	}
+	if err != nil {
+		writeKnownError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
 }

@@ -29,6 +29,8 @@ import type {
   ToolSummary,
   Tunnel,
   Sandbox,
+  SandboxActivity,
+  SandboxActivityEvent,
 } from "@mender/sdk";
 
 import {
@@ -63,6 +65,7 @@ import {
   type ToolSummary as BindingToolSummary,
   type Tunnel as BindingTunnel,
   type Sandbox as BindingSandbox,
+  type SandboxActivity as BindingSandboxActivity,
 } from "../bindings/github.com/orz-i/Mender/backend/internal/desktop/binding";
 
 export async function installDesktopProviderPlugin(
@@ -373,6 +376,9 @@ export function createDesktopMenderClient(): MenderClient {
       return sandbox(await Service.GetSandbox(sandboxId));
     },
 
+    async getSandboxActivity(sandboxId, limit = 50) {
+      return sandboxActivity(await Service.GetSandboxActivity(sandboxId, limit));
+    },
     async createLocalSandbox(body) {
       return sandbox(await Service.CreateLocalSandbox(body));
     },
@@ -1263,6 +1269,25 @@ function mcpServerInstance(
     ...(value.tunnelStatus === undefined
       ? {}
       : { tunnelStatus: tunnelStatus(value.tunnelStatus) }),
+  };
+}
+
+function sandboxActivity(value: BindingSandboxActivity): SandboxActivity {
+  return {
+    sandboxId:value.sandboxId,
+    limit:value.limit,
+    events:(value.events ?? []).map((event):SandboxActivityEvent=>({
+      kind:event.kind as SandboxActivityEvent["kind"],
+      action:event.action as SandboxActivityEvent["action"],
+      status:event.status as SandboxActivityEvent["status"],
+      occurredAt:event.occurredAt,
+      principalKind:event.principalKind,
+      origin:event.origin,
+      ...(event.policyDecision?{policyDecision:event.policyDecision}:{}),
+      ...(event.generation!==undefined && event.generation>0?{generation:event.generation}:{}),
+      ...(event.previousState?{previousState:event.previousState}:{}),
+      ...(event.nextState?{nextState:event.nextState}:{}),
+    })),
   };
 }
 

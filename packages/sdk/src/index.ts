@@ -47,6 +47,8 @@ export type {
   RuntimeGovernanceStatus,
   RuntimeIsolation,
   Sandbox,
+  SandboxActivity,
+  SandboxActivityEvent,
   SearchToolsInput,
   SkillDeployment,
   SkillInspection,

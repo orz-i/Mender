@@ -362,6 +362,28 @@ export interface Sandbox {
     "backendAvailable": boolean;
 }
 
+export interface SandboxActivity {
+    "sandboxId": string;
+    "events": SandboxActivityEvent[] | null;
+    "limit": number;
+}
+
+/**
+ * Activity projection omits subject references, policy reasons and secrets.
+ */
+export interface SandboxActivityEvent {
+    "kind": string;
+    "action": string;
+    "status": string;
+    "occurredAt": string;
+    "principalKind": string;
+    "origin": string;
+    "policyDecision"?: string;
+    "generation"?: number;
+    "previousState"?: string;
+    "nextState"?: string;
+}
+
 export interface SandboxList {
     "sandboxes": Sandbox[] | null;
 }

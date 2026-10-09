@@ -87,6 +87,28 @@ func (s *Service) ListSandboxes() (SandboxList, error) {
 	}
 	return SandboxList{Sandboxes: results}, nil
 }
+func (s *Service) GetSandboxActivity(sandboxID string, limit int) (SandboxActivity, error) {
+	id, err := sandboxdomain.ParseID(sandboxID)
+	if err != nil {
+		return SandboxActivity{}, err
+	}
+	activity, err := s.runtime.Sandboxes.Activity(s.ctx, id, limit)
+	if err != nil {
+		return SandboxActivity{}, err
+	}
+	projected := make([]SandboxActivityEvent, 0, len(activity.Events))
+	for _, event := range activity.Events {
+		projected = append(projected, SandboxActivityEvent{
+			Kind: event.Kind, Action: event.Action, Status: event.Status,
+			OccurredAt:    event.OccurredAt.UTC().Format(time.RFC3339Nano),
+			PrincipalKind: event.PrincipalKind, Origin: event.Origin,
+			PolicyDecision: event.PolicyDecision, Generation: event.Generation,
+			PreviousState: event.PreviousState, NextState: event.NextState,
+		})
+	}
+	return SandboxActivity{SandboxID: activity.SandboxID, Events: projected, Limit: activity.Limit}, nil
+}
+
 func (s *Service) GetSandbox(sandboxID string) (Sandbox, error) {
 	id, err := sandboxdomain.ParseID(sandboxID)
 	if err != nil {

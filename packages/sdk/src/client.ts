@@ -17,6 +17,8 @@ export type InvocationResult = components["schemas"]["InvocationResult"];
 export type Profile = components["schemas"]["Profile"];
 export type Tunnel = components["schemas"]["Tunnel"];
 export type Sandbox = components["schemas"]["Sandbox"];
+export type SandboxActivity = components["schemas"]["SandboxActivity"];
+export type SandboxActivityEvent = components["schemas"]["SandboxActivityEvent"];
 export type CreateLocalSandboxRequest = components["schemas"]["CreateLocalSandboxRequest"];
 export type CreateDockerSandboxRequest = components["schemas"]["CreateDockerSandboxRequest"];
 export type CreateDaytonaSandboxRequest = components["schemas"]["CreateDaytonaSandboxRequest"];
@@ -153,6 +155,7 @@ export interface MenderClient {
   setProfileTunnel(slug: string, body: SetProfileTunnelRequest): Promise<Profile>;
   listSandboxes(): Promise<{ sandboxes: Sandbox[] }>;
   getSandbox(sandboxId: string): Promise<Sandbox>;
+  getSandboxActivity(sandboxId: string, limit?: number): Promise<SandboxActivity>;
   createLocalSandbox(body: CreateLocalSandboxRequest): Promise<Sandbox>;
   createDockerSandbox(body: CreateDockerSandboxRequest): Promise<Sandbox>;
   createDaytonaSandbox(body: CreateDaytonaSandboxRequest): Promise<Sandbox>;
@@ -489,6 +492,10 @@ export function createMenderClient(
       return requireData(result);
     },
 
+    async getSandboxActivity(sandboxId, limit = 50) {
+      const result = await client.GET("/sandboxes/{sandboxId}/activity", {params:{path:{sandboxId},query:{limit}}});
+      return requireData(result);
+    },
     async createLocalSandbox(body: CreateLocalSandboxRequest) {
       const result = await client.POST("/sandboxes/local", {body});
       return requireData(result);
