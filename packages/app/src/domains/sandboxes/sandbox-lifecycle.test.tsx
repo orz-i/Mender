@@ -9,7 +9,7 @@ afterEach(()=>{cleanup();vi.restoreAllMocks();});
 const local:Sandbox={
  sandboxId:"sbx_0123456789abcdef0123456789abcdef",
  name:"Test Sandbox",backend:"local_workspace",isolation:"host",state:"ready",
- localRoot:"/tmp/test-sandbox",ownerKind:"local_user",ownerRef:"owner",activeLeases:0,
+ localRoot:"/tmp/test-sandbox",ownerKind:"local_user",ownerRef:"owner",activeLeases:0,backendAvailable:true,
 };
 function mount(client:Partial<MenderClient>){
  const effective=client as MenderClient;

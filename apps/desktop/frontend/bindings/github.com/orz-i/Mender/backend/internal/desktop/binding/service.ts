@@ -28,6 +28,10 @@ export function CallTool(toolID: string, $arguments: { [_ in string]?: any } | n
     return $Call.ByID(3440826094, toolID, $arguments);
 }
 
+export function CreateDockerSandbox(input: $models.CreateDockerSandboxInput): $CancellablePromise<$models.Sandbox> {
+    return $Call.ByID(364657363, input);
+}
+
 export function CreateEnvironmentCredential($namespace: string, name: string, displayName: string, environmentVariable: string): $CancellablePromise<$models.Credential> {
     return $Call.ByID(3148533732, $namespace, name, displayName, environmentVariable);
 }
@@ -140,6 +144,10 @@ export function GetSandbox(sandboxID: string): $CancellablePromise<$models.Sandb
     return $Call.ByID(1347185727, sandboxID);
 }
 
+export function GetSandboxBackends(): $CancellablePromise<$models.DockerBackendStatus> {
+    return $Call.ByID(854635658);
+}
+
 export function GetSkillInstallation(installationID: string): $CancellablePromise<$models.SkillInspection> {
     return $Call.ByID(2370910789, installationID);
 }
@@ -210,6 +218,10 @@ export function ListTunnels(): $CancellablePromise<$models.TunnelList> {
 
 export function RebindProvider(providerID: string, installationID: string, config: { [_ in string]?: any } | null): $CancellablePromise<$models.ProviderMutationResponse> {
     return $Call.ByID(1790042971, providerID, installationID, config);
+}
+
+export function ReconcileDockerSandbox(raw: string): $CancellablePromise<$models.Sandbox> {
+    return $Call.ByID(3611398827, raw);
 }
 
 export function RemoveProfileTool(slug: string, toolID: string): $CancellablePromise<$models.Profile> {

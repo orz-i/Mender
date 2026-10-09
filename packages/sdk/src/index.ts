@@ -14,6 +14,8 @@ export type {
   CreateNativeCredentialRequest,
   CreateOpenAITunnelRequest,
   CreateLocalSandboxRequest,
+  CreateDockerSandboxRequest,
+  SandboxBackends,
   CreateProfileRequest,
   CreateStdioProviderRequest,
   Credential,

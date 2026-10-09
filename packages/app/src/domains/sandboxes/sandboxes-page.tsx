@@ -72,7 +72,7 @@ export function SandboxesPage({ client }: { client: MenderClient }) {
               <TableCell className="font-medium">{item.name}</TableCell>
               <TableCell>{sandboxBackend(item)}</TableCell>
               <TableCell>{isolationLabel(item.isolation)}</TableCell>
-              <TableCell><Badge variant="outline">{item.state === "ready" ? t("Ready") : item.state}</Badge></TableCell>
+              <TableCell><Badge variant="outline">{item.backendAvailable ? (item.state === "ready" ? t("Ready") : item.state) : t("Backend unavailable")}</Badge></TableCell>
               <TableCell className="max-w-[240px] truncate font-mono text-xs text-muted-foreground" title={item.localRoot}>{item.localRoot || "—"}</TableCell>
               <TableCell className="text-right"><Button size="sm" variant="outline" onClick={()=>{void navigate(`/sandboxes/${item.sandboxId}`);}}>{t("View")}</Button></TableCell>
             </TableRow>)}
@@ -84,71 +84,101 @@ export function SandboxesPage({ client }: { client: MenderClient }) {
   </>;
 }
 
-export function CreateSandboxPage({ client }: { client: MenderClient }) {
-  const navigate = useNavigate();
-  const [step, setStep] = useState<"backend"|"configure"|"review">("backend");
-  const [name, setName] = useState("");
-  const [root, setRoot] = useState("");
-  const [isolation, setIsolation] = useState<""|"host"|"restricted_host">("");
-  const [restrictedAvailable, setRestrictedAvailable] = useState(false);
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    let active = true;
-    void client.getRuntimeGovernance().then((info)=>{
-      if (active) setRestrictedAvailable(info.backend.restrictedHostAvailable);
-    }).catch((reason: unknown)=>{if(active)setError(errorMessage(reason));});
-    return ()=>{active=false;};
-  },[client]);
-
-  async function create(){
-    if (!name.trim() || !root.trim() || isolation === "") return;
-    setBusy(true);setError("");
-    try {
-      const sandbox = await client.createLocalSandbox({name:name.trim(), root:root.trim(), isolation});
-      void navigate(`/sandboxes/${sandbox.sandboxId}`);
-    } catch(reason) {setError(errorMessage(reason));setBusy(false);}
-  }
-
-  return <>
-    <PageHeader actions={<Button variant="outline" onClick={()=>{void navigate("/sandboxes");}}>{t("Back to sandboxes")}</Button>}/>
-    {error ? <ErrorNotice message={error}/> : null}
-    <DataPanel title="Create sandbox" description="Choose a backend, configure isolation, then review the Sandbox authority before provisioning.">
-      <div className="space-y-6 p-5">
-        {step === "backend" ? <div className="grid gap-3 sm:grid-cols-2">
-          <button type="button" onClick={()=>setStep("configure")} className="rounded-xl border border-primary/50 bg-primary/5 p-5 text-left transition hover:bg-primary/10 focus-visible:outline-2 focus-visible:outline-primary">
-            <BoxIcon className="mb-3 size-6" aria-hidden="true"/><p className="font-medium">{t("Local workspace")}</p>
-            <p className="mt-1 text-xs leading-5 text-muted-foreground">{t("Host and restricted-host execution. Not a container or VM.")}</p>
-          </button>
-          {(["Docker","Daytona","E2B"] as const).map((item)=><div key={item} aria-disabled="true" className="rounded-xl border border-border bg-muted/20 p-5 opacity-65">
-            <BoxIcon className="mb-3 size-6" aria-hidden="true"/><p className="font-medium">{item} · {t("Planned")}</p>
-            <p className="mt-1 text-xs text-muted-foreground">{t("Backend not yet implemented")}</p>
-          </div>)}
-        </div> : null}
-        {step === "configure" ? <div className="max-w-xl space-y-4">
-          <label className="block space-y-1.5 text-sm"><span>{t("Sandbox name")}</span><Input aria-label={t("Sandbox name")} value={name} onChange={e=>setName(e.target.value)} maxLength={160}/></label>
-          <label className="block space-y-1.5 text-sm"><span>{t("Absolute local directory")}</span><Input aria-label={t("Absolute local directory")} value={root} onChange={e=>setRoot(e.target.value)} placeholder={t("/Users/example/project")}/></label>
-          <label className="block space-y-1.5 text-sm"><span>{t("Isolation")}</span>
-            <select aria-label={t("Isolation")} value={isolation} onChange={e=>setIsolation(e.target.value as ""|"host"|"restricted_host")} className="h-9 w-full rounded-lg border border-input bg-background px-3">
-              <option value="">{t("Choose isolation")}</option>
-              <option value="restricted_host" disabled={!restrictedAvailable}>{t("Restricted host")}{!restrictedAvailable ? ` · ${t("Unavailable")}` : ""}</option>
-              <option value="host">{t("Host (not isolated)")}</option>
-            </select>
-          </label>
-          <p className="text-xs leading-5 text-muted-foreground">{t("Isolation choice is persisted per Sandbox; changing global Runtime settings will not weaken it.")}</p>
-          <div className="flex gap-2"><Button variant="outline" onClick={()=>setStep("backend")}>{t("Back")}</Button><Button disabled={!name.trim()||!root.trim()||!isolation} onClick={()=>setStep("review")}>{t("Review")}</Button></div>
-        </div> : null}
-        {step === "review" ? <div className="max-w-xl space-y-4 text-sm">
-          <p className="font-medium">{t("Review Sandbox authority")}</p>
-          <Metadata name={t("Name")} value={name}/><Metadata name={t("Backend")} value={t("Local workspace")}/>
-          <Metadata name={t("Workspace")} value={root}/><Metadata name={t("Isolation")} value={isolationLabel(isolation)}/>
-          {isolation === "host" ? <div role="alert" className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-sm">{t("Host mode is not isolated and uses the Runtime user's local file and process permissions.")}</div> : null}
-          <div className="flex gap-2"><Button variant="outline" disabled={busy} onClick={()=>setStep("configure")}>{t("Back")}</Button><Button disabled={busy} onClick={()=>void create()}>{busy?t("Creating…"):t("Create sandbox")}</Button></div>
-        </div> : null}
+export function CreateSandboxPage({client}:{client:MenderClient}) {
+ const navigate=useNavigate();
+ const [step,setStep]=useState<"backend"|"configure"|"review">("backend");
+ const [selected,setSelected]=useState<"local_workspace"|"docker">("local_workspace");
+ const [name,setName]=useState("");
+ const [root,setRoot]=useState("");
+ const [isolation,setIsolation]=useState<""|"host"|"restricted_host">("");
+ const [restrictedAvailable,setRestrictedAvailable]=useState(false);
+ const [dockerAvailable,setDockerAvailable]=useState(false);
+ const [dockerStatus,setDockerStatus]=useState("");
+ const [imageDigest,setImageDigest]=useState("");
+ const [userId,setUserId]=useState(10001);
+ const [groupId,setGroupId]=useState(10001);
+ const [cpuMilli,setCpuMilli]=useState(1000);
+ const [memoryMiB,setMemoryMiB]=useState(512);
+ const [workspaceMiB,setWorkspaceMiB]=useState(64);
+ const [pids,setPids]=useState(64);
+ const [error,setError]=useState("");
+ const [busy,setBusy]=useState(false);
+ useEffect(()=>{
+  let active=true;
+  void client.getRuntimeGovernance().then(info=>{if(active)setRestrictedAvailable(info.backend.restrictedHostAvailable);}).catch((reason:unknown)=>{if(active)setError(errorMessage(reason));});
+  void client.getSandboxBackends().then(info=>{if(active){setDockerAvailable(info.dockerAvailable);setDockerStatus(info.dockerStatus);}}).catch((reason:unknown)=>{if(active)setDockerStatus(errorMessage(reason));});
+  return ()=>{active=false;};
+ },[client]);
+ const digestOK=/^[a-z0-9]+(?:[.-][a-z0-9]+)+(?:\/[a-z0-9]+(?:[._-][a-z0-9]+)*){2,}@sha256:[0-9a-f]{64}$/.test(imageDigest);
+ const dockerConfigValid=dockerAvailable && digestOK && userId>=1000 && userId<=65534 && groupId>=1000 && groupId<=65534 && cpuMilli>=100 && cpuMilli<=8000 && memoryMiB>=256 && memoryMiB<=16384 && workspaceMiB>=64 && workspaceMiB<=2048 && workspaceMiB<=memoryMiB && pids>=16 && pids<=512;
+ const formValid=Boolean(name.trim()) && (selected==="docker"?dockerConfigValid:Boolean(root.trim()&&isolation));
+ async function create(){
+  if(!formValid||busy)return;
+  setBusy(true);setError("");
+  try{
+   const sandbox=selected==="docker"?await client.createDockerSandbox({name:name.trim(),imageDigest,userId,groupId,cpuMilli,memoryMiB,workspaceMiB,pids}):await client.createLocalSandbox({name:name.trim(),root:root.trim(),isolation:isolation as "host"|"restricted_host"});
+   void navigate(`/sandboxes/${sandbox.sandboxId}`);
+  }catch(reason){setError(errorMessage(reason));setBusy(false);}
+ }
+ function numberField(label:string,value:number,onChange:(next:number)=>void,min:number,max:number){return <label className="block space-y-1.5 text-sm"><span>{label}</span><Input type="number" min={min} max={max} value={value} onChange={e=>onChange(Number(e.target.value))}/></label>;}
+ return <>
+  <PageHeader actions={<Button variant="outline" onClick={()=>{void navigate("/sandboxes");}}>{t("Back to sandboxes")}</Button>}/>
+  {error?<ErrorNotice message={error}/>:null}
+  <DataPanel title="Create sandbox" description="Choose a backend, configure isolation, then review the Sandbox authority before provisioning.">
+   <div className="space-y-6 p-5">
+    {step==="backend"?<div className="grid gap-3 sm:grid-cols-2">
+     <button type="button" onClick={()=>{setSelected("local_workspace");setStep("configure");}} className="rounded-xl border border-primary/50 bg-primary/5 p-5 text-left transition hover:bg-primary/10 focus-visible:outline-2 focus-visible:outline-primary">
+      <BoxIcon className="mb-3 size-6" aria-hidden="true"/><p className="font-medium">{t("Local workspace")}</p>
+      <p className="mt-1 text-xs leading-5 text-muted-foreground">{t("Host and restricted-host execution. Not a container or VM.")}</p>
+     </button>
+     {dockerAvailable?<button type="button" onClick={()=>{setSelected("docker");setStep("configure");}} className="rounded-xl border border-primary/50 bg-primary/5 p-5 text-left transition hover:bg-primary/10 focus-visible:outline-2 focus-visible:outline-primary">
+      <BoxIcon className="mb-3 size-6" aria-hidden="true"/><p className="font-medium">{t("Docker")}</p>
+      <p className="mt-1 text-xs leading-5 text-muted-foreground">{t("Isolated, locally cached immutable image; no network, no host mounts.")}</p>
+     </button>:<div aria-disabled="true" className="rounded-xl border border-border bg-muted/20 p-5 opacity-65">
+      <BoxIcon className="mb-3 size-6" aria-hidden="true"/><p className="font-medium">{t("Docker")} · {t("Unavailable")}</p>
+      <p className="mt-1 break-words text-xs text-muted-foreground">{dockerStatus||t("Configure MENDER_DOCKER_SOCKET on the Runtime host.")}</p>
+     </div>}
+     {(["Daytona","E2B"] as const).map(item=><div key={item} aria-disabled="true" className="rounded-xl border border-border bg-muted/20 p-5 opacity-65">
+      <BoxIcon className="mb-3 size-6" aria-hidden="true"/><p className="font-medium">{item} · {t("Planned")}</p>
+      <p className="mt-1 text-xs text-muted-foreground">{t("Backend not yet implemented")}</p>
+     </div>)}
+    </div>:null}
+    {step==="configure"?<div className="max-w-xl space-y-4">
+     <label className="block space-y-1.5 text-sm"><span>{t("Sandbox name")}</span><Input aria-label={t("Sandbox name")} value={name} maxLength={160} onChange={e=>setName(e.target.value)}/></label>
+     {selected==="local_workspace"?<>
+      <label className="block space-y-1.5 text-sm"><span>{t("Absolute local directory")}</span><Input aria-label={t("Absolute local directory")} value={root} onChange={e=>setRoot(e.target.value)} placeholder={t("/Users/example/project")}/></label>
+      <label className="block space-y-1.5 text-sm"><span>{t("Isolation")}</span><select aria-label={t("Isolation")} className="h-9 w-full rounded-lg border border-input bg-background px-3" value={isolation} onChange={e=>setIsolation(e.target.value as ""|"host"|"restricted_host")}>
+       <option value="">{t("Choose isolation")}</option><option value="restricted_host" disabled={!restrictedAvailable}>{t("Restricted host")}{!restrictedAvailable?` · ${t("Unavailable")}`:""}</option><option value="host">{t("Host (not isolated)")}</option>
+      </select></label>
+      <p className="text-xs leading-5 text-muted-foreground">{t("Isolation choice is persisted per Sandbox; changing global Runtime settings will not weaken it.")}</p>
+     </>:<>
+      <label className="block space-y-1.5 text-sm"><span>{t("Immutable image digest")}</span><Input aria-label={t("Immutable image digest")} value={imageDigest} onChange={e=>setImageDigest(e.target.value.trim())} placeholder={t("docker.io/library/alpine@sha256:…")} autoComplete="off"/></label>
+      <p className="text-xs leading-5 text-muted-foreground">{t("The exact image digest must already be cached locally. Mender never pulls images automatically.")}</p>
+      <div className="grid gap-3 sm:grid-cols-2">
+       {numberField(t("User ID (non-root)"),userId,setUserId,1000,65534)}
+       {numberField(t("Group ID (non-root)"),groupId,setGroupId,1000,65534)}
+       {numberField(t("CPU (millicores)"),cpuMilli,setCpuMilli,100,8000)}
+       {numberField(t("Memory (MiB)"),memoryMiB,setMemoryMiB,256,16384)}
+       {numberField(t("Workspace tmpfs (MiB)"),workspaceMiB,setWorkspaceMiB,64,2048)}
+       {numberField(t("PID limit"),pids,setPids,16,512)}
       </div>
-    </DataPanel>
-  </>;
+      <p className="text-xs leading-5 text-muted-foreground">{t("Docker execution uses read-only rootfs, non-root user, no network or host mounts. Workspace files are ephemeral across restarts.")}</p>
+     </>}
+     <div className="flex gap-2"><Button variant="outline" onClick={()=>setStep("backend")}>{t("Back")}</Button><Button disabled={!formValid} onClick={()=>setStep("review")}>{t("Review")}</Button></div>
+    </div>:null}
+    {step==="review"?<div className="max-w-xl space-y-4 text-sm">
+     <p className="font-medium">{t("Review Sandbox authority")}</p>
+     <Metadata name={t("Name")} value={name}/><Metadata name={t("Backend")} value={selected==="docker"?"Docker":t("Local workspace")}/>
+     {selected==="local_workspace"?<><Metadata name={t("Workspace")} value={root}/><Metadata name={t("Isolation")} value={isolationLabel(isolation)}/></>:<>
+      <Metadata name={t("Immutable image digest")} value={imageDigest}/><Metadata name={t("Isolation")} value={t("Container")}/>
+      <p className="rounded-lg border border-amber-500/40 p-3 text-xs">{t("Docker Workspace files are ephemeral; stopping and starting recreates the container and erases scratch files.")}</p>
+     </>}
+     {selected==="local_workspace"&&isolation==="host"?<div role="alert" className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-sm">{t("Host mode is not isolated and uses the Runtime user's local file and process permissions.")}</div>:null}
+     <div className="flex gap-2"><Button variant="outline" disabled={busy} onClick={()=>setStep("configure")}>{t("Back")}</Button><Button disabled={busy||!formValid} onClick={()=>void create()}>{busy?t("Creating…"):t("Create sandbox")}</Button></div>
+    </div>:null}
+   </div>
+  </DataPanel>
+ </>;
 }
 
 export function SandboxDetailPage({client}:{client:MenderClient}) {
@@ -167,6 +197,7 @@ export function SandboxDetailPage({client}:{client:MenderClient}) {
   async function changeLifecycle(action:"start"|"stop"|"destroy"){
     if(!item||busy)return;
     if(action==="destroy" && !window.confirm(t('Destroy Sandbox "{{name}}"? This only tombstones the Sandbox; host files are never deleted.',{name:item.name})))return;
+    if(action==="start" && item.backend==="docker" && !window.confirm(t("Docker Sandbox restarts with an empty workspace. Continue?")))return;
     setBusy(true);setError("");
     try{
       const next=action==="start"?await client.startSandbox(item.sandboxId):action==="stop"?await client.stopSandbox(item.sandboxId):await client.destroySandbox(item.sandboxId);
@@ -174,16 +205,24 @@ export function SandboxDetailPage({client}:{client:MenderClient}) {
     }catch(reason){setError(errorMessage(reason));}
     finally{setBusy(false);}
   }
-  const local=item?.backend==="local_workspace";
+  const manageable=Boolean(item?.backendAvailable && (item.backend==="local_workspace" || item.backend==="docker"));
   const noActiveLeases=item?.activeLeases===0;
-  const canStart=local && item?.state==="stopped";
-  const canStop=local && item?.state==="ready";
-  const canDestroy=local && (item?.state==="ready"||item?.state==="stopped");
+  const canStart=manageable && item?.state==="stopped";
+  const canStop=manageable && item?.state==="ready";
+  const canDestroy=manageable && (item?.state==="ready"||item?.state==="stopped");
+  async function reconcile(){
+    if(!item||busy||item.backend!=="docker")return;
+    setBusy(true);setError("");
+    try{setItem(await client.reconcileDockerSandbox(item.sandboxId));}
+    catch(reason){setError(errorMessage(reason));}
+    finally{setBusy(false);}
+  }
   return <>
     <PageHeader actions={<div className="flex flex-wrap justify-end gap-2">
       {canStart?<Button disabled={busy||!noActiveLeases} onClick={()=>void changeLifecycle("start")}>{t("Start sandbox")}</Button>:null}
       {canStop?<Button variant="outline" disabled={busy||!noActiveLeases} onClick={()=>void changeLifecycle("stop")}>{t("Stop sandbox")}</Button>:null}
       {canDestroy?<Button variant="destructive" disabled={busy||!noActiveLeases} onClick={()=>void changeLifecycle("destroy")}>{t("Destroy sandbox")}</Button>:null}
+      {item?.backend==="docker" && item.backendAvailable && item.state==="unknown"?<Button disabled={busy||!noActiveLeases} onClick={()=>void reconcile()}>{t("Reconcile Docker sandbox")}</Button>:null}
       <Button variant="outline" onClick={()=>{void navigate("/sandboxes");}}>{t("Back to sandboxes")}</Button>
     </div>}/>
     {error || !sandboxId ? <ErrorNotice message={error || t("The requested item was not found.")}/> : null}
@@ -194,9 +233,11 @@ export function SandboxDetailPage({client}:{client:MenderClient}) {
           <Metadata name={t("Isolation")} value={isolationLabel(item.isolation)}/><Metadata name={t("State")} value={sandboxStateLabel(item.state)}/>
           <Metadata name={t("Workspace")} value={item.localRoot||"—"}/><Metadata name={t("Owner type")} value={item.ownerKind}/>
           <Metadata name={t("Active execution leases")} value={String(item.activeLeases)}/>
+          <Metadata name={t("Backend status")} value={item.backendAvailable?t("Available"):t("Unavailable")}/>
         </div>
         {item.activeLeases>0?<p role="status" className="border-t border-border px-5 py-3 text-xs text-amber-700 dark:text-amber-300">{t("Cannot change lifecycle while a Sandbox execution lease is active.")}</p>:null}
         {item.state==="destroyed"?<p role="status" className="border-t border-border px-5 py-3 text-xs text-muted-foreground">{t("Host files remain untouched after Sandbox destruction.")}</p>:null}
+        {item.backend==="docker"?<p role="status" className="border-t border-border px-5 py-3 text-xs text-muted-foreground">{t("Docker Workspace scratch is ephemeral. Stop/Start recreates the container; destruction never removes host files.")}</p>:null}
       </DataPanel>
       <DataPanel title="Security boundary" description="Isolation depends on the actual backend, not the Sandbox name.">
         <p className="p-5 text-sm leading-6 text-muted-foreground">{t(item.isolation === "host" ? "Host mode is not isolated and uses the Runtime user's local file and process permissions." : item.isolation === "restricted_host" ? "Restricted host confines local processes but is not a container or VM." : "Isolation guarantees depend on the selected backend and must be verified independently.")}</p>

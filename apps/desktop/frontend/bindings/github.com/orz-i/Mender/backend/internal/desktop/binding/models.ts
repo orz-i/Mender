@@ -29,6 +29,17 @@ export interface AuditRecord {
     "failureCode": string;
 }
 
+export interface CreateDockerSandboxInput {
+    "name": string;
+    "imageDigest": string;
+    "userId": number;
+    "groupId": number;
+    "cpuMilli": number;
+    "memoryMiB": number;
+    "workspaceMiB": number;
+    "pids": number;
+}
+
 export interface CreateLocalSandboxInput {
     "name": string;
     "root": string;
@@ -65,6 +76,11 @@ export interface CredentialStatus {
     "resolver": string;
     "persistentStore": boolean;
     "editable": boolean;
+}
+
+export interface DockerBackendStatus {
+    "dockerAvailable": boolean;
+    "dockerStatus": string;
 }
 
 export interface InvocationResult {
@@ -330,6 +346,7 @@ export interface Sandbox {
     "ownerKind": string;
     "ownerRef": string;
     "activeLeases": number;
+    "backendAvailable": boolean;
 }
 
 export interface SandboxList {

@@ -486,6 +486,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/sandboxes/backends": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getSandboxBackends"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sandboxes/docker": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["createDockerSandbox"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/sandboxes/local": {
         parameters: {
             query?: never;
@@ -513,6 +545,22 @@ export interface paths {
         put?: never;
         post?: never;
         delete: operations["destroySandbox"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sandboxes/{sandboxId}/reconcile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["reconcileDockerSandbox"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1394,6 +1442,21 @@ export interface components {
             /** @description Mender Credential Reference containing the OpenAI tunnel runtime API key. */
             runtimeCredentialRef: string;
         };
+        SandboxBackends: {
+            dockerAvailable: boolean;
+            dockerStatus: string;
+        };
+        CreateDockerSandboxRequest: {
+            name: string;
+            /** @description Immutable locally cached registry/image@sha256 digest */
+            imageDigest: string;
+            userId: number;
+            groupId: number;
+            cpuMilli: number;
+            memoryMiB: number;
+            workspaceMiB: number;
+            pids: number;
+        };
         CreateLocalSandboxRequest: {
             name: string;
             root: string;
@@ -1411,6 +1474,8 @@ export interface components {
             state: "defined" | "provisioning" | "ready" | "stopping" | "stopped" | "destroying" | "destroyed" | "failed" | "unknown" | "orphaned";
             /** @description Persisted cross-process Sandbox execution leases */
             activeLeases: number;
+            /** @description Whether the selected backend is operational on the current Runtime host */
+            backendAvailable: boolean;
             localRoot: string;
             /** @enum {string} */
             ownerKind: "local_user" | "service";
@@ -2485,6 +2550,69 @@ export interface operations {
             403: components["responses"]["Forbidden"];
         };
     };
+    getSandboxBackends: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Real host-owned Sandbox backend capability status */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SandboxBackends"];
+                };
+            };
+        };
+    };
+    createDockerSandbox: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateDockerSandboxRequest"];
+            };
+        };
+        responses: {
+            /** @description Governed Docker container provisioned and verified */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Sandbox"];
+                };
+            };
+            /** @description Durable Docker Sandbox exists but the Engine outcome is uncertain; inspect state before attempting recovery */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Sandbox"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            /** @description Docker Engine unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     createLocalSandbox: {
         parameters: {
             query?: never;
@@ -2561,6 +2689,38 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+        };
+    };
+    reconcileDockerSandbox: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sandboxId: components["parameters"]["SandboxId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Existing unknown Docker container verified, no new container created */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Sandbox"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            /** @description Unavailable Docker Engine */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     startSandbox: {

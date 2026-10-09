@@ -17,6 +17,7 @@ const availableSandbox: Sandbox = {
   ownerKind: "local_user",
   ownerRef: "test-owner",
   activeLeases: 0,
+  backendAvailable: true,
 };
 
 const unavailableSandbox: Sandbox = {
@@ -24,6 +25,15 @@ const unavailableSandbox: Sandbox = {
   sandboxId: "sbx_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   name: "Offline project",
   state: "stopped",
+};
+
+const dockerSandbox: Sandbox = {
+  ...availableSandbox,
+  sandboxId: "sbx_cccccccccccccccccccccccccccccccc",
+  name: "Docker project",
+  backend: "docker",
+  isolation: "container",
+  localRoot: "",
 };
 
 const remoteSandbox: Sandbox = {
@@ -50,17 +60,18 @@ describe("Workspace Sandbox selector", () => {
           uiSchema={undefined}
           value={{}}
           credentials={[]}
-          sandboxes={[availableSandbox, unavailableSandbox, remoteSandbox]}
+          sandboxes={[availableSandbox, unavailableSandbox, remoteSandbox, dockerSandbox]}
           onChange={onChange}
         />
       </MemoryRouter>,
     );
     const selector = screen.getByRole<HTMLSelectElement>("combobox");
     const choices = screen.getAllByRole<HTMLOptionElement>("option");
-    expect(choices).toHaveLength(2);
+    expect(choices).toHaveLength(3);
     expect(choices.some((option) => option.value === availableSandbox.sandboxId)).toBe(true);
     expect(choices.some((option) => option.value === unavailableSandbox.sandboxId)).toBe(false);
     expect(choices.some((option) => option.value === remoteSandbox.sandboxId)).toBe(false);
+    expect(choices.some((option) => option.value === dockerSandbox.sandboxId)).toBe(true);
     expect(screen.queryByRole("textbox")).toBeNull();
     expect(screen.getByRole<HTMLAnchorElement>("link").getAttribute("href")).toBe("/sandboxes/new");
     fireEvent.change(selector, { target: { value: availableSandbox.sandboxId } });
