@@ -248,6 +248,7 @@ export function SandboxDetailPage({client}:{client:MenderClient}) {
       {canStop?<Button variant="outline" disabled={busy||!noActiveLeases} onClick={()=>void changeLifecycle("stop")}>{t("Stop sandbox")}</Button>:null}
       {canDestroy?<Button variant="destructive" disabled={busy||!noActiveLeases} onClick={()=>void changeLifecycle("destroy")}>{t("Destroy sandbox")}</Button>:null}
       {(item?.backend==="docker"||item?.backend==="daytona") && item.backendAvailable && item.state==="unknown"?<Button disabled={busy||!noActiveLeases} onClick={()=>void reconcile()}>{t(item.backend==="daytona"?"Reconcile Daytona sandbox":"Reconcile Docker sandbox")}</Button>:null}
+      {item?<Button variant="outline" onClick={()=>{void navigate(`/sandboxes/${item.sandboxId}/activity`);}}>{t("Activity")}</Button>:null}
       <Button variant="outline" onClick={()=>{void navigate("/sandboxes");}}>{t("Back to sandboxes")}</Button>
     </div>}/>
     {error || !sandboxId ? <ErrorNotice message={error || t("The requested item was not found.")}/> : null}

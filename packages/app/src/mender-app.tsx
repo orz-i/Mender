@@ -21,6 +21,7 @@ import { ProfilesPage } from "./domains/profiles/profiles-page";
 import { ProvidersPage } from "./domains/providers/providers-page";
 import { RuntimePage } from "./domains/runtime/runtime-page";
 import { SandboxesPage, CreateSandboxPage, SandboxDetailPage } from "./domains/sandboxes/sandboxes-page";
+import { SandboxActivityPage } from "./domains/sandboxes/sandbox-activity-page";
 import { ServersPage } from "./domains/servers/servers-page";
 import { SkillsPage } from "./domains/skills/skills-page";
 import { TunnelsPage } from "./domains/tunnels/tunnels-page";
@@ -97,6 +98,7 @@ export function MenderApp({
           <Route path="sandboxes" element={<SandboxesPage client={client} />} />
           <Route path="sandboxes/new" element={<CreateSandboxPage client={client} />} />
           <Route path="sandboxes/:sandboxId" element={<SandboxDetailPage client={client} />} />
+          <Route path="sandboxes/:sandboxId/activity" element={<SandboxActivityPage client={client} />} />
           <Route path="policy" element={<PolicyPage client={client} />} />
           <Route
             path="credentials"
