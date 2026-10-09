@@ -475,3 +475,20 @@ Goals:
 Exit criteria require forward-only Runtime/Tunnel migrations, governed Tunnel process launch through the shared isolation backend, bounded child environment, typed management parity, unchanged loopback/lifecycle protections, and green repository/race/security verification.
 
 See `phase-24-runtime-process-governance.md`.
+
+## Phase 25 — Sandbox Execution Router & Sandbox Workspace Tools
+
+Status: Proposed (research/design only)
+
+Goals:
+
+- Introduce a first-class, governed Sandbox resource separate from Provider and the existing Provider executor router.
+- Add a capability-checked Execution Environment Router with host-owned drivers, stateful Sandbox lifecycle, Principal-attributed leases, and strict no-fallback semantics.
+- Hard-cut the built-in Workspace Provider to a Sandbox-bound four-tool facade while preserving its PluginID, canonical SourceKeys, ToolIDs, Profile bindings, and Policy/Audit authority.
+- Add Sandboxes management in the Runtime sidebar, with backend selection, focused configuration, status/detail/security/activity views, and typed HTTP/OpenAPI/SDK/Wails/Desktop parity.
+- Start with honest Local Workspace semantics and a managed local Docker backend; evaluate Daytona as first remote integration and E2B as next.
+- Establish resource/mount/network/credential, cancellation, reconciliation, idempotency, and remote cost safeguards before claiming Sandbox security properties.
+
+Proposed exit criteria: ADR-0035 accepted; backend/file/shell parity verified; governance denial-before-side-effects and no unsafe host fallback proved; Workspace v1 forward migration preserves identities; Sandbox lifecycle/UI/API are operational; full repository/race/security gates pass.
+
+See `phase-25-sandbox-execution-router.md`. The phase plan is a proposal, not an implementation completion claim.
