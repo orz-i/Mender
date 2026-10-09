@@ -363,7 +363,7 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 
 	ids := invocationidentity.NewGenerator()
 	approvalGate := policylocal.RejectApproval{}
-	sandboxes, err := NewSandboxes(ctx, options.DatabasePath, policies.Evaluate, approvalGate)
+	sandboxes, err := NewSandboxes(ctx, options.DatabasePath, policies.Evaluate, approvalGate, runtimeGovernance)
 	if err != nil {
 		_ = skills.Close()
 		_ = providerInstances.CloseAll()

@@ -70,27 +70,10 @@ func (r *Router) Resolve(ctx context.Context, id sandboxdomain.ID, required sand
 	return sandboxapp.Placement{Sandbox: item, Run: run, Required: required}, nil
 }
 
-type Lease struct {
-	SandboxID  sandboxdomain.ID
-	Generation uint64
-	Session    sandboxapp.Session
-	release    func() error
-	once       sync.Once
-	releaseErr error
-}
-
-func (l *Lease) Close() error {
-	if l == nil || l.release == nil {
-		return nil
-	}
-	l.once.Do(func() { l.releaseErr = l.release() })
-	return l.releaseErr
-}
-
 // Acquire only works after an AdmissionGate decides sandbox.acquire. It reads
 // state again and compares identity and generation to reject stale placements.
 // No backend substitution or weakening of the bound security class is allowed.
-func (r *Router) Acquire(ctx context.Context, principal governancedomain.Context, placement sandboxapp.Placement) (*Lease, error) {
+func (r *Router) Acquire(ctx context.Context, principal governancedomain.Context, placement sandboxapp.Placement) (*sandboxapp.Lease, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -167,11 +150,11 @@ func (r *Router) Acquire(ctx context.Context, principal governancedomain.Context
 		releaseBudget()
 		return nil, err
 	}
-	return &Lease{SandboxID: spec.ID, Generation: run.Generation, Session: session, release: func() error {
+	return sandboxapp.NewLease(spec.ID, run.Generation, session, func() error {
 		defer releaseBudget()
 		if err := session.Close(); err != nil {
 			return fmt.Errorf("release sandbox session: %w", err)
 		}
 		return nil
-	}}, nil
+	}), nil
 }
