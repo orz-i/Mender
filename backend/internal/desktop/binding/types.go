@@ -24,8 +24,20 @@ type SandboxList struct {
 	Sandboxes []Sandbox `json:"sandboxes"`
 }
 type DockerBackendStatus struct {
-	DockerAvailable bool   `json:"dockerAvailable"`
-	DockerStatus    string `json:"dockerStatus"`
+	DaytonaConfigured bool   `json:"daytonaConfigured"`
+	DaytonaStatus     string `json:"daytonaStatus"`
+	DockerAvailable   bool   `json:"dockerAvailable"`
+	DockerStatus      string `json:"dockerStatus"`
+}
+type CreateDaytonaSandboxInput struct {
+	Name          string `json:"name"`
+	CredentialRef string `json:"credentialRef"`
+	ImageDigest   string `json:"imageDigest"`
+	Target        string `json:"target"`
+	CPU           int    `json:"cpu"`
+	MemoryGiB     int    `json:"memoryGiB"`
+	DiskGiB       int    `json:"diskGiB"`
+	TTLMinutes    int    `json:"ttlMinutes"`
 }
 type CreateDockerSandboxInput struct {
 	Name         string `json:"name"`

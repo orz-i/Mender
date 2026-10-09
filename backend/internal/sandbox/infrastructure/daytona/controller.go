@@ -280,3 +280,21 @@ func closeRemote(client RemoteClient) {
 	defer cancel()
 	_ = client.Close(ctx)
 }
+
+// CheckCredential performs an inventory-backed secret resolution only after
+// the caller's sandbox.provision Policy has already been admitted. It does not
+// make a remote create/get request or reserve a billable Sandbox slot.
+func (c *Controller) CheckCredential(ctx context.Context, t Template) error {
+	if c == nil || c.factory == nil {
+		return sandboxdomain.ErrBackendUnavailable
+	}
+	if err := t.Validate(); err != nil {
+		return err
+	}
+	client, err := c.factory.Connect(ctx, t)
+	if err != nil {
+		return err
+	}
+	closeRemote(client)
+	return nil
+}

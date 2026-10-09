@@ -4,7 +4,9 @@ import (
 	"errors"
 	"net/http"
 
+	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
 	sandboxapplication "github.com/orz-i/Mender/backend/internal/sandbox/application"
+	sandboxdaytona "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/daytona"
 	sandboxdocker "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/dockerengine"
 
 	"github.com/orz-i/Mender/backend/internal/bootstrap"
@@ -175,7 +177,7 @@ type createDockerSandboxRequest struct {
 }
 
 func (h *Handler) sandboxBackends(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{"dockerAvailable": h.runtime.Sandboxes.DockerAvailable(), "dockerStatus": h.runtime.Sandboxes.DockerStatus()})
+	writeJSON(w, http.StatusOK, map[string]any{"dockerAvailable": h.runtime.Sandboxes.DockerAvailable(), "dockerStatus": h.runtime.Sandboxes.DockerStatus(), "daytonaConfigured": h.runtime.Sandboxes.DaytonaConfigured(), "daytonaStatus": "Credential Reference and live provider availability must be verified during creation"})
 }
 func (h *Handler) createDockerSandbox(w http.ResponseWriter, r *http.Request) {
 	var input createDockerSandboxRequest
@@ -259,4 +261,97 @@ func (h *Handler) reconcileDockerSandbox(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	writeJSON(w, http.StatusOK, result)
+}
+
+type createDaytonaSandboxRequest struct {
+	Name          string `json:"name"`
+	CredentialRef string `json:"credentialRef"`
+	ImageDigest   string `json:"imageDigest"`
+	Target        string `json:"target"`
+	CPU           int    `json:"cpu"`
+	MemoryGiB     int    `json:"memoryGiB"`
+	DiskGiB       int    `json:"diskGiB"`
+	TTLMinutes    int    `json:"ttlMinutes"`
+}
+
+func (h *Handler) createDaytonaSandbox(w http.ResponseWriter, r *http.Request) {
+	var input createDaytonaSandboxRequest
+	if err := decodeJSON(r, &input); err != nil {
+		writeAPIError(w, http.StatusBadRequest, "validation_error", err)
+		return
+	}
+	ref, err := credentialdomain.ParseReference(input.CredentialRef)
+	if err != nil {
+		writeAPIError(w, http.StatusBadRequest, "validation_error", err)
+		return
+	}
+	caller, err := governancedomain.NewContext(governancedomain.OriginManagementHTTP, h.runtime.OwnerPrincipal(), governancedomain.CatalogScope())
+	if err != nil {
+		writeKnownError(w, err)
+		return
+	}
+	template := sandboxdaytona.Template{CredentialRef: ref, ImageDigest: input.ImageDigest, Target: input.Target, CPU: input.CPU, MemoryGiB: input.MemoryGiB, DiskGiB: input.DiskGiB, TTLMinutes: input.TTLMinutes}
+	item, err := h.runtime.Sandboxes.CreateDaytonaSandbox(r.Context(), bootstrap.CreateDaytonaSandboxRequest{Name: input.Name, Template: template}, caller)
+	if err != nil {
+		if item.ID() != "" {
+			result, stateErr := h.sandboxStatus(r, item)
+			if stateErr != nil {
+				writeKnownError(w, stateErr)
+				return
+			}
+			writeJSON(w, http.StatusAccepted, result)
+			return
+		}
+		switch {
+		case errors.Is(err, sandboxdomain.ErrNotAuthorized), errors.Is(err, sandboxapplication.ErrApprovalDenied):
+			writeAPIError(w, http.StatusForbidden, "policy_denied", err)
+		case errors.Is(err, sandboxdomain.ErrConflict):
+			writeAPIError(w, http.StatusConflict, "resource_limit", err)
+		case errors.Is(err, sandboxdomain.ErrBackendUnavailable):
+			writeAPIError(w, http.StatusServiceUnavailable, "remote_unavailable", err)
+		default:
+			writeAPIError(w, http.StatusBadRequest, "validation_error", err)
+		}
+		return
+	}
+	response, err := h.sandboxStatus(r, item)
+	if err != nil {
+		writeKnownError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, response)
+}
+func (h *Handler) reconcileDaytonaSandbox(w http.ResponseWriter, r *http.Request) {
+	id, err := sandboxdomain.ParseID(r.PathValue("sandboxId"))
+	if err != nil {
+		writeAPIError(w, http.StatusBadRequest, "validation_error", err)
+		return
+	}
+	caller, err := governancedomain.NewContext(governancedomain.OriginManagementHTTP, h.runtime.OwnerPrincipal(), governancedomain.CatalogScope())
+	if err != nil {
+		writeKnownError(w, err)
+		return
+	}
+	if _, err := h.runtime.Sandboxes.ReconcileDaytona(r.Context(), id, caller); err != nil {
+		switch {
+		case errors.Is(err, sandboxdomain.ErrNotAuthorized):
+			writeAPIError(w, http.StatusForbidden, "policy_denied", err)
+		case errors.Is(err, sandboxdomain.ErrConflict):
+			writeAPIError(w, http.StatusConflict, "conflict", err)
+		default:
+			writeAPIError(w, http.StatusServiceUnavailable, "remote_unavailable", err)
+		}
+		return
+	}
+	item, err := h.runtime.Sandboxes.Get(r.Context(), id)
+	if err != nil {
+		writeKnownError(w, err)
+		return
+	}
+	state, err := h.sandboxStatus(r, item)
+	if err != nil {
+		writeKnownError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, state)
 }

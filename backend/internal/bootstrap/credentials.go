@@ -61,9 +61,10 @@ func (c *Credentials) Close() error {
 }
 
 type runtimeCredentialUsageChecker struct {
-	profiles *Profiles
-	tunnels  *Tunnels
-	configs  interface {
+	profiles  *Profiles
+	tunnels   *Tunnels
+	sandboxes *Sandboxes
+	configs   interface {
 		List(context.Context) ([]providerplugin.Configuration, error)
 	}
 }
@@ -141,6 +142,15 @@ func (a runtimeCredentialUsageChecker) Usages(
 				Kind:        "provider",
 				Description: fmt.Sprintf("provider %s", config.ProviderID),
 			})
+		}
+	}
+	if a.sandboxes != nil {
+		sandboxIDs, err := a.sandboxes.DaytonaCredentialBindings(ctx, ref)
+		if err != nil {
+			return nil, fmt.Errorf("credential usage: Daytona inventory unavailable: %w", err)
+		}
+		for _, id := range sandboxIDs {
+			usages = append(usages, credentialapplication.Usage{Kind: "sandbox", Description: fmt.Sprintf("Daytona Sandbox %s", id)})
 		}
 	}
 	return usages, nil

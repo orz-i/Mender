@@ -28,6 +28,7 @@ import (
 	installationdomain "github.com/orz-i/Mender/backend/internal/providerplugin/installation/domain"
 	runtimegovernancedomain "github.com/orz-i/Mender/backend/internal/runtimegovernance/domain"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
+	sandboxdaytona "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/daytona"
 	sandboxdocker "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/dockerengine"
 	skillapplication "github.com/orz-i/Mender/backend/internal/skill/application"
 	skilldomain "github.com/orz-i/Mender/backend/internal/skill/domain"
@@ -137,7 +138,40 @@ func (s *Service) changeLocalSandboxLifecycle(rawID string, action governancedom
 }
 
 func (s *Service) GetSandboxBackends() (DockerBackendStatus, error) {
-	return DockerBackendStatus{DockerAvailable: s.runtime.Sandboxes.DockerAvailable(), DockerStatus: s.runtime.Sandboxes.DockerStatus()}, nil
+	return DockerBackendStatus{DockerAvailable: s.runtime.Sandboxes.DockerAvailable(), DockerStatus: s.runtime.Sandboxes.DockerStatus(), DaytonaConfigured: s.runtime.Sandboxes.DaytonaConfigured(), DaytonaStatus: "Credential Reference and live remote availability are verified during creation"}, nil
+}
+func (s *Service) CreateDaytonaSandbox(input CreateDaytonaSandboxInput) (Sandbox, error) {
+	ref, err := credentialdomain.ParseReference(input.CredentialRef)
+	if err != nil {
+		return Sandbox{}, err
+	}
+	caller, err := s.governanceContext()
+	if err != nil {
+		return Sandbox{}, err
+	}
+	item, err := s.runtime.Sandboxes.CreateDaytonaSandbox(s.ctx, bootstrap.CreateDaytonaSandboxRequest{Name: input.Name, Template: sandboxdaytona.Template{CredentialRef: ref, ImageDigest: input.ImageDigest, Target: input.Target, CPU: input.CPU, MemoryGiB: input.MemoryGiB, DiskGiB: input.DiskGiB, TTLMinutes: input.TTLMinutes}}, caller)
+	if err != nil && item.ID() == "" {
+		return Sandbox{}, err
+	}
+	return s.projectSandbox(item)
+}
+func (s *Service) ReconcileDaytonaSandbox(raw string) (Sandbox, error) {
+	id, err := sandboxdomain.ParseID(raw)
+	if err != nil {
+		return Sandbox{}, err
+	}
+	caller, err := s.governanceContext()
+	if err != nil {
+		return Sandbox{}, err
+	}
+	if _, err := s.runtime.Sandboxes.ReconcileDaytona(s.ctx, id, caller); err != nil {
+		return Sandbox{}, err
+	}
+	item, err := s.runtime.Sandboxes.Get(s.ctx, id)
+	if err != nil {
+		return Sandbox{}, err
+	}
+	return s.projectSandbox(item)
 }
 func (s *Service) CreateDockerSandbox(input CreateDockerSandboxInput) (Sandbox, error) {
 	caller, err := s.governanceContext()

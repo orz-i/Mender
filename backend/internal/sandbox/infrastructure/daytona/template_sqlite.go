@@ -123,3 +123,36 @@ func (s *TemplateStore) GetDaytonaTemplate(ctx context.Context, id sandboxdomain
 	}
 	return result, nil
 }
+
+// ActiveCredentialBindings lists durable Daytona Sandbox references that would
+// be broken if the Mender Credential were deleted. Destroyed resources do not
+// retain live secret dependencies; unknown/provisioning/stopped are preserved.
+func (s *TemplateStore) ActiveCredentialBindings(ctx context.Context, ref credentialdomain.Reference) ([]sandboxdomain.ID, error) {
+	if s == nil || s.db == nil {
+		return nil, sandboxdomain.ErrBackendUnavailable
+	}
+	if _, err := credentialdomain.ParseReference(ref.String()); err != nil {
+		return nil, err
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT t.sandbox_id FROM sandbox_daytona_templates AS t JOIN sandbox_runs AS r ON r.sandbox_id=t.sandbox_id WHERE t.credential_ref=? AND r.state NOT IN ('destroyed','failed') ORDER BY t.sandbox_id`, ref.String())
+	if err != nil {
+		return nil, fmt.Errorf("daytona Credential usage unavailable: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	out := make([]sandboxdomain.ID, 0)
+	for rows.Next() {
+		var raw string
+		if err := rows.Scan(&raw); err != nil {
+			return nil, err
+		}
+		id, err := sandboxdomain.ParseID(raw)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return out, nil
+}

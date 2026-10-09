@@ -232,7 +232,7 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 	// Sandboxes are composed before Provider plugins so Workspace activation
 	// only observes post-cut Sandbox bindings. Migration is one DB transaction.
 	approvalGate := policylocal.RejectApproval{}
-	sandboxes, err := NewSandboxes(ctx, options.DatabasePath, policies.Evaluate, approvalGate, runtimeGovernance)
+	sandboxes, err := NewSandboxes(ctx, options.DatabasePath, policies.Evaluate, approvalGate, runtimeGovernance, credentials.Resolver)
 	if err != nil {
 		closeBootstrapStores()
 		return nil, fmt.Errorf("compose runtime: sandbox inventory: %w", err)
@@ -348,9 +348,10 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		credentials.store,
 		credentials.secrets,
 		runtimeCredentialUsageChecker{
-			profiles: profiles,
-			tunnels:  tunnels,
-			configs:  providerConfigs,
+			profiles:  profiles,
+			tunnels:   tunnels,
+			sandboxes: sandboxes,
+			configs:   providerConfigs,
 		},
 	)
 

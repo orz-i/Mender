@@ -9,8 +9,10 @@ import (
 	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 
 	governanceapplication "github.com/orz-i/Mender/backend/internal/governance/application"
+	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
 	sandboxapplication "github.com/orz-i/Mender/backend/internal/sandbox/application"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
+	sandboxdaytona "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/daytona"
 	sandboxdocker "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/dockerengine"
 	sandboxidentity "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/identity"
 	sandboxlocalworkspace "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/localworkspace"
@@ -28,9 +30,11 @@ type Sandboxes struct {
 	docker                  *sandboxdocker.Provisioner
 	dockerTemplates         *sandboxdocker.TemplateStore
 	dockerUnavailableReason string
+	daytona                 *sandboxdaytona.Controller
+	daytonaTemplates        *sandboxdaytona.TemplateStore
 }
 
-func NewSandboxes(ctx context.Context, databasePath string, policy sandboxapplication.AdmissionPolicy, approval governanceapplication.ApprovalGate, governance *RuntimeGovernance) (*Sandboxes, error) {
+func NewSandboxes(ctx context.Context, databasePath string, policy sandboxapplication.AdmissionPolicy, approval governanceapplication.ApprovalGate, governance *RuntimeGovernance, credentials invocationapplication.CredentialResolver) (*Sandboxes, error) {
 	if policy == nil || approval == nil || governance == nil || governance.processIsolation == nil {
 		return nil, fmt.Errorf("compose sandboxes: policy/approval unavailable")
 	}
@@ -51,6 +55,14 @@ func NewSandboxes(ctx context.Context, databasePath string, policy sandboxapplic
 		backends = append(backends, dockerBackend)
 	} else if err != nil {
 		component.dockerUnavailableReason = "Docker Engine unavailable or insecure"
+	}
+	daytonaBackend, daytonaErr := component.configureDaytona(ctx, databasePath, credentials)
+	if daytonaErr != nil {
+		_ = component.Close()
+		return nil, fmt.Errorf("compose remote Sandbox provider: %w", daytonaErr)
+	}
+	if daytonaBackend != nil {
+		backends = append(backends, daytonaBackend)
 	}
 	router, err := sandboxrouter.New(store, store, gate, store, backends...)
 	if err != nil {
@@ -83,6 +95,9 @@ func (s *Sandboxes) Close() error {
 	}
 	if s.dockerTemplates != nil {
 		_ = s.dockerTemplates.Close()
+	}
+	if s.daytonaTemplates != nil {
+		_ = s.daytonaTemplates.Close()
 	}
 	return s.store.Close()
 }

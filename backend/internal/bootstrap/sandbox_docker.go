@@ -72,6 +72,9 @@ func (s *Sandboxes) BackendAvailable(item sandboxdomain.Sandbox) bool {
 	if item.Backend() == sandboxdomain.BackendDocker {
 		return s.DockerAvailable()
 	}
+	if item.Backend() == sandboxdomain.BackendDaytona {
+		return s.DaytonaConfigured()
+	}
 	return false
 }
 
@@ -133,6 +136,11 @@ func (s *Sandboxes) ChangeLifecycle(ctx context.Context, id sandboxdomain.ID, ac
 			return sandboxdomain.Run{}, sandboxdomain.ErrBackendUnavailable
 		}
 		return s.docker.ChangeLifecycle(ctx, caller, id, action)
+	case sandboxdomain.BackendDaytona:
+		if !s.DaytonaConfigured() {
+			return sandboxdomain.Run{}, sandboxdomain.ErrBackendUnavailable
+		}
+		return s.daytona.ChangeLifecycle(ctx, caller, id, action)
 	default:
 		return sandboxdomain.Run{}, sandboxdomain.ErrBackendUnavailable
 	}

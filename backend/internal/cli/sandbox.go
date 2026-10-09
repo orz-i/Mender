@@ -5,8 +5,10 @@ import (
 	"text/tabwriter"
 
 	"github.com/orz-i/Mender/backend/internal/bootstrap"
+	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
 	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
+	sandboxdaytona "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/daytona"
 	sandboxdocker "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/dockerengine"
 	"github.com/spf13/cobra"
 )
@@ -20,6 +22,7 @@ func (a *app) newSandboxCommand() *cobra.Command {
 	add := &cobra.Command{Use: "add", Short: "Provision a Sandbox"}
 	add.AddCommand(a.newSandboxAddLocalCommand())
 	add.AddCommand(a.newSandboxAddDockerCommand())
+	add.AddCommand(a.newSandboxAddDaytonaCommand())
 	command.AddCommand(a.newSandboxReconcileCommand())
 	command.AddCommand(add)
 	return command
@@ -164,15 +167,69 @@ func (a *app) newSandboxReconcileCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			run, err := runtime.Sandboxes.ReconcileDocker(cmd.Context(), id, caller)
-			if err != nil {
-				return err
-			}
 			item, err := runtime.Sandboxes.Get(cmd.Context(), id)
 			if err != nil {
 				return err
 			}
-			return a.writeValue(fmt.Sprintf("Docker Sandbox %s reconciled: %s", id, run.State), map[string]any{"sandbox": sandboxProjection(item), "state": string(run.State), "generation": run.Generation})
+			var run sandboxdomain.Run
+			switch item.Backend() {
+			case sandboxdomain.BackendDocker:
+				run, err = runtime.Sandboxes.ReconcileDocker(cmd.Context(), id, caller)
+			case sandboxdomain.BackendDaytona:
+				run, err = runtime.Sandboxes.ReconcileDaytona(cmd.Context(), id, caller)
+			default:
+				return sandboxdomain.ErrBackendUnavailable
+			}
+			if err != nil {
+				return err
+			}
+			item, err = runtime.Sandboxes.Get(cmd.Context(), id)
+			if err != nil {
+				return err
+			}
+			return a.writeValue(fmt.Sprintf("Sandbox %s reconciled: %s", id, run.State), map[string]any{"sandbox": sandboxProjection(item), "state": string(run.State), "generation": run.Generation})
 		})
 	}}
+}
+
+func (a *app) newSandboxAddDaytonaCommand() *cobra.Command {
+	var name, credential, image, target string
+	var cpu, memory, disk, ttl int
+	cmd := &cobra.Command{Use: "daytona", Short: "Governed Daytona remote Sandbox creation (may incur provider charges)", Args: exactArgs(0), RunE: func(cmd *cobra.Command, _ []string) error {
+		ref, err := credentialdomain.ParseReference(credential)
+		if err != nil {
+			return usageError{err: err}
+		}
+		template := sandboxdaytona.Template{CredentialRef: ref, ImageDigest: image, Target: target, CPU: cpu, MemoryGiB: memory, DiskGiB: disk, TTLMinutes: ttl}
+		if err := template.Validate(); err != nil {
+			return usageError{err: err}
+		}
+		if name == "" {
+			return usageError{err: fmt.Errorf("daytona requires --name")}
+		}
+		return a.withRuntime(cmd.Context(), func(runtime *bootstrap.Runtime) error {
+			caller, err := governancedomain.NewContext(governancedomain.OriginCLI, runtime.OwnerPrincipal(), governancedomain.CatalogScope())
+			if err != nil {
+				return err
+			}
+			item, err := runtime.Sandboxes.CreateDaytonaSandbox(cmd.Context(), bootstrap.CreateDaytonaSandboxRequest{Name: name, Template: template}, caller)
+			if err != nil && item.ID() == "" {
+				return err
+			}
+			run, lookupErr := runtime.Sandboxes.GetRun(cmd.Context(), item.ID())
+			if lookupErr != nil {
+				return lookupErr
+			}
+			return a.writeValue(fmt.Sprintf("Daytona Sandbox %s: %s (verify remote charges)", item.ID(), run.State), map[string]any{"sandbox": sandboxProjection(item), "state": string(run.State), "generation": run.Generation})
+		})
+	}}
+	cmd.Flags().StringVar(&name, "name", "", "Sandbox display name")
+	cmd.Flags().StringVar(&credential, "credential-ref", "", "Mender Credential Reference, e.g. credential://daytona/api-key")
+	cmd.Flags().StringVar(&image, "image-digest", "", "immutable repository@sha256 image reference")
+	cmd.Flags().StringVar(&target, "target", sandboxdaytona.TargetUS, "allowlisted Daytona target")
+	cmd.Flags().IntVar(&cpu, "cpu", 1, "vCPU allocation (1..2)")
+	cmd.Flags().IntVar(&memory, "memory-gib", 2, "memory allocation GiB (1..4)")
+	cmd.Flags().IntVar(&disk, "disk-gib", 3, "disk allocation GiB (3..10)")
+	cmd.Flags().IntVar(&ttl, "ttl-minutes", 30, "provider-enforced lifetime (15..120min), not a USD spending limit")
+	return cmd
 }

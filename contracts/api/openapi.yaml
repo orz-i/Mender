@@ -675,6 +675,30 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '409': { $ref: '#/components/responses/Conflict' }
         '503': { description: Docker Engine unavailable }
+  /sandboxes/daytona:
+    post:
+      operationId: createDaytonaSandbox
+      description: Provision a bounded Daytona remote Sandbox using a Mender Credential Reference. Live provider availability and billing require a connected account.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateDaytonaSandboxRequest' }
+      responses:
+        '201':
+          description: Daytona Sandbox observed started
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Sandbox' }
+        '202':
+          description: Remote outcome is uncertain; resource persisted and must be reviewed, not retried
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Sandbox' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '503': { description: Credential or remote service unavailable }
   /sandboxes/local:
     post:
       operationId: createLocalSandbox
@@ -720,6 +744,22 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
+  /sandboxes/{sandboxId}/daytona/reconcile:
+    post:
+      operationId: reconcileDaytonaSandbox
+      description: Read-only reconciliation of a provisioned unknown Daytona Sandbox, no remote create replay
+      parameters:
+        - $ref: '#/components/parameters/SandboxId'
+      responses:
+        '200':
+          description: Remote state inspected and verified
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Sandbox' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '503': { description: Remote API unavailable }
   /sandboxes/{sandboxId}/reconcile:
     post:
       operationId: reconcileDockerSandbox
@@ -1889,11 +1929,26 @@ components:
       additionalProperties: false
     SandboxBackends:
       type: object
-      required: [dockerAvailable, dockerStatus]
+      required: [dockerAvailable, dockerStatus, daytonaConfigured, daytonaStatus]
       properties:
         dockerAvailable: { type: boolean }
         dockerStatus: { type: string }
+        daytonaConfigured: { type: boolean, description: Driver installed only; does not prove live remote account access }
+        daytonaStatus: { type: string }
       additionalProperties: false
+    CreateDaytonaSandboxRequest:
+      type: object
+      required: [name, credentialRef, imageDigest, target, cpu, memoryGiB, diskGiB, ttlMinutes]
+      additionalProperties: false
+      properties:
+        name: { type: string, minLength: 1, maxLength: 160 }
+        credentialRef: { type: string, pattern: '^credential://[a-z][a-z0-9-]*/[a-z][a-z0-9-]*$', description: Reference to Mender's secret inventory, never plaintext }
+        imageDigest: { type: string, minLength: 72, maxLength: 320 }
+        target: { type: string, enum: [us] }
+        cpu: { type: integer, minimum: 1, maximum: 2 }
+        memoryGiB: { type: integer, minimum: 1, maximum: 4 }
+        diskGiB: { type: integer, minimum: 3, maximum: 10 }
+        ttlMinutes: { type: integer, minimum: 15, maximum: 120, description: Provider-enforced wall-clock lifetime; not a monetary billing cap }
     CreateDockerSandboxRequest:
       type: object
       required: [name, imageDigest, userId, groupId, cpuMilli, memoryMiB, workspaceMiB, pids]
