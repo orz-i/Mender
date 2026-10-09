@@ -57,6 +57,7 @@ type Runtime struct {
 	Tunnels                     *Tunnels
 	Policy                      *Policies
 	Skills                      *Skills
+	Sandboxes                   *Sandboxes
 	RuntimeGovernance           *RuntimeGovernance
 	InvokeTool                  invocationapplication.InvokeTool
 	ListAudit                   auditapplication.ListRecords
@@ -362,6 +363,21 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 
 	ids := invocationidentity.NewGenerator()
 	approvalGate := policylocal.RejectApproval{}
+	sandboxes, err := NewSandboxes(ctx, options.DatabasePath, policies.Evaluate, approvalGate)
+	if err != nil {
+		_ = skills.Close()
+		_ = providerInstances.CloseAll()
+		_ = externalProcesses.CloseAll()
+		_ = pluginInstallations.Close()
+		_ = providerConfigs.Close()
+		_ = configs.Close()
+		_ = policies.Close()
+		_ = profiles.Close()
+		_ = credentials.Close()
+		_ = auditStore.Close()
+		_ = catalog.Close()
+		return nil, fmt.Errorf("compose runtime: sandboxes: %w", err)
+	}
 	providerActivation := provideractivationapplication.NewAdmit(
 		policies.Evaluate,
 		approvalGate,
@@ -408,6 +424,7 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		Tunnels:                     tunnels,
 		Policy:                      policies,
 		Skills:                      skills,
+		Sandboxes:                   sandboxes,
 		RuntimeGovernance:           runtimeGovernance,
 		InvokeTool:                  invokeTool,
 		ListAudit:                   auditapplication.NewListRecords(auditStore),
@@ -496,6 +513,7 @@ func (r *Runtime) Close() error {
 	errs = append(
 		errs,
 		r.Skills.Close(),
+		r.Sandboxes.Close(),
 		r.RuntimeGovernance.Close(),
 		r.pluginInstallations.Close(),
 		r.providerConfigs.Close(),
