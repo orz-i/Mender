@@ -7,6 +7,26 @@ type SystemStatus struct {
 	MCP         MCPStatus        `json:"mcp"`
 }
 
+// Sandbox is management metadata; state reflects the last persisted observation.
+type Sandbox struct {
+	SandboxID string `json:"sandboxId"`
+	Name      string `json:"name"`
+	Backend   string `json:"backend"`
+	Isolation string `json:"isolation"`
+	State     string `json:"state"`
+	LocalRoot string `json:"localRoot"`
+	OwnerKind string `json:"ownerKind"`
+	OwnerRef  string `json:"ownerRef"`
+}
+type SandboxList struct {
+	Sandboxes []Sandbox `json:"sandboxes"`
+}
+type CreateLocalSandboxInput struct {
+	Name      string `json:"name"`
+	Root      string `json:"root"`
+	Isolation string `json:"isolation"`
+}
+
 type RuntimeBudget struct {
 	MaxInvocations          int   `json:"maxInvocations"`
 	MaxPrincipalInvocations int   `json:"maxPrincipalInvocations"`

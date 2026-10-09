@@ -28,6 +28,7 @@ import type {
   ToolDetail,
   ToolSummary,
   Tunnel,
+  Sandbox,
 } from "@mender/sdk";
 
 import {
@@ -61,6 +62,7 @@ import {
   type ToolDetail as BindingToolDetail,
   type ToolSummary as BindingToolSummary,
   type Tunnel as BindingTunnel,
+  type Sandbox as BindingSandbox,
 } from "../bindings/github.com/orz-i/Mender/backend/internal/desktop/binding";
 
 export async function installDesktopProviderPlugin(
@@ -360,6 +362,19 @@ export function createDesktopMenderClient(): MenderClient {
 
     async setProfileTunnel(slug, body) {
       return profile(await Service.SetProfileTunnel(slug, body.tunnelId));
+    },
+
+    async listSandboxes() {
+      const result = await Service.ListSandboxes();
+      return { sandboxes: (result.sandboxes ?? []).map(sandbox) };
+    },
+
+    async getSandbox(sandboxId) {
+      return sandbox(await Service.GetSandbox(sandboxId));
+    },
+
+    async createLocalSandbox(body) {
+      return sandbox(await Service.CreateLocalSandbox(body));
     },
 
     async listTunnels() {
@@ -664,7 +679,10 @@ function policyDecision(value: string): Policy["defaultDecision"] {
 function policyAction(
   value: string,
 ): PolicyRule["match"]["actions"][number] {
-  if (value === "tool.invoke" || value === "provider.activate") {
+  if (value === "tool.invoke" || value === "provider.activate" ||
+      value === "sandbox.acquire" || value === "sandbox.provision" ||
+      value === "sandbox.start" || value === "sandbox.stop" ||
+      value === "sandbox.destroy") {
     return value;
   }
   throw new MenderClientInvariantError("Unsupported desktop Policy action: " + value);
@@ -1219,6 +1237,25 @@ function mcpServerInstance(
     ...(value.tunnelStatus === undefined
       ? {}
       : { tunnelStatus: tunnelStatus(value.tunnelStatus) }),
+  };
+}
+
+function sandbox(value: BindingSandbox): Sandbox {
+  if (!["local_workspace", "docker", "daytona", "e2b"].includes(value.backend) ||
+      !["host", "restricted_host", "container", "remote"].includes(value.isolation) ||
+      !["defined", "provisioning", "ready", "stopping", "stopped", "destroying", "destroyed", "failed", "unknown", "orphaned"].includes(value.state) ||
+      (value.ownerKind !== "local_user" && value.ownerKind !== "service")) {
+    throw new MenderClientInvariantError("Unsupported desktop Sandbox metadata");
+  }
+  return {
+    sandboxId: value.sandboxId,
+    name: value.name,
+    backend: value.backend as Sandbox["backend"],
+    isolation: value.isolation as Sandbox["isolation"],
+    state: value.state as Sandbox["state"],
+    localRoot: value.localRoot,
+    ownerKind: value.ownerKind,
+    ownerRef: value.ownerRef,
   };
 }
 

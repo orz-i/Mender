@@ -9,6 +9,7 @@ export {
 export type {
     AuditList,
     AuditRecord,
+    CreateLocalSandboxInput,
     Credential,
     CredentialEnvironment,
     CredentialHeader,
@@ -42,6 +43,8 @@ export type {
     RuntimeGovernanceStatus,
     RuntimeIsolation,
     RuntimeUsage,
+    Sandbox,
+    SandboxList,
     SkillDeployment,
     SkillDeploymentList,
     SkillInspection,

@@ -16,6 +16,8 @@ export type ToolDetail = components["schemas"]["ToolDetail"];
 export type InvocationResult = components["schemas"]["InvocationResult"];
 export type Profile = components["schemas"]["Profile"];
 export type Tunnel = components["schemas"]["Tunnel"];
+export type Sandbox = components["schemas"]["Sandbox"];
+export type CreateLocalSandboxRequest = components["schemas"]["CreateLocalSandboxRequest"];
 export type CreateOpenAITunnelRequest =
   components["schemas"]["CreateOpenAITunnelRequest"];
 export type SetProfileTunnelRequest =
@@ -146,6 +148,9 @@ export interface MenderClient {
   ): Promise<Profile>;
   removeProfileTool(slug: string, toolId: string): Promise<Profile>;
   setProfileTunnel(slug: string, body: SetProfileTunnelRequest): Promise<Profile>;
+  listSandboxes(): Promise<{ sandboxes: Sandbox[] }>;
+  getSandbox(sandboxId: string): Promise<Sandbox>;
+  createLocalSandbox(body: CreateLocalSandboxRequest): Promise<Sandbox>;
   listTunnels(): Promise<{ tunnels: Tunnel[] }>;
   createOpenAITunnel(body: CreateOpenAITunnelRequest): Promise<Tunnel>;
   deleteTunnel(tunnelId: string): Promise<void>;
@@ -460,6 +465,21 @@ export function createMenderClient(
         params: { path: { slug } },
         body,
       });
+      return requireData(result);
+    },
+
+    async listSandboxes() {
+      const result = await client.GET("/sandboxes");
+      return requireData(result);
+    },
+
+    async getSandbox(sandboxId: string) {
+      const result = await client.GET("/sandboxes/{sandboxId}", {params: {path: {sandboxId}}});
+      return requireData(result);
+    },
+
+    async createLocalSandbox(body: CreateLocalSandboxRequest) {
+      const result = await client.POST("/sandboxes/local", {body});
       return requireData(result);
     },
 

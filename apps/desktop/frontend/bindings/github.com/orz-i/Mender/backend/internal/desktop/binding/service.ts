@@ -36,6 +36,10 @@ export function CreateHTTPProvider($namespace: string, displayName: string, desc
     return $Call.ByID(2466151773, $namespace, displayName, description, endpoint, headers, credentialHeaders);
 }
 
+export function CreateLocalSandbox(input: $models.CreateLocalSandboxInput): $CancellablePromise<$models.Sandbox> {
+    return $Call.ByID(2786206366, input);
+}
+
 export function CreateNativeCredential($namespace: string, name: string, displayName: string, secret: string): $CancellablePromise<$models.Credential> {
     return $Call.ByID(46061890, $namespace, name, displayName, secret);
 }
@@ -128,6 +132,10 @@ export function GetRuntimeGovernance(): $CancellablePromise<$models.RuntimeGover
     return $Call.ByID(4089393752);
 }
 
+export function GetSandbox(sandboxID: string): $CancellablePromise<$models.Sandbox> {
+    return $Call.ByID(1347185727, sandboxID);
+}
+
 export function GetSkillInstallation(installationID: string): $CancellablePromise<$models.SkillInspection> {
     return $Call.ByID(2370910789, installationID);
 }
@@ -178,6 +186,10 @@ export function ListProviderPlugins(): $CancellablePromise<$models.ProviderPlugi
 
 export function ListProviders(): $CancellablePromise<$models.ProviderList> {
     return $Call.ByID(3638226830);
+}
+
+export function ListSandboxes(): $CancellablePromise<$models.SandboxList> {
+    return $Call.ByID(2515631083);
 }
 
 export function ListSkillDeployments(): $CancellablePromise<$models.SkillDeploymentList> {

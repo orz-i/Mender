@@ -470,6 +470,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/sandboxes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listSandboxes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sandboxes/local": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["createLocalSandbox"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sandboxes/{sandboxId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getSandbox"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/tunnels": {
         parameters: {
             query?: never;
@@ -1314,6 +1362,26 @@ export interface components {
             /** @description Mender Credential Reference containing the OpenAI tunnel runtime API key. */
             runtimeCredentialRef: string;
         };
+        CreateLocalSandboxRequest: {
+            name: string;
+            root: string;
+            /** @enum {string} */
+            isolation: "host" | "restricted_host";
+        };
+        Sandbox: {
+            sandboxId: string;
+            name: string;
+            /** @enum {string} */
+            backend: "local_workspace" | "docker" | "daytona" | "e2b";
+            /** @enum {string} */
+            isolation: "host" | "restricted_host" | "container" | "remote";
+            /** @enum {string} */
+            state: "defined" | "provisioning" | "ready" | "stopping" | "stopped" | "destroying" | "destroyed" | "failed" | "unknown" | "orphaned";
+            localRoot: string;
+            /** @enum {string} */
+            ownerKind: "local_user" | "service";
+            ownerRef: string;
+        };
         Tunnel: {
             tunnelId: string;
             displayName: string;
@@ -1449,6 +1517,7 @@ export interface components {
         };
     };
     parameters: {
+        SandboxId: string;
         ProviderId: string;
         InstallationId: string;
         DeploymentId: string;
@@ -2352,6 +2421,81 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Profile"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listSandboxes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Configured Sandbox inventory */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        sandboxes: components["schemas"]["Sandbox"][];
+                    };
+                };
+            };
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    createLocalSandbox: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateLocalSandboxRequest"];
+            };
+        };
+        responses: {
+            /** @description Local Sandbox admitted and created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Sandbox"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getSandbox: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sandboxId: components["parameters"]["SandboxId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Persisted Sandbox and last observed state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Sandbox"];
                 };
             };
             400: components["responses"]["BadRequest"];

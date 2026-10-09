@@ -627,6 +627,53 @@ paths:
                 $ref: '#/components/schemas/Profile'
         '400': { $ref: '#/components/responses/BadRequest' }
         '404': { $ref: '#/components/responses/NotFound' }
+  /sandboxes:
+    get:
+      operationId: listSandboxes
+      responses:
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '200':
+          description: Configured Sandbox inventory
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [sandboxes]
+                properties:
+                  sandboxes:
+                    type: array
+                    items: { $ref: '#/components/schemas/Sandbox' }
+  /sandboxes/local:
+    post:
+      operationId: createLocalSandbox
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateLocalSandboxRequest' }
+      responses:
+        '201':
+          description: Local Sandbox admitted and created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Sandbox' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /sandboxes/{sandboxId}:
+    get:
+      operationId: getSandbox
+      parameters:
+        - $ref: '#/components/parameters/SandboxId'
+      responses:
+        '200':
+          description: Persisted Sandbox and last observed state
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Sandbox' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /tunnels:
     get:
       operationId: listTunnels
@@ -1026,6 +1073,11 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
 components:
   parameters:
+    SandboxId:
+      name: sandboxId
+      in: path
+      required: true
+      schema: { type: string, pattern: '^sbx_[0-9a-f]{32}$' }
     ProviderId:
       name: providerId
       in: path
@@ -1743,6 +1795,27 @@ components:
         runtimeCredentialRef:
           type: string
           description: Mender Credential Reference containing the OpenAI tunnel runtime API key.
+      additionalProperties: false
+    CreateLocalSandboxRequest:
+      type: object
+      required: [name, root, isolation]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 160 }
+        root: { type: string, minLength: 1, maxLength: 4096 }
+        isolation: { type: string, enum: [host, restricted_host] }
+      additionalProperties: false
+    Sandbox:
+      type: object
+      required: [sandboxId, name, backend, isolation, state, localRoot, ownerKind, ownerRef]
+      properties:
+        sandboxId: { type: string, pattern: '^sbx_[0-9a-f]{32}$' }
+        name: { type: string }
+        backend: { type: string, enum: [local_workspace, docker, daytona, e2b] }
+        isolation: { type: string, enum: [host, restricted_host, container, remote] }
+        state: { type: string, enum: [defined, provisioning, ready, stopping, stopped, destroying, destroyed, failed, unknown, orphaned] }
+        localRoot: { type: string }
+        ownerKind: { type: string, enum: [local_user, service] }
+        ownerRef: { type: string }
       additionalProperties: false
     Tunnel:
       type: object

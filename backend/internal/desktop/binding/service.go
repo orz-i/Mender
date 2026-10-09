@@ -3,6 +3,7 @@ package binding
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -26,6 +27,7 @@ import (
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
 	installationdomain "github.com/orz-i/Mender/backend/internal/providerplugin/installation/domain"
 	runtimegovernancedomain "github.com/orz-i/Mender/backend/internal/runtimegovernance/domain"
+	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 	skillapplication "github.com/orz-i/Mender/backend/internal/skill/application"
 	skilldomain "github.com/orz-i/Mender/backend/internal/skill/domain"
 	tunnelapplication "github.com/orz-i/Mender/backend/internal/tunnel/application"
@@ -66,6 +68,55 @@ func (s *Service) GetSystemStatus() (SystemStatus, error) {
 			ExposureModes:  []string{"direct", "dynamic", "hybrid"},
 		},
 	}, nil
+}
+
+func (s *Service) ListSandboxes() (SandboxList, error) {
+	items, err := s.runtime.Sandboxes.List(s.ctx)
+	if err != nil {
+		return SandboxList{}, err
+	}
+	results := make([]Sandbox, 0, len(items))
+	for _, item := range items {
+		projected, err := s.projectSandbox(item)
+		if err != nil {
+			return SandboxList{}, err
+		}
+		results = append(results, projected)
+	}
+	return SandboxList{Sandboxes: results}, nil
+}
+func (s *Service) GetSandbox(sandboxID string) (Sandbox, error) {
+	id, err := sandboxdomain.ParseID(sandboxID)
+	if err != nil {
+		return Sandbox{}, err
+	}
+	item, err := s.runtime.Sandboxes.Get(s.ctx, id)
+	if err != nil {
+		return Sandbox{}, err
+	}
+	return s.projectSandbox(item)
+}
+func (s *Service) CreateLocalSandbox(input CreateLocalSandboxInput) (Sandbox, error) {
+	caller, err := s.governanceContext()
+	if err != nil {
+		return Sandbox{}, err
+	}
+	item, err := s.runtime.Sandboxes.CreateLocalSandbox(s.ctx, bootstrap.CreateLocalSandboxRequest{Name: input.Name, Root: input.Root, Isolation: sandboxdomain.IsolationClass(input.Isolation)}, caller)
+	if err != nil {
+		return Sandbox{}, err
+	}
+	return s.projectSandbox(item)
+}
+func (s *Service) projectSandbox(item sandboxdomain.Sandbox) (Sandbox, error) {
+	spec := item.Spec()
+	state := "defined"
+	run, err := s.runtime.Sandboxes.GetRun(s.ctx, item.ID())
+	if err == nil {
+		state = string(run.State)
+	} else if !errors.Is(err, sandboxdomain.ErrNotFound) {
+		return Sandbox{}, err
+	}
+	return Sandbox{SandboxID: spec.ID.String(), Name: spec.Name, Backend: string(spec.Backend), Isolation: string(spec.Isolation), State: state, LocalRoot: spec.LocalRoot, OwnerKind: spec.OwnerKind, OwnerRef: spec.OwnerRef}, nil
 }
 
 func (s *Service) GetRuntimeGovernance() (RuntimeGovernanceStatus, error) {

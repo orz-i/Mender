@@ -107,6 +107,9 @@ func (h *Handler) routes() {
 	h.mux.HandleFunc("DELETE /api/v1/profiles/{slug}/tools/{toolId}", h.removeProfileTool)
 	h.mux.HandleFunc("PUT /api/v1/profiles/{slug}/tunnel", h.setProfileTunnel)
 
+	h.mux.HandleFunc("GET /api/v1/sandboxes", h.listSandboxes)
+	h.mux.HandleFunc("POST /api/v1/sandboxes/local", h.createLocalSandbox)
+	h.mux.HandleFunc("GET /api/v1/sandboxes/{sandboxId}", h.getSandbox)
 	h.mux.HandleFunc("GET /api/v1/tunnels", h.listTunnels)
 	h.mux.HandleFunc("POST /api/v1/tunnels/openai", h.createOpenAITunnel)
 	h.mux.HandleFunc("DELETE /api/v1/tunnels/{tunnelId}", h.deleteTunnel)

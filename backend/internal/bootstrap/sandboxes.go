@@ -133,3 +133,12 @@ func (s *Sandboxes) CreateLocalSandbox(ctx context.Context, request CreateLocalS
 	}
 	return item, nil
 }
+
+// GetRun reports the last persisted observed backend state. It does not probe,
+// start or create instances while serving the management control plane.
+func (s *Sandboxes) GetRun(ctx context.Context, id sandboxdomain.ID) (sandboxdomain.Run, error) {
+	if s == nil || s.store == nil {
+		return sandboxdomain.Run{}, fmt.Errorf("sandbox inventory unavailable")
+	}
+	return s.store.GetRun(ctx, id)
+}

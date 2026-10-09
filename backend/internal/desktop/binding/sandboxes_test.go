@@ -1,0 +1,58 @@
+package binding
+
+import (
+	"context"
+	"errors"
+	"path/filepath"
+	"testing"
+
+	"github.com/orz-i/Mender/backend/internal/bootstrap"
+	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
+	policyapplication "github.com/orz-i/Mender/backend/internal/policy/application"
+	policydomain "github.com/orz-i/Mender/backend/internal/policy/domain"
+	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
+)
+
+func TestDesktopSandboxManagementFollowsRuntimeGovernance(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	runtime, err := bootstrap.NewRuntime(ctx, bootstrap.RuntimeOptions{DatabasePath: filepath.Join(t.TempDir(), "desktop-sandboxes.db")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = runtime.Close() })
+	service := NewService(ctx, runtime)
+	initially, err := service.ListSandboxes()
+	if err != nil || len(initially.Sandboxes) != 0 {
+		t.Fatalf("initial %+v %v", initially, err)
+	}
+	root := t.TempDir()
+	created, err := service.CreateLocalSandbox(CreateLocalSandboxInput{Name: "Desktop", Root: root, Isolation: "host"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created.SandboxID == "" || created.Backend != "local_workspace" || created.State != "ready" {
+		t.Fatalf("created %+v", created)
+	}
+	fetched, err := service.GetSandbox(created.SandboxID)
+	if err != nil || fetched.SandboxID != created.SandboxID {
+		t.Fatalf("detail %+v %v", fetched, err)
+	}
+	list, err := service.ListSandboxes()
+	if err != nil || len(list.Sandboxes) != 1 {
+		t.Fatalf("list %+v %v", list, err)
+	}
+	if _, err := service.GetSandbox("sbx_invalid"); err == nil {
+		t.Fatal("accepted malformed SandboxID")
+	}
+	if _, err := runtime.Policy.CreateRule.Execute(ctx, policyapplication.RuleInput{DisplayName: "Deny new Sandbox", Enabled: true, Decision: policydomain.DecisionDeny, Match: policydomain.MatchSpec{Actions: []governancedomain.Action{governancedomain.ActionSandboxProvision}}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.CreateLocalSandbox(CreateLocalSandboxInput{Name: "Denied", Root: filepath.Join(t.TempDir(), "nonexistent"), Isolation: "host"}); !errors.Is(err, sandboxdomain.ErrNotAuthorized) {
+		t.Fatalf("sandbox.provision policy bypass: %v", err)
+	}
+	unchanged, err := service.ListSandboxes()
+	if err != nil || len(unchanged.Sandboxes) != 1 {
+		t.Fatalf("denied create persisted: %+v %v", unchanged, err)
+	}
+}

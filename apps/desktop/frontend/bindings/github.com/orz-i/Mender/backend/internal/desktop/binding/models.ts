@@ -29,6 +29,12 @@ export interface AuditRecord {
     "failureCode": string;
 }
 
+export interface CreateLocalSandboxInput {
+    "name": string;
+    "root": string;
+    "isolation": string;
+}
+
 export interface Credential {
     "reference": string;
     "namespace": string;
@@ -309,6 +315,24 @@ export interface RuntimeIsolation {
 export interface RuntimeUsage {
     "invocations": number;
     "activations": number;
+}
+
+/**
+ * Sandbox is management metadata; state reflects the last persisted observation.
+ */
+export interface Sandbox {
+    "sandboxId": string;
+    "name": string;
+    "backend": string;
+    "isolation": string;
+    "state": string;
+    "localRoot": string;
+    "ownerKind": string;
+    "ownerRef": string;
+}
+
+export interface SandboxList {
+    "sandboxes": Sandbox[] | null;
 }
 
 export interface SkillDeployment {
