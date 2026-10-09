@@ -454,3 +454,34 @@ Implementation gate for this segment:
 7. Tests must cover v1 persisted DB upgrade on Runtime start, idempotent restart, strict v2 rejection of `root`, denied `tool.invoke` and `sandbox.acquire` (zero backend effects), `read/search/edit/shell` on the same Sandbox root, and stale/missing sandbox bindings. Existing tests must be adapted to the **new** source of authority rather than retaining v1 helpers.
 
 Non-goals: no new compatibility bridge, no Agent loop, no auto provisioning, no remote fallback, no unreviewed executable/mount flags from Tool input. Remain In Progress until management adapter parity and tests are green.
+
+## Implementation checkpoint — C2 hard cut and local Sandbox management (2026-10-09)
+
+Phase 25 is **In Progress**, not complete. The post-C1 milestone implements the Workspace Provider hard cut and the first local Sandbox management experience; it does **not** implement Docker, Daytona, E2B, lifecycle stop/destroy, remote budget enforcement or a general multi-tenant sandbox security boundary.
+
+Document-first and segmented commits:
+
+- `81c0932`: establish explicit C2 execution/authority/migration requirements before the hard cut.
+- `b5fcfe7`: admitted local `sandbox.provision` with durable Policy decision and isolated Sandbox/Run persistence, including denied-before-filesystem-observation tests.
+- `a769885`: hard-cut Workspace Provider ConfigVersion 2 to bound `{ "sandboxId": "sbx_..." }`; remove the v1 host-based read/search/edit/shell execution implementations; preserve stable `workspace.*` SourceKeys; attach validated Invocation GovernanceContext to the delegated Executor request; transact the v1→v2 startup migration in a single SQLite DB while preserving ProviderID/ToolID/Profile bindings. CLI now supports `mender sandbox add local`, `mender sandbox list`, and `mender provider add workspace --sandbox`. An integration test constructs v1 persisted configuration, upgrades/restarts the runtime and checks real tool invocation plus identity preservation. Existing isolation settings become a migration-time **snapshot**, not mutable Sandbox authority.
+- `a332d7e`: add `GET /api/v1/sandboxes`, `GET /api/v1/sandboxes/{sandboxId}`, `POST /api/v1/sandboxes/local`; typed OpenAPI, SDK and Wails binding/client parity; HTTP and Desktop governance/validation tests. Management operations are local-only and use explicit Principal/Policy; remote/container backends are not advertised as operational.
+- `df35e4d`: add Runtime sidebar `Sandboxes` and `/sandboxes`, `/sandboxes/new`, `/sandboxes/:sandboxId` pages with local-backend-first creation, explicit host/non-VM warning, state and capability metadata, search/filter/pagination, and planned-backend disabled cards. The built-in Workspace Provider's configuration editor uses a filtered *existing Sandbox selector* (ready local only), not a free-text opaque ID. Added regression test and updated provider UI test fixtures.
+
+Verification on the local Mender checkout (commit `df35e4d`):
+
+- `pnpm check` **exit code 0**, including Go full/race/lint, Provider plugin SDK/proto, generated OpenAPI/Wails bindings, TypeScript/ESLint, i18n, Vitest and Web/Desktop production builds.
+- Vitest **11 test files, 72 tests passed**; focused Workspace Sandbox selector test ensures only ready local backends are selectable and no manual ID field exists.
+- Startup migration proves persisted ProviderID/ToolID/Profile identity and real workspace read after restart. HTTP/Wails governance tests assert a denied Sandbox provision has no persisted instance.
+- Frontend production builds emit pre-existing non-fatal large-chunk warnings (>500 kB). Performance/codesplitting remains an independent backlog item.
+- `pnpm security:check` was **re-run and failed**: local Go 1.27.1 standard-library reachable advisories (12, patched by Go 1.27.2) and `golang.org/x/net` v0.58.0 vulnerability metadata (patched in v0.60.0); scan remains a release blocker. `pnpm check` green is **not** a security clearance.
+- `.agents/`, `.pi/`, `.intent-loop/` remain untouched and untracked. Commits are local and have not been pushed.
+
+Next gates, in priority order:
+
+1. Harden local Sandbox resource integrity: prevent orphaned Provider → Sandbox links and unsafe sharing of the same local root across independently governed Sandbox IDs, and verify access to non-existent Sandbox IDs cannot be configured through normal Provider flows.
+2. Design and implement governed `sandbox.start/stop/destroy` lifecycle, typed state transitions, durable audit and active-lease-aware cleanup (only where the backend supports the action). Preserve safe immutable host/restricted-host decisions for local Sandbox resources.
+3. Design Docker's backend-specific security configuration (image digest, UID/GID, read-only mount and explicit write grants, no privilege or daemon socket binding, network default, cgroup resource limits, timeouts), run IDs, cancellation/reconciliation and integration tests, then expose a working Docker create card only when verified.
+4. Integrate Daytona as first remote adapter after strong credential/cost/TTL and uncertain-outcome safeguards; do not auto-retry side-effecting commands or silently fail over to host.
+5. Address the separate Go toolchain/dependency vulnerability scan failure and rerun `pnpm security:check` before any Phase 25 completion claim.
+
+The new management pages display last *persisted* run state; `ready` does not mean a fresh backend health probe. Local Workspace `host` is high authority and **not isolated**; `restricted_host` is OS process isolation, **not** a VM/container. Profiles using a different Principal from the owning local user require explicit future delegation; do not loosen the ownership check as an incidental compatibility change.
