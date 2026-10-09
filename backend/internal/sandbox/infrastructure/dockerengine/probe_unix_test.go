@@ -149,3 +149,16 @@ func TestDockerEngineReadOnlyLiveSmoke(t *testing.T) {
 	}
 	t.Logf("read-only Engine=%s API=%s OS=%s cgroup=%s seccompBuiltin=%t", result.EngineVersion, result.APIVersion, result.OSType, result.CgroupVersion, result.SeccompBuiltin)
 }
+
+func TestDockerHubDigestAliasRequiresIdenticalManifest(t *testing.T) {
+	manifest := "sha256:" + strings.Repeat("a", 64)
+	if !locallyVerifiedDigest([]string{"alpine@" + manifest}, "docker.io/library/alpine@"+manifest) {
+		t.Fatal("normalized official Docker Hub digest was rejected")
+	}
+	if locallyVerifiedDigest([]string{"alpine@" + manifest}, "example.com/library/alpine@"+manifest) {
+		t.Fatal("alias crossed registry boundary")
+	}
+	if locallyVerifiedDigest([]string{"alpine@" + manifest}, "docker.io/library/alpine@sha256:"+strings.Repeat("b", 64)) {
+		t.Fatal("different manifest accepted")
+	}
+}

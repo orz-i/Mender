@@ -139,7 +139,7 @@ func (i *Inspector) InspectLocalImage(ctx context.Context, t Template) (LocalIma
 		return LocalImage{}, safeDaemonError(limited, err)
 	}
 	response := result.InspectResponse
-	if response.Os != "linux" || !slices.Contains(response.RepoDigests, t.ImageDigest) || !strings.HasPrefix(response.ID, "sha256:") || len(response.ID) != 71 || response.Architecture == "" {
+	if response.Os != "linux" || !locallyVerifiedDigest(response.RepoDigests, t.ImageDigest) || !strings.HasPrefix(response.ID, "sha256:") || len(response.ID) != 71 || response.Architecture == "" {
 		return LocalImage{}, fmt.Errorf("docker engine: requested immutable image not locally verified: %w", sandboxdomain.ErrBackendUnavailable)
 	}
 	return LocalImage{ImageID: response.ID, Digest: t.ImageDigest, OSType: response.Os, Architecture: response.Architecture}, nil
@@ -155,4 +155,18 @@ func safeDaemonError(ctx context.Context, err error) error {
 		return err
 	}
 	return sandboxdomain.ErrBackendUnavailable
+}
+
+// Docker Engine normalizes Docker Hub library repository names to short
+// RepoDigests ("alpine@sha256:...") even when queried by its fully qualified
+// form. This is the only permitted alias, and the content digest must match.
+func locallyVerifiedDigest(known []string, expected string) bool {
+	if slices.Contains(known, expected) {
+		return true
+	}
+	const prefix = "docker.io/library/"
+	if strings.HasPrefix(expected, prefix) {
+		return slices.Contains(known, strings.TrimPrefix(expected, prefix))
+	}
+	return false
 }
