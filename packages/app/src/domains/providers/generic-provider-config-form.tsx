@@ -1,6 +1,7 @@
 import { useState } from "react";
 
-import type { Credential, ProviderPlugin } from "@mender/sdk";
+import type { Credential, ProviderPlugin, Sandbox } from "@mender/sdk";
+import { Link } from "react-router";
 import { Input } from "@mender/ui/components/input";
 import { Textarea } from "@mender/ui/components/textarea";
 
@@ -34,14 +35,37 @@ export function GenericProviderConfigForm({
   uiSchema,
   value,
   credentials,
+  sandboxes,
+  pluginId,
   onChange,
 }: {
   schema: ProviderPlugin["configSchema"];
   uiSchema: ProviderPlugin["uiSchema"];
   value: ConfigValue;
   credentials: Credential[];
+  sandboxes?: Sandbox[];
+  pluginId?: string | undefined;
   onChange: (value: ConfigValue) => void;
 }) {
+  // The built-in Workspace plugin uses a resource selector instead of a raw
+  // sandboxId input. LLMs/Agents must never be able to select execution placement.
+  if (pluginId === "io.mender.provider.workspace") {
+    const available = (sandboxes ?? []).filter((item) => item.state === "ready" && item.backend === "local_workspace");
+    const selected = typeof value.sandboxId === "string" ? value.sandboxId : "";
+    return <div className="space-y-3">
+      <label className="block space-y-2 text-sm">
+        <span className="font-medium">{t("Sandbox")}</span>
+        <select aria-label={t("Sandbox")} className="h-9 w-full rounded-lg border border-input bg-background px-3" value={selected} onChange={(e) => onChange({...value,sandboxId:e.target.value})}>
+          <option value="">{t("Choose a sandbox")}</option>
+          {!available.some((item)=>item.sandboxId===selected) && selected ? <option value={selected} disabled>{t("Unavailable sandbox")}</option> : null}
+          {available.map((item)=><option key={item.sandboxId} value={item.sandboxId}>{item.name} · {t(item.isolation==="host" ? "Host (not isolated)" : "Restricted host")}</option>)}
+        </select>
+      </label>
+      <p className="text-xs leading-5 text-muted-foreground">{t("Workspace Tools share the selected Sandbox filesystem and its fixed isolation boundary.")}</p>
+      {available.length === 0 ? <p className="text-xs text-muted-foreground">{t("No ready local Sandbox is available.")}</p> : null}
+      <Link to="/sandboxes/new" className="inline-flex text-xs font-medium text-primary underline-offset-4 hover:underline">{t("Create sandbox")}</Link>
+    </div>;
+  }
   const supportError = genericSchemaSupportError(schema);
   if (supportError) {
     return <SchemaNotice>{supportError}</SchemaNotice>;

@@ -13,6 +13,7 @@ import {
 
 import type {
   Credential,
+  Sandbox,
   MenderClient,
   Provider,
   ProviderPlugin,
@@ -301,6 +302,7 @@ export function ProvidersPage({
     ProviderPluginIssue[]
   >([]);
   const [credentials, setCredentials] = useState<Credential[]>([]);
+  const [sandboxes, setSandboxes] = useState<Sandbox[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
@@ -358,13 +360,15 @@ export function ProvidersPage({
       client.listProviderPlugins(),
       client.listProviders(),
       client.listCredentials(),
+      client.listSandboxes(),
     ])
-      .then(([pluginResult, providerResult, credentialResult]) => {
+      .then(([pluginResult, providerResult, credentialResult, sandboxResult]) => {
         if (active) {
           setProviderPlugins(pluginResult.plugins);
           setProviderPluginIssues(pluginResult.issues);
           setProviders(providerResult.providers);
           setCredentials(credentialResult.credentials);
+          setSandboxes(sandboxResult.sandboxes);
 
           if (createRequest.requested) {
             const plugin =
@@ -840,6 +844,7 @@ export function ProvidersPage({
         form={createForm}
         plugins={providerPlugins}
         credentials={credentials}
+        sandboxes={sandboxes}
         busy={busy === "create"}
         onOpenChange={setCreateDialogOpen}
         onChange={setCreateForm}
@@ -888,6 +893,7 @@ export function ProvidersPage({
           form={editForm}
           plugins={providerPlugins}
           credentials={credentials}
+          sandboxes={sandboxes}
           busy={
             editProvider !== null && busy === editProvider.providerId
           }
@@ -1128,6 +1134,7 @@ function ProviderFormDialog({
   form,
   plugins,
   credentials,
+  sandboxes,
   busy,
   onOpenChange,
   onChange,
@@ -1140,6 +1147,7 @@ function ProviderFormDialog({
   form: ProviderFormState;
   plugins: ProviderPlugin[];
   credentials: Credential[];
+  sandboxes: Sandbox[];
   busy: boolean;
   onOpenChange: (open: boolean) => void;
   onChange: (value: ProviderFormState) => void;
@@ -1367,6 +1375,8 @@ function ProviderFormDialog({
                 uiSchema={selectedPlugin?.uiSchema}
                 value={form.genericConfig}
                 credentials={credentials}
+                sandboxes={sandboxes}
+                pluginId={selectedPlugin?.pluginId}
                 onChange={(genericConfig) =>
                   onChange({ ...form, genericConfig })
                 }

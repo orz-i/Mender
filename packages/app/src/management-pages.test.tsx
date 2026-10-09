@@ -2252,6 +2252,9 @@ function renderApp(
       .mockResolvedValue({ installations: [] }),
     listCredentials: vi.fn().mockResolvedValue({ credentials: [] }),
     listTunnels: vi.fn().mockResolvedValue({ tunnels: [] }),
+    listSandboxes: vi.fn().mockResolvedValue({ sandboxes: [] }),
+    getSandbox: vi.fn(),
+    createLocalSandbox: vi.fn(),
     ...client,
   } as MenderClient;
   return render(

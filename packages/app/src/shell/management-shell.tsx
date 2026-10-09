@@ -15,6 +15,7 @@ import {
   PlugIcon,
   ScrollTextIcon,
   ServerCogIcon,
+  BoxIcon,
   ShieldCheckIcon,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -94,6 +95,11 @@ const navigation: NavigationGroup[] = [
         to: "/runtime",
         label: "Runtime",
         icon: GaugeIcon,
+      },
+      {
+        to: "/sandboxes",
+        label: "Sandboxes",
+        icon: BoxIcon,
       },
       {
         to: "/profiles",
