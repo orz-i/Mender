@@ -485,3 +485,11 @@ Next gates, in priority order:
 5. Address the separate Go toolchain/dependency vulnerability scan failure and rerun `pnpm security:check` before any Phase 25 completion claim.
 
 The new management pages display last *persisted* run state; `ready` does not mean a fresh backend health probe. Local Workspace `host` is high authority and **not isolated**; `restricted_host` is OS process isolation, **not** a VM/container. Profiles using a different Principal from the owning local user require explicit future delegation; do not loosen the ownership check as an incidental compatibility change.
+
+### Workspace binding integrity hardening (2026-10-09)
+
+- `bd39430` — Workspace Provider `ValidateConfig` now performs a **metadata-only** `SandboxRouter.Resolve` after strict ConfigVersion 2 parsing. If the Sandbox does not exist, Provider registration/update fails before activation and no Provider configuration is persisted. `ValidateConfig` never calls `Acquire`, probes a backend filesystem, resolves credentials, or starts a Sandbox; existing `Plugin.Open` and Catalog discovery stay side-effect-free.
+- Added unit and Runtime integration tests for unknown SandboxID rejection and absence of persisted failed Provider configuration.
+- `pnpm check` was re-run after the change: **exit code 0**, Go lint/test/race and contracts/TypeScript checks passed, Vitest **11 files / 72 tests** passed, and frontend production builds completed. One first-pass unrelated Skills-page 5-second test timeout passed both as an isolated re-run and during full re-run; document this as a potential flaky timing test, not a new Workspace regression.
+- `pnpm security:check` is still **failing** (Go 1.27.1 standard-library advisory set and `golang.org/x/net` v0.58.0). This is not fixed by the Sandbox binding hardening commit. The Phase 25 milestone remains **In Progress**.
+- Future lifecycle changes must block deleting a Sandbox while it is referenced by any Provider and must reconcile stale/unknown runs before permitting destruction. The current UI does not expose deletion or stop/start and should not imply they work.
