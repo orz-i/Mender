@@ -92,6 +92,10 @@ export function DeploySkill(installationID: string, targetValue: string, project
     return $Call.ByID(1977911452, installationID, targetValue, projectRoot);
 }
 
+export function DestroySandbox(sandboxID: string): $CancellablePromise<$models.Sandbox> {
+    return $Call.ByID(220259473, sandboxID);
+}
+
 export function DisableProviderPluginInstallation(installationID: string): $CancellablePromise<$models.ProviderPluginInstallation> {
     return $Call.ByID(3166916010, installationID);
 }
@@ -244,8 +248,16 @@ export function StartMCPServer(profile: string, address: string): $CancellablePr
     return $Call.ByID(1278287583, profile, address);
 }
 
+export function StartSandbox(sandboxID: string): $CancellablePromise<$models.Sandbox> {
+    return $Call.ByID(1689561319, sandboxID);
+}
+
 export function StopMCPServer(serverID: string): $CancellablePromise<void> {
     return $Call.ByID(2585675323, serverID);
+}
+
+export function StopSandbox(sandboxID: string): $CancellablePromise<$models.Sandbox> {
+    return $Call.ByID(4195828507, sandboxID);
 }
 
 export function SyncProvider(providerID: string): $CancellablePromise<$models.SyncResult> {

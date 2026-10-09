@@ -1,4 +1,13 @@
 export const zhCNMessages: Readonly<Record<string, string>> = {
+  "Start sandbox": "启动沙盒",
+  "Stop sandbox": "停止沙盒",
+  "Destroy sandbox": "销毁沙盒",
+  "Active execution leases": "活动执行租约",
+  "Cannot change lifecycle while a Sandbox execution lease is active.": "沙盒存在活动执行租约时不能更改生命周期。",
+  "Host files remain untouched after Sandbox destruction.": "沙盒销毁后，本地主机文件保持不变。",
+  "Destroy Sandbox \"{{name}}\"? This only tombstones the Sandbox; host files are never deleted.": "确定销毁沙盒“{{name}}”？这只会将沙盒标记为已销毁，不会删除本地文件。",
+  "Stopped": "已停止",
+  "Destroyed": "已销毁",
   "/Users/example/project": "/Users/example/project",
   "Absolute local directory": "本地绝对目录",
   "All backends": "所有后端",

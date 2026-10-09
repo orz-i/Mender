@@ -16,6 +16,7 @@ const availableSandbox: Sandbox = {
   localRoot: "/workspace/project",
   ownerKind: "local_user",
   ownerRef: "test-owner",
+  activeLeases: 0,
 };
 
 const unavailableSandbox: Sandbox = {

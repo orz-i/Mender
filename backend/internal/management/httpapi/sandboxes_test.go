@@ -56,3 +56,60 @@ func TestSandboxManagementListCreateDetailAndPolicyDenied(t *testing.T) {
 		t.Fatalf("denied provision persisted: %+v", final)
 	}
 }
+
+func TestSandboxManagementLifecycleLocalAndPolicyDeny(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	runtime, err := bootstrap.NewRuntime(ctx, bootstrap.RuntimeOptions{DatabasePath: filepath.Join(t.TempDir(), "lifecycle-api.db")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = runtime.Close() })
+	server := httptest.NewServer(New(runtime))
+	t.Cleanup(server.Close)
+	root := t.TempDir()
+	created := requestJSON(t, server.Client(), http.MethodPost, server.URL+"/api/v1/sandboxes/local", map[string]any{"name": "Lifecycle", "root": root, "isolation": "host"}, http.StatusCreated)
+	id := created["sandboxId"].(string)
+	base := server.URL + "/api/v1/sandboxes/" + id
+	if created["activeLeases"] != float64(0) {
+		t.Fatalf("unexpected initial leases %+v", created)
+	}
+	if _, err := runtime.Policy.CreateRule.Execute(ctx, policyapplication.RuleInput{DisplayName: "deny Sandbox stop", Enabled: true, Decision: policydomain.DecisionDeny, Match: policydomain.MatchSpec{Actions: []governancedomain.Action{governancedomain.ActionSandboxStop}}}); err != nil {
+		t.Fatal(err)
+	}
+	requestJSON(t, server.Client(), http.MethodPost, base+"/stop", nil, http.StatusForbidden)
+	ready := requestJSON(t, server.Client(), http.MethodGet, base, nil, http.StatusOK)
+	if ready["state"] != "ready" {
+		t.Fatalf("denial changed state %+v", ready)
+	}
+	rules, err := runtime.Policy.Get.Execute(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, rule := range rules.Rules() {
+		if err := runtime.Policy.DeleteRule.Execute(ctx, rule.ID()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	stopped := requestJSON(t, server.Client(), http.MethodPost, base+"/stop", nil, http.StatusOK)
+	if stopped["state"] != "stopped" {
+		t.Fatalf("stop %+v", stopped)
+	}
+	requestJSON(t, server.Client(), http.MethodPost, base+"/stop", nil, http.StatusConflict)
+	started := requestJSON(t, server.Client(), http.MethodPost, base+"/start", nil, http.StatusOK)
+	if started["state"] != "ready" {
+		t.Fatalf("start %+v", started)
+	}
+	destroyed := requestJSON(t, server.Client(), http.MethodDelete, base, nil, http.StatusOK)
+	if destroyed["state"] != "destroyed" {
+		t.Fatalf("destroy %+v", destroyed)
+	}
+	requestJSON(t, server.Client(), http.MethodPost, base+"/start", nil, http.StatusConflict)
+	requestJSON(t, server.Client(), http.MethodPost, base+"/stop", nil, http.StatusConflict)
+	requestJSON(t, server.Client(), http.MethodDelete, base, nil, http.StatusConflict)
+	list := requestJSON(t, server.Client(), http.MethodGet, server.URL+"/api/v1/sandboxes", nil, http.StatusOK)
+	rows := list["sandboxes"].([]any)
+	if len(rows) != 1 || rows[0].(map[string]any)["state"] != "destroyed" {
+		t.Fatalf("tombstone disappeared %+v", list)
+	}
+}

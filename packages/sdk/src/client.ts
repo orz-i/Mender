@@ -151,6 +151,9 @@ export interface MenderClient {
   listSandboxes(): Promise<{ sandboxes: Sandbox[] }>;
   getSandbox(sandboxId: string): Promise<Sandbox>;
   createLocalSandbox(body: CreateLocalSandboxRequest): Promise<Sandbox>;
+  startSandbox(sandboxId: string): Promise<Sandbox>;
+  stopSandbox(sandboxId: string): Promise<Sandbox>;
+  destroySandbox(sandboxId: string): Promise<Sandbox>;
   listTunnels(): Promise<{ tunnels: Tunnel[] }>;
   createOpenAITunnel(body: CreateOpenAITunnelRequest): Promise<Tunnel>;
   deleteTunnel(tunnelId: string): Promise<void>;
@@ -480,6 +483,19 @@ export function createMenderClient(
 
     async createLocalSandbox(body: CreateLocalSandboxRequest) {
       const result = await client.POST("/sandboxes/local", {body});
+      return requireData(result);
+    },
+
+    async startSandbox(sandboxId: string) {
+      const result = await client.POST("/sandboxes/{sandboxId}/start", {params:{path:{sandboxId}}});
+      return requireData(result);
+    },
+    async stopSandbox(sandboxId: string) {
+      const result = await client.POST("/sandboxes/{sandboxId}/stop", {params:{path:{sandboxId}}});
+      return requireData(result);
+    },
+    async destroySandbox(sandboxId: string) {
+      const result = await client.DELETE("/sandboxes/{sandboxId}", {params:{path:{sandboxId}}});
       return requireData(result);
     },
 

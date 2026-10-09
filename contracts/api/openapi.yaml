@@ -674,6 +674,50 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      operationId: destroySandbox
+      parameters:
+        - $ref: '#/components/parameters/SandboxId'
+      responses:
+        '200':
+          description: Sandbox tombstoned. The local host directory is NOT deleted.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Sandbox' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /sandboxes/{sandboxId}/start:
+    post:
+      operationId: startSandbox
+      parameters:
+        - $ref: '#/components/parameters/SandboxId'
+      responses:
+        '200':
+          description: Local Sandbox revalidated and started
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Sandbox' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /sandboxes/{sandboxId}/stop:
+    post:
+      operationId: stopSandbox
+      parameters:
+        - $ref: '#/components/parameters/SandboxId'
+      responses:
+        '200':
+          description: Local Sandbox made unavailable for new executions
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Sandbox' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
   /tunnels:
     get:
       operationId: listTunnels
@@ -1806,13 +1850,14 @@ components:
       additionalProperties: false
     Sandbox:
       type: object
-      required: [sandboxId, name, backend, isolation, state, localRoot, ownerKind, ownerRef]
+      required: [sandboxId, name, backend, isolation, state, localRoot, ownerKind, ownerRef, activeLeases]
       properties:
         sandboxId: { type: string, pattern: '^sbx_[0-9a-f]{32}$' }
         name: { type: string }
         backend: { type: string, enum: [local_workspace, docker, daytona, e2b] }
         isolation: { type: string, enum: [host, restricted_host, container, remote] }
         state: { type: string, enum: [defined, provisioning, ready, stopping, stopped, destroying, destroyed, failed, unknown, orphaned] }
+        activeLeases: { type: integer, minimum: 0, description: Persisted cross-process Sandbox execution leases }
         localRoot: { type: string }
         ownerKind: { type: string, enum: [local_user, service] }
         ownerRef: { type: string }

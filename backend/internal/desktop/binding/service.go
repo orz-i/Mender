@@ -107,6 +107,34 @@ func (s *Service) CreateLocalSandbox(input CreateLocalSandboxInput) (Sandbox, er
 	}
 	return s.projectSandbox(item)
 }
+func (s *Service) StartSandbox(sandboxID string) (Sandbox, error) {
+	return s.changeLocalSandboxLifecycle(sandboxID, governancedomain.ActionSandboxStart)
+}
+func (s *Service) StopSandbox(sandboxID string) (Sandbox, error) {
+	return s.changeLocalSandboxLifecycle(sandboxID, governancedomain.ActionSandboxStop)
+}
+func (s *Service) DestroySandbox(sandboxID string) (Sandbox, error) {
+	return s.changeLocalSandboxLifecycle(sandboxID, governancedomain.ActionSandboxDestroy)
+}
+func (s *Service) changeLocalSandboxLifecycle(rawID string, action governancedomain.Action) (Sandbox, error) {
+	id, err := sandboxdomain.ParseID(rawID)
+	if err != nil {
+		return Sandbox{}, err
+	}
+	caller, err := s.governanceContext()
+	if err != nil {
+		return Sandbox{}, err
+	}
+	if _, err := s.runtime.Sandboxes.ChangeLocalLifecycle(s.ctx, id, action, caller); err != nil {
+		return Sandbox{}, err
+	}
+	item, err := s.runtime.Sandboxes.Get(s.ctx, id)
+	if err != nil {
+		return Sandbox{}, err
+	}
+	return s.projectSandbox(item)
+}
+
 func (s *Service) projectSandbox(item sandboxdomain.Sandbox) (Sandbox, error) {
 	spec := item.Spec()
 	state := "defined"
@@ -116,7 +144,11 @@ func (s *Service) projectSandbox(item sandboxdomain.Sandbox) (Sandbox, error) {
 	} else if !errors.Is(err, sandboxdomain.ErrNotFound) {
 		return Sandbox{}, err
 	}
-	return Sandbox{SandboxID: spec.ID.String(), Name: spec.Name, Backend: string(spec.Backend), Isolation: string(spec.Isolation), State: state, LocalRoot: spec.LocalRoot, OwnerKind: spec.OwnerKind, OwnerRef: spec.OwnerRef}, nil
+	active, err := s.runtime.Sandboxes.ActiveLeases(s.ctx, item.ID())
+	if err != nil {
+		return Sandbox{}, err
+	}
+	return Sandbox{SandboxID: spec.ID.String(), Name: spec.Name, Backend: string(spec.Backend), Isolation: string(spec.Isolation), State: state, LocalRoot: spec.LocalRoot, OwnerKind: spec.OwnerKind, OwnerRef: spec.OwnerRef, ActiveLeases: active}, nil
 }
 
 func (s *Service) GetRuntimeGovernance() (RuntimeGovernanceStatus, error) {

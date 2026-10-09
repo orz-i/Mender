@@ -377,6 +377,16 @@ export function createDesktopMenderClient(): MenderClient {
       return sandbox(await Service.CreateLocalSandbox(body));
     },
 
+    async startSandbox(sandboxId) {
+      return sandbox(await Service.StartSandbox(sandboxId));
+    },
+    async stopSandbox(sandboxId) {
+      return sandbox(await Service.StopSandbox(sandboxId));
+    },
+    async destroySandbox(sandboxId) {
+      return sandbox(await Service.DestroySandbox(sandboxId));
+    },
+
     async listTunnels() {
       const result = await Service.ListTunnels();
       return { tunnels: (result.tunnels ?? []).map(tunnel) };
@@ -1256,6 +1266,7 @@ function sandbox(value: BindingSandbox): Sandbox {
     localRoot: value.localRoot,
     ownerKind: value.ownerKind,
     ownerRef: value.ownerRef,
+    activeLeases: value.activeLeases,
   };
 }
 

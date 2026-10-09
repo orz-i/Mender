@@ -4,6 +4,8 @@ import (
 	"errors"
 	"net/http"
 
+	sandboxapplication "github.com/orz-i/Mender/backend/internal/sandbox/application"
+
 	"github.com/orz-i/Mender/backend/internal/bootstrap"
 	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
@@ -93,15 +95,68 @@ func (h *Handler) sandboxStatus(r *http.Request, item sandboxdomain.Sandbox) (ma
 	} else if !errors.Is(err, sandboxdomain.ErrNotFound) {
 		return nil, err
 	}
+	leases, err := h.runtime.Sandboxes.ActiveLeases(r.Context(), item.ID())
+	if err != nil {
+		return nil, err
+	}
 	spec := item.Spec()
 	return map[string]any{
-		"sandboxId": spec.ID.String(),
-		"name":      spec.Name,
-		"backend":   string(spec.Backend),
-		"isolation": string(spec.Isolation),
-		"state":     state,
-		"localRoot": spec.LocalRoot,
-		"ownerKind": spec.OwnerKind,
-		"ownerRef":  spec.OwnerRef,
+		"activeLeases": leases,
+		"sandboxId":    spec.ID.String(),
+		"name":         spec.Name,
+		"backend":      string(spec.Backend),
+		"isolation":    string(spec.Isolation),
+		"state":        state,
+		"localRoot":    spec.LocalRoot,
+		"ownerKind":    spec.OwnerKind,
+		"ownerRef":     spec.OwnerRef,
 	}, nil
+}
+
+func (h *Handler) startLocalSandbox(w http.ResponseWriter, r *http.Request) {
+	h.localSandboxLifecycle(w, r, governancedomain.ActionSandboxStart)
+}
+func (h *Handler) stopLocalSandbox(w http.ResponseWriter, r *http.Request) {
+	h.localSandboxLifecycle(w, r, governancedomain.ActionSandboxStop)
+}
+func (h *Handler) destroyLocalSandbox(w http.ResponseWriter, r *http.Request) {
+	h.localSandboxLifecycle(w, r, governancedomain.ActionSandboxDestroy)
+}
+func (h *Handler) localSandboxLifecycle(w http.ResponseWriter, r *http.Request, action governancedomain.Action) {
+	id, err := sandboxdomain.ParseID(r.PathValue("sandboxId"))
+	if err != nil {
+		writeAPIError(w, http.StatusBadRequest, "validation_error", err)
+		return
+	}
+	caller, err := governancedomain.NewContext(governancedomain.OriginManagementHTTP, h.runtime.OwnerPrincipal(), governancedomain.CatalogScope())
+	if err != nil {
+		writeKnownError(w, err)
+		return
+	}
+	if _, err := h.runtime.Sandboxes.ChangeLocalLifecycle(r.Context(), id, action, caller); err != nil {
+		switch {
+		case errors.Is(err, sandboxdomain.ErrNotFound):
+			writeAPIError(w, http.StatusNotFound, "not_found", err)
+		case errors.Is(err, sandboxdomain.ErrNotAuthorized), errors.Is(err, sandboxapplication.ErrApprovalDenied):
+			writeAPIError(w, http.StatusForbidden, "policy_denied", err)
+		case errors.Is(err, sandboxdomain.ErrConflict):
+			writeAPIError(w, http.StatusConflict, "conflict", err)
+		case errors.Is(err, sandboxdomain.ErrBackendUnavailable):
+			writeAPIError(w, http.StatusNotImplemented, "unsupported_backend", err)
+		default:
+			writeKnownError(w, err)
+		}
+		return
+	}
+	item, err := h.runtime.Sandboxes.Get(r.Context(), id)
+	if err != nil {
+		writeKnownError(w, err)
+		return
+	}
+	projected, err := h.sandboxStatus(r, item)
+	if err != nil {
+		writeKnownError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, projected)
 }

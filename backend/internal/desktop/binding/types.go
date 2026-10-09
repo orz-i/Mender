@@ -9,14 +9,15 @@ type SystemStatus struct {
 
 // Sandbox is management metadata; state reflects the last persisted observation.
 type Sandbox struct {
-	SandboxID string `json:"sandboxId"`
-	Name      string `json:"name"`
-	Backend   string `json:"backend"`
-	Isolation string `json:"isolation"`
-	State     string `json:"state"`
-	LocalRoot string `json:"localRoot"`
-	OwnerKind string `json:"ownerKind"`
-	OwnerRef  string `json:"ownerRef"`
+	SandboxID    string `json:"sandboxId"`
+	Name         string `json:"name"`
+	Backend      string `json:"backend"`
+	Isolation    string `json:"isolation"`
+	State        string `json:"state"`
+	LocalRoot    string `json:"localRoot"`
+	OwnerKind    string `json:"ownerKind"`
+	OwnerRef     string `json:"ownerRef"`
+	ActiveLeases int    `json:"activeLeases"`
 }
 type SandboxList struct {
 	Sandboxes []Sandbox `json:"sandboxes"`

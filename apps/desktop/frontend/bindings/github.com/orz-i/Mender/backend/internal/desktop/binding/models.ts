@@ -329,6 +329,7 @@ export interface Sandbox {
     "localRoot": string;
     "ownerKind": string;
     "ownerRef": string;
+    "activeLeases": number;
 }
 
 export interface SandboxList {

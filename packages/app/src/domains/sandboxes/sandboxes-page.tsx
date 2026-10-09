@@ -152,24 +152,51 @@ export function CreateSandboxPage({ client }: { client: MenderClient }) {
 }
 
 export function SandboxDetailPage({client}:{client:MenderClient}) {
-  const {sandboxId}=useParams();const navigate=useNavigate();
-  const [item,setItem]=useState<Sandbox|null>(null);const [error,setError]=useState("");const [loaded,setLoaded]=useState(false);
+  const {sandboxId}=useParams();
+  const navigate=useNavigate();
+  const [item,setItem]=useState<Sandbox|null>(null);
+  const [error,setError]=useState("");
+  const [loaded,setLoaded]=useState(false);
+  const [busy,setBusy]=useState(false);
   useEffect(()=>{
     if (!sandboxId) return;
     let active=true;
     void client.getSandbox(sandboxId).then(value=>{if(active){setItem(value);setLoaded(true);}}).catch((reason:unknown)=>{if(active){setError(errorMessage(reason));setLoaded(true);}});
     return ()=>{active=false;};
   },[client,sandboxId]);
+  async function changeLifecycle(action:"start"|"stop"|"destroy"){
+    if(!item||busy)return;
+    if(action==="destroy" && !window.confirm(t('Destroy Sandbox "{{name}}"? This only tombstones the Sandbox; host files are never deleted.',{name:item.name})))return;
+    setBusy(true);setError("");
+    try{
+      const next=action==="start"?await client.startSandbox(item.sandboxId):action==="stop"?await client.stopSandbox(item.sandboxId):await client.destroySandbox(item.sandboxId);
+      setItem(next);
+    }catch(reason){setError(errorMessage(reason));}
+    finally{setBusy(false);}
+  }
+  const local=item?.backend==="local_workspace";
+  const noActiveLeases=item?.activeLeases===0;
+  const canStart=local && item?.state==="stopped";
+  const canStop=local && item?.state==="ready";
+  const canDestroy=local && (item?.state==="ready"||item?.state==="stopped");
   return <>
-    <PageHeader actions={<Button variant="outline" onClick={()=>{void navigate("/sandboxes");}}>{t("Back to sandboxes")}</Button>}/>
+    <PageHeader actions={<div className="flex flex-wrap justify-end gap-2">
+      {canStart?<Button disabled={busy||!noActiveLeases} onClick={()=>void changeLifecycle("start")}>{t("Start sandbox")}</Button>:null}
+      {canStop?<Button variant="outline" disabled={busy||!noActiveLeases} onClick={()=>void changeLifecycle("stop")}>{t("Stop sandbox")}</Button>:null}
+      {canDestroy?<Button variant="destructive" disabled={busy||!noActiveLeases} onClick={()=>void changeLifecycle("destroy")}>{t("Destroy sandbox")}</Button>:null}
+      <Button variant="outline" onClick={()=>{void navigate("/sandboxes");}}>{t("Back to sandboxes")}</Button>
+    </div>}/>
     {error || !sandboxId ? <ErrorNotice message={error || t("The requested item was not found.")}/> : null}
     {sandboxId && !loaded ? <p className="text-sm text-muted-foreground">{t("Loading Sandboxes…")}</p> : item ? <div className="space-y-4">
       <DataPanel title="Sandbox overview" description={item.name}>
         <div className="grid gap-4 p-5 sm:grid-cols-2">
           <Metadata name={t("Sandbox ID")} value={item.sandboxId}/><Metadata name={t("Backend")} value={sandboxBackend(item)}/>
-          <Metadata name={t("Isolation")} value={isolationLabel(item.isolation)}/><Metadata name={t("State")} value={item.state}/>
+          <Metadata name={t("Isolation")} value={isolationLabel(item.isolation)}/><Metadata name={t("State")} value={sandboxStateLabel(item.state)}/>
           <Metadata name={t("Workspace")} value={item.localRoot||"—"}/><Metadata name={t("Owner type")} value={item.ownerKind}/>
+          <Metadata name={t("Active execution leases")} value={String(item.activeLeases)}/>
         </div>
+        {item.activeLeases>0?<p role="status" className="border-t border-border px-5 py-3 text-xs text-amber-700 dark:text-amber-300">{t("Cannot change lifecycle while a Sandbox execution lease is active.")}</p>:null}
+        {item.state==="destroyed"?<p role="status" className="border-t border-border px-5 py-3 text-xs text-muted-foreground">{t("Host files remain untouched after Sandbox destruction.")}</p>:null}
       </DataPanel>
       <DataPanel title="Security boundary" description="Isolation depends on the actual backend, not the Sandbox name.">
         <p className="p-5 text-sm leading-6 text-muted-foreground">{t(item.isolation === "host" ? "Host mode is not isolated and uses the Runtime user's local file and process permissions." : item.isolation === "restricted_host" ? "Restricted host confines local processes but is not a container or VM." : "Isolation guarantees depend on the selected backend and must be verified independently.")}</p>
@@ -182,3 +209,7 @@ export function SandboxDetailPage({client}:{client:MenderClient}) {
 function sandboxBackend(item:Sandbox){return item.backend==="local_workspace"?t("Local workspace"):item.backend;}
 function isolationLabel(value:string){if(value==="host")return t("Host (not isolated)");if(value==="restricted_host")return t("Restricted host");return value;}
 function Metadata({name,value}:{name:string;value:string}){return <div className="min-w-0"><div className="text-xs font-medium text-muted-foreground">{name}</div><div className="mt-1 break-all font-mono text-sm">{value}</div></div>;}
+
+function sandboxStateLabel(state:Sandbox["state"]){
+ switch(state){case "ready":return t("Ready");case "stopped":return t("Stopped");case "destroyed":return t("Destroyed");default:return state;}
+}

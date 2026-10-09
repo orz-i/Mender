@@ -55,4 +55,22 @@ func TestDesktopSandboxManagementFollowsRuntimeGovernance(t *testing.T) {
 	if err != nil || len(unchanged.Sandboxes) != 1 {
 		t.Fatalf("denied create persisted: %+v %v", unchanged, err)
 	}
+	stopped, err := service.StopSandbox(created.SandboxID)
+	if err != nil || stopped.State != "stopped" {
+		t.Fatalf("desktop stop %+v %v", stopped, err)
+	}
+	started, err := service.StartSandbox(created.SandboxID)
+	if err != nil || started.State != "ready" {
+		t.Fatalf("desktop start %+v %v", started, err)
+	}
+	destroyed, err := service.DestroySandbox(created.SandboxID)
+	if err != nil || destroyed.State != "destroyed" {
+		t.Fatalf("desktop destroy %+v %v", destroyed, err)
+	}
+	if destroyed.ActiveLeases != 0 {
+		t.Fatalf("destroyed Sandbox active leases %+v", destroyed)
+	}
+	if _, err := service.StartSandbox(created.SandboxID); !errors.Is(err, sandboxdomain.ErrConflict) {
+		t.Fatalf("restart tombstone: %v", err)
+	}
 }
