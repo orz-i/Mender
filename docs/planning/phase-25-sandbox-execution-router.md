@@ -391,3 +391,24 @@ Critical limitations and next mandatory gates:
 3. `sandbox.provision/start/stop/destroy` require their own admitted use cases and lifecycle audit; their Policy action enumerations alone are not implementation of those operations.
 4. Workspace ConfigVersion 1→2 migration must be forward-only, rollback-safe and preserve Provider/Tool identity, existing Profile bindings and governance. No dual parser, default host fallback or silent privilege escalation.
 5. Sandbox management UI/HTTP/OpenAPI/Wails parity is still pending, as are Docker, Daytona/E2B and remote resource/cost controls.
+
+## Follow-up cluster C1 — Local Workspace backend extraction (implementation contract)
+
+Status: Ready for implementation; document-first boundary before touching runtime code.
+
+- Introduce the first concrete Sandbox backend at `sandbox/infrastructure/localworkspace`, with a narrow `WorkspaceSession` application port exposing all four existing canonical operations. Its backend must open **one** validated, symlink-resolved local root and bind both structured files and shell execution to this same root.
+- Reuse the existing bounded read/search/edit/shell algorithms by extracting them, not by teaching remote drivers to use a local `os.Root`, and preserve canonical SourceKeys, JSON argument/output schemas, symlink denial, exact edit semantics and bounded results.
+- `Backend.Open` must validate `local_workspace` identity, `host/restricted_host` isolation, `ready`/matching run generation, and the configured root before returning an `os.Root`-owned session. It must not spawn a subprocess or silently create host directories.
+- Shell command launcher is **host-owned** and explicitly receives the Sandbox's selected isolation mode. No use of the mutable Runtime-wide default to override the persisted Sandbox isolation; restricted-host must fail closed when unavailable. Shell remains high authority for `host` and must not be represented as a VM/container sandbox.
+- A Local Workspace adapter must not read/write an unrelated root or execute outside the selected Sandbox. All operations require explicit capability selection; unknown capabilities fail closed. Full read/search/edit/shell parity tests must exercise one common root and confirm the reduced environment, bounded command output/timeouts, path traversal and symlink protections.
+- Keep the existing Workspace Provider ConfigVersion 1 live only until C2 migration is fully implemented and verified. The C1 commit may temporarily retain the current tool implementation while introducing the tested backend in isolation; C2 will remove the duplicated legacy execution path in a **single hard cut**, with no persistent compatibility bridge.
+- Acceptance: `go test -race ./backend/internal/sandbox/...`, focused bootstrap/process isolation checks, `golangci-lint`, and a clean, scoped commit; C1 does not claim that Invocation already invokes the new backend.
+
+## Follow-up cluster C2 — Workspace plugin hard cut prerequisites
+
+Status: Pending C1.
+
+- Provider ConfigVersion 2 only accepts `{ "sandboxId": "sbx_..." }`; reject root, legacy version and unknown fields at runtime, and make descriptor/management/CLI contract match.
+- Workspace Tool execution receives validated Invocation's trusted `GovernanceContext` (never from Tool arguments), resolves the bound Sandbox, acquires the governed lease, delegates to the backend `WorkspaceSession`, then releases it on every outcome. Profile Tool and global Policy must remain authoritative before any sandbox acquisition.
+- Before switching the parser, perform one **transactional forward migration** of Workspace Provider v1 records to local Sandbox rows/run records in the same SQLite file; derive stable Sandbox IDs from Provider IDs, preserve Tool/Provider IDs and bindings, record original roots/selected isolation without weakening it, and fail closed on invalid legacy data. Never auto-provision remote chargeable resources.
+- Hard-cut test matrix must prove migration rollback and restart, catalog/Profile identity stability, shell/files backend consistency, absence of v1 runtime decoding, and CLI/HTTP/Wails/Web parity. No automatic host fallback, even if a bound Sandbox backend is unavailable.
