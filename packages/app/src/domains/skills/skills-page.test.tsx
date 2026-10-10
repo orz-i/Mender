@@ -120,6 +120,14 @@ describe("SkillsPage", () => {
       await screen.findByRole("heading", { name: "Skills" }),
     ).toBeTruthy();
     expect(screen.getAllByText("mender-tools").length).toBeGreaterThan(0);
+    const toolbar = document.querySelector('[data-slot="page-toolbar"]');
+    const results = screen.getByRole("region", { name: "Skill Library" });
+    expect(toolbar).not.toBeNull();
+    expect(toolbar?.contains(screen.getByRole("button", { name: "Install Skill" }))).toBe(true);
+    expect(toolbar?.contains(screen.getByRole("textbox", { name: "Search Skills" }))).toBe(true);
+    expect(toolbar?.contains(screen.getByRole("button", { name: /All Skills/ }))).toBe(true);
+    expect(results.contains(toolbar)).toBe(false);
+    expect(results.querySelector('[data-slot="card-header"]')).toBeNull();
 
     fireEvent.click(
       screen.getByRole("button", { name: "View example-skill" }),

@@ -22,6 +22,7 @@ import { t } from "../../i18n/i18n";
 import { errorMessage } from "../../shared/errors";
 import { ErrorNotice } from "../../shared/page";
 import { FocusSwitch } from "../../shared/focus-switch";
+import { PageToolbar } from "../../shared/page-toolbar";
 import { DataPanel, MetricStrip, MetricTile } from "../../shared/workbench";
 
 const budgetFields: Array<{
@@ -128,15 +129,26 @@ export function RuntimePage({ client }: { client: MenderClient }) {
   return (
     <div className="space-y-4">
       {error ? <ErrorNotice message={error} /> : null}
-      <FocusSwitch
-        label="Runtime governance"
-        value={focus}
-        onChange={setFocus}
-        items={[
-          { value: "status", label: "Runtime" },
-          { value: "budget", label: "Runtime budget" },
-          { value: "isolation", label: "Process isolation" },
-        ]}
+      <PageToolbar
+        tabs={
+          <FocusSwitch
+            label="Runtime governance"
+            value={focus}
+            onChange={setFocus}
+            items={[
+              { value: "status", label: "Runtime" },
+              { value: "budget", label: "Runtime budget" },
+              { value: "isolation", label: "Process isolation" },
+            ]}
+          />
+        }
+        actions={
+          focus === "budget" ? (
+            <Button size="sm" variant="outline" disabled={budget === null} onClick={() => setEditor("budget")}>{t("Edit")}</Button>
+          ) : focus === "isolation" ? (
+            <Button size="sm" variant="outline" disabled={isolation === null} onClick={() => setEditor("isolation")}>{t("Edit")}</Button>
+          ) : null
+        }
       />
 
       {focus === "status" ? <MetricStrip>
@@ -149,8 +161,7 @@ export function RuntimePage({ client }: { client: MenderClient }) {
           label="Restricted host"
         />
       </MetricStrip> : focus === "budget" ? (
-        <DataPanel title="Runtime budget" description="Hard limits apply after governance admission. Profile constraints may only tighten them."
-          actions={<Button variant="outline" disabled={budget === null} onClick={() => setEditor("budget")}>{t("Edit")}</Button>}>
+        <DataPanel title="Runtime budget" description="Hard limits apply after governance admission. Profile constraints may only tighten them.">
           <div className="grid gap-x-6 gap-y-5 p-5 sm:grid-cols-2">
             {budgetFields.map((field) => <div key={field.key} className="min-w-0 border-b border-border/60 pb-3">
               <p className="truncate text-xs text-muted-foreground">{t(field.label)}</p>
@@ -159,8 +170,7 @@ export function RuntimePage({ client }: { client: MenderClient }) {
           </div>
         </DataPanel>
       ) : (
-        <DataPanel title="Process isolation" description="Isolation changes host filesystem authority; it does not change Policy decisions."
-          actions={<Button variant="outline" disabled={isolation === null} onClick={() => setEditor("isolation")}>{t("Edit")}</Button>}>
+        <DataPanel title="Process isolation" description="Isolation changes host filesystem authority; it does not change Policy decisions.">
           <div className="divide-y divide-border/70 px-5 pb-3">
             {(["workspaceShell", "externalProvider", "tunnelClient"] as const).map((key, i) => (
               <div key={key} className="flex items-center justify-between gap-4 py-4">

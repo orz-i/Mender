@@ -33,6 +33,7 @@ import { formatDateTime, formatNumber, t } from "../../i18n/i18n";
 import { errorMessage } from "../../shared/errors";
 import { ErrorNotice } from "../../shared/page";
 import { FocusSwitch } from "../../shared/focus-switch";
+import { PageToolbar } from "../../shared/page-toolbar";
 import { usePagination } from "../../shared/pagination";
 import { TablePagination } from "../../shared/table-pagination";
 import {
@@ -123,6 +124,19 @@ export function OverviewPage({ client }: { client: MenderClient }) {
     <>
       {error ? <ErrorNotice message={error} /> : null}
 
+      <PageToolbar
+        tabs={
+        <FocusSwitch
+          label="Overview"
+          value={view}
+          onChange={setView}
+          items={[
+            { value: "activity", label: "Recent invocations" },
+            { value: "resources", label: `${t("Providers")} / ${t("Profiles")}` },
+          ]}
+        />
+        }
+      />
       <MetricStrip>
         <MetricTile
           icon={ActivityIcon}
@@ -150,17 +164,6 @@ export function OverviewPage({ client }: { client: MenderClient }) {
         />
       </MetricStrip>
 
-      <div className="mt-5 mb-4">
-        <FocusSwitch
-          label="Overview"
-          value={view}
-          onChange={setView}
-          items={[
-            { value: "activity", label: "Recent invocations" },
-            { value: "resources", label: `${t("Providers")} / ${t("Profiles")}` },
-          ]}
-        />
-      </div>
       {view === "activity" ? (
         <div className="min-w-0">
         <DataPanel

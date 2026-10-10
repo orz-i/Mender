@@ -19,16 +19,16 @@ export function PageToolbar({
   return (
     <div
       data-slot="page-toolbar"
-      className={["mb-4 flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-3", className].join(" ")}
+      className={["mb-4 flex min-w-0 flex-col gap-3 xl:flex-row xl:flex-wrap xl:items-center xl:justify-between", className].join(" ")}
     >
-      {tabs ? <div data-slot="page-toolbar-tabs" className="flex min-w-0 max-w-full flex-wrap items-center gap-2">{tabs}</div> : null}
+      {tabs ? <div data-slot="page-toolbar-tabs" className="flex w-full min-w-0 max-w-full flex-wrap items-center gap-2 xl:w-auto xl:shrink-0">{tabs}</div> : null}
       {filters || actions ? (
         <div
           data-slot="page-toolbar-controls"
-          className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2"
+          className="flex w-full min-w-0 flex-wrap items-center justify-end gap-2 xl:ml-auto xl:w-auto xl:flex-1"
         >
           {filters ? (
-            <div data-slot="page-toolbar-filters" className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2">
+            <div data-slot="page-toolbar-filters" className="flex w-full min-w-0 flex-wrap items-center justify-start gap-2 sm:flex-1 xl:w-auto xl:justify-end">
               {filters}
             </div>
           ) : null}
@@ -65,7 +65,7 @@ export function PageTabs({ label, children }: { label: string; children: ReactNo
     <div
       role="group"
       aria-label={t(label)}
-      className="inline-flex max-w-full items-center gap-1 overflow-x-auto rounded-2xl bg-secondary p-1"
+      className="inline-flex max-w-full items-center gap-1 overflow-x-auto rounded-2xl bg-secondary p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
     >
       {children}
     </div>

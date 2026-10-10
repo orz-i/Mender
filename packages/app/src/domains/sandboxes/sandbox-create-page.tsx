@@ -15,7 +15,8 @@ import { Input } from "@mender/ui/components/input";
 
 import { t } from "../../i18n/i18n";
 import { errorMessage } from "../../shared/errors";
-import { ErrorNotice, PageHeader } from "../../shared/page";
+import { ErrorNotice } from "../../shared/page";
+import { PageToolbar } from "../../shared/page-toolbar";
 import { DataPanel } from "../../shared/workbench";
 
 type Backend = "local_workspace" | "docker" | "daytona";
@@ -257,7 +258,7 @@ export function CreateSandboxPage({ client }: { client: MenderClient }) {
 
   return (
     <>
-      <PageHeader actions={
+      <PageToolbar actions={
         <Button variant="outline" onClick={() => void navigate("/sandboxes")}>{t("Back to sandboxes")}</Button>
       } />
       {error ? <ErrorNotice message={error} /> : null}

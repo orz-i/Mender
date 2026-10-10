@@ -28,7 +28,7 @@ import {
 import { formatDateTime, formatNumber, t } from "../../i18n/i18n";
 import { errorMessage } from "../../shared/errors";
 import { IconButton } from "../../shared/icon-button";
-import { EmptyState, ErrorNotice, PageHeader } from "../../shared/page";
+import { EmptyState, ErrorNotice } from "../../shared/page";
 import { FocusSwitch } from "../../shared/focus-switch";
 import { PageToolbar, ResultPanel } from "../../shared/page-toolbar";
 import {
@@ -293,7 +293,19 @@ export function PluginDetailPage({ client }: { client: MenderClient }) {
 
   return (
     <>
-      <PageHeader
+      <PageToolbar
+        tabs={plugin ? (
+          <FocusSwitch
+            label="Plugin details"
+            value={section}
+            onChange={setSection}
+            items={[
+              { value: "overview", label: "Overview" },
+              { value: "capabilities", label: "Capabilities" },
+              { value: "technical", label: "Technical details" },
+            ]}
+          />
+        ) : undefined}
         actions={
           <div className="flex flex-wrap items-center justify-end gap-2">
             <Button
@@ -375,16 +387,6 @@ export function PluginDetailPage({ client }: { client: MenderClient }) {
         </DataPanel>
       ) : (
         <div className="flex flex-col gap-4">
-          <FocusSwitch
-            label="Plugin details"
-            value={section}
-            onChange={setSection}
-            items={[
-              { value: "overview", label: "Overview" },
-              { value: "capabilities", label: "Capabilities" },
-              { value: "technical", label: "Technical details" },
-            ]}
-          />
           {plugin.issue !== undefined ? (
             <ErrorNotice
               message={t("Plugin issue: {{message}}", {

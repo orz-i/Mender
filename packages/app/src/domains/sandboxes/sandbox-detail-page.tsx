@@ -17,7 +17,8 @@ import {
 import { t } from "../../i18n/i18n";
 import { errorMessage } from "../../shared/errors";
 import { FocusSwitch } from "../../shared/focus-switch";
-import { ErrorNotice, PageHeader } from "../../shared/page";
+import { ErrorNotice } from "../../shared/page";
+import { PageToolbar } from "../../shared/page-toolbar";
 import { DataPanel } from "../../shared/workbench";
 import { isolationLabel, sandboxBackend, sandboxStateLabel } from "./sandbox-display";
 import { SandboxMetadata } from "./sandbox-metadata";
@@ -111,7 +112,18 @@ export function SandboxDetailPage({ client }: { client: MenderClient }) {
 
   return (
     <>
-      <PageHeader
+      <PageToolbar
+        tabs={item ? (
+          <FocusSwitch
+            label="Sandbox overview"
+            value={topic}
+            onChange={setTopic}
+            items={[
+              { value: "overview", label: "Sandbox overview" },
+              { value: "security", label: "Security boundary" },
+            ]}
+          />
+        ) : undefined}
         actions={
           <div className="flex flex-wrap justify-end gap-2">
             <Button variant="outline" onClick={() => void navigate("/sandboxes")}>
@@ -138,15 +150,6 @@ export function SandboxDetailPage({ client }: { client: MenderClient }) {
         ? <p className="text-sm text-muted-foreground">{t("Loading Sandboxes…")}</p>
         : item ? (
           <div className="flex flex-col gap-4">
-            <FocusSwitch
-              label="Sandbox overview"
-              value={topic}
-              onChange={setTopic}
-              items={[
-                { value: "overview", label: "Sandbox overview" },
-                { value: "security", label: "Security boundary" },
-              ]}
-            />
             {topic === "overview" ? (
               <DataPanel title="Sandbox overview" description={item.name}>
                 <dl className="grid gap-x-8 gap-y-4 p-5 sm:grid-cols-2">
