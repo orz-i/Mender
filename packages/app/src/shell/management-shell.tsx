@@ -37,7 +37,7 @@ import {
   TooltipTrigger,
 } from "@mender/ui/components/tooltip";
 
-import { type Locale, setLocale, t, useLocale } from "../i18n/i18n";
+import { setLocale, t, useLocale } from "../i18n/i18n";
 
 const SIDEBAR_STORAGE_KEY = "mender.sidebar.collapsed";
 
@@ -157,19 +157,46 @@ export function ManagementShell({ client }: { client: MenderClient }) {
       <aside
         className={[
           "sticky top-0 z-30 flex h-dvh shrink-0 flex-col border-r border-border/70 bg-sidebar transition-[width] duration-200 ease-out",
-          collapsed ? "w-[68px]" : "w-[68px] lg:w-[258px]",
+          collapsed ? "w-[68px] lg:w-[80px]" : "w-[68px] lg:w-[258px]",
         ].join(" ")}
       >
-        <div className={["flex h-[88px] shrink-0 items-center px-3", collapsed ? "justify-center" : "justify-center lg:justify-start lg:gap-3 lg:px-6"].join(" ")}>
+        <div
+          data-slot="sidebar-brand"
+          className={[
+            "flex h-[88px] shrink-0 items-center",
+            collapsed
+              ? "justify-center px-2 lg:justify-between lg:px-1"
+              : "justify-center px-3 lg:justify-start lg:gap-3 lg:px-5",
+          ].join(" ")}
+        >
           <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-foreground text-background">
             <BlocksIcon className="size-[19px]" aria-hidden="true" />
           </div>
           {!collapsed ? (
-            <div className="hidden min-w-0 lg:block">
+            <div className="hidden min-w-0 flex-1 lg:block">
               <p className="truncate text-[23px] leading-6 font-semibold tracking-[-0.045em]">Mender</p>
               <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{t("Tool control plane")}</p>
             </div>
           ) : null}
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  aria-label={t(collapsed ? "Expand sidebar" : "Collapse sidebar")}
+                  onClick={() => setCollapsed((current) => !current)}
+                  className="hidden size-8 shrink-0 text-muted-foreground hover:text-foreground lg:inline-flex"
+                />
+              }
+            >
+              {collapsed ? <PanelLeftOpenIcon /> : <PanelLeftCloseIcon />}
+            </TooltipTrigger>
+            <TooltipContent side="right">
+              {t(collapsed ? "Expand sidebar" : "Collapse sidebar")}
+            </TooltipContent>
+          </Tooltip>
         </div>
 
         <nav
@@ -225,70 +252,6 @@ export function ManagementShell({ client }: { client: MenderClient }) {
           ))}
         </nav>
 
-        <div className={["shrink-0 border-t border-border/70 py-4", collapsed ? "px-2" : "px-2 lg:px-4"].join(" ")}>
-          {!collapsed ? (
-            <label className="mb-3 hidden flex-col gap-1.5 px-2 text-xs font-medium text-muted-foreground lg:flex">
-              <span className="flex items-center gap-2">
-                <LanguagesIcon className="size-4" aria-hidden="true" />
-                {t("Language")}
-              </span>
-              <select
-                value={locale}
-                onChange={(event) => setLocale(event.target.value as Locale)}
-                aria-label={t("Language")}
-                className="h-9 w-full rounded-xl border border-input bg-card px-3 text-xs text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <option value="en">{t("English")}</option>
-                <option value="zh-CN">{t("Simplified Chinese")}</option>
-              </select>
-            </label>
-          ) : null}
-          <div className={collapsed ? "" : "lg:hidden"}>
-            <Tooltip>
-              <TooltipTrigger render={
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  aria-label={t("Language")}
-                  onClick={switchLocale}
-                  className="w-full text-muted-foreground"
-                />
-              }>
-                <LanguagesIcon />
-              </TooltipTrigger>
-              <TooltipContent side="right">{t("Language")}: {locale === "en" ? t("English") : t("Simplified Chinese")}</TooltipContent>
-            </Tooltip>
-          </div>
-          {collapsed ? (
-            <Tooltip>
-              <TooltipTrigger render={
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  aria-label={t("Expand sidebar")}
-                  onClick={() => setCollapsed(false)}
-                  className="w-full text-muted-foreground"
-                />
-              }>
-                <PanelLeftOpenIcon />
-              </TooltipTrigger>
-              <TooltipContent side="right">{t("Expand sidebar")}</TooltipContent>
-            </Tooltip>
-          ) : (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => setCollapsed(true)}
-              className="hidden w-full justify-start text-muted-foreground lg:flex"
-            >
-              <PanelLeftCloseIcon data-icon="inline-start" />
-              {t("Collapse sidebar")}
-            </Button>
-          )}
-        </div>
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
@@ -328,6 +291,27 @@ export function ManagementShell({ client }: { client: MenderClient }) {
                 {runtimeReady === true ? t("Connected") : runtimeReady === false ? t("Unavailable") : t("Loading")}
               </span>
             </div>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-lg"
+                    aria-label={t("Language")}
+                    onClick={switchLocale}
+                    className="size-9 rounded-xl text-muted-foreground hover:bg-card hover:text-foreground"
+                  />
+                }
+              >
+                <LanguagesIcon />
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                {t("Language")}: {locale === "en" ? t("English") : t("Simplified Chinese")}
+                {" → "}
+                {locale === "en" ? t("Simplified Chinese") : t("English")}
+              </TooltipContent>
+            </Tooltip>
           </div>
         </header>
 

@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import type { MenderClient } from "@mender/sdk";
 import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -89,12 +89,19 @@ describe("MenderApp", () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Collapse sidebar" }));
-    expect(screen.getByRole("button", { name: "Expand sidebar" })).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Providers" })).toBeTruthy();
+    const brand = document.querySelector('[data-slot="sidebar-brand"]');
+    const collapse = screen.getByRole("button", { name: "Collapse sidebar" });
+    expect(brand?.contains(collapse)).toBe(true);
+    fireEvent.click(collapse);
 
-    fireEvent.click(screen.getByRole("button", { name: "Expand sidebar" }));
-    expect(screen.getByRole("button", { name: "Collapse sidebar" })).toBeTruthy();
+    const expand = screen.getByRole("button", { name: "Expand sidebar" });
+    expect(brand?.contains(expand)).toBe(true);
+    expect(screen.getByRole("link", { name: "Providers" })).toBeTruthy();
+    expect(window.localStorage.getItem("mender.sidebar.collapsed")).toBe("true");
+
+    fireEvent.click(expand);
+    expect(brand?.contains(screen.getByRole("button", { name: "Collapse sidebar" }))).toBe(true);
+    expect(window.localStorage.getItem("mender.sidebar.collapsed")).toBe("false");
   });
 
   it("switches the active UI to Simplified Chinese without a reload", () => {
@@ -104,9 +111,12 @@ describe("MenderApp", () => {
       </MemoryRouter>,
     );
 
-    fireEvent.change(screen.getByRole("combobox", { name: "Language" }), {
-      target: { value: "zh-CN" },
-    });
+    const topbar = within(screen.getByRole("banner"));
+    const switchLanguage = topbar.getByRole("button", { name: "Language" });
+    const connection = topbar.getByRole("status");
+    expect(connection.compareDocumentPosition(switchLanguage) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(within(screen.getByRole("complementary")).queryByRole("combobox", { name: "Language" })).toBeNull();
+    fireEvent.click(switchLanguage);
 
     expect(screen.getByRole("heading", { name: "概览" })).toBeTruthy();
     expect(screen.getByRole("link", { name: "插件市场" })).toBeTruthy();
@@ -117,6 +127,10 @@ describe("MenderApp", () => {
     ).toBeNull();
     expect(window.localStorage.getItem("mender.locale")).toBe("zh-CN");
     expect(document.documentElement.lang).toBe("zh-CN");
+
+    fireEvent.click(topbar.getByRole("button", { name: "语言" }));
+    expect(screen.getByRole("heading", { name: "Overview" })).toBeTruthy();
+    expect(window.localStorage.getItem("mender.locale")).toBe("en");
   });
 });
 
