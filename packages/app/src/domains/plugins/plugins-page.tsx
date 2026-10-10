@@ -5,6 +5,7 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   PackagePlusIcon,
+  RefreshCwIcon,
   PlusIcon,
   PowerIcon,
   PowerOffIcon,
@@ -29,12 +30,12 @@ import { errorMessage } from "../../shared/errors";
 import { IconButton } from "../../shared/icon-button";
 import { EmptyState, ErrorNotice, PageHeader } from "../../shared/page";
 import { FocusSwitch } from "../../shared/focus-switch";
+import { PageToolbar, ResultPanel } from "../../shared/page-toolbar";
 import {
   DataPanel,
   EmptyPanelState,
   FilterSelect,
   SearchField,
-  WorkbenchToolbar,
 } from "../../shared/workbench";
 import {
   type MarketplaceInstaller,
@@ -136,71 +137,34 @@ export function PluginsPage({
 
   return (
     <>
-      <PageHeader
-        actions={
-          installers.length ? (
-            <div className="flex flex-wrap gap-2">
-              {installers.map((installer) => (
-                <Button
-                  key={installer.key}
-                  type="button"
-                  disabled={busy !== ""}
-                  onClick={() => void installPlugin(installer)}
-                >
-                  <PackagePlusIcon data-icon="inline-start" />
-                  {t(
-                    busy === "install:" + installer.key
-                      ? installer.pendingLabel
-                      : installer.label,
-                  )}
-                </Button>
-              ))}
+      <PageToolbar
+        filters={
+          <>
+            <div className="w-full min-w-0 sm:w-48 sm:shrink-0">
+              <SearchField
+                value={query}
+                onChange={(value) => { setQuery(value); setCursorHistory([null]); }}
+                label="Search plugins"
+                placeholder="Search plugins…"
+              />
             </div>
-          ) : undefined
-        }
-      />
-
-      {error ? <ErrorNotice message={error} /> : null}
-
-      <DataPanel
-        title="Plugin catalog"
-        description="Browse built-in and installed plugin packages available to Mender."
-        toolbar={
-          <WorkbenchToolbar>
-            <SearchField
-              value={query}
-              onChange={(value) => {
-                setQuery(value);
-                setCursorHistory([null]);
-              }}
-              label="Search plugins"
-              placeholder="Search plugins…"
-              className="md:min-w-64"
-            />
             <FilterSelect
               value={kindFilter}
-              onValueChange={(value) => {
-                setKindFilter(value);
-                setCursorHistory([null]);
-              }}
+              onValueChange={(value) => { setKindFilter(value); setCursorHistory([null]); }}
               label="Plugin type filter"
               options={kindOptions}
+              className="w-32 min-w-0"
             />
             <FilterSelect
               value={sourceFilter}
-              onValueChange={(value) => {
-                setSourceFilter(value);
-                setCursorHistory([null]);
-              }}
+              onValueChange={(value) => { setSourceFilter(value); setCursorHistory([null]); }}
               label="Plugin source filter"
               options={sourceOptions}
+              className="w-32 min-w-0"
             />
             <FilterSelect
               value={statusFilter}
-              onValueChange={(value) => {
-                setStatusFilter(value as StatusFilter);
-                setCursorHistory([null]);
-              }}
+              onValueChange={(value) => { setStatusFilter(value as StatusFilter); setCursorHistory([null]); }}
               label="Plugin status filter"
               options={[
                 { value: "all", label: "All plugin statuses" },
@@ -209,10 +173,29 @@ export function PluginsPage({
                 { value: "degraded", label: "Degraded" },
                 { value: "invalid", label: "Invalid" },
               ]}
+              className="w-32 min-w-0"
             />
-          </WorkbenchToolbar>
+          </>
         }
-      >
+        actions={
+          <>
+            <Button type="button" variant="outline" size="sm" disabled={busy !== ""} onClick={() => void refresh()}>
+              <RefreshCwIcon data-icon="inline-start" />
+              {t("Refresh")}
+            </Button>
+            {installers.map((installer) => (
+              <Button key={installer.key} type="button" size="sm" disabled={busy !== ""} onClick={() => void installPlugin(installer)}>
+                <PackagePlusIcon data-icon="inline-start" />
+                {t(busy === "install:" + installer.key ? installer.pendingLabel : installer.label)}
+              </Button>
+            ))}
+          </>
+        }
+      />
+
+      {error ? <ErrorNotice message={error} /> : null}
+
+      <ResultPanel title="Plugin catalog">
         {!loaded ? (
           <div className="px-4 py-12 text-center text-sm text-muted-foreground">
             {t("Loading plugins…")}
@@ -250,7 +233,7 @@ export function PluginsPage({
             />
           </EmptyPanelState>
         )}
-      </DataPanel>
+      </ResultPanel>
     </>
   );
 }

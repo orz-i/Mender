@@ -40,15 +40,14 @@ import {
 import { formatDateTime, formatNumber, t } from "../../i18n/i18n";
 import { errorMessage } from "../../shared/errors";
 import { IconButton } from "../../shared/icon-button";
-import { EmptyState, ErrorNotice, PageHeader } from "../../shared/page";
+import { EmptyState, ErrorNotice } from "../../shared/page";
+import { PageTab, PageTabs, PageToolbar, ResultPanel } from "../../shared/page-toolbar";
 import { usePagination } from "../../shared/pagination";
 import { TablePagination } from "../../shared/table-pagination";
 import {
-  DataPanel,
   EmptyPanelState,
   FilterSelect,
   SearchField,
-  WorkbenchToolbar,
 } from "../../shared/workbench";
 
 type DeploySkill = (
@@ -357,111 +356,73 @@ export function SkillsPage({
 
   return (
     <>
-      <PageHeader
+      <PageToolbar
+        tabs={
+          <PageTabs label="Skill Library">
+            <PageTab label="All Skills" count={installations.length} active={filter === "all"} onClick={() => setFilter("all")} />
+            <PageTab label="Built-in" count={installations.filter((item) => item.builtIn).length} active={filter === "builtin"} onClick={() => setFilter("builtin")} />
+            <PageTab label="Installed Skills" count={installations.filter((item) => !item.builtIn).length} active={filter === "installed"} onClick={() => setFilter("installed")} />
+            <PageTab label="Enabled" count={installations.filter((item) => item.enabled).length} active={filter === "enabled"} onClick={() => setFilter("enabled")} />
+          </PageTabs>
+        }
+        filters={
+          <>
+            <div className="w-full min-w-0 sm:w-40 sm:shrink-0">
+              <SearchField value={query} onChange={setQuery} placeholder="Search Skills…" label="Search Skills" />
+            </div>
+            <FilterSelect
+              value={sourceFilter}
+              onValueChange={(value) => setSourceFilter(value as SkillSourceFilter)}
+              label="Skill source filter"
+              options={[
+                { value: "all", label: "All Sources" },
+                { value: "builtin", label: "Built-in" },
+                { value: "local", label: "Local" },
+              ]}
+              className="w-28 min-w-0"
+            />
+            <FilterSelect
+              value={statusFilter}
+              onValueChange={(value) => setStatusFilter(value as SkillStatusFilter)}
+              label="Skill status filter"
+              options={[
+                { value: "all", label: "All Status" },
+                { value: "enabled", label: "Enabled" },
+                { value: "disabled", label: "Disabled" },
+              ]}
+              className="w-28 min-w-0"
+            />
+            <FilterSelect
+              value={sort}
+              onValueChange={(value) => setSort(value as SkillSort)}
+              label="Skill sort"
+              options={[
+                { value: "name", label: "Name" },
+                { value: "version", label: "Version" },
+              ]}
+              className="w-24 min-w-0"
+            />
+          </>
+        }
         actions={
-          <div className="flex gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => void refresh()}
-              disabled={mutating}
-            >
+          <>
+            <Button type="button" variant="outline" size="sm" onClick={() => void refresh()} disabled={mutating}>
               <RefreshCwIcon data-icon="inline-start" />
               {t("Refresh")}
             </Button>
             {installSkill !== undefined ? (
-              <Button
-                type="button"
-                onClick={() => void install()}
-                disabled={mutating}
-              >
+              <Button type="button" size="sm" onClick={() => void install()} disabled={mutating}>
                 <PlusIcon data-icon="inline-start" />
                 {busy === "install" ? t("Installing…") : t("Install Skill")}
               </Button>
             ) : null}
-          </div>
+          </>
         }
       />
 
       {error ? <ErrorNotice message={error} /> : null}
 
-      <DataPanel
-        title="Skill Library"
-        description="Browse exact installations, then open one focused detail view when you need more context."
-        toolbar={
-          <div className="flex flex-col gap-3">
-            <div className="flex min-w-max items-center gap-1 overflow-x-auto">
-                <FilterTab
-                  label="All Skills"
-                  count={installations.length}
-                  active={filter === "all"}
-                  onClick={() => setFilter("all")}
-                />
-                <FilterTab
-                  label="Built-in"
-                  count={installations.filter((item) => item.builtIn).length}
-                  active={filter === "builtin"}
-                  onClick={() => setFilter("builtin")}
-                />
-                <FilterTab
-                  label="Installed Skills"
-                  count={installations.filter((item) => !item.builtIn).length}
-                  active={filter === "installed"}
-                  onClick={() => setFilter("installed")}
-                />
-                <FilterTab
-                  label="Enabled"
-                  count={installations.filter((item) => item.enabled).length}
-                  active={filter === "enabled"}
-                  onClick={() => setFilter("enabled")}
-                />
-            </div>
-
-            <WorkbenchToolbar>
-              <SearchField
-                value={query}
-                onChange={setQuery}
-                placeholder="Search Skills…"
-                label="Search Skills"
-                className="md:min-w-64"
-              />
-              <FilterSelect
-                value={sourceFilter}
-                onValueChange={(value) =>
-                  setSourceFilter(value as SkillSourceFilter)
-                }
-                label="Skill source filter"
-                options={[
-                  { value: "all", label: "All Sources" },
-                  { value: "builtin", label: "Built-in" },
-                  { value: "local", label: "Local" },
-                ]}
-              />
-              <FilterSelect
-                value={statusFilter}
-                onValueChange={(value) =>
-                  setStatusFilter(value as SkillStatusFilter)
-                }
-                label="Skill status filter"
-                options={[
-                  { value: "all", label: "All Status" },
-                  { value: "enabled", label: "Enabled" },
-                  { value: "disabled", label: "Disabled" },
-                ]}
-              />
-              <FilterSelect
-                value={sort}
-                onValueChange={(value) => setSort(value as SkillSort)}
-                label="Skill sort"
-                options={[
-                  { value: "name", label: "Name" },
-                  { value: "version", label: "Version" },
-                ]}
-              />
-            </WorkbenchToolbar>
-          </div>
-        }
-      >
+      <ResultPanel title="Skill Library">
             <div className="p-3">
               {!loaded ? (
                 <p className="px-3 py-10 text-center text-sm text-muted-foreground">
@@ -630,7 +591,7 @@ export function SkillsPage({
                 </div>
               ) : null}
             </div>
-      </DataPanel>
+      </ResultPanel>
 
       <Dialog
         open={selected !== null}
@@ -982,44 +943,6 @@ export function SkillsPage({
         </DialogContent>
       </Dialog>
     </>
-  );
-}
-
-function FilterTab({
-  label,
-  count,
-  active,
-  onClick,
-}: {
-  label: string;
-  count: number;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={[
-        "relative flex h-12 items-center gap-2 px-3 text-sm font-medium transition-colors",
-        active
-          ? "text-primary-ink"
-          : "text-muted-foreground hover:text-foreground",
-      ].join(" ")}
-    >
-      {t(label)}
-      <span
-        className={[
-          "rounded-full px-1.5 py-0.5 text-[10px] tabular-nums",
-          active ? "bg-accent text-accent-foreground" : "bg-muted text-muted-foreground",
-        ].join(" ")}
-      >
-        {formatNumber(count)}
-      </span>
-      {active ? (
-        <span className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-primary" />
-      ) : null}
-    </button>
   );
 }
 
