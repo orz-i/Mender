@@ -12,8 +12,8 @@ export function PageHeader({
   }
 
   return (
-    <div className="mb-5 flex flex-wrap justify-end gap-2">
-      <div className="shrink-0">{actions}</div>
+    <div className="mb-5 flex min-w-0 justify-end">
+      <div className="min-w-0 max-w-full">{actions}</div>
     </div>
   );
 }

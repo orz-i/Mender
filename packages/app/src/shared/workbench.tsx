@@ -63,7 +63,7 @@ const panelIcons: Record<string, LucideIcon> = {
 
 export function MetricStrip({ children }: { children: ReactNode }) {
   return (
-    <div className="grid overflow-hidden rounded-[22px] border border-border/40 bg-card shadow-[var(--card-elevation)] sm:grid-cols-2 min-[1000px]:grid-cols-4">
+    <div className="grid overflow-hidden rounded-[22px] border border-border/40 bg-card shadow-[var(--card-elevation)] sm:grid-cols-2 xl:grid-cols-4">
       {children}
     </div>
   );
@@ -83,7 +83,7 @@ export function MetricTile({
   action?: ReactNode;
 }) {
   return (
-    <div className="flex min-h-[100px] min-w-0 items-center gap-3 border-b border-border/70 px-5 py-4 last:border-b-0 sm:odd:border-r sm:[&:nth-child(-n+2)]:border-b min-[1000px]:border-r min-[1000px]:border-b-0 min-[1000px]:last:border-r-0 min-[1000px]:[&:nth-child(-n+2)]:border-b-0">
+    <div className="flex min-h-[100px] min-w-0 items-center gap-3 border-b border-border/70 px-5 py-4 last:border-b-0 sm:odd:border-r sm:[&:nth-child(-n+2)]:border-b xl:border-r xl:border-b-0 xl:last:border-r-0 xl:[&:nth-child(-n+2)]:border-b-0">
       <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-foreground text-background dark:bg-muted dark:text-foreground">
         <Icon className="size-[19px]" aria-hidden="true" />
       </span>
