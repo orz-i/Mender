@@ -28,7 +28,22 @@ describe("Daytona Sandbox creation",()=>{
   const createDaytonaSandbox=vi.fn();renderDaytona({createDaytonaSandbox});
   fireEvent.click(await screen.findByRole("button",{name:/Daytona/}));
   expect(screen.getByText(/No credentials available/)).toBeTruthy();
+  expect(screen.getByRole<HTMLButtonElement>("button",{name:"Next"}).disabled).toBe(true);
+  expect(createDaytonaSandbox).not.toHaveBeenCalled();
+ });
+ it("requires valid remote limits before the authority review",async()=>{
+  const createDaytonaSandbox=vi.fn();
+  renderDaytona({listCredentials:vi.fn().mockResolvedValue({credentials:[{reference,displayName:"Daytona API"}]}),createDaytonaSandbox});
+  fireEvent.click(await screen.findByRole("button",{name:/Daytona/}));
+  fireEvent.change(screen.getByRole("textbox",{name:"Sandbox name"}),{target:{value:"Guarded Remote"}});
+  fireEvent.change(screen.getByRole("textbox",{name:"Immutable image digest"}),{target:{value:digest}});
+  fireEvent.change(screen.getByRole("combobox",{name:"Mender Credential Reference"}),{target:{value:reference}});
+  fireEvent.click(screen.getByRole("button",{name:"Next"}));
+  fireEvent.change(screen.getByRole("spinbutton",{name:"TTL (minutes)"}),{target:{value:"1"}});
   expect(screen.getByRole<HTMLButtonElement>("button",{name:"Review"}).disabled).toBe(true);
+  fireEvent.change(screen.getByRole("spinbutton",{name:"TTL (minutes)"}),{target:{value:"60"}});
+  fireEvent.click(screen.getByRole("button",{name:"Review"}));
+  expect(screen.getByText("60")).toBeTruthy();
   expect(createDaytonaSandbox).not.toHaveBeenCalled();
  });
  it("passes only credential reference, fixed region, immutable image and provider TTL, then reviews unknown state",async()=>{
@@ -38,6 +53,9 @@ describe("Daytona Sandbox creation",()=>{
   fireEvent.change(screen.getByRole("textbox",{name:"Sandbox name"}),{target:{value:"Remote Sandbox"}});
   fireEvent.change(screen.getByRole("textbox",{name:"Immutable image digest"}),{target:{value:digest}});
   fireEvent.change(screen.getByRole("combobox",{name:"Mender Credential Reference"}),{target:{value:reference}});
+  expect(screen.queryByRole("spinbutton",{name:"Remote CPUs"})).toBeNull();
+  fireEvent.click(screen.getByRole("button",{name:"Next"}));
+  expect(screen.getByRole("spinbutton",{name:"Remote CPUs"})).toBeTruthy();
   fireEvent.click(screen.getByRole("button",{name:"Review"}));
   expect(screen.getByText(/TTL is not a USD spending cap/)).toBeTruthy();
   fireEvent.click(screen.getByRole("button",{name:"Create sandbox"}));

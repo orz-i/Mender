@@ -69,8 +69,12 @@ describe("Docker Sandbox creation UX", () => {
     const digestField = screen.getByRole<HTMLInputElement>("textbox", { name: "Immutable image digest" });
     fireEvent.change(nameField, { target: { value: "Safe Container" } });
     fireEvent.change(digestField, { target: { value: "alpine:latest" } });
-    expect(screen.getByRole<HTMLButtonElement>("button", { name: "Review" }).disabled).toBe(true);
+    expect(screen.getByRole<HTMLButtonElement>("button", { name: "Next" }).disabled).toBe(true);
+    expect(screen.queryByRole("spinbutton", { name: "CPU (millicores)" })).toBeNull();
     fireEvent.change(digestField, { target: { value: cachedImage } });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(screen.queryByRole("textbox", { name: "Sandbox name" })).toBeNull();
+    expect(screen.getByRole("spinbutton", { name: "CPU (millicores)" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Review" }));
     expect(screen.getByText(/Workspace files are ephemeral/i)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Create sandbox" }));
@@ -87,6 +91,36 @@ describe("Docker Sandbox creation UX", () => {
     expect(await screen.findByText("Sandbox detail route reached")).toBeTruthy();
   });
 
+  it("keeps identity and resource limits in separate steps, preserving edits after Back", async () => {
+    const createDockerSandbox = vi.fn();
+    showCreate({
+      getRuntimeGovernance: vi.fn().mockResolvedValue(runtimeGovernanceStub()),
+      getSandboxBackends: vi.fn().mockResolvedValue({ dockerAvailable: true, dockerStatus: "ready" }),
+      createDockerSandbox,
+    });
+
+    fireEvent.click(await screen.findByRole("button", { name: /Docker/ }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Sandbox name" }), { target: { value: "Preview only" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Immutable image digest" }), { target: { value: cachedImage } });
+    expect(screen.queryByRole("spinbutton", { name: "Memory (MiB)" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    const memory = screen.getByRole<HTMLInputElement>("spinbutton", { name: "Memory (MiB)" });
+    fireEvent.change(memory, { target: { value: "128" } });
+    expect(screen.getByRole<HTMLButtonElement>("button", { name: "Review" }).disabled).toBe(true);
+    fireEvent.change(memory, { target: { value: "1024" } });
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    expect(screen.getByRole<HTMLInputElement>("textbox", { name: "Sandbox name" }).value).toBe("Preview only");
+    expect(screen.queryByRole("spinbutton", { name: "Memory (MiB)" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(screen.getByRole<HTMLInputElement>("spinbutton", { name: "Memory (MiB)" }).value).toBe("1024");
+    fireEvent.click(screen.getByRole("button", { name: "Review" }));
+    expect(screen.queryByRole("spinbutton", { name: "Memory (MiB)" })).toBeNull();
+    expect(screen.getByText("1024")).toBeTruthy();
+    expect(createDockerSandbox).not.toHaveBeenCalled();
+  });
+
   it("takes an uncertain persisted result to its detail instead of retriggering Docker create", async () => {
     const createDockerSandbox = vi.fn().mockResolvedValue({ ...created, state: "unknown" });
     showCreate({
@@ -97,6 +131,7 @@ describe("Docker Sandbox creation UX", () => {
     fireEvent.click(await screen.findByRole("button", { name: /Docker/ }));
     fireEvent.change(screen.getByRole("textbox", { name: "Sandbox name" }), { target: { value: "Uncertain Container" } });
     fireEvent.change(screen.getByRole("textbox", { name: "Immutable image digest" }), { target: { value: cachedImage } });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
     fireEvent.click(screen.getByRole("button", { name: "Review" }));
     fireEvent.click(screen.getByRole("button", { name: "Create sandbox" }));
     expect(await screen.findByText("Sandbox detail route reached")).toBeTruthy();
