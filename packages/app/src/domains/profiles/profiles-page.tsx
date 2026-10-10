@@ -37,6 +37,7 @@ import {
 } from "@mender/ui/components/table";
 
 import { errorMessage } from "../../shared/errors";
+import { canonicalizeOwnedIdentifier, isCanonicalOwnedSlug, ownedIdentifierCreateError } from "../../shared/form-identifiers";
 import { IconButton } from "../../shared/icon-button";
 import { EmptyState, ErrorNotice } from "../../shared/page";
 import { PageToolbar, ResultPanel } from "../../shared/page-toolbar";
@@ -59,6 +60,8 @@ type PresentationForm = Pick<
   "direct" | "alias" | "titleOverride" | "descriptionOverride"
 >;
 
+const TOOL_ALIAS_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9_.-]*[A-Za-z0-9])?$/;
+
 type GovernanceForm = Pick<
   ProfileToolBinding,
   "policyConstraint" | "concurrencyConstraint"
@@ -77,6 +80,7 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
 
   const [createOpen, setCreateOpen] = useState(false);
   const [createForm, setCreateForm] = useState(emptyCreateForm);
+  const [createError, setCreateError] = useState("");
 
   const [manageSlug, setManageSlug] = useState("");
   const [pickerSlug, setPickerSlug] = useState("");
@@ -94,6 +98,7 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
     titleOverride: "",
     descriptionOverride: "",
   });
+  const [presentationError, setPresentationError] = useState("");
   const [governanceSlug, setGovernanceSlug] = useState("");
   const [governanceToolId, setGovernanceToolId] = useState("");
   const [governanceForm, setGovernanceForm] = useState<GovernanceForm>({
@@ -220,17 +225,28 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
   }, [inventoryQuery, profiles]);
   const profilePagination = usePagination(visibleProfiles);
 
+  const createSlug = canonicalizeOwnedIdentifier(createForm.slug);
+  const createSlugValid = isCanonicalOwnedSlug(createSlug);
+  const createDisplayNameValid = createForm.displayName.trim() !== "" &&
+    new TextEncoder().encode(createForm.displayName.trim()).length <= 160;
+  const createValid = createSlugValid && createDisplayNameValid;
+
   async function createProfile() {
+    if (!createValid || busy) return;
     setBusy(true);
-    setError("");
+    setCreateError("");
     try {
-      const profile = await client.createProfile(createForm);
+      const profile = await client.createProfile({
+        ...createForm,
+        slug: createSlug,
+        displayName: createForm.displayName.trim(),
+      });
       setCreateOpen(false);
       setCreateForm(emptyCreateForm);
       await refreshProfiles();
       setManageSlug(profile.slug);
     } catch (reason) {
-      setError(errorMessage(reason));
+      setCreateError(ownedIdentifierCreateError(reason, "profile"));
     } finally {
       setBusy(false);
     }
@@ -345,6 +361,7 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
   }
 
   function openPresentation(binding: ProfileToolBinding) {
+    setPresentationError("");
     if (managedProfile === null) {
       return;
     }
@@ -363,6 +380,7 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
   }
 
   function closePresentation() {
+    setPresentationError("");
     const slug = presentationSlug;
     setPresentationSlug("");
     setPresentationToolId("");
@@ -371,8 +389,11 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
     }
   }
 
+  const trimmedAlias = presentationForm.alias.trim();
+  const aliasValid = trimmedAlias === "" || (trimmedAlias.length <= 128 && TOOL_ALIAS_PATTERN.test(trimmedAlias));
+
   async function savePresentation() {
-    if (presentationProfile === null || presentationBinding === null) {
+    if (presentationProfile === null || presentationBinding === null || !aliasValid) {
       return;
     }
     const direct =
@@ -382,12 +403,12 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
           ? false
           : presentationForm.direct;
     setBusy(true);
-    setError("");
+    setPresentationError("");
     try {
       const profile = await client.replaceProfileTools(presentationProfile.slug, {
         tools: presentationProfile.tools.map((binding) =>
           binding.toolId === presentationBinding.toolId
-            ? { ...binding, ...presentationForm, direct }
+            ? { ...binding, ...presentationForm, alias: trimmedAlias, direct }
             : binding,
         ),
       });
@@ -397,8 +418,8 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
       setPresentationSlug("");
       setPresentationToolId("");
       window.setTimeout(() => setManageSlug(profile.slug), 0);
-    } catch (reason) {
-      setError(errorMessage(reason));
+    } catch {
+      setPresentationError(t("Could not save Tool presentation. Review the fields and try again."));
     } finally {
       setBusy(false);
     }
@@ -568,7 +589,7 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
         actions={
           <>
             <Button variant="outline" size="sm" disabled={busy} onClick={() => void refreshProfiles()}>{t("Refresh")}</Button>
-            <Button size="sm" onClick={() => setCreateOpen(true)}>{t("Create profile")}</Button>
+            <Button size="sm" onClick={() => { setCreateError(""); setCreateOpen(true); }}>{t("Create profile")}</Button>
           </>
         }
       />
@@ -651,42 +672,61 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
           setCreateOpen(open);
           if (!open) {
             setCreateForm(emptyCreateForm);
+            setCreateError("");
           }
         }}
       >
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>{t("Create profile")}</DialogTitle>
-            <DialogDescription>
-              {t("Choose an exposure mode, then select Tools from the Catalog.")}
-            </DialogDescription>
-          </DialogHeader>
+        <DialogContent className="max-h-[calc(100dvh-2rem)] grid-rows-[auto_minmax(0,1fr)_auto] sm:max-w-lg">
+          <div className="grid gap-3">
+            <DialogHeader>
+              <DialogTitle>{t("Create profile")}</DialogTitle>
+              <DialogDescription>
+                {t("Choose an exposure mode, then select Tools from the Catalog.")}
+              </DialogDescription>
+            </DialogHeader>
+            {createError ? (
+              <div role="alert" className="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                {createError}
+              </div>
+            ) : null}
+          </div>
 
-          <div className="space-y-4">
+          <div className="min-h-0 space-y-4 overflow-y-auto pr-1">
             <Field label="Slug">
               <Input
                 aria-label={t("Profile slug")}
                 placeholder={t("default")}
                 value={createForm.slug}
-                onChange={(event) =>
-                  setCreateForm((current) => ({
-                    ...current,
-                    slug: event.target.value,
-                  }))
-                }
+                aria-invalid={createForm.slug.trim() !== "" && !createSlugValid}
+                onChange={(event) => {
+                  setCreateError("");
+                  setCreateForm((current) => ({ ...current, slug: event.target.value }));
+                }}
               />
+              <p className="mt-1 text-xs text-muted-foreground">
+                {t("Uppercase letters and spaces become a lowercase hyphenated identifier.")}
+              </p>
+              {createForm.slug.trim() !== "" ? (
+                <p className={createSlugValid ? "mt-1 break-all font-mono text-xs" : "mt-1 text-xs text-destructive"}>
+                  {createSlugValid
+                    ? t("Result: {{value}}", { value: createSlug })
+                    : t("Use 1–63 characters, starting with a letter and ending with a letter or digit; only lowercase letters, digits and hyphens are allowed.")}
+                </p>
+              ) : null}
             </Field>
             <Field label="Display name">
               <Input
                 aria-label={t("Profile display name")}
                 value={createForm.displayName}
-                onChange={(event) =>
-                  setCreateForm((current) => ({
-                    ...current,
-                    displayName: event.target.value,
-                  }))
-                }
+                aria-invalid={createForm.displayName.trim() !== "" && !createDisplayNameValid}
+                onChange={(event) => {
+                  setCreateError("");
+                  setCreateForm((current) => ({ ...current, displayName: event.target.value }));
+                }}
               />
+              {createForm.displayName.trim() !== "" && !createDisplayNameValid ? (
+                <p className="mt-1 text-xs text-destructive">{t("Display name is too long (maximum 160 bytes).")}</p>
+              ) : null}
             </Field>
             <Field label="Exposure mode">
               <select
@@ -715,7 +755,7 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
               {t("Cancel")}
             </DialogClose>
             <Button
-              disabled={busy || !createForm.slug || !createForm.displayName}
+              disabled={busy || !createValid}
               onClick={() => void createProfile()}
             >
               {t(busy ? "Creating…" : "Create profile")}
@@ -923,6 +963,12 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
             </DialogDescription>
           </DialogHeader>
 
+          {presentationError ? (
+            <div role="alert" className="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {presentationError}
+            </div>
+          ) : null}
+
           {presentationBinding !== null && presentationProfile !== null ? (
             <div className="space-y-4">
               <Field label="Alias">
@@ -930,13 +976,20 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
                   aria-label={t("Tool binding alias")}
                   placeholder={t("Inherit canonical Tool name")}
                   value={presentationForm.alias}
-                  onChange={(event) =>
+                  aria-invalid={!aliasValid}
+                  onChange={(event) => {
+                    setPresentationError("");
                     setPresentationForm((current) => ({
                       ...current,
                       alias: event.target.value,
-                    }))
-                  }
+                    }));
+                  }}
                 />
+                {!aliasValid ? (
+                  <p className="mt-1 text-xs text-destructive">
+                    {t("Tool aliases preserve case and allow letters, digits, underscores, dots and hyphens (maximum 128 characters). Spaces are not allowed.")}
+                  </p>
+                ) : null}
               </Field>
               <Field label="Title override">
                 <Input
@@ -993,7 +1046,7 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
             <Button variant="outline" onClick={closePresentation}>
               {t("Cancel")}
             </Button>
-            <Button disabled={busy} onClick={() => void savePresentation()}>
+            <Button disabled={busy || !aliasValid} onClick={() => void savePresentation()}>
               {t(busy ? "Saving…" : "Save presentation")}
             </Button>
           </DialogFooter>

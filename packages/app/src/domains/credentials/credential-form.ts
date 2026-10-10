@@ -1,4 +1,5 @@
 import { t } from "../../i18n/i18n";
+import { canonicalizeOwnedIdentifier } from "../../shared/form-identifiers";
 
 // Keep these checks aligned with credential/domain/reference.go and credential.go.
 export const CREDENTIAL_PART_PATTERN = /^[a-z][a-z0-9-]{0,62}$/;
@@ -7,7 +8,7 @@ export const MAX_CREDENTIAL_DISPLAY_NAME_BYTES = 160;
 export const MAX_NATIVE_SECRET_BYTES = 64 * 1024;
 
 export function canonicalCredentialPart(value: string): string {
-  return value.trim().toLowerCase().replace(/\s+/g, "-");
+  return canonicalizeOwnedIdentifier(value);
 }
 
 export function validCredentialPart(value: string): boolean {

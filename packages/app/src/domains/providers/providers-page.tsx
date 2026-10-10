@@ -51,6 +51,7 @@ import {
 import { Textarea } from "@mender/ui/components/textarea";
 
 import { errorMessage } from "../../shared/errors";
+import { canonicalizeOwnedIdentifier, isCanonicalOwnedSlug, ownedIdentifierCreateError } from "../../shared/form-identifiers";
 import { IconButton } from "../../shared/icon-button";
 import { EmptyState, ErrorNotice } from "../../shared/page";
 import { PageToolbar, ResultPanel } from "../../shared/page-toolbar";
@@ -314,6 +315,7 @@ export function ProvidersPage({
   const [createCanReturnToPicker, setCreateCanReturnToPicker] = useState(false);
   const [createForm, setCreateForm] =
     useState<ProviderFormState>(emptyProviderForm);
+  const [createError, setCreateError] = useState("");
 
   const [viewProvider, setViewProvider] = useState<Provider | null>(null);
   const [editProvider, setEditProvider] = useState<Provider | null>(null);
@@ -424,16 +426,15 @@ export function ProvidersPage({
   const providerPagination = usePagination(visibleProviders);
 
   async function addProvider() {
-    const namespaceExisted = providers.some(
-      (provider) => provider.namespace === createForm.namespace,
-    );
-
+    const namespace = canonicalizeOwnedIdentifier(createForm.namespace);
+    if (!isCanonicalOwnedSlug(namespace) || busy !== "") return;
     setBusy("create");
+    setCreateError("");
     setError("");
     try {
       await client.createProvider({
-        namespace: createForm.namespace,
-        displayName: createForm.displayName,
+        namespace,
+        displayName: createForm.displayName.trim(),
         pluginId: createForm.pluginId,
         ...(createForm.installationId
           ? { installationId: createForm.installationId }
@@ -449,17 +450,10 @@ export function ProvidersPage({
       setCreateForm(emptyProviderForm);
       await refresh();
     } catch (reason) {
-      const message = errorMessage(reason);
-      const current = await refresh();
-      setError(message);
-      if (
-        !namespaceExisted &&
-        current?.some((provider) => provider.namespace === createForm.namespace)
-      ) {
-        setCreateOpen(false);
-        setCreateCanReturnToPicker(false);
-        setCreateForm(emptyProviderForm);
-      }
+      // The inventory may contain an identically named provider created in
+      // another window. An uncertain response is never evidence of success.
+      setCreateError(ownedIdentifierCreateError(reason, "provider"));
+      await refresh();
     } finally {
       setBusy("");
     }
@@ -648,6 +642,7 @@ export function ProvidersPage({
 
   function openCreatePluginPicker() {
     setError("");
+    setCreateError("");
     setCreateOpen(false);
     setCreateCanReturnToPicker(false);
     setCreateForm(emptyProviderForm);
@@ -656,6 +651,7 @@ export function ProvidersPage({
 
   function chooseCreatePlugin(plugin: ProviderPlugin) {
     setError("");
+    setCreateError("");
     setCreateForm(formForProviderPlugin(emptyProviderForm, plugin));
     setPluginPickerOpen(false);
     setCreateCanReturnToPicker(true);
@@ -663,6 +659,7 @@ export function ProvidersPage({
   }
 
   function returnToCreatePluginPicker() {
+    setCreateError("");
     setCreateOpen(false);
     setCreateCanReturnToPicker(false);
     setCreateForm(emptyProviderForm);
@@ -672,6 +669,7 @@ export function ProvidersPage({
   function setCreateDialogOpen(open: boolean) {
     setCreateOpen(open);
     if (!open) {
+      setCreateError("");
       setCreateCanReturnToPicker(false);
       setCreateForm(emptyProviderForm);
     }
@@ -853,8 +851,12 @@ export function ProvidersPage({
         credentials={credentials}
         sandboxes={sandboxes}
         busy={busy === "create"}
+        createError={createError}
         onOpenChange={setCreateDialogOpen}
-        onChange={setCreateForm}
+        onChange={(next) => {
+          setCreateError("");
+          setCreateForm(next);
+        }}
         onAuthentication={openCreateAuthentication}
         {...(createCanReturnToPicker
           ? { onBack: returnToCreatePluginPicker }
@@ -1143,6 +1145,7 @@ function ProviderFormDialog({
   credentials,
   sandboxes,
   busy,
+  createError,
   onOpenChange,
   onChange,
   onAuthentication,
@@ -1156,6 +1159,7 @@ function ProviderFormDialog({
   credentials: Credential[];
   sandboxes: Sandbox[];
   busy: boolean;
+  createError?: string;
   onOpenChange: (open: boolean) => void;
   onChange: (value: ProviderFormState) => void;
   onAuthentication?: () => void;
@@ -1166,6 +1170,8 @@ function ProviderFormDialog({
   const creating = mode === "create";
   const selectedPlugin = providerPluginForForm(plugins, form);
   const renderer = providerRenderer(form);
+  const canonicalNamespace = canonicalizeOwnedIdentifier(form.namespace);
+  const namespaceValid = isCanonicalOwnedSlug(canonicalNamespace);
   const genericError =
     renderer === "generic"
       ? genericConfigValidationError(
@@ -1175,7 +1181,9 @@ function ProviderFormDialog({
       : null;
   const valid =
     form.displayName.trim() !== "" &&
-    (!creating || form.namespace.trim() !== "") &&
+    new TextEncoder().encode(form.displayName.trim()).length <= 160 &&
+    new TextEncoder().encode(form.description.trim()).length <= 4096 &&
+    (!creating || namespaceValid) &&
     (renderer === "mcp"
       ? form.transport === "http"
         ? form.endpoint.trim() !== ""
@@ -1199,8 +1207,9 @@ function ProviderFormDialog({
         onOpenChange(nextOpen);
       }}
     >
-      <DialogContent className="sm:max-w-xl">
-        <DialogHeader>
+      <DialogContent className="max-h-[calc(100dvh-2rem)] grid-rows-[auto_minmax(0,1fr)_auto] sm:max-w-xl">
+        <div className="grid gap-3">
+          <DialogHeader>
           <DialogTitle>
             {creating
               ? selectedPlugin !== undefined
@@ -1224,9 +1233,15 @@ function ProviderFormDialog({
                   "Update mutable metadata and plugin connection settings. Provider identity and plugin remain stable.",
                 )}
           </DialogDescription>
-        </DialogHeader>
+          </DialogHeader>
+          {creating && createError ? (
+            <div role="alert" className="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {createError}
+            </div>
+          ) : null}
+        </div>
 
-        <div className="space-y-4">
+        <div className="min-h-0 space-y-4 overflow-y-auto pr-1">
           {!creating ? (
             <div className="grid grid-cols-2 gap-3">
               <ReadOnlyField label="Namespace" value={form.namespace} />
@@ -1335,10 +1350,21 @@ function ProviderFormDialog({
                 aria-label={t("Namespace")}
                 placeholder={t("namespace")}
                 value={form.namespace}
+                aria-invalid={form.namespace.trim() !== "" && !namespaceValid}
                 onChange={(event) =>
                   onChange({ ...form, namespace: event.target.value })
                 }
               />
+              <p className="mt-1 text-xs text-muted-foreground">
+                {t("Uppercase letters and spaces become a lowercase hyphenated identifier.")}
+              </p>
+              {form.namespace.trim() !== "" ? (
+                <p className={namespaceValid ? "mt-1 break-all font-mono text-xs" : "mt-1 text-xs text-destructive"}>
+                  {namespaceValid
+                    ? t("Result: {{value}}", { value: canonicalNamespace })
+                    : t("Use 1–63 characters, starting with a letter and ending with a letter or digit; only lowercase letters, digits and hyphens are allowed.")}
+                </p>
+              ) : null}
             </Field>
           ) : null}
 
@@ -1346,20 +1372,28 @@ function ProviderFormDialog({
             <Input
               aria-label={t("Display name")}
               value={form.displayName}
+              aria-invalid={form.displayName.trim() !== "" && new TextEncoder().encode(form.displayName.trim()).length > 160}
               onChange={(event) =>
                 onChange({ ...form, displayName: event.target.value })
               }
             />
+            {form.displayName.trim() !== "" && new TextEncoder().encode(form.displayName.trim()).length > 160 ? (
+              <p className="mt-1 text-xs text-destructive">{t("Display name is too long (maximum 160 bytes).")}</p>
+            ) : null}
           </Field>
 
           <Field label="Description" optional>
             <Input
               aria-label={t("Description")}
               value={form.description}
+              aria-invalid={new TextEncoder().encode(form.description.trim()).length > 4096}
               onChange={(event) =>
                 onChange({ ...form, description: event.target.value })
               }
             />
+            {new TextEncoder().encode(form.description.trim()).length > 4096 ? (
+              <p className="mt-1 text-xs text-destructive">{t("Description is too long (maximum 4096 bytes).")}</p>
+            ) : null}
           </Field>
 
           {renderer === "generic" ? (

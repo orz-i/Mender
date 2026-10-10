@@ -333,8 +333,9 @@ describe("management pages", () => {
     expect(screen.getByLabelText<HTMLInputElement>("Enabled").checked).toBe(true);
 
     fireEvent.change(screen.getByLabelText("Namespace"), {
-      target: { value: "external-echo" },
+      target: { value: "External Echo" },
     });
+    expect(screen.getByText("Result: external-echo")).toBeTruthy();
     fireEvent.change(screen.getByLabelText("Display name"), {
       target: { value: "External Echo Provider" },
     });
@@ -1675,8 +1676,14 @@ describe("management pages", () => {
     expect(screen.queryByRole("button", { name: "Choose tools" })).toBeNull();
 
     fireEvent.change(screen.getByLabelText("Tool binding alias"), {
-      target: { value: "search_release" },
+      target: { value: "Search Release" },
     });
+    expect(screen.getByRole<HTMLButtonElement>("button", { name: "Save presentation" }).disabled).toBe(true);
+    expect(screen.getByText(/Tool aliases preserve case/)).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Tool binding alias"), {
+      target: { value: "Search.Release_2" },
+    });
+    expect(screen.getByRole<HTMLButtonElement>("button", { name: "Save presentation" }).disabled).toBe(false);
     fireEvent.change(screen.getByLabelText("Tool binding title override"), {
       target: { value: "Release Search" },
     });
@@ -1688,7 +1695,7 @@ describe("management pages", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save presentation" }));
 
     expect(await screen.findByText("Release Search")).toBeTruthy();
-    expect(screen.getByText("Alias: search_release")).toBeTruthy();
+    expect(screen.getByText("Alias: Search.Release_2")).toBeTruthy();
     expect(screen.getByText(/Search release documentation/).classList).toContain(
       "truncate",
     );
