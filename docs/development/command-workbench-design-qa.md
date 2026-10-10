@@ -1,0 +1,323 @@
+# Product Design QA — Command Workbench redesign
+
+## Audit scope
+
+- Selected direction: Product Design direction 2, **Command Workbench**.
+- Product surface: Mender Web/Desktop shared management UI.
+- Audit flow:
+  1. Desktop Plugin Marketplace.
+  2. Mobile Plugin Marketplace.
+  3. Providers after plugin-management migration.
+  4. Desktop Skills workspace.
+  5. Skill focused detail Dialog.
+  6. Catalog workspace.
+  7. Mobile Skills workspace.
+- Audit capture source: live local web app backed by an isolated temporary Mender Runtime.
+- No production database was used.
+
+## Current audit evidence
+
+Accepted screenshots captured from the final working tree include:
+
+1. Desktop Plugin Marketplace — `/tmp/mender-plugin-marketplace-final-qa.png`
+2. Marketplace Plugin Details — `/tmp/mender-plugin-marketplace-detail.png`
+3. Marketplace Technical Details — `/tmp/mender-plugin-marketplace-technical.png`
+4. Mobile Plugin Marketplace — `/tmp/mender-plugin-marketplace-mobile.png`
+5. Desktop Providers with Top Bar title — `/tmp/mender-topbar-providers.png`
+6. Desktop Overview with Top Bar title — `/tmp/mender-topbar-overview.png`
+7. Mobile Skills with Top Bar title/search — `/tmp/mender-topbar-mobile-skills.png`
+8. Skill detail Dialog — `/tmp/mender-audit-final-02-skill-dialog.png`
+9. Catalog workspace with single-line cells — `/tmp/mender-table-catalog-single-line.png`
+10. Provider inventory with single-line cells — `/tmp/mender-table-providers-single-line.png`
+
+Desktop viewport: 1536 × 1024 CSS px.
+
+Mobile viewport: 390 × 844 CSS px.
+
+The temporary Runtime contained the built-in `mender-tools` Skill, one trusted/enabled local `code-review` Skill installation, the four built-in Provider plugins, and an external `Example Echo` Provider plugin installation. Marketplace lifecycle QA disabled and re-enabled Example Echo against the isolated Runtime.
+
+## Information architecture
+
+The redesign now uses one shared page grammar:
+
+~~~text
+Top Bar (current page title at left, global search + Runtime state at right)
+  -> optional page action row
+  -> optional filter / configuration toolbar
+  -> one primary data workspace with its own section title/status description
+  -> focused layered Dialogs for deeper tasks
+
+The current route title exists only in the global Top Bar. Content-area page titles and page-level descriptions are removed from every route, including Overview. PageHeader is now an action-only primitive and renders nothing when a page has no primary actions.
+~~~
+
+This grammar is applied across:
+
+- Overview
+- Plugin Marketplace
+- Providers
+- Skills
+- Catalog
+- Profiles
+- Servers
+- Policy
+- Credentials
+- Audit
+
+The redesign intentionally reduces nested Card usage. Cards now communicate a meaningful grouping boundary instead of becoming the default wrapper for every section.
+
+## Step audit
+
+### 1. Plugin Marketplace
+
+**Health: passed**
+
+Strengths:
+
+- Marketplace is a dedicated package-management surface rather than a second Provider-instance screen.
+- Current Provider Plugins are normalized into a generic Marketplace model so future plugin kinds can add adapters without changing the page structure.
+- Plugin type filter options are generated from normalized Marketplace data rather than hard-coded to Provider Plugin.
+- Built-in MCP, Model Tools, OpenAPI, and Workspace plugins appear in the same inventory.
+- Search and type/source/status filters are grouped in one workbench toolbar.
+- Primary table cells show only user-facing Plugin / Type / Source / Version / Status information; pluginId, installationId, and digest remain detail-only.
+- Plugin Details and Technical Details follow the existing one-viewport/one-information-category Dialog rule.
+- Web does not expose arbitrary server filesystem installation; Desktop receives the host-only Provider plugin package-install action, and the action is explicitly labeled as Provider-specific until additional plugin installers exist.
+- Providers no longer contains a duplicate Manage Plugins workflow.
+
+Responsive repair:
+
+- Desktop renders the complete six-column inventory.
+- Mobile hides Type / Source / Version columns and keeps Plugin / Status / Actions, avoiding horizontal overflow while retaining access to the omitted metadata through details.
+
+### 2. Desktop Skills workspace
+
+**Health: passed**
+
+Strengths:
+
+- Sidebar, global page search, Runtime state, title/action area, filters, Skill list, and pagination have a clear top-to-bottom hierarchy.
+- Skill statistics were removed from the domain page; aggregate statistics are reserved for Overview.
+- Tabs and filters are grouped into one workbench toolbar instead of multiple visual containers.
+- Built-in and local installations remain visually distinguishable without adding fabricated metadata.
+- Source, status, search, and sort controls are functional.
+
+Interaction evidence:
+
+- The Skill source filter was opened in the live browser and switched from All Sources to Local.
+- The built-in Skill disappeared and only `code-review` remained.
+
+Accessibility observations:
+
+- Desktop navigation links have explicit accessible names.
+- Filter controls have explicit labels.
+- Main icon actions retain tooltip/aria-label behavior.
+
+### 3. Skill focused Dialog
+
+**Health: passed**
+
+The visual reference originally showed a persistent right-side inspector, but the product requirement explicitly overrides that interaction. Mender keeps the previously established focused Dialog model.
+
+The default Skill Dialog shows one class of information:
+
+- installation identity;
+- source/version/digest;
+- installed state/time;
+- resource count/size;
+- allowed-tools metadata.
+
+It does not mix full resource inventory or deployment history into the same viewport.
+
+Separate transitions remain available for:
+
+- Skill resources;
+- Skill deployments.
+
+The Dialog uses a bounded viewport and internal scrolling, and deployment configuration opens as a separate modal task instead of stacking multiple information categories.
+
+### 4. Catalog workspace
+
+**Health: passed**
+
+Strengths:
+
+- Search, Provider filter, Search action, Browse action, and results now occupy one Data Panel.
+- The previous “filter card + results card” visual split is removed.
+- Table hierarchy is consistent with Providers, Profiles, Servers, Credentials, Audit, and Policy.
+- Each data cell represents one information point; names no longer stack IDs or secondary diagnostics underneath.
+- ToolID / ProviderID / Profile slug / Credential reference and similar technical identifiers are hidden from primary tables and remain available only in focused detail/configuration contexts.
+- Existing Tool detail/invoke Dialog behavior is preserved.
+
+The Catalog Provider filter intentionally remains a native select because the current Base UI Select is difficult to exercise reliably in JSDOM and the project already uses native selects in several management forms. This preserves regression-test coverage without changing the visual IA.
+
+### 5. Mobile Skills workspace
+
+**Health: passed after repair**
+
+The audit initially found a P1 responsive defect: the expanded 236px desktop Sidebar remained fully expanded at 390px, leaving the main content unusably narrow.
+
+Repair:
+
+- below `md`, Sidebar is now a fixed 68px icon rail;
+- desktop still supports explicit expand/collapse;
+- navigation links retain explicit accessible names when labels are visually hidden;
+- language switching remains available on the mobile rail;
+- Top Bar keeps the current page title at left and the global search affordance at right;
+- page actions remain in the content area without repeating page identity;
+- filters, list, and pagination regain usable content width.
+
+The repaired mobile page is approximately 1731px tall versus roughly 2782px before the fix, reflecting the removal of the severe horizontal squeeze and resulting excessive wrapping.
+
+## Shared visual system
+
+Direction 2 is reflected in:
+
+- cool white workspace background;
+- quieter blue-violet primary accent;
+- lighter border hierarchy;
+- smaller 236px expanded Sidebar;
+- 64px global top bar;
+- current route title at the Top Bar left edge;
+- compact global page search aligned to the Top Bar right edge;
+- Runtime connection state remains beside global search on desktop;
+- subtle active navigation state;
+- content pages no longer render a second icon/title/description identity block;
+- reduced Card radius/shadow;
+- unified Dialog overlay, spacing, title hierarchy, and footer;
+- shared `DataPanel`, `WorkbenchToolbar`, `SearchField`, and `FilterSelect` for domain pages;
+- `MetricStrip` and `MetricTile` are reserved for Overview only.
+
+## Page-specific decisions
+
+### Overview
+
+Uses four real summary metrics:
+
+- Runtime;
+- Providers;
+- Skills;
+- Profiles.
+
+Recent invocation activity is presented as one Data Panel.
+
+### Plugin Marketplace
+
+Marketplace owns plugin package discovery, exact external installation lifecycle, degradation state, and Desktop package installation. Provider Plugin is the first adapter; future plugin kinds extend the normalized Marketplace model.
+
+### Providers
+
+Providers now manages configured Provider instances only. The old Manage Plugins Dialog and package-install lifecycle were removed from this page. Provider degradation remains visible as a generic attention notice without exposing installation IDs; exact issue details belong to Marketplace.
+
+### Skills
+
+Skill statistics were removed from the domain page. The page now enters directly into the Skill Library with tabs, search, source/status filters, sort, list, pagination, and focused Dialog viewing.
+
+### Policy
+
+Policy statistics were removed from the domain page. The real configuration action for the default decision remains available as a compact toolbar inside the Policy Rules workspace; enabled-rule counts and approval-behavior summary cards were removed.
+
+### Profiles / Servers / Credentials / Audit
+
+These task-oriented inventories remain centered on one primary data workspace plus focused dialogs and do not expose decorative statistics.
+
+## Audit findings and repairs
+
+1. **P1 — mobile Sidebar consumed most of the viewport**
+   - Fixed with a 68px icon rail below `md`.
+   - Navigation accessible names retained.
+
+2. **P2 — page IA varied by domain**
+   - Fixed by introducing shared Command Workbench primitives and migrating all nine management pages.
+
+3. **P2 — Catalog split search and results into unrelated Card surfaces**
+   - Fixed by merging them into one workbench Data Panel.
+
+4. **P2 — card-heavy hierarchy**
+   - Reduced by using Cards only for meaningful grouped surfaces.
+   - Domain-level statistic cards were later removed entirely; statistics are now reserved for Overview.
+
+5. **P2 — shared Dialog styling lagged behind the new visual system**
+   - Updated overlay, border, radius, spacing, heading hierarchy, and footer.
+
+6. **P2 — prior design QA document was stale**
+   - Updated during this commit audit to match Direction 2 and current evidence.
+
+7. **Regression-test mismatch after shadcn Select adoption**
+   - Skills Dialog regression test was kept focused on the Dialog contract.
+   - Catalog uses a native Provider select so existing behavior tests remain deterministic.
+   - Live-browser QA verifies the shadcn Skill filters.
+
+8. **P2 — page identity competed with the actual workspace**
+   - The previous content-area icon/title block read like a hero section on every management page.
+   - A first repair reduced its visual weight, but it still duplicated route identity already available in navigation.
+   - Final repair moves the page title into the global Top Bar and removes the content-area icon/title identity block entirely.
+
+9. **P2 — page header and main data panel repeated the same title/description hierarchy**
+   - Domain pages previously explained the same resource twice in immediate succession.
+   - A partial repair removed most domain descriptions but still left a separate content-area title row.
+   - Final repair removes all page-level descriptions and all content-area page titles, including Overview.
+   - Main DataPanel headers own operational context; exact duplicate panel titles remain specific (`Provider inventory`, `Profile inventory`).
+   - PageHeader is now action-only and returns null when no actions exist.
+
+10. **P2 — table cells mixed primary labels with technical identifiers**
+   - Catalog, Providers, Profiles, Servers, Credentials, and Policy used stacked secondary lines for IDs, namespaces, slugs, transport/address metadata, or fact summaries.
+   - Repaired so each primary table cell carries one scannable information point.
+   - Technical identifiers remain in detail Dialogs/configuration forms where exact identity matters.
+   - Audit resolves Tool IDs to friendly Tool names when Catalog metadata is available and falls back to `Unknown Tool` instead of exposing raw IDs in the main history table.
+   - Provider plugin fallback labels now use user-facing names such as `Workspace`, `MCP`, `OpenAPI`, and `Model Tools` rather than plugin IDs.
+
+11. **P2 — Overview recent invocations still stacked ToolID and caller**
+   - The Overview summary used a custom row layout with raw ToolID on the first line and caller on a second line.
+   - Replaced the custom rows with the shared Table pattern: `Tool / Caller / Status / Finished`.
+   - Overview now resolves Tool IDs to user-facing Tool names when Catalog metadata is available and falls back to `Unknown Tool`; raw Tool IDs are not rendered in the summary table.
+   - Caller is now its own cell, so Overview follows the same one-cell/one-information rule as the domain inventories.
+
+## Browser diagnostics
+
+Live browser QA has been run on representative pages:
+
+- Plugin Marketplace desktop;
+- Plugin Marketplace mobile;
+- Plugin details / technical details;
+- Providers after plugin-management migration;
+- Skills;
+- Audit;
+- Overview;
+- Catalog;
+- Policy.
+
+For the final representative QA runs:
+
+- network diagnostics passed;
+- console diagnostics passed;
+- page error count: 0;
+- screenshots were verified on disk.
+
+Desktop Sidebar collapse and expand were manually verified after the redesign.
+
+## Engineering verification
+
+Current final gate:
+
+- ESLint: PASS
+- Workspace TypeScript: PASS
+- i18n: **638 required / 638 zh-CN**
+- Vitest: **10 files / 62 tests**
+- Web production build: PASS
+- Desktop production build: PASS
+- `git diff --check`: PASS
+- `pnpm check`: PASS
+- `pnpm security:check`: PASS
+- govulncheck: no reachable vulnerabilities
+- production dependency audit: no known vulnerabilities
+
+The existing Vite warning for JavaScript chunks larger than 500 kB remains non-blocking and predates this design pass.
+
+## Evidence limits
+
+Screenshot/browser inspection can verify visible hierarchy, responsive behavior, interactive state changes, accessible names exposed by the browser, console errors, and network failures. It does not establish full WCAG compliance, screen-reader behavior across platforms, or all keyboard/focus-order behavior.
+
+## Final result
+
+**passed**
+
+No unresolved P0, P1, or actionable P2 findings remain for this UI/UX commit.
