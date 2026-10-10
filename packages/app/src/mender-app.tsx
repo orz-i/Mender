@@ -31,12 +31,14 @@ import { ManagementShell } from "./shell/management-shell";
 export function MenderApp({
   client,
   copyText,
+  chooseLocalDirectory,
   installProviderPlugin,
   installSkill,
   deploySkill,
 }: {
   client: MenderClient;
   copyText?: (value: string) => Promise<void>;
+  chooseLocalDirectory?: () => Promise<string | null>;
   installProviderPlugin?: () => Promise<ProviderPluginInstallation | null>;
   installSkill?: () => Promise<SkillInstallation | null>;
   deploySkill?: (
@@ -96,7 +98,15 @@ export function MenderApp({
           />
           <Route path="runtime" element={<RuntimePage client={client} />} />
           <Route path="sandboxes" element={<SandboxesPage client={client} />} />
-          <Route path="sandboxes/new" element={<CreateSandboxPage client={client} />} />
+          <Route
+            path="sandboxes/new"
+            element={
+              <CreateSandboxPage
+                client={client}
+                {...(chooseLocalDirectory === undefined ? {} : { chooseLocalDirectory })}
+              />
+            }
+          />
           <Route path="sandboxes/:sandboxId" element={<SandboxDetailPage client={client} />} />
           <Route path="sandboxes/:sandboxId/activity" element={<SandboxActivityPage client={client} />} />
           <Route path="policy" element={<PolicyPage client={client} />} />

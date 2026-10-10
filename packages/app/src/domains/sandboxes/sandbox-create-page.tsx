@@ -5,6 +5,7 @@ import {
   CloudIcon,
   ContainerIcon,
   FolderIcon,
+  FolderOpenIcon,
   LockKeyholeIcon,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router";
@@ -16,6 +17,7 @@ import { Input } from "@mender/ui/components/input";
 import { t } from "../../i18n/i18n";
 import { errorMessage } from "../../shared/errors";
 import { ErrorNotice } from "../../shared/page";
+import { IconButton } from "../../shared/icon-button";
 import { PageToolbar } from "../../shared/page-toolbar";
 import { DataPanel } from "../../shared/workbench";
 
@@ -167,12 +169,19 @@ function daytonaStatus(value: string): string {
 }
 
 /** Sandbox creation is explicit and progressive: selection → identity → limits → authority review. */
-export function CreateSandboxPage({ client }: { client: MenderClient }) {
+export function CreateSandboxPage({
+  client,
+  chooseLocalDirectory,
+}: {
+  client: MenderClient;
+  chooseLocalDirectory?: () => Promise<string | null>;
+}) {
   const navigate = useNavigate();
   const [step, setStep] = useState<CreationStep>("backend");
   const [selected, setSelected] = useState<Backend>("local_workspace");
   const [name, setName] = useState("");
   const [root, setRoot] = useState("");
+  const [pickingDirectory, setPickingDirectory] = useState(false);
   const [isolation, setIsolation] = useState<"" | "host" | "restricted_host">("");
   const [restrictedAvailable, setRestrictedAvailable] = useState(false);
   const [dockerAvailable, setDockerAvailable] = useState(false);
@@ -239,6 +248,20 @@ export function CreateSandboxPage({ client }: { client: MenderClient }) {
     setError("");
   }
 
+  async function pickLocalDirectory() {
+    if (!chooseLocalDirectory || pickingDirectory) return;
+    setPickingDirectory(true);
+    setError("");
+    try {
+      const directory = await chooseLocalDirectory();
+      if (directory) setRoot(directory);
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
+      setPickingDirectory(false);
+    }
+  }
+
   async function create() {
     if (!formValid || step !== "review" || busy) return;
     setBusy(true);
@@ -300,12 +323,25 @@ export function CreateSandboxPage({ client }: { client: MenderClient }) {
 
               {selected === "local_workspace" ? (
                 <>
-                  <label className="grid gap-2 text-sm">
-                    <span className="font-medium">{t("Absolute local directory")}</span>
-                    <Input aria-label={t("Absolute local directory")} value={root}
-                      onChange={(event) => setRoot(event.target.value)}
-                      placeholder={t("/Users/example/project")} />
-                  </label>
+                  <div className="grid gap-2 text-sm">
+                    <label htmlFor="local-sandbox-root" className="font-medium">{t("Absolute local directory")}</label>
+                    <div className="relative">
+                      <Input id="local-sandbox-root" value={root}
+                        className={chooseLocalDirectory ? "pr-12" : undefined}
+                        onChange={(event) => setRoot(event.target.value)}
+                        placeholder={t("/Users/example/project")} />
+                      {chooseLocalDirectory ? (
+                        <div className="absolute inset-y-0 right-1 flex items-center">
+                          <IconButton type="button" variant="ghost" size="icon-sm"
+                            label={t("Choose local directory")}
+                            disabled={pickingDirectory || busy}
+                            onClick={() => void pickLocalDirectory()}>
+                            <FolderOpenIcon aria-hidden="true" />
+                          </IconButton>
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
                   <label className="grid gap-2 text-sm">
                     <span className="font-medium">{t("Isolation")}</span>
                     <select aria-label={t("Isolation")} value={isolation}

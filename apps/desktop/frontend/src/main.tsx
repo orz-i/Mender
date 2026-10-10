@@ -23,6 +23,19 @@ if (rootElement === null) {
 
 const client = createDesktopMenderClient();
 
+async function chooseLocalSandboxDirectory(): Promise<string | null> {
+  const directory = await Dialogs.OpenFile({
+    AllowsMultipleSelection: false,
+    CanChooseDirectories: true,
+    CanChooseFiles: false,
+    CanCreateDirectories: false,
+    Title: t("Choose local directory"),
+    Message: t("Choose the workspace directory for this local Sandbox."),
+    ButtonText: t("Select directory"),
+  });
+  return directory || null;
+}
+
 async function chooseAndInstallProviderPlugin() {
   const sourcePath = await Dialogs.OpenFile({
     AllowsMultipleSelection: false,
@@ -83,6 +96,7 @@ createRoot(rootElement).render(
       <MenderApp
         client={client}
         copyText={Clipboard.SetText}
+        chooseLocalDirectory={chooseLocalSandboxDirectory}
         installProviderPlugin={chooseAndInstallProviderPlugin}
         installSkill={chooseAndInstallSkill}
         deploySkill={chooseAndDeploySkill}
