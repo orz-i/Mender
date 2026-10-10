@@ -21,6 +21,7 @@ import {
 import { t } from "../../i18n/i18n";
 import { errorMessage } from "../../shared/errors";
 import { ErrorNotice } from "../../shared/page";
+import { FocusSwitch } from "../../shared/focus-switch";
 import { DataPanel, MetricStrip, MetricTile } from "../../shared/workbench";
 
 const budgetFields: Array<{
@@ -67,6 +68,7 @@ export function RuntimePage({ client }: { client: MenderClient }) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
   const [editor, setEditor] = useState<"budget" | "isolation" | null>(null);
+  const [focus, setFocus] = useState<"status" | "budget" | "isolation">("status");
 
   useEffect(() => {
     let active = true;
@@ -132,8 +134,18 @@ export function RuntimePage({ client }: { client: MenderClient }) {
         </p>
       </div>
       {error ? <ErrorNotice message={error} /> : null}
+      <FocusSwitch
+        label="Runtime governance"
+        value={focus}
+        onChange={setFocus}
+        items={[
+          { value: "status", label: "Runtime" },
+          { value: "budget", label: "Runtime budget" },
+          { value: "isolation", label: "Process isolation" },
+        ]}
+      />
 
-      <MetricStrip>
+      {focus === "status" ? <MetricStrip>
         <MetricTile icon={ActivityIcon} value={status?.usage.invocations ?? "—"} label="In-flight invocations" />
         <MetricTile icon={WorkflowIcon} value={status?.usage.activations ?? "—"} label="In-flight activations" />
         <MetricTile icon={BoxesIcon} value={status?.backend.name ?? "—"} label="Isolation backend" />
@@ -142,9 +154,7 @@ export function RuntimePage({ client }: { client: MenderClient }) {
           value={restrictedAvailable ? t("Available") : t("Unavailable")}
           label="Restricted host"
         />
-      </MetricStrip>
-
-      <div className="grid gap-5 xl:grid-cols-2">
+      </MetricStrip> : focus === "budget" ? (
         <DataPanel title="Runtime budget" description="Hard limits apply after governance admission. Profile constraints may only tighten them."
           actions={<Button variant="outline" disabled={budget === null} onClick={() => setEditor("budget")}>{t("Edit")}</Button>}>
           <div className="grid gap-x-6 gap-y-5 p-5 sm:grid-cols-2">
@@ -154,6 +164,7 @@ export function RuntimePage({ client }: { client: MenderClient }) {
             </div>)}
           </div>
         </DataPanel>
+      ) : (
         <DataPanel title="Process isolation" description="Isolation changes host filesystem authority; it does not change Policy decisions."
           actions={<Button variant="outline" disabled={isolation === null} onClick={() => setEditor("isolation")}>{t("Edit")}</Button>}>
           <div className="divide-y divide-border/70 px-5 pb-3">
@@ -168,7 +179,7 @@ export function RuntimePage({ client }: { client: MenderClient }) {
               : t("restricted_host is unavailable on this Runtime. Host mode keeps the local process authority of the Runtime user.")}</p>
           </div>
         </DataPanel>
-      </div>
+      )}
       <Dialog open={editor === "budget"} onOpenChange={(open) => { if (!open && !busy) { setEditor(null); setBudget(status?.budget ?? null); } }}>
         <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader><DialogTitle>{t("Runtime budget")}</DialogTitle><DialogDescription>{t("Hard limits apply after governance admission. Profile constraints may only tighten them.")}</DialogDescription></DialogHeader>

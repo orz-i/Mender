@@ -535,9 +535,15 @@ describe("management pages", () => {
     ).toBeNull();
 
     fireEvent.click(screen.getByRole("link", { name: "View Echo" }));
-    expect(await screen.findByText("Technical details")).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Technical details" })).toBeTruthy();
+    expect(screen.queryByText("dev.example.echo")).toBeNull();
+    expect(screen.queryByText(installation.installationId)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Technical details" }));
     expect(screen.getByText("dev.example.echo")).toBeTruthy();
     expect(screen.getByText(installation.installationId)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Capabilities" }));
+    expect(screen.queryByText("dev.example.echo")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Overview" }));
     expect(screen.queryByRole("button", { name: "Add provider" })).toBeNull();
 
     fireEvent.click(
@@ -2078,9 +2084,12 @@ describe("management pages", () => {
     expect(await screen.findByText("Runtime governance")).toBeTruthy();
     expect(screen.queryByLabelText("Tunnel client")).toBeNull();
     expect(screen.queryByLabelText("Global invocations")).toBeNull();
-    expect(screen.getByText("restricted_host is unavailable on this Runtime. Host mode keeps the local process authority of the Runtime user.")).toBeTruthy();
+    expect(screen.queryByText("restricted_host is unavailable on this Runtime. Host mode keeps the local process authority of the Runtime user.")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
 
-    fireEvent.click(screen.getAllByRole("button", { name: "Edit" })[0]!);
+    fireEvent.click(screen.getByRole("button", { name: "Runtime budget" }));
+    expect(screen.queryByLabelText("Global invocations")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
     const globalInput = screen.getByLabelText("Global invocations");
     fireEvent.change(globalInput, { target: { value: "12" } });
     fireEvent.click(screen.getByRole("button", { name: "Save budget" }));
@@ -2092,7 +2101,10 @@ describe("management pages", () => {
       });
     });
 
-    fireEvent.click(screen.getAllByRole("button", { name: "Edit" })[1]!);
+    fireEvent.click(screen.getByRole("button", { name: "Process isolation" }));
+    expect(screen.getByText("restricted_host is unavailable on this Runtime. Host mode keeps the local process authority of the Runtime user.")).toBeTruthy();
+    expect(screen.queryByLabelText("Tunnel client")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
     expect(screen.getByLabelText("Tunnel client")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Save isolation" }));
     await waitFor(() => {

@@ -28,6 +28,7 @@ import { formatDateTime, formatNumber, t } from "../../i18n/i18n";
 import { errorMessage } from "../../shared/errors";
 import { IconButton } from "../../shared/icon-button";
 import { EmptyState, ErrorNotice, PageHeader } from "../../shared/page";
+import { FocusSwitch } from "../../shared/focus-switch";
 import {
   DataPanel,
   EmptyPanelState,
@@ -260,6 +261,7 @@ export function PluginDetailPage({ client }: { client: MenderClient }) {
   const { plugins, loaded, error, setError, refresh } =
     useMarketplacePlugins(client);
   const [busy, setBusy] = useState("");
+  const [section, setSection] = useState<"overview" | "capabilities" | "technical">("overview");
   const plugin = plugins.find((item) => item.key === pluginKey) ?? null;
   const createAction = plugin?.createAction;
 
@@ -390,6 +392,24 @@ export function PluginDetailPage({ client }: { client: MenderClient }) {
         </DataPanel>
       ) : (
         <div className="flex flex-col gap-4">
+          <FocusSwitch
+            label="Plugin details"
+            value={section}
+            onChange={setSection}
+            items={[
+              { value: "overview", label: "Overview" },
+              { value: "capabilities", label: "Capabilities" },
+              { value: "technical", label: "Technical details" },
+            ]}
+          />
+          {plugin.issue !== undefined ? (
+            <ErrorNotice
+              message={t("Plugin issue: {{message}}", {
+                message: plugin.issue.message,
+              })}
+            />
+          ) : null}
+          {section === "overview" ? (
           <DataPanel
             title={plugin.displayName}
             description={plugin.description || t("No plugin description.")}
@@ -411,14 +431,7 @@ export function PluginDetailPage({ client }: { client: MenderClient }) {
             </div>
           </DataPanel>
 
-          {plugin.issue !== undefined ? (
-            <ErrorNotice
-              message={t("Plugin issue: {{message}}", {
-                message: plugin.issue.message,
-              })}
-            />
-          ) : null}
-
+          ) : section === "capabilities" ? (
           <DataPanel
             title="Capabilities"
             description={
@@ -442,6 +455,7 @@ export function PluginDetailPage({ client }: { client: MenderClient }) {
             </div>
           </DataPanel>
 
+          ) : (
           <DataPanel title="Technical details">
             <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
               {plugin.technicalDetails.map((detail) => (
@@ -458,6 +472,7 @@ export function PluginDetailPage({ client }: { client: MenderClient }) {
               ))}
             </div>
           </DataPanel>
+          )}
         </div>
       )}
     </>

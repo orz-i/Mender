@@ -32,6 +32,7 @@ import {
 import { formatDateTime, formatNumber, t } from "../../i18n/i18n";
 import { errorMessage } from "../../shared/errors";
 import { ErrorNotice } from "../../shared/page";
+import { FocusSwitch } from "../../shared/focus-switch";
 import { usePagination } from "../../shared/pagination";
 import { TablePagination } from "../../shared/table-pagination";
 import {
@@ -149,17 +150,16 @@ export function OverviewPage({ client }: { client: MenderClient }) {
         />
       </MetricStrip>
 
-      <div role="group" aria-label={t("Overview")} className="mt-5 mb-4 inline-flex max-w-full items-center gap-1 rounded-2xl bg-secondary p-1">
-        <button type="button" aria-pressed={view === "activity"} onClick={() => setView("activity")}
-          className={[
-            "rounded-xl px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-ring",
-            view === "activity" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
-          ].join(" ")}>{t("Recent invocations")}</button>
-        <button type="button" aria-pressed={view === "resources"} onClick={() => setView("resources")}
-          className={[
-            "rounded-xl px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-ring",
-            view === "resources" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
-          ].join(" ")}>{t("Providers")} / {t("Profiles")}</button>
+      <div className="mt-5 mb-4">
+        <FocusSwitch
+          label="Overview"
+          value={view}
+          onChange={setView}
+          items={[
+            { value: "activity", label: "Recent invocations" },
+            { value: "resources", label: `${t("Providers")} / ${t("Profiles")}` },
+          ]}
+        />
       </div>
       {view === "activity" ? (
         <div className="min-w-0">
