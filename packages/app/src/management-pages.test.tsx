@@ -2076,9 +2076,11 @@ describe("management pages", () => {
     });
 
     expect(await screen.findByText("Runtime governance")).toBeTruthy();
-    expect(screen.getByLabelText("Tunnel client")).toBeTruthy();
+    expect(screen.queryByLabelText("Tunnel client")).toBeNull();
+    expect(screen.queryByLabelText("Global invocations")).toBeNull();
     expect(screen.getByText("restricted_host is unavailable on this Runtime. Host mode keeps the local process authority of the Runtime user.")).toBeTruthy();
 
+    fireEvent.click(screen.getAllByRole("button", { name: "Edit" })[0]!);
     const globalInput = screen.getByLabelText("Global invocations");
     fireEvent.change(globalInput, { target: { value: "12" } });
     fireEvent.click(screen.getByRole("button", { name: "Save budget" }));
@@ -2090,6 +2092,8 @@ describe("management pages", () => {
       });
     });
 
+    fireEvent.click(screen.getAllByRole("button", { name: "Edit" })[1]!);
+    expect(screen.getByLabelText("Tunnel client")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Save isolation" }));
     await waitFor(() => {
       expect(updateRuntimeIsolation).toHaveBeenCalledWith(status.isolation);

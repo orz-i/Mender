@@ -9,6 +9,7 @@ import type {
 } from "@mender/sdk";
 import { Button } from "@mender/ui/components/button";
 import { Input } from "@mender/ui/components/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@mender/ui/components/dialog";
 import {
   Select,
   SelectContent,
@@ -65,6 +66,7 @@ export function RuntimePage({ client }: { client: MenderClient }) {
   const [isolation, setIsolation] = useState<RuntimeIsolation | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
+  const [editor, setEditor] = useState<"budget" | "isolation" | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -94,6 +96,7 @@ export function RuntimePage({ client }: { client: MenderClient }) {
       setBudget(next.budget);
       setIsolation(next.isolation);
       setError("");
+      setEditor(null);
     } catch (reason) {
       setError(errorMessage(reason));
     } finally {
@@ -110,6 +113,7 @@ export function RuntimePage({ client }: { client: MenderClient }) {
       setBudget(next.budget);
       setIsolation(next.isolation);
       setError("");
+      setEditor(null);
     } catch (reason) {
       setError(errorMessage(reason));
     } finally {
@@ -140,63 +144,58 @@ export function RuntimePage({ client }: { client: MenderClient }) {
         />
       </MetricStrip>
 
-      <DataPanel
-        title="Runtime budget"
-        description="Hard limits apply after governance admission. Profile constraints may only tighten them."
-        actions={<Button disabled={budget === null || busy !== ""} onClick={() => void saveBudget()}>{busy === "budget" ? t("Saving…") : t("Save budget")}</Button>}
-      >
-        <div className="grid gap-4 p-4 md:grid-cols-2 xl:grid-cols-4">
-          {budgetFields.map((field) => (
-            <label key={field.key} className="space-y-1.5">
-              <span className="text-xs font-medium">{t(field.label)}</span>
-              <Input
-                aria-label={t(field.label)}
-                type="number"
-                min={field.min}
-                max={field.max}
-                value={budget?.[field.key] ?? ""}
-                onChange={(event) => {
-                  const value = Number(event.target.value);
-                  setBudget((current) => current === null ? null : { ...current, [field.key]: value });
-                }}
-              />
-              <span className="block text-[11px] text-muted-foreground">{budgetDescription(field.key)}</span>
-            </label>
-          ))}
-        </div>
-      </DataPanel>
+      <div className="grid gap-5 xl:grid-cols-2">
+        <DataPanel title="Runtime budget" description="Hard limits apply after governance admission. Profile constraints may only tighten them."
+          actions={<Button variant="outline" disabled={budget === null} onClick={() => setEditor("budget")}>{t("Edit")}</Button>}>
+          <div className="grid gap-x-6 gap-y-5 p-5 sm:grid-cols-2">
+            {budgetFields.map((field) => <div key={field.key} className="min-w-0 border-b border-border/60 pb-3">
+              <p className="truncate text-xs text-muted-foreground">{t(field.label)}</p>
+              <p className="mt-1 text-xl font-semibold tabular-nums">{budget?.[field.key] ?? "—"}</p>
+            </div>)}
+          </div>
+        </DataPanel>
+        <DataPanel title="Process isolation" description="Isolation changes host filesystem authority; it does not change Policy decisions."
+          actions={<Button variant="outline" disabled={isolation === null} onClick={() => setEditor("isolation")}>{t("Edit")}</Button>}>
+          <div className="divide-y divide-border/70 px-5 pb-3">
+            {(["workspaceShell", "externalProvider", "tunnelClient"] as const).map((key, i) => (
+              <div key={key} className="flex items-center justify-between gap-4 py-4">
+                <span className="text-sm">{[t("Workspace shell"), t("External Providers"), t("Tunnel client")][i]!}</span>
+                <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium">{t((isolation?.[key] ?? "host") === "host" ? "Host" : "Restricted host")}</span>
+              </div>
+            ))}
+            <p className="pt-4 text-xs leading-5 text-muted-foreground">{restrictedAvailable
+              ? t("restricted_host provides host containment, not a VM or container. Network access remains available in this phase.")
+              : t("restricted_host is unavailable on this Runtime. Host mode keeps the local process authority of the Runtime user.")}</p>
+          </div>
+        </DataPanel>
+      </div>
+      <Dialog open={editor === "budget"} onOpenChange={(open) => { if (!open && !busy) { setEditor(null); setBudget(status?.budget ?? null); } }}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader><DialogTitle>{t("Runtime budget")}</DialogTitle><DialogDescription>{t("Hard limits apply after governance admission. Profile constraints may only tighten them.")}</DialogDescription></DialogHeader>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {budgetFields.map((field) => <label key={field.key} className="grid gap-1.5 text-sm">
+              <span className="font-medium">{t(field.label)}</span>
+              <Input type="number" aria-label={t(field.label)} min={field.min} max={field.max} value={budget?.[field.key] ?? ""}
+                onChange={(event) => setBudget((current) => current === null ? null : { ...current, [field.key]: Number(event.target.value) })} />
+              <span className="text-xs text-muted-foreground">{budgetDescription(field.key)}</span>
+            </label>)}
+          </div>
+          <DialogFooter><Button variant="outline" disabled={busy !== ""} onClick={() => { setBudget(status?.budget ?? null); setEditor(null); }}>{t("Cancel")}</Button><Button disabled={busy !== ""} onClick={() => void saveBudget()}>{busy === "budget" ? t("Saving…") : t("Save budget")}</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={editor === "isolation"} onOpenChange={(open) => { if (!open && !busy) { setEditor(null); setIsolation(status?.isolation ?? null); } }}>
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader><DialogTitle>{t("Process isolation")}</DialogTitle><DialogDescription>{t("Isolation changes host filesystem authority; it does not change Policy decisions.")}</DialogDescription></DialogHeader>
+          <div className="grid gap-5">
+            {(["workspaceShell", "externalProvider", "tunnelClient"] as const).map((key, i) => <IsolationField key={key}
+              label={[t("Workspace shell"), t("External Providers"), t("Tunnel client")][i]!}
+              value={isolation?.[key] ?? "host"} restrictedAvailable={restrictedAvailable}
+              onChange={(value) => setIsolation((current) => current === null ? null : { ...current, [key]: value })} />)}
+          </div>
+          <DialogFooter><Button variant="outline" disabled={busy !== ""} onClick={() => { setIsolation(status?.isolation ?? null); setEditor(null); }}>{t("Cancel")}</Button><Button disabled={busy !== ""} onClick={() => void saveIsolation()}>{busy === "isolation" ? t("Saving…") : t("Save isolation")}</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-      <DataPanel
-        title="Process isolation"
-        description="Isolation changes host filesystem authority; it does not change Policy decisions."
-        actions={<Button disabled={isolation === null || busy !== ""} onClick={() => void saveIsolation()}>{busy === "isolation" ? t("Saving…") : t("Save isolation")}</Button>}
-      >
-        <div className="grid gap-4 p-4 md:grid-cols-3">
-          <IsolationField
-            label="Workspace shell"
-            value={isolation?.workspaceShell ?? "host"}
-            restrictedAvailable={restrictedAvailable}
-            onChange={(value) => setIsolation((current) => current === null ? null : { ...current, workspaceShell: value })}
-          />
-          <IsolationField
-            label="External Providers"
-            value={isolation?.externalProvider ?? "host"}
-            restrictedAvailable={restrictedAvailable}
-            onChange={(value) => setIsolation((current) => current === null ? null : { ...current, externalProvider: value })}
-          />
-          <IsolationField
-            label="Tunnel client"
-            value={isolation?.tunnelClient ?? "host"}
-            restrictedAvailable={restrictedAvailable}
-            onChange={(value) => setIsolation((current) => current === null ? null : { ...current, tunnelClient: value })}
-          />
-        </div>
-        <div className="border-t border-border/65 px-4 py-3 text-xs text-muted-foreground">
-          {restrictedAvailable
-            ? t("restricted_host provides host containment, not a VM or container. Network access remains available in this phase.")
-            : t("restricted_host is unavailable on this Runtime. Host mode keeps the local process authority of the Runtime user.")}
-        </div>
-      </DataPanel>
     </div>
   );
 }
