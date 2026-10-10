@@ -193,6 +193,7 @@ export function ManagementShell({ client }: { client: MenderClient }) {
                       to={item.to}
                       end={item.to === "/"}
                       aria-label={t(item.label)}
+                      title={t(item.label)}
                       className={({ isActive }) => [
                         "group flex h-10 min-w-0 items-center rounded-xl text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
                         collapsed ? "justify-center px-0" : "justify-center px-0 lg:justify-start lg:gap-3 lg:px-3",

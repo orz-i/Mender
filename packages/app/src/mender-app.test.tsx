@@ -44,6 +44,42 @@ describe("MenderApp", () => {
     }
   });
 
+  it("keeps the quick navigation searchable and closes it after selecting a page", () => {
+    render(
+      <MemoryRouter>
+        <MenderApp client={overviewClient()} />
+      </MemoryRouter>,
+    );
+
+    fireEvent.keyDown(window, { key: "k", ctrlKey: true });
+    const dialog = screen.getByRole("dialog", { name: "Quick navigation" });
+    const search = screen.getByRole("textbox", { name: "Search pages" });
+    fireEvent.change(search, { target: { value: "Overview" } });
+
+    expect(screen.getByRole("button", { name: "Overview" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Providers" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Overview" }));
+
+    expect(screen.queryByRole("dialog", { name: "Quick navigation" })).toBeNull();
+    expect(screen.getByRole("heading", { name: "Overview" })).toBeTruthy();
+    expect(dialog.isConnected).toBe(false);
+  });
+
+  it("collapses and expands the sidebar without losing page navigation", () => {
+    render(
+      <MemoryRouter>
+        <MenderApp client={overviewClient()} />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Collapse sidebar" }));
+    expect(screen.getByRole("button", { name: "Expand sidebar" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Providers" })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Expand sidebar" }));
+    expect(screen.getByRole("button", { name: "Collapse sidebar" })).toBeTruthy();
+  });
+
   it("switches the active UI to Simplified Chinese without a reload", () => {
     render(
       <MemoryRouter>
