@@ -136,6 +136,8 @@ Credentials is list-first management. Users can create native-keyring or environ
 
 Credential deletion returns a conflict while a Profile ToolBinding or Provider authentication binding references the Credential. Normal workflows derive `credential://namespace/name` from namespace/name and use inventory selectors elsewhere rather than asking users to paste raw References.
 
+Create forms accept human-typed namespace/name values and derive the canonical lowercase-hyphen identity for preview and submission (for example, `OpenAI` + `Tunnel API Key` becomes `credential://openai/tunnel-api-key`). Each canonical part must match `^[a-z][a-z0-9-]{0,62}$` and environment variable names must match `^[A-Za-z_][A-Za-z0-9_]*$`. Invalid identifiers cannot be submitted, and the form explains the constraints inline. Creation failures are displayed **inside** the create dialog rather than behind it; known reference conflicts and unavailable native keyring errors receive safe, localized guidance. Secret bytes and untrusted backend error strings are never included in that guidance. No plaintext fallback is permitted.
+
 ### Audit
 
 Audit shows data-minimized terminal invocation metadata. Each row can open a read-only detail Dialog containing invocation identity, execution origin/scope, canonical outcome classification, timing, policy/approval outcome, error class, and an optional bounded/redacted failure summary.
