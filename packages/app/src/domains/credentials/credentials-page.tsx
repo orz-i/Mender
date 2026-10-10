@@ -31,6 +31,15 @@ import { TablePagination } from "../../shared/table-pagination";
 import { EmptyPanelState, SearchField } from "../../shared/workbench";
 
 import { t } from "../../i18n/i18n";
+import {
+  canonicalCredentialPart,
+  credentialCreateError,
+  credentialReferencePreview,
+  ENVIRONMENT_VARIABLE_PATTERN,
+  MAX_CREDENTIAL_DISPLAY_NAME_BYTES,
+  MAX_NATIVE_SECRET_BYTES,
+  validCredentialPart,
+} from "./credential-form";
 
 type CredentialSource = Credential["source"];
 
@@ -52,6 +61,7 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
 
   const [createOpen, setCreateOpen] = useState(false);
   const [createForm, setCreateForm] = useState(emptyCreateForm);
+  const [createError, setCreateError] = useState("");
 
   const [rotateCredential, setRotateCredential] =
     useState<Credential | null>(null);
@@ -100,38 +110,53 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
   }, [credentials, inventoryQuery]);
   const credentialPagination = usePagination(visibleCredentials);
 
-  const referencePreview = useMemo(() => {
-    const namespace = createForm.namespace.trim();
-    const name = createForm.name.trim();
-    return namespace && name
-      ? "credential://" + namespace + "/" + name
-      : t("Derived after namespace and name");
-  }, [createForm.name, createForm.namespace]);
+  const namespace = canonicalCredentialPart(createForm.namespace);
+  const name = canonicalCredentialPart(createForm.name);
+  const namespaceInvalid = createForm.namespace.trim() !== "" && !validCredentialPart(namespace);
+  const nameInvalid = createForm.name.trim() !== "" && !validCredentialPart(name);
+  const canonicalReference = credentialReferencePreview(namespace, name);
+  const referencePreview = canonicalReference ?? (
+    namespace && name ? t("Invalid namespace or name") : t("Derived after namespace and name")
+  );
+  const displayNameValid = createForm.displayName.trim() !== "" &&
+    new TextEncoder().encode(createForm.displayName.trim()).length <= MAX_CREDENTIAL_DISPLAY_NAME_BYTES;
+  const secretValid = createForm.secret !== "" &&
+    new TextEncoder().encode(createForm.secret).length <= MAX_NATIVE_SECRET_BYTES;
+  const environmentVariableValid = ENVIRONMENT_VARIABLE_PATTERN.test(createForm.environmentVariable.trim());
+  const createValid = canonicalReference !== null && displayNameValid && (
+    createForm.source === "native" ? secretValid : environmentVariableValid
+  );
+
+  function updateCreateForm(changes: Partial<typeof emptyCreateForm>) {
+    setCreateError("");
+    setCreateForm((current) => ({ ...current, ...changes }));
+  }
 
   async function createCredential() {
+    if (!createValid || busy !== "") return;
     setBusy("create");
-    setError("");
+    setCreateError("");
     try {
       if (createForm.source === "native") {
         await client.createNativeCredential({
-          namespace: createForm.namespace,
-          name: createForm.name,
-          displayName: createForm.displayName,
+          namespace,
+          name,
+          displayName: createForm.displayName.trim(),
           secret: createForm.secret,
         });
       } else {
         await client.createEnvironmentCredential({
-          namespace: createForm.namespace,
-          name: createForm.name,
-          displayName: createForm.displayName,
-          environmentVariable: createForm.environmentVariable,
+          namespace,
+          name,
+          displayName: createForm.displayName.trim(),
+          environmentVariable: createForm.environmentVariable.trim(),
         });
       }
       setCreateOpen(false);
       setCreateForm(emptyCreateForm);
       await refresh();
     } catch (reason) {
-      setError(errorMessage(reason));
+      setCreateError(credentialCreateError(reason));
     } finally {
       setBusy("");
     }
@@ -181,14 +206,6 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
     }
   }
 
-  const createValid =
-    createForm.namespace.trim() !== "" &&
-    createForm.name.trim() !== "" &&
-    createForm.displayName.trim() !== "" &&
-    (createForm.source === "native"
-      ? createForm.secret !== ""
-      : createForm.environmentVariable.trim() !== "");
-
   return (
     <>
       <PageToolbar
@@ -200,7 +217,7 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
         actions={
           <>
             <Button variant="outline" size="sm" disabled={busy !== ""} onClick={() => void refresh()}>{t("Refresh")}</Button>
-            <Button size="sm" onClick={() => { setError(""); setCreateOpen(true); }}>{t("Add credential")}</Button>
+            <Button size="sm" onClick={() => { setCreateError(""); setCreateOpen(true); }}>{t("Add credential")}</Button>
           </>
         }
       />
@@ -287,30 +304,35 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
           setCreateOpen(open);
           if (!open) {
             setCreateForm(emptyCreateForm);
+            setCreateError("");
           }
         }}
       >
-        <DialogContent className="sm:max-w-xl">
-          <DialogHeader>
-            <DialogTitle>{t("Add credential")}</DialogTitle>
-            <DialogDescription>
-              {t("Inventory metadata is stored in Mender. Native secret values go directly to the OS credential store; environment-backed Credentials store only the variable name.")}
-            </DialogDescription>
-          </DialogHeader>
+        <DialogContent className="grid-rows-[auto_minmax(0,1fr)_auto] max-h-[calc(100dvh-2rem)] sm:max-w-xl">
+          <div className="grid gap-3">
+            <DialogHeader>
+              <DialogTitle>{t("Add credential")}</DialogTitle>
+              <DialogDescription>
+                {t("Inventory metadata is stored in Mender. Native secret values go directly to the OS credential store; environment-backed Credentials store only the variable name.")}
+              </DialogDescription>
+            </DialogHeader>
+            {createError ? (
+              <div role="alert" className="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                {createError}
+              </div>
+            ) : null}
+          </div>
 
-          <div className="space-y-4">
+          <div className="min-h-0 space-y-4 overflow-y-auto pr-1">
             <Field label="Source">
               <select
                 aria-label={t("Credential source")}
                 value={createForm.source}
-                onChange={(event) =>
-                  setCreateForm((current) => ({
-                    ...current,
-                    source: event.target.value as CredentialSource,
-                    secret: "",
-                    environmentVariable: "",
-                  }))
-                }
+                onChange={(event) => updateCreateForm({
+                  source: event.target.value as CredentialSource,
+                  secret: "",
+                  environmentVariable: "",
+                })}
                 className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
               >
                 <option value="native">{t("native keyring")}</option>
@@ -324,12 +346,8 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
                   aria-label={t("Credential namespace")}
                   placeholder={t("github")}
                   value={createForm.namespace}
-                  onChange={(event) =>
-                    setCreateForm((current) => ({
-                      ...current,
-                      namespace: event.target.value,
-                    }))
-                  }
+                  aria-invalid={namespaceInvalid}
+                  onChange={(event) => updateCreateForm({ namespace: event.target.value })}
                 />
               </Field>
               <Field label="Name">
@@ -337,30 +355,32 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
                   aria-label={t("Credential name")}
                   placeholder={t("work")}
                   value={createForm.name}
-                  onChange={(event) =>
-                    setCreateForm((current) => ({
-                      ...current,
-                      name: event.target.value,
-                    }))
-                  }
+                  aria-invalid={nameInvalid}
+                  onChange={(event) => updateCreateForm({ name: event.target.value })}
                 />
               </Field>
             </div>
+
+            <p className="text-xs leading-5 text-muted-foreground">
+              {t("Namespace and name are lowercased and spaces become hyphens. Use 1–63 letters, digits or hyphens, starting with a letter.")}
+              {namespaceInvalid || nameInvalid ? (
+                <span className="block text-destructive">{t("Use valid namespace and name identifiers before creating a credential.")}</span>
+              ) : null}
+            </p>
 
             <Field label="Display name">
               <Input
                 aria-label={t("Credential display name")}
                 placeholder={t("GitHub work")}
                 value={createForm.displayName}
-                onChange={(event) =>
-                  setCreateForm((current) => ({
-                    ...current,
-                    displayName: event.target.value,
-                  }))
-                }
+                aria-invalid={createForm.displayName.trim() !== "" && !displayNameValid}
+                onChange={(event) => updateCreateForm({ displayName: event.target.value })}
               />
             </Field>
 
+            {createForm.displayName.trim() !== "" && !displayNameValid ? (
+              <p className="text-xs text-destructive">{t("Display name is too long (maximum 160 bytes).")}</p>
+            ) : null}
             <ReadOnlyField label="Reference" value={referencePreview} />
 
             {createForm.source === "native" ? (
@@ -370,16 +390,15 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
                   autoComplete="new-password"
                   aria-label={t("Credential secret")}
                   value={createForm.secret}
-                  onChange={(event) =>
-                    setCreateForm((current) => ({
-                      ...current,
-                      secret: event.target.value,
-                    }))
-                  }
+                  aria-invalid={createForm.secret !== "" && !secretValid}
+                  onChange={(event) => updateCreateForm({ secret: event.target.value })}
                 />
                 <p className="mt-1 text-xs leading-5 text-muted-foreground">
                   {t("The value is submitted once and is never returned by Mender.")}
                 </p>
+                {createForm.secret !== "" && !secretValid ? (
+                  <p className="mt-1 text-xs text-destructive">{t("Secret exceeds the 64 KiB limit.")}</p>
+                ) : null}
               </Field>
             ) : (
               <Field label="Environment variable">
@@ -387,13 +406,12 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
                   aria-label={t("Credential environment variable")}
                   placeholder={t("GITHUB_TOKEN")}
                   value={createForm.environmentVariable}
-                  onChange={(event) =>
-                    setCreateForm((current) => ({
-                      ...current,
-                      environmentVariable: event.target.value,
-                    }))
-                  }
+                  aria-invalid={createForm.environmentVariable.trim() !== "" && !environmentVariableValid}
+                  onChange={(event) => updateCreateForm({ environmentVariable: event.target.value })}
                 />
+                {createForm.environmentVariable.trim() !== "" && !environmentVariableValid ? (
+                  <p className="mt-1 text-xs text-destructive">{t("Enter a valid environment variable name.")}</p>
+                ) : null}
               </Field>
             )}
           </div>
