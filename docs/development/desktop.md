@@ -64,6 +64,8 @@ The desktop process does not start `menderd` and does not use the management HTT
 
 Phase 16 adds one deliberately narrow native integration: Provider plugin installation uses the Wails directory picker to select a local plugin package directory, then passes that host-local path directly to the Wails binding. The shared React app receives this as an optional capability, so the Web host does not gain arbitrary server-filesystem path access.
 
+Local Sandbox creation also receives a desktop-only directory-picking capability. The folder action beside **Absolute local directory** opens the native Wails directory-only picker and fills the editable absolute-path field; cancellation preserves the current value, and picker failures are surfaced in the creation page. Manual paths remain valid, including in Web where the host cannot reliably expose a local absolute path. The existing Review step and Runtime authorization/path checks still govern Sandbox creation: picking a folder does not grant permissions or create a Sandbox.
+
 ## Database location
 
 The desktop process resolves its default database under Go's per-user `os.UserConfigDir()`:
