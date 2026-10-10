@@ -311,6 +311,7 @@ export const zhCNMessages: Readonly<Record<string, string>> = {
   "Invocation arguments": "调用参数",
   "Invocation details": "调用详情",
   "Invocation history": "调用历史",
+  "Invocations": "调用次数",
   "Invocation passes through Policy, Approval, Credential, Executor, and Audit.": "调用会依次经过策略、审批、凭据、执行器和审计。",
   "Invoke tool": "调用工具",
   "Legacy HTTP header templates are still configured. They remain compatible but are not governed by Profile Credential scope. Prefer inventory-backed bindings below.": "仍配置有旧版 HTTP 请求头模板。它们继续兼容，但不受配置档凭据范围治理。请优先使用下方的凭据清单绑定。",

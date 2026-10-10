@@ -44,6 +44,23 @@ describe("MenderApp", () => {
     }
   });
 
+  it("shows one overview topic at a time and switches to read-only resource previews", async () => {
+    render(
+      <MemoryRouter>
+        <MenderApp client={overviewClient()} />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText("No invocation records yet.")).toBeTruthy();
+    expect(screen.queryByText("No providers")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Providers / Profiles" }));
+    expect(await screen.findByText("No providers")).toBeTruthy();
+    expect(await screen.findByText("No profiles")).toBeTruthy();
+    expect(screen.queryByText("No invocation records yet.")).toBeNull();
+    expect(screen.queryByRole("textbox", { name: "Display name" })).toBeNull();
+  });
+
   it("keeps the quick navigation searchable and closes it after selecting a page", () => {
     render(
       <MemoryRouter>

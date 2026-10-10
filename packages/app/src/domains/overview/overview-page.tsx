@@ -6,6 +6,8 @@ import {
   BookOpenIcon,
   Layers3Icon,
   PlugIcon,
+  CheckCircle2Icon,
+  Clock3Icon,
 } from "lucide-react";
 
 import type {
@@ -81,6 +83,7 @@ function PanelLink({ to, label, destination = label }: { to: string; label: stri
 export function OverviewPage({ client }: { client: MenderClient }) {
   const [data, setData] = useState<OverviewState | null>(null);
   const [error, setError] = useState("");
+  const [view, setView] = useState<"activity" | "resources">("activity");
 
   useEffect(() => {
     let active = true;
@@ -146,7 +149,20 @@ export function OverviewPage({ client }: { client: MenderClient }) {
         />
       </MetricStrip>
 
-      <div className="mt-5 grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1.65fr)_minmax(310px,1fr)]">
+      <div role="group" aria-label={t("Overview")} className="mt-5 mb-4 inline-flex max-w-full items-center gap-1 rounded-2xl bg-secondary p-1">
+        <button type="button" aria-pressed={view === "activity"} onClick={() => setView("activity")}
+          className={[
+            "rounded-xl px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-ring",
+            view === "activity" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+          ].join(" ")}>{t("Recent invocations")}</button>
+        <button type="button" aria-pressed={view === "resources"} onClick={() => setView("resources")}
+          className={[
+            "rounded-xl px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-ring",
+            view === "resources" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+          ].join(" ")}>{t("Providers")} / {t("Profiles")}</button>
+      </div>
+      {view === "activity" ? (
+        <div className="min-w-0">
         <DataPanel
           title="Recent invocations"
           description="Latest tool execution activity across the local control plane."
@@ -185,13 +201,25 @@ export function OverviewPage({ client }: { client: MenderClient }) {
               </div>
             </>
           ) : (
-            <EmptyPanelState>
-              <p className="text-sm text-muted-foreground">{t("No invocation records yet.")}</p>
-            </EmptyPanelState>
+            <div className="px-5 pb-5">
+              <div className="grid grid-cols-3 divide-x divide-border rounded-2xl border border-border/65 bg-background/65 py-4">
+                <div className="px-4"><CheckCircle2Icon className="mb-2 size-4 text-primary-ink" /><p className="text-2xl font-semibold tabular-nums">0</p><p className="text-xs text-muted-foreground">{t("Completed")}</p></div>
+                <div className="px-4"><ActivityIcon className="mb-2 size-4 text-muted-foreground" /><p className="text-2xl font-semibold tabular-nums">0</p><p className="text-xs text-muted-foreground">{t("Invocations")}</p></div>
+                <div className="px-4"><Clock3Icon className="mb-2 size-4 text-muted-foreground" /><p className="text-2xl font-semibold tabular-nums">0</p><p className="text-xs text-muted-foreground">{t("Failed")}</p></div>
+              </div>
+              <div className="flex min-h-36 flex-col items-center justify-center gap-2 text-center">
+                <ActivityIcon className="size-6 text-muted-foreground/60" aria-hidden="true" />
+                <p className="text-sm font-medium">{t("No invocation records yet.")}</p>
+                <p className="text-xs text-muted-foreground">{t("Latest tool execution activity across the local control plane.")}</p>
+              </div>
+            </div>
           )}
         </DataPanel>
 
-        <div className="grid min-w-0 content-start gap-5 sm:grid-cols-2 xl:grid-cols-1">
+        </div>
+      ) : (
+        <div className="grid min-w-0 items-start gap-5 lg:grid-cols-2">
+
           <DataPanel
             title="Providers"
             description="Registered tool sources"
@@ -240,7 +268,7 @@ export function OverviewPage({ client }: { client: MenderClient }) {
             )}
           </DataPanel>
         </div>
-      </div>
+      )}
     </>
   );
 }
