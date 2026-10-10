@@ -2081,7 +2081,7 @@ describe("management pages", () => {
       updateRuntimeIsolation,
     });
 
-    expect(await screen.findByText("Runtime governance")).toBeTruthy();
+    expect(await screen.findByRole("group", { name: "Runtime governance" })).toBeTruthy();
     expect(screen.queryByLabelText("Tunnel client")).toBeNull();
     expect(screen.queryByLabelText("Global invocations")).toBeNull();
     expect(screen.queryByText("restricted_host is unavailable on this Runtime. Host mode keeps the local process authority of the Runtime user.")).toBeNull();

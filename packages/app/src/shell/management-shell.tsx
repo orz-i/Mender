@@ -132,9 +132,6 @@ export function ManagementShell({ client }: { client: MenderClient }) {
         ? location.pathname === "/"
         : location.pathname.startsWith(item.to),
     ) ?? flatNavigation[0]!;
-  const activeGroup = navigation.find((group) =>
-    group.items.some((item) => item.to === activeItem.to),
-  ) ?? navigation[0]!;
   const normalizedQuery = query.trim().toLocaleLowerCase();
   const filteredNavigation = normalizedQuery
     ? flatNavigation.filter((item) =>
@@ -175,7 +172,6 @@ export function ManagementShell({ client }: { client: MenderClient }) {
           {!collapsed ? (
             <div className="hidden min-w-0 flex-1 lg:block">
               <p className="truncate text-[23px] leading-6 font-semibold tracking-[-0.045em]">Mender</p>
-              <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{t("Tool control plane")}</p>
             </div>
           ) : null}
           <Tooltip>
@@ -260,7 +256,6 @@ export function ManagementShell({ client }: { client: MenderClient }) {
             <h1 className="truncate text-[23px] leading-[1.15] font-semibold tracking-[-0.045em] sm:text-[27px]">
               {t(activeItem.label)}
             </h1>
-            <p className="mt-1.5 truncate text-xs text-muted-foreground">{t(activeGroup.label)} · {t("Tool control plane")}</p>
           </div>
 
           <div className="flex min-w-0 shrink-0 items-center justify-end gap-2 sm:gap-3">

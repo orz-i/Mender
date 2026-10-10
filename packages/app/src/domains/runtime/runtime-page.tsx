@@ -127,12 +127,6 @@ export function RuntimePage({ client }: { client: MenderClient }) {
 
   return (
     <div className="space-y-4">
-      <div className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight">{t("Runtime governance")}</h1>
-        <p className="text-sm text-muted-foreground">
-          {t("Bound Runtime capacity and local process authority independently.")}
-        </p>
-      </div>
       {error ? <ErrorNotice message={error} /> : null}
       <FocusSwitch
         label="Runtime governance"

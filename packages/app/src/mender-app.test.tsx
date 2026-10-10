@@ -44,6 +44,26 @@ describe("MenderApp", () => {
     }
   });
 
+  it("shows only the brand and route title without redundant descriptions", () => {
+    render(
+      <MemoryRouter>
+        <MenderApp client={overviewClient()} />
+      </MemoryRouter>,
+    );
+
+    const brand = document.querySelector('[data-slot="sidebar-brand"]');
+    expect(brand?.textContent?.trim()).toBe("Mender");
+    const header = screen.getByRole("banner");
+    expect(within(header).getByRole("heading", { name: "Overview" })).toBeTruthy();
+    expect(header.querySelector("p")).toBeNull();
+    expect(screen.queryByText("Tool control plane")).toBeNull();
+
+    fireEvent.click(within(header).getByRole("button", { name: "Language" }));
+    expect(within(header).getByRole("heading", { name: "概览" })).toBeTruthy();
+    expect(screen.queryByText("工具控制平面")).toBeNull();
+    expect(brand?.textContent?.trim()).toBe("Mender");
+  });
+
   it("shows one overview topic at a time and switches to read-only resource previews", async () => {
     render(
       <MemoryRouter>
