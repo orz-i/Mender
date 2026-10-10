@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
 import {
   ArrowLeftIcon,
@@ -52,11 +52,12 @@ import { Textarea } from "@mender/ui/components/textarea";
 
 import { errorMessage } from "../../shared/errors";
 import { IconButton } from "../../shared/icon-button";
-import { EmptyState, ErrorNotice, PageHeader } from "../../shared/page";
+import { EmptyState, ErrorNotice } from "../../shared/page";
+import { PageToolbar, ResultPanel } from "../../shared/page-toolbar";
 import { usePagination } from "../../shared/pagination";
 import { TablePagination } from "../../shared/table-pagination";
 import {
-  DataPanel,
+  SearchField,
   EmptyPanelState,
 } from "../../shared/workbench";
 import { GenericProviderConfigForm } from "./generic-provider-config-form";
@@ -306,6 +307,7 @@ export function ProvidersPage({
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
+  const [inventoryQuery, setInventoryQuery] = useState("");
 
   const [pluginPickerOpen, setPluginPickerOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
@@ -412,7 +414,14 @@ export function ProvidersPage({
     };
   }, [client, createRequest, setSearchParams]);
 
-  const providerPagination = usePagination(providers);
+  const visibleProviders = useMemo(() => {
+    const needle = inventoryQuery.trim().toLocaleLowerCase();
+    return needle ? providers.filter((provider) =>
+      [provider.displayName, provider.namespace, provider.pluginId ?? ""]
+        .some((value) => value.toLocaleLowerCase().includes(needle))
+    ) : providers;
+  }, [inventoryQuery, providers]);
+  const providerPagination = usePagination(visibleProviders);
 
   async function addProvider() {
     const namespaceExisted = providers.some(
@@ -670,36 +679,34 @@ export function ProvidersPage({
 
   return (
     <>
-      <PageHeader
+      <PageToolbar
+        tabs={
+          <span className="text-xs text-muted-foreground">
+            {tCount(providers.length, "{{count}} configured source", "{{count}} configured sources")}
+          </span>
+        }
+        filters={
+          <div className="w-full min-w-0 sm:w-56 sm:shrink-0">
+            <SearchField label="Search providers" placeholder="Search providers…" value={inventoryQuery} onChange={setInventoryQuery} />
+          </div>
+        }
         actions={
-          <Button onClick={openCreatePluginPicker}>
-            {t("Add provider")}
-          </Button>
+          <>
+            <Button variant="outline" size="sm" disabled={busy !== ""} onClick={() => void refresh()}>{t("Refresh")}</Button>
+            <Button size="sm" onClick={openCreatePluginPicker}>{t("Add provider")}</Button>
+          </>
         }
       />
-
       {error ? <ErrorNotice message={error} /> : null}
       {providerPluginIssues.length ? (
-        <ErrorNotice
-          message={t(
-            "Some Provider plugins need attention. Review Plugin Marketplace for installation details.",
-          )}
-        />
+        <ErrorNotice message={t("Some Provider plugins need attention. Review Plugin Marketplace for installation details.")} />
       ) : null}
-
-      <DataPanel
-        title="Provider inventory"
-        description={tCount(
-          providers.length,
-          "{{count}} configured source",
-          "{{count}} configured sources",
-        )}
-      >
+      <ResultPanel title="Provider inventory">
         {!loaded ? (
           <div className="px-4 py-12 text-center text-sm text-muted-foreground">
             {t("Loading providers…")}
           </div>
-        ) : providers.length ? (
+        ) : visibleProviders.length ? (
           <>
             <Table>
               <TableHeader>
@@ -824,12 +831,12 @@ export function ProvidersPage({
         ) : (
           <EmptyPanelState>
             <EmptyState
-              title="No providers"
-              description="Add a Provider plugin and configure its connection to populate the Catalog."
+              title={providers.length ? t("No matching providers") : t("No providers")}
+              description={providers.length ? t("Try a different search or filter.") : t("Add a Provider plugin and configure its connection to populate the Catalog.")}
             />
           </EmptyPanelState>
         )}
-      </DataPanel>
+      </ResultPanel>
 
       <ProviderPluginPickerDialog
         open={pluginPickerOpen}

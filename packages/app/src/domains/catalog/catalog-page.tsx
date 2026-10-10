@@ -32,12 +32,11 @@ import { Textarea } from "@mender/ui/components/textarea";
 import { errorMessage } from "../../shared/errors";
 import { IconButton } from "../../shared/icon-button";
 import { EmptyState, ErrorNotice } from "../../shared/page";
+import { PageToolbar, ResultPanel } from "../../shared/page-toolbar";
 import { usePagination } from "../../shared/pagination";
 import { TablePagination } from "../../shared/table-pagination";
 import {
-  DataPanel,
   EmptyPanelState,
-  WorkbenchToolbar,
 } from "../../shared/workbench";
 
 import { formatNumber, t, tCount } from "../../i18n/i18n";
@@ -197,42 +196,29 @@ export function CatalogPage({ client }: { client: MenderClient }) {
     <>
       {error ? <ErrorNotice message={error} /> : null}
 
-      <DataPanel
-        title="Tools"
-        description={
-          !loaded
-            ? t("Loading synchronized Tools…")
-            : searched
-              ? tCount(
-                  results.length,
-                  "{{count}} compact match",
-                  "{{count}} compact matches",
-                )
-              : tCount(
-                  results.length,
-                  "{{count}} synchronized Tool",
-                  "{{count}} synchronized Tools",
-                )
+      <PageToolbar
+        tabs={
+          <span className="text-xs font-medium text-muted-foreground" aria-live="polite">
+            {!loaded ? t("Loading synchronized Tools…") :
+              searched ? tCount(results.length, "{{count}} compact match", "{{count}} compact matches") :
+              tCount(results.length, "{{count}} synchronized Tool", "{{count}} synchronized Tools")}
+          </span>
         }
-        toolbar={
-          <WorkbenchToolbar>
+        filters={
+          <>
             <Input
               aria-label={t("Catalog search")}
               placeholder={t("Search intent, e.g. create issue")}
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  void search();
-                }
-              }}
-              className="h-9 min-w-0 flex-1 md:min-w-72"
+              onKeyDown={(event) => { if (event.key === "Enter") void search(); }}
+              className="h-9 w-full min-w-0 sm:w-60 sm:shrink-0"
             />
             <select
               aria-label={t("Catalog provider filter")}
               value={providerId}
               onChange={(event) => setProviderId(event.target.value)}
-              className="h-9 min-w-48 rounded-lg border border-input bg-background px-3 text-sm text-foreground outline-none transition-colors focus:border-ring focus:ring-2 focus:ring-ring/20"
+              className="h-9 w-40 min-w-0 rounded-xl border border-input bg-card px-3 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <option value="">{t("All Providers")}</option>
               {providers.map((provider) => (
@@ -241,22 +227,20 @@ export function CatalogPage({ client }: { client: MenderClient }) {
                 </option>
               ))}
             </select>
-            <Button
-              onClick={() => void search()}
-              disabled={busy !== "" || !query.trim()}
-            >
+          </>
+        }
+        actions={
+          <>
+            <Button size="sm" onClick={() => void search()} disabled={busy !== "" || !query.trim()}>
               {t(busy === "search" ? "Searching…" : "Search")}
             </Button>
-            <Button
-              variant="outline"
-              onClick={() => void browseAll()}
-              disabled={busy !== ""}
-            >
+            <Button size="sm" variant="outline" onClick={() => void browseAll()} disabled={busy !== ""}>
               {t(busy === "browse" ? "Loading…" : "Browse")}
             </Button>
-          </WorkbenchToolbar>
+          </>
         }
-      >
+      />
+      <ResultPanel title="Tools">
           {results.length ? (
             <>
               <Table className="table-fixed">
@@ -337,7 +321,7 @@ export function CatalogPage({ client }: { client: MenderClient }) {
               />
             </EmptyPanelState>
           )}
-      </DataPanel>
+      </ResultPanel>
 
       <Dialog
         open={selected !== null}

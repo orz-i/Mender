@@ -24,12 +24,13 @@ import {
 
 import { errorMessage } from "../../shared/errors";
 import { IconButton } from "../../shared/icon-button";
-import { EmptyState, ErrorNotice, PageHeader } from "../../shared/page";
+import { EmptyState, ErrorNotice } from "../../shared/page";
+import { PageToolbar, ResultPanel } from "../../shared/page-toolbar";
 import { usePagination } from "../../shared/pagination";
 import { TablePagination } from "../../shared/table-pagination";
-import { DataPanel, EmptyPanelState } from "../../shared/workbench";
+import { EmptyPanelState, SearchField } from "../../shared/workbench";
 
-import { t, tCount } from "../../i18n/i18n";
+import { t } from "../../i18n/i18n";
 
 type CredentialSource = Credential["source"];
 
@@ -47,6 +48,7 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
+  const [inventoryQuery, setInventoryQuery] = useState("");
 
   const [createOpen, setCreateOpen] = useState(false);
   const [createForm, setCreateForm] = useState(emptyCreateForm);
@@ -89,7 +91,14 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
     };
   }, [client]);
 
-  const credentialPagination = usePagination(credentials);
+  const visibleCredentials = useMemo(() => {
+    const needle = inventoryQuery.trim().toLocaleLowerCase();
+    return needle ? credentials.filter((item) =>
+      [item.displayName, item.namespace, item.name, item.source, item.environmentVariable ?? ""]
+        .some((value) => value.toLocaleLowerCase().includes(needle))
+    ) : credentials;
+  }, [credentials, inventoryQuery]);
+  const credentialPagination = usePagination(visibleCredentials);
 
   const referencePreview = useMemo(() => {
     const namespace = createForm.namespace.trim();
@@ -182,34 +191,26 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
 
   return (
     <>
-      <PageHeader
+      <PageToolbar
+        filters={
+          <div className="w-full min-w-0 sm:w-56 sm:shrink-0">
+            <SearchField label="Search credentials" placeholder="Search credentials…" value={inventoryQuery} onChange={setInventoryQuery} />
+          </div>
+        }
         actions={
-          <Button
-            onClick={() => {
-              setError("");
-              setCreateOpen(true);
-            }}
-          >
-            {t("Add credential")}
-          </Button>
+          <>
+            <Button variant="outline" size="sm" disabled={busy !== ""} onClick={() => void refresh()}>{t("Refresh")}</Button>
+            <Button size="sm" onClick={() => { setError(""); setCreateOpen(true); }}>{t("Add credential")}</Button>
+          </>
         }
       />
-
       {error ? <ErrorNotice message={error} /> : null}
-
-      <DataPanel
-        title="Credential inventory"
-        description={tCount(
-          credentials.length,
-          "{{count}} Credential configured. Secret values are never displayed here.",
-          "{{count}} Credentials configured. Secret values are never displayed here.",
-        )}
-      >
+      <ResultPanel title="Credential inventory">
           {!loaded ? (
             <div className="px-4 py-12 text-center text-sm text-muted-foreground">
               {t("Loading Credentials…")}
             </div>
-          ) : credentials.length ? (
+          ) : visibleCredentials.length ? (
             <>
               <Table>
               <TableHeader>
@@ -273,12 +274,12 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
           ) : (
             <EmptyPanelState>
               <EmptyState
-                title="No Credentials"
-                description="Add a native or environment-backed Credential before configuring Provider authentication or Profile credential scope."
+                title={credentials.length ? t("No matching credentials") : t("No Credentials")}
+                description={credentials.length ? t("Try a different search or filter.") : t("Add a native or environment-backed Credential before configuring Provider authentication or Profile credential scope.")}
               />
             </EmptyPanelState>
           )}
-      </DataPanel>
+      </ResultPanel>
 
       <Dialog
         open={createOpen}

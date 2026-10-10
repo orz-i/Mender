@@ -38,10 +38,11 @@ import {
 
 import { errorMessage } from "../../shared/errors";
 import { IconButton } from "../../shared/icon-button";
-import { EmptyState, ErrorNotice, PageHeader } from "../../shared/page";
+import { EmptyState, ErrorNotice } from "../../shared/page";
+import { PageToolbar, ResultPanel } from "../../shared/page-toolbar";
 import { usePagination } from "../../shared/pagination";
 import { TablePagination } from "../../shared/table-pagination";
-import { DataPanel, EmptyPanelState } from "../../shared/workbench";
+import { EmptyPanelState, SearchField } from "../../shared/workbench";
 
 import { formatNumber, t, tCount } from "../../i18n/i18n";
 
@@ -72,6 +73,7 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [inventoryQuery, setInventoryQuery] = useState("");
 
   const [createOpen, setCreateOpen] = useState(false);
   const [createForm, setCreateForm] = useState(emptyCreateForm);
@@ -209,7 +211,14 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
     [providers],
   );
 
-  const profilePagination = usePagination(profiles);
+  const visibleProfiles = useMemo(() => {
+    const needle = inventoryQuery.trim().toLocaleLowerCase();
+    return needle ? profiles.filter((profile) =>
+      [profile.displayName, profile.slug, profile.mode]
+        .some((value) => value.toLocaleLowerCase().includes(needle))
+    ) : profiles;
+  }, [inventoryQuery, profiles]);
+  const profilePagination = usePagination(visibleProfiles);
 
   async function createProfile() {
     setBusy(true);
@@ -545,26 +554,31 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
 
   return (
     <>
-      <PageHeader
+      <PageToolbar
+        tabs={
+          <span className="text-xs text-muted-foreground">
+            {tCount(profiles.length, "{{count}} profile configured", "{{count}} profiles configured")}
+          </span>
+        }
+        filters={
+          <div className="w-full min-w-0 sm:w-56 sm:shrink-0">
+            <SearchField label="Search profiles" placeholder="Search profiles…" value={inventoryQuery} onChange={setInventoryQuery} />
+          </div>
+        }
         actions={
-          <Button onClick={() => setCreateOpen(true)}>{t("Create profile")}</Button>
+          <>
+            <Button variant="outline" size="sm" disabled={busy} onClick={() => void refreshProfiles()}>{t("Refresh")}</Button>
+            <Button size="sm" onClick={() => setCreateOpen(true)}>{t("Create profile")}</Button>
+          </>
         }
       />
       {error ? <ErrorNotice message={error} /> : null}
-
-      <DataPanel
-        title="Profile inventory"
-        description={tCount(
-          profiles.length,
-          "{{count}} profile configured",
-          "{{count}} profiles configured",
-        )}
-      >
+      <ResultPanel title="Profile inventory">
           {!loaded ? (
             <div className="px-4 py-12 text-center text-sm text-muted-foreground">
               {t("Loading profiles…")}
             </div>
-          ) : profiles.length ? (
+          ) : visibleProfiles.length ? (
             <>
               <Table>
               <TableHeader>
@@ -624,12 +638,12 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
           ) : (
             <EmptyPanelState>
               <EmptyState
-                title="No profiles"
-                description="Create a Profile before exposing Tools through MCP."
+                title={profiles.length ? t("No matching profiles") : t("No profiles")}
+                description={profiles.length ? t("Try a different search or filter.") : t("Create a Profile before exposing Tools through MCP.")}
               />
             </EmptyPanelState>
           )}
-      </DataPanel>
+      </ResultPanel>
 
       <Dialog
         open={createOpen}
