@@ -2144,8 +2144,10 @@ describe("management pages", () => {
       }),
     });
 
-    expect(await screen.findByText("completed")).toBeTruthy();
+    expect(await screen.findByText("Completed")).toBeTruthy();
     expect(screen.getByText("Unknown Tool")).toBeTruthy();
+    expect(screen.getByRole("table", { name: "Invocation history" })).toBeTruthy();
+    expect(screen.queryByRole("table", { name: "Provider activation history" })).toBeNull();
     expect(screen.queryByText("tool_1")).toBeNull();
     expect(screen.queryByRole("columnheader", { name: "Arguments" })).toBeNull();
     expect(screen.queryByRole("columnheader", { name: "Result" })).toBeNull();
@@ -2184,23 +2186,26 @@ describe("management pages", () => {
       }),
     });
 
-    expect(await screen.findByText("failed")).toBeTruthy();
+    expect(await screen.findByText("Failed")).toBeTruthy();
     fireEvent.click(
       screen.getByRole("button", { name: "View audit record" }),
     );
 
-    expect(await screen.findByText("Invocation details")).toBeTruthy();
-    expect(screen.getByText("tool_1")).toBeTruthy();
-    expect(
-      screen.getByText("provider rejected request: missing required query"),
-    ).toBeTruthy();
-    const dialog = within(screen.getByRole("dialog"));
+    const dialog = within(screen.getByRole("dialog", { name: "Invocation details" }));
+    expect(dialog.getByRole("button", { name: "Diagnostics" }).getAttribute("aria-pressed")).toBe("true");
+    expect(dialog.getByText("provider rejected request: missing required query")).toBeTruthy();
     expect(dialog.getByText("execution")).toBeTruthy();
-    expect(dialog.getByText("desktop")).toBeTruthy();
-    expect(dialog.getByText("local_user:os:501")).toBeTruthy();
-    expect(dialog.getByText("profile")).toBeTruthy();
     expect(dialog.getByText("provider")).toBeTruthy();
     expect(dialog.getByText("provider_error")).toBeTruthy();
+    expect(dialog.queryByText("tool_1")).toBeNull();
+    fireEvent.click(dialog.getByRole("button", { name: "Overview" }));
+    expect(dialog.getByText("tool_1")).toBeTruthy();
+    expect(dialog.getByText("desktop")).toBeTruthy();
+    expect(dialog.getByText("local_user:os:501")).toBeTruthy();
+    fireEvent.click(dialog.getByRole("button", { name: "Governance" }));
+    expect(dialog.getByText("profile")).toBeTruthy();
+    expect(dialog.getByText("local.default")).toBeTruthy();
+    expect(dialog.queryByText("provider_error")).toBeNull();
     expect(screen.queryByText(/TOP-SECRET/)).toBeNull();
   });
 });

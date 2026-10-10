@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
-import { EyeIcon } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { EyeIcon, RefreshCwIcon } from "lucide-react";
 
 import type {
   AuditRecord,
@@ -10,14 +10,6 @@ import type {
 import { Badge } from "@mender/ui/components/badge";
 import { Button } from "@mender/ui/components/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@mender/ui/components/dialog";
-import {
   Table,
   TableBody,
   TableCell,
@@ -26,44 +18,119 @@ import {
   TableRow,
 } from "@mender/ui/components/table";
 
+import { formatDateTime, formatNumber, t } from "../../i18n/i18n";
 import { errorMessage } from "../../shared/errors";
+import { FocusSwitch } from "../../shared/focus-switch";
 import { IconButton } from "../../shared/icon-button";
-import { EmptyState, ErrorNotice, PageHeader } from "../../shared/page";
+import { EmptyState, ErrorNotice } from "../../shared/page";
 import { usePagination } from "../../shared/pagination";
 import { TablePagination } from "../../shared/table-pagination";
-import { DataPanel, EmptyPanelState } from "../../shared/workbench";
+import {
+  DataPanel,
+  FilterSelect,
+  SearchField,
+  WorkbenchToolbar,
+} from "../../shared/workbench";
+import {
+  AuditDetailDialog,
+  AuditStatusBadge,
+  type AuditDetailSection,
+  type AuditSelection,
+} from "./audit-detail-dialog";
 
-import { formatDateTime, t } from "../../i18n/i18n";
+type AuditTopic = "invocations" | "activations";
+type StatusFilter = "all" | "completed" | "failed" | "denied";
+
+type AuditPreview = {
+  key: string;
+  finishedAt: string;
+  target: string;
+  targetId: string;
+  principal: string;
+  status: string;
+  policy: string;
+  errorClass: string;
+  selection: AuditSelection;
+};
+
+function browseAuditTools(client: MenderClient) {
+  const browseTools = (client as Partial<MenderClient>).browseTools;
+  if (typeof browseTools !== "function") return Promise.resolve(null);
+  return browseTools.call(client, { limit: 100 }).catch(() => null);
+}
+
+function indexTools(tools: ToolSummary[]) {
+  return Object.fromEntries(tools.map((tool) => [tool.toolId, tool]));
+}
+
+function toolLabel(toolsById: Record<string, ToolSummary>, toolId: string) {
+  const tool = toolsById[toolId];
+  return tool?.title || tool?.name || t("Unknown Tool");
+}
+
+function principalLabel(kind: string, reference: string) {
+  return reference ? kind + ":" + reference : kind || "—";
+}
+
+function policyLabel(value: string) {
+  switch (value.toLowerCase()) {
+    case "allow": return t("Allow");
+    case "deny": return t("Deny");
+    default: return value || "—";
+  }
+}
+
+function matchesPreview(row: AuditPreview, search: string, status: StatusFilter) {
+  if (status !== "all" && row.status.toLowerCase() !== status) return false;
+  if (!search) return true;
+  const localizedStatus = row.status === "completed"
+    ? t("Completed")
+    : row.status === "failed"
+      ? t("Failed")
+      : row.status === "denied" ? t("Denied") : row.status;
+  return [
+    row.target,
+    row.targetId,
+    row.principal,
+    row.status,
+    localizedStatus,
+    row.policy,
+    policyLabel(row.policy),
+    row.errorClass,
+    formatDateTime(row.finishedAt),
+  ].some((value) => value.toLocaleLowerCase().includes(search));
+}
 
 export function AuditPage({ client }: { client: MenderClient }) {
   const [records, setRecords] = useState<AuditRecord[]>([]);
-  const [activationRecords, setActivationRecords] =
-    useState<ProviderActivationAuditRecord[]>([]);
+  const [activationRecords, setActivationRecords] = useState<ProviderActivationAuditRecord[]>([]);
   const [toolsById, setToolsById] = useState<Record<string, ToolSummary>>({});
-  const [selected, setSelected] = useState<AuditRecord | null>(null);
-  const [selectedActivation, setSelectedActivation] =
-    useState<ProviderActivationAuditRecord | null>(null);
+  const [topic, setTopic] = useState<AuditTopic>("invocations");
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [selected, setSelected] = useState<AuditSelection | null>(null);
+  const [detailSection, setDetailSection] = useState<AuditDetailSection>("overview");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [loaded, setLoaded] = useState(false);
 
   const refresh = useCallback(async () => {
     setBusy(true);
     try {
-      const [result, activationResult, toolResult] = await Promise.all([
+      const [invocations, activations, tools] = await Promise.all([
         client.listAudit(100),
         client.listProviderActivationAudit(100),
         browseAuditTools(client),
       ]);
-      setRecords(result.records);
-      setActivationRecords(activationResult.records);
-      if (toolResult !== null) {
-        setToolsById(indexTools(toolResult.tools));
-      }
+      setRecords(invocations.records);
+      setActivationRecords(activations.records);
+      if (tools !== null) setToolsById(indexTools(tools.tools));
       setError("");
     } catch (reason) {
       setError(errorMessage(reason));
     } finally {
       setBusy(false);
+      setLoaded(true);
     }
   }, [client]);
 
@@ -74,164 +141,200 @@ export function AuditPage({ client }: { client: MenderClient }) {
       client.listProviderActivationAudit(100),
       browseAuditTools(client),
     ])
-      .then(([result, activationResult, toolResult]) => {
-        if (active) {
-          setRecords(result.records);
-          setActivationRecords(activationResult.records);
-          if (toolResult !== null) {
-            setToolsById(indexTools(toolResult.tools));
-          }
-          setError("");
-        }
+      .then(([invocations, activations, tools]) => {
+        if (!active) return;
+        setRecords(invocations.records);
+        setActivationRecords(activations.records);
+        if (tools !== null) setToolsById(indexTools(tools.tools));
+        setError("");
       })
       .catch((reason: unknown) => {
-        if (active) {
-          setError(errorMessage(reason));
-        }
+        if (active) setError(errorMessage(reason));
+      })
+      .finally(() => {
+        if (active) setLoaded(true);
       });
-    return () => {
-      active = false;
-    };
+    return () => { active = false; };
   }, [client]);
 
-  const auditPagination = usePagination(records);
-  const activationPagination = usePagination(activationRecords);
+  const invocationRows = useMemo<AuditPreview[]>(
+    () => records.map((record) => ({
+      key: record.invocationId,
+      finishedAt: record.finishedAt,
+      target: toolLabel(toolsById, record.toolId),
+      targetId: record.toolId,
+      principal: principalLabel(record.principalKind, record.principalRef),
+      status: record.status,
+      policy: record.policyKind,
+      errorClass: record.errorClass,
+      selection: { kind: "invocations", record },
+    })),
+    [records, toolsById],
+  );
+  const activationRows = useMemo<AuditPreview[]>(
+    () => activationRecords.map((record) => ({
+      key: record.activationId,
+      finishedAt: record.finishedAt,
+      target: record.providerId,
+      targetId: record.providerId,
+      principal: principalLabel(record.principalKind, record.principalRef),
+      status: record.status,
+      policy: record.policyKind,
+      errorClass: record.errorClass,
+      selection: { kind: "activations", record },
+    })),
+    [activationRecords],
+  );
+
+  const search = query.trim().toLocaleLowerCase();
+  const filteredInvocations = useMemo(
+    () => invocationRows.filter((row) => matchesPreview(row, search, statusFilter)),
+    [invocationRows, search, statusFilter],
+  );
+  const filteredActivations = useMemo(
+    () => activationRows.filter((row) => matchesPreview(row, search, statusFilter)),
+    [activationRows, search, statusFilter],
+  );
+  const invocationPagination = usePagination(filteredInvocations, {
+    initialPageSize: 10, pageSizeOptions: [10, 25, 50],
+  });
+  const activationPagination = usePagination(filteredActivations, {
+    initialPageSize: 10, pageSizeOptions: [10, 25, 50],
+  });
+
+  const activePagination = topic === "invocations" ? invocationPagination : activationPagination;
+  const activeRecords = topic === "invocations" ? records : activationRecords;
+  const panelTitle = topic === "invocations" ? "Invocation history" : "Provider activation history";
+
+  function resetFilters() {
+    setQuery("");
+    setStatusFilter("all");
+    invocationPagination.reset();
+    activationPagination.reset();
+  }
+
+  function changeTopic(next: AuditTopic) {
+    setTopic(next);
+    resetFilters();
+  }
+
+  function openDetails(selection: AuditSelection) {
+    setSelected(selection);
+    setDetailSection(selection.record.status === "completed" ? "overview" : "diagnostics");
+  }
 
   return (
     <>
-      <PageHeader
-        actions={
-          <Button variant="outline" onClick={() => void refresh()} disabled={busy}>
-            {t("Refresh")}
-          </Button>
-        }
-      />
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <FocusSwitch
+          label="Audit"
+          value={topic}
+          onChange={changeTopic}
+          items={[
+            { value: "invocations", label: "Invocation history" },
+            { value: "activations", label: "Provider activation history" },
+          ]}
+        />
+        <Button
+          variant="outline"
+          size="sm"
+          aria-label={t("Refresh")}
+          className="w-8 px-0 sm:w-auto sm:px-3"
+          disabled={busy || !loaded}
+          onClick={() => void refresh()}
+        >
+          <RefreshCwIcon className={busy ? "animate-spin" : undefined} />
+          <span className="hidden sm:inline">{t("Refresh")}</span>
+        </Button>
+      </div>
+
       {error ? <ErrorNotice message={error} /> : null}
-
       <DataPanel
-        title="Invocation history"
-        description="Recent terminal invocation outcomes and governance decisions."
+        title={panelTitle}
+        description={topic === "invocations"
+          ? t("Recent terminal invocation outcomes and governance decisions.")
+          : t("Capability admission outcomes recorded before Provider code, discovery Credentials, or execution routes are activated.")}
+        actions={loaded ? <Badge variant="secondary" className="hidden tabular-nums sm:inline-flex">{formatNumber(activePagination.total)}</Badge> : null}
+        toolbar={
+          <WorkbenchToolbar>
+            <SearchField
+              label="Search audit records"
+              placeholder="Search audit records…"
+              value={query}
+              onChange={(value) => {
+                setQuery(value);
+                invocationPagination.reset();
+                activationPagination.reset();
+              }}
+              className="md:min-w-56 md:max-w-md"
+            />
+            <FilterSelect
+              label="Audit status"
+              value={statusFilter}
+              onValueChange={(value) => {
+                setStatusFilter(value as StatusFilter);
+                invocationPagination.reset();
+                activationPagination.reset();
+              }}
+              options={[
+                { value: "all", label: "All statuses" },
+                { value: "completed", label: "Completed" },
+                { value: "failed", label: "Failed" },
+                { value: "denied", label: "Denied" },
+              ]}
+              className="min-w-40"
+            />
+          </WorkbenchToolbar>
+        }
       >
-          {records.length ? (
-            <>
-              <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{t("Finished")}</TableHead>
-                  <TableHead>{t("Status")}</TableHead>
-                  <TableHead>{t("Principal")}</TableHead>
-                  <TableHead>{t("Tool")}</TableHead>
-                  <TableHead>{t("Policy")}</TableHead>
-                  <TableHead>{t("Error")}</TableHead>
-                  <TableHead className="text-right">{t("Actions")}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {auditPagination.items.map((record) => (
-                  <TableRow key={record.invocationId}>
-                    <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                      {formatDateTime(record.finishedAt)}
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={
-                          record.status === "completed" ? "outline" : "secondary"
-                        }
-                      >
-                        {record.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-xs">{principalLabel(record.principalKind, record.principalRef)}</TableCell>
-                    <TableCell className="max-w-60 truncate">
-                      {toolLabel(toolsById, record.toolId)}
-                    </TableCell>
-                    <TableCell className="text-xs">
-                      {record.policyKind || "—"}
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {record.errorClass || "—"}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <IconButton
-                        variant="outline"
-                        label={t("View audit record")}
-                        onClick={() => setSelected(record)}
-                      >
-                        <EyeIcon />
-                      </IconButton>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-              </Table>
-              <div className="px-4 pb-3">
-                <TablePagination
-                  label="Audit"
-                  pagination={auditPagination}
-                />
-              </div>
-            </>
-          ) : (
-            <EmptyPanelState>
-              <EmptyState
-                title="No audit records"
-                description="Invocation outcomes will appear here after Tools are called."
-              />
-            </EmptyPanelState>
-          )}
-      </DataPanel>
-
-
-      <DataPanel
-        title="Provider activation history"
-        description="Capability admission outcomes recorded before Provider code, discovery Credentials, or execution routes are activated."
-      >
-        {activationRecords.length ? (
+        {!loaded && !error ? (
+          <p className="px-5 py-12 text-sm text-muted-foreground">{t("Loading audit history…")}</p>
+        ) : activePagination.total ? (
           <>
-            <Table>
-              <TableHeader>
+            <Table aria-label={t(panelTitle)} className="max-md:block max-md:w-full">
+              <TableHeader className="max-md:sr-only">
                 <TableRow>
                   <TableHead>{t("Finished")}</TableHead>
-                  <TableHead>{t("Status")}</TableHead>
+                  <TableHead>{t(topic === "invocations" ? "Tool" : "Provider")}</TableHead>
                   <TableHead>{t("Principal")}</TableHead>
-                  <TableHead>{t("Provider")}</TableHead>
+                  <TableHead>{t("Status")}</TableHead>
                   <TableHead>{t("Policy")}</TableHead>
-                  <TableHead>{t("Error")}</TableHead>
                   <TableHead className="text-right">{t("Actions")}</TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody>
-                {activationPagination.items.map((record) => (
-                  <TableRow key={record.activationId}>
-                    <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                      {formatDateTime(record.finishedAt)}
+              <TableBody className="max-md:block">
+                {activePagination.items.map((row) => (
+                  <TableRow key={row.key} className="md:[&>td]:py-3 max-md:grid max-md:grid-cols-[minmax(0,1fr)_auto] max-md:items-start max-md:gap-x-3 max-md:gap-y-1 max-md:px-4 max-md:py-3">
+                    <TableCell className="max-md:col-start-1 max-md:row-start-3 max-md:block max-md:p-0">
+                      <time dateTime={row.finishedAt} className="whitespace-nowrap text-xs tabular-nums text-muted-foreground max-md:text-[11px]">
+                        {formatDateTime(row.finishedAt)}
+                      </time>
                     </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={
-                          record.status === "completed" ? "outline" : "secondary"
-                        }
-                      >
-                        {record.status}
-                      </Badge>
+                    <TableCell className="font-medium max-md:col-start-1 max-md:row-start-1 max-md:block max-md:min-w-0 max-md:p-0">
+                      <span title={row.target} className="block max-w-48 truncate">{row.target}</span>
                     </TableCell>
-                    <TableCell className="text-xs">
-                      {principalLabel(record.principalKind, record.principalRef)}
+                    <TableCell className="text-xs max-md:col-start-1 max-md:row-start-2 max-md:block max-md:min-w-0 max-md:p-0">
+                      <span title={row.principal} className="block max-w-48 truncate text-muted-foreground">{row.principal}</span>
                     </TableCell>
-                    <TableCell className="max-w-60 truncate font-mono text-xs">
-                      {record.providerId}
+                    <TableCell className="max-md:col-start-2 max-md:row-start-1 max-md:block max-md:p-0">
+                      <div className="flex flex-col items-start gap-1 max-md:items-end">
+                        <AuditStatusBadge status={row.status} />
+                        {row.status !== "completed" && row.errorClass ? (
+                          <span className="max-w-32 truncate text-[11px] text-muted-foreground" title={row.errorClass}>
+                            {row.errorClass}
+                          </span>
+                        ) : null}
+                      </div>
                     </TableCell>
-                    <TableCell className="text-xs">
-                      {record.policyKind || "—"}
+                    <TableCell className="text-xs text-muted-foreground max-md:hidden">
+                      {policyLabel(row.policy)}
                     </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {record.errorClass || "—"}
-                    </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="text-right max-md:col-start-2 max-md:row-start-2 max-md:row-span-2 max-md:block max-md:self-center max-md:p-0">
                       <IconButton
                         variant="outline"
-                        label={t("View Provider activation record")}
-                        onClick={() => setSelectedActivation(record)}
+                        size="icon-sm"
+                        label={t(topic === "invocations" ? "View audit record" : "View Provider activation record")}
+                        onClick={() => openDetails(row.selection)}
                       >
                         <EyeIcon />
                       </IconButton>
@@ -240,281 +343,40 @@ export function AuditPage({ client }: { client: MenderClient }) {
                 ))}
               </TableBody>
             </Table>
-            <div className="px-4 pb-3">
+            <div className="px-5 pb-4">
               <TablePagination
-                label="Provider activations"
-                pagination={activationPagination}
+                label={topic === "invocations" ? "Audit" : "Provider activations"}
+                pagination={activePagination}
               />
             </div>
           </>
         ) : (
-          <EmptyPanelState>
+          <div className="px-5 py-5">
             <EmptyState
-              title="No Provider activation records"
-              description="Provider activation admission outcomes will appear here when Providers are created, synchronized, rebound, or activated for Tool execution."
+              title={activeRecords.length
+                ? t("No matching audit records")
+                : topic === "invocations" ? t("No audit records") : t("No Provider activation records")}
+              description={activeRecords.length
+                ? t("Try another search or status filter.")
+                : topic === "invocations"
+                  ? t("Invocation outcomes will appear here after Tools are called.")
+                  : t("Provider activation admission outcomes will appear here when Providers are created, synchronized, rebound, or activated for Tool execution.")}
             />
-          </EmptyPanelState>
+            {activeRecords.length ? (
+              <div className="mt-3 flex justify-center">
+                <Button size="sm" variant="outline" onClick={resetFilters}>{t("Clear filters")}</Button>
+              </div>
+            ) : null}
+          </div>
         )}
       </DataPanel>
 
-      <Dialog
-        open={selected !== null}
-        onOpenChange={(open) => {
-          if (!open) {
-            setSelected(null);
-          }
-        }}
-      >
-        <DialogContent className="sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>{t("Invocation details")}</DialogTitle>
-            <DialogDescription>
-              {t("Data-minimized terminal metadata and failure diagnostics.")}
-            </DialogDescription>
-          </DialogHeader>
-
-          {selected !== null ? (
-            <div className="space-y-5">
-              <div className="grid gap-3 sm:grid-cols-2">
-                <AuditField label="Status" value={selected.status} />
-                <AuditField label="Outcome" value={selected.outcomeKind || "—"} />
-                <AuditField label="Origin" value={selected.origin || "—"} />
-                <AuditField
-                  label="Principal"
-                  value={principalLabel(selected.principalKind, selected.principalRef)}
-                  mono
-                />
-                <AuditField label="Scope" value={selected.scopeKind || "—"} />
-                <AuditField
-                  label="Scope reference"
-                  value={selected.scopeReference || "—"}
-                  mono
-                />
-                <AuditField
-                  label="Invocation ID"
-                  value={selected.invocationId}
-                  mono
-                />
-                <AuditField label="Tool ID" value={selected.toolId} mono />
-                <AuditField
-                  label="Provider ID"
-                  value={selected.providerId || "—"}
-                  mono
-                />
-                <AuditField
-                  label="Result kind"
-                  value={selected.resultKind || "—"}
-                />
-                <AuditField
-                  label="Started"
-                  value={formatDateTime(selected.startedAt)}
-                />
-                <AuditField
-                  label="Finished"
-                  value={formatDateTime(selected.finishedAt)}
-                />
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-3">
-                <AuditField
-                  label="Policy"
-                  value={selected.policyKind || "—"}
-                />
-                <AuditField
-                  label="Approval"
-                  value={selected.approval || "—"}
-                />
-                <AuditField
-                  label="Error class"
-                  value={selected.errorClass || "—"}
-                />
-                <AuditField
-                  label="Rejection code"
-                  value={selected.rejectionCode || "—"}
-                />
-                <AuditField
-                  label="Failure source"
-                  value={selected.failureSource || "—"}
-                />
-                <AuditField
-                  label="Failure code"
-                  value={selected.failureCode || "—"}
-                />
-              </div>
-
-              {selected.policyReason ? (
-                <div>
-                  <p className="text-sm font-medium">{t("Policy reason")}</p>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {selected.policyReason}
-                  </p>
-                </div>
-              ) : null}
-
-              {selected.status !== "completed" ? (
-                <div className="rounded-lg border border-border p-4">
-                  <p className="text-sm font-medium">{t("Error summary")}</p>
-                  {selected.errorSummary ? (
-                    <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-muted-foreground">
-                      {selected.errorSummary}
-                    </p>
-                  ) : (
-                    <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                      {t("No diagnostic summary was retained for this record. Older Audit records and failures without a safe upstream summary only contain the error class.")}
-                    </p>
-                  )}
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-
-          <DialogFooter showCloseButton />
-        </DialogContent>
-      </Dialog>
-
-      <Dialog
-        open={selectedActivation !== null}
-        onOpenChange={(open) => {
-          if (!open) {
-            setSelectedActivation(null);
-          }
-        }}
-      >
-        <DialogContent className="sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>{t("Provider activation details")}</DialogTitle>
-            <DialogDescription>
-              {t("Data-minimized capability admission metadata recorded before Provider activation side effects.")}
-            </DialogDescription>
-          </DialogHeader>
-
-          {selectedActivation !== null ? (
-            <div className="space-y-5">
-              <div className="grid gap-3 sm:grid-cols-2">
-                <AuditField label="Status" value={selectedActivation.status} />
-                <AuditField label="Action" value={selectedActivation.action} />
-                <AuditField label="Origin" value={selectedActivation.origin} />
-                <AuditField
-                  label="Principal"
-                  value={principalLabel(
-                    selectedActivation.principalKind,
-                    selectedActivation.principalRef,
-                  )}
-                  mono
-                />
-                <AuditField label="Scope" value={selectedActivation.scopeKind} />
-                <AuditField
-                  label="Scope reference"
-                  value={selectedActivation.scopeReference || "—"}
-                  mono
-                />
-                <AuditField
-                  label="Activation ID"
-                  value={selectedActivation.activationId}
-                  mono
-                />
-                <AuditField
-                  label="Provider ID"
-                  value={selectedActivation.providerId}
-                  mono
-                />
-                <AuditField
-                  label="Started"
-                  value={formatDateTime(selectedActivation.startedAt)}
-                />
-                <AuditField
-                  label="Finished"
-                  value={formatDateTime(selectedActivation.finishedAt)}
-                />
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-3">
-                <AuditField
-                  label="Policy"
-                  value={selectedActivation.policyKind || "—"}
-                />
-                <AuditField
-                  label="Approval"
-                  value={selectedActivation.approval || "—"}
-                />
-                <AuditField
-                  label="Error class"
-                  value={selectedActivation.errorClass || "—"}
-                />
-              </div>
-
-              {selectedActivation.policyReason ? (
-                <div>
-                  <p className="text-sm font-medium">{t("Policy reason")}</p>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {selectedActivation.policyReason}
-                  </p>
-                </div>
-              ) : null}
-
-              {selectedActivation.status !== "completed" ? (
-                <div className="rounded-lg border border-border p-4">
-                  <p className="text-sm font-medium">{t("Error summary")}</p>
-                  <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-muted-foreground">
-                    {selectedActivation.errorSummary ||
-                      t("No diagnostic summary was retained for this record.")}
-                  </p>
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-
-          <DialogFooter showCloseButton />
-        </DialogContent>
-      </Dialog>
+      <AuditDetailDialog
+        selection={selected}
+        section={detailSection}
+        onSectionChange={setDetailSection}
+        onClose={() => setSelected(null)}
+      />
     </>
-  );
-}
-
-function browseAuditTools(client: MenderClient) {
-  const browseTools = (client as Partial<MenderClient>).browseTools;
-  if (typeof browseTools !== "function") {
-    return Promise.resolve(null);
-  }
-  return browseTools.call(client, { limit: 100 }).catch(() => null);
-}
-
-function indexTools(tools: ToolSummary[]) {
-  return Object.fromEntries(tools.map((tool) => [tool.toolId, tool]));
-}
-
-function principalLabel(kind: string, reference: string) {
-  return reference ? kind + ":" + reference : kind || "—";
-}
-
-function toolLabel(
-  toolsById: Record<string, ToolSummary>,
-  toolId: string,
-) {
-  const tool = toolsById[toolId];
-  return tool?.title || tool?.name || t("Unknown Tool");
-}
-
-function AuditField({
-  label,
-  value,
-  mono = false,
-}: {
-  label: string;
-  value: string;
-  mono?: boolean;
-}) {
-  return (
-    <div className="min-w-0 rounded-lg border border-border bg-muted/40 p-3">
-      <p className="text-xs text-muted-foreground">{t(label)}</p>
-      <p
-        className={[
-          "mt-1 truncate text-sm",
-          mono ? "font-mono text-xs" : "",
-        ].join(" ")}
-      >
-        {value}
-      </p>
-    </div>
   );
 }
