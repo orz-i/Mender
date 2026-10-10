@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
-import { SearchIcon } from "lucide-react";
+import { Layers3Icon, SearchIcon } from "lucide-react";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@mender/ui/components/card";
 import { Input } from "@mender/ui/components/input";
@@ -17,7 +17,9 @@ import { formatNumber, t } from "../i18n/i18n";
 
 export function MetricStrip({ children }: { children: ReactNode }) {
   return (
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{children}</div>
+    <div className="grid overflow-hidden rounded-[22px] border border-border/40 bg-card shadow-[var(--card-elevation)] sm:grid-cols-2 xl:grid-cols-4">
+      {children}
+    </div>
   );
 }
 
@@ -35,31 +37,25 @@ export function MetricTile({
   action?: ReactNode;
 }) {
   return (
-    <Card className="gap-0 py-0 shadow-none">
-      <CardContent className="flex min-h-24 items-center gap-3 px-4 py-4">
-        <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/8 text-primary">
-          <Icon aria-hidden="true" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-xl font-semibold tracking-[-0.03em] text-foreground">
-                {typeof value === "number" ? formatNumber(value) : value}
-              </p>
-              <p className="text-xs font-medium text-muted-foreground">
-                {t(label)}
-              </p>
-            </div>
-            {action ? <div className="shrink-0">{action}</div> : null}
-          </div>
-          {description ? (
-            <p className="mt-0.5 truncate text-[11px] text-muted-foreground/80">
-              {t(description)}
-            </p>
-          ) : null}
+    <div className="flex min-h-[108px] min-w-0 items-center gap-3 border-b border-border/70 px-5 py-4 last:border-b-0 sm:odd:border-r sm:[&:nth-child(-n+2)]:border-b xl:border-r xl:border-b-0 xl:last:border-r-0 xl:[&:nth-child(-n+2)]:border-b-0">
+      <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-foreground text-background dark:bg-muted dark:text-foreground">
+        <Icon className="size-[19px]" aria-hidden="true" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-xs font-medium text-muted-foreground">{t(label)}</p>
+        <div className="mt-1 flex min-w-0 items-center justify-between gap-2">
+          <p className="min-w-0 truncate text-[26px] leading-none font-semibold tracking-[-0.05em] text-foreground tabular-nums">
+            {typeof value === "number" ? formatNumber(value) : value}
+          </p>
+          {action ? <div className="shrink-0">{action}</div> : null}
         </div>
-      </CardContent>
-    </Card>
+        {description ? (
+          <p className="mt-1.5 truncate text-[11px] leading-4 text-muted-foreground">
+            {t(description)}
+          </p>
+        ) : null}
+      </div>
+    </div>
   );
 }
 
@@ -68,6 +64,7 @@ export function DataPanel({
   description,
   actions,
   toolbar,
+  icon: Icon = Layers3Icon,
   children,
   className = "",
 }: {
@@ -75,28 +72,34 @@ export function DataPanel({
   description?: ReactNode;
   actions?: ReactNode;
   toolbar?: ReactNode;
+  icon?: LucideIcon;
   children: ReactNode;
   className?: string;
 }) {
   return (
-    <Card className={["gap-0 py-0 shadow-none", className].join(" ")}>
-      <CardHeader className="min-h-16 border-b border-border/65 px-4 py-3.5">
-        <div className="flex items-center justify-between gap-4">
-          <div className="min-w-0">
-            <CardTitle className="text-sm font-semibold tracking-tight">
-              {t(title)}
-            </CardTitle>
-            {description ? (
-              <CardDescription className="mt-0.5 text-xs">
-                {typeof description === "string" ? t(description) : description}
-              </CardDescription>
-            ) : null}
+    <Card className={["gap-0 py-0", className].join(" ")}>
+      <CardHeader className="min-h-[78px] px-5 pt-4 pb-3">
+        <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-foreground text-background dark:bg-muted dark:text-foreground">
+              <Icon className="size-[19px]" aria-hidden="true" />
+            </span>
+            <div className="min-w-0">
+              <CardTitle className="text-[15px] font-semibold tracking-[-0.015em]">
+                {t(title)}
+              </CardTitle>
+              {description ? (
+                <CardDescription className="mt-0.5 text-xs leading-5">
+                  {typeof description === "string" ? t(description) : description}
+                </CardDescription>
+              ) : null}
+            </div>
           </div>
-          {actions ? <div className="shrink-0">{actions}</div> : null}
+          {actions ? <div className="min-w-0 shrink-0">{actions}</div> : null}
         </div>
       </CardHeader>
       {toolbar ? (
-        <div className="border-b border-border/65 bg-muted/10 px-4 py-3">
+        <div className="border-b border-border/65 px-5 pt-1 pb-4">
           {toolbar}
         </div>
       ) : null}
@@ -130,14 +133,14 @@ export function SearchField({
     <div className={["relative min-w-0 flex-1", className].join(" ")}>
       <SearchIcon
         aria-hidden="true"
-        className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+        className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
       />
       <Input
         aria-label={t(label)}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={t(placeholder)}
-        className="h-9 pl-9"
+        className="h-9 bg-background pl-9"
       />
     </div>
   );
@@ -162,7 +165,7 @@ export function FilterSelect({
     <Select value={value} onValueChange={(next) => onValueChange(String(next))}>
       <SelectTrigger
         aria-label={t(label)}
-        className={["h-9 min-w-36 bg-background", className].join(" ")}
+        className={["h-9 min-w-36 bg-card", className].join(" ")}
       >
         <SelectValue>{t(selected)}</SelectValue>
       </SelectTrigger>
@@ -179,10 +182,6 @@ export function FilterSelect({
   );
 }
 
-export function EmptyPanelState({
-  children,
-}: {
-  children: ReactNode;
-}) {
-  return <div className="px-4 py-5">{children}</div>;
+export function EmptyPanelState({ children }: { children: ReactNode }) {
+  return <div className="px-5 py-8">{children}</div>;
 }
