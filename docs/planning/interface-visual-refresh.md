@@ -46,6 +46,14 @@ The reference primarily defines light mode. Dark mode retains the same hierarchy
 - Never include `.agents/`, `.pi/`, or `.intent-loop/` in commits.
 - No copied healthcare metrics, patient content, Elera logo, or proprietary font files.
 
+
+## Viewport information and action discipline (2026-10-10 clarification)
+- **One viewport, one information class**: A screen's primary surface focuses on one topic (activity, resources, governance, or configuration). Do not stack an activity table, status breakdown and resource inventories in the same initial viewport. If adjacent topics are useful, expose a clear view switch or detail navigation instead of competing dashboard panels.
+- **Preview before mutation**: Inventory and detail pages show read-only summaries first. Explicit Add/Edit/Delete actions open a dedicated focused dialog, wizard step, or route; do not render editable configuration fields directly in the normal inventory/preview viewport. A dedicated creation route is acceptable only if it starts with a choice/review step, followed by a focused configuration step, rather than showing every setting immediately.
+- **Progressive disclosure**: Dense parameter forms must be segmented into logical steps with accessible Back/Review/Confirm controls; destructive actions need explicit confirmation. Existing Providers/Profile/Credential create flows already use dialogs; preserve these boundaries.
+- **Overview specifically**: Show one compact four-item overview strip and a selectable **activity vs resource** area. Activity view presents recent invocations. Resource view presents Provider/Profile previews. No duplicated activity summary cards on the same viewport.
+- **Acceptance**: At 1440x900 the Overview initial viewport shows only the KPI strip and the active topic panel; switching topics is explicit. No mutating fields appear in any list preview without an initiating action.
+
 ## Acceptance
 - Existing routes and dialogs remain functional, including quick search and sidebar collapse.
 - On desktop the shell, metric strip, panels and navigation align with the supplied palette, spacing and hierarchy.
