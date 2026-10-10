@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   CheckIcon,
   CopyIcon,
@@ -30,10 +30,11 @@ import {
 
 import { errorMessage } from "../../shared/errors";
 import { IconButton } from "../../shared/icon-button";
-import { EmptyState, ErrorNotice, PageHeader } from "../../shared/page";
+import { EmptyState, ErrorNotice } from "../../shared/page";
+import { PageToolbar, ResultPanel } from "../../shared/page-toolbar";
 import { usePagination } from "../../shared/pagination";
 import { TablePagination } from "../../shared/table-pagination";
-import { DataPanel, EmptyPanelState } from "../../shared/workbench";
+import { EmptyPanelState, SearchField } from "../../shared/workbench";
 
 import { formatDateTime, t, tCount } from "../../i18n/i18n";
 
@@ -51,6 +52,7 @@ export function ServersPage({
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
+  const [inventoryQuery, setInventoryQuery] = useState("");
   const [copied, setCopied] = useState("");
 
   const [startOpen, setStartOpen] = useState(false);
@@ -124,7 +126,14 @@ export function ServersPage({
     }
   }
 
-  const serverPagination = usePagination(servers);
+  const visibleServers = useMemo(() => {
+    const needle = inventoryQuery.trim().toLocaleLowerCase();
+    return needle ? servers.filter((server) =>
+      [server.profile, server.endpoint, server.status, server.tunnelDisplayName ?? ""]
+        .some((value) => value.toLocaleLowerCase().includes(needle))
+    ) : servers;
+  }, [servers, inventoryQuery]);
+  const serverPagination = usePagination(visibleServers);
 
   async function restartServer(server: MCPServerInstance) {
     setBusy(server.serverId);
@@ -177,37 +186,26 @@ export function ServersPage({
 
   return (
     <>
-      <PageHeader
-        actions={
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              disabled={busy !== ""}
-              onClick={() => void refresh()}
-            >
-              {t("Refresh")}
-            </Button>
-            <Button
-              disabled={profiles.length === 0 || busy !== ""}
-              onClick={openStartDialog}
-            >
-              {t("Start server")}
-            </Button>
+      <PageToolbar
+        filters={
+          <div className="w-full min-w-0 sm:w-56 sm:shrink-0">
+            <SearchField label="Search servers" placeholder="Search servers…" value={inventoryQuery} onChange={setInventoryQuery} />
           </div>
         }
+        actions={
+          <>
+            <Button size="sm" variant="outline" disabled={busy !== ""} onClick={() => void refresh()}>{t("Refresh")}</Button>
+            <Button size="sm" disabled={profiles.length === 0 || busy !== ""} onClick={openStartDialog}>{t("Start server")}</Button>
+          </>
+        }
       />
-
       {error ? <ErrorNotice message={error} /> : null}
-
-      <DataPanel
-        title="Running MCP servers"
-        description="Runtime-only loopback servers. They stop when Mender exits."
-      >
+      <ResultPanel title="Running MCP servers">
           {!loaded ? (
             <div className="px-4 py-12 text-center text-sm text-muted-foreground">
               {t("Loading servers…")}
             </div>
-          ) : servers.length ? (
+          ) : visibleServers.length ? (
             <>
               <Table>
               <TableHeader>
@@ -347,7 +345,7 @@ export function ServersPage({
               />
             </EmptyPanelState>
           )}
-      </DataPanel>
+      </ResultPanel>
 
       <Dialog
         open={startOpen}

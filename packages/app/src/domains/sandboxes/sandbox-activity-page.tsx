@@ -8,9 +8,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 
 import { t } from "../../i18n/i18n";
 import { errorMessage } from "../../shared/errors";
-import { EmptyState, ErrorNotice, PageHeader } from "../../shared/page";
+import { EmptyState, ErrorNotice } from "../../shared/page";
+import { PageToolbar, ResultPanel } from "../../shared/page-toolbar";
 import { usePagination } from "../../shared/pagination";
-import { DataPanel, EmptyPanelState } from "../../shared/workbench";
+import { EmptyPanelState } from "../../shared/workbench";
 import { TablePagination } from "../../shared/table-pagination";
 
 type ActivityFilter = "all" | "admission" | "lifecycle";
@@ -49,20 +50,23 @@ export function SandboxActivityPage({ client }: { client: MenderClient }) {
   const pagination = usePagination(filtered);
 
   return <>
-    <PageHeader actions={<Button variant="outline" onClick={() => { void navigate(sandboxId ? `/sandboxes/${sandboxId}` : "/sandboxes"); }}>{t("Back to sandbox")}</Button>} />
+    <PageToolbar
+      filters={
+        <label className="flex items-center gap-2 text-sm">
+          <span className="text-muted-foreground">{t("Event type")}</span>
+          <select aria-label={t("Event type")} value={filter} onChange={(event) => setFilter(event.target.value as ActivityFilter)} className="h-9 w-40 rounded-xl border border-input bg-card px-3 text-sm">
+            <option value="all">{t("All events")}</option>
+            <option value="admission">{t("Admissions")}</option>
+            <option value="lifecycle">{t("Lifecycle")}</option>
+          </select>
+        </label>
+      }
+      actions={
+        <Button size="sm" variant="outline" onClick={() => void navigate(sandboxId ? `/sandboxes/${sandboxId}` : "/sandboxes")}>{t("Back to sandbox")}</Button>
+      }
+    />
     {error || !sandboxId ? <ErrorNotice message={error || t("The requested item was not found.")} /> : null}
-    <DataPanel
-      title={t("Sandbox activity")}
-      description={t("Durable governance admissions and successful lifecycle events; no tool inputs or credential details.")}
-      toolbar={<label className="flex items-center gap-2 text-sm">
-        <span>{t("Event type")}</span>
-        <select aria-label={t("Event type")} value={filter} onChange={(event) => setFilter(event.target.value as ActivityFilter)} className="h-9 rounded-lg border border-input bg-background px-3 text-sm">
-          <option value="all">{t("All events")}</option>
-          <option value="admission">{t("Admissions")}</option>
-          <option value="lifecycle">{t("Lifecycle")}</option>
-        </select>
-      </label>}
-    >
+    <ResultPanel title="Sandbox activity">
       {!loaded && !error ? <div className="p-6 text-sm text-muted-foreground">{t("Loading activity…")}</div> : error || !sandboxId ? null : filtered.length === 0 ?
         <EmptyPanelState><EmptyState title={t("No activity yet")} description={t("Sandbox decisions and state transitions will appear here.")} /></EmptyPanelState> : <>
           <Table>
@@ -85,7 +89,7 @@ export function SandboxActivityPage({ client }: { client: MenderClient }) {
           </Table>
           <div className="px-4 pb-3"><TablePagination label={t("Events")} pagination={pagination}/></div>
         </>}
-    </DataPanel>
+    </ResultPanel>
   </>;
 }
 

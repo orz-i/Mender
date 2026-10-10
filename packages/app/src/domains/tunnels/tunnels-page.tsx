@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { CableIcon, Trash2Icon } from "lucide-react";
 
 import type { Credential, MenderClient, Tunnel } from "@mender/sdk";
@@ -26,10 +26,11 @@ import {
 import { t, tCount } from "../../i18n/i18n";
 import { errorMessage } from "../../shared/errors";
 import { IconButton } from "../../shared/icon-button";
-import { EmptyState, ErrorNotice, PageHeader } from "../../shared/page";
+import { EmptyState, ErrorNotice } from "../../shared/page";
+import { PageToolbar, ResultPanel } from "../../shared/page-toolbar";
 import { usePagination } from "../../shared/pagination";
 import { TablePagination } from "../../shared/table-pagination";
-import { DataPanel, EmptyPanelState } from "../../shared/workbench";
+import { EmptyPanelState, SearchField } from "../../shared/workbench";
 
 const emptyCreateForm = {
   displayName: "",
@@ -43,6 +44,8 @@ export function TunnelsPage({ client }: { client: MenderClient }) {
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
+  const [inventoryQuery, setInventoryQuery] = useState("");
+  const [helpOpen, setHelpOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [createForm, setCreateForm] = useState(emptyCreateForm);
 
@@ -85,7 +88,14 @@ export function TunnelsPage({ client }: { client: MenderClient }) {
     };
   }, [client]);
 
-  const pagination = usePagination(tunnels);
+  const visibleTunnels = useMemo(() => {
+    const needle = inventoryQuery.trim().toLocaleLowerCase();
+    return needle ? tunnels.filter((item) =>
+      [item.displayName, item.externalTunnelId, item.runtimeCredentialRef]
+        .some((value) => value.toLocaleLowerCase().includes(needle))
+    ) : tunnels;
+  }, [inventoryQuery, tunnels]);
+  const pagination = usePagination(visibleTunnels);
 
   const createValid =
     createForm.displayName.trim() !== "" &&
@@ -136,61 +146,47 @@ export function TunnelsPage({ client }: { client: MenderClient }) {
 
   return (
     <>
-      <PageHeader
+      <PageToolbar
+        tabs={
+          <span className="text-xs text-muted-foreground">
+            {tCount(tunnels.length, "{{count}} Tunnel configured", "{{count}} Tunnels configured")}
+          </span>
+        }
+        filters={
+          <div className="w-full min-w-0 sm:w-56 sm:shrink-0">
+            <SearchField label="Search tunnels" placeholder="Search tunnels…" value={inventoryQuery} onChange={setInventoryQuery} />
+          </div>
+        }
         actions={
-          <Button
-            disabled={busy !== ""}
-            onClick={() => {
-              setError("");
-              setCreateForm({
-                ...emptyCreateForm,
-                runtimeCredentialRef: credentials[0]?.reference ?? "",
-              });
-              setCreateOpen(true);
-            }}
-          >
-            {t("Add tunnel")}
-          </Button>
+          <>
+            <Button size="sm" variant="outline" onClick={() => setHelpOpen(true)}>
+              <CableIcon data-icon="inline-start" />
+              {t("OpenAI Secure MCP Tunnel")}
+            </Button>
+            <Button
+              size="sm"
+              disabled={busy !== ""}
+              onClick={() => {
+                setError("");
+                setCreateForm({
+                  ...emptyCreateForm,
+                  runtimeCredentialRef: credentials[0]?.reference ?? "",
+                });
+                setCreateOpen(true);
+              }}
+            >
+              {t("Add tunnel")}
+            </Button>
+          </>
         }
       />
-
       {error ? <ErrorNotice message={error} /> : null}
-
-      <div className="mb-4 rounded-xl border border-border bg-muted/35 px-4 py-3">
-        <div className="flex gap-3">
-          <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg border border-border bg-background">
-            <CableIcon className="size-4" aria-hidden="true" />
-          </div>
-          <div className="min-w-0">
-            <p className="text-sm font-medium">{t("OpenAI Secure MCP Tunnel")}</p>
-            <p className="mt-1 text-xs leading-5 text-muted-foreground">
-              {t(
-                "OpenAI Secure MCP Tunnel keeps the MCP server private and carries traffic through outbound HTTPS to supported OpenAI surfaces. It does not create a general public MCP URL.",
-              )}
-            </p>
-            <p className="mt-2 text-xs text-muted-foreground">
-              {t("Install the client first:")}{" "}
-              <code className="rounded bg-background px-1.5 py-0.5 font-mono">
-                {t("brew install openai/tools/tunnel-client")}
-              </code>
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <DataPanel
-        title="Tunnel inventory"
-        description={tCount(
-          tunnels.length,
-          "{{count}} Tunnel configured",
-          "{{count}} Tunnels configured",
-        )}
-      >
+      <ResultPanel title="Tunnel inventory">
         {!loaded ? (
           <div className="px-4 py-12 text-center text-sm text-muted-foreground">
             {t("Loading Tunnels…")}
           </div>
-        ) : tunnels.length ? (
+        ) : visibleTunnels.length ? (
           <>
             <Table>
               <TableHeader>
@@ -243,7 +239,25 @@ export function TunnelsPage({ client }: { client: MenderClient }) {
             />
           </EmptyPanelState>
         )}
-      </DataPanel>
+      </ResultPanel>
+
+      <Dialog open={helpOpen} onOpenChange={setHelpOpen}>
+        <DialogContent className="sm:max-w-xl" showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>{t("OpenAI Secure MCP Tunnel")}</DialogTitle>
+            <DialogDescription>
+              {t("OpenAI Secure MCP Tunnel keeps the MCP server private and carries traffic through outbound HTTPS to supported OpenAI surfaces. It does not create a general public MCP URL.")}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="rounded-xl border border-border bg-background p-4 text-sm">
+            {t("Install the client first:")}{" "}
+            <code className="break-all font-mono text-xs">{t("brew install openai/tools/tunnel-client")}</code>
+          </div>
+          <DialogFooter>
+            <DialogClose render={<Button variant="outline" />}>{t("Close")}</DialogClose>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={createOpen}

@@ -1434,9 +1434,11 @@ describe("management pages", () => {
     });
 
     expect(await screen.findByText("No Tunnels")).toBeTruthy();
-    expect(
-      screen.getByText(/does not create a general public MCP URL/),
-    ).toBeTruthy();
+    expect(screen.queryByText(/does not create a general public MCP URL/)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "OpenAI Secure MCP Tunnel" }));
+    const help = within(screen.getByRole("dialog", { name: "OpenAI Secure MCP Tunnel" }));
+    expect(help.getByText(/does not create a general public MCP URL/)).toBeTruthy();
+    fireEvent.click(help.getByRole("button", { name: "Close" }));
 
     fireEvent.click(screen.getByRole("button", { name: "Add tunnel" }));
     expect(await screen.findByText("Create OpenAI Tunnel")).toBeTruthy();

@@ -38,11 +38,11 @@ import {
 
 import { errorMessage } from "../../shared/errors";
 import { IconButton } from "../../shared/icon-button";
-import { EmptyState, ErrorNotice, PageHeader } from "../../shared/page";
+import { EmptyState, ErrorNotice } from "../../shared/page";
+import { PageToolbar, ResultPanel } from "../../shared/page-toolbar";
 import { usePagination } from "../../shared/pagination";
 import { TablePagination } from "../../shared/table-pagination";
 import {
-  DataPanel,
   EmptyPanelState,
 } from "../../shared/workbench";
 
@@ -314,41 +314,27 @@ export function PolicyPage({ client }: { client: MenderClient }) {
 
   return (
     <>
-      <PageHeader
-        actions={<Button onClick={openCreateRule}>{t("Add rule")}</Button>}
-      />
-
-      {error ? <ErrorNotice message={error} /> : null}
-
-      <DataPanel
-        title="Policy rules"
-        description={tCount(
-          rules.length,
-          "{{count}} Policy Rule configured. Matching deny Rules cannot be overridden by allow Rules.",
-          "{{count}} Policy Rules configured. Matching deny Rules cannot be overridden by allow Rules.",
-        )}
-        toolbar={
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-2 text-sm">
-              <span className="text-muted-foreground">
-                {t("Default decision")}
-              </span>
-              <DecisionBadge decision={policy?.defaultDecision ?? "allow"} />
-              <span className="hidden text-xs text-muted-foreground lg:inline">
-                {t("Used only when no enabled Rule matches.")}
-              </span>
-            </div>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={!loaded || policy === null}
-              onClick={openDefaultEditor}
-            >
-              {t("Edit")}
-            </Button>
+      <PageToolbar
+        tabs={
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span className="text-muted-foreground">{t("Default decision")}</span>
+            <DecisionBadge decision={policy?.defaultDecision ?? "allow"} />
+            <span className="hidden text-muted-foreground lg:inline">
+              {tCount(rules.length, "{{count}} Policy Rule configured. Matching deny Rules cannot be overridden by allow Rules.", "{{count}} Policy Rules configured. Matching deny Rules cannot be overridden by allow Rules.")}
+            </span>
           </div>
         }
-      >
+        actions={
+          <>
+            <Button size="sm" variant="outline" disabled={!loaded || policy === null} onClick={openDefaultEditor}>
+              {t("Edit")}
+            </Button>
+            <Button size="sm" onClick={openCreateRule}>{t("Add rule")}</Button>
+          </>
+        }
+      />
+      {error ? <ErrorNotice message={error} /> : null}
+      <ResultPanel title="Policy rules">
           {!loaded ? (
             <div className="px-4 py-12 text-center text-sm text-muted-foreground">
               {t("Loading Policy…")}
@@ -431,7 +417,7 @@ export function PolicyPage({ client }: { client: MenderClient }) {
               />
             </EmptyPanelState>
           )}
-      </DataPanel>
+      </ResultPanel>
 
       <Dialog open={defaultOpen} onOpenChange={setDefaultOpen}>
         <DialogContent className="sm:max-w-lg">

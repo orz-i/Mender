@@ -7,7 +7,6 @@ import type {
   ProviderActivationAuditRecord,
   ToolSummary,
 } from "@mender/sdk";
-import { Badge } from "@mender/ui/components/badge";
 import { Button } from "@mender/ui/components/button";
 import {
   Table,
@@ -18,18 +17,17 @@ import {
   TableRow,
 } from "@mender/ui/components/table";
 
-import { formatDateTime, formatNumber, t } from "../../i18n/i18n";
+import { formatDateTime, t } from "../../i18n/i18n";
 import { errorMessage } from "../../shared/errors";
 import { FocusSwitch } from "../../shared/focus-switch";
+import { PageToolbar, ResultPanel } from "../../shared/page-toolbar";
 import { IconButton } from "../../shared/icon-button";
 import { EmptyState, ErrorNotice } from "../../shared/page";
 import { usePagination } from "../../shared/pagination";
 import { TablePagination } from "../../shared/table-pagination";
 import {
-  DataPanel,
   FilterSelect,
   SearchField,
-  WorkbenchToolbar,
 } from "../../shared/workbench";
 import {
   AuditDetailDialog,
@@ -225,49 +223,32 @@ export function AuditPage({ client }: { client: MenderClient }) {
 
   return (
     <>
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <FocusSwitch
-          label="Audit"
-          value={topic}
-          onChange={changeTopic}
-          items={[
-            { value: "invocations", label: "Invocation history" },
-            { value: "activations", label: "Provider activation history" },
-          ]}
-        />
-        <Button
-          variant="outline"
-          size="sm"
-          aria-label={t("Refresh")}
-          className="w-8 px-0 sm:w-auto sm:px-3"
-          disabled={busy || !loaded}
-          onClick={() => void refresh()}
-        >
-          <RefreshCwIcon className={busy ? "animate-spin" : undefined} />
-          <span className="hidden sm:inline">{t("Refresh")}</span>
-        </Button>
-      </div>
-
-      {error ? <ErrorNotice message={error} /> : null}
-      <DataPanel
-        title={panelTitle}
-        description={topic === "invocations"
-          ? t("Recent terminal invocation outcomes and governance decisions.")
-          : t("Capability admission outcomes recorded before Provider code, discovery Credentials, or execution routes are activated.")}
-        actions={loaded ? <Badge variant="secondary" className="hidden tabular-nums sm:inline-flex">{formatNumber(activePagination.total)}</Badge> : null}
-        toolbar={
-          <WorkbenchToolbar>
-            <SearchField
-              label="Search audit records"
-              placeholder="Search audit records…"
-              value={query}
-              onChange={(value) => {
-                setQuery(value);
-                invocationPagination.reset();
-                activationPagination.reset();
-              }}
-              className="md:min-w-56 md:max-w-md"
-            />
+      <PageToolbar
+        tabs={
+          <FocusSwitch
+            label="Audit"
+            value={topic}
+            onChange={changeTopic}
+            items={[
+              { value: "invocations", label: "Invocation history" },
+              { value: "activations", label: "Provider activation history" },
+            ]}
+          />
+        }
+        filters={
+          <>
+            <div className="w-full min-w-0 sm:w-48 sm:shrink-0">
+              <SearchField
+                label="Search audit records"
+                placeholder="Search audit records…"
+                value={query}
+                onChange={(value) => {
+                  setQuery(value);
+                  invocationPagination.reset();
+                  activationPagination.reset();
+                }}
+              />
+            </div>
             <FilterSelect
               label="Audit status"
               value={statusFilter}
@@ -282,11 +263,25 @@ export function AuditPage({ client }: { client: MenderClient }) {
                 { value: "failed", label: "Failed" },
                 { value: "denied", label: "Denied" },
               ]}
-              className="min-w-40"
+              className="w-32 min-w-0"
             />
-          </WorkbenchToolbar>
+          </>
         }
-      >
+        actions={
+          <Button
+            variant="outline"
+            size="sm"
+            aria-label={t("Refresh")}
+            disabled={busy || !loaded}
+            onClick={() => void refresh()}
+          >
+            <RefreshCwIcon data-icon="inline-start" className={busy ? "animate-spin" : undefined} />
+            {t("Refresh")}
+          </Button>
+        }
+      />
+      {error ? <ErrorNotice message={error} /> : null}
+      <ResultPanel title={panelTitle}>
         {!loaded && !error ? (
           <p className="px-5 py-12 text-sm text-muted-foreground">{t("Loading audit history…")}</p>
         ) : activePagination.total ? (
@@ -369,7 +364,7 @@ export function AuditPage({ client }: { client: MenderClient }) {
             ) : null}
           </div>
         )}
-      </DataPanel>
+      </ResultPanel>
 
       <AuditDetailDialog
         selection={selected}
