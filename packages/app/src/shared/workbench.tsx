@@ -1,6 +1,23 @@
 import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
-import { Layers3Icon, SearchIcon } from "lucide-react";
+import {
+  ActivityIcon,
+  BlocksIcon,
+  BookOpenIcon,
+  BoxIcon,
+  CableIcon,
+  CpuIcon,
+  GaugeIcon,
+  KeyRoundIcon,
+  Layers3Icon,
+  PackageSearchIcon,
+  PlugIcon,
+  ScrollTextIcon,
+  SearchIcon,
+  ServerCogIcon,
+  ShieldCheckIcon,
+  WrenchIcon,
+} from "lucide-react";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@mender/ui/components/card";
 import { Input } from "@mender/ui/components/input";
@@ -14,6 +31,35 @@ import {
 } from "@mender/ui/components/select";
 
 import { formatNumber, t } from "../i18n/i18n";
+
+const panelIcons: Record<string, LucideIcon> = {
+  "Recent invocations": ActivityIcon,
+  "Plugin catalog": BlocksIcon,
+  "Plugin details": BlocksIcon,
+  "Capabilities": WrenchIcon,
+  "Technical details": CpuIcon,
+  "Provider inventory": PlugIcon,
+  "Skill Library": BookOpenIcon,
+  "Tools": WrenchIcon,
+  "Profile inventory": Layers3Icon,
+  "Tunnel inventory": CableIcon,
+  "Running MCP servers": ServerCogIcon,
+  "Runtime budget": GaugeIcon,
+  "Process isolation": ShieldCheckIcon,
+  "Sandbox inventory": BoxIcon,
+  "Sandbox overview": BoxIcon,
+  "Create sandbox": BoxIcon,
+  "Sandbox activity": ActivityIcon,
+  "Security boundary": ShieldCheckIcon,
+  "Policy rules": ShieldCheckIcon,
+  "Credential inventory": KeyRoundIcon,
+  "Invocation history": ScrollTextIcon,
+  "Provider activation history": PlugIcon,
+  "Providers": PlugIcon,
+  "Profiles": Layers3Icon,
+  "Skills": BookOpenIcon,
+  "Catalog": PackageSearchIcon,
+};
 
 export function MetricStrip({ children }: { children: ReactNode }) {
   return (
@@ -64,7 +110,7 @@ export function DataPanel({
   description,
   actions,
   toolbar,
-  icon: Icon = Layers3Icon,
+  icon,
   children,
   className = "",
 }: {
@@ -76,6 +122,7 @@ export function DataPanel({
   children: ReactNode;
   className?: string;
 }) {
+  const Icon = icon ?? panelIcons[title] ?? Layers3Icon;
   return (
     <Card className={["gap-0 py-0", className].join(" ")}>
       <CardHeader className="min-h-[78px] px-5 pt-4 pb-3">

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowLeftIcon,
+  BlocksIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
   PackagePlusIcon,
@@ -16,7 +17,6 @@ import { Badge } from "@mender/ui/components/badge";
 import { Button } from "@mender/ui/components/button";
 import {
   Card,
-  CardAction,
   CardContent,
   CardDescription,
   CardFooter,
@@ -521,20 +521,24 @@ function PluginCard({ plugin }: { plugin: MarketplacePlugin }) {
       aria-label={t("View {{plugin}}", {
         plugin: plugin.displayName,
       })}
-      className="group block rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+      className="group block rounded-[22px] outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
-      <Card className="h-full transition-shadow group-hover:shadow-md">
-        <CardHeader>
-          <CardTitle>{plugin.displayName}</CardTitle>
-          <CardAction>
-            <Badge
-              variant={
-                plugin.status === "enabled" ? "outline" : "secondary"
-              }
-            >
+      <Card className="h-full transition-[transform,box-shadow] duration-200 group-hover:-translate-y-0.5 group-hover:shadow-[0_16px_32px_-16px_rgb(18_18_18/0.24)]">
+        <CardHeader className="gap-3">
+          <div className="flex min-w-0 items-start gap-3">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-foreground text-background dark:bg-muted dark:text-foreground">
+              <BlocksIcon className="size-[19px]" aria-hidden="true" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <CardTitle className="truncate text-base" title={plugin.displayName}>
+                {plugin.displayName}
+              </CardTitle>
+              <p className="mt-1 text-xs text-muted-foreground">{pluginKindLabel(plugin)}</p>
+            </div>
+            <Badge variant={plugin.status === "enabled" ? "default" : "secondary"}>
               {pluginStatusLabel(plugin)}
             </Badge>
-          </CardAction>
+          </div>
           <CardDescription className="min-h-[3.75rem] line-clamp-3">
             {plugin.description || t("No plugin description.")}
           </CardDescription>
@@ -641,7 +645,7 @@ function DetailField({
   mono?: boolean;
 }) {
   return (
-    <div className="rounded-xl border border-border/70 bg-muted/20 p-3">
+    <div className="rounded-xl border border-border/70 bg-background/80 p-3">
       <p className="text-xs font-medium text-muted-foreground">
         {t(label)}
       </p>

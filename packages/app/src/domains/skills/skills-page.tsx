@@ -490,7 +490,7 @@ export function SkillsPage({
                             className={[
                               "flex size-12 shrink-0 items-center justify-center rounded-xl",
                               item.builtIn
-                                ? "bg-primary/10 text-primary"
+                                ? "bg-foreground text-background dark:bg-muted dark:text-foreground"
                                 : "bg-muted text-muted-foreground",
                             ].join(" ")}
                           >
@@ -511,7 +511,7 @@ export function SkillsPage({
                                 className={[
                                   "shrink-0 rounded-full px-2 py-0 text-[10px] font-medium",
                                   item.builtIn
-                                    ? "border-primary/15 bg-primary/7 text-primary"
+                                    ? "border-accent bg-accent text-accent-foreground"
                                     : "bg-muted/60 text-muted-foreground",
                                 ].join(" ")}
                               >
@@ -662,7 +662,7 @@ export function SkillsPage({
           {selected !== null && skillView === "overview" ? (
             <div className="space-y-5">
               <div className="flex items-start gap-3 rounded-xl border border-border/70 bg-muted/15 p-4">
-                <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-foreground text-background dark:bg-muted dark:text-foreground">
                   {selected.builtIn ? (
                     <BookOpenIcon className="size-5" />
                   ) : (
@@ -1003,7 +1003,7 @@ function FilterTab({
       className={[
         "relative flex h-12 items-center gap-2 px-3 text-sm font-medium transition-colors",
         active
-          ? "text-primary"
+          ? "text-primary-ink"
           : "text-muted-foreground hover:text-foreground",
       ].join(" ")}
     >
@@ -1011,7 +1011,7 @@ function FilterTab({
       <span
         className={[
           "rounded-full px-1.5 py-0.5 text-[10px] tabular-nums",
-          active ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground",
+          active ? "bg-accent text-accent-foreground" : "bg-muted text-muted-foreground",
         ].join(" ")}
       >
         {formatNumber(count)}

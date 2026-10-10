@@ -178,7 +178,7 @@ export function CreateSandboxPage({client}:{client:MenderClient}) {
       <label className="block space-y-1.5 text-sm"><span>{t("Mender Credential Reference")}</span>
        <select aria-label={t("Mender Credential Reference")} className="h-9 w-full rounded-lg border border-input bg-background px-3" value={daytonaCredential} onChange={e=>setDaytonaCredential(e.target.value)}><option value="">{t("Choose a credential")}</option>{credentials.map(c=><option key={c.reference} value={c.reference}>{c.displayName} · {c.reference}</option>)}</select>
       </label>
-      {credentials.length===0?<p className="text-xs text-muted-foreground">{t("No credentials available. Add a Daytona API credential first.")} <Link to="/credentials" className="text-primary underline-offset-4 hover:underline">{t("Credentials")}</Link></p>:null}
+      {credentials.length===0?<p className="text-xs text-muted-foreground">{t("No credentials available. Add a Daytona API credential first.")} <Link to="/credentials" className="text-primary-ink underline-offset-4 hover:underline">{t("Credentials")}</Link></p>:null}
       <label className="block space-y-1.5 text-sm"><span>{t("Immutable image digest")}</span><Input aria-label={t("Immutable image digest")} value={imageDigest} onChange={e=>setImageDigest(e.target.value.trim())} placeholder={t("docker.io/library/python@sha256:…")} autoComplete="off"/></label>
       <div className="grid gap-3 sm:grid-cols-2">
        {numberField(t("Remote CPUs"),daytonaCPU,setDaytonaCPU,1,2)}

@@ -63,7 +63,7 @@ export function GenericProviderConfigForm({
       </label>
       <p className="text-xs leading-5 text-muted-foreground">{t("Workspace Tools share the selected Sandbox filesystem and its fixed isolation boundary.")}</p>
       {available.length === 0 ? <p className="text-xs text-muted-foreground">{t("No ready Sandbox is available on this Runtime host.")}</p> : null}
-      <Link to="/sandboxes/new" className="inline-flex text-xs font-medium text-primary underline-offset-4 hover:underline">{t("Create sandbox")}</Link>
+      <Link to="/sandboxes/new" className="inline-flex text-xs font-medium text-primary-ink underline-offset-4 hover:underline">{t("Create sandbox")}</Link>
     </div>;
   }
   const supportError = genericSchemaSupportError(schema);
