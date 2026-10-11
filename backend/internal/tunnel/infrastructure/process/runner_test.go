@@ -97,6 +97,7 @@ func testTunnel(t *testing.T) tunneldomain.Tunnel {
 		id,
 		"OpenAI Test",
 		tunneldomain.ProviderOpenAI,
+		tunneldomain.OpenAIBinding(),
 		"tunnel_external_test",
 		ref,
 	)

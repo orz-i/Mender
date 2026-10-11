@@ -15,7 +15,8 @@ const (
 type Provider string
 
 const (
-	ProviderOpenAI Provider = "openai"
+	ProviderOpenAI   Provider = "openai"
+	ProviderExternal Provider = "external"
 )
 
 // Tunnel is persistent non-secret configuration for one external reachability adapter.
@@ -23,6 +24,7 @@ type Tunnel struct {
 	id                   TunnelID
 	displayName          string
 	provider             Provider
+	binding              Binding
 	externalTunnelID     string
 	runtimeCredentialRef credentialdomain.Reference
 }
@@ -31,6 +33,7 @@ func NewTunnel(
 	id TunnelID,
 	displayName string,
 	provider Provider,
+	binding Binding,
 	externalTunnelID string,
 	runtimeCredentialRef credentialdomain.Reference,
 ) (Tunnel, error) {
@@ -46,10 +49,8 @@ func NewTunnel(
 		return Tunnel{}, fmt.Errorf("tunnel display_name: is too long")
 	}
 
-	switch provider {
-	case ProviderOpenAI:
-	default:
-		return Tunnel{}, fmt.Errorf("tunnel provider: unsupported value %q", provider)
+	if err := binding.ValidateProvider(provider); err != nil {
+		return Tunnel{}, err
 	}
 
 	externalTunnelID = strings.TrimSpace(externalTunnelID)
@@ -68,6 +69,7 @@ func NewTunnel(
 		id:                   id,
 		displayName:          displayName,
 		provider:             provider,
+		binding:              binding,
 		externalTunnelID:     externalTunnelID,
 		runtimeCredentialRef: runtimeCredentialRef,
 	}, nil
@@ -92,3 +94,6 @@ func (t Tunnel) ExternalTunnelID() string {
 func (t Tunnel) RuntimeCredentialRef() credentialdomain.Reference {
 	return t.runtimeCredentialRef
 }
+
+// Binding exposes a value copy of the exact extension identity.
+func (t Tunnel) Binding() Binding { return t.binding }

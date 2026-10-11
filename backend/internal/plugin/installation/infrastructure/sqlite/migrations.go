@@ -160,6 +160,42 @@ func migrate(ctx context.Context, db *sql.DB) error {
 			}
 		}
 	}
+	// A Tunnel transport may not be disabled or removed while a configured
+	// Tunnel still holds its exact InstallationID. SQLite closes concurrent
+	// resource-create vs management-status TOCTOU races.
+	var tunnelsPresent int
+	if err := tx.QueryRowContext(ctx,
+		"SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='tunnels'").Scan(&tunnelsPresent); err != nil {
+		return err
+	}
+	if tunnelsPresent != 0 {
+		for _, statement := range []string{
+			`CREATE TRIGGER IF NOT EXISTS tunnel_transport_install_pin_insert
+            BEFORE INSERT ON tunnels WHEN NEW.provider='external'
+            AND NOT EXISTS(
+                SELECT 1 FROM plugin_installations pi
+                WHERE pi.installation_id=NEW.installation_id AND pi.plugin_id=NEW.plugin_id
+                    AND pi.status='enabled' AND pi.verified_descriptor_json IS NOT NULL
+                    AND json_extract(pi.manifest_json,'$.extensions[0].kind')='tunnel.transport'
+            ) BEGIN SELECT RAISE(ABORT,'Tunnel plugin installation unavailable'); END`,
+			`CREATE TRIGGER IF NOT EXISTS tunnel_transport_disable_guard
+            BEFORE UPDATE OF status ON plugin_installations
+            WHEN NEW.status!='enabled' AND EXISTS(
+                SELECT 1 FROM tunnels t WHERE t.provider='external'
+                  AND t.installation_id=OLD.installation_id
+            ) BEGIN SELECT RAISE(ABORT,'Tunnel transport installation is in use'); END`,
+			`CREATE TRIGGER IF NOT EXISTS tunnel_transport_remove_guard
+            BEFORE DELETE ON plugin_installations
+            WHEN EXISTS(
+                SELECT 1 FROM tunnels t WHERE t.provider='external'
+                  AND t.installation_id=OLD.installation_id
+            ) BEGIN SELECT RAISE(ABORT,'Tunnel transport installation is in use'); END`,
+		} {
+			if _, err := tx.ExecContext(ctx, statement); err != nil {
+				return fmt.Errorf("tunnel plugin installation reference guard: %w", err)
+			}
+		}
+	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit generic plugin installation migrations: %w", err)
 	}

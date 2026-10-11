@@ -27,6 +27,7 @@ func TestTunnelRoundTripConflictAndDelete(t *testing.T) {
 		firstID,
 		"OpenAI Work",
 		tunneldomain.ProviderOpenAI,
+		tunneldomain.OpenAIBinding(),
 		"tunnel_external_1",
 		ref,
 	)
@@ -53,6 +54,7 @@ func TestTunnelRoundTripConflictAndDelete(t *testing.T) {
 		secondID,
 		"Duplicate OpenAI Work",
 		tunneldomain.ProviderOpenAI,
+		tunneldomain.OpenAIBinding(),
 		first.ExternalTunnelID(),
 		ref,
 	)

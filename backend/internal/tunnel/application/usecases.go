@@ -55,6 +55,7 @@ func (uc CreateOpenAITunnel) Execute(
 		id,
 		request.DisplayName,
 		tunneldomain.ProviderOpenAI,
+		tunneldomain.OpenAIBinding(),
 		request.ExternalTunnelID,
 		request.RuntimeCredentialRef,
 	)
