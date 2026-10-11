@@ -13,6 +13,7 @@ import (
 	sandboxdaytona "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/daytona"
 	sandboxdocker "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/dockerengine"
 	sandboxsqlite "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/sqlite"
+	sandboxssh "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/sshremote"
 	"github.com/spf13/cobra"
 )
 
@@ -26,6 +27,7 @@ func (a *app) newSandboxCommand() *cobra.Command {
 	add.AddCommand(a.newSandboxAddLocalCommand())
 	add.AddCommand(a.newSandboxAddDockerCommand())
 	add.AddCommand(a.newSandboxAddDaytonaCommand())
+	add.AddCommand(a.newSandboxAddSSHRemoteCommand())
 	add.AddCommand(a.newSandboxAddExternalCommand())
 	command.AddCommand(a.newSandboxReconcileCommand())
 	command.AddCommand(add)
@@ -233,6 +235,48 @@ func (a *app) newSandboxAddDaytonaCommand() *cobra.Command {
 	cmd.Flags().IntVar(&disk, "disk-gib", 3, "disk allocation GiB (3..10)")
 	cmd.Flags().IntVar(&ttl, "ttl-minutes", 30, "provider-enforced lifetime (15..120min), not a USD spending limit")
 	return cmd
+}
+
+func (a *app) newSandboxAddSSHRemoteCommand() *cobra.Command {
+	var name, host, user, root, publicKey, credential string
+	var port uint16
+	command := &cobra.Command{Use: "ssh-remote", Short: "Bind a trusted SSH login to a governed remote Workspace (NOT OS isolation)", Args: exactArgs(0),
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			ref, err := credentialdomain.ParseReference(credential)
+			if err != nil {
+				return usageError{err: err}
+			}
+			t := sandboxssh.Template{Host: host, Port: port, User: user, Root: root, HostPublicKey: publicKey, CredentialRef: ref}
+			if err := t.Validate(); err != nil {
+				return usageError{err: err}
+			}
+			if name == "" {
+				return usageError{err: fmt.Errorf("SSH remote requires --name")}
+			}
+			return a.withRuntime(cmd.Context(), func(runtime *bootstrap.Runtime) error {
+				caller, err := governancedomain.NewContext(governancedomain.OriginCLI,
+					runtime.OwnerPrincipal(), governancedomain.CatalogScope())
+				if err != nil {
+					return err
+				}
+				item, err := runtime.Sandboxes.CreateSSHRemoteSandbox(cmd.Context(),
+					bootstrap.CreateSSHRemoteSandboxRequest{Name: name, Template: t}, caller)
+				if err != nil {
+					return err
+				}
+				return a.writeValue(fmt.Sprintf("SSH Remote Sandbox %s verified (remote host unchanged)", item.ID()),
+					map[string]any{"sandbox": sandboxProjection(item)})
+			})
+		},
+	}
+	command.Flags().StringVar(&name, "name", "", "Sandbox display name")
+	command.Flags().StringVar(&host, "host", "", "explicit SSH host name or IP")
+	command.Flags().Uint16Var(&port, "port", 22, "SSH port (1..65535)")
+	command.Flags().StringVar(&user, "user", "", "unprivileged SSH login; root rejected")
+	command.Flags().StringVar(&root, "root", "", "absolute POSIX remote workspace directory")
+	command.Flags().StringVar(&publicKey, "host-public-key", "", "pinned ssh-ed25519 public host key, OpenSSH format")
+	command.Flags().StringVar(&credential, "credential-ref", "", "native OS keychain reference, credential://ssh/name; never a private key")
+	return command
 }
 
 // Add a remote Sandbox only by an installed, verified, pinned extension package.

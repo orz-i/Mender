@@ -2,6 +2,8 @@ package cli
 
 import (
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
 	"fmt"
 	"io"
 	"os"
@@ -12,6 +14,7 @@ import (
 
 	mobyclient "github.com/moby/moby/client"
 	"github.com/orz-i/Mender/backend/internal/bootstrap"
+	"golang.org/x/crypto/ssh"
 )
 
 func TestCLILocalSandboxLifecycleAndDestroyConfirmation(t *testing.T) {
@@ -44,6 +47,39 @@ func TestCLILocalSandboxLifecycleAndDestroyConfirmation(t *testing.T) {
 	listed := executeJSONCommand(t, db, "sandbox", "list")
 	if values, ok := listed["sandboxes"].([]any); !ok || len(values) != 1 {
 		t.Fatalf("tombstoned resource lost %+v", listed)
+	}
+}
+
+func TestCLISSHRemoteValidatesHostBindingAndNeverPersistsFailedLogin(t *testing.T) {
+	t.Parallel()
+	db := filepath.Join(t.TempDir(), "ssh-cli.db")
+	_, private, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pub, err := ssh.NewPublicKey(private.Public())
+	if err != nil {
+		t.Fatal(err)
+	}
+	pinned := strings.TrimSpace(string(ssh.MarshalAuthorizedKey(pub)))
+	invoke := func(user string) error {
+		command := NewRootCommand(Options{Stdin: nil, Stdout: io.Discard, Stderr: io.Discard})
+		command.SetArgs([]string{"--db", db, "sandbox", "add", "ssh-remote",
+			"--name", "CLI SSH remote", "--host", "127.0.0.1", "--port", "22",
+			"--user", user, "--root", "/home/agent/work",
+			"--host-public-key", pinned, "--credential-ref", "credential://ssh/absent"})
+		return command.ExecuteContext(context.Background())
+	}
+	if err := invoke("root"); err == nil {
+		t.Fatal("CLI accepted SSH root login")
+	}
+	if err := invoke("agent"); err == nil {
+		t.Fatal("CLI provisioned remote SSH without native Keychain credential")
+	}
+	results := executeJSONCommand(t, db, "sandbox", "list")
+	items, ok := results["sandboxes"].([]any)
+	if !ok || len(items) != 0 {
+		t.Fatalf("failed SSH CLI create left persistent resource: %+v", results)
 	}
 }
 

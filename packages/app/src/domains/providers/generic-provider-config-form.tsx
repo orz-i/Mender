@@ -50,7 +50,7 @@ export function GenericProviderConfigForm({
   // The built-in Workspace plugin uses a resource selector instead of a raw
   // sandboxId input. LLMs/Agents must never be able to select execution placement.
   if (pluginId === "io.mender.provider.workspace") {
-    const available = (sandboxes ?? []).filter((item) => item.state === "ready" && item.backendAvailable && (item.backend === "local_workspace" || item.backend === "docker" || item.backend === "daytona" || item.backend === "external"));
+    const available = (sandboxes ?? []).filter((item) => item.state === "ready" && item.backendAvailable && (item.backend === "local_workspace" || item.backend === "docker" || item.backend === "daytona" || item.backend === "ssh_remote" || item.backend === "external"));
     const selected = typeof value.sandboxId === "string" ? value.sandboxId : "";
     return <div className="space-y-3">
       <label className="block space-y-2 text-sm">
@@ -60,10 +60,16 @@ export function GenericProviderConfigForm({
           {!available.some((item)=>item.sandboxId===selected) && selected ? <option value={selected} disabled>{t("Unavailable sandbox")}</option> : null}
           {available.map((item)=><option key={item.sandboxId} value={item.sandboxId}>{item.name} · {item.backend === "docker" ? t("Docker") : item.backend === "daytona" ? t("Daytona") :
             item.backend === "external" ? t("External plugin") :
+            item.backend === "ssh_remote" ? t("SSH Remote") :
             t(item.isolation === "host" ? "Host (not isolated)" : "Restricted host")}</option>)}
         </select>
       </label>
       <p className="text-xs leading-5 text-muted-foreground">{t("Workspace Tools share the selected Sandbox filesystem and its fixed isolation boundary.")}</p>
+      {available.some((item) => item.backend === "ssh_remote") ? (
+        <p className="text-xs leading-5 text-muted-foreground">
+          {t("SSH Remote is not container or VM isolation. The remote shell can access everything permitted to its login account. Only connect to a trusted host and unprivileged user.")}
+        </p>
+      ) : null}
       {available.length === 0 ? <p className="text-xs text-muted-foreground">{t("No ready Sandbox is available on this Runtime host.")}</p> : null}
       <Link to="/sandboxes/new" className="inline-flex text-xs font-medium text-primary-ink underline-offset-4 hover:underline">{t("Create sandbox")}</Link>
     </div>;

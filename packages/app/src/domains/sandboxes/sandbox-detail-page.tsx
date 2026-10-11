@@ -58,7 +58,7 @@ export function SandboxDetailPage({ client }: { client: MenderClient }) {
 
   const manageable = Boolean(
     item?.backendAvailable &&
-      (item.backend === "local_workspace" || item.backend === "docker" || item.backend === "daytona" || item.backend === "external"),
+      (item.backend === "local_workspace" || item.backend === "docker" || item.backend === "daytona" || item.backend === "ssh_remote" || item.backend === "external"),
   );
   const noActiveLeases = item?.activeLeases === 0;
   const canStart = manageable && item?.state === "stopped";
@@ -209,7 +209,11 @@ export function SandboxDetailPage({ client }: { client: MenderClient }) {
                         ? "Restricted host confines local processes but is not a container or VM."
                         : "Isolation guarantees depend on the selected backend and must be verified independently.")}
                   </p>
-                  {item.backend === "daytona" ? (
+                  {item.backend === "ssh_remote" ? (
+                    <p className="text-xs leading-5 text-muted-foreground">
+                      {t("SSH Remote is not container or VM isolation. The remote shell can access everything permitted to its login account. Only connect to a trusted host and unprivileged user.")}
+                    </p>
+                  ) : item.backend === "daytona" ? (
                     <p className="text-xs leading-5 text-muted-foreground">
                       {t("Remote Sandbox incurs Daytona account charges. TTL is a wall-clock ceiling, not a billing cap.")}
                     </p>

@@ -36,6 +36,14 @@ const dockerSandbox: Sandbox = {
   localRoot: "",
 };
 
+const sshSandbox: Sandbox = {
+  ...availableSandbox,
+  sandboxId: "sbx_dddddddddddddddddddddddddddddddd",
+  name: "SSH remote project",
+  backend: "ssh_remote",
+  isolation: "remote",
+  localRoot: "",
+};
 const remoteSandbox: Sandbox = {
   ...availableSandbox,
   sandboxId: "sbx_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
@@ -61,18 +69,20 @@ describe("Workspace Sandbox selector", () => {
           uiSchema={undefined}
           value={{}}
           credentials={[]}
-          sandboxes={[availableSandbox, unavailableSandbox, remoteSandbox, dockerSandbox]}
+          sandboxes={[availableSandbox, unavailableSandbox, remoteSandbox, dockerSandbox, sshSandbox]}
           onChange={onChange}
         />
       </MemoryRouter>,
     );
     const selector = screen.getByRole<HTMLSelectElement>("combobox");
     const choices = screen.getAllByRole<HTMLOptionElement>("option");
-    expect(choices).toHaveLength(3);
+    expect(choices).toHaveLength(4);
     expect(choices.some((option) => option.value === availableSandbox.sandboxId)).toBe(true);
     expect(choices.some((option) => option.value === unavailableSandbox.sandboxId)).toBe(false);
     expect(choices.some((option) => option.value === remoteSandbox.sandboxId)).toBe(false);
     expect(choices.some((option) => option.value === dockerSandbox.sandboxId)).toBe(true);
+    expect(choices.some((option) => option.value === sshSandbox.sandboxId &&
+      option.textContent?.includes("SSH Remote"))).toBe(true);
     expect(screen.queryByRole("textbox")).toBeNull();
     expect(screen.getByRole<HTMLAnchorElement>("link").getAttribute("href")).toBe("/sandboxes/new");
     fireEvent.change(selector, { target: { value: availableSandbox.sandboxId } });

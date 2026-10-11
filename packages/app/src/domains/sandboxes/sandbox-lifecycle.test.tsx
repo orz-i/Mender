@@ -67,6 +67,33 @@ describe("Sandbox lifecycle management", () => {
     expect(await manage.findByRole("button", { name: "Stop sandbox" })).toBeTruthy();
   });
 
+  it("manages SSH Remote local authority without claiming it stops the remote host",async()=>{
+    const ssh:Sandbox={...local,backend:"ssh_remote",isolation:"remote",localRoot:"",
+      name:"SSH pinned host workspace"};
+    const stopSandbox=vi.fn().mockResolvedValue({...ssh,state:"stopped"});
+    const startSandbox=vi.fn().mockResolvedValue({...ssh,state:"ready"});
+    const destroySandbox=vi.fn().mockResolvedValue({...ssh,state:"destroyed"});
+    mount({getSandbox:vi.fn().mockResolvedValue(ssh),stopSandbox,startSandbox,destroySandbox});
+    const manage=await openManage();
+    fireEvent.click(manage.getByRole("button",{name:"Stop sandbox"}));
+    await waitFor(()=>expect(stopSandbox).toHaveBeenCalledExactlyOnceWith(ssh.sandboxId));
+    fireEvent.click(await manage.findByRole("button",{name:"Start sandbox"}));
+    await waitFor(()=>expect(startSandbox).toHaveBeenCalledExactlyOnceWith(ssh.sandboxId));
+    fireEvent.click(manage.getByRole("button",{name:"Destroy sandbox"}));
+    const confirmation=within(screen.getByRole("dialog",{name:"Confirm sandbox destruction"}));
+    expect(destroySandbox).not.toHaveBeenCalled();
+    fireEvent.click(confirmation.getByRole("button",{name:"Confirm destruction"}));
+    await waitFor(()=>expect(destroySandbox).toHaveBeenCalledExactlyOnceWith(ssh.sandboxId));
+  });
+
+  it("describes SSH Remote as remote account access, not a container or VM",async()=>{
+    const ssh:Sandbox={...local,backend:"ssh_remote",isolation:"remote",localRoot:""};
+    mount({getSandbox:vi.fn().mockResolvedValue(ssh)});
+    expect(await screen.findByText("Test Sandbox")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button",{name:"Security boundary"}));
+    expect(screen.getByText(/SSH Remote is not container or VM isolation/)).toBeTruthy();
+  });
+
   it("blocks all lifecycle actions while a persisted execution lease is active", async () => {
     const stopSandbox = vi.fn();
     const destroySandbox = vi.fn();
