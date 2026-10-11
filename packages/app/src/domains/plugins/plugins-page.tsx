@@ -176,6 +176,7 @@ export function PluginsPage({
                 { value: "enabled", label: "Enabled" },
                 { value: "disabled", label: "Disabled" },
                 { value: "unavailable", label: "Unavailable" },
+                { value: "planned", label: "Planned" },
                 { value: "degraded", label: "Degraded" },
                 { value: "invalid", label: "Invalid" },
               ]}
@@ -409,13 +410,15 @@ export function PluginDetailPage({ client }: { client: MenderClient }) {
             <ErrorNotice
               message={plugin.status === "unavailable" && plugin.key === "io.mender.sandbox.docker@builtin"
                 ? dockerStatusText(plugin.issue.message) + " " + t("Mender Desktop automatically discovers local Docker engines. Start Docker Desktop or Colima to connect. For headless runtimes, configure MENDER_DOCKER_SOCKET.")
-                : t("Plugin issue: {{message}}", { message: plugin.issue.message })}
+                : plugin.key === "io.mender.sandbox.daytona@builtin"
+                  ? t("Experimental Daytona disabled; local operator must set MENDER_DAYTONA_EXPERIMENTAL=enabled before Runtime startup")
+                  : t("Plugin issue: {{message}}", { message: plugin.issue.message })}
             />
           ) : null}
           {section === "overview" ? (
           <DataPanel
             title={plugin.displayName}
-            description={plugin.description || t("No plugin description.")}
+            description={pluginDescription(plugin) || t("No plugin description.")}
           >
             <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-4">
               <DetailField
@@ -426,7 +429,7 @@ export function PluginDetailPage({ client }: { client: MenderClient }) {
                 label="Source"
                 value={pluginSourceLabel(plugin)}
               />
-              <DetailField label="Version" value={plugin.version} />
+              <DetailField label="Version" value={pluginVersionLabel(plugin)} />
               <DetailField
                 label="Status"
                 value={pluginStatusLabel(plugin)}
@@ -575,7 +578,7 @@ function PluginCard({ plugin }: { plugin: MarketplacePlugin }) {
             </Badge>
           </div>
           <CardDescription className="min-h-[3.75rem] line-clamp-3">
-            {plugin.description || t("No plugin description.")}
+            {pluginDescription(plugin) || t("No plugin description.")}
           </CardDescription>
         </CardHeader>
 
@@ -609,7 +612,7 @@ function PluginCard({ plugin }: { plugin: MarketplacePlugin }) {
             {t("Version")}
           </span>
           <span className="truncate font-mono text-xs">
-            {plugin.version}
+            {pluginVersionLabel(plugin)}
           </span>
         </CardFooter>
       </Card>
@@ -711,6 +714,8 @@ function pluginSourceLabel(plugin: MarketplacePlugin) {
       return t("Built-in");
     case "local":
       return t("Local package");
+    case "planned":
+      return t("Roadmap");
     default:
       return plugin.sourceLabel;
   }
@@ -728,5 +733,18 @@ function pluginStatusLabel(plugin: MarketplacePlugin) {
       return t("Degraded");
     case "unavailable":
       return t("Unavailable");
+    case "planned":
+      return t("Planned");
   }
+}
+
+function pluginVersionLabel(plugin: MarketplacePlugin) {
+  return plugin.version === "Not released" ? t("Not released") : plugin.version;
+}
+
+function pluginDescription(plugin: MarketplacePlugin) {
+  if (plugin.key === "io.mender.sandbox.e2b@planned") {
+    return t("Planned Sandbox backend; not implemented or available for provisioning");
+  }
+  return plugin.description;
 }

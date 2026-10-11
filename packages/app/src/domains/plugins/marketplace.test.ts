@@ -79,6 +79,51 @@ describe("canonical typed Marketplace",()=>{
     expect(result.actions).toEqual({enable:false,disable:false,remove:false});
   });
 
+  it("maps all Sandbox picker entries into honest Marketplace actions",()=>{
+    const builtin=(pluginId:string, overrides:Partial<PluginCatalogueEntry>={}):PluginCatalogueEntry=>{
+      const base=entry("sandbox.backend",{
+        key:pluginId+"@builtin",pluginId,sourceKind:"builtin",
+        displayName:pluginId.split(".").at(-1)||pluginId,
+        enabled:true,status:"enabled",usageCount:0,
+      });
+      delete base.installationId;
+      return {...base,...overrides};
+    };
+    const preview=builtin("io.mender.sandbox.e2b",{
+      key:"io.mender.sandbox.e2b@planned",displayName:"E2B",
+      sourceKind:"planned",status:"planned",enabled:false,
+      packageVersion:"",capabilities:[],
+    });
+    delete preview.configVersion;
+    delete preview.protocolVersion;
+    const models=pluginCatalogueToMarketplace([
+      builtin("io.mender.sandbox.local-workspace",{displayName:"Local Workspace"}),
+      builtin("io.mender.sandbox.docker",{displayName:"Docker Engine"}),
+      builtin("io.mender.sandbox.daytona",{displayName:"Daytona",enabled:false,
+        status:"unavailable",issue:"Experimental Daytona disabled"}),
+      preview,
+    ]);
+    expect(models).toHaveLength(4);
+    expect(models.find(x=>x.key==="io.mender.sandbox.local-workspace@builtin")?.createAction?.href)
+      .toBe("/sandboxes/new?create=1&pluginId=io.mender.sandbox.local-workspace");
+    expect(models.find(x=>x.key==="io.mender.sandbox.docker@builtin")?.createAction?.href)
+      .toBe("/sandboxes/new?create=1&pluginId=io.mender.sandbox.docker");
+    expect(models.find(x=>x.key==="io.mender.sandbox.daytona@builtin")?.createAction).toBeUndefined();
+    const planned=models.find(x=>x.key==="io.mender.sandbox.e2b@planned");
+    expect(planned).toMatchObject({
+      status:"planned",source:"planned",sourceLabel:"Roadmap",version:"Not released",
+      enabled:false,capabilities:[],actions:{enable:false,disable:false,remove:false},
+    });
+    expect(planned?.createAction).toBeUndefined();
+    expect(planned?.actionRef).toBeUndefined();
+    expect(planned?.issue).toBeUndefined();
+    const enabledDaytona=pluginCatalogueToMarketplace([
+      builtin("io.mender.sandbox.daytona",{displayName:"Daytona (experimental)"}),
+    ])[0]!;
+    expect(enabledDaytona.createAction?.href)
+      .toBe("/sandboxes/new?create=1&pluginId=io.mender.sandbox.daytona");
+  });
+
   it("uses stable cursor pagination",()=>{
     const models=pluginCatalogueToMarketplace(
       Array.from({length:13},(_,i)=>entry("provider.tools",{

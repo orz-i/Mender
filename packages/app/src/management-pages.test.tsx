@@ -876,6 +876,96 @@ describe("management pages", () => {
     }
   });
 
+  it("shows all four Sandbox backends with truthful Marketplace statuses and no E2B provisioning",async()=>{
+    const builtin=(pluginId:string,displayName:string,status:"enabled"|"unavailable"="enabled")=>({
+      key:pluginId+"@builtin",pluginId,extensionId:"main",kind:"sandbox.backend" as const,
+      displayName,description:displayName+" Sandbox backend",
+      packageVersion:"1.0.0",sourceKind:"builtin" as const,
+      status,enabled:status==="enabled",usageCount:0,capabilities:["file.read"],
+      ...(status==="unavailable"?{issue:"Experimental Daytona disabled; local operator must set MENDER_DAYTONA_EXPERIMENTAL=enabled before Runtime startup"}:{}),
+    });
+    const listPluginCatalogue=vi.fn().mockResolvedValue({plugins:[
+      builtin("io.mender.sandbox.local-workspace","Local Workspace"),
+      builtin("io.mender.sandbox.docker","Docker Engine"),
+      builtin("io.mender.sandbox.daytona","Daytona (experimental)","unavailable"),
+      {
+        key:"io.mender.sandbox.e2b@planned",pluginId:"io.mender.sandbox.e2b",
+        extensionId:"main",kind:"sandbox.backend",displayName:"E2B",
+        description:"Planned Sandbox backend; not implemented or available for provisioning",
+        packageVersion:"",sourceKind:"planned",status:"planned",
+        enabled:false,usageCount:0,capabilities:[],
+      },
+    ]});
+    renderApp("/plugins",{listPluginCatalogue});
+    for(const displayName of ["Local Workspace","Docker Engine","Daytona (experimental)","E2B"]){
+      expect(await screen.findByRole("link",{name:"View "+displayName})).toBeTruthy();
+    }
+    fireEvent.click(screen.getByRole("link",{name:"View E2B"}));
+    expect(await screen.findByText("Planned Sandbox backend; not implemented or available for provisioning")).toBeTruthy();
+    expect(screen.getAllByText("Planned").length).toBeGreaterThan(0);
+    expect(screen.getByText("Roadmap")).toBeTruthy();
+    expect(screen.getByText("Not released")).toBeTruthy();
+    expect(screen.queryByRole("button",{name:"Create sandbox"})).toBeNull();
+    expect(screen.queryByRole("button",{name:"Enable E2B"})).toBeNull();
+    expect(screen.queryByRole("button",{name:"Remove E2B"})).toBeNull();
+    fireEvent.click(screen.getByRole("button",{name:"Back"}));
+    fireEvent.click(await screen.findByRole("link",{name:"View Daytona (experimental)"}));
+    expect(await screen.findByText(/MENDER_DAYTONA_EXPERIMENTAL=enabled/)).toBeTruthy();
+    expect(screen.queryByRole("button",{name:"Create sandbox"})).toBeNull();
+  });
+
+  it("opens only the selected built-in Sandbox form from the Marketplace",async()=>{
+    const local={
+      key:"io.mender.sandbox.local-workspace@builtin",
+      pluginId:"io.mender.sandbox.local-workspace",extensionId:"main",kind:"sandbox.backend",
+      displayName:"Local Workspace",description:"Host workspace",
+      packageVersion:"1.0.0",sourceKind:"builtin",status:"enabled",enabled:true,
+      usageCount:0,capabilities:["file.read","file.search","file.edit","process.shell"],
+    };
+    const daytona={...local,
+      key:"io.mender.sandbox.daytona@builtin",pluginId:"io.mender.sandbox.daytona",
+      displayName:"Daytona (experimental)",description:"Credential-gated experimental",
+    };
+    const listPluginCatalogue=vi.fn().mockResolvedValue({plugins:[local,daytona]});
+    const client={
+      listPluginCatalogue,
+      getRuntimeGovernance:vi.fn().mockResolvedValue({backend:{restrictedHostAvailable:false}}),
+      getSandboxBackends:vi.fn().mockResolvedValue({dockerAvailable:false,dockerStatus:"not configured",daytonaConfigured:true,daytonaStatus:"Experimental"}),
+      listCredentials:vi.fn().mockResolvedValue({credentials:[]}),
+    };
+    renderApp("/plugins/io.mender.sandbox.local-workspace%40builtin",client);
+    fireEvent.click(await screen.findByRole("button",{name:"Create sandbox"}));
+    expect(await screen.findByRole("textbox",{name:"Sandbox name"})).toBeTruthy();
+    expect(screen.getByText("Absolute local directory")).toBeTruthy();
+    expect(screen.queryByLabelText("Mender Credential Reference")).toBeNull();
+    expect(screen.queryByLabelText("Cached Docker image")).toBeNull();
+    // Returning to Marketplace must retain the selected built-in identity.
+    fireEvent.click(screen.getByRole("button",{name:"Back"}));
+    expect(await screen.findByRole("button",{name:"Create sandbox"})).toBeTruthy();
+  });
+
+  it("opens the experimental Daytona credential workflow only after native opt-in",async()=>{
+    const plugin={
+      key:"io.mender.sandbox.daytona@builtin",pluginId:"io.mender.sandbox.daytona",
+      extensionId:"main",kind:"sandbox.backend",displayName:"Daytona (experimental)",
+      description:"Credential-gated experimental",packageVersion:"1.0.0",
+      sourceKind:"builtin",status:"enabled",enabled:true,
+      usageCount:0,capabilities:["file.read","file.search","file.edit","process.shell"],
+    };
+    renderApp("/plugins/io.mender.sandbox.daytona%40builtin",{
+      listPluginCatalogue:vi.fn().mockResolvedValue({plugins:[plugin]}),
+      getRuntimeGovernance:vi.fn().mockResolvedValue({backend:{restrictedHostAvailable:false}}),
+      getSandboxBackends:vi.fn().mockResolvedValue({dockerAvailable:false,dockerStatus:"not configured",daytonaConfigured:true,daytonaStatus:"Experimental"}),
+      listCredentials:vi.fn().mockResolvedValue({credentials:[]}),
+    });
+    fireEvent.click(await screen.findByRole("button",{name:"Create sandbox"}));
+    expect(await screen.findByRole("combobox",{name:"Mender Credential Reference"})).toBeTruthy();
+    expect(screen.getByText(/No credentials available/)).toBeTruthy();
+    expect(screen.queryByLabelText("Absolute local directory")).toBeNull();
+    expect(screen.queryByLabelText("Cached Docker image")).toBeNull();
+    expect(screen.getByRole<HTMLButtonElement>("button",{name:"Next"}).disabled).toBe(true);
+  });
+
   it("opens a selected Sandbox plugin in its own configuration and review flow",async()=>{
     const installationId="pinst_1234567890abcdef1234567890abcdef";
     const pluginId="dev.example.sandbox";

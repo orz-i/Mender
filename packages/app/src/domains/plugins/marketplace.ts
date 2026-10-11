@@ -11,7 +11,8 @@ export type MarketplacePluginStatus =
   | "disabled"
   | "invalid"
   | "degraded"
-  | "unavailable";
+  | "unavailable"
+  | "planned";
 
 export interface MarketplacePluginActions {
   enable: boolean;
@@ -88,9 +89,11 @@ export function pluginCatalogueToMarketplace(entries:PluginCatalogueEntry[]):Mar
       key:entry.key,kind,kindLabel:labels[kind],
       displayName:entry.displayName||humanizePluginId(entry.pluginId),
       description:entry.description,
-      source:entry.sourceKind,sourceLabel:entry.sourceKind==="builtin"?"Built-in":"Local package",
-      version:entry.packageVersion,
-      status:entry.status==="unavailable"?"unavailable":entry.issue?"degraded":entry.status,
+      source:entry.sourceKind,sourceLabel:entry.sourceKind==="builtin"?"Built-in":
+        entry.sourceKind==="planned"?"Roadmap":"Local package",
+      version:entry.packageVersion||"Not released",
+      status:entry.status==="unavailable"||entry.status==="planned"?
+        entry.status:entry.issue?"degraded":entry.status,
       enabled:entry.enabled,
       capabilities:entry.capabilities,
       actions:installationId?{
