@@ -31,3 +31,9 @@ No speculative subphase proliferation, Docker context scanning, public registry,
 - Colima socket: https://colima.run/docs/faq/
 - OrbStack Unix socket: https://docs.orbstack.dev/faq
 - Docker daemon security: https://docs.docker.com/engine/security/protect-access/
+
+## P4 — Docker Sandbox creation UX defect (user-reported, 2026-10-11)
+
+The initial auto-discovery activation is healthy and real Engine tests provision Docker containers, yet the Sandbox create form only exposes a free-text `Immutable image digest`. A user with locally cached `alpine:3.22` sees no discoverable images; a normal tag does not satisfy the form, disabling progress. This is a **resource-selection UX defect**, not a license to accept mutable tags as persistent targets.
+
+Acceptance: expose a strictly read-only, bounded **locally verified immutable image inventory** on authenticated HTTP and Wails/SDK; use the same Engine probe as Sandbox creation; canonicalize Docker Hub's short `RepoDigests` to fully qualified `docker.io/...@sha256` and verify every selection against the observed image. The focused Docker form offers a selection of installed images that fills the original `imageDigest` field, retaining advanced manual Digest entry only when needed. No image tag is persisted, no pull/build/removal, no daemon-config option and no Tool-facing Engine list capability. No Docker runtime => empty/fail-closed inventory and no accidental Sandbox creation. Test real cached images on Desktop, API/SDK/Wails parity, denial/empty/not-found states and UI selection end-to-end before closure.
