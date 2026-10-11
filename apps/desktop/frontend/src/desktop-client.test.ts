@@ -29,7 +29,6 @@ vi.mock(
       GetSystemStatus: vi.fn(),
       InstallProviderPlugin: vi.fn(),
       InstallLocalPlugin: vi.fn(),
-      ConnectDockerDesktop: vi.fn(),
       ListPluginCatalogue: vi.fn(),
       EnablePluginInstallation:vi.fn(),
       DisablePluginInstallation:vi.fn(),
@@ -70,7 +69,6 @@ import { Service } from "../bindings/github.com/orz-i/Mender/backend/internal/de
 
 import {
   createDesktopMenderClient,
-  connectDesktopDocker,
   deployDesktopSkill,
   installDesktopProviderPlugin,
   installDesktopPlugin,
@@ -213,13 +211,6 @@ describe("desktop Mender client", () => {
     }]});
     await expect(createDesktopMenderClient().listPluginCatalogue())
       .rejects.toBeInstanceOf(MenderClientInvariantError);
-  });
-
-  it("activates Docker Desktop only through the dedicated Wails host method",async()=>{
-    vi.mocked(Service.ConnectDockerDesktop).mockResolvedValue(undefined);
-    await connectDesktopDocker();
-    expect(Service.ConnectDockerDesktop).toHaveBeenCalledOnce();
-    expect(Service.ConnectDockerDesktop).toHaveBeenCalledWith();
   });
 
   it("installs any typed package through a trusted Wails-local folder selection",async()=>{

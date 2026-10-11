@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	goruntime "runtime"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -19,6 +21,60 @@ import (
 	sanddocker "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/dockerengine"
 	workspaceplugin "github.com/orz-i/Mender/backend/internal/workspace/infrastructure/plugin"
 )
+
+// The opt-in live gate proves the Desktop's fixed-path automatic discovery
+// composes with the same Router-backed Docker engine, without starting any
+// container. Full Workspace operations are tested separately.
+func TestRuntimeDockerAutodiscoveryLive(t *testing.T) {
+	socket := os.Getenv("MENDER_DOCKER_TEST_SOCKET")
+	if socket == "" {
+		t.Skip("requires explicit MENDER_DOCKER_TEST_SOCKET")
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(sanddocker.KnownLocalEndpoints(home, goruntime.GOOS, os.Getuid()), socket) {
+		t.Skip("test Docker socket is not a known local auto-discovery candidate")
+	}
+	t.Setenv(DockerSocketEnvironment, "")
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	r, err := NewRuntime(ctx, RuntimeOptions{DatabasePath: filepath.Join(t.TempDir(), "docker-autodiscovery.db")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = r.Close() }()
+	if err := r.Sandboxes.StartDockerAutoDiscovery(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Sandboxes.StartDockerAutoDiscovery(ctx); err != nil {
+		t.Fatal(err)
+	}
+	for !r.Sandboxes.DockerAvailable() {
+		select {
+		case <-ctx.Done():
+			t.Fatal("Docker automatic discovery did not connect to the verified local Engine")
+		case <-time.After(100 * time.Millisecond):
+		}
+	}
+	entries, err := r.ListPluginCatalogue(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dockerCount := 0
+	for _, entry := range entries {
+		if entry.PluginID == "io.mender.sandbox.docker" {
+			dockerCount++
+			if entry.Status != "enabled" || !entry.Enabled || entry.Key != "io.mender.sandbox.docker@builtin" || entry.Issue != "" {
+				t.Fatalf("auto-discovered Docker Marketplace entry invalid: %+v", entry)
+			}
+		}
+	}
+	if dockerCount != 1 {
+		t.Fatalf("auto-discovered Docker entries: %d", dockerCount)
+	}
+}
 
 // This opt-in integration validates the REAL production runtime composition:
 // configured Docker Engine, Policy, Sandbox router, stable Workspace Provider

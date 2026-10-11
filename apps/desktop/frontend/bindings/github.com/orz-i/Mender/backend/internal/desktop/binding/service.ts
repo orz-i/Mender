@@ -28,14 +28,6 @@ export function CallTool(toolID: string, $arguments: { [_ in string]?: any } | n
     return $Call.ByID(3440826094, toolID, $arguments);
 }
 
-/**
- * ConnectDockerDesktop is exposed only through the native Desktop binding.
- * The Wails caller supplies no socket address, daemon flags or image options.
- */
-export function ConnectDockerDesktop(): $CancellablePromise<void> {
-    return $Call.ByID(4056050422);
-}
-
 export function CreateDaytonaSandbox(input: $models.CreateDaytonaSandboxInput): $CancellablePromise<$models.Sandbox> {
     return $Call.ByID(1474299265, input);
 }

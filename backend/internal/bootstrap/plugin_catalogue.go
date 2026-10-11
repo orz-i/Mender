@@ -145,7 +145,7 @@ func (r *Runtime) ListPluginCatalogue(ctx context.Context) ([]PluginCatalogueEnt
 		item := pluginEntry(descriptor, "builtin", nil, usage[descriptor.PluginID.String()+"@builtin"])
 		item.Status = "unavailable"
 		item.Enabled = false
-		item.Issue = r.Sandboxes.DockerStatus() + ". Connect Docker Desktop from the local Desktop app, or configure MENDER_DOCKER_SOCKET on Runtime startup."
+		item.Issue = r.Sandboxes.DockerStatus()
 		result = append(result, item)
 	}
 	tunnelBuiltin := r.tunnelPlugins.BuiltinDescriptor()

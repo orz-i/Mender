@@ -75,10 +75,6 @@ import {
   type SandboxProfileGrantEvents as BindingSandboxProfileGrantEvents,
 } from "../bindings/github.com/orz-i/Mender/backend/internal/desktop/binding";
 
-export async function connectDesktopDocker(): Promise<void> {
-  await Service.ConnectDockerDesktop();
-}
-
 export async function installDesktopPlugin(sourcePath:string){
   return providerPluginInstallation(await Service.InstallLocalPlugin(sourcePath));
 }

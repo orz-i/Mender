@@ -230,6 +230,25 @@ export function CreateSandboxPage({
     return () => { active = false; };
   }, [client]);
 
+  // Docker may start after the Create view opened. Refresh only while
+  // unavailable; connection is performed by the native host, not this UI.
+  useEffect(() => {
+    if (dockerAvailable) return;
+    let active = true;
+    const timer = window.setInterval(() => {
+      void client.getSandboxBackends()
+        .then((info) => {
+          if (!active) return;
+          setDockerAvailable(info.dockerAvailable);
+          setDockerStatus(info.dockerStatus);
+        })
+        .catch((reason: unknown) => {
+          if (active) setDockerStatus(errorMessage(reason));
+        });
+    }, 5000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [client, dockerAvailable]);
+
   const digestOK = IMAGE_DIGEST.test(imageDigest);
   const credentialOK = credentials.some((item) => item.reference === daytonaCredential);
   const identityValid = Boolean(name.trim()) && (

@@ -33,7 +33,6 @@ export function MenderApp({
   client,
   copyText,
   chooseLocalDirectory,
-  connectDockerDesktop,
   installPlugin,
   installSkill,
   deploySkill,
@@ -41,7 +40,6 @@ export function MenderApp({
   client: MenderClient;
   copyText?: (value: string) => Promise<void>;
   chooseLocalDirectory?: () => Promise<string | null>;
-  connectDockerDesktop?: () => Promise<void>;
   installPlugin?: () => Promise<ProviderPluginInstallation | null>;
   installSkill?: () => Promise<SkillInstallation | null>;
   deploySkill?: (
@@ -71,7 +69,7 @@ export function MenderApp({
           />
           <Route
             path="plugins/:pluginKey"
-            element={<PluginDetailPage client={client} {...(connectDockerDesktop ? { connectDockerDesktop } : {})} />}
+            element={<PluginDetailPage client={client} />}
           />
           <Route
             path="providers"

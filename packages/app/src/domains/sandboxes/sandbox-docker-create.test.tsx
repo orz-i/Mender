@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { MenderClient, Sandbox } from "@mender/sdk";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -54,6 +54,35 @@ describe("Docker Sandbox creation UX", () => {
     expect(await screen.findByText(/Docker Engine socket has not been configured/)).toBeTruthy();
     expect(screen.queryByRole("button", { name: /Docker/ })).toBeNull();
     expect(createDockerSandbox).not.toHaveBeenCalled();
+  });
+
+  it("automatically unlocks Docker when the local host discovers the Engine later", async () => {
+    const getSandboxBackends=vi.fn()
+      .mockResolvedValueOnce({dockerAvailable:false,dockerStatus:"Docker Engine not detected"})
+      .mockResolvedValue({dockerAvailable:true,dockerStatus:"ready"});
+    let tick:(()=>void)|undefined;
+    const original=window.setInterval.bind(window);
+    const spy=vi.spyOn(window,"setInterval").mockImplementation((handler,delay)=>{
+      if(delay===5000 && typeof handler==="function"){
+        tick=handler as ()=>void;
+        return -1;
+      }
+      return original(handler,delay);
+    });
+    try {
+      showCreate({
+        getRuntimeGovernance: vi.fn().mockResolvedValue(runtimeGovernanceStub()),
+        getSandboxBackends,
+      });
+      expect(await screen.findByText("Docker Engine not detected")).toBeTruthy();
+      expect(screen.queryByRole("button",{name:/Docker/})).toBeNull();
+      if(!tick)throw new Error("Docker backend auto-refresh timer missing");
+      await act(async()=>{tick?.();await Promise.resolve();});
+      expect(screen.getByRole("button",{name:/Docker/})).toBeTruthy();
+      expect(getSandboxBackends).toHaveBeenCalledTimes(2);
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it("requires a reviewed pinned image and creates through the typed Docker API", async () => {
