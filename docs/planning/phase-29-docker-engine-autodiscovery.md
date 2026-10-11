@@ -1,6 +1,6 @@
 # Phase 29 — Docker Engine automatic local discovery
 
-Status: **In progress (2026-10-11)**. Supersedes the Phase 28 *manual desktop connection* UX only; ADR-0035/0036/0037, Router, Policy, Lease and immutably pinned Docker templates remain authoritative.
+Status: **Closed (2026-10-11)**. Supersedes the Phase 28 *manual desktop connection* UX only; ADR-0035/0036/0037, Router, Policy, Lease and immutably pinned Docker templates remain authoritative.
 
 ## Intent and audited baseline
 
@@ -37,3 +37,37 @@ No speculative subphase proliferation, Docker context scanning, public registry,
 The initial auto-discovery activation is healthy and real Engine tests provision Docker containers, yet the Sandbox create form only exposes a free-text `Immutable image digest`. A user with locally cached `alpine:3.22` sees no discoverable images; a normal tag does not satisfy the form, disabling progress. This is a **resource-selection UX defect**, not a license to accept mutable tags as persistent targets.
 
 Acceptance: expose a strictly read-only, bounded **locally verified immutable image inventory** on authenticated HTTP and Wails/SDK; use the same Engine probe as Sandbox creation; canonicalize Docker Hub's short `RepoDigests` to fully qualified `docker.io/...@sha256` and verify every selection against the observed image. The focused Docker form offers a selection of installed images that fills the original `imageDigest` field, retaining advanced manual Digest entry only when needed. No image tag is persisted, no pull/build/removal, no daemon-config option and no Tool-facing Engine list capability. No Docker runtime => empty/fail-closed inventory and no accidental Sandbox creation. Test real cached images on Desktop, API/SDK/Wails parity, denial/empty/not-found states and UI selection end-to-end before closure.
+
+## Closure evidence — 2026-10-11
+
+Status: **Closed**. Phase 29 includes the user-reported Docker creation image-selection correction.
+
+- `7a9c56d`: document host-only ordered socket discovery, retry/cancel and hard gates.
+- `2dc1a7e`: implement fixed Unix endpoint candidates, read-only Engine probe,
+  exactly one cancellable worker, bounded retry and atomic exact Registry binding.
+- `870d45c`: native Desktop startup auto-discovery, Marketplace/create state refresh,
+  removal of manual Wails connection callback and confirmation.
+- `cb11eb8`: document why mandatory free-text manifest Digest caused apparent
+  inability to create a Docker Sandbox even when the Engine was ready.
+- `8e89529`: verified read-only local Docker image enumeration, safe Docker Hub
+  digest normalization, strict image identity checks and 64-option maximum;
+  typed HTTP, Wails and TS SDK responses, negative and live integration gates.
+- `313a8ac`: focused Docker image selector that persists the exact image digest,
+  advanced manual digest fallback and corresponding UI/i18n acceptance.
+
+Verification: `pnpm check` passed (Go lint/test/Race, protobuf, API/SDK/Wails
+binding drift, TypeScript lint/typecheck, i18n **957/957**, **148/148** React
+tests and Web/Desktop builds); `pnpm security:check` found no known Go or
+high-severity production JS issues. Native macOS Desktop Go build passed with
+existing deployment-target linker warnings. Real Docker Engine 29.8.0 on
+macOS accepted automatic startup discovery; real cached Alpine digest
+`docker.io/library/alpine@sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8`
+appeared in the host's immutable image inventory. Both real HTTP Docker create/
+stop/start/destroy and Docker Workspace parity/isolation live tests passed with
+`-race`. All test resources were ephemeral and uniquely labeled; no existing
+user Sandbox, container or database was deleted.
+
+Outstanding release-specific check: visual click-through on signed/packaged
+Wails app is not asserted by these automated gates; production application
+packaging/signing remains a release verification concern. No runtime image
+download or mutable `tag` target has been introduced.
