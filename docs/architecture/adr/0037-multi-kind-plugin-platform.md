@@ -1,6 +1,6 @@
 # ADR-0037: Make Mender plugins a platform with typed Provider, Sandbox, and Tunnel extensions
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-10
 - Scope: architecture research and decision proposal; this document does not authorize implementation
 
@@ -161,7 +161,7 @@ No Mender Agent loop or hosted sandbox orchestrator. No arbitrary runtime-genera
 
 ## Acceptance before implementation
 
-This ADR must be accepted explicitly before Phase 27 implementation. Verify install identity/byte integrity, no startup process side effects, per-kind contract gating, mandatory host admissions before credentials/charges, Sandbox fencing/reconcile/no fallback, tunnel bind/start/stop/rollback, native trust disclosures, forward-only upgrades preserving all existing resource IDs and references, full CLI/HTTP/SDK/Wails parity, focused bilingual UI, race tests and the repository quality gates. Never modify real user Sandboxes, Tunnel credentials or live remote resources during acceptance tests.
+This ADR was accepted for Phase 27 implementation; each work package must still pass its own gates before being committed. Verify install identity/byte integrity, no startup process side effects, per-kind contract gating, mandatory host admissions before credentials/charges, Sandbox fencing/reconcile/no fallback, tunnel bind/start/stop/rollback, native trust disclosures, forward-only upgrades preserving all existing resource IDs and references, full CLI/HTTP/SDK/Wails parity, focused bilingual UI, race tests and the repository quality gates. Never modify real user Sandboxes, Tunnel credentials or live remote resources during acceptance tests.
 
 ## References
 

@@ -1,6 +1,6 @@
 # Phase 27 proposal — Multi-kind Mender Plugin Platform
 
-Status: Proposed; **architecture-only**. Implementation starts only after ADR-0037 is accepted.
+Status: In progress; ADR-0037 accepted. Work packages are separately implemented, verified and committed.
 
 Governing proposal: [ADR-0037](../architecture/adr/0037-multi-kind-plugin-platform.md). This phase generalizes the existing Provider-only plugin installation/host to support Provider Tool Sources, Sandbox Backends and Tunnel Transports. Mender stays a governed Tool/Resource runtime, not an Agent loop. The deliverable is real backend extension support, not merely three labels in the Marketplace.
 
@@ -47,7 +47,7 @@ Existing plugin trust hardening and exact pinned installations are valuable asse
 
 ## Work packages and separate commits
 
-### A. Decision and migration design (this document)
+### A. Decision and migration design (complete)
 
 Deliverables: Proposed ADR, source-backed inventory, explicit plugin/extension/resource concepts, manifest v2 shape, trust boundaries, forward-only migration strategy, staged acceptance. No production code or live resource changes.
 
