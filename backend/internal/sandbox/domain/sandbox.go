@@ -123,6 +123,7 @@ type Spec struct {
 	ID        ID
 	Name      string
 	Backend   BackendKind
+	Binding   BackendBinding
 	Isolation IsolationClass
 	LocalRoot string
 	OwnerKind string
@@ -139,6 +140,12 @@ func NewSandbox(spec Spec) (Sandbox, error) {
 		return Sandbox{}, fmt.Errorf("sandbox name: invalid or too long")
 	}
 	if err := spec.Backend.Validate(); err != nil {
+		return Sandbox{}, err
+	}
+	if err := spec.Binding.Validate(); err != nil {
+		return Sandbox{}, err
+	}
+	if err := RequireBuiltinBinding(spec.Backend, spec.Binding); err != nil {
 		return Sandbox{}, err
 	}
 	if err := spec.Isolation.Validate(); err != nil {

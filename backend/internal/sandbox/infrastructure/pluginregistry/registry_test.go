@@ -48,21 +48,21 @@ func TestTrustedBuiltinBackendDescriptors(t *testing.T) {
 			if err := registry.Register(backend, descriptor); err != nil {
 				t.Fatal(err)
 			}
-			if _, err := registry.ResolveBackend(tc.kind, sandboxdomain.CapabilityEdit); !errors.Is(err, sandboxdomain.ErrCapabilityUnavailable) {
+			if _, err := registry.ResolveBackend(tc.kind, sandboxdomain.BuiltinBinding(tc.kind), sandboxdomain.CapabilityEdit); !errors.Is(err, sandboxdomain.ErrCapabilityUnavailable) {
 				t.Fatalf("unadvertised edit resolved %v", err)
 			}
 			// A backend may gain a dynamic capability, but the original
 			// host-verified descriptor must continue to bound authority.
 			backend.caps.Edit = true
-			if _, err := registry.ResolveBackend(tc.kind, sandboxdomain.CapabilityEdit); !errors.Is(err, sandboxdomain.ErrCapabilityUnavailable) {
+			if _, err := registry.ResolveBackend(tc.kind, sandboxdomain.BuiltinBinding(tc.kind), sandboxdomain.CapabilityEdit); !errors.Is(err, sandboxdomain.ErrCapabilityUnavailable) {
 				t.Fatalf("capability grew beyond pinned descriptor: %v", err)
 			}
-			got, err := registry.ResolveBackend(tc.kind, sandboxdomain.CapabilityRead)
+			got, err := registry.ResolveBackend(tc.kind, sandboxdomain.BuiltinBinding(tc.kind), sandboxdomain.CapabilityRead)
 			if err != nil || got != backend {
 				t.Fatalf("read backend = %T %v", got, err)
 			}
 			entries := registry.Entries()
-			if len(entries) != 1 || !registry.Available(tc.kind) {
+			if len(entries) != 1 || !registry.Available(tc.kind, sandboxdomain.BuiltinBinding(tc.kind)) {
 				t.Fatalf("missing registry entry %+v", entries)
 			}
 			entries[0].Descriptor.Capabilities[0] = "mutated"
@@ -103,14 +103,27 @@ func TestSandboxRegistryRejectsWrongKindClaimsAndDuplicates(t *testing.T) {
 	if err := r.Register(backend, original); err == nil {
 		t.Fatal("duplicate backend registration accepted")
 	}
-	if r.Available(sandboxdomain.BackendDaytona) {
+	if r.Available(sandboxdomain.BackendDaytona, sandboxdomain.BuiltinBinding(sandboxdomain.BackendDaytona)) {
 		t.Fatal("unconfigured Daytona advertised as available")
 	}
-	if _, err := r.ResolveBackend(sandboxdomain.BackendDaytona, sandboxdomain.CapabilityRead); !errors.Is(err, sandboxdomain.ErrBackendUnavailable) {
+	if _, err := r.ResolveBackend(sandboxdomain.BackendDaytona, sandboxdomain.BuiltinBinding(sandboxdomain.BackendDaytona), sandboxdomain.CapabilityRead); !errors.Is(err, sandboxdomain.ErrBackendUnavailable) {
 		t.Fatalf("unavailable driver routed: %v", err)
 	}
-	if _, err := r.ResolveBackend(sandboxdomain.BackendDocker, sandboxdomain.Capability("made.up")); err == nil {
+	if _, err := r.ResolveBackend(sandboxdomain.BackendDocker, sandboxdomain.BuiltinBinding(sandboxdomain.BackendDocker), sandboxdomain.Capability("made.up")); err == nil {
 		t.Fatal("invalid capability accepted")
+	}
+	builtin := sandboxdomain.BuiltinBinding(sandboxdomain.BackendDocker)
+	for _, modified := range []sandboxdomain.BackendBinding{
+		{PluginID: "dev.example.other", ExtensionID: "main"},
+		{PluginID: builtin.PluginID, ExtensionID: "other"},
+		{PluginID: builtin.PluginID, ExtensionID: "main", InstallationID: "pinst_00000000000000000000000000000001"},
+	} {
+		if r.Available(sandboxdomain.BackendDocker, modified) {
+			t.Fatalf("wrong binding shown available: %+v", modified)
+		}
+		if _, err := r.ResolveBackend(sandboxdomain.BackendDocker, modified, sandboxdomain.CapabilityRead); !errors.Is(err, sandboxdomain.ErrBackendUnavailable) {
+			t.Fatalf("wrong binding routed to backend: %+v %v", modified, err)
+		}
 	}
 	if _, err := BuiltinDescriptor(&fakeBackend{kind: sandboxdomain.BackendE2B}); err == nil {
 		t.Fatal("unimplemented E2B registered")

@@ -392,7 +392,7 @@ func testWorkspaceSandboxConfig(t *testing.T, runtime *Runtime, root string, pri
 	if err != nil {
 		t.Fatal(err)
 	}
-	item, err := sandboxdomain.NewSandbox(sandboxdomain.Spec{ID: id, Name: "Test workspace", Backend: sandboxdomain.BackendLocalWorkspace, Isolation: isolation, LocalRoot: canonical, OwnerKind: string(principal.Kind()), OwnerRef: principal.Reference()})
+	item, err := sandboxdomain.NewSandbox(sandboxdomain.Spec{ID: id, Name: "Test workspace", Backend: sandboxdomain.BackendLocalWorkspace, Binding: sandboxdomain.BuiltinBinding(sandboxdomain.BackendLocalWorkspace), Isolation: isolation, LocalRoot: canonical, OwnerKind: string(principal.Kind()), OwnerRef: principal.Reference()})
 	if err != nil {
 		t.Fatal(err)
 	}

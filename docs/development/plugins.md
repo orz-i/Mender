@@ -73,6 +73,39 @@ startup and resource references on the upgraded database.
 PluginID and installation identity are separate from ProviderID, SandboxID and
 TunnelID; side-by-side package versions never automatically rebind resources.
 
+## Sandbox exact extension binding (SQLite v9)
+
+Each persisted Sandbox now contains an immutable `BackendBinding`:
+
+~~~text
+PluginID         io.mender.sandbox.docker
+ExtensionID      main
+InstallationID   (empty for trusted built-in)
+~~~
+
+The historical `backend=docker` classification is still used to validate
+Docker-specific isolation/templates. It is **not** a plugin resolver or
+executable authority. The Execution Router checks the stored PluginID,
+ExtensionID, optional exact InstallationID, backend kind and verified capability
+before opening a backend. `sandbox.acquire` admission/Owner/Principal,
+run generation and durable lease fencing remain in Mender.
+
+SQLite v8 upgrades to v9 in one forward-only transaction, preserving SandboxIDs,
+run generations/states/external IDs, Docker/Daytona templates, Profile grants,
+audit and leases. A `.mender-sandbox-v8-backup-*.db` SQLite snapshot is
+created beside the runtime database before the hard cut. Do not delete it until
+checking the upgraded runtime and resource inventory. If an unknown backend
+kind cannot be bound, startup fails without modifying the v8 inventory.
+A pre-v9 client cannot write Sandbox records after upgrade: the v9 schema
+rejects missing extension pins and overwriting existing pins.
+
+At this stage Sandbox binding and runtime driver registration cover trusted
+Local Workspace, Docker Engine (only when configured), and Daytona (only when
+explicit experimental opt-in is enabled). Third-party native Sandbox packages,
+remote provisioning controllers and dynamic kind registration are **not yet
+supported**. A `sandbox.backend` descriptor in the registry is not a
+claim of live cloud access or OS-level confinement.
+
 ## Native code trust
 
 A native plugin runs as OS-account-trusted code; gRPC, local mTLS, SHA-256 and

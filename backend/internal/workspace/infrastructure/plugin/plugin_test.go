@@ -75,7 +75,7 @@ func openWorkspaceTestInstance(t *testing.T, root string) (*Instance, *fixtureRo
 	if err != nil {
 		t.Fatal(err)
 	}
-	item, err := sandboxdomain.NewSandbox(sandboxdomain.Spec{ID: sandboxdomain.ID(testSandboxID), Name: "Workspace", Backend: sandboxdomain.BackendLocalWorkspace, Isolation: sandboxdomain.IsolationHost, LocalRoot: canonical, OwnerKind: "local_user", OwnerRef: "unit"})
+	item, err := sandboxdomain.NewSandbox(sandboxdomain.Spec{ID: sandboxdomain.ID(testSandboxID), Name: "Workspace", Backend: sandboxdomain.BackendLocalWorkspace, Binding: sandboxdomain.BuiltinBinding(sandboxdomain.BackendLocalWorkspace), Isolation: sandboxdomain.IsolationHost, LocalRoot: canonical, OwnerKind: "local_user", OwnerRef: "unit"})
 	if err != nil {
 		t.Fatal(err)
 	}

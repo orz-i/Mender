@@ -91,7 +91,7 @@ func (s *Sandboxes) CreateDaytonaSandbox(ctx context.Context, input CreateDayton
 		return sandboxdomain.Sandbox{}, err
 	}
 	principal := caller.Principal()
-	item, err := sandboxdomain.NewSandbox(sandboxdomain.Spec{ID: id, Name: input.Name, Backend: sandboxdomain.BackendDaytona, Isolation: sandboxdomain.IsolationRemote, OwnerKind: string(principal.Kind()), OwnerRef: principal.Reference()})
+	item, err := sandboxdomain.NewSandbox(sandboxdomain.Spec{ID: id, Name: input.Name, Backend: sandboxdomain.BackendDaytona, Binding: sandboxdomain.BuiltinBinding(sandboxdomain.BackendDaytona), Isolation: sandboxdomain.IsolationRemote, OwnerKind: string(principal.Kind()), OwnerRef: principal.Reference()})
 	if err != nil {
 		return sandboxdomain.Sandbox{}, err
 	}

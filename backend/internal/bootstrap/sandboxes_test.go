@@ -33,7 +33,7 @@ func TestRuntimeSandboxLocalBackendUsesGovernedLeasesAndPersists(t *testing.T) {
 	}
 	id := sandbox.ID("sbx_0123456789abcdef0123456789abcdef")
 	owner := runtime.OwnerPrincipal()
-	item, err := sandbox.NewSandbox(sandbox.Spec{ID: id, Name: "Trusted Local", Backend: sandbox.BackendLocalWorkspace, Isolation: sandbox.IsolationHost, LocalRoot: root, OwnerKind: string(owner.Kind()), OwnerRef: owner.Reference()})
+	item, err := sandbox.NewSandbox(sandbox.Spec{ID: id, Name: "Trusted Local", Backend: sandbox.BackendLocalWorkspace, Binding: sandbox.BuiltinBinding(sandbox.BackendLocalWorkspace), Isolation: sandbox.IsolationHost, LocalRoot: root, OwnerKind: string(owner.Kind()), OwnerRef: owner.Reference()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +92,7 @@ func TestRuntimeSandboxLocalBackendUsesGovernedLeasesAndPersists(t *testing.T) {
 	}
 	// A remote backend is never silently substituted with Local Workspace.
 	remoteID := sandbox.ID("sbx_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
-	remote, err := sandbox.NewSandbox(sandbox.Spec{ID: remoteID, Name: "Unavailable Remote", Backend: sandbox.BackendDaytona, Isolation: sandbox.IsolationRemote, OwnerKind: string(owner.Kind()), OwnerRef: owner.Reference()})
+	remote, err := sandbox.NewSandbox(sandbox.Spec{ID: remoteID, Name: "Unavailable Remote", Backend: sandbox.BackendDaytona, Binding: sandbox.BuiltinBinding(sandbox.BackendDaytona), Isolation: sandbox.IsolationRemote, OwnerKind: string(owner.Kind()), OwnerRef: owner.Reference()})
 	if err != nil {
 		t.Fatal(err)
 	}

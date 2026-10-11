@@ -15,7 +15,7 @@ const sandboxID sandboxdomain.ID = "sbx_0123456789abcdef0123456789abcdef"
 
 func testSandbox(t *testing.T) sandboxdomain.Sandbox {
 	t.Helper()
-	item, err := sandboxdomain.NewSandbox(sandboxdomain.Spec{ID: sandboxID, Name: "workspace", Backend: sandboxdomain.BackendLocalWorkspace, Isolation: sandboxdomain.IsolationHost, LocalRoot: t.TempDir(), OwnerKind: "local_user", OwnerRef: "local-owner"})
+	item, err := sandboxdomain.NewSandbox(sandboxdomain.Spec{ID: sandboxID, Name: "workspace", Backend: sandboxdomain.BackendLocalWorkspace, Binding: sandboxdomain.BuiltinBinding(sandboxdomain.BackendLocalWorkspace), Isolation: sandboxdomain.IsolationHost, LocalRoot: t.TempDir(), OwnerKind: "local_user", OwnerRef: "local-owner"})
 	if err != nil {
 		t.Fatal(err)
 	}

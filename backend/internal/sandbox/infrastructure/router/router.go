@@ -99,7 +99,7 @@ func (r *Router) Acquire(ctx context.Context, principal governancedomain.Context
 	if run != placement.Run || run.State != sandboxdomain.StateReady {
 		return nil, sandboxdomain.ErrConflict
 	}
-	backend, err := r.backends.ResolveBackend(spec.Backend, placement.Required)
+	backend, err := r.backends.ResolveBackend(spec.Backend, spec.Binding, placement.Required)
 	if err != nil {
 		return nil, err
 	}

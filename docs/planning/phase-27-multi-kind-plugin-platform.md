@@ -168,8 +168,20 @@ Acceptance: migration on a copied v8 DB with real grants/runs/leases and Docker/
   capabilities fail closed. Tests include mutable backend capability expansion,
   invalid/wrong-kind descriptors, duplicate registration and existing governed
   Sandbox lifecycle/lease tests. Full repository and security checks pass.
-- **C2/C3 remain:** persisted exact extension/installation binding, generic
-  Sandbox lifecycle backend ports and installable external Sandbox RPC.
+- **C2 — complete:** Sandbox `Spec.BackendBinding` now requires exact
+  PluginID/ExtensionID/InstallationID for trusted resource configuration; an
+  absent/mismatched pin is rejected before Router execution. SQLite schema v9
+  migrates existing local/Docker/Daytona resources to pinned built-in identities
+  once, preserves SandboxID/Run generation/lease/Profile grants/templates and
+  makes a WAL-consistent pre-upgrade snapshot. INSERT without binding and
+  immutable-pin mutation fail in DB triggers. Migration unknown-kind failure
+  rolls back all writes. Exact-binding checks remain in the inner Router path,
+  with no kind-only fallback. `pnpm check` and `pnpm security:check` pass;
+  Sandbox/Bootstrap/Management API Race tests and v8->v9 fixture tests pass.
+- **C3 remains:** generic Sandbox lifecycle backend ports and installable
+  external Sandbox RPC/SDK; the current durable binding deliberately pins only
+  reviewed built-in implementations. E2B and arbitrary external Sandbox drivers
+  remain unsupported until explicit protocol and lifecycle acceptance.
 - **D and E:** not yet implemented; typed Sandbox descriptors alone do not
   imply external Sandbox/Tunnel driver support or Marketplace coverage.
 

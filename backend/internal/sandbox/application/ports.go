@@ -46,8 +46,8 @@ type Backend interface {
 // BackendResolver resolves only registered, host-reviewed typed Backend
 // extensions after Sandbox admission. It must have no observable side effects.
 type BackendResolver interface {
-	ResolveBackend(sandboxdomain.BackendKind, sandboxdomain.Capability) (Backend, error)
-	Available(sandboxdomain.BackendKind) bool
+	ResolveBackend(sandboxdomain.BackendKind, sandboxdomain.BackendBinding, sandboxdomain.Capability) (Backend, error)
+	Available(sandboxdomain.BackendKind, sandboxdomain.BackendBinding) bool
 }
 
 type Placement struct {

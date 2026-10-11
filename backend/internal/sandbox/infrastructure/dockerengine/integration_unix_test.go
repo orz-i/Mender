@@ -67,7 +67,7 @@ func TestDockerLiveWorkspaceParityAndIsolation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	item, err := sandboxdomain.NewSandbox(sandboxdomain.Spec{ID: id, Name: "Docker integration", Backend: sandboxdomain.BackendDocker, Isolation: sandboxdomain.IsolationContainer, OwnerKind: string(owner.Kind()), OwnerRef: owner.Reference()})
+	item, err := sandboxdomain.NewSandbox(sandboxdomain.Spec{ID: id, Name: "Docker integration", Backend: sandboxdomain.BackendDocker, Binding: sandboxdomain.BuiltinBinding(sandboxdomain.BackendDocker), Isolation: sandboxdomain.IsolationContainer, OwnerKind: string(owner.Kind()), OwnerRef: owner.Reference()})
 	if err != nil {
 		t.Fatal(err)
 	}

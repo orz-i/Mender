@@ -145,7 +145,7 @@ func (s *Sandboxes) CreateLocalSandbox(ctx context.Context, request CreateLocalS
 		return sandboxdomain.Sandbox{}, err
 	}
 	principal := caller.Principal()
-	spec := sandboxdomain.Spec{ID: id, Name: request.Name, Backend: sandboxdomain.BackendLocalWorkspace, Isolation: request.Isolation, LocalRoot: filepath.Clean(request.Root), OwnerKind: string(principal.Kind()), OwnerRef: principal.Reference()}
+	spec := sandboxdomain.Spec{ID: id, Name: request.Name, Backend: sandboxdomain.BackendLocalWorkspace, Binding: sandboxdomain.BuiltinBinding(sandboxdomain.BackendLocalWorkspace), Isolation: request.Isolation, LocalRoot: filepath.Clean(request.Root), OwnerKind: string(principal.Kind()), OwnerRef: principal.Reference()}
 	item, err := sandboxdomain.NewSandbox(spec)
 	if err != nil {
 		return sandboxdomain.Sandbox{}, err

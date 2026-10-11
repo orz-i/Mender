@@ -14,7 +14,7 @@ import (
 func safePlan(t *testing.T) ContainerPlan {
 	t.Helper()
 	id := sandboxdomain.ID("sbx_0123456789abcdef0123456789abcdef")
-	item, err := sandboxdomain.NewSandbox(sandboxdomain.Spec{ID: id, Name: "Container sandbox", Backend: sandboxdomain.BackendDocker, Isolation: sandboxdomain.IsolationContainer, OwnerKind: "local_user", OwnerRef: "operator"})
+	item, err := sandboxdomain.NewSandbox(sandboxdomain.Spec{ID: id, Name: "Container sandbox", Backend: sandboxdomain.BackendDocker, Binding: sandboxdomain.BuiltinBinding(sandboxdomain.BackendDocker), Isolation: sandboxdomain.IsolationContainer, OwnerKind: "local_user", OwnerRef: "operator"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -153,7 +153,7 @@ func TestNewPlanRefusesUntrustedProviderAndRun(t *testing.T) {
 	id := plan.SandboxID
 	template := plan.Template
 	image := plan.Image
-	spec := sandboxdomain.Spec{ID: id, Name: "Sandbox", Backend: sandboxdomain.BackendDocker, Isolation: sandboxdomain.IsolationContainer, OwnerKind: "local_user", OwnerRef: "operator"}
+	spec := sandboxdomain.Spec{ID: id, Name: "Sandbox", Backend: sandboxdomain.BackendDocker, Binding: sandboxdomain.BuiltinBinding(sandboxdomain.BackendDocker), Isolation: sandboxdomain.IsolationContainer, OwnerKind: "local_user", OwnerRef: "operator"}
 	good, err := sandboxdomain.NewSandbox(spec)
 	if err != nil {
 		t.Fatal(err)
@@ -167,6 +167,7 @@ func TestNewPlanRefusesUntrustedProviderAndRun(t *testing.T) {
 	}{
 		{"host masquerading as docker", func(s *sandboxdomain.Spec) {
 			s.Backend = sandboxdomain.BackendLocalWorkspace
+			s.Binding = sandboxdomain.BuiltinBinding(sandboxdomain.BackendLocalWorkspace)
 			s.Isolation = sandboxdomain.IsolationHost
 			s.LocalRoot = "/tmp"
 		}, sandboxdomain.StateProvisioning, "", ""},

@@ -145,7 +145,7 @@ func (r *Registry) Register(backend sandboxapp.Backend, descriptor platformplugi
 
 // ResolveBackend is local, side-effect free, and does not acquire a lease.
 // It is always called AFTER the Sandbox Router has admitted Principal/Policy.
-func (r *Registry) ResolveBackend(kind sandboxdomain.BackendKind, required sandboxdomain.Capability) (sandboxapp.Backend, error) {
+func (r *Registry) ResolveBackend(kind sandboxdomain.BackendKind, binding sandboxdomain.BackendBinding, required sandboxdomain.Capability) (sandboxapp.Backend, error) {
 	if r == nil {
 		return nil, sandboxdomain.ErrBackendUnavailable
 	}
@@ -156,6 +156,10 @@ func (r *Registry) ResolveBackend(kind sandboxdomain.BackendKind, required sandb
 	entry, ok := r.byKind[kind]
 	r.mu.RUnlock()
 	if !ok || entry.backend == nil {
+		return nil, sandboxdomain.ErrBackendUnavailable
+	}
+	if binding.Validate() != nil || binding.PluginID != entry.descriptor.PluginID ||
+		binding.ExtensionID != entry.descriptor.Extension.ID || binding.InstallationID != "" {
 		return nil, sandboxdomain.ErrBackendUnavailable
 	}
 	// Capability authority cannot grow beyond the immutable registered descriptor,
@@ -170,14 +174,15 @@ func (r *Registry) ResolveBackend(kind sandboxdomain.BackendKind, required sandb
 	return entry.backend, nil
 }
 
-func (r *Registry) Available(kind sandboxdomain.BackendKind) bool {
+func (r *Registry) Available(kind sandboxdomain.BackendKind, binding sandboxdomain.BackendBinding) bool {
 	if r == nil {
 		return false
 	}
 	r.mu.RLock()
-	_, ok := r.byKind[kind]
+	item, ok := r.byKind[kind]
 	r.mu.RUnlock()
-	return ok
+	return ok && binding.Validate() == nil && binding.PluginID == item.descriptor.PluginID &&
+		binding.ExtensionID == item.descriptor.Extension.ID && binding.InstallationID == ""
 }
 
 // Entries exposes only inert metadata, without launching drivers or probing

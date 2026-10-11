@@ -136,7 +136,7 @@ func (s *TemplateStore) CreateDefinedSandbox(ctx context.Context, item sandboxdo
 	defer func() { _ = tx.Rollback() }()
 	spec := item.Spec()
 	now := time.Now().UTC().Format(time.RFC3339Nano)
-	_, err = tx.ExecContext(ctx, `INSERT INTO sandboxes(id,display_name,backend,isolation,local_root,owner_kind,owner_ref,created_at) VALUES(?,?,?,?,?,?,?,?)`, spec.ID.String(), spec.Name, string(spec.Backend), string(spec.Isolation), spec.LocalRoot, spec.OwnerKind, spec.OwnerRef, now)
+	_, err = tx.ExecContext(ctx, `INSERT INTO sandboxes(id,display_name,backend,backend_plugin_id,backend_extension_id,backend_installation_id,isolation,local_root,owner_kind,owner_ref,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)`, spec.ID.String(), spec.Name, string(spec.Backend), spec.Binding.PluginID.String(), spec.Binding.ExtensionID.String(), spec.Binding.InstallationID.String(), string(spec.Isolation), spec.LocalRoot, spec.OwnerKind, spec.OwnerRef, now)
 	if err != nil {
 		return sandboxdomain.ErrConflict
 	}

@@ -87,7 +87,7 @@ func (s *TemplateStore) CreateDefinedSandbox(ctx context.Context, item sandboxdo
 		return sandboxdomain.ErrConflict
 	}
 	timestamp := time.Now().UTC().Format(time.RFC3339Nano)
-	if _, err = conn.ExecContext(ctx, `INSERT INTO sandboxes(id,display_name,backend,isolation,local_root,owner_kind,owner_ref,created_at) VALUES(?,?,?,?,?,?,?,?)`, spec.ID.String(), spec.Name, string(spec.Backend), string(spec.Isolation), "", spec.OwnerKind, spec.OwnerRef, timestamp); err != nil {
+	if _, err = conn.ExecContext(ctx, `INSERT INTO sandboxes(id,display_name,backend,backend_plugin_id,backend_extension_id,backend_installation_id,isolation,local_root,owner_kind,owner_ref,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)`, spec.ID.String(), spec.Name, string(spec.Backend), spec.Binding.PluginID.String(), spec.Binding.ExtensionID.String(), spec.Binding.InstallationID.String(), string(spec.Isolation), "", spec.OwnerKind, spec.OwnerRef, timestamp); err != nil {
 		return fmt.Errorf("daytona reserve: Sandbox unavailable: %w", sandboxdomain.ErrConflict)
 	}
 	if _, err = conn.ExecContext(ctx, `INSERT INTO sandbox_runs(sandbox_id,generation,state,external_id,updated_at) VALUES(?,1,'defined','',?)`, spec.ID.String(), timestamp); err != nil {

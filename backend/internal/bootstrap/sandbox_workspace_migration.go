@@ -128,7 +128,7 @@ func migrateWorkspaceProviderV1ToSandbox(ctx context.Context, databasePath strin
 		if err != nil {
 			return fmt.Errorf("migrate Workspace: generated SandboxID: %w", err)
 		}
-		spec := sandboxdomain.Spec{ID: sandboxID, Name: "Workspace / " + providerID.String(), Backend: sandboxdomain.BackendLocalWorkspace, Isolation: isolation, LocalRoot: filepath.Clean(root), OwnerKind: string(owner.Kind()), OwnerRef: owner.Reference()}
+		spec := sandboxdomain.Spec{ID: sandboxID, Name: "Workspace / " + providerID.String(), Backend: sandboxdomain.BackendLocalWorkspace, Binding: sandboxdomain.BuiltinBinding(sandboxdomain.BackendLocalWorkspace), Isolation: isolation, LocalRoot: filepath.Clean(root), OwnerKind: string(owner.Kind()), OwnerRef: owner.Reference()}
 		if _, err := sandboxdomain.NewSandbox(spec); err != nil {
 			return fmt.Errorf("migrate Workspace %s: invalid Sandbox: %w", providerID, err)
 		}
@@ -137,7 +137,7 @@ func migrateWorkspaceProviderV1ToSandbox(ctx context.Context, databasePath strin
 			return err
 		}
 		created := time.Now().UTC().Format(time.RFC3339Nano)
-		if _, err := tx.ExecContext(ctx, `INSERT INTO sandboxes(id,display_name,backend,isolation,local_root,owner_kind,owner_ref,created_at) VALUES(?,?,?,?,?,?,?,?)`, spec.ID.String(), spec.Name, string(spec.Backend), string(spec.Isolation), spec.LocalRoot, spec.OwnerKind, spec.OwnerRef, created); err != nil {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO sandboxes(id,display_name,backend,backend_plugin_id,backend_extension_id,backend_installation_id,isolation,local_root,owner_kind,owner_ref,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)`, spec.ID.String(), spec.Name, string(spec.Backend), spec.Binding.PluginID.String(), spec.Binding.ExtensionID.String(), spec.Binding.InstallationID.String(), string(spec.Isolation), spec.LocalRoot, spec.OwnerKind, spec.OwnerRef, created); err != nil {
 			return fmt.Errorf("migrate Workspace %s: insert Sandbox: %w", providerID, err)
 		}
 		if _, err := tx.ExecContext(ctx, `INSERT INTO sandbox_runs(sandbox_id,generation,state,external_id,updated_at) VALUES(?,?,?,?,?)`, run.SandboxID.String(), run.Generation, string(run.State), run.ExternalID, created); err != nil {

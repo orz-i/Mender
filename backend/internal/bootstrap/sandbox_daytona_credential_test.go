@@ -24,7 +24,7 @@ func TestDaytonaSandboxRetainsCredentialUsageUntilDestroyed(t *testing.T) {
 	}
 	id := sandboxdomain.ID("sbx_abcdef0123456789abcdef0123456789")
 	owner := runtime.OwnerPrincipal()
-	resource, err := sandboxdomain.NewSandbox(sandboxdomain.Spec{ID: id, Name: "Daytona pending", Backend: sandboxdomain.BackendDaytona, Isolation: sandboxdomain.IsolationRemote, OwnerKind: string(owner.Kind()), OwnerRef: owner.Reference()})
+	resource, err := sandboxdomain.NewSandbox(sandboxdomain.Spec{ID: id, Name: "Daytona pending", Backend: sandboxdomain.BackendDaytona, Binding: sandboxdomain.BuiltinBinding(sandboxdomain.BackendDaytona), Isolation: sandboxdomain.IsolationRemote, OwnerKind: string(owner.Kind()), OwnerRef: owner.Reference()})
 	if err != nil {
 		t.Fatal(err)
 	}

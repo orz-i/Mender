@@ -66,7 +66,7 @@ func (s *Sandboxes) DockerStatus() string {
 	return s.dockerUnavailableReason
 }
 func (s *Sandboxes) BackendAvailable(item sandboxdomain.Sandbox) bool {
-	return s != nil && s.backendPlugins != nil && s.backendPlugins.Available(item.Backend())
+	return s != nil && s.backendPlugins != nil && s.backendPlugins.Available(item.Backend(), item.Spec().Binding)
 }
 
 type CreateDockerSandboxRequest struct {
@@ -92,7 +92,7 @@ func (s *Sandboxes) CreateDockerSandbox(ctx context.Context, request CreateDocke
 		return sandboxdomain.Sandbox{}, err
 	}
 	subject := caller.Principal()
-	item, err := sandboxdomain.NewSandbox(sandboxdomain.Spec{ID: id, Name: request.Name, Backend: sandboxdomain.BackendDocker, Isolation: sandboxdomain.IsolationContainer, OwnerKind: string(subject.Kind()), OwnerRef: subject.Reference()})
+	item, err := sandboxdomain.NewSandbox(sandboxdomain.Spec{ID: id, Name: request.Name, Backend: sandboxdomain.BackendDocker, Binding: sandboxdomain.BuiltinBinding(sandboxdomain.BackendDocker), Isolation: sandboxdomain.IsolationContainer, OwnerKind: string(subject.Kind()), OwnerRef: subject.Reference()})
 	if err != nil {
 		return sandboxdomain.Sandbox{}, err
 	}

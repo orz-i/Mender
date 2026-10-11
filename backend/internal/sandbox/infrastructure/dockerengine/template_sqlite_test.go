@@ -21,7 +21,7 @@ func dockerTemplateFixture(t *testing.T) (context.Context, string, *sandboxsqlit
 	}
 	t.Cleanup(func() { _ = resources.Close() })
 	id := sandboxdomain.ID("sbx_0123456789abcdef0123456789abcdef")
-	item, err := sandboxdomain.NewSandbox(sandboxdomain.Spec{ID: id, Name: "Docker resource", Backend: sandboxdomain.BackendDocker, Isolation: sandboxdomain.IsolationContainer, OwnerKind: "local_user", OwnerRef: "operator"})
+	item, err := sandboxdomain.NewSandbox(sandboxdomain.Spec{ID: id, Name: "Docker resource", Backend: sandboxdomain.BackendDocker, Binding: sandboxdomain.BuiltinBinding(sandboxdomain.BackendDocker), Isolation: sandboxdomain.IsolationContainer, OwnerKind: "local_user", OwnerRef: "operator"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,7 +99,7 @@ func TestTrustedDockerTemplateRejectsNonDockerAndInvalidInputs(t *testing.T) {
 		t.Fatal("accepted mutable image ref")
 	}
 	otherID := sandboxdomain.ID("sbx_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
-	local, err := sandboxdomain.NewSandbox(sandboxdomain.Spec{ID: otherID, Name: "host local", Backend: sandboxdomain.BackendLocalWorkspace, Isolation: sandboxdomain.IsolationHost, OwnerKind: "local_user", OwnerRef: "operator", LocalRoot: t.TempDir()})
+	local, err := sandboxdomain.NewSandbox(sandboxdomain.Spec{ID: otherID, Name: "host local", Backend: sandboxdomain.BackendLocalWorkspace, Binding: sandboxdomain.BuiltinBinding(sandboxdomain.BackendLocalWorkspace), Isolation: sandboxdomain.IsolationHost, OwnerKind: "local_user", OwnerRef: "operator", LocalRoot: t.TempDir()})
 	if err != nil {
 		t.Fatal(err)
 	}

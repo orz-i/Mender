@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-const latestSchemaVersion = 8
+const latestSchemaVersion = 9
 
 func migrate(ctx context.Context, db *sql.DB) error {
 	tx, err := db.BeginTx(ctx, nil)
@@ -261,6 +261,62 @@ func migrate(ctx context.Context, db *sql.DB) error {
 		}
 		if _, err = tx.ExecContext(ctx, "INSERT INTO sandbox_schema_migrations(version,applied_at) VALUES(8,?)", time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
 			return fmt.Errorf("record sandbox migration 8: %w", err)
+		}
+	}
+	// Phase 27 C2: a Sandbox binds to exact extension software, not to a
+	// historical vendor kind inferred on every runtime read. This transaction
+	// retains all stable Sandbox/run/lease/grant and template IDs unchanged.
+	var bindingApplied int
+	if err = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM sandbox_schema_migrations WHERE version=9").Scan(&bindingApplied); err != nil {
+		return fmt.Errorf("sandbox migration 9 presence: %w", err)
+	}
+	if bindingApplied == 0 {
+		for _, statement := range []string{
+			"ALTER TABLE sandboxes ADD COLUMN backend_plugin_id TEXT NOT NULL DEFAULT ''",
+			"ALTER TABLE sandboxes ADD COLUMN backend_extension_id TEXT NOT NULL DEFAULT ''",
+			"ALTER TABLE sandboxes ADD COLUMN backend_installation_id TEXT NOT NULL DEFAULT ''",
+			`UPDATE sandboxes SET backend_plugin_id=CASE backend
+                WHEN 'local_workspace' THEN 'io.mender.sandbox.local-workspace'
+                WHEN 'docker' THEN 'io.mender.sandbox.docker'
+                WHEN 'daytona' THEN 'io.mender.sandbox.daytona'
+                ELSE '' END, backend_extension_id='main'`,
+		} {
+			if _, err = tx.ExecContext(ctx, statement); err != nil {
+				return fmt.Errorf("sandbox migration 9 binding: %w", err)
+			}
+		}
+		var missing int
+		if err = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM sandboxes WHERE backend_plugin_id='' OR backend_extension_id=''").Scan(&missing); err != nil {
+			return err
+		}
+		if missing != 0 {
+			return fmt.Errorf("sandbox migration 9: %d resources have unknown backend plugin identity", missing)
+		}
+		// ALTER TABLE defaults are required solely for the one-time copy.
+		// Triggers prohibit any legacy INSERT/UPDATE that omits the binding.
+		// The historical backend classification is not a dispatch authority.
+		for _, statement := range []string{
+			`CREATE TRIGGER sandbox_extension_binding_insert BEFORE INSERT ON sandboxes
+            WHEN NEW.backend_plugin_id='' OR NEW.backend_extension_id!='main' OR
+                 (NEW.backend='local_workspace' AND (NEW.backend_plugin_id!='io.mender.sandbox.local-workspace' OR NEW.backend_installation_id!='')) OR
+                 (NEW.backend='docker' AND (NEW.backend_plugin_id!='io.mender.sandbox.docker' OR NEW.backend_installation_id!='')) OR
+                 (NEW.backend='daytona' AND (NEW.backend_plugin_id!='io.mender.sandbox.daytona' OR NEW.backend_installation_id!=''))
+            BEGIN SELECT RAISE(ABORT,'Sandbox extension binding is required'); END`,
+			`CREATE TRIGGER sandbox_extension_binding_update BEFORE UPDATE ON sandboxes
+            WHEN NEW.backend_plugin_id='' OR NEW.backend_extension_id!='main' OR
+                 NEW.backend_plugin_id!=OLD.backend_plugin_id OR NEW.backend_extension_id!=OLD.backend_extension_id OR
+                 NEW.backend_installation_id!=OLD.backend_installation_id OR NEW.backend!=OLD.backend OR
+                 (NEW.backend='local_workspace' AND NEW.backend_plugin_id!='io.mender.sandbox.local-workspace') OR
+                 (NEW.backend='docker' AND NEW.backend_plugin_id!='io.mender.sandbox.docker') OR
+                 (NEW.backend='daytona' AND NEW.backend_plugin_id!='io.mender.sandbox.daytona')
+            BEGIN SELECT RAISE(ABORT,'Sandbox extension binding is immutable'); END`,
+		} {
+			if _, err = tx.ExecContext(ctx, statement); err != nil {
+				return fmt.Errorf("sandbox migration 9 guard: %w", err)
+			}
+		}
+		if _, err = tx.ExecContext(ctx, "INSERT INTO sandbox_schema_migrations(version,applied_at) VALUES(9,?)", time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
+			return fmt.Errorf("record sandbox migration 9: %w", err)
 		}
 	}
 	if err = tx.Commit(); err != nil {

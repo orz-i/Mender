@@ -42,7 +42,7 @@ func TestDaytonaExperimentalDisabledByDefaultRetainsInventoryButBlocksExecution(
 		t.Fatalf("remote create available by default: %v", err)
 	}
 	id := sandboxdomain.ID("sbx_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
-	item, err := sandboxdomain.NewSandbox(sandboxdomain.Spec{ID: id, Name: "Persisted remote before quarantine", Backend: sandboxdomain.BackendDaytona, Isolation: sandboxdomain.IsolationRemote, OwnerKind: string(owner.Kind()), OwnerRef: owner.Reference()})
+	item, err := sandboxdomain.NewSandbox(sandboxdomain.Spec{ID: id, Name: "Persisted remote before quarantine", Backend: sandboxdomain.BackendDaytona, Binding: sandboxdomain.BuiltinBinding(sandboxdomain.BackendDaytona), Isolation: sandboxdomain.IsolationRemote, OwnerKind: string(owner.Kind()), OwnerRef: owner.Reference()})
 	if err != nil {
 		t.Fatal(err)
 	}

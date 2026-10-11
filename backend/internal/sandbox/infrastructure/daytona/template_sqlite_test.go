@@ -15,7 +15,7 @@ import (
 
 func testDaytonaSandbox(t *testing.T, id sandboxdomain.ID, owner string) sandboxdomain.Sandbox {
 	t.Helper()
-	item, err := sandboxdomain.NewSandbox(sandboxdomain.Spec{ID: id, Name: "Daytona allocated", Backend: sandboxdomain.BackendDaytona, Isolation: sandboxdomain.IsolationRemote, OwnerKind: "local_user", OwnerRef: owner})
+	item, err := sandboxdomain.NewSandbox(sandboxdomain.Spec{ID: id, Name: "Daytona allocated", Backend: sandboxdomain.BackendDaytona, Binding: sandboxdomain.BuiltinBinding(sandboxdomain.BackendDaytona), Isolation: sandboxdomain.IsolationRemote, OwnerKind: "local_user", OwnerRef: owner})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,7 +136,7 @@ func TestDaytonaTemplateRejectsWrongBackendOrInvalidConfig(t *testing.T) {
 	if _, err := runs.Get(ctx, id); !errors.Is(err, sandboxdomain.ErrNotFound) {
 		t.Fatalf("invalid Template created resource: %v", err)
 	}
-	host, err := sandboxdomain.NewSandbox(sandboxdomain.Spec{ID: id, Name: "host", Backend: sandboxdomain.BackendLocalWorkspace, Isolation: sandboxdomain.IsolationHost, LocalRoot: t.TempDir(), OwnerKind: "local_user", OwnerRef: "me"})
+	host, err := sandboxdomain.NewSandbox(sandboxdomain.Spec{ID: id, Name: "host", Backend: sandboxdomain.BackendLocalWorkspace, Binding: sandboxdomain.BuiltinBinding(sandboxdomain.BackendLocalWorkspace), Isolation: sandboxdomain.IsolationHost, LocalRoot: t.TempDir(), OwnerKind: "local_user", OwnerRef: "me"})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -121,7 +121,7 @@ func dockerProvisionFixture(t *testing.T) (*Provisioner, *sandboxsqlite.Store, *
 		t.Fatal(err)
 	}
 	id := sandboxdomain.ID("sbx_0123456789abcdef0123456789abcdef")
-	item, err := sandboxdomain.NewSandbox(sandboxdomain.Spec{ID: id, Name: "Docker pending", Backend: sandboxdomain.BackendDocker, Isolation: sandboxdomain.IsolationContainer, OwnerKind: string(p.Kind()), OwnerRef: p.Reference()})
+	item, err := sandboxdomain.NewSandbox(sandboxdomain.Spec{ID: id, Name: "Docker pending", Backend: sandboxdomain.BackendDocker, Binding: sandboxdomain.BuiltinBinding(sandboxdomain.BackendDocker), Isolation: sandboxdomain.IsolationContainer, OwnerKind: string(p.Kind()), OwnerRef: p.Reference()})
 	if err != nil {
 		t.Fatal(err)
 	}

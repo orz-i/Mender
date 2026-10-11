@@ -6,9 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	platformplugin "github.com/orz-i/Mender/backend/internal/plugin"
 
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 	_ "modernc.org/sqlite"
@@ -39,6 +42,10 @@ func Open(ctx context.Context, path string) (*Store, error) {
 		_ = db.Close()
 		return nil, fmt.Errorf("open sandbox sqlite ping: %w", err)
 	}
+	if err := backupPreBindingSandbox(ctx, db, absolute); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("open sandbox sqlite: pre-binding backup: %w", err)
+	}
 	if err := migrate(ctx, db); err != nil {
 		_ = db.Close()
 		return nil, err
@@ -56,8 +63,8 @@ func (s *Store) Create(ctx context.Context, item sandboxdomain.Sandbox) error {
 		return err
 	}
 	spec := item.Spec()
-	_, err := s.db.ExecContext(ctx, `INSERT INTO sandboxes(id,display_name,backend,isolation,local_root,owner_kind,owner_ref,created_at)
- VALUES(?,?,?,?,?,?,?,?)`, spec.ID.String(), spec.Name, string(spec.Backend), string(spec.Isolation), spec.LocalRoot, spec.OwnerKind, spec.OwnerRef, time.Now().UTC().Format(time.RFC3339Nano))
+	_, err := s.db.ExecContext(ctx, `INSERT INTO sandboxes(id,display_name,backend,backend_plugin_id,backend_extension_id,backend_installation_id,isolation,local_root,owner_kind,owner_ref,created_at)
+ VALUES(?,?,?,?,?,?,?,?,?,?,?)`, spec.ID.String(), spec.Name, string(spec.Backend), spec.Binding.PluginID.String(), spec.Binding.ExtensionID.String(), spec.Binding.InstallationID.String(), string(spec.Isolation), spec.LocalRoot, spec.OwnerKind, spec.OwnerRef, time.Now().UTC().Format(time.RFC3339Nano))
 	if err != nil {
 		if uniqueError(err) {
 			return sandboxdomain.ErrConflict
@@ -70,7 +77,7 @@ func (s *Store) Get(ctx context.Context, id sandboxdomain.ID) (sandboxdomain.San
 	if _, err := sandboxdomain.ParseID(id.String()); err != nil {
 		return sandboxdomain.Sandbox{}, err
 	}
-	item, err := scanSandbox(s.db.QueryRowContext(ctx, `SELECT id, display_name, backend, isolation, local_root, owner_kind, owner_ref FROM sandboxes WHERE id = ?`, id.String()))
+	item, err := scanSandbox(s.db.QueryRowContext(ctx, `SELECT id, display_name, backend, backend_plugin_id, backend_extension_id, backend_installation_id, isolation, local_root, owner_kind, owner_ref FROM sandboxes WHERE id = ?`, id.String()))
 	if errors.Is(err, sql.ErrNoRows) {
 		return sandboxdomain.Sandbox{}, sandboxdomain.ErrNotFound
 	}
@@ -80,7 +87,7 @@ func (s *Store) Get(ctx context.Context, id sandboxdomain.ID) (sandboxdomain.San
 	return item, nil
 }
 func (s *Store) List(ctx context.Context) ([]sandboxdomain.Sandbox, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id,display_name,backend,isolation,local_root,owner_kind,owner_ref FROM sandboxes ORDER BY display_name,id`)
+	rows, err := s.db.QueryContext(ctx, `SELECT id,display_name,backend,backend_plugin_id,backend_extension_id,backend_installation_id,isolation,local_root,owner_kind,owner_ref FROM sandboxes ORDER BY display_name,id`)
 	if err != nil {
 		return nil, fmt.Errorf("list sandboxes: %w", err)
 	}
@@ -154,13 +161,14 @@ func (s *Store) TransitionRun(ctx context.Context, expected sandboxdomain.Run, t
 type scanner interface{ Scan(...any) error }
 
 func scanSandbox(row scanner) (sandboxdomain.Sandbox, error) {
-	var rawID, backend, isolation string
+	var rawID, backend, pluginID, extensionID, installationID, isolation string
 	var spec sandboxdomain.Spec
-	if err := row.Scan(&rawID, &spec.Name, &backend, &isolation, &spec.LocalRoot, &spec.OwnerKind, &spec.OwnerRef); err != nil {
+	if err := row.Scan(&rawID, &spec.Name, &backend, &pluginID, &extensionID, &installationID, &isolation, &spec.LocalRoot, &spec.OwnerKind, &spec.OwnerRef); err != nil {
 		return sandboxdomain.Sandbox{}, err
 	}
 	spec.ID = sandboxdomain.ID(rawID)
 	spec.Backend = sandboxdomain.BackendKind(backend)
+	spec.Binding = sandboxdomain.BackendBinding{PluginID: platformplugin.ID(pluginID), ExtensionID: platformplugin.ExtensionID(extensionID), InstallationID: platformplugin.InstallationID(installationID)}
 	spec.Isolation = sandboxdomain.IsolationClass(isolation)
 	return sandboxdomain.NewSandbox(spec)
 }
@@ -187,7 +195,7 @@ func (s *Store) CreateReady(ctx context.Context, item sandboxdomain.Sandbox, run
 	defer func() { _ = tx.Rollback() }()
 	spec := item.Spec()
 	now := time.Now().UTC().Format(time.RFC3339Nano)
-	_, err = tx.ExecContext(ctx, `INSERT INTO sandboxes(id,display_name,backend,isolation,local_root,owner_kind,owner_ref,created_at) VALUES(?,?,?,?,?,?,?,?)`, spec.ID.String(), spec.Name, string(spec.Backend), string(spec.Isolation), spec.LocalRoot, spec.OwnerKind, spec.OwnerRef, now)
+	_, err = tx.ExecContext(ctx, `INSERT INTO sandboxes(id,display_name,backend,backend_plugin_id,backend_extension_id,backend_installation_id,isolation,local_root,owner_kind,owner_ref,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)`, spec.ID.String(), spec.Name, string(spec.Backend), spec.Binding.PluginID.String(), spec.Binding.ExtensionID.String(), spec.Binding.InstallationID.String(), string(spec.Isolation), spec.LocalRoot, spec.OwnerKind, spec.OwnerRef, now)
 	if err != nil {
 		if uniqueError(err) {
 			return sandboxdomain.ErrConflict
@@ -200,6 +208,41 @@ func (s *Store) CreateReady(ctx context.Context, item sandboxdomain.Sandbox, run
 	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("create ready sandbox: commit: %w", err)
+	}
+	return nil
+}
+
+// backupPreBindingSandbox makes a WAL-consistent SQLite snapshot before any
+// v8->v9 hard cut. It is skipped for a fresh DB or an already-upgraded DB.
+func backupPreBindingSandbox(ctx context.Context, db *sql.DB, path string) error {
+	var present int
+	if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='sandbox_schema_migrations'").Scan(&present); err != nil {
+		return err
+	}
+	if present == 0 {
+		return nil
+	}
+	var version sql.NullInt64
+	if err := db.QueryRowContext(ctx, "SELECT MAX(version) FROM sandbox_schema_migrations").Scan(&version); err != nil {
+		return err
+	}
+	if !version.Valid || version.Int64 >= latestSchemaVersion {
+		return nil
+	}
+	file, err := os.CreateTemp(filepath.Dir(path), ".mender-sandbox-v8-backup-*.db")
+	if err != nil {
+		return err
+	}
+	destination := file.Name()
+	if err = file.Close(); err != nil {
+		return err
+	}
+	if err = os.Remove(destination); err != nil {
+		return err
+	}
+	if _, err = db.ExecContext(ctx, "VACUUM INTO ?", destination); err != nil {
+		_ = os.Remove(destination)
+		return fmt.Errorf("sandbox SQLite consistent backup: %w", err)
 	}
 	return nil
 }

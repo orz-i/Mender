@@ -93,7 +93,7 @@ func setup(t *testing.T) (*fakeStore, gov.Context, *gate, *backend, *Router) {
 		t.Fatal(err)
 	}
 	id := sandboxdomain.ID("sbx_0123456789abcdef0123456789abcdef")
-	item, err := sandboxdomain.NewSandbox(sandboxdomain.Spec{ID: id, Name: "Test", Backend: sandboxdomain.BackendLocalWorkspace, Isolation: sandboxdomain.IsolationHost, LocalRoot: t.TempDir(), OwnerKind: "local_user", OwnerRef: "owner"})
+	item, err := sandboxdomain.NewSandbox(sandboxdomain.Spec{ID: id, Name: "Test", Backend: sandboxdomain.BackendLocalWorkspace, Binding: sandboxdomain.BuiltinBinding(sandboxdomain.BackendLocalWorkspace), Isolation: sandboxdomain.IsolationHost, LocalRoot: t.TempDir(), OwnerKind: "local_user", OwnerRef: "owner"})
 	if err != nil {
 		t.Fatal(err)
 	}

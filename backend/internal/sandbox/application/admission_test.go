@@ -62,7 +62,7 @@ func setUpGate(t *testing.T) (gov.Context, Placement, *gatePolicy, *gateApproval
 	if err != nil {
 		t.Fatal(err)
 	}
-	s, err := sandboxdomain.NewSandbox(sandboxdomain.Spec{ID: sandboxdomain.ID("sbx_0123456789abcdef0123456789abcdef"), Name: "sandbox", Backend: sandboxdomain.BackendLocalWorkspace, Isolation: sandboxdomain.IsolationRestrictedHost, LocalRoot: t.TempDir(), OwnerKind: "local_user", OwnerRef: "owner"})
+	s, err := sandboxdomain.NewSandbox(sandboxdomain.Spec{ID: sandboxdomain.ID("sbx_0123456789abcdef0123456789abcdef"), Name: "sandbox", Backend: sandboxdomain.BackendLocalWorkspace, Binding: sandboxdomain.BuiltinBinding(sandboxdomain.BackendLocalWorkspace), Isolation: sandboxdomain.IsolationRestrictedHost, LocalRoot: t.TempDir(), OwnerKind: "local_user", OwnerRef: "owner"})
 	if err != nil {
 		t.Fatal(err)
 	}

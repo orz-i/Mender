@@ -44,7 +44,7 @@ func testLocalSandbox(t *testing.T, root string, mode sandboxdomain.IsolationCla
 		t.Fatal(err)
 	}
 	id := sandboxdomain.ID("sbx_0123456789abcdef0123456789abcdef")
-	item, err := sandboxdomain.NewSandbox(sandboxdomain.Spec{ID: id, Name: "Test", Backend: sandboxdomain.BackendLocalWorkspace, Isolation: mode, LocalRoot: canonical, OwnerKind: "local_user", OwnerRef: "owner"})
+	item, err := sandboxdomain.NewSandbox(sandboxdomain.Spec{ID: id, Name: "Test", Backend: sandboxdomain.BackendLocalWorkspace, Binding: sandboxdomain.BuiltinBinding(sandboxdomain.BackendLocalWorkspace), Isolation: mode, LocalRoot: canonical, OwnerKind: "local_user", OwnerRef: "owner"})
 	if err != nil {
 		t.Fatal(err)
 	}
