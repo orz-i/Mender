@@ -40,6 +40,13 @@ func (s *Sandboxes) SetProfileGrants(ctx context.Context, id sandboxdomain.ID, p
 	if err = caller.Validate(); err != nil {
 		return err
 	}
+	item, err := s.store.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+	if !sandboxapplication.IsGrantManager(caller, item) {
+		return sandboxdomain.ErrNotAuthorized
+	}
 	if err = s.profileExists(ctx, parsed); err != nil {
 		return fmt.Errorf("grant Sandbox access: Profile not found: %w", err)
 	}

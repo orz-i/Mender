@@ -584,6 +584,61 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/sandboxes/{sandboxId}/profile-grants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Owner-only current Profile capability grants; ungranted by default. */
+        get: operations["getSandboxProfileGrants"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sandboxes/{sandboxId}/profile-grants/{profileId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sandboxId: components["parameters"]["SandboxId"];
+                profileId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** @description The local owner replaces one existing Profile's allowed capabilities. No implicit grant. */
+        put: operations["putSandboxProfileGrants"];
+        post?: never;
+        /** @description Owner revokes all of one Profile's capabilities. In-progress durable leases are not force-aborted. */
+        delete: operations["revokeSandboxProfileGrants"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sandboxes/{sandboxId}/profile-grant-events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Last 100 owner-only grant/revoke audit events, newest first. */
+        get: operations["getSandboxProfileGrantEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/sandboxes/{sandboxId}/daytona/reconcile": {
         parameters: {
             query?: never;
@@ -1492,6 +1547,31 @@ export interface components {
             externalTunnelId: string;
             /** @description Mender Credential Reference containing the OpenAI tunnel runtime API key. */
             runtimeCredentialRef: string;
+        };
+        /** @enum {string} */
+        SandboxProfileCapability: "file.read" | "file.search" | "file.edit" | "process.shell";
+        SandboxProfileGrant: {
+            profileId: string;
+            capabilities: components["schemas"]["SandboxProfileCapability"][];
+        };
+        SandboxProfileGrants: {
+            sandboxId: string;
+            grants: components["schemas"]["SandboxProfileGrant"][];
+        };
+        ReplaceSandboxProfileGrantsRequest: {
+            capabilities: components["schemas"]["SandboxProfileCapability"][];
+        };
+        SandboxProfileGrantEvent: {
+            profileId: string;
+            capability: components["schemas"]["SandboxProfileCapability"];
+            /** @enum {string} */
+            action: "grant" | "revoke";
+            /** Format: date-time */
+            occurredAt: string;
+        };
+        SandboxProfileGrantEvents: {
+            sandboxId: string;
+            events: components["schemas"]["SandboxProfileGrantEvent"][];
         };
         SandboxActivity: {
             sandboxId: string;
@@ -2845,6 +2925,112 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getSandboxProfileGrants: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sandboxId: components["parameters"]["SandboxId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current explicit Profile access to a Sandbox */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SandboxProfileGrants"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    putSandboxProfileGrants: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sandboxId: components["parameters"]["SandboxId"];
+                profileId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReplaceSandboxProfileGrantsRequest"];
+            };
+        };
+        responses: {
+            /** @description Replaced capability grant set */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SandboxProfileGrants"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    revokeSandboxProfileGrants: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sandboxId: components["parameters"]["SandboxId"];
+                profileId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Revocation complete */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SandboxProfileGrants"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getSandboxProfileGrantEvents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sandboxId: components["parameters"]["SandboxId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sanitized Profile grant/revoke history */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SandboxProfileGrantEvents"];
+                };
+            };
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
         };

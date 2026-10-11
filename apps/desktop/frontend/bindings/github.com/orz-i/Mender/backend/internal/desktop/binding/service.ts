@@ -156,6 +156,14 @@ export function GetSandboxBackends(): $CancellablePromise<$models.DockerBackendS
     return $Call.ByID(854635658);
 }
 
+export function GetSandboxProfileGrantEvents(sandboxID: string, limit: number): $CancellablePromise<$models.SandboxProfileGrantEvents> {
+    return $Call.ByID(3232716867, sandboxID, limit);
+}
+
+export function GetSandboxProfileGrants(rawID: string): $CancellablePromise<$models.SandboxProfileGrants> {
+    return $Call.ByID(2724874943, rawID);
+}
+
 export function GetSkillInstallation(installationID: string): $CancellablePromise<$models.SkillInspection> {
     return $Call.ByID(2370910789, installationID);
 }
@@ -224,6 +232,10 @@ export function ListTunnels(): $CancellablePromise<$models.TunnelList> {
     return $Call.ByID(3666209663);
 }
 
+export function PutSandboxProfileGrants(sandboxID: string, profileID: string, capabilities: string[] | null): $CancellablePromise<$models.SandboxProfileGrants> {
+    return $Call.ByID(3444082118, sandboxID, profileID, capabilities);
+}
+
 export function RebindProvider(providerID: string, installationID: string, config: { [_ in string]?: any } | null): $CancellablePromise<$models.ProviderMutationResponse> {
     return $Call.ByID(1790042971, providerID, installationID, config);
 }
@@ -246,6 +258,10 @@ export function ReplaceProfileTools(slug: string, tools: $models.ProfileTool[] |
 
 export function RestartMCPServer(serverID: string): $CancellablePromise<$models.MCPServerInstance> {
     return $Call.ByID(2194966826, serverID);
+}
+
+export function RevokeSandboxProfileGrants(sandboxID: string, profileID: string): $CancellablePromise<$models.SandboxProfileGrants> {
+    return $Call.ByID(954645277, sandboxID, profileID);
 }
 
 export function RotateNativeCredential($namespace: string, name: string, secret: string): $CancellablePromise<$models.Credential> {

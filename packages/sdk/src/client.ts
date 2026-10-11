@@ -19,6 +19,11 @@ export type Tunnel = components["schemas"]["Tunnel"];
 export type Sandbox = components["schemas"]["Sandbox"];
 export type SandboxActivity = components["schemas"]["SandboxActivity"];
 export type SandboxActivityEvent = components["schemas"]["SandboxActivityEvent"];
+export type SandboxProfileGrants = components["schemas"]["SandboxProfileGrants"];
+export type SandboxProfileGrant = components["schemas"]["SandboxProfileGrant"];
+export type SandboxProfileCapability = components["schemas"]["SandboxProfileCapability"];
+export type SandboxProfileGrantEvents = components["schemas"]["SandboxProfileGrantEvents"];
+export type ReplaceSandboxProfileGrantsRequest = components["schemas"]["ReplaceSandboxProfileGrantsRequest"];
 export type CreateLocalSandboxRequest = components["schemas"]["CreateLocalSandboxRequest"];
 export type CreateDockerSandboxRequest = components["schemas"]["CreateDockerSandboxRequest"];
 export type CreateDaytonaSandboxRequest = components["schemas"]["CreateDaytonaSandboxRequest"];
@@ -156,6 +161,10 @@ export interface MenderClient {
   listSandboxes(): Promise<{ sandboxes: Sandbox[] }>;
   getSandbox(sandboxId: string): Promise<Sandbox>;
   getSandboxActivity(sandboxId: string, limit?: number): Promise<SandboxActivity>;
+  getSandboxProfileGrants(sandboxId: string): Promise<SandboxProfileGrants>;
+  putSandboxProfileGrants(sandboxId: string, profileId: string, body: ReplaceSandboxProfileGrantsRequest): Promise<SandboxProfileGrants>;
+  revokeSandboxProfileGrants(sandboxId: string, profileId: string): Promise<SandboxProfileGrants>;
+  getSandboxProfileGrantEvents(sandboxId: string): Promise<SandboxProfileGrantEvents>;
   createLocalSandbox(body: CreateLocalSandboxRequest): Promise<Sandbox>;
   createDockerSandbox(body: CreateDockerSandboxRequest): Promise<Sandbox>;
   createDaytonaSandbox(body: CreateDaytonaSandboxRequest): Promise<Sandbox>;
@@ -495,6 +504,22 @@ export function createMenderClient(
     async getSandboxActivity(sandboxId, limit = 50) {
       const result = await client.GET("/sandboxes/{sandboxId}/activity", {params:{path:{sandboxId},query:{limit}}});
       return requireData(result);
+    },
+    async getSandboxProfileGrants(sandboxId) {
+      return requireData(await client.GET("/sandboxes/{sandboxId}/profile-grants", { params: { path: { sandboxId } } }));
+    },
+    async putSandboxProfileGrants(sandboxId, profileId, body) {
+      return requireData(await client.PUT("/sandboxes/{sandboxId}/profile-grants/{profileId}", {
+        params: { path: { sandboxId, profileId } }, body,
+      }));
+    },
+    async revokeSandboxProfileGrants(sandboxId, profileId) {
+      return requireData(await client.DELETE("/sandboxes/{sandboxId}/profile-grants/{profileId}", {
+        params: { path: { sandboxId, profileId } },
+      }));
+    },
+    async getSandboxProfileGrantEvents(sandboxId) {
+      return requireData(await client.GET("/sandboxes/{sandboxId}/profile-grant-events", { params: { path: { sandboxId } } }));
     },
     async createLocalSandbox(body: CreateLocalSandboxRequest) {
       const result = await client.POST("/sandboxes/local", {body});

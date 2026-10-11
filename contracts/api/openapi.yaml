@@ -763,6 +763,72 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+  /sandboxes/{sandboxId}/profile-grants:
+    get:
+      operationId: getSandboxProfileGrants
+      description: Owner-only current Profile capability grants; ungranted by default.
+      parameters:
+        - $ref: '#/components/parameters/SandboxId'
+      responses:
+        '200':
+          description: Current explicit Profile access to a Sandbox
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SandboxProfileGrants' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /sandboxes/{sandboxId}/profile-grants/{profileId}:
+    parameters:
+      - $ref: '#/components/parameters/SandboxId'
+      - in: path
+        name: profileId
+        required: true
+        schema: { type: string, pattern: '^prof_[0-9a-f]{32}$' }
+    put:
+      operationId: putSandboxProfileGrants
+      description: The local owner replaces one existing Profile's allowed capabilities. No implicit grant.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReplaceSandboxProfileGrantsRequest' }
+      responses:
+        '200':
+          description: Replaced capability grant set
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SandboxProfileGrants' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+    delete:
+      operationId: revokeSandboxProfileGrants
+      description: Owner revokes all of one Profile's capabilities. In-progress durable leases are not force-aborted.
+      responses:
+        '200':
+          description: Revocation complete
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SandboxProfileGrants' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /sandboxes/{sandboxId}/profile-grant-events:
+    get:
+      operationId: getSandboxProfileGrantEvents
+      description: Last 100 owner-only grant/revoke audit events, newest first.
+      parameters:
+        - $ref: '#/components/parameters/SandboxId'
+      responses:
+        '200':
+          description: Sanitized Profile grant/revoke history
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SandboxProfileGrantEvents' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /sandboxes/{sandboxId}/daytona/reconcile:
     post:
       operationId: reconcileDaytonaSandbox
@@ -1946,6 +2012,60 @@ components:
           type: string
           description: Mender Credential Reference containing the OpenAI tunnel runtime API key.
       additionalProperties: false
+    SandboxProfileCapability:
+      type: string
+      enum: ['file.read', 'file.search', 'file.edit', 'process.shell']
+    SandboxProfileGrant:
+      type: object
+      additionalProperties: false
+      required: [profileId, capabilities]
+      properties:
+        profileId: { type: string, pattern: '^prof_[0-9a-f]{32}$' }
+        capabilities:
+          type: array
+          uniqueItems: true
+          minItems: 1
+          maxItems: 4
+          items: { $ref: '#/components/schemas/SandboxProfileCapability' }
+    SandboxProfileGrants:
+      type: object
+      additionalProperties: false
+      required: [sandboxId, grants]
+      properties:
+        sandboxId: { type: string, pattern: '^sbx_[0-9a-f]{32}$' }
+        grants:
+          type: array
+          items: { $ref: '#/components/schemas/SandboxProfileGrant' }
+    ReplaceSandboxProfileGrantsRequest:
+      type: object
+      additionalProperties: false
+      required: [capabilities]
+      properties:
+        capabilities:
+          type: array
+          uniqueItems: true
+          minItems: 1
+          maxItems: 4
+          items: { $ref: '#/components/schemas/SandboxProfileCapability' }
+    SandboxProfileGrantEvent:
+      type: object
+      additionalProperties: false
+      required: [profileId, capability, action, occurredAt]
+      properties:
+        profileId: { type: string, pattern: '^prof_[0-9a-f]{32}$' }
+        capability: { $ref: '#/components/schemas/SandboxProfileCapability' }
+        action: { type: string, enum: [grant, revoke] }
+        occurredAt: { type: string, format: date-time }
+    SandboxProfileGrantEvents:
+      type: object
+      additionalProperties: false
+      required: [sandboxId, events]
+      properties:
+        sandboxId: { type: string, pattern: '^sbx_[0-9a-f]{32}$' }
+        events:
+          type: array
+          maxItems: 100
+          items: { $ref: '#/components/schemas/SandboxProfileGrantEvent' }
     SandboxActivity:
       type: object
       additionalProperties: false

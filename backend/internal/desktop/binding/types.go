@@ -42,6 +42,27 @@ type SandboxActivity struct {
 type SandboxList struct {
 	Sandboxes []Sandbox `json:"sandboxes"`
 }
+
+// Owner-only Profile access. No remote Principal reference is supplied as input.
+type SandboxProfileGrant struct {
+	ProfileID    string   `json:"profileId"`
+	Capabilities []string `json:"capabilities"`
+}
+type SandboxProfileGrants struct {
+	SandboxID string                `json:"sandboxId"`
+	Grants    []SandboxProfileGrant `json:"grants"`
+}
+type SandboxProfileGrantEvent struct {
+	ProfileID  string `json:"profileId"`
+	Capability string `json:"capability"`
+	Action     string `json:"action"`
+	OccurredAt string `json:"occurredAt"`
+}
+type SandboxProfileGrantEvents struct {
+	SandboxID string                     `json:"sandboxId"`
+	Events    []SandboxProfileGrantEvent `json:"events"`
+}
+
 type DockerBackendStatus struct {
 	DaytonaConfigured bool   `json:"daytonaConfigured"`
 	DaytonaStatus     string `json:"daytonaStatus"`

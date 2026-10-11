@@ -30,6 +30,21 @@ func IsOwner(caller governancedomain.Context, sandbox sandboxdomain.Sandbox) boo
 		subject.Reference() == sandbox.OwnerRef()
 }
 
+// IsGrantManager identifies an authenticated local control-plane operation.
+// A Profile MCP service never manages grants, even for a service-owned Sandbox.
+func IsGrantManager(caller governancedomain.Context, sandbox sandboxdomain.Sandbox) bool {
+	if caller.Validate() != nil || !IsOwner(caller, sandbox) ||
+		caller.Principal().Kind() != governancedomain.PrincipalLocalUser ||
+		caller.Scope().Kind() != governancedomain.ScopeCatalog {
+		return false
+	}
+	switch caller.Origin() {
+	case governancedomain.OriginCLI, governancedomain.OriginDesktop, governancedomain.OriginManagementHTTP:
+		return true
+	}
+	return false
+}
+
 // ProfileDelegationLookup checks current grants before admission. The durable
 // lease store must re-check the same grant atomically when reserving execution.
 type ProfileDelegationLookup interface {

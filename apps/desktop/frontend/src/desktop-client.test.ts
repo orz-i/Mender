@@ -20,6 +20,10 @@ vi.mock(
       GetCredential: vi.fn(),
       GetPolicy: vi.fn(),
       GetRuntimeGovernance: vi.fn(),
+      GetSandboxProfileGrants: vi.fn(),
+      PutSandboxProfileGrants: vi.fn(),
+      RevokeSandboxProfileGrants: vi.fn(),
+      GetSandboxProfileGrantEvents: vi.fn(),
       GetSkillInstallation: vi.fn(),
       GetPolicyStatus: vi.fn(),
       GetSystemStatus: vi.fn(),
@@ -975,6 +979,24 @@ describe("desktop Mender client", () => {
         },
       ],
     });
+  });
+
+  it("adapts owner-only Sandbox Profile grant methods", async () => {
+    const sandboxId = "sbx_0123456789abcdef0123456789abcdef";
+    const profileId = "prof_0123456789abcdef0123456789abcdef";
+    const grant = { sandboxId, grants: [{ profileId, capabilities: ["file.read"] }] };
+    vi.mocked(Service.GetSandboxProfileGrants).mockResolvedValue(grant);
+    vi.mocked(Service.PutSandboxProfileGrants).mockResolvedValue(grant);
+    vi.mocked(Service.RevokeSandboxProfileGrants).mockResolvedValue({sandboxId,grants:[]});
+    vi.mocked(Service.GetSandboxProfileGrantEvents).mockResolvedValue({sandboxId,events:[]});
+    const client = createDesktopMenderClient();
+    await expect(client.getSandboxProfileGrants(sandboxId)).resolves.toEqual(grant);
+    await expect(client.putSandboxProfileGrants(sandboxId,profileId,{capabilities:["file.read"]})).resolves.toEqual(grant);
+    expect(Service.PutSandboxProfileGrants).toHaveBeenCalledWith(sandboxId,profileId,["file.read"]);
+    await expect(client.revokeSandboxProfileGrants(sandboxId,profileId)).resolves.toEqual({sandboxId,grants:[]});
+    await expect(client.getSandboxProfileGrantEvents(sandboxId)).resolves.toEqual({sandboxId,events:[]});
+    vi.mocked(Service.GetSandboxProfileGrants).mockResolvedValue({sandboxId,grants:[{profileId,capabilities:["invalid"]}]});
+    await expect(client.getSandboxProfileGrants(sandboxId)).rejects.toBeInstanceOf(MenderClientInvariantError);
   });
 
   it("rejects unexpected binding enum values at the host boundary", async () => {

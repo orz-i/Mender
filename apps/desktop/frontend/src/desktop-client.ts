@@ -31,6 +31,9 @@ import type {
   Sandbox,
   SandboxActivity,
   SandboxActivityEvent,
+  SandboxProfileGrants,
+  SandboxProfileGrantEvents,
+  SandboxProfileCapability,
 } from "@mender/sdk";
 
 import {
@@ -66,6 +69,8 @@ import {
   type Tunnel as BindingTunnel,
   type Sandbox as BindingSandbox,
   type SandboxActivity as BindingSandboxActivity,
+  type SandboxProfileGrants as BindingSandboxProfileGrants,
+  type SandboxProfileGrantEvents as BindingSandboxProfileGrantEvents,
 } from "../bindings/github.com/orz-i/Mender/backend/internal/desktop/binding";
 
 export async function installDesktopProviderPlugin(
@@ -378,6 +383,18 @@ export function createDesktopMenderClient(): MenderClient {
 
     async getSandboxActivity(sandboxId, limit = 50) {
       return sandboxActivity(await Service.GetSandboxActivity(sandboxId, limit));
+    },
+    async getSandboxProfileGrants(sandboxId) {
+      return sandboxProfileGrants(await Service.GetSandboxProfileGrants(sandboxId));
+    },
+    async putSandboxProfileGrants(sandboxId, profileId, body) {
+      return sandboxProfileGrants(await Service.PutSandboxProfileGrants(sandboxId, profileId, body.capabilities));
+    },
+    async revokeSandboxProfileGrants(sandboxId, profileId) {
+      return sandboxProfileGrants(await Service.RevokeSandboxProfileGrants(sandboxId, profileId));
+    },
+    async getSandboxProfileGrantEvents(sandboxId) {
+      return sandboxProfileGrantEvents(await Service.GetSandboxProfileGrantEvents(sandboxId, 100));
     },
     async createLocalSandbox(body) {
       return sandbox(await Service.CreateLocalSandbox(body));
@@ -1269,6 +1286,44 @@ function mcpServerInstance(
     ...(value.tunnelStatus === undefined
       ? {}
       : { tunnelStatus: tunnelStatus(value.tunnelStatus) }),
+  };
+}
+
+const SANDBOX_PROFILE_CAPABILITIES: ReadonlySet<string> = new Set([
+  "file.read", "file.search", "file.edit", "process.shell",
+]);
+
+function sandboxProfileCapability(value: string): SandboxProfileCapability {
+  if (!SANDBOX_PROFILE_CAPABILITIES.has(value)) {
+    throw new MenderClientInvariantError("Unsupported Sandbox Profile capability");
+  }
+  return value as SandboxProfileCapability;
+}
+
+function sandboxProfileGrants(value: BindingSandboxProfileGrants): SandboxProfileGrants {
+  return {
+    sandboxId: value.sandboxId,
+    grants: (value.grants ?? []).map((grant) => ({
+      profileId: grant.profileId,
+      capabilities: (grant.capabilities ?? []).map(sandboxProfileCapability),
+    })),
+  };
+}
+
+function sandboxProfileGrantEvents(value: BindingSandboxProfileGrantEvents): SandboxProfileGrantEvents {
+  return {
+    sandboxId: value.sandboxId,
+    events: (value.events ?? []).map((event) => {
+      if (event.action !== "grant" && event.action !== "revoke") {
+        throw new MenderClientInvariantError("Unsupported Sandbox grant audit action");
+      }
+      return {
+        profileId: event.profileId,
+        capability: sandboxProfileCapability(event.capability),
+        action: event.action,
+        occurredAt: event.occurredAt,
+      };
+    }),
   };
 }
 

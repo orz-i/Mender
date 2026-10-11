@@ -46,7 +46,7 @@ func (s *Store) ListProfileGrants(ctx context.Context, id sandboxdomain.ID, call
 	if err != nil {
 		return nil, err
 	}
-	if !sandboxapplication.IsOwner(caller, item) {
+	if !sandboxapplication.IsGrantManager(caller, item) {
 		return nil, sandboxdomain.ErrNotAuthorized
 	}
 	rows, err := s.db.QueryContext(ctx, "SELECT profile_id,capability FROM sandbox_profile_grants WHERE sandbox_id=? ORDER BY profile_id,capability", id.String())
@@ -201,7 +201,7 @@ func (s *Store) ListGrantEvents(ctx context.Context, id sandboxdomain.ID, caller
 	if err != nil {
 		return nil, err
 	}
-	if !sandboxapplication.IsOwner(caller, item) {
+	if !sandboxapplication.IsGrantManager(caller, item) {
 		return nil, sandboxdomain.ErrNotAuthorized
 	}
 	rows, err := s.db.QueryContext(ctx, "SELECT profile_id,capability,action,occurred_at FROM sandbox_profile_grant_events WHERE sandbox_id=? ORDER BY event_id DESC LIMIT ?", id.String(), limit)

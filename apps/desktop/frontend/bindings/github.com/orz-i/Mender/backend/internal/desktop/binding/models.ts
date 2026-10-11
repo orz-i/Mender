@@ -388,6 +388,31 @@ export interface SandboxList {
     "sandboxes": Sandbox[] | null;
 }
 
+/**
+ * Owner-only Profile access. No remote Principal reference is supplied as input.
+ */
+export interface SandboxProfileGrant {
+    "profileId": string;
+    "capabilities": string[] | null;
+}
+
+export interface SandboxProfileGrantEvent {
+    "profileId": string;
+    "capability": string;
+    "action": string;
+    "occurredAt": string;
+}
+
+export interface SandboxProfileGrantEvents {
+    "sandboxId": string;
+    "events": SandboxProfileGrantEvent[] | null;
+}
+
+export interface SandboxProfileGrants {
+    "sandboxId": string;
+    "grants": SandboxProfileGrant[] | null;
+}
+
 export interface SkillDeployment {
     "deploymentId": string;
     "installationId": string;
