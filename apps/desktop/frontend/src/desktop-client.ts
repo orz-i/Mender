@@ -20,6 +20,7 @@ import type {
   ProviderPlugin,
   ProviderPluginInstallation,
   ProviderPluginIssue,
+  PluginCatalogueEntry,
   SkillDeployment,
   SkillInspection,
   SkillInstallation,
@@ -57,6 +58,7 @@ import {
   type ProviderPlugin as BindingProviderPlugin,
   type ProviderPluginInstallation as BindingProviderPluginInstallation,
   type ProviderPluginIssue as BindingProviderPluginIssue,
+  type PluginCatalogueEntry as BindingPluginCatalogueEntry,
   type SkillDeployment as BindingSkillDeployment,
   type SkillInspection as BindingSkillInspection,
   type SkillInstallation as BindingSkillInstallation,
@@ -72,6 +74,10 @@ import {
   type SandboxProfileGrants as BindingSandboxProfileGrants,
   type SandboxProfileGrantEvents as BindingSandboxProfileGrantEvents,
 } from "../bindings/github.com/orz-i/Mender/backend/internal/desktop/binding";
+
+export async function installDesktopPlugin(sourcePath:string,kind:PluginCatalogueEntry["kind"]){
+  return providerPluginInstallation(await Service.InstallPlugin(sourcePath,kind));
+}
 
 export async function installDesktopProviderPlugin(
   sourcePath: string,
@@ -103,6 +109,19 @@ export function createDesktopMenderClient(): MenderClient {
       return systemStatus(await Service.GetSystemStatus());
     },
 
+    async listPluginCatalogue(){
+      const catalogue=await Service.ListPluginCatalogue();
+      return {plugins:(catalogue.plugins??[]).map(pluginCatalogueEntry)};
+    },
+    async enablePluginInstallation(installationId){
+      return {installation:providerPluginInstallation(await Service.EnablePluginInstallation(installationId))};
+    },
+    async disablePluginInstallation(installationId){
+      return {installation:providerPluginInstallation(await Service.DisablePluginInstallation(installationId))};
+    },
+    async deletePluginInstallation(installationId){
+      await Service.DeletePluginInstallation(installationId);
+    },
     async listProviderPlugins() {
       const result = await Service.ListProviderPlugins();
       return {
@@ -403,6 +422,14 @@ export function createDesktopMenderClient(): MenderClient {
     async getSandboxBackends() {
       return Service.GetSandboxBackends();
     },
+    async createExternalSandbox(body){
+      return sandbox(await Service.CreateExternalSandbox({
+        name:body.name,installationId:body.installationId,configJson:JSON.stringify(body.config),
+      }));
+    },
+    async reconcileSandbox(sandboxId){
+      return sandbox(await Service.ReconcileSandbox(sandboxId));
+    },
     async createDaytonaSandbox(body) {
       return sandbox(await Service.CreateDaytonaSandbox(body));
     },
@@ -431,6 +458,11 @@ export function createDesktopMenderClient(): MenderClient {
       return { tunnels: (result.tunnels ?? []).map(tunnel) };
     },
 
+    async createExternalTunnel(body){
+      return tunnel(await Service.CreateExternalTunnel(
+        body.displayName,body.installationId,body.externalTunnelId,body.runtimeCredentialRef,
+      ));
+    },
     async createOpenAITunnel(body) {
       return tunnel(
         await Service.CreateOpenAITunnel(
@@ -890,6 +922,34 @@ function providerPluginUISchema(
   throw new MenderClientInvariantError("Unsupported Provider plugin UI schema");
 }
 
+function pluginCatalogueEntry(value:BindingPluginCatalogueEntry):PluginCatalogueEntry {
+  if(!["provider.tools","sandbox.backend","tunnel.transport"].includes(value.kind) ||
+     !["builtin","local"].includes(value.sourceKind) ||
+     !["enabled","disabled","invalid"].includes(value.status)){
+    throw new MenderClientInvariantError("Unsupported typed plugin catalogue entry");
+  }
+  const schema=value.configSchema;
+  if(schema!==undefined && typeof schema!=="boolean" &&
+     (typeof schema!=="object" || schema===null || Array.isArray(schema))){
+    throw new MenderClientInvariantError("Unsupported plugin configuration schema");
+  }
+  return {
+    key:value.key,pluginId:value.pluginId,extensionId:value.extensionId,
+    kind:value.kind as PluginCatalogueEntry["kind"],displayName:value.displayName,
+    description:value.description,packageVersion:value.packageVersion,
+    sourceKind:value.sourceKind as PluginCatalogueEntry["sourceKind"],
+    status:value.status as PluginCatalogueEntry["status"],
+    enabled:value.enabled,capabilities:value.capabilities??[],usageCount:value.usageCount,
+    ...(value.installationId?{installationId:value.installationId}:{}),
+    ...(value.digest?{digest:value.digest}:{}),
+    ...(value.installedAt?{installedAt:value.installedAt}:{}),
+    ...(value.configVersion?{configVersion:value.configVersion}:{}),
+    ...(value.protocolVersion?{protocolVersion:value.protocolVersion}:{}),
+    ...(schema!==undefined?{configSchema:schema}:{}),
+    ...(value.issue?{issue:value.issue}:{}),
+  };
+}
+
 function providerPluginInstallation(
   value: BindingProviderPluginInstallation,
 ): ProviderPluginInstallation {
@@ -1303,6 +1363,7 @@ function sandboxProfileCapability(value: string): SandboxProfileCapability {
 function sandboxProfileGrants(value: BindingSandboxProfileGrants): SandboxProfileGrants {
   return {
     sandboxId: value.sandboxId,
+
     grants: (value.grants ?? []).map((grant) => ({
       profileId: grant.profileId,
       capabilities: (grant.capabilities ?? []).map(sandboxProfileCapability),
@@ -1313,6 +1374,7 @@ function sandboxProfileGrants(value: BindingSandboxProfileGrants): SandboxProfil
 function sandboxProfileGrantEvents(value: BindingSandboxProfileGrantEvents): SandboxProfileGrantEvents {
   return {
     sandboxId: value.sandboxId,
+
     events: (value.events ?? []).map((event) => {
       if (event.action !== "grant" && event.action !== "revoke") {
         throw new MenderClientInvariantError("Unsupported Sandbox grant audit action");
@@ -1347,7 +1409,7 @@ function sandboxActivity(value: BindingSandboxActivity): SandboxActivity {
 }
 
 function sandbox(value: BindingSandbox): Sandbox {
-  if (!["local_workspace", "docker", "daytona", "e2b"].includes(value.backend) ||
+  if (!["local_workspace", "docker", "daytona", "e2b", "external"].includes(value.backend) ||
       !["host", "restricted_host", "container", "remote"].includes(value.isolation) ||
       !["defined", "provisioning", "ready", "stopping", "stopped", "destroying", "destroyed", "failed", "unknown", "orphaned"].includes(value.state) ||
       (value.ownerKind !== "local_user" && value.ownerKind !== "service")) {
@@ -1355,6 +1417,9 @@ function sandbox(value: BindingSandbox): Sandbox {
   }
   return {
     sandboxId: value.sandboxId,
+    ...(value.pluginId?{pluginId:value.pluginId}:{}),
+    ...(value.extensionId?{extensionId:value.extensionId}:{}),
+    ...(value.installationId?{installationId:value.installationId}:{}),
     name: value.name,
     backend: value.backend as Sandbox["backend"],
     isolation: value.isolation as Sandbox["isolation"],
@@ -1370,6 +1435,9 @@ function sandbox(value: BindingSandbox): Sandbox {
 function tunnel(value: BindingTunnel): Tunnel {
   return {
     tunnelId: value.tunnelId,
+    ...(value.pluginId?{pluginId:value.pluginId}:{}),
+    ...(value.extensionId?{extensionId:value.extensionId}:{}),
+    ...(value.installationId?{installationId:value.installationId}:{}),
     displayName: value.displayName,
     provider: tunnelProvider(value.provider),
     externalTunnelId: value.externalTunnelId,
@@ -1377,16 +1445,16 @@ function tunnel(value: BindingTunnel): Tunnel {
   };
 }
 
-function tunnelProvider(value: string): "openai" {
-  if (value === "openai") {
+function tunnelProvider(value: string): Tunnel["provider"] {
+  if (value === "openai" || value === "external") {
     return value;
   }
   throw new MenderClientInvariantError("Unsupported Tunnel provider: " + value);
 }
 
-function tunnelStatus(value: string): "running" | "exited" {
-  if (value === "running" || value === "exited") {
-    return value;
+function tunnelStatus(value: string): NonNullable<MCPServerInstance["tunnelStatus"]> {
+  if (["starting","ready","degraded","failed","exited","running"].includes(value)) {
+    return value as NonNullable<MCPServerInstance["tunnelStatus"]>;
   }
   throw new MenderClientInvariantError("Unsupported Tunnel status: " + value);
 }

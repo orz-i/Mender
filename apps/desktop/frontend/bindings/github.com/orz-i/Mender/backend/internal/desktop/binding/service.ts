@@ -40,6 +40,14 @@ export function CreateEnvironmentCredential($namespace: string, name: string, di
     return $Call.ByID(3148533732, $namespace, name, displayName, environmentVariable);
 }
 
+export function CreateExternalSandbox(input: $models.CreateExternalSandboxInput): $CancellablePromise<$models.Sandbox> {
+    return $Call.ByID(2755442042, input);
+}
+
+export function CreateExternalTunnel(displayName: string, installationID: string, externalID: string, credentialRef: string): $CancellablePromise<$models.Tunnel> {
+    return $Call.ByID(565443465, displayName, installationID, externalID, credentialRef);
+}
+
 export function CreateHTTPProvider($namespace: string, displayName: string, description: string, endpoint: string, headers: { [_ in string]?: string } | null, credentialHeaders: $models.CredentialHeader[] | null): $CancellablePromise<$models.ProviderMutationResponse> {
     return $Call.ByID(2466151773, $namespace, displayName, description, endpoint, headers, credentialHeaders);
 }
@@ -76,6 +84,10 @@ export function DeleteCredential($namespace: string, name: string): $Cancellable
     return $Call.ByID(3995507350, $namespace, name);
 }
 
+export function DeletePluginInstallation(rawID: string): $CancellablePromise<void> {
+    return $Call.ByID(3155509060, rawID);
+}
+
 export function DeletePolicyRule(ruleID: string): $CancellablePromise<void> {
     return $Call.ByID(3136236455, ruleID);
 }
@@ -104,12 +116,20 @@ export function DestroySandbox(sandboxID: string): $CancellablePromise<$models.S
     return $Call.ByID(220259473, sandboxID);
 }
 
+export function DisablePluginInstallation(id: string): $CancellablePromise<$models.ProviderPluginInstallation> {
+    return $Call.ByID(1277897699, id);
+}
+
 export function DisableProviderPluginInstallation(installationID: string): $CancellablePromise<$models.ProviderPluginInstallation> {
     return $Call.ByID(3166916010, installationID);
 }
 
 export function DisableSkillInstallation(installationID: string): $CancellablePromise<$models.SkillInstallation> {
     return $Call.ByID(3452175237, installationID);
+}
+
+export function EnablePluginInstallation(id: string): $CancellablePromise<$models.ProviderPluginInstallation> {
+    return $Call.ByID(3698993472, id);
 }
 
 export function EnableProviderPluginInstallation(installationID: string): $CancellablePromise<$models.ProviderPluginInstallation> {
@@ -176,6 +196,10 @@ export function GetTool(toolID: string): $CancellablePromise<$models.ToolDetail>
     return $Call.ByID(973227434, toolID);
 }
 
+export function InstallPlugin(sourcePath: string, kind: string): $CancellablePromise<$models.ProviderPluginInstallation> {
+    return $Call.ByID(2808272564, sourcePath, kind);
+}
+
 export function InstallProviderPlugin(sourcePath: string): $CancellablePromise<$models.ProviderPluginInstallation> {
     return $Call.ByID(524382217, sourcePath);
 }
@@ -194,6 +218,10 @@ export function ListCredentials(): $CancellablePromise<$models.CredentialList> {
 
 export function ListMCPServers(): $CancellablePromise<$models.MCPServerList> {
     return $Call.ByID(3824735736);
+}
+
+export function ListPluginCatalogue(): $CancellablePromise<$models.PluginCatalogueList> {
+    return $Call.ByID(1928914560);
 }
 
 export function ListProfiles(): $CancellablePromise<$models.ProfileList> {
@@ -246,6 +274,10 @@ export function ReconcileDaytonaSandbox(raw: string): $CancellablePromise<$model
 
 export function ReconcileDockerSandbox(raw: string): $CancellablePromise<$models.Sandbox> {
     return $Call.ByID(3611398827, raw);
+}
+
+export function ReconcileSandbox(raw: string): $CancellablePromise<$models.Sandbox> {
+    return $Call.ByID(1011418727, raw);
 }
 
 export function RemoveProfileTool(slug: string, toolID: string): $CancellablePromise<$models.Profile> {

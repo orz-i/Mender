@@ -51,6 +51,12 @@ export interface CreateDockerSandboxInput {
     "pids": number;
 }
 
+export interface CreateExternalSandboxInput {
+    "name": string;
+    "installationId": string;
+    "configJson": string;
+}
+
 export interface CreateLocalSandboxInput {
     "name": string;
     "root": string;
@@ -132,6 +138,35 @@ export interface MCPStatus {
     "stdio": boolean;
     "streamableHttp": boolean;
     "exposureModes": string[] | null;
+}
+
+/**
+ * PluginCatalogueEntry mirrors the inert all-kind management catalogue.
+ */
+export interface PluginCatalogueEntry {
+    "key": string;
+    "pluginId": string;
+    "extensionId": string;
+    "kind": string;
+    "displayName": string;
+    "description": string;
+    "packageVersion": string;
+    "sourceKind": string;
+    "status": string;
+    "enabled": boolean;
+    "installationId"?: string;
+    "digest"?: string;
+    "installedAt"?: string;
+    "configVersion"?: number;
+    "protocolVersion"?: number;
+    "configSchema"?: any;
+    "capabilities": string[] | null;
+    "usageCount": number;
+    "issue"?: string;
+}
+
+export interface PluginCatalogueList {
+    "plugins": PluginCatalogueEntry[] | null;
 }
 
 export interface Policy {
@@ -350,6 +385,9 @@ export interface RuntimeUsage {
  * Sandbox is management metadata; state reflects the last persisted observation.
  */
 export interface Sandbox {
+    "pluginId"?: string;
+    "extensionId"?: string;
+    "installationId"?: string;
     "sandboxId": string;
     "name": string;
     "backend": string;
@@ -512,6 +550,9 @@ export interface ToolSummary {
 }
 
 export interface Tunnel {
+    "pluginId"?: string;
+    "extensionId"?: string;
+    "installationId"?: string;
     "tunnelId": string;
     "displayName": string;
     "provider": string;

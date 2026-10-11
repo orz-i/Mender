@@ -69,6 +69,10 @@ func (h *Handler) routes() {
 	h.mux.HandleFunc("POST /api/v1/credentials/{namespace}/{name}/rotate", h.rotateCredential)
 	h.mux.HandleFunc("DELETE /api/v1/credentials/{namespace}/{name}", h.deleteCredential)
 
+	h.mux.HandleFunc("GET /api/v1/plugins", h.listPluginCatalogue)
+	h.mux.HandleFunc("POST /api/v1/plugin-installations/{installationId}/enable", h.enablePluginInstallation)
+	h.mux.HandleFunc("POST /api/v1/plugin-installations/{installationId}/disable", h.disablePluginInstallation)
+	h.mux.HandleFunc("DELETE /api/v1/plugin-installations/{installationId}", h.deletePluginInstallation)
 	h.mux.HandleFunc("GET /api/v1/provider-plugins", h.listProviderPlugins)
 	h.mux.HandleFunc("GET /api/v1/provider-plugin-installations", h.listProviderPluginInstallations)
 	h.mux.HandleFunc("POST /api/v1/provider-plugin-installations/{installationId}/enable", h.enableProviderPluginInstallation)
@@ -112,6 +116,7 @@ func (h *Handler) routes() {
 	h.mux.HandleFunc("GET /api/v1/sandboxes/backends", h.sandboxBackends)
 	h.mux.HandleFunc("POST /api/v1/sandboxes/docker", h.createDockerSandbox)
 	h.mux.HandleFunc("POST /api/v1/sandboxes/daytona", h.createDaytonaSandbox)
+	h.mux.HandleFunc("POST /api/v1/sandboxes/external", h.createExternalSandbox)
 	h.mux.HandleFunc("POST /api/v1/sandboxes/{sandboxId}/daytona/reconcile", h.reconcileDaytonaSandbox)
 	h.mux.HandleFunc("POST /api/v1/sandboxes/{sandboxId}/reconcile", h.reconcileDockerSandbox)
 	h.mux.HandleFunc("GET /api/v1/sandboxes/{sandboxId}", h.getSandbox)
@@ -125,6 +130,7 @@ func (h *Handler) routes() {
 	h.mux.HandleFunc("DELETE /api/v1/sandboxes/{sandboxId}", h.destroyLocalSandbox)
 	h.mux.HandleFunc("GET /api/v1/tunnels", h.listTunnels)
 	h.mux.HandleFunc("POST /api/v1/tunnels/openai", h.createOpenAITunnel)
+	h.mux.HandleFunc("POST /api/v1/tunnels/external", h.createExternalTunnel)
 	h.mux.HandleFunc("DELETE /api/v1/tunnels/{tunnelId}", h.deleteTunnel)
 
 	h.mux.HandleFunc("GET /api/v1/mcp/servers", h.listMCPServers)

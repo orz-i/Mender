@@ -17,6 +17,65 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SystemStatus'
+  /plugins:
+    get:
+      operationId: listPluginCatalogue
+      responses:
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '200':
+          description: Process-free canonical Plugin Catalogue for all extension kinds
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [plugins]
+                properties:
+                  plugins:
+                    type: array
+                    items: { $ref: '#/components/schemas/PluginCatalogueEntry' }
+  /plugin-installations/{installationId}/enable:
+    post:
+      operationId: enablePluginInstallation
+      parameters: [{ $ref: '#/components/parameters/InstallationId' }]
+      responses:
+        '200':
+          description: Typed installation enabled
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [installation]
+                properties:
+                  installation: { $ref: '#/components/schemas/ProviderPluginInstallation' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /plugin-installations/{installationId}/disable:
+    post:
+      operationId: disablePluginInstallation
+      parameters: [{ $ref: '#/components/parameters/InstallationId' }]
+      responses:
+        '200':
+          description: Typed installation disabled when all resource domains permit
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [installation]
+                properties:
+                  installation: { $ref: '#/components/schemas/ProviderPluginInstallation' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /plugin-installations/{installationId}:
+    delete:
+      operationId: deletePluginInstallation
+      parameters: [{ $ref: '#/components/parameters/InstallationId' }]
+      responses:
+        '204': { description: Unreferenced typed installation removed }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
   /provider-plugins:
     get:
       operationId: listProviderPlugins
@@ -675,6 +734,28 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '409': { $ref: '#/components/responses/Conflict' }
         '503': { description: Docker Engine unavailable }
+  /sandboxes/external:
+    post:
+      operationId: createExternalSandbox
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateExternalSandboxRequest' }
+      responses:
+        '201':
+          description: Externally provisioned Sandbox
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Sandbox' }
+        '202':
+          description: Sandbox created with uncertain provisioning; reconcile explicitly
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Sandbox' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
   /sandboxes/daytona:
     post:
       operationId: createDaytonaSandbox
@@ -907,6 +988,24 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/Tunnel'
+  /tunnels/external:
+    post:
+      operationId: createExternalTunnel
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateExternalTunnelRequest' }
+      responses:
+        '201':
+          description: Managed Tunnel using one exact native transport installation
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Tunnel' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
   /tunnels/openai:
     post:
       operationId: createOpenAITunnel
@@ -1568,6 +1667,36 @@ components:
       properties:
         secret: { type: string, writeOnly: true }
       additionalProperties: false
+    PluginCatalogueEntry:
+      type: object
+      required: [key, pluginId, extensionId, kind, displayName, description, packageVersion, sourceKind, status, enabled, capabilities, usageCount]
+      properties:
+        key: { type: string }
+        pluginId: { type: string }
+        extensionId: { type: string }
+        kind: { type: string, enum: [provider.tools, sandbox.backend, tunnel.transport] }
+        displayName: { type: string }
+        description: { type: string }
+        packageVersion: { type: string }
+        sourceKind: { type: string, enum: [builtin, local] }
+        status: { type: string, enum: [enabled, disabled, invalid] }
+        enabled: { type: boolean }
+        capabilities:
+          type: array
+          items: { type: string }
+        usageCount: { type: integer, minimum: 0 }
+        issue: { type: string }
+        installationId: { type: string }
+        digest: { type: string }
+        installedAt: { type: string, format: date-time }
+        configVersion: { type: integer, minimum: 1 }
+        protocolVersion: { type: integer, minimum: 1 }
+        configSchema:
+          oneOf:
+            - type: object
+              additionalProperties: true
+            - type: boolean
+      additionalProperties: false
     ProviderPlugin:
       type: object
       required: [pluginId, version, packageVersion, displayName, description, configVersion, sourceKind, capabilities, enabled]
@@ -2000,6 +2129,15 @@ components:
           type: string
           description: Mender Tunnel ID. Send an empty string to clear the binding.
       additionalProperties: false
+    CreateExternalTunnelRequest:
+      type: object
+      required: [displayName, installationId, externalTunnelId, runtimeCredentialRef]
+      properties:
+        displayName: { type: string, minLength: 1, maxLength: 160 }
+        installationId: { type: string }
+        externalTunnelId: { type: string, minLength: 1, maxLength: 256 }
+        runtimeCredentialRef: { type: string }
+      additionalProperties: false
     CreateOpenAITunnelRequest:
       type: object
       required: [displayName, externalTunnelId, runtimeCredentialRef]
@@ -2114,6 +2252,17 @@ components:
         memoryGiB: { type: integer, minimum: 1, maximum: 4 }
         diskGiB: { type: integer, minimum: 3, maximum: 10 }
         ttlMinutes: { type: integer, minimum: 15, maximum: 120, description: Provider-enforced wall-clock lifetime; not a monetary billing cap }
+    CreateExternalSandboxRequest:
+      type: object
+      required: [name, installationId, config]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 160 }
+        installationId: { type: string }
+        config:
+          type: object
+          description: Host-reviewed non-secret JSON constrained by exact plugin schema
+          additionalProperties: true
+      additionalProperties: false
     CreateDockerSandboxRequest:
       type: object
       required: [name, imageDigest, userId, groupId, cpuMilli, memoryMiB, workspaceMiB, pids]
@@ -2141,7 +2290,10 @@ components:
       properties:
         sandboxId: { type: string, pattern: '^sbx_[0-9a-f]{32}$' }
         name: { type: string }
-        backend: { type: string, enum: [local_workspace, docker, daytona, e2b] }
+        backend: { type: string, enum: [local_workspace, docker, daytona, e2b, external] }
+        pluginId: { type: string }
+        extensionId: { type: string }
+        installationId: { type: string }
         isolation: { type: string, enum: [host, restricted_host, container, remote] }
         state: { type: string, enum: [defined, provisioning, ready, stopping, stopped, destroying, destroyed, failed, unknown, orphaned] }
         activeLeases: { type: integer, minimum: 0, description: Persisted cross-process Sandbox execution leases }
@@ -2156,7 +2308,10 @@ components:
       properties:
         tunnelId: { type: string }
         displayName: { type: string }
-        provider: { type: string, enum: [openai] }
+        provider: { type: string, enum: [openai, external] }
+        pluginId: { type: string }
+        extensionId: { type: string }
+        installationId: { type: string }
         externalTunnelId: { type: string }
         runtimeCredentialRef: { type: string }
     StartMCPServerRequest:
@@ -2181,9 +2336,9 @@ components:
         startedAt: { type: string, format: date-time }
         tunnelId: { type: string }
         tunnelDisplayName: { type: string }
-        tunnelProvider: { type: string, enum: [openai] }
+        tunnelProvider: { type: string, enum: [openai, external] }
         tunnelExternalId: { type: string }
-        tunnelStatus: { type: string, enum: [running, exited] }
+        tunnelStatus: { type: string, enum: [starting, ready, degraded, failed, exited, running] }
     AuditRecord:
       type: object
       required: [invocationId, toolId, principalKind, principalRef, startedAt, finishedAt, policyKind, policyReason, approval, status, resultKind, errorClass, errorSummary, origin, scopeKind, scopeReference, outcomeKind, rejectionCode, failureSource, failureCode]

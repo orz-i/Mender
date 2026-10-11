@@ -111,6 +111,9 @@ func tunnelProjection(item tunneldomain.Tunnel) map[string]any {
 		"tunnelId":             item.ID().String(),
 		"displayName":          item.DisplayName(),
 		"provider":             string(item.Provider()),
+		"pluginId":             item.Binding().PluginID.String(),
+		"extensionId":          item.Binding().ExtensionID.String(),
+		"installationId":       item.Binding().InstallationID.String(),
 		"externalTunnelId":     item.ExternalTunnelID(),
 		"runtimeCredentialRef": item.RuntimeCredentialRef().String(),
 	}

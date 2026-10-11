@@ -9,6 +9,9 @@ type SystemStatus struct {
 
 // Sandbox is management metadata; state reflects the last persisted observation.
 type Sandbox struct {
+	PluginID         string `json:"pluginId,omitempty"`
+	ExtensionID      string `json:"extensionId,omitempty"`
+	InstallationID   string `json:"installationId,omitempty"`
 	SandboxID        string `json:"sandboxId"`
 	Name             string `json:"name"`
 	Backend          string `json:"backend"`
@@ -216,6 +219,32 @@ type CredentialHeader struct {
 type CredentialEnvironment struct {
 	Name          string `json:"name"`
 	CredentialRef string `json:"credentialRef"`
+}
+
+// PluginCatalogueEntry mirrors the inert all-kind management catalogue.
+type PluginCatalogueEntry struct {
+	Key             string   `json:"key"`
+	PluginID        string   `json:"pluginId"`
+	ExtensionID     string   `json:"extensionId"`
+	Kind            string   `json:"kind"`
+	DisplayName     string   `json:"displayName"`
+	Description     string   `json:"description"`
+	PackageVersion  string   `json:"packageVersion"`
+	SourceKind      string   `json:"sourceKind"`
+	Status          string   `json:"status"`
+	Enabled         bool     `json:"enabled"`
+	InstallationID  string   `json:"installationId,omitempty"`
+	Digest          string   `json:"digest,omitempty"`
+	InstalledAt     string   `json:"installedAt,omitempty"`
+	ConfigVersion   uint32   `json:"configVersion,omitempty"`
+	ProtocolVersion uint32   `json:"protocolVersion,omitempty"`
+	ConfigSchema    any      `json:"configSchema,omitempty"`
+	Capabilities    []string `json:"capabilities"`
+	UsageCount      int      `json:"usageCount"`
+	Issue           string   `json:"issue,omitempty"`
+}
+type PluginCatalogueList struct {
+	Plugins []PluginCatalogueEntry `json:"plugins"`
 }
 
 type ProviderPlugin struct {
@@ -442,6 +471,9 @@ type Profile struct {
 }
 
 type Tunnel struct {
+	PluginID             string `json:"pluginId,omitempty"`
+	ExtensionID          string `json:"extensionId,omitempty"`
+	InstallationID       string `json:"installationId,omitempty"`
 	TunnelID             string `json:"tunnelId"`
 	DisplayName          string `json:"displayName"`
 	Provider             string `json:"provider"`
@@ -506,4 +538,10 @@ type ProviderActivationAuditRecord struct {
 
 type ProviderActivationAuditList struct {
 	Records []ProviderActivationAuditRecord `json:"records"`
+}
+
+type CreateExternalSandboxInput struct {
+	Name           string `json:"name"`
+	InstallationID string `json:"installationId"`
+	ConfigJSON     string `json:"configJson"`
 }

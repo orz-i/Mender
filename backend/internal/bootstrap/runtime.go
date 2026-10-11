@@ -80,6 +80,7 @@ type Runtime struct {
 	pluginInstallations *installationsqlite.Store
 	pluginPackages      *installationlocalfs.Store
 	externalProcesses   *providerexternal.Supervisor
+	tunnelPlugins       *tunnelregistry.Registry
 	providerInstances   *providerplugin.Manager
 	providerActivation  provideractivationapplication.Admit
 	ownerPrincipal      governancedomain.Principal
@@ -538,6 +539,7 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		pluginInstallations:         pluginInstallations,
 		pluginPackages:              pluginPackages,
 		externalProcesses:           externalProcesses,
+		tunnelPlugins:               tunnelRegistry,
 		providerInstances:           providerInstances,
 		providerActivation:          providerActivation,
 		ownerPrincipal:              ownerPrincipal,

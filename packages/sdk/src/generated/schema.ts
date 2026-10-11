@@ -20,6 +20,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/plugins": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listPluginCatalogue"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/plugin-installations/{installationId}/enable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["enablePluginInstallation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/plugin-installations/{installationId}/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["disablePluginInstallation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/plugin-installations/{installationId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["deletePluginInstallation"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/provider-plugins": {
         parameters: {
             query?: never;
@@ -518,6 +582,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/sandboxes/external": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["createExternalSandbox"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/sandboxes/daytona": {
         parameters: {
             query?: never;
@@ -714,6 +794,22 @@ export interface paths {
         get: operations["listTunnels"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tunnels/external": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["createExternalTunnel"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1232,6 +1328,33 @@ export interface components {
         RotateCredentialRequest: {
             secret: string;
         };
+        PluginCatalogueEntry: {
+            key: string;
+            pluginId: string;
+            extensionId: string;
+            /** @enum {string} */
+            kind: "provider.tools" | "sandbox.backend" | "tunnel.transport";
+            displayName: string;
+            description: string;
+            packageVersion: string;
+            /** @enum {string} */
+            sourceKind: "builtin" | "local";
+            /** @enum {string} */
+            status: "enabled" | "disabled" | "invalid";
+            enabled: boolean;
+            capabilities: string[];
+            usageCount: number;
+            issue?: string;
+            installationId?: string;
+            digest?: string;
+            /** Format: date-time */
+            installedAt?: string;
+            configVersion?: number;
+            protocolVersion?: number;
+            configSchema?: {
+                [key: string]: unknown;
+            } | boolean;
+        };
         ProviderPlugin: {
             pluginId: string;
             version: string;
@@ -1541,6 +1664,12 @@ export interface components {
             /** @description Mender Tunnel ID. Send an empty string to clear the binding. */
             tunnelId: string;
         };
+        CreateExternalTunnelRequest: {
+            displayName: string;
+            installationId: string;
+            externalTunnelId: string;
+            runtimeCredentialRef: string;
+        };
         CreateOpenAITunnelRequest: {
             displayName: string;
             /** @description OpenAI Secure MCP Tunnel ID. */
@@ -1614,6 +1743,14 @@ export interface components {
             /** @description Provider-enforced wall-clock lifetime; not a monetary billing cap */
             ttlMinutes: number;
         };
+        CreateExternalSandboxRequest: {
+            name: string;
+            installationId: string;
+            /** @description Host-reviewed non-secret JSON constrained by exact plugin schema */
+            config: {
+                [key: string]: unknown;
+            };
+        };
         CreateDockerSandboxRequest: {
             name: string;
             /** @description Immutable locally cached registry/image@sha256 digest */
@@ -1635,7 +1772,10 @@ export interface components {
             sandboxId: string;
             name: string;
             /** @enum {string} */
-            backend: "local_workspace" | "docker" | "daytona" | "e2b";
+            backend: "local_workspace" | "docker" | "daytona" | "e2b" | "external";
+            pluginId?: string;
+            extensionId?: string;
+            installationId?: string;
             /** @enum {string} */
             isolation: "host" | "restricted_host" | "container" | "remote";
             /** @enum {string} */
@@ -1653,7 +1793,10 @@ export interface components {
             tunnelId: string;
             displayName: string;
             /** @enum {string} */
-            provider: "openai";
+            provider: "openai" | "external";
+            pluginId?: string;
+            extensionId?: string;
+            installationId?: string;
             externalTunnelId: string;
             runtimeCredentialRef: string;
         };
@@ -1677,10 +1820,10 @@ export interface components {
             tunnelId?: string;
             tunnelDisplayName?: string;
             /** @enum {string} */
-            tunnelProvider?: "openai";
+            tunnelProvider?: "openai" | "external";
             tunnelExternalId?: string;
             /** @enum {string} */
-            tunnelStatus?: "running" | "exited";
+            tunnelStatus?: "starting" | "ready" | "degraded" | "failed" | "exited" | "running";
         };
         AuditRecord: {
             invocationId: string;
@@ -1820,6 +1963,106 @@ export interface operations {
                 };
             };
             403: components["responses"]["Forbidden"];
+        };
+    };
+    listPluginCatalogue: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Process-free canonical Plugin Catalogue for all extension kinds */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        plugins: components["schemas"]["PluginCatalogueEntry"][];
+                    };
+                };
+            };
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    enablePluginInstallation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                installationId: components["parameters"]["InstallationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Typed installation enabled */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        installation: components["schemas"]["ProviderPluginInstallation"];
+                    };
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    disablePluginInstallation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                installationId: components["parameters"]["InstallationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Typed installation disabled when all resource domains permit */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        installation: components["schemas"]["ProviderPluginInstallation"];
+                    };
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    deletePluginInstallation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                installationId: components["parameters"]["InstallationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Unreferenced typed installation removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
     listProviderPlugins: {
@@ -2781,6 +3024,42 @@ export interface operations {
             };
         };
     };
+    createExternalSandbox: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateExternalSandboxRequest"];
+            };
+        };
+        responses: {
+            /** @description Externally provisioned Sandbox */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Sandbox"];
+                };
+            };
+            /** @description Sandbox created with uncertain provisioning; reconcile explicitly */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Sandbox"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+        };
+    };
     createDaytonaSandbox: {
         parameters: {
             query?: never;
@@ -3172,6 +3451,34 @@ export interface operations {
                 };
             };
             403: components["responses"]["Forbidden"];
+        };
+    };
+    createExternalTunnel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateExternalTunnelRequest"];
+            };
+        };
+        responses: {
+            /** @description Managed Tunnel using one exact native transport installation */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Tunnel"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
     createOpenAITunnel: {

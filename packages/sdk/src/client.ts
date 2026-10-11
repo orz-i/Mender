@@ -2,6 +2,9 @@ import createClient from "openapi-fetch";
 
 import type { components, paths } from "./generated/schema";
 
+export type PluginCatalogueEntry=components["schemas"]["PluginCatalogueEntry"];
+export type CreateExternalSandboxRequest=components["schemas"]["CreateExternalSandboxRequest"];
+export type CreateExternalTunnelRequest=components["schemas"]["CreateExternalTunnelRequest"];
 export type ProviderPlugin = components["schemas"]["ProviderPlugin"];
 export type ProviderPluginIssue = components["schemas"]["ProviderPluginIssue"];
 export type ProviderPluginInstallation =
@@ -93,6 +96,10 @@ export interface SearchToolsInput {
 
 export interface MenderClient {
   getSystemStatus(): Promise<SystemStatus>;
+  listPluginCatalogue(): Promise<{plugins: PluginCatalogueEntry[]}>;
+  enablePluginInstallation(installationId:string):Promise<{installation:ProviderPluginInstallation}>;
+  disablePluginInstallation(installationId:string):Promise<{installation:ProviderPluginInstallation}>;
+  deletePluginInstallation(installationId:string):Promise<void>;
   listProviderPlugins(): Promise<{
     plugins: ProviderPlugin[];
     issues: ProviderPluginIssue[];
@@ -169,6 +176,8 @@ export interface MenderClient {
   createLocalSandbox(body: CreateLocalSandboxRequest): Promise<Sandbox>;
   createDockerSandbox(body: CreateDockerSandboxRequest): Promise<Sandbox>;
   createDaytonaSandbox(body: CreateDaytonaSandboxRequest): Promise<Sandbox>;
+  createExternalSandbox(body:CreateExternalSandboxRequest):Promise<Sandbox>;
+  reconcileSandbox(sandboxId:string):Promise<Sandbox>;
   reconcileDaytonaSandbox(sandboxId: string): Promise<Sandbox>;
   getSandboxBackends(): Promise<SandboxBackends>;
   reconcileDockerSandbox(sandboxId: string): Promise<Sandbox>;
@@ -177,6 +186,7 @@ export interface MenderClient {
   destroySandbox(sandboxId: string): Promise<Sandbox>;
   listTunnels(): Promise<{ tunnels: Tunnel[] }>;
   createOpenAITunnel(body: CreateOpenAITunnelRequest): Promise<Tunnel>;
+  createExternalTunnel(body:CreateExternalTunnelRequest):Promise<Tunnel>;
   deleteTunnel(tunnelId: string): Promise<void>;
   listMCPServers(): Promise<{ servers: MCPServerInstance[] }>;
   startMCPServer(body: StartMCPServerRequest): Promise<MCPServerInstance>;
@@ -244,6 +254,19 @@ export function createMenderClient(
       return requireData(result);
     },
 
+    async listPluginCatalogue(){
+      return requireData(await client.GET("/plugins"));
+    },
+    async enablePluginInstallation(installationId:string){
+      return requireData(await client.POST("/plugin-installations/{installationId}/enable",{params:{path:{installationId}}}));
+    },
+    async disablePluginInstallation(installationId:string){
+      return requireData(await client.POST("/plugin-installations/{installationId}/disable",{params:{path:{installationId}}}));
+    },
+    async deletePluginInstallation(installationId:string){
+      const result=await client.DELETE("/plugin-installations/{installationId}",{params:{path:{installationId}}});
+      if(!result.response.ok)throwApiError(result.error,result.response);
+    },
     async listProviderPlugins() {
       const result = await client.GET("/provider-plugins");
       return requireData(result);
@@ -531,6 +554,12 @@ export function createMenderClient(
       const result = await client.POST("/sandboxes/docker", {body});
       return requireData(result);
     },
+    async createExternalSandbox(body:CreateExternalSandboxRequest){
+      return requireData(await client.POST("/sandboxes/external",{body}));
+    },
+    async reconcileSandbox(sandboxId:string){
+      return requireData(await client.POST("/sandboxes/{sandboxId}/reconcile",{params:{path:{sandboxId}}}));
+    },
     async createDaytonaSandbox(body: CreateDaytonaSandboxRequest) {
       const result = await client.POST("/sandboxes/daytona", {body});
       return requireData(result);
@@ -566,6 +595,9 @@ export function createMenderClient(
       return requireData(result);
     },
 
+    async createExternalTunnel(body:CreateExternalTunnelRequest){
+      return requireData(await client.POST("/tunnels/external",{body}));
+    },
     async createOpenAITunnel(body: CreateOpenAITunnelRequest) {
       const result = await client.POST("/tunnels/openai", { body });
       return requireData(result);

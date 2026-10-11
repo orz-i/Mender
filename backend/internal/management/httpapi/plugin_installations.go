@@ -101,6 +101,8 @@ func pluginInstallationProjection(
 	result := map[string]any{
 		"installationId": item.ID().String(),
 		"pluginId":       item.PluginID().String(),
+		"extensionKind":  string(item.Extension().Kind),
+		"extensionId":    item.Extension().ID.String(),
 		"packageVersion": item.PackageVersion(),
 		"sourceKind":     string(item.SourceKind()),
 		"digest":         item.Digest(),

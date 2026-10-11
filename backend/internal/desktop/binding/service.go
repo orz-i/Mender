@@ -20,6 +20,7 @@ import (
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	mcpconfigstore "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/configstore"
 	mcpplugin "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/plugin"
+	platformplugin "github.com/orz-i/Mender/backend/internal/plugin"
 	installationdomain "github.com/orz-i/Mender/backend/internal/plugin/installation/domain"
 	policyapplication "github.com/orz-i/Mender/backend/internal/policy/application"
 	policydomain "github.com/orz-i/Mender/backend/internal/policy/domain"
@@ -30,6 +31,7 @@ import (
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 	sandboxdaytona "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/daytona"
 	sandboxdocker "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/dockerengine"
+	sandboxsqlite "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/sqlite"
 	skillapplication "github.com/orz-i/Mender/backend/internal/skill/application"
 	skilldomain "github.com/orz-i/Mender/backend/internal/skill/domain"
 	tunnelapplication "github.com/orz-i/Mender/backend/internal/tunnel/application"
@@ -162,6 +164,51 @@ func (s *Service) changeLocalSandboxLifecycle(rawID string, action governancedom
 func (s *Service) GetSandboxBackends() (DockerBackendStatus, error) {
 	return DockerBackendStatus{DockerAvailable: s.runtime.Sandboxes.DockerAvailable(), DockerStatus: s.runtime.Sandboxes.DockerStatus(), DaytonaConfigured: s.runtime.Sandboxes.DaytonaConfigured(), DaytonaStatus: s.runtime.Sandboxes.DaytonaStatus()}, nil
 }
+func (s *Service) CreateExternalSandbox(input CreateExternalSandboxInput) (Sandbox, error) {
+	id, err := platformplugin.ParseInstallationID(input.InstallationID)
+	if err != nil {
+		return Sandbox{}, err
+	}
+	packageItem, err := s.runtime.GetPluginInstallation(s.ctx, id)
+	if err != nil {
+		return Sandbox{}, err
+	}
+	descriptor, verified := packageItem.VerifiedDescriptor()
+	if !verified {
+		return Sandbox{}, fmt.Errorf("Sandbox plugin installation is unverified")
+	}
+	caller, err := s.governanceContext()
+	if err != nil {
+		return Sandbox{}, err
+	}
+	item, createErr := s.runtime.Sandboxes.CreateExternalSandbox(s.ctx, bootstrap.CreateExternalSandboxRequest{
+		Name: input.Name, InstallationID: id,
+		Config: sandboxsqlite.ExternalConfig{ConfigVersion: descriptor.ConfigVersion, JSON: json.RawMessage(input.ConfigJSON)},
+	}, caller)
+	if createErr != nil && item.ID() == "" {
+		return Sandbox{}, createErr
+	}
+	return s.projectSandbox(item)
+}
+func (s *Service) ReconcileSandbox(raw string) (Sandbox, error) {
+	id, err := sandboxdomain.ParseID(raw)
+	if err != nil {
+		return Sandbox{}, err
+	}
+	caller, err := s.governanceContext()
+	if err != nil {
+		return Sandbox{}, err
+	}
+	if _, err := s.runtime.Sandboxes.Reconcile(s.ctx, id, caller); err != nil {
+		return Sandbox{}, err
+	}
+	item, err := s.runtime.Sandboxes.Get(s.ctx, id)
+	if err != nil {
+		return Sandbox{}, err
+	}
+	return s.projectSandbox(item)
+}
+
 func (s *Service) CreateDaytonaSandbox(input CreateDaytonaSandboxInput) (Sandbox, error) {
 	ref, err := credentialdomain.ParseReference(input.CredentialRef)
 	if err != nil {
@@ -239,7 +286,8 @@ func (s *Service) projectSandbox(item sandboxdomain.Sandbox) (Sandbox, error) {
 	if err != nil {
 		return Sandbox{}, err
 	}
-	return Sandbox{SandboxID: spec.ID.String(), Name: spec.Name, Backend: string(spec.Backend), Isolation: string(spec.Isolation), State: state, LocalRoot: spec.LocalRoot, OwnerKind: spec.OwnerKind, OwnerRef: spec.OwnerRef, ActiveLeases: active, BackendAvailable: s.runtime.Sandboxes.BackendAvailable(item)}, nil
+	return Sandbox{PluginID: spec.Binding.PluginID.String(), ExtensionID: spec.Binding.ExtensionID.String(),
+		InstallationID: spec.Binding.InstallationID.String(), SandboxID: spec.ID.String(), Name: spec.Name, Backend: string(spec.Backend), Isolation: string(spec.Isolation), State: state, LocalRoot: spec.LocalRoot, OwnerKind: spec.OwnerKind, OwnerRef: spec.OwnerRef, ActiveLeases: active, BackendAvailable: s.runtime.Sandboxes.BackendAvailable(item)}, nil
 }
 
 func (s *Service) GetRuntimeGovernance() (RuntimeGovernanceStatus, error) {
@@ -470,6 +518,63 @@ func (s *Service) DeleteCredential(namespace string, name string) error {
 		return err
 	}
 	return s.runtime.Credentials.Delete.Execute(s.ctx, ref)
+}
+
+func (s *Service) ListPluginCatalogue() (PluginCatalogueList, error) {
+	entries, err := s.runtime.ListPluginCatalogue(s.ctx)
+	if err != nil {
+		return PluginCatalogueList{}, err
+	}
+	result := make([]PluginCatalogueEntry, 0, len(entries))
+	for _, entry := range entries {
+		var schema any
+		if len(entry.ConfigSchema) > 0 {
+			if err := json.Unmarshal(entry.ConfigSchema, &schema); err != nil {
+				return PluginCatalogueList{}, err
+			}
+		}
+		result = append(result, PluginCatalogueEntry{
+			Key: entry.Key, PluginID: entry.PluginID, ExtensionID: entry.ExtensionID, Kind: string(entry.Kind),
+			DisplayName: entry.DisplayName, Description: entry.Description, PackageVersion: entry.PackageVersion,
+			SourceKind: entry.SourceKind, Status: entry.Status, Enabled: entry.Enabled,
+			InstallationID: entry.InstallationID, Digest: entry.Digest, InstalledAt: entry.InstalledAt,
+			ConfigVersion: entry.ConfigVersion, ProtocolVersion: entry.ProtocolVersion, ConfigSchema: schema,
+			Capabilities: entry.Capabilities, UsageCount: entry.UsageCount, Issue: entry.Issue,
+		})
+	}
+	return PluginCatalogueList{Plugins: result}, nil
+}
+func (s *Service) InstallPlugin(sourcePath string, kind string) (ProviderPluginInstallation, error) {
+	verifiedKind := platformplugin.Kind(kind)
+	item, err := s.runtime.InstallPlugin(s.ctx, sourcePath, verifiedKind)
+	if err != nil {
+		return ProviderPluginInstallation{}, err
+	}
+	return providerPluginInstallationProjection(item), nil
+}
+func (s *Service) EnablePluginInstallation(id string) (ProviderPluginInstallation, error) {
+	return s.setPluginInstallationStatus(id, installationdomain.StatusEnabled)
+}
+func (s *Service) DisablePluginInstallation(id string) (ProviderPluginInstallation, error) {
+	return s.setPluginInstallationStatus(id, installationdomain.StatusDisabled)
+}
+func (s *Service) setPluginInstallationStatus(rawID string, status installationdomain.Status) (ProviderPluginInstallation, error) {
+	id, err := platformplugin.ParseInstallationID(rawID)
+	if err != nil {
+		return ProviderPluginInstallation{}, err
+	}
+	item, err := s.runtime.SetPluginInstallationStatus(s.ctx, id, status)
+	if err != nil {
+		return ProviderPluginInstallation{}, err
+	}
+	return providerPluginInstallationProjection(item), nil
+}
+func (s *Service) DeletePluginInstallation(rawID string) error {
+	id, err := platformplugin.ParseInstallationID(rawID)
+	if err != nil {
+		return err
+	}
+	return s.runtime.RemovePluginInstallation(s.ctx, id)
 }
 
 func (s *Service) ListProviderPlugins() (ProviderPluginList, error) {
@@ -1471,6 +1576,23 @@ func (s *Service) ListTunnels() (TunnelList, error) {
 	return TunnelList{Tunnels: tunnels}, nil
 }
 
+func (s *Service) CreateExternalTunnel(displayName, installationID, externalID, credentialRef string) (Tunnel, error) {
+	id, err := platformplugin.ParseInstallationID(installationID)
+	if err != nil {
+		return Tunnel{}, err
+	}
+	ref, err := credentialdomain.ParseReference(credentialRef)
+	if err != nil {
+		return Tunnel{}, err
+	}
+	item, err := s.runtime.Tunnels.CreateExternal(s.ctx, bootstrap.CreateExternalTunnelRequest{
+		DisplayName: displayName, InstallationID: id, ExternalTunnelID: externalID, RuntimeCredentialRef: ref,
+	})
+	if err != nil {
+		return Tunnel{}, err
+	}
+	return tunnelProjection(item), nil
+}
 func (s *Service) CreateOpenAITunnel(
 	displayName string,
 	externalTunnelID string,
@@ -2110,6 +2232,8 @@ func runtimeGovernanceStatus(
 
 func tunnelProjection(item tunneldomain.Tunnel) Tunnel {
 	return Tunnel{
+		PluginID: item.Binding().PluginID.String(), ExtensionID: item.Binding().ExtensionID.String(),
+		InstallationID:       item.Binding().InstallationID.String(),
 		TunnelID:             item.ID().String(),
 		DisplayName:          item.DisplayName(),
 		Provider:             string(item.Provider()),

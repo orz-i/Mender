@@ -111,6 +111,9 @@ func (h *Handler) sandboxStatus(r *http.Request, item sandboxdomain.Sandbox) (ma
 		"sandboxId":        spec.ID.String(),
 		"name":             spec.Name,
 		"backend":          string(spec.Backend),
+		"pluginId":         spec.Binding.PluginID.String(),
+		"extensionId":      spec.Binding.ExtensionID.String(),
+		"installationId":   spec.Binding.InstallationID.String(),
 		"isolation":        string(spec.Isolation),
 		"state":            state,
 		"localRoot":        spec.LocalRoot,
@@ -240,7 +243,7 @@ func (h *Handler) reconcileDockerSandbox(w http.ResponseWriter, r *http.Request)
 		writeKnownError(w, err)
 		return
 	}
-	if _, err := h.runtime.Sandboxes.ReconcileDocker(r.Context(), id, caller); err != nil {
+	if _, err := h.runtime.Sandboxes.Reconcile(r.Context(), id, caller); err != nil {
 		if errors.Is(err, sandboxdomain.ErrConflict) {
 			writeAPIError(w, http.StatusConflict, "conflict", err)
 			return
