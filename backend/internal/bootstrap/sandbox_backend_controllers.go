@@ -20,6 +20,15 @@ func (c localLifecycle) Reconcile(context.Context, sandboxdomain.ID, gov.Context
 	return sandboxdomain.Run{}, sandboxdomain.ErrBackendUnavailable
 }
 
+type sshRemoteLifecycle struct{ sandboxes *Sandboxes }
+
+func (c sshRemoteLifecycle) Change(ctx context.Context, id sandboxdomain.ID, action gov.Action, caller gov.Context) (sandboxdomain.Run, error) {
+	return c.sandboxes.ChangeSSHRemoteLifecycle(ctx, id, action, caller)
+}
+func (c sshRemoteLifecycle) Reconcile(context.Context, sandboxdomain.ID, gov.Context) (sandboxdomain.Run, error) {
+	return sandboxdomain.Run{}, sandboxdomain.ErrBackendUnavailable
+}
+
 type dockerLifecycle struct{ sandboxes *Sandboxes }
 
 func (c dockerLifecycle) Change(ctx context.Context, id sandboxdomain.ID, action gov.Action, caller gov.Context) (sandboxdomain.Run, error) {
@@ -69,6 +78,8 @@ func (s *Sandboxes) registerBuiltinLifecycle(backends []sandboxapp.Backend) erro
 			controller = localLifecycle{sandboxes: s}
 		case sandboxdomain.BackendDocker:
 			controller = dockerLifecycle{sandboxes: s}
+		case sandboxdomain.BackendSSHRemote:
+			controller = sshRemoteLifecycle{sandboxes: s}
 		case sandboxdomain.BackendDaytona:
 			controller = daytonaLifecycle{sandboxes: s}
 		default:

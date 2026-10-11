@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-const latestSchemaVersion = 10
+const latestSchemaVersion = 11
 
 func migrate(ctx context.Context, db *sql.DB) error {
 	tx, err := db.BeginTx(ctx, nil)
@@ -372,6 +372,56 @@ func migrate(ctx context.Context, db *sql.DB) error {
 		}
 		if _, err = tx.ExecContext(ctx, "INSERT INTO sandbox_schema_migrations(version,applied_at) VALUES(10,?)", time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
 			return fmt.Errorf("record sandbox migration 10: %w", err)
+		}
+	}
+	var sshApplied int
+	if err = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM sandbox_schema_migrations WHERE version=11").Scan(&sshApplied); err != nil {
+		return fmt.Errorf("sandbox migration 11 presence: %w", err)
+	}
+	if sshApplied == 0 {
+		for _, statement := range []string{
+			// SSH is remote account access, NOT remote isolation. Only a
+			// Credential Reference and pinned public host key are stored here.
+			`CREATE TABLE sandbox_ssh_remote_templates (
+                sandbox_id TEXT PRIMARY KEY REFERENCES sandboxes(id) ON DELETE RESTRICT,
+                credential_ref TEXT NOT NULL,
+                host TEXT NOT NULL,
+                port INTEGER NOT NULL CHECK(port BETWEEN 1 AND 65535),
+                login_user TEXT NOT NULL,
+                workspace_root TEXT NOT NULL,
+                pinned_host_key TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )`,
+			`CREATE INDEX idx_ssh_remote_credential_ref ON sandbox_ssh_remote_templates(credential_ref)`,
+			`CREATE TRIGGER sandbox_ssh_template_immutable_update BEFORE UPDATE ON sandbox_ssh_remote_templates BEGIN SELECT RAISE(ABORT,'SSH Sandbox template is immutable'); END`,
+			`CREATE TRIGGER sandbox_ssh_template_immutable_delete BEFORE DELETE ON sandbox_ssh_remote_templates BEGIN SELECT RAISE(ABORT,'SSH Sandbox template cannot be deleted'); END`,
+			"DROP TRIGGER sandbox_extension_binding_insert",
+			"DROP TRIGGER sandbox_extension_binding_update",
+			`CREATE TRIGGER sandbox_extension_binding_insert BEFORE INSERT ON sandboxes
+                WHEN NEW.backend_plugin_id='' OR NEW.backend_extension_id!='main' OR
+                    (NEW.backend='local_workspace' AND (NEW.backend_plugin_id!='io.mender.sandbox.local-workspace' OR NEW.backend_installation_id!='')) OR
+                    (NEW.backend='docker' AND (NEW.backend_plugin_id!='io.mender.sandbox.docker' OR NEW.backend_installation_id!='')) OR
+                    (NEW.backend='daytona' AND (NEW.backend_plugin_id!='io.mender.sandbox.daytona' OR NEW.backend_installation_id!='')) OR
+                    (NEW.backend='ssh_remote' AND (NEW.backend_plugin_id!='io.mender.sandbox.ssh-remote' OR NEW.backend_installation_id!='')) OR
+                    (NEW.backend='external' AND (NEW.backend_installation_id='' OR NEW.backend_plugin_id LIKE 'io.mender.%'))
+                BEGIN SELECT RAISE(ABORT,'Sandbox extension binding is required'); END`,
+			`CREATE TRIGGER sandbox_extension_binding_update BEFORE UPDATE ON sandboxes
+                WHEN NEW.backend_plugin_id='' OR NEW.backend_extension_id!='main' OR
+                    NEW.backend_plugin_id!=OLD.backend_plugin_id OR NEW.backend_extension_id!=OLD.backend_extension_id OR
+                    NEW.backend_installation_id!=OLD.backend_installation_id OR NEW.backend!=OLD.backend OR
+                    (NEW.backend='local_workspace' AND NEW.backend_plugin_id!='io.mender.sandbox.local-workspace') OR
+                    (NEW.backend='docker' AND NEW.backend_plugin_id!='io.mender.sandbox.docker') OR
+                    (NEW.backend='daytona' AND NEW.backend_plugin_id!='io.mender.sandbox.daytona') OR
+                    (NEW.backend='ssh_remote' AND NEW.backend_plugin_id!='io.mender.sandbox.ssh-remote') OR
+                    (NEW.backend='external' AND (NEW.backend_installation_id='' OR NEW.backend_plugin_id LIKE 'io.mender.%'))
+                BEGIN SELECT RAISE(ABORT,'Sandbox extension binding is immutable'); END`,
+		} {
+			if _, err = tx.ExecContext(ctx, statement); err != nil {
+				return fmt.Errorf("sandbox migration 11 SSH templates: %w", err)
+			}
+		}
+		if _, err = tx.ExecContext(ctx, "INSERT INTO sandbox_schema_migrations(version,applied_at) VALUES(11,?)", time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
+			return fmt.Errorf("record sandbox migration 11: %w", err)
 		}
 	}
 	if err = tx.Commit(); err != nil {

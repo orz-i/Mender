@@ -40,6 +40,8 @@ func BuiltinBinding(kind BackendKind) BackendBinding {
 		return BackendBinding{PluginID: "io.mender.sandbox.docker", ExtensionID: "main"}
 	case BackendDaytona:
 		return BackendBinding{PluginID: "io.mender.sandbox.daytona", ExtensionID: "main"}
+	case BackendSSHRemote:
+		return BackendBinding{PluginID: "io.mender.sandbox.ssh-remote", ExtensionID: "main"}
 	default:
 		return BackendBinding{}
 	}

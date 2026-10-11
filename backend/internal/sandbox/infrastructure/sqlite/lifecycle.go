@@ -31,6 +31,15 @@ type LifecycleEvent struct {
 // audit in one SQLite transaction. It is never used with a remote/container
 // backend, and its success does not remove actual host filesystem contents.
 func (s *Store) ChangeLocalLifecycle(ctx context.Context, expected sandboxdomain.Run, action governancedomain.Action, caller governancedomain.Context) (sandboxdomain.Run, error) {
+	return s.changePassiveLifecycle(ctx, expected, action, caller, sandboxdomain.BackendLocalWorkspace, "local_workspace:")
+}
+
+// SSH stop/start/destroy only changes the local authority binding. It does
+// not mutate, reboot or delete any resource on the remote SSH host.
+func (s *Store) ChangeSSHRemoteLifecycle(ctx context.Context, expected sandboxdomain.Run, action governancedomain.Action, caller governancedomain.Context) (sandboxdomain.Run, error) {
+	return s.changePassiveLifecycle(ctx, expected, action, caller, sandboxdomain.BackendSSHRemote, "ssh_remote:")
+}
+func (s *Store) changePassiveLifecycle(ctx context.Context, expected sandboxdomain.Run, action governancedomain.Action, caller governancedomain.Context, backendKind sandboxdomain.BackendKind, prefix string) (sandboxdomain.Run, error) {
 	if s == nil || s.db == nil {
 		return sandboxdomain.Run{}, sandboxdomain.ErrBackendUnavailable
 	}
@@ -48,7 +57,7 @@ func (s *Store) ChangeLocalLifecycle(ctx context.Context, expected sandboxdomain
 			return sandboxdomain.Run{}, sandboxdomain.ErrConflict
 		}
 		intermediate, terminal = sandboxdomain.StateProvisioning, sandboxdomain.StateReady
-		externalID = "local_workspace:" + expected.SandboxID.String()
+		externalID = prefix + expected.SandboxID.String()
 	case governancedomain.ActionSandboxStop:
 		if expected.State != sandboxdomain.StateReady {
 			return sandboxdomain.Run{}, sandboxdomain.ErrConflict
@@ -85,7 +94,7 @@ func (s *Store) ChangeLocalLifecycle(ctx context.Context, expected sandboxdomain
 	if err != nil {
 		return sandboxdomain.Run{}, fmt.Errorf("local Sandbox lifecycle: inventory: %w", err)
 	}
-	if backend != string(sandboxdomain.BackendLocalWorkspace) {
+	if backend != string(backendKind) {
 		return sandboxdomain.Run{}, sandboxdomain.ErrBackendUnavailable
 	}
 	principal := caller.Principal()

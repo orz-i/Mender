@@ -90,6 +90,10 @@ func builtinDescriptor(kind sandboxdomain.BackendKind, capabilities []string) (p
 		id = "io.mender.sandbox.docker"
 		display = "Docker Engine"
 		description = "Trusted local Docker Engine backend with monitored readiness and container isolation checks"
+	case sandboxdomain.BackendSSHRemote:
+		id = "io.mender.sandbox.ssh-remote"
+		display = "SSH Remote"
+		description = "Pinned-host-key SSH remote account Workspace; remote is not OS/container isolation"
 	case sandboxdomain.BackendDaytona:
 		id = "io.mender.sandbox.daytona"
 		display = "Daytona (experimental)"

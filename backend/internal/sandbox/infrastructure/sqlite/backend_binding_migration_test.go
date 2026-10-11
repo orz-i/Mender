@@ -40,6 +40,9 @@ func seedSandboxV8(t *testing.T) string {
 	for _, statement := range []string{
 		"DROP TRIGGER sandbox_extension_binding_insert",
 		"DROP TRIGGER sandbox_extension_binding_update",
+		"DROP TRIGGER sandbox_ssh_template_immutable_update",
+		"DROP TRIGGER sandbox_ssh_template_immutable_delete",
+		"DROP TABLE sandbox_ssh_remote_templates",
 		"DROP TRIGGER sandbox_external_config_update",
 		"DROP TRIGGER sandbox_external_config_delete",
 		"DROP TABLE sandbox_external_operations",
@@ -49,6 +52,7 @@ func seedSandboxV8(t *testing.T) string {
 		"ALTER TABLE sandboxes DROP COLUMN backend_installation_id",
 		"DELETE FROM sandbox_schema_migrations WHERE version=9",
 		"DELETE FROM sandbox_schema_migrations WHERE version=10",
+		"DELETE FROM sandbox_schema_migrations WHERE version=11",
 	} {
 		if _, err := db.ExecContext(ctx, statement); err != nil {
 			t.Fatalf("prepare v8 fixture %q: %v", statement, err)

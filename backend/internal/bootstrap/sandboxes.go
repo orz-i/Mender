@@ -23,6 +23,7 @@ import (
 	sandboxpluginregistry "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/pluginregistry"
 	sandboxrouter "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/router"
 	sandboxsqlite "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/sqlite"
+	sandboxssh "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/sshremote"
 )
 
 // Sandboxes owns the persistent Sandbox inventory and a fail-closed Execution
@@ -44,6 +45,7 @@ type Sandboxes struct {
 	docker                     *sandboxdocker.Provisioner
 	dockerTemplates            *sandboxdocker.TemplateStore
 	dockerUnavailableReason    string
+	sshRemote                  *sandboxssh.Backend
 	daytona                    *sandboxdaytona.Controller
 	daytonaTemplates           *sandboxdaytona.TemplateStore
 	daytonaExperimental        bool
@@ -66,7 +68,13 @@ func NewSandboxes(ctx context.Context, databasePath string, policy sandboxapplic
 		return nil, fmt.Errorf("compose sandboxes: local workspace: %w", err)
 	}
 	component := &Sandboxes{store: store, admission: gate, launcher: launcher, profileExists: profileExists, dockerDatabasePath: databasePath, dockerUnavailableReason: "Docker Engine is not configured"}
-	backends := []sandboxapplication.Backend{localBackend}
+	// The SSH built-in registers without connecting, resolving a key, or
+	// contacting a remote host. Only an admitted Sandbox create/open does so.
+	component.sshRemote = &sandboxssh.Backend{
+		Dial:      sandboxssh.Dialer{Credentials: credentials},
+		Templates: store,
+	}
+	backends := []sandboxapplication.Backend{localBackend, component.sshRemote}
 	if dockerBackend, err := component.configureDocker(ctx, databasePath, gate); err == nil && dockerBackend != nil {
 		backends = append(backends, dockerBackendGate{owner: component, backend: dockerBackend})
 	} else if err != nil {

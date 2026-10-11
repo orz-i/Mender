@@ -49,13 +49,14 @@ const (
 	BackendLocalWorkspace BackendKind = "local_workspace"
 	BackendDocker         BackendKind = "docker"
 	BackendDaytona        BackendKind = "daytona"
+	BackendSSHRemote      BackendKind = "ssh_remote"
 	BackendE2B            BackendKind = "e2b"
 	BackendExternal       BackendKind = "external"
 )
 
 func (k BackendKind) Validate() error {
 	switch k {
-	case BackendLocalWorkspace, BackendDocker, BackendDaytona, BackendE2B, BackendExternal:
+	case BackendLocalWorkspace, BackendDocker, BackendDaytona, BackendSSHRemote, BackendE2B, BackendExternal:
 		return nil
 	}
 	return fmt.Errorf("sandbox backend: unsupported kind %q", k)
@@ -178,7 +179,7 @@ func NewSandbox(spec Spec) (Sandbox, error) {
 		if spec.Backend == BackendDocker && spec.Isolation != IsolationContainer {
 			return Sandbox{}, fmt.Errorf("docker sandbox must declare container isolation")
 		}
-		if (spec.Backend == BackendDaytona || spec.Backend == BackendE2B || spec.Backend == BackendExternal) && spec.Isolation != IsolationRemote {
+		if (spec.Backend == BackendDaytona || spec.Backend == BackendSSHRemote || spec.Backend == BackendE2B || spec.Backend == BackendExternal) && spec.Isolation != IsolationRemote {
 			return Sandbox{}, fmt.Errorf("remote sandbox must declare remote isolation")
 		}
 	}

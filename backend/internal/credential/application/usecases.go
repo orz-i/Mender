@@ -43,6 +43,11 @@ func (uc CreateNative) Execute(
 	if err != nil {
 		return credentialdomain.Credential{}, err
 	}
+	if request.Namespace == "ssh" {
+		if err := credentialdomain.ValidateSSHPrivateKey(secret); err != nil {
+			return credentialdomain.Credential{}, err
+		}
+	}
 	credential, err := credentialdomain.NewCredential(
 		ref,
 		request.DisplayName,
@@ -98,6 +103,9 @@ func (uc CreateEnvironment) Execute(
 	ctx context.Context,
 	request CreateEnvironmentRequest,
 ) (credentialdomain.Credential, error) {
+	if request.Namespace == "ssh" {
+		return credentialdomain.Credential{}, fmt.Errorf("SSH private key credentials must use the native OS credential store")
+	}
 	ref, err := credentialdomain.NewReference(request.Namespace, request.Name)
 	if err != nil {
 		return credentialdomain.Credential{}, fmt.Errorf("create environment credential: %w", err)
@@ -194,6 +202,11 @@ func (uc RotateNativeSecret) Execute(
 	secret, err := validateSecret(rawSecret)
 	if err != nil {
 		return credentialdomain.Credential{}, err
+	}
+	if ref.Namespace() == "ssh" {
+		if err := credentialdomain.ValidateSSHPrivateKey(secret); err != nil {
+			return credentialdomain.Credential{}, err
+		}
 	}
 	if err := uc.secrets.Put(ctx, ref, secret); err != nil {
 		return credentialdomain.Credential{}, fmt.Errorf("rotate credential secret: %w", err)

@@ -152,6 +152,13 @@ func (a runtimeCredentialUsageChecker) Usages(
 		for _, id := range sandboxIDs {
 			usages = append(usages, credentialapplication.Usage{Kind: "sandbox", Description: fmt.Sprintf("Daytona Sandbox %s", id)})
 		}
+		sshIDs, err := a.sandboxes.SSHCredentialBindings(ctx, ref)
+		if err != nil {
+			return nil, fmt.Errorf("credential usage: SSH remote inventory unavailable: %w", err)
+		}
+		for _, id := range sshIDs {
+			usages = append(usages, credentialapplication.Usage{Kind: "sandbox", Description: fmt.Sprintf("SSH Remote Sandbox %s", id)})
+		}
 	}
 	return usages, nil
 }
