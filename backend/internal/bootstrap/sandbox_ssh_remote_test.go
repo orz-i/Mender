@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
+	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -14,6 +15,54 @@ import (
 	sshremote "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/sshremote"
 	"golang.org/x/crypto/ssh"
 )
+
+// An SSH credential must not be deleted while any active SSH Sandbox uses
+// its reference; reading usage does not need access to the raw keyring secret.
+func TestSSHRemoteCreateRequiresLocalOperatorBeforeKeyResolution(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	r, err := NewRuntime(ctx, RuntimeOptions{DatabasePath: filepath.Join(t.TempDir(), "no-ssh-access.db")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = r.Close() }()
+	_, key, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pub, err := ssh.NewPublicKey(key.Public())
+	if err != nil {
+		t.Fatal(err)
+	}
+	ref, _ := credentialdomain.ParseReference("credential://ssh/unavailable")
+	request := CreateSSHRemoteSandboxRequest{Name: "Restricted remote", Template: sshremote.Template{
+		Host: "127.0.0.1", Port: 22, User: "agent", Root: "/home/agent/work",
+		CredentialRef: ref, HostPublicKey: strings.TrimSpace(string(ssh.MarshalAuthorizedKey(pub))),
+	}}
+	service, err := gov.NewPrincipal(gov.PrincipalService, "profile:untrusted")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		kind   gov.Principal
+		origin gov.Origin
+	}{
+		{service, gov.OriginMCP}, {service, gov.OriginInternal}, {r.OwnerPrincipal(), gov.OriginMCP},
+	} {
+		caller, err := gov.NewContext(tc.origin, tc.kind, gov.CatalogScope())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := r.Sandboxes.CreateSSHRemoteSandbox(ctx, request, caller); !errors.Is(err, sandboxdomain.ErrNotAuthorized) {
+			t.Fatalf("untrusted SSH host connection admitted for %s/%s: %v",
+				tc.kind.Kind(), tc.origin, err)
+		}
+	}
+	items, err := r.Sandboxes.List(ctx)
+	if err != nil || len(items) != 0 {
+		t.Fatalf("denied SSH attempts created resources: %+v %v", items, err)
+	}
+}
 
 // An SSH credential must not be deleted while any active SSH Sandbox uses
 // its reference; reading usage does not need access to the raw keyring secret.

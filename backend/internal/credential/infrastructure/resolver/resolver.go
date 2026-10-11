@@ -41,7 +41,12 @@ func (r Resolver) Resolve(
 	if err != nil {
 		return nil, fmt.Errorf("resolve credential: %w", err)
 	}
-
+	// SSH private keys must come from the OS keyring even for historical
+	// credential rows created before the dedicated SSH namespace contract.
+	// Never read them from an environment variable or another fallback.
+	if ref.Namespace() == "ssh" && credential.Source() != credentialdomain.SourceNative {
+		return nil, credentialapplication.ErrSecretSourceUnavailable
+	}
 	switch credential.Source() {
 	case credentialdomain.SourceNative:
 		secret, err := r.secrets.Get(ctx, ref)

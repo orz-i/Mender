@@ -232,7 +232,9 @@ func backupPreSandboxUpgrade(ctx context.Context, db *sql.DB, path string) error
 		return nil
 	}
 	prefix := ".mender-sandbox-v8-backup-*.db"
-	if version.Int64 >= 9 {
+	if version.Int64 >= 10 {
+		prefix = ".mender-sandbox-v10-backup-*.db"
+	} else if version.Int64 >= 9 {
 		prefix = ".mender-sandbox-v9-backup-*.db"
 	}
 	file, err := os.CreateTemp(filepath.Dir(path), prefix)

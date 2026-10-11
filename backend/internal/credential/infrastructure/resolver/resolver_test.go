@@ -65,6 +65,26 @@ func TestResolverNativeAndEnvironmentSources(t *testing.T) {
 	}
 }
 
+func TestSSHPrivateKeyResolverRejectsLegacyEnvironmentCredential(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	ref, _ := credentialdomain.NewReference("ssh", "legacy")
+	legacy, err := credentialdomain.NewCredential(ref, "Legacy SSH private key",
+		credentialdomain.SourceEnvironment, "SSH_PRIVATE_KEY", time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	called := false
+	resolver := New(fakeRepository{ref: legacy}, fakeSecretStore{}, func(string) (string, bool) {
+		called = true
+		return "never-allow-environment-SSH-secret", true
+	})
+	if value, err := resolver.Resolve(ctx, ref); value != nil ||
+		!errors.Is(err, credentialapplication.ErrSecretSourceUnavailable) || called {
+		t.Fatalf("legacy environment SSH secret resolved or env accessed: %v, value length %d, lookup %v", err, len(value), called)
+	}
+}
+
 func TestResolverMissingEnvironmentFailsClosed(t *testing.T) {
 	t.Parallel()
 

@@ -52,6 +52,11 @@ func TestUnifiedPluginCatalogueManagementContract(t *testing.T) {
 				if item["sourceKind"] != "builtin" || item["enabled"] != true || item["status"] != "enabled" {
 					t.Fatalf("Local Workspace not enabled: %+v", item)
 				}
+			case "io.mender.sandbox.ssh-remote@builtin":
+				if item["sourceKind"] != "builtin" || item["enabled"] != true ||
+					item["status"] != "enabled" || item["issue"] != nil {
+					t.Fatalf("SSH backend must be registered but listing must not connect: %+v", item)
+				}
 			case "io.mender.sandbox.docker@builtin", "io.mender.sandbox.daytona@builtin":
 				if item["sourceKind"] != "builtin" || item["enabled"] != false ||
 					item["status"] != "unavailable" || item["issue"] == nil {
@@ -70,6 +75,7 @@ func TestUnifiedPluginCatalogueManagementContract(t *testing.T) {
 		"io.mender.sandbox.local-workspace@builtin",
 		"io.mender.sandbox.docker@builtin",
 		"io.mender.sandbox.daytona@builtin",
+		"io.mender.sandbox.ssh-remote@builtin",
 		"io.mender.sandbox.e2b@planned",
 	} {
 		if sandboxKeys[key] != 1 {

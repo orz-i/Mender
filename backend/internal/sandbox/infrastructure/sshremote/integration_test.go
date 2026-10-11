@@ -206,9 +206,30 @@ func TestSSHRemoteWorkspaceOverPinnedSSHAndSFTP(t *testing.T) {
 	if created["operation"] != "create" {
 		t.Fatalf("create: %+v", created)
 	}
+	// Repeated exclusive create must never overwrite the existing target.
+	duplicate, err := s.ExecuteWorkspace(ctx, sandboxdomain.CapabilityEdit, jsonArg(t, map[string]any{
+		"path": "added.txt", "operation": "create", "content": "must-not-overwrite",
+	}))
+	if err != nil || duplicate.Kind() != invocationdomain.OutcomeKindFailed {
+		t.Fatalf("exclusive SFTP create did not reject existing file: %v %+v", err, duplicate)
+	}
+	preserved := execute(t, s, sandboxdomain.CapabilityRead, map[string]any{"path": "added.txt"})
+	if preserved["content"] != "created" {
+		t.Fatalf("exclusive SFTP create overwrote original bytes: %+v", preserved)
+	}
 	result := execute(t, s, sandboxdomain.CapabilityShell, map[string]any{"command": "pwd && cat hello.txt"})
 	if result["exitCode"] != float64(0) || !strings.Contains(fmt.Sprint(result["stdout"]), "hello secure") {
 		t.Fatalf("shell: %+v", result)
+	}
+	// Trusted remote server may support symbolic links; structured tools
+	// must refuse them, not silently follow outside the configured root.
+	if err := os.Symlink("hello.txt", filepath.Join(template.Root, "linked.txt")); err != nil {
+		t.Fatal(err)
+	}
+	symlinkRead, err := s.ExecuteWorkspace(ctx, sandboxdomain.CapabilityRead, jsonArg(t,
+		map[string]any{"path": "linked.txt"}))
+	if err != nil || symlinkRead.Kind() != invocationdomain.OutcomeKindFailed {
+		t.Fatalf("structured SFTP read followed a symlink: %v %+v", err, symlinkRead)
 	}
 	deleted := execute(t, s, sandboxdomain.CapabilityEdit, map[string]any{"path": "added.txt", "operation": "delete"})
 	if deleted["operation"] != "delete" {

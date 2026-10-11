@@ -138,6 +138,13 @@ func relative(raw string, allowRoot bool) (string, error) {
 	if raw == "" {
 		raw = "."
 	}
+	// Do not silently normalize an explicit traversal segment away. This
+	// is a path-safety contract, not remote process isolation.
+	for _, segment := range strings.Split(raw, "/") {
+		if segment == ".." {
+			return "", errors.New("SSH workspace path contains parent traversal")
+		}
+	}
 	clean := path.Clean(raw)
 	if clean == ".." || strings.HasPrefix(clean, "../") || (clean == "." && !allowRoot) {
 		return "", errors.New("SSH workspace path escapes or names root")
@@ -315,8 +322,25 @@ func (s *Session) edit(ctx context.Context, args invocationdomain.JSONValue) (in
 	default:
 		return failure("unsupported SSH edit operation")
 	}
-	// New temporary file + exclusive create; then POSIX atomic rename when
-	// supported. A transport ambiguity retains the durable execution lease.
+	if in.Operation == "create" {
+		// SSH_FXF_EXCL must be checked atomically by the trusted SFTP server.
+		// A separate Lstat-then-Rename would overwrite a file created between
+		// those calls, even if both calls reported success independently.
+		file, err := s.conn.SFTP.OpenFile(remote, os.O_WRONLY|os.O_CREATE|os.O_EXCL)
+		if err != nil {
+			return failure("remote target already exists or exclusive create unavailable")
+		}
+		written, writeErr := io.Copy(file, strings.NewReader(in.Content))
+		closeErr := file.Close()
+		if writeErr != nil || closeErr != nil || written != int64(len(in.Content)) {
+			s.uncertain.Store(true)
+			return invocationdomain.Outcome{}, sandboxdomain.ErrBackendUnavailable
+		}
+		return complete(map[string]any{"path": in.Path, "operation": "create", "replacements": 0,
+			"bytesBefore": 0, "bytesAfter": written})
+	}
+	// Replace uses a new exclusive temporary file and POSIX atomic rename
+	// on SFTP servers that support it. An uncertain result retains the lease.
 	var nonce [12]byte
 	if _, err := rand.Read(nonce[:]); err != nil {
 		return invocationdomain.Outcome{}, err
@@ -326,29 +350,18 @@ func (s *Session) edit(ctx context.Context, args invocationdomain.JSONValue) (in
 	if err != nil {
 		return failure("remote temporary file unavailable")
 	}
-	_, writeErr := file.Write([]byte(in.Content))
+	written, writeErr := io.Copy(file, strings.NewReader(in.Content))
 	closeErr := file.Close()
-	if writeErr != nil || closeErr != nil {
+	if writeErr != nil || closeErr != nil || written != int64(len(in.Content)) {
 		s.uncertain.Store(true)
 		return invocationdomain.Outcome{}, sandboxdomain.ErrBackendUnavailable
 	}
-	if in.Operation == "replace" {
-		if err := s.conn.SFTP.PosixRename(temporary, remote); err != nil {
-			s.uncertain.Store(true)
-			return invocationdomain.Outcome{}, sandboxdomain.ErrBackendUnavailable
-		}
-	} else {
-		// No overwrite on create: a concurrent new final path must fail closed.
-		if observed, e := s.conn.SFTP.Lstat(remote); e == nil || !errors.Is(e, os.ErrNotExist) || observed != nil {
-			_ = s.conn.SFTP.Remove(temporary)
-			return failure("remote target already exists or cannot be verified")
-		}
-		if err := s.conn.SFTP.Rename(temporary, remote); err != nil {
-			s.uncertain.Store(true)
-			return invocationdomain.Outcome{}, sandboxdomain.ErrBackendUnavailable
-		}
+	if err := s.conn.SFTP.PosixRename(temporary, remote); err != nil {
+		s.uncertain.Store(true)
+		return invocationdomain.Outcome{}, sandboxdomain.ErrBackendUnavailable
 	}
-	return complete(map[string]any{"path": in.Path, "operation": in.Operation, "replacements": replacements, "bytesBefore": before, "bytesAfter": len(in.Content)})
+	return complete(map[string]any{"path": in.Path, "operation": "replace", "replacements": replacements,
+		"bytesBefore": before, "bytesAfter": written})
 }
 
 type searchArgs struct {
@@ -404,8 +417,11 @@ func (s *Session) search(ctx context.Context, args invocationdomain.JSONValue) (
 	}
 	matches := make([]match, 0)
 	files := 0
+	visitedEntries := 0
+	discoveredDirs := 1
 	aggregate := int64(0)
 	truncated := false
+	exhausted := false
 	type node struct {
 		dir   string
 		depth int
@@ -429,12 +445,22 @@ func (s *Session) search(ctx context.Context, args invocationdomain.JSONValue) (
 			if ctx.Err() != nil {
 				return invocationdomain.Outcome{}, ctx.Err()
 			}
+			visitedEntries++
+			if visitedEntries > 10000 {
+				truncated, exhausted = true, true
+				break
+			}
 			if entry.Mode()&fs.ModeSymlink != 0 || entry.Name() == ".git" {
 				continue
 			}
 			full := path.Join(curr.dir, entry.Name())
 			rel := strings.TrimPrefix(full, s.root+"/")
 			if entry.IsDir() {
+				discoveredDirs++
+				if discoveredDirs > 1024 {
+					truncated, exhausted = true, true
+					break
+				}
 				queue = append(queue, node{full, curr.depth + 1})
 				continue
 			}
@@ -499,7 +525,7 @@ func (s *Session) search(ctx context.Context, args invocationdomain.JSONValue) (
 				break
 			}
 		}
-		if truncated && (files > 10000 || len(matches) >= in.MaxResults) {
+		if exhausted || (truncated && (files > 10000 || len(matches) >= in.MaxResults)) {
 			break
 		}
 	}

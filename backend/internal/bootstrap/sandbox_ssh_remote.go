@@ -25,6 +25,13 @@ func (s *Sandboxes) CreateSSHRemoteSandbox(ctx context.Context, input CreateSSHR
 	if err := caller.Validate(); err != nil {
 		return sandboxdomain.Sandbox{}, err
 	}
+	// Only an actual local operator may configure a remote login. A Profile
+	// service, MCP client or model Tool cannot make Mender contact an
+	// arbitrary SSH host even if it happens to possess Sandbox grants.
+	if caller.Principal().Kind() != governancedomain.PrincipalLocalUser ||
+		caller.Origin() == governancedomain.OriginMCP {
+		return sandboxdomain.Sandbox{}, sandboxdomain.ErrNotAuthorized
+	}
 	if err := input.Template.Validate(); err != nil {
 		return sandboxdomain.Sandbox{}, err
 	}
