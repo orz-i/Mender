@@ -1,6 +1,6 @@
 # Phase 27 D — Tunnel Transport Plugin closure
 
-Status: In progress (2026-10-11). Governing ADR-0037 and ADR-0031.
+Status: **Closed (2026-10-11)**. Governing ADR-0037 and ADR-0031.
 
 ## Intent and acceptance
 
@@ -91,3 +91,54 @@ Tunnel brand adoption, multi-extension package or externally accessible MCP
 listener. Do not invent public Tunnel URLs or pass raw secrets in persisted
 package/resource config. Incompatible external plugins remain unavailable
 rather than silently falling back to OpenAI.
+
+
+## Final Phase D acceptance evidence
+
+| Gate | Source and observation | Result |
+| --- | --- | --- |
+| Typed Tunnel identity | `tunnel/domain/{binding,tunnel}.go`; exact OpenAI built-in or installed third-party binding | Pass |
+| Forward-only v3 hard cut | `tunnel/infrastructure/sqlite/migrations.go`, `migrations_v3_test.go` | Preserved historical TunnelID, ExternalTunnelID, Credential Ref, Profile link; backup/rollback/restart |
+| Installation usage | `plugin/installation/infrastructure/sqlite/migrations.go` | Atomic create/disable/delete guards; referenced and unbound Tunnels block removal |
+| Separate typed wire contract | `contracts/tunnelplugin/v1/`, `sdk/tunnelplugin/go/` | Go gRPC v1, handshake, descriptor and config inspection |
+| External native test fixture | `examples/tunnel-plugin-example/` | Strict literal loopback `/mcp`, no public Tunnel or cloud I/O |
+| Shared host | `tunnel/infrastructure/external/{dialer,runner,session}.go` | Exact package digest, version and descriptor verified before Credential resolution |
+| OpenAI built-in path | `tunnel/infrastructure/process/runner.go`, `pluginregistry/registry.go` | Unchanged OpenAI command arguments and Credential environment |
+| Managed MCP lifecycle | `bootstrap/mcp_servers.go` | Listener first; Tunnel connect second; failure rollback, health cache, bounded stop/crash handling |
+| Lifecycle/health E2E | `bootstrap/tunnel_plugin_e2e_test.go` | Ready/degraded/exited, re-connect, stop, invalid URL and deterministic Connect failure |
+| Governance E2E | `bootstrap/tunnel_plugin_e2e_test.go`, original `mcp_servers_test.go` | Profile/Credential reference protection, active Tunnel deletion prevention, wrong-kind rejection |
+| Secure management | `bootstrap/tunnel_plugin_installations.go`, `cli/tunnel.go` | Generic package CLI, typed Tunnel inventory/add/delete, fail-closed state changes |
+
+Quality checks:
+- `pnpm provider-plugin:proto:check` (all three typed protocols) and
+  `pnpm tunnel-plugin:sdk:check`, `pnpm tunnel-plugin:example:check` passed.
+- `go test -race ./backend/...` and `golangci-lint run ./backend/...` passed.
+- `pnpm lint`, `pnpm typecheck`, `pnpm test` (132/132),
+  `pnpm build` (Web and Desktop frontend) passed.
+- `pnpm security:check` scanned the new Tunnel SDK/example Go modules
+  and existing modules plus production JavaScript dependencies, with no known
+  vulnerabilities reported.
+- `GOWORK=off go build` in `apps/desktop` succeeded, with existing macOS
+  minimum-deployment linker warnings but no error.
+
+Verified code commits: `db21a7f` (exact binding and SQLite migration),
+`262a398` (Tunnel v1 SDK/example), `f14904e` (managed runtime, CLI and tests).
+
+**No real OpenAI account or Tunnel API key was accessed.** The native example
+was built and run using temporary test files, environment fixture credentials,
+and a real *local-only* managed MCP endpoint. It is not evidence of public
+reachability or real OpenAI tunnel registration.
+
+## Explicit carry-forward
+
+**Phase E** owns a unified backend Plugin Catalogue plus Web, Desktop/Wails
+and TypeScript SDK management UI flows for plugin discovery, installation,
+details, creation, filtering and resource usage. This Phase D supports the
+actual external native transport through Runtime and CLI; it does not claim
+a completed Marketplace UI.
+
+An OpenAI `tunnel-client` process that merely started is reported
+`starting`, not `ready`; OpenAI control-plane registration still needs
+explicit real-world verification. Third-party native plugin binaries run
+with the OS account's authority unless a separate OS-enforced sandbox is used.
+The example reports readiness for **local loopback MCP reachability only**.

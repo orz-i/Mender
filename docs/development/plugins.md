@@ -13,7 +13,7 @@ Work is tracked in [Phase 27](../planning/phase-27-multi-kind-plugin-platform.md
 | --- | --- | --- |
 | `provider.tools` | Canonical Tool discovery/invocation, Provider lifecycle | Supported with Provider Plugin Protocol v1 |
 | `sandbox.backend` | Sandbox provisioning/session and backend file/process operations | Trusted Local Workspace/Docker/opt-in Daytona; installable native external backend through Sandbox Plugin Protocol v1 and governed CLI |
-| `tunnel.transport` | Managed downstream MCP Profile reachability | Typed metadata defined; external transport protocol under development |
+| `tunnel.transport` | Managed downstream MCP Profile reachability | Trusted OpenAI built-in; external native Tunnel Transport Protocol v1 and CLI/Runtime support |
 
 A Sandbox does not automatically create Tools and a Tunnel does not participate
 in Catalog discovery. Credentials, Policy, Admission, leases, budgets, Audit,
@@ -44,11 +44,11 @@ exactly one `extensions` item is required. Configuration Schema,
 Credentials and capabilities are validated by the host and the respective
 extension contract. Manifest claims never confer authority.
 
-Both `provider.tools` and `sandbox.backend` have independently versioned,
-installable native runtimes. The generic Plugin Core verifies both packages
+`provider.tools`, `sandbox.backend` and `tunnel.transport` each have
+independently versioned, installable native runtimes. The generic Plugin Core verifies both packages
 and supervises their native processes, but Provider/Sandbox management and
 execution protocols remain separate. The CLI dispatches installation by
-`extensions[0].kind`; Tunnel is still a proposed extension contract. Web and
+`extensions[0].kind`. Web and
 Desktop plugin-marketplace integration for Sandbox/Tunnel remains Phase 27 E.
 
 ## Forward-only hard cut for already installed Provider packages
@@ -172,6 +172,60 @@ alone is not trusted for that invariant.
 **Product scope:** the governed native install/create/operate path is currently
 available from the CLI and backend Runtime. Generic Web/Desktop plugin-market
 and resource creation flows are Phase 27 E work, not part of C3.
+
+## Tunnel Transport extensions (SQLite v3)
+
+`io.mender.tunnel.openai/main` is the trusted OpenAI transport. Existing
+Tunnel IDs, provider-facing ExternalTunnelIDs, Profile tunnel links and
+Credential references are preserved by a one-time **v2→v3 hard cut**.
+A WAL-consistent `.mender-tunnel-pre-v3-*.db` snapshot is created before
+upgrading the Tunnel database. The new Tunnel `Binding` is immutable and
+retains an empty InstallationID only for the shipped OpenAI built-in.
+
+External Tunnels require the exact verified, enabled `tunnel.transport/main`
+InstallationID. Mender checks package status, full SHA-256 tree integrity and
+typed descriptor before resolving the runtime Credential Reference. Connection
+parameters always contain a host-selected `http://127.0.0.1:<port>/mcp`
+(or equivalent literal IPv6 loopback) endpoint. Neither a Profile nor a
+native plugin may choose a public MCP listener.
+
+Independent `contracts/tunnelplugin/v1/` and `sdk/tunnelplugin/go/`
+provide GetDescriptor, Validate/InspectConfig, Connect, Status and Disconnect.
+A native extension can report `starting`, `ready`, `degraded` or `failed`;
+these are **transport-reported** states, not proof of OpenAI/control-plane
+registration or public Internet accessibility. OpenAI `tunnel-client`
+process startup alone is `starting`, never an assumed `ready`.
+
+A managed Profile MCP HTTP server must exist before Tunnel Connect. On
+connection failure the listener is shut down. On stop/restart the Tunnel
+session is boundedly disconnected; unexpected process termination is observed
+as `exited`. Resource deletion is blocked while any Profile still references
+the Tunnel or a managed MCP server is actively exposing it. The exact
+installation cannot be disabled/removed as long as any Tunnel inventory row
+references it, even after Profile unbind. SQLite also prevents racing package
+disable/create/delete from silently stranding a Tunnel.
+
+**Headless local fixture example:**
+
+~~~sh
+cd examples/tunnel-plugin-example
+mkdir -p bin
+GOWORK=off go build -o bin/mender-tunnel-example ./cmd/mender-tunnel-example
+
+# Use the same Mender CLI database throughout:
+mender plugin install /absolute/path/to/examples/tunnel-plugin-example
+mender plugin list
+mender tunnel add external --name example --installation pinst_<exact-id> --external-id test --credential-ref credential://example/tunnel
+mender tunnel list
+~~~
+
+The Credential Reference must exist in Mender's inventory. The example uses
+a local loopback MCP reachability probe only and does **not** connect to a
+cloud relay. Attach the TunnelID to a Profile through the existing managed
+Profile Tunnel binding flow, then start that Profile's managed MCP Server.
+Once the Profile is unbound and its MCP server stopped, `mender tunnel delete`
+can remove the Tunnel resource. CLI and backend Runtime are implemented;
+the unified native Web/Desktop creation workflow remains Phase E.
 
 ## Native code trust
 

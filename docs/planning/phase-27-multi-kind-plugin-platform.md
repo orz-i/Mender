@@ -194,9 +194,20 @@ Acceptance: migration on a copied v8 DB with real grants/runs/leases and Docker/
   provision and atomic disable/create/remove conflict guards are tested.
   `pnpm check`, `pnpm security:check`, Race, Go Desktop build and SDK/proto
   gates passed. See [C3 closure](phase-27-c3-sandbox-plugin-closure.md).
-- **D and E:** not implemented. Tunnel pluginization and unified Marketplace
-  remain separate planned work; the existing external Sandbox path is a
-  governed native CLI/Runtime capability, not an automatic cloud integration.
+- **D — closed (2026-10-11):** OpenAI remains a trusted built-in Tunnel
+  transport and external `tunnel.transport` packages are installable through
+  the shared Plugin Core. SQLite v3 migrates Tunnel identity to exact typed
+  PluginID/ExtensionID/InstallationID with WAL-consistent backup; old
+  TunnelID/Credential/Profile references stay stable. Independent gRPC v1,
+  standalone Go SDK and a no-network Tunnel fixture exercise the host-selected
+  managed loopback MCP server, health/exit observation, startup rollback,
+  restart, scoped Credential delivery, immutable package pin, atomic
+  disable/delete/create guards and Profile usage. Full CLI/Runtime tests and
+  checks pass. See [D closure](phase-27-d-tunnel-transport-closure.md).
+- **E remains:** one backend Plugin Catalogue and unified Web/Desktop/Wails,
+  API and SDK management experience. Native external Sandbox and Tunnel
+  Runtime support does not imply completed Marketplace UX or public provider
+  reachability.
 
 Foundation verification: `pnpm check` (Go lint/test/race, SDK/protocol/example,
 HTTP/TS/Wails contract drift, i18n/132 frontend tests, Web/Desktop builds) and
