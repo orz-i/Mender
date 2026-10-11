@@ -32,6 +32,7 @@ func TestUnifiedPluginCatalogueManagementContract(t *testing.T) {
 		t.Fatalf("catalogue missing builtin types: %+v", result)
 	}
 	kinds := map[string]bool{}
+	dockerCount := 0
 	for _, raw := range items {
 		item, ok := raw.(map[string]any)
 		if !ok {
@@ -42,6 +43,22 @@ func TestUnifiedPluginCatalogueManagementContract(t *testing.T) {
 			t.Fatal("missing typed extension kind")
 		}
 		kinds[kind] = true
+		if item["pluginId"] == "io.mender.sandbox.docker" {
+			dockerCount++
+			if item["key"] != "io.mender.sandbox.docker@builtin" || kind != "sandbox.backend" {
+				t.Fatalf("Docker must have one stable trusted plugin identity: %+v", item)
+			}
+			if r.Sandboxes.DockerAvailable() {
+				if item["status"] != "enabled" || item["enabled"] != true {
+					t.Fatalf("active Docker absent from HTTP Marketplace: %+v", item)
+				}
+			} else if item["status"] != "unavailable" || item["enabled"] != false || item["issue"] == "" {
+				t.Fatalf("unconfigured Docker not fail-closed in HTTP Marketplace: %+v", item)
+			}
+		}
+	}
+	if dockerCount != 1 {
+		t.Fatalf("expected exactly one Docker plugin in HTTP catalogue, got %d", dockerCount)
 	}
 	for _, kind := range []string{"provider.tools", "sandbox.backend", "tunnel.transport"} {
 		if !kinds[kind] {

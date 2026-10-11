@@ -1,6 +1,6 @@
 # Phase 28 — Docker Sandbox Marketplace activation
 
-Status: In progress (2026-10-11). Governing ADR-0035/0036/0037; follows the closed Phase 27.
+Status: Closed (2026-10-11). Governing ADR-0035/0036/0037; follows the closed Phase 27.
 
 ## Observed baseline
 
@@ -81,3 +81,47 @@ https://docs.docker.com/engine/security/protect-access/
 On current Docker Desktop for macOS, the user socket is under
 `~/.docker/run/docker.sock` and `/var/run/docker.sock` may not exist:
 https://docs.docker.com/desktop/setup/install/mac-permission-requirements/
+
+## P3 — verification and closure (2026-10-11)
+
+- **Plugin identity**: `io.mender.sandbox.docker@builtin`, typed
+  `sandbox.backend/main`. Unconfigured Runtime returns exactly one inert
+  `unavailable` catalogue entry with four known Workspace capabilities,
+  no installation/enable/create authority. The same key becomes `enabled`
+  after Engine probe and atomic backend+lifecycle registration. No cloned
+  driver, compatibility Provider or unsigned executable.
+- **Operator flow**: Desktop Marketplace → Docker Engine → **Connect Docker
+  Desktop** → review privileged-daemon warning → confirm → refreshed plugin
+  detail → **Create sandbox**. Only Wails desktop binding has the connection
+  method; it takes no browser-supplied endpoint. A fixed Docker Desktop socket
+  (`~/.docker/run/docker.sock`) is vetted by existing guards. The connection
+  is process-local and does not change startup configuration.
+- **Failure**: absent/malformed/TCP socket or untrusted Engine leaves the
+  adapter unregistered and the card `unavailable`. The ordinary HTTP
+  management plane has no activation endpoint, and the generic installed
+  plugin enable/delete actions do not apply to built-ins.
+- **Tests**:
+  - Go backend unit and race tests for Registry, catalogue and desktop host
+    callback; HTTP `/plugins` projection asserts one stable Docker identity.
+  - Marketplace/React/Wails tests cover dormant status, opt-in confirmation,
+    cancellation, rejection, desktop-only action and activated create path.
+  - Real Docker Engine 29.8.0 on macOS: both
+    `TestRuntimeDockerSandboxProviderEndToEnd` and
+    `TestDockerLiveWorkspaceParityAndIsolation` passed with `-race` using a
+    pre-cached pinned Alpine image. Verified read/search/edit/shell,
+    create/stop/start/destroy, immutable binding, non-root UID, read-only
+    rootfs, no socket in container, `NoNewPrivs` and limits.
+  - Go lint/tests/race, frontend lint/typecheck, 145 frontend unit tests,
+    i18n 952/952, Wails generated bindings, module checks, Web/Desktop
+    production Vite builds passed. macOS Desktop Go build passed (linker
+    emitted platform-version warnings).
+  - `pnpm security:check`: govulncheck (8 modules) and
+    `pnpm audit --prod --audit-level high` found no known vulnerabilities.
+  - `pnpm check`: passed after the final lint fix (see last commit).
+- **Explicit limits**: This work publishes the built-in to Mender's local
+  Plugin Marketplace, **not** a remote/public registry. Docker still requires
+  an operator-owned daemon and a pre-cached immutable
+  `registry/path/image@sha256:…` image, no automatic pull. Containers are
+  constrained but Docker socket access is privileged; no VM-grade hostile
+  multi-tenant security claim. Existing Wails dev processes must be restarted
+  or rebuilt if they have not loaded the changed Go binary.

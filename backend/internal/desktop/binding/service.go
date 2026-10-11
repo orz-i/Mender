@@ -69,7 +69,7 @@ func NewServiceWithDockerActivation(ctx context.Context, runtime *bootstrap.Runt
 // The Wails caller supplies no socket address, daemon flags or image options.
 func (s *Service) ConnectDockerDesktop() error {
 	if s == nil || s.activateDockerDesktop == nil {
-		return fmt.Errorf("Docker Desktop activation requires the local desktop host")
+		return fmt.Errorf("docker Desktop activation requires the local desktop host")
 	}
 	return s.activateDockerDesktop(s.ctx)
 }
