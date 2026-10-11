@@ -79,7 +79,7 @@ func builtinDescriptor(kind sandboxdomain.BackendKind, capabilities []string) (p
 	case sandboxdomain.BackendDocker:
 		id = "io.mender.sandbox.docker"
 		display = "Docker Engine"
-		description = "Trusted opt-in Docker Engine backend with container isolation checks"
+		description = "Trusted local Docker Engine backend with monitored readiness and container isolation checks"
 	case sandboxdomain.BackendDaytona:
 		id = "io.mender.sandbox.daytona"
 		display = "Daytona (experimental)"

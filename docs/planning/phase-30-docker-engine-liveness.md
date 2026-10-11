@@ -1,6 +1,6 @@
 # Phase 30 — Docker Engine 长期自动连接与健康治理
 
-状态：实施中（2026-10-11），衔接已收口 Phase 29。遵循 ADR-0035/0036/0037；文档先行、分段提交。
+状态：Closed（2026-10-11），衔接已收口 Phase 29。遵循 ADR-0035/0036/0037；文档先行、分段提交。
 
 ## 审计结论
 
@@ -26,3 +26,33 @@ Docker Engine `/_ping` 和 `/info` 是官方读接口；守护进程的 `Info.ID
 边界：不构建 Agent Loop；不自行启动/停止 Docker Desktop，不扫描任意 UNIX Socket 或 Docker contexts，不引入新的兼容桥接，不自动拉取镜像，不开放 daemon API 给 Tool，不修改 `.agents/` / `.pi/` / `.intent-loop/`。
 
 参考：https://docs.docker.com/reference/api/engine/ ，https://docs.docker.com/engine/security/protect-access/ 。
+
+## Phase 30 验收与收口（2026-10-11）
+
+**状态：Closed。** 未引入额外架构阶段、Provider 桥接或 Tool daemon 入口。
+
+| 验收条件 | 实际结果 |
+| --- | --- |
+| 首次自动发现持续到 Engine 就绪 | 单 Worker / 10 秒串行重试 |
+| 首次就绪后不停监测 | Worker 继续只读 `Probe`，丢失连接标记不可用 |
+| 守护进程恢复 | 仅同一 `Info.ID` 和已绑定 Socket 恢复；不重新注册/切换 |
+| 不同 Engine 身份 | `ErrEngineIdentityChanged` 双重错误标记，持久化 Sandbox 和 Lease 不变 |
+| 执行权限 | Docker backend / 生命周期 / 镜像列表 / 沙盒创建 / 已打开的 Workspace Session 在最后已知失联时拒绝新操作 |
+| Web/桌面状态一致 | Canonical 插件目录、`GetSandboxBackends`、`backendAvailable` 与健康状态一致；Docker 插件和创建页每 5 秒只读刷新 |
+| 安全与兼容 | 原 Docker Session、Execution Router、Policy、审核、Generation、Lease 及缓存 Digest 约束保留；无网络端点和自动拉镜像 |
+
+提交顺序：
+
+- `7c11a15` — 文档先行、设计约束；
+- `dcfe8b5` — 持续监测、身份钉住、动态执行门禁和 Race 测试；
+- `25efa4d` — Web/Desktop 管理状态与前端失联/恢复回归；
+- 后续收口提交包含 Marketplace 描述一致性和本验收记录。
+
+验证：
+
+- `pnpm check` **全通过**（Go lint、完整 Go tests/Race、SDK/Wails drift、TS lint/typecheck、i18n **959/959**、Vitest **150/150**、Web/Desktop build）。
+- `pnpm security:check` **全通过**，8 个 Go 模块 `govulncheck` 与 JS 生产依赖审计均无已知漏洞；Go 漏洞数据库使用正常的备用镜像。
+- 实际 Docker Engine 29.8.0 的自动发现、Engine ID 记录、同 Engine 状态恢复与 Docker 创建/销毁、read/search/edit/shell、容器安全配置验证通过，真实引擎相关测试带 `-race`。
+- 原生 macOS Wails Go Build 通过，工具链仍提示与现有 macOS target 相关的非致命链接警告。
+
+**边界与限制：** 不为了模拟断线而停止用户的 Docker Desktop；断线/恢复采用 Fake/状态注入并结合活体只读探测测试。监测状态最多有一个巡检周期（10 秒）延迟；新 Tool Session 仍会逐次进行原有真实 Engine 隔离和身份探测。Docker Engine 身份变更不得自动切换沙盒，需操作者重启并核查资源。不会自动销毁或重建任何既有 Sandbox / 容器。
