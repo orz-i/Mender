@@ -5,10 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"regexp"
 	"slices"
 	"strings"
 	"unicode/utf8"
+
+	platformplugin "github.com/orz-i/Mender/backend/internal/plugin"
 
 	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
@@ -18,7 +19,6 @@ import (
 )
 
 const (
-	maxIDLength                   = 128
 	maxVersionLength              = 128
 	maxDisplayNameLength          = 160
 	maxDescriptionLength          = 4096
@@ -28,35 +28,11 @@ const (
 	maxConnectionSummaryBytes     = 4096
 )
 
-var idPattern = regexp.MustCompile(`^[a-z][a-z0-9-]*(?:\.[a-z][a-z0-9-]*)+$`)
+// ID is the shared platform identity of a Provider implementation.
+type ID = platformplugin.ID
 
-// ID is the stable identity of one Provider plugin implementation.
-//
-// IDs are namespaced and intentionally are not normalized silently.
-type ID string
-
-// ParseID validates and returns a Provider plugin ID.
-func ParseID(value string) (ID, error) {
-	if value == "" {
-		return "", fmt.Errorf("provider plugin id: must not be empty")
-	}
-	if len(value) > maxIDLength {
-		return "", fmt.Errorf("provider plugin id: must be at most %d characters", maxIDLength)
-	}
-	if value != strings.TrimSpace(value) {
-		return "", fmt.Errorf("provider plugin id: must not contain surrounding whitespace")
-	}
-	if !idPattern.MatchString(value) {
-		return "", fmt.Errorf(
-			"provider plugin id: must be a lowercase namespaced identifier such as io.mender.provider.mcp",
-		)
-	}
-	return ID(value), nil
-}
-
-func (id ID) String() string {
-	return string(id)
-}
+// ParseID validates a platform plugin identity.
+func ParseID(value string) (ID, error) { return platformplugin.ParseID(value) }
 
 // Descriptor is safe Provider plugin metadata exposed by Runtime/management.
 //
