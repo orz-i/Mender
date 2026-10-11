@@ -944,6 +944,34 @@ describe("management pages", () => {
     expect(await screen.findByRole("button",{name:"Create sandbox"})).toBeTruthy();
   });
 
+  it("opens the trusted SSH Remote plugin directly in its own credential-gated create flow",async()=>{
+    const pluginId="io.mender.sandbox.ssh-remote";
+    const plugin={
+      key:pluginId+"@builtin",pluginId,extensionId:"main",kind:"sandbox.backend",
+      displayName:"SSH Remote",description:"Pinned SSH remote account",
+      packageVersion:"1.0.0",sourceKind:"builtin",status:"enabled",enabled:true,
+      capabilities:["file.read","file.search","file.edit","process.shell"],usageCount:0,
+    };
+    const credential={
+      reference:"credential://ssh/build",namespace:"ssh",name:"build",
+      displayName:"SSH build",source:"native",environmentVariable:"",
+      createdAt:"2026-10-11T00:00:00Z",updatedAt:"2026-10-11T00:00:00Z",
+    };
+    renderApp("/plugins/"+pluginId+"%40builtin",{
+      listPluginCatalogue:vi.fn().mockResolvedValue({plugins:[plugin]}),
+      getRuntimeGovernance:vi.fn().mockResolvedValue({backend:{restrictedHostAvailable:false}}),
+      getSandboxBackends:vi.fn().mockResolvedValue({dockerAvailable:false,dockerStatus:"unavailable",daytonaConfigured:false,daytonaStatus:"disabled"}),
+      listCredentials:vi.fn().mockResolvedValue({credentials:[credential]}),
+    });
+    fireEvent.click(await screen.findByRole("button",{name:"Create sandbox"}));
+    expect(await screen.findByRole("textbox",{name:"SSH host"})).toBeTruthy();
+    expect(screen.getByRole("combobox",{name:"SSH private key credential"})).toBeTruthy();
+    expect(screen.getByText(/SSH Remote is not container or VM isolation/)).toBeTruthy();
+    expect(screen.queryByLabelText("Cached Docker image")).toBeNull();
+    expect(screen.queryByLabelText("Mender Credential Reference")).toBeNull();
+    expect(screen.getByRole<HTMLButtonElement>("button",{name:"Review"}).disabled).toBe(true);
+  });
+
   it("opens the experimental Daytona credential workflow only after native opt-in",async()=>{
     const plugin={
       key:"io.mender.sandbox.daytona@builtin",pluginId:"io.mender.sandbox.daytona",

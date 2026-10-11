@@ -60,6 +60,64 @@ afterEach(() => {
 });
 
 describe("Credential create validation and feedback", () => {
+  it("creates a native SSH private key credential with multiline secret and fixed SSH namespace", async()=>{
+    const sshCredential:Credential={...credential,
+      reference:"credential://ssh/build",namespace:"ssh",name:"build",
+      displayName:"SSH Build",source:"native",environmentVariable:"",
+    };
+    const listCredentials=vi.fn().mockResolvedValueOnce({credentials:[]})
+      .mockResolvedValue({credentials:[sshCredential]});
+    const {createNativeCredential,createEnvironmentCredential}=showPage({listCredentials});
+    fireEvent.change(screen.getByRole("combobox",{name:"Credential source"}),{
+      target:{value:"ssh-key"},
+    });
+    const namespace=screen.getByRole<HTMLInputElement>("textbox",{name:"Credential namespace"});
+    expect(namespace.value).toBe("ssh");
+    expect(namespace.disabled).toBe(true);
+    fireEvent.change(screen.getByRole("textbox",{name:"Credential name"}),{
+      target:{value:"build"},
+    });
+    fireEvent.change(screen.getByRole("textbox",{name:"Credential display name"}),{
+      target:{value:"SSH Build"},
+    });
+    const secret="-----BEGIN OPENSSH PRIVATE KEY-----\nfixture-only\n-----END OPENSSH PRIVATE KEY-----";
+    const textarea=screen.getByRole<HTMLTextAreaElement>("textbox",{name:"SSH private key"});
+    fireEvent.change(textarea,{target:{value:secret}});
+    expect(screen.getByText("credential://ssh/build")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button",{name:"Create credential"}));
+    await waitFor(()=>expect(createNativeCredential).toHaveBeenCalledWith({
+      namespace:"ssh",name:"build",displayName:"SSH Build",secret,
+    }));
+    expect(createEnvironmentCredential).not.toHaveBeenCalled();
+    expect(await screen.findByText("SSH Build")).toBeTruthy();
+    expect(screen.queryByText("fixture-only")).toBeNull();
+  });
+
+  it("does not reflect rejected SSH private-key parser details near the secret",async()=>{
+    const createNativeCredential=vi.fn().mockRejectedValue(
+      new Error("ssh private key: invalid or encrypted private key"),
+    );
+    showPage({createNativeCredential});
+    fireEvent.change(screen.getByRole("combobox",{name:"Credential source"}),{
+      target:{value:"ssh-key"},
+    });
+    fireEvent.change(screen.getByRole("textbox",{name:"Credential name"}),{
+      target:{value:"build"},
+    });
+    fireEvent.change(screen.getByRole("textbox",{name:"Credential display name"}),{
+      target:{value:"SSH Build"},
+    });
+    fireEvent.change(screen.getByRole("textbox",{name:"SSH private key"}),{
+      target:{value:"-----BEGIN OPENSSH PRIVATE KEY-----\nprivate fixture"},
+    });
+    fireEvent.click(screen.getByRole("button",{name:"Create credential"}));
+    const alert=await within(screen.getByRole("dialog",{name:"Add credential"}))
+      .findByRole("alert");
+    expect(alert.textContent).toContain("SSH private key must be");
+    expect(alert.textContent).not.toContain("invalid or encrypted");
+    expect(alert.textContent).not.toContain("private fixture");
+  });
+
   it("canonicalizes the screenshot's mixed-case and spaced identifiers before creating", async () => {
     const listCredentials = vi.fn()
       .mockResolvedValueOnce({ credentials: [] })

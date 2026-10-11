@@ -29,6 +29,10 @@ export function credentialCreateError(reason: unknown): string {
     typeof reason === "object" && reason !== null && "message" in reason &&
       typeof reason.message === "string" ? reason.message : "";
 
+  if (detail.includes("ssh private key:") ||
+      detail.includes("SSH private key credentials must use")) {
+    return t("SSH private key must be an unencrypted Ed25519, ECDSA or RSA 3072-bit key stored in the OS keychain.");
+  }
   if (detail.includes("credential: reference already exists")) {
     return t("A credential with this reference already exists.");
   }

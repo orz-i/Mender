@@ -41,7 +41,7 @@ import {
   validCredentialPart,
 } from "./credential-form";
 
-type CredentialSource = Credential["source"];
+type CredentialSource = Credential["source"] | "ssh-key";
 
 const emptyCreateForm = {
   namespace: "",
@@ -123,9 +123,10 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
   const secretValid = createForm.secret !== "" &&
     new TextEncoder().encode(createForm.secret).length <= MAX_NATIVE_SECRET_BYTES;
   const environmentVariableValid = ENVIRONMENT_VARIABLE_PATTERN.test(createForm.environmentVariable.trim());
+  const sshKeyMode = createForm.source === "ssh-key";
   const createValid = canonicalReference !== null && displayNameValid && (
-    createForm.source === "native" ? secretValid : environmentVariableValid
-  );
+    createForm.source !== "environment" ? secretValid : environmentVariableValid
+  ) && (!sshKeyMode || (namespace === "ssh" && createForm.secret.includes("PRIVATE KEY")));
 
   function updateCreateForm(changes: Partial<typeof emptyCreateForm>) {
     setCreateError("");
@@ -137,7 +138,7 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
     setBusy("create");
     setCreateError("");
     try {
-      if (createForm.source === "native") {
+      if (createForm.source !== "environment") {
         await client.createNativeCredential({
           namespace,
           name,
@@ -330,6 +331,7 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
                 value={createForm.source}
                 onChange={(event) => updateCreateForm({
                   source: event.target.value as CredentialSource,
+                  namespace: event.target.value === "ssh-key" ? "ssh" : "",
                   secret: "",
                   environmentVariable: "",
                 })}
@@ -337,6 +339,7 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
               >
                 <option value="native">{t("native keyring")}</option>
                 <option value="environment">{t("environment variable")}</option>
+                <option value="ssh-key">{t("SSH private key")}</option>
               </select>
             </Field>
 
@@ -346,6 +349,7 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
                   aria-label={t("Credential namespace")}
                   placeholder={t("github")}
                   value={createForm.namespace}
+                  disabled={sshKeyMode}
                   aria-invalid={namespaceInvalid}
                   onChange={(event) => updateCreateForm({ namespace: event.target.value })}
                 />
@@ -383,18 +387,33 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
             ) : null}
             <ReadOnlyField label="Reference" value={referencePreview} />
 
-            {createForm.source === "native" ? (
-              <Field label="Secret">
-                <Input
-                  type="password"
-                  autoComplete="new-password"
-                  aria-label={t("Credential secret")}
-                  value={createForm.secret}
-                  aria-invalid={createForm.secret !== "" && !secretValid}
-                  onChange={(event) => updateCreateForm({ secret: event.target.value })}
-                />
+            {createForm.source !== "environment" ? (
+              <Field label={sshKeyMode ? t("SSH private key") : t("Secret")}>
+                {sshKeyMode ? (
+                  <textarea
+                    aria-label={t("SSH private key")}
+                    autoComplete="off"
+                    spellCheck={false}
+                    rows={5}
+                    value={createForm.secret}
+                    aria-invalid={createForm.secret !== "" && !secretValid}
+                    onChange={(event) => updateCreateForm({ secret: event.target.value })}
+                    className="w-full resize-y rounded-lg border border-input bg-background p-3 font-mono text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    placeholder={t("-----BEGIN OPENSSH PRIVATE KEY-----")}
+                  />
+                ) : (
+                  <Input
+                    type="password"
+                    autoComplete="new-password"
+                    aria-label={t("Credential secret")}
+                    value={createForm.secret}
+                    aria-invalid={createForm.secret !== "" && !secretValid}
+                    onChange={(event) => updateCreateForm({ secret: event.target.value })}
+                  />
+                )}
                 <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                  {t("The value is submitted once and is never returned by Mender.")}
+                  {sshKeyMode ? t("Use an unencrypted Ed25519 or ECDSA SSH private key. Mender stores it only in the OS keychain. Host public keys are configured separately in the SSH Sandbox.") :
+                    t("The value is submitted once and is never returned by Mender.")}
                 </p>
                 {createForm.secret !== "" && !secretValid ? (
                   <p className="mt-1 text-xs text-destructive">{t("Secret exceeds the 64 KiB limit.")}</p>
@@ -448,14 +467,26 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
               })}
             </DialogDescription>
           </DialogHeader>
-          <Field label="New secret">
-            <Input
-              type="password"
-              autoComplete="new-password"
-              aria-label={t("New Credential secret")}
-              value={rotateSecret}
-              onChange={(event) => setRotateSecret(event.target.value)}
-            />
+          <Field label={rotateCredential?.namespace === "ssh" ? t("SSH private key") : t("New secret")}>
+            {rotateCredential?.namespace === "ssh" ? (
+              <textarea
+                aria-label={t("New Credential secret")}
+                autoComplete="off"
+                spellCheck={false}
+                rows={5}
+                value={rotateSecret}
+                onChange={(event) => setRotateSecret(event.target.value)}
+                className="w-full resize-y rounded-lg border border-input bg-background p-3 font-mono text-xs"
+              />
+            ) : (
+              <Input
+                type="password"
+                autoComplete="new-password"
+                aria-label={t("New Credential secret")}
+                value={rotateSecret}
+                onChange={(event) => setRotateSecret(event.target.value)}
+              />
+            )}
           </Field>
           <DialogFooter>
             <Button

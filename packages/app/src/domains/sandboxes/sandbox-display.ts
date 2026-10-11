@@ -2,7 +2,8 @@ import type { Sandbox } from "@mender/sdk";
 import { t } from "../../i18n/i18n";
 
 export function sandboxBackend(item: Sandbox): string {
-  return item.backend === "local_workspace" ? t("Local workspace") : item.backend;
+  return item.backend === "local_workspace" ? t("Local workspace") :
+    item.backend === "ssh_remote" ? t("SSH Remote") : item.backend;
 }
 
 export function isolationLabel(value: string): string {

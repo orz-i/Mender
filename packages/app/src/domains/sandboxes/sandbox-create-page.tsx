@@ -7,6 +7,7 @@ import {
   FolderIcon,
   FolderOpenIcon,
   LockKeyholeIcon,
+  ServerIcon,
 } from "lucide-react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 
@@ -22,7 +23,7 @@ import { IconButton } from "../../shared/icon-button";
 import { PageToolbar } from "../../shared/page-toolbar";
 import { DataPanel } from "../../shared/workbench";
 
-type Backend = "local_workspace" | "docker" | "daytona";
+type Backend = "local_workspace" | "docker" | "daytona" | "ssh_remote";
 type CreationStep = "backend" | "configure" | "limits" | "review";
 
 const IMAGE_DIGEST = /^[a-z0-9]+(?:[.-][a-z0-9]+)+(?:\/[a-z0-9]+(?:[._-][a-z0-9]+)*){2,}@sha256:[0-9a-f]{64}$/;
@@ -123,7 +124,7 @@ function CreationProgress({
   const steps: Array<{ value: CreationStep; label: string }> = [
     { value: "backend", label: "Backend" },
     { value: "configure", label: "Configuration" },
-    ...(selected === "local_workspace" ? [] : [{ value: "limits" as const, label: "Resource limits" }]),
+    ...(selected === "local_workspace" || selected === "ssh_remote" ? [] : [{ value: "limits" as const, label: "Resource limits" }]),
     { value: "review", label: "Review" },
   ];
 
@@ -183,6 +184,7 @@ export function CreateSandboxPage({
   const fixedBackend:Backend|undefined=
     chosenBuiltin==="io.mender.sandbox.local-workspace"?"local_workspace":
     chosenBuiltin==="io.mender.sandbox.docker"?"docker":
+    chosenBuiltin==="io.mender.sandbox.ssh-remote"?"ssh_remote":
     chosenBuiltin==="io.mender.sandbox.daytona"?"daytona":undefined;
   const [step,setStep]=useState<CreationStep>(fixedBackend?"configure":"backend");
   const [selected,setSelected]=useState<Backend>(fixedBackend??"local_workspace");
@@ -197,6 +199,12 @@ export function CreateSandboxPage({
   const [daytonaMessage, setDaytonaMessage] = useState("");
   const [credentials, setCredentials] = useState<Credential[]>([]);
   const [daytonaCredential, setDaytonaCredential] = useState("");
+  const [sshHost, setSSHHost] = useState("");
+  const [sshPort, setSSHPort] = useState(22);
+  const [sshUser, setSSHUser] = useState("");
+  const [sshRoot, setSSHRoot] = useState("");
+  const [sshHostPublicKey, setSSHHostPublicKey] = useState("");
+  const [sshCredentialRef, setSSHCredentialRef] = useState("");
   const [daytonaCPU, setDaytonaCPU] = useState(1);
   const [daytonaMemory, setDaytonaMemory] = useState(2);
   const [daytonaDisk, setDaytonaDisk] = useState(3);
@@ -283,10 +291,21 @@ export function CreateSandboxPage({
 
   const digestOK = IMAGE_DIGEST.test(imageDigest);
   const credentialOK = credentials.some((item) => item.reference === daytonaCredential);
+  const sshCredentials = credentials.filter((item) => item.namespace === "ssh" && item.source === "native");
+  const sshValid = sshHost.length > 0 && sshHost.length <= 253 &&
+    /^[A-Za-z0-9.:-]+$/.test(sshHost) &&
+    /^[a-z_][a-z0-9_-]{0,62}$/.test(sshUser) && sshUser !== "root" &&
+    Number.isInteger(sshPort) && sshPort >= 1 && sshPort <= 65535 &&
+    sshRoot.startsWith("/") && sshRoot.length > 1 && sshRoot.length <= 1024 &&
+    !sshRoot.split("/").some((part) => part === ".." || part === ".") &&
+    sshHostPublicKey.trim().startsWith("ssh-ed25519 ") &&
+    !sshHostPublicKey.includes("\n") &&
+    sshCredentials.some((item) => item.reference === sshCredentialRef);
   const identityValid = Boolean(name.trim()) && (
     selected === "local_workspace" ? Boolean(root.trim() && isolation) :
       selected === "docker" ? dockerAvailable && digestOK :
-        daytonaConfigured && digestOK && credentialOK
+        selected === "ssh_remote" ? sshValid :
+          daytonaConfigured && digestOK && credentialOK
   );
   const dockerValid = dockerAvailable && digestOK &&
     userId >= 1000 && userId <= 65534 && groupId >= 1000 && groupId <= 65534 &&
@@ -297,7 +316,8 @@ export function CreateSandboxPage({
     daytonaCPU >= 1 && daytonaCPU <= 2 && daytonaMemory >= 1 && daytonaMemory <= 4 &&
     daytonaDisk >= 3 && daytonaDisk <= 10 && daytonaTTL >= 15 && daytonaTTL <= 120;
   const formValid = identityValid &&
-    (selected === "local_workspace" ? true : selected === "docker" ? dockerValid : daytonaValid);
+    (selected === "local_workspace" || selected === "ssh_remote" ? true :
+      selected === "docker" ? dockerValid : daytonaValid);
 
   function chooseBackend(next: Backend) {
     setSelected(next);
@@ -326,6 +346,11 @@ export function CreateSandboxPage({
     try {
       const sandbox = selected === "docker"
         ? await client.createDockerSandbox({ name: name.trim(), imageDigest, userId, groupId, cpuMilli, memoryMiB, workspaceMiB, pids })
+        : selected === "ssh_remote"
+          ? await client.createSSHRemoteSandbox({
+              name: name.trim(), host: sshHost.trim(), port: sshPort, user: sshUser,
+              root: sshRoot.trim(), hostPublicKey: sshHostPublicKey.trim(), credentialRef: sshCredentialRef,
+            })
         : selected === "daytona"
           ? await client.createDaytonaSandbox({ name: name.trim(), credentialRef: daytonaCredential, imageDigest, target: "us", cpu: daytonaCPU, memoryGiB: daytonaMemory, diskGiB: daytonaDisk, ttlMinutes: daytonaTTL })
           : await client.createLocalSandbox({ name: name.trim(), root: root.trim(), isolation: isolation as "host" | "restricted_host" });
@@ -360,6 +385,9 @@ export function CreateSandboxPage({
                 {...(dockerAvailable ? { onClick: () => chooseBackend("docker") } : {
                   disabledReason: dockerStatus ? dockerStatusText(dockerStatus) : t("Configure MENDER_DOCKER_SOCKET on the Runtime host."),
                 })} />
+              <BackendChoice label={t("SSH Remote")} icon={ServerIcon}
+                description={t("Connect to an SSH account with a pinned host key. SSH does not isolate remote processes or files.")}
+                onClick={() => chooseBackend("ssh_remote")} />
               <BackendChoice label={t("Daytona") + " · " + t("Experimental")} icon={CloudIcon}
                 description={t("Remote Daytona Sandbox uses a Mender credential and incurs provider charges. Provider availability is verified on creation.")}
                 {...(daytonaConfigured ? { onClick: () => chooseBackend("daytona") } : {
@@ -418,6 +446,60 @@ export function CreateSandboxPage({
                   </label>
                   <p className="text-xs leading-5 text-muted-foreground">
                     {t("Isolation choice is persisted per Sandbox; changing global Runtime settings will not weaken it.")}
+                  </p>
+                </>
+              ) : selected === "ssh_remote" ? (
+                <>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <label className="grid gap-2 text-sm">
+                      <span className="font-medium">{t("SSH host")}</span>
+                      <Input aria-label={t("SSH host")} value={sshHost} maxLength={253}
+                        placeholder={t("server.example.com")}
+                        onChange={(event) => setSSHHost(event.target.value.trim())}/>
+                    </label>
+                    <ResourceField label="SSH port" value={sshPort} onChange={setSSHPort} min={1} max={65535} />
+                    <label className="grid gap-2 text-sm">
+                      <span className="font-medium">{t("SSH login user")}</span>
+                      <Input aria-label={t("SSH login user")} value={sshUser}
+                        onChange={(event) => setSSHUser(event.target.value.trim())}/>
+                    </label>
+                    <label className="grid gap-2 text-sm">
+                      <span className="font-medium">{t("Remote workspace root")}</span>
+                      <Input aria-label={t("Remote workspace root")} value={sshRoot} placeholder={t("/home/agent/project")}
+                        onChange={(event) => setSSHRoot(event.target.value)}/>
+                    </label>
+                  </div>
+                  <label className="grid gap-2 text-sm">
+                    <span className="font-medium">{t("Pinned SSH host public key")}</span>
+                    <textarea aria-label={t("Pinned SSH host public key")} rows={3} spellCheck={false}
+                      value={sshHostPublicKey}
+                      onChange={(event) => setSSHHostPublicKey(event.target.value)}
+                      placeholder={t("ssh-ed25519 AAAA...")}
+                      className="w-full resize-y rounded-xl border border-input bg-card p-3 font-mono text-xs"/>
+                  </label>
+                  <label className="grid gap-2 text-sm">
+                    <span className="font-medium">{t("SSH private key credential")}</span>
+                    <select aria-label={t("SSH private key credential")} value={sshCredentialRef}
+                      onChange={(event) => setSSHCredentialRef(event.target.value)}
+                      className="h-10 w-full rounded-xl border border-input bg-card px-3 text-sm">
+                      <option value="">{t("Choose a credential")}</option>
+                      {sshCredentials.map((item) => (
+                        <option key={item.reference} value={item.reference}>
+                          {item.displayName}{" · "}{item.reference}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {sshCredentials.length === 0 ? (
+                    <p className="text-xs leading-5 text-muted-foreground">
+                      {t("No SSH key credentials. Add an SSH private key credential in Credentials first.")}{" "}
+                      <Link to="/credentials" className="font-medium text-primary-ink underline-offset-4 hover:underline">
+                        {t("Credentials")}
+                      </Link>
+                    </p>
+                  ) : null}
+                  <p className="text-xs leading-5 text-muted-foreground">
+                    {t("SSH Remote is not container or VM isolation. The remote shell can access everything permitted to its login account. Only connect to a trusted host and unprivileged user.")}
                   </p>
                 </>
               ) : (
@@ -505,15 +587,15 @@ export function CreateSandboxPage({
                   }
                   setStep("backend");
                 }}>{t("Back")}</Button>
-                <Button disabled={!identityValid} onClick={() => setStep(selected === "local_workspace" ? "review" : "limits")}>
-                  {t(selected === "local_workspace" ? "Review" : "Next")}
+                <Button disabled={!identityValid} onClick={() => setStep(selected === "local_workspace" || selected === "ssh_remote" ? "review" : "limits")}>
+                  {t(selected === "local_workspace" || selected === "ssh_remote" ? "Review" : "Next")}
                   <ArrowRightIcon data-icon="inline-end" />
                 </Button>
               </div>
             </section>
           ) : null}
 
-          {step === "limits" && selected !== "local_workspace" ? (
+          {step === "limits" && selected !== "local_workspace" && selected !== "ssh_remote" ? (
             <section aria-label={t("Resource limits")} className="flex max-w-2xl flex-col gap-5">
               <div className="grid gap-4 sm:grid-cols-2">
                 {selected === "docker" ? (
@@ -551,11 +633,21 @@ export function CreateSandboxPage({
               <p className="text-sm font-semibold">{t("Review Sandbox authority")}</p>
               <dl className="grid gap-x-6 gap-y-4 rounded-2xl border border-border/70 bg-background/60 p-5 sm:grid-cols-2">
                 <ReviewField label="Name" value={name.trim()} />
-                <ReviewField label="Backend" value={selected === "docker" ? t("Docker") : selected === "daytona" ? t("Daytona") : t("Local workspace")} />
+                <ReviewField label="Backend" value={selected === "docker" ? t("Docker") : selected === "ssh_remote" ? t("SSH Remote") : selected === "daytona" ? t("Daytona") : t("Local workspace")} />
                 {selected === "local_workspace" ? (
                   <>
                     <ReviewField label="Workspace" value={root.trim()} />
                     <ReviewField label="Isolation" value={isolation === "host" ? t("Host (not isolated)") : t("Restricted host")} />
+                  </>
+                ) : selected === "ssh_remote" ? (
+                  <>
+                    <ReviewField label="SSH host" value={sshHost}/>
+                    <ReviewField label="SSH port" value={sshPort}/>
+                    <ReviewField label="SSH login user" value={sshUser}/>
+                    <ReviewField label="Remote workspace root" value={sshRoot}/>
+                    <ReviewField label="SSH private key credential" value={sshCredentialRef}/>
+                    <ReviewField label="Pinned SSH host public key" value={sshHostPublicKey}/>
+                    <ReviewField label="Isolation" value={t("Remote account (not isolated)")}/>
                   </>
                 ) : (
                   <>
@@ -591,11 +683,13 @@ export function CreateSandboxPage({
                         : "Isolation choice is persisted per Sandbox; changing global Runtime settings will not weaken it.")
                     : selected === "docker"
                       ? t("Docker Workspace files are ephemeral; stopping and starting recreates the container and erases scratch files.")
-                      : t("Creating a Daytona Sandbox can incur provider charges. TTL is not a USD spending cap. Maximum 2 active remote sandboxes per Principal.")}
+                      : selected === "ssh_remote"
+                        ? t("SSH Remote is not container or VM isolation. The remote shell can access everything permitted to its login account. Only connect to a trusted host and unprivileged user.")
+                        : t("Creating a Daytona Sandbox can incur provider charges. TTL is not a USD spending cap. Maximum 2 active remote sandboxes per Principal.")}
                 </p>
               </div>
               <div className="flex flex-wrap gap-2 border-t border-border/65 pt-5">
-                <Button variant="outline" disabled={busy} onClick={() => setStep(selected === "local_workspace" ? "configure" : "limits")}>
+                <Button variant="outline" disabled={busy} onClick={() => setStep(selected === "local_workspace" || selected === "ssh_remote" ? "configure" : "limits")}>
                   {t("Back")}
                 </Button>
                 <Button disabled={busy || !formValid} onClick={() => void create()}>

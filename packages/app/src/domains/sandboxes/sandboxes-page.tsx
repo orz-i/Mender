@@ -74,6 +74,7 @@ export function SandboxesPage({ client }: { client: MenderClient }) {
             <option value="local_workspace">{t("Local workspace")}</option>
             <option value="docker">{t("Docker")}</option>
             <option value="daytona">{t("Daytona")}</option>
+            <option value="ssh_remote">{t("SSH Remote")}</option>
             <option value="e2b">{t("E2B")}</option>
             <option value="external">{t("External plugin")}</option>
           </select>
