@@ -115,7 +115,14 @@ func (s *Sandboxes) ReconcileDaytona(ctx context.Context, id sandboxdomain.ID, c
 	if !s.DaytonaConfigured() {
 		return sandboxdomain.Run{}, sandboxdomain.ErrBackendUnavailable
 	}
-	return s.daytona.Reconcile(ctx, caller, id)
+	item, err := s.store.Get(ctx, id)
+	if err != nil {
+		return sandboxdomain.Run{}, err
+	}
+	if item.Backend() != sandboxdomain.BackendDaytona {
+		return sandboxdomain.Run{}, sandboxdomain.ErrBackendUnavailable
+	}
+	return s.Reconcile(ctx, id, caller)
 }
 
 func (s *Sandboxes) DaytonaCredentialBindings(ctx context.Context, ref credentialdomain.Reference) ([]sandboxdomain.ID, error) {

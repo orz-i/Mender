@@ -2,7 +2,7 @@ import { resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 
 const root = resolve(import.meta.dirname, "..");
-const modules = ["backend", "apps/desktop"];
+const modules = ["backend", "apps/desktop", "sdk/sandboxplugin/go", "examples/sandbox-plugin-example"];
 
 for (const directory of modules) {
   const cwd = resolve(root, directory);

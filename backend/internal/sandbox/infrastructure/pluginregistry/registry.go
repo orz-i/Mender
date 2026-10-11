@@ -29,17 +29,20 @@ type Entry struct {
 type Registry struct {
 	mu          sync.RWMutex
 	byKind      map[sandboxdomain.BackendKind]registered
+	external    map[platformplugin.InstallationID]registered
 	byExtension map[platformplugin.ID]sandboxdomain.BackendKind
 }
 
 type registered struct {
 	descriptor platformplugin.Descriptor
 	backend    sandboxapp.Backend
+	lifecycle  sandboxapp.LifecycleController
 }
 
 func NewRegistry() *Registry {
 	return &Registry{
 		byKind:      make(map[sandboxdomain.BackendKind]registered),
+		external:    make(map[platformplugin.InstallationID]registered),
 		byExtension: make(map[platformplugin.ID]sandboxdomain.BackendKind),
 	}
 }
@@ -143,6 +146,120 @@ func (r *Registry) Register(backend sandboxapp.Backend, descriptor platformplugi
 	return nil
 }
 
+// RegisterExternal snapshots one verified, exact external extension instance.
+// Its native process does not start until the Sandbox owner is admitted.
+func (r *Registry) RegisterExternal(backend sandboxapp.Backend, descriptor platformplugin.Descriptor, installationID platformplugin.InstallationID) error {
+	if r == nil || backend == nil {
+		return fmt.Errorf("sandbox external registry unavailable")
+	}
+	if _, err := platformplugin.ParseInstallationID(installationID.String()); err != nil {
+		return err
+	}
+	descriptor = descriptor.Clone()
+	if err := descriptor.Validate(); err != nil {
+		return err
+	}
+	if descriptor.Extension.Kind != platformplugin.SandboxBackend || descriptor.Extension.ID != "main" ||
+		backend.Kind() != sandboxdomain.BackendExternal || strings.HasPrefix(descriptor.PluginID.String(), "io.mender.") {
+		return fmt.Errorf("sandbox registry: wrong external extension identity")
+	}
+	actual := capabilityNames(backend.Capabilities())
+	claimed := slices.Clone(descriptor.Capabilities)
+	slices.Sort(actual)
+	slices.Sort(claimed)
+	if !slices.Equal(actual, claimed) {
+		return fmt.Errorf("sandbox registry: external backend capability mismatch")
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if prior, exists := r.external[installationID]; exists {
+		// Re-enabling an unchanged exact package does not replace the native
+		// process or mutable driver selection while callers hold leases.
+		if prior.descriptor.PluginID == descriptor.PluginID &&
+			prior.descriptor.PackageVersion == descriptor.PackageVersion &&
+			slices.Equal(prior.descriptor.Capabilities, descriptor.Capabilities) &&
+			prior.descriptor.Extension == descriptor.Extension {
+			return nil
+		}
+		return fmt.Errorf("sandbox registry: conflicting installation %s", installationID)
+	}
+	r.external[installationID] = registered{descriptor: descriptor, backend: backend}
+	return nil
+}
+
+// ResolveExternal is host-only lifecycle discovery. Callers must perform
+// sandbox.provision/start/stop/destroy/reconcile admission BEFORE calling it.
+func (r *Registry) ResolveExternal(binding sandboxdomain.BackendBinding) (sandboxapp.Backend, error) {
+	if r == nil || binding.Validate() != nil || binding.InstallationID == "" {
+		return nil, sandboxdomain.ErrBackendUnavailable
+	}
+	r.mu.RLock()
+	entry, ok := r.external[binding.InstallationID]
+	r.mu.RUnlock()
+	if !ok || entry.backend == nil || entry.descriptor.PluginID != binding.PluginID ||
+		entry.descriptor.Extension.ID != binding.ExtensionID || entry.backend.Kind() != sandboxdomain.BackendExternal {
+		return nil, sandboxdomain.ErrBackendUnavailable
+	}
+	return entry.backend, nil
+}
+
+// RegisterLifecycle binds one host-owned lifecycle controller to the exact
+// installed extension. A resource cannot choose another implementation by
+// passing a familiar BackendKind.
+func (r *Registry) RegisterLifecycle(kind sandboxdomain.BackendKind,
+	binding sandboxdomain.BackendBinding, controller sandboxapp.LifecycleController) error {
+	if r == nil || controller == nil || binding.Validate() != nil {
+		return fmt.Errorf("sandbox plugin lifecycle: invalid controller or binding")
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var entry registered
+	var ok bool
+	if kind == sandboxdomain.BackendExternal {
+		entry, ok = r.external[binding.InstallationID]
+	} else {
+		entry, ok = r.byKind[kind]
+	}
+	if !ok || entry.backend == nil || entry.backend.Kind() != kind || entry.lifecycle != nil ||
+		entry.descriptor.PluginID != binding.PluginID || entry.descriptor.Extension.ID != binding.ExtensionID ||
+		(kind == sandboxdomain.BackendExternal && binding.InstallationID == "") ||
+		(kind != sandboxdomain.BackendExternal && binding.InstallationID != "") {
+		return fmt.Errorf("sandbox plugin lifecycle: unavailable, duplicate or mismatched extension")
+	}
+	entry.lifecycle = controller
+	if kind == sandboxdomain.BackendExternal {
+		r.external[binding.InstallationID] = entry
+	} else {
+		r.byKind[kind] = entry
+	}
+	return nil
+}
+
+// ResolveLifecycle returns only an exact registered controller after the
+// management caller has selected one persisted Sandbox identity.
+func (r *Registry) ResolveLifecycle(kind sandboxdomain.BackendKind,
+	binding sandboxdomain.BackendBinding) (sandboxapp.LifecycleController, error) {
+	if r == nil || binding.Validate() != nil {
+		return nil, sandboxdomain.ErrBackendUnavailable
+	}
+	r.mu.RLock()
+	var entry registered
+	var ok bool
+	if kind == sandboxdomain.BackendExternal {
+		entry, ok = r.external[binding.InstallationID]
+	} else {
+		entry, ok = r.byKind[kind]
+	}
+	r.mu.RUnlock()
+	if !ok || entry.lifecycle == nil || entry.backend == nil || entry.backend.Kind() != kind ||
+		entry.descriptor.PluginID != binding.PluginID || entry.descriptor.Extension.ID != binding.ExtensionID ||
+		(kind == sandboxdomain.BackendExternal && binding.InstallationID == "") ||
+		(kind != sandboxdomain.BackendExternal && binding.InstallationID != "") {
+		return nil, sandboxdomain.ErrBackendUnavailable
+	}
+	return entry.lifecycle, nil
+}
+
 // ResolveBackend is local, side-effect free, and does not acquire a lease.
 // It is always called AFTER the Sandbox Router has admitted Principal/Policy.
 func (r *Registry) ResolveBackend(kind sandboxdomain.BackendKind, binding sandboxdomain.BackendBinding, required sandboxdomain.Capability) (sandboxapp.Backend, error) {
@@ -153,13 +270,18 @@ func (r *Registry) ResolveBackend(kind sandboxdomain.BackendKind, binding sandbo
 		return nil, err
 	}
 	r.mu.RLock()
-	entry, ok := r.byKind[kind]
-	r.mu.RUnlock()
-	if !ok || entry.backend == nil {
-		return nil, sandboxdomain.ErrBackendUnavailable
+	var entry registered
+	var ok bool
+	if kind == sandboxdomain.BackendExternal {
+		entry, ok = r.external[binding.InstallationID]
+	} else {
+		entry, ok = r.byKind[kind]
 	}
-	if binding.Validate() != nil || binding.PluginID != entry.descriptor.PluginID ||
-		binding.ExtensionID != entry.descriptor.Extension.ID || binding.InstallationID != "" {
+	r.mu.RUnlock()
+	if !ok || entry.backend == nil || binding.Validate() != nil ||
+		binding.PluginID != entry.descriptor.PluginID ||
+		binding.ExtensionID != entry.descriptor.Extension.ID ||
+		(kind != sandboxdomain.BackendExternal && binding.InstallationID != "") {
 		return nil, sandboxdomain.ErrBackendUnavailable
 	}
 	// Capability authority cannot grow beyond the immutable registered descriptor,
@@ -179,10 +301,17 @@ func (r *Registry) Available(kind sandboxdomain.BackendKind, binding sandboxdoma
 		return false
 	}
 	r.mu.RLock()
-	item, ok := r.byKind[kind]
+	var item registered
+	var ok bool
+	if kind == sandboxdomain.BackendExternal {
+		item, ok = r.external[binding.InstallationID]
+	} else {
+		item, ok = r.byKind[kind]
+	}
 	r.mu.RUnlock()
 	return ok && binding.Validate() == nil && binding.PluginID == item.descriptor.PluginID &&
-		binding.ExtensionID == item.descriptor.Extension.ID && binding.InstallationID == ""
+		binding.ExtensionID == item.descriptor.Extension.ID &&
+		(kind == sandboxdomain.BackendExternal || binding.InstallationID == "")
 }
 
 // Entries exposes only inert metadata, without launching drivers or probing
@@ -196,9 +325,14 @@ func (r *Registry) Entries() []Entry {
 	for kind, entry := range r.byKind {
 		items = append(items, Entry{Kind: kind, Descriptor: entry.descriptor.Clone()})
 	}
+	for _, entry := range r.external {
+		items = append(items, Entry{Kind: sandboxdomain.BackendExternal, Descriptor: entry.descriptor.Clone()})
+	}
 	r.mu.RUnlock()
 	slices.SortFunc(items, func(a, b Entry) int { return strings.Compare(string(a.Kind), string(b.Kind)) })
 	return items
 }
 
 var _ sandboxapp.BackendResolver = (*Registry)(nil)
+
+var _ sandboxapp.LifecycleResolver = (*Registry)(nil)

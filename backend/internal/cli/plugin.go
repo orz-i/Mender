@@ -2,10 +2,14 @@ package cli
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"text/tabwriter"
 
 	"github.com/orz-i/Mender/backend/internal/bootstrap"
+	platformplugin "github.com/orz-i/Mender/backend/internal/plugin"
 	installationdomain "github.com/orz-i/Mender/backend/internal/plugin/installation/domain"
+	pluginmanifest "github.com/orz-i/Mender/backend/internal/plugin/manifest"
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
 	"github.com/spf13/cobra"
 )
@@ -13,7 +17,7 @@ import (
 func (a *app) newPluginCommand() *cobra.Command {
 	command := &cobra.Command{
 		Use:   "plugin",
-		Short: "Manage external Provider plugin packages",
+		Short: "Manage typed Mender plugin packages",
 	}
 	command.AddCommand(a.newPluginListCommand())
 	command.AddCommand(a.newPluginInstallCommand())
@@ -27,11 +31,11 @@ func (a *app) newPluginCommand() *cobra.Command {
 func (a *app) newPluginListCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
-		Short: "List installed external Provider plugins",
+		Short: "List installed external plugins",
 		Args:  exactArgs(0),
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return a.withRuntime(cmd.Context(), func(runtime *bootstrap.Runtime) error {
-				items, err := runtime.ListProviderPluginInstallations(cmd.Context())
+				items, err := runtime.ListPluginInstallations(cmd.Context())
 				if err != nil {
 					return err
 				}
@@ -43,13 +47,12 @@ func (a *app) newPluginListCommand() *cobra.Command {
 					return a.writeValue("", map[string]any{"installations": projected})
 				}
 				writer := tabwriter.NewWriter(a.options.Stdout, 0, 4, 2, ' ', 0)
-				_, _ = fmt.Fprintln(writer, "INSTALLATION	PLUGIN	VERSION	STATUS")
+				_, _ = fmt.Fprintln(writer, "INSTALLATION	PLUGIN	KIND	VERSION	STATUS")
 				for _, item := range items {
 					_, _ = fmt.Fprintf(
 						writer,
-						"%s\t%s\t%s\t%s\n",
-						item.ID(),
-						item.PluginID(),
+						"%s\t%s\t%s\t%s\t%s\n",
+						item.ID(), item.PluginID(), item.Extension().Kind,
 						item.PackageVersion(),
 						item.Status(),
 					)
@@ -63,11 +66,28 @@ func (a *app) newPluginListCommand() *cobra.Command {
 func (a *app) newPluginInstallCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "install <package-directory>",
-		Short: "Install and verify a local Provider plugin package",
+		Short: "Install and verify a local typed plugin package",
 		Args:  exactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return a.withRuntime(cmd.Context(), func(runtime *bootstrap.Runtime) error {
-				item, err := runtime.InstallProviderPlugin(cmd.Context(), args[0])
+				raw, readErr := os.ReadFile(filepath.Join(args[0], pluginmanifest.FileName)) // #nosec G304 -- user-selected local package directory is separately validated by installer.
+				if readErr != nil {
+					return fmt.Errorf("read plugin manifest: %w", readErr)
+				}
+				manifest, parseErr := pluginmanifest.Parse(raw)
+				if parseErr != nil {
+					return parseErr
+				}
+				var item installationdomain.Installation
+				var err error
+				switch manifest.Extensions[0].Kind {
+				case platformplugin.ProviderTools:
+					item, err = runtime.InstallProviderPlugin(cmd.Context(), args[0])
+				case platformplugin.SandboxBackend:
+					item, err = runtime.InstallSandboxPlugin(cmd.Context(), args[0])
+				default:
+					return fmt.Errorf("plugin extension %s not supported yet", manifest.Extensions[0].Kind)
+				}
 				if err != nil {
 					return err
 				}
@@ -88,7 +108,7 @@ func (a *app) newPluginInstallCommand() *cobra.Command {
 func (a *app) newPluginInspectCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "inspect <installation>",
-		Short: "Inspect one installed Provider plugin package",
+		Short: "Inspect one installed plugin package",
 		Args:  exactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			id, err := providerplugin.ParseInstallationID(args[0])
@@ -96,7 +116,7 @@ func (a *app) newPluginInspectCommand() *cobra.Command {
 				return usageError{err: err}
 			}
 			return a.withRuntime(cmd.Context(), func(runtime *bootstrap.Runtime) error {
-				item, err := runtime.GetProviderPluginInstallation(cmd.Context(), id)
+				item, err := runtime.GetPluginInstallation(cmd.Context(), id)
 				if err != nil {
 					return err
 				}
@@ -122,11 +142,11 @@ func (a *app) newPluginInspectCommand() *cobra.Command {
 
 func (a *app) newPluginStatusCommand(enabled bool) *cobra.Command {
 	name := "disable"
-	short := "Disable an installed Provider plugin and close its active Providers"
+	short := "Disable an unused plugin installation"
 	status := installationdomain.StatusDisabled
 	if enabled {
 		name = "enable"
-		short = "Enable an installed Provider plugin"
+		short = "Enable an installed plugin"
 		status = installationdomain.StatusEnabled
 	}
 	return &cobra.Command{
@@ -139,11 +159,20 @@ func (a *app) newPluginStatusCommand(enabled bool) *cobra.Command {
 				return usageError{err: err}
 			}
 			return a.withRuntime(cmd.Context(), func(runtime *bootstrap.Runtime) error {
-				item, err := runtime.SetProviderPluginInstallationStatus(
-					cmd.Context(),
-					id,
-					status,
-				)
+				current, lookupErr := runtime.GetPluginInstallation(cmd.Context(), id)
+				if lookupErr != nil {
+					return lookupErr
+				}
+				var item installationdomain.Installation
+				var err error
+				switch current.Extension().Kind {
+				case platformplugin.ProviderTools:
+					item, err = runtime.SetProviderPluginInstallationStatus(cmd.Context(), id, status)
+				case platformplugin.SandboxBackend:
+					item, err = runtime.SetSandboxPluginInstallationStatus(cmd.Context(), id, status)
+				default:
+					return fmt.Errorf("plugin kind %s cannot be enabled or disabled", current.Extension().Kind)
+				}
 				if err != nil {
 					return err
 				}
@@ -159,7 +188,7 @@ func (a *app) newPluginStatusCommand(enabled bool) *cobra.Command {
 func (a *app) newPluginRemoveCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "remove <installation>",
-		Short: "Remove an unreferenced external Provider plugin package",
+		Short: "Remove an unreferenced external plugin package",
 		Args:  exactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			id, err := providerplugin.ParseInstallationID(args[0])
@@ -167,10 +196,20 @@ func (a *app) newPluginRemoveCommand() *cobra.Command {
 				return usageError{err: err}
 			}
 			return a.withRuntime(cmd.Context(), func(runtime *bootstrap.Runtime) error {
-				if err := runtime.RemoveProviderPluginInstallation(
-					cmd.Context(),
-					id,
-				); err != nil {
+				current, lookupErr := runtime.GetPluginInstallation(cmd.Context(), id)
+				if lookupErr != nil {
+					return lookupErr
+				}
+				var err error
+				switch current.Extension().Kind {
+				case platformplugin.ProviderTools:
+					err = runtime.RemoveProviderPluginInstallation(cmd.Context(), id)
+				case platformplugin.SandboxBackend:
+					err = runtime.RemoveSandboxPluginInstallation(cmd.Context(), id)
+				default:
+					return fmt.Errorf("unsupported plugin removal kind %s", current.Extension().Kind)
+				}
+				if err != nil {
 					return err
 				}
 				return a.writeValue(
@@ -188,6 +227,7 @@ func pluginInstallationProjection(
 	return map[string]any{
 		"installationId":  item.ID().String(),
 		"pluginId":        item.PluginID().String(),
+		"kind":            string(item.Extension().Kind),
 		"packageVersion":  item.PackageVersion(),
 		"sourceKind":      string(item.SourceKind()),
 		"sourceReference": item.SourceReference(),

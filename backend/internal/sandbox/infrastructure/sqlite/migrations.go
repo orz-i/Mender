@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-const latestSchemaVersion = 9
+const latestSchemaVersion = 10
 
 func migrate(ctx context.Context, db *sql.DB) error {
 	tx, err := db.BeginTx(ctx, nil)
@@ -317,6 +317,61 @@ func migrate(ctx context.Context, db *sql.DB) error {
 		}
 		if _, err = tx.ExecContext(ctx, "INSERT INTO sandbox_schema_migrations(version,applied_at) VALUES(9,?)", time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
 			return fmt.Errorf("record sandbox migration 9: %w", err)
+		}
+	}
+	var externalApplied int
+	if err = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM sandbox_schema_migrations WHERE version=10").Scan(&externalApplied); err != nil {
+		return fmt.Errorf("sandbox migration 10 presence: %w", err)
+	}
+	if externalApplied == 0 {
+		for _, statement := range []string{
+			// A stable host-generated idempotency key is durably written before
+			// any external side effect. No operation is automatically replayed.
+			`CREATE TABLE sandbox_external_operations (
+                operation_id TEXT PRIMARY KEY,
+                sandbox_id TEXT NOT NULL REFERENCES sandboxes(id) ON DELETE RESTRICT,
+                generation INTEGER NOT NULL CHECK(generation>0),
+                action TEXT NOT NULL CHECK(action IN ('sandbox.provision','sandbox.start','sandbox.stop','sandbox.destroy','sandbox.reconcile')),
+                state TEXT NOT NULL CHECK(state IN ('issued','complete','uncertain')),
+                created_at TEXT NOT NULL,
+                finished_at TEXT NOT NULL DEFAULT ''
+            )`,
+			`CREATE INDEX idx_sandbox_external_operations_sandbox ON sandbox_external_operations(sandbox_id,created_at DESC)`,
+			// Immutable non-secret config and exact install pin; no external
+			// package can change it by updating an existing Sandbox row.
+			`CREATE TABLE sandbox_external_configs (
+                sandbox_id TEXT PRIMARY KEY REFERENCES sandboxes(id) ON DELETE RESTRICT,
+                config_version INTEGER NOT NULL CHECK(config_version>0),
+                config_json TEXT NOT NULL CHECK(json_valid(config_json) AND length(config_json)<=4096),
+                created_at TEXT NOT NULL
+            )`,
+			`CREATE TRIGGER sandbox_external_config_update BEFORE UPDATE ON sandbox_external_configs BEGIN SELECT RAISE(ABORT,'Sandbox external config is immutable'); END`,
+			`CREATE TRIGGER sandbox_external_config_delete BEFORE DELETE ON sandbox_external_configs BEGIN SELECT RAISE(ABORT,'Sandbox external config cannot be deleted'); END`,
+			"DROP TRIGGER sandbox_extension_binding_insert",
+			"DROP TRIGGER sandbox_extension_binding_update",
+			`CREATE TRIGGER sandbox_extension_binding_insert BEFORE INSERT ON sandboxes
+                WHEN NEW.backend_plugin_id='' OR NEW.backend_extension_id!='main' OR
+                    (NEW.backend='local_workspace' AND (NEW.backend_plugin_id!='io.mender.sandbox.local-workspace' OR NEW.backend_installation_id!='')) OR
+                    (NEW.backend='docker' AND (NEW.backend_plugin_id!='io.mender.sandbox.docker' OR NEW.backend_installation_id!='')) OR
+                    (NEW.backend='daytona' AND (NEW.backend_plugin_id!='io.mender.sandbox.daytona' OR NEW.backend_installation_id!='')) OR
+                    (NEW.backend='external' AND (NEW.backend_installation_id='' OR NEW.backend_plugin_id LIKE 'io.mender.%'))
+                BEGIN SELECT RAISE(ABORT,'Sandbox extension binding is required'); END`,
+			`CREATE TRIGGER sandbox_extension_binding_update BEFORE UPDATE ON sandboxes
+                WHEN NEW.backend_plugin_id='' OR NEW.backend_extension_id!='main' OR
+                    NEW.backend_plugin_id!=OLD.backend_plugin_id OR NEW.backend_extension_id!=OLD.backend_extension_id OR
+                    NEW.backend_installation_id!=OLD.backend_installation_id OR NEW.backend!=OLD.backend OR
+                    (NEW.backend='local_workspace' AND NEW.backend_plugin_id!='io.mender.sandbox.local-workspace') OR
+                    (NEW.backend='docker' AND NEW.backend_plugin_id!='io.mender.sandbox.docker') OR
+                    (NEW.backend='daytona' AND NEW.backend_plugin_id!='io.mender.sandbox.daytona') OR
+                    (NEW.backend='external' AND (NEW.backend_installation_id='' OR NEW.backend_plugin_id LIKE 'io.mender.%'))
+                BEGIN SELECT RAISE(ABORT,'Sandbox extension binding is immutable'); END`,
+		} {
+			if _, err = tx.ExecContext(ctx, statement); err != nil {
+				return fmt.Errorf("sandbox migration 10: %w", err)
+			}
+		}
+		if _, err = tx.ExecContext(ctx, "INSERT INTO sandbox_schema_migrations(version,applied_at) VALUES(10,?)", time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
+			return fmt.Errorf("record sandbox migration 10: %w", err)
 		}
 	}
 	if err = tx.Commit(); err != nil {

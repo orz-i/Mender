@@ -105,6 +105,15 @@ func (r *Runtime) InstallProviderPlugin(
 	return installation, nil
 }
 
+// GetPluginInstallation reads exact software inventory metadata without
+// launching any extension kind. Plugin package identity is cross-domain.
+func (r *Runtime) GetPluginInstallation(ctx context.Context, id platformplugin.InstallationID) (installationdomain.Installation, error) {
+	if r == nil {
+		return installationdomain.Installation{}, fmt.Errorf("get plugin installation: runtime unavailable")
+	}
+	return r.pluginInstallations.Get(ctx, id)
+}
+
 // GetProviderPluginInstallation returns one persisted external plugin package.
 func (r *Runtime) GetProviderPluginInstallation(
 	ctx context.Context,

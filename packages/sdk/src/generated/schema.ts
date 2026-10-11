@@ -1177,7 +1177,7 @@ export interface components {
             match: components["schemas"]["PolicyMatch"];
         };
         PolicyMatch: {
-            actions: ("tool.invoke" | "provider.activate" | "sandbox.acquire" | "sandbox.provision" | "sandbox.start" | "sandbox.stop" | "sandbox.destroy")[];
+            actions: ("tool.invoke" | "provider.activate" | "sandbox.acquire" | "sandbox.provision" | "sandbox.start" | "sandbox.stop" | "sandbox.destroy" | "sandbox.reconcile")[];
             origins: ("cli" | "mcp" | "management_http" | "desktop" | "internal")[];
             principalKinds: ("local_user" | "service")[];
             principalRefs: string[];
@@ -1582,7 +1582,7 @@ export interface components {
             /** @enum {string} */
             kind: "admission" | "lifecycle";
             /** @enum {string} */
-            action: "sandbox.provision" | "sandbox.acquire" | "sandbox.start" | "sandbox.stop" | "sandbox.destroy";
+            action: "sandbox.provision" | "sandbox.acquire" | "sandbox.start" | "sandbox.stop" | "sandbox.destroy" | "sandbox.reconcile";
             /** @enum {string} */
             status: "admitted" | "denied" | "failed" | "completed";
             /** Format: date-time */

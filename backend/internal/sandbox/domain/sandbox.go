@@ -50,11 +50,12 @@ const (
 	BackendDocker         BackendKind = "docker"
 	BackendDaytona        BackendKind = "daytona"
 	BackendE2B            BackendKind = "e2b"
+	BackendExternal       BackendKind = "external"
 )
 
 func (k BackendKind) Validate() error {
 	switch k {
-	case BackendLocalWorkspace, BackendDocker, BackendDaytona, BackendE2B:
+	case BackendLocalWorkspace, BackendDocker, BackendDaytona, BackendE2B, BackendExternal:
 		return nil
 	}
 	return fmt.Errorf("sandbox backend: unsupported kind %q", k)
@@ -145,7 +146,12 @@ func NewSandbox(spec Spec) (Sandbox, error) {
 	if err := spec.Binding.Validate(); err != nil {
 		return Sandbox{}, err
 	}
-	if err := RequireBuiltinBinding(spec.Backend, spec.Binding); err != nil {
+	if spec.Backend == BackendExternal {
+		if spec.Binding.InstallationID == "" || spec.Binding.ExtensionID != "main" ||
+			strings.HasPrefix(spec.Binding.PluginID.String(), "io.mender.") {
+			return Sandbox{}, fmt.Errorf("external sandbox requires an exact third-party plugin installation")
+		}
+	} else if err := RequireBuiltinBinding(spec.Backend, spec.Binding); err != nil {
 		return Sandbox{}, err
 	}
 	if err := spec.Isolation.Validate(); err != nil {
@@ -172,7 +178,7 @@ func NewSandbox(spec Spec) (Sandbox, error) {
 		if spec.Backend == BackendDocker && spec.Isolation != IsolationContainer {
 			return Sandbox{}, fmt.Errorf("docker sandbox must declare container isolation")
 		}
-		if (spec.Backend == BackendDaytona || spec.Backend == BackendE2B) && spec.Isolation != IsolationRemote {
+		if (spec.Backend == BackendDaytona || spec.Backend == BackendE2B || spec.Backend == BackendExternal) && spec.Isolation != IsolationRemote {
 			return Sandbox{}, fmt.Errorf("remote sandbox must declare remote isolation")
 		}
 	}
@@ -210,8 +216,8 @@ var allowedTransitions = map[State]map[State]bool{
 	StateStopped:      {StateProvisioning: true, StateDestroying: true, StateUnknown: true},
 	StateDestroying:   {StateDestroyed: true, StateFailed: true, StateUnknown: true},
 	StateFailed:       {StateProvisioning: true, StateDestroying: true, StateUnknown: true},
-	StateUnknown:      {StateReady: true, StateStopped: true, StateFailed: true, StateOrphaned: true, StateDestroying: true},
-	StateOrphaned:     {StateDestroying: true, StateUnknown: true},
+	StateUnknown:      {StateReady: true, StateStopped: true, StateFailed: true, StateOrphaned: true, StateDestroying: true, StateDestroyed: true},
+	StateOrphaned:     {StateDestroying: true, StateUnknown: true, StateDestroyed: true},
 }
 
 func (s State) Validate() error {

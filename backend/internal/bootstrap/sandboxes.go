@@ -10,11 +10,13 @@ import (
 
 	governanceapplication "github.com/orz-i/Mender/backend/internal/governance/application"
 	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
+	pluginprocess "github.com/orz-i/Mender/backend/internal/plugin/process"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 	sandboxapplication "github.com/orz-i/Mender/backend/internal/sandbox/application"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 	sandboxdaytona "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/daytona"
 	sandboxdocker "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/dockerengine"
+	sandboxexternal "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/external"
 	sandboxidentity "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/identity"
 	sandboxlocalworkspace "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/localworkspace"
 	sandboxpluginregistry "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/pluginregistry"
@@ -25,18 +27,20 @@ import (
 // Sandboxes owns the persistent Sandbox inventory and a fail-closed Execution
 // Router. Provider/Tool execution is not redirected until the Workspace hard cut.
 type Sandboxes struct {
-	store                   *sandboxsqlite.Store
-	router                  *sandboxrouter.Router
-	backendPlugins          *sandboxpluginregistry.Registry
-	admission               sandboxapplication.Admit
-	launcher                sandboxWorkspaceShellLauncher
-	docker                  *sandboxdocker.Provisioner
-	dockerTemplates         *sandboxdocker.TemplateStore
-	dockerUnavailableReason string
-	daytona                 *sandboxdaytona.Controller
-	daytonaTemplates        *sandboxdaytona.TemplateStore
-	daytonaExperimental     bool
-	profileExists           func(context.Context, profiledomain.ProfileID) error
+	store                      *sandboxsqlite.Store
+	router                     *sandboxrouter.Router
+	backendPlugins             *sandboxpluginregistry.Registry
+	externalInstallationLookup sandboxexternal.InstallationLookup
+	externalProcesses          *pluginprocess.Supervisor
+	admission                  sandboxapplication.Admit
+	launcher                   sandboxWorkspaceShellLauncher
+	docker                     *sandboxdocker.Provisioner
+	dockerTemplates            *sandboxdocker.TemplateStore
+	dockerUnavailableReason    string
+	daytona                    *sandboxdaytona.Controller
+	daytonaTemplates           *sandboxdaytona.TemplateStore
+	daytonaExperimental        bool
+	profileExists              func(context.Context, profiledomain.ProfileID) error
 }
 
 func NewSandboxes(ctx context.Context, databasePath string, policy sandboxapplication.AdmissionPolicy, approval governanceapplication.ApprovalGate, governance *RuntimeGovernance, credentials invocationapplication.CredentialResolver, profileExists func(context.Context, profiledomain.ProfileID) error) (*Sandboxes, error) {
@@ -88,6 +92,10 @@ func NewSandboxes(ctx context.Context, databasePath string, policy sandboxapplic
 	}
 	component.router = router
 	component.backendPlugins = registry
+	if err := component.registerBuiltinLifecycle(backends); err != nil {
+		_ = component.Close()
+		return nil, fmt.Errorf("compose sandbox lifecycle controllers: %w", err)
+	}
 	return component, nil
 }
 

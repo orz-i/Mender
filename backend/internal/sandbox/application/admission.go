@@ -98,7 +98,7 @@ func (a Admit) admitAction(ctx context.Context, governance governancedomain.Cont
 	switch action {
 	case governancedomain.ActionSandboxAcquire, governancedomain.ActionSandboxProvision,
 		governancedomain.ActionSandboxStart, governancedomain.ActionSandboxStop,
-		governancedomain.ActionSandboxDestroy:
+		governancedomain.ActionSandboxDestroy, governancedomain.ActionSandboxReconcile:
 	default:
 		return fmt.Errorf("admit sandbox: action %q is not a sandbox action", action)
 	}

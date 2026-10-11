@@ -111,35 +111,32 @@ func (s *Sandboxes) CreateDockerSandbox(ctx context.Context, request CreateDocke
 	return item, nil
 }
 
-func (s *Sandboxes) ChangeLifecycle(ctx context.Context, id sandboxdomain.ID, action governancedomain.Action, caller governancedomain.Context) (sandboxdomain.Run, error) {
-	if s == nil || s.store == nil {
+func (s *Sandboxes) ChangeLifecycle(ctx context.Context, id sandboxdomain.ID,
+	action governancedomain.Action, caller governancedomain.Context) (sandboxdomain.Run, error) {
+	if s == nil || s.store == nil || s.backendPlugins == nil {
 		return sandboxdomain.Run{}, sandboxdomain.ErrBackendUnavailable
 	}
 	item, err := s.store.Get(ctx, id)
 	if err != nil {
 		return sandboxdomain.Run{}, err
 	}
-	switch item.Backend() {
-	case sandboxdomain.BackendLocalWorkspace:
-		return s.ChangeLocalLifecycle(ctx, id, action, caller)
-	case sandboxdomain.BackendDocker:
-		if !s.DockerAvailable() {
-			return sandboxdomain.Run{}, sandboxdomain.ErrBackendUnavailable
-		}
-		return s.docker.ChangeLifecycle(ctx, caller, id, action)
-	case sandboxdomain.BackendDaytona:
-		if !s.DaytonaConfigured() {
-			return sandboxdomain.Run{}, sandboxdomain.ErrBackendUnavailable
-		}
-		return s.daytona.ChangeLifecycle(ctx, caller, id, action)
-	default:
-		return sandboxdomain.Run{}, sandboxdomain.ErrBackendUnavailable
+	controller, err := s.backendPlugins.ResolveLifecycle(item.Backend(), item.Spec().Binding)
+	if err != nil {
+		return sandboxdomain.Run{}, err
 	}
+	return controller.Change(ctx, id, action, caller)
 }
 
 func (s *Sandboxes) ReconcileDocker(ctx context.Context, id sandboxdomain.ID, caller governancedomain.Context) (sandboxdomain.Run, error) {
 	if !s.DockerAvailable() {
 		return sandboxdomain.Run{}, sandboxdomain.ErrBackendUnavailable
 	}
-	return s.docker.Reconcile(ctx, caller, id)
+	item, err := s.store.Get(ctx, id)
+	if err != nil {
+		return sandboxdomain.Run{}, err
+	}
+	if item.Backend() != sandboxdomain.BackendDocker {
+		return sandboxdomain.Run{}, sandboxdomain.ErrBackendUnavailable
+	}
+	return s.Reconcile(ctx, id, caller)
 }

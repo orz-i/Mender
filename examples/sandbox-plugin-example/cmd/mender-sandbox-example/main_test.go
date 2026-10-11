@@ -31,6 +31,15 @@ func TestLifecycleAndWorkspace(t *testing.T) {
 	if err != nil || provision.GetResult().GetState() != "unknown" {
 		t.Fatalf("uncertain provision: %+v %v", provision, err)
 	}
+	again, err := service.Provision(ctx, &sandboxv1.ProvisionRequest{Operation: op})
+	if err != nil || again.GetResult().GetExternalId() != provision.GetResult().GetExternalId() {
+		t.Fatalf("same idempotency key was replayed as another resource: %+v %v", again, err)
+	}
+	another := &sandboxv1.LifecycleRequest{SandboxId: op.GetSandboxId(), Generation: op.GetGeneration(),
+		OperationId: "different-operation", ConfigJson: op.GetConfigJson()}
+	if _, err := service.Provision(ctx, &sandboxv1.ProvisionRequest{Operation: another}); err == nil {
+		t.Fatal("another provisioning key duplicated the resource")
+	}
 	op.ExternalId = provision.GetResult().GetExternalId()
 	op.OperationId = "op:reconcile"
 	observed, err := service.Reconcile(ctx, &sandboxv1.ReconcileRequest{Operation: op})

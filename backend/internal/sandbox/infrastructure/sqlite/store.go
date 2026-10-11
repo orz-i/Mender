@@ -42,7 +42,7 @@ func Open(ctx context.Context, path string) (*Store, error) {
 		_ = db.Close()
 		return nil, fmt.Errorf("open sandbox sqlite ping: %w", err)
 	}
-	if err := backupPreBindingSandbox(ctx, db, absolute); err != nil {
+	if err := backupPreSandboxUpgrade(ctx, db, absolute); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("open sandbox sqlite: pre-binding backup: %w", err)
 	}
@@ -212,11 +212,13 @@ func (s *Store) CreateReady(ctx context.Context, item sandboxdomain.Sandbox, run
 	return nil
 }
 
-// backupPreBindingSandbox makes a WAL-consistent SQLite snapshot before any
-// v8->v9 hard cut. It is skipped for a fresh DB or an already-upgraded DB.
-func backupPreBindingSandbox(ctx context.Context, db *sql.DB, path string) error {
+// backupPreSandboxUpgrade creates a WAL-consistent snapshot before the
+// forward-only v8/v9 -> v10 schema hard cut. An already-current database is
+// never snapshotted again, and an unsupported future schema never downgraded.
+func backupPreSandboxUpgrade(ctx context.Context, db *sql.DB, path string) error {
 	var present int
-	if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='sandbox_schema_migrations'").Scan(&present); err != nil {
+	if err := db.QueryRowContext(ctx,
+		"SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='sandbox_schema_migrations'").Scan(&present); err != nil {
 		return err
 	}
 	if present == 0 {
@@ -229,7 +231,11 @@ func backupPreBindingSandbox(ctx context.Context, db *sql.DB, path string) error
 	if !version.Valid || version.Int64 >= latestSchemaVersion {
 		return nil
 	}
-	file, err := os.CreateTemp(filepath.Dir(path), ".mender-sandbox-v8-backup-*.db")
+	prefix := ".mender-sandbox-v8-backup-*.db"
+	if version.Int64 >= 9 {
+		prefix = ".mender-sandbox-v9-backup-*.db"
+	}
+	file, err := os.CreateTemp(filepath.Dir(path), prefix)
 	if err != nil {
 		return err
 	}

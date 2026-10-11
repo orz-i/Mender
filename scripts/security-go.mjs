@@ -27,6 +27,8 @@ for (const directory of [
   "apps/desktop",
   "sdk/providerplugin/go",
   "examples/provider-plugin-example",
+  "sdk/sandboxplugin/go",
+  "examples/sandbox-plugin-example",
 ]) {
   console.log(`govulncheck ${version}: ${directory}`);
   const cwd = resolve(root, directory);

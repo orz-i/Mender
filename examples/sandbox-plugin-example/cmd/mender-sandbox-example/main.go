@@ -15,10 +15,11 @@ import (
 )
 
 type resource struct {
-	generation    uint64
-	state         string
-	externalID    string
-	uncertainOnce bool
+	generation           uint64
+	state                string
+	externalID           string
+	uncertainOnce        bool
+	provisionOperationID string
 }
 type service struct {
 	sandboxv1.UnimplementedSandboxPluginServiceServer
@@ -99,9 +100,17 @@ func (s *service) Provision(_ context.Context, req *sandboxv1.ProvisionRequest) 
 	defer s.mu.Unlock()
 	r := s.resources[op.GetSandboxId()]
 	if r != nil {
-		return nil, fmt.Errorf("resource already provisioned")
+		if r.provisionOperationID != op.GetOperationId() || r.generation != op.GetGeneration() {
+			return nil, fmt.Errorf("resource already provisioned by another operation")
+		}
+		observed := "ready"
+		if r.uncertainOnce {
+			observed = "unknown"
+		}
+		return &sandboxv1.ProvisionResponse{Result: s.result(op.GetSandboxId(), r, observed)}, nil
 	}
-	r = &resource{generation: op.GetGeneration(), state: "ready", externalID: "mock:" + op.GetSandboxId(), uncertainOnce: c.UncertainProvision}
+	r = &resource{generation: op.GetGeneration(), state: "ready", externalID: "mock:" + op.GetSandboxId(),
+		uncertainOnce: c.UncertainProvision, provisionOperationID: op.GetOperationId()}
 	s.resources[op.GetSandboxId()] = r
 	state := "ready"
 	if r.uncertainOnce {
@@ -125,8 +134,12 @@ func (s *service) change(op *sandboxv1.LifecycleRequest, action string) (*sandbo
 	if r == nil {
 		return nil, fmt.Errorf("missing resource")
 	}
-	if r.generation != op.GetGeneration() || r.externalID != op.GetExternalId() {
-		return nil, fmt.Errorf("stale run generation")
+	if action == "start" && r.state == "stopped" && op.GetGeneration() == r.generation+1 &&
+		r.externalID == op.GetExternalId() {
+		r.generation = op.GetGeneration()
+	} else if r.generation != op.GetGeneration() ||
+		(r.externalID != op.GetExternalId() && (action != "reconcile" || op.GetExternalId() != "")) {
+		return nil, fmt.Errorf("stale run generation or external ID")
 	}
 	switch action {
 	case "start":
@@ -208,7 +221,7 @@ func (s *service) ExecuteWorkspace(_ context.Context, req *sandboxv1.ExecuteWork
 	if arg.Path != "README.txt" {
 		return nil, fmt.Errorf("file not found")
 	}
-	return &sandboxv1.ExecuteWorkspaceResponse{ContentJson: []byte(`{"text":"Example Sandbox managed fixture"}`)}, nil
+	return &sandboxv1.ExecuteWorkspaceResponse{ContentJson: []byte(`{"path":"README.txt","content":"Example Sandbox managed fixture","startLine":1,"endLine":1,"truncated":false}`)}, nil
 }
 func (s *service) CloseSession(_ context.Context, req *sandboxv1.CloseSessionRequest) (*sandboxv1.CloseSessionResponse, error) {
 	s.mu.Lock()

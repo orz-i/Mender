@@ -375,7 +375,7 @@ func (i EvaluationInput) Validate() error {
 		}
 	case governancedomain.ActionSandboxAcquire, governancedomain.ActionSandboxProvision,
 		governancedomain.ActionSandboxStart, governancedomain.ActionSandboxStop,
-		governancedomain.ActionSandboxDestroy:
+		governancedomain.ActionSandboxDestroy, governancedomain.ActionSandboxReconcile:
 		if i.ProviderID != "" || i.ToolID != "" {
 			return fmt.Errorf("evaluation: sandbox action cannot target Provider or Tool")
 		}
@@ -500,7 +500,7 @@ func isSandboxAction(a governancedomain.Action) bool {
 	switch a {
 	case governancedomain.ActionSandboxAcquire, governancedomain.ActionSandboxProvision,
 		governancedomain.ActionSandboxStart, governancedomain.ActionSandboxStop,
-		governancedomain.ActionSandboxDestroy:
+		governancedomain.ActionSandboxDestroy, governancedomain.ActionSandboxReconcile:
 		return true
 	default:
 		return false

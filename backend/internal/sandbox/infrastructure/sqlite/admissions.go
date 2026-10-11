@@ -77,7 +77,7 @@ func validateAdmission(r app.AdmissionAudit) error {
 	switch r.Action {
 	case governance.ActionSandboxAcquire, governance.ActionSandboxProvision,
 		governance.ActionSandboxStart, governance.ActionSandboxStop,
-		governance.ActionSandboxDestroy:
+		governance.ActionSandboxDestroy, governance.ActionSandboxReconcile:
 	default:
 		return errors.New("sandbox admission action unsupported")
 	}

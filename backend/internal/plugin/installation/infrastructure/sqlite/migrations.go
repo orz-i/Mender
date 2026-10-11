@@ -113,8 +113,51 @@ func migrate(ctx context.Context, db *sql.DB) error {
 		}
 	}
 	if !recorded.Valid {
-		if _, err := tx.ExecContext(ctx, "INSERT INTO plugin_installation_schema_migrations(version,applied_at) VALUES (?,?)", latestSchemaVersion, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
+		if _, err := tx.ExecContext(ctx, "INSERT INTO plugin_installation_schema_migrations(version,applied_at) VALUES (?,?)",
+			latestSchemaVersion, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
 			return err
+		}
+	}
+	// The runtime owns one SQLite file for both bounded contexts. Protect
+	// the immutable Sandbox -> Plugin Installation pin INSIDE SQLite, not only
+	// through a racy check-then-disable sequence in the management layer.
+	// Sandbox migrations run first in normal Runtime composition; standalone
+	// plugin-store tests have no Sandbox inventory and skip these guards.
+	var sandboxTable int
+	if err := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='sandboxes'").Scan(&sandboxTable); err != nil {
+		return err
+	}
+	if sandboxTable != 0 {
+		for _, statement := range []string{
+			`CREATE TRIGGER IF NOT EXISTS sandbox_external_installation_pin_insert
+            BEFORE INSERT ON sandboxes WHEN NEW.backend='external'
+            AND NOT EXISTS(
+              SELECT 1 FROM plugin_installations pi
+              WHERE pi.installation_id=NEW.backend_installation_id
+                AND pi.plugin_id=NEW.backend_plugin_id
+                AND pi.status='enabled'
+                AND json_extract(pi.manifest_json,'$.extensions[0].kind')='sandbox.backend'
+                AND pi.verified_descriptor_json IS NOT NULL
+            )
+            BEGIN SELECT RAISE(ABORT,'external Sandbox installation must be enabled and verified'); END`,
+			`CREATE TRIGGER IF NOT EXISTS sandbox_driver_disable_guard
+            BEFORE UPDATE OF status ON plugin_installations
+            WHEN NEW.status!='enabled' AND EXISTS(
+              SELECT 1 FROM sandboxes s WHERE s.backend='external'
+                AND s.backend_installation_id=OLD.installation_id
+            )
+            BEGIN SELECT RAISE(ABORT,'Sandbox driver installation is in use'); END`,
+			`CREATE TRIGGER IF NOT EXISTS sandbox_driver_remove_guard
+            BEFORE DELETE ON plugin_installations
+            WHEN EXISTS(
+              SELECT 1 FROM sandboxes s WHERE s.backend='external'
+                AND s.backend_installation_id=OLD.installation_id
+            )
+            BEGIN SELECT RAISE(ABORT,'Sandbox driver installation is in use'); END`,
+		} {
+			if _, err := tx.ExecContext(ctx, statement); err != nil {
+				return fmt.Errorf("install cross-domain Sandbox driver safety guards: %w", err)
+			}
 		}
 	}
 	if err := tx.Commit(); err != nil {

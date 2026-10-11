@@ -45,6 +45,19 @@ type Backend interface {
 
 // BackendResolver resolves only registered, host-reviewed typed Backend
 // extensions after Sandbox admission. It must have no observable side effects.
+// LifecycleController is the domain-owned control-plane port for an already
+// configured Sandbox Backend. It never decides Policy or changes ownership.
+type LifecycleController interface {
+	Change(context.Context, sandboxdomain.ID, governancedomain.Action, governancedomain.Context) (sandboxdomain.Run, error)
+	Reconcile(context.Context, sandboxdomain.ID, governancedomain.Context) (sandboxdomain.Run, error)
+}
+
+// LifecycleResolver routes an immutable Sandbox extension pin to its exact
+// lifecycle implementation; no kind-only or host execution fallback.
+type LifecycleResolver interface {
+	ResolveLifecycle(sandboxdomain.BackendKind, sandboxdomain.BackendBinding) (LifecycleController, error)
+}
+
 type BackendResolver interface {
 	ResolveBackend(sandboxdomain.BackendKind, sandboxdomain.BackendBinding, sandboxdomain.Capability) (Backend, error)
 	Available(sandboxdomain.BackendKind, sandboxdomain.BackendBinding) bool

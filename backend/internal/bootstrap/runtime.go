@@ -24,6 +24,8 @@ import (
 	invocationresultguard "github.com/orz-i/Mender/backend/internal/invocation/infrastructure/resultguard"
 	invocationrouter "github.com/orz-i/Mender/backend/internal/invocation/infrastructure/router"
 	mcpconfigstore "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/configstore"
+	platformplugin "github.com/orz-i/Mender/backend/internal/plugin"
+	installationdomain "github.com/orz-i/Mender/backend/internal/plugin/installation/domain"
 	installationlocalfs "github.com/orz-i/Mender/backend/internal/plugin/installation/infrastructure/localfs"
 	installationsqlite "github.com/orz-i/Mender/backend/internal/plugin/installation/infrastructure/sqlite"
 	policylocal "github.com/orz-i/Mender/backend/internal/policy/infrastructure/local"
@@ -35,6 +37,7 @@ import (
 	providerconfigstore "github.com/orz-i/Mender/backend/internal/providerplugin/configstore"
 	providerexternal "github.com/orz-i/Mender/backend/internal/providerplugin/external"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
+	sandboxexternal "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/external"
 	tunnelapplication "github.com/orz-i/Mender/backend/internal/tunnel/application"
 	tunnelprocess "github.com/orz-i/Mender/backend/internal/tunnel/infrastructure/process"
 )
@@ -328,6 +331,39 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		_ = auditStore.Close()
 		_ = catalog.Close()
 		return nil, fmt.Errorf("compose runtime: external plugin processes: %w", err)
+	}
+	// Register the independent Sandbox Plugin Protocol on the same package
+	// supervisor before any runtime Provider activation opens a plugin.
+	sandboxDialer, err := sandboxexternal.NewDialer(externalProviderIsolationLauncher{governance: runtimeGovernance})
+	if err == nil {
+		err = externalProcesses.ProcessHost().Register(platformplugin.SandboxBackend, sandboxDialer)
+	}
+	if err != nil {
+		_ = externalProcesses.CloseAll()
+		_ = pluginInstallations.Close()
+		closeBootstrapStores()
+		return nil, fmt.Errorf("compose sandbox plugin dialer: %w", err)
+	}
+	sandboxes.externalInstallationLookup = pluginInstallations
+	sandboxes.externalProcesses = externalProcesses.ProcessHost()
+	installedPlugins, err := pluginInstallations.List(ctx)
+	if err != nil {
+		_ = externalProcesses.CloseAll()
+		_ = pluginInstallations.Close()
+		closeBootstrapStores()
+		return nil, fmt.Errorf("compose installed plugins: %w", err)
+	}
+	for _, item := range installedPlugins {
+		if item.Extension().Kind != platformplugin.SandboxBackend ||
+			item.Status() != installationdomain.StatusEnabled {
+			continue
+		}
+		if err := sandboxes.RegisterExternalSandboxBackend(item, pluginInstallations, externalProcesses.ProcessHost()); err != nil {
+			_ = externalProcesses.CloseAll()
+			_ = pluginInstallations.Close()
+			closeBootstrapStores()
+			return nil, fmt.Errorf("compose external Sandbox backend %s: %w", item.ID(), err)
+		}
 	}
 	externalResolver, err := providerexternal.NewResolver(
 		providerPlugins,

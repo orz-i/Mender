@@ -1,15 +1,18 @@
 package cli
 
 import (
+	"encoding/json"
 	"fmt"
 	"text/tabwriter"
 
 	"github.com/orz-i/Mender/backend/internal/bootstrap"
 	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
 	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
+	platformplugin "github.com/orz-i/Mender/backend/internal/plugin"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 	sandboxdaytona "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/daytona"
 	sandboxdocker "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/dockerengine"
+	sandboxsqlite "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/sqlite"
 	"github.com/spf13/cobra"
 )
 
@@ -23,6 +26,7 @@ func (a *app) newSandboxCommand() *cobra.Command {
 	add.AddCommand(a.newSandboxAddLocalCommand())
 	add.AddCommand(a.newSandboxAddDockerCommand())
 	add.AddCommand(a.newSandboxAddDaytonaCommand())
+	add.AddCommand(a.newSandboxAddExternalCommand())
 	command.AddCommand(a.newSandboxReconcileCommand())
 	command.AddCommand(add)
 	return command
@@ -82,7 +86,9 @@ func (a *app) newSandboxListCommand() *cobra.Command {
 }
 func sandboxProjection(item sandboxdomain.Sandbox) map[string]any {
 	spec := item.Spec()
-	return map[string]any{"sandboxId": spec.ID.String(), "name": spec.Name, "backend": string(spec.Backend), "isolation": string(spec.Isolation), "localRoot": spec.LocalRoot, "ownerKind": spec.OwnerKind, "ownerRef": spec.OwnerRef}
+	return map[string]any{"sandboxId": spec.ID.String(), "name": spec.Name, "backend": string(spec.Backend), "isolation": string(spec.Isolation), "localRoot": spec.LocalRoot, "ownerKind": spec.OwnerKind, "ownerRef": spec.OwnerRef,
+		"pluginId": spec.Binding.PluginID.String(), "extensionId": spec.Binding.ExtensionID.String(),
+		"installationId": spec.Binding.InstallationID.String()}
 }
 
 func (a *app) newSandboxLifecycleCommand(name string, action governancedomain.Action) *cobra.Command {
@@ -171,15 +177,10 @@ func (a *app) newSandboxReconcileCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			var run sandboxdomain.Run
-			switch item.Backend() {
-			case sandboxdomain.BackendDocker:
-				run, err = runtime.Sandboxes.ReconcileDocker(cmd.Context(), id, caller)
-			case sandboxdomain.BackendDaytona:
-				run, err = runtime.Sandboxes.ReconcileDaytona(cmd.Context(), id, caller)
-			default:
+			if item.Backend() == sandboxdomain.BackendLocalWorkspace {
 				return sandboxdomain.ErrBackendUnavailable
 			}
+			run, err := runtime.Sandboxes.Reconcile(cmd.Context(), id, caller)
 			if err != nil {
 				return err
 			}
@@ -232,4 +233,58 @@ func (a *app) newSandboxAddDaytonaCommand() *cobra.Command {
 	cmd.Flags().IntVar(&disk, "disk-gib", 3, "disk allocation GiB (3..10)")
 	cmd.Flags().IntVar(&ttl, "ttl-minutes", 30, "provider-enforced lifetime (15..120min), not a USD spending limit")
 	return cmd
+}
+
+// Add a remote Sandbox only by an installed, verified, pinned extension package.
+// The driver config is non-secret; no model Tool can select this operation.
+func (a *app) newSandboxAddExternalCommand() *cobra.Command {
+	var name, installation, configJSON string
+	command := &cobra.Command{Use: "external", Short: "Provision a governed Sandbox from one exact installed backend plugin", Args: exactArgs(0),
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if name == "" || installation == "" || configJSON == "" {
+				return usageError{err: fmt.Errorf("--name, --installation and --config-json are required")}
+			}
+			id, err := platformplugin.ParseInstallationID(installation)
+			if err != nil {
+				return usageError{err: err}
+			}
+			return a.withRuntime(cmd.Context(), func(runtime *bootstrap.Runtime) error {
+				installation, err := runtime.GetPluginInstallation(cmd.Context(), id)
+				if err != nil {
+					return err
+				}
+				descriptor, verified := installation.VerifiedDescriptor()
+				if !verified {
+					return fmt.Errorf("sandbox plugin installation descriptor is unverified")
+				}
+				config := sandboxsqlite.ExternalConfig{ConfigVersion: descriptor.ConfigVersion, JSON: json.RawMessage(configJSON)}
+				if err := config.Validate(); err != nil {
+					return usageError{err: err}
+				}
+				caller, err := governancedomain.NewContext(governancedomain.OriginCLI, runtime.OwnerPrincipal(), governancedomain.CatalogScope())
+				if err != nil {
+					return err
+				}
+				item, createErr := runtime.Sandboxes.CreateExternalSandbox(cmd.Context(), bootstrap.CreateExternalSandboxRequest{
+					Name: name, InstallationID: id, Config: config,
+				}, caller)
+				if item.ID() == "" {
+					return createErr
+				}
+				run, err := runtime.Sandboxes.GetRun(cmd.Context(), item.ID())
+				if err != nil {
+					return err
+				}
+				// A remote uncertain result must be visible; never silently
+				// auto-retry or mark a running Sandbox as ready.
+				return a.writeValue(fmt.Sprintf("external Sandbox %s: %s (review/reconcile if unknown)", item.ID(), run.State),
+					map[string]any{"sandbox": sandboxProjection(item), "state": string(run.State), "generation": run.Generation,
+						"needsReconciliation": createErr != nil})
+			})
+		},
+	}
+	command.Flags().StringVar(&name, "name", "", "Sandbox display name")
+	command.Flags().StringVar(&installation, "installation", "", "exact installed sandbox.backend InstallationID")
+	command.Flags().StringVar(&configJSON, "config-json", "", "bounded non-secret plugin configuration JSON (credential fields are refused)")
+	return command
 }
