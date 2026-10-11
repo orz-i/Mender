@@ -31,6 +31,9 @@ func TestHTTPProfileSandboxGrantLifecycle(t *testing.T) {
 	}
 	requestJSON(t, server.Client(), http.MethodPut, path, map[string]any{"capabilities": []string{}}, http.StatusBadRequest)
 	requestJSON(t, server.Client(), http.MethodPut, path, map[string]any{"capabilities": []string{"file.read", "invalid"}}, http.StatusBadRequest)
+	requestJSON(t, server.Client(), http.MethodPut, path, map[string]any{"capabilities": []string{"file.read", "file.read"}}, http.StatusBadRequest)
+	requestJSON(t, server.Client(), http.MethodPut, base+"/profile-grants/invalid", map[string]any{"capabilities": []string{"file.read"}}, http.StatusBadRequest)
+	requestJSON(t, server.Client(), http.MethodDelete, base+"/profile-grants/invalid", nil, http.StatusBadRequest)
 	requestJSON(t, server.Client(), http.MethodPut, base+"/profile-grants/prof_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", map[string]any{"capabilities": []string{"file.read"}}, http.StatusNotFound)
 	got = requestJSON(t, server.Client(), http.MethodPut, path, map[string]any{"capabilities": []string{"file.read", "file.search"}}, http.StatusOK)
 	if len(got["grants"].([]any)) != 1 {

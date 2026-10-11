@@ -7,6 +7,7 @@ import (
 
 	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	profileapplication "github.com/orz-i/Mender/backend/internal/profile/application"
+	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 )
 
@@ -53,6 +54,14 @@ func (h *Handler) getSandboxProfileGrants(w http.ResponseWriter, r *http.Request
 	writeJSON(w, http.StatusOK, map[string]any{"sandboxId": id.String(), "grants": grants})
 }
 
+func sandboxGrantProfileID(w http.ResponseWriter, raw string) (string, bool) {
+	if _, err := profiledomain.ParseProfileID(raw); err != nil {
+		writeAPIError(w, http.StatusBadRequest, "validation_error", err)
+		return "", false
+	}
+	return raw, true
+}
+
 type sandboxGrantInput struct {
 	Capabilities []string `json:"capabilities"`
 }
@@ -61,6 +70,10 @@ func (h *Handler) putSandboxProfileGrants(w http.ResponseWriter, r *http.Request
 	id, err := sandboxdomain.ParseID(r.PathValue("sandboxId"))
 	if err != nil {
 		writeAPIError(w, http.StatusBadRequest, "validation_error", err)
+		return
+	}
+	profileID, valid := sandboxGrantProfileID(w, r.PathValue("profileId"))
+	if !valid {
 		return
 	}
 	caller, err := h.sandboxGrantContext()
@@ -78,15 +91,21 @@ func (h *Handler) putSandboxProfileGrants(w http.ResponseWriter, r *http.Request
 		return
 	}
 	capabilities := make([]sandboxdomain.Capability, 0, len(input.Capabilities))
+	seen := make(map[sandboxdomain.Capability]bool)
 	for _, raw := range input.Capabilities {
 		capability := sandboxdomain.Capability(raw)
 		if err = capability.Validate(); err != nil {
 			writeAPIError(w, http.StatusBadRequest, "validation_error", err)
 			return
 		}
+		if seen[capability] {
+			writeAPIError(w, http.StatusBadRequest, "validation_error", fmt.Errorf("duplicate Sandbox capability"))
+			return
+		}
+		seen[capability] = true
 		capabilities = append(capabilities, capability)
 	}
-	if err = h.runtime.Sandboxes.SetProfileGrants(r.Context(), id, r.PathValue("profileId"), capabilities, caller); err != nil {
+	if err = h.runtime.Sandboxes.SetProfileGrants(r.Context(), id, profileID, capabilities, caller); err != nil {
 		grantAPIError(w, err)
 		return
 	}
@@ -99,12 +118,16 @@ func (h *Handler) deleteSandboxProfileGrants(w http.ResponseWriter, r *http.Requ
 		writeAPIError(w, http.StatusBadRequest, "validation_error", err)
 		return
 	}
+	profileID, valid := sandboxGrantProfileID(w, r.PathValue("profileId"))
+	if !valid {
+		return
+	}
 	caller, err := h.sandboxGrantContext()
 	if err != nil {
 		grantAPIError(w, err)
 		return
 	}
-	if err = h.runtime.Sandboxes.SetProfileGrants(r.Context(), id, r.PathValue("profileId"), nil, caller); err != nil {
+	if err = h.runtime.Sandboxes.SetProfileGrants(r.Context(), id, profileID, nil, caller); err != nil {
 		grantAPIError(w, err)
 		return
 	}
