@@ -11,6 +11,7 @@ require (
 	github.com/modelcontextprotocol/go-sdk v1.8.0
 	github.com/orz-i/Mender/sdk/providerplugin/go v0.0.0
 	github.com/orz-i/Mender/sdk/sandboxplugin/go v0.0.0
+	github.com/orz-i/Mender/sdk/tunnelplugin/go v0.0.0
 	github.com/spf13/cobra v1.10.2
 	github.com/zalando/go-keyring v0.2.8
 	golang.org/x/mod v0.41.0
@@ -106,3 +107,5 @@ require (
 replace github.com/orz-i/Mender/sdk/providerplugin/go => ../sdk/providerplugin/go
 
 replace github.com/orz-i/Mender/sdk/sandboxplugin/go => ../sdk/sandboxplugin/go
+
+replace github.com/orz-i/Mender/sdk/tunnelplugin/go => ../sdk/tunnelplugin/go

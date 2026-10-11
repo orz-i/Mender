@@ -314,7 +314,7 @@ func TestManagedMCPHTTPServerSupervisesProfileTunnel(t *testing.T) {
 		instance.TunnelDisplayName != tunnel.DisplayName() ||
 		instance.TunnelProvider != string(tunneldomain.ProviderOpenAI) ||
 		instance.TunnelExternalID != tunnel.ExternalTunnelID() ||
-		instance.TunnelStatus != "running" {
+		instance.TunnelStatus != "starting" {
 		t.Fatalf("tunneled instance = %#v", instance)
 	}
 	first := runner.processAt(t, 0)
@@ -329,7 +329,7 @@ func TestManagedMCPHTTPServerSupervisesProfileTunnel(t *testing.T) {
 	if !first.stopped {
 		t.Fatal("restart did not stop original tunnel process")
 	}
-	if restarted.TunnelStatus != "running" {
+	if restarted.TunnelStatus != "starting" {
 		t.Fatalf("restarted tunnel status = %q", restarted.TunnelStatus)
 	}
 	second := runner.processAt(t, 1)
@@ -432,6 +432,10 @@ type fakeTunnelRunner struct {
 	mu        sync.Mutex
 	processes []*fakeTunnelProcess
 	startErr  error
+}
+
+func (r *fakeTunnelRunner) Preflight(_ context.Context, tunnel tunneldomain.Tunnel) error {
+	return tunnel.Binding().ValidateProvider(tunneldomain.ProviderOpenAI)
 }
 
 func (r *fakeTunnelRunner) Start(

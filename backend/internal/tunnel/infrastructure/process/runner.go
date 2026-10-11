@@ -7,7 +7,6 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"strings"
 	"sync"
 
 	tunnelapplication "github.com/orz-i/Mender/backend/internal/tunnel/application"
@@ -28,15 +27,23 @@ func NewRunner(launcher CommandLauncher) Runner {
 	return Runner{launcher: launcher}
 }
 
+func (r Runner) Preflight(_ context.Context, tunnel tunneldomain.Tunnel) error {
+	if r.launcher == nil {
+		return fmt.Errorf("openai Tunnel launcher unavailable")
+	}
+	return tunnel.Binding().ValidateProvider(tunneldomain.ProviderOpenAI)
+}
 func (r Runner) Start(
 	ctx context.Context,
 	tunnel tunneldomain.Tunnel,
 	endpoint string,
 	apiKey []byte,
 ) (tunnelapplication.Process, error) {
-	endpoint = strings.TrimSpace(endpoint)
-	if endpoint == "" {
-		return nil, fmt.Errorf("run tunnel client: MCP endpoint must not be empty")
+	if err := r.Preflight(ctx, tunnel); err != nil {
+		return nil, err
+	}
+	if err := tunnelapplication.ValidateManagedMCPEndpoint(endpoint); err != nil {
+		return nil, err
 	}
 	if len(apiKey) == 0 {
 		return nil, fmt.Errorf("run tunnel client: runtime API key must not be empty")
@@ -122,3 +129,7 @@ func (p *childProcess) Stop(ctx context.Context) error {
 }
 
 var _ tunnelapplication.ProcessRunner = Runner{}
+
+// An OpenAI native tunnel-client process being launched does not demonstrate
+// control-plane registration or externally reachable MCP readiness.
+func (*childProcess) TunnelHealth() string { return "starting" }

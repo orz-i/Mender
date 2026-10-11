@@ -5,4 +5,5 @@ use (
 	./backend
 	./sdk/providerplugin/go
 	./sdk/sandboxplugin/go
+	./sdk/tunnelplugin/go
 )

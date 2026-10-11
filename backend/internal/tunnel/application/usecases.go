@@ -164,6 +164,12 @@ func (uc StartTunnel) Execute(
 	if uc.runner == nil {
 		return nil, tunneldomain.Tunnel{}, fmt.Errorf("start tunnel: process runner is unavailable")
 	}
+	if err := uc.runner.Preflight(ctx, tunnel); err != nil {
+		return nil, tunneldomain.Tunnel{}, fmt.Errorf("start tunnel: transport unavailable: %w", err)
+	}
+	if err := ValidateManagedMCPEndpoint(endpoint); err != nil {
+		return nil, tunneldomain.Tunnel{}, err
+	}
 	secret, err := uc.credentials.Resolve(ctx, tunnel.RuntimeCredentialRef())
 	if err != nil {
 		return nil, tunneldomain.Tunnel{}, fmt.Errorf("start tunnel: resolve runtime credential: %w", err)

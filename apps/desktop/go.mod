@@ -67,6 +67,7 @@ require (
 	github.com/opencontainers/image-spec v1.1.1 // indirect
 	github.com/orz-i/Mender/sdk/providerplugin/go v0.0.0 // indirect
 	github.com/orz-i/Mender/sdk/sandboxplugin/go v0.0.0 // indirect
+	github.com/orz-i/Mender/sdk/tunnelplugin/go v0.0.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2 // indirect
 	github.com/segmentio/asm v1.1.3 // indirect
@@ -107,3 +108,5 @@ replace github.com/orz-i/Mender/backend => ../../backend
 replace github.com/orz-i/Mender/sdk/providerplugin/go => ../../sdk/providerplugin/go
 
 replace github.com/orz-i/Mender/sdk/sandboxplugin/go => ../../sdk/sandboxplugin/go
+
+replace github.com/orz-i/Mender/sdk/tunnelplugin/go => ../../sdk/tunnelplugin/go

@@ -240,3 +240,11 @@ func backupPreTunnelHardCut(ctx context.Context, db *sql.DB, path string) error 
 	}
 	return nil
 }
+
+// All Tunnel resources hold immutable installation references, including
+// unbound or stopped Tunnels. Every reference blocks disable/removal.
+func (s *Store) ReferencedInstallation(ctx context.Context, installationID string) (int, error) {
+	var count int
+	err := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM tunnels WHERE provider='external' AND installation_id=?", installationID).Scan(&count)
+	return count, err
+}

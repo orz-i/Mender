@@ -17,6 +17,7 @@ import (
 	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 	tunnelapplication "github.com/orz-i/Mender/backend/internal/tunnel/application"
+	tunneldomain "github.com/orz-i/Mender/backend/internal/tunnel/domain"
 )
 
 var (
@@ -40,11 +41,13 @@ type MCPServerInstance struct {
 }
 
 type managedMCPServer struct {
-	info           MCPServerInstance
-	desiredAddress string
-	server         *http.Server
-	listener       net.Listener
-	tunnelProcess  tunnelapplication.Process
+	info            MCPServerInstance
+	desiredAddress  string
+	server          *http.Server
+	listener        net.Listener
+	tunnelProcess   tunnelapplication.Process
+	pendingTunnelID string
+	stopping        bool
 }
 
 func (r *Runtime) ListMCPServers() []MCPServerInstance {
@@ -120,11 +123,9 @@ func (r *Runtime) StartMCPHTTPServer(
 		Status:    "running",
 		StartedAt: time.Now().UTC(),
 	}
-	managed := &managedMCPServer{
-		info:           instance,
-		desiredAddress: address,
-		server:         httpServer,
-		listener:       listener,
+	managed := &managedMCPServer{info: instance, desiredAddress: address, server: httpServer, listener: listener}
+	if id, ok := profile.TunnelID(); ok {
+		managed.pendingTunnelID = id.String()
 	}
 
 	r.mcpServersMu.Lock()
@@ -146,17 +147,23 @@ func (r *Runtime) StartMCPHTTPServer(
 
 		r.mcpServersMu.Lock()
 		current, stillRunning := r.mcpServers[serverID]
-		if stillRunning && current == managed {
+		attached := stillRunning && current == managed && !managed.stopping
+		if attached {
 			managed.tunnelProcess = process
 			managed.info.TunnelID = tunnel.ID().String()
 			managed.info.TunnelDisplayName = tunnel.DisplayName()
 			managed.info.TunnelProvider = string(tunnel.Provider())
 			managed.info.TunnelExternalID = tunnel.ExternalTunnelID()
-			managed.info.TunnelStatus = "running"
+			// Child startup is not evidence of downstream reachability.
+			// Only a typed health reporter may claim ready/degraded.
+			managed.info.TunnelStatus = "starting"
+			if observed, ok := process.(tunnelapplication.HealthReporter); ok {
+				managed.info.TunnelStatus = observed.TunnelHealth()
+			}
 			instance = managed.info
 		}
 		r.mcpServersMu.Unlock()
-		if !stillRunning || current != managed {
+		if !attached {
 			_ = process.Stop(context.Background())
 			return MCPServerInstance{}, fmt.Errorf(
 				"start MCP server: local server stopped before tunnel attached",
@@ -168,26 +175,41 @@ func (r *Runtime) StartMCPHTTPServer(
 	return instance, nil
 }
 
-func (r *Runtime) StopMCPServer(
-	ctx context.Context,
-	serverID string,
-) error {
+func (r *Runtime) StopMCPServer(ctx context.Context, serverID string) error {
 	r.mcpServersMu.Lock()
 	managed, ok := r.mcpServers[serverID]
-	if ok {
+	if !ok || managed.stopping {
+		r.mcpServersMu.Unlock()
+		return ErrMCPServerNotFound
+	}
+	// Keep the resource visible as active until process disconnect + listener
+	// shutdown both finish, preventing Tunnel delete during teardown.
+	managed.stopping = true
+	r.mcpServersMu.Unlock()
+	tunnelErr := stopManagedTunnel(ctx, managed.tunnelProcess)
+	serverErr := shutdownHTTPServer(ctx, managed.server)
+	r.mcpServersMu.Lock()
+	if r.mcpServers[serverID] == managed {
 		delete(r.mcpServers, serverID)
 	}
 	r.mcpServersMu.Unlock()
-
-	if !ok {
-		return ErrMCPServerNotFound
-	}
-	tunnelErr := stopManagedTunnel(ctx, managed.tunnelProcess)
-	serverErr := shutdownHTTPServer(ctx, managed.server)
 	if err := errors.Join(tunnelErr, serverErr); err != nil {
 		return fmt.Errorf("stop MCP server %s: %w", serverID, err)
 	}
 	return nil
+}
+
+// isTunnelActive is a host-owned, side-effect-free usage predicate. It also
+// covers a server between listener startup and Tunnel process attachment.
+func (r *Runtime) isTunnelActive(id tunneldomain.TunnelID) bool {
+	r.mcpServersMu.Lock()
+	defer r.mcpServersMu.Unlock()
+	for _, managed := range r.mcpServers {
+		if managed.pendingTunnelID == id.String() || managed.info.TunnelID == id.String() {
+			return true
+		}
+	}
+	return false
 }
 
 func (r *Runtime) RestartMCPServer(
@@ -267,29 +289,48 @@ func (r *Runtime) serveManagedMCPServer(
 
 	r.mcpServersMu.Lock()
 	current, ok := r.mcpServers[serverID]
-	if ok && current == managed {
+	if ok && current == managed && !managed.stopping {
 		delete(r.mcpServers, serverID)
 	}
+	wasUnmanaged := ok && current == managed && !managed.stopping
 	r.mcpServersMu.Unlock()
-	if ok && current == managed {
+	if wasUnmanaged {
 		stopCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		defer cancel()
 		_ = stopManagedTunnel(stopCtx, managed.tunnelProcess)
 	}
 }
 
-func (r *Runtime) watchManagedTunnel(
-	serverID string,
-	managed *managedMCPServer,
-	process tunnelapplication.Process,
-) {
-	<-process.Done()
-
+func (r *Runtime) watchManagedTunnel(serverID string, managed *managedMCPServer,
+	process tunnelapplication.Process) {
+	reporter, hasHealth := process.(tunnelapplication.HealthReporter)
+	if !hasHealth {
+		<-process.Done()
+		r.setManagedTunnelStatus(serverID, managed, process, "exited")
+		return
+	}
+	ticker := time.NewTicker(400 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-process.Done():
+			r.setManagedTunnelStatus(serverID, managed, process, "exited")
+			return
+		case <-ticker.C:
+			// Reads cached session metadata only, without launching plugins
+			// or resolving credentials in the management plane.
+			status := reporter.TunnelHealth()
+			r.setManagedTunnelStatus(serverID, managed, process, status)
+		}
+	}
+}
+func (r *Runtime) setManagedTunnelStatus(serverID string, managed *managedMCPServer,
+	process tunnelapplication.Process, status string) {
 	r.mcpServersMu.Lock()
 	defer r.mcpServersMu.Unlock()
 	if current, ok := r.mcpServers[serverID]; ok && current == managed &&
-		managed.tunnelProcess == process {
-		managed.info.TunnelStatus = "exited"
+		current.tunnelProcess == process {
+		current.info.TunnelStatus = status
 	}
 }
 

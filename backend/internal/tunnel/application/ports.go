@@ -43,6 +43,13 @@ type Process interface {
 	Done() <-chan error
 }
 
+// ProcessRunner is a typed transport dispatcher. Preflight must reject a
+// disabled/wrong-kind/missing driver BEFORE StartTunnel resolves credentials.
 type ProcessRunner interface {
+	Preflight(context.Context, tunneldomain.Tunnel) error
 	Start(context.Context, tunneldomain.Tunnel, string, []byte) (Process, error)
 }
+
+// HealthReporter provides cached evidence. Management catalogue reads never
+// initiate plugin RPCs or infer "ready" merely because a child started.
+type HealthReporter interface{ TunnelHealth() string }

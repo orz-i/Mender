@@ -39,6 +39,8 @@ import (
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 	sandboxexternal "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/external"
 	tunnelapplication "github.com/orz-i/Mender/backend/internal/tunnel/application"
+	tunnelexternal "github.com/orz-i/Mender/backend/internal/tunnel/infrastructure/external"
+	tunnelregistry "github.com/orz-i/Mender/backend/internal/tunnel/infrastructure/pluginregistry"
 	tunnelprocess "github.com/orz-i/Mender/backend/internal/tunnel/infrastructure/process"
 )
 
@@ -344,6 +346,37 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		closeBootstrapStores()
 		return nil, fmt.Errorf("compose sandbox plugin dialer: %w", err)
 	}
+	tunnelDialer, err := tunnelexternal.NewDialer(externalProviderIsolationLauncher{governance: runtimeGovernance})
+	if err == nil {
+		err = externalProcesses.ProcessHost().Register(platformplugin.TunnelTransport, tunnelDialer)
+	}
+	if err != nil {
+		_ = externalProcesses.CloseAll()
+		_ = pluginInstallations.Close()
+		closeBootstrapStores()
+		return nil, fmt.Errorf("compose Tunnel Transport protocol: %w", err)
+	}
+	externalTunnelRunner, err := tunnelexternal.NewRunner(pluginInstallations, externalProcesses.ProcessHost())
+	if err != nil {
+		_ = externalProcesses.CloseAll()
+		_ = pluginInstallations.Close()
+		closeBootstrapStores()
+		return nil, err
+	}
+	tunnelRegistry, err := tunnelregistry.New(tunnelRunner, externalTunnelRunner)
+	if err != nil {
+		_ = externalProcesses.CloseAll()
+		_ = pluginInstallations.Close()
+		closeBootstrapStores()
+		return nil, err
+	}
+	if err := tunnels.ConfigureExternal(pluginInstallations, externalTunnelRunner); err != nil {
+		_ = externalProcesses.CloseAll()
+		_ = pluginInstallations.Close()
+		closeBootstrapStores()
+		return nil, err
+	}
+	tunnels.Start = tunnelapplication.NewStartTunnel(tunnels.store, credentials.Resolver, tunnelRegistry)
 	sandboxes.externalInstallationLookup = pluginInstallations
 	sandboxes.externalProcesses = externalProcesses.ProcessHost()
 	installedPlugins, err := pluginInstallations.List(ctx)
@@ -483,7 +516,7 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 	tunnelsOwned = false
 	runtimeGovernanceOwned = false
 	sandboxesOwned = false
-	return &Runtime{
+	result := &Runtime{
 		Catalog:                     catalog,
 		Credentials:                 credentials,
 		Profiles:                    profiles,
@@ -509,7 +542,11 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		providerActivation:          providerActivation,
 		ownerPrincipal:              ownerPrincipal,
 		mcpServers:                  make(map[string]*managedMCPServer),
-	}, nil
+	}
+	tunnels.Delete = tunnelapplication.NewDeleteTunnel(tunnels.store, runtimeTunnelUsageChecker{
+		profiles: profiles, active: result.isTunnelActive,
+	})
+	return result, nil
 }
 
 // RegisterExecutor binds a canonical Provider to its execution adapter.

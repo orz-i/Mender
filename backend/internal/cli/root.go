@@ -99,6 +99,7 @@ func NewRootCommand(options Options) *cobra.Command {
 	root.AddCommand(a.newPluginCommand())
 	root.AddCommand(a.newProviderCommand())
 	root.AddCommand(a.newSandboxCommand())
+	root.AddCommand(a.newTunnelCommand())
 	root.AddCommand(a.newProfileCommand())
 	root.AddCommand(a.newSkillCommand())
 	root.AddCommand(a.newToolCommand())

@@ -87,6 +87,35 @@ func (s *Supervisor) Register(kind platformplugin.Kind, dialer Dialer) error {
 	return nil
 }
 
+// VerifyPackage checks the complete exact installation byte tree and typed
+// manifest without launching or reusing a native process. Call this before
+// resolving secrets even when another session keeps the process alive.
+func (s *Supervisor) VerifyPackage(ctx context.Context, item installationdomain.Installation) error {
+	if s == nil {
+		return fmt.Errorf("plugin process supervisor unavailable")
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if err := item.Validate(); err != nil {
+		return err
+	}
+	if item.Status() != installationdomain.StatusEnabled {
+		return fmt.Errorf("plugin installation disabled")
+	}
+	resolved, err := s.packages.Resolve(ctx, item)
+	if err != nil {
+		return fmt.Errorf("verify plugin package: %w", err)
+	}
+	if resolved.Manifest.PluginID != item.PluginID().String() ||
+		resolved.Manifest.Version != item.PackageVersion() ||
+		len(resolved.Manifest.Extensions) != 1 ||
+		resolved.Manifest.Extensions[0] != item.Extension() {
+		return fmt.Errorf("plugin package descriptor identity changed")
+	}
+	return nil
+}
+
 // Ensure returns one connected, reusable client for an enabled installation.
 // It does not silently restart an uncertain side-effecting extension action:
 // callers own their own operation and replay/reconcile semantics.

@@ -98,6 +98,9 @@ func (s *service) Connect(ctx context.Context, r *tunnelv1.ConnectRequest) (*tun
 	if err := validateLoopbackEndpoint(r.GetMcpEndpoint()); err != nil {
 		return nil, err
 	}
+	if r.GetExternalTunnelId() == "force-fail" {
+		return nil, fmt.Errorf("fixture declined Tunnel Transport connection")
+	}
 	// The fixture establishes readiness only from an actual local MCP HTTP
 	// response. It does not claim any downstream public Tunnel registration.
 	client := http.Client{Timeout: 2 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
@@ -127,8 +130,12 @@ func (s *service) Connect(ctx context.Context, r *tunnelv1.ConnectRequest) (*tun
 	if _, present := s.sessions[id]; present {
 		return nil, fmt.Errorf("duplicate tunnel session")
 	}
-	s.sessions[id] = session{endpoint: r.GetMcpEndpoint(), phase: "ready"}
-	return &tunnelv1.ConnectResponse{SessionId: id, Phase: "ready", Diagnostic: "managed loopback endpoint responded; no public reachability is asserted"}, nil
+	phase := "ready"
+	if r.GetExternalTunnelId() == "degraded" {
+		phase = "degraded"
+	}
+	s.sessions[id] = session{endpoint: r.GetMcpEndpoint(), phase: phase}
+	return &tunnelv1.ConnectResponse{SessionId: id, Phase: phase, Diagnostic: "managed loopback endpoint responded; no public reachability is asserted"}, nil
 }
 func (s *service) Status(_ context.Context, r *tunnelv1.StatusRequest) (*tunnelv1.StatusResponse, error) {
 	s.mu.Lock()

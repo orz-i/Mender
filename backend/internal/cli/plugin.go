@@ -85,6 +85,8 @@ func (a *app) newPluginInstallCommand() *cobra.Command {
 					item, err = runtime.InstallProviderPlugin(cmd.Context(), args[0])
 				case platformplugin.SandboxBackend:
 					item, err = runtime.InstallSandboxPlugin(cmd.Context(), args[0])
+				case platformplugin.TunnelTransport:
+					item, err = runtime.InstallTunnelPlugin(cmd.Context(), args[0])
 				default:
 					return fmt.Errorf("plugin extension %s not supported yet", manifest.Extensions[0].Kind)
 				}
@@ -170,6 +172,8 @@ func (a *app) newPluginStatusCommand(enabled bool) *cobra.Command {
 					item, err = runtime.SetProviderPluginInstallationStatus(cmd.Context(), id, status)
 				case platformplugin.SandboxBackend:
 					item, err = runtime.SetSandboxPluginInstallationStatus(cmd.Context(), id, status)
+				case platformplugin.TunnelTransport:
+					item, err = runtime.SetTunnelPluginInstallationStatus(cmd.Context(), id, status)
 				default:
 					return fmt.Errorf("plugin kind %s cannot be enabled or disabled", current.Extension().Kind)
 				}
@@ -206,6 +210,8 @@ func (a *app) newPluginRemoveCommand() *cobra.Command {
 					err = runtime.RemoveProviderPluginInstallation(cmd.Context(), id)
 				case platformplugin.SandboxBackend:
 					err = runtime.RemoveSandboxPluginInstallation(cmd.Context(), id)
+				case platformplugin.TunnelTransport:
+					err = runtime.RemoveTunnelPluginInstallation(cmd.Context(), id)
 				default:
 					return fmt.Errorf("unsupported plugin removal kind %s", current.Extension().Kind)
 				}
