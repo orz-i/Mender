@@ -1,6 +1,6 @@
 # Phase 31 — Sandbox backends in the unified Plugin Marketplace
 
-Status: **In progress** (2026-10-11). Builds on closed Phase 27 E and Phase 28–30. Implementation is document-first, incremental and hard-cut: no Provider bridge, duplicate Marketplace, or agent loop.
+Status: **Closed** (2026-10-11). Builds on closed Phase 27 E and Phase 28–30. Implementation is document-first, incremental and hard-cut: no Provider bridge, duplicate Marketplace, or agent loop.
 
 ## Current audit
 
@@ -34,3 +34,14 @@ External `sandbox.backend` packages remain the only truly locally installed Sand
 ## Scope boundary
 
 The Plugin Marketplace is Mender's local unified software catalogue, not a public distribution registry. An upcoming E2B adapter is informational only; Daytona remains a deliberate experimental operator opt-in, not auto-connected to a billable remote service.
+
+## Acceptance and closure (2026-10-11)
+
+- `c1c72ae` — contract before implementation, including exact non-executable E2B preview semantics.
+- `66435ce` — existing Daytona code appears in the canonical Catalogue even while host experimental opt-in is off; E2B appears once as `@planned`, not `@builtin`; SDK/OpenAPI/Wails source + status types aligned. Inert catalogue/HTTP tests cover one stable key per backend and opt-in transitions; existing Registry test continues to reject attempting to register E2B.
+- `0b002ba` — Marketplace grid, filters, status/source labels and previews include `Roadmap / Planned`. Local Workspace and explicitly opted-in Daytona navigate to their own existing focused configuration flows. No E2B create/enable/remove action or fictional package version; Chinese translations included.
+- `bd6e81e` — negative HTTP acceptance confirms there is no E2B creation endpoint, even when the informational card is discoverable.
+
+Test gates: `pnpm check` passed with all Go lint/unit/race gates, HTTP/SDK/Wails schema checks, 23 Vitest files / **155 passing tests**, and **962/962** required zh-CN translations. `pnpm security:check` passed on 8 Go modules and production JS dependencies (Go vulnerability feed used its supported fallback). Native macOS desktop `GOWORK=off go build ./...` passed with pre-existing macOS linker target warnings. No new external daemon, Docker action, remote Daytona API call, Credential, billable provisioning, or user DB migration was initiated by Marketplace listing.
+
+The Sandbox create chooser is retained for existing entry points. The Marketplace is now also a complete catalogue of those four options, not a second resource inventory; exact installed external `sandbox.backend` packages remain in the same source. Product-preview E2B remains explicitly unimplemented until a separately governed implementation is accepted. Native packaged WKWebView visual release QA is not claimed by these automated checks.
