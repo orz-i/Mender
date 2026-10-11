@@ -189,6 +189,14 @@ Phase 7 validated `wails3 build` and `wails3 package` on the current macOS devel
 
 On macOS, `TunnelClient=restricted_host` requires the narrow `com.apple.trustd.agent` Seatbelt Mach service lookup for Go's OS-backed x509 verification. The symptom before this exception is `tls: failed to verify certificate: x509: OSStatus -26276`, while an unrestricted Go probe succeeds and MCP initialize works. This is distinct from DNS anomalies, ChatGPT connector setup rate limits, or an upstream HTTP 401/403. Preserve certificate verification and sandbox isolation; never work around the error by disabling verification or exporting API keys. Rebuild/restart Wails and restart the managed server so its tunnel child inherits the corrected profile. Only after the client reports a successful control-plane poll should the ChatGPT connector registration be retried.
 
+## Sandbox lifecycle confirmation in macOS WebView
+
+The Wails v3 macOS `WKUIDelegate` in the pinned beta implements file selection, but does not implement `runJavaScriptConfirmPanelWithMessage`. In the shared Sandbox detail page, `window.confirm` therefore cannot be the approval gate for `sandbox.destroy` (or Docker Start, which discards scratch data): the button may appear to do nothing in the desktop app. The normal browser test environment supports `window.confirm`, so the existing UI tests alone did not catch this.
+
+The management dialog uses a **single in-dialog confirmation step** instead. Start/Stop remain immediate when permitted; Destroy and Docker Start first show the pending action and consequences, then require a separately labeled confirmation button. Cancel/Back does not call the backend; errors appear in the same dialog. The backend retains authorization, owner, generation, active-lease, and Workspace Provider reference checks. A successful Local Workspace destroy **tombstones** the run for audit and does not remove the inventory row or delete host files. An unavailable backend or active execution lease is never bypassed.
+
+When validating Desktop: create a disposable local Sandbox in a test database, verify Cancel issues no RPC, confirm Destroy issues one RPC and yields `destroyed`, and verify the new record remains viewable while the associated host root is untouched. Do not destructively test against a user's existing Sandbox to validate the UI.
+
 ## Quality gates
 
 Run desktop-specific portable checks:
