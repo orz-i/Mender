@@ -81,6 +81,22 @@ func TestUnifiedPluginCatalogueManagementContract(t *testing.T) {
 			t.Fatalf("missing extension kind %s", kind)
 		}
 	}
+	// Planned software has no Create API. Do not interpret a Marketplace
+	// preview as a provisionable executable Sandbox Backend.
+	{
+		plannedReq, err := http.NewRequestWithContext(ctx, http.MethodPost, server.URL+"/api/v1/sandboxes/e2b", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		response, err := server.Client().Do(plannedReq)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = response.Body.Close()
+		if response.StatusCode != http.StatusNotFound && response.StatusCode != http.StatusMethodNotAllowed {
+			t.Fatalf("planned E2B unexpectedly has a provisioning endpoint: %d", response.StatusCode)
+		}
+	}
 	requestJSON(t, server.Client(), http.MethodPost, server.URL+"/api/v1/plugin-installations/pinst_missing/disable", nil, http.StatusBadRequest)
 	requestJSON(t, server.Client(), http.MethodPost, server.URL+"/api/v1/sandboxes/external", map[string]any{
 		"name": "Denied", "installationId": "invalid", "config": map[string]any{},
