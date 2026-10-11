@@ -1,6 +1,8 @@
 # Phase 27 proposal — Multi-kind Mender Plugin Platform
 
-Status: In progress; ADR-0037 accepted. Work packages are separately implemented, verified and committed.
+Status: **Closed (2026-10-11)**. ADR-0037 accepted; implementation and automated
+quality gates completed in separate, verified commits. Browser-based visual
+inspection remains a release QA gate (see [E closure](phase-27-e-unified-plugin-marketplace.md)).
 
 Governing proposal: [ADR-0037](../architecture/adr/0037-multi-kind-plugin-platform.md). This phase generalizes the existing Provider-only plugin installation/host to support Provider Tool Sources, Sandbox Backends and Tunnel Transports. Mender stays a governed Tool/Resource runtime, not an Agent loop. The deliverable is real backend extension support, not merely three labels in the Marketplace.
 
@@ -204,13 +206,22 @@ Acceptance: migration on a copied v8 DB with real grants/runs/leases and Docker/
   restart, scoped Credential delivery, immutable package pin, atomic
   disable/delete/create guards and Profile usage. Full CLI/Runtime tests and
   checks pass. See [D closure](phase-27-d-tunnel-transport-closure.md).
-- **E remains:** one backend Plugin Catalogue and unified Web/Desktop/Wails,
-  API and SDK management experience. Native external Sandbox and Tunnel
-  Runtime support does not imply completed Marketplace UX or public provider
-  reachability.
+- **E — closed (2026-10-11):** one read-only host-owned Plugin Catalogue
+  resolves all `provider.tools`, `sandbox.backend` and `tunnel.transport`
+  entries and exact native installations with status, capability metadata,
+  installation identity and resource usage. Generic installation management
+  delegates to each extension kind's existing resource safeguards. Typed
+  HTTP/OpenAPI/SDK/Wails external Sandbox/Tunnel creation, desktop-local
+  trusted installer and focused Marketplace detail → owning-resource creation
+  flows are implemented. No frontend Provider-installation shadow inventory,
+  raw Web native package installation, model-selected backend or Host fallback.
+  Positive multi-kind installed native fixture tests, exact resource pinning,
+  resource count and guarded disable, HTTP management E2E and 140 UI tests
+  pass. In-app confirmation replaces unreliable WebView browser dialogs. See
+  [E closure](phase-27-e-unified-plugin-marketplace.md).
 
 Foundation verification: `pnpm check` (Go lint/test/race, SDK/protocol/example,
-HTTP/TS/Wails contract drift, i18n/132 frontend tests, Web/Desktop builds) and
+HTTP/TS/Wails contract drift, i18n/140 frontend tests, Web/Desktop builds) and
 `pnpm security:check` passed. Isolated migration tests cover v1 inventory with
 descriptor and original backup, restart idempotence, incompatible legacy
 protocol rollback, and old software tree checksum/tamper protection.

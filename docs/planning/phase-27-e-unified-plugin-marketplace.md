@@ -1,6 +1,9 @@
 # Phase 27 E — Unified Plugin Catalogue and typed management closure
 
-Status: In progress (2026-10-11); ADR-0037 accepted. Previous Phase A/B/C/D implemented and independently committed.
+Status: **Closed for implementation (2026-10-11)**; ADR-0037 accepted.
+Automated acceptance completed; real browser screenshot/mobile visual QA was
+blocked by the existing Pi browser journal format and is explicitly retained
+as a separate release QA gate, not silently claimed as passed.
 
 ## Audited baseline
 
@@ -39,3 +42,65 @@ Marketplace UX:
 ## Non-goals
 
 No Agent loop, arbitrary dynamic React/HTML, public native-plugin installation via web, OCI registry, multi-extension binary or guessed cloud capabilities, no generic platform reachability claim from a local loopback health probe. No permanent provider-vs-generic installation dual-read in the Marketplace. No endless Phase E subphase expansion. Never commit `.agents/`, `.pi/`, `.intent-loop/`.
+
+
+## Phase E closure evidence (2026-10-11)
+
+| Acceptance | Evidence | Result |
+| --- | --- | --- |
+| Document-first scope | `de4217f` (this contract before code) | Complete |
+| Unified typed host Catalogue | `16925f5`, `backend/internal/bootstrap/plugin_catalogue.go` | Process-free; all Provider/Sandbox/Tunnel extensions |
+| Canonical installation state | `plugin_management.go`, HTTP `/plugin-installations`, Wails and SDK | Exact verified kind dispatch, reference-based disable/delete guards |
+| Typed resource HTTP | `backend/internal/management/httpapi/external_resources.go`, OpenAPI schemas, generated TS SDK | External Sandbox and Tunnel creation, shared identity/status/credential handling |
+| Native desktop installer | `desktop/binding/Service.InstallLocalPlugin`, Wails generated TypeScript binding, OS folder chooser | Trusted local action only; no remote path install API |
+| Marketplace Web/Desktop | `bb51d8e`, `packages/app/src/domains/plugins/` | One backend catalogue, card grid, cursor pagination, type/source/status/search, detail tabs |
+| Selected create UX | `sandbox-external-create-page.tsx`, focused built-in Sandbox, Provider and Tunnel creation | Exact software pin, relevant form only, review/credential selector |
+| UX and API hardening | `ab12333`, dedicated removal confirmation, builtin Sandbox back navigation, typed wrong-kind/invalid Tunnel errors | WKWebView-safe; no category fallback |
+| Cross-kind fixture acceptance | `TestCanonicalCatalogueInstalledThreeKindsAndUsage`, `TestUnifiedPluginCatalogueHTTPExternalResourceFlow` | Real test-built native fixtures: descriptors, inert listing, exact resource usage, disable conflict and positive HTTP create |
+| Existing governance preservation | Sandbox Router/lease/Policy and Tunnel/Profile reference tests, SQLite migration tests | No bypass or resource reassignment |
+| UI/desktop contract | `management-pages.test.tsx`, `desktop-client.test.ts`, Wails binding generation | No raw secrets or installed package paths exposed by browser UI |
+
+### Final automated gates
+
+- `pnpm check`: protobuf + Go SDK/examples generation, type-safe Wails/HTTP
+  contracts, Go lint/unit/Race, Web/Desktop TypeScript lint and typecheck,
+  i18n parity, **140/140** React tests, Web/Desktop production frontend build.
+- `pnpm security:check`: `govulncheck` across backend, desktop and all
+  provider/sandbox/tunnel Go SDK and examples, plus production JS audit.
+- `GOWORK=off go build ./...` for the macOS desktop Go app passed; macOS
+  deployment-target linker warnings persist but do not fail the build.
+- Isolated disposable-host smoke: newly built `menderd` with a temporary
+  SQLite DB on loopback, matching Vite proxy on a separate loopback port:
+  `GET /api/v1/plugins`, Web proxy `GET /api/v1/plugins`, and `GET /plugins`
+  returned HTTP 200. The catalogue had all three built-in extension kinds,
+  with identical direct-API/proxy JSON. Both test processes, database,
+  temporary Vite config and binary were cleaned.
+- Positive HTTP/resource fixtures did not contact any actual Sandbox cloud,
+  Docker daemon, OpenAI account, public relay, user-owned resource or
+  production Credential.
+
+### Outstanding release-specific checks (not misreported as complete)
+
+**Native visual browser QA:** the Pi agent browser refused the current
+project session because it contains legacy browser records. Even a fresh
+browser mode was blocked; consequently no desktop/mobile screenshot audit or
+real WKWebView click-through has been claimed. RTL tests cover the
+Marketplace/detail/creation and in-app confirmation interactions, and the
+disposable Vite/HTTP integration is green. Screenshot-driven layout,
+responsive mobile breakpoints and packaged/signed Wails release QA remain
+for the next **release verification**, rather than extending Phase 27 into
+an unbounded E1–E100 series.
+
+**Backend/cloud limitations:** the native external Sandbox and Tunnel
+examples exercise deterministic local fixtures only. Real remote account
+reachability, billing caps, OS-level native-plugin isolation and external
+package distribution/registry are not implied by a Marketplace card or
+`enabled` status. Existing built-in Docker/Daytona opt-in and OpenAI
+downstream handshake gates remain authoritative.
+
+### Implementation commits
+
+- `de4217f` — E acceptance plan/contract
+- `16925f5` — Unified backend catalogue and typed HTTP/SDK/Wails resource management
+- `bb51d8e` — Marketplace and focused resource creation UI
+- `ab12333` — HTTP/inventory E2E and desktop-safe UX hardening

@@ -45,11 +45,14 @@ Credentials and capabilities are validated by the host and the respective
 extension contract. Manifest claims never confer authority.
 
 `provider.tools`, `sandbox.backend` and `tunnel.transport` each have
-independently versioned, installable native runtimes. The generic Plugin Core verifies both packages
-and supervises their native processes, but Provider/Sandbox management and
-execution protocols remain separate. The CLI dispatches installation by
-`extensions[0].kind`. Web and
-Desktop plugin-marketplace integration for Sandbox/Tunnel remains Phase 27 E.
+independently versioned, installable native runtimes. The generic Plugin Core
+verifies all three package kinds and supervises their native processes, while
+Provider, Sandbox and Tunnel keep separate management/execution contracts.
+The CLI dispatches installation by `extensions[0].kind`. Phase 27 E now
+provides one host-owned Plugin Catalogue, type-aware Web/Desktop creation
+routes, generated OpenAPI/SDK/Wails bindings and a trusted desktop-local
+package chooser. Web does **not** expose an arbitrary native package install
+endpoint.
 
 ## Forward-only hard cut for already installed Provider packages
 
@@ -169,9 +172,11 @@ or removed. Atomic SQLite pin and installation status/delete guards also
 reject a creation racing with administrative disable; management preflight
 alone is not trusted for that invariant.
 
-**Product scope:** the governed native install/create/operate path is currently
-available from the CLI and backend Runtime. Generic Web/Desktop plugin-market
-and resource creation flows are Phase 27 E work, not part of C3.
+**Product scope:** the governed native install/create/operate path is supported
+by CLI/Runtime. Phase 27 E adds unified Web/Desktop plugin discovery and
+exact-installation Sandbox creation/configuration/review. This does not claim
+cloud provider availability, unrestricted shell execution or an OS-isolated
+native plugin.
 
 ## Tunnel Transport extensions (SQLite v3)
 
@@ -224,8 +229,62 @@ a local loopback MCP reachability probe only and does **not** connect to a
 cloud relay. Attach the TunnelID to a Profile through the existing managed
 Profile Tunnel binding flow, then start that Profile's managed MCP Server.
 Once the Profile is unbound and its MCP server stopped, `mender tunnel delete`
-can remove the Tunnel resource. CLI and backend Runtime are implemented;
-the unified native Web/Desktop creation workflow remains Phase E.
+can remove the Tunnel resource. CLI/Runtime and the Phase 27 E Web/Desktop
+focused Tunnel plugin selection/creation flow are implemented. This is not
+verification of publicly reachable OpenAI or third-party relay connectivity.
+
+## Unified Plugin Catalogue and Marketplace (Phase 27 E)
+
+The host-owned `GET /api/v1/plugins` catalogue is **one source of truth** for
+three typed extension kinds. Rows represent built-ins or verified exact native
+installations and contain safe descriptive identity, source, status,
+capabilities, optional config JSON Schema, InstalledAt/digest and usage count.
+No native plugin is started, no Credential is resolved, and no remote Sandbox
+or Tunnel is provisioned during catalogue reads.
+
+Generic package status/delete operations use:
+`POST /api/v1/plugin-installations/{installationId}/enable`,
+`POST /api/v1/plugin-installations/{installationId}/disable`, and
+`DELETE /api/v1/plugin-installations/{installationId}`. A referenced package
+cannot be disabled or deleted; the underlying SQLite guards continue to
+enforce that constraint for Sandbox/Tunnel even across Runtime processes.
+
+Marketplace cards show a compact preview and stable cursor-based pagination.
+Type/search/source/status controls and install/refresh share the toolbar. The
+card detail separates **overview**, **capabilities**, and **technical details**.
+The Add action pins one software identity and opens only the matching
+owner-domain resource flow:
+
+- **Provider:** existing generic Provider create dialog with exact PluginID
+  and InstallationID; Provider Tools still resolve through their Provider
+  descriptor, not a Sandbox/Tunnel RPC.
+- **Sandbox:** built-in Local/Docker/Daytona focused guided create or a
+  separate external `/sandboxes/new/external` config/review page. Schema
+  validation occurs in both UI and the host; a configuration cannot retarget
+  to a different installed driver. Unknown states require manual
+  `/sandboxes/{sandboxId}/reconcile`.
+- **Tunnel:** choose OpenAI built-in or a verified external transport, then a
+  focused Credential Reference selector. Credentials are resolved by Mender
+  only when starting a managed MCP server; the creation form never asks for
+  the raw key or arbitrary public listen address.
+
+The local desktop app may install native package folders only after the user
+selects a directory through the OS file chooser. HTTP/Web has no native package
+upload/path-install endpoint. In-app confirmation dialogs replace
+`window.confirm` for plugin and Tunnel deletion, including WKWebView.
+
+**Sample HTTP usage (already-installed extensions):**
+
+~~~text
+GET    /api/v1/plugins
+POST   /api/v1/sandboxes/external
+POST   /api/v1/tunnels/external
+POST   /api/v1/sandboxes/{sandboxId}/reconcile
+~~~
+
+Both external creation endpoints select a fixed InstallationID validated by
+their own bounded contexts. The UI and metadata do not prove provider cloud
+reachability, charge limits or native executable confinement.
 
 ## Native code trust
 
@@ -242,6 +301,7 @@ is designed.
 ~~~bash
 go test -race ./backend/internal/plugin/...
 go test ./backend/internal/providerplugin/...
+go test -race ./backend/internal/bootstrap ./backend/internal/management/httpapi ./backend/internal/tunnel/...
 pnpm check
 pnpm security:check
 ~~~
