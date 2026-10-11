@@ -10,6 +10,7 @@ import "@mender/ui/globals.css";
 
 import {
   createDesktopMenderClient,
+  connectDesktopDocker,
   deployDesktopSkill,
   installDesktopPlugin,
   installDesktopSkill,
@@ -97,6 +98,7 @@ createRoot(rootElement).render(
         client={client}
         copyText={Clipboard.SetText}
         chooseLocalDirectory={chooseLocalSandboxDirectory}
+        connectDockerDesktop={connectDesktopDocker}
         installPlugin={chooseAndInstallPlugin}
         installSkill={chooseAndInstallSkill}
         deploySkill={chooseAndDeploySkill}

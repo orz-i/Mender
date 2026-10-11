@@ -5,6 +5,8 @@ import (
 	"embed"
 	"fmt"
 	"log"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/orz-i/Mender/backend/internal/bootstrap"
@@ -48,7 +50,16 @@ func run() error {
 	}
 	defer shutdown()
 
-	service := desktopbinding.NewService(ctx, runtime)
+	service := desktopbinding.NewServiceWithDockerActivation(ctx, runtime, func(ctx context.Context) error {
+		home, err := os.UserHomeDir()
+		if err != nil || home == "" {
+			return fmt.Errorf("Docker Desktop home directory unavailable")
+		}
+		// A fixed, operator-local UNIX socket path. No browser/Tool-provided
+		// endpoint, DOCKER_HOST or context may select the Docker daemon.
+		socket := "unix://" + filepath.Join(home, ".docker", "run", "docker.sock")
+		return runtime.Sandboxes.ActivateDocker(ctx, socket)
+	})
 	info := buildinfo.Current()
 	windowTitle := "Mender"
 	if info.Version != "dev" {

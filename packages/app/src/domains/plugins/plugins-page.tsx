@@ -174,6 +174,7 @@ export function PluginsPage({
                 { value: "all", label: "All plugin statuses" },
                 { value: "enabled", label: "Enabled" },
                 { value: "disabled", label: "Disabled" },
+                { value: "unavailable", label: "Unavailable" },
                 { value: "degraded", label: "Degraded" },
                 { value: "invalid", label: "Invalid" },
               ]}
@@ -242,16 +243,40 @@ export function PluginsPage({
   );
 }
 
-export function PluginDetailPage({ client }: { client: MenderClient }) {
+export function PluginDetailPage({
+  client,
+  connectDockerDesktop,
+}: {
+  client: MenderClient;
+  connectDockerDesktop?: () => Promise<void>;
+}) {
   const navigate = useNavigate();
   const { pluginKey = "" } = useParams();
   const { plugins, loaded, error, setError, refresh } =
     useMarketplacePlugins(client);
   const [busy, setBusy] = useState("");
   const [removeTarget,setRemoveTarget]=useState<MarketplacePlugin|null>(null);
+  const [connectDockerOpen,setConnectDockerOpen]=useState(false);
   const [section, setSection] = useState<"overview" | "capabilities" | "technical">("overview");
   const plugin = plugins.find((item) => item.key === pluginKey) ?? null;
   const createAction = plugin?.createAction;
+  const canConnectDocker = connectDockerDesktop !== undefined &&
+    plugin?.key === "io.mender.sandbox.docker@builtin" && plugin.status === "unavailable";
+
+  async function connectDocker() {
+    if (!canConnectDocker || busy !== "") return;
+    setBusy("connect:docker");
+    setError("");
+    try {
+      await connectDockerDesktop();
+      setConnectDockerOpen(false);
+      await refresh();
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
+      setBusy("");
+    }
+  }
 
   async function setEnabled(
     current: MarketplacePlugin,
@@ -319,6 +344,13 @@ export function PluginDetailPage({ client }: { client: MenderClient }) {
                 {t(createAction.label)}
               </Button>
             ) : null}
+            {canConnectDocker ? (
+              <Button type="button" disabled={busy !== ""}
+                onClick={() => setConnectDockerOpen(true)}>
+                <PowerIcon data-icon="inline-start" />
+                {t("Connect Docker Desktop")}
+              </Button>
+            ) : null}
             {plugin?.actions.disable ? (
               <IconButton
                 type="button"
@@ -360,6 +392,25 @@ export function PluginDetailPage({ client }: { client: MenderClient }) {
           </div>
         }
       />
+
+      <Dialog open={connectDockerOpen} onOpenChange={(open)=>{
+        if(busy==="")setConnectDockerOpen(open);
+      }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{t("Connect Docker Desktop")}</DialogTitle>
+            <DialogDescription>
+              {t("Docker daemon access grants powerful control over your host. Connect only if you trust this local Mender Desktop runtime. Mender enforces Sandbox container restrictions; the daemon socket itself is privileged. Connection lasts until this runtime exits.")}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="outline" disabled={busy!==""}
+              onClick={()=>setConnectDockerOpen(false)}>{t("Cancel")}</Button>
+            <Button type="button" disabled={busy!==""}
+              onClick={()=>void connectDocker()}>{t("Connect Docker Desktop")}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={removeTarget!==null} onOpenChange={(open)=>{
         if(!open && busy==="")setRemoveTarget(null);
@@ -406,9 +457,9 @@ export function PluginDetailPage({ client }: { client: MenderClient }) {
         <div className="flex flex-col gap-4">
           {plugin.issue !== undefined ? (
             <ErrorNotice
-              message={t("Plugin issue: {{message}}", {
-                message: plugin.issue.message,
-              })}
+              message={plugin.status === "unavailable"
+                ? dockerAvailabilityMessage(plugin.issue.message)
+                : t("Plugin issue: {{message}}", { message: plugin.issue.message })}
             />
           ) : null}
           {section === "overview" ? (
@@ -698,6 +749,17 @@ function pluginSourceLabel(plugin: MarketplacePlugin) {
   }
 }
 
+function dockerAvailabilityMessage(message: string) {
+  switch (message) {
+    case "Docker Engine is not configured. Connect Docker Desktop from the local Desktop app, or configure MENDER_DOCKER_SOCKET on Runtime startup.":
+      return t("Docker Engine is not configured. Connect Docker Desktop from the local Desktop app, or configure MENDER_DOCKER_SOCKET on Runtime startup.");
+    case "Docker Engine unavailable or insecure. Connect Docker Desktop from the local Desktop app, or configure MENDER_DOCKER_SOCKET on Runtime startup.":
+      return t("Docker Engine unavailable or insecure. Connect Docker Desktop from the local Desktop app, or configure MENDER_DOCKER_SOCKET on Runtime startup.");
+    default:
+      return message;
+  }
+}
+
 function pluginStatusLabel(plugin: MarketplacePlugin) {
   switch (plugin.status) {
     case "enabled":
@@ -708,5 +770,7 @@ function pluginStatusLabel(plugin: MarketplacePlugin) {
       return t("Invalid");
     case "degraded":
       return t("Degraded");
+    case "unavailable":
+      return t("Unavailable");
   }
 }

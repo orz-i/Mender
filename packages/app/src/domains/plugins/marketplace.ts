@@ -10,7 +10,8 @@ export type MarketplacePluginStatus =
   | "enabled"
   | "disabled"
   | "invalid"
-  | "degraded";
+  | "degraded"
+  | "unavailable";
 
 export interface MarketplacePluginActions {
   enable: boolean;
@@ -89,7 +90,7 @@ export function pluginCatalogueToMarketplace(entries:PluginCatalogueEntry[]):Mar
       description:entry.description,
       source:entry.sourceKind,sourceLabel:entry.sourceKind==="builtin"?"Built-in":"Local package",
       version:entry.packageVersion,
-      status:entry.issue?"degraded":entry.status,
+      status:entry.status==="unavailable"?"unavailable":entry.issue?"degraded":entry.status,
       enabled:entry.enabled,
       capabilities:entry.capabilities,
       actions:installationId?{
@@ -109,7 +110,7 @@ export function pluginCatalogueToMarketplace(entries:PluginCatalogueEntry[]):Mar
       ],
       ...(createAction?{createAction}:{}),
       ...(installationId?{actionRef:installationId}:{}),
-      ...(entry.issue?{issue:{code:"descriptor_unavailable",message:entry.issue}}:{}),
+      ...(entry.issue?{issue:{code:entry.status==="unavailable"?"runtime_unavailable":"descriptor_unavailable",message:entry.issue}}:{}),
     };
   }).toSorted(compareMarketplacePlugins);
 }

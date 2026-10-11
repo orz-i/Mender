@@ -60,6 +60,25 @@ describe("canonical typed Marketplace",()=>{
     expect(model?.createAction?.href).toBe("/tunnels?create=1&pluginId=io.mender.tunnel.openai");
   });
 
+  it("shows the dormant Docker built-in without enabling unsafe creation",()=>{
+    const builtin=entry("sandbox.backend",{
+      key:"io.mender.sandbox.docker@builtin",
+      pluginId:"io.mender.sandbox.docker",
+      displayName:"Docker Engine",
+      sourceKind:"builtin",
+      status:"unavailable",
+      enabled:false,
+      usageCount:0,
+      issue:"Docker Engine is not configured",
+    });
+    delete builtin.installationId;
+    const result=pluginCatalogueToMarketplace([builtin])[0]!;
+    expect(result.status).toBe("unavailable");
+    expect(result.issue).toEqual({code:"runtime_unavailable",message:"Docker Engine is not configured"});
+    expect(result.createAction).toBeUndefined();
+    expect(result.actions).toEqual({enable:false,disable:false,remove:false});
+  });
+
   it("uses stable cursor pagination",()=>{
     const models=pluginCatalogueToMarketplace(
       Array.from({length:13},(_,i)=>entry("provider.tools",{

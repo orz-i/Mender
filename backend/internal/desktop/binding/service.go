@@ -49,12 +49,29 @@ const (
 // It deliberately has no dependency on Wails so the backend module remains
 // independently buildable and testable.
 type Service struct {
-	ctx     context.Context
-	runtime *bootstrap.Runtime
+	ctx                   context.Context
+	runtime               *bootstrap.Runtime
+	activateDockerDesktop func(context.Context) error
 }
 
 func NewService(ctx context.Context, runtime *bootstrap.Runtime) *Service {
 	return &Service{ctx: ctx, runtime: runtime}
+}
+
+// NewServiceWithDockerActivation allows only the trusted desktop host to
+// supply a local Docker activation action. Remote HTTP/Tools cannot reach it.
+func NewServiceWithDockerActivation(ctx context.Context, runtime *bootstrap.Runtime,
+	activate func(context.Context) error) *Service {
+	return &Service{ctx: ctx, runtime: runtime, activateDockerDesktop: activate}
+}
+
+// ConnectDockerDesktop is exposed only through the native Desktop binding.
+// The Wails caller supplies no socket address, daemon flags or image options.
+func (s *Service) ConnectDockerDesktop() error {
+	if s == nil || s.activateDockerDesktop == nil {
+		return fmt.Errorf("Docker Desktop activation requires the local desktop host")
+	}
+	return s.activateDockerDesktop(s.ctx)
 }
 
 func (s *Service) GetSystemStatus() (SystemStatus, error) {

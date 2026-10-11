@@ -797,6 +797,75 @@ describe("management pages", () => {
     }
   });
 
+  it("keeps dormant Docker in the Marketplace until the local operator confirms activation",async()=>{
+    const docker=(ready:boolean)=>({
+      key:"io.mender.sandbox.docker@builtin",
+      pluginId:"io.mender.sandbox.docker",extensionId:"main",kind:"sandbox.backend" as const,
+      displayName:"Docker Engine",description:"Trusted Docker backend",
+      packageVersion:"1.0.0",sourceKind:"builtin" as const,
+      status:ready?"enabled" as const:"unavailable" as const,enabled:ready,
+      capabilities:["file.read","file.search","file.edit","process.shell"],usageCount:0,
+      ...(ready?{}:{issue:"Docker Engine is not configured. Connect Docker Desktop from the local Desktop app, or configure MENDER_DOCKER_SOCKET on Runtime startup."}),
+    });
+    const listPluginCatalogue=vi.fn()
+      .mockResolvedValueOnce({plugins:[docker(false)]})
+      .mockResolvedValue({plugins:[docker(true)]});
+    const connectDockerDesktop=vi.fn().mockResolvedValue(undefined);
+    renderApp("/plugins/io.mender.sandbox.docker%40builtin",{
+      listPluginCatalogue,
+    },{connectDockerDesktop});
+    expect(await screen.findByRole("button",{name:"Connect Docker Desktop"})).toBeTruthy();
+    expect(screen.queryByRole("button",{name:"Create sandbox"})).toBeNull();
+    expect(connectDockerDesktop).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button",{name:"Connect Docker Desktop"}));
+    const confirmation=screen.getByRole("dialog",{name:"Connect Docker Desktop"});
+    expect(within(confirmation).getByText(/Docker daemon access grants powerful control/)).toBeTruthy();
+    expect(connectDockerDesktop).not.toHaveBeenCalled();
+    fireEvent.click(within(confirmation).getByRole("button",{name:"Cancel"}));
+    expect(connectDockerDesktop).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button",{name:"Connect Docker Desktop"}));
+    fireEvent.click(within(screen.getByRole("dialog",{name:"Connect Docker Desktop"}))
+      .getByRole("button",{name:"Connect Docker Desktop"}));
+    await waitFor(()=>expect(connectDockerDesktop).toHaveBeenCalledTimes(1));
+    expect(await screen.findByRole("button",{name:"Create sandbox"})).toBeTruthy();
+    expect(screen.queryByRole("button",{name:"Connect Docker Desktop"})).toBeNull();
+    expect(listPluginCatalogue).toHaveBeenCalledTimes(2);
+  });
+
+  it("never exposes Docker daemon activation through the Web Marketplace",async()=>{
+    const pluginId="io.mender.sandbox.docker";
+    renderApp("/plugins/"+pluginId+"%40builtin",{
+      listPluginCatalogue:vi.fn().mockResolvedValue({plugins:[{
+        key:pluginId+"@builtin",pluginId,extensionId:"main",kind:"sandbox.backend",
+        displayName:"Docker Engine",description:"Docker",
+        packageVersion:"1.0.0",sourceKind:"builtin",status:"unavailable",enabled:false,
+        issue:"Docker Engine is not configured",capabilities:["file.read"],usageCount:0,
+      }]}),
+    });
+    expect(await screen.findByText("Docker Engine")).toBeTruthy();
+    expect(screen.getAllByText("Unavailable").length).toBeGreaterThan(0);
+    expect(screen.queryByRole("button",{name:"Connect Docker Desktop"})).toBeNull();
+    expect(screen.queryByRole("button",{name:"Create sandbox"})).toBeNull();
+  });
+
+  it("fails closed when Docker Desktop activation rejects the daemon",async()=>{
+    const pluginId="io.mender.sandbox.docker";
+    const connectDockerDesktop=vi.fn().mockRejectedValue(new Error("Docker Engine unavailable or insecure"));
+    renderApp("/plugins/"+pluginId+"%40builtin",{
+      listPluginCatalogue:vi.fn().mockResolvedValue({plugins:[{
+        key:pluginId+"@builtin",pluginId,extensionId:"main",kind:"sandbox.backend",
+        displayName:"Docker Engine",description:"Docker",
+        packageVersion:"1.0.0",sourceKind:"builtin",status:"unavailable",enabled:false,
+        issue:"Docker Engine is not configured",capabilities:["file.read"],usageCount:0,
+      }]}),
+    },{connectDockerDesktop});
+    fireEvent.click(await screen.findByRole("button",{name:"Connect Docker Desktop"}));
+    fireEvent.click(within(screen.getByRole("dialog",{name:"Connect Docker Desktop"}))
+      .getByRole("button",{name:"Connect Docker Desktop"}));
+    expect(await screen.findByText("Docker Engine unavailable or insecure")).toBeTruthy();
+    expect(screen.queryByRole("button",{name:"Create sandbox"})).toBeNull();
+  });
+
   it("opens a selected Sandbox plugin in its own configuration and review flow",async()=>{
     const installationId="pinst_1234567890abcdef1234567890abcdef";
     const pluginId="dev.example.sandbox";
@@ -2369,6 +2438,7 @@ function renderApp(
   client: Partial<MenderClient>,
   options: {
     installPlugin?: () => Promise<ProviderPluginInstallation | null>;
+    connectDockerDesktop?: () => Promise<void>;
   } = {},
 ) {
   const builtinPlugin=(id:string,name:string)=>({
@@ -2443,6 +2513,9 @@ function renderApp(
         {...(options.installPlugin === undefined
           ? {}
           : { installPlugin: options.installPlugin })}
+        {...(options.connectDockerDesktop === undefined
+          ? {}
+          : { connectDockerDesktop: options.connectDockerDesktop })}
       />
     </MemoryRouter>,
   );
