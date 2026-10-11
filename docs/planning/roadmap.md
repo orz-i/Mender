@@ -495,6 +495,6 @@ See `phase-25-sandbox-execution-router.md` for the final bounded acceptance and 
 
 ## Phase 26 — Profile Service Principal Sandbox Delegation
 
-Status: In progress. See `phase-26-profile-sandbox-delegation.md` and ADR-0036.
+Status: Complete (functional implementation with full test/build/security gates). See `phase-26-profile-sandbox-delegation.md` and ADR-0036.
 
 Scope: durable owner-granted ProfileID/SandboxID capabilities, atomic execution-lease revocation fencing, independent Policy enforcement, immutable grant audit and owner-only typed management/Web/Desktop UX. No automatic grants for existing Profile MCP endpoints, and no impersonation of local owner or change to Daytona experimental support. Close this as one bounded phase after end-to-end tests and full repository gates.
