@@ -10,13 +10,14 @@ import (
 	"time"
 
 	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
+	sandboxapplication "github.com/orz-i/Mender/backend/internal/sandbox/application"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 )
 
 // ReserveExecution atomically checks persisted Run generation/state and takes
 // its unique lease. There is no lease TTL: a crashed executor requires reviewed
 // reconciliation instead of silently allowing another writer or destroyer.
-func (s *Store) ReserveExecution(ctx context.Context, id sandboxdomain.ID, generation uint64, principal governancedomain.Context) (string, error) {
+func (s *Store) ReserveExecution(ctx context.Context, id sandboxdomain.ID, generation uint64, principal governancedomain.Context, capability sandboxdomain.Capability) (string, error) {
 	if s == nil || s.db == nil {
 		return "", sandboxdomain.ErrBackendUnavailable
 	}
@@ -29,6 +30,21 @@ func (s *Store) ReserveExecution(ctx context.Context, id sandboxdomain.ID, gener
 	if err := principal.Validate(); err != nil {
 		return "", err
 	}
+	if err := capability.Validate(); err != nil {
+		return "", err
+	}
+	profileID, delegated := sandboxapplication.ProfileServiceID(principal)
+	if !delegated && principal.Principal().Kind() != governancedomain.PrincipalLocalUser {
+		// Preserve actual service-owned Sandbox access while rejecting untrusted
+		// service-to-other-owner acquisition. The INSERT still checks ownership.
+		item, err := s.Get(ctx, id)
+		if err != nil {
+			return "", err
+		}
+		if !sandboxapplication.IsOwner(principal, item) {
+			return "", sandboxdomain.ErrNotAuthorized
+		}
+	}
 	var random [16]byte
 	if _, err := rand.Read(random[:]); err != nil {
 		return "", fmt.Errorf("reserve Sandbox lease: random token: %w", err)
@@ -36,8 +52,23 @@ func (s *Store) ReserveExecution(ctx context.Context, id sandboxdomain.ID, gener
 	token := hex.EncodeToString(random[:])
 	subject := principal.Principal()
 	scope := principal.Scope()
+	// Authorize and reserve as ONE SQLite write. The grant cannot be revoked
+	// between authorization and the lease; other Runtime processes share this DB.
+	delegatedFlag := 0
+	if delegated {
+		delegatedFlag = 1
+	}
 	result, err := s.db.ExecContext(ctx, `INSERT INTO sandbox_execution_leases(sandbox_id,lease_token,generation,principal_kind,principal_ref,scope_kind,scope_ref,acquired_at)
- SELECT ?,?,?,?,?,?,?,? FROM sandbox_runs WHERE sandbox_id=? AND generation=? AND state='ready'`, id.String(), token, generation, string(subject.Kind()), subject.Reference(), string(scope.Kind()), scope.Reference(), time.Now().UTC().Format(time.RFC3339Nano), id.String(), generation)
+ SELECT ?,?,?,?,?,?,?,? FROM sandbox_runs r
+ JOIN sandboxes s ON s.id=r.sandbox_id
+ WHERE r.sandbox_id=? AND r.generation=? AND r.state='ready'
+ AND (
+   (s.owner_kind=? AND s.owner_ref=?)
+   OR (?=1 AND EXISTS (
+     SELECT 1 FROM sandbox_profile_grants g
+     WHERE g.sandbox_id=s.id AND g.profile_id=? AND g.capability=?
+   ))
+ )`, id.String(), token, generation, string(subject.Kind()), subject.Reference(), string(scope.Kind()), scope.Reference(), time.Now().UTC().Format(time.RFC3339Nano), id.String(), generation, string(subject.Kind()), subject.Reference(), delegatedFlag, profileID, string(capability))
 	if err != nil {
 		if uniqueError(err) {
 			return "", sandboxdomain.ErrConflict

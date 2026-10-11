@@ -75,7 +75,7 @@ func setUpGate(t *testing.T) (gov.Context, Placement, *gatePolicy, *gateApproval
 func TestSandboxAdmitHonorsGlobalDecisionAndRecordsBoundedFacts(t *testing.T) {
 	caller, placement, p, auditApproval, audit := setUpGate(t)
 	p.decision, _ = policydomain.Allow("allowed", "allowed")
-	gate := NewAdmit(p, auditApproval, audit, gateID{}, gateClock{})
+	gate := NewAdmit(p, auditApproval, audit, gateID{}, gateClock{}, nil)
 	if err := gate.AdmitAcquire(context.Background(), caller, placement); err != nil {
 		t.Fatal(err)
 	}
@@ -115,7 +115,7 @@ func TestSandboxAdmitDeniedAndApprovalFailClosed(t *testing.T) {
 			caller, place, p, auditApproval, audit := setUpGate(t)
 			p.decision = test.decision
 			auditApproval.allowed = test.approval
-			err := NewAdmit(p, auditApproval, audit, gateID{}, gateClock{}).AdmitAcquire(context.Background(), caller, place)
+			err := NewAdmit(p, auditApproval, audit, gateID{}, gateClock{}, nil).AdmitAcquire(context.Background(), caller, place)
 			if !errors.Is(err, test.want) {
 				t.Fatalf("denial: %v", err)
 			}
@@ -129,13 +129,13 @@ func TestSandboxAuditWriteFailureStopsAdmission(t *testing.T) {
 	caller, place, p, approval, audit := setUpGate(t)
 	p.decision, _ = policydomain.Allow("allow", "allow")
 	audit.err = errors.New("disk unavailable")
-	if err := NewAdmit(p, approval, audit, gateID{}, gateClock{}).AdmitAcquire(context.Background(), caller, place); err == nil {
+	if err := NewAdmit(p, approval, audit, gateID{}, gateClock{}, nil).AdmitAcquire(context.Background(), caller, place); err == nil {
 		t.Fatal("missing audit failed open")
 	}
 }
 func TestSandboxMissingGateDependenciesFailClosed(t *testing.T) {
 	caller, place, _, _, _ := setUpGate(t)
-	if err := NewAdmit(nil, nil, nil, nil, nil).AdmitAcquire(context.Background(), caller, place); err == nil {
+	if err := NewAdmit(nil, nil, nil, nil, nil, nil).AdmitAcquire(context.Background(), caller, place); err == nil {
 		t.Fatal("nil governance gate allowed")
 	}
 }

@@ -10,6 +10,7 @@ import (
 
 	governanceapplication "github.com/orz-i/Mender/backend/internal/governance/application"
 	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
+	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 	sandboxapplication "github.com/orz-i/Mender/backend/internal/sandbox/application"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 	sandboxdaytona "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/daytona"
@@ -33,24 +34,25 @@ type Sandboxes struct {
 	daytona                 *sandboxdaytona.Controller
 	daytonaTemplates        *sandboxdaytona.TemplateStore
 	daytonaExperimental     bool
+	profileExists           func(context.Context, profiledomain.ProfileID) error
 }
 
-func NewSandboxes(ctx context.Context, databasePath string, policy sandboxapplication.AdmissionPolicy, approval governanceapplication.ApprovalGate, governance *RuntimeGovernance, credentials invocationapplication.CredentialResolver) (*Sandboxes, error) {
-	if policy == nil || approval == nil || governance == nil || governance.processIsolation == nil {
+func NewSandboxes(ctx context.Context, databasePath string, policy sandboxapplication.AdmissionPolicy, approval governanceapplication.ApprovalGate, governance *RuntimeGovernance, credentials invocationapplication.CredentialResolver, profileExists func(context.Context, profiledomain.ProfileID) error) (*Sandboxes, error) {
+	if policy == nil || approval == nil || governance == nil || governance.processIsolation == nil || profileExists == nil {
 		return nil, fmt.Errorf("compose sandboxes: policy/approval unavailable")
 	}
 	store, err := sandboxsqlite.Open(ctx, databasePath)
 	if err != nil {
 		return nil, fmt.Errorf("compose sandboxes: %w", err)
 	}
-	gate := sandboxapplication.NewAdmit(policy, approval, store, sandboxidentity.Generator{}, systemClock{})
+	gate := sandboxapplication.NewAdmit(policy, approval, store, sandboxidentity.Generator{}, systemClock{}, store)
 	launcher := sandboxWorkspaceShellLauncher{governance: governance}
 	localBackend, err := sandboxlocalworkspace.New(launcher)
 	if err != nil {
 		_ = store.Close()
 		return nil, fmt.Errorf("compose sandboxes: local workspace: %w", err)
 	}
-	component := &Sandboxes{store: store, admission: gate, launcher: launcher, dockerUnavailableReason: "Docker Engine is not configured"}
+	component := &Sandboxes{store: store, admission: gate, launcher: launcher, profileExists: profileExists, dockerUnavailableReason: "Docker Engine is not configured"}
 	backends := []sandboxapplication.Backend{localBackend}
 	if dockerBackend, err := component.configureDocker(ctx, databasePath, gate); err == nil && dockerBackend != nil {
 		backends = append(backends, dockerBackend)

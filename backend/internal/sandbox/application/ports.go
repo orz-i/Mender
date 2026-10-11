@@ -53,6 +53,6 @@ type Placement struct {
 // One persisted lease is held per Sandbox until successful backend cleanup.
 // A crash must NOT automatically expire an uncertain lease.
 type ExecutionLeaseStore interface {
-	ReserveExecution(context.Context, sandboxdomain.ID, uint64, governancedomain.Context) (string, error)
+	ReserveExecution(context.Context, sandboxdomain.ID, uint64, governancedomain.Context, sandboxdomain.Capability) (string, error)
 	ReleaseExecution(context.Context, sandboxdomain.ID, string) error
 }

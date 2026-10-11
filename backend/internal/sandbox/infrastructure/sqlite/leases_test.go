@@ -46,7 +46,7 @@ func TestSandboxLeasePersistsAcrossProcessesAndRestart(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = second.Close() }()
-	token, err := first.ReserveExecution(ctx, sandboxID, 1, leasePrincipal(t))
+	token, err := first.ReserveExecution(ctx, sandboxID, 1, leasePrincipal(t), sandboxdomain.CapabilityRead)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,7 +54,7 @@ func TestSandboxLeasePersistsAcrossProcessesAndRestart(t *testing.T) {
 		t.Fatal(err)
 	}
 	// A Runtime restart must NOT silently free uncertain local execution.
-	if _, err := second.ReserveExecution(ctx, sandboxID, 1, leasePrincipal(t)); !errors.Is(err, sandboxdomain.ErrConflict) {
+	if _, err := second.ReserveExecution(ctx, sandboxID, 1, leasePrincipal(t), sandboxdomain.CapabilityRead); !errors.Is(err, sandboxdomain.ErrConflict) {
 		t.Fatalf("post-crash double acquisition: %v", err)
 	}
 	count, err := second.ActiveLeaseCount(ctx, sandboxID)
@@ -67,7 +67,7 @@ func TestSandboxLeasePersistsAcrossProcessesAndRestart(t *testing.T) {
 	if err := second.ReleaseExecution(ctx, sandboxID, token); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := second.ReserveExecution(ctx, sandboxID, 1, leasePrincipal(t)); err != nil {
+	if _, err := second.ReserveExecution(ctx, sandboxID, 1, leasePrincipal(t), sandboxdomain.CapabilityRead); err != nil {
 		t.Fatalf("after release: %v", err)
 	}
 }
@@ -101,7 +101,7 @@ func TestLeaseReservationAtomicAcrossConcurrentSQLiteConnections(t *testing.T) {
 		wg.Add(1)
 		go func(s *Store) {
 			defer wg.Done()
-			_, err := s.ReserveExecution(ctx, sandboxID, 1, caller)
+			_, err := s.ReserveExecution(ctx, sandboxID, 1, caller, sandboxdomain.CapabilityRead)
 			results <- err
 		}(store)
 	}
@@ -139,7 +139,7 @@ func TestLeaseReservationValidatesRunGenerationAndState(t *testing.T) {
 	if err := store.CreateRun(ctx, run); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.ReserveExecution(ctx, sandboxID, 4, leasePrincipal(t)); !errors.Is(err, sandboxdomain.ErrConflict) {
+	if _, err := store.ReserveExecution(ctx, sandboxID, 4, leasePrincipal(t), sandboxdomain.CapabilityRead); !errors.Is(err, sandboxdomain.ErrConflict) {
 		t.Fatalf("stopped run accessible: %v", err)
 	}
 	ready, err := store.TransitionRun(ctx, run, sandboxdomain.StateProvisioning, "")
@@ -150,10 +150,10 @@ func TestLeaseReservationValidatesRunGenerationAndState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.ReserveExecution(ctx, sandboxID, 4, leasePrincipal(t)); !errors.Is(err, sandboxdomain.ErrConflict) {
+	if _, err := store.ReserveExecution(ctx, sandboxID, 4, leasePrincipal(t), sandboxdomain.CapabilityRead); !errors.Is(err, sandboxdomain.ErrConflict) {
 		t.Fatalf("old generation accessible: %v", err)
 	}
-	token, err := store.ReserveExecution(ctx, sandboxID, 5, leasePrincipal(t))
+	token, err := store.ReserveExecution(ctx, sandboxID, 5, leasePrincipal(t), sandboxdomain.CapabilityRead)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -88,10 +88,12 @@ func (r *Router) Acquire(ctx context.Context, principal governancedomain.Context
 	if err := placement.Required.Validate(); err != nil {
 		return nil, err
 	}
-	// An owner is a security boundary. Delegations are a future explicit feature.
-	subject := principal.Principal()
-	if spec.OwnerKind != string(subject.Kind()) || spec.OwnerRef != subject.Reference() {
-		return nil, sandboxdomain.ErrNotAuthorized
+	// Only the exact trusted MCP Profile service shape may seek a delegated grant.
+	// Admission and the atomic lease store each independently enforce that grant.
+	if !sandboxapp.IsOwner(principal, placement.Sandbox) {
+		if _, valid := sandboxapp.ProfileServiceID(principal); !valid {
+			return nil, sandboxdomain.ErrNotAuthorized
+		}
 	}
 	// Admit first, before any I/O to a backend or credential store.
 	if err := r.gate.AdmitAcquire(ctx, principal, placement); err != nil {
@@ -123,7 +125,7 @@ func (r *Router) Acquire(ctx context.Context, principal governancedomain.Context
 	}
 	// Reserve from the persistent store before touching a backend; all Runtime
 	// processes sharing the same SQLite database compete for this one lease.
-	token, err := r.leases.ReserveExecution(ctx, spec.ID, run.Generation, principal)
+	token, err := r.leases.ReserveExecution(ctx, spec.ID, run.Generation, principal, placement.Required)
 	if err != nil {
 		return nil, fmt.Errorf("reserve Sandbox execution: %w", err)
 	}

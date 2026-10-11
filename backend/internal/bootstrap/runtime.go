@@ -25,6 +25,7 @@ import (
 	invocationrouter "github.com/orz-i/Mender/backend/internal/invocation/infrastructure/router"
 	mcpconfigstore "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/configstore"
 	policylocal "github.com/orz-i/Mender/backend/internal/policy/infrastructure/local"
+	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 	provideractivationapplication "github.com/orz-i/Mender/backend/internal/provideractivation/application"
 	provideractivationidentity "github.com/orz-i/Mender/backend/internal/provideractivation/infrastructure/identity"
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
@@ -232,7 +233,10 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 	// Sandboxes are composed before Provider plugins so Workspace activation
 	// only observes post-cut Sandbox bindings. Migration is one DB transaction.
 	approvalGate := policylocal.RejectApproval{}
-	sandboxes, err := NewSandboxes(ctx, options.DatabasePath, policies.Evaluate, approvalGate, runtimeGovernance, credentials.Resolver)
+	sandboxes, err := NewSandboxes(ctx, options.DatabasePath, policies.Evaluate, approvalGate, runtimeGovernance, credentials.Resolver, func(ctx context.Context, id profiledomain.ProfileID) error {
+		_, err := profiles.GetByID.Execute(ctx, id)
+		return err
+	})
 	if err != nil {
 		closeBootstrapStores()
 		return nil, fmt.Errorf("compose runtime: sandbox inventory: %w", err)

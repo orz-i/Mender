@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-const latestSchemaVersion = 7
+const latestSchemaVersion = 8
 
 func migrate(ctx context.Context, db *sql.DB) error {
 	tx, err := db.BeginTx(ctx, nil)
@@ -227,6 +227,40 @@ func migrate(ctx context.Context, db *sql.DB) error {
 		}
 		if _, err = tx.ExecContext(ctx, `INSERT INTO sandbox_schema_migrations(version,applied_at) VALUES(7,?)`, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
 			return fmt.Errorf("sandbox migration 7 record: %w", err)
+		}
+	}
+	var delegationApplied int
+	if err = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM sandbox_schema_migrations WHERE version = 8").Scan(&delegationApplied); err != nil {
+		return fmt.Errorf("sandbox migration 8 presence: %w", err)
+	}
+	if delegationApplied == 0 {
+		for _, statement := range []string{
+			`CREATE TABLE sandbox_profile_grants (
+                sandbox_id TEXT NOT NULL REFERENCES sandboxes(id) ON DELETE RESTRICT,
+                profile_id TEXT NOT NULL,
+                capability TEXT NOT NULL CHECK(capability IN ('file.read','file.search','file.edit','process.shell')),
+                granted_at TEXT NOT NULL,
+                PRIMARY KEY(sandbox_id,profile_id,capability)
+            )`,
+			`CREATE TABLE sandbox_profile_grant_events (
+                event_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                sandbox_id TEXT NOT NULL REFERENCES sandboxes(id) ON DELETE RESTRICT,
+                profile_id TEXT NOT NULL,
+                capability TEXT NOT NULL CHECK(capability IN ('file.read','file.search','file.edit','process.shell')),
+                action TEXT NOT NULL CHECK(action IN ('grant','revoke')),
+                principal_kind TEXT NOT NULL CHECK(principal_kind='local_user'),
+                principal_ref TEXT NOT NULL,
+                origin TEXT NOT NULL,
+                occurred_at TEXT NOT NULL
+            )`,
+			`CREATE INDEX idx_sandbox_profile_grant_events ON sandbox_profile_grant_events(sandbox_id,event_id DESC)`,
+		} {
+			if _, err = tx.ExecContext(ctx, statement); err != nil {
+				return fmt.Errorf("sandbox migration 8: %w", err)
+			}
+		}
+		if _, err = tx.ExecContext(ctx, "INSERT INTO sandbox_schema_migrations(version,applied_at) VALUES(8,?)", time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
+			return fmt.Errorf("record sandbox migration 8: %w", err)
 		}
 	}
 	if err = tx.Commit(); err != nil {

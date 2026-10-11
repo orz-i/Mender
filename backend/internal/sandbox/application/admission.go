@@ -49,10 +49,11 @@ type Admit struct {
 	audit    AdmissionAuditRecorder
 	ids      AdmissionIDGenerator
 	clock    AdmissionClock
+	grants   ProfileDelegationLookup
 }
 
-func NewAdmit(policy AdmissionPolicy, approval governanceapplication.ApprovalGate, audit AdmissionAuditRecorder, ids AdmissionIDGenerator, clock AdmissionClock) Admit {
-	return Admit{policy: policy, approval: approval, audit: audit, ids: ids, clock: clock}
+func NewAdmit(policy AdmissionPolicy, approval governanceapplication.ApprovalGate, audit AdmissionAuditRecorder, ids AdmissionIDGenerator, clock AdmissionClock, grants ProfileDelegationLookup) Admit {
+	return Admit{policy: policy, approval: approval, audit: audit, ids: ids, clock: clock, grants: grants}
 }
 
 // AdmitAcquire evaluates sandbox.acquire before backend access or secret resolution.
@@ -64,12 +65,30 @@ func (a Admit) AdmitAcquire(ctx context.Context, governance governancedomain.Con
 	if err := placement.Required.Validate(); err != nil {
 		return fmt.Errorf("admit sandbox: capability: %w", err)
 	}
-	return a.AdmitAction(ctx, governance, placement.Sandbox, governancedomain.ActionSandboxAcquire)
+	owner := IsOwner(governance, placement.Sandbox)
+	if !owner {
+		profileID, trusted := ProfileServiceID(governance)
+		if !trusted || a.grants == nil {
+			return sandboxdomain.ErrNotAuthorized
+		}
+		allowed, err := a.grants.HasProfileGrant(ctx, placement.Sandbox.ID(), profileID, placement.Required)
+		if err != nil {
+			return fmt.Errorf("admit Sandbox Profile grant: %w", err)
+		}
+		if !allowed {
+			return sandboxdomain.ErrNotAuthorized
+		}
+	}
+	return a.admitAction(ctx, governance, placement.Sandbox, governancedomain.ActionSandboxAcquire, true)
 }
 
 // AdmitAction authorizes one Sandbox control-plane operation before the
 // operation performs filesystem I/O, creates resources or resolves credentials.
 func (a Admit) AdmitAction(ctx context.Context, governance governancedomain.Context, sandbox sandboxdomain.Sandbox, action governancedomain.Action) error {
+	return a.admitAction(ctx, governance, sandbox, action, false)
+}
+
+func (a Admit) admitAction(ctx context.Context, governance governancedomain.Context, sandbox sandboxdomain.Sandbox, action governancedomain.Action, delegatedAcquire bool) error {
 	if err := governance.Validate(); err != nil {
 		return fmt.Errorf("admit sandbox: governance: %w", err)
 	}
@@ -88,7 +107,7 @@ func (a Admit) AdmitAction(ctx context.Context, governance governancedomain.Cont
 	}
 	spec := sandbox.Spec()
 	principal := governance.Principal()
-	if spec.OwnerKind != string(principal.Kind()) || spec.OwnerRef != principal.Reference() {
+	if !IsOwner(governance, sandbox) && (!delegatedAcquire || action != governancedomain.ActionSandboxAcquire) {
 		return sandboxdomain.ErrNotAuthorized
 	}
 	if a.policy == nil || a.approval == nil || a.audit == nil || a.ids == nil || a.clock == nil {

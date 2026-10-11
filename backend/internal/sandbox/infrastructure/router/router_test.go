@@ -27,7 +27,10 @@ func (f *fakeStore) GetRun(context.Context, sandboxdomain.ID) (sandboxdomain.Run
 	return f.run, nil
 }
 
-func (f *fakeStore) ReserveExecution(_ context.Context, id sandboxdomain.ID, generation uint64, caller gov.Context) (string, error) {
+func (f *fakeStore) ReserveExecution(_ context.Context, id sandboxdomain.ID, generation uint64, caller gov.Context, capability sandboxdomain.Capability) (string, error) {
+	if err := capability.Validate(); err != nil {
+		return "", err
+	}
 	f.leaseMu.Lock()
 	defer f.leaseMu.Unlock()
 	if id != f.item.ID() || f.run.State != sandboxdomain.StateReady || generation != f.run.Generation || f.leaseToken != "" {
