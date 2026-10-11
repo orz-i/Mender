@@ -86,6 +86,19 @@ func TestDarwinRestrictedCommandUsesCanonicalProfile(t *testing.T) {
 		!strings.Contains(cmd.Args[2], canonicalRoot) {
 		t.Fatalf("sandbox args = %#v", cmd.Args)
 	}
+	profile := cmd.Args[2]
+	const trustAgent = "(allow mach-lookup (global-name \"com.apple.trustd.agent\"))"
+	if strings.Count(profile, trustAgent) != 1 {
+		t.Fatalf("Seatbelt must allow the system TLS trust agent exactly once: %q", profile)
+	}
+	if strings.Count(profile, "(allow mach-lookup") != 1 ||
+		strings.Contains(profile, "(allow mach-lookup)") {
+		t.Fatalf("Seatbelt must not permit unrestricted Mach service access: %q", profile)
+	}
+	if !strings.Contains(profile, "(deny default)") ||
+		!strings.Contains(profile, "(allow network-outbound)") {
+		t.Fatalf("Seatbelt default-deny/network boundary changed: %q", profile)
+	}
 }
 
 func TestRestrictedHostReadOnlyRootWhenAvailable(t *testing.T) {

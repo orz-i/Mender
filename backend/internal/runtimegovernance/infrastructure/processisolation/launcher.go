@@ -351,6 +351,10 @@ func (l *Launcher) darwinProfile(spec CommandSpec) (string, error) {
 	}
 
 	builder.WriteString("(allow sysctl-read)\n")
+	// Go uses macOS Security.framework/trustd when verifying system-trusted TLS
+	// certificates. Permit only this per-user trust agent: unrestricted Mach
+	// lookups would unnecessarily weaken the deny-by-default Seatbelt profile.
+	builder.WriteString("(allow mach-lookup (global-name \"com.apple.trustd.agent\"))\n")
 	builder.WriteString("(allow network-outbound)\n")
 	builder.WriteString("(allow network-inbound)\n")
 
