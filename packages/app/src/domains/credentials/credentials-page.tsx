@@ -246,7 +246,7 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
                       {item.displayName}
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline">{t(item.source)}</Badge>
+                      <Badge variant="outline">{item.namespace === "ssh" ? t("SSH private key") : t(item.source)}</Badge>
                     </TableCell>
                     <TableCell className="font-mono text-xs text-muted-foreground">
                       {item.source === "environment"

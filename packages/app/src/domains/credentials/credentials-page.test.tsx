@@ -90,6 +90,7 @@ describe("Credential create validation and feedback", () => {
     }));
     expect(createEnvironmentCredential).not.toHaveBeenCalled();
     expect(await screen.findByText("SSH Build")).toBeTruthy();
+    expect(screen.getByText("SSH private key")).toBeTruthy();
     expect(screen.queryByText("fixture-only")).toBeNull();
   });
 
