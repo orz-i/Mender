@@ -1,0 +1,93 @@
+syntax = "proto3";
+
+package sandboxplugin.v1;
+
+option go_package = "github.com/orz-i/Mender/sdk/sandboxplugin/go/protocol/v1;sandboxv1";
+
+// Sandbox plugins implement backend mechanics, never Mender Policy or resource state.
+service SandboxPluginService {
+  rpc GetDescriptor(GetDescriptorRequest) returns (GetDescriptorResponse);
+  rpc ValidateConfig(ValidateConfigRequest) returns (ValidateConfigResponse);
+  rpc InspectConfig(InspectConfigRequest) returns (InspectConfigResponse);
+  rpc Provision(ProvisionRequest) returns (ProvisionResponse);
+  rpc Inspect(InspectRequest) returns (InspectResponse);
+  rpc Start(StartRequest) returns (StartResponse);
+  rpc Stop(StopRequest) returns (StopResponse);
+  rpc Destroy(DestroyRequest) returns (DestroyResponse);
+  rpc Reconcile(ReconcileRequest) returns (ReconcileResponse);
+  rpc OpenSession(OpenSessionRequest) returns (OpenSessionResponse);
+  rpc ExecuteWorkspace(ExecuteWorkspaceRequest) returns (ExecuteWorkspaceResponse);
+  rpc CloseSession(CloseSessionRequest) returns (CloseSessionResponse);
+}
+
+message GetDescriptorRequest {}
+message GetDescriptorResponse { Descriptor descriptor = 1; }
+message Descriptor {
+  string plugin_id = 1;
+  string package_version = 2;
+  string display_name = 3;
+  string description = 4;
+  uint32 protocol_version = 5;
+  uint32 config_version = 6;
+  bytes config_schema_json = 7;
+  repeated string capabilities = 8;
+}
+message ValidateConfigRequest { uint32 config_version = 1; bytes config_json = 2; }
+message ValidateConfigResponse { bool valid = 1; string diagnostic = 2; }
+message InspectConfigRequest { uint32 config_version = 1; bytes config_json = 2; }
+message InspectConfigResponse {
+  string connection_summary = 1;
+  repeated string credential_refs = 2;
+}
+
+// Operations must have a Mender-chosen immutable resource and stable idempotency
+// key; the plugin must not allocate a different resource identity.
+message LifecycleRequest {
+  string sandbox_id = 1;
+  uint64 generation = 2;
+  string operation_id = 3;
+  string external_id = 4;
+  bytes config_json = 5;
+}
+message InspectRequestData {
+  string sandbox_id = 1;
+  uint64 generation = 2;
+  string external_id = 3;
+  bytes config_json = 4;
+}
+message LifecycleResponse {
+  string sandbox_id = 1;
+  uint64 generation = 2;
+  string external_id = 3;
+  string state = 4;
+  string diagnostic = 5;
+}
+message OpenSessionRequest {
+  string sandbox_id = 1;
+  uint64 generation = 2;
+  string external_id = 3;
+  bytes config_json = 4;
+}
+message OpenSessionResponse { string session_id = 1; }
+message ExecuteWorkspaceRequest {
+  string session_id = 1;
+  string capability = 2;
+  bytes arguments_json = 3;
+}
+message ExecuteWorkspaceResponse {
+  bytes content_json = 1;
+}
+message CloseSessionRequest { string session_id = 1; }
+message CloseSessionResponse {}
+message ProvisionRequest { LifecycleRequest operation = 1; }
+message ProvisionResponse { LifecycleResponse result = 1; }
+message InspectRequest { InspectRequestData operation = 1; }
+message InspectResponse { LifecycleResponse result = 1; }
+message StartRequest { LifecycleRequest operation = 1; }
+message StartResponse { LifecycleResponse result = 1; }
+message StopRequest { LifecycleRequest operation = 1; }
+message StopResponse { LifecycleResponse result = 1; }
+message DestroyRequest { LifecycleRequest operation = 1; }
+message DestroyResponse { LifecycleResponse result = 1; }
+message ReconcileRequest { LifecycleRequest operation = 1; }
+message ReconcileResponse { LifecycleResponse result = 1; }

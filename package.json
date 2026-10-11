@@ -7,7 +7,7 @@
   },
   "scripts": {
     "build": "pnpm -r --if-present run build",
-    "check": "pnpm provider-plugin:proto:check && pnpm provider-plugin:sdk:lint && pnpm provider-plugin:sdk:test && pnpm provider-plugin:sdk:test:race && pnpm provider-plugin:example:lint && pnpm provider-plugin:example:test && pnpm provider-plugin:example:test:race && pnpm provider-plugin:example:build && pnpm go:modules:check && pnpm sdk:check && pnpm desktop:bindings:check && pnpm desktop:architecture:check && pnpm go:lint && pnpm go:test && pnpm go:test:race && pnpm lint && pnpm typecheck && pnpm test && pnpm build",
+    "check": "pnpm provider-plugin:proto:check && pnpm provider-plugin:sdk:lint && pnpm provider-plugin:sdk:test && pnpm provider-plugin:sdk:test:race && pnpm provider-plugin:example:lint && pnpm provider-plugin:example:test && pnpm provider-plugin:example:test:race && pnpm provider-plugin:example:build && pnpm sandbox-plugin:sdk:check && pnpm sandbox-plugin:example:check && pnpm go:modules:check && pnpm sdk:check && pnpm desktop:bindings:check && pnpm desktop:architecture:check && pnpm go:lint && pnpm go:test && pnpm go:test:race && pnpm lint && pnpm typecheck && pnpm test && pnpm build",
     "desktop:architecture:check": "node scripts/check-desktop-architecture.mjs",
     "desktop:bindings:check": "node scripts/check-desktop-bindings.mjs",
     "dev:web": "pnpm --filter @mender/web dev",
@@ -22,8 +22,8 @@
     "provider-plugin:example:lint": "cd examples/provider-plugin-example && GOWORK=off golangci-lint run ./...",
     "provider-plugin:example:test": "cd examples/provider-plugin-example && GOWORK=off go test ./...",
     "provider-plugin:example:test:race": "cd examples/provider-plugin-example && GOWORK=off go test -race ./...",
-    "provider-plugin:proto:check": "GOWORK=off go run github.com/bufbuild/buf/cmd/buf@v1.73.0 lint && pnpm provider-plugin:proto:generate && git diff --exit-code -- sdk/providerplugin/go/protocol/v1",
-    "provider-plugin:proto:generate": "GOWORK=off go run github.com/bufbuild/buf/cmd/buf@v1.73.0 generate",
+    "provider-plugin:proto:check": "GOWORK=off go run github.com/bufbuild/buf/cmd/buf@v1.73.0 lint && pnpm provider-plugin:proto:generate && git diff --exit-code -- sdk/providerplugin/go/protocol/v1 sdk/sandboxplugin/go/protocol/v1",
+    "provider-plugin:proto:generate": "GOWORK=off go run github.com/bufbuild/buf/cmd/buf@v1.73.0 generate --path contracts/providerplugin/v1/provider_plugin.proto && GOWORK=off go run github.com/bufbuild/buf/cmd/buf@v1.73.0 generate --path contracts/sandboxplugin/v1/sandbox_plugin.proto --template buf.gen.sandbox.yaml",
     "provider-plugin:sdk:lint": "cd sdk/providerplugin/go && GOWORK=off golangci-lint run ./...",
     "provider-plugin:sdk:test": "cd sdk/providerplugin/go && GOWORK=off go test ./...",
     "provider-plugin:sdk:test:race": "cd sdk/providerplugin/go && GOWORK=off go test -race ./...",
@@ -38,7 +38,9 @@
     "security:js": "pnpm audit --prod --audit-level high",
     "sdk:check": "pnpm --filter @mender/sdk generate && git diff --exit-code -- packages/sdk/src/generated/schema.ts",
     "test": "pnpm i18n:check && vitest run",
-    "typecheck": "pnpm -r --if-present run typecheck"
+    "typecheck": "pnpm -r --if-present run typecheck",
+    "sandbox-plugin:sdk:check": "cd sdk/sandboxplugin/go && GOWORK=off golangci-lint run ./... && GOWORK=off go test -race ./...",
+    "sandbox-plugin:example:check": "cd examples/sandbox-plugin-example && GOWORK=off golangci-lint run ./... && GOWORK=off go test -race ./... && mkdir -p bin && GOWORK=off go build -o bin/mender-sandbox-example ./cmd/mender-sandbox-example && rm -rf bin"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

@@ -1,0 +1,15 @@
+{
+  "manifestVersion": 2,
+  "pluginId": "dev.mender.example.sandbox",
+  "version": "0.1.0",
+  "displayName": "Example Sandbox",
+  "description": "Deterministic, local-only fake remote Sandbox backend for Mender integration testing",
+  "entrypoints": {
+    "darwin/arm64": "bin/mender-sandbox-example",
+    "darwin/amd64": "bin/mender-sandbox-example",
+    "linux/arm64": "bin/mender-sandbox-example",
+    "linux/amd64": "bin/mender-sandbox-example",
+    "windows/amd64": "bin/mender-sandbox-example.exe"
+  },
+  "extensions": [{"id": "main", "kind": "sandbox.backend", "protocolVersion": 1}]
+}
