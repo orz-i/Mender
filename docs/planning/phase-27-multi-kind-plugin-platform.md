@@ -132,6 +132,19 @@ Before introducing external Sandbox RPC or a new persisted backend binding, the 
 
 Acceptance: typed registration invalid/duplicate cases, real Backend/descriptor parity, denied Acquire no side effects, unavailable backend and unsupported capability fail-closed, unchanged lease/revoke and concurrent acquisition tests, no Docker/Daytona live operations and repository gates.
 
+### C2: durable exact Sandbox extension binding — forward-only migration contract
+
+After C1, execution is routed through the verified Sandbox Backend plugin registry, but the persisted Sandbox resource still contains only the historical `backend` string. This MUST become an immutable exact extension binding **before** external drivers can provision or open workspaces.
+
+- Extend the Sandbox `Spec` with a comparable, immutable `BackendBinding{PluginID, ExtensionID, InstallationID}`. The optional InstallationID is empty only for a host built-in. `BackendKind` remains a separate *backend capability/classification value*, not authority to resolve a plugin. Never derive an executable binding from Tool arguments, Profile choices, HTTP headers, or a vendor-kind-only fallback.
+- Local Workspace, Docker Engine, and Daytona bind to `io.mender.sandbox.local-workspace/main`, `io.mender.sandbox.docker/main`, and `io.mender.sandbox.daytona/main`. These are statically trusted built-ins; existing SandboxID, isolation, ownership, run generation and external ID remain unchanged.
+- Sandbox SQLite v9 adds `backend_plugin_id`, `backend_extension_id`, and `backend_installation_id` to `sandboxes`. Migration assigns the three known built-in identities *once* in the same transaction; unknown backend kinds, invalid rows or future schemas fail closed with the original data intact. A SQLite-consistent backup precedes any upgrade. New INSERT/UPDATE paths must explicitly supply binding values, and SQL constraints/triggers reject missing bindings even when old columns have migration defaults.
+- Update the Sandbox Domain and SQLite reader/writer, Docker/Daytona template transaction paths, Workspace old-root migration and test fixtures to persist/require exact binding. Once cut, there are **no dual-reader branches, no runtime inference** from `backend`, and no fallback to a different installed package or host execution. `Spec` equality and Router placement rechecks must include binding.
+- `BackendResolver` resolves by the persisted binding **and** the backend kind; Registry validates exact PluginID/ExtensionID, enabled installation pin, driver kind, advertised-and-actual capability, and version. Missing or disabled installations leave inventory visible but execution unavailable. Profile Sandbox grants, durable leases, lifecycle CAS and immutable templates remain in their bounded contexts unchanged.
+- The existing fixed backend-kind enum may be expanded in C3 to admit vetted external driver kinds **only when** an exact typed extension is installed and configured. C2 does not represent unimplemented E2B or experimental Daytona as production-ready.
+
+Acceptance: migration on a copied v8 DB with real grants/runs/leases and Docker/Daytona templates; all IDs and references unchanged; new rows without exact pin rejected; restart idempotency; wrong/mismatched PluginID/ExtensionID/InstallationID/BackendKind fail before credentials/backend I/O; replacement package does not automatically retarget resources; concurrent grant revocation and operation lease fencing still pass; no real user resource is touched.
+
 ## Verified implementation progress
 
 - **A (complete):** ADR-0037 accepted before implementation; no user resource changes.
