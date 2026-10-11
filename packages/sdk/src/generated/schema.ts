@@ -1340,7 +1340,7 @@ export interface components {
             /** @enum {string} */
             sourceKind: "builtin" | "local";
             /** @enum {string} */
-            status: "enabled" | "disabled" | "invalid";
+            status: "enabled" | "disabled" | "invalid" | "unavailable";
             enabled: boolean;
             capabilities: string[];
             usageCount: number;

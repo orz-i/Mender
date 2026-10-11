@@ -10,41 +10,50 @@ import (
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 	sandboxdocker "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/dockerengine"
 	sandboxidentity "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/identity"
+	sandboxpluginregistry "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/pluginregistry"
 )
 
 // Docker is opt-in through a host-owned explicit UNIX endpoint. Never honor
 // DOCKER_HOST, Docker contexts, Tool arguments or remote Docker TCP endpoints.
 const DockerSocketEnvironment = "MENDER_DOCKER_SOCKET"
 
-func (s *Sandboxes) configureDocker(ctx context.Context, databasePath string, admitter sandboxapplication.AdmissionGate) (sandboxapplication.Backend, error) {
-	raw := os.Getenv(DockerSocketEnvironment)
-	if raw == "" {
-		return nil, nil
-	}
+func (s *Sandboxes) prepareDocker(ctx context.Context, raw string) (*sandboxdocker.Backend, *sandboxdocker.Provisioner, *sandboxdocker.TemplateStore, error) {
 	endpoint, err := sandboxdocker.ParseEngineEndpoint(raw)
 	if err != nil {
-		return nil, fmt.Errorf("docker sandbox: explicitly configured endpoint invalid")
+		return nil, nil, nil, fmt.Errorf("docker sandbox: explicitly configured endpoint invalid")
 	}
-	templates, err := sandboxdocker.OpenTemplateStore(ctx, databasePath)
+	templates, err := sandboxdocker.OpenTemplateStore(ctx, s.dockerDatabasePath)
 	if err != nil {
-		return nil, fmt.Errorf("docker sandbox: immutable templates unavailable")
+		return nil, nil, nil, fmt.Errorf("docker sandbox: immutable templates unavailable")
 	}
-	// The existing sandboxapplication.Admit implements both acquire and action
-	// admission; no Provider activation path may start a Docker container.
+	// Only a trusted Runtime operation may select a daemon. No model/Tool
+	// argument, Docker context or DOCKER_HOST fallback reaches this path.
 	controller, err := sandboxdocker.NewProvisioner(endpoint, s.store, templates, s.admission)
 	if err != nil {
 		_ = templates.Close()
-		return nil, err
+		return nil, nil, nil, err
 	}
 	if _, err := controller.Probe(ctx); err != nil {
 		_ = controller.Close()
 		_ = templates.Close()
-		return nil, sandboxdomain.ErrBackendUnavailable
+		return nil, nil, nil, sandboxdomain.ErrBackendUnavailable
 	}
 	backend, err := controller.WorkspaceBackend()
 	if err != nil {
 		_ = controller.Close()
 		_ = templates.Close()
+		return nil, nil, nil, err
+	}
+	return backend, controller, templates, nil
+}
+
+func (s *Sandboxes) configureDocker(ctx context.Context, _ string, _ sandboxapplication.AdmissionGate) (sandboxapplication.Backend, error) {
+	raw := os.Getenv(DockerSocketEnvironment)
+	if raw == "" {
+		return nil, nil
+	}
+	backend, controller, templates, err := s.prepareDocker(ctx, raw)
+	if err != nil {
 		return nil, err
 	}
 	s.docker = controller
@@ -53,14 +62,68 @@ func (s *Sandboxes) configureDocker(ctx context.Context, databasePath string, ad
 	return backend, nil
 }
 
+// ActivateDocker enables the existing trusted Sandbox backend in this Runtime
+// process, after an explicit *local operator* action. Neither Web management
+// nor a Tool/Provider can activate Docker or choose its daemon endpoint.
+// An unsuccessful activation leaves the Router without a Docker registration.
+func (s *Sandboxes) ActivateDocker(ctx context.Context, rawEndpoint string) error {
+	if s == nil || s.store == nil || s.backendPlugins == nil {
+		return sandboxdomain.ErrBackendUnavailable
+	}
+	s.dockerMu.Lock()
+	defer s.dockerMu.Unlock()
+	if s.docker != nil && s.dockerTemplates != nil {
+		return nil
+	}
+	backend, controller, templates, err := s.prepareDocker(ctx, rawEndpoint)
+	if err != nil {
+		s.dockerUnavailableReason = "Docker Engine unavailable or insecure"
+		return err
+	}
+	descriptor, err := sandboxpluginregistry.BuiltinDescriptor(backend)
+	if err == nil {
+		// Publish backend and lifecycle together, after the Engine preflight.
+		// The registry holds the exact identity/capability binding.
+		s.docker = controller
+		s.dockerTemplates = templates
+		err = s.backendPlugins.RegisterBuiltinWithLifecycle(backend, descriptor, dockerLifecycle{sandboxes: s})
+	}
+	if err != nil {
+		s.docker = nil
+		s.dockerTemplates = nil
+		s.dockerUnavailableReason = "Docker Engine unavailable or insecure"
+		_ = controller.Close()
+		_ = templates.Close()
+		return err
+	}
+	s.dockerUnavailableReason = ""
+	return nil
+}
+
+func (s *Sandboxes) dockerController() *sandboxdocker.Provisioner {
+	if s == nil {
+		return nil
+	}
+	s.dockerMu.RLock()
+	defer s.dockerMu.RUnlock()
+	return s.docker
+}
+
 func (s *Sandboxes) DockerAvailable() bool {
-	return s != nil && s.docker != nil && s.dockerTemplates != nil
+	if s == nil {
+		return false
+	}
+	s.dockerMu.RLock()
+	defer s.dockerMu.RUnlock()
+	return s.docker != nil && s.dockerTemplates != nil
 }
 func (s *Sandboxes) DockerStatus() string {
 	if s == nil {
 		return "Docker Engine unavailable"
 	}
-	if s.DockerAvailable() {
+	s.dockerMu.RLock()
+	defer s.dockerMu.RUnlock()
+	if s.docker != nil && s.dockerTemplates != nil {
 		return "ready"
 	}
 	return s.dockerUnavailableReason
@@ -78,7 +141,12 @@ type CreateDockerSandboxRequest struct {
 // persists Sandbox/Run/immutable Template atomically. A post-create ambiguous
 // failure leaves a visible unknown run for reviewed operator reconciliation.
 func (s *Sandboxes) CreateDockerSandbox(ctx context.Context, request CreateDockerSandboxRequest, caller governancedomain.Context) (sandboxdomain.Sandbox, error) {
-	if !s.DockerAvailable() {
+	if s == nil {
+		return sandboxdomain.Sandbox{}, sandboxdomain.ErrBackendUnavailable
+	}
+	s.dockerMu.RLock()
+	defer s.dockerMu.RUnlock()
+	if s.docker == nil || s.dockerTemplates == nil {
 		return sandboxdomain.Sandbox{}, sandboxdomain.ErrBackendUnavailable
 	}
 	if err := caller.Validate(); err != nil {
@@ -128,7 +196,7 @@ func (s *Sandboxes) ChangeLifecycle(ctx context.Context, id sandboxdomain.ID,
 }
 
 func (s *Sandboxes) ReconcileDocker(ctx context.Context, id sandboxdomain.ID, caller governancedomain.Context) (sandboxdomain.Run, error) {
-	if !s.DockerAvailable() {
+	if s.dockerController() == nil {
 		return sandboxdomain.Run{}, sandboxdomain.ErrBackendUnavailable
 	}
 	item, err := s.store.Get(ctx, id)

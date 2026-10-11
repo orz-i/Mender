@@ -53,9 +53,25 @@ func BuiltinDescriptor(backend sandboxapp.Backend) (platformplugin.Descriptor, e
 	if backend == nil {
 		return platformplugin.Descriptor{}, fmt.Errorf("sandbox plugin: backend is required")
 	}
+	return builtinDescriptor(backend.Kind(), capabilityNames(backend.Capabilities()))
+}
+
+// DockerCatalogueDescriptor is inert metadata, not a Router registration.
+// It remains visible while the operator has not connected a trusted Engine;
+// the corresponding catalogue entry must explicitly mark it unavailable.
+func DockerCatalogueDescriptor() (platformplugin.Descriptor, error) {
+	return builtinDescriptor(sandboxdomain.BackendDocker, []string{
+		string(sandboxdomain.CapabilityRead),
+		string(sandboxdomain.CapabilitySearch),
+		string(sandboxdomain.CapabilityEdit),
+		string(sandboxdomain.CapabilityShell),
+	})
+}
+
+func builtinDescriptor(kind sandboxdomain.BackendKind, capabilities []string) (platformplugin.Descriptor, error) {
 	var id platformplugin.ID
 	var display, description string
-	switch backend.Kind() {
+	switch kind {
 	case sandboxdomain.BackendLocalWorkspace:
 		id = "io.mender.sandbox.local-workspace"
 		display = "Local Workspace"
@@ -69,13 +85,13 @@ func BuiltinDescriptor(backend sandboxapp.Backend) (platformplugin.Descriptor, e
 		display = "Daytona (experimental)"
 		description = "Opt-in remote Sandbox backend; live integration is not accepted"
 	default:
-		return platformplugin.Descriptor{}, fmt.Errorf("sandbox plugin: no built-in identity for backend %q", backend.Kind())
+		return platformplugin.Descriptor{}, fmt.Errorf("sandbox plugin: no built-in identity for backend %q", kind)
 	}
 	d := platformplugin.Descriptor{
 		PluginID: id, PackageVersion: builtinPackageVersion,
 		Extension:   platformplugin.Extension{ID: mainExtension, Kind: platformplugin.SandboxBackend, ProtocolVersion: 1},
 		DisplayName: display, Description: description, ConfigVersion: 1,
-		Capabilities: capabilityNames(backend.Capabilities()),
+		Capabilities: slices.Clone(capabilities),
 	}
 	return d, d.Validate()
 }
@@ -101,6 +117,22 @@ func capabilityNames(cap sandboxdomain.Capabilities) []string {
 // C1 admits built-in drivers only; the external process trust boundary and
 // persisted InstallationID binding are deliberately deferred to C2/C3.
 func (r *Registry) Register(backend sandboxapp.Backend, descriptor platformplugin.Descriptor) error {
+	return r.registerBuiltin(backend, descriptor, nil)
+}
+
+// RegisterBuiltinWithLifecycle activates a trusted built-in atomically.
+// During on-demand Desktop activation no Router lookup may see a backend
+// without its matching host-owned lifecycle controller.
+func (r *Registry) RegisterBuiltinWithLifecycle(backend sandboxapp.Backend,
+	descriptor platformplugin.Descriptor, controller sandboxapp.LifecycleController) error {
+	if controller == nil {
+		return fmt.Errorf("sandbox plugin: lifecycle controller is required")
+	}
+	return r.registerBuiltin(backend, descriptor, controller)
+}
+
+func (r *Registry) registerBuiltin(backend sandboxapp.Backend,
+	descriptor platformplugin.Descriptor, controller sandboxapp.LifecycleController) error {
 	if r == nil {
 		return fmt.Errorf("sandbox plugin: registry unavailable")
 	}
@@ -141,7 +173,7 @@ func (r *Registry) Register(backend sandboxapp.Backend, descriptor platformplugi
 	if _, ok := r.byExtension[descriptor.PluginID]; ok {
 		return fmt.Errorf("sandbox plugin: extension id %s already registered", descriptor.PluginID)
 	}
-	r.byKind[kind] = registered{descriptor: descriptor, backend: backend}
+	r.byKind[kind] = registered{descriptor: descriptor, backend: backend, lifecycle: controller}
 	r.byExtension[descriptor.PluginID] = kind
 	return nil
 }

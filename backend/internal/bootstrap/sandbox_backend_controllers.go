@@ -23,16 +23,18 @@ func (c localLifecycle) Reconcile(context.Context, sandboxdomain.ID, gov.Context
 type dockerLifecycle struct{ sandboxes *Sandboxes }
 
 func (c dockerLifecycle) Change(ctx context.Context, id sandboxdomain.ID, action gov.Action, caller gov.Context) (sandboxdomain.Run, error) {
-	if !c.sandboxes.DockerAvailable() {
+	controller := c.sandboxes.dockerController()
+	if controller == nil {
 		return sandboxdomain.Run{}, sandboxdomain.ErrBackendUnavailable
 	}
-	return c.sandboxes.docker.ChangeLifecycle(ctx, caller, id, action)
+	return controller.ChangeLifecycle(ctx, caller, id, action)
 }
 func (c dockerLifecycle) Reconcile(ctx context.Context, id sandboxdomain.ID, caller gov.Context) (sandboxdomain.Run, error) {
-	if !c.sandboxes.DockerAvailable() {
+	controller := c.sandboxes.dockerController()
+	if controller == nil {
 		return sandboxdomain.Run{}, sandboxdomain.ErrBackendUnavailable
 	}
-	return c.sandboxes.docker.Reconcile(ctx, caller, id)
+	return controller.Reconcile(ctx, caller, id)
 }
 
 type daytonaLifecycle struct{ sandboxes *Sandboxes }

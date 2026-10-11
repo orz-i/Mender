@@ -13,7 +13,7 @@ import (
 )
 
 func TestCanonicalPluginCatalogueAllTypesInertAndStable(t *testing.T) {
-	t.Parallel()
+	t.Setenv(DockerSocketEnvironment, "")
 	ctx := context.Background()
 	r, err := NewRuntime(ctx, RuntimeOptions{DatabasePath: filepath.Join(t.TempDir(), "mender.db")})
 	if err != nil {
@@ -39,9 +39,15 @@ func TestCanonicalPluginCatalogueAllTypesInertAndStable(t *testing.T) {
 			t.Fatalf("duplicate catalogue key %s", plugin.Key)
 		}
 		keys[plugin.Key] = true
-		if plugin.InstalledAt != "" || plugin.InstallationID != "" || plugin.SourceKind != "builtin" ||
-			!plugin.Enabled || plugin.Status != "enabled" || plugin.UsageCount != 0 {
+		if plugin.InstalledAt != "" || plugin.InstallationID != "" || plugin.SourceKind != "builtin" || plugin.UsageCount != 0 {
 			t.Fatalf("untrusted process or fake installation on builtin: %+v", plugin)
+		}
+		if plugin.PluginID == "io.mender.sandbox.docker" {
+			if plugin.Enabled || plugin.Status != "unavailable" || plugin.Issue == "" || len(plugin.Capabilities) != 4 {
+				t.Fatalf("unconfigured Docker should be discoverable but unavailable: %+v", plugin)
+			}
+		} else if !plugin.Enabled || plugin.Status != "enabled" {
+			t.Fatalf("registered builtin unexpectedly unavailable: %+v", plugin)
 		}
 	}
 	for _, kind := range []platformplugin.Kind{platformplugin.ProviderTools, platformplugin.SandboxBackend, platformplugin.TunnelTransport} {
@@ -49,8 +55,26 @@ func TestCanonicalPluginCatalogueAllTypesInertAndStable(t *testing.T) {
 			t.Fatalf("catalogue lacks extension kind %s", kind)
 		}
 	}
+	if !keys["io.mender.sandbox.docker@builtin"] {
+		t.Fatal("unconfigured Docker Sandbox missing from canonical Marketplace")
+	}
 	if len(r.ListMCPServers()) != 0 {
 		t.Fatal("catalogue started MCP server")
+	}
+	if err := r.Sandboxes.ActivateDocker(ctx, "tcp://127.0.0.1:2375"); err == nil {
+		t.Fatal("untrusted Docker TCP endpoint activated")
+	}
+	if r.Sandboxes.DockerAvailable() {
+		t.Fatal("rejected activation registered a Docker backend")
+	}
+	after, err := r.ListPluginCatalogue(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, plugin := range after {
+		if plugin.PluginID == "io.mender.sandbox.docker" && (plugin.Enabled || plugin.Status != "unavailable") {
+			t.Fatalf("failed activation changed Docker catalogue availability: %+v", plugin)
+		}
 	}
 }
 

@@ -12,6 +12,7 @@ import (
 	installationdomain "github.com/orz-i/Mender/backend/internal/plugin/installation/domain"
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
+	sandboxpluginregistry "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/pluginregistry"
 )
 
 // PluginCatalogueEntry is an inert, host-reviewed projection of exactly one
@@ -122,15 +123,30 @@ func (r *Runtime) ListPluginCatalogue(ctx context.Context) ([]PluginCatalogueEnt
 		}
 		result = append(result, pluginEntry(descriptor, "builtin", nil, usage[descriptor.PluginID.String()+"@builtin"]))
 	}
+	dockerRegistered := false
 	for _, entry := range r.Sandboxes.backendPlugins.Entries() {
 		if entry.Kind == sandboxdomain.BackendExternal {
 			continue
+		}
+		if entry.Kind == sandboxdomain.BackendDocker {
+			dockerRegistered = true
 		}
 		descriptor := entry.Descriptor
 		if err := descriptor.Validate(); err != nil {
 			return nil, err
 		}
 		result = append(result, pluginEntry(descriptor, "builtin", nil, usage[descriptor.PluginID.String()+"@builtin"]))
+	}
+	if !dockerRegistered {
+		descriptor, err := sandboxpluginregistry.DockerCatalogueDescriptor()
+		if err != nil {
+			return nil, err
+		}
+		item := pluginEntry(descriptor, "builtin", nil, usage[descriptor.PluginID.String()+"@builtin"])
+		item.Status = "unavailable"
+		item.Enabled = false
+		item.Issue = r.Sandboxes.DockerStatus() + ". Connect Docker Desktop from the local Desktop app, or configure MENDER_DOCKER_SOCKET on Runtime startup."
+		result = append(result, item)
 	}
 	tunnelBuiltin := r.tunnelPlugins.BuiltinDescriptor()
 	result = append(result, pluginEntry(tunnelBuiltin, "builtin", nil, usage[tunnelBuiltin.PluginID.String()+"@builtin"]))

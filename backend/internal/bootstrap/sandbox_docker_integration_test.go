@@ -28,7 +28,8 @@ func TestRuntimeDockerSandboxProviderEndToEnd(t *testing.T) {
 	if socket == "" || image == "" {
 		t.Skip("requires explicit MENDER_DOCKER_TEST_SOCKET and MENDER_DOCKER_TEST_IMAGE")
 	}
-	t.Setenv(DockerSocketEnvironment, socket)
+	// The Engine must remain disconnected until a deliberate activation.
+	t.Setenv(DockerSocketEnvironment, "")
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
 	runtime, err := NewRuntime(ctx, RuntimeOptions{DatabasePath: filepath.Join(t.TempDir(), "runtime-docker-integration.db")})
@@ -36,8 +37,33 @@ func TestRuntimeDockerSandboxProviderEndToEnd(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = runtime.Close() }()
+	if runtime.Sandboxes.DockerAvailable() {
+		t.Fatal("Docker silently connected without explicit opt-in")
+	}
+	if err := runtime.Sandboxes.ActivateDocker(ctx, socket); err != nil {
+		t.Fatalf("activate trusted Docker Engine: %v", err)
+	}
 	if !runtime.Sandboxes.DockerAvailable() {
-		t.Fatal("real Engine unavailable in runtime")
+		t.Fatal("real Engine unavailable after activation")
+	}
+	if err := runtime.Sandboxes.ActivateDocker(ctx, socket); err != nil {
+		t.Fatalf("repeated session activation: %v", err)
+	}
+	plugins, err := runtime.ListPluginCatalogue(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var dockerCards int
+	for _, entry := range plugins {
+		if entry.PluginID == "io.mender.sandbox.docker" {
+			dockerCards++
+			if !entry.Enabled || entry.Status != "enabled" || entry.Issue != "" {
+				t.Fatalf("activated Docker Marketplace card: %+v", entry)
+			}
+		}
+	}
+	if dockerCards != 1 {
+		t.Fatalf("expected one Docker Marketplace card, got %d", dockerCards)
 	}
 	owner := runtime.OwnerPrincipal()
 	caller, err := gov.NewContext(gov.OriginInternal, owner, gov.CatalogScope())

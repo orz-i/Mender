@@ -1679,7 +1679,7 @@ components:
         description: { type: string }
         packageVersion: { type: string }
         sourceKind: { type: string, enum: [builtin, local] }
-        status: { type: string, enum: [enabled, disabled, invalid] }
+        status: { type: string, enum: [enabled, disabled, invalid, unavailable] }
         enabled: { type: boolean }
         capabilities:
           type: array

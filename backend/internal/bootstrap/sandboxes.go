@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 
 	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 
@@ -34,6 +35,8 @@ type Sandboxes struct {
 	externalProcesses          *pluginprocess.Supervisor
 	admission                  sandboxapplication.Admit
 	launcher                   sandboxWorkspaceShellLauncher
+	dockerMu                   sync.RWMutex
+	dockerDatabasePath         string
 	docker                     *sandboxdocker.Provisioner
 	dockerTemplates            *sandboxdocker.TemplateStore
 	dockerUnavailableReason    string
@@ -58,7 +61,7 @@ func NewSandboxes(ctx context.Context, databasePath string, policy sandboxapplic
 		_ = store.Close()
 		return nil, fmt.Errorf("compose sandboxes: local workspace: %w", err)
 	}
-	component := &Sandboxes{store: store, admission: gate, launcher: launcher, profileExists: profileExists, dockerUnavailableReason: "Docker Engine is not configured"}
+	component := &Sandboxes{store: store, admission: gate, launcher: launcher, profileExists: profileExists, dockerDatabasePath: databasePath, dockerUnavailableReason: "Docker Engine is not configured"}
 	backends := []sandboxapplication.Backend{localBackend}
 	if dockerBackend, err := component.configureDocker(ctx, databasePath, gate); err == nil && dockerBackend != nil {
 		backends = append(backends, dockerBackend)
@@ -116,12 +119,14 @@ func (s *Sandboxes) Close() error {
 	if s == nil || s.store == nil {
 		return nil
 	}
+	s.dockerMu.Lock()
 	if s.docker != nil {
 		_ = s.docker.Close()
 	}
 	if s.dockerTemplates != nil {
 		_ = s.dockerTemplates.Close()
 	}
+	s.dockerMu.Unlock()
 	if s.daytonaTemplates != nil {
 		_ = s.daytonaTemplates.Close()
 	}
