@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 
-import type { Credential, MenderClient } from "@mender/sdk";
+import type { CachedDockerImage, Credential, MenderClient } from "@mender/sdk";
 import { Button } from "@mender/ui/components/button";
 import { Input } from "@mender/ui/components/input";
 
@@ -201,6 +201,9 @@ export function CreateSandboxPage({
   const [daytonaDisk, setDaytonaDisk] = useState(3);
   const [daytonaTTL, setDaytonaTTL] = useState(30);
   const [imageDigest, setImageDigest] = useState("");
+  const [dockerImages, setDockerImages] = useState<CachedDockerImage[]>([]);
+  const [dockerImagesLoading, setDockerImagesLoading] = useState(true);
+  const [dockerImagesIssue, setDockerImagesIssue] = useState("");
   const [userId, setUserId] = useState(10001);
   const [groupId, setGroupId] = useState(10001);
   const [cpuMilli, setCpuMilli] = useState(1000);
@@ -247,6 +250,28 @@ export function CreateSandboxPage({
         });
     }, 5000);
     return () => { active = false; window.clearInterval(timer); };
+  }, [client, dockerAvailable]);
+
+  useEffect(() => {
+    if (!dockerAvailable) return;
+    let active = true;
+    void client.listDockerImages()
+      .then((result) => {
+        if (!active) return;
+        setDockerImages(result.images);
+        // If there is exactly one trusted digest, select it rather than
+        // asking the user to copy a content hash from their Docker CLI.
+        if (result.images.length === 1) {
+          setImageDigest((current) => current || result.images[0]!.imageDigest);
+        }
+      })
+      .catch((reason: unknown) => {
+        if (active) setDockerImagesIssue(errorMessage(reason));
+      })
+      .finally(() => {
+        if (active) setDockerImagesLoading(false);
+      });
+    return () => { active = false; };
   }, [client, dockerAvailable]);
 
   const digestOK = IMAGE_DIGEST.test(imageDigest);
@@ -410,18 +435,53 @@ export function CreateSandboxPage({
                       ) : null}
                     </>
                   ) : null}
-                  <label className="grid gap-2 text-sm">
-                    <span className="font-medium">{t("Immutable image digest")}</span>
-                    <Input aria-label={t("Immutable image digest")} value={imageDigest}
-                      onChange={(event) => setImageDigest(event.target.value.trim())}
-                      placeholder={t(selected === "docker" ? "docker.io/library/alpine@sha256:…" : "docker.io/library/python@sha256:…")}
-                      autoComplete="off" />
-                  </label>
-                  <p className="text-xs leading-5 text-muted-foreground">
-                    {selected === "docker"
-                      ? t("The exact image digest must already be cached locally. Mender never pulls images automatically.")
-                      : t("Remote Daytona Sandbox uses a Mender credential and incurs provider charges. Provider availability is verified on creation.")}
-                  </p>
+                  {selected === "docker" ? (
+                    <>
+                      <label className="grid gap-2 text-sm">
+                        <span className="font-medium">{t("Cached Docker image")}</span>
+                        <select aria-label={t("Cached Docker image")} value={
+                          dockerImages.some((item) => item.imageDigest === imageDigest) ? imageDigest : ""
+                        } onChange={(event) => setImageDigest(event.target.value)}
+                          className="h-10 w-full rounded-xl border border-input bg-card px-3 text-sm">
+                          <option value="">{t("Select a locally cached image")}</option>
+                          {dockerImages.map((item) => (
+                            <option value={item.imageDigest} key={item.imageDigest}>
+                              {item.displayName}{" · sha256:"}{item.imageDigest.split("@sha256:")[1]?.slice(0, 12)}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <p className="text-xs leading-5 text-muted-foreground">
+                        {dockerImagesLoading ? t("Checking cached Docker images…")
+                          : dockerImagesIssue || (dockerImages.length === 0
+                            ? t("No locally cached images with verified digests. Pull a suitable image in Docker first, then reopen this form.")
+                            : t("Only locally verified immutable images can be used. Mender does not pull images."))}
+                      </p>
+                      <details className="rounded-xl border border-border/70 px-4 py-3 text-sm">
+                        <summary className="cursor-pointer font-medium">{t("Enter image digest manually")}</summary>
+                        <label className="mt-3 grid gap-2 text-sm">
+                          <span className="font-medium">{t("Immutable image digest")}</span>
+                          <Input aria-label={t("Immutable image digest")} value={imageDigest}
+                            onChange={(event) => setImageDigest(event.target.value.trim())}
+                            placeholder={t("docker.io/library/alpine@sha256:…")}
+                            autoComplete="off" />
+                        </label>
+                      </details>
+                    </>
+                  ) : (
+                    <>
+                      <label className="grid gap-2 text-sm">
+                        <span className="font-medium">{t("Immutable image digest")}</span>
+                        <Input aria-label={t("Immutable image digest")} value={imageDigest}
+                          onChange={(event) => setImageDigest(event.target.value.trim())}
+                          placeholder={t("docker.io/library/python@sha256:…")}
+                          autoComplete="off" />
+                      </label>
+                      <p className="text-xs leading-5 text-muted-foreground">
+                        {t("Remote Daytona Sandbox uses a Mender credential and incurs provider charges. Provider availability is verified on creation.")}
+                      </p>
+                    </>
+                  )}
                 </>
               )}
 

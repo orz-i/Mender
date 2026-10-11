@@ -24,6 +24,9 @@ const created: Sandbox = {
 function showCreate(client: Partial<MenderClient>) {
   const passed: Partial<MenderClient> = {
     listCredentials: vi.fn().mockResolvedValue({credentials: []}),
+    listDockerImages: vi.fn().mockResolvedValue({images:[{
+      imageDigest:cachedImage, displayName:"alpine:3.22",
+    }]}),
     ...client,
   };
   render(
@@ -95,6 +98,7 @@ describe("Docker Sandbox creation UX", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: /Docker/ }));
     const nameField = screen.getByRole<HTMLInputElement>("textbox", { name: "Sandbox name" });
+    fireEvent.click(screen.getByText("Enter image digest manually"));
     const digestField = screen.getByRole<HTMLInputElement>("textbox", { name: "Immutable image digest" });
     fireEvent.change(nameField, { target: { value: "Safe Container" } });
     fireEvent.change(digestField, { target: { value: "alpine:latest" } });
@@ -120,6 +124,34 @@ describe("Docker Sandbox creation UX", () => {
     expect(await screen.findByText("Sandbox detail route reached")).toBeTruthy();
   });
 
+  it("creates Docker from a selected locally verified image without typing a digest", async () => {
+    const redisImage=`docker.io/library/redis@sha256:${"b".repeat(64)}`;
+    const createDockerSandbox=vi.fn().mockResolvedValue(created);
+    showCreate({
+      getRuntimeGovernance:vi.fn().mockResolvedValue(runtimeGovernanceStub()),
+      getSandboxBackends:vi.fn().mockResolvedValue({dockerAvailable:true,dockerStatus:"ready"}),
+      listDockerImages:vi.fn().mockResolvedValue({images:[
+        {imageDigest:cachedImage,displayName:"alpine:3.22"},
+        {imageDigest:redisImage,displayName:"redis:8-alpine"},
+      ]}),
+      createDockerSandbox,
+    });
+    fireEvent.click(await screen.findByRole("button",{name:/Docker/}));
+    fireEvent.change(screen.getByRole("textbox",{name:"Sandbox name"}),{target:{value:"Redis isolated"}});
+    const select=screen.getByRole<HTMLSelectElement>("combobox",{name:"Cached Docker image"});
+    expect(await screen.findByRole("option",{name:/redis:8-alpine/})).toBeTruthy();
+    expect(screen.getByRole<HTMLButtonElement>("button",{name:"Next"}).disabled).toBe(true);
+    fireEvent.change(select,{target:{value:redisImage}});
+    fireEvent.click(screen.getByRole("button",{name:"Next"}));
+    fireEvent.click(screen.getByRole("button",{name:"Review"}));
+    expect(screen.getByText(redisImage)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button",{name:"Create sandbox"}));
+    await waitFor(()=>expect(createDockerSandbox).toHaveBeenCalledWith(expect.objectContaining({
+      name:"Redis isolated",imageDigest:redisImage,
+    })));
+    expect(await screen.findByText("Sandbox detail route reached")).toBeTruthy();
+  });
+
   it("keeps identity and resource limits in separate steps, preserving edits after Back", async () => {
     const createDockerSandbox = vi.fn();
     showCreate({
@@ -130,7 +162,7 @@ describe("Docker Sandbox creation UX", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: /Docker/ }));
     fireEvent.change(screen.getByRole("textbox", { name: "Sandbox name" }), { target: { value: "Preview only" } });
-    fireEvent.change(screen.getByRole("textbox", { name: "Immutable image digest" }), { target: { value: cachedImage } });
+    expect(await screen.findByRole("option",{name:/alpine:3.22/})).toBeTruthy();
     expect(screen.queryByRole("spinbutton", { name: "Memory (MiB)" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
@@ -159,7 +191,7 @@ describe("Docker Sandbox creation UX", () => {
     });
     fireEvent.click(await screen.findByRole("button", { name: /Docker/ }));
     fireEvent.change(screen.getByRole("textbox", { name: "Sandbox name" }), { target: { value: "Uncertain Container" } });
-    fireEvent.change(screen.getByRole("textbox", { name: "Immutable image digest" }), { target: { value: cachedImage } });
+    await screen.findByRole("option",{name:/alpine:3.22/});
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
     fireEvent.click(screen.getByRole("button", { name: "Review" }));
     fireEvent.click(screen.getByRole("button", { name: "Create sandbox" }));
