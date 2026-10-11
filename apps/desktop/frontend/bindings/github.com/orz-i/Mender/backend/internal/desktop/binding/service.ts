@@ -76,6 +76,10 @@ export function CreateProvider($namespace: string, displayName: string, descript
     return $Call.ByID(1616703517, $namespace, displayName, description, pluginID, installationID, config);
 }
 
+export function CreateSSHRemoteSandbox(input: $models.CreateSSHRemoteSandboxInput): $CancellablePromise<$models.Sandbox> {
+    return $Call.ByID(2154512183, input);
+}
+
 export function CreateStdioProvider($namespace: string, displayName: string, description: string, executable: string, args: string[] | null, directory: string, credentialEnvironment: $models.CredentialEnvironment[] | null): $CancellablePromise<$models.ProviderMutationResponse> {
     return $Call.ByID(3677167748, $namespace, displayName, description, executable, args, directory, credentialEnvironment);
 }

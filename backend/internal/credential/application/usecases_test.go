@@ -3,11 +3,15 @@ package application
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
+	"encoding/pem"
 	"errors"
 	"testing"
 	"time"
 
 	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
+	"golang.org/x/crypto/ssh"
 )
 
 func TestCreateNativeCompensatesSecretOnMetadataFailure(t *testing.T) {
@@ -36,6 +40,49 @@ func TestCreateNativeCompensatesSecretOnMetadataFailure(t *testing.T) {
 	}
 	if secrets.deleteCalls != 1 {
 		t.Fatalf("secret delete calls = %d, want 1", secrets.deleteCalls)
+	}
+}
+
+func TestSSHPrivateKeyCredentialRequiresNativeKeyringAndValidatedKey(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	repo := newMemoryRepository()
+	secrets := newMemorySecrets()
+	clock := fixedClock{now: time.Date(2026, 10, 11, 12, 0, 0, 0, time.UTC)}
+	request := CreateNativeRequest{Namespace: "ssh", Name: "build", DisplayName: "SSH build key", Secret: []byte("not a private key")}
+	if _, err := NewCreateNative(repo, secrets, clock).Execute(ctx, request); err == nil {
+		t.Fatal("unvalidated SSH key entered native credential store")
+	}
+	if secrets.putCalls != 0 {
+		t.Fatal("invalid SSH key reached keyring")
+	}
+	if _, err := NewCreateEnvironment(repo, clock).Execute(ctx, CreateEnvironmentRequest{
+		Namespace: "ssh", Name: "build", DisplayName: "SSH key", EnvironmentVariable: "MY_SSH_PRIVATE_KEY",
+	}); err == nil {
+		t.Fatal("SSH key accepted insecure environment-backed credential")
+	}
+	_, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	block, err := ssh.MarshalPrivateKey(priv, "fixture")
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Secret = pem.EncodeToMemory(block)
+	created, err := NewCreateNative(repo, secrets, clock).Execute(ctx, request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created.Reference().String() != "credential://ssh/build" || len(secrets.values[created.Reference()]) == 0 {
+		t.Fatal("valid SSH credential not stored using native keyring")
+	}
+	before := append([]byte(nil), secrets.values[created.Reference()]...)
+	if _, err := NewRotateNativeSecret(repo, secrets, clock).Execute(ctx, created.Reference(), []byte("wrong key")); err == nil {
+		t.Fatal("invalid rotated SSH key accepted")
+	}
+	if !bytes.Equal(before, secrets.values[created.Reference()]) {
+		t.Fatal("failed SSH rotation overwrote keyring secret")
 	}
 }
 

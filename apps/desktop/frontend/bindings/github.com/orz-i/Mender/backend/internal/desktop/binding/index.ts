@@ -15,6 +15,7 @@ export type {
     CreateDockerSandboxInput,
     CreateExternalSandboxInput,
     CreateLocalSandboxInput,
+    CreateSSHRemoteSandboxInput,
     Credential,
     CredentialEnvironment,
     CredentialHeader,

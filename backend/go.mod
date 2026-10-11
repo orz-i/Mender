@@ -12,8 +12,10 @@ require (
 	github.com/orz-i/Mender/sdk/providerplugin/go v0.0.0
 	github.com/orz-i/Mender/sdk/sandboxplugin/go v0.0.0
 	github.com/orz-i/Mender/sdk/tunnelplugin/go v0.0.0
+	github.com/pkg/sftp v1.13.11
 	github.com/spf13/cobra v1.10.2
 	github.com/zalando/go-keyring v0.2.8
+	golang.org/x/crypto v0.57.0
 	golang.org/x/mod v0.41.0
 	google.golang.org/grpc v1.83.2
 	gopkg.in/yaml.v3 v3.0.1
@@ -72,7 +74,6 @@ require (
 	github.com/oklog/run v1.1.0 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.1 // indirect
-	github.com/pkg/sftp v1.13.11 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/rogpeppe/go-internal v1.16.0 // indirect
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2 // indirect
@@ -92,7 +93,6 @@ require (
 	go.opentelemetry.io/otel/sdk/metric v1.46.0 // indirect
 	go.opentelemetry.io/otel/trace v1.46.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.11.0 // indirect
-	golang.org/x/crypto v0.57.0 // indirect
 	golang.org/x/net v0.60.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/sync v0.23.0 // indirect

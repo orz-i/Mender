@@ -582,6 +582,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/sandboxes/ssh-remote": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Admit and verify an SSH remote account; never provisions or isolates the remote host. */
+        post: operations["createSSHRemoteSandbox"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/sandboxes/docker": {
         parameters: {
             query?: never;
@@ -1746,6 +1763,18 @@ export interface components {
             daytonaConfigured: boolean;
             daytonaStatus: string;
         };
+        CreateSSHRemoteSandboxRequest: {
+            name: string;
+            host: string;
+            port: number;
+            user: string;
+            /** @description Absolute POSIX remote workspace root; NOT a chroot or shell containment guarantee */
+            root: string;
+            /** @description Explicit pinned ssh-ed25519 public host key in OpenSSH format */
+            hostPublicKey: string;
+            /** @description Keychain-backed Mender SSH private key reference */
+            credentialRef: string;
+        };
         CreateDaytonaSandboxRequest: {
             name: string;
             /** @description Reference to Mender's secret inventory */
@@ -1794,7 +1823,7 @@ export interface components {
             sandboxId: string;
             name: string;
             /** @enum {string} */
-            backend: "local_workspace" | "docker" | "daytona" | "e2b" | "external";
+            backend: "local_workspace" | "docker" | "daytona" | "ssh_remote" | "e2b" | "external";
             pluginId?: string;
             extensionId?: string;
             installationId?: string;
@@ -3024,6 +3053,40 @@ export interface operations {
                 };
             };
             /** @description Docker Engine is unavailable or not configured */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    createSSHRemoteSandbox: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSSHRemoteSandboxRequest"];
+            };
+        };
+        responses: {
+            /** @description Pinned SSH host and Credential verified; only Mender's local access binding was created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Sandbox"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            /** @description Remote SSH host, pinned public key, SFTP workspace or key authentication unavailable */
             503: {
                 headers: {
                     [name: string]: unknown;

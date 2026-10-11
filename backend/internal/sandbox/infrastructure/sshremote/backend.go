@@ -81,6 +81,14 @@ func (s *Session) ExecuteWorkspace(ctx context.Context, cap sandboxdomain.Capabi
 	if err := ctx.Err(); err != nil {
 		return invocationdomain.Outcome{}, err
 	}
+	// SFTP requests do not take Context. Closing the authenticated transport
+	// on invocation cancellation bounds an unresponsive remote server. Its
+	// outcome remains uncertain and the durable execution lease is retained.
+	stopCancel := context.AfterFunc(ctx, func() {
+		s.uncertain.Store(true)
+		_ = s.conn.Close()
+	})
+	defer stopCancel()
 	if len(args.Bytes()) > 1<<20 {
 		return failure("SSH workspace arguments exceed limit")
 	}

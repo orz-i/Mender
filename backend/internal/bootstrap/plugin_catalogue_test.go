@@ -56,6 +56,11 @@ func TestCanonicalPluginCatalogueAllTypesInertAndStable(t *testing.T) {
 				plugin.PackageVersion != "" || plugin.ProtocolVersion != 0 || plugin.ConfigVersion != 0 {
 				t.Fatalf("E2B roadmap preview masquerades as an installed plugin: %+v", plugin)
 			}
+		case "io.mender.sandbox.ssh-remote":
+			if plugin.Status != "enabled" || !plugin.Enabled || plugin.SourceKind != "builtin" || len(plugin.Capabilities) != 4 ||
+				plugin.Key != "io.mender.sandbox.ssh-remote@builtin" || plugin.Issue != "" {
+				t.Fatalf("trusted SSH remote plugin unavailable: %+v", plugin)
+			}
 		default:
 			if plugin.SourceKind != "builtin" || !plugin.Enabled || plugin.Status != "enabled" {
 				t.Fatalf("registered builtin unexpectedly unavailable: %+v", plugin)
@@ -71,6 +76,7 @@ func TestCanonicalPluginCatalogueAllTypesInertAndStable(t *testing.T) {
 		"io.mender.sandbox.local-workspace@builtin",
 		"io.mender.sandbox.docker@builtin",
 		"io.mender.sandbox.daytona@builtin",
+		"io.mender.sandbox.ssh-remote@builtin",
 		"io.mender.sandbox.e2b@planned",
 	} {
 		if !keys[key] {

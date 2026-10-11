@@ -81,6 +81,15 @@ type DockerBackendStatus struct {
 	DockerAvailable   bool   `json:"dockerAvailable"`
 	DockerStatus      string `json:"dockerStatus"`
 }
+type CreateSSHRemoteSandboxInput struct {
+	Name          string `json:"name"`
+	Host          string `json:"host"`
+	Port          uint16 `json:"port"`
+	User          string `json:"user"`
+	Root          string `json:"root"`
+	HostPublicKey string `json:"hostPublicKey"`
+	CredentialRef string `json:"credentialRef"`
+}
 type CreateDaytonaSandboxInput struct {
 	Name          string `json:"name"`
 	CredentialRef string `json:"credentialRef"`

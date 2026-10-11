@@ -33,6 +33,7 @@ import (
 	sandboxdaytona "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/daytona"
 	sandboxdocker "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/dockerengine"
 	sandboxsqlite "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/sqlite"
+	sandboxssh "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/sshremote"
 	skillapplication "github.com/orz-i/Mender/backend/internal/skill/application"
 	skilldomain "github.com/orz-i/Mender/backend/internal/skill/domain"
 	tunnelapplication "github.com/orz-i/Mender/backend/internal/tunnel/application"
@@ -221,6 +222,24 @@ func (s *Service) ReconcileSandbox(raw string) (Sandbox, error) {
 	return s.projectSandbox(item)
 }
 
+func (s *Service) CreateSSHRemoteSandbox(input CreateSSHRemoteSandboxInput) (Sandbox, error) {
+	ref, err := credentialdomain.ParseReference(input.CredentialRef)
+	if err != nil {
+		return Sandbox{}, err
+	}
+	caller, err := s.governanceContext()
+	if err != nil {
+		return Sandbox{}, err
+	}
+	t := sandboxssh.Template{Host: input.Host, Port: input.Port, User: input.User,
+		Root: input.Root, HostPublicKey: input.HostPublicKey, CredentialRef: ref}
+	item, err := s.runtime.Sandboxes.CreateSSHRemoteSandbox(s.ctx,
+		bootstrap.CreateSSHRemoteSandboxRequest{Name: input.Name, Template: t}, caller)
+	if err != nil {
+		return Sandbox{}, err
+	}
+	return s.projectSandbox(item)
+}
 func (s *Service) CreateDaytonaSandbox(input CreateDaytonaSandboxInput) (Sandbox, error) {
 	ref, err := credentialdomain.ParseReference(input.CredentialRef)
 	if err != nil {

@@ -15,6 +15,7 @@ export type {
   CreateOpenAITunnelRequest,
   CreateLocalSandboxRequest,
   CreateDockerSandboxRequest,
+  CreateSSHRemoteSandboxRequest,
   CachedDockerImage,
   CreateDaytonaSandboxRequest,
   SandboxBackends,

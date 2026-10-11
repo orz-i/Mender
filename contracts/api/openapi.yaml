@@ -728,6 +728,26 @@ paths:
                     items: { $ref: '#/components/schemas/CachedDockerImage' }
         '503':
           description: Docker Engine is unavailable or not configured
+  /sandboxes/ssh-remote:
+    post:
+      operationId: createSSHRemoteSandbox
+      description: Admit and verify an SSH remote account; never provisions or isolates the remote host.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateSSHRemoteSandboxRequest' }
+      responses:
+        '201':
+          description: Pinned SSH host and Credential verified; only Mender's local access binding was created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Sandbox' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '503':
+          description: Remote SSH host, pinned public key, SFTP workspace or key authentication unavailable
   /sandboxes/docker:
     post:
       operationId: createDockerSandbox
@@ -2256,6 +2276,18 @@ components:
         daytonaConfigured: { type: boolean, description: Explicit host-operator experimental execution opt-in; disabled by default, never proof of live remote acceptance }
         daytonaStatus: { type: string }
       additionalProperties: false
+    CreateSSHRemoteSandboxRequest:
+      type: object
+      additionalProperties: false
+      required: [name, host, port, user, root, hostPublicKey, credentialRef]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 160 }
+        host: { type: string, minLength: 1, maxLength: 253 }
+        port: { type: integer, minimum: 1, maximum: 65535 }
+        user: { type: string, pattern: '^[a-z_][a-z0-9_-]{0,62}$' }
+        root: { type: string, minLength: 2, maxLength: 1024, description: Absolute POSIX remote workspace root; NOT a chroot or shell containment guarantee }
+        hostPublicKey: { type: string, minLength: 45, maxLength: 1024, description: Explicit pinned ssh-ed25519 public host key in OpenSSH format, never TOFU }
+        credentialRef: { type: string, pattern: '^credential://ssh/[a-z][a-z0-9-]*$', description: Keychain-backed Mender SSH private key reference, never a raw private key }
     CreateDaytonaSandboxRequest:
       type: object
       required: [name, credentialRef, imageDigest, target, cpu, memoryGiB, diskGiB, ttlMinutes]
@@ -2314,7 +2346,7 @@ components:
       properties:
         sandboxId: { type: string, pattern: '^sbx_[0-9a-f]{32}$' }
         name: { type: string }
-        backend: { type: string, enum: [local_workspace, docker, daytona, e2b, external] }
+        backend: { type: string, enum: [local_workspace, docker, daytona, ssh_remote, e2b, external] }
         pluginId: { type: string }
         extensionId: { type: string }
         installationId: { type: string }

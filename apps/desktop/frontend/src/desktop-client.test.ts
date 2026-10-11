@@ -35,6 +35,7 @@ vi.mock(
       DisablePluginInstallation:vi.fn(),
       DeletePluginInstallation:vi.fn(),
       CreateExternalSandbox:vi.fn(),
+      CreateSSHRemoteSandbox:vi.fn(),
       ReconcileSandbox:vi.fn(),
       CreateExternalTunnel:vi.fn(),
       InstallSkill: vi.fn(),
@@ -258,6 +259,23 @@ describe("desktop Mender client", () => {
     vi.mocked(Service.InstallLocalPlugin).mockResolvedValue(installed);
     await expect(installDesktopPlugin("/tmp/selected-plugin")).resolves.toMatchObject(installed);
     expect(Service.InstallLocalPlugin).toHaveBeenCalledWith("/tmp/selected-plugin");
+  });
+
+  it("uses the native SSH Remote binding without sending private key material",async()=>{
+    const request={
+      name:"Remote Dev",host:"example.org",port:22,user:"agent",root:"/home/agent/work",
+      hostPublicKey:"ssh-ed25519 "+"A".repeat(70),
+      credentialRef:"credential://ssh/build",
+    };
+    const sandbox={
+      sandboxId:"sbx_0123456789abcdef0123456789abcdef",name:"Remote Dev",
+      backend:"ssh_remote",isolation:"remote",state:"ready",localRoot:"",
+      ownerKind:"local_user",ownerRef:"test",activeLeases:0,backendAvailable:true,
+    };
+    vi.mocked(Service.CreateSSHRemoteSandbox).mockResolvedValue(sandbox);
+    await expect(createDesktopMenderClient().createSSHRemoteSandbox(request)).resolves.toMatchObject(sandbox);
+    expect(Service.CreateSSHRemoteSandbox).toHaveBeenCalledExactlyOnceWith(request);
+    expect(JSON.stringify(vi.mocked(Service.CreateSSHRemoteSandbox).mock.calls)).not.toContain("PRIVATE KEY");
   });
 
   it("passes the exact external Sandbox and Tunnel bindings to Wails",async()=>{

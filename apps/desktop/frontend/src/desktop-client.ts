@@ -439,6 +439,9 @@ export function createDesktopMenderClient(): MenderClient {
     async createDaytonaSandbox(body) {
       return sandbox(await Service.CreateDaytonaSandbox(body));
     },
+    async createSSHRemoteSandbox(body) {
+      return sandbox(await Service.CreateSSHRemoteSandbox(body));
+    },
     async reconcileDaytonaSandbox(sandboxId) {
       return sandbox(await Service.ReconcileDaytonaSandbox(sandboxId));
     },
@@ -1424,7 +1427,7 @@ function sandboxActivity(value: BindingSandboxActivity): SandboxActivity {
 }
 
 function sandbox(value: BindingSandbox): Sandbox {
-  if (!["local_workspace", "docker", "daytona", "e2b", "external"].includes(value.backend) ||
+  if (!["local_workspace", "docker", "daytona", "ssh_remote", "e2b", "external"].includes(value.backend) ||
       !["host", "restricted_host", "container", "remote"].includes(value.isolation) ||
       !["defined", "provisioning", "ready", "stopping", "stopped", "destroying", "destroyed", "failed", "unknown", "orphaned"].includes(value.state) ||
       (value.ownerKind !== "local_user" && value.ownerKind !== "service")) {

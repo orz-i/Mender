@@ -116,7 +116,6 @@ func (d Dialer) Connect(ctx context.Context, t Template) (*Connection, error) {
 		_ = raw.Close()
 		return nil, sandboxdomain.ErrBackendUnavailable
 	}
-	_ = raw.SetDeadline(time.Time{})
 	client := ssh.NewClient(conn, channels, requests)
 	sftpClient, err := sftp.NewClient(client)
 	if err != nil {
@@ -128,6 +127,9 @@ func (d Dialer) Connect(ctx context.Context, t Template) (*Connection, error) {
 		_ = result.Close()
 		return nil, sandboxdomain.ErrBackendUnavailable
 	}
+	// Keep a bounded deadline through SFTP handshake and root verification.
+	// A half-open or malicious SSH server must not block create indefinitely.
+	_ = raw.SetDeadline(time.Time{})
 	return result, nil
 }
 

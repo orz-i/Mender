@@ -76,6 +76,16 @@ export interface CreateLocalSandboxInput {
     "isolation": string;
 }
 
+export interface CreateSSHRemoteSandboxInput {
+    "name": string;
+    "host": string;
+    "port": number;
+    "user": string;
+    "root": string;
+    "hostPublicKey": string;
+    "credentialRef": string;
+}
+
 export interface Credential {
     "reference": string;
     "namespace": string;

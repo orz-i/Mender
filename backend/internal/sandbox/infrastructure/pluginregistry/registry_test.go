@@ -31,6 +31,7 @@ func TestTrustedBuiltinBackendDescriptors(t *testing.T) {
 		{sandboxdomain.BackendLocalWorkspace, "io.mender.sandbox.local-workspace"},
 		{sandboxdomain.BackendDocker, "io.mender.sandbox.docker"},
 		{sandboxdomain.BackendDaytona, "io.mender.sandbox.daytona"},
+		{sandboxdomain.BackendSSHRemote, "io.mender.sandbox.ssh-remote"},
 	} {
 		t.Run(string(tc.kind), func(t *testing.T) {
 			backend := &fakeBackend{kind: tc.kind, caps: sandboxdomain.Capabilities{Read: true, Search: true, Shell: true}}

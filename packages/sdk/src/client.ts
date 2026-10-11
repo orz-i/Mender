@@ -31,6 +31,7 @@ export type ReplaceSandboxProfileGrantsRequest = components["schemas"]["ReplaceS
 export type CreateLocalSandboxRequest = components["schemas"]["CreateLocalSandboxRequest"];
 export type CreateDockerSandboxRequest = components["schemas"]["CreateDockerSandboxRequest"];
 export type CachedDockerImage = components["schemas"]["CachedDockerImage"];
+export type CreateSSHRemoteSandboxRequest = components["schemas"]["CreateSSHRemoteSandboxRequest"];
 export type CreateDaytonaSandboxRequest = components["schemas"]["CreateDaytonaSandboxRequest"];
 export type SandboxBackends = components["schemas"]["SandboxBackends"];
 export type CreateOpenAITunnelRequest =
@@ -177,6 +178,7 @@ export interface MenderClient {
   createLocalSandbox(body: CreateLocalSandboxRequest): Promise<Sandbox>;
   createDockerSandbox(body: CreateDockerSandboxRequest): Promise<Sandbox>;
   createDaytonaSandbox(body: CreateDaytonaSandboxRequest): Promise<Sandbox>;
+  createSSHRemoteSandbox(body: CreateSSHRemoteSandboxRequest): Promise<Sandbox>;
   createExternalSandbox(body:CreateExternalSandboxRequest):Promise<Sandbox>;
   reconcileSandbox(sandboxId:string):Promise<Sandbox>;
   reconcileDaytonaSandbox(sandboxId: string): Promise<Sandbox>;
@@ -564,6 +566,10 @@ export function createMenderClient(
     },
     async createDaytonaSandbox(body: CreateDaytonaSandboxRequest) {
       const result = await client.POST("/sandboxes/daytona", {body});
+      return requireData(result);
+    },
+    async createSSHRemoteSandbox(body: CreateSSHRemoteSandboxRequest) {
+      const result = await client.POST("/sandboxes/ssh-remote", {body});
       return requireData(result);
     },
     async reconcileDaytonaSandbox(sandboxId: string) {
