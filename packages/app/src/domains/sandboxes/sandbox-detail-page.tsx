@@ -22,8 +22,9 @@ import { PageToolbar } from "../../shared/page-toolbar";
 import { DataPanel } from "../../shared/workbench";
 import { isolationLabel, sandboxBackend, sandboxStateLabel } from "./sandbox-display";
 import { SandboxMetadata } from "./sandbox-metadata";
+import { SandboxAccessPanel } from "./sandbox-access-panel";
 
-type DetailTopic = "overview" | "security";
+type DetailTopic = "overview" | "security" | "access";
 type LifecycleAction = "start" | "stop" | "destroy";
 
 export function SandboxDetailPage({ client }: { client: MenderClient }) {
@@ -137,6 +138,7 @@ export function SandboxDetailPage({ client }: { client: MenderClient }) {
             items={[
               { value: "overview", label: "Sandbox overview" },
               { value: "security", label: "Security boundary" },
+              { value: "access", label: "Profile access" },
             ]}
           />
         ) : undefined}
@@ -192,6 +194,8 @@ export function SandboxDetailPage({ client }: { client: MenderClient }) {
                   {t("State is last observed; unsupported lifecycle operations are not available.")}
                 </p>
               </DataPanel>
+            ) : topic === "access" ? (
+              <SandboxAccessPanel key={item.sandboxId} client={client} sandbox={item} />
             ) : (
               <DataPanel title="Security boundary" description="Isolation depends on the actual backend, not the Sandbox name.">
                 <div className="flex flex-col gap-4 p-5">

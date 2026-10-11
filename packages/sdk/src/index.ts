@@ -53,6 +53,7 @@ export type {
   SandboxProfileGrant,
   SandboxProfileCapability,
   SandboxProfileGrantEvents,
+  SandboxProfileGrantEvent,
   ReplaceSandboxProfileGrantsRequest,
   SearchToolsInput,
   SkillDeployment,

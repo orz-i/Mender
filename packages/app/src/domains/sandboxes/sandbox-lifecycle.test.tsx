@@ -179,6 +179,19 @@ describe("Sandbox lifecycle management", () => {
     expect(screen.getByText(local.sandboxId)).toBeTruthy();
   });
 
+  it("separates Profile access from Sandbox overview", async () => {
+    mount({
+      getSandbox: vi.fn().mockResolvedValue(local),
+      getSandboxProfileGrants: vi.fn().mockResolvedValue({ sandboxId: local.sandboxId, grants: [] }),
+      getSandboxProfileGrantEvents: vi.fn().mockResolvedValue({ sandboxId: local.sandboxId, events: [] }),
+      listProfiles: vi.fn().mockResolvedValue({ profiles: [] }),
+    });
+    expect(await screen.findByText(local.sandboxId)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Profile access" }));
+    expect(await screen.findByText(/No Profile access granted/)).toBeTruthy();
+    expect(screen.queryByText(local.sandboxId)).toBeNull();
+  });
+
   it("does not display unsupported lifecycle actions on unregistered backends", async () => {
     mount({ getSandbox: vi.fn().mockResolvedValue({ ...local, backend: "e2b", isolation: "remote" }) });
     expect(await screen.findByText("Test Sandbox")).toBeTruthy();

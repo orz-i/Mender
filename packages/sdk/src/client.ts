@@ -23,6 +23,7 @@ export type SandboxProfileGrants = components["schemas"]["SandboxProfileGrants"]
 export type SandboxProfileGrant = components["schemas"]["SandboxProfileGrant"];
 export type SandboxProfileCapability = components["schemas"]["SandboxProfileCapability"];
 export type SandboxProfileGrantEvents = components["schemas"]["SandboxProfileGrantEvents"];
+export type SandboxProfileGrantEvent = components["schemas"]["SandboxProfileGrantEvent"];
 export type ReplaceSandboxProfileGrantsRequest = components["schemas"]["ReplaceSandboxProfileGrantsRequest"];
 export type CreateLocalSandboxRequest = components["schemas"]["CreateLocalSandboxRequest"];
 export type CreateDockerSandboxRequest = components["schemas"]["CreateDockerSandboxRequest"];
