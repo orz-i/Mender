@@ -3,6 +3,7 @@ package bootstrap
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -89,6 +90,59 @@ func TestRuntimeDockerAutodiscoveryLive(t *testing.T) {
 	}
 	if dockerCount != 1 {
 		t.Fatalf("auto-discovered Docker entries: %d", dockerCount)
+	}
+	// Do not stop the user's Docker Desktop to simulate an outage.
+	// Exercise the exact Runtime management/Router health projection
+	// and recover by probing the still-running original daemon.
+	select {
+	case <-r.Sandboxes.dockerAutoDone:
+		t.Fatal("Docker monitoring stopped after first connection")
+	default:
+	}
+	controller := r.Sandboxes.dockerController()
+	probe, err := controller.Probe(ctx)
+	if err != nil || probe.EngineID == "" {
+		t.Fatalf("Docker Engine identity not pinned: %+v %v", probe, err)
+	}
+	owner := r.OwnerPrincipal()
+	resource, err := sand.NewSandbox(sand.Spec{
+		ID: "sbx_0123456789abcdef0123456789abcdef", Name: "Health projection",
+		Backend: sand.BackendDocker, Binding: sand.BuiltinBinding(sand.BackendDocker),
+		Isolation: sand.IsolationContainer, OwnerKind: string(owner.Kind()), OwnerRef: owner.Reference(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.Sandboxes.updateDockerHealth(controller, errors.New("simulated Engine outage"))
+	if r.Sandboxes.DockerAvailable() || r.Sandboxes.BackendAvailable(resource) {
+		t.Fatal("Docker Sandbox still available after observed Engine loss")
+	}
+	offline, err := r.ListPluginCatalogue(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, plugin := range offline {
+		if plugin.PluginID == "io.mender.sandbox.docker" &&
+			(plugin.Status != "unavailable" || plugin.Enabled || plugin.Issue == "") {
+			t.Fatalf("registered but disconnected Engine still enabled: %+v", plugin)
+		}
+	}
+	if _, err := r.Sandboxes.ListDockerImages(ctx); !errors.Is(err, sand.ErrBackendUnavailable) {
+		t.Fatalf("offline Engine still exposed immutable images: %v", err)
+	}
+	if !r.Sandboxes.refreshDockerHealth(ctx) || !r.Sandboxes.DockerAvailable() ||
+		!r.Sandboxes.BackendAvailable(resource) {
+		t.Fatal("same pinned Docker Engine was not recovered")
+	}
+	restored, err := r.ListPluginCatalogue(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, plugin := range restored {
+		if plugin.PluginID == "io.mender.sandbox.docker" &&
+			(plugin.Status != "enabled" || !plugin.Enabled || plugin.Issue != "") {
+			t.Fatalf("recovered Docker plugin did not return to enabled: %+v", plugin)
+		}
 	}
 }
 

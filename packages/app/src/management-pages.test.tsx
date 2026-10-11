@@ -825,6 +825,34 @@ describe("management pages", () => {
     }
   });
 
+  it("updates a connected Docker card on outage and same-Engine recovery",async()=>{
+    const docker=(status:"enabled"|"unavailable")=>({
+      key:"io.mender.sandbox.docker@builtin",
+      pluginId:"io.mender.sandbox.docker",extensionId:"main",kind:"sandbox.backend" as const,
+      displayName:"Docker Engine",description:"Trusted Docker backend",
+      packageVersion:"1.0.0",sourceKind:"builtin" as const,
+      status,enabled:status==="enabled",capabilities:["file.read"],usageCount:0,
+      ...(status==="unavailable"?{issue:"Docker Engine disconnected or insecure; retrying"}:{}),
+    });
+    const listPluginCatalogue=vi.fn()
+      .mockResolvedValueOnce({plugins:[docker("enabled")]})
+      .mockResolvedValueOnce({plugins:[docker("unavailable")]})
+      .mockResolvedValue({plugins:[docker("enabled")]});
+    const polling=captureDockerPolling();
+    try {
+      renderApp("/plugins/io.mender.sandbox.docker%40builtin",{listPluginCatalogue});
+      expect(await screen.findByRole("button",{name:"Create sandbox"})).toBeTruthy();
+      await polling.tick();
+      expect(screen.queryByRole("button",{name:"Create sandbox"})).toBeNull();
+      expect(screen.getByText(/Docker Engine disconnected or insecure; retrying/)).toBeTruthy();
+      await polling.tick();
+      expect(screen.getByRole("button",{name:"Create sandbox"})).toBeTruthy();
+      expect(listPluginCatalogue).toHaveBeenCalledTimes(3);
+    } finally {
+      polling.restore();
+    }
+  });
+
   it("keeps unverified Docker unavailable without a privileged Web action",async()=>{
     const pluginId="io.mender.sandbox.docker";
     const listPluginCatalogue=vi.fn().mockResolvedValue({plugins:[{

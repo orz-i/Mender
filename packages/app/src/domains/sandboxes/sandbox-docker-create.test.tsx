@@ -88,6 +88,41 @@ describe("Docker Sandbox creation UX", () => {
     }
   });
 
+  it("disables a Docker create form on Engine loss and re-enables on same-Engine recovery",async()=>{
+    const getSandboxBackends=vi.fn()
+      .mockResolvedValueOnce({dockerAvailable:true,dockerStatus:"ready"})
+      .mockResolvedValueOnce({dockerAvailable:false,dockerStatus:"Docker Engine disconnected or insecure; retrying"})
+      .mockResolvedValue({dockerAvailable:true,dockerStatus:"ready"});
+    let tick:(()=>void)|undefined;
+    const original=window.setInterval.bind(window);
+    const spy=vi.spyOn(window,"setInterval").mockImplementation((handler,delay)=>{
+      if(delay===5000 && typeof handler==="function"){
+        tick=handler as ()=>void;
+        return -1;
+      }
+      return original(handler,delay);
+    });
+    try {
+      showCreate({
+        getRuntimeGovernance:vi.fn().mockResolvedValue(runtimeGovernanceStub()),
+        getSandboxBackends,
+      });
+      fireEvent.click(await screen.findByRole("button",{name:/Docker/}));
+      await screen.findByRole("option",{name:/alpine:3.22/});
+      fireEvent.change(screen.getByRole("textbox",{name:"Sandbox name"}),{target:{value:"Guarded Docker"}});
+      expect(screen.getByRole<HTMLButtonElement>("button",{name:"Next"}).disabled).toBe(false);
+      if(!tick)throw new Error("Docker health refresh timer missing");
+      await act(async()=>{tick?.();await Promise.resolve();});
+      expect(screen.getByRole<HTMLButtonElement>("button",{name:"Next"}).disabled).toBe(true);
+      expect(screen.getByRole("status").textContent).toContain("Docker Engine disconnected or insecure; retrying");
+      await act(async()=>{tick?.();await Promise.resolve();});
+      expect(screen.getByRole<HTMLButtonElement>("button",{name:"Next"}).disabled).toBe(false);
+      expect(getSandboxBackends).toHaveBeenCalledTimes(3);
+    }finally{
+      spy.mockRestore();
+    }
+  });
+
   it("requires a reviewed pinned image and creates through the typed Docker API", async () => {
     const createDockerSandbox = vi.fn().mockResolvedValue(created);
     showCreate({

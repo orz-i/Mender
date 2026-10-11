@@ -869,6 +869,8 @@ export const zhCNMessages: Readonly<Record<string, string>> = {
   "Docker Engine not detected": "尚未检测到 Docker Engine",
   "Docker Engine is not configured": "Docker Engine 尚未配置",
   "Docker Engine unavailable or insecure": "Docker Engine 不可用或安全校验未通过",
+  "Docker Engine disconnected or insecure; retrying": "Docker Engine 已断开或安全校验未通过，正在重试",
+  "Docker Engine identity changed; restart Mender to review": "检测到 Docker Engine 身份变化，请重启 Mender 并核查沙盒",
   "Mender Desktop automatically discovers local Docker engines. Start Docker Desktop or Colima to connect. For headless runtimes, configure MENDER_DOCKER_SOCKET.": "Mender 桌面端会自动发现本地 Docker Engine。启动 Docker Desktop 或 Colima 后将自动连接。无界面运行时需要配置 MENDER_DOCKER_SOCKET。",
   "Degraded": "异常",
   "Disable {{plugin}}": "禁用 {{plugin}}",

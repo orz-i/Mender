@@ -16,6 +16,7 @@ import { Input } from "@mender/ui/components/input";
 
 import { t } from "../../i18n/i18n";
 import { errorMessage } from "../../shared/errors";
+import { dockerStatusText } from "../../shared/docker-status";
 import { ErrorNotice } from "../../shared/page";
 import { IconButton } from "../../shared/icon-button";
 import { PageToolbar } from "../../shared/page-toolbar";
@@ -233,12 +234,14 @@ export function CreateSandboxPage({
     return () => { active = false; };
   }, [client]);
 
-  // Docker may start after the Create view opened. Refresh only while
-  // unavailable; connection is performed by the native host, not this UI.
+  // Observe loss/recovery as well as initial discovery; polling is read-only.
+  // A daemon outage disables provisioning even if the form is already open.
   useEffect(() => {
-    if (dockerAvailable) return;
     let active = true;
+    let pending = false;
     const timer = window.setInterval(() => {
+      if (pending) return;
+      pending = true;
       void client.getSandboxBackends()
         .then((info) => {
           if (!active) return;
@@ -246,11 +249,15 @@ export function CreateSandboxPage({
           setDockerStatus(info.dockerStatus);
         })
         .catch((reason: unknown) => {
-          if (active) setDockerStatus(errorMessage(reason));
-        });
+          if (active) {
+            setDockerAvailable(false);
+            setDockerStatus(errorMessage(reason));
+          }
+        })
+        .finally(() => { pending = false; });
     }, 5000);
     return () => { active = false; window.clearInterval(timer); };
-  }, [client, dockerAvailable]);
+  }, [client]);
 
   useEffect(() => {
     if (!dockerAvailable) return;
@@ -351,7 +358,7 @@ export function CreateSandboxPage({
               <BackendChoice label={t("Docker")} icon={ContainerIcon}
                 description={t("Isolated, locally cached immutable image; no network, no host mounts.")}
                 {...(dockerAvailable ? { onClick: () => chooseBackend("docker") } : {
-                  disabledReason: dockerStatus || t("Configure MENDER_DOCKER_SOCKET on the Runtime host."),
+                  disabledReason: dockerStatus ? dockerStatusText(dockerStatus) : t("Configure MENDER_DOCKER_SOCKET on the Runtime host."),
                 })} />
               <BackendChoice label={t("Daytona") + " · " + t("Experimental")} icon={CloudIcon}
                 description={t("Remote Daytona Sandbox uses a Mender credential and incurs provider charges. Provider availability is verified on creation.")}
@@ -365,6 +372,11 @@ export function CreateSandboxPage({
 
           {step === "configure" ? (
             <section aria-label={t("Configuration")} className="flex max-w-2xl flex-col gap-5">
+              {selected === "docker" && !dockerAvailable ? (
+                <p role="status" className="text-sm text-muted-foreground">
+                  {dockerStatusText(dockerStatus || "Docker Engine not detected")}
+                </p>
+              ) : null}
               <label className="grid gap-2 text-sm">
                 <span className="font-medium">{t("Sandbox name")}</span>
                 <Input aria-label={t("Sandbox name")} value={name} maxLength={160}

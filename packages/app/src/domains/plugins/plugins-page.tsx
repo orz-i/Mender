@@ -31,6 +31,7 @@ import {
 
 import { formatDateTime, formatNumber, t } from "../../i18n/i18n";
 import { errorMessage } from "../../shared/errors";
+import { dockerStatusText } from "../../shared/docker-status";
 import { IconButton } from "../../shared/icon-button";
 import { EmptyState, ErrorNotice } from "../../shared/page";
 import { FocusSwitch } from "../../shared/focus-switch";
@@ -407,7 +408,7 @@ export function PluginDetailPage({ client }: { client: MenderClient }) {
           {plugin.issue !== undefined ? (
             <ErrorNotice
               message={plugin.status === "unavailable" && plugin.key === "io.mender.sandbox.docker@builtin"
-                ? dockerAvailabilityMessage(plugin.issue.message) + " " + t("Mender Desktop automatically discovers local Docker engines. Start Docker Desktop or Colima to connect. For headless runtimes, configure MENDER_DOCKER_SOCKET.")
+                ? dockerStatusText(plugin.issue.message) + " " + t("Mender Desktop automatically discovers local Docker engines. Start Docker Desktop or Colima to connect. For headless runtimes, configure MENDER_DOCKER_SOCKET.")
                 : t("Plugin issue: {{message}}", { message: plugin.issue.message })}
             />
           ) : null}
@@ -522,13 +523,14 @@ function useMarketplacePlugins(client: MenderClient) {
     };
   }, [client]);
 
-  // The native host probes in the background. Keep discovery/read-only
-  // Marketplace projections fresh without requiring manual connection.
-  const dockerPending = plugins.some(
-    (item) => item.key === "io.mender.sandbox.docker@builtin" && item.status === "unavailable",
+  // The native host monitors the same pinned Engine after first connection.
+  // Refresh both ready and unavailable statuses so daemon shutdown and
+  // recovery are visible without manual interaction or daemon I/O from UI.
+  const dockerPresent = plugins.some(
+    (item) => item.key === "io.mender.sandbox.docker@builtin",
   );
   useEffect(() => {
-    if (!dockerPending) return;
+    if (!dockerPresent) return;
     let pending = false;
     const timer = window.setInterval(() => {
       if (pending) return;
@@ -536,7 +538,7 @@ function useMarketplacePlugins(client: MenderClient) {
       void refresh().finally(() => { pending = false; });
     }, 5000);
     return () => window.clearInterval(timer);
-  }, [dockerPending, refresh]);
+  }, [dockerPresent, refresh]);
 
   return {
     plugins,
@@ -711,19 +713,6 @@ function pluginSourceLabel(plugin: MarketplacePlugin) {
       return t("Local package");
     default:
       return plugin.sourceLabel;
-  }
-}
-
-function dockerAvailabilityMessage(message: string) {
-  switch (message) {
-    case "Docker Engine not detected":
-      return t("Docker Engine not detected");
-    case "Docker Engine is not configured":
-      return t("Docker Engine is not configured");
-    case "Docker Engine unavailable or insecure":
-      return t("Docker Engine unavailable or insecure");
-    default:
-      return message;
   }
 }
 
