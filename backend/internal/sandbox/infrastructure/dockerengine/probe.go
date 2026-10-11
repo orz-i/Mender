@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	mobyclient "github.com/moby/moby/client"
@@ -26,10 +27,18 @@ type probeAPI interface {
 
 // Inspector is a read-only SDK-backed host-owned Engine capability and local
 // image observer; it is NOT an operational Sandbox Backend yet.
+// ErrEngineIdentityChanged signals an otherwise healthy but *different*
+// daemon behind a previously verified Socket. Never silently rebind Sandboxes
+// and their persisted Runs/leases to this new identity.
+var ErrEngineIdentityChanged = errors.New("docker engine identity changed")
+
 type Inspector struct {
 	endpoint EngineEndpoint
 	api      probeAPI
 	close    func() error
+
+	mu             sync.Mutex
+	pinnedEngineID string
 }
 
 func NewInspector(endpoint EngineEndpoint) (*Inspector, error) {
@@ -53,6 +62,8 @@ func (i *Inspector) Close() error {
 }
 
 type Probe struct {
+	// EngineID is host-internal and must never appear in management projection.
+	EngineID       string
 	EngineVersion  string
 	APIVersion     string
 	OSType         string
@@ -85,6 +96,7 @@ func (i *Inspector) Probe(ctx context.Context) (Probe, error) {
 		return Probe{}, safeDaemonError(limited, err)
 	}
 	c := Probe{
+		EngineID:       info.Info.ID,
 		EngineVersion:  info.Info.ServerVersion,
 		APIVersion:     ping.APIVersion,
 		OSType:         info.Info.OSType,
@@ -94,8 +106,16 @@ func (i *Inspector) Probe(ctx context.Context) (Probe, error) {
 		MemoryLimits:   info.Info.MemoryLimit,
 		PIDsLimit:      info.Info.PidsLimit,
 	}
-	if c.OSType != "linux" || c.CgroupVersion != "2" || !c.SeccompBuiltin || !c.CPULimits || !c.MemoryLimits || !c.PIDsLimit || c.EngineVersion == "" {
-		return Probe{}, fmt.Errorf("docker engine: required Linux seccomp/cgroup resource controls unavailable: %w", sandboxdomain.ErrBackendUnavailable)
+	if c.OSType != "linux" || c.CgroupVersion != "2" || !c.SeccompBuiltin || !c.CPULimits || !c.MemoryLimits || !c.PIDsLimit ||
+		c.EngineVersion == "" || len(c.EngineID) == 0 || len(c.EngineID) > 128 || strings.TrimSpace(c.EngineID) != c.EngineID {
+		return Probe{}, fmt.Errorf("docker engine: required identity/Linux seccomp/cgroup resource controls unavailable: %w", sandboxdomain.ErrBackendUnavailable)
+	}
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	if i.pinnedEngineID == "" {
+		i.pinnedEngineID = c.EngineID
+	} else if i.pinnedEngineID != c.EngineID {
+		return Probe{}, errors.Join(sandboxdomain.ErrBackendUnavailable, ErrEngineIdentityChanged)
 	}
 	return c, nil
 }

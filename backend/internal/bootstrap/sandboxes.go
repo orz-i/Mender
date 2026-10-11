@@ -40,6 +40,7 @@ type Sandboxes struct {
 	dockerAutoCancel           context.CancelFunc
 	dockerAutoDone             chan struct{}
 	dockerClosed               bool
+	dockerReady                bool
 	docker                     *sandboxdocker.Provisioner
 	dockerTemplates            *sandboxdocker.TemplateStore
 	dockerUnavailableReason    string
@@ -67,7 +68,7 @@ func NewSandboxes(ctx context.Context, databasePath string, policy sandboxapplic
 	component := &Sandboxes{store: store, admission: gate, launcher: launcher, profileExists: profileExists, dockerDatabasePath: databasePath, dockerUnavailableReason: "Docker Engine is not configured"}
 	backends := []sandboxapplication.Backend{localBackend}
 	if dockerBackend, err := component.configureDocker(ctx, databasePath, gate); err == nil && dockerBackend != nil {
-		backends = append(backends, dockerBackend)
+		backends = append(backends, dockerBackendGate{owner: component, backend: dockerBackend})
 	} else if err != nil {
 		component.dockerUnavailableReason = "Docker Engine unavailable or insecure"
 	}
@@ -124,6 +125,7 @@ func (s *Sandboxes) Close() error {
 	}
 	s.dockerMu.Lock()
 	s.dockerClosed = true
+	s.dockerReady = false
 	cancel, done := s.dockerAutoCancel, s.dockerAutoDone
 	s.dockerMu.Unlock()
 	if cancel != nil {

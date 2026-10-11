@@ -135,7 +135,13 @@ func (r *Runtime) ListPluginCatalogue(ctx context.Context) ([]PluginCatalogueEnt
 		if err := descriptor.Validate(); err != nil {
 			return nil, err
 		}
-		result = append(result, pluginEntry(descriptor, "builtin", nil, usage[descriptor.PluginID.String()+"@builtin"]))
+		item := pluginEntry(descriptor, "builtin", nil, usage[descriptor.PluginID.String()+"@builtin"])
+		if entry.Kind == sandboxdomain.BackendDocker && !r.Sandboxes.DockerAvailable() {
+			item.Status = "unavailable"
+			item.Enabled = false
+			item.Issue = r.Sandboxes.DockerStatus()
+		}
+		result = append(result, item)
 	}
 	if !dockerRegistered {
 		descriptor, err := sandboxpluginregistry.DockerCatalogueDescriptor()

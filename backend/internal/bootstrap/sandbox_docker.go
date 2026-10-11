@@ -58,13 +58,14 @@ func (s *Sandboxes) configureDocker(ctx context.Context, _ string, _ sandboxappl
 	}
 	s.docker = controller
 	s.dockerTemplates = templates
+	s.dockerReady = true
 	s.dockerUnavailableReason = ""
 	return backend, nil
 }
 
-// ActivateDocker enables the existing trusted Sandbox backend in this Runtime
-// process, after an explicit *local operator* action. Neither Web management
-// nor a Tool/Provider can activate Docker or choose its daemon endpoint.
+// ActivateDocker binds the one verified, host-selected UNIX Engine in this Runtime.
+// Only the native Desktop discovery worker or trusted explicit host setup calls
+// this method. Neither HTTP, model Tools nor Providers choose the endpoint.
 // An unsuccessful activation leaves the Router without a Docker registration.
 func (s *Sandboxes) ActivateDocker(ctx context.Context, rawEndpoint string) error {
 	if s == nil || s.store == nil || s.backendPlugins == nil {
@@ -89,16 +90,19 @@ func (s *Sandboxes) ActivateDocker(ctx context.Context, rawEndpoint string) erro
 		// The registry holds the exact identity/capability binding.
 		s.docker = controller
 		s.dockerTemplates = templates
-		err = s.backendPlugins.RegisterBuiltinWithLifecycle(backend, descriptor, dockerLifecycle{sandboxes: s})
+		err = s.backendPlugins.RegisterBuiltinWithLifecycle(
+			dockerBackendGate{owner: s, backend: backend}, descriptor, dockerLifecycle{sandboxes: s})
 	}
 	if err != nil {
 		s.docker = nil
 		s.dockerTemplates = nil
+		s.dockerReady = false
 		s.dockerUnavailableReason = "Docker Engine unavailable or insecure"
 		_ = controller.Close()
 		_ = templates.Close()
 		return err
 	}
+	s.dockerReady = true
 	s.dockerUnavailableReason = ""
 	return nil
 }
@@ -109,6 +113,9 @@ func (s *Sandboxes) dockerController() *sandboxdocker.Provisioner {
 	}
 	s.dockerMu.RLock()
 	defer s.dockerMu.RUnlock()
+	if s.dockerClosed || !s.dockerReady {
+		return nil
+	}
 	return s.docker
 }
 
@@ -120,7 +127,7 @@ func (s *Sandboxes) ListDockerImages(ctx context.Context) ([]sandboxdocker.Cache
 	}
 	s.dockerMu.RLock()
 	defer s.dockerMu.RUnlock()
-	if s.dockerClosed || s.docker == nil || s.dockerTemplates == nil {
+	if s.dockerClosed || !s.dockerReady || s.docker == nil || s.dockerTemplates == nil {
 		return nil, sandboxdomain.ErrBackendUnavailable
 	}
 	return s.docker.ListLocalImages(ctx)
@@ -132,7 +139,7 @@ func (s *Sandboxes) DockerAvailable() bool {
 	}
 	s.dockerMu.RLock()
 	defer s.dockerMu.RUnlock()
-	return s.docker != nil && s.dockerTemplates != nil
+	return !s.dockerClosed && s.dockerReady && s.docker != nil && s.dockerTemplates != nil
 }
 func (s *Sandboxes) DockerStatus() string {
 	if s == nil {
@@ -140,13 +147,19 @@ func (s *Sandboxes) DockerStatus() string {
 	}
 	s.dockerMu.RLock()
 	defer s.dockerMu.RUnlock()
-	if s.docker != nil && s.dockerTemplates != nil {
+	if !s.dockerClosed && s.dockerReady && s.docker != nil && s.dockerTemplates != nil {
 		return "ready"
 	}
 	return s.dockerUnavailableReason
 }
 func (s *Sandboxes) BackendAvailable(item sandboxdomain.Sandbox) bool {
-	return s != nil && s.backendPlugins != nil && s.backendPlugins.Available(item.Backend(), item.Spec().Binding)
+	if s == nil || s.backendPlugins == nil {
+		return false
+	}
+	if item.Backend() == sandboxdomain.BackendDocker && !s.DockerAvailable() {
+		return false
+	}
+	return s.backendPlugins.Available(item.Backend(), item.Spec().Binding)
 }
 
 type CreateDockerSandboxRequest struct {
@@ -163,7 +176,7 @@ func (s *Sandboxes) CreateDockerSandbox(ctx context.Context, request CreateDocke
 	}
 	s.dockerMu.RLock()
 	defer s.dockerMu.RUnlock()
-	if s.docker == nil || s.dockerTemplates == nil {
+	if s.dockerClosed || !s.dockerReady || s.docker == nil || s.dockerTemplates == nil {
 		return sandboxdomain.Sandbox{}, sandboxdomain.ErrBackendUnavailable
 	}
 	if err := caller.Validate(); err != nil {

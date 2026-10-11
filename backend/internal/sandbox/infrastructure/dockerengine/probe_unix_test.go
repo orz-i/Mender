@@ -47,7 +47,7 @@ func newProbeFixture(t *testing.T) (*Inspector, *probeFake) {
 	f := &probeFake{
 		ping: mobyclient.PingResult{APIVersion: "1.56", OSType: "linux"},
 		info: mobyclient.SystemInfoResult{Info: apisystem.Info{
-			ServerVersion: "29.8.0", OSType: "linux", CgroupVersion: "2", CPUCfsQuota: true, CPUCfsPeriod: true, MemoryLimit: true, PidsLimit: true, SecurityOptions: []string{"name=seccomp,profile=builtin"},
+			ID: "engine-A", ServerVersion: "29.8.0", OSType: "linux", CgroupVersion: "2", CPUCfsQuota: true, CPUCfsPeriod: true, MemoryLimit: true, PidsLimit: true, SecurityOptions: []string{"name=seccomp,profile=builtin"},
 		}},
 	}
 	return &Inspector{endpoint: endpoint, api: f}, f
@@ -91,6 +91,7 @@ func TestDockerEngineProbeFailsClosedOnMissingHardGuarantees(t *testing.T) {
 		{"memory not enforced", func(f *probeFake) { f.info.Info.MemoryLimit = false }},
 		{"PID not enforced", func(f *probeFake) { f.info.Info.PidsLimit = false }},
 		{"missing server version", func(f *probeFake) { f.info.Info.ServerVersion = "" }},
+		{"missing engine identity", func(f *probeFake) { f.info.Info.ID = "" }},
 	}
 	for _, tc := range mutations {
 		t.Run(tc.name, func(t *testing.T) {
@@ -104,6 +105,32 @@ func TestDockerEngineProbeFailsClosedOnMissingHardGuarantees(t *testing.T) {
 				t.Fatal("daemon error leaked socket path")
 			}
 		})
+	}
+}
+
+func TestDockerEngineIdentityPinnedAcrossDisconnectionAndReconnect(t *testing.T) {
+	i, fake := newProbeFixture(t)
+	ctx := context.Background()
+	first, err := i.Probe(ctx)
+	if err != nil || first.EngineID != "engine-A" {
+		t.Fatalf("first Engine pin %+v, %v", first, err)
+	}
+	fake.pingErr = errors.New("socket unavailable")
+	if _, err := i.Probe(ctx); !errors.Is(err, sandboxdomain.ErrBackendUnavailable) {
+		t.Fatalf("disconnection must fail closed: %v", err)
+	}
+	fake.pingErr = nil
+	if _, err := i.Probe(ctx); err != nil {
+		t.Fatalf("same Engine after restart must recover: %v", err)
+	}
+	fake.info.Info.ID = "engine-B"
+	if _, err := i.Probe(ctx); !errors.Is(err, ErrEngineIdentityChanged) ||
+		!errors.Is(err, sandboxdomain.ErrBackendUnavailable) {
+		t.Fatalf("different Engine must fail identity fence: %v", err)
+	}
+	fake.info.Info.ID = "engine-A"
+	if _, err := i.Probe(ctx); err != nil {
+		t.Fatalf("original Engine may recover: %v", err)
 	}
 }
 

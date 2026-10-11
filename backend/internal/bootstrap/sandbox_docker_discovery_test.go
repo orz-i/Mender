@@ -2,31 +2,36 @@ package bootstrap
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	sandboxdocker "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/dockerengine"
 )
 
-func TestDockerDiscoveryRetriesUntilEngineReady(t *testing.T) {
+func TestDockerMonitorContinuesAfterInitialConnectionUntilCancelled(t *testing.T) {
 	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	var count atomic.Int32
 	done := make(chan struct{})
 	go func() {
-		runDockerDiscovery(ctx, 5*time.Millisecond, func(context.Context) bool {
-			return count.Add(1) >= 3
+		runDockerMonitor(ctx, 5*time.Millisecond, func(context.Context) {
+			if count.Add(1) >= 4 {
+				cancel()
+			}
 		})
 		close(done)
 	}()
 	select {
 	case <-done:
-		if count.Load() != 3 {
-			t.Fatalf("unexpected probes: %d", count.Load())
+		if count.Load() != 4 {
+			t.Fatalf("monitor stopped prematurely or ignored cancellation: %d", count.Load())
 		}
-	case <-ctx.Done():
-		t.Fatal("Docker discovery failed to retry and stop")
+	case <-time.After(time.Second):
+		t.Fatal("Docker monitor did not complete")
 	}
 }
 
@@ -37,14 +42,13 @@ func TestDockerDiscoveryCancelledOnShutdown(t *testing.T) {
 	done := make(chan struct{})
 	var count atomic.Int32
 	go func() {
-		runDockerDiscovery(ctx, 5*time.Millisecond, func(context.Context) bool {
+		runDockerMonitor(ctx, 5*time.Millisecond, func(context.Context) {
 			count.Add(1)
 			select {
 			case <-first:
 			default:
 				close(first)
 			}
-			return false
 		})
 		close(done)
 	}()
@@ -104,12 +108,45 @@ func TestDockerAutoDiscoverySingleWorkerAndRuntimeShutdown(t *testing.T) {
 	}
 }
 
+func TestDockerHealthFailClosedAndSameIdentityRecovery(t *testing.T) {
+	t.Parallel()
+	controller := &sandboxdocker.Provisioner{}
+	s := &Sandboxes{
+		docker: controller, dockerTemplates: &sandboxdocker.TemplateStore{},
+		dockerReady: true,
+	}
+	if !s.DockerAvailable() || s.DockerStatus() != "ready" {
+		t.Fatal("ready Engine not reported")
+	}
+	s.updateDockerHealth(controller, errors.New("socket disconnected"))
+	if s.DockerAvailable() || s.DockerStatus() != "Docker Engine disconnected or insecure; retrying" {
+		t.Fatalf("unhealthy Engine still exposed: %q", s.DockerStatus())
+	}
+	s.updateDockerHealth(controller, errors.Join(sandboxdocker.ErrEngineIdentityChanged, errors.New("untrusted daemon")))
+	if s.DockerAvailable() || s.DockerStatus() != "Docker Engine identity changed; restart Mender to review" {
+		t.Fatalf("Engine drift accepted: %q", s.DockerStatus())
+	}
+	s.updateDockerHealth(controller, nil)
+	if !s.DockerAvailable() || s.DockerStatus() != "ready" {
+		t.Fatalf("same verified Engine did not recover: %q", s.DockerStatus())
+	}
+	s.updateDockerHealth(&sandboxdocker.Provisioner{}, errors.New("stale controller"))
+	if !s.DockerAvailable() {
+		t.Fatal("stale Controller overwrote healthy Engine")
+	}
+	s.dockerClosed = true
+	s.updateDockerHealth(controller, nil)
+	if s.DockerAvailable() {
+		t.Fatal("closed Runtime still exposes Docker")
+	}
+}
+
 func TestDockerDiscoveryStopsOnCancelledContextBeforeInitialProbe(t *testing.T) {
 	t.Parallel()
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	count := 0
-	runDockerDiscovery(ctx, time.Millisecond, func(context.Context) bool { count++; return true })
+	runDockerMonitor(ctx, time.Millisecond, func(context.Context) { count++ })
 	if count != 0 {
 		t.Fatal("probe executed after shutdown")
 	}
