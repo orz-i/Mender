@@ -112,6 +112,20 @@ func (s *Sandboxes) dockerController() *sandboxdocker.Provisioner {
 	return s.docker
 }
 
+// ListDockerImages surfaces verified read-only local image choices to an
+// authorized management UI. It does not create Sandboxes or pull images.
+func (s *Sandboxes) ListDockerImages(ctx context.Context) ([]sandboxdocker.CachedImage, error) {
+	if s == nil {
+		return nil, sandboxdomain.ErrBackendUnavailable
+	}
+	s.dockerMu.RLock()
+	defer s.dockerMu.RUnlock()
+	if s.dockerClosed || s.docker == nil || s.dockerTemplates == nil {
+		return nil, sandboxdomain.ErrBackendUnavailable
+	}
+	return s.docker.ListLocalImages(ctx)
+}
+
 func (s *Sandboxes) DockerAvailable() bool {
 	if s == nil {
 		return false

@@ -89,6 +89,9 @@ func TestDesktopDockerBackendUnavailableWithoutExplicitSocket(t *testing.T) {
 	if err != nil || backends.DockerAvailable {
 		t.Fatalf("backend status %+v %v", backends, err)
 	}
+	if images, err := service.ListDockerImages(); !errors.Is(err, sandboxdomain.ErrBackendUnavailable) || len(images.Images) != 0 {
+		t.Fatalf("unconfigured Docker image inventory %+v %v", images, err)
+	}
 	_, err = service.CreateDockerSandbox(CreateDockerSandboxInput{Name: "No Engine", ImageDigest: "docker.io/library/alpine@sha256:" + strings.Repeat("a", 64), UserID: 10001, GroupID: 10001, CPUmilli: 1000, MemoryMiB: 512, WorkspaceMiB: 64, PIDs: 64})
 	if !errors.Is(err, sandboxdomain.ErrBackendUnavailable) {
 		t.Fatalf("created Docker Sandbox without socket: %v", err)

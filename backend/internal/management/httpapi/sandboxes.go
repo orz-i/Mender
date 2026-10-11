@@ -184,6 +184,20 @@ type createDockerSandboxRequest struct {
 func (h *Handler) sandboxBackends(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"dockerAvailable": h.runtime.Sandboxes.DockerAvailable(), "dockerStatus": h.runtime.Sandboxes.DockerStatus(), "daytonaConfigured": h.runtime.Sandboxes.DaytonaConfigured(), "daytonaStatus": h.runtime.Sandboxes.DaytonaStatus()})
 }
+
+// Cached image discovery is read-only and never accepts an Engine endpoint.
+func (h *Handler) listDockerImages(w http.ResponseWriter, r *http.Request) {
+	images, err := h.runtime.Sandboxes.ListDockerImages(r.Context())
+	if err != nil {
+		if errors.Is(err, sandboxdomain.ErrBackendUnavailable) {
+			writeAPIError(w, http.StatusServiceUnavailable, "backend_unavailable", err)
+		} else {
+			writeKnownError(w, err)
+		}
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"images": images})
+}
 func (h *Handler) createDockerSandbox(w http.ResponseWriter, r *http.Request) {
 	var input createDockerSandboxRequest
 	if err := decodeJSON(r, &input); err != nil {

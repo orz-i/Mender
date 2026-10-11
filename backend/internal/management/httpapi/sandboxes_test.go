@@ -129,6 +129,7 @@ func TestSandboxManagementDockerFailsClosedWithoutTrustedEngine(t *testing.T) {
 	if status["dockerAvailable"] != false {
 		t.Fatalf("Docker unexpectedly enabled %+v", status)
 	}
+	requestJSON(t, server.Client(), http.MethodGet, server.URL+"/api/v1/sandboxes/docker/images", nil, http.StatusServiceUnavailable)
 	requestJSON(t, server.Client(), http.MethodPost, server.URL+"/api/v1/sandboxes/docker", map[string]any{
 		"name": "Denied Docker", "imageDigest": "docker.io/library/alpine@sha256:" + strings.Repeat("a", 64),
 		"userId": 10001, "groupId": 10001, "cpuMilli": 1000, "memoryMiB": 512, "workspaceMiB": 64, "pids": 64,

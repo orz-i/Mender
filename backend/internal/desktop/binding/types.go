@@ -66,6 +66,15 @@ type SandboxProfileGrantEvents struct {
 	Events    []SandboxProfileGrantEvent `json:"events"`
 }
 
+// CachedDockerImage is an immutable local image option for a focused
+// management form; neither tags nor references grant daemon access.
+type CachedDockerImage struct {
+	ImageDigest string `json:"imageDigest"`
+	DisplayName string `json:"displayName"`
+}
+type CachedDockerImageList struct {
+	Images []CachedDockerImage `json:"images"`
+}
 type DockerBackendStatus struct {
 	DaytonaConfigured bool   `json:"daytonaConfigured"`
 	DaytonaStatus     string `json:"daytonaStatus"`

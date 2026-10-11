@@ -225,6 +225,10 @@ export function ListCredentials(): $CancellablePromise<$models.CredentialList> {
     return $Call.ByID(3050037706);
 }
 
+export function ListDockerImages(): $CancellablePromise<$models.CachedDockerImageList> {
+    return $Call.ByID(3849820578);
+}
+
 export function ListMCPServers(): $CancellablePromise<$models.MCPServerList> {
     return $Call.ByID(3824735736);
 }

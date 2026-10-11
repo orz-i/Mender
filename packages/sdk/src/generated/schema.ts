@@ -566,6 +566,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/sandboxes/docker/images": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listDockerImages"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/sandboxes/docker": {
         parameters: {
             query?: never;
@@ -1750,6 +1766,12 @@ export interface components {
             config: {
                 [key: string]: unknown;
             };
+        };
+        CachedDockerImage: {
+            /** @description Exact locally verified immutable image manifest digest */
+            imageDigest: string;
+            /** @description Informational local tag or repository; never used for provisioning */
+            displayName: string;
         };
         CreateDockerSandboxRequest: {
             name: string;
@@ -2978,6 +3000,35 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["SandboxBackends"];
                 };
+            };
+        };
+    };
+    listDockerImages: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Bounded list of locally cached and verified immutable Docker image choices */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        images: components["schemas"]["CachedDockerImage"][];
+                    };
+                };
+            };
+            /** @description Docker Engine is unavailable or not configured */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

@@ -30,6 +30,7 @@ vi.mock(
       InstallProviderPlugin: vi.fn(),
       InstallLocalPlugin: vi.fn(),
       ListPluginCatalogue: vi.fn(),
+      ListDockerImages: vi.fn(),
       EnablePluginInstallation:vi.fn(),
       DisablePluginInstallation:vi.fn(),
       DeletePluginInstallation:vi.fn(),
@@ -179,6 +180,16 @@ describe("desktop Mender client", () => {
     expect(result.plugins.map(p=>p.kind)).toEqual(["tunnel.transport","sandbox.backend"]);
     expect(result.plugins[1]).toMatchObject({usageCount:2,installationId:"pinst_0123456789abcdef0123456789abcdef"});
     expect(Service.ListPluginCatalogue).toHaveBeenCalledTimes(1);
+  });
+
+  it("reads host-verified immutable cached Docker images from the Wails binding",async()=>{
+    const image={
+      imageDigest:"docker.io/library/alpine@sha256:"+"a".repeat(64),
+      displayName:"alpine:3.22",
+    };
+    vi.mocked(Service.ListDockerImages).mockResolvedValue({images:[image]});
+    await expect(createDesktopMenderClient().listDockerImages()).resolves.toEqual({images:[image]});
+    expect(Service.ListDockerImages).toHaveBeenCalledWith();
   });
 
   it("accepts the unavailable Docker built-in from the real typed desktop catalogue", async()=>{

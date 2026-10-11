@@ -227,6 +227,15 @@ func (p *Provisioner) WorkspaceBackend() (*Backend, error) {
 	}
 	return NewBackend(p.observer, p.templates)
 }
+
+// ListLocalImages is a read-only Engine inventory. It never mutates or pulls images.
+func (p *Provisioner) ListLocalImages(ctx context.Context) ([]CachedImage, error) {
+	if p == nil || p.observer == nil {
+		return nil, sandboxdomain.ErrBackendUnavailable
+	}
+	return p.observer.ListCachedImages(ctx)
+}
+
 func (p *Provisioner) VerifyLocalImage(ctx context.Context, template Template) (LocalImage, error) {
 	if p == nil || p.observer == nil {
 		return LocalImage{}, sandboxdomain.ErrBackendUnavailable

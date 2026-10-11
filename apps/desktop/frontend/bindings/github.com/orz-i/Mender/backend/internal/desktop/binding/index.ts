@@ -9,6 +9,8 @@ export {
 export type {
     AuditList,
     AuditRecord,
+    CachedDockerImage,
+    CachedDockerImageList,
     CreateDaytonaSandboxInput,
     CreateDockerSandboxInput,
     CreateExternalSandboxInput,

@@ -168,5 +168,9 @@ func locallyVerifiedDigest(known []string, expected string) bool {
 	if strings.HasPrefix(expected, prefix) {
 		return slices.Contains(known, strings.TrimPrefix(expected, prefix))
 	}
+	// Docker Hub also omits docker.io/ for namespaced repositories.
+	if strings.HasPrefix(expected, "docker.io/") {
+		return slices.Contains(known, strings.TrimPrefix(expected, "docker.io/"))
+	}
 	return false
 }

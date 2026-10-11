@@ -165,6 +165,17 @@ func (s *Service) changeLocalSandboxLifecycle(rawID string, action governancedom
 func (s *Service) GetSandboxBackends() (DockerBackendStatus, error) {
 	return DockerBackendStatus{DockerAvailable: s.runtime.Sandboxes.DockerAvailable(), DockerStatus: s.runtime.Sandboxes.DockerStatus(), DaytonaConfigured: s.runtime.Sandboxes.DaytonaConfigured(), DaytonaStatus: s.runtime.Sandboxes.DaytonaStatus()}, nil
 }
+func (s *Service) ListDockerImages() (CachedDockerImageList, error) {
+	available, err := s.runtime.Sandboxes.ListDockerImages(s.ctx)
+	if err != nil {
+		return CachedDockerImageList{}, err
+	}
+	images := make([]CachedDockerImage, 0, len(available))
+	for _, item := range available {
+		images = append(images, CachedDockerImage{ImageDigest: item.ImageDigest, DisplayName: item.DisplayName})
+	}
+	return CachedDockerImageList{Images: images}, nil
+}
 func (s *Service) CreateExternalSandbox(input CreateExternalSandboxInput) (Sandbox, error) {
 	id, err := platformplugin.ParseInstallationID(input.InstallationID)
 	if err != nil {

@@ -422,6 +422,12 @@ export function createDesktopMenderClient(): MenderClient {
     async getSandboxBackends() {
       return Service.GetSandboxBackends();
     },
+    async listDockerImages() {
+      const result=await Service.ListDockerImages();
+      return {images:(result.images??[]).map(image=>({
+        imageDigest:image.imageDigest,displayName:image.displayName,
+      }))};
+    },
     async createExternalSandbox(body){
       return sandbox(await Service.CreateExternalSandbox({
         name:body.name,installationId:body.installationId,configJson:JSON.stringify(body.config),

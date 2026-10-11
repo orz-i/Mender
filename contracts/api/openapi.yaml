@@ -711,6 +711,23 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/SandboxBackends' }
+  /sandboxes/docker/images:
+    get:
+      operationId: listDockerImages
+      responses:
+        '200':
+          description: Bounded list of locally cached and verified immutable Docker image choices
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [images]
+                properties:
+                  images:
+                    type: array
+                    items: { $ref: '#/components/schemas/CachedDockerImage' }
+        '503':
+          description: Docker Engine is unavailable or not configured
   /sandboxes/docker:
     post:
       operationId: createDockerSandbox
@@ -2262,6 +2279,13 @@ components:
           type: object
           description: Host-reviewed non-secret JSON constrained by exact plugin schema
           additionalProperties: true
+      additionalProperties: false
+    CachedDockerImage:
+      type: object
+      required: [imageDigest, displayName]
+      properties:
+        imageDigest: { type: string, minLength: 72, maxLength: 320, description: Exact locally verified immutable image manifest digest }
+        displayName: { type: string, maxLength: 320, description: Informational local tag or repository; never used for provisioning }
       additionalProperties: false
     CreateDockerSandboxRequest:
       type: object

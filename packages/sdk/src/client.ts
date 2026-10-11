@@ -30,6 +30,7 @@ export type SandboxProfileGrantEvent = components["schemas"]["SandboxProfileGran
 export type ReplaceSandboxProfileGrantsRequest = components["schemas"]["ReplaceSandboxProfileGrantsRequest"];
 export type CreateLocalSandboxRequest = components["schemas"]["CreateLocalSandboxRequest"];
 export type CreateDockerSandboxRequest = components["schemas"]["CreateDockerSandboxRequest"];
+export type CachedDockerImage = components["schemas"]["CachedDockerImage"];
 export type CreateDaytonaSandboxRequest = components["schemas"]["CreateDaytonaSandboxRequest"];
 export type SandboxBackends = components["schemas"]["SandboxBackends"];
 export type CreateOpenAITunnelRequest =
@@ -180,6 +181,7 @@ export interface MenderClient {
   reconcileSandbox(sandboxId:string):Promise<Sandbox>;
   reconcileDaytonaSandbox(sandboxId: string): Promise<Sandbox>;
   getSandboxBackends(): Promise<SandboxBackends>;
+  listDockerImages(): Promise<{ images: CachedDockerImage[] }>;
   reconcileDockerSandbox(sandboxId: string): Promise<Sandbox>;
   startSandbox(sandboxId: string): Promise<Sandbox>;
   stopSandbox(sandboxId: string): Promise<Sandbox>;
@@ -570,6 +572,10 @@ export function createMenderClient(
     },
     async getSandboxBackends() {
       const result = await client.GET("/sandboxes/backends");
+      return requireData(result);
+    },
+    async listDockerImages() {
+      const result = await client.GET("/sandboxes/docker/images");
       return requireData(result);
     },
     async reconcileDockerSandbox(sandboxId: string) {

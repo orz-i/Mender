@@ -29,6 +29,19 @@ export interface AuditRecord {
     "failureCode": string;
 }
 
+/**
+ * CachedDockerImage is an immutable local image option for a focused
+ * management form; neither tags nor references grant daemon access.
+ */
+export interface CachedDockerImage {
+    "imageDigest": string;
+    "displayName": string;
+}
+
+export interface CachedDockerImageList {
+    "images": CachedDockerImage[] | null;
+}
+
 export interface CreateDaytonaSandboxInput {
     "name": string;
     "credentialRef": string;

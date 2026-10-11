@@ -21,6 +21,9 @@ type probeFake struct {
 	image                      mobyclient.ImageInspectResult
 	pingErr, infoErr, imageErr error
 	imageCalls                 int
+	imageList                  mobyclient.ImageListResult
+	imageListErr               error
+	imageListCalls             int
 }
 
 func (f *probeFake) Ping(context.Context, mobyclient.PingOptions) (mobyclient.PingResult, error) {
@@ -32,6 +35,10 @@ func (f *probeFake) Info(context.Context, mobyclient.InfoOptions) (mobyclient.Sy
 func (f *probeFake) ImageInspect(_ context.Context, _ string, _ ...mobyclient.ImageInspectOption) (mobyclient.ImageInspectResult, error) {
 	f.imageCalls++
 	return f.image, f.imageErr
+}
+func (f *probeFake) ImageList(_ context.Context, _ mobyclient.ImageListOptions) (mobyclient.ImageListResult, error) {
+	f.imageListCalls++
+	return f.imageList, f.imageListErr
 }
 
 func newProbeFixture(t *testing.T) (*Inspector, *probeFake) {

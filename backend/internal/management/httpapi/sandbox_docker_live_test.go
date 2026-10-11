@@ -36,6 +36,21 @@ func TestHTTPDockerSandboxRealLifecycle(t *testing.T) {
 	if backends["dockerAvailable"] != true {
 		t.Fatalf("Docker backend not enabled: %+v", backends)
 	}
+	cached := requestJSON(t, server.Client(), http.MethodGet, server.URL+"/api/v1/sandboxes/docker/images", nil, http.StatusOK)
+	available, ok := cached["images"].([]any)
+	if !ok {
+		t.Fatalf("Docker cached images response invalid: %+v", cached)
+	}
+	found := false
+	for _, entry := range available {
+		imageEntry, ok := entry.(map[string]any)
+		if ok && imageEntry["imageDigest"] == image && imageEntry["displayName"] != "" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected verified local image %s in Docker HTTP inventory: %+v", image, cached)
+	}
 	created := requestJSON(t, server.Client(), http.MethodPost, server.URL+"/api/v1/sandboxes/docker", map[string]any{
 		"name": "HTTP Docker smoke", "imageDigest": image, "userId": 10001, "groupId": 10001,
 		"cpuMilli": 1000, "memoryMiB": 512, "workspaceMiB": 64, "pids": 64,

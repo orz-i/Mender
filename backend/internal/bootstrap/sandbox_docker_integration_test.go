@@ -58,6 +58,22 @@ func TestRuntimeDockerAutodiscoveryLive(t *testing.T) {
 		case <-time.After(100 * time.Millisecond):
 		}
 	}
+	images, err := r.Sandboxes.ListDockerImages(ctx)
+	if err != nil {
+		t.Fatalf("read-only cached Docker inventory: %v", err)
+	}
+	if expected := os.Getenv("MENDER_DOCKER_TEST_IMAGE"); expected != "" {
+		found := false
+		for _, entry := range images {
+			if entry.ImageDigest == expected {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("pre-cached immutable image %s absent from verified inventory: %+v", expected, images)
+		}
+	}
 	entries, err := r.ListPluginCatalogue(ctx)
 	if err != nil {
 		t.Fatal(err)
