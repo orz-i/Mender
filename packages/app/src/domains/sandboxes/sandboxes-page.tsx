@@ -15,7 +15,7 @@ import { PageTab, PageTabs, PageToolbar, ResultPanel } from "../../shared/page-t
 import { usePagination } from "../../shared/pagination";
 import { TablePagination } from "../../shared/table-pagination";
 import { EmptyPanelState, SearchField } from "../../shared/workbench";
-import { isolationLabel, sandboxBackend } from "./sandbox-display";
+import { isolationLabel, sandboxBackend, sandboxStateLabel } from "./sandbox-display";
 
 export { CreateSandboxPage } from "./sandbox-create-page";
 export { SandboxDetailPage } from "./sandbox-detail-page";
@@ -90,7 +90,7 @@ export function SandboxesPage({ client }: { client: MenderClient }) {
               <TableCell className="font-medium">{item.name}</TableCell>
               <TableCell>{sandboxBackend(item)}</TableCell>
               <TableCell>{isolationLabel(item.isolation)}</TableCell>
-              <TableCell><Badge variant="outline">{item.backendAvailable ? (item.state === "ready" ? t("Ready") : item.state) : t("Backend unavailable")}</Badge></TableCell>
+              <TableCell><Badge variant="outline">{item.state === "destroyed" || item.backendAvailable ? sandboxStateLabel(item.state) : t("Backend unavailable")}</Badge></TableCell>
               <TableCell className="max-w-[240px] truncate font-mono text-xs text-muted-foreground" title={item.localRoot}>{item.localRoot || "—"}</TableCell>
               <TableCell className="text-right"><Button size="sm" variant="outline" onClick={()=>{void navigate(`/sandboxes/${item.sandboxId}`);}}>{t("View")}</Button></TableCell>
             </TableRow>)}

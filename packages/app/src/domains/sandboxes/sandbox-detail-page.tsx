@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { ActivityIcon, ShieldCheckIcon } from "lucide-react";
 import { useNavigate, useParams } from "react-router";
 
-import type { MenderClient, Sandbox } from "@mender/sdk";
+import { MenderApiError, type MenderClient, type Sandbox } from "@mender/sdk";
 import { Button } from "@mender/ui/components/button";
 import {
   Dialog,
@@ -35,6 +35,7 @@ export function SandboxDetailPage({ client }: { client: MenderClient }) {
   const [busy, setBusy] = useState(false);
   const [topic, setTopic] = useState<DetailTopic>("overview");
   const [manageOpen, setManageOpen] = useState(false);
+  const [pendingAction, setPendingAction] = useState<"destroy" | "docker-restart" | null>(null);
 
   useEffect(() => {
     if (!sandboxId) return;
@@ -66,16 +67,30 @@ export function SandboxDetailPage({ client }: { client: MenderClient }) {
     item?.state === "unknown";
   const hasActions = canStart || canStop || canDestroy || canReconcile;
 
+  function requestLifecycle(action: LifecycleAction) {
+    if (!item || busy || !noActiveLeases) return;
+    if (action === "destroy" && canDestroy) {
+      setError("");
+      setPendingAction("destroy");
+      return;
+    }
+    if (action === "start" && canStart && item.backend === "docker") {
+      setError("");
+      setPendingAction("docker-restart");
+      return;
+    }
+    if ((action === "start" && canStart) || (action === "stop" && canStop)) {
+      void changeLifecycle(action);
+    }
+  }
+
   async function changeLifecycle(action: LifecycleAction) {
     if (!item || busy || !noActiveLeases) return;
-    if (action === "destroy" &&
-      !window.confirm(t('Destroy Sandbox "{{name}}"? This only tombstones the Sandbox; host files are never deleted.', { name: item.name }))) {
-      return;
-    }
+    // Confirmation lives in the existing management modal. No native JS
+    // confirm() dependency (WKWebView does not implement its delegate).
+    if (action === "destroy" && (!canDestroy || pendingAction !== "destroy")) return;
     if (action === "start" && item.backend === "docker" &&
-      !window.confirm(t("Docker Sandbox restarts with an empty workspace. Continue?"))) {
-      return;
-    }
+      (!canStart || pendingAction !== "docker-restart")) return;
 
     setBusy(true);
     setError("");
@@ -86,9 +101,10 @@ export function SandboxDetailPage({ client }: { client: MenderClient }) {
           ? await client.stopSandbox(item.sandboxId)
           : await client.destroySandbox(item.sandboxId);
       setItem(next);
+      setPendingAction(null);
       if (action === "destroy") setManageOpen(false);
     } catch (reason) {
-      setError(errorMessage(reason));
+      setError(sandboxLifecycleError(reason));
     } finally {
       setBusy(false);
     }
@@ -205,15 +221,33 @@ export function SandboxDetailPage({ client }: { client: MenderClient }) {
         ) : null}
 
       <Dialog open={manageOpen && hasActions} onOpenChange={(open) => {
-        if (!busy) setManageOpen(open);
+        if (!busy) {
+          setManageOpen(open);
+          if (!open) setPendingAction(null);
+        }
       }}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>{t("Manage sandbox")}</DialogTitle>
+            <DialogTitle>{t(pendingAction === "destroy"
+              ? "Confirm sandbox destruction"
+              : pendingAction === "docker-restart"
+                ? "Confirm Docker sandbox restart"
+                : "Manage sandbox")}</DialogTitle>
             <DialogDescription>{item?.name ?? ""}</DialogDescription>
           </DialogHeader>
           {error ? <ErrorNotice message={error} /> : null}
-          {item ? (
+          {item && pendingAction ? (
+            <div className="space-y-3 text-sm">
+              <p>{pendingAction === "destroy"
+                ? t('Destroy Sandbox "{{name}}"? This only tombstones the Sandbox; host files are never deleted.', { name: item.name })
+                : t("Docker Sandbox restarts with an empty workspace. Continue?")}</p>
+              <p className="text-muted-foreground">
+                {pendingAction === "destroy"
+                  ? t("The Sandbox remains in inventory as a destroyed record. Host files are not deleted.")
+                  : t("The Docker Sandbox workspace will be empty after restart.")}
+              </p>
+            </div>
+          ) : item ? (
             <div className="flex flex-col gap-4">
               <div className="grid grid-cols-2 gap-3 rounded-2xl border border-border/70 bg-background/60 p-4">
                 <SandboxMetadata name={t("State")} value={sandboxStateLabel(item.state)} />
@@ -226,12 +260,12 @@ export function SandboxDetailPage({ client }: { client: MenderClient }) {
               ) : null}
               <div className="flex flex-wrap items-center gap-2">
                 {canStart ? (
-                  <Button disabled={busy || !noActiveLeases} onClick={() => void changeLifecycle("start")}>
+                  <Button disabled={busy || !noActiveLeases} onClick={() => requestLifecycle("start")}>
                     {t("Start sandbox")}
                   </Button>
                 ) : null}
                 {canStop ? (
-                  <Button disabled={busy || !noActiveLeases} onClick={() => void changeLifecycle("stop")}>
+                  <Button disabled={busy || !noActiveLeases} onClick={() => requestLifecycle("stop")}>
                     {t("Stop sandbox")}
                   </Button>
                 ) : null}
@@ -246,7 +280,7 @@ export function SandboxDetailPage({ client }: { client: MenderClient }) {
                   </Button>
                 ) : null}
                 {canDestroy ? (
-                  <Button variant="destructive" disabled={busy || !noActiveLeases} onClick={() => void changeLifecycle("destroy")}>
+                  <Button variant="destructive" disabled={busy || !noActiveLeases} onClick={() => requestLifecycle("destroy")}>
                     {t("Destroy sandbox")}
                   </Button>
                 ) : null}
@@ -254,10 +288,37 @@ export function SandboxDetailPage({ client }: { client: MenderClient }) {
             </div>
           ) : null}
           <DialogFooter>
-            <DialogClose render={<Button variant="outline" disabled={busy} />}>{t("Close")}</DialogClose>
+            {pendingAction ? (
+              <>
+                <Button variant="outline" disabled={busy} onClick={() => {
+                  setPendingAction(null);
+                  setError("");
+                }}>{t("Back")}</Button>
+                <Button
+                  variant={pendingAction === "destroy" ? "destructive" : "default"}
+                  disabled={busy || !noActiveLeases}
+                  onClick={() => void changeLifecycle(pendingAction === "destroy" ? "destroy" : "start")}
+                >
+                  {t(pendingAction === "destroy" ? "Confirm destruction" : "Confirm restart")}
+                </Button>
+              </>
+            ) : (
+              <DialogClose render={<Button variant="outline" disabled={busy} />}>{t("Close")}</DialogClose>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
     </>
   );
+}
+
+function sandboxLifecycleError(reason: unknown): string {
+  const detail = typeof reason === "string"
+    ? reason
+    : reason instanceof Error ? reason.message : "";
+  if (detail.includes("sandbox state conflict") ||
+    (reason instanceof MenderApiError && reason.code === "conflict")) {
+    return t("Sandbox lifecycle conflicts with an active lease, Workspace Provider binding, or a changed state. Review dependencies and refresh.");
+  }
+  return errorMessage(reason);
 }
