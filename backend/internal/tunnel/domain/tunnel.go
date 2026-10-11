@@ -42,23 +42,13 @@ func NewTunnel(
 	}
 
 	displayName = strings.TrimSpace(displayName)
-	if displayName == "" {
-		return Tunnel{}, fmt.Errorf("tunnel display_name: must not be empty")
-	}
-	if len(displayName) > maxTunnelDisplayNameLength {
-		return Tunnel{}, fmt.Errorf("tunnel display_name: is too long")
+	externalTunnelID = strings.TrimSpace(externalTunnelID)
+	if err := ValidateNameAndExternalID(displayName, externalTunnelID); err != nil {
+		return Tunnel{}, err
 	}
 
 	if err := binding.ValidateProvider(provider); err != nil {
 		return Tunnel{}, err
-	}
-
-	externalTunnelID = strings.TrimSpace(externalTunnelID)
-	if externalTunnelID == "" {
-		return Tunnel{}, fmt.Errorf("tunnel external_tunnel_id: must not be empty")
-	}
-	if len(externalTunnelID) > maxExternalTunnelIDLength {
-		return Tunnel{}, fmt.Errorf("tunnel external_tunnel_id: is too long")
 	}
 
 	if _, err := credentialdomain.ParseReference(runtimeCredentialRef.String()); err != nil {
@@ -97,3 +87,23 @@ func (t Tunnel) RuntimeCredentialRef() credentialdomain.Reference {
 
 // Binding exposes a value copy of the exact extension identity.
 func (t Tunnel) Binding() Binding { return t.binding }
+
+// ValidateNameAndExternalID is the shared HTTP/Desktop/Domain request boundary.
+// It does not allocate a resource or resolve a Credential Reference.
+func ValidateNameAndExternalID(name, externalID string) error {
+	name = strings.TrimSpace(name)
+	externalID = strings.TrimSpace(externalID)
+	if name == "" {
+		return fmt.Errorf("tunnel display_name: must not be empty")
+	}
+	if len(name) > maxTunnelDisplayNameLength {
+		return fmt.Errorf("tunnel display_name: is too long")
+	}
+	if externalID == "" {
+		return fmt.Errorf("tunnel external_tunnel_id: must not be empty")
+	}
+	if len(externalID) > maxExternalTunnelIDLength {
+		return fmt.Errorf("tunnel external_tunnel_id: is too long")
+	}
+	return nil
+}

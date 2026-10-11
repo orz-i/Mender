@@ -39,6 +39,10 @@ func (h *Handler) createOpenAITunnel(w http.ResponseWriter, r *http.Request) {
 		writeAPIError(w, http.StatusBadRequest, "validation_error", err)
 		return
 	}
+	if err := tunneldomain.ValidateNameAndExternalID(input.DisplayName, input.ExternalTunnelID); err != nil {
+		writeAPIError(w, http.StatusBadRequest, "validation_error", err)
+		return
+	}
 	ref, err := credentialdomain.ParseReference(input.RuntimeCredentialRef)
 	if err != nil {
 		writeAPIError(w, http.StatusBadRequest, "validation_error", err)

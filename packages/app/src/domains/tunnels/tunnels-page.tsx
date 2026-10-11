@@ -49,6 +49,7 @@ export function TunnelsPage({ client }: { client: MenderClient }) {
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
+  const [removeTarget,setRemoveTarget]=useState<Tunnel|null>(null);
   const [inventoryQuery, setInventoryQuery] = useState("");
   const [deepLink] = useState(() => ({
     create:searchParams.get("create")==="1",
@@ -167,21 +168,13 @@ export function TunnelsPage({ client }: { client: MenderClient }) {
     }
   }
 
-  async function remove(item: Tunnel) {
-    if (
-      !window.confirm(
-        t('Delete Tunnel "{{name}}"? Profiles that reference it will block deletion.', {
-          name: item.displayName,
-        }),
-      )
-    ) {
-      return;
-    }
-
+  async function remove(item:Tunnel){
+    if(busy!=="" || removeTarget?.tunnelId!==item.tunnelId)return;
     setBusy(item.tunnelId);
     setError("");
     try {
       await client.deleteTunnel(item.tunnelId);
+      setRemoveTarget(null);
       await refresh();
     } catch (reason) {
       setError(errorMessage(reason));
@@ -260,7 +253,7 @@ export function TunnelsPage({ client }: { client: MenderClient }) {
                         variant="outline"
                         label={t("Delete {{name}}", { name: item.displayName })}
                         disabled={busy !== ""}
-                        onClick={() => void remove(item)}
+                        onClick={() => setRemoveTarget(item)}
                       >
                         <Trash2Icon />
                       </IconButton>
@@ -282,6 +275,27 @@ export function TunnelsPage({ client }: { client: MenderClient }) {
           </EmptyPanelState>
         )}
       </ResultPanel>
+
+      <Dialog open={removeTarget!==null} onOpenChange={(open)=>{
+        if(!open && busy==="")setRemoveTarget(null);
+      }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{t("Confirm Tunnel removal")}</DialogTitle>
+            <DialogDescription>
+              {removeTarget?t('Delete Tunnel "{{name}}"? Profiles that reference it will block deletion.',{
+                name:removeTarget.displayName,
+              }):""}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="outline" disabled={busy!==""}
+              onClick={()=>setRemoveTarget(null)}>{t("Cancel")}</Button>
+            <Button type="button" variant="destructive" disabled={busy!=="" || !removeTarget}
+              onClick={()=>{if(removeTarget)void remove(removeTarget);}}>{t("Delete")}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={selectionOpen} onOpenChange={setSelectionOpen}>
         <DialogContent className="sm:max-w-xl">

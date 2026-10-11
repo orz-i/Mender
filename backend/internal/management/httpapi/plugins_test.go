@@ -4,10 +4,16 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/orz-i/Mender/backend/internal/bootstrap"
+	credentialapp "github.com/orz-i/Mender/backend/internal/credential/application"
+	platformplugin "github.com/orz-i/Mender/backend/internal/plugin"
+	installationdomain "github.com/orz-i/Mender/backend/internal/plugin/installation/domain"
 )
 
 func TestUnifiedPluginCatalogueManagementContract(t *testing.T) {
@@ -62,4 +68,135 @@ func TestUnifiedPluginCatalogueManagementContract(t *testing.T) {
 	if response.StatusCode != http.StatusNotFound {
 		t.Fatalf("public path installation unexpectedly exposed: %d", response.StatusCode)
 	}
+}
+
+// Drive the HTTP surface through real verified Sandbox and Tunnel example
+// installations. The fixture is local-only and never uses a user database,
+// Docker daemon, cloud account, public tunnel, or actual Credential secret.
+func TestUnifiedPluginCatalogueHTTPExternalResourceFlow(t *testing.T) {
+	t.Setenv("MENDER_PHASE27E_TEST_TOKEN", strings.Repeat("q", 24))
+	ctx := context.Background()
+	root := t.TempDir()
+	managed := filepath.Join(root, "managed")
+	t.Cleanup(func() {
+		_ = filepath.WalkDir(managed, func(path string, entry os.DirEntry, walkErr error) error {
+			if walkErr != nil {
+				return nil
+			}
+			if entry.IsDir() {
+				// #nosec G122,G302 -- walk is confined to this test's TempDir; restore writable dirs for cleanup.
+				_ = os.Chmod(path, 0o700)
+			}
+			return nil
+		})
+	})
+	r, err := bootstrap.NewRuntime(ctx, bootstrap.RuntimeOptions{
+		DatabasePath: filepath.Join(root, "mender.db"), ProviderPluginRoot: managed,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := r.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+
+	buildSource := func(folder, binary string) string {
+		t.Helper()
+		repository, err := filepath.Abs("../../../..")
+		if err != nil {
+			t.Fatal(err)
+		}
+		fixture := filepath.Join(repository, "examples", folder)
+		packageRoot := filepath.Join(t.TempDir(), folder)
+		executable := filepath.Join(packageRoot, "bin", binary)
+		if err := os.MkdirAll(filepath.Dir(executable), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		cmd := exec.Command("go", "build", "-o", executable, "./cmd/"+binary) // #nosec G204 -- two hardcoded checked-in fixture names and a test-owned output path.
+		cmd.Dir = fixture
+		cmd.Env = append(os.Environ(), "GOWORK=off")
+		if output, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("build %s: %v\n%s", folder, err, output)
+		}
+		raw, err := os.ReadFile(filepath.Join(fixture, "mender-plugin.json")) // #nosec G304 -- fixed checked-in fixture manifest.
+		if err != nil {
+			t.Fatal(err)
+		}
+		// #nosec G703 -- packageRoot and basename are fixed test-owned paths.
+		if err := os.WriteFile(filepath.Join(packageRoot, "mender-plugin.json"), raw, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return packageRoot
+	}
+	sb, err := r.InstallPlugin(ctx, buildSource("sandbox-plugin-example", "mender-sandbox-example"), platformplugin.SandboxBackend)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tn, err := r.InstallPlugin(ctx, buildSource("tunnel-plugin-example", "mender-tunnel-example"), platformplugin.TunnelTransport)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err := r.Credentials.CreateEnvironment.Execute(ctx, credentialapp.CreateEnvironmentRequest{
+		Namespace: "phasee", Name: "tunnel", DisplayName: "Phase E fixture",
+		EnvironmentVariable: "MENDER_PHASE27E_TEST_TOKEN",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(New(r))
+	defer server.Close()
+	base := server.URL + "/api/v1"
+
+	sandbox := requestJSON(t, server.Client(), http.MethodPost, base+"/sandboxes/external", map[string]any{
+		"name": "HTTP fixture Sandbox", "installationId": sb.ID().String(), "config": map[string]any{},
+	}, http.StatusCreated)
+	if sandbox["backend"] != "external" || sandbox["installationId"] != sb.ID().String() ||
+		sandbox["pluginId"] != sb.PluginID().String() || sandbox["state"] != "ready" {
+		t.Fatalf("HTTP Sandbox extension binding or state drift: %+v", sandbox)
+	}
+	tunnel := requestJSON(t, server.Client(), http.MethodPost, base+"/tunnels/external", map[string]any{
+		"displayName": "HTTP fixture Tunnel", "installationId": tn.ID().String(),
+		"externalTunnelId": "fixture", "runtimeCredentialRef": c.Reference().String(),
+	}, http.StatusCreated)
+	if tunnel["provider"] != "external" || tunnel["installationId"] != tn.ID().String() ||
+		tunnel["pluginId"] != tn.PluginID().String() ||
+		tunnel["runtimeCredentialRef"] != c.Reference().String() {
+		t.Fatalf("HTTP Tunnel extension binding drift: %+v", tunnel)
+	}
+	catalogue := requestJSON(t, server.Client(), http.MethodGet, base+"/plugins", nil, http.StatusOK)
+	entries, ok := catalogue["plugins"].([]any)
+	if !ok {
+		t.Fatalf("invalid catalogue: %+v", catalogue)
+	}
+	usages := map[string]float64{}
+	for _, entry := range entries {
+		obj, ok := entry.(map[string]any)
+		if !ok {
+			t.Fatal("malformed plugin catalogue entry")
+		}
+		key, _ := obj["key"].(string)
+		number, _ := obj["usageCount"].(float64)
+		usages[key] = number
+	}
+	for _, item := range []installationdomain.Installation{sb, tn} {
+		key := item.PluginID().String() + "@" + item.ID().String()
+		if usages[key] != 1 {
+			t.Fatalf("catalogue reference %s count=%v", key, usages[key])
+		}
+		requestJSON(t, server.Client(), http.MethodPost,
+			base+"/plugin-installations/"+item.ID().String()+"/disable", nil, http.StatusConflict)
+	}
+	requestJSON(t, server.Client(), http.MethodPost, base+"/sandboxes/external", map[string]any{
+		"name": "Wrong-kind sandbox", "installationId": tn.ID().String(), "config": map[string]any{},
+	}, http.StatusBadRequest)
+	requestJSON(t, server.Client(), http.MethodPost, base+"/tunnels/external", map[string]any{
+		"displayName": "   ", "installationId": tn.ID().String(),
+		"externalTunnelId": "fixture", "runtimeCredentialRef": c.Reference().String(),
+	}, http.StatusBadRequest)
+	requestJSON(t, server.Client(), http.MethodPost, base+"/tunnels/external", map[string]any{
+		"displayName": "Wrong-kind Tunnel", "installationId": sb.ID().String(),
+		"externalTunnelId": "fixture", "runtimeCredentialRef": c.Reference().String(),
+	}, http.StatusConflict)
 }

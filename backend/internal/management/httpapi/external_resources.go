@@ -11,6 +11,7 @@ import (
 	platformplugin "github.com/orz-i/Mender/backend/internal/plugin"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 	sandboxsqlite "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/sqlite"
+	tunneldomain "github.com/orz-i/Mender/backend/internal/tunnel/domain"
 )
 
 type createExternalSandboxRequest struct {
@@ -84,6 +85,10 @@ type createExternalTunnelRequest struct {
 func (h *Handler) createExternalTunnel(w http.ResponseWriter, r *http.Request) {
 	var input createExternalTunnelRequest
 	if err := decodeJSON(r, &input); err != nil {
+		writeAPIError(w, http.StatusBadRequest, "validation_error", err)
+		return
+	}
+	if err := tunneldomain.ValidateNameAndExternalID(input.DisplayName, input.ExternalTunnelID); err != nil {
 		writeAPIError(w, http.StatusBadRequest, "validation_error", err)
 		return
 	}

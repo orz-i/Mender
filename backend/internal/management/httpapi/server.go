@@ -259,6 +259,7 @@ func writeKnownError(w http.ResponseWriter, err error) {
 		errors.Is(err, bootstrap.ErrBuiltInSkillImmutable),
 		errors.Is(err, tunnelapplication.ErrTunnelConflict),
 		errors.Is(err, tunnelapplication.ErrTunnelInUse),
+		errors.Is(err, tunnelapplication.ErrTunnelTransportUnavailable),
 		errors.Is(err, bootstrap.ErrProviderInUse):
 		writeAPIError(w, http.StatusConflict, "conflict", err)
 

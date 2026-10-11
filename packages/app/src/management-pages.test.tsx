@@ -529,7 +529,6 @@ describe("management pages", () => {
       }]});
     const disablePluginInstallation=vi.fn().mockResolvedValue({installation:disabled});
     const deletePluginInstallation=vi.fn().mockResolvedValue(undefined);
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
 
     renderApp("/plugins", {
       listPluginCatalogue:catalogue,
@@ -571,10 +570,11 @@ describe("management pages", () => {
     expect(await screen.findByText("Disabled")).toBeTruthy();
 
     fireEvent.click(
-      screen.getByRole("button", {
-        name: "Remove Echo",
-      }),
+      screen.getByRole("button", {name:"Remove Echo"}),
     );
+    const removal=screen.getByRole("dialog",{name:"Confirm plugin removal"});
+    expect(deletePluginInstallation).not.toHaveBeenCalled();
+    fireEvent.click(within(removal).getByRole("button",{name:"Remove"}));
     await waitFor(() => {
       expect(deletePluginInstallation).toHaveBeenCalledWith(
         installation.installationId,
@@ -584,7 +584,6 @@ describe("management pages", () => {
       expect(screen.queryByText("Echo")).toBeNull();
     });
     expect(await screen.findByText("MCP")).toBeTruthy();
-    confirm.mockRestore();
   });
 
   it("uses cursor navigation for the Marketplace card grid", async () => {
@@ -748,6 +747,54 @@ describe("management pages", () => {
       expect(installPlugin).toHaveBeenCalledTimes(1);
     });
     expect(await screen.findByText("Local")).toBeTruthy();
+  });
+
+  it("keeps the selected built-in Sandbox backend fixed without another chooser",async()=>{
+    const pluginId="io.mender.sandbox.local-workspace";
+    renderApp("/sandboxes/new?create=1&pluginId="+pluginId,{
+      getRuntimeGovernance:vi.fn().mockResolvedValue({backend:{restrictedHostAvailable:true}}),
+      listPluginCatalogue:vi.fn().mockResolvedValue({plugins:[{
+        key:pluginId+"@builtin",pluginId,extensionId:"main",
+        kind:"sandbox.backend",displayName:"Local workspace",description:"Trusted builtin",
+        packageVersion:"1.0.0",sourceKind:"builtin",status:"enabled",enabled:true,
+        capabilities:["file.read"],usageCount:0,
+      }]}),
+    });
+    expect(await screen.findByLabelText("Sandbox name")).toBeTruthy();
+    expect(screen.queryByRole("region",{name:"Choose backend"})).toBeNull();
+    fireEvent.click(screen.getByRole("button",{name:"Back"}));
+    expect(await screen.findByRole("button",{name:"Capabilities"})).toBeTruthy();
+    expect(screen.getByText("Local workspace")).toBeTruthy();
+  });
+
+  it("requires an in-app Tunnel deletion confirmation, never native browser confirm",async()=>{
+    const item={
+      tunnelId:"tun_0123456789abcdef0123456789abcdef",
+      displayName:"Fixture Tunnel",provider:"external" as const,
+      externalTunnelId:"fixture",runtimeCredentialRef:"credential://example/key",
+    };
+    const deleteTunnel=vi.fn().mockResolvedValue(undefined);
+    const listTunnels=vi.fn()
+      .mockResolvedValueOnce({tunnels:[item]})
+      .mockResolvedValueOnce({tunnels:[]});
+    const confirm=vi.spyOn(window,"confirm").mockImplementation(()=>{
+      throw new Error("native confirm must not be called");
+    });
+    try {
+      renderApp("/tunnels",{listTunnels,deleteTunnel});
+      expect(await screen.findByText("Fixture Tunnel")).toBeTruthy();
+      fireEvent.click(screen.getByRole("button",{name:"Delete Fixture Tunnel"}));
+      const dialog=screen.getByRole("dialog",{name:"Confirm Tunnel removal"});
+      expect(deleteTunnel).not.toHaveBeenCalled();
+      fireEvent.click(within(dialog).getByRole("button",{name:"Cancel"}));
+      expect(deleteTunnel).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByRole("button",{name:"Delete Fixture Tunnel"}));
+      fireEvent.click(within(screen.getByRole("dialog",{name:"Confirm Tunnel removal"}))
+        .getByRole("button",{name:"Delete"}));
+      await waitFor(()=>expect(deleteTunnel).toHaveBeenCalledWith(item.tunnelId));
+    }finally{
+      confirm.mockRestore();
+    }
   });
 
   it("opens a selected Sandbox plugin in its own configuration and review flow",async()=>{

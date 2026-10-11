@@ -58,7 +58,9 @@ export function GenericProviderConfigForm({
         <select aria-label={t("Sandbox")} className="h-9 w-full rounded-lg border border-input bg-background px-3" value={selected} onChange={(e) => onChange({...value,sandboxId:e.target.value})}>
           <option value="">{t("Choose a sandbox")}</option>
           {!available.some((item)=>item.sandboxId===selected) && selected ? <option value={selected} disabled>{t("Unavailable sandbox")}</option> : null}
-          {available.map((item)=><option key={item.sandboxId} value={item.sandboxId}>{item.name} · {item.backend === "docker" ? t("Docker") : item.backend === "daytona" ? t("Daytona") : t(item.isolation === "host" ? "Host (not isolated)" : "Restricted host")}</option>)}
+          {available.map((item)=><option key={item.sandboxId} value={item.sandboxId}>{item.name} · {item.backend === "docker" ? t("Docker") : item.backend === "daytona" ? t("Daytona") :
+            item.backend === "external" ? t("External plugin") :
+            t(item.isolation === "host" ? "Host (not isolated)" : "Restricted host")}</option>)}
         </select>
       </label>
       <p className="text-xs leading-5 text-muted-foreground">{t("Workspace Tools share the selected Sandbox filesystem and its fixed isolation boundary.")}</p>

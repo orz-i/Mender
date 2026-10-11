@@ -407,7 +407,13 @@ export function CreateSandboxPage({
               )}
 
               <div className="flex flex-wrap gap-2 border-t border-border/65 pt-5">
-                <Button variant="outline" onClick={() => setStep("backend")}>{t("Back")}</Button>
+                <Button variant="outline" onClick={() => {
+                  if(fixedBackend && chosenBuiltin){
+                    void navigate("/plugins/"+encodeURIComponent(chosenBuiltin+"@builtin"));
+                    return;
+                  }
+                  setStep("backend");
+                }}>{t("Back")}</Button>
                 <Button disabled={!identityValid} onClick={() => setStep(selected === "local_workspace" ? "review" : "limits")}>
                   {t(selected === "local_workspace" ? "Review" : "Next")}
                   <ArrowRightIcon data-icon="inline-end" />

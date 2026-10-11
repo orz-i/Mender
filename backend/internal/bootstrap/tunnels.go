@@ -79,7 +79,7 @@ func (t *Tunnels) CreateExternal(ctx context.Context, request CreateExternalTunn
 	}
 	if item.Status() != installationdomain.StatusEnabled || item.Extension().Kind != platformplugin.TunnelTransport ||
 		item.Extension().ID != "main" {
-		return tunneldomain.Tunnel{}, fmt.Errorf("tunnel transport installation unavailable")
+		return tunneldomain.Tunnel{}, fmt.Errorf("create external Tunnel: %w", tunnelapplication.ErrTunnelTransportUnavailable)
 	}
 	if _, err := t.credentials.GetCredential(ctx, request.RuntimeCredentialRef); err != nil {
 		return tunneldomain.Tunnel{}, fmt.Errorf("tunnel Credential Reference unavailable: %w", err)

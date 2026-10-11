@@ -15,6 +15,10 @@ import { Link, useNavigate, useParams } from "react-router";
 
 import type { MenderClient } from "@mender/sdk";
 import { Badge } from "@mender/ui/components/badge";
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader,
+  DialogTitle,
+} from "@mender/ui/components/dialog";
 import { Button } from "@mender/ui/components/button";
 import {
   Card,
@@ -244,6 +248,7 @@ export function PluginDetailPage({ client }: { client: MenderClient }) {
   const { plugins, loaded, error, setError, refresh } =
     useMarketplacePlugins(client);
   const [busy, setBusy] = useState("");
+  const [removeTarget,setRemoveTarget]=useState<MarketplacePlugin|null>(null);
   const [section, setSection] = useState<"overview" | "capabilities" | "technical">("overview");
   const plugin = plugins.find((item) => item.key === pluginKey) ?? null;
   const createAction = plugin?.createAction;
@@ -264,25 +269,13 @@ export function PluginDetailPage({ client }: { client: MenderClient }) {
     }
   }
 
-  async function remove(current: MarketplacePlugin) {
-    if (
-      !window.confirm(
-        t(
-          'Remove installed plugin "{{plugin}}" {{version}}? Referenced resources will block removal.',
-          {
-            plugin: current.displayName,
-            version: current.version,
-          },
-        ),
-      )
-    ) {
-      return;
-    }
-
+  async function remove(current:MarketplacePlugin){
+    if(busy!=="" || !current.actions.remove)return;
     setBusy(current.key);
     setError("");
     try {
       await removeMarketplacePlugin(client, current);
+      setRemoveTarget(null);
       void navigate("/plugins", { replace: true });
     } catch (reason) {
       setError(errorMessage(reason));
@@ -359,7 +352,7 @@ export function PluginDetailPage({ client }: { client: MenderClient }) {
                   plugin: plugin.displayName,
                 })}
                 disabled={busy !== ""}
-                onClick={() => void remove(plugin)}
+                onClick={() => setRemoveTarget(plugin)}
               >
                 <Trash2Icon />
               </IconButton>
@@ -367,6 +360,30 @@ export function PluginDetailPage({ client }: { client: MenderClient }) {
           </div>
         }
       />
+
+      <Dialog open={removeTarget!==null} onOpenChange={(open)=>{
+        if(!open && busy==="")setRemoveTarget(null);
+      }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{t("Confirm plugin removal")}</DialogTitle>
+            <DialogDescription>
+              {removeTarget?t('Remove installed plugin "{{plugin}}" {{version}}? Referenced resources will block removal.',{
+                plugin:removeTarget.displayName,version:removeTarget.version,
+              }):""}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="outline" disabled={busy!==""}
+              onClick={()=>setRemoveTarget(null)}>{t("Cancel")}</Button>
+            <Button type="button" variant="destructive"
+              disabled={busy!=="" || removeTarget===null}
+              onClick={()=>{if(removeTarget)void remove(removeTarget);}}>
+              {t("Remove")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {error ? <ErrorNotice message={error} /> : null}
 
@@ -661,8 +678,13 @@ function DetailField({
   );
 }
 
-function pluginKindLabel(plugin: MarketplacePlugin) {
-  return t(plugin.kindLabel);
+function pluginKindLabel(plugin:MarketplacePlugin){
+  switch(plugin.kind){
+    case "provider":return t("Provider plugin");
+    case "sandbox":return t("Sandbox backend");
+    case "tunnel":return t("Tunnel transport");
+    default:return t(plugin.kindLabel);
+  }
 }
 
 function pluginSourceLabel(plugin: MarketplacePlugin) {

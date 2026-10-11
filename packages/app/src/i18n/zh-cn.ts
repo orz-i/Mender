@@ -943,4 +943,8 @@ export const zhCNMessages: Readonly<Record<string, string>> = {
   "The selected Sandbox backend is unavailable.": "选定的沙盒后端不可用。",
   "Use an inventory Credential authorized for the selected Tunnel transport.": "选择一个已授权给所选隧道传输插件的清单凭据。",
   "Used by resources": "资源引用数",
+  "Confirm plugin removal": "确认移除插件",
+  "Confirm Tunnel removal": "确认删除隧道",
+  "Sandbox backend": "沙盒后端",
+  "Tunnel transport": "隧道传输插件",
 };
