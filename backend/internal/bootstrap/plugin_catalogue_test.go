@@ -10,10 +10,12 @@ import (
 	credentialapplication "github.com/orz-i/Mender/backend/internal/credential/application"
 	platformplugin "github.com/orz-i/Mender/backend/internal/plugin"
 	installationdomain "github.com/orz-i/Mender/backend/internal/plugin/installation/domain"
+	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 )
 
 func TestCanonicalPluginCatalogueAllTypesInertAndStable(t *testing.T) {
 	t.Setenv(DockerSocketEnvironment, "")
+	t.Setenv(DaytonaExperimentalEnvironment, "")
 	ctx := context.Background()
 	r, err := NewRuntime(ctx, RuntimeOptions{DatabasePath: filepath.Join(t.TempDir(), "mender.db")})
 	if err != nil {
@@ -39,15 +41,25 @@ func TestCanonicalPluginCatalogueAllTypesInertAndStable(t *testing.T) {
 			t.Fatalf("duplicate catalogue key %s", plugin.Key)
 		}
 		keys[plugin.Key] = true
-		if plugin.InstalledAt != "" || plugin.InstallationID != "" || plugin.SourceKind != "builtin" || plugin.UsageCount != 0 {
-			t.Fatalf("untrusted process or fake installation on builtin: %+v", plugin)
+		if plugin.InstalledAt != "" || plugin.InstallationID != "" || plugin.UsageCount != 0 {
+			t.Fatalf("untrusted process or fake installation on catalogue entry: %+v", plugin)
 		}
-		if plugin.PluginID == "io.mender.sandbox.docker" {
-			if plugin.Enabled || plugin.Status != "unavailable" || plugin.Issue == "" || len(plugin.Capabilities) != 4 {
-				t.Fatalf("unconfigured Docker should be discoverable but unavailable: %+v", plugin)
+		switch plugin.PluginID {
+		case "io.mender.sandbox.docker", "io.mender.sandbox.daytona":
+			if plugin.SourceKind != "builtin" || plugin.Enabled || plugin.Status != "unavailable" ||
+				plugin.Issue == "" || len(plugin.Capabilities) != 4 {
+				t.Fatalf("quarantined Sandbox must remain discoverable but unavailable: %+v", plugin)
 			}
-		} else if !plugin.Enabled || plugin.Status != "enabled" {
-			t.Fatalf("registered builtin unexpectedly unavailable: %+v", plugin)
+		case "io.mender.sandbox.e2b":
+			if plugin.SourceKind != "planned" || plugin.Status != "planned" || plugin.Enabled ||
+				plugin.Key != "io.mender.sandbox.e2b@planned" || len(plugin.Capabilities) != 0 ||
+				plugin.PackageVersion != "" || plugin.ProtocolVersion != 0 || plugin.ConfigVersion != 0 {
+				t.Fatalf("E2B roadmap preview masquerades as an installed plugin: %+v", plugin)
+			}
+		default:
+			if plugin.SourceKind != "builtin" || !plugin.Enabled || plugin.Status != "enabled" {
+				t.Fatalf("registered builtin unexpectedly unavailable: %+v", plugin)
+			}
 		}
 	}
 	for _, kind := range []platformplugin.Kind{platformplugin.ProviderTools, platformplugin.SandboxBackend, platformplugin.TunnelTransport} {
@@ -55,8 +67,15 @@ func TestCanonicalPluginCatalogueAllTypesInertAndStable(t *testing.T) {
 			t.Fatalf("catalogue lacks extension kind %s", kind)
 		}
 	}
-	if !keys["io.mender.sandbox.docker@builtin"] {
-		t.Fatal("unconfigured Docker Sandbox missing from canonical Marketplace")
+	for _, key := range []string{
+		"io.mender.sandbox.local-workspace@builtin",
+		"io.mender.sandbox.docker@builtin",
+		"io.mender.sandbox.daytona@builtin",
+		"io.mender.sandbox.e2b@planned",
+	} {
+		if !keys[key] {
+			t.Fatalf("Sandbox option %q missing from canonical Marketplace", key)
+		}
 	}
 	if len(r.ListMCPServers()) != 0 {
 		t.Fatal("catalogue started MCP server")
@@ -67,6 +86,12 @@ func TestCanonicalPluginCatalogueAllTypesInertAndStable(t *testing.T) {
 	if r.Sandboxes.DockerAvailable() {
 		t.Fatal("rejected activation registered a Docker backend")
 	}
+	if r.Sandboxes.DaytonaConfigured() {
+		t.Fatal("catalogue discovery unexpectedly enabled experimental Daytona")
+	}
+	if r.Sandboxes.backendPlugins.Available(sandboxdomain.BackendE2B, sandboxdomain.BuiltinBinding(sandboxdomain.BackendE2B)) {
+		t.Fatal("catalogue preview registered unimplemented E2B")
+	}
 	after, err := r.ListPluginCatalogue(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -75,6 +100,40 @@ func TestCanonicalPluginCatalogueAllTypesInertAndStable(t *testing.T) {
 		if plugin.PluginID == "io.mender.sandbox.docker" && (plugin.Enabled || plugin.Status != "unavailable") {
 			t.Fatalf("failed activation changed Docker catalogue availability: %+v", plugin)
 		}
+	}
+}
+
+func TestCanonicalCatalogueExperimentalDaytonaOptInOnlyChangesItsAvailability(t *testing.T) {
+	t.Setenv(DockerSocketEnvironment, "")
+	t.Setenv(DaytonaExperimentalEnvironment, "enabled")
+	ctx := context.Background()
+	r, err := NewRuntime(ctx, RuntimeOptions{DatabasePath: filepath.Join(t.TempDir(), "mender.db")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = r.Close() }()
+	entries, err := r.ListPluginCatalogue(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var daytona, e2b int
+	for _, entry := range entries {
+		switch entry.PluginID {
+		case "io.mender.sandbox.daytona":
+			daytona++
+			if entry.Key != "io.mender.sandbox.daytona@builtin" || entry.Status != "enabled" ||
+				!entry.Enabled || entry.Issue != "" || entry.SourceKind != "builtin" {
+				t.Fatalf("opted-in Daytona did not become configurable: %+v", entry)
+			}
+		case "io.mender.sandbox.e2b":
+			e2b++
+			if entry.Status != "planned" || entry.Enabled || entry.SourceKind != "planned" {
+				t.Fatalf("Daytona opt-in activated unrelated E2B preview: %+v", entry)
+			}
+		}
+	}
+	if daytona != 1 || e2b != 1 {
+		t.Fatalf("incorrect Sandbox Marketplace cardinality: Daytona=%d E2B=%d", daytona, e2b)
 	}
 }
 

@@ -17,7 +17,8 @@ import (
 )
 
 func TestUnifiedPluginCatalogueManagementContract(t *testing.T) {
-	t.Parallel()
+	t.Setenv(bootstrap.DockerSocketEnvironment, "")
+	t.Setenv(bootstrap.DaytonaExperimentalEnvironment, "")
 	ctx := context.Background()
 	r, err := bootstrap.NewRuntime(ctx, bootstrap.RuntimeOptions{DatabasePath: filepath.Join(t.TempDir(), "mender.db")})
 	if err != nil {
@@ -32,7 +33,7 @@ func TestUnifiedPluginCatalogueManagementContract(t *testing.T) {
 		t.Fatalf("catalogue missing builtin types: %+v", result)
 	}
 	kinds := map[string]bool{}
-	dockerCount := 0
+	sandboxKeys := map[string]int{}
 	for _, raw := range items {
 		item, ok := raw.(map[string]any)
 		if !ok {
@@ -43,22 +44,37 @@ func TestUnifiedPluginCatalogueManagementContract(t *testing.T) {
 			t.Fatal("missing typed extension kind")
 		}
 		kinds[kind] = true
-		if item["pluginId"] == "io.mender.sandbox.docker" {
-			dockerCount++
-			if item["key"] != "io.mender.sandbox.docker@builtin" || kind != "sandbox.backend" {
-				t.Fatalf("Docker must have one stable trusted plugin identity: %+v", item)
-			}
-			if r.Sandboxes.DockerAvailable() {
-				if item["status"] != "enabled" || item["enabled"] != true {
-					t.Fatalf("active Docker absent from HTTP Marketplace: %+v", item)
+		if kind == "sandbox.backend" {
+			key := item["key"].(string)
+			sandboxKeys[key]++
+			switch key {
+			case "io.mender.sandbox.local-workspace@builtin":
+				if item["sourceKind"] != "builtin" || item["enabled"] != true || item["status"] != "enabled" {
+					t.Fatalf("Local Workspace not enabled: %+v", item)
 				}
-			} else if item["status"] != "unavailable" || item["enabled"] != false || item["issue"] == "" {
-				t.Fatalf("unconfigured Docker not fail-closed in HTTP Marketplace: %+v", item)
+			case "io.mender.sandbox.docker@builtin", "io.mender.sandbox.daytona@builtin":
+				if item["sourceKind"] != "builtin" || item["enabled"] != false ||
+					item["status"] != "unavailable" || item["issue"] == nil {
+					t.Fatalf("quarantined Sandbox unexpectedly enabled: %+v", item)
+				}
+			case "io.mender.sandbox.e2b@planned":
+				if item["sourceKind"] != "planned" || item["status"] != "planned" ||
+					item["enabled"] != false || item["installationId"] != nil || item["packageVersion"] != "" ||
+					item["configVersion"] != nil || item["protocolVersion"] != nil {
+					t.Fatalf("E2B roadmap item misrepresented as executable: %+v", item)
+				}
 			}
 		}
 	}
-	if dockerCount != 1 {
-		t.Fatalf("expected exactly one Docker plugin in HTTP catalogue, got %d", dockerCount)
+	for _, key := range []string{
+		"io.mender.sandbox.local-workspace@builtin",
+		"io.mender.sandbox.docker@builtin",
+		"io.mender.sandbox.daytona@builtin",
+		"io.mender.sandbox.e2b@planned",
+	} {
+		if sandboxKeys[key] != 1 {
+			t.Fatalf("expected one canonical Sandbox entry %q, got %d", key, sandboxKeys[key])
+		}
 	}
 	for _, kind := range []string{"provider.tools", "sandbox.backend", "tunnel.transport"} {
 		if !kinds[kind] {

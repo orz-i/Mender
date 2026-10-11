@@ -1354,9 +1354,9 @@ export interface components {
             description: string;
             packageVersion: string;
             /** @enum {string} */
-            sourceKind: "builtin" | "local";
+            sourceKind: "builtin" | "local" | "planned";
             /** @enum {string} */
-            status: "enabled" | "disabled" | "invalid" | "unavailable";
+            status: "enabled" | "disabled" | "invalid" | "unavailable" | "planned";
             enabled: boolean;
             capabilities: string[];
             usageCount: number;

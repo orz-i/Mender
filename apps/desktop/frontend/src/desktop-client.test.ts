@@ -182,6 +182,30 @@ describe("desktop Mender client", () => {
     expect(Service.ListPluginCatalogue).toHaveBeenCalledTimes(1);
   });
 
+  it("accepts roadmap-only E2B while rejecting executable planned plugin claims",async()=>{
+    const planned={
+      key:"io.mender.sandbox.e2b@planned",
+      pluginId:"io.mender.sandbox.e2b",extensionId:"main",kind:"sandbox.backend",
+      displayName:"E2B",description:"Planned Sandbox backend",
+      packageVersion:"",sourceKind:"planned",status:"planned",
+      enabled:false,capabilities:[],usageCount:0,
+    };
+    vi.mocked(Service.ListPluginCatalogue).mockResolvedValue({plugins:[planned]});
+    await expect(createDesktopMenderClient().listPluginCatalogue()).resolves.toEqual({
+      plugins:[planned],
+    });
+    vi.mocked(Service.ListPluginCatalogue).mockResolvedValue({
+      plugins:[{...planned,enabled:true}],
+    });
+    await expect(createDesktopMenderClient().listPluginCatalogue())
+      .rejects.toBeInstanceOf(MenderClientInvariantError);
+    vi.mocked(Service.ListPluginCatalogue).mockResolvedValue({
+      plugins:[{...planned,status:"enabled"}],
+    });
+    await expect(createDesktopMenderClient().listPluginCatalogue())
+      .rejects.toBeInstanceOf(MenderClientInvariantError);
+  });
+
   it("reads host-verified immutable cached Docker images from the Wails binding",async()=>{
     const image={
       imageDigest:"docker.io/library/alpine@sha256:"+"a".repeat(64),

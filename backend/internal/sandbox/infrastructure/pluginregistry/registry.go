@@ -60,12 +60,22 @@ func BuiltinDescriptor(backend sandboxapp.Backend) (platformplugin.Descriptor, e
 // It remains visible while the operator has not connected a trusted Engine;
 // the corresponding catalogue entry must explicitly mark it unavailable.
 func DockerCatalogueDescriptor() (platformplugin.Descriptor, error) {
-	return builtinDescriptor(sandboxdomain.BackendDocker, []string{
+	return builtinDescriptor(sandboxdomain.BackendDocker, sandboxCatalogueCapabilities())
+}
+
+// DaytonaCatalogueDescriptor describes existing quarantined code without
+// registering it. The operator-only experimental gate remains authoritative.
+func DaytonaCatalogueDescriptor() (platformplugin.Descriptor, error) {
+	return builtinDescriptor(sandboxdomain.BackendDaytona, sandboxCatalogueCapabilities())
+}
+
+func sandboxCatalogueCapabilities() []string {
+	return []string{
 		string(sandboxdomain.CapabilityRead),
 		string(sandboxdomain.CapabilitySearch),
 		string(sandboxdomain.CapabilityEdit),
 		string(sandboxdomain.CapabilityShell),
-	})
+	}
 }
 
 func builtinDescriptor(kind sandboxdomain.BackendKind, capabilities []string) (platformplugin.Descriptor, error) {

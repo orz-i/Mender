@@ -115,7 +115,7 @@ func (r *Runtime) ListPluginCatalogue(ctx context.Context) ([]PluginCatalogueEnt
 		}
 		usage[key]++
 	}
-	result := make([]PluginCatalogueEntry, 0, len(installations)+8)
+	result := make([]PluginCatalogueEntry, 0, len(installations)+10)
 	for _, p := range r.ProviderPluginDescriptors() {
 		descriptor, err := providerpluginPlatformDescriptor(p)
 		if err != nil {
@@ -124,12 +124,16 @@ func (r *Runtime) ListPluginCatalogue(ctx context.Context) ([]PluginCatalogueEnt
 		result = append(result, pluginEntry(descriptor, "builtin", nil, usage[descriptor.PluginID.String()+"@builtin"]))
 	}
 	dockerRegistered := false
+	daytonaRegistered := false
 	for _, entry := range r.Sandboxes.backendPlugins.Entries() {
 		if entry.Kind == sandboxdomain.BackendExternal {
 			continue
 		}
 		if entry.Kind == sandboxdomain.BackendDocker {
 			dockerRegistered = true
+		}
+		if entry.Kind == sandboxdomain.BackendDaytona {
+			daytonaRegistered = true
 		}
 		descriptor := entry.Descriptor
 		if err := descriptor.Validate(); err != nil {
@@ -154,6 +158,30 @@ func (r *Runtime) ListPluginCatalogue(ctx context.Context) ([]PluginCatalogueEnt
 		item.Issue = r.Sandboxes.DockerStatus()
 		result = append(result, item)
 	}
+	if !daytonaRegistered {
+		// Daytona's implementation exists but is explicitly quarantined
+		// until the host operator enables experimental remote execution.
+		// Catalogue projection never resolves a Credential or calls Daytona.
+		descriptor, err := sandboxpluginregistry.DaytonaCatalogueDescriptor()
+		if err != nil {
+			return nil, err
+		}
+		item := pluginEntry(descriptor, "builtin", nil, usage[descriptor.PluginID.String()+"@builtin"])
+		item.Status = "unavailable"
+		item.Enabled = false
+		item.Issue = r.Sandboxes.DaytonaStatus()
+		result = append(result, item)
+	}
+	// E2B is only a product roadmap preview, not an installed extension:
+	// a distinct @planned identity and source MUST NOT enter the Registry
+	// or acquire a Sandbox, even through an exact PluginID request.
+	result = append(result, PluginCatalogueEntry{
+		Key: "io.mender.sandbox.e2b@planned", PluginID: "io.mender.sandbox.e2b",
+		ExtensionID: "main", Kind: platformplugin.SandboxBackend,
+		DisplayName: "E2B", Description: "Planned Sandbox backend; not implemented or available for provisioning",
+		SourceKind: "planned", Status: "planned", Enabled: false,
+		Capabilities: []string{}, UsageCount: 0,
+	})
 	tunnelBuiltin := r.tunnelPlugins.BuiltinDescriptor()
 	result = append(result, pluginEntry(tunnelBuiltin, "builtin", nil, usage[tunnelBuiltin.PluginID.String()+"@builtin"]))
 	for i := range installations {
