@@ -1,6 +1,7 @@
 # Phase 27 C3 — Sandbox Backend Plugin execution closure
 
-Status: In progress (2026-10-11). Governing ADR-0037/0035/0036.
+Status: **Closed (2026-10-11)**. Governing ADR-0037/0035/0036.
+Head implementation: `272c810` (plus C3 protocol `8ca5704`, prior contract `e99d22f`).
 
 ## Outcome and bounded delivery
 
@@ -89,3 +90,47 @@ Phase C is only complete when a third-party plugin package can be installed
 and a governed fake external Sandbox can execute and reconcile through the
 **same** Router, persistent lease, exact binding, authority and audit path as
 built-ins. Otherwise status remains partially complete with explicit blockers.
+
+
+## Closure evidence (2026-10-11)
+
+| Contract | Implementation evidence | Result |
+| --- | --- | --- |
+| Distinct external protocol | `contracts/sandboxplugin/v1/sandbox_plugin.proto`, `sdk/sandboxplugin/go/`, `examples/sandbox-plugin-example/` | Pass |
+| Shared process host | `sandbox/infrastructure/external/dialer.go`, `plugin/process`, `bootstrap/runtime.go` | Exact kind/version/digest/descriptor verified |
+| Durable exact binding | `sandbox/domain/BackendBinding`, plugin registry and Router | No wrong-kind, absent driver or Host fallback |
+| Governed lifecycle | `bootstrap/sandbox_external.go`, typed controllers, Sandbox Policy/admissions | Admission before native RPC, owner identity enforced |
+| Crash/uncertainty | `sandbox_external_operations`, `TransitionExternalRun` and manual `sandbox.reconcile` | Stable op ID, uncertain state retained, no automatic re-provision |
+| Config and migrations | SQLite v10 external configs, immutable pin triggers, v8/v9 snapshot creation | Stable Sandbox IDs, grants, leases, Docker/Daytona templates and audits |
+| Safe package management | Atomic plugin installation disable/delete and Sandbox insert guards | Concurrent disable/create, referenced (including destroyed) removal rejected |
+| Full execution | `TestExternalSandboxWorkspaceProviderCanonicalToolInvocation` | Catalog → Invocation → Workspace → Router → external plugin + audit |
+| Multi-process execution | `TestExternalSandboxLeaseContentionAcrossRuntimes` | Second Runtime rejected before external process launch |
+| Negative tests | Sandbox E2E tamper, denied provision, unknown/reconcile, restart and no fallback | Pass |
+
+**Quality checks:** `pnpm check` (Go lint, unit/Race, SDK/protobuf,
+OpenAPI/TS/Wails drift, i18n, 132 frontend tests, Web/Desktop frontend
+builds), `pnpm security:check` (including new Sandbox SDK/example Go modules),
+and `GOWORK=off go build ./...` within `apps/desktop` passed.
+The standalone native sample was built and exercised inside temporary
+test-managed directories; **no user-owned Sandbox, real remote account,
+Docker daemon, Daytona API, or Credential secret was accessed.**
+
+The macOS desktop Go build reported SDK deployment-target linker warnings,
+but exited successfully. Those warnings do not establish a packaged/signed
+release application; packaging verification belongs to a release gate.
+
+### Explicit carry-forward
+
+- **Phase D:** make Tunnel Transport a typed installable extension. The
+  existing OpenAI tunnel remains governed; no new protocol exposure is
+  implied by Sandbox C3.
+- **Phase E:** unified plugin catalogue and Web/Desktop typed management
+  flows. C3 only provides an executable backend Runtime and CLI workflow.
+- Production cloud backends (E2B/Daytona/other), OS-level confinement for
+  third-party native code, provider bill budgeting and direct credential
+  handoff require separate provider-specific admission/remote acceptance.
+  The fake Sandbox is neither a container/VM nor a general cloud provider.
+- A crashed external operation is not retried automatically; orphan or
+  uncertain remote state requires explicit operator reconciliation. Native
+  plugin code runs with its OS account's authority, so installing an external
+  package is a trusted operator action.

@@ -12,7 +12,7 @@ Work is tracked in [Phase 27](../planning/phase-27-multi-kind-plugin-platform.md
 | Kind | Ownership | Available external implementation |
 | --- | --- | --- |
 | `provider.tools` | Canonical Tool discovery/invocation, Provider lifecycle | Supported with Provider Plugin Protocol v1 |
-| `sandbox.backend` | Sandbox provisioning/session and backend file/process operations | Trusted Local Workspace/Docker/opt-in Daytona extensions registered for Router session execution; external driver protocol pending |
+| `sandbox.backend` | Sandbox provisioning/session and backend file/process operations | Trusted Local Workspace/Docker/opt-in Daytona; installable native external backend through Sandbox Plugin Protocol v1 and governed CLI |
 | `tunnel.transport` | Managed downstream MCP Profile reachability | Typed metadata defined; external transport protocol under development |
 
 A Sandbox does not automatically create Tools and a Tunnel does not participate
@@ -44,11 +44,12 @@ exactly one `extensions` item is required. Configuration Schema,
 Credentials and capabilities are validated by the host and the respective
 extension contract. Manifest claims never confer authority.
 
-Only `provider.tools` has a supported external runtime implementation at this
-milestone. CLI/Desktop Provider-plugin installation rejects wrong-kind packages
-before launching the executable. The generic installation store is shared;
-additional driver installation/verification becomes available only after those
-typed protocols exist.
+Both `provider.tools` and `sandbox.backend` have independently versioned,
+installable native runtimes. The generic Plugin Core verifies both packages
+and supervises their native processes, but Provider/Sandbox management and
+execution protocols remain separate. The CLI dispatches installation by
+`extensions[0].kind`; Tunnel is still a proposed extension contract. Web and
+Desktop plugin-marketplace integration for Sandbox/Tunnel remains Phase 27 E.
 
 ## Forward-only hard cut for already installed Provider packages
 
@@ -99,12 +100,78 @@ kind cannot be bound, startup fails without modifying the v8 inventory.
 A pre-v9 client cannot write Sandbox records after upgrade: the v9 schema
 rejects missing extension pins and overwriting existing pins.
 
-At this stage Sandbox binding and runtime driver registration cover trusted
-Local Workspace, Docker Engine (only when configured), and Daytona (only when
-explicit experimental opt-in is enabled). Third-party native Sandbox packages,
-remote provisioning controllers and dynamic kind registration are **not yet
-supported**. A `sandbox.backend` descriptor in the registry is not a
-claim of live cloud access or OS-level confinement.
+Trusted built-in Sandbox binding continues to cover Local Workspace, Docker
+Engine (only when explicitly configured), and Daytona (only when operator
+experimental opt-in is enabled). The new `external` backend classification
+requires an exact installed and verified `sandbox.backend/main` package, with
+a non-empty immutable InstallationID. Its capabilities are checked in the
+host-governed Router; unknown or missing packages never fall back to the host.
+A descriptor is never evidence of cloud reachability or OS-level confinement.
+
+## Native external Sandbox extensions (SQLite v10)
+
+Phase 27 C3 adds a separate, generated `contracts/sandboxplugin/v1/`
+gRPC contract and standalone `sdk/sandboxplugin/go/` SDK. The checked-in
+`examples/sandbox-plugin-example/` is a deterministic local-only fixture; it
+does not host a real cloud Sandbox or touch the host filesystem.
+
+New external resources use the existing `SandboxID`, `BackendBinding` and
+Sandbox Router. `sandbox_external_configs` stores bounded immutable
+non-secret JSON and config version; `sandbox_external_operations` stores
+the operation's stable idempotency key and observed completion/uncertainty.
+The host validates the extension's JSON Schema and rejects recognized
+credential-bearing fields/values (including escaped or nested keys). This
+filter cannot identify arbitrary secrets; a later credential-backed protocol
+must use a narrowly scoped, host-mediated credential handoff.
+
+A state transition is governed before remote execution, fenced by the persisted
+Run generation and durable lease, and audited separately from Policy admission.
+Timed-out, crashed, or ambiguous remote operations stay visible as
+`unknown`/`orphaned` until an explicitly authorized `sandbox.reconcile`.
+No automatic operation replay, local shell fallback, retargeting, or silent
+remote resource deletion is permitted.
+
+**Install and exercise the local-only example:**
+
+~~~sh
+cd examples/sandbox-plugin-example
+mkdir -p bin
+GOWORK=off go build -o bin/mender-sandbox-example ./cmd/mender-sandbox-example
+
+# From the repository root, using the same Mender CLI database:
+mender plugin install /absolute/path/to/examples/sandbox-plugin-example
+mender plugin list
+mender sandbox add external --name example --installation pinst_<exact-id> --config-json '{}'
+mender sandbox list
+mender sandbox reconcile sbx_<id>             # only when in unknown/orphaned state
+mender sandbox stop sbx_<id>
+mender sandbox start sbx_<id>
+mender sandbox destroy sbx_<id> --confirm
+~~~
+
+Example package `file.read` returns a sample `README.txt` response
+conforming to the canonical Workspace Tool output schema. Other capabilities
+are not advertised and cannot be silently routed to Host. The fixture keeps
+remote state in memory and may lose it when restarted; this intentionally
+demonstrates fail-closed recovery, not production persistence.
+
+**Forward-only upgrades:** v8→v9 still backs up to
+`.mender-sandbox-v8-backup-*.db`; v9→v10 creates a WAL-consistent
+`.mender-sandbox-v9-backup-*.db` before adding external resource config,
+operation journals and stricter extension bindings. Existing SandboxID,
+Run generation, durable leases, Profile grants, Docker/Daytona templates and
+audit are preserved. Retain migration backups until the upgraded Runtime and
+its resource inventory have been reviewed.
+
+**Package lifecycle safety:** a plugin installation referenced by any external
+Sandbox, including an already destroyed historical resource, cannot be disabled
+or removed. Atomic SQLite pin and installation status/delete guards also
+reject a creation racing with administrative disable; management preflight
+alone is not trusted for that invariant.
+
+**Product scope:** the governed native install/create/operate path is currently
+available from the CLI and backend Runtime. Generic Web/Desktop plugin-market
+and resource creation flows are Phase 27 E work, not part of C3.
 
 ## Native code trust
 

@@ -178,12 +178,25 @@ Acceptance: migration on a copied v8 DB with real grants/runs/leases and Docker/
   rolls back all writes. Exact-binding checks remain in the inner Router path,
   with no kind-only fallback. `pnpm check` and `pnpm security:check` pass;
   Sandbox/Bootstrap/Management API Race tests and v8->v9 fixture tests pass.
-- **C3 remains:** generic Sandbox lifecycle backend ports and installable
-  external Sandbox RPC/SDK; the current durable binding deliberately pins only
-  reviewed built-in implementations. E2B and arbitrary external Sandbox drivers
-  remain unsupported until explicit protocol and lifecycle acceptance.
-- **D and E:** not yet implemented; typed Sandbox descriptors alone do not
-  imply external Sandbox/Tunnel driver support or Marketplace coverage.
+- **C3 — closed (2026-10-11):** independent Sandbox Plugin Protocol v1 and Go
+  SDK; manifest-v2 native fixture; generic shared process supervisor typed
+  dialer; versioned verified descriptors and immutable external backend pins.
+  The Sandbox Router now uses exact extension + durable lease for all built-in
+  and external drivers, while a typed lifecycle controller registry replaces
+  Bootstrap vendor-kind dispatch. SQLite v10 persists external configuration
+  and stable pre-RPC operation IDs; schema migrations preserve existing
+  resources and make WAL-consistent v9→v10 backups. CLI can install, provision,
+  stop/start/destroy and explicitly reconcile a fake native backend. Policy,
+  Owner/Principal, Approval, capability, immutable InstallationID, state
+  generation and audit remain host-owned. Full Workspace Tool Invocation to the
+  external driver, cross-Runtime lease contention, deadline/unknown/reconcile,
+  restart without replay/fallback, package tamper, wrong-capability, denied
+  provision and atomic disable/create/remove conflict guards are tested.
+  `pnpm check`, `pnpm security:check`, Race, Go Desktop build and SDK/proto
+  gates passed. See [C3 closure](phase-27-c3-sandbox-plugin-closure.md).
+- **D and E:** not implemented. Tunnel pluginization and unified Marketplace
+  remain separate planned work; the existing external Sandbox path is a
+  governed native CLI/Runtime capability, not an automatic cloud integration.
 
 Foundation verification: `pnpm check` (Go lint/test/race, SDK/protocol/example,
 HTTP/TS/Wails contract drift, i18n/132 frontend tests, Web/Desktop builds) and
