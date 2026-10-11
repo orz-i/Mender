@@ -107,6 +107,19 @@ Gate: HTTP/OpenAPI/TS/Wails consistency, end-to-end Marketplace -> detail -> res
 
 DB startup migrates atomically/idempotently with a pre-upgrade backup path and rejects unknown future schemas. If a package, backend or resource binding is missing or inconsistent, report an actionable unavailable state rather than silently ignoring the reference. Migration itself performs no Docker/Daytona/OpenAI I/O.
 
+### B-next: one native process supervisor, typed protocol dialers
+
+Package process ownership must move to `backend/internal/plugin/process/`, separate from Provider RPC semantics. The generic supervisor owns per-InstallationID synchronization, exact pinned package resolution, descriptor kind/protocol guards, at-most-one live process per exact installation, crash recovery, disable/close/shutdown, and process-free health queries. A typed dialer is selected by `extension.kind` only **after** host validates the persisted installation, exact package digest and normalized manifest/extension identity. The dialer negotiates its own typed wire protocol and verifies the runtime descriptor before a process is cached.
+
+- Native Provider Plugin Protocol v1 remains in `providerplugin/external` as the `provider.tools` dialer; it does not become a universal RPC service.
+- Shared process host must not import Provider/Catalog, Sandbox, Tunnel or generated gRPC interfaces.
+- Execution remains request-driven; registry/catalogue reads never launch the plugin.
+- A returned process is not reusable when package identity/digest/extension changes, and unsupported kinds fail before launching anything.
+- `CloseInstallation` and `CloseAll` must preserve current bounded cleanup and race semantics. Quarantined side-effecting Sandbox drivers will later block disable/remove until cleanup obligations are reconciled.
+- The Provider adapter may expose typed `Ensure`/timeout handling around the host. Such an adapter is an extension implementation, **not** a second independently owned process registry or a compatibility bridge.
+
+Acceptance for this cluster: concurrent Ensure, cross-installation concurrency, nil/missing/wrong-kind dialer, exact digest/version mismatch, process crash/restart, disabled/closed/no-process-start catalogue, close/reuse races; existing Provider external integration and full repository gates.
+
 ## Verified implementation progress
 
 - **A (complete):** ADR-0037 accepted before implementation; no user resource changes.
