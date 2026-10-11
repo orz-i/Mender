@@ -11,6 +11,7 @@ import (
 	platformplugin "github.com/orz-i/Mender/backend/internal/plugin"
 	installationapplication "github.com/orz-i/Mender/backend/internal/plugin/installation/application"
 	installationdomain "github.com/orz-i/Mender/backend/internal/plugin/installation/domain"
+	pluginprocess "github.com/orz-i/Mender/backend/internal/plugin/process"
 	pluginprotocol "github.com/orz-i/Mender/sdk/providerplugin/go/protocol"
 	providerv1 "github.com/orz-i/Mender/sdk/providerplugin/go/protocol/v1"
 	plugintransport "github.com/orz-i/Mender/sdk/providerplugin/go/transport"
@@ -125,33 +126,22 @@ func (p *Process) Close() error {
 	return p.client.Close()
 }
 
-type processSlot struct {
-	mu      sync.Mutex
-	process *Process
-}
-
-// Supervisor owns reusable external plugin package processes.
+// Supervisor is the typed Provider protocol connector into one shared plugin
+// process host. Process identity, synchronization and teardown live only in the
+// generic host, not in this Provider extension adapter.
 type Supervisor struct {
-	packages PackageResolver
+	host     *pluginprocess.Supervisor
 	launcher ProcessLauncher
 	options  Options
-
-	mu     sync.Mutex
-	closed bool
-	slots  map[installationdomain.InstallationID]*processSlot
 }
 
-// NewSupervisor constructs an external plugin process supervisor.
-func NewSupervisor(
-	packages PackageResolver,
-	launcher ProcessLauncher,
-	options Options,
-) (*Supervisor, error) {
+// NewSupervisor registers the Provider RPC dialect on the shared process host.
+func NewSupervisor(packages PackageResolver, launcher ProcessLauncher, options Options) (*Supervisor, error) {
 	if packages == nil {
 		return nil, fmt.Errorf("new external plugin supervisor: package resolver must not be nil")
 	}
 	if launcher == nil {
-		return nil, fmt.Errorf("new external plugin supervisor: process launcher must not be nil")
+		return nil, fmt.Errorf("new external plugin supervisor: launcher must not be nil")
 	}
 	if options.StartTimeout <= 0 {
 		options.StartTimeout = defaultStartTimeout
@@ -174,12 +164,24 @@ func NewSupervisor(
 	if options.MaxStderrBytes <= 0 {
 		options.MaxStderrBytes = defaultMaxStderrBytes
 	}
-	return &Supervisor{
-		packages: packages,
-		launcher: launcher,
-		options:  options,
-		slots:    make(map[installationdomain.InstallationID]*processSlot),
-	}, nil
+	host, err := pluginprocess.NewSupervisor(packages)
+	if err != nil {
+		return nil, err
+	}
+	s := &Supervisor{host: host, launcher: launcher, options: options}
+	if err := host.Register(platformplugin.ProviderTools, s); err != nil {
+		return nil, err
+	}
+	return s, nil
+}
+
+// ProcessHost exposes the one owning process registry so additional typed
+// dialers can be registered during Runtime composition, before first Ensure.
+func (s *Supervisor) ProcessHost() *pluginprocess.Supervisor {
+	if s == nil {
+		return nil
+	}
+	return s.host
 }
 
 type controlPlaneTimeouts struct {
@@ -190,230 +192,79 @@ type controlPlaneTimeouts struct {
 }
 
 func defaultControlPlaneTimeouts() controlPlaneTimeouts {
-	return controlPlaneTimeouts{
-		validateConfig: defaultValidateConfigTimeout,
-		inspectConfig:  defaultInspectConfigTimeout,
-		open:           defaultOpenTimeout,
-		listTools:      defaultListToolsTimeout,
-	}
+	return controlPlaneTimeouts{validateConfig: defaultValidateConfigTimeout,
+		inspectConfig: defaultInspectConfigTimeout, open: defaultOpenTimeout, listTools: defaultListToolsTimeout}
 }
-
 func (s *Supervisor) controlPlaneTimeouts() controlPlaneTimeouts {
 	if s == nil {
 		return defaultControlPlaneTimeouts()
 	}
-	return controlPlaneTimeouts{
-		validateConfig: s.options.ValidateConfigTimeout,
-		inspectConfig:  s.options.InspectConfigTimeout,
-		open:           s.options.OpenTimeout,
-		listTools:      s.options.ListToolsTimeout,
-	}
+	return controlPlaneTimeouts{validateConfig: s.options.ValidateConfigTimeout,
+		inspectConfig: s.options.InspectConfigTimeout, open: s.options.OpenTimeout, listTools: s.options.ListToolsTimeout}
 }
 
-// Ensure returns one reusable healthy process for an enabled installation.
-func (s *Supervisor) Ensure(
-	ctx context.Context,
-	installation installationdomain.Installation,
-) (*Process, error) {
-	if err := installation.Validate(); err != nil {
-		return nil, fmt.Errorf("ensure external plugin process: installation: %w", err)
-	}
-	if installation.Extension().Kind != platformplugin.ProviderTools {
-		return nil, fmt.Errorf("ensure external Provider process: wrong extension kind %s", installation.Extension().Kind)
-	}
-	if installation.Status() != installationdomain.StatusEnabled {
-		return nil, fmt.Errorf(
-			"ensure external plugin process: installation %s is %s",
-			installation.ID(),
-			installation.Status(),
-		)
-	}
-	slot, err := s.slot(installation.ID())
-	if err != nil {
-		return nil, err
-	}
-
-	slot.mu.Lock()
-	defer slot.mu.Unlock()
-
-	if slot.process != nil {
-		if slot.process.digest != installation.Digest() {
-			return nil, fmt.Errorf(
-				"ensure external plugin process: installation %s metadata changed",
-				installation.ID(),
-			)
-		}
-		if !slot.process.Exited() {
-			return slot.process, nil
-		}
-		_ = slot.process.Close()
-		slot.process = nil
-	}
-
-	process, err := s.start(ctx, installation)
-	if err != nil {
-		return nil, err
-	}
-	slot.process = process
-	return process, nil
-}
-
-// Running reports whether one installation currently has a live package process.
-// It never starts or probes a process.
-func (s *Supervisor) Running(id installationdomain.InstallationID) bool {
+// Ensure returns one protocol-verified Provider process from the generic host.
+func (s *Supervisor) Ensure(ctx context.Context, item installationdomain.Installation) (*Process, error) {
 	if s == nil {
-		return false
+		return nil, fmt.Errorf("ensure external plugin process: supervisor is nil")
 	}
-	s.mu.Lock()
-	slot := s.slots[id]
-	s.mu.Unlock()
-	if slot == nil {
-		return false
-	}
-	slot.mu.Lock()
-	defer slot.mu.Unlock()
-	return slot.process != nil && !slot.process.Exited()
-}
-
-// CloseInstallation closes the reusable process for one installation, if present.
-func (s *Supervisor) CloseInstallation(
-	id installationdomain.InstallationID,
-) error {
-	if _, err := installationdomain.ParseInstallationID(id.String()); err != nil {
-		return fmt.Errorf("close external plugin process: %w", err)
-	}
-
-	s.mu.Lock()
-	slot := s.slots[id]
-	s.mu.Unlock()
-	if slot == nil {
-		return nil
-	}
-
-	slot.mu.Lock()
-	defer slot.mu.Unlock()
-	if slot.process == nil {
-		return nil
-	}
-	err := slot.process.Close()
-	slot.process = nil
+	c, err := s.host.Ensure(ctx, item)
 	if err != nil {
-		return fmt.Errorf("close external plugin process: %w", err)
+		return nil, err
 	}
-	return nil
+	p, ok := c.(*Process)
+	if !ok {
+		return nil, fmt.Errorf("ensure external Provider process: unexpected typed connector %T", c)
+	}
+	return p, nil
 }
-
-// CloseAll permanently closes the supervisor and all started plugin processes.
+func (s *Supervisor) Running(id installationdomain.InstallationID) bool {
+	return s != nil && s.host.Running(id)
+}
+func (s *Supervisor) CloseInstallation(id installationdomain.InstallationID) error {
+	if s == nil {
+		return nil
+	}
+	return s.host.CloseInstallation(id)
+}
 func (s *Supervisor) CloseAll() error {
 	if s == nil {
 		return nil
 	}
-
-	s.mu.Lock()
-	if s.closed {
-		s.mu.Unlock()
-		return nil
-	}
-	s.closed = true
-	slots := make([]*processSlot, 0, len(s.slots))
-	for _, slot := range s.slots {
-		slots = append(slots, slot)
-	}
-	s.mu.Unlock()
-
-	var firstErr error
-	for _, slot := range slots {
-		slot.mu.Lock()
-		if slot.process != nil {
-			if err := slot.process.Close(); err != nil && firstErr == nil {
-				firstErr = err
-			}
-			slot.process = nil
-		}
-		slot.mu.Unlock()
-	}
-	if firstErr != nil {
-		return fmt.Errorf("close external plugin processes: %w", firstErr)
-	}
-	return nil
+	return s.host.CloseAll()
 }
 
-func (s *Supervisor) slot(
-	id installationdomain.InstallationID,
-) (*processSlot, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if s.closed {
-		return nil, fmt.Errorf("ensure external plugin process: supervisor is closed")
-	}
-	slot := s.slots[id]
-	if slot == nil {
-		slot = &processSlot{}
-		s.slots[id] = slot
-	}
-	return slot, nil
-}
-
-func (s *Supervisor) start(
-	ctx context.Context,
-	installation installationdomain.Installation,
-) (*Process, error) {
-	resolved, err := s.packages.Resolve(ctx, installation)
-	if err != nil {
-		return nil, fmt.Errorf("ensure external plugin process: resolve package: %w", err)
-	}
-	if resolved.Manifest.PluginID != installation.PluginID().String() ||
-		resolved.Manifest.Version != installation.PackageVersion() {
-		return nil, fmt.Errorf(
-			"ensure external plugin process: resolved package identity mismatch",
-		)
-	}
-
+// Connect owns Provider-specific transport, protocol negotiation and descriptor
+// validation. The generic host already checked status, digest and package kind.
+func (s *Supervisor) Connect(ctx context.Context, item installationdomain.Installation,
+	resolved installationapplication.ResolvedPackage) (pluginprocess.Client, error) {
 	negotiated, err := pluginprotocol.Negotiate([]uint32{resolved.Manifest.Extensions[0].ProtocolVersion})
 	if err != nil {
 		return nil, fmt.Errorf("ensure external plugin process: protocol: %w", err)
 	}
-
-	command, err := s.launcher.Command(
-		ctx,
-		resolved.EntrypointPath,
-		resolved.WorkingDirectory,
-	)
+	command, err := s.launcher.Command(ctx, resolved.EntrypointPath, resolved.WorkingDirectory)
 	if err != nil {
 		return nil, fmt.Errorf("ensure external plugin process: construct command: %w", err)
 	}
 	stderr := newBoundedWriter(s.options.MaxStderrBytes)
 	startTimeout := timeoutWithinContext(ctx, s.options.StartTimeout)
 	client, err := plugintransport.StartClient(plugintransport.ClientOptions{
-		Executable:          resolved.EntrypointPath,
-		WorkingDirectory:    resolved.WorkingDirectory,
-		Versions:            []uint32{negotiated},
-		ExecutableChecksum:  resolved.ExecutableChecksum,
-		StartTimeout:        startTimeout,
-		Stderr:              stderr,
-		PluginLogBufferSize: s.options.MaxStderrBytes,
-		Command:             command,
+		Executable: resolved.EntrypointPath, WorkingDirectory: resolved.WorkingDirectory,
+		Versions: []uint32{negotiated}, ExecutableChecksum: resolved.ExecutableChecksum,
+		StartTimeout: startTimeout, Stderr: stderr, PluginLogBufferSize: s.options.MaxStderrBytes, Command: command,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("ensure external plugin process: start: %w", err)
 	}
-
-	process := &Process{
-		installationID: installation.ID(),
-		digest:         installation.Digest(),
-		client:         client,
-		service:        client.Service(),
-		protocol:       client.ProtocolVersion(),
-		stderr:         stderr,
-	}
-	descriptor, err := s.verifyDescriptor(ctx, installation, resolved, process)
+	p := &Process{installationID: item.ID(), digest: item.Digest(), client: client,
+		service: client.Service(), protocol: client.ProtocolVersion(), stderr: stderr}
+	descriptor, err := s.verifyDescriptor(ctx, item, resolved, p)
 	if err != nil {
-		_ = process.Close()
+		_ = p.Close()
 		return nil, err
 	}
-	process.descriptor = descriptor
-	return process, nil
+	p.descriptor = descriptor
+	return p, nil
 }
 
 func (s *Supervisor) verifyDescriptor(

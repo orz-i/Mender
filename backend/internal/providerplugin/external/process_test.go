@@ -239,6 +239,16 @@ func TestSupervisorRejectsUnsupportedProtocolBeforeLaunch(t *testing.T) {
 	t.Parallel()
 
 	installation, resolved := testExternalInstallation(t, "good")
+	// Version incompatibility must be in the installed package's declared
+	// extension itself, not an untrusted resolver-mismatched manifest.
+	mutated := strings.Replace(string(installation.ManifestJSON()), `"protocolVersion":1`, `"protocolVersion":99`, 1)
+	var err error
+	installation, err = installationdomain.NewInstallation(installation.ID(), installation.PluginID(), installation.PackageVersion(),
+		installation.SourceKind(), installation.SourceReference(), installation.Digest(), []byte(mutated),
+		installation.Status(), installation.InstalledAt())
+	if err != nil {
+		t.Fatal(err)
+	}
 	resolved.Manifest.Extensions[0].ProtocolVersion = 99
 	resolver := &fakePackageResolver{resolved: resolved}
 	supervisor, err := NewSupervisor(resolver, HostProcessLauncher{}, DefaultOptions())
