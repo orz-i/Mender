@@ -196,6 +196,15 @@ export function GetTool(toolID: string): $CancellablePromise<$models.ToolDetail>
     return $Call.ByID(973227434, toolID);
 }
 
+/**
+ * InstallLocalPlugin is desktop-only and receives a folder explicitly chosen
+ * via the OS dialog. The manifest is parsed locally; Web cannot upload native
+ * executable packages or pick arbitrary Runtime filesystem paths.
+ */
+export function InstallLocalPlugin(sourcePath: string): $CancellablePromise<$models.ProviderPluginInstallation> {
+    return $Call.ByID(2874044569, sourcePath);
+}
+
 export function InstallPlugin(sourcePath: string, kind: string): $CancellablePromise<$models.ProviderPluginInstallation> {
     return $Call.ByID(2808272564, sourcePath, kind);
 }

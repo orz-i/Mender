@@ -15,13 +15,14 @@ import {
   PluginDetailPage,
   PluginsPage,
 } from "./domains/plugins/plugins-page";
-import { providerPluginInstaller } from "./domains/plugins/marketplace";
+import { pluginInstaller } from "./domains/plugins/marketplace";
 import { PolicyPage } from "./domains/policy/policy-page";
 import { ProfilesPage } from "./domains/profiles/profiles-page";
 import { ProvidersPage } from "./domains/providers/providers-page";
 import { RuntimePage } from "./domains/runtime/runtime-page";
 import { SandboxesPage, CreateSandboxPage, SandboxDetailPage } from "./domains/sandboxes/sandboxes-page";
 import { SandboxActivityPage } from "./domains/sandboxes/sandbox-activity-page";
+import { ExternalSandboxCreatePage } from "./domains/sandboxes/sandbox-external-create-page";
 import { ServersPage } from "./domains/servers/servers-page";
 import { SkillsPage } from "./domains/skills/skills-page";
 import { TunnelsPage } from "./domains/tunnels/tunnels-page";
@@ -32,14 +33,14 @@ export function MenderApp({
   client,
   copyText,
   chooseLocalDirectory,
-  installProviderPlugin,
+  installPlugin,
   installSkill,
   deploySkill,
 }: {
   client: MenderClient;
   copyText?: (value: string) => Promise<void>;
   chooseLocalDirectory?: () => Promise<string | null>;
-  installProviderPlugin?: () => Promise<ProviderPluginInstallation | null>;
+  installPlugin?: () => Promise<ProviderPluginInstallation | null>;
   installSkill?: () => Promise<SkillInstallation | null>;
   deploySkill?: (
     installationId: string,
@@ -59,9 +60,9 @@ export function MenderApp({
               <PluginsPage
                 client={client}
                 installers={
-                  installProviderPlugin === undefined
+                  installPlugin === undefined
                     ? []
-                    : [providerPluginInstaller(installProviderPlugin)]
+                    : [pluginInstaller(installPlugin)]
                 }
               />
             }
@@ -107,6 +108,7 @@ export function MenderApp({
               />
             }
           />
+          <Route path="sandboxes/new/external" element={<ExternalSandboxCreatePage client={client} />} />
           <Route path="sandboxes/:sandboxId" element={<SandboxDetailPage client={client} />} />
           <Route path="sandboxes/:sandboxId/activity" element={<SandboxActivityPage client={client} />} />
           <Route path="policy" element={<PolicyPage client={client} />} />

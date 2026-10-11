@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CableIcon, Trash2Icon } from "lucide-react";
+import { useSearchParams } from "react-router";
 
-import type { Credential, MenderClient, Tunnel } from "@mender/sdk";
+import type { Credential, MenderClient, Tunnel, PluginCatalogueEntry } from "@mender/sdk";
 import { Badge } from "@mender/ui/components/badge";
 import { Button } from "@mender/ui/components/button";
 import {
@@ -39,22 +40,31 @@ const emptyCreateForm = {
 };
 
 export function TunnelsPage({ client }: { client: MenderClient }) {
+  const [searchParams]=useSearchParams();
   const [tunnels, setTunnels] = useState<Tunnel[]>([]);
+  const [availablePlugins,setAvailablePlugins]=useState<PluginCatalogueEntry[]>([]);
+  const [selectedPluginKey,setSelectedPluginKey]=useState("");
+  const [selectionOpen,setSelectionOpen]=useState(false);
   const [credentials, setCredentials] = useState<Credential[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
   const [inventoryQuery, setInventoryQuery] = useState("");
+  const [deepLink] = useState(() => ({
+    create:searchParams.get("create")==="1",
+    pluginId:searchParams.get("pluginId")??"",
+    installationId:searchParams.get("installationId")??"",
+  }));
   const [helpOpen, setHelpOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [createForm, setCreateForm] = useState(emptyCreateForm);
 
   const refresh = useCallback(async () => {
     try {
-      const [tunnelResult, credentialResult] = await Promise.all([
-        client.listTunnels(),
-        client.listCredentials(),
+      const [tunnelResult, credentialResult, catalogue] = await Promise.all([
+        client.listTunnels(),client.listCredentials(),client.listPluginCatalogue(),
       ]);
+      setAvailablePlugins(catalogue.plugins.filter((item)=>item.kind==="tunnel.transport"));
       setTunnels(tunnelResult.tunnels);
       setCredentials(credentialResult.credentials);
       setError("");
@@ -67,11 +77,23 @@ export function TunnelsPage({ client }: { client: MenderClient }) {
 
   useEffect(() => {
     let active = true;
-    void Promise.all([client.listTunnels(), client.listCredentials()])
-      .then(([tunnelResult, credentialResult]) => {
+    void Promise.all([client.listTunnels(), client.listCredentials(),client.listPluginCatalogue()])
+      .then(([tunnelResult, credentialResult,catalogue]) => {
         if (active) {
           setTunnels(tunnelResult.tunnels);
           setCredentials(credentialResult.credentials);
+          setAvailablePlugins(catalogue.plugins.filter((item)=>item.kind==="tunnel.transport"));
+          if(deepLink.create){
+            const selected=catalogue.plugins.find(item=>item.kind==="tunnel.transport" &&
+              item.pluginId===deepLink.pluginId &&
+              (item.installationId??"")===deepLink.installationId &&
+              item.enabled && item.status==="enabled");
+            if(selected){
+              setSelectedPluginKey(selected.key);
+              setCreateForm({...emptyCreateForm,runtimeCredentialRef:credentialResult.credentials[0]?.reference??""});
+              setCreateOpen(true);
+            }
+          }
           setError("");
           setLoaded(true);
         }
@@ -86,7 +108,22 @@ export function TunnelsPage({ client }: { client: MenderClient }) {
     return () => {
       active = false;
     };
-  }, [client]);
+  }, [client,deepLink]);
+
+  const selectedPlugin=availablePlugins.find((item)=>item.key===selectedPluginKey);
+  const enabledPlugins=availablePlugins.filter((item)=>item.enabled&&item.status==="enabled");
+
+  function choosePlugin(plugin:PluginCatalogueEntry){
+    if(!plugin.enabled || plugin.status!=="enabled")return;
+    setSelectedPluginKey(plugin.key);
+    setCreateForm({
+      ...emptyCreateForm,
+      runtimeCredentialRef: credentials[0]?.reference ?? "",
+    });
+    setSelectionOpen(false);
+    setCreateOpen(true);
+    setError("");
+  }
 
   const visibleTunnels = useMemo(() => {
     const needle = inventoryQuery.trim().toLocaleLowerCase();
@@ -98,6 +135,7 @@ export function TunnelsPage({ client }: { client: MenderClient }) {
   const pagination = usePagination(visibleTunnels);
 
   const createValid =
+    selectedPlugin!==undefined && selectedPlugin.enabled &&
     createForm.displayName.trim() !== "" &&
     createForm.externalTunnelId.trim() !== "" &&
     createForm.runtimeCredentialRef !== "";
@@ -106,11 +144,19 @@ export function TunnelsPage({ client }: { client: MenderClient }) {
     setBusy("create");
     setError("");
     try {
-      await client.createOpenAITunnel({
-        displayName: createForm.displayName,
-        externalTunnelId: createForm.externalTunnelId,
-        runtimeCredentialRef: createForm.runtimeCredentialRef,
-      });
+      if(!selectedPlugin)throw new Error("Selected Tunnel transport is unavailable");
+      const input={
+        displayName:createForm.displayName,
+        externalTunnelId:createForm.externalTunnelId,
+        runtimeCredentialRef:createForm.runtimeCredentialRef,
+      };
+      if(selectedPlugin.installationId){
+        await client.createExternalTunnel({...input,installationId:selectedPlugin.installationId});
+      }else if(selectedPlugin.pluginId==="io.mender.tunnel.openai"){
+        await client.createOpenAITunnel(input);
+      }else{
+        throw new Error("Unknown built-in Tunnel transport");
+      }
       setCreateOpen(false);
       setCreateForm(emptyCreateForm);
       await refresh();
@@ -168,11 +214,7 @@ export function TunnelsPage({ client }: { client: MenderClient }) {
               disabled={busy !== ""}
               onClick={() => {
                 setError("");
-                setCreateForm({
-                  ...emptyCreateForm,
-                  runtimeCredentialRef: credentials[0]?.reference ?? "",
-                });
-                setCreateOpen(true);
+                setSelectionOpen(true);
               }}
             >
               {t("Add tunnel")}
@@ -193,7 +235,7 @@ export function TunnelsPage({ client }: { client: MenderClient }) {
                 <TableRow>
                   <TableHead>{t("Tunnel")}</TableHead>
                   <TableHead>{t("Provider")}</TableHead>
-                  <TableHead>{t("OpenAI Tunnel ID")}</TableHead>
+                  <TableHead>{t("External Tunnel ID")}</TableHead>
                   <TableHead>{t("Runtime credential")}</TableHead>
                   <TableHead className="text-right">{t("Actions")}</TableHead>
                 </TableRow>
@@ -205,7 +247,7 @@ export function TunnelsPage({ client }: { client: MenderClient }) {
                       {item.displayName}
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline">{t("OpenAI")}</Badge>
+                      <Badge variant="outline">{item.provider==="external"?t("External plugin"):t("OpenAI")}</Badge>
                     </TableCell>
                     <TableCell className="max-w-[240px] truncate font-mono text-xs">
                       {item.externalTunnelId}
@@ -241,6 +283,26 @@ export function TunnelsPage({ client }: { client: MenderClient }) {
         )}
       </ResultPanel>
 
+      <Dialog open={selectionOpen} onOpenChange={setSelectionOpen}>
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>{t("Choose Tunnel transport")}</DialogTitle>
+            <DialogDescription>{t("Select one installed or built-in Tunnel transport.")}</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-2">
+            {enabledPlugins.map((plugin)=>(
+              <button key={plugin.key} type="button"
+                className="rounded-xl border border-border p-4 text-left transition-colors hover:bg-accent"
+                onClick={()=>choosePlugin(plugin)}>
+                <span className="block font-medium">{plugin.displayName}</span>
+                <span className="mt-1 block text-xs text-muted-foreground">{plugin.description}</span>
+              </button>
+            ))}
+            {enabledPlugins.length===0?<p className="text-sm text-muted-foreground">{t("No available Tunnel transport plugins.")}</p>:null}
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={helpOpen} onOpenChange={setHelpOpen}>
         <DialogContent className="sm:max-w-xl" showCloseButton={false}>
           <DialogHeader>
@@ -270,16 +332,16 @@ export function TunnelsPage({ client }: { client: MenderClient }) {
       >
         <DialogContent className="sm:max-w-xl">
           <DialogHeader>
-            <DialogTitle>{t("Create OpenAI Tunnel")}</DialogTitle>
+            <DialogTitle>{t("Create Tunnel")}</DialogTitle>
             <DialogDescription>
               {t(
-                "Tunnel configuration stores only a Credential Reference. Mender resolves the API key only when starting tunnel-client.",
+                "Mender stores only a Credential Reference and resolves the secret when connecting the selected transport.",
               )}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">
-            <ReadOnlyField label="Provider" value={t("OpenAI Secure MCP Tunnel")} />
+            <ReadOnlyField label="Provider" value={selectedPlugin?.displayName??t("Unavailable")} />
 
             <Field label="Display name">
               <Input
@@ -295,11 +357,11 @@ export function TunnelsPage({ client }: { client: MenderClient }) {
               />
             </Field>
 
-            <Field label="OpenAI Tunnel ID">
+            <Field label="External Tunnel ID">
               <Input
-                aria-label={t("OpenAI Tunnel ID")}
+                aria-label={t("External Tunnel ID")}
                 className="font-mono"
-                placeholder="tunnel_..."
+                placeholder={t("External Tunnel ID")}
                 value={createForm.externalTunnelId}
                 onChange={(event) =>
                   setCreateForm((current) => ({
@@ -332,10 +394,10 @@ export function TunnelsPage({ client }: { client: MenderClient }) {
               <p className="mt-1 text-xs leading-5 text-muted-foreground">
                 {credentials.length
                   ? t(
-                      "Use an inventory Credential containing the OpenAI tunnel runtime API key.",
+                      "Use an inventory Credential authorized for the selected Tunnel transport.",
                     )
                   : t(
-                      "Create a Credential first. Tunnel configuration stores only its reference; Mender resolves the secret when starting tunnel-client.",
+                      "Create a Credential first. Tunnel configuration stores only its reference.",
                     )}
               </p>
             </Field>

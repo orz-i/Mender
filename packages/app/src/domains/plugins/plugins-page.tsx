@@ -268,7 +268,7 @@ export function PluginDetailPage({ client }: { client: MenderClient }) {
     if (
       !window.confirm(
         t(
-          'Remove installed plugin "{{plugin}}" {{version}}? Configured Providers will block removal.',
+          'Remove installed plugin "{{plugin}}" {{version}}? Referenced resources will block removal.',
           {
             plugin: current.displayName,
             version: current.version,

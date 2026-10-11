@@ -75,8 +75,8 @@ import {
   type SandboxProfileGrantEvents as BindingSandboxProfileGrantEvents,
 } from "../bindings/github.com/orz-i/Mender/backend/internal/desktop/binding";
 
-export async function installDesktopPlugin(sourcePath:string,kind:PluginCatalogueEntry["kind"]){
-  return providerPluginInstallation(await Service.InstallPlugin(sourcePath,kind));
+export async function installDesktopPlugin(sourcePath:string){
+  return providerPluginInstallation(await Service.InstallLocalPlugin(sourcePath));
 }
 
 export async function installDesktopProviderPlugin(
@@ -928,7 +928,7 @@ function pluginCatalogueEntry(value:BindingPluginCatalogueEntry):PluginCatalogue
      !["enabled","disabled","invalid"].includes(value.status)){
     throw new MenderClientInvariantError("Unsupported typed plugin catalogue entry");
   }
-  const schema=value.configSchema;
+  const schema:unknown=value.configSchema;
   if(schema!==undefined && typeof schema!=="boolean" &&
      (typeof schema!=="object" || schema===null || Array.isArray(schema))){
     throw new MenderClientInvariantError("Unsupported plugin configuration schema");
@@ -945,7 +945,7 @@ function pluginCatalogueEntry(value:BindingPluginCatalogueEntry):PluginCatalogue
     ...(value.installedAt?{installedAt:value.installedAt}:{}),
     ...(value.configVersion?{configVersion:value.configVersion}:{}),
     ...(value.protocolVersion?{protocolVersion:value.protocolVersion}:{}),
-    ...(schema!==undefined?{configSchema:schema}:{}),
+    ...(schema!==undefined?{configSchema:schema as NonNullable<PluginCatalogueEntry["configSchema"]>}:{}),
     ...(value.issue?{issue:value.issue}:{}),
   };
 }

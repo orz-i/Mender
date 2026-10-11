@@ -28,6 +28,14 @@ vi.mock(
       GetPolicyStatus: vi.fn(),
       GetSystemStatus: vi.fn(),
       InstallProviderPlugin: vi.fn(),
+      InstallLocalPlugin: vi.fn(),
+      ListPluginCatalogue: vi.fn(),
+      EnablePluginInstallation:vi.fn(),
+      DisablePluginInstallation:vi.fn(),
+      DeletePluginInstallation:vi.fn(),
+      CreateExternalSandbox:vi.fn(),
+      ReconcileSandbox:vi.fn(),
+      CreateExternalTunnel:vi.fn(),
       InstallSkill: vi.fn(),
       ListAudit: vi.fn(),
       ListCredentials: vi.fn(),
@@ -63,6 +71,7 @@ import {
   createDesktopMenderClient,
   deployDesktopSkill,
   installDesktopProviderPlugin,
+  installDesktopPlugin,
   installDesktopSkill,
 } from "./desktop-client";
 
@@ -150,6 +159,72 @@ describe("desktop Mender client", () => {
 
     expect(Service.UpdateRuntimeBudget).toHaveBeenCalledWith(status.budget);
     expect(Service.UpdateRuntimeIsolation).toHaveBeenCalledWith(status.isolation);
+  });
+
+  it("uses one typed Wails catalogue for all extension kinds",async()=>{
+    vi.mocked(Service.ListPluginCatalogue).mockResolvedValue({plugins:[
+      {key:"io.mender.tunnel.openai@builtin",pluginId:"io.mender.tunnel.openai",extensionId:"main",
+        kind:"tunnel.transport",displayName:"OpenAI Secure MCP Tunnel",description:"Internal",
+        packageVersion:"1.0.0",sourceKind:"builtin",status:"enabled",enabled:true,
+        capabilities:["managed-loopback-mcp"],usageCount:0},
+      {key:"dev.example.sandbox@pinst_0123456789abcdef0123456789abcdef",
+        pluginId:"dev.example.sandbox",extensionId:"main",kind:"sandbox.backend",
+        displayName:"Example Sandbox",description:"Fixture",packageVersion:"1.0.0",
+        sourceKind:"local",status:"enabled",enabled:true,
+        installationId:"pinst_0123456789abcdef0123456789abcdef",
+        capabilities:["file.read"],usageCount:2},
+    ]});
+    const client=createDesktopMenderClient();
+    const result=await client.listPluginCatalogue();
+    expect(result.plugins.map(p=>p.kind)).toEqual(["tunnel.transport","sandbox.backend"]);
+    expect(result.plugins[1]).toMatchObject({usageCount:2,installationId:"pinst_0123456789abcdef0123456789abcdef"});
+    expect(Service.ListPluginCatalogue).toHaveBeenCalledTimes(1);
+  });
+
+  it("installs any typed package through a trusted Wails-local folder selection",async()=>{
+    const installed={
+      installationId:"pinst_0123456789abcdef0123456789abcdef",
+      pluginId:"dev.example.tunnel",packageVersion:"1.0.0",sourceKind:"local",
+      digest:"sha256:"+"a".repeat(64),status:"enabled",
+      installedAt:"2026-10-11T00:00:00Z",
+    };
+    vi.mocked(Service.InstallLocalPlugin).mockResolvedValue(installed);
+    await expect(installDesktopPlugin("/tmp/selected-plugin")).resolves.toMatchObject(installed);
+    expect(Service.InstallLocalPlugin).toHaveBeenCalledWith("/tmp/selected-plugin");
+  });
+
+  it("passes the exact external Sandbox and Tunnel bindings to Wails",async()=>{
+    const sandbox={
+      sandboxId:"sbx_0123456789abcdef0123456789abcdef",name:"Fixture",
+      backend:"external",isolation:"remote",state:"ready",localRoot:"",
+      ownerKind:"local_user",ownerRef:"test",activeLeases:0,backendAvailable:true,
+      pluginId:"dev.example.sandbox",extensionId:"main",
+      installationId:"pinst_0123456789abcdef0123456789abcdef",
+    };
+    vi.mocked(Service.CreateExternalSandbox).mockResolvedValue(sandbox);
+    const tunnel={
+      tunnelId:"tun_0123456789abcdef0123456789abcdef",displayName:"Fixture Tunnel",
+      provider:"external",externalTunnelId:"fixture",
+      runtimeCredentialRef:"credential://example/key",
+      pluginId:"dev.example.tunnel",extensionId:"main",
+      installationId:"pinst_0123456789abcdef0123456789abcdef",
+    };
+    vi.mocked(Service.CreateExternalTunnel).mockResolvedValue(tunnel);
+    const client=createDesktopMenderClient();
+    const config={message:"hello"};
+    await expect(client.createExternalSandbox({
+      name:"Fixture",installationId:sandbox.installationId,config,
+    })).resolves.toMatchObject({backend:"external",installationId:sandbox.installationId});
+    expect(Service.CreateExternalSandbox).toHaveBeenCalledWith({
+      name:"Fixture",installationId:sandbox.installationId,configJson:JSON.stringify(config),
+    });
+    await expect(client.createExternalTunnel({
+      displayName:"Fixture Tunnel",installationId:tunnel.installationId,
+      externalTunnelId:"fixture",runtimeCredentialRef:"credential://example/key",
+    })).resolves.toMatchObject({provider:"external",pluginId:"dev.example.tunnel"});
+    expect(Service.CreateExternalTunnel).toHaveBeenCalledWith(
+      "Fixture Tunnel",tunnel.installationId,"fixture","credential://example/key",
+    );
   });
 
   it("installs Provider plugins only through the desktop-local Wails capability", async () => {

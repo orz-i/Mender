@@ -11,7 +11,7 @@ import "@mender/ui/globals.css";
 import {
   createDesktopMenderClient,
   deployDesktopSkill,
-  installDesktopProviderPlugin,
+  installDesktopPlugin,
   installDesktopSkill,
 } from "./desktop-client";
 
@@ -36,20 +36,20 @@ async function chooseLocalSandboxDirectory(): Promise<string | null> {
   return directory || null;
 }
 
-async function chooseAndInstallProviderPlugin() {
+async function chooseAndInstallPlugin() {
   const sourcePath = await Dialogs.OpenFile({
     AllowsMultipleSelection: false,
     CanChooseDirectories: true,
     CanChooseFiles: false,
     CanCreateDirectories: false,
-    Title: t("Install Provider plugin"),
-    Message: t("Choose a Provider plugin package directory."),
+    Title: t("Install plugin"),
+    Message: t("Choose a plugin package directory."),
     ButtonText: t("Install"),
   });
   if (!sourcePath) {
     return null;
   }
-  return installDesktopProviderPlugin(sourcePath);
+  return installDesktopPlugin(sourcePath);
 }
 
 async function chooseAndInstallSkill() {
@@ -97,7 +97,7 @@ createRoot(rootElement).render(
         client={client}
         copyText={Clipboard.SetText}
         chooseLocalDirectory={chooseLocalSandboxDirectory}
-        installProviderPlugin={chooseAndInstallProviderPlugin}
+        installPlugin={chooseAndInstallPlugin}
         installSkill={chooseAndInstallSkill}
         deploySkill={chooseAndDeploySkill}
       />

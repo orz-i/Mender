@@ -1,201 +1,93 @@
-import { describe, expect, it } from "vitest";
-
+import { describe, expect, it, vi } from "vitest";
+import type { MenderClient, PluginCatalogueEntry } from "@mender/sdk";
 import {
   humanizePluginId,
   marketplaceCursorPage,
-  providerPluginsToMarketplace,
+  pluginCatalogueToMarketplace,
+  loadMarketplacePlugins,
+  removeMarketplacePlugin,
+  setMarketplacePluginEnabled,
 } from "./marketplace";
 
-describe("providerPluginsToMarketplace", () => {
-  it("keeps built-ins and disabled external installations in one catalog", () => {
-    const plugins = [
-      {
-        pluginId: "io.mender.provider.mcp",
-        version: "1.0.0",
-        packageVersion: "1.0.0",
-        displayName: "MCP",
-        description: "Model Context Protocol provider",
-        configVersion: 1,
-        sourceKind: "builtin" as const,
-        capabilities: ["http", "stdio"],
-        enabled: true,
-      },
-    ];
-    const installations = [
-      {
-        installationId: "pinst_0123456789abcdef0123456789abcdef",
-        pluginId: "dev.example.echo",
-        packageVersion: "2.0.0",
-        sourceKind: "local" as const,
-        digest: "sha256:" + "a".repeat(64),
-        status: "disabled" as const,
-        installedAt: "2026-09-30T00:00:00Z",
-        displayName: "Example Echo",
-        description: "Echo Provider plugin",
-        configVersion: 2,
-        protocolVersion: 1,
-        capabilities: ["echo"],
-      },
-    ];
+const id = "pinst_0123456789abcdef0123456789abcdef";
+function entry(kind:PluginCatalogueEntry["kind"],overrides:Partial<PluginCatalogueEntry>={}):PluginCatalogueEntry{
+  const pluginId = kind==="provider.tools"?"dev.example.provider":
+    kind==="sandbox.backend"?"dev.example.sandbox":"dev.example.tunnel";
+  return {
+    key:pluginId+"@"+id,pluginId,extensionId:"main",kind,
+    displayName:"Example "+kind,description:"A real typed extension",
+    packageVersion:"1.0.0",sourceKind:"local",status:"enabled",enabled:true,
+    installationId:id,digest:"sha256"+"a".repeat(64),installedAt:"2026-09-30T00:00:00Z",
+    configVersion:1,protocolVersion:1,capabilities:["file.read"],usageCount:0,
+    ...overrides,
+  };
+}
 
-    const result = providerPluginsToMarketplace(
-      plugins,
-      installations,
-      [],
-    );
-
-    expect(result).toHaveLength(2);
-    expect(result[0]).toMatchObject({
-      displayName: "MCP",
-      source: "builtin",
-      status: "enabled",
-      enabled: true,
-      createAction: {
-        label: "Add provider",
-        href: "/providers?create=1&pluginId=io.mender.provider.mcp",
-      },
-    });
-    expect(result[1]).toMatchObject({
-      displayName: "Example Echo",
-      description: "Echo Provider plugin",
-      source: "local",
-      status: "disabled",
-      enabled: false,
-      capabilities: ["echo"],
-      actionRef: installations[0]?.installationId,
-    });
-    expect(result[1]?.technicalDetails).toContainEqual({
-      label: "Plugin ID",
-      value: "dev.example.echo",
-      mono: true,
-    });
-    expect(result[1]?.technicalDetails).toContainEqual({
-      label: "Installation ID",
-      value: installations[0]?.installationId,
-      mono: true,
-    });
-    expect(result[1]?.createAction).toBeUndefined();
-  });
-
-  it("creates exact Provider handoffs for enabled external installations", () => {
-    const installationId = "pinst_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-    const result = providerPluginsToMarketplace(
-      [
-        {
-          pluginId: "dev.example.echo",
-          installationId,
-          version: "1.0.0",
-          packageVersion: "1.2.3",
-          displayName: "Example Echo",
-          description: "Echo Provider plugin",
-          configVersion: 1,
-          sourceKind: "external",
-          capabilities: ["echo"],
-          enabled: true,
-        },
-      ],
-      [
-        {
-          installationId,
-          pluginId: "dev.example.echo",
-          packageVersion: "1.2.3",
-          sourceKind: "local",
-          digest: "sha256:" + "a".repeat(64),
-          status: "enabled",
-          installedAt: "2026-09-30T00:00:00Z",
-        },
-      ],
-      [],
-    );
-
-    expect(result).toHaveLength(1);
-    expect(result[0]?.createAction).toEqual({
-      label: "Add provider",
-      href:
-        "/providers?create=1&pluginId=dev.example.echo&installationId=" +
-        installationId,
-    });
-  });
-
-  it("pages the sorted catalog from stable plugin-key cursors", () => {
-    const plugins = Array.from({ length: 7 }, (_, index) => ({
-      pluginId: `dev.example.plugin-${String(index + 1).padStart(2, "0")}`,
-      version: "1.0.0",
-      packageVersion: "1.0.0",
-      displayName: `Plugin ${String(index + 1).padStart(2, "0")}`,
-      description: "Test plugin",
-      configVersion: 1,
-      sourceKind: "builtin" as const,
-      capabilities: [],
-      enabled: true,
-    }));
-    const marketplace = providerPluginsToMarketplace(plugins, [], []);
-
-    const first = marketplaceCursorPage(marketplace, null, 3);
-    expect(first.items.map((plugin) => plugin.displayName)).toEqual([
-      "Plugin 01",
-      "Plugin 02",
-      "Plugin 03",
+describe("canonical typed Marketplace",()=>{
+  it("shows all three extension types from one authority and routes exact creation IDs",()=>{
+    const models=pluginCatalogueToMarketplace([
+      entry("provider.tools"),entry("sandbox.backend"),entry("tunnel.transport"),
     ]);
-    expect(first.nextCursor).toBe(first.items.at(-1)?.key);
-    expect(first).toMatchObject({ from: 1, to: 3, total: 7 });
+    expect(models).toHaveLength(3);
+    expect(models.find((x)=>x.kind==="provider")?.createAction?.href).toBe(
+      "/providers?create=1&pluginId=dev.example.provider&installationId="+id);
+    expect(models.find((x)=>x.kind==="sandbox")?.createAction?.href).toBe(
+      "/sandboxes/new/external?create=1&pluginId=dev.example.sandbox&installationId="+id);
+    expect(models.find((x)=>x.kind==="tunnel")?.createAction?.href).toBe(
+      "/tunnels?create=1&pluginId=dev.example.tunnel&installationId="+id);
+  });
 
-    const second = marketplaceCursorPage(
-      marketplace,
-      first.nextCursor,
-      3,
-    );
-    expect(second.items.map((plugin) => plugin.displayName)).toEqual([
-      "Plugin 04",
-      "Plugin 05",
-      "Plugin 06",
+  it("prevents enable/remove of unavailable or referenced packages",()=>{
+    const models=pluginCatalogueToMarketplace([
+      entry("sandbox.backend",{enabled:false,status:"disabled",usageCount:2}),
+      entry("tunnel.transport",{enabled:true,usageCount:1}),
+      entry("provider.tools",{enabled:true,issue:"verification failed"}),
     ]);
-    expect(second).toMatchObject({ from: 4, to: 6, total: 7 });
+    expect(models.find(x=>x.kind==="sandbox")?.actions).toEqual({enable:true,disable:false,remove:false});
+    expect(models.find(x=>x.kind==="tunnel")?.actions).toEqual({enable:false,disable:false,remove:false});
+    expect(models.find(x=>x.kind==="provider")?.createAction).toBeUndefined();
+    expect(models.find(x=>x.kind==="provider")?.status).toBe("degraded");
   });
 
-  it("projects installation issues as degraded state", () => {
-    const installationId =
-      "pinst_fedcba9876543210fedcba9876543210";
-    const result = providerPluginsToMarketplace(
-      [],
-      [
-        {
-          installationId,
-          pluginId: "dev.example.echo",
-          packageVersion: "1.0.0",
-          sourceKind: "local",
-          digest: "sha256:" + "b".repeat(64),
-          status: "disabled",
-          installedAt: "2026-09-30T00:00:00Z",
-        },
-      ],
-      [
-        {
-          installationId,
-          code: "descriptor_invalid",
-          message: "descriptor rejected",
-        },
-      ],
-    );
-
-    expect(result[0]).toMatchObject({
-      displayName: "Echo",
-      status: "degraded",
-      enabled: false,
-      actions: {
-        enable: false,
-        disable: false,
-        remove: true,
-      },
-      issue: {
-        code: "descriptor_invalid",
-      },
+  it("keeps builtin entries inert and prevents unsafe install management",()=>{
+    const builtin=entry("tunnel.transport",{
+      key:"io.mender.tunnel.openai@builtin",pluginId:"io.mender.tunnel.openai",
+      sourceKind:"builtin",usageCount:0,
     });
+    delete builtin.installationId;
+    const model=pluginCatalogueToMarketplace([builtin])[0];
+    expect(model?.actions).toEqual({enable:false,disable:false,remove:false});
+    expect(model?.createAction?.href).toBe("/tunnels?create=1&pluginId=io.mender.tunnel.openai");
   });
 
-  it("humanizes unknown plugin IDs without exposing their full identifier", () => {
-    expect(humanizePluginId("dev.example.audit-exporter")).toBe(
-      "Audit Exporter",
-    );
+  it("uses stable cursor pagination",()=>{
+    const models=pluginCatalogueToMarketplace(
+      Array.from({length:13},(_,i)=>entry("provider.tools",{
+        pluginId:"dev.example.plugin-"+String(i).padStart(2,"0"),
+        displayName:"Plugin "+String(i).padStart(2,"0"),
+        key:"dev.example.plugin-"+String(i).padStart(2,"0")+"@builtin",
+      })));
+    const page=marketplaceCursorPage(models,null,12);
+    expect(page.items).toHaveLength(12);
+    expect(marketplaceCursorPage(models,page.nextCursor,12).items).toHaveLength(1);
+  });
+
+  it("loads exactly one canonical catalogue and dispatches generic installation actions",async()=>{
+    const listPluginCatalogue=vi.fn().mockResolvedValue({plugins:[entry("sandbox.backend")]});
+    const disablePluginInstallation=vi.fn().mockResolvedValue({});
+    const deletePluginInstallation=vi.fn().mockResolvedValue(undefined);
+    const client={
+      listPluginCatalogue,disablePluginInstallation,deletePluginInstallation,
+    } as unknown as MenderClient;
+    const result=await loadMarketplacePlugins(client);
+    expect(listPluginCatalogue).toHaveBeenCalledTimes(1);
+    await setMarketplacePluginEnabled(client,result[0]!,false);
+    await removeMarketplacePlugin(client,result[0]!);
+    expect(disablePluginInstallation).toHaveBeenCalledWith(id);
+    expect(deletePluginInstallation).toHaveBeenCalledWith(id);
+  });
+
+  it("humanizes unknown ids without exposing full technical identifier",()=>{
+    expect(humanizePluginId("dev.example.audit-exporter")).toBe("Audit Exporter");
   });
 });

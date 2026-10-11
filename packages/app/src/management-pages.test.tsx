@@ -507,31 +507,42 @@ describe("management pages", () => {
       installedAt: "2026-09-28T00:00:00Z",
     };
     const disabled = { ...installation, status: "disabled" as const };
-    const listProviderPluginInstallations = vi
-      .fn()
-      .mockResolvedValueOnce({ installations: [installation] })
-      .mockResolvedValueOnce({ installations: [installation] })
-      .mockResolvedValueOnce({ installations: [disabled] })
-      .mockResolvedValueOnce({ installations: [] });
-    const disableProviderPluginInstallation = vi.fn().mockResolvedValue({
-      installation: disabled,
+    const echo=(status:"enabled"|"disabled")=>({
+      key:installation.pluginId+"@"+installation.installationId,
+      pluginId:installation.pluginId,extensionId:"main",kind:"provider.tools" as const,
+      displayName:"Echo",description:"External Echo",packageVersion:installation.packageVersion,
+      sourceKind:"local" as const,status,enabled:status==="enabled",
+      capabilities:[],usageCount:0,installationId:installation.installationId,
+      digest:installation.digest,installedAt:installation.installedAt,
+      configVersion:1,protocolVersion:1,
     });
-    const deleteProviderPluginInstallation = vi.fn().mockResolvedValue(undefined);
+    const catalogue=vi.fn()
+      .mockResolvedValueOnce({plugins:[echo("enabled")]})
+      .mockResolvedValueOnce({plugins:[echo("enabled")]})
+      .mockResolvedValueOnce({plugins:[echo("disabled")]})
+      .mockResolvedValueOnce({plugins:[{
+        key:"io.mender.provider.mcp@builtin",pluginId:"io.mender.provider.mcp",
+        extensionId:"main",kind:"provider.tools",displayName:"MCP",
+        description:"Model Context Protocol Provider",packageVersion:"1.0.0",
+        sourceKind:"builtin",status:"enabled",enabled:true,
+        capabilities:[],usageCount:0,
+      }]});
+    const disablePluginInstallation=vi.fn().mockResolvedValue({installation:disabled});
+    const deletePluginInstallation=vi.fn().mockResolvedValue(undefined);
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
 
     renderApp("/plugins", {
-      listProviderPluginInstallations,
-      disableProviderPluginInstallation,
-      deleteProviderPluginInstallation,
+      listPluginCatalogue:catalogue,
+      disablePluginInstallation,
+      deletePluginInstallation,
     });
-
     expect(await screen.findByText("Plugin catalog")).toBeTruthy();
     expect(screen.getByText("Echo")).toBeTruthy();
     expect(screen.queryByText("dev.example.echo")).toBeNull();
     expect(screen.queryByText(installation.installationId)).toBeNull();
     expect(
       screen.queryByRole("button", {
-        name: "Install Provider plugin",
+        name: "Install plugin",
       }),
     ).toBeNull();
 
@@ -545,7 +556,7 @@ describe("management pages", () => {
     fireEvent.click(screen.getByRole("button", { name: "Capabilities" }));
     expect(screen.queryByText("dev.example.echo")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Overview" }));
-    expect(screen.queryByRole("button", { name: "Add provider" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Add provider" })).toBeTruthy();
 
     fireEvent.click(
       screen.getByRole("button", {
@@ -553,7 +564,7 @@ describe("management pages", () => {
       }),
     );
     await waitFor(() => {
-      expect(disableProviderPluginInstallation).toHaveBeenCalledWith(
+      expect(disablePluginInstallation).toHaveBeenCalledWith(
         installation.installationId,
       );
     });
@@ -565,7 +576,7 @@ describe("management pages", () => {
       }),
     );
     await waitFor(() => {
-      expect(deleteProviderPluginInstallation).toHaveBeenCalledWith(
+      expect(deletePluginInstallation).toHaveBeenCalledWith(
         installation.installationId,
       );
     });
@@ -590,10 +601,12 @@ describe("management pages", () => {
     }));
 
     renderApp("/plugins", {
-      listProviderPlugins: vi.fn().mockResolvedValue({
-        plugins,
-        issues: [],
-      }),
+      listPluginCatalogue:vi.fn().mockResolvedValue({plugins:plugins.map(plugin=>({
+        key:plugin.pluginId+"@builtin",pluginId:plugin.pluginId,extensionId:"main",
+        kind:"provider.tools",displayName:plugin.displayName,description:plugin.description,
+        packageVersion:plugin.packageVersion,sourceKind:"builtin",status:"enabled",
+        enabled:true,capabilities:[],usageCount:0,configVersion:1,protocolVersion:1,
+      }))}),
     });
 
     expect(
@@ -707,33 +720,102 @@ describe("management pages", () => {
       status: "enabled" as const,
       installedAt: "2026-09-28T00:00:00Z",
     };
-    const installProviderPlugin = vi.fn().mockResolvedValue(installed);
-    const listProviderPluginInstallations = vi
-      .fn()
-      .mockResolvedValueOnce({ installations: [] })
-      .mockResolvedValueOnce({ installations: [installed] });
-
-    renderApp(
-      "/plugins",
-      {
-        listProviderPluginInstallations,
-      },
-      { installProviderPlugin },
-    );
+    const installPlugin = vi.fn().mockResolvedValue(installed);
+    const installedEntry={
+      key:installed.pluginId+"@"+installed.installationId,
+      pluginId:installed.pluginId,extensionId:"main",kind:"provider.tools" as const,
+      displayName:"Local",description:"Example local plugin",packageVersion:installed.packageVersion,
+      sourceKind:"local" as const,status:"enabled" as const,enabled:true,
+      capabilities:[],usageCount:0,installationId:installed.installationId,
+      digest:installed.digest,installedAt:installed.installedAt,
+      configVersion:1,protocolVersion:1,
+    };
+    const listPluginCatalogue=vi.fn()
+      .mockResolvedValueOnce({plugins:[]})
+      .mockResolvedValueOnce({plugins:[installedEntry]});
+    renderApp("/plugins",{listPluginCatalogue},{installPlugin});
 
     expect(
       await screen.findByRole("button", {
-        name: "Install Provider plugin",
+        name: "Install plugin",
       }),
     ).toBeTruthy();
     fireEvent.click(
-      screen.getByRole("button", { name: "Install Provider plugin" }),
+      screen.getByRole("button", { name: "Install plugin" }),
     );
 
     await waitFor(() => {
-      expect(installProviderPlugin).toHaveBeenCalledTimes(1);
+      expect(installPlugin).toHaveBeenCalledTimes(1);
     });
     expect(await screen.findByText("Local")).toBeTruthy();
+  });
+
+  it("opens a selected Sandbox plugin in its own configuration and review flow",async()=>{
+    const installationId="pinst_1234567890abcdef1234567890abcdef";
+    const pluginId="dev.example.sandbox";
+    const created={sandboxId:"sbx_1234567890abcdef1234567890abcdef",
+      name:"Fixture",backend:"external" as const};
+    const createExternalSandbox=vi.fn().mockResolvedValue(created);
+    renderApp("/sandboxes/new/external?create=1&pluginId="+pluginId+"&installationId="+installationId,{
+      listPluginCatalogue:vi.fn().mockResolvedValue({plugins:[{
+        key:pluginId+"@"+installationId,pluginId,extensionId:"main",
+        kind:"sandbox.backend",displayName:"Fixture Sandbox",description:"Mock",
+        packageVersion:"1.0.0",sourceKind:"local",status:"enabled",enabled:true,
+        installationId,usageCount:0,capabilities:["file.read"],
+        configVersion:1,protocolVersion:1,configSchema:{
+          type:"object",properties:{message:{type:"string"}},
+          additionalProperties:false,
+        },
+      }]}),
+      createExternalSandbox,
+      getSandbox:vi.fn().mockResolvedValue({
+        ...created,isolation:"remote",state:"ready",localRoot:"",ownerKind:"local_user",ownerRef:"test",
+        activeLeases:0,backendAvailable:true,
+      }),
+    });
+    expect(await screen.findByText("Fixture Sandbox")).toBeTruthy();
+    expect(screen.queryByText("Docker")).toBeNull();
+    fireEvent.change(screen.getByLabelText("Sandbox name"),{target:{value:"Fixture"}});
+    fireEvent.click(screen.getByRole("button",{name:"Review"}));
+    expect(await screen.findByText(installationId)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button",{name:"Create sandbox"}));
+    await waitFor(()=>expect(createExternalSandbox).toHaveBeenCalledWith({
+      name:"Fixture",installationId,config:{},
+    }));
+  });
+
+  it("opens exactly the selected external Tunnel transport form",async()=>{
+    const installationId="pinst_abcdef1234567890abcdef1234567890";
+    const pluginId="dev.example.tunnel";
+    const createExternalTunnel=vi.fn().mockResolvedValue({
+      tunnelId:"tun_11111111111111111111111111111111",
+      displayName:"Fixture Tunnel",provider:"external",
+      externalTunnelId:"fixture",runtimeCredentialRef:"credential://example/key",
+    });
+    renderApp("/tunnels?create=1&pluginId="+pluginId+"&installationId="+installationId,{
+      listPluginCatalogue:vi.fn().mockResolvedValue({plugins:[{
+        key:pluginId+"@"+installationId,pluginId,extensionId:"main",kind:"tunnel.transport",
+        displayName:"Fixture Tunnel Transport",description:"Only loopback reachability",
+        packageVersion:"1.0.0",sourceKind:"local",status:"enabled",enabled:true,
+        installationId,usageCount:0,capabilities:["loopback-mcp-proxy"],
+      }]}),
+      listCredentials:vi.fn().mockResolvedValue({credentials:[{
+        reference:"credential://example/key",namespace:"example",name:"key",
+        displayName:"Example",source:"environment",environmentVariable:"EXAMPLE_KEY",
+        createdAt:"2026-10-01T00:00:00Z",updatedAt:"2026-10-01T00:00:00Z",
+      }]}),
+      createExternalTunnel,
+    });
+    const form=await screen.findByRole("dialog",{name:"Create Tunnel"});
+    expect(within(form).getByText("Fixture Tunnel Transport")).toBeTruthy();
+    expect(within(form).queryByText("OpenAI Secure MCP Tunnel")).toBeNull();
+    fireEvent.change(within(form).getByLabelText("Tunnel display name"),{target:{value:"Fixture Tunnel"}});
+    fireEvent.change(within(form).getByLabelText("External Tunnel ID"),{target:{value:"fixture"}});
+    fireEvent.click(within(form).getByRole("button",{name:"Create tunnel"}));
+    await waitFor(()=>expect(createExternalTunnel).toHaveBeenCalledWith({
+      displayName:"Fixture Tunnel",installationId,externalTunnelId:"fixture",
+      runtimeCredentialRef:"credential://example/key",
+    }));
   });
 
   it("registers a Model Tools Provider with inventory authentication", async () => {
@@ -1442,14 +1524,18 @@ describe("management pages", () => {
     fireEvent.click(help.getByRole("button", { name: "Close" }));
 
     fireEvent.click(screen.getByRole("button", { name: "Add tunnel" }));
-    expect(await screen.findByText("Create OpenAI Tunnel")).toBeTruthy();
+    const chooser=await screen.findByRole("dialog",{name:"Choose Tunnel transport"});
+    fireEvent.click(within(chooser).getByRole("button",{
+      name:/OpenAI Secure MCP Tunnel/,
+    }));
+    expect(await screen.findByRole("dialog",{name:"Create Tunnel"})).toBeTruthy();
     expect(screen.queryByLabelText("Credential reference")).toBeNull();
     expect(screen.queryByLabelText("Tunnel client executable")).toBeNull();
 
     fireEvent.change(screen.getByLabelText("Tunnel display name"), {
       target: { value: "OpenAI Work" },
     });
-    fireEvent.change(screen.getByLabelText("OpenAI Tunnel ID"), {
+    fireEvent.change(screen.getByLabelText("External Tunnel ID"), {
       target: { value: "tunnel_external_work" },
     });
     expect(
@@ -2235,10 +2321,23 @@ function renderApp(
   path: string,
   client: Partial<MenderClient>,
   options: {
-    installProviderPlugin?: () => Promise<ProviderPluginInstallation | null>;
+    installPlugin?: () => Promise<ProviderPluginInstallation | null>;
   } = {},
 ) {
+  const builtinPlugin=(id:string,name:string)=>({
+    key:id+"@builtin",pluginId:id,extensionId:"main",kind:"provider.tools" as const,
+    displayName:name,description:name+" Provider plugin",packageVersion:"1.0.0",
+    sourceKind:"builtin" as const,status:"enabled" as const,enabled:true,
+    capabilities:[],usageCount:0,configVersion:1,protocolVersion:1,
+  });
   const resolvedClient = {
+    listPluginCatalogue:vi.fn().mockResolvedValue({plugins:[
+      builtinPlugin("io.mender.provider.mcp","MCP"),
+      builtinPlugin("io.mender.provider.model-tools","Model Tools"),
+      builtinPlugin("io.mender.provider.openapi","OpenAPI"),
+      {...builtinPlugin("io.mender.tunnel.openai","OpenAI Secure MCP Tunnel"),
+        kind:"tunnel.transport" as const},
+    ]}),
     listProviderPlugins: vi.fn().mockResolvedValue({
       plugins: [
         {
@@ -2294,9 +2393,9 @@ function renderApp(
     <MemoryRouter initialEntries={[path]}>
       <MenderApp
         client={resolvedClient}
-        {...(options.installProviderPlugin === undefined
+        {...(options.installPlugin === undefined
           ? {}
-          : { installProviderPlugin: options.installProviderPlugin })}
+          : { installPlugin: options.installPlugin })}
       />
     </MemoryRouter>,
   );

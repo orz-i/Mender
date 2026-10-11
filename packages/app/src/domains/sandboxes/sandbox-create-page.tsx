@@ -8,7 +8,7 @@ import {
   FolderOpenIcon,
   LockKeyholeIcon,
 } from "lucide-react";
-import { Link, useNavigate } from "react-router";
+import { Link, useNavigate, useSearchParams } from "react-router";
 
 import type { Credential, MenderClient } from "@mender/sdk";
 import { Button } from "@mender/ui/components/button";
@@ -176,9 +176,15 @@ export function CreateSandboxPage({
   client: MenderClient;
   chooseLocalDirectory?: () => Promise<string | null>;
 }) {
-  const navigate = useNavigate();
-  const [step, setStep] = useState<CreationStep>("backend");
-  const [selected, setSelected] = useState<Backend>("local_workspace");
+  const navigate=useNavigate();
+  const [searchParams]=useSearchParams();
+  const chosenBuiltin=searchParams.get("pluginId");
+  const fixedBackend:Backend|undefined=
+    chosenBuiltin==="io.mender.sandbox.local-workspace"?"local_workspace":
+    chosenBuiltin==="io.mender.sandbox.docker"?"docker":
+    chosenBuiltin==="io.mender.sandbox.daytona"?"daytona":undefined;
+  const [step,setStep]=useState<CreationStep>(fixedBackend?"configure":"backend");
+  const [selected,setSelected]=useState<Backend>(fixedBackend??"local_workspace");
   const [name, setName] = useState("");
   const [root, setRoot] = useState("");
   const [pickingDirectory, setPickingDirectory] = useState(false);

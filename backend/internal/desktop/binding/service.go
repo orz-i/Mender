@@ -22,6 +22,7 @@ import (
 	mcpplugin "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/plugin"
 	platformplugin "github.com/orz-i/Mender/backend/internal/plugin"
 	installationdomain "github.com/orz-i/Mender/backend/internal/plugin/installation/domain"
+	pluginmanifest "github.com/orz-i/Mender/backend/internal/plugin/manifest"
 	policyapplication "github.com/orz-i/Mender/backend/internal/policy/application"
 	policydomain "github.com/orz-i/Mender/backend/internal/policy/domain"
 	profileapplication "github.com/orz-i/Mender/backend/internal/profile/application"
@@ -544,6 +545,26 @@ func (s *Service) ListPluginCatalogue() (PluginCatalogueList, error) {
 	}
 	return PluginCatalogueList{Plugins: result}, nil
 }
+
+// InstallLocalPlugin is desktop-only and receives a folder explicitly chosen
+// via the OS dialog. The manifest is parsed locally; Web cannot upload native
+// executable packages or pick arbitrary Runtime filesystem paths.
+func (s *Service) InstallLocalPlugin(sourcePath string) (ProviderPluginInstallation, error) {
+	raw, err := os.ReadFile(filepath.Join(sourcePath, pluginmanifest.FileName)) // #nosec G304 -- explicit trusted local Wails directory chooser.
+	if err != nil {
+		return ProviderPluginInstallation{}, err
+	}
+	manifest, err := pluginmanifest.Parse(raw)
+	if err != nil {
+		return ProviderPluginInstallation{}, err
+	}
+	item, err := s.runtime.InstallPlugin(s.ctx, sourcePath, manifest.Extensions[0].Kind)
+	if err != nil {
+		return ProviderPluginInstallation{}, err
+	}
+	return providerPluginInstallationProjection(item), nil
+}
+
 func (s *Service) InstallPlugin(sourcePath string, kind string) (ProviderPluginInstallation, error) {
 	verifiedKind := platformplugin.Kind(kind)
 	item, err := s.runtime.InstallPlugin(s.ctx, sourcePath, verifiedKind)

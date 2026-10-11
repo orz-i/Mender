@@ -50,7 +50,7 @@ export function GenericProviderConfigForm({
   // The built-in Workspace plugin uses a resource selector instead of a raw
   // sandboxId input. LLMs/Agents must never be able to select execution placement.
   if (pluginId === "io.mender.provider.workspace") {
-    const available = (sandboxes ?? []).filter((item) => item.state === "ready" && item.backendAvailable && (item.backend === "local_workspace" || item.backend === "docker" || item.backend === "daytona"));
+    const available = (sandboxes ?? []).filter((item) => item.state === "ready" && item.backendAvailable && (item.backend === "local_workspace" || item.backend === "docker" || item.backend === "daytona" || item.backend === "external"));
     const selected = typeof value.sandboxId === "string" ? value.sandboxId : "";
     return <div className="space-y-3">
       <label className="block space-y-2 text-sm">

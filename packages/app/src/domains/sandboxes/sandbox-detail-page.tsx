@@ -58,14 +58,14 @@ export function SandboxDetailPage({ client }: { client: MenderClient }) {
 
   const manageable = Boolean(
     item?.backendAvailable &&
-      (item.backend === "local_workspace" || item.backend === "docker" || item.backend === "daytona"),
+      (item.backend === "local_workspace" || item.backend === "docker" || item.backend === "daytona" || item.backend === "external"),
   );
   const noActiveLeases = item?.activeLeases === 0;
   const canStart = manageable && item?.state === "stopped";
   const canStop = manageable && item?.state === "ready";
   const canDestroy = manageable && (item?.state === "ready" || item?.state === "stopped");
-  const canReconcile = manageable && (item?.backend === "docker" || item?.backend === "daytona") &&
-    item?.state === "unknown";
+  const canReconcile = manageable && (item?.backend === "docker" || item?.backend === "daytona" || item?.backend === "external") &&
+    (item?.state === "unknown" || item?.state === "orphaned");
   const hasActions = canStart || canStop || canDestroy || canReconcile;
 
   function requestLifecycle(action: LifecycleAction) {
@@ -118,7 +118,7 @@ export function SandboxDetailPage({ client }: { client: MenderClient }) {
     try {
       const next = item.backend === "daytona"
         ? await client.reconcileDaytonaSandbox(item.sandboxId)
-        : await client.reconcileDockerSandbox(item.sandboxId);
+        : await client.reconcileSandbox(item.sandboxId);
       setItem(next);
     } catch (reason) {
       setError(errorMessage(reason));
