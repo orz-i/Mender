@@ -929,7 +929,7 @@ function providerPluginUISchema(
 function pluginCatalogueEntry(value:BindingPluginCatalogueEntry):PluginCatalogueEntry {
   if(!["provider.tools","sandbox.backend","tunnel.transport"].includes(value.kind) ||
      !["builtin","local"].includes(value.sourceKind) ||
-     !["enabled","disabled","invalid"].includes(value.status)){
+     !["enabled","disabled","invalid","unavailable"].includes(value.status)){
     throw new MenderClientInvariantError("Unsupported typed plugin catalogue entry");
   }
   const schema:unknown=value.configSchema;

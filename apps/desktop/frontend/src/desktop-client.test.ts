@@ -183,6 +183,38 @@ describe("desktop Mender client", () => {
     expect(Service.ListPluginCatalogue).toHaveBeenCalledTimes(1);
   });
 
+  it("accepts the unavailable Docker built-in from the real typed desktop catalogue", async()=>{
+    const docker={
+      key:"io.mender.sandbox.docker@builtin",
+      pluginId:"io.mender.sandbox.docker",extensionId:"main",
+      kind:"sandbox.backend",displayName:"Docker Engine",
+      description:"Trusted opt-in Docker Engine backend",
+      packageVersion:"1.0.0",sourceKind:"builtin",
+      status:"unavailable",enabled:false,
+      issue:"Docker Engine is not configured",
+      capabilities:["file.read","file.search","file.edit","process.shell"],
+      usageCount:0,configVersion:1,protocolVersion:1,
+    };
+    vi.mocked(Service.ListPluginCatalogue).mockResolvedValue({plugins:[docker]});
+    await expect(createDesktopMenderClient().listPluginCatalogue()).resolves.toEqual({
+      plugins:[docker],
+    });
+    expect(Service.ListPluginCatalogue).toHaveBeenCalledOnce();
+  });
+
+  it("rejects truly unknown plugin status rather than masking a contract change", async()=>{
+    vi.mocked(Service.ListPluginCatalogue).mockResolvedValue({plugins:[{
+      key:"io.mender.sandbox.docker@builtin",
+      pluginId:"io.mender.sandbox.docker",extensionId:"main",
+      kind:"sandbox.backend",displayName:"Docker Engine",description:"Docker",
+      packageVersion:"1.0.0",sourceKind:"builtin",
+      status:"unsupported_future_status",enabled:false,
+      capabilities:[],usageCount:0,
+    }]});
+    await expect(createDesktopMenderClient().listPluginCatalogue())
+      .rejects.toBeInstanceOf(MenderClientInvariantError);
+  });
+
   it("activates Docker Desktop only through the dedicated Wails host method",async()=>{
     vi.mocked(Service.ConnectDockerDesktop).mockResolvedValue(undefined);
     await connectDesktopDocker();
