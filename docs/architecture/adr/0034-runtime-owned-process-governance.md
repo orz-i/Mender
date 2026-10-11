@@ -201,6 +201,12 @@ Costs:
 - `tunnel-client` must be discoverable by the Runtime host at launch time;
 - restricted Tunnel execution may expose platform/backend incompatibilities that host mode previously hid.
 
+## macOS Seatbelt TLS trust correction (October 2026)
+
+A live Wails development Runtime with `TunnelClient=restricted_host` reproduced an outbound TLS failure at `https://api.openai.com`: `x509: OSStatus -26276`. The tunnel child remained `running` with `/healthz` and `/readyz` at 200, but its control-plane health stayed `degraded/backoff` (`network_error`) and had zero successful polls. Mender's loopback MCP `initialize` succeeded independently. Native Go HTTPS probes with the same verified destination passed outside Seatbelt, failed with the original `(deny default)` profile, and passed with **only** `(allow mach-lookup (global-name "com.apple.trustd.agent"))` added. Granting unrelated `com.apple.trustd` or `com.apple.securityd` alone did not resolve it.
+
+The macOS `restricted_host` launcher must allow lookup of exactly `com.apple.trustd.agent` for operating-system certificate trust evaluation. It must **not** use unrestricted `(allow mach-lookup)`, disable TLS certificate verification, give a child host-mode fallback, broaden HOME/keychain file permissions, or pass extra environment secrets. The shared Seatbelt profile already permits outbound networking; the targeted trust-agent lookup restores the ability to verify HTTPS peers while retaining the existing filesystem and process boundaries. Tests should assert the precise exception and preserve read-only/host-home isolation. Deployment requires rebuilding/restarting the desktop Runtime and restarting the managed MCP Server/Tunnel child.
+
 ## Follow-up
 
 Separate phases should address the remaining audit findings: canonical Outcome byte budgeting/Unknown Governance Facts, then verified remote Principal propagation and interactive approval.

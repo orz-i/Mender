@@ -183,6 +183,12 @@ A native package is not automatically a production release. Public desktop artif
 
 Phase 7 validated `wails3 build` and `wails3 package` on the current macOS development host. That local smoke package is ad-hoc-signed only.
 
+## Troubleshooting restricted-host Tunnel TLS
+
+`wails3 dev` uses the same desktop Runtime process-isolation policy as a native production build. A visible `tunnel-client` process or a local `/readyz` response does **not** prove that the OpenAI control plane can poll. Find the client-local health/admin listener (the `--health.listen-addr` default is ephemeral for Mender), then check `/health?details=true`, `/api/status` (specifically `tunnel_metadata_error`), or `tunnel-client health --port <port> --require-control-plane-poll`. Do not print the child environment or secret-bearing logs.
+
+On macOS, `TunnelClient=restricted_host` requires the narrow `com.apple.trustd.agent` Seatbelt Mach service lookup for Go's OS-backed x509 verification. The symptom before this exception is `tls: failed to verify certificate: x509: OSStatus -26276`, while an unrestricted Go probe succeeds and MCP initialize works. This is distinct from DNS anomalies, ChatGPT connector setup rate limits, or an upstream HTTP 401/403. Preserve certificate verification and sandbox isolation; never work around the error by disabling verification or exporting API keys. Rebuild/restart Wails and restart the managed server so its tunnel child inherits the corrected profile. Only after the client reports a successful control-plane poll should the ChatGPT connector registration be retried.
+
 ## Quality gates
 
 Run desktop-specific portable checks:
