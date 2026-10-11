@@ -107,6 +107,27 @@ Gate: HTTP/OpenAPI/TS/Wails consistency, end-to-end Marketplace -> detail -> res
 
 DB startup migrates atomically/idempotently with a pre-upgrade backup path and rejects unknown future schemas. If a package, backend or resource binding is missing or inconsistent, report an actionable unavailable state rather than silently ignoring the reference. Migration itself performs no Docker/Daytona/OpenAI I/O.
 
+## Verified implementation progress
+
+- **A (complete):** ADR-0037 accepted before implementation; no user resource changes.
+- **B — foundation (complete):** shared PluginID/InstallationID and typed registry;
+  strict `mender-plugin.json` v2 manifest; generic `plugin/installation`
+  domain/application/SQLite/local package inventory; Provider extension descriptor
+  adaptation; one-time schema migration with WAL-consistent backup and original
+  v1 package digest integrity; Provider RPC v1 stays unchanged. Provider-only
+  admin operations reject wrong extension kinds. Previously installed native
+  Provider binaries remain byte-for-byte pinned.
+- **B — remaining:** generic process supervisor and unified management catalogue
+  are prerequisites for externally executable Sandbox/Tunnel extensions.
+- **C, D and E:** not yet implemented; typed descriptors alone do not imply
+  external Sandbox/Tunnel driver support or Marketplace coverage.
+
+Foundation verification: `pnpm check` (Go lint/test/race, SDK/protocol/example,
+HTTP/TS/Wails contract drift, i18n/132 frontend tests, Web/Desktop builds) and
+`pnpm security:check` passed. Isolated migration tests cover v1 inventory with
+descriptor and original backup, restart idempotence, incompatible legacy
+protocol rollback, and old software tree checksum/tamper protection.
+
 ## Explicit deferrals
 
 OCI/Sigstore distribution and registries; WASI Component runtime; arbitrary combinations of several extension kinds in one native binary; unrestricted install from Web; generic dynamically loaded UI; unproven OS isolation of native plugins; E2B/Modal/Cloudflare adapters without acceptance tests; agent loops or new model-facing privilege escalation.

@@ -16,12 +16,12 @@ import (
 	credentialapplication "github.com/orz-i/Mender/backend/internal/credential/application"
 	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
 	mcpconfigstore "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/configstore"
+	installationapplication "github.com/orz-i/Mender/backend/internal/plugin/installation/application"
 	policyapplication "github.com/orz-i/Mender/backend/internal/policy/application"
 	profileapplication "github.com/orz-i/Mender/backend/internal/profile/application"
 	provideractivationapplication "github.com/orz-i/Mender/backend/internal/provideractivation/application"
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
 	providerconfigstore "github.com/orz-i/Mender/backend/internal/providerplugin/configstore"
-	installationapplication "github.com/orz-i/Mender/backend/internal/providerplugin/installation/application"
 	skillapplication "github.com/orz-i/Mender/backend/internal/skill/application"
 	tunnelapplication "github.com/orz-i/Mender/backend/internal/tunnel/application"
 )

@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"sync"
 
+	installationdomain "github.com/orz-i/Mender/backend/internal/plugin/installation/domain"
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
-	installationdomain "github.com/orz-i/Mender/backend/internal/providerplugin/installation/domain"
 )
 
 // InstallationSource loads exact installed external plugin packages by stable identity.

@@ -15,10 +15,10 @@ import (
 	"testing"
 	"time"
 
+	installationapplication "github.com/orz-i/Mender/backend/internal/plugin/installation/application"
+	installationdomain "github.com/orz-i/Mender/backend/internal/plugin/installation/domain"
+	"github.com/orz-i/Mender/backend/internal/plugin/manifest"
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
-	installationapplication "github.com/orz-i/Mender/backend/internal/providerplugin/installation/application"
-	installationdomain "github.com/orz-i/Mender/backend/internal/providerplugin/installation/domain"
-	"github.com/orz-i/Mender/backend/internal/providerplugin/manifest"
 	pluginprotocol "github.com/orz-i/Mender/sdk/providerplugin/go/protocol"
 	providerv1 "github.com/orz-i/Mender/sdk/providerplugin/go/protocol/v1"
 	plugintransport "github.com/orz-i/Mender/sdk/providerplugin/go/transport"
@@ -239,7 +239,7 @@ func TestSupervisorRejectsUnsupportedProtocolBeforeLaunch(t *testing.T) {
 	t.Parallel()
 
 	installation, resolved := testExternalInstallation(t, "good")
-	resolved.Manifest.ProtocolVersions = []uint32{99}
+	resolved.Manifest.Extensions[0].ProtocolVersion = 99
 	resolver := &fakePackageResolver{resolved: resolved}
 	supervisor, err := NewSupervisor(resolver, HostProcessLauncher{}, DefaultOptions())
 	if err != nil {
@@ -792,10 +792,10 @@ func testExternalInstallationVersion(
 		entrypoint += ".exe"
 	}
 	manifestJSON := []byte(`{
-		"manifestVersion": 1,
+		"manifestVersion": 2,
 		"pluginId": "dev.example.echo",
 		"version": "` + packageVersion + `",
-		"protocolVersions": [1],
+		"extensions": [{"id":"main","kind":"provider.tools","protocolVersion":1}],
 		"displayName": "Example Echo",
 		"description": "Test Provider plugin",
 		"entrypoints": {"` + runtime.GOOS + `/` + runtime.GOARCH + `": "` + entrypoint + `"}

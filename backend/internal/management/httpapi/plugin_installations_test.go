@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
+	installationdomain "github.com/orz-i/Mender/backend/internal/plugin/installation/domain"
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
-	installationdomain "github.com/orz-i/Mender/backend/internal/providerplugin/installation/domain"
 )
 
 func TestPluginInstallationProjectionIncludesVerifiedDescriptor(t *testing.T) {
@@ -24,10 +24,10 @@ func TestPluginInstallationProjectionIncludesVerifiedDescriptor(t *testing.T) {
 	}
 	manifestJSON := []byte(
 		"{\n" +
-			"  \"manifestVersion\": 1,\n" +
+			"  \"manifestVersion\": 2,\n" +
 			"  \"pluginId\": \"dev.example.echo\",\n" +
 			"  \"version\": \"1.2.3\",\n" +
-			"  \"protocolVersions\": [1],\n" +
+			"  \"extensions\": [{\"id\":\"main\",\"kind\":\"provider.tools\",\"protocolVersion\":1}],\n" +
 			"  \"displayName\": \"Example Echo\",\n" +
 			"  \"description\": \"Echo Provider plugin\",\n" +
 			"  \"entrypoints\": {\"linux/amd64\": \"bin/echo\"}\n" +
@@ -47,7 +47,7 @@ func TestPluginInstallationProjectionIncludesVerifiedDescriptor(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	item, err = item.WithVerifiedDescriptor(providerplugin.Descriptor{
+	native, err := providerplugin.PlatformDescriptor(providerplugin.Descriptor{
 		ID:              pluginID,
 		Version:         "1.2.3",
 		DisplayName:     "Example Echo",
@@ -56,6 +56,10 @@ func TestPluginInstallationProjectionIncludesVerifiedDescriptor(t *testing.T) {
 		ProtocolVersion: 1,
 		Capabilities:    []string{"echo"},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	item, err = item.WithVerifiedDescriptor(native)
 	if err != nil {
 		t.Fatal(err)
 	}

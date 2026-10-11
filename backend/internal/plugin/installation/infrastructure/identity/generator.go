@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"io"
 
-	installationdomain "github.com/orz-i/Mender/backend/internal/providerplugin/installation/domain"
+	installationdomain "github.com/orz-i/Mender/backend/internal/plugin/installation/domain"
 )
 
 const randomIDBytes = 16

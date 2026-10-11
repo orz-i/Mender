@@ -1,8 +1,8 @@
 {
-  "manifestVersion": 1,
+  "manifestVersion": 2,
   "pluginId": "dev.mender.example.echo",
   "version": "0.1.0",
-  "protocolVersions": [1],
+  "extensions": [{"id": "main", "kind": "provider.tools", "protocolVersion": 1}],
   "displayName": "Example Echo",
   "description": "Standalone external Provider plugin built with the public Mender Go SDK.",
   "entrypoints": {

@@ -8,8 +8,9 @@ import (
 	"sync"
 	"time"
 
-	installationapplication "github.com/orz-i/Mender/backend/internal/providerplugin/installation/application"
-	installationdomain "github.com/orz-i/Mender/backend/internal/providerplugin/installation/domain"
+	platformplugin "github.com/orz-i/Mender/backend/internal/plugin"
+	installationapplication "github.com/orz-i/Mender/backend/internal/plugin/installation/application"
+	installationdomain "github.com/orz-i/Mender/backend/internal/plugin/installation/domain"
 	pluginprotocol "github.com/orz-i/Mender/sdk/providerplugin/go/protocol"
 	providerv1 "github.com/orz-i/Mender/sdk/providerplugin/go/protocol/v1"
 	plugintransport "github.com/orz-i/Mender/sdk/providerplugin/go/transport"
@@ -217,6 +218,9 @@ func (s *Supervisor) Ensure(
 	if err := installation.Validate(); err != nil {
 		return nil, fmt.Errorf("ensure external plugin process: installation: %w", err)
 	}
+	if installation.Extension().Kind != platformplugin.ProviderTools {
+		return nil, fmt.Errorf("ensure external Provider process: wrong extension kind %s", installation.Extension().Kind)
+	}
 	if installation.Status() != installationdomain.StatusEnabled {
 		return nil, fmt.Errorf(
 			"ensure external plugin process: installation %s is %s",
@@ -366,7 +370,7 @@ func (s *Supervisor) start(
 		)
 	}
 
-	negotiated, err := pluginprotocol.Negotiate(resolved.Manifest.ProtocolVersions)
+	negotiated, err := pluginprotocol.Negotiate([]uint32{resolved.Manifest.Extensions[0].ProtocolVersion})
 	if err != nil {
 		return nil, fmt.Errorf("ensure external plugin process: protocol: %w", err)
 	}

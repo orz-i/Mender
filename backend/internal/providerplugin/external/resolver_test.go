@@ -8,8 +8,8 @@ import (
 	"time"
 
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
+	installationdomain "github.com/orz-i/Mender/backend/internal/plugin/installation/domain"
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
-	installationdomain "github.com/orz-i/Mender/backend/internal/providerplugin/installation/domain"
 	providerv1 "github.com/orz-i/Mender/sdk/providerplugin/go/protocol/v1"
 )
 
@@ -215,10 +215,10 @@ func resolverTestInstallation(
 	}
 	manifestJSON := []byte(fmt.Sprintf(
 		`{
-			"manifestVersion": 1,
+			"manifestVersion": 2,
 			"pluginId": %q,
 			"version": %q,
-			"protocolVersions": [1],
+			"extensions": [{"id":"main","kind":"provider.tools","protocolVersion":1}],
 			"displayName": "Resolver Test",
 			"description": "Resolver test package",
 			"entrypoints": {"linux/amd64": "bin/plugin"}
@@ -240,7 +240,7 @@ func resolverTestInstallation(
 	if err != nil {
 		t.Fatal(err)
 	}
-	item, err = item.WithVerifiedDescriptor(providerplugin.Descriptor{
+	native, err := providerplugin.PlatformDescriptor(providerplugin.Descriptor{
 		ID:              pluginID,
 		Version:         version,
 		DisplayName:     "Echo " + version,
@@ -249,6 +249,10 @@ func resolverTestInstallation(
 		ConfigVersion:   1,
 		ConfigSchema:    []byte("{}"),
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	item, err = item.WithVerifiedDescriptor(native)
 	if err != nil {
 		t.Fatal(err)
 	}

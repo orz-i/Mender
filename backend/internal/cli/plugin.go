@@ -5,8 +5,8 @@ import (
 	"text/tabwriter"
 
 	"github.com/orz-i/Mender/backend/internal/bootstrap"
+	installationdomain "github.com/orz-i/Mender/backend/internal/plugin/installation/domain"
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
-	installationdomain "github.com/orz-i/Mender/backend/internal/providerplugin/installation/domain"
 	"github.com/spf13/cobra"
 )
 

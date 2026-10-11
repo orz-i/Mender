@@ -10,10 +10,10 @@ import (
 	"testing"
 	"time"
 
-	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
-	installationapplication "github.com/orz-i/Mender/backend/internal/providerplugin/installation/application"
-	installationdomain "github.com/orz-i/Mender/backend/internal/providerplugin/installation/domain"
-	"github.com/orz-i/Mender/backend/internal/providerplugin/manifest"
+	platformplugin "github.com/orz-i/Mender/backend/internal/plugin"
+	installationapplication "github.com/orz-i/Mender/backend/internal/plugin/installation/application"
+	installationdomain "github.com/orz-i/Mender/backend/internal/plugin/installation/domain"
+	"github.com/orz-i/Mender/backend/internal/plugin/manifest"
 )
 
 func TestInstallLocalCopiesAndHardensPackage(t *testing.T) {
@@ -281,10 +281,10 @@ func writeTestPackage(
 		t.Fatal(err)
 	}
 	rawManifest := []byte(`{
-		"manifestVersion": 1,
+		"manifestVersion": 2,
 		"pluginId": "` + pluginID + `",
 		"version": "` + version + `",
-		"protocolVersions": [1],
+		"extensions": [{"id":"main","kind":"provider.tools","protocolVersion":1}],
 		"displayName": "Echo",
 		"description": "Example",
 		"entrypoints": {
@@ -322,7 +322,7 @@ func installationFromManagedPackage(
 	pkg installationapplication.ManagedPackage,
 ) installationdomain.Installation {
 	t.Helper()
-	pluginID, err := providerplugin.ParseID(pkg.Manifest.PluginID)
+	pluginID, err := platformplugin.ParseID(pkg.Manifest.PluginID)
 	if err != nil {
 		t.Fatal(err)
 	}

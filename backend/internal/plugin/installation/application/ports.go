@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	installationdomain "github.com/orz-i/Mender/backend/internal/providerplugin/installation/domain"
-	"github.com/orz-i/Mender/backend/internal/providerplugin/manifest"
+	installationdomain "github.com/orz-i/Mender/backend/internal/plugin/installation/domain"
+	"github.com/orz-i/Mender/backend/internal/plugin/manifest"
 )
 
 // Repository persists plugin installation metadata.

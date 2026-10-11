@@ -5,10 +5,11 @@ import (
 	"errors"
 	"fmt"
 
+	platformplugin "github.com/orz-i/Mender/backend/internal/plugin"
+	installationapplication "github.com/orz-i/Mender/backend/internal/plugin/installation/application"
+	installationdomain "github.com/orz-i/Mender/backend/internal/plugin/installation/domain"
+	installationidentity "github.com/orz-i/Mender/backend/internal/plugin/installation/infrastructure/identity"
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
-	installationapplication "github.com/orz-i/Mender/backend/internal/providerplugin/installation/application"
-	installationdomain "github.com/orz-i/Mender/backend/internal/providerplugin/installation/domain"
-	installationidentity "github.com/orz-i/Mender/backend/internal/providerplugin/installation/infrastructure/identity"
 )
 
 // InstallProviderPlugin installs, verifies, and persists one local external plugin package.
@@ -30,6 +31,11 @@ func (r *Runtime) InstallProviderPlugin(
 	installation, err := usecase.Execute(ctx, sourcePath)
 	if err != nil {
 		return installationdomain.Installation{}, err
+	}
+	if installation.Extension().Kind != platformplugin.ProviderTools {
+		processErr := installationapplication.NewRemoveInstallation(r.pluginInstallations, r.pluginPackages, nil).Execute(context.WithoutCancel(ctx), installation.ID())
+		return installationdomain.Installation{}, errors.Join(
+			fmt.Errorf("install provider plugin: package must contribute provider.tools (got %s)", installation.Extension().Kind), processErr)
 	}
 
 	resolved, err := r.externalResolver.ProbeInstallation(
@@ -55,10 +61,14 @@ func (r *Runtime) InstallProviderPlugin(
 			),
 		)
 	}
+	platformDescriptor, err := providerplugin.PlatformDescriptor(resolved.Descriptor)
+	if err != nil {
+		return installationdomain.Installation{}, fmt.Errorf("install provider plugin: extension descriptor: %w", err)
+	}
 	if err := r.pluginInstallations.SetVerifiedDescriptor(
 		ctx,
 		installation.ID(),
-		resolved.Descriptor,
+		platformDescriptor,
 	); err != nil {
 		processErr := r.externalProcesses.CloseInstallation(installation.ID())
 		removeErr := installationapplication.NewRemoveInstallation(
@@ -78,7 +88,7 @@ func (r *Runtime) InstallProviderPlugin(
 			),
 		)
 	}
-	installation, err = installation.WithVerifiedDescriptor(resolved.Descriptor)
+	installation, err = installation.WithVerifiedDescriptor(platformDescriptor)
 	if err != nil {
 		return installationdomain.Installation{}, fmt.Errorf(
 			"install provider plugin: attach verified descriptor: %w",
@@ -107,12 +117,21 @@ func (r *Runtime) GetProviderPluginInstallation(
 	}
 	item, err := r.pluginInstallations.Get(ctx, id)
 	if err != nil {
-		return installationdomain.Installation{}, fmt.Errorf(
-			"get provider plugin installation: %w",
-			err,
-		)
+		return installationdomain.Installation{}, fmt.Errorf("get provider plugin installation: %w", err)
+	}
+	if item.Extension().Kind != platformplugin.ProviderTools {
+		return installationdomain.Installation{}, fmt.Errorf("get provider plugin installation: extension %s is not provider.tools", item.Extension().Kind)
 	}
 	return item, nil
+}
+
+// ListPluginInstallations lists all installed extension kinds without process
+// launches or Credential resolution. Resource-specific management remains typed.
+func (r *Runtime) ListPluginInstallations(ctx context.Context) ([]installationdomain.Installation, error) {
+	if r == nil {
+		return nil, fmt.Errorf("list plugin installations: runtime is nil")
+	}
+	return installationapplication.NewListInstallations(r.pluginInstallations).Execute(ctx)
 }
 
 // ListProviderPluginInstallations returns persisted external plugin packages.
@@ -122,9 +141,17 @@ func (r *Runtime) ListProviderPluginInstallations(
 	if r == nil {
 		return nil, fmt.Errorf("list provider plugin installations: runtime is nil")
 	}
-	return installationapplication.NewListInstallations(
-		r.pluginInstallations,
-	).Execute(ctx)
+	all, err := r.ListPluginInstallations(ctx)
+	if err != nil {
+		return nil, err
+	}
+	providers := make([]installationdomain.Installation, 0, len(all))
+	for _, item := range all {
+		if item.Extension().Kind == platformplugin.ProviderTools {
+			providers = append(providers, item)
+		}
+	}
+	return providers, nil
 }
 
 // SetProviderPluginInstallationStatus changes administrative availability.
@@ -136,9 +163,10 @@ func (r *Runtime) SetProviderPluginInstallationStatus(
 	status installationdomain.Status,
 ) (installationdomain.Installation, error) {
 	if r == nil {
-		return installationdomain.Installation{}, fmt.Errorf(
-			"set provider plugin installation status: runtime is nil",
-		)
+		return installationdomain.Installation{}, fmt.Errorf("set provider plugin installation status: runtime is nil")
+	}
+	if _, err := r.GetProviderPluginInstallation(ctx, id); err != nil {
+		return installationdomain.Installation{}, err
 	}
 	var configs []providerplugin.Configuration
 	if status != installationdomain.StatusEnabled {
@@ -195,6 +223,9 @@ func (r *Runtime) RemoveProviderPluginInstallation(
 ) error {
 	if r == nil {
 		return fmt.Errorf("remove provider plugin installation: runtime is nil")
+	}
+	if _, err := r.GetProviderPluginInstallation(ctx, id); err != nil {
+		return err
 	}
 	usage := runtimePluginInstallationUsageChecker{configs: r.providerConfigs}
 	usages, err := usage.Usages(ctx, id)

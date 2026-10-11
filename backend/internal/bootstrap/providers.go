@@ -11,9 +11,10 @@ import (
 	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
+	platformplugin "github.com/orz-i/Mender/backend/internal/plugin"
+	installationdomain "github.com/orz-i/Mender/backend/internal/plugin/installation/domain"
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
 	providerconfigstore "github.com/orz-i/Mender/backend/internal/providerplugin/configstore"
-	installationdomain "github.com/orz-i/Mender/backend/internal/providerplugin/installation/domain"
 )
 
 const (
@@ -102,7 +103,11 @@ func (r *Runtime) ProviderPluginDescriptorForConfig(
 	if !ok {
 		return providerplugin.Descriptor{}, false, nil
 	}
-	return descriptor.Clone(), true, nil
+	typed, err := providerplugin.ProviderDescriptor(descriptor)
+	if err != nil {
+		return providerplugin.Descriptor{}, false, err
+	}
+	return typed, true, nil
 }
 
 // ListAvailableProviderPluginCatalog returns built-in plugins plus enabled
@@ -136,10 +141,18 @@ func (r *Runtime) ListAvailableProviderPluginCatalog(
 	}
 	issues := make([]ProviderPluginIssue, 0)
 	for _, installation := range installations {
-		if installation.Status() != installationdomain.StatusEnabled {
+		if installation.Status() != installationdomain.StatusEnabled || installation.Extension().Kind != platformplugin.ProviderTools {
 			continue
 		}
-		descriptor, verified := installation.VerifiedDescriptor()
+		platformDescriptor, verified := installation.VerifiedDescriptor()
+		var descriptor providerplugin.Descriptor
+		if verified {
+			descriptor, err = providerplugin.ProviderDescriptor(platformDescriptor)
+			if err != nil {
+				issues = append(issues, newProviderPluginIssue(installation.ID(), providerPluginIssueResolveDescriptor, err))
+				continue
+			}
+		}
 		if !verified {
 			var backfillIssues []ProviderPluginIssue
 			descriptor, verified, backfillIssues = backfillProviderPluginDescriptor(
@@ -218,7 +231,7 @@ type providerPluginVerifiedDescriptorStore interface {
 	SetVerifiedDescriptor(
 		context.Context,
 		providerplugin.InstallationID,
-		providerplugin.Descriptor,
+		platformplugin.Descriptor,
 	) error
 }
 
@@ -244,10 +257,14 @@ func backfillProviderPluginDescriptor(
 		}
 	}
 	descriptor := resolved.Descriptor.Clone()
+	platformDescriptor, conversionErr := providerplugin.PlatformDescriptor(descriptor)
+	if conversionErr != nil {
+		return providerplugin.Descriptor{}, false, []ProviderPluginIssue{
+			newProviderPluginIssue(installation.ID(), providerPluginIssuePersistDescriptor, conversionErr),
+		}
+	}
 	persistErr := store.SetVerifiedDescriptor(
-		context.WithoutCancel(ctx),
-		installation.ID(),
-		descriptor,
+		context.WithoutCancel(ctx), installation.ID(), platformDescriptor,
 	)
 	closeErr := processes.CloseInstallation(installation.ID())
 

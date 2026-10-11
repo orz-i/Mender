@@ -20,12 +20,12 @@ import (
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	mcpconfigstore "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/configstore"
 	mcpplugin "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/plugin"
+	installationdomain "github.com/orz-i/Mender/backend/internal/plugin/installation/domain"
 	policyapplication "github.com/orz-i/Mender/backend/internal/policy/application"
 	policydomain "github.com/orz-i/Mender/backend/internal/policy/domain"
 	profileapplication "github.com/orz-i/Mender/backend/internal/profile/application"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
-	installationdomain "github.com/orz-i/Mender/backend/internal/providerplugin/installation/domain"
 	runtimegovernancedomain "github.com/orz-i/Mender/backend/internal/runtimegovernance/domain"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 	sandboxdaytona "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/daytona"
@@ -1770,8 +1770,8 @@ func providerPluginInstallationProjection(
 	if descriptor, ok := item.VerifiedDescriptor(); ok {
 		result.DisplayName = descriptor.DisplayName
 		result.Description = descriptor.Description
-		result.ConfigVersion = descriptor.ConfigVersion
-		result.ProtocolVersion = descriptor.ProtocolVersion
+		result.ConfigVersion = int(descriptor.ConfigVersion)
+		result.ProtocolVersion = descriptor.Extension.ProtocolVersion
 		result.Capabilities = append([]string(nil), descriptor.Capabilities...)
 	}
 	return result

@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
+	installationdomain "github.com/orz-i/Mender/backend/internal/plugin/installation/domain"
+	"github.com/orz-i/Mender/backend/internal/plugin/manifest"
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
-	installationdomain "github.com/orz-i/Mender/backend/internal/providerplugin/installation/domain"
-	"github.com/orz-i/Mender/backend/internal/providerplugin/manifest"
 )
 
 func TestInstallLocalPersistsManagedPackage(t *testing.T) {
@@ -340,10 +340,10 @@ func (c fakeUsageChecker) Usages(
 
 func appTestManagedPackage(pluginID, version, digestRune string) ManagedPackage {
 	raw := []byte(`{
-		"manifestVersion": 1,
+		"manifestVersion": 2,
 		"pluginId": "` + pluginID + `",
 		"version": "` + version + `",
-		"protocolVersions": [1],
+		"extensions": [{"id":"main","kind":"provider.tools","protocolVersion":1}],
 		"displayName": "Example",
 		"description": "Example",
 		"entrypoints": {"linux/amd64": "bin/plugin"}

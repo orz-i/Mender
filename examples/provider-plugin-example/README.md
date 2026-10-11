@@ -22,7 +22,7 @@ On Windows use `bin/mender-provider-example.exe`.
 The package directory then contains:
 
 ~~~text
-mender-provider.json
+mender-plugin.json
 bin/mender-provider-example
 ~~~
 

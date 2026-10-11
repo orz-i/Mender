@@ -123,10 +123,10 @@ func validInstallation(t *testing.T) Installation {
 
 func validManifestJSON(pluginID, version string) []byte {
 	return []byte(`{
-		"manifestVersion": 1,
+		"manifestVersion": 2,
 		"pluginId": "` + pluginID + `",
 		"version": "` + version + `",
-		"protocolVersions": [1],
+		"extensions": [{"id":"main","kind":"provider.tools","protocolVersion":1}],
 		"displayName": "Echo",
 		"description": "Example",
 		"entrypoints": {"linux/amd64": "bin/echo"}

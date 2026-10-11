@@ -16,13 +16,17 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
 	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
+	platformplugin "github.com/orz-i/Mender/backend/internal/plugin"
+	installationdomain "github.com/orz-i/Mender/backend/internal/plugin/installation/domain"
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
-	installationdomain "github.com/orz-i/Mender/backend/internal/providerplugin/installation/domain"
 	providerv1 "github.com/orz-i/Mender/sdk/providerplugin/go/protocol/v1"
 )
 
@@ -76,6 +80,9 @@ func NewPlugin(
 	if err := installation.Validate(); err != nil {
 		return nil, fmt.Errorf("new external provider plugin: installation: %w", err)
 	}
+	if installation.Extension().Kind != platformplugin.ProviderTools {
+		return nil, fmt.Errorf("new external provider plugin: installation has wrong extension kind %s", installation.Extension().Kind)
+	}
 	process, err := processes.Ensure(ctx, installation)
 	if err != nil {
 		return nil, fmt.Errorf("new external provider plugin: process: %w", err)
@@ -113,11 +120,15 @@ func NewPlugin(
 		return nil, fmt.Errorf("new external provider plugin: descriptor identity mismatch")
 	}
 	if expected, ok := installation.VerifiedDescriptor(); ok {
+		platformActual, conversionErr := providerplugin.PlatformDescriptor(descriptor)
+		if conversionErr != nil {
+			return nil, conversionErr
+		}
 		expectedVerified, expectedErr := installationdomain.NewVerifiedDescriptor(expected)
 		if expectedErr != nil {
 			return nil, fmt.Errorf("new external provider plugin: persisted descriptor: %w", expectedErr)
 		}
-		actualVerified, actualErr := installationdomain.NewVerifiedDescriptor(descriptor)
+		actualVerified, actualErr := installationdomain.NewVerifiedDescriptor(platformActual)
 		if actualErr != nil {
 			return nil, fmt.Errorf("new external provider plugin: runtime descriptor: %w", actualErr)
 		}
@@ -150,11 +161,15 @@ func NewPluginFromVerifiedDescriptor(
 	if err := installation.Validate(); err != nil {
 		return nil, fmt.Errorf("new external provider plugin: installation: %w", err)
 	}
-	descriptor, ok := installation.VerifiedDescriptor()
+	if installation.Extension().Kind != platformplugin.ProviderTools {
+		return nil, fmt.Errorf("new external provider plugin: installation has wrong extension kind %s", installation.Extension().Kind)
+	}
+	platformDescriptor, ok := installation.VerifiedDescriptor()
 	if !ok {
 		return nil, fmt.Errorf("new external provider plugin: verified descriptor snapshot is required")
 	}
-	if err := descriptor.Validate(); err != nil {
+	descriptor, err := providerplugin.ProviderDescriptor(platformDescriptor)
+	if err != nil {
 		return nil, fmt.Errorf("new external provider plugin: persisted descriptor: %w", err)
 	}
 	timeouts := defaultControlPlaneTimeouts()
@@ -483,6 +498,9 @@ func (i *Instance) Execute(
 		if ctx.Err() != nil {
 			return invocationdomain.Outcome{}, ctx.Err()
 		}
+		if status.Code(err) == codes.DeadlineExceeded {
+			return invocationdomain.Outcome{}, fmt.Errorf("execute external provider tool %q: %w", sourceKey, context.DeadlineExceeded)
+		}
 		return invocationdomain.Outcome{}, fmt.Errorf(
 			"execute external provider tool %q: rpc: %s",
 			sourceKey,
@@ -505,6 +523,9 @@ func (i *Instance) Execute(
 		if recvErr != nil {
 			if ctx.Err() != nil {
 				return invocationdomain.Outcome{}, ctx.Err()
+			}
+			if status.Code(recvErr) == codes.DeadlineExceeded {
+				return invocationdomain.Outcome{}, fmt.Errorf("execute external provider tool %q: %w", sourceKey, context.DeadlineExceeded)
 			}
 			return invocationdomain.Outcome{}, fmt.Errorf(
 				"execute external provider tool %q: receive: %s",

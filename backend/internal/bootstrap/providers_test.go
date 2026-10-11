@@ -21,9 +21,10 @@ import (
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	mcpplugin "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/plugin"
 	openapiplugin "github.com/orz-i/Mender/backend/internal/openapi/infrastructure/plugin"
+	platformplugin "github.com/orz-i/Mender/backend/internal/plugin"
+	installationdomain "github.com/orz-i/Mender/backend/internal/plugin/installation/domain"
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
 	providerconfigstore "github.com/orz-i/Mender/backend/internal/providerplugin/configstore"
-	installationdomain "github.com/orz-i/Mender/backend/internal/providerplugin/installation/domain"
 )
 
 func TestRuntimeExposesBuiltInProviderPluginDescriptors(t *testing.T) {
@@ -106,10 +107,10 @@ func TestProviderPluginDescriptorForConfigUsesPersistedExternalSnapshotOffline(t
 		"/tmp/mender-offline-provider-fixture",
 		"sha256:"+strings.Repeat("7", 64),
 		[]byte(`{
-			"manifestVersion": 1,
+			"manifestVersion": 2,
 			"pluginId": "dev.example.offline",
 			"version": "2.3.4",
-			"protocolVersions": [1],
+			"extensions": [{"id":"main","kind":"provider.tools","protocolVersion":1}],
 			"displayName": "Offline Plugin",
 			"description": "Persisted descriptor fixture",
 			"entrypoints": {"linux/amd64": "bin/plugin"}
@@ -120,7 +121,11 @@ func TestProviderPluginDescriptorForConfigUsesPersistedExternalSnapshotOffline(t
 	if err != nil {
 		t.Fatal(err)
 	}
-	installation, err = installation.WithVerifiedDescriptor(descriptor)
+	platformDescriptor, err := providerplugin.PlatformDescriptor(descriptor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	installation, err = installation.WithVerifiedDescriptor(platformDescriptor)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -175,10 +180,10 @@ func TestListAvailableProviderPluginsIsolatesBrokenLegacyInstallation(t *testing
 		t.Fatal(err)
 	}
 	manifestJSON := []byte(`{
-		"manifestVersion": 1,
+		"manifestVersion": 2,
 		"pluginId": "dev.example.broken",
 		"version": "1.0.0",
-		"protocolVersions": [1],
+		"extensions": [{"id":"main","kind":"provider.tools","protocolVersion":1}],
 		"displayName": "Broken",
 		"description": "Missing managed package fixture",
 		"entrypoints": {"linux/amd64": "bin/plugin"}
@@ -241,10 +246,10 @@ func TestBackfillProviderPluginDescriptorSurfacesPersistenceAndCleanupFailures(t
 		"/tmp/mender-backfill-provider-fixture",
 		"sha256:"+strings.Repeat("8", 64),
 		[]byte(`{
-			"manifestVersion": 1,
+			"manifestVersion": 2,
 			"pluginId": "dev.example.backfill",
 			"version": "1.0.0",
-			"protocolVersions": [1],
+			"extensions": [{"id":"main","kind":"provider.tools","protocolVersion":1}],
 			"displayName": "Backfill",
 			"description": "Backfill fixture",
 			"entrypoints": {"linux/amd64": "bin/plugin"}
@@ -325,7 +330,7 @@ type backfillDescriptorStore struct {
 func (s backfillDescriptorStore) SetVerifiedDescriptor(
 	context.Context,
 	providerplugin.InstallationID,
-	providerplugin.Descriptor,
+	platformplugin.Descriptor,
 ) error {
 	return s.err
 }

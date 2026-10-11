@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 
-	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
-	installationdomain "github.com/orz-i/Mender/backend/internal/providerplugin/installation/domain"
+	platformplugin "github.com/orz-i/Mender/backend/internal/plugin"
+	installationdomain "github.com/orz-i/Mender/backend/internal/plugin/installation/domain"
 )
 
 type InstallLocal struct {
@@ -48,7 +48,7 @@ func (uc InstallLocal) Execute(
 		return uc.packages.Remove(context.WithoutCancel(ctx), id)
 	}
 
-	pluginID, err := providerplugin.ParseID(pkg.Manifest.PluginID)
+	pluginID, err := platformplugin.ParseID(pkg.Manifest.PluginID)
 	if err != nil {
 		return installationdomain.Installation{}, errors.Join(
 			fmt.Errorf("install provider plugin: plugin id: %w", err),

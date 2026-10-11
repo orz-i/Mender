@@ -18,9 +18,9 @@ import (
 	credentialapplication "github.com/orz-i/Mender/backend/internal/credential/application"
 	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
-	installationapplication "github.com/orz-i/Mender/backend/internal/providerplugin/installation/application"
-	installationdomain "github.com/orz-i/Mender/backend/internal/providerplugin/installation/domain"
-	"github.com/orz-i/Mender/backend/internal/providerplugin/manifest"
+	installationapplication "github.com/orz-i/Mender/backend/internal/plugin/installation/application"
+	installationdomain "github.com/orz-i/Mender/backend/internal/plugin/installation/domain"
+	"github.com/orz-i/Mender/backend/internal/plugin/manifest"
 	runtimegovernancedomain "github.com/orz-i/Mender/backend/internal/runtimegovernance/domain"
 )
 
@@ -91,7 +91,7 @@ func TestRuntimeInstalledExternalProviderEndToEnd(t *testing.T) {
 	installationID := installation.ID()
 	pluginID := installation.PluginID()
 	verifiedDescriptor, ok := installation.VerifiedDescriptor()
-	if !ok || verifiedDescriptor.ID != pluginID || verifiedDescriptor.ProtocolVersion != 1 {
+	if !ok || verifiedDescriptor.PluginID != pluginID || verifiedDescriptor.Extension.ProtocolVersion != 1 {
 		t.Fatalf("installed verified descriptor = %+v, present=%v", verifiedDescriptor, ok)
 	}
 	if runtime.externalProcesses.Running(installationID) {

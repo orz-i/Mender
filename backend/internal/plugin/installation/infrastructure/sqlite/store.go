@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
-	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
-	installationapplication "github.com/orz-i/Mender/backend/internal/providerplugin/installation/application"
-	installationdomain "github.com/orz-i/Mender/backend/internal/providerplugin/installation/domain"
+	platformplugin "github.com/orz-i/Mender/backend/internal/plugin"
+	installationapplication "github.com/orz-i/Mender/backend/internal/plugin/installation/application"
+	installationdomain "github.com/orz-i/Mender/backend/internal/plugin/installation/domain"
 	_ "modernc.org/sqlite"
 )
 
@@ -46,6 +46,10 @@ func Open(ctx context.Context, path string) (*Store, error) {
 		_ = db.Close()
 		return nil, fmt.Errorf("open plugin installation sqlite: ping: %w", err)
 	}
+	if err := backupLegacy(ctx, db, absolute); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("open plugin installation sqlite: pre-upgrade backup: %w", err)
+	}
 	if err := migrate(ctx, db); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("open plugin installation sqlite: migrate: %w", err)
@@ -75,7 +79,7 @@ func (s *Store) Create(
 	}
 	_, err = s.db.ExecContext(
 		ctx,
-		`INSERT INTO provider_plugin_installations(
+		`INSERT INTO plugin_installations(
 			installation_id,
 			plugin_id,
 			package_version,
@@ -83,10 +87,11 @@ func (s *Store) Create(
 			source_reference,
 			digest,
 			manifest_json,
+            artifact_manifest_file,
 			verified_descriptor_json,
 			status,
 			installed_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		installation.ID().String(),
 		installation.PluginID().String(),
 		installation.PackageVersion(),
@@ -94,6 +99,7 @@ func (s *Store) Create(
 		installation.SourceReference(),
 		installation.Digest(),
 		string(installation.ManifestJSON()),
+		installation.ArtifactManifestName(),
 		verifiedDescriptorJSON,
 		string(installation.Status()),
 		installation.InstalledAt().Format(time.RFC3339Nano),
@@ -122,10 +128,11 @@ func (s *Store) Get(
 			source_reference,
 			digest,
 			manifest_json,
+            artifact_manifest_file,
 			verified_descriptor_json,
 			status,
 			installed_at
-		FROM provider_plugin_installations
+		FROM plugin_installations
 		WHERE installation_id = ?`,
 		id.String(),
 	)
@@ -154,10 +161,11 @@ func (s *Store) GetByDigest(
 			source_reference,
 			digest,
 			manifest_json,
+            artifact_manifest_file,
 			verified_descriptor_json,
 			status,
 			installed_at
-		FROM provider_plugin_installations
+		FROM plugin_installations
 		WHERE digest = ?`,
 		digest,
 	)
@@ -185,10 +193,11 @@ func (s *Store) List(
 			source_reference,
 			digest,
 			manifest_json,
+            artifact_manifest_file,
 			verified_descriptor_json,
 			status,
 			installed_at
-		FROM provider_plugin_installations
+		FROM plugin_installations
 		ORDER BY installation_id`,
 	)
 	if err != nil {
@@ -224,7 +233,7 @@ func (s *Store) SetStatus(
 	}
 	result, err := s.db.ExecContext(
 		ctx,
-		"UPDATE provider_plugin_installations SET status = ? WHERE installation_id = ?",
+		"UPDATE plugin_installations SET status = ? WHERE installation_id = ?",
 		string(status),
 		id.String(),
 	)
@@ -247,7 +256,7 @@ func (s *Store) SetStatus(
 func (s *Store) SetVerifiedDescriptor(
 	ctx context.Context,
 	id installationdomain.InstallationID,
-	descriptor providerplugin.Descriptor,
+	descriptor platformplugin.Descriptor,
 ) error {
 	installation, err := s.Get(ctx, id)
 	if err != nil {
@@ -277,7 +286,7 @@ func (s *Store) SetVerifiedDescriptor(
 	}
 	result, err := s.db.ExecContext(
 		ctx,
-		"UPDATE provider_plugin_installations SET verified_descriptor_json = ? WHERE installation_id = ?",
+		"UPDATE plugin_installations SET verified_descriptor_json = ? WHERE installation_id = ?",
 		value,
 		id.String(),
 	)
@@ -304,7 +313,7 @@ func (s *Store) Delete(
 	}
 	result, err := s.db.ExecContext(
 		ctx,
-		"DELETE FROM provider_plugin_installations WHERE installation_id = ?",
+		"DELETE FROM plugin_installations WHERE installation_id = ?",
 		id.String(),
 	)
 	if err != nil {
@@ -328,16 +337,17 @@ func scanInstallation(
 	scanner rowScanner,
 ) (installationdomain.Installation, error) {
 	var (
-		rawID           string
-		rawPluginID     string
-		packageVersion  string
-		rawSourceKind   string
-		sourceReference string
-		digest          string
-		rawManifest     string
-		rawDescriptor   sql.NullString
-		rawStatus       string
-		rawInstalledAt  string
+		rawID            string
+		rawPluginID      string
+		packageVersion   string
+		rawSourceKind    string
+		sourceReference  string
+		digest           string
+		rawManifest      string
+		artifactManifest string
+		rawDescriptor    sql.NullString
+		rawStatus        string
+		rawInstalledAt   string
 	)
 	if err := scanner.Scan(
 		&rawID,
@@ -347,6 +357,7 @@ func scanInstallation(
 		&sourceReference,
 		&digest,
 		&rawManifest,
+		&artifactManifest,
 		&rawDescriptor,
 		&rawStatus,
 		&rawInstalledAt,
@@ -358,7 +369,7 @@ func scanInstallation(
 	if err != nil {
 		return installationdomain.Installation{}, fmt.Errorf("parse plugin installation id: %w", err)
 	}
-	pluginID, err := providerplugin.ParseID(rawPluginID)
+	pluginID, err := platformplugin.ParseID(rawPluginID)
 	if err != nil {
 		return installationdomain.Installation{}, fmt.Errorf("parse plugin id: %w", err)
 	}
@@ -380,6 +391,10 @@ func scanInstallation(
 	if err != nil {
 		return installationdomain.Installation{}, fmt.Errorf("restore plugin installation: %w", err)
 	}
+	installation, err = installation.WithArtifactManifestName(artifactManifest)
+	if err != nil {
+		return installationdomain.Installation{}, fmt.Errorf("restore plugin artifact manifest: %w", err)
+	}
 	if rawDescriptor.Valid {
 		descriptor, decodeErr := unmarshalVerifiedDescriptor(rawDescriptor.String)
 		if decodeErr != nil {
@@ -399,65 +414,26 @@ func scanInstallation(
 	return installation, nil
 }
 
-type verifiedDescriptorRecord struct {
-	PluginID        string   `json:"pluginId"`
-	PackageVersion  string   `json:"packageVersion"`
-	ProtocolVersion uint32   `json:"protocolVersion"`
-	ConfigVersion   int      `json:"configVersion"`
-	DisplayName     string   `json:"displayName"`
-	Description     string   `json:"description,omitempty"`
-	ConfigSchema    string   `json:"configSchema,omitempty"`
-	UISchema        string   `json:"uiSchema,omitempty"`
-	Capabilities    []string `json:"capabilities,omitempty"`
-}
-
-func marshalVerifiedDescriptor(
-	installation installationdomain.Installation,
-) (any, error) {
+// The snapshot is extension-typed and independent of Provider runtime types.
+func marshalVerifiedDescriptor(installation installationdomain.Installation) (any, error) {
 	descriptor, ok := installation.VerifiedDescriptor()
 	if !ok {
 		return nil, nil
 	}
-	record := verifiedDescriptorRecord{
-		PluginID:        descriptor.ID.String(),
-		PackageVersion:  descriptor.Version,
-		ProtocolVersion: descriptor.ProtocolVersion,
-		ConfigVersion:   descriptor.ConfigVersion,
-		DisplayName:     descriptor.DisplayName,
-		Description:     descriptor.Description,
-		ConfigSchema:    string(descriptor.ConfigSchema),
-		UISchema:        string(descriptor.UISchema),
-		Capabilities:    append([]string(nil), descriptor.Capabilities...),
-	}
-	raw, err := json.Marshal(record)
+	raw, err := json.Marshal(descriptor)
 	if err != nil {
 		return nil, err
 	}
 	return string(raw), nil
 }
 
-func unmarshalVerifiedDescriptor(raw string) (providerplugin.Descriptor, error) {
-	var record verifiedDescriptorRecord
-	if err := json.Unmarshal([]byte(raw), &record); err != nil {
-		return providerplugin.Descriptor{}, err
+func unmarshalVerifiedDescriptor(raw string) (platformplugin.Descriptor, error) {
+	var descriptor platformplugin.Descriptor
+	if err := json.Unmarshal([]byte(raw), &descriptor); err != nil {
+		return platformplugin.Descriptor{}, err
 	}
-	pluginID, err := providerplugin.ParseID(record.PluginID)
-	if err != nil {
-		return providerplugin.Descriptor{}, err
-	}
-	descriptor := providerplugin.Descriptor{
-		ID:              pluginID,
-		Version:         record.PackageVersion,
-		DisplayName:     record.DisplayName,
-		Description:     record.Description,
-		ConfigVersion:   record.ConfigVersion,
-		ProtocolVersion: record.ProtocolVersion,
-		ConfigSchema:    json.RawMessage(record.ConfigSchema),
-		UISchema:        json.RawMessage(record.UISchema),
-		Capabilities:    append([]string(nil), record.Capabilities...),
-	}
-	if _, err := installationdomain.NewVerifiedDescriptor(descriptor); err != nil {
-		return providerplugin.Descriptor{}, err
+	if err := descriptor.Validate(); err != nil {
+		return platformplugin.Descriptor{}, err
 	}
 	return descriptor, nil
 }

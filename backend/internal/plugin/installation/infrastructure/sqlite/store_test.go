@@ -1,17 +1,19 @@
 package sqlite
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
-	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
-	installationapplication "github.com/orz-i/Mender/backend/internal/providerplugin/installation/application"
-	installationdomain "github.com/orz-i/Mender/backend/internal/providerplugin/installation/domain"
+	platformplugin "github.com/orz-i/Mender/backend/internal/plugin"
+	installationapplication "github.com/orz-i/Mender/backend/internal/plugin/installation/application"
+	installationdomain "github.com/orz-i/Mender/backend/internal/plugin/installation/domain"
 	_ "modernc.org/sqlite"
 )
 
@@ -107,13 +109,13 @@ func TestStorePersistsVerifiedDescriptorSnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	descriptor := providerplugin.Descriptor{
-		ID:              installation.PluginID(),
-		Version:         installation.PackageVersion(),
-		DisplayName:     "Echo",
-		Description:     "Verified descriptor",
-		ConfigVersion:   2,
-		ProtocolVersion: 1,
+	descriptor := platformplugin.Descriptor{
+		PluginID:       installation.PluginID(),
+		PackageVersion: installation.PackageVersion(),
+		Extension:      installation.Extension(),
+		DisplayName:    "Echo",
+		Description:    "Verified descriptor",
+		ConfigVersion:  2,
 		ConfigSchema: []byte(`{
   "type": "object",
   "properties": {"prefix": {"type": "string"}}
@@ -136,13 +138,13 @@ func TestStorePersistsVerifiedDescriptorSnapshot(t *testing.T) {
 	if !ok {
 		t.Fatal("VerifiedDescriptor() missing after persistence")
 	}
-	if snapshot.ID != descriptor.ID ||
-		snapshot.Version != descriptor.Version ||
-		snapshot.ProtocolVersion != descriptor.ProtocolVersion ||
+	if snapshot.PluginID != descriptor.PluginID ||
+		snapshot.PackageVersion != descriptor.PackageVersion ||
+		snapshot.Extension != descriptor.Extension ||
 		snapshot.ConfigVersion != descriptor.ConfigVersion ||
 		snapshot.DisplayName != descriptor.DisplayName ||
-		string(snapshot.ConfigSchema) != string(descriptor.ConfigSchema) ||
-		string(snapshot.UISchema) != string(descriptor.UISchema) {
+		!equivalentJSON(snapshot.ConfigSchema, descriptor.ConfigSchema) ||
+		!equivalentJSON(snapshot.UISchema, descriptor.UISchema) {
 		t.Fatalf("verified descriptor = %+v, want %+v", snapshot, descriptor)
 	}
 
@@ -216,7 +218,7 @@ func TestStoreMissingAndStatusValidation(t *testing.T) {
 	}
 }
 
-func TestOpenMigratesInstallationSchemaV1ToVerifiedDescriptorV2(t *testing.T) {
+func TestOpenHardCutsLegacyInstallationSchema(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
@@ -265,7 +267,7 @@ func TestOpenMigratesInstallationSchemaV1ToVerifiedDescriptorV2(t *testing.T) {
 		t.Fatalf("Open(v1) error = %v", err)
 	}
 	defer func() { _ = store.Close() }()
-	rows, err := store.db.QueryContext(ctx, "PRAGMA table_info(provider_plugin_installations)")
+	rows, err := store.db.QueryContext(ctx, "PRAGMA table_info(plugin_installations)")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -287,7 +289,18 @@ func TestOpenMigratesInstallationSchemaV1ToVerifiedDescriptorV2(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !found {
-		t.Fatal("migration v2 did not add verified_descriptor_json")
+		t.Fatal("generic plugin inventory is missing verified descriptor column")
+	}
+	var legacyTables int
+	if err := store.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='provider_plugin_installations'").Scan(&legacyTables); err != nil {
+		t.Fatal(err)
+	}
+	if legacyTables != 0 {
+		t.Fatal("old provider installation inventory still exists")
+	}
+	snapshots, err := filepath.Glob(filepath.Join(filepath.Dir(databasePath), ".mender-phase27-backup-*.db"))
+	if err != nil || len(snapshots) == 0 {
+		t.Fatalf("preupgrade backup missing: %v %v", snapshots, err)
 	}
 }
 
@@ -300,7 +313,7 @@ func TestOpenFailsClosedOnFutureSchemaVersion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.ExecContext(ctx, `CREATE TABLE provider_plugin_installation_schema_migrations (
+	if _, err := db.ExecContext(ctx, `CREATE TABLE plugin_installation_schema_migrations (
 		version INTEGER PRIMARY KEY,
 		applied_at TEXT NOT NULL
 	)`); err != nil {
@@ -309,7 +322,7 @@ func TestOpenFailsClosedOnFutureSchemaVersion(t *testing.T) {
 	}
 	if _, err := db.ExecContext(
 		ctx,
-		"INSERT INTO provider_plugin_installation_schema_migrations(version, applied_at) VALUES (?, ?)",
+		"INSERT INTO plugin_installation_schema_migrations(version, applied_at) VALUES (?, ?)",
 		latestSchemaVersion+1,
 		time.Now().UTC().Format(time.RFC3339Nano),
 	); err != nil {
@@ -357,15 +370,15 @@ func testInstallation(
 	if err != nil {
 		t.Fatal(err)
 	}
-	pluginID, err := providerplugin.ParseID(rawPluginID)
+	pluginID, err := platformplugin.ParseID(rawPluginID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	manifestJSON := []byte(`{
-		"manifestVersion": 1,
+		"manifestVersion": 2,
 		"pluginId": "` + pluginID.String() + `",
 		"version": "` + version + `",
-		"protocolVersions": [1],
+		"extensions": [{"id":"main","kind":"provider.tools","protocolVersion":1}],
 		"displayName": "Test Plugin",
 		"description": "Test external Provider plugin",
 		"entrypoints": {"linux/amd64": "bin/plugin"}
@@ -404,4 +417,15 @@ func assertInstallationEqual(
 		!got.InstalledAt().Equal(want.InstalledAt()) {
 		t.Fatalf("installation mismatch\n got: %#v\nwant: %#v", got, want)
 	}
+}
+
+func equivalentJSON(a, b []byte) bool {
+	var x, y bytes.Buffer
+	if err := json.Compact(&x, a); err != nil {
+		return false
+	}
+	if err := json.Compact(&y, b); err != nil {
+		return false
+	}
+	return bytes.Equal(x.Bytes(), y.Bytes())
 }

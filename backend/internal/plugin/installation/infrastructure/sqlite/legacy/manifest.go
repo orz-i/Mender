@@ -10,7 +10,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
+	platformplugin "github.com/orz-i/Mender/backend/internal/plugin"
 	"golang.org/x/mod/semver"
 )
 
@@ -76,7 +76,7 @@ func (m Manifest) Validate() error {
 			m.ManifestVersion,
 		)
 	}
-	if _, err := providerplugin.ParseID(m.PluginID); err != nil {
+	if _, err := platformplugin.ParseID(m.PluginID); err != nil {
 		return fmt.Errorf("provider plugin manifest: %w", err)
 	}
 	if err := validatePackageVersion(m.Version); err != nil {

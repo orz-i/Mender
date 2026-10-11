@@ -1,6 +1,7 @@
 package localfs
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/binary"
@@ -15,15 +16,16 @@ import (
 	"slices"
 	"strings"
 
-	installationapplication "github.com/orz-i/Mender/backend/internal/providerplugin/installation/application"
-	installationdomain "github.com/orz-i/Mender/backend/internal/providerplugin/installation/domain"
-	"github.com/orz-i/Mender/backend/internal/providerplugin/manifest"
+	installationapplication "github.com/orz-i/Mender/backend/internal/plugin/installation/application"
+	installationdomain "github.com/orz-i/Mender/backend/internal/plugin/installation/domain"
+	"github.com/orz-i/Mender/backend/internal/plugin/manifest"
 )
 
 const (
-	defaultMaxFiles = 4096
-	defaultMaxBytes = int64(256 * 1024 * 1024)
-	digestPreamble  = "mender-provider-package-tree-v1\x00"
+	defaultMaxFiles      = 4096
+	defaultMaxBytes      = int64(256 * 1024 * 1024)
+	legacyDigestPreamble = "mender-provider-package-tree-v1\x00"
+	digestPreamble       = "mender-plugin-package-tree-v2\x00"
 )
 
 // Limits bound local package ingestion before data enters Mender-managed storage.
@@ -128,7 +130,7 @@ func (s *Store) InstallLocal(
 		)
 	}
 
-	sourceSnapshot, err := s.inspect(ctx, source)
+	sourceSnapshot, err := s.inspect(ctx, source, nil)
 	if err != nil {
 		return installationapplication.ManagedPackage{}, fmt.Errorf(
 			"install local plugin package: inspect source: %w",
@@ -173,7 +175,7 @@ func (s *Store) InstallLocal(
 		)
 	}
 
-	stagedSnapshot, err := s.inspect(ctx, staging)
+	stagedSnapshot, err := s.inspect(ctx, staging, nil)
 	if err != nil {
 		return installationapplication.ManagedPackage{}, fmt.Errorf(
 			"install local plugin package: verify staging package: %w",
@@ -235,7 +237,7 @@ func (s *Store) Resolve(
 			"resolve local plugin package: package root must be a real directory",
 		)
 	}
-	snapshot, err := s.inspect(ctx, packageRoot)
+	snapshot, err := s.inspect(ctx, packageRoot, &installation)
 	if err != nil {
 		return installationapplication.ResolvedPackage{}, fmt.Errorf(
 			"resolve local plugin package: verify package: %w",
@@ -248,7 +250,8 @@ func (s *Store) Resolve(
 		)
 	}
 	if snapshot.parsed.PluginID != installation.PluginID().String() ||
-		snapshot.parsed.Version != installation.PackageVersion() {
+		snapshot.parsed.Version != installation.PackageVersion() ||
+		snapshot.parsed.Extensions[0] != installation.Extension() {
 		return installationapplication.ResolvedPackage{}, fmt.Errorf(
 			"resolve local plugin package: manifest identity mismatch",
 		)
@@ -361,6 +364,7 @@ type packageSnapshot struct {
 func (s *Store) inspect(
 	ctx context.Context,
 	rootPath string,
+	expected *installationdomain.Installation,
 ) (packageSnapshot, error) {
 	root, err := os.OpenRoot(rootPath)
 	if err != nil {
@@ -422,17 +426,33 @@ func (s *Store) inspect(
 	slices.SortFunc(files, func(a, b packageFile) int {
 		return strings.Compare(a.relative, b.relative)
 	})
+	manifestName := manifest.FileName
+	if expected != nil {
+		manifestName = expected.ArtifactManifestName()
+	}
 	manifestIndex := slices.IndexFunc(files, func(file packageFile) bool {
-		return file.relative == manifest.FileName
+		return file.relative == manifestName
 	})
 	if manifestIndex < 0 {
-		return packageSnapshot{}, fmt.Errorf("package is missing %s", manifest.FileName)
+		return packageSnapshot{}, fmt.Errorf("package is missing %s", manifestName)
 	}
-	manifestJSON, err := root.ReadFile(filepath.FromSlash(manifest.FileName))
+	manifestJSON, err := root.ReadFile(filepath.FromSlash(manifestName))
 	if err != nil {
 		return packageSnapshot{}, fmt.Errorf("read manifest: %w", err)
 	}
-	parsed, err := manifest.Parse(manifestJSON)
+	var parsed manifest.Manifest
+	if expected == nil {
+		// New installs only accept generic manifest v2. Old Provider packages
+		// are converted once in SQLite migration, never installed via v1.
+		parsed, err = manifest.Parse(manifestJSON)
+	} else {
+		// No legacy manifest decoder in the runtime: the whole original tree,
+		// including its original manifest, is verified by pinned SHA-256.
+		parsed, err = expected.Manifest()
+		if manifestName == manifest.FileName && !bytes.Equal(manifestJSON, expected.ManifestJSON()) {
+			return packageSnapshot{}, fmt.Errorf("package manifest differs from pinned metadata")
+		}
+	}
 	if err != nil {
 		return packageSnapshot{}, err
 	}
@@ -456,7 +476,7 @@ func (s *Store) inspect(
 		)
 	}
 
-	digest, err := digestFiles(ctx, root, files)
+	digest, err := digestFiles(ctx, root, files, manifestName)
 	if err != nil {
 		return packageSnapshot{}, err
 	}
@@ -472,9 +492,14 @@ func digestFiles(
 	ctx context.Context,
 	root *os.Root,
 	files []packageFile,
+	manifestName string,
 ) (string, error) {
 	hasher := sha256.New()
-	_, _ = io.WriteString(hasher, digestPreamble)
+	preamble := digestPreamble
+	if manifestName == "mender-provider.json" {
+		preamble = legacyDigestPreamble
+	}
+	_, _ = io.WriteString(hasher, preamble)
 	var scratch [8]byte
 
 	for _, item := range files {

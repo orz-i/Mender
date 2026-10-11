@@ -3,8 +3,8 @@ package httpapi
 import (
 	"net/http"
 
+	installationdomain "github.com/orz-i/Mender/backend/internal/plugin/installation/domain"
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
-	installationdomain "github.com/orz-i/Mender/backend/internal/providerplugin/installation/domain"
 )
 
 func (h *Handler) listProviderPluginInstallations(
@@ -110,8 +110,8 @@ func pluginInstallationProjection(
 	if descriptor, ok := item.VerifiedDescriptor(); ok {
 		result["displayName"] = descriptor.DisplayName
 		result["description"] = descriptor.Description
-		result["configVersion"] = descriptor.ConfigVersion
-		result["protocolVersion"] = descriptor.ProtocolVersion
+		result["configVersion"] = int(descriptor.ConfigVersion)
+		result["protocolVersion"] = descriptor.Extension.ProtocolVersion
 		result["capabilities"] = descriptor.Capabilities
 	}
 	return result

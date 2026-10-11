@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/orz-i/Mender/backend/internal/providerplugin/manifest"
+	"github.com/orz-i/Mender/backend/internal/plugin/manifest"
 )
 
 func TestInstallProviderPluginCompensatesFailedExecutableProbe(t *testing.T) {

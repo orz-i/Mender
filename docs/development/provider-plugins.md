@@ -48,8 +48,13 @@ External Providers pin an exact Installation ID. Installing a newer package does
 
 ## Package layout
 
+New packages use the generic `mender-plugin.json` manifest version 2 with one
+`provider.tools` extension. Existing immutable v1 installations migrate their
+metadata without rewriting the original `mender-provider.json` artifact; see
+[typed plugin packages](plugins.md) for migration, checksum and trust semantics.
+
 ```text
-mender-provider.json
+mender-plugin.json
 bin/
   mender-provider-example
 ```
