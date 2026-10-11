@@ -120,6 +120,18 @@ Package process ownership must move to `backend/internal/plugin/process/`, separ
 
 Acceptance for this cluster: concurrent Ensure, cross-installation concurrency, nil/missing/wrong-kind dialer, exact digest/version mismatch, process crash/restart, disabled/closed/no-process-start catalogue, close/reuse races; existing Provider external integration and full repository gates.
 
+### C1: trusted Sandbox Backend extension registry and Router cutover
+
+Before introducing external Sandbox RPC or a new persisted backend binding, the existing local/managed backend implementations must become **registered typed** `sandbox.backend` extensions. The initial cut is deliberately scoped to runtime routing and trust metadata:
+
+- Every registered backend is paired with one immutable, validated `plugin.Descriptor` of kind `sandbox.backend`, exact ExtensionID `main`, a stable namespaced PluginID, and an exact sandbox backend kind. Identity collisions and wrong-kind registration fail closed.
+- The typed descriptor capabilities are derived from the **actual** Backend operations: `file.read`, `file.search`, `file.edit`, `process.shell`; an external/vendor claim alone cannot elevate permissions.
+- The Sandbox Execution Router receives one typed `BackendResolver`, not an unreviewed varargs list or a parallel kind-to-backend map. `Resolve` remains read-only; `Acquire` continues owner/Principal/Policy/Approval, state-generation and durable lease admission **before** resolving/opening an extension backend. Unknown/offline backends remain unavailable and never fall back to local host.
+- Local Workspace/Docker/experimental Daytona retain existing immutable templates and lifecycle controllers during C1. Docker is opt-in and Daytona remains quarantined when the operator has not enabled experimental execution. Offline drivers do not become runnable merely because their descriptor is discoverable.
+- Persisted `BackendKind` remains unchanged **during C1** to preserve resources; the C2 forward-only migration to explicit `PluginID + ExtensionID + InstallationID?` and C3 external protocol cannot be called complete yet. No compatibility shim is introduced: C1 replaces the Router dispatch directly.
+
+Acceptance: typed registration invalid/duplicate cases, real Backend/descriptor parity, denied Acquire no side effects, unavailable backend and unsupported capability fail-closed, unchanged lease/revoke and concurrent acquisition tests, no Docker/Daytona live operations and repository gates.
+
 ## Verified implementation progress
 
 - **A (complete):** ADR-0037 accepted before implementation; no user resource changes.
