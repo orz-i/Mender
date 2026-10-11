@@ -11,6 +11,7 @@ import (
 	gov "github.com/orz-i/Mender/backend/internal/governance/domain"
 	sandboxapp "github.com/orz-i/Mender/backend/internal/sandbox/application"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
+	sandboxpluginregistry "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/pluginregistry"
 )
 
 type fakeStore struct {
@@ -103,7 +104,15 @@ func setup(t *testing.T) (*fakeStore, gov.Context, *gate, *backend, *Router) {
 	f := &fakeStore{item: item, run: run}
 	g := &gate{}
 	b := &backend{session: &session{}, cap: sandboxdomain.Capabilities{Read: true}}
-	r, err := New(f, f, g, f, b)
+	registry := sandboxpluginregistry.NewRegistry()
+	descriptor, err := sandboxpluginregistry.BuiltinDescriptor(b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := registry.Register(b, descriptor); err != nil {
+		t.Fatal(err)
+	}
+	r, err := New(f, f, g, f, registry)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -170,11 +179,11 @@ func TestAcquireCapabilityLifecycleAndNoFallback(t *testing.T) {
 }
 func TestFailClosedWithoutAdmissionGateOrBackend(t *testing.T) {
 	f, caller, _, _, _ := setup(t)
-	if _, err := New(f, f, nil, f); err == nil {
+	if _, err := New(f, f, nil, f, sandboxpluginregistry.NewRegistry()); err == nil {
 		t.Fatal("missing gate accepted")
 	}
 	g := &gate{}
-	r, err := New(f, f, g, f)
+	r, err := New(f, f, g, f, sandboxpluginregistry.NewRegistry())
 	if err != nil {
 		t.Fatal(err)
 	}

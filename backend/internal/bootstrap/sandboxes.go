@@ -17,6 +17,7 @@ import (
 	sandboxdocker "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/dockerengine"
 	sandboxidentity "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/identity"
 	sandboxlocalworkspace "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/localworkspace"
+	sandboxpluginregistry "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/pluginregistry"
 	sandboxrouter "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/router"
 	sandboxsqlite "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/sqlite"
 )
@@ -26,6 +27,7 @@ import (
 type Sandboxes struct {
 	store                   *sandboxsqlite.Store
 	router                  *sandboxrouter.Router
+	backendPlugins          *sandboxpluginregistry.Registry
 	admission               sandboxapplication.Admit
 	launcher                sandboxWorkspaceShellLauncher
 	docker                  *sandboxdocker.Provisioner
@@ -67,12 +69,25 @@ func NewSandboxes(ctx context.Context, databasePath string, policy sandboxapplic
 	if daytonaBackend != nil {
 		backends = append(backends, daytonaBackend)
 	}
-	router, err := sandboxrouter.New(store, store, gate, store, backends...)
+	registry := sandboxpluginregistry.NewRegistry()
+	for _, backend := range backends {
+		descriptor, descriptorErr := sandboxpluginregistry.BuiltinDescriptor(backend)
+		if descriptorErr != nil {
+			_ = component.Close()
+			return nil, fmt.Errorf("compose sandbox backend extension descriptor: %w", descriptorErr)
+		}
+		if registerErr := registry.Register(backend, descriptor); registerErr != nil {
+			_ = component.Close()
+			return nil, fmt.Errorf("compose sandbox backend extension: %w", registerErr)
+		}
+	}
+	router, err := sandboxrouter.New(store, store, gate, store, registry)
 	if err != nil {
 		_ = component.Close()
 		return nil, fmt.Errorf("compose sandboxes: router: %w", err)
 	}
 	component.router = router
+	component.backendPlugins = registry
 	return component, nil
 }
 

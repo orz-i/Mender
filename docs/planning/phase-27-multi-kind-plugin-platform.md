@@ -142,10 +142,23 @@ Acceptance: typed registration invalid/duplicate cases, real Backend/descriptor 
   v1 package digest integrity; Provider RPC v1 stays unchanged. Provider-only
   admin operations reject wrong extension kinds. Previously installed native
   Provider binaries remain byte-for-byte pinned.
-- **B — remaining:** generic process supervisor and unified management catalogue
-  are prerequisites for externally executable Sandbox/Tunnel extensions.
-- **C, D and E:** not yet implemented; typed descriptors alone do not imply
-  external Sandbox/Tunnel driver support or Marketplace coverage.
+- **B — native host complete:** the Provider extension now delegates package
+  verification, per-installation concurrency, crash/restart and teardown to
+  one generic typed process supervisor. Provider Protocol v1 remains its typed
+  dialer. `pnpm check` and `pnpm security:check` pass; verified by
+  concurrent, wrong-kind, tamper, cancellation and ProcessHost Race tests.
+  Unified Plugin Catalogue remains outstanding.
+- **C1 — complete:** Local Workspace, Docker and opted-in Daytona are registered
+  as host-reviewed `sandbox.backend` extension descriptors and Router
+  acquires implementations only through the typed BackendResolver after Policy,
+  generation and lease preflight. Unknown/offline drivers and unsupported
+  capabilities fail closed. Tests include mutable backend capability expansion,
+  invalid/wrong-kind descriptors, duplicate registration and existing governed
+  Sandbox lifecycle/lease tests. Full repository and security checks pass.
+- **C2/C3 remain:** persisted exact extension/installation binding, generic
+  Sandbox lifecycle backend ports and installable external Sandbox RPC.
+- **D and E:** not yet implemented; typed Sandbox descriptors alone do not
+  imply external Sandbox/Tunnel driver support or Marketplace coverage.
 
 Foundation verification: `pnpm check` (Go lint/test/race, SDK/protocol/example,
 HTTP/TS/Wails contract drift, i18n/132 frontend tests, Web/Desktop builds) and

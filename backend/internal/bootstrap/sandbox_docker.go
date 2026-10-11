@@ -66,16 +66,7 @@ func (s *Sandboxes) DockerStatus() string {
 	return s.dockerUnavailableReason
 }
 func (s *Sandboxes) BackendAvailable(item sandboxdomain.Sandbox) bool {
-	if item.Backend() == sandboxdomain.BackendLocalWorkspace {
-		return true
-	}
-	if item.Backend() == sandboxdomain.BackendDocker {
-		return s.DockerAvailable()
-	}
-	if item.Backend() == sandboxdomain.BackendDaytona {
-		return s.DaytonaConfigured()
-	}
-	return false
+	return s != nil && s.backendPlugins != nil && s.backendPlugins.Available(item.Backend())
 }
 
 type CreateDockerSandboxRequest struct {

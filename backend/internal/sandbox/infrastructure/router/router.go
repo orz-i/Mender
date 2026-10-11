@@ -17,29 +17,15 @@ type Router struct {
 	definitions sandboxapp.SandboxLookup
 	runs        sandboxapp.RunLookup
 	gate        sandboxapp.AdmissionGate
-	backends    map[sandboxdomain.BackendKind]sandboxapp.Backend
+	backends    sandboxapp.BackendResolver
 	leases      sandboxapp.ExecutionLeaseStore
 }
 
-func New(definitions sandboxapp.SandboxLookup, runs sandboxapp.RunLookup, gate sandboxapp.AdmissionGate, leases sandboxapp.ExecutionLeaseStore, backends ...sandboxapp.Backend) (*Router, error) {
-	if definitions == nil || runs == nil || gate == nil || leases == nil {
-		return nil, fmt.Errorf("sandbox router: definitions, runs, admission gate and durable leases required")
+func New(definitions sandboxapp.SandboxLookup, runs sandboxapp.RunLookup, gate sandboxapp.AdmissionGate, leases sandboxapp.ExecutionLeaseStore, backends sandboxapp.BackendResolver) (*Router, error) {
+	if definitions == nil || runs == nil || gate == nil || leases == nil || backends == nil {
+		return nil, fmt.Errorf("sandbox router: definitions, runs, admission gate, durable leases and plugin registry required")
 	}
-	router := &Router{definitions: definitions, runs: runs, gate: gate, leases: leases, backends: make(map[sandboxdomain.BackendKind]sandboxapp.Backend)}
-	for _, backend := range backends {
-		if backend == nil {
-			return nil, fmt.Errorf("sandbox router: nil backend")
-		}
-		kind := backend.Kind()
-		if err := kind.Validate(); err != nil {
-			return nil, err
-		}
-		if _, found := router.backends[kind]; found {
-			return nil, fmt.Errorf("sandbox router: duplicate backend %q", kind)
-		}
-		router.backends[kind] = backend
-	}
-	return router, nil
+	return &Router{definitions: definitions, runs: runs, gate: gate, leases: leases, backends: backends}, nil
 }
 
 // Resolve reads only persisted metadata. It cannot probe, launch or connect to
@@ -113,15 +99,9 @@ func (r *Router) Acquire(ctx context.Context, principal governancedomain.Context
 	if run != placement.Run || run.State != sandboxdomain.StateReady {
 		return nil, sandboxdomain.ErrConflict
 	}
-	backend, ok := r.backends[spec.Backend]
-	if !ok {
-		return nil, sandboxdomain.ErrBackendUnavailable
-	}
-	if !backend.Capabilities().Supports(placement.Required) {
-		return nil, sandboxdomain.ErrCapabilityUnavailable
-	}
-	if backend.Kind() != spec.Backend {
-		return nil, sandboxdomain.ErrBackendUnavailable
+	backend, err := r.backends.ResolveBackend(spec.Backend, placement.Required)
+	if err != nil {
+		return nil, err
 	}
 	// Reserve from the persistent store before touching a backend; all Runtime
 	// processes sharing the same SQLite database compete for this one lease.

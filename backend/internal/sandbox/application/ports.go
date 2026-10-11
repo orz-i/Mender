@@ -43,6 +43,13 @@ type Backend interface {
 	Open(context.Context, sandboxdomain.Sandbox, sandboxdomain.Run) (Session, error)
 }
 
+// BackendResolver resolves only registered, host-reviewed typed Backend
+// extensions after Sandbox admission. It must have no observable side effects.
+type BackendResolver interface {
+	ResolveBackend(sandboxdomain.BackendKind, sandboxdomain.Capability) (Backend, error)
+	Available(sandboxdomain.BackendKind) bool
+}
+
 type Placement struct {
 	Sandbox  sandboxdomain.Sandbox
 	Run      sandboxdomain.Run

@@ -12,7 +12,7 @@ Work is tracked in [Phase 27](../planning/phase-27-multi-kind-plugin-platform.md
 | Kind | Ownership | Available external implementation |
 | --- | --- | --- |
 | `provider.tools` | Canonical Tool discovery/invocation, Provider lifecycle | Supported with Provider Plugin Protocol v1 |
-| `sandbox.backend` | Sandbox provisioning/session and backend file/process operations | Typed metadata defined; external driver protocol under development |
+| `sandbox.backend` | Sandbox provisioning/session and backend file/process operations | Trusted Local Workspace/Docker/opt-in Daytona extensions registered for Router session execution; external driver protocol pending |
 | `tunnel.transport` | Managed downstream MCP Profile reachability | Typed metadata defined; external transport protocol under development |
 
 A Sandbox does not automatically create Tools and a Tunnel does not participate
