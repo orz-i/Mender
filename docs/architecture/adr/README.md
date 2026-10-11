@@ -62,3 +62,4 @@ Minor implementation choices that remain inside an accepted architectural bounda
 - [ADR-0034: Govern every Runtime-owned native process through one host-owned process boundary](0034-runtime-owned-process-governance.md)
 - [ADR-0035: Separate governed Sandbox resources from Provider execution routing](0035-governed-sandbox-execution-router.md) — Accepted
 - [ADR-0036: Explicit Profile Service Principal Delegation to Sandboxes](0036-sandbox-profile-delegation.md) — Accepted
+- [ADR-0037: Multi-kind Mender Plugin Platform](0037-multi-kind-plugin-platform.md) — Proposed
