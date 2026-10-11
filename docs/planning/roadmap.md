@@ -492,3 +492,9 @@ Goals:
 Exit criteria: ADR-0035 accepted; backend/file/shell parity verified; governance denial-before-side-effects and no unsafe host fallback proved; Workspace v1 forward migration preserves identities; Sandbox lifecycle/UI/API are operational; full repository/race/security gates pass.
 
 See `phase-25-sandbox-execution-router.md` for the final bounded acceptance and per-backend support matrix. Local Workspace, Docker, governance, lifecycle, Activity and full repository/race/security gates are complete. Daytona remains disabled by default and **has NOT passed live create/tool/lifecycle acceptance**; its credential-backed provider smoke, orphan review and cleanup are separate post-phase operational-release requirements, not an open Phase 25 implementation stage. No new D/E subdivisions are planned.
+
+## Phase 26 — Profile Service Principal Sandbox Delegation
+
+Status: In progress. See `phase-26-profile-sandbox-delegation.md` and ADR-0036.
+
+Scope: durable owner-granted ProfileID/SandboxID capabilities, atomic execution-lease revocation fencing, independent Policy enforcement, immutable grant audit and owner-only typed management/Web/Desktop UX. No automatic grants for existing Profile MCP endpoints, and no impersonation of local owner or change to Daytona experimental support. Close this as one bounded phase after end-to-end tests and full repository gates.

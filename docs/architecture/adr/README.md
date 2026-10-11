@@ -61,3 +61,4 @@ Minor implementation choices that remain inside an accepted architectural bounda
 - [ADR-0033: Bound Runtime resource use and isolate local process execution](0033-runtime-budget-restricted-host-isolation.md)
 - [ADR-0034: Govern every Runtime-owned native process through one host-owned process boundary](0034-runtime-owned-process-governance.md)
 - [ADR-0035: Separate governed Sandbox resources from Provider execution routing](0035-governed-sandbox-execution-router.md) — Accepted
+- [ADR-0036: Explicit Profile Service Principal Delegation to Sandboxes](0036-sandbox-profile-delegation.md) — Accepted
