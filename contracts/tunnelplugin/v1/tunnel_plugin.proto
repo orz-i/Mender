@@ -1,0 +1,52 @@
+syntax = "proto3";
+
+package tunnelplugin.v1;
+option go_package = "github.com/orz-i/Mender/sdk/tunnelplugin/go/protocol/v1;tunnelv1";
+
+// A Tunnel transport moves downstream MCP reachability. It does not provide
+// Tools, set Policy, choose listen addresses, or mint trusted Principals.
+service TunnelTransportService {
+  rpc GetDescriptor(GetDescriptorRequest) returns (GetDescriptorResponse);
+  rpc ValidateConfig(ValidateConfigRequest) returns (ValidateConfigResponse);
+  rpc InspectConfig(InspectConfigRequest) returns (InspectConfigResponse);
+  rpc Connect(ConnectRequest) returns (ConnectResponse);
+  rpc Status(StatusRequest) returns (StatusResponse);
+  rpc Disconnect(DisconnectRequest) returns (DisconnectResponse);
+}
+message GetDescriptorRequest {}
+message GetDescriptorResponse { TransportDescriptor transport = 1; }
+message TransportDescriptor {
+  string plugin_id = 1;
+  string package_version = 2;
+  uint32 protocol_version = 3;
+  uint32 config_version = 4;
+  string display_name = 5;
+  string description = 6;
+  bytes config_schema_json = 7;
+  repeated string capabilities = 8;
+  string reachability_semantics = 9;
+}
+message ValidateConfigRequest {uint32 config_version = 1; bytes config_json = 2;}
+message ValidateConfigResponse {bool valid = 1; string diagnostic = 2;}
+message InspectConfigRequest {uint32 config_version = 1; bytes config_json = 2;}
+message InspectConfigResponse {
+  string connection_summary = 1;
+  repeated string credential_refs = 2;
+}
+message ConnectRequest {
+  // All identities and the managed loopback URL are selected by Mender.
+  string tunnel_id = 1;
+  string external_tunnel_id = 2;
+  string mcp_endpoint = 3;
+  bytes ephemeral_credential = 4;
+}
+message ConnectResponse {
+  string session_id = 1;
+  // starting | ready | degraded | failed. "ready" only with evidence.
+  string phase = 2;
+  string diagnostic = 3;
+}
+message StatusRequest {string session_id = 1;}
+message StatusResponse {string phase = 1; string diagnostic = 2;}
+message DisconnectRequest {string session_id = 1;}
+message DisconnectResponse {}

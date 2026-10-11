@@ -29,6 +29,8 @@ for (const directory of [
   "examples/provider-plugin-example",
   "sdk/sandboxplugin/go",
   "examples/sandbox-plugin-example",
+  "sdk/tunnelplugin/go",
+  "examples/tunnel-plugin-example",
 ]) {
   console.log(`govulncheck ${version}: ${directory}`);
   const cwd = resolve(root, directory);

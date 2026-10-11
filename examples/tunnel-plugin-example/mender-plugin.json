@@ -1,0 +1,15 @@
+{
+  "manifestVersion": 2,
+  "pluginId": "dev.mender.example.tunnel",
+  "version": "0.1.0",
+  "displayName": "Example Tunnel",
+  "description": "Deterministic loopback-only Tunnel Transport test fixture",
+  "entrypoints": {
+    "darwin/arm64": "bin/mender-tunnel-example",
+    "darwin/amd64": "bin/mender-tunnel-example",
+    "linux/amd64": "bin/mender-tunnel-example",
+    "linux/arm64": "bin/mender-tunnel-example",
+    "windows/amd64": "bin/mender-tunnel-example.exe"
+  },
+  "extensions": [{"id": "main", "kind": "tunnel.transport", "protocolVersion": 1}]
+}
