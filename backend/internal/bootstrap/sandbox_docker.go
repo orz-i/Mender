@@ -72,6 +72,9 @@ func (s *Sandboxes) ActivateDocker(ctx context.Context, rawEndpoint string) erro
 	}
 	s.dockerMu.Lock()
 	defer s.dockerMu.Unlock()
+	if s.dockerClosed {
+		return sandboxdomain.ErrBackendUnavailable
+	}
 	if s.docker != nil && s.dockerTemplates != nil {
 		return nil
 	}

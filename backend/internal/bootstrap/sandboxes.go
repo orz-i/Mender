@@ -37,6 +37,9 @@ type Sandboxes struct {
 	launcher                   sandboxWorkspaceShellLauncher
 	dockerMu                   sync.RWMutex
 	dockerDatabasePath         string
+	dockerAutoCancel           context.CancelFunc
+	dockerAutoDone             chan struct{}
+	dockerClosed               bool
 	docker                     *sandboxdocker.Provisioner
 	dockerTemplates            *sandboxdocker.TemplateStore
 	dockerUnavailableReason    string
@@ -118,6 +121,16 @@ func (s *Sandboxes) Get(ctx context.Context, id sandboxdomain.ID) (sandboxdomain
 func (s *Sandboxes) Close() error {
 	if s == nil || s.store == nil {
 		return nil
+	}
+	s.dockerMu.Lock()
+	s.dockerClosed = true
+	cancel, done := s.dockerAutoCancel, s.dockerAutoDone
+	s.dockerMu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+	if done != nil {
+		<-done
 	}
 	s.dockerMu.Lock()
 	if s.docker != nil {
