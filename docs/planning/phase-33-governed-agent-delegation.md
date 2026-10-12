@@ -48,7 +48,7 @@ A→B→C→D are bounded packages with commits at each completed, tested bounda
 
 ### Stage log
 
-- **A:** Documentation and protocol decision (pending commit).
-- **B:** Not started.
+- **A:** `10bc3b7` ADR/contract committed before implementation.
+- **B:** Core persistence and stdio runner committed as `9d8fda7`; local launcher, Resource/Policy integration and task service are in progress. Full stage-B exit gates remain open.
 - **C:** Not started.
 - **D:** Not started.

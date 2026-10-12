@@ -56,6 +56,12 @@ func TestCanonicalPluginCatalogueAllTypesInertAndStable(t *testing.T) {
 				plugin.PackageVersion != "" || plugin.ProtocolVersion != 0 || plugin.ConfigVersion != 0 {
 				t.Fatalf("E2B roadmap preview masquerades as an installed plugin: %+v", plugin)
 			}
+		case "io.mender.agent.codex", "io.mender.agent.grok":
+			if plugin.SourceKind != "builtin" || plugin.Kind != platformplugin.AgentBackend || len(plugin.Capabilities) != 3 ||
+				(plugin.Status != "enabled" && plugin.Status != "unavailable") ||
+				(plugin.Status == "unavailable" && (plugin.Enabled || plugin.Issue == "")) {
+				t.Fatalf("Agent Backend status or trust incorrectly reported: %+v", plugin)
+			}
 		case "io.mender.sandbox.ssh-remote":
 			if plugin.Status != "enabled" || !plugin.Enabled || plugin.SourceKind != "builtin" || len(plugin.Capabilities) != 4 ||
 				plugin.Key != "io.mender.sandbox.ssh-remote@builtin" || plugin.Issue != "" {
@@ -67,7 +73,7 @@ func TestCanonicalPluginCatalogueAllTypesInertAndStable(t *testing.T) {
 			}
 		}
 	}
-	for _, kind := range []platformplugin.Kind{platformplugin.ProviderTools, platformplugin.SandboxBackend, platformplugin.TunnelTransport} {
+	for _, kind := range []platformplugin.Kind{platformplugin.ProviderTools, platformplugin.SandboxBackend, platformplugin.TunnelTransport, platformplugin.AgentBackend} {
 		if seen[kind] == 0 {
 			t.Fatalf("catalogue lacks extension kind %s", kind)
 		}

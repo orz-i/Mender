@@ -24,7 +24,7 @@ func TestPluginIdentityAndKindValidation(t *testing.T) {
 	if id, err := ParseInstallationID("pinst_0123456789abcdef0123456789abcdef"); err != nil || id.String() != "pinst_0123456789abcdef0123456789abcdef" {
 		t.Fatalf("ParseInstallationID valid = %s, %v", id, err)
 	}
-	for _, kind := range []Kind{ProviderTools, SandboxBackend, TunnelTransport} {
+	for _, kind := range []Kind{ProviderTools, SandboxBackend, TunnelTransport, AgentBackend} {
 		if err := kind.Validate(); err != nil {
 			t.Errorf("kind %q: %v", kind, err)
 		}
@@ -48,7 +48,7 @@ func validDescriptor(kind Kind) Descriptor {
 
 func TestRegistryKeepsTypedContractsAndImmutableSnapshots(t *testing.T) {
 	t.Parallel()
-	for _, kind := range []Kind{ProviderTools, SandboxBackend, TunnelTransport} {
+	for _, kind := range []Kind{ProviderTools, SandboxBackend, TunnelTransport, AgentBackend} {
 		t.Run(string(kind), func(t *testing.T) {
 			r := NewRegistry()
 			descriptor := validDescriptor(kind)
@@ -74,7 +74,7 @@ func TestRegistryKeepsTypedContractsAndImmutableSnapshots(t *testing.T) {
 			if _, err := r.Lookup(descriptor.PluginID, descriptor.Extension.ID, Kind("nonexistent")); err == nil {
 				t.Fatal("lookup accepted unknown kind")
 			}
-			for _, wrong := range []Kind{ProviderTools, SandboxBackend, TunnelTransport} {
+			for _, wrong := range []Kind{ProviderTools, SandboxBackend, TunnelTransport, AgentBackend} {
 				if wrong == kind {
 					continue
 				}

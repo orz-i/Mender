@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	agentdomain "github.com/orz-i/Mender/backend/internal/agent/domain"
+	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	platformplugin "github.com/orz-i/Mender/backend/internal/plugin"
 	installationdomain "github.com/orz-i/Mender/backend/internal/plugin/installation/domain"
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
@@ -67,7 +69,7 @@ func pluginEntry(descriptor platformplugin.Descriptor, kind string, installation
 }
 
 func (r *Runtime) ListPluginCatalogue(ctx context.Context) ([]PluginCatalogueEntry, error) {
-	if r == nil || r.pluginInstallations == nil || r.tunnelPlugins == nil || r.Sandboxes == nil {
+	if r == nil || r.pluginInstallations == nil || r.tunnelPlugins == nil || r.Sandboxes == nil || r.Agents == nil || r.agentLauncher == nil {
 		return nil, fmt.Errorf("plugin catalogue unavailable")
 	}
 	if err := ctx.Err(); err != nil {
@@ -115,7 +117,20 @@ func (r *Runtime) ListPluginCatalogue(ctx context.Context) ([]PluginCatalogueEnt
 		}
 		usage[key]++
 	}
-	result := make([]PluginCatalogueEntry, 0, len(installations)+10)
+	internalCaller, err := governancedomain.NewContext(
+		governancedomain.OriginInternal, r.ownerPrincipal, governancedomain.CatalogScope(),
+	)
+	if err != nil {
+		return nil, err
+	}
+	agents, err := r.Agents.List(ctx, internalCaller)
+	if err != nil {
+		return nil, err
+	}
+	for _, a := range agents {
+		usage[a.Spec().PluginID.String()+"@builtin"]++
+	}
+	result := make([]PluginCatalogueEntry, 0, len(installations)+12)
 	for _, p := range r.ProviderPluginDescriptors() {
 		descriptor, err := providerpluginPlatformDescriptor(p)
 		if err != nil {
@@ -182,6 +197,33 @@ func (r *Runtime) ListPluginCatalogue(ctx context.Context) ([]PluginCatalogueEnt
 		SourceKind: "planned", Status: "planned", Enabled: false,
 		Capabilities: []string{}, UsageCount: 0,
 	})
+	// Agent backends are configured resources and do not produce Tools by
+	// themselves. The marketplace snapshot checks only executable existence;
+	// it never starts an Agent, probes accounts or imports session secrets.
+	for _, backend := range []struct {
+		kind              agentdomain.Backend
+		name, description string
+	}{
+		{agentdomain.BackendCodex, "Codex Agent", "Codex CLI through the separately installed codex-acp adapter"},
+		{agentdomain.BackendGrok, "Grok Agent", "Grok CLI through its native ACP stdio protocol"},
+	} {
+		descriptor := platformplugin.Descriptor{
+			PluginID: backend.kind.PluginID(), PackageVersion: "1.0.0",
+			Extension:   platformplugin.Extension{ID: "main", Kind: platformplugin.AgentBackend, ProtocolVersion: 1},
+			DisplayName: backend.name, Description: backend.description, ConfigVersion: 1,
+			Capabilities: []string{"acp.v1", "tasks", "local_workspace"},
+		}
+		if err := descriptor.Validate(); err != nil {
+			return nil, err
+		}
+		item := pluginEntry(descriptor, "builtin", nil, usage[descriptor.PluginID.String()+"@builtin"])
+		if _, err := r.agentLauncher.Availability(backend.kind); err != nil {
+			item.Status = "unavailable"
+			item.Enabled = false
+			item.Issue = err.Error()
+		}
+		result = append(result, item)
+	}
 	tunnelBuiltin := r.tunnelPlugins.BuiltinDescriptor()
 	result = append(result, pluginEntry(tunnelBuiltin, "builtin", nil, usage[tunnelBuiltin.PluginID.String()+"@builtin"]))
 	for i := range installations {

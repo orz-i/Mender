@@ -10,6 +10,9 @@ import (
 	"sync"
 	"time"
 
+	agentapplication "github.com/orz-i/Mender/backend/internal/agent/application"
+	agentacp "github.com/orz-i/Mender/backend/internal/agent/infrastructure/acp"
+	agentsqlite "github.com/orz-i/Mender/backend/internal/agent/infrastructure/sqlite"
 	auditapplication "github.com/orz-i/Mender/backend/internal/audit/application"
 	auditsqlite "github.com/orz-i/Mender/backend/internal/audit/infrastructure/sqlite"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
@@ -65,6 +68,7 @@ type Runtime struct {
 	Policy                      *Policies
 	Skills                      *Skills
 	Sandboxes                   *Sandboxes
+	Agents                      *agentapplication.Service
 	RuntimeGovernance           *RuntimeGovernance
 	InvokeTool                  invocationapplication.InvokeTool
 	ListAudit                   auditapplication.ListRecords
@@ -84,6 +88,8 @@ type Runtime struct {
 	providerInstances   *providerplugin.Manager
 	providerActivation  provideractivationapplication.Admit
 	ownerPrincipal      governancedomain.Principal
+	agentStore          *agentsqlite.Store
+	agentLauncher       *agentacp.LocalFactory
 
 	closersMu sync.Mutex
 	closers   []io.Closer
@@ -514,6 +520,16 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		options.DefaultTimeout,
 	)
 
+	agents, agentStore, agentLauncher, err := newAgents(ctx, options.DatabasePath, ownerPrincipal, profiles, policies, runtimeGovernance)
+	if err != nil {
+		_ = skills.Close()
+		_ = providerInstances.CloseAll()
+		_ = externalProcesses.CloseAll()
+		_ = pluginInstallations.Close()
+		closeBootstrapStores()
+		return nil, fmt.Errorf("compose runtime: Agent backend: %w", err)
+	}
+
 	tunnelsOwned = false
 	runtimeGovernanceOwned = false
 	sandboxesOwned = false
@@ -525,6 +541,7 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		Policy:                      policies,
 		Skills:                      skills,
 		Sandboxes:                   sandboxes,
+		Agents:                      agents,
 		RuntimeGovernance:           runtimeGovernance,
 		InvokeTool:                  invokeTool,
 		ListAudit:                   auditapplication.NewListRecords(auditStore),
@@ -543,6 +560,8 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		providerInstances:           providerInstances,
 		providerActivation:          providerActivation,
 		ownerPrincipal:              ownerPrincipal,
+		agentStore:                  agentStore,
+		agentLauncher:               agentLauncher,
 		mcpServers:                  make(map[string]*managedMCPServer),
 	}
 	tunnels.Delete = tunnelapplication.NewDeleteTunnel(tunnels.store, runtimeTunnelUsageChecker{
@@ -601,6 +620,7 @@ func (r *Runtime) addCloser(closer io.Closer) {
 
 // Close releases all runtime-owned infrastructure.
 func (r *Runtime) Close() error {
+	agentErr := r.Agents.Close()
 	serverErr := r.closeManagedMCPServers()
 	providerErr := r.providerInstances.CloseAll()
 	processErr := r.externalProcesses.CloseAll()
@@ -611,12 +631,13 @@ func (r *Runtime) Close() error {
 	r.closersMu.Unlock()
 
 	errs := make([]error, 0, len(closers)+9)
-	errs = append(errs, serverErr, providerErr, processErr)
+	errs = append(errs, agentErr, serverErr, providerErr, processErr)
 	for i := len(closers) - 1; i >= 0; i-- {
 		errs = append(errs, closers[i].Close())
 	}
 	errs = append(
 		errs,
+		r.agentStore.Close(),
 		r.Skills.Close(),
 		r.Sandboxes.Close(),
 		r.RuntimeGovernance.Close(),

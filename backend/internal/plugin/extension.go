@@ -15,11 +15,12 @@ const (
 	ProviderTools   Kind = "provider.tools"
 	SandboxBackend  Kind = "sandbox.backend"
 	TunnelTransport Kind = "tunnel.transport"
+	AgentBackend    Kind = "agent.backend"
 )
 
 func (k Kind) Validate() error {
 	switch k {
-	case ProviderTools, SandboxBackend, TunnelTransport:
+	case ProviderTools, SandboxBackend, TunnelTransport, AgentBackend:
 		return nil
 	default:
 		return fmt.Errorf("plugin extension kind: unsupported %q", k)

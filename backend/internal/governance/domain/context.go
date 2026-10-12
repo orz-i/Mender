@@ -22,13 +22,17 @@ const (
 	ActionSandboxStop      Action = "sandbox.stop"
 	ActionSandboxDestroy   Action = "sandbox.destroy"
 	ActionSandboxReconcile Action = "sandbox.reconcile"
+	ActionAgentActivate    Action = "agent.activate"
+	ActionAgentTaskSubmit  Action = "agent.task.submit"
+	ActionAgentTaskCancel  Action = "agent.task.cancel"
 )
 
 func (a Action) Validate() error {
 	switch a {
 	case ActionToolInvoke, ActionProviderActivate,
 		ActionSandboxAcquire, ActionSandboxProvision, ActionSandboxStart,
-		ActionSandboxStop, ActionSandboxDestroy, ActionSandboxReconcile:
+		ActionSandboxStop, ActionSandboxDestroy, ActionSandboxReconcile,
+		ActionAgentActivate, ActionAgentTaskSubmit, ActionAgentTaskCancel:
 		return nil
 	default:
 		return fmt.Errorf("governance action: unknown value %q", a)

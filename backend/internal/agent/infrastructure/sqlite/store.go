@@ -151,6 +151,36 @@ func (s *Store) CreateTask(ctx context.Context, t agentdomain.Task) error {
 		t.CreatedAt.Format(time.RFC3339Nano), t.UpdatedAt.Format(time.RFC3339Nano))
 	return err
 }
+
+// CreateAdmittedTask atomically fences Profile grant revocation and per-Agent
+// concurrency in the same INSERT decision. Caller has already passed Policy.
+func (s *Store) CreateAdmittedTask(ctx context.Context, t agentdomain.Task, maxActive int, profileID string) error {
+	if err := t.Validate(); err != nil {
+		return err
+	}
+	if t.Status != agentdomain.TaskQueued || maxActive < 1 || maxActive > 32 {
+		return agentdomain.ErrInvalid
+	}
+	result, err := s.db.ExecContext(ctx, `INSERT INTO agent_tasks(`+taskColumns+`)
+	SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,?
+	WHERE (SELECT COUNT(*) FROM agent_tasks WHERE agent_id=? AND status IN ('queued','running')) < ?
+	  AND (?='' OR EXISTS(SELECT 1 FROM agent_grants WHERE agent_id=? AND profile_id=?))`,
+		string(t.ID), string(t.AgentID), string(t.Status), t.Origin, t.PrincipalKind, t.PrincipalRef,
+		t.ScopeKind, t.ScopeRef, t.Generation, t.Result, t.Diagnostic, 0,
+		t.CreatedAt.Format(time.RFC3339Nano), t.UpdatedAt.Format(time.RFC3339Nano),
+		string(t.AgentID), maxActive, profileID, string(t.AgentID), profileID)
+	if err != nil {
+		return fmt.Errorf("reserve Agent task: %w", err)
+	}
+	n, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n != 1 {
+		return agentdomain.ErrConflict
+	}
+	return nil
+}
 func (s *Store) GetTask(ctx context.Context, id agentdomain.TaskID) (agentdomain.Task, error) {
 	if _, err := agentdomain.ParseTaskID(string(id)); err != nil {
 		return agentdomain.Task{}, err
