@@ -63,3 +63,5 @@ Minor implementation choices that remain inside an accepted architectural bounda
 - [ADR-0035: Separate governed Sandbox resources from Provider execution routing](0035-governed-sandbox-execution-router.md) — Accepted
 - [ADR-0036: Explicit Profile Service Principal Delegation to Sandboxes](0036-sandbox-profile-delegation.md) — Accepted
 - [ADR-0037: Multi-kind Mender Plugin Platform](0037-multi-kind-plugin-platform.md) — Accepted
+- [ADR-0038: Governed Agent Delegation](0038-governed-agent-delegation.md) — Accepted
+- [ADR-0039: Marketplace Offerings, Resources and Tool Suites](0039-offerings-resource-tool-suites.md) — Accepted
