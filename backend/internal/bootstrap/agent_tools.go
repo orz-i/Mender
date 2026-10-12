@@ -186,7 +186,7 @@ func (r *Runtime) CreateAgentWithTools(ctx context.Context, req agentapplication
 		return agent, err
 	}
 	if _, err = r.EnsureAgentTools(ctx, agent.ID(), caller); err != nil {
-		return agent, fmt.Errorf("Agent %s created but tools are not ready; repair from Agent details: %w", agent.ID(), err)
+		return agent, fmt.Errorf("agent %s created but tools are not ready; repair from agent details: %w", agent.ID(), err)
 	}
 	return agent, nil
 }

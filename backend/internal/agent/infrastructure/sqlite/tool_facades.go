@@ -61,7 +61,7 @@ func (s *Store) ClaimToolFacade(ctx context.Context, id agentdomain.ID, provider
 		"SELECT plugin_id,config_json FROM provider_configs WHERE provider_id=? AND plugin_installation_id IS NULL",
 		providerID).Scan(&pluginID, &configJSON)
 	if err != nil {
-		return fmt.Errorf("%w: Agent facade Provider missing configuration: %v", agentdomain.ErrConflict, err)
+		return fmt.Errorf("%w: agent facade provider missing configuration: %w", agentdomain.ErrConflict, err)
 	}
 	var config struct {
 		AgentID string `json:"agentId"`
@@ -72,7 +72,7 @@ func (s *Store) ClaimToolFacade(ctx context.Context, id agentdomain.ID, provider
 	if _, err = tx.ExecContext(ctx,
 		"INSERT INTO agent_tool_facades(agent_id,provider_id,suite_id,created_at) VALUES(?,?,?,?)",
 		string(id), providerID, "agent.delegation", time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
-		return fmt.Errorf("%w: claim Agent facade: %v", agentdomain.ErrConflict, err)
+		return fmt.Errorf("%w: claim agent facade: %w", agentdomain.ErrConflict, err)
 	}
 	return tx.Commit()
 }
