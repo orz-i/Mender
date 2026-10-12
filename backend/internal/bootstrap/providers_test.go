@@ -32,10 +32,11 @@ func TestRuntimeExposesBuiltInProviderPluginDescriptors(t *testing.T) {
 
 	runtime := newProviderTestRuntime(t)
 	descriptors := runtime.ProviderPluginDescriptors()
-	if len(descriptors) != 4 {
-		t.Fatalf("ProviderPluginDescriptors() len = %d, want 4", len(descriptors))
+	if len(descriptors) != 5 {
+		t.Fatalf("ProviderPluginDescriptors() len = %d, want 5", len(descriptors))
 	}
 	wantIDs := []providerplugin.ID{
+		"io.mender.provider.agent-delegation",
 		"io.mender.provider.mcp",
 		"io.mender.provider.model-tools",
 		"io.mender.provider.openapi",
@@ -63,8 +64,8 @@ func TestRuntimeExposesBuiltInProviderPluginDescriptors(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListAvailableProviderPlugins() error = %v", err)
 	}
-	if len(available) != 4 {
-		t.Fatalf("ListAvailableProviderPlugins() len = %d, want 4", len(available))
+	if len(available) != 5 {
+		t.Fatalf("ListAvailableProviderPlugins() len = %d, want 5", len(available))
 	}
 	for _, item := range available {
 		if item.SourceKind != ProviderPluginSourceBuiltIn ||
@@ -210,8 +211,8 @@ func TestListAvailableProviderPluginsIsolatesBrokenLegacyInstallation(t *testing
 	if err != nil {
 		t.Fatalf("ListAvailableProviderPluginCatalog() error = %v", err)
 	}
-	if len(catalog.Plugins) != 4 {
-		t.Fatalf("available plugins = %d, want 4 healthy built-ins", len(catalog.Plugins))
+	if len(catalog.Plugins) != 5 {
+		t.Fatalf("available plugins = %d, want 5 healthy built-ins", len(catalog.Plugins))
 	}
 	for _, item := range catalog.Plugins {
 		if item.SourceKind != ProviderPluginSourceBuiltIn {

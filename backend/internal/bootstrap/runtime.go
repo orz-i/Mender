@@ -12,6 +12,7 @@ import (
 
 	agentapplication "github.com/orz-i/Mender/backend/internal/agent/application"
 	agentacp "github.com/orz-i/Mender/backend/internal/agent/infrastructure/acp"
+	agentdelegation "github.com/orz-i/Mender/backend/internal/agent/infrastructure/delegationprovider"
 	agentsqlite "github.com/orz-i/Mender/backend/internal/agent/infrastructure/sqlite"
 	auditapplication "github.com/orz-i/Mender/backend/internal/audit/application"
 	auditsqlite "github.com/orz-i/Mender/backend/internal/audit/infrastructure/sqlite"
@@ -56,6 +57,9 @@ type RuntimeOptions struct {
 	BindingExecutionGuard invocationapplication.BindingExecutionGuard
 	InvocationObserver    invocationapplication.InvocationObserver
 	TunnelProcessRunner   tunnelapplication.ProcessRunner
+	// AgentExecutor is an in-process trusted testing seam; never expose it via
+	// API, Provider config, persisted metadata, or untrusted Tool arguments.
+	AgentExecutor agentapplication.Executor
 }
 
 // Runtime composes Catalog, Profile persistence, Provider config persistence,
@@ -520,7 +524,7 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		options.DefaultTimeout,
 	)
 
-	agents, agentStore, agentLauncher, err := newAgents(ctx, options.DatabasePath, ownerPrincipal, profiles, policies, runtimeGovernance)
+	agents, agentStore, agentLauncher, err := newAgents(ctx, options.DatabasePath, ownerPrincipal, profiles, policies, runtimeGovernance, options.AgentExecutor)
 	if err != nil {
 		_ = skills.Close()
 		_ = providerInstances.CloseAll()
@@ -530,6 +534,19 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		return nil, fmt.Errorf("compose runtime: Agent backend: %w", err)
 	}
 
+	// The Tool facade is only registered after its Agent service is ready.
+	// Registration is inert; Provider activation and Task submission retain
+	// their independent governance gates.
+	if err := providerPlugins.Register(agentdelegation.New(agents, ownerPrincipal)); err != nil {
+		_ = agents.Close()
+		_ = agentStore.Close()
+		_ = skills.Close()
+		_ = providerInstances.CloseAll()
+		_ = externalProcesses.CloseAll()
+		_ = pluginInstallations.Close()
+		closeBootstrapStores()
+		return nil, fmt.Errorf("compose runtime: Agent delegation Provider: %w", err)
+	}
 	tunnelsOwned = false
 	runtimeGovernanceOwned = false
 	sandboxesOwned = false

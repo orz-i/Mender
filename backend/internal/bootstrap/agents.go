@@ -18,6 +18,7 @@ import (
 // plugin packages cannot silently acquire the native process authority.
 func newAgents(ctx context.Context, dbPath string, owner gov.Principal,
 	profiles *Profiles, policies *Policies, governance *RuntimeGovernance,
+	fixtureRunner agentapplication.Executor,
 ) (*agentapplication.Service, *agentsqlite.Store, *agentacp.LocalFactory, error) {
 	store, err := agentsqlite.Open(ctx, dbPath)
 	if err != nil {
@@ -60,7 +61,11 @@ func newAgents(ctx context.Context, dbPath string, owner gov.Principal,
 		_, err = profiles.GetByID.Execute(ctx, parsed)
 		return err
 	}
-	service, err := agentapplication.NewService(store, agentacp.Runner{NewCommand: launcher.Command}, admit, owner, profileExists)
+	runner := fixtureRunner
+	if runner == nil {
+		runner = agentacp.Runner{NewCommand: launcher.Command}
+	}
+	service, err := agentapplication.NewService(store, runner, admit, owner, profileExists)
 	if err != nil {
 		_ = store.Close()
 		return nil, nil, nil, err
