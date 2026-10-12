@@ -68,7 +68,7 @@ it("reconciles Tunnel starting -> ready -> degraded from Mender without manual R
       .mockResolvedValueOnce({ servers: [{ ...fixture, tunnelStatus: "degraded" }] });
     const { listProfiles, unmount } = showServer(listMCPServers);
     expect(await screen.findByText("Starting")).toBeTruthy();
-    expect(polling.installed()).toBe(true);
+    await waitFor(() => expect(polling.installed()).toBe(true));
     expect(screen.getByText("Starting").className).not.toContain("text-destructive");
 
     await polling.tick();
@@ -94,6 +94,7 @@ it("does not resurrect a stopped Tunnel server from an in-flight stale status re
     const stopMCPServer = vi.fn().mockResolvedValue(undefined);
     showServer(listMCPServers, { stopMCPServer });
     expect(await screen.findByText("Starting")).toBeTruthy();
+    await waitFor(() => expect(polling.installed()).toBe(true));
 
     await polling.tick();
     fireEvent.click(screen.getByRole("button", { name: "Stop" }));
@@ -133,6 +134,7 @@ it("retains last known status on transient polling errors without issuing overla
       .mockResolvedValueOnce({ servers: [{ ...fixture, tunnelStatus: "ready" }] });
     showServer(listMCPServers);
     expect(await screen.findByText("Starting")).toBeTruthy();
+    await waitFor(() => expect(polling.installed()).toBe(true));
 
     await polling.tick();
     await polling.tick();
