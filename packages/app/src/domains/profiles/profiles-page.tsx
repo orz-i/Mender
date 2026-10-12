@@ -40,7 +40,7 @@ import { errorMessage } from "../../shared/errors";
 import { canonicalizeOwnedIdentifier, isCanonicalOwnedSlug, ownedIdentifierCreateError } from "../../shared/form-identifiers";
 import { IconButton } from "../../shared/icon-button";
 import { EmptyState, ErrorNotice } from "../../shared/page";
-import { PageToolbar, ResultPanel } from "../../shared/page-toolbar";
+import { PageTab, PageTabs, PageToolbar, ResultPanel } from "../../shared/page-toolbar";
 import { usePagination } from "../../shared/pagination";
 import { TablePagination } from "../../shared/table-pagination";
 import { EmptyPanelState, SearchField } from "../../shared/workbench";
@@ -83,6 +83,9 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
   const [createError, setCreateError] = useState("");
 
   const [manageSlug, setManageSlug] = useState("");
+  const [manageView, setManageView] = useState<"overview" | "tools">("tools");
+  const [manageQuery, setManageQuery] = useState("");
+  const [manageExposure, setManageExposure] = useState<"all" | "direct" | "dynamic">("all");
   const [pickerSlug, setPickerSlug] = useState("");
   const [pickerQuery, setPickerQuery] = useState("");
   const [pickerProvider, setPickerProvider] = useState("");
@@ -215,6 +218,26 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
     () => new Map(providers.map((provider) => [provider.providerId, provider])),
     [providers],
   );
+
+  const visibleManagedTools = useMemo(() => {
+    if (managedProfile === null) return [];
+    const needle = manageQuery.trim().toLocaleLowerCase();
+    return managedProfile.tools.filter((selection) => {
+      if (manageExposure !== "all" &&
+        (selection.direct ? "direct" : "dynamic") !== manageExposure) {
+        return false;
+      }
+      if (!needle) return true;
+      const tool = knownTools.get(selection.toolId);
+      const provider = tool ? providerById.get(tool.providerId) : undefined;
+      return [
+        selection.alias, selection.titleOverride, selection.descriptionOverride,
+        tool?.title, tool?.name, tool?.description,
+        provider?.displayName, provider?.namespace,
+      ].some((value) => value?.toLocaleLowerCase().includes(needle));
+    });
+  }, [managedProfile, manageQuery, manageExposure, knownTools, providerById]);
+  const managedToolPagination = usePagination(visibleManagedTools);
 
   const visibleProfiles = useMemo(() => {
     const needle = inventoryQuery.trim().toLocaleLowerCase();
@@ -640,7 +663,7 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
                         label={t("Manage {{profile}}", {
                           profile: profile.displayName || profile.slug,
                         })}
-                        onClick={() => setManageSlug(profile.slug)}
+                        onClick={() => { setManageView("tools"); setManageQuery(""); setManageExposure("all"); managedToolPagination.reset(); setManageSlug(profile.slug); }}
                       >
                         <Settings2Icon />
                       </IconButton>
@@ -772,18 +795,28 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
           }
         }}
       >
-        <DialogContent className="sm:max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>
-              {managedProfile?.displayName ?? t("Manage profile")}
-            </DialogTitle>
-            <DialogDescription>
-              {t("Choose which Catalog Tools this Profile may expose.")}
-            </DialogDescription>
-          </DialogHeader>
+        <DialogContent className="h-[min(760px,calc(100dvh-2rem))] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden sm:max-w-3xl">
+          <div className="space-y-3">
+            <DialogHeader>
+              <DialogTitle>
+                {managedProfile?.displayName ?? t("Manage profile")}
+              </DialogTitle>
+              <DialogDescription>
+                {t("Choose which Catalog Tools this Profile may expose.")}
+              </DialogDescription>
+            </DialogHeader>
+            <PageTabs label="Manage Profile sections">
+              <PageTab label="Tools" count={managedProfile?.tools.length ?? 0}
+                active={manageView === "tools"} onClick={() => setManageView("tools")} />
+              <PageTab label="Overview" active={manageView === "overview"}
+                onClick={() => setManageView("overview")} />
+            </PageTabs>
+          </div>
 
           {managedProfile !== null ? (
-            <div className="space-y-5">
+            <div className="min-h-0 flex flex-col gap-3">
+              {manageView === "overview" ? (
+                <div className="min-h-0 space-y-5 overflow-y-auto overscroll-contain pr-1">
               <div className="grid grid-cols-2 gap-3">
                 <ReadOnlyField label="Profile" value={managedProfile.slug} />
                 <ReadOnlyField label="Mode" value={managedProfile.mode} />
@@ -815,7 +848,10 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
                 </Field>
               </div>
 
-              <div className="flex items-center justify-between">
+                </div>
+              ) : (
+                <>
+              <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <div className="font-medium">{t("Selected Tools")}</div>
                   <p className="mt-1 text-xs text-muted-foreground">
@@ -830,9 +866,33 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
                 </Button>
               </div>
 
-              {managedProfile.tools.length ? (
-                <div className="divide-y divide-border rounded-lg border border-border">
-                  {managedProfile.tools.map((selection) => {
+              <div className="grid shrink-0 gap-2 sm:grid-cols-[minmax(0,1fr)_180px]">
+                <Input
+                  aria-label={t("Search selected tools")}
+                  placeholder={t("Search selected tools…")}
+                  value={manageQuery}
+                  onChange={(event) => {
+                    setManageQuery(event.target.value);
+                    managedToolPagination.reset();
+                  }}
+                />
+                <select
+                  aria-label={t("Exposure filter")}
+                  value={manageExposure}
+                  onChange={(event) => {
+                    setManageExposure(event.target.value as typeof manageExposure);
+                    managedToolPagination.reset();
+                  }}
+                  className="h-9 min-w-0 rounded-lg border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
+                >
+                  <option value="all">{t("All exposures")}</option>
+                  <option value="direct">{t("Direct")}</option>
+                  <option value="dynamic">{t("Dynamic")}</option>
+                </select>
+              </div>
+              {visibleManagedTools.length ? (
+                <div data-slot="profile-selected-tools-list" className="min-h-0 flex-1 divide-y divide-border overflow-y-auto overscroll-contain rounded-lg border border-border">
+                  {managedToolPagination.items.map((selection) => {
                     const tool = knownTools.get(selection.toolId);
                     const provider =
                       tool === undefined
@@ -935,10 +995,18 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
                   })}
                 </div>
               ) : (
-                <EmptyState
-                  title="No tools selected"
-                  description="Choose Tools from the Catalog to define this Profile's exposure boundary."
-                />
+                <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border border-border">
+                  {managedProfile.tools.length ? (
+                    <EmptyState title="No matching Tools." description="Try a different search or filter." />
+                  ) : (
+                    <EmptyState title="No tools selected" description="Choose Tools from the Catalog to define this Profile's exposure boundary." />
+                  )}
+                </div>
+              )}
+              <div className="shrink-0">
+                <TablePagination label="Selected Tools" pagination={managedToolPagination} />
+              </div>
+                </>
               )}
             </div>
           ) : null}
@@ -1264,6 +1332,7 @@ function ToolPickerDialog({
   const providerById = new Map(
     providers.map((provider) => [provider.providerId, provider]),
   );
+  const pickerPagination = usePagination(tools);
 
   return (
     <Dialog
@@ -1274,7 +1343,7 @@ function ToolPickerDialog({
         }
       }}
     >
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-4xl">
+      <DialogContent className="h-[min(760px,calc(100dvh-2rem))] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden sm:max-w-4xl">
         <DialogHeader>
           <DialogTitle>{t("Choose tools")}</DialogTitle>
           <DialogDescription>
@@ -1282,12 +1351,16 @@ function ToolPickerDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid grid-cols-[minmax(0,1fr)_220px_auto] gap-3">
+        <div className="min-h-0 flex flex-col gap-3">
+        <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,210px)_auto] sm:items-center">
           <Input
             aria-label={t("Profile tool search")}
             placeholder={t("Search tools")}
             value={query}
-            onChange={(event) => onQueryChange(event.target.value)}
+            onChange={(event) => {
+              onQueryChange(event.target.value);
+              pickerPagination.reset();
+            }}
             onKeyDown={(event) => {
               if (event.key === "Enter") {
                 onApply();
@@ -1297,7 +1370,10 @@ function ToolPickerDialog({
           <select
             aria-label={t("Provider filter")}
             value={providerId}
-            onChange={(event) => onProviderChange(event.target.value)}
+            onChange={(event) => {
+              onProviderChange(event.target.value);
+              pickerPagination.reset();
+            }}
             className="h-8 rounded-lg border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
           >
             <option value="">{t("All Providers")}</option>
@@ -1319,9 +1395,9 @@ function ToolPickerDialog({
           <span>{tCount(selected.size, "{{count}} selected", "{{count}} selected")}</span>
         </div>
 
-        <div className="max-h-[52vh] divide-y divide-border overflow-y-auto rounded-lg border border-border">
+        <div data-slot="profile-tool-picker-list" className="min-h-0 flex-1 divide-y divide-border overflow-y-auto overscroll-contain rounded-lg border border-border">
           {tools.length ? (
-            tools.map((tool) => {
+            pickerPagination.items.map((tool) => {
               const isSelected = selected.has(tool.toolId);
               const provider = providerById.get(tool.providerId);
               return (
@@ -1384,6 +1460,10 @@ function ToolPickerDialog({
           )}
         </div>
 
+        <div className="shrink-0">
+          <TablePagination label="Catalog Tools" pagination={pickerPagination} />
+        </div>
+        </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>
             {t("Cancel")}

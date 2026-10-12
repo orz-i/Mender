@@ -1836,6 +1836,7 @@ describe("management pages", () => {
     expect(screen.getByText("Local only")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Manage Default" }));
+    fireEvent.click(screen.getByRole("button", { name: "Overview" }));
     const tunnelSelect =
       await screen.findByLabelText<HTMLSelectElement>("Profile tunnel");
     expect(tunnelSelect.value).toBe("");

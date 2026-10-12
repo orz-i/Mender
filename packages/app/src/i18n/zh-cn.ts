@@ -1,5 +1,11 @@
 export const zhCNMessages: Readonly<Record<string, string>> = {
   "Access": "访问授权",
+  "All exposures": "全部暴露方式",
+  "Catalog Tools": "目录工具",
+  "Exposure filter": "暴露方式筛选",
+  "Manage Profile sections": "配置档管理视图",
+  "Search selected tools": "搜索已选工具",
+  "Search selected tools…": "搜索已选工具…",
   "Add agent": "添加智能体",
   "Add an Agent to delegate tasks through a Profile.": "添加智能体后，可通过 Profile 委派任务。",
   "Agent access": "智能体访问授权",
