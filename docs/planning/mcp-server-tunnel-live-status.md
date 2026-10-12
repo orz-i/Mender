@@ -30,3 +30,15 @@ Fix the **UI's passive status projection**. Reuse the existing `MenderClient.lis
 - Do not claim screenshots, remote ChatGPT connectivity or real Wails UI clicks unless actually verified.
 
 Follow-up is bounded to the present bug; do not reopen completed native transport orchestration.
+
+## Closure evidence — 2026-10-12
+
+- Documentation-first commit: `2d8d5b8`. Implementation and regression tests: `9393d9f`.
+- UI polls `client.listMCPServers()` (one read-only Mender inventory call, no Profile reload) every 2000 ms only while a managed Tunnel-backed server is present and no management mutation is active. The effect clears its interval when the Servers view unmounts or its last Tunnel-backed server is removed; overlapping requests are suppressed.
+- A generation counter invalidates in-flight stale reads whenever a user triggers Refresh/Start/Restart/Stop. Explicit stop cannot be undone by a delayed poll. Transient read errors leave last-known rows intact and do not silently relaunch processes.
+- The Tunnel status badge is now neutral for `starting`, non-error for `ready`/`running`, and destructive only for `degraded`, `failed`, or `exited`. Labels including the MCP server's `running` status are localized in Chinese rather than displaying raw English protocol enum strings.
+- `server-status-live.test.tsx` covers automatic `starting → ready → degraded`, no Profile reload, in-flight stop fencing, cleanup on unmount, no periodic calls for local-only MCP Servers, polling failure, overlap prevention, and Chinese status output. Targeted Vitest/TypeScript/ESLint/i18n checks all passed.
+- `pnpm check` exited **0** following the UI implementation (Go lint/test/race, plugin SDK/protocol checks, Wails binding checks, Web/Desktop builds, i18n 1058/1058 and 179 Vitest UI tests). Build output includes preexisting large JS chunk notices, not failures.
+- The currently running Wails dev backend and native tunnel-client were preserved. Read-only live native observation confirmed `live=true`, `ready=true` and `control-plane ok/polling`. Vite on the existing desktop frontend port serves the updated shared server-page code; a Go/Tunnel process restart is unnecessary for this **frontend-only** repair.
+- **Manual UI/window observation remains a separate acceptance step**: with Servers open, a still-running native Tunnel should move from `启动中` to `就绪` on the next read (~2 s). If HMR did not update the window, navigate away from Servers and return or reload the Wails frontend. The user-visible native window was not driven by automation in this run, so a screenshot-perfect claim is not made.
+- Local native daemon and control-plane readiness do not assert remote ChatGPT connector registration or external Tool invocation success.
