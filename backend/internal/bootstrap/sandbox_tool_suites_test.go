@@ -190,3 +190,75 @@ func TestSandboxSuiteConcurrentClaimsUniqueAndProfileDenied(t *testing.T) {
 		t.Fatalf("Profile could inspect management-only binding: %v", err)
 	}
 }
+
+// An owner-scoped management Context must not claim a different Principal's
+// Sandbox even when it has catalog-level management permissions.
+func TestSandboxSuiteMutationsRequireExactResourceOwner(t *testing.T) {
+	ctx := context.Background()
+	r := newSuiteRuntime(t)
+	id := sandboxdomain.ID("sbx_00000000000000000000000000000088")
+	item, err := sandboxdomain.NewSandbox(sandboxdomain.Spec{
+		ID: id, Name: "Service-owned", Backend: sandboxdomain.BackendLocalWorkspace,
+		Binding:   sandboxdomain.BuiltinBinding(sandboxdomain.BackendLocalWorkspace),
+		Isolation: sandboxdomain.IsolationHost, LocalRoot: t.TempDir(),
+		OwnerKind: "service", OwnerRef: "service:fixture",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	run, err := sandboxdomain.NewRun(id, 1, sandboxdomain.StateReady, "local_workspace:"+id.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = r.Sandboxes.store.CreateReady(ctx, item, run); err != nil {
+		t.Fatal(err)
+	}
+	owner := agentOwnerContext(t, r)
+	if _, err = r.EnsureSandboxWorkspaceTools(ctx, id, owner); !errors.Is(err, sandboxdomain.ErrNotAuthorized) {
+		t.Fatalf("owner mismatch allowed create: %v", err)
+	}
+	if err = r.RemoveSandboxWorkspaceTools(ctx, id, owner); !errors.Is(err, sandboxdomain.ErrNotAuthorized) {
+		t.Fatalf("owner mismatch allowed delete: %v", err)
+	}
+}
+
+// Restart may not reprovision or rebind existing managed Workspace Tools.
+func TestSandboxToolSuiteRestartPreservesCanonicalToolIdentity(t *testing.T) {
+	ctx := context.Background()
+	database := filepath.Join(t.TempDir(), "restart.sqlite")
+	first, err := NewRuntime(ctx, RuntimeOptions{DatabasePath: database, AgentExecutor: fixtureAgentExecutor{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner := agentOwnerContext(t, first)
+	item, err := first.Sandboxes.CreateLocalSandbox(ctx, CreateLocalSandboxRequest{
+		Name: "Persistent Workspace", Root: t.TempDir(), Isolation: sandboxdomain.IsolationHost,
+	}, owner)
+	if err != nil {
+		_ = first.Close()
+		t.Fatal(err)
+	}
+	state, err := first.EnsureSandboxWorkspaceTools(ctx, item.ID(), owner)
+	if err != nil {
+		_ = first.Close()
+		t.Fatal(err)
+	}
+	if err := first.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	reopened, err := NewRuntime(ctx, RuntimeOptions{DatabasePath: database, AgentExecutor: fixtureAgentExecutor{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = reopened.Close() }()
+	next, err := reopened.SandboxWorkspaceTools(ctx, item.ID(), agentOwnerContext(t, reopened))
+	if err != nil || next.Status != "ready" || next.ProviderID != state.ProviderID {
+		t.Fatalf("suite lost on restart: %+v %v", next, err)
+	}
+	for i, tool := range state.Tools {
+		if next.Tools[i].ToolID != tool.ToolID {
+			t.Fatal("ToolID changed during restart")
+		}
+	}
+}

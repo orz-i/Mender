@@ -74,6 +74,11 @@ func (r *Runtime) sandboxWorkspaceCapabilitySnapshot(ctx context.Context, id san
 	if err != nil {
 		return false, "", err
 	}
+	// Backend availability (including Docker Engine liveness) is a cached
+	// host observation; a static extension descriptor alone is not readiness.
+	if !r.Sandboxes.BackendAvailable(item) {
+		return false, "Sandbox backend is unavailable", nil
+	}
 	spec := item.Spec()
 	available := make([]suitedomain.Capability, 0, 4)
 	for _, entry := range []struct {
@@ -250,8 +255,12 @@ func (r *Runtime) RemoveSandboxWorkspaceTools(ctx context.Context, id sandboxdom
 	if err := r.sandboxToolOwner(caller); err != nil {
 		return err
 	}
-	if _, err := r.Sandboxes.Get(ctx, id); err != nil {
+	resource, err := r.Sandboxes.Get(ctx, id)
+	if err != nil {
 		return err
+	}
+	if resource.OwnerKind() != string(caller.Principal().Kind()) || resource.OwnerRef() != caller.Principal().Reference() {
+		return sandboxdomain.ErrNotAuthorized
 	}
 	state, err := r.SandboxWorkspaceTools(ctx, id, caller)
 	if err != nil {
