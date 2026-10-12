@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
@@ -322,6 +323,13 @@ func TestManagedMCPHTTPServerSupervisesProfileTunnel(t *testing.T) {
 		t.Fatalf("runner start = endpoint %q secret %q", first.endpoint, first.secret)
 	}
 
+	// The management/UI projection must reflect the transport's CACHED
+	// health, not merely infer readiness from a running native process.
+	first.setHealth("ready")
+	awaitManagedTunnelStatus(t, runtime, instance.ServerID, "ready")
+	first.setHealth("degraded")
+	awaitManagedTunnelStatus(t, runtime, instance.ServerID, "degraded")
+
 	restarted, err := restartMCPServerTest(t, runtime, ctx, instance.ServerID)
 	if err != nil {
 		t.Fatalf("RestartMCPServer() error = %v", err)
@@ -473,8 +481,36 @@ type fakeTunnelProcess struct {
 	endpoint string
 	secret   string
 	stopped  bool
+	health   string
 	done     chan error
 	once     sync.Once
+}
+
+func (p *fakeTunnelProcess) TunnelHealth() string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.health == "" {
+		return "starting"
+	}
+	return p.health
+}
+func (p *fakeTunnelProcess) setHealth(phase string) {
+	p.mu.Lock()
+	p.health = phase
+	p.mu.Unlock()
+}
+func awaitManagedTunnelStatus(t *testing.T, r *Runtime, id, want string) {
+	t.Helper()
+	deadline := time.Now().Add(4 * time.Second)
+	for time.Now().Before(deadline) {
+		for _, server := range r.ListMCPServers() {
+			if server.ServerID == id && server.TunnelStatus == want {
+				return
+			}
+		}
+		time.Sleep(30 * time.Millisecond)
+	}
+	t.Fatalf("managed Tunnel status never reached %q: %+v", want, r.ListMCPServers())
 }
 
 func (p *fakeTunnelProcess) Stop(context.Context) error {

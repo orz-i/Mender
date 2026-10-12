@@ -3,8 +3,10 @@ package process
 import (
 	"context"
 	"errors"
+	"net"
 	"os/exec"
 	"slices"
+	"strings"
 	"testing"
 
 	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
@@ -33,10 +35,18 @@ func TestRunnerUsesLauncherWithBoundedEnvironment(t *testing.T) {
 		"--control-plane.tunnel-id=tunnel_external_test",
 		"--control-plane.api-key=env:CONTROL_PLANE_API_KEY",
 		"--mcp.server-url=http://127.0.0.1:1234/mcp",
-		"--health.listen-addr=127.0.0.1:0",
 	}
-	if !slices.Equal(launcher.arguments, wantArguments) {
-		t.Fatalf("launcher arguments = %#v", launcher.arguments)
+	if len(launcher.arguments) != len(wantArguments)+1 || !slices.Equal(launcher.arguments[:len(wantArguments)], wantArguments) {
+		t.Fatalf("launcher arguments differ from host-governed contract")
+	}
+	const healthPrefix = "--health.listen-addr="
+	if !strings.HasPrefix(launcher.arguments[len(wantArguments)], healthPrefix) {
+		t.Fatalf("native health flag not configured")
+	}
+	address := strings.TrimPrefix(launcher.arguments[len(wantArguments)], healthPrefix)
+	host, port, err := net.SplitHostPort(address)
+	if err != nil || host != "127.0.0.1" || port == "" || port == "0" {
+		t.Fatalf("native health address is not an OS-assigned loopback port: %q", address)
 	}
 	child, ok := process.(*childProcess)
 	if !ok {
