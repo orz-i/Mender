@@ -21,6 +21,7 @@ import type {
   ProviderPluginInstallation,
   ProviderPluginIssue,
   PluginCatalogueEntry,
+  IntegrationOffering,
   SkillDeployment,
   SkillInspection,
   SkillInstallation,
@@ -63,6 +64,7 @@ import {
   type ProviderPluginInstallation as BindingProviderPluginInstallation,
   type ProviderPluginIssue as BindingProviderPluginIssue,
   type PluginCatalogueEntry as BindingPluginCatalogueEntry,
+  type IntegrationOffering as BindingIntegrationOffering,
   type SkillDeployment as BindingSkillDeployment,
   type SkillInspection as BindingSkillInspection,
   type SkillInstallation as BindingSkillInstallation,
@@ -120,6 +122,10 @@ export function createDesktopMenderClient(): MenderClient {
     async listPluginCatalogue(){
       const catalogue=await Service.ListPluginCatalogue();
       return {plugins:(catalogue.plugins??[]).map(pluginCatalogueEntry)};
+    },
+    async listIntegrationOfferings(){
+      const result=await Service.ListIntegrationOfferings();
+      return {integrations:(result.integrations??[]).map(integrationOffering)};
     },
     async enablePluginInstallation(installationId){
       return {installation:providerPluginInstallation(await Service.EnablePluginInstallation(installationId))};
@@ -867,6 +873,21 @@ function policyResourceOperator(
   throw new MenderClientInvariantError("Unsupported desktop Policy resource operator: " + value);
 }
 
+function integrationOffering(value:BindingIntegrationOffering):IntegrationOffering {
+  if(value.kind!=="remote-mcp" || value.driverPluginId!=="io.mender.provider.mcp" ||
+    value.transport!=="streamable-http" || value.authentication!=="optional-bearer"){
+    throw new MenderClientInvariantError("Unsupported reviewed integration offering");
+  }
+  if(!value.endpoint.startsWith("https://") || !value.offeringId.startsWith("io.mender.integration.")){
+    throw new MenderClientInvariantError("Invalid integration offering endpoint or identity");
+  }
+  if(value.headers===null || Object.values(value.headers).some(header=>typeof header!=="string")){
+    throw new MenderClientInvariantError("Invalid integration offering headers");
+  }
+  return {...value,headers:Object.fromEntries(Object.entries(value.headers)) as Record<string,string>,
+    kind:"remote-mcp",driverPluginId:"io.mender.provider.mcp",
+    transport:"streamable-http",authentication:"optional-bearer"};
+}
 function agent(value:BindingAgent):Agent {
   if(value.backend!=="codex"&&value.backend!=="grok"){
     throw new MenderClientInvariantError("Unknown Agent Backend: "+value.backend);

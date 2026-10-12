@@ -17,6 +17,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SystemStatus'
+  /integrations:
+    get:
+      operationId: listIntegrationOfferings
+      responses:
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '200':
+          description: Reviewed, inert integration configuration offerings (not live connections)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [integrations]
+                properties:
+                  integrations: { type: array, items: { $ref: '#/components/schemas/IntegrationOffering' } }
   /plugins:
     get:
       operationId: listPluginCatalogue
@@ -1868,6 +1882,22 @@ components:
       properties:
         secret: { type: string, writeOnly: true }
       additionalProperties: false
+    IntegrationOffering:
+      type: object
+      required: [offeringId, displayName, description, kind, driverPluginId, transport, endpoint, headers, defaultNamespace, authentication, sourceUrl]
+      additionalProperties: false
+      properties:
+        offeringId: { type: string }
+        displayName: { type: string }
+        description: { type: string }
+        kind: { type: string, enum: [remote-mcp] }
+        driverPluginId: { type: string, enum: [io.mender.provider.mcp] }
+        transport: { type: string, enum: [streamable-http] }
+        endpoint: { type: string, format: uri }
+        headers: { type: object, additionalProperties: { type: string } }
+        defaultNamespace: { type: string }
+        authentication: { type: string, enum: [optional-bearer] }
+        sourceUrl: { type: string, format: uri }
     PluginCatalogueEntry:
       type: object
       required: [key, pluginId, extensionId, kind, displayName, description, packageVersion, sourceKind, status, enabled, capabilities, usageCount]

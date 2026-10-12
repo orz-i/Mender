@@ -281,6 +281,10 @@ export function ListDockerImages(): $CancellablePromise<$models.CachedDockerImag
     return $Call.ByID(3849820578);
 }
 
+export function ListIntegrationOfferings(): $CancellablePromise<$models.IntegrationOfferingList> {
+    return $Call.ByID(2626086329);
+}
+
 export function ListMCPServers(): $CancellablePromise<$models.MCPServerList> {
     return $Call.ByID(3824735736);
 }

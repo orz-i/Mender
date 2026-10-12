@@ -42,6 +42,7 @@ export type {
   ProviderPlugin,
   ProviderPluginIssue,
   PluginCatalogueEntry,
+  IntegrationOffering,
   CreateExternalSandboxRequest,
   CreateExternalTunnelRequest,
   ProviderPluginInstallation,

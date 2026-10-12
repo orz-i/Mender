@@ -33,6 +33,8 @@ export type {
     CredentialList,
     CredentialStatus,
     DockerBackendStatus,
+    IntegrationOffering,
+    IntegrationOfferingList,
     InvocationResult,
     MCPServerInstance,
     MCPServerList,

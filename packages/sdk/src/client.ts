@@ -3,6 +3,7 @@ import createClient from "openapi-fetch";
 import type { components, paths } from "./generated/schema";
 
 export type PluginCatalogueEntry=components["schemas"]["PluginCatalogueEntry"];
+export type IntegrationOffering=components["schemas"]["IntegrationOffering"];
 export type CreateExternalSandboxRequest=components["schemas"]["CreateExternalSandboxRequest"];
 export type CreateExternalTunnelRequest=components["schemas"]["CreateExternalTunnelRequest"];
 export type ProviderPlugin = components["schemas"]["ProviderPlugin"];
@@ -175,6 +176,7 @@ export interface MenderClient {
   ): Promise<Profile>;
   removeProfileTool(slug: string, toolId: string): Promise<Profile>;
   setProfileTunnel(slug: string, body: SetProfileTunnelRequest): Promise<Profile>;
+  listIntegrationOfferings(): Promise<{integrations:IntegrationOffering[]}>;
   listAgents(): Promise<{agents:Agent[]}>;
   getAgent(agentId:string): Promise<Agent>;
   getAgentTools(agentId:string): Promise<AgentTools>;
@@ -539,6 +541,7 @@ export function createMenderClient(
       return requireData(result);
     },
 
+    async listIntegrationOfferings(){return requireData(await client.GET("/integrations"));},
     async listAgents(){return requireData(await client.GET("/agents"));},
     async getAgent(agentId){return requireData(await client.GET("/agents/{agentId}",{params:{path:{agentId}}}));},
     async getAgentTools(agentId){return requireData(await client.GET("/agents/{agentId}/tools",{params:{path:{agentId}}}));},

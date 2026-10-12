@@ -20,6 +20,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/integrations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listIntegrationOfferings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/plugins": {
         parameters: {
             query?: never;
@@ -1514,6 +1530,27 @@ export interface components {
         RotateCredentialRequest: {
             secret: string;
         };
+        IntegrationOffering: {
+            offeringId: string;
+            displayName: string;
+            description: string;
+            /** @enum {string} */
+            kind: "remote-mcp";
+            /** @enum {string} */
+            driverPluginId: "io.mender.provider.mcp";
+            /** @enum {string} */
+            transport: "streamable-http";
+            /** Format: uri */
+            endpoint: string;
+            headers: {
+                [key: string]: string;
+            };
+            defaultNamespace: string;
+            /** @enum {string} */
+            authentication: "optional-bearer";
+            /** Format: uri */
+            sourceUrl: string;
+        };
         PluginCatalogueEntry: {
             key: string;
             pluginId: string;
@@ -2245,6 +2282,29 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SystemStatus"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    listIntegrationOfferings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Reviewed, inert integration configuration offerings (not live connections) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        integrations: components["schemas"]["IntegrationOffering"][];
+                    };
                 };
             };
             403: components["responses"]["Forbidden"];

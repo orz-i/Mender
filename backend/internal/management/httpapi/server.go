@@ -89,6 +89,7 @@ func (h *Handler) routes() {
 	h.mux.HandleFunc("GET /api/v1/skill-deployments", h.listSkillDeployments)
 	h.mux.HandleFunc("DELETE /api/v1/skill-deployments/{deploymentId}", h.undeploySkill)
 
+	h.mux.HandleFunc("GET /api/v1/integrations", h.listIntegrationOfferings)
 	h.mux.HandleFunc("GET /api/v1/providers", h.listProviders)
 	h.mux.HandleFunc("POST /api/v1/providers", h.createProvider)
 	h.mux.HandleFunc("POST /api/v1/providers/http", h.createHTTPProvider)

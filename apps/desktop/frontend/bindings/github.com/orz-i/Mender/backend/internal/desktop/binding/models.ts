@@ -204,6 +204,24 @@ export interface DockerBackendStatus {
     "dockerStatus": string;
 }
 
+export interface IntegrationOffering {
+    "offeringId": string;
+    "displayName": string;
+    "description": string;
+    "kind": string;
+    "driverPluginId": string;
+    "transport": string;
+    "endpoint": string;
+    "headers": { [_ in string]?: string } | null;
+    "defaultNamespace": string;
+    "authentication": string;
+    "sourceUrl": string;
+}
+
+export interface IntegrationOfferingList {
+    "integrations": IntegrationOffering[] | null;
+}
+
 export interface InvocationResult {
     "invocationId": string;
     "kind": string;
