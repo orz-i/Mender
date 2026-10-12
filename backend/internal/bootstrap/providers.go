@@ -880,6 +880,17 @@ func (r *Runtime) DeleteConfiguredProvider(
 	ctx context.Context,
 	providerID catalogdomain.ProviderID,
 ) error {
+	// Managed Agent facades cannot be torn down through Provider CRUD;
+	// otherwise CloseProvider would run before the persisted guard fails.
+	if r.agentStore != nil {
+		managed, err := r.agentStore.IsToolFacadeProvider(ctx, providerID.String())
+		if err != nil {
+			return err
+		}
+		if managed {
+			return fmt.Errorf("%w: Provider is owned by an Agent Tool Suite", ErrProviderInUse)
+		}
+	}
 	if err := r.ensureProviderUnused(ctx, providerID); err != nil {
 		return err
 	}

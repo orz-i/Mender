@@ -68,7 +68,7 @@ func (h *Handler) createAgent(w http.ResponseWriter, r *http.Request) {
 		h.agentError(w, err)
 		return
 	}
-	a, err := h.runtime.Agents.Create(r.Context(), req, caller)
+	a, err := h.runtime.CreateAgentWithTools(r.Context(), req, caller)
 	if err != nil {
 		h.agentError(w, err)
 		return
@@ -104,11 +104,49 @@ func (h *Handler) deleteAgent(w http.ResponseWriter, r *http.Request) {
 		h.agentError(w, err)
 		return
 	}
-	if err := h.runtime.Agents.Delete(r.Context(), id, caller); err != nil {
+	if err := h.runtime.DeleteAgentWithTools(r.Context(), id, caller); err != nil {
 		h.agentError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// Tool suite inspection is inert. Recovery is an explicit owner-only POST.
+func (h *Handler) getAgentTools(w http.ResponseWriter, r *http.Request) {
+	id, err := agentdomain.ParseID(r.PathValue("agentId"))
+	if err != nil {
+		h.agentError(w, err)
+		return
+	}
+	caller, err := h.agentOwnerContext()
+	if err != nil {
+		h.agentError(w, err)
+		return
+	}
+	tools, err := h.runtime.AgentTools(r.Context(), id, caller)
+	if err != nil {
+		h.agentError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, tools)
+}
+func (h *Handler) ensureAgentTools(w http.ResponseWriter, r *http.Request) {
+	id, err := agentdomain.ParseID(r.PathValue("agentId"))
+	if err != nil {
+		h.agentError(w, err)
+		return
+	}
+	caller, err := h.agentOwnerContext()
+	if err != nil {
+		h.agentError(w, err)
+		return
+	}
+	tools, err := h.runtime.EnsureAgentTools(r.Context(), id, caller)
+	if err != nil {
+		h.agentError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, tools)
 }
 func (h *Handler) listAgentTasks(w http.ResponseWriter, r *http.Request) {
 	id, err := agentdomain.ParseID(r.PathValue("agentId"))

@@ -736,6 +736,31 @@ paths:
         '204': { description: Unreferenced Agent removed }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
+  /agents/{agentId}/tools:
+    parameters:
+      - name: agentId
+        in: path
+        required: true
+        schema: { type: string, pattern: '^agent_[0-9a-f]{32}$' }
+    get:
+      operationId: getAgentTools
+      responses:
+        '200':
+          description: Read one Agent suite binding without activating a Provider or Agent
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentTools' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      operationId: ensureAgentTools
+      responses:
+        '200':
+          description: Explicitly create/adopt and synchronize one Agent delegation facade; never grants a Profile
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentTools' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
   /agents/{agentId}/tasks:
     get:
       operationId: listAgentTasks
@@ -2503,6 +2528,25 @@ components:
         createdAt: { type: string, format: date-time }
         backendAvailable: { type: boolean }
         issue: { type: string, description: No secret/account data }
+    AgentTool:
+      type: object
+      required: [toolId, sourceKey, name, title]
+      additionalProperties: false
+      properties:
+        toolId: { type: string }
+        sourceKey: { type: string }
+        name: { type: string }
+        title: { type: string }
+    AgentTools:
+      type: object
+      required: [suiteId, status, tools]
+      additionalProperties: false
+      properties:
+        suiteId: { type: string, enum: [agent.delegation] }
+        status: { type: string, enum: [missing, ready, incomplete, legacy, conflict] }
+        providerId: { type: string }
+        providerName: { type: string }
+        tools: { type: array, items: { $ref: '#/components/schemas/AgentTool' } }
     AgentTask:
       type: object
       required: [taskId, agentId, status, createdAt, updatedAt, cancelRequested]

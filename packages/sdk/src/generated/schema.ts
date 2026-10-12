@@ -568,6 +568,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/agents/{agentId}/tools": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        get: operations["getAgentTools"];
+        put?: never;
+        post: operations["ensureAgentTools"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/agents/{agentId}/tasks": {
         parameters: {
             query?: never;
@@ -1982,6 +2000,21 @@ export interface components {
             /** @description No secret/account data */
             issue?: string;
         };
+        AgentTool: {
+            toolId: string;
+            sourceKey: string;
+            name: string;
+            title: string;
+        };
+        AgentTools: {
+            /** @enum {string} */
+            suiteId: "agent.delegation";
+            /** @enum {string} */
+            status: "missing" | "ready" | "incomplete" | "legacy" | "conflict";
+            providerId?: string;
+            providerName?: string;
+            tools: components["schemas"]["AgentTool"][];
+        };
         AgentTask: {
             taskId: string;
             agentId: string;
@@ -3281,6 +3314,53 @@ export interface operations {
                 content?: never;
             };
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getAgentTools: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Read one Agent suite binding without activating a Provider or Agent */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentTools"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    ensureAgentTools: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Explicitly create/adopt and synchronize one Agent delegation facade; never grants a Profile */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentTools"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
             409: components["responses"]["Conflict"];
         };
     };

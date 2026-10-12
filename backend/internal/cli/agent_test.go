@@ -54,6 +54,14 @@ func TestAgentCLIResourceAndProfileGrantLifecycle(t *testing.T) {
 	if inspected["agent"].(map[string]any)["agentId"] != id {
 		t.Fatal("show Agent identity mismatch")
 	}
+	toolState := runAgentJSON(t, db, "agent", "tools", id)["suite"].(map[string]any)
+	if toolState["status"] != "ready" || len(toolState["tools"].([]any)) != 4 {
+		t.Fatalf("CLI Agent tools missing: %v", toolState)
+	}
+	prepared := runAgentJSON(t, db, "agent", "tools", id, "--prepare")["suite"].(map[string]any)
+	if prepared["providerId"] != toolState["providerId"] {
+		t.Fatalf("CLI repair replaced stable ProviderID: %v", prepared)
+	}
 	admissions := runAgentJSON(t, db, "agent", "admissions", id)
 	if len(admissions["events"].([]any)) != 0 {
 		t.Fatalf("unexpected admission events: %v", admissions)

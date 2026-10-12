@@ -16,6 +16,7 @@ func (a *app) newAgentCommand() *cobra.Command {
 	command.AddCommand(a.newAgentListCommand())
 	command.AddCommand(a.newAgentAddCommand())
 	command.AddCommand(a.newAgentShowCommand())
+	command.AddCommand(a.newAgentToolsCommand())
 	command.AddCommand(a.newAgentRemoveCommand())
 	command.AddCommand(a.newAgentTasksCommand())
 	command.AddCommand(a.newAgentAdmissionsCommand())
@@ -89,7 +90,7 @@ func (a *app) newAgentAddCommand() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				agent, err := runtime.Agents.Create(cmd.Context(), agentapplication.CreateRequest{
+				agent, err := runtime.CreateAgentWithTools(cmd.Context(), agentapplication.CreateRequest{
 					Name: name, Backend: agentdomain.Backend(backend), WorkspaceRoot: root, Isolation: isolation,
 				}, caller)
 				if err != nil {
@@ -126,6 +127,35 @@ func (a *app) newAgentShowCommand() *cobra.Command {
 		},
 	}
 }
+func (a *app) newAgentToolsCommand() *cobra.Command {
+	var prepare bool
+	command := &cobra.Command{Use: "tools <agent-id>", Short: "Inspect or explicitly repair an Agent-owned Tool suite",
+		Args: exactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+			id, err := agentdomain.ParseID(args[0])
+			if err != nil {
+				return usageError{err: err}
+			}
+			return a.withRuntime(cmd.Context(), func(runtime *bootstrap.Runtime) error {
+				caller, err := agentCLIContext(runtime)
+				if err != nil {
+					return err
+				}
+				var state bootstrap.AgentTools
+				if prepare {
+					state, err = runtime.EnsureAgentTools(cmd.Context(), id, caller)
+				} else {
+					state, err = runtime.AgentTools(cmd.Context(), id, caller)
+				}
+				if err != nil {
+					return err
+				}
+				return a.writeValue(fmt.Sprintf("Agent tools: %s (%d Tools)", state.Status, len(state.Tools)), map[string]any{"suite": state})
+			})
+		},
+	}
+	command.Flags().BoolVar(&prepare, "prepare", false, "owner-authorized create/adopt and sync; does not grant Profile access")
+	return command
+}
 func (a *app) newAgentRemoveCommand() *cobra.Command {
 	var confirm bool
 	command := &cobra.Command{Use: "remove <agent-id>", Short: "Delete only an Agent with no task or Provider references",
@@ -142,7 +172,7 @@ func (a *app) newAgentRemoveCommand() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				if err := runtime.Agents.Delete(cmd.Context(), id, caller); err != nil {
+				if err := runtime.DeleteAgentWithTools(cmd.Context(), id, caller); err != nil {
 					return err
 				}
 				return a.writeValue(fmt.Sprintf("removed Agent %s", id), map[string]string{"agentId": string(id)})

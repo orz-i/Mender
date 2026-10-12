@@ -58,6 +58,21 @@ export interface AgentTaskList {
     "tasks": AgentTask[] | null;
 }
 
+export interface AgentTool {
+    "toolId": string;
+    "sourceKey": string;
+    "name": string;
+    "title": string;
+}
+
+export interface AgentTools {
+    "suiteId": string;
+    "status": string;
+    "providerId"?: string;
+    "providerName"?: string;
+    "tools": AgentTool[] | null;
+}
+
 export interface AuditList {
     "records": AuditRecord[] | null;
 }

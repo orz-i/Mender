@@ -15,6 +15,8 @@ export type {
     AgentProfileGrants,
     AgentTask,
     AgentTaskList,
+    AgentTool,
+    AgentTools,
     AuditList,
     AuditRecord,
     CachedDockerImage,

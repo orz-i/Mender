@@ -48,6 +48,25 @@ func TestAgentHTTPManagementAndGrantLifecycle(t *testing.T) {
 	if get["agentId"] != id {
 		t.Fatal("get Agent mismatch", get)
 	}
+	toolPath := api + "/agents/" + id + "/tools"
+	firstTools := requestJSON(t, server.Client(), http.MethodGet, toolPath, nil, http.StatusOK)
+	if firstTools["status"] != "ready" || firstTools["suiteId"] != "agent.delegation" ||
+		len(firstTools["tools"].([]any)) != 4 || firstTools["providerName"] != "Code Reviewer" {
+		t.Fatalf("new Agent should have its own tools without grants: %v", firstTools)
+	}
+	secondTools := requestJSON(t, server.Client(), http.MethodPost, toolPath, nil, http.StatusOK)
+	if secondTools["providerId"] != firstTools["providerId"] {
+		t.Fatalf("explicit ensure re-created facade: %v %v", firstTools, secondTools)
+	}
+	for index, value := range firstTools["tools"].([]any) {
+		if value.(map[string]any)["toolId"] != secondTools["tools"].([]any)[index].(map[string]any)["toolId"] {
+			t.Fatal("tool identity changed during explicit ensure")
+		}
+	}
+	grantsBefore := requestJSON(t, server.Client(), http.MethodGet, api+"/agents/"+id+"/profile-grants", nil, http.StatusOK)
+	if len(grantsBefore["profileIds"].([]any)) != 0 {
+		t.Fatal("tool setup granted Profile permissions")
+	}
 	profile := requestJSON(t, server.Client(), http.MethodPost, api+"/profiles", map[string]any{
 		"slug": "agent-grant-fixture", "displayName": "Agent fixture", "mode": "dynamic",
 	}, http.StatusCreated)

@@ -20,6 +20,7 @@ export type InvocationResult = components["schemas"]["InvocationResult"];
 export type Profile = components["schemas"]["Profile"];
 export type Tunnel = components["schemas"]["Tunnel"];
 export type Agent = components["schemas"]["Agent"];
+export type AgentTools = components["schemas"]["AgentTools"];
 export type AgentTask = components["schemas"]["AgentTask"];
 export type AgentAdmissionEvent = components["schemas"]["AgentAdmissionEvent"];
 export type AgentGrants = components["schemas"]["AgentGrants"];
@@ -176,6 +177,8 @@ export interface MenderClient {
   setProfileTunnel(slug: string, body: SetProfileTunnelRequest): Promise<Profile>;
   listAgents(): Promise<{agents:Agent[]}>;
   getAgent(agentId:string): Promise<Agent>;
+  getAgentTools(agentId:string): Promise<AgentTools>;
+  ensureAgentTools(agentId:string): Promise<AgentTools>;
   createAgent(body:CreateAgentRequest): Promise<Agent>;
   deleteAgent(agentId:string): Promise<void>;
   listAgentTasks(agentId:string): Promise<{tasks:AgentTask[]}>;
@@ -538,6 +541,8 @@ export function createMenderClient(
 
     async listAgents(){return requireData(await client.GET("/agents"));},
     async getAgent(agentId){return requireData(await client.GET("/agents/{agentId}",{params:{path:{agentId}}}));},
+    async getAgentTools(agentId){return requireData(await client.GET("/agents/{agentId}/tools",{params:{path:{agentId}}}));},
+    async ensureAgentTools(agentId){return requireData(await client.POST("/agents/{agentId}/tools",{params:{path:{agentId}}}));},
     async createAgent(body){return requireData(await client.POST("/agents",{body}));},
     async deleteAgent(agentId){
       const result=await client.DELETE("/agents/{agentId}",{params:{path:{agentId}}});

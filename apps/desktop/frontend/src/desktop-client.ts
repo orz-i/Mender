@@ -31,6 +31,7 @@ import type {
   Tunnel,
   Sandbox,
   Agent,
+  AgentTools,
   AgentTask,
   AgentAdmissionEvent,
   SandboxActivity,
@@ -73,6 +74,7 @@ import {
   type ToolSummary as BindingToolSummary,
   type Tunnel as BindingTunnel,
   type Agent as BindingAgent,
+  type AgentTools as BindingAgentTools,
   type AgentTask as BindingAgentTask,
   type AgentAdmissionEvent as BindingAgentAdmissionEvent,
   type Sandbox as BindingSandbox,
@@ -402,6 +404,8 @@ export function createDesktopMenderClient(): MenderClient {
       return {agents:(result.agents??[]).map(agent)};
     },
     async getAgent(agentId){return agent(await Service.GetAgent(agentId));},
+    async getAgentTools(agentId){return agentTools(await Service.GetAgentTools(agentId));},
+    async ensureAgentTools(agentId){return agentTools(await Service.EnsureAgentTools(agentId));},
     async createAgent(body){return agent(await Service.CreateAgent({
       name:body.name,backend:body.backend,workspaceRoot:body.workspaceRoot,
       isolation:body.isolation??"restricted_host",
@@ -871,6 +875,21 @@ function agent(value:BindingAgent):Agent {
     throw new MenderClientInvariantError("Unknown Agent isolation: "+value.isolation);
   }
   return {...value,backend:value.backend,isolation:value.isolation};
+}
+function agentTools(value:BindingAgentTools):AgentTools {
+  if(value.suiteId!=="agent.delegation") {
+    throw new MenderClientInvariantError("Unknown Agent tool suite: "+value.suiteId);
+  }
+  if(value.status!=="missing"&&value.status!=="ready"&&value.status!=="incomplete"&&
+    value.status!=="legacy"&&value.status!=="conflict"){
+    throw new MenderClientInvariantError("Unknown Agent tools state: "+value.status);
+  }
+  return {
+    ...value,
+    suiteId:"agent.delegation",
+    status:value.status,
+    tools:(value.tools??[]).map(item=>({toolId:item.toolId,sourceKey:item.sourceKey,name:item.name,title:item.title})),
+  };
 }
 function agentAdmissionEvent(value:BindingAgentAdmissionEvent):AgentAdmissionEvent{
   if(value.action!=="agent.activate" && value.action!=="agent.task.submit" && value.action!=="agent.task.cancel"){

@@ -52,6 +52,7 @@ export type {
   RuntimeGovernanceStatus,
   RuntimeIsolation,
   Agent,
+  AgentTools,
   AgentTask,
   AgentAdmissionEvent,
   AgentGrants,

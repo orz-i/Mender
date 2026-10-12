@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-const latestSchemaVersion = 3
+const latestSchemaVersion = 4
 
 // migrate owns Agent state exclusively, and never changes the existing
 // Providers/Sandboxes/Tunnels/Plugin inventory.
@@ -149,6 +149,42 @@ func migrate(ctx context.Context, db *sql.DB) error {
 			)
 			BEGIN SELECT RAISE(ABORT,'Agent is referenced by a Provider'); END`); err != nil {
 			return fmt.Errorf("agent Provider binding guard: %w", err)
+		}
+	}
+	if !version.Valid || version.Int64 < 4 {
+		// Managed suite bindings are host-owned. Existing manual Providers are
+		// not adopted on startup: only an explicit owner mutation can claim one.
+		for _, statement := range []string{
+			`CREATE TABLE agent_tool_facades (
+				agent_id TEXT PRIMARY KEY REFERENCES agents(agent_id) ON DELETE RESTRICT,
+				provider_id TEXT NOT NULL UNIQUE REFERENCES providers(id) ON DELETE RESTRICT,
+				suite_id TEXT NOT NULL CHECK(suite_id='agent.delegation'),
+				created_at TEXT NOT NULL
+			)`,
+		} {
+			if _, err = tx.ExecContext(ctx, statement); err != nil {
+				return fmt.Errorf("agent v4 tool facades: %w", err)
+			}
+		}
+		if _, err = tx.ExecContext(ctx, `INSERT INTO agent_schema_migrations VALUES(?,?)`,
+			4, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
+			return err
+		}
+	}
+	// Standalone Agent stores may not yet have a Provider catalogue. The
+	// guards are installed whenever the Runtime composes both domains.
+	if providerConfigs > 0 {
+		for _, statement := range []string{
+			`CREATE TRIGGER IF NOT EXISTS agent_facade_provider_config_delete_guard BEFORE DELETE ON provider_configs
+				WHEN EXISTS(SELECT 1 FROM agent_tool_facades f WHERE f.provider_id=OLD.provider_id)
+				BEGIN SELECT RAISE(ABORT,'managed Agent facade must be detached by owner'); END`,
+			`CREATE TRIGGER IF NOT EXISTS agent_facade_provider_config_update_guard BEFORE UPDATE OF plugin_id, config_json, plugin_installation_id ON provider_configs
+				WHEN EXISTS(SELECT 1 FROM agent_tool_facades f WHERE f.provider_id=OLD.provider_id)
+				BEGIN SELECT RAISE(ABORT,'managed Agent facade config is immutable'); END`,
+		} {
+			if _, err = tx.ExecContext(ctx, statement); err != nil {
+				return fmt.Errorf("agent tool facade guards: %w", err)
+			}
 		}
 	}
 	return tx.Commit()

@@ -115,6 +115,8 @@ func (h *Handler) routes() {
 	h.mux.HandleFunc("POST /api/v1/agents", h.createAgent)
 	h.mux.HandleFunc("GET /api/v1/agents/{agentId}", h.getAgent)
 	h.mux.HandleFunc("DELETE /api/v1/agents/{agentId}", h.deleteAgent)
+	h.mux.HandleFunc("GET /api/v1/agents/{agentId}/tools", h.getAgentTools)
+	h.mux.HandleFunc("POST /api/v1/agents/{agentId}/tools", h.ensureAgentTools)
 	h.mux.HandleFunc("GET /api/v1/agents/{agentId}/tasks", h.listAgentTasks)
 	h.mux.HandleFunc("GET /api/v1/agents/{agentId}/admissions", h.listAgentAdmissions)
 	h.mux.HandleFunc("GET /api/v1/agents/{agentId}/profile-grants", h.listAgentGrants)

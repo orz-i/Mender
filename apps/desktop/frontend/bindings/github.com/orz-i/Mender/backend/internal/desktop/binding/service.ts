@@ -156,12 +156,20 @@ export function EnableSkillInstallation(installationID: string): $CancellablePro
     return $Call.ByID(1714532984, installationID);
 }
 
+export function EnsureAgentTools(id: string): $CancellablePromise<$models.AgentTools> {
+    return $Call.ByID(2907355678, id);
+}
+
 export function GetAgent(id: string): $CancellablePromise<$models.Agent> {
     return $Call.ByID(425014641, id);
 }
 
 export function GetAgentTask(id: string): $CancellablePromise<$models.AgentTask> {
     return $Call.ByID(1156608320, id);
+}
+
+export function GetAgentTools(id: string): $CancellablePromise<$models.AgentTools> {
+    return $Call.ByID(659256448, id);
 }
 
 export function GetCredential($namespace: string, name: string): $CancellablePromise<$models.Credential> {

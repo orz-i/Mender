@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/orz-i/Mender/backend/internal/bootstrap"
+
 	agentapplication "github.com/orz-i/Mender/backend/internal/agent/application"
 	agentdomain "github.com/orz-i/Mender/backend/internal/agent/domain"
 	gov "github.com/orz-i/Mender/backend/internal/governance/domain"
@@ -23,6 +25,19 @@ type Agent struct {
 }
 type AgentList struct {
 	Agents []Agent `json:"agents"`
+}
+type AgentTool struct {
+	ToolID    string `json:"toolId"`
+	SourceKey string `json:"sourceKey"`
+	Name      string `json:"name"`
+	Title     string `json:"title"`
+}
+type AgentTools struct {
+	SuiteID      string      `json:"suiteId"`
+	Status       string      `json:"status"`
+	ProviderID   string      `json:"providerId,omitempty"`
+	ProviderName string      `json:"providerName,omitempty"`
+	Tools        []AgentTool `json:"tools"`
 }
 type AgentTask struct {
 	TaskID          string `json:"taskId"`
@@ -125,7 +140,7 @@ func (s *Service) CreateAgent(input CreateAgentInput) (Agent, error) {
 	if err != nil {
 		return Agent{}, err
 	}
-	a, err := s.runtime.Agents.Create(s.ctx, agentapplication.CreateRequest{
+	a, err := s.runtime.CreateAgentWithTools(s.ctx, agentapplication.CreateRequest{
 		Name: input.Name, Backend: agentdomain.Backend(input.Backend), WorkspaceRoot: input.WorkspaceRoot, Isolation: input.Isolation,
 	}, caller)
 	if err != nil {
@@ -133,6 +148,40 @@ func (s *Service) CreateAgent(input CreateAgentInput) (Agent, error) {
 	}
 	return s.projectAgent(a), nil
 }
+func projectAgentTools(value bootstrap.AgentTools) AgentTools {
+	out := AgentTools{
+		SuiteID: value.SuiteID, Status: value.Status, ProviderID: value.ProviderID,
+		ProviderName: value.ProviderName, Tools: make([]AgentTool, 0, len(value.Tools)),
+	}
+	for _, tool := range value.Tools {
+		out.Tools = append(out.Tools, AgentTool{
+			ToolID: tool.ToolID, SourceKey: tool.SourceKey, Name: tool.Name, Title: tool.Title,
+		})
+	}
+	return out
+}
+func (s *Service) agentTools(id string, ensure bool) (AgentTools, error) {
+	caller, err := s.agentOwnerContext()
+	if err != nil {
+		return AgentTools{}, err
+	}
+	parsed, err := agentdomain.ParseID(id)
+	if err != nil {
+		return AgentTools{}, err
+	}
+	var value bootstrap.AgentTools
+	if ensure {
+		value, err = s.runtime.EnsureAgentTools(s.ctx, parsed, caller)
+	} else {
+		value, err = s.runtime.AgentTools(s.ctx, parsed, caller)
+	}
+	if err != nil {
+		return AgentTools{}, err
+	}
+	return projectAgentTools(value), nil
+}
+func (s *Service) GetAgentTools(id string) (AgentTools, error)    { return s.agentTools(id, false) }
+func (s *Service) EnsureAgentTools(id string) (AgentTools, error) { return s.agentTools(id, true) }
 func (s *Service) DeleteAgent(id string) error {
 	caller, err := s.agentOwnerContext()
 	if err != nil {
@@ -142,7 +191,7 @@ func (s *Service) DeleteAgent(id string) error {
 	if err != nil {
 		return err
 	}
-	return s.runtime.Agents.Delete(s.ctx, parsed, caller)
+	return s.runtime.DeleteAgentWithTools(s.ctx, parsed, caller)
 }
 func (s *Service) ListAgentTasks(id string) (AgentTaskList, error) {
 	caller, err := s.agentOwnerContext()
