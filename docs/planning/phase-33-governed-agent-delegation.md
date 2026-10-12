@@ -1,6 +1,6 @@
 # Phase 33 — Governed Agent CLI Delegation
 
-Status: **In progress (2026-10-11)**. Architecture: [ADR-0038](../architecture/adr/0038-governed-agent-delegation.md).
+Status: **Phase 33 core implementation closed; synthetic ACP/MCP acceptance verified** (2026-10-11). Architecture: [ADR-0038](../architecture/adr/0038-governed-agent-delegation.md). Operator guide: [Agent CLI Delegation](../development/agent-delegation.md).
 
 ## Intent Contract
 
@@ -49,6 +49,15 @@ A→B→C→D are bounded packages with commits at each completed, tested bounda
 ### Stage log
 
 - **A:** `10bc3b7` ADR/contract committed before implementation.
-- **B:** Core persistence and stdio runner committed as `9d8fda7`; local launcher, Resource/Policy integration and task service are in progress. Full stage-B exit gates remain open.
-- **C:** Not started.
-- **D:** Not started.
+- **B:** `9d8fda7`, `feba53a`, `937484b` establish typed Backend inventory, Agent/Task domain, explicit local ACP v1 launcher, durable Tasks and task budgets, fail-closed Profile Grants, generation-fenced recovery and immutable, minimized admission/grant events. Fixture tests exercise success, unapproved permission requests, unknown client requests, invalid/oversized frames, cancellation, timeout and shutdown semantics. ACP request-permission termination/process-group cleanup is included in the final focused gate.
+- **C:** `3b4d358` and `937484b` expose one pinned Agent through the normal Catalog/Invocation/Policy pipeline, including Profile ToolBindings, Principal Scope, explicit AgentGrant and owner-only task access. Test fixture covers missing/revoked grants, cross-Profile TaskID isolation, Policy denial and Audit. A **real MCP SDK client session** additionally confirms `tools/list` → `tools/call` → TaskID → result polling and revocation using a synthetic executor (`381e4de`).
+- **D:** `fd52e5c`, `123ce99` and `8b13530` implement OpenAPI, TypeScript SDK, Wails/Desktop bindings, Go CLI, localized Agents page, focused Add/Detail/Tasks/Access/Activity, Marketplace Agent type routing, and bound Delegation Provider creation. `381e4de` closes unauthorized ACP client requests and exercises the Profile through an actual MCP client session. The automated suite includes CLI CRUD/grant/audit, HTTP owner management, Wails generation, i18n and React UI tests. CLI discovery checks file existence **without executing version/login/model**; actual CLI protocol/version/auth checks and packaged GUI screenshots need a separate explicit operator test and must not be described as passed.
+
+## Closure evidence and remaining operator verification
+
+- **Automated gate:** `pnpm check` exited **0** on the Phase 33 worktree. Provider/Sandbox/Tunnel SDK and protocol generation, Go module isolation, SDK generation, Wails binding regeneration, desktop architecture, Go lint, all Go tests and race tests, ESLint, TypeScript, i18n, Vitest, Web and desktop frontend builds passed.
+- **Protocol evidence:** `TestAgentDelegationThroughMCPClientSession` verifies an actual in-memory MCP SDK client/server exchange with Tool discovery, denied ungranted call, successful delegated fixture TaskID, result polling, and rejection after ProfileGrant revocation. `TestACPFailClosedOnClientPermissionAndFilesystemRequests` ensures unsolicited approval/client filesystem requests do not produce successful Task outcomes. No real CLI prompt, account or external API was accessed.
+- **Recovery and accounting:** deterministic fixtures cover policy-denied zero side effects, cross-Profile TaskID isolation, bounded input/output, atomic global/Principal/Agent concurrent Task admission, cancelled versus unknown outcomes, restart fencing, Agent reference safety and immutable data-minimized Audit.
+- **Operator-only follow-up:** Codex CLI requires a separately installed `codex-acp` adapter; Grok's built-in adapter plans native `grok agent stdio`. Actual credentials, runtime sandbox compatibility, paid model access, version handshake against live installed CLIs, and packaged desktop screenshot smoke are **not verified** in Phase 33. They must not be inferred from passive binary detection or fixture success. No automatic installation or model charges occurred.
+
+**Explicitly not claimed:** an independent Mender Agent planning loop, persistent/recoverable ACP conversations, native approval continuation, full MCP Tasks extension advertisement, A2A, recursively exposed Mender tools, or Agent process placement on Docker/SSH. These require separate design and admission gates, not an unbounded Phase 33 follow-up.
