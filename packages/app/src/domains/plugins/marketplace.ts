@@ -1,6 +1,7 @@
 import type {
   MenderClient,
   IntegrationOffering,
+  ToolSuiteDefinition,
   PluginCatalogueEntry,
   ProviderPluginInstallation,
 } from "@mender/sdk";
@@ -160,12 +161,41 @@ export function integrationOfferingsToMarketplace(offerings:IntegrationOffering[
   });
 }
 
+export function toolSuitesToMarketplace(suites:ToolSuiteDefinition[]):MarketplacePlugin[]{
+  return suites.map((entry):MarketplacePlugin=>{
+    if(!["agent.delegation","sandbox.workspace","sandbox.browser"].includes(entry.suiteId) ||
+      !["agent","sandbox"].includes(entry.resourceKind) ||
+      !["builtin","unavailable"].includes(entry.status) ||
+      (entry.status==="unavailable" && entry.toolSourceKeys.length!==0)){
+      throw new Error("Unsupported reviewed Tool Suite definition");
+    }
+    return {
+      key:"suite:"+entry.suiteId,kind:"suite",kindLabel:"Tool Suite",
+      displayName:entry.displayName,description:entry.description,
+      source:"builtin",sourceLabel:"Built-in",
+      version:"Reviewed suite",status:entry.status==="builtin"?"available":"unavailable",
+      enabled:false,capabilities:entry.requiredCapabilities,
+      actions:noMarketplaceActions(),
+      technicalDetails:[
+        {label:"Suite ID",value:entry.suiteId,mono:true},
+        {label:"Target resource",value:entry.resourceKind},
+        {label:"Required capabilities",value:entry.requiredCapabilities.join(", ")},
+        {label:"Declared tools",value:entry.toolSourceKeys.join(", ")||"Not executable"},
+      ],
+      ...(entry.issue?{issue:{code:"suite_unavailable",message:entry.issue}}:{}),
+      // The Tools view of a specific authorized resource owns the Bind action;
+      // a catalogue cannot choose a SandboxID from model-controlled inputs.
+    };
+  });
+}
+
 export async function loadMarketplacePlugins(client:MenderClient){
-  const [catalogue,integrations]=await Promise.all([
-    client.listPluginCatalogue(),client.listIntegrationOfferings(),
+  const [catalogue,integrations,suites]=await Promise.all([
+    client.listPluginCatalogue(),client.listIntegrationOfferings(),client.listToolSuites(),
   ]);
   return [...pluginCatalogueToMarketplace(catalogue.plugins),
-    ...integrationOfferingsToMarketplace(integrations.integrations)]
+    ...integrationOfferingsToMarketplace(integrations.integrations),
+    ...toolSuitesToMarketplace(suites.suites)]
     .toSorted(compareMarketplacePlugins);
 }
 

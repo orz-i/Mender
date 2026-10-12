@@ -2666,6 +2666,7 @@ function renderApp(
   });
   const resolvedClient = {
     listIntegrationOfferings:vi.fn().mockResolvedValue({integrations:[]}),
+    listToolSuites:vi.fn().mockResolvedValue({suites:[]}),
     listPluginCatalogue:vi.fn().mockResolvedValue({plugins:[
       builtinPlugin("io.mender.provider.mcp","MCP"),
       builtinPlugin("io.mender.provider.model-tools","Model Tools"),

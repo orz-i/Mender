@@ -76,6 +76,9 @@ const MODEL_TOOLS_PLUGIN_ID = "io.mender.provider.model-tools";
 const OPENAPI_PLUGIN_ID = "io.mender.provider.openapi";
 const WORKSPACE_PLUGIN_ID = "io.mender.provider.workspace";
 const AGENT_DELEGATION_PLUGIN_ID = "io.mender.provider.agent-delegation";
+function isInternalProvider(pluginId:string|undefined){
+  return pluginId===AGENT_DELEGATION_PLUGIN_ID || pluginId===WORKSPACE_PLUGIN_ID;
+}
 
 type ProviderTransport = "http" | "stdio";
 type ModelToolsEngine = "openai" | "anthropic" | "gemini";
@@ -452,7 +455,7 @@ export function ProvidersPage({
 
   const visibleProviders = useMemo(() => {
     const needle = inventoryQuery.trim().toLocaleLowerCase();
-    const normal = showInternal ? providers : providers.filter(provider => provider.pluginId !== AGENT_DELEGATION_PLUGIN_ID);
+    const normal = showInternal ? providers : providers.filter(provider => !isInternalProvider(provider.pluginId));
     return needle ? normal.filter((provider) =>
       [provider.displayName, provider.namespace, provider.pluginId ?? ""]
         .some((value) => value.toLocaleLowerCase().includes(needle))
@@ -748,7 +751,7 @@ export function ProvidersPage({
       <PageToolbar
         tabs={
           <span className="text-xs text-muted-foreground">
-            {tCount(showInternal ? providers.length : providers.filter(p=>p.pluginId!==AGENT_DELEGATION_PLUGIN_ID).length, "{{count}} configured source", "{{count}} configured sources")}
+            {tCount(showInternal ? providers.length : providers.filter(p=>!isInternalProvider(p.pluginId)).length, "{{count}} configured source", "{{count}} configured sources")}
           </span>
         }
         filters={
@@ -959,7 +962,7 @@ export function ProvidersPage({
 
       <ProviderPluginPickerDialog
         open={pluginPickerOpen}
-        plugins={showInternal ? providerPlugins : providerPlugins.filter(plugin => plugin.pluginId !== AGENT_DELEGATION_PLUGIN_ID)}
+        plugins={showInternal ? providerPlugins : providerPlugins.filter(plugin => !isInternalProvider(plugin.pluginId))}
         onOpenChange={setPluginPickerOpen}
         onSelect={chooseCreatePlugin}
       />

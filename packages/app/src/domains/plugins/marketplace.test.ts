@@ -1,10 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
-import type { IntegrationOffering, MenderClient, PluginCatalogueEntry } from "@mender/sdk";
+import type { IntegrationOffering, MenderClient, PluginCatalogueEntry, ToolSuiteDefinition } from "@mender/sdk";
 import {
   humanizePluginId,
   marketplaceCursorPage,
   pluginCatalogueToMarketplace,
   integrationOfferingsToMarketplace,
+  toolSuitesToMarketplace,
   loadMarketplacePlugins,
   removeMarketplacePlugin,
   setMarketplacePluginEnabled,
@@ -34,6 +35,21 @@ const anySearch:IntegrationOffering={
     authentication:"optional-bearer" as const,sourceUrl:"https://github.com/anysearch-ai/anysearch-mcp-server",
   };
 describe("canonical typed Marketplace",()=>{
+  it("keeps Browser Suite explicitly unavailable with no executable Tools or Add action",()=>{
+    const browser:ToolSuiteDefinition={
+      suiteId:"sandbox.browser",displayName:"Browser Tools",
+      description:"Browser-specific navigation",
+      resourceKind:"sandbox",requiredCapabilities:["browser.session"],
+      toolSourceKeys:[],status:"unavailable",
+      issue:"No verified managed Browser Session backend",
+    };
+    const item=toolSuitesToMarketplace([browser])[0]!;
+    expect(item).toMatchObject({kind:"suite",status:"unavailable",enabled:false,
+      actions:{enable:false,disable:false,remove:false}});
+    expect(item.createAction).toBeUndefined();
+    expect(item.capabilities).toEqual(["browser.session"]);
+    expect(item.issue?.code).toBe("suite_unavailable");
+  });
   it("offers AnySearch as a connection recipe, not an executable Provider installation",()=>{
     const result=integrationOfferingsToMarketplace([anySearch]);
     expect(result).toHaveLength(1);
@@ -197,14 +213,16 @@ describe("canonical typed Marketplace",()=>{
   it("loads exactly one canonical catalogue and dispatches generic installation actions",async()=>{
     const listPluginCatalogue=vi.fn().mockResolvedValue({plugins:[entry("sandbox.backend")]});
     const listIntegrationOfferings=vi.fn().mockResolvedValue({integrations:[anySearch]});
+    const listToolSuites=vi.fn().mockResolvedValue({suites:[]});
     const disablePluginInstallation=vi.fn().mockResolvedValue({});
     const deletePluginInstallation=vi.fn().mockResolvedValue(undefined);
     const client={
-      listPluginCatalogue,listIntegrationOfferings,disablePluginInstallation,deletePluginInstallation,
+      listPluginCatalogue,listIntegrationOfferings,listToolSuites,disablePluginInstallation,deletePluginInstallation,
     } as unknown as MenderClient;
     const result=await loadMarketplacePlugins(client);
     expect(listPluginCatalogue).toHaveBeenCalledTimes(1);
     expect(listIntegrationOfferings).toHaveBeenCalledTimes(1);
+    expect(listToolSuites).toHaveBeenCalledTimes(1);
     expect(result).toHaveLength(2);
     const sandbox=result.find(item=>item.kind==="sandbox")!;
     await setMarketplacePluginEnabled(client,sandbox,false);

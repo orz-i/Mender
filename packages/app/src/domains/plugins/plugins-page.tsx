@@ -714,6 +714,7 @@ function DetailField({
 
 function pluginKindLabel(plugin:MarketplacePlugin){
   switch(plugin.kind){
+    case "suite":return t("Tool Suite");
     case "integration":return t("Remote MCP integration");
     case "provider":return t("Provider plugin");
     case "sandbox":return t("Sandbox backend");
@@ -760,7 +761,8 @@ function pluginStatusLabel(plugin: MarketplacePlugin) {
 
 function pluginVersionLabel(plugin: MarketplacePlugin) {
   return plugin.version === "Not released" ? t("Not released") :
-    plugin.version === "Reviewed preset" ? t("Reviewed preset") : plugin.version;
+    plugin.version === "Reviewed preset" ? t("Reviewed preset") :
+    plugin.version === "Reviewed suite" ? t("Reviewed suite") : plugin.version;
 }
 
 function pluginDescription(plugin: MarketplacePlugin) {

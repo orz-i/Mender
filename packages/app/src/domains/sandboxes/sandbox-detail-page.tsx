@@ -23,8 +23,9 @@ import { DataPanel } from "../../shared/workbench";
 import { isolationLabel, sandboxBackend, sandboxStateLabel } from "./sandbox-display";
 import { SandboxMetadata } from "./sandbox-metadata";
 import { SandboxAccessPanel } from "./sandbox-access-panel";
+import { SandboxToolsPanel } from "./sandbox-tools-panel";
 
-type DetailTopic = "overview" | "security" | "access";
+type DetailTopic = "overview" | "security" | "access" | "tools";
 type LifecycleAction = "start" | "stop" | "destroy";
 
 export function SandboxDetailPage({ client }: { client: MenderClient }) {
@@ -139,6 +140,7 @@ export function SandboxDetailPage({ client }: { client: MenderClient }) {
               { value: "overview", label: "Sandbox overview" },
               { value: "security", label: "Security boundary" },
               { value: "access", label: "Profile access" },
+              { value: "tools", label: "Tools" },
             ]}
           />
         ) : undefined}
@@ -196,6 +198,8 @@ export function SandboxDetailPage({ client }: { client: MenderClient }) {
               </DataPanel>
             ) : topic === "access" ? (
               <SandboxAccessPanel key={item.sandboxId} client={client} sandbox={item} />
+            ) : topic === "tools" ? (
+              <SandboxToolsPanel key={item.sandboxId} client={client} sandbox={item}/>
             ) : (
               <DataPanel title="Security boundary" description="Isolation depends on the actual backend, not the Sandbox name.">
                 <div className="flex flex-col gap-4 p-5">
