@@ -584,6 +584,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/agents/{agentId}/admissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listAgentAdmissions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/agents/{agentId}/profile-grants": {
         parameters: {
             query?: never;
@@ -1979,6 +1995,24 @@ export interface components {
             result?: string;
             diagnostic?: string;
         };
+        AgentAdmissionEvent: {
+            agentId: string;
+            /** @enum {string} */
+            action: "agent.activate" | "agent.task.submit" | "agent.task.cancel";
+            /** @enum {string} */
+            principalKind: "local_user" | "service";
+            /** @enum {string} */
+            origin: "cli" | "mcp" | "management_http" | "desktop" | "internal";
+            /** @enum {string} */
+            scopeKind: "catalog" | "profile";
+            /** @enum {string} */
+            policyKind: "allow" | "deny" | "require_approval" | "failed";
+            policyReason: string;
+            /** @enum {string} */
+            status: "admitted" | "denied" | "failed";
+            /** Format: date-time */
+            occurredAt: string;
+        };
         AgentGrants: {
             profileIds: string[];
         };
@@ -3272,6 +3306,32 @@ export interface operations {
                     };
                 };
             };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listAgentAdmissions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owner-visible bounded Agent Policy admission history */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        events: components["schemas"]["AgentAdmissionEvent"][];
+                    };
+                };
+            };
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
         };
     };

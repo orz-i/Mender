@@ -245,6 +245,10 @@ export function InstallSkill(sourcePath: string): $CancellablePromise<$models.Sk
     return $Call.ByID(3234224228, sourcePath);
 }
 
+export function ListAgentAdmissions(id: string): $CancellablePromise<$models.AgentAdmissionList> {
+    return $Call.ByID(184228319, id);
+}
+
 export function ListAgentGrants(id: string): $CancellablePromise<$models.AgentProfileGrants> {
     return $Call.ByID(449330666, id);
 }

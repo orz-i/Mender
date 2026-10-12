@@ -37,6 +37,21 @@ type AgentTask struct {
 type AgentTaskList struct {
 	Tasks []AgentTask `json:"tasks"`
 }
+type AgentAdmissionEvent struct {
+	AgentID       string `json:"agentId"`
+	Action        string `json:"action"`
+	PrincipalKind string `json:"principalKind"`
+	Origin        string `json:"origin"`
+	ScopeKind     string `json:"scopeKind"`
+	PolicyKind    string `json:"policyKind"`
+	PolicyReason  string `json:"policyReason"`
+	Status        string `json:"status"`
+	OccurredAt    string `json:"occurredAt"`
+}
+type AgentAdmissionList struct {
+	Events []AgentAdmissionEvent `json:"events"`
+}
+
 type AgentProfileGrants struct {
 	ProfileIDs []string `json:"profileIds"`
 }
@@ -148,6 +163,31 @@ func (s *Service) ListAgentTasks(id string) (AgentTaskList, error) {
 	}
 	return out, nil
 }
+func (s *Service) ListAgentAdmissions(id string) (AgentAdmissionList, error) {
+	caller, err := s.agentOwnerContext()
+	if err != nil {
+		return AgentAdmissionList{}, err
+	}
+	parsed, err := agentdomain.ParseID(id)
+	if err != nil {
+		return AgentAdmissionList{}, err
+	}
+	items, err := s.runtime.Agents.Admissions(s.ctx, parsed, caller, 100)
+	if err != nil {
+		return AgentAdmissionList{}, err
+	}
+	out := AgentAdmissionList{Events: make([]AgentAdmissionEvent, 0, len(items))}
+	for _, ev := range items {
+		out.Events = append(out.Events, AgentAdmissionEvent{
+			AgentID: string(ev.AgentID), Action: ev.Action, PrincipalKind: ev.PrincipalKind,
+			Origin: ev.Origin, ScopeKind: ev.ScopeKind, PolicyKind: ev.PolicyKind,
+			PolicyReason: ev.PolicyReason, Status: ev.Status,
+			OccurredAt: ev.OccurredAt.UTC().Format(time.RFC3339Nano),
+		})
+	}
+	return out, nil
+}
+
 func (s *Service) GetAgentTask(id string) (AgentTask, error) {
 	caller, err := s.agentOwnerContext()
 	if err != nil {

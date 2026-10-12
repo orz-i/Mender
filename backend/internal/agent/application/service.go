@@ -14,11 +14,12 @@ import (
 
 	agentdomain "github.com/orz-i/Mender/backend/internal/agent/domain"
 	gov "github.com/orz-i/Mender/backend/internal/governance/domain"
+	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 )
 
 const (
-	maxActivePerAgent  = 2
-	defaultTaskTimeout = 10 * time.Minute
+	maxActivePerAgent = 2
+	TaskTimeout       = 10 * time.Minute
 )
 
 // Repository is the Agent consuming-side storage port.
@@ -34,6 +35,7 @@ type Repository interface {
 	RequestCancel(context.Context, agentdomain.TaskID, uint64) error
 	HasProfileGrant(context.Context, agentdomain.ID, string) (bool, error)
 	ListProfileGrants(context.Context, agentdomain.ID) ([]string, error)
+	ListAdmissions(context.Context, agentdomain.ID, int) ([]agentdomain.AdmissionEvent, error)
 	GrantProfile(context.Context, agentdomain.ID, string) error
 	RevokeProfile(context.Context, agentdomain.ID, string) error
 }
@@ -88,7 +90,7 @@ func (s *Service) isTrustedProfile(caller gov.Context) string {
 		return ""
 	}
 	id := caller.Scope().Reference()
-	if id == "" || caller.Principal().Reference() != "profile:"+id {
+	if _, err := profiledomain.ParseProfileID(id); err != nil || caller.Principal().Reference() != "profile:"+id {
 		return ""
 	}
 	return id
@@ -187,6 +189,9 @@ func (s *Service) Grant(ctx context.Context, id agentdomain.ID, profileID string
 	if s.profileExists == nil {
 		return agentdomain.ErrUnavailable
 	}
+	if _, err := profiledomain.ParseProfileID(profileID); err != nil {
+		return agentdomain.ErrInvalid
+	}
 	a, err := s.store.GetAgent(ctx, id)
 	if err != nil {
 		return err
@@ -203,6 +208,9 @@ func (s *Service) Revoke(ctx context.Context, id agentdomain.ID, profileID strin
 	if err := s.requireOwner(caller); err != nil {
 		return err
 	}
+	if _, err := profiledomain.ParseProfileID(profileID); err != nil {
+		return agentdomain.ErrInvalid
+	}
 	if _, err := s.store.GetAgent(ctx, id); err != nil {
 		return err
 	}
@@ -216,6 +224,17 @@ func (s *Service) Grants(ctx context.Context, id agentdomain.ID, caller gov.Cont
 		return nil, err
 	}
 	return s.store.ListProfileGrants(ctx, id)
+}
+
+// Admissions is an owner-only audit view, not an MCP task capability.
+func (s *Service) Admissions(ctx context.Context, id agentdomain.ID, caller gov.Context, limit int) ([]agentdomain.AdmissionEvent, error) {
+	if err := s.requireOwner(caller); err != nil {
+		return nil, err
+	}
+	if _, err := s.store.GetAgent(ctx, id); err != nil {
+		return nil, err
+	}
+	return s.store.ListAdmissions(ctx, id, limit)
 }
 
 func (s *Service) Submit(ctx context.Context, id agentdomain.ID, prompt string, caller gov.Context) (agentdomain.Task, error) {
@@ -257,7 +276,7 @@ func (s *Service) Submit(ctx context.Context, id agentdomain.ID, prompt string, 
 		s.mu.Unlock()
 		return agentdomain.Task{}, err
 	}
-	runCtx, cancel := context.WithTimeout(s.rootContext, defaultTaskTimeout)
+	runCtx, cancel := context.WithTimeout(s.rootContext, TaskTimeout)
 	s.active[taskID] = cancel
 	s.wg.Add(1)
 	s.mu.Unlock()
@@ -296,11 +315,21 @@ func (s *Service) run(ctx context.Context, cancel context.CancelFunc, agent agen
 		next = agentdomain.TaskFailed
 		diagnostic = "Agent execution failed"
 		if errors.Is(err, context.Canceled) {
-			next = agentdomain.TaskCancelled
-			diagnostic = "Task cancelled"
+			// The request to stop can originate from the caller or from
+			// Mender shutting down. Only a caller-initiated cancellation
+			// has a persisted CancelRequested bit.
+			persisted, readErr := s.store.GetTask(context.WithoutCancel(ctx), task.ID)
+			if readErr == nil && persisted.CancelRequested {
+				next = agentdomain.TaskCancelled
+				diagnostic = "Task cancelled"
+			} else {
+				next = agentdomain.TaskUnknown
+				diagnostic = "Agent outcome unknown after runtime shutdown"
+			}
 		}
 		if errors.Is(err, context.DeadlineExceeded) {
-			diagnostic = "Agent task timed out"
+			next = agentdomain.TaskUnknown
+			diagnostic = "Agent outcome unknown after timeout"
 		}
 		result = ""
 	}

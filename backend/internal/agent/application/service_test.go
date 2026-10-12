@@ -54,6 +54,11 @@ func profile(t *testing.T, id string) gov.Context {
 	}
 	return c
 }
+
+const goodProfileID = "prof_00000000000000000000000000000001"
+const badProfileID = "prof_00000000000000000000000000000002"
+const otherProfileID = "prof_00000000000000000000000000000003"
+
 func newFixtureService(t *testing.T, run Executor) (*Service, gov.Context) {
 	t.Helper()
 	s, err := agentsqlite.Open(context.Background(), filepath.Join(t.TempDir(), "agents.db"))
@@ -64,7 +69,7 @@ func newFixtureService(t *testing.T, run Executor) (*Service, gov.Context) {
 	o := owner(t)
 	service, err := NewService(s, run, func(context.Context, gov.Context, agentdomain.Agent, gov.Action) error { return nil },
 		o.Principal(), func(_ context.Context, id string) error {
-			if id == "good" {
+			if id == goodProfileID {
 				return nil
 			}
 			return errors.New("profile missing")
@@ -102,16 +107,16 @@ func TestServiceRejectsUntrustedProfileAndCancelsFixture(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Submit(ctx, a.ID(), "inspect", profile(t, "good")); !errors.Is(err, agentdomain.ErrForbidden) {
+	if _, err := s.Submit(ctx, a.ID(), "inspect", profile(t, goodProfileID)); !errors.Is(err, agentdomain.ErrForbidden) {
 		t.Fatalf("ungranted Profile accepted: %v", err)
 	}
-	if err := s.Grant(ctx, a.ID(), "good", o); err != nil {
+	if err := s.Grant(ctx, a.ID(), goodProfileID, o); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Grant(ctx, a.ID(), "bad", o); err == nil {
+	if err := s.Grant(ctx, a.ID(), badProfileID, o); err == nil {
 		t.Fatal("nonexistent Profile granted")
 	}
-	task, err := s.Submit(ctx, a.ID(), "inspect", profile(t, "good"))
+	task, err := s.Submit(ctx, a.ID(), "inspect", profile(t, goodProfileID))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,20 +125,20 @@ func TestServiceRejectsUntrustedProfileAndCancelsFixture(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("executor never started")
 	}
-	if _, err := s.Task(ctx, task.ID, profile(t, "other")); !errors.Is(err, agentdomain.ErrForbidden) {
+	if _, err := s.Task(ctx, task.ID, profile(t, otherProfileID)); !errors.Is(err, agentdomain.ErrForbidden) {
 		t.Fatal("cross-Profile Task leaked", err)
 	}
-	if err := s.Cancel(ctx, task.ID, profile(t, "good")); err != nil {
+	if err := s.Cancel(ctx, task.ID, profile(t, goodProfileID)); err != nil {
 		t.Fatal(err)
 	}
 	after := waitTask(t, s, task.ID, o, agentdomain.TaskCancelled)
 	if !after.CancelRequested {
 		t.Fatal("cancel intent missing")
 	}
-	if err := s.Revoke(ctx, a.ID(), "good", o); err != nil {
+	if err := s.Revoke(ctx, a.ID(), goodProfileID, o); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Task(ctx, task.ID, profile(t, "good")); !errors.Is(err, agentdomain.ErrForbidden) {
+	if _, err := s.Task(ctx, task.ID, profile(t, goodProfileID)); !errors.Is(err, agentdomain.ErrForbidden) {
 		t.Fatal("revoked Profile can still read", err)
 	}
 }
@@ -189,5 +194,37 @@ func TestServiceDeniedPolicyNeverStartsRunner(t *testing.T) {
 	tasks, err := s.Tasks(context.Background(), a.ID(), o)
 	if err != nil || len(tasks) > 0 {
 		t.Fatal("Task persisted before admission", err)
+	}
+}
+
+func TestRuntimeShutdownDoesNotClaimCallerCancellation(t *testing.T) {
+	ctx := context.Background()
+	executor := fakeExecutor{started: make(chan struct{}), release: make(chan struct{})}
+	service, ownerCtx := newFixtureService(t, executor)
+	agent, err := service.Create(ctx, CreateRequest{
+		Name: "Shutdown safety fixture", Backend: agentdomain.BackendGrok,
+		WorkspaceRoot: t.TempDir(),
+	}, ownerCtx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	task, err := service.Submit(ctx, agent.ID(), "read-only fixture prompt", ownerCtx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-executor.started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("fixture task not running")
+	}
+	if err := service.Close(); err != nil {
+		t.Fatal(err)
+	}
+	observed, err := service.Task(ctx, task.ID, ownerCtx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if observed.Status != agentdomain.TaskUnknown || observed.CancelRequested {
+		t.Fatalf("runtime shutdown incorrectly claimed confirmed cancellation: %+v", observed)
 	}
 }

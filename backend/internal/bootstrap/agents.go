@@ -2,7 +2,9 @@ package bootstrap
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"time"
 
 	agentapplication "github.com/orz-i/Mender/backend/internal/agent/application"
 	agentdomain "github.com/orz-i/Mender/backend/internal/agent/domain"
@@ -32,6 +34,13 @@ func newAgents(ctx context.Context, dbPath string, owner gov.Principal,
 	if err != nil {
 		return nil, nil, nil, err
 	}
+	// Only expired prior-run tasks can be fenced into unknown. A live
+	// 10-minute task is never reclassified merely because another Runtime
+	// opened the same database; no task is automatically replayed.
+	if _, err := store.ReconcileExpired(ctx, time.Now().Add(-(agentapplication.TaskTimeout + 2*time.Minute))); err != nil {
+		_ = store.Close()
+		return nil, nil, nil, err
+	}
 	launcher, err := agentacp.NewLocalFactory(governance.processIsolation)
 	if err != nil {
 		_ = store.Close()
@@ -53,8 +62,31 @@ func newAgents(ctx context.Context, dbPath string, owner gov.Principal,
 				{Kind: "agent_isolation", Value: a.Spec().Isolation},
 			},
 		})
+		policyKind := "failed"
+		policyReason := "policy_evaluation_error"
+		status := "failed"
+		if err == nil {
+			policyKind = string(decision.Kind())
+			policyReason = decision.ReasonCode()
+			if decision.Kind() == policydomain.DecisionAllow {
+				status = "admitted"
+			} else {
+				status = "denied"
+			}
+		}
+		recordCtx, recordCancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		recordErr := store.RecordAdmission(recordCtx, agentsqlite.AdmissionEvent{
+			AgentID: a.ID(), Action: string(action),
+			PrincipalKind: string(caller.Principal().Kind()), PrincipalRef: caller.Principal().Reference(),
+			Origin: string(caller.Origin()), ScopeKind: string(caller.Scope().Kind()),
+			ScopeRef: caller.Scope().Reference(), PolicyKind: policyKind, PolicyReason: policyReason, Status: status,
+		})
+		recordCancel()
 		if err != nil {
-			return fmt.Errorf("agent admission: %w", err)
+			return errors.Join(fmt.Errorf("agent admission: %w", err), recordErr)
+		}
+		if recordErr != nil {
+			return fmt.Errorf("agent admission audit unavailable: %w", recordErr)
 		}
 		if decision.Kind() != policydomain.DecisionAllow {
 			return agentdomain.ErrForbidden

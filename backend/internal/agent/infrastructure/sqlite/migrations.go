@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-const latestSchemaVersion = 1
+const latestSchemaVersion = 3
 
 // migrate owns Agent state exclusively, and never changes the existing
 // Providers/Sandboxes/Tunnels/Plugin inventory.
@@ -65,8 +65,90 @@ func migrate(ctx context.Context, db *sql.DB) error {
 				return fmt.Errorf("agent schema: %w", err)
 			}
 		}
-		if _, err = tx.ExecContext(ctx, `INSERT INTO agent_schema_migrations VALUES(?,?)`, latestSchemaVersion, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
+		if _, err = tx.ExecContext(ctx, `INSERT INTO agent_schema_migrations VALUES(?,?)`, 1, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
 			return err
+		}
+	}
+	if !version.Valid || version.Int64 < 2 {
+		// Grant/revoke history survives Agent deletion. SQL triggers record
+		// changes even if a caller bypasses application-level convenience
+		// APIs; records contain no task prompt, API key or result payload.
+		for _, statement := range []string{
+			`CREATE TABLE agent_grant_events (
+				event_id INTEGER PRIMARY KEY AUTOINCREMENT,
+				agent_id TEXT NOT NULL,
+				profile_id TEXT NOT NULL,
+				action TEXT NOT NULL CHECK(action IN ('grant','revoke')),
+				occurred_at TEXT NOT NULL
+			)`,
+			`CREATE INDEX agent_grant_events_agent ON agent_grant_events(agent_id,event_id)`,
+			`CREATE TRIGGER agent_grant_insert_event AFTER INSERT ON agent_grants
+				BEGIN INSERT INTO agent_grant_events(agent_id,profile_id,action,occurred_at)
+					VALUES(NEW.agent_id,NEW.profile_id,'grant',STRFTIME('%Y-%m-%dT%H:%M:%fZ','now')); END`,
+			`CREATE TRIGGER agent_grant_delete_event AFTER DELETE ON agent_grants
+				BEGIN INSERT INTO agent_grant_events(agent_id,profile_id,action,occurred_at)
+					VALUES(OLD.agent_id,OLD.profile_id,'revoke',STRFTIME('%Y-%m-%dT%H:%M:%fZ','now')); END`,
+			`CREATE TRIGGER agent_grant_history_no_update BEFORE UPDATE ON agent_grant_events
+				BEGIN SELECT RAISE(ABORT,'Agent grant history immutable'); END`,
+			`CREATE TRIGGER agent_grant_history_no_delete BEFORE DELETE ON agent_grant_events
+				BEGIN SELECT RAISE(ABORT,'Agent grant history immutable'); END`,
+		} {
+			if _, err = tx.ExecContext(ctx, statement); err != nil {
+				return fmt.Errorf("agent v2 grant history: %w", err)
+			}
+		}
+		if _, err = tx.ExecContext(ctx, `INSERT INTO agent_schema_migrations VALUES(?,?)`,
+			2, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
+			return err
+		}
+	}
+	if !version.Valid || version.Int64 < 3 {
+		for _, statement := range []string{
+			`CREATE TABLE agent_admissions (
+				event_id INTEGER PRIMARY KEY AUTOINCREMENT,
+				agent_id TEXT NOT NULL,
+				action TEXT NOT NULL CHECK(action IN ('agent.activate','agent.task.submit','agent.task.cancel')),
+				principal_kind TEXT NOT NULL,principal_ref TEXT NOT NULL,
+				origin TEXT NOT NULL,scope_kind TEXT NOT NULL,scope_ref TEXT NOT NULL,
+				policy_kind TEXT NOT NULL CHECK(policy_kind IN ('allow','deny','require_approval','failed')),
+				policy_reason TEXT NOT NULL,status TEXT NOT NULL CHECK(status IN ('admitted','denied','failed')),
+				occurred_at TEXT NOT NULL
+			)`,
+			`CREATE INDEX agent_admissions_by_agent ON agent_admissions(agent_id,event_id)`,
+			`CREATE TRIGGER agent_admission_no_update BEFORE UPDATE ON agent_admissions
+				BEGIN SELECT RAISE(ABORT,'Agent admission audit immutable'); END`,
+			`CREATE TRIGGER agent_admission_no_delete BEFORE DELETE ON agent_admissions
+				BEGIN SELECT RAISE(ABORT,'Agent admission audit immutable'); END`,
+		} {
+			if _, err = tx.ExecContext(ctx, statement); err != nil {
+				return fmt.Errorf("agent v3 admission audit: %w", err)
+			}
+		}
+		if _, err = tx.ExecContext(ctx, `INSERT INTO agent_schema_migrations VALUES(?,?)`,
+			3, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
+			return err
+		}
+	}
+	// Agent -> Provider references are embedded in a typed Provider config
+	// JSON field. This trigger prevents a concurrent delete/rebind from
+	// leaving dangling Providers, at SQLite commit rather than in a racy
+	// management read. Some standalone Agent-store tests intentionally have
+	// no Provider catalogue; the trigger is installed on Runtime composition.
+	var providerConfigs int
+	if err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='provider_configs'`).Scan(&providerConfigs); err != nil {
+		return err
+	}
+	if providerConfigs > 0 {
+		if _, err = tx.ExecContext(ctx, `CREATE TRIGGER IF NOT EXISTS agent_bound_provider_delete_guard
+			BEFORE DELETE ON agents
+			WHEN EXISTS(
+				SELECT 1 FROM provider_configs p
+				WHERE p.plugin_id='io.mender.provider.agent-delegation'
+				  AND (json_valid(p.config_json)=0 OR
+					   json_extract(p.config_json,'$.agentId')=OLD.agent_id)
+			)
+			BEGIN SELECT RAISE(ABORT,'Agent is referenced by a Provider'); END`); err != nil {
+			return fmt.Errorf("agent Provider binding guard: %w", err)
 		}
 	}
 	return tx.Commit()

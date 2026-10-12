@@ -1589,7 +1589,9 @@ func TestManagementAPIGenericProviderPluginFlow(t *testing.T) {
 		t.Fatalf("provider plugin issues = %#v", plugins["issues"])
 	}
 	agentPlugin, _ := items[0].(map[string]any)
-	if agentPlugin["pluginId"] != "io.mender.provider.agent-delegation" { t.Fatalf("Agent delegation plugin = %#v", agentPlugin) }
+	if agentPlugin["pluginId"] != "io.mender.provider.agent-delegation" {
+		t.Fatalf("Agent delegation plugin = %#v", agentPlugin)
+	}
 	plugin, _ := items[1].(map[string]any)
 	if plugin["pluginId"] != "io.mender.provider.mcp" ||
 		plugin["sourceKind"] != "builtin" ||

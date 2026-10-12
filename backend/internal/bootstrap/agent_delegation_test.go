@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	gov "github.com/orz-i/Mender/backend/internal/governance/domain"
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
+	policydomain "github.com/orz-i/Mender/backend/internal/policy/domain"
 	profileapplication "github.com/orz-i/Mender/backend/internal/profile/application"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 )
@@ -152,6 +154,41 @@ func TestGovernedCanonicalAgentDelegationToolFixture(t *testing.T) {
 	if last.Status != "completed" || last.Result != "fixture: review code" {
 		t.Fatalf("delegation result: %+v", last)
 	}
+	// Agent admission is independent from canonical Tool invocation. Denied
+	// submissions must create neither Task records nor Agent side effects.
+	if _, err := r.Policy.SetDefault.Execute(ctx, policydomain.DecisionDeny); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.Agents.Submit(ctx, a.ID(), "TOP_SECRET_PROMPT_DENY", caller); !errors.Is(err, agentdomain.ErrForbidden) {
+		t.Fatalf("Agent Policy deny admitted task: %v", err)
+	}
+	auditEvents, err := r.agentStore.ListAdmissions(ctx, a.ID(), 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var allowedActivate, allowedSubmit, deniedActivate bool
+	for _, ev := range auditEvents {
+		if ev.Action == "agent.activate" && ev.Status == "admitted" {
+			allowedActivate = true
+		}
+		if ev.Action == "agent.task.submit" && ev.Status == "admitted" {
+			allowedSubmit = true
+		}
+		if ev.Action == "agent.activate" && ev.Status == "denied" && ev.PolicyKind == "deny" {
+			deniedActivate = true
+		}
+		raw, _ := json.Marshal(ev)
+		if strings.Contains(string(raw), "TOP_SECRET_PROMPT_DENY") ||
+			strings.Contains(string(raw), "review code") || strings.Contains(string(raw), "profile:prof_") {
+			t.Fatalf("admission audit contains protected data: %s", raw)
+		}
+	}
+	if !allowedActivate || !allowedSubmit || !deniedActivate {
+		t.Fatalf("missing Agent Policy decision records: %+v", auditEvents)
+	}
+	if _, err := r.Policy.SetDefault.Execute(ctx, policydomain.DecisionAllow); err != nil {
+		t.Fatal(err)
+	}
 	// Same TaskID under another Profile service must not reveal results.
 	p2, err := r.Profiles.Create.Execute(ctx, profileapplication.CreateProfileRequest{
 		Slug: "agent-test-b", DisplayName: "Agent Test B", Mode: profiledomain.ExposureDynamic,
@@ -175,5 +212,8 @@ func TestGovernedCanonicalAgentDelegationToolFixture(t *testing.T) {
 	denied, err := r.CallConfiguredTool(ctx, ids["agent.delegate"], []byte(`{"prompt":"denied after revocation"}`), caller)
 	if err == nil && denied.Outcome.Kind() == invocationdomain.OutcomeKindComplete {
 		t.Fatal("Agent task submitted after grant revocation")
+	}
+	if err := r.Agents.Delete(ctx, a.ID(), owner); !errors.Is(err, agentdomain.ErrConflict) {
+		t.Fatalf("Agent with configured delegation Provider was removed: %v", err)
 	}
 }

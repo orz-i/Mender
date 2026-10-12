@@ -163,6 +163,25 @@ func (h *Handler) cancelAgentTask(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusAccepted, map[string]any{"taskId": id, "cancelRequested": true})
 }
+func (h *Handler) listAgentAdmissions(w http.ResponseWriter, r *http.Request) {
+	id, err := agentdomain.ParseID(r.PathValue("agentId"))
+	if err != nil {
+		h.agentError(w, err)
+		return
+	}
+	caller, err := h.agentOwnerContext()
+	if err != nil {
+		h.agentError(w, err)
+		return
+	}
+	events, err := h.runtime.Agents.Admissions(r.Context(), id, caller, 100)
+	if err != nil {
+		h.agentError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"events": events})
+}
+
 func (h *Handler) listAgentGrants(w http.ResponseWriter, r *http.Request) {
 	id, err := agentdomain.ParseID(r.PathValue("agentId"))
 	if err != nil {

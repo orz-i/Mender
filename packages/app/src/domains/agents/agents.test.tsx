@@ -27,6 +27,11 @@ function show(path:string,overrides:Partial<MenderClient>={}){
     getAgent:vi.fn().mockResolvedValue(agent),
     listAgentTasks:vi.fn().mockResolvedValue({tasks:[task]}),
     getAgentTask:vi.fn().mockResolvedValue(task),
+    listAgentAdmissions:vi.fn().mockResolvedValue({events:[{
+      agentId:agent.agentId,action:"agent.task.submit",origin:"mcp",principalKind:"service",
+      scopeKind:"profile",policyKind:"allow",policyReason:"default_allow",status:"admitted",
+      occurredAt:"2026-10-11T10:00:00Z",
+    }]}),
     listAgentGrants:vi.fn().mockResolvedValue({profileIds:[]}),
     listProfiles:vi.fn().mockResolvedValue({profiles:[]}),
     createAgent:vi.fn().mockResolvedValue(agent),
@@ -86,5 +91,8 @@ describe("Agents focused management",()=>{
     fireEvent.click(screen.getByRole("button",{name:/^Tasks/}));
     fireEvent.click(await screen.findByRole("button",{name:"View"}));
     expect(await screen.findByText("fixture reviewed")).toBeTruthy();
+    fireEvent.click(screen.getAllByRole("button",{name:"Close"})[0]!);
+    fireEvent.click(screen.getByRole("button",{name:"Activity"}));
+    expect(await screen.findByText("agent.task.submit")).toBeTruthy();
   });
 });

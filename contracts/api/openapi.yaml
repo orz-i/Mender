@@ -751,6 +751,22 @@ paths:
                 properties:
                   tasks: { type: array, items: { $ref: '#/components/schemas/AgentTask' } }
         '404': { $ref: '#/components/responses/NotFound' }
+  /agents/{agentId}/admissions:
+    get:
+      operationId: listAgentAdmissions
+      parameters: [{ name: agentId, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200':
+          description: Owner-visible bounded Agent Policy admission history
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [events]
+                properties:
+                  events: { type: array, items: { $ref: '#/components/schemas/AgentAdmissionEvent' } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /agents/{agentId}/profile-grants:
     get:
       operationId: listAgentGrants
@@ -2500,6 +2516,20 @@ components:
         cancelRequested: { type: boolean }
         result: { type: string, maxLength: 65536 }
         diagnostic: { type: string, maxLength: 1024 }
+    AgentAdmissionEvent:
+      type: object
+      required: [agentId, action, principalKind, origin, scopeKind, policyKind, policyReason, status, occurredAt]
+      additionalProperties: false
+      properties:
+        agentId: { type: string }
+        action: { type: string, enum: [agent.activate, agent.task.submit, agent.task.cancel] }
+        principalKind: { type: string, enum: [local_user, service] }
+        origin: { type: string, enum: [cli, mcp, management_http, desktop, internal] }
+        scopeKind: { type: string, enum: [catalog, profile] }
+        policyKind: { type: string, enum: [allow, deny, require_approval, failed] }
+        policyReason: { type: string }
+        status: { type: string, enum: [admitted, denied, failed] }
+        occurredAt: { type: string, format: date-time }
     AgentGrants:
       type: object
       required: [profileIds]

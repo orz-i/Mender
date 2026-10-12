@@ -8,6 +8,8 @@ export {
 
 export type {
     Agent,
+    AgentAdmissionEvent,
+    AgentAdmissionList,
     AgentCancelReceipt,
     AgentList,
     AgentProfileGrants,

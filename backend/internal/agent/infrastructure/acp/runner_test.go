@@ -30,17 +30,37 @@ func TestACPFixtureProcess(t *testing.T) {
 		}
 		switch msg.Method {
 		case "initialize":
-			send(map[string]any{"jsonrpc": "2.0", "id": msg.ID, "result": map[string]any{"protocolVersion": 1}})
+			version := 1
+			if os.Getenv("ACP_FIXTURE_MODE") == "version2" {
+				version = 2
+			}
+			send(map[string]any{"jsonrpc": "2.0", "id": msg.ID, "result": map[string]any{"protocolVersion": version}})
 		case "session/new":
 			send(map[string]any{"jsonrpc": "2.0", "id": msg.ID, "result": map[string]any{"sessionId": "fixture-1"}})
 		case "session/prompt":
-			if os.Getenv("ACP_FIXTURE_MODE") == "hang" {
+			mode := os.Getenv("ACP_FIXTURE_MODE")
+			if mode == "invalid-json" {
+				_, _ = fmt.Fprintln(writer, `{"jsonrpc":`)
+				_ = writer.Flush()
+				os.Exit(85)
+			}
+			if mode == "hang" {
 				// Cancellation test: block until process is killed by caller.
 				for {
 					time.Sleep(time.Second)
 				}
 			}
-			if os.Getenv("ACP_FIXTURE_MODE") == "permission" {
+			if mode == "client-file" {
+				send(map[string]any{"jsonrpc": "2.0", "id": 96, "method": "fs/read_text_file", "params": map[string]string{"path": "/etc/passwd"}})
+				if !scan.Scan() {
+					os.Exit(81)
+				}
+				var response rpcMessage
+				if err := json.Unmarshal(scan.Bytes(), &response); err != nil || response.Error == nil || response.Error.Code != -32601 {
+					os.Exit(82)
+				}
+			}
+			if mode == "permission" {
 				send(map[string]any{"jsonrpc": "2.0", "id": 97, "method": "session/request_permission", "params": map[string]any{
 					"sessionId": "fixture-1", "options": []any{map[string]string{"optionId": "allow_once", "name": "Allow", "kind": "allow_once"}},
 				}})
@@ -60,8 +80,16 @@ func TestACPFixtureProcess(t *testing.T) {
 					os.Exit(83)
 				}
 			}
+			sessionID := "fixture-1"
+			if mode == "foreign-session" {
+				sessionID = "other-session"
+			}
+			text := "fixture completed"
+			if mode == "oversized" {
+				text = strings.Repeat("X", agentdomain.MaxResultBytes+1)
+			}
 			send(map[string]any{"jsonrpc": "2.0", "method": "session/update", "params": map[string]any{
-				"sessionId": "fixture-1", "update": map[string]any{"sessionUpdate": "agent_message_chunk", "content": map[string]string{"type": "text", "text": "fixture completed"}},
+				"sessionId": sessionID, "update": map[string]any{"sessionUpdate": "agent_message_chunk", "content": map[string]string{"type": "text", "text": text}},
 			}})
 			send(map[string]any{"jsonrpc": "2.0", "id": msg.ID, "result": map[string]string{"stopReason": "end_turn"}})
 		default:
@@ -98,13 +126,25 @@ func fixtureRunner(mode string) Runner {
 	}}
 }
 func TestACPStableHandshakeAndNoApproval(t *testing.T) {
-	for _, mode := range []string{"completed", "permission"} {
+	for _, mode := range []string{"completed", "permission", "client-file"} {
 		t.Run(mode, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 			defer cancel()
 			got, err := fixtureRunner(mode).Execute(ctx, fixtureAgent(t), "task")
 			if err != nil || got != "fixture completed" {
 				t.Fatalf("result %q error %v", got, err)
+			}
+		})
+	}
+}
+func TestACPRejectsInvalidProtocolAndUnboundedOrForeignOutput(t *testing.T) {
+	for _, mode := range []string{"version2", "invalid-json", "foreign-session", "oversized"} {
+		t.Run(mode, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer cancel()
+			result, err := fixtureRunner(mode).Execute(ctx, fixtureAgent(t), "task")
+			if err == nil || result != "" {
+				t.Fatalf("untrusted ACP %s accepted with result %q, error %v", mode, result, err)
 			}
 		})
 	}

@@ -14,6 +14,22 @@ export interface Agent {
     "issue"?: string;
 }
 
+export interface AgentAdmissionEvent {
+    "agentId": string;
+    "action": string;
+    "principalKind": string;
+    "origin": string;
+    "scopeKind": string;
+    "policyKind": string;
+    "policyReason": string;
+    "status": string;
+    "occurredAt": string;
+}
+
+export interface AgentAdmissionList {
+    "events": AgentAdmissionEvent[] | null;
+}
+
 export interface AgentCancelReceipt {
     "taskId": string;
     "cancelRequested": boolean;

@@ -32,6 +32,7 @@ import type {
   Sandbox,
   Agent,
   AgentTask,
+  AgentAdmissionEvent,
   SandboxActivity,
   SandboxActivityEvent,
   SandboxProfileGrants,
@@ -73,6 +74,7 @@ import {
   type Tunnel as BindingTunnel,
   type Agent as BindingAgent,
   type AgentTask as BindingAgentTask,
+  type AgentAdmissionEvent as BindingAgentAdmissionEvent,
   type Sandbox as BindingSandbox,
   type SandboxActivity as BindingSandboxActivity,
   type SandboxProfileGrants as BindingSandboxProfileGrants,
@@ -408,6 +410,10 @@ export function createDesktopMenderClient(): MenderClient {
     async listAgentTasks(agentId){
       const result=await Service.ListAgentTasks(agentId);
       return {tasks:(result.tasks??[]).map(agentTask)};
+    },
+    async listAgentAdmissions(agentId){
+      const result=await Service.ListAgentAdmissions(agentId);
+      return {events:(result.events??[]).map(agentAdmissionEvent)};
     },
     async getAgentTask(taskId){return agentTask(await Service.GetAgentTask(taskId));},
     async cancelAgentTask(taskId){return Service.CancelAgentTask(taskId);},
@@ -865,6 +871,30 @@ function agent(value:BindingAgent):Agent {
     throw new MenderClientInvariantError("Unknown Agent isolation: "+value.isolation);
   }
   return {...value,backend:value.backend,isolation:value.isolation};
+}
+function agentAdmissionEvent(value:BindingAgentAdmissionEvent):AgentAdmissionEvent{
+  if(value.action!=="agent.activate" && value.action!=="agent.task.submit" && value.action!=="agent.task.cancel"){
+    throw new MenderClientInvariantError("Unknown Agent action: "+value.action);
+  }
+  if(value.principalKind!=="local_user"&&value.principalKind!=="service"){
+    throw new MenderClientInvariantError("Unknown Agent Principal: "+value.principalKind);
+  }
+  if(value.origin!=="cli"&&value.origin!=="mcp"&&value.origin!=="management_http"&&
+    value.origin!=="desktop"&&value.origin!=="internal"){
+    throw new MenderClientInvariantError("Unknown Agent origin: "+value.origin);
+  }
+  if(value.scopeKind!=="catalog"&&value.scopeKind!=="profile"){
+    throw new MenderClientInvariantError("Unknown Agent scope: "+value.scopeKind);
+  }
+  if(value.policyKind!=="allow"&&value.policyKind!=="deny"&&
+    value.policyKind!=="require_approval"&&value.policyKind!=="failed"){
+    throw new MenderClientInvariantError("Unknown Agent Policy decision: "+value.policyKind);
+  }
+  if(value.status!=="admitted"&&value.status!=="denied"&&value.status!=="failed"){
+    throw new MenderClientInvariantError("Unknown Agent audit status: "+value.status);
+  }
+  return {...value,action:value.action,principalKind:value.principalKind,origin:value.origin,
+    scopeKind:value.scopeKind,policyKind:value.policyKind,status:value.status};
 }
 function agentTask(value:BindingAgentTask):AgentTask {
   switch(value.status){

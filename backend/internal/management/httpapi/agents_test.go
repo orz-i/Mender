@@ -2,12 +2,16 @@ package httpapi
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
 	"testing"
 
+	agentdomain "github.com/orz-i/Mender/backend/internal/agent/domain"
 	"github.com/orz-i/Mender/backend/internal/bootstrap"
+	gov "github.com/orz-i/Mender/backend/internal/governance/domain"
+	policydomain "github.com/orz-i/Mender/backend/internal/policy/domain"
 )
 
 func TestAgentHTTPManagementAndGrantLifecycle(t *testing.T) {
@@ -65,6 +69,32 @@ func TestAgentHTTPManagementAndGrantLifecycle(t *testing.T) {
 	}
 	requestJSON(t, server.Client(), http.MethodGet, api+"/agent-tasks/atask_00000000000000000000000000000000", nil, http.StatusNotFound)
 	requestJSON(t, server.Client(), http.MethodPost, api+"/agent-tasks/invalid/cancel", nil, http.StatusBadRequest)
+	// Denied Agent Policy operations must be independently auditable through
+	// the owner-only API, without exporting PrincipalRefs or task prompts.
+	if _, err := runtime.Policy.SetDefault.Execute(ctx, policydomain.DecisionDeny); err != nil {
+		t.Fatal(err)
+	}
+	caller, err := gov.NewContext(gov.OriginCLI, runtime.OwnerPrincipal(), gov.CatalogScope())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runtime.Agents.Submit(ctx, agentdomain.ID(id), "DONT_LOG_THIS_AGENT_PROMPT", caller); !errors.Is(err, agentdomain.ErrForbidden) {
+		t.Fatalf("default deny failed: %v", err)
+	}
+	logs := requestJSON(t, server.Client(), http.MethodGet, api+"/agents/"+id+"/admissions", nil, http.StatusOK)
+	events, ok := logs["events"].([]any)
+	if !ok || len(events) != 1 {
+		t.Fatalf("missing Agent admission history: %v", logs)
+	}
+	event := events[0].(map[string]any)
+	if event["status"] != "denied" || event["action"] != "agent.activate" {
+		t.Fatalf("wrong event %v", event)
+	}
+	for _, field := range []string{"principalRef", "scopeRef", "prompt", "result", "credential"} {
+		if _, ok := event[field]; ok {
+			t.Fatalf("admission audit leaked %s", field)
+		}
+	}
 	requestJSON(t, server.Client(), http.MethodDelete, api+"/agents/"+id, nil, http.StatusNoContent)
 	requestJSON(t, server.Client(), http.MethodGet, api+"/agents/"+id, nil, http.StatusNotFound)
 }

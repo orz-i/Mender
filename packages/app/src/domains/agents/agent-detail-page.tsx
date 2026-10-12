@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 
-import type { Agent, AgentTask, MenderClient, Profile } from "@mender/sdk";
+import type { Agent, AgentTask, AgentAdmissionEvent, MenderClient, Profile } from "@mender/sdk";
 import { Badge } from "@mender/ui/components/badge";
 import { Button } from "@mender/ui/components/button";
 import {
@@ -27,7 +27,7 @@ function taskStatusText(value:AgentTask["status"]):string{
     case "unknown":return t("Unknown");
   }
 }
-type Topic = "overview" | "tasks" | "access";
+type Topic = "overview" | "tasks" | "access" | "activity";
 type ConfirmAction = {kind:"cancel"|"revoke"|"delete";id:string} | null;
 
 export function AgentDetailPage({client}:{client:MenderClient}){
@@ -35,6 +35,7 @@ export function AgentDetailPage({client}:{client:MenderClient}){
   const navigate=useNavigate();
   const [agent,setAgent]=useState<Agent|null>(null);
   const [tasks,setTasks]=useState<AgentTask[]>([]);
+  const [activity,setActivity]=useState<AgentAdmissionEvent[]>([]);
   const [grants,setGrants]=useState<string[]>([]);
   const [profiles,setProfiles]=useState<Profile[]>([]);
   const [topic,setTopic]=useState<Topic>("overview");
@@ -64,6 +65,14 @@ export function AgentDetailPage({client}:{client:MenderClient}){
     return ()=>{active=false};
   },[client,agentId,revision]);
 
+  useEffect(()=>{
+    if(!agentId||topic!=="activity")return;
+    let live=true;
+    void client.listAgentAdmissions(agentId).then(({events})=>{
+      if(live){setActivity(events);setError("");}
+    }).catch((reason:unknown)=>{if(live)setError(errorMessage(reason))});
+    return ()=>{live=false;};
+  },[client,agentId,topic,revision]);
   const pagination=usePagination(tasks);
   const options=useMemo(()=>profiles.filter(p=>!grants.includes(p.profileId)),[profiles,grants]);
 
@@ -114,6 +123,7 @@ export function AgentDetailPage({client}:{client:MenderClient}){
         <PageTab label="Overview" active={topic==="overview"} onClick={()=>setTopic("overview")}/>
         <PageTab label="Tasks" count={tasks.length} active={topic==="tasks"} onClick={()=>setTopic("tasks")}/>
         <PageTab label="Access" count={grants.length} active={topic==="access"} onClick={()=>setTopic("access")}/>
+        <PageTab label="Activity" active={topic==="activity"} onClick={()=>setTopic("activity")}/>
       </PageTabs>:undefined}
       actions={<>
         <Button variant="outline" size="sm" onClick={()=>void navigate("/agents")}>{t("Back to agents")}</Button>
@@ -163,6 +173,25 @@ export function AgentDetailPage({client}:{client:MenderClient}){
         </TableCell>
       </TableRow>)}</TableBody></Table><div className="px-4 pb-3"><TablePagination label="Tasks" pagination={pagination}/></div></>
       :<EmptyPanelState><EmptyState title="No Agent tasks" description="Delegated task history will appear here."/></EmptyPanelState>}
+    </ResultPanel>:
+    topic==="activity"?<ResultPanel title="Agent activity">
+      {activity.length?<Table><TableHeader><TableRow>
+        <TableHead>{t("Time")}</TableHead>
+        <TableHead>{t("Action")}</TableHead>
+        <TableHead>{t("Origin")}</TableHead>
+        <TableHead>{t("Policy decision")}</TableHead>
+        <TableHead>{t("Status")}</TableHead>
+      </TableRow></TableHeader><TableBody>{activity.map((ev,i)=>
+        <TableRow key={ev.agentId+"-"+ev.occurredAt+"-"+i}>
+          <TableCell className="text-xs">{formatDateTime(ev.occurredAt)}</TableCell>
+          <TableCell className="font-mono text-xs">{ev.action}</TableCell>
+          <TableCell className="text-xs">{ev.origin}</TableCell>
+          <TableCell className="text-xs">{ev.policyKind}</TableCell>
+          <TableCell><Badge variant="outline">{ev.status}</Badge></TableCell>
+        </TableRow>
+      )}</TableBody></Table>:
+      <EmptyPanelState><EmptyState title="No Agent activity"
+        description="Agent admission decisions will appear here."/></EmptyPanelState>}
     </ResultPanel>:
     <ResultPanel title="Agent access">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4">

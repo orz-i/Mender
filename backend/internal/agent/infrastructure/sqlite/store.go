@@ -106,6 +106,10 @@ func (s *Store) ListAgents(ctx context.Context) ([]agentdomain.Agent, error) {
 func (s *Store) DeleteAgent(ctx context.Context, id agentdomain.ID) error {
 	res, err := s.db.ExecContext(ctx, `DELETE FROM agents WHERE agent_id=?`, string(id))
 	if err != nil {
+		if strings.Contains(strings.ToLower(err.Error()), "constraint failed") ||
+			strings.Contains(err.Error(), "Agent is referenced by a Provider") {
+			return fmt.Errorf("%w: Agent still referenced by task or Provider", agentdomain.ErrConflict)
+		}
 		return fmt.Errorf("delete Agent: %w", err)
 	}
 	n, _ := res.RowsAffected()
@@ -148,7 +152,7 @@ func (s *Store) CreateTask(ctx context.Context, t agentdomain.Task) error {
 	_, err := s.db.ExecContext(ctx, `INSERT INTO agent_tasks(`+taskColumns+`) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		string(t.ID), string(t.AgentID), string(t.Status), t.Origin, t.PrincipalKind, t.PrincipalRef,
 		t.ScopeKind, t.ScopeRef, t.Generation, t.Result, t.Diagnostic, 0,
-		t.CreatedAt.Format(time.RFC3339Nano), t.UpdatedAt.Format(time.RFC3339Nano))
+		t.CreatedAt.UTC().Format(time.RFC3339Nano), t.UpdatedAt.UTC().Format(time.RFC3339Nano))
 	return err
 }
 
@@ -161,14 +165,24 @@ func (s *Store) CreateAdmittedTask(ctx context.Context, t agentdomain.Task, maxA
 	if t.Status != agentdomain.TaskQueued || maxActive < 1 || maxActive > 32 {
 		return agentdomain.ErrInvalid
 	}
+	// These limits are an independent, cross-Runtime task budget. Each
+	// condition is checked in the INSERT statement under SQLite's writer
+	// serialization, never via a separate racy count-then-insert.
+	const globalTaskLimit = 8
+	const principalTaskLimit = 2
 	result, err := s.db.ExecContext(ctx, `INSERT INTO agent_tasks(`+taskColumns+`)
 	SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,?
 	WHERE (SELECT COUNT(*) FROM agent_tasks WHERE agent_id=? AND status IN ('queued','running')) < ?
+	  AND (SELECT COUNT(*) FROM agent_tasks WHERE status IN ('queued','running')) < ?
+	  AND (SELECT COUNT(*) FROM agent_tasks WHERE principal_kind=? AND principal_ref=?
+	       AND status IN ('queued','running')) < ?
 	  AND (?='' OR EXISTS(SELECT 1 FROM agent_grants WHERE agent_id=? AND profile_id=?))`,
 		string(t.ID), string(t.AgentID), string(t.Status), t.Origin, t.PrincipalKind, t.PrincipalRef,
 		t.ScopeKind, t.ScopeRef, t.Generation, t.Result, t.Diagnostic, 0,
-		t.CreatedAt.Format(time.RFC3339Nano), t.UpdatedAt.Format(time.RFC3339Nano),
-		string(t.AgentID), maxActive, profileID, string(t.AgentID), profileID)
+		t.CreatedAt.UTC().Format(time.RFC3339Nano), t.UpdatedAt.UTC().Format(time.RFC3339Nano),
+		string(t.AgentID), maxActive, globalTaskLimit,
+		t.PrincipalKind, t.PrincipalRef, principalTaskLimit,
+		profileID, string(t.AgentID), profileID)
 	if err != nil {
 		return fmt.Errorf("reserve Agent task: %w", err)
 	}
@@ -235,6 +249,29 @@ func (s *Store) Transition(ctx context.Context, id agentdomain.TaskID, generatio
 	}
 	return nil
 }
+
+// ReconcileExpired fences tasks from prior Runtime runs only after the full
+// hard task timeout plus an operator-reviewed recovery margin has passed.
+// The outcome remains unknown, never completed/cancelled. Fencing generation
+// prevents a late old worker from overwriting the recovered record; no task
+// prompt is replayed and no process is started by reconciliation.
+func (s *Store) ReconcileExpired(ctx context.Context, cutoff time.Time) (int64, error) {
+	if cutoff.IsZero() {
+		return 0, agentdomain.ErrInvalid
+	}
+	result, err := s.db.ExecContext(ctx, `UPDATE agent_tasks SET
+		status='unknown',generation=generation+1,result_text='',
+		diagnostic='Agent outcome unknown after execution deadline',
+		updated_at=?
+		WHERE status IN ('queued','running') AND updated_at < ?`,
+		time.Now().UTC().Format(time.RFC3339Nano),
+		cutoff.UTC().Format(time.RFC3339Nano))
+	if err != nil {
+		return 0, fmt.Errorf("reconcile stale Agent tasks: %w", err)
+	}
+	return result.RowsAffected()
+}
+
 func (s *Store) RequestCancel(ctx context.Context, id agentdomain.TaskID, generation uint64) error {
 	res, err := s.db.ExecContext(ctx, `UPDATE agent_tasks SET cancel_requested=1,updated_at=?
 		WHERE task_id=? AND generation=? AND status IN ('queued','running')`,
