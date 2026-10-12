@@ -19,6 +19,8 @@ import (
 
 const maxFrameBytes = 1 << 20
 
+var errClientPermissionDenied = errors.New("ACP Agent requested a client capability without authorization")
+
 // CommandFactory must be a trusted, host-owned process selector; no prompt or
 // model-controlled argument may select the command, cwd, sandbox or env.
 type CommandFactory func(context.Context, agentdomain.Agent) (*exec.Cmd, error)
@@ -107,14 +109,20 @@ func (s *stream) respondToAgent(msg rpcMessage) error {
 	case "session/request_permission":
 		// Never select an approval option or infer permission from a tool
 		// argument. A trusted operator response path may be added later.
-		return s.send(map[string]any{"jsonrpc": "2.0", "id": json.RawMessage(msg.ID), "result": map[string]any{
+		if err := s.send(map[string]any{"jsonrpc": "2.0", "id": json.RawMessage(msg.ID), "result": map[string]any{
 			"outcome": map[string]string{"outcome": "cancelled"},
-		}})
+		}}); err != nil {
+			return err
+		}
+		return errClientPermissionDenied
 	default:
 		// Deny client-side filesystem, terminal, elicitation, or unrecognized
 		// ACP requests. Not implementing them is not implicit authority.
-		return s.send(map[string]any{"jsonrpc": "2.0", "id": json.RawMessage(msg.ID),
-			"error": map[string]any{"code": -32601, "message": "client capability not authorized"}})
+		if err := s.send(map[string]any{"jsonrpc": "2.0", "id": json.RawMessage(msg.ID),
+			"error": map[string]any{"code": -32601, "message": "client capability not authorized"}}); err != nil {
+			return err
+		}
+		return errClientPermissionDenied
 	}
 }
 
@@ -128,7 +136,11 @@ func (r Runner) Execute(ctx context.Context, agent agentdomain.Agent, prompt str
 	if len(prompt) == 0 || len(prompt) > agentdomain.MaxPromptBytes || strings.TrimSpace(prompt) == "" {
 		return "", fmt.Errorf("%w: invalid Task prompt", agentdomain.ErrInvalid)
 	}
-	cmd, err := r.NewCommand(ctx, agent)
+	// The per-task command has no persistent Agent session. Cancel its context
+	// when the prompt ends so the owned process group and scanner are drained.
+	runCtx, stop := context.WithCancel(ctx)
+	defer stop()
+	cmd, err := r.NewCommand(runCtx, agent)
 	if err != nil {
 		return "", err
 	}
@@ -150,8 +162,13 @@ func (r Runner) Execute(ctx context.Context, agent agentdomain.Agent, prompt str
 		return "", fmt.Errorf("start ACP Agent: %w", err)
 	}
 	defer func() {
+		// CommandContext uses the Runtime process-isolation Cancel hook:
+		// on Unix this kills the whole process group, not only the leader.
+		stop()
 		_ = stdin.Close()
-		if cmd.Process != nil {
+		if cmd.Cancel != nil {
+			_ = cmd.Cancel()
+		} else if cmd.Process != nil {
 			_ = cmd.Process.Kill()
 		}
 		_ = cmd.Wait()
@@ -170,7 +187,7 @@ func (r Runner) Execute(ctx context.Context, agent agentdomain.Agent, prompt str
 			}
 			select {
 			case messages <- message:
-			case <-ctx.Done():
+			case <-runCtx.Done():
 				return
 			}
 		}

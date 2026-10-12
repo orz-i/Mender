@@ -134,11 +134,11 @@ func (s *Service) Create(ctx context.Context, request CreateRequest, caller gov.
 	}
 	resolved, err := filepath.EvalSymlinks(request.WorkspaceRoot)
 	if err != nil {
-		return agentdomain.Agent{}, fmt.Errorf("agent workspace unavailable: %w", err)
+		return agentdomain.Agent{}, fmt.Errorf("%w: Agent workspace unavailable: %w", agentdomain.ErrInvalid, err)
 	}
 	info, err := os.Stat(resolved)
 	if err != nil {
-		return agentdomain.Agent{}, err
+		return agentdomain.Agent{}, fmt.Errorf("%w: Agent workspace stat: %w", agentdomain.ErrInvalid, err)
 	}
 	if !info.IsDir() {
 		return agentdomain.Agent{}, agentdomain.ErrInvalid

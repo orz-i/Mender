@@ -126,7 +126,7 @@ func fixtureRunner(mode string) Runner {
 	}}
 }
 func TestACPStableHandshakeAndNoApproval(t *testing.T) {
-	for _, mode := range []string{"completed", "permission", "client-file"} {
+	for _, mode := range []string{"completed"} {
 		t.Run(mode, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 			defer cancel()
@@ -137,6 +137,19 @@ func TestACPStableHandshakeAndNoApproval(t *testing.T) {
 		})
 	}
 }
+func TestACPFailClosedOnClientPermissionAndFilesystemRequests(t *testing.T) {
+	for _, mode := range []string{"permission", "client-file"} {
+		t.Run(mode, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+			defer cancel()
+			result, err := fixtureRunner(mode).Execute(ctx, fixtureAgent(t), "task")
+			if !errors.Is(err, errClientPermissionDenied) || result != "" {
+				t.Fatalf("ACP %s did not fail closed, result %q, error %v", mode, result, err)
+			}
+		})
+	}
+}
+
 func TestACPRejectsInvalidProtocolAndUnboundedOrForeignOutput(t *testing.T) {
 	for _, mode := range []string{"version2", "invalid-json", "foreign-session", "oversized"} {
 		t.Run(mode, func(t *testing.T) {
