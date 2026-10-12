@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   CheckIcon,
   CopyIcon,
@@ -40,6 +40,31 @@ import { EmptyPanelState, SearchField } from "../../shared/workbench";
 import { formatDateTime, t, tCount } from "../../i18n/i18n";
 
 const defaultAddress = "127.0.0.1:8765";
+const serverStatusPollIntervalMs = 2000;
+
+function tunnelStatusLabel(status: NonNullable<MCPServerInstance["tunnelStatus"]>): string {
+  switch (status) {
+    case "starting": return t("Starting");
+    case "ready": return t("Ready");
+    case "degraded": return t("Degraded");
+    case "failed": return t("Failed");
+    case "exited": return t("Exited");
+    case "running": return t("Running");
+  }
+}
+function tunnelStatusVariant(status: NonNullable<MCPServerInstance["tunnelStatus"]>): "outline" | "secondary" | "destructive" {
+  switch (status) {
+    case "ready":
+    case "running":
+      return "secondary";
+    case "starting":
+      return "outline";
+    case "degraded":
+    case "failed":
+    case "exited":
+      return "destructive";
+  }
+}
 
 export function ServersPage({
   client,
@@ -55,12 +80,16 @@ export function ServersPage({
   const [busy, setBusy] = useState("");
   const [inventoryQuery, setInventoryQuery] = useState("");
   const [copied, setCopied] = useState("");
+  // Fences a background inventory read that began before a management
+  // operation. An old response must never resurrect a stopped server.
+  const serverOperationEpoch = useRef(0);
 
   const [startOpen, setStartOpen] = useState(false);
   const [startProfile, setStartProfile] = useState("");
   const [startAddress, setStartAddress] = useState(defaultAddress);
 
   const refresh = useCallback(async () => {
+    serverOperationEpoch.current += 1;
     setBusy("refresh");
     try {
       const [profileResult, serverResult] = await Promise.all([
@@ -102,6 +131,35 @@ export function ServersPage({
     };
   }, [client]);
 
+  // The native Tunnel's ready/degraded phases update asynchronously after
+  // the initial Start response. Poll only this read-only Mender inventory
+  // while a tunneled server is visible; no Tunnel credentials or endpoints
+  // are queried by the frontend.
+  const hasManagedTunnel = servers.some((server) => Boolean(server.tunnelId));
+  useEffect(() => {
+    if (!loaded || !hasManagedTunnel || busy !== "") return;
+
+    let active = true;
+    let requestInFlight = false;
+    const timer = window.setInterval(() => {
+      if (requestInFlight) return;
+      requestInFlight = true;
+      const requestEpoch = serverOperationEpoch.current;
+      void client.listMCPServers().then(({ servers: current }) => {
+        if (!active || requestEpoch !== serverOperationEpoch.current) return;
+        setServers(current);
+      }).catch(() => {
+        // A transient management read failure is not evidence of native
+        // Tunnel failure. Preserve the last observed state and manual Refresh.
+      }).finally(() => { requestInFlight = false; });
+    }, serverStatusPollIntervalMs);
+
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, [client, loaded, hasManagedTunnel, busy]);
+
   function openStartDialog() {
     setError("");
     setStartProfile(profiles[0]?.slug ?? "");
@@ -110,6 +168,7 @@ export function ServersPage({
   }
 
   async function startServer() {
+    serverOperationEpoch.current += 1;
     setBusy("start");
     setError("");
     try {
@@ -137,6 +196,7 @@ export function ServersPage({
   const serverPagination = usePagination(visibleServers);
 
   async function restartServer(server: MCPServerInstance) {
+    serverOperationEpoch.current += 1;
     setBusy(server.serverId);
     setError("");
     try {
@@ -156,6 +216,7 @@ export function ServersPage({
   }
 
   async function stopServer(server: MCPServerInstance) {
+    serverOperationEpoch.current += 1;
     setBusy(server.serverId);
     setError("");
     try {
@@ -226,7 +287,7 @@ export function ServersPage({
                       {server.profile}
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline">{t(server.status)}</Badge>
+                      <Badge variant="outline">{t("Server running")}</Badge>
                     </TableCell>
                     <TableCell>
                       {server.tunnelId ? (
@@ -238,13 +299,10 @@ export function ServersPage({
                             <Badge variant="outline">{t("OpenAI")}</Badge>
                             {server.tunnelStatus ? (
                               <Badge
-                                variant={
-                                  server.tunnelStatus === "running"
-                                    ? "secondary"
-                                    : "destructive"
-                                }
+                                variant={tunnelStatusVariant(server.tunnelStatus)}
+                                aria-live="polite"
                               >
-                                {t(server.tunnelStatus)}
+                                {tunnelStatusLabel(server.tunnelStatus)}
                               </Badge>
                             ) : null}
                           </div>
