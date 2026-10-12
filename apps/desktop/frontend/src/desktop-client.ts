@@ -1007,7 +1007,7 @@ function providerPluginUISchema(
 }
 
 function pluginCatalogueEntry(value:BindingPluginCatalogueEntry):PluginCatalogueEntry {
-  if(!["provider.tools","sandbox.backend","tunnel.transport"].includes(value.kind) ||
+  if(!["provider.tools","sandbox.backend","tunnel.transport","agent.backend"].includes(value.kind) ||
      !["builtin","local","planned"].includes(value.sourceKind) ||
      !["enabled","disabled","invalid","unavailable","planned"].includes(value.status)){
     throw new MenderClientInvariantError("Unsupported typed plugin catalogue entry");

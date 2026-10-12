@@ -183,6 +183,58 @@ describe("desktop Mender client", () => {
     expect(Service.ListPluginCatalogue).toHaveBeenCalledTimes(1);
   });
 
+  it("accepts the Phase 33 Agent Backends alongside all previous Wails marketplace extension kinds",async()=>{
+    const builtin=(pluginId:string,kind:string,overrides:Record<string,unknown>={})=>({
+      key:pluginId+"@builtin",pluginId,extensionId:"main",kind,
+      displayName:pluginId,description:"Host-reviewed built-in extension",
+      packageVersion:"1.0.0",sourceKind:"builtin",status:"enabled",
+      enabled:true,capabilities:[],usageCount:0,configVersion:1,protocolVersion:1,
+      ...overrides,
+    });
+    const codex=builtin("io.mender.agent.codex","agent.backend",{
+      status:"unavailable",enabled:false,issue:"codex-acp adapter not installed",
+      capabilities:["acp.v1","tasks","local_workspace"],
+    });
+    const grok=builtin("io.mender.agent.grok","agent.backend",{
+      capabilities:["acp.v1","tasks","local_workspace"],
+    });
+    const entries=[
+      builtin("io.mender.provider.mcp","provider.tools"),
+      builtin("io.mender.sandbox.local-workspace","sandbox.backend"),
+      builtin("io.mender.tunnel.openai","tunnel.transport"),
+      codex,grok,
+      {key:"io.mender.sandbox.e2b@planned",pluginId:"io.mender.sandbox.e2b",
+        extensionId:"main",kind:"sandbox.backend",displayName:"E2B",
+        description:"Roadmap only",packageVersion:"",sourceKind:"planned",
+        status:"planned",enabled:false,capabilities:[],usageCount:0},
+    ];
+    vi.mocked(Service.ListPluginCatalogue).mockResolvedValue({plugins:entries});
+    const result=await createDesktopMenderClient().listPluginCatalogue();
+    expect(result.plugins).toHaveLength(entries.length);
+    expect(result.plugins.map(plugin=>plugin.kind)).toEqual(entries.map(entry=>entry.kind));
+    expect(result.plugins.find(p=>p.pluginId==="io.mender.agent.codex")).toMatchObject({
+      kind:"agent.backend",sourceKind:"builtin",status:"unavailable",enabled:false,
+      issue:"codex-acp adapter not installed",
+    });
+    expect(result.plugins.find(p=>p.pluginId==="io.mender.agent.grok")).toMatchObject({
+      kind:"agent.backend",sourceKind:"builtin",status:"enabled",enabled:true,
+      capabilities:["acp.v1","tasks","local_workspace"],
+    });
+    expect(Service.ListPluginCatalogue).toHaveBeenCalledOnce();
+  });
+
+  it("rejects genuinely unrecognized Wails extension kinds, rather than treating them as Agent plugins",async()=>{
+    vi.mocked(Service.ListPluginCatalogue).mockResolvedValue({plugins:[{
+      key:"io.mender.agent.unknown@builtin",pluginId:"io.mender.agent.unknown",
+      extensionId:"main",kind:"agent.unknown",displayName:"Unknown Agent",
+      description:"Unexpected new kind",packageVersion:"1.0.0",
+      sourceKind:"builtin",status:"enabled",enabled:true,
+      capabilities:[],usageCount:0,
+    }]});
+    await expect(createDesktopMenderClient().listPluginCatalogue())
+      .rejects.toBeInstanceOf(MenderClientInvariantError);
+  });
+
   it("accepts roadmap-only E2B while rejecting executable planned plugin claims",async()=>{
     const planned={
       key:"io.mender.sandbox.e2b@planned",
