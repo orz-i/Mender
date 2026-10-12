@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-const latestSchemaVersion = 11
+const latestSchemaVersion = 12
 
 func migrate(ctx context.Context, db *sql.DB) error {
 	tx, err := db.BeginTx(ctx, nil)
@@ -422,6 +422,44 @@ func migrate(ctx context.Context, db *sql.DB) error {
 		}
 		if _, err = tx.ExecContext(ctx, "INSERT INTO sandbox_schema_migrations(version,applied_at) VALUES(11,?)", time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
 			return fmt.Errorf("record sandbox migration 11: %w", err)
+		}
+	}
+	var suiteApplied int
+	if err = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM sandbox_schema_migrations WHERE version=12").Scan(&suiteApplied); err != nil {
+		return fmt.Errorf("sandbox migration 12 presence: %w", err)
+	}
+	if suiteApplied == 0 {
+		if _, err = tx.ExecContext(ctx, `CREATE TABLE sandbox_tool_suite_bindings (
+			sandbox_id TEXT NOT NULL REFERENCES sandboxes(id) ON DELETE RESTRICT,
+			suite_id TEXT NOT NULL CHECK(suite_id='sandbox.workspace'),
+			provider_id TEXT NOT NULL UNIQUE REFERENCES providers(id) ON DELETE RESTRICT,
+			created_at TEXT NOT NULL,
+			PRIMARY KEY(sandbox_id,suite_id)
+		)`); err != nil {
+			return fmt.Errorf("sandbox migration 12 suite bindings: %w", err)
+		}
+		if _, err = tx.ExecContext(ctx, "INSERT INTO sandbox_schema_migrations(version,applied_at) VALUES(12,?)", time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
+			return fmt.Errorf("record sandbox migration 12: %w", err)
+		}
+	}
+	// A standalone Sandbox store may precede the Provider catalogue. Install
+	// guards whenever the two contexts share their Runtime database.
+	var hasProviderConfigs int
+	if err = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='provider_configs'").Scan(&hasProviderConfigs); err != nil {
+		return err
+	}
+	if hasProviderConfigs > 0 {
+		for _, statement := range []string{
+			`CREATE TRIGGER IF NOT EXISTS sandbox_suite_config_delete_guard BEFORE DELETE ON provider_configs
+			WHEN EXISTS(SELECT 1 FROM sandbox_tool_suite_bindings s WHERE s.provider_id=OLD.provider_id)
+			BEGIN SELECT RAISE(ABORT,'Sandbox Tool Suite is resource-owned'); END`,
+			`CREATE TRIGGER IF NOT EXISTS sandbox_suite_config_update_guard BEFORE UPDATE OF plugin_id,plugin_installation_id,config_json,config_version ON provider_configs
+			WHEN EXISTS(SELECT 1 FROM sandbox_tool_suite_bindings s WHERE s.provider_id=OLD.provider_id)
+			BEGIN SELECT RAISE(ABORT,'Sandbox Tool Suite config immutable'); END`,
+		} {
+			if _, err = tx.ExecContext(ctx, statement); err != nil {
+				return fmt.Errorf("sandbox suite persistence guards: %w", err)
+			}
 		}
 	}
 	if err = tx.Commit(); err != nil {

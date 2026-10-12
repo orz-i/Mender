@@ -538,6 +538,15 @@ func (r *Runtime) UpdateConfiguredProvider(
 	rawConfig json.RawMessage,
 	governanceContext governancedomain.Context,
 ) (catalogdomain.Provider, error) {
+	if r.Sandboxes != nil && r.Sandboxes.store != nil {
+		managed, err := r.Sandboxes.store.IsWorkspaceSuiteProvider(ctx, providerID.String())
+		if err != nil {
+			return catalogdomain.Provider{}, err
+		}
+		if managed {
+			return catalogdomain.Provider{}, fmt.Errorf("%w: Provider belongs to a Sandbox Tool Suite", ErrProviderInUse)
+		}
+	}
 	currentProvider, err := r.Catalog.GetProvider.Execute(ctx, providerID)
 	if err != nil {
 		return catalogdomain.Provider{}, err
@@ -889,6 +898,15 @@ func (r *Runtime) DeleteConfiguredProvider(
 		}
 		if managed {
 			return fmt.Errorf("%w: Provider is owned by an Agent Tool Suite", ErrProviderInUse)
+		}
+	}
+	if r.Sandboxes != nil && r.Sandboxes.store != nil {
+		managed, err := r.Sandboxes.store.IsWorkspaceSuiteProvider(ctx, providerID.String())
+		if err != nil {
+			return err
+		}
+		if managed {
+			return fmt.Errorf("%w: Provider belongs to a Sandbox Tool Suite", ErrProviderInUse)
 		}
 	}
 	if err := r.ensureProviderUnused(ctx, providerID); err != nil {
