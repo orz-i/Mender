@@ -17,6 +17,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SystemStatus'
+  /tool-suites:
+    get:
+      operationId: listToolSuites
+      responses:
+        '200':
+          description: Reviewed host-owned Tool Suite definitions; Browser is not executable
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [suites]
+                properties:
+                  suites: { type: array, items: { $ref: '#/components/schemas/ToolSuiteDefinition' } }
+        '403': { $ref: '#/components/responses/Forbidden' }
   /integrations:
     get:
       operationId: listIntegrationOfferings
@@ -1037,6 +1051,37 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Sandbox' }
         '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /sandboxes/{sandboxId}/tools:
+    parameters:
+      - $ref: '#/components/parameters/SandboxId'
+    get:
+      operationId: getSandboxTools
+      responses:
+        '200':
+          description: Inspect resource-bound Workspace Tool Suite without executing or repairing
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SandboxToolSuite' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      operationId: ensureSandboxTools
+      responses:
+        '200':
+          description: Explicitly create/adopt Workspace Tool Suite without granting Profile access
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SandboxToolSuite' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+    delete:
+      operationId: removeSandboxTools
+      responses:
+        '204': { description: Unreferenced resource-owned Workspace Tool Suite retired }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
@@ -2617,6 +2662,41 @@ components:
       properties:
         taskId: { type: string }
         cancelRequested: { type: boolean }
+    ToolSuiteDefinition:
+      type: object
+      required: [suiteId, displayName, description, resourceKind, requiredCapabilities, toolSourceKeys, status]
+      additionalProperties: false
+      properties:
+        suiteId: { type: string, enum: [agent.delegation, sandbox.workspace, sandbox.browser] }
+        displayName: { type: string }
+        description: { type: string }
+        resourceKind: { type: string, enum: [agent, sandbox] }
+        requiredCapabilities: { type: array, items: { type: string } }
+        toolSourceKeys: { type: array, items: { type: string } }
+        status: { type: string, enum: [builtin, unavailable] }
+        issue: { type: string }
+    SandboxTool:
+      type: object
+      required: [toolId, sourceKey, name, title]
+      additionalProperties: false
+      properties:
+        toolId: { type: string }
+        sourceKey: { type: string }
+        name: { type: string }
+        title: { type: string }
+    SandboxToolSuite:
+      type: object
+      required: [suiteId, sandboxId, status, available, tools]
+      additionalProperties: false
+      properties:
+        suiteId: { type: string, enum: [sandbox.workspace] }
+        sandboxId: { type: string, pattern: '^sbx_[0-9a-f]{32}$' }
+        status: { type: string, enum: [missing, ready, legacy, incomplete, conflict, incompatible] }
+        available: { type: boolean }
+        issue: { type: string }
+        providerId: { type: string }
+        providerName: { type: string }
+        tools: { type: array, items: { $ref: '#/components/schemas/SandboxTool' } }
     Sandbox:
       type: object
       required: [sandboxId, name, backend, isolation, state, localRoot, ownerKind, ownerRef, activeLeases, backendAvailable]

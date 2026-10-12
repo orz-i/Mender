@@ -31,6 +31,8 @@ import type {
   ToolSummary,
   Tunnel,
   Sandbox,
+  SandboxToolSuite,
+  ToolSuiteDefinition,
   Agent,
   AgentTools,
   AgentTask,
@@ -80,6 +82,8 @@ import {
   type AgentTask as BindingAgentTask,
   type AgentAdmissionEvent as BindingAgentAdmissionEvent,
   type Sandbox as BindingSandbox,
+  type SandboxToolSuite as BindingSandboxToolSuite,
+  type ToolSuiteDefinition as BindingToolSuiteDefinition,
   type SandboxActivity as BindingSandboxActivity,
   type SandboxProfileGrants as BindingSandboxProfileGrants,
   type SandboxProfileGrantEvents as BindingSandboxProfileGrantEvents,
@@ -433,6 +437,13 @@ export function createDesktopMenderClient(): MenderClient {
     },
     async grantAgentProfile(agentId,profileId){await Service.GrantAgentProfile(agentId,profileId);},
     async revokeAgentProfile(agentId,profileId){await Service.RevokeAgentProfile(agentId,profileId);},
+    async listToolSuites(){
+      const result=await Service.ListToolSuites();
+      return {suites:(result.suites??[]).map(toolSuiteDefinition)};
+    },
+    async getSandboxTools(sandboxId){return sandboxToolSuite(await Service.GetSandboxTools(sandboxId));},
+    async ensureSandboxTools(sandboxId){return sandboxToolSuite(await Service.EnsureSandboxTools(sandboxId));},
+    async removeSandboxTools(sandboxId){await Service.RemoveSandboxTools(sandboxId);},
     async listSandboxes() {
       const result = await Service.ListSandboxes();
       return { sandboxes: (result.sandboxes ?? []).map(sandbox) };
@@ -873,6 +884,26 @@ function policyResourceOperator(
   throw new MenderClientInvariantError("Unsupported desktop Policy resource operator: " + value);
 }
 
+function toolSuiteDefinition(value:BindingToolSuiteDefinition):ToolSuiteDefinition {
+  if(!["agent.delegation","sandbox.workspace","sandbox.browser"].includes(value.suiteId) ||
+    !["agent","sandbox"].includes(value.resourceKind) ||
+    !["builtin","unavailable"].includes(value.status) ||
+    (value.status==="unavailable"&&(value.toolSourceKeys?.length??0)!==0)){
+    throw new MenderClientInvariantError("Invalid Tool Suite descriptor");
+  }
+  return {...value,suiteId:value.suiteId as ToolSuiteDefinition["suiteId"],
+    resourceKind:value.resourceKind as ToolSuiteDefinition["resourceKind"],
+    status:value.status as ToolSuiteDefinition["status"],
+    requiredCapabilities:value.requiredCapabilities??[],toolSourceKeys:value.toolSourceKeys??[]};
+}
+function sandboxToolSuite(value:BindingSandboxToolSuite):SandboxToolSuite {
+  if(value.suiteId!=="sandbox.workspace" ||
+    !["missing","ready","legacy","incomplete","conflict","incompatible"].includes(value.status)){
+    throw new MenderClientInvariantError("Invalid Sandbox Tool Suite state");
+  }
+  return {...value,suiteId:"sandbox.workspace",status:value.status as SandboxToolSuite["status"],
+    tools:(value.tools??[]).map(tool=>({...tool}))};
+}
 function integrationOffering(value:BindingIntegrationOffering):IntegrationOffering {
   if(value.kind!=="remote-mcp" || value.driverPluginId!=="io.mender.provider.mcp" ||
     value.transport!=="streamable-http" || value.authentication!=="optional-bearer"){

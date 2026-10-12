@@ -17,7 +17,7 @@ var definitions = []domain.Definition{
 	{SuiteID: domain.SandboxBrowser, DisplayName: "Browser Tools",
 		Description:  "Browser-specific navigation, interaction and screenshots; requires a managed Browser Session backend",
 		ResourceKind: domain.SandboxResource, RequiredCapabilities: []domain.Capability{domain.BrowserSession},
-		Status: "unavailable", Issue: "No verified managed Browser Session backend is registered"},
+		ToolSourceKeys: []string{}, Status: "unavailable", Issue: "No verified managed Browser Session backend is registered"},
 }
 
 // List is stable source-reviewed metadata; it never discovers external

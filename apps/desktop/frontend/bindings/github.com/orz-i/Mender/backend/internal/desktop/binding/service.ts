@@ -160,6 +160,10 @@ export function EnsureAgentTools(id: string): $CancellablePromise<$models.AgentT
     return $Call.ByID(2907355678, id);
 }
 
+export function EnsureSandboxTools(id: string): $CancellablePromise<$models.SandboxToolSuite> {
+    return $Call.ByID(2389196380, id);
+}
+
 export function GetAgent(id: string): $CancellablePromise<$models.Agent> {
     return $Call.ByID(425014641, id);
 }
@@ -214,6 +218,10 @@ export function GetSandboxProfileGrantEvents(sandboxID: string, limit: number): 
 
 export function GetSandboxProfileGrants(rawID: string): $CancellablePromise<$models.SandboxProfileGrants> {
     return $Call.ByID(2724874943, rawID);
+}
+
+export function GetSandboxTools(id: string): $CancellablePromise<$models.SandboxToolSuite> {
+    return $Call.ByID(3299159646, id);
 }
 
 export function GetSkillInstallation(installationID: string): $CancellablePromise<$models.SkillInspection> {
@@ -325,6 +333,10 @@ export function ListSkills(): $CancellablePromise<$models.SkillInstallationList>
     return $Call.ByID(2845482598);
 }
 
+export function ListToolSuites(): $CancellablePromise<$models.ToolSuiteDefinitionList> {
+    return $Call.ByID(2161354387);
+}
+
 export function ListTunnels(): $CancellablePromise<$models.TunnelList> {
     return $Call.ByID(3666209663);
 }
@@ -351,6 +363,10 @@ export function ReconcileSandbox(raw: string): $CancellablePromise<$models.Sandb
 
 export function RemoveProfileTool(slug: string, toolID: string): $CancellablePromise<$models.Profile> {
     return $Call.ByID(610642707, slug, toolID);
+}
+
+export function RemoveSandboxTools(id: string): $CancellablePromise<void> {
+    return $Call.ByID(471789370, id);
 }
 
 export function ReplaceProfileTools(slug: string, tools: $models.ProfileTool[] | null): $CancellablePromise<$models.Profile> {

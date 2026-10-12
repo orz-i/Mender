@@ -571,6 +571,24 @@ export interface SandboxProfileGrants {
     "grants": SandboxProfileGrant[] | null;
 }
 
+export interface SandboxTool {
+    "toolId": string;
+    "sourceKey": string;
+    "name": string;
+    "title": string;
+}
+
+export interface SandboxToolSuite {
+    "suiteId": string;
+    "sandboxId": string;
+    "status": string;
+    "providerId"?: string;
+    "providerName"?: string;
+    "available": boolean;
+    "issue"?: string;
+    "tools": SandboxTool[] | null;
+}
+
 export interface SkillDeployment {
     "deploymentId": string;
     "installationId": string;
@@ -658,6 +676,21 @@ export interface ToolDetail {
 
 export interface ToolList {
     "tools": ToolSummary[] | null;
+}
+
+export interface ToolSuiteDefinition {
+    "suiteId": string;
+    "displayName": string;
+    "description": string;
+    "resourceKind": string;
+    "requiredCapabilities": string[] | null;
+    "toolSourceKeys": string[] | null;
+    "status": string;
+    "issue"?: string;
+}
+
+export interface ToolSuiteDefinitionList {
+    "suites": ToolSuiteDefinition[] | null;
 }
 
 export interface ToolSummary {

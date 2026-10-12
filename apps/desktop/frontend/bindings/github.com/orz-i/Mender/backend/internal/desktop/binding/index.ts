@@ -73,6 +73,8 @@ export type {
     SandboxProfileGrantEvent,
     SandboxProfileGrantEvents,
     SandboxProfileGrants,
+    SandboxTool,
+    SandboxToolSuite,
     SkillDeployment,
     SkillDeploymentList,
     SkillInspection,
@@ -84,6 +86,8 @@ export type {
     SystemStatus,
     ToolDetail,
     ToolList,
+    ToolSuiteDefinition,
+    ToolSuiteDefinitionList,
     ToolSummary,
     Tunnel,
     TunnelList

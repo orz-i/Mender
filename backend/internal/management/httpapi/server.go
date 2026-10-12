@@ -90,6 +90,7 @@ func (h *Handler) routes() {
 	h.mux.HandleFunc("DELETE /api/v1/skill-deployments/{deploymentId}", h.undeploySkill)
 
 	h.mux.HandleFunc("GET /api/v1/integrations", h.listIntegrationOfferings)
+	h.mux.HandleFunc("GET /api/v1/tool-suites", h.listToolSuites)
 	h.mux.HandleFunc("GET /api/v1/providers", h.listProviders)
 	h.mux.HandleFunc("POST /api/v1/providers", h.createProvider)
 	h.mux.HandleFunc("POST /api/v1/providers/http", h.createHTTPProvider)
@@ -136,6 +137,9 @@ func (h *Handler) routes() {
 	h.mux.HandleFunc("POST /api/v1/sandboxes/{sandboxId}/daytona/reconcile", h.reconcileDaytonaSandbox)
 	h.mux.HandleFunc("POST /api/v1/sandboxes/{sandboxId}/reconcile", h.reconcileDockerSandbox)
 	h.mux.HandleFunc("GET /api/v1/sandboxes/{sandboxId}", h.getSandbox)
+	h.mux.HandleFunc("GET /api/v1/sandboxes/{sandboxId}/tools", h.getSandboxTools)
+	h.mux.HandleFunc("POST /api/v1/sandboxes/{sandboxId}/tools", h.ensureSandboxTools)
+	h.mux.HandleFunc("DELETE /api/v1/sandboxes/{sandboxId}/tools", h.removeSandboxTools)
 	h.mux.HandleFunc("GET /api/v1/sandboxes/{sandboxId}/activity", h.getSandboxActivity)
 	h.mux.HandleFunc("GET /api/v1/sandboxes/{sandboxId}/profile-grants", h.getSandboxProfileGrants)
 	h.mux.HandleFunc("PUT /api/v1/sandboxes/{sandboxId}/profile-grants/{profileId}", h.putSandboxProfileGrants)

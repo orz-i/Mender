@@ -60,6 +60,8 @@ export type {
   AgentCancelReceipt,
   CreateAgentRequest,
   Sandbox,
+  SandboxToolSuite,
+  ToolSuiteDefinition,
   SandboxActivity,
   SandboxActivityEvent,
   SandboxProfileGrants,

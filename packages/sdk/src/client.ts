@@ -28,6 +28,8 @@ export type AgentGrants = components["schemas"]["AgentGrants"];
 export type AgentCancelReceipt = components["schemas"]["AgentCancelReceipt"];
 export type CreateAgentRequest = components["schemas"]["CreateAgentRequest"];
 export type Sandbox = components["schemas"]["Sandbox"];
+export type ToolSuiteDefinition=components["schemas"]["ToolSuiteDefinition"];
+export type SandboxToolSuite=components["schemas"]["SandboxToolSuite"];
 export type SandboxActivity = components["schemas"]["SandboxActivity"];
 export type SandboxActivityEvent = components["schemas"]["SandboxActivityEvent"];
 export type SandboxProfileGrants = components["schemas"]["SandboxProfileGrants"];
@@ -190,6 +192,10 @@ export interface MenderClient {
   listAgentGrants(agentId:string): Promise<AgentGrants>;
   grantAgentProfile(agentId:string,profileId:string): Promise<void>;
   revokeAgentProfile(agentId:string,profileId:string): Promise<void>;
+  listToolSuites(): Promise<{suites:ToolSuiteDefinition[]}>;
+  getSandboxTools(sandboxId:string):Promise<SandboxToolSuite>;
+  ensureSandboxTools(sandboxId:string):Promise<SandboxToolSuite>;
+  removeSandboxTools(sandboxId:string):Promise<void>;
   listSandboxes(): Promise<{ sandboxes: Sandbox[] }>;
   getSandbox(sandboxId: string): Promise<Sandbox>;
   getSandboxActivity(sandboxId: string, limit?: number): Promise<SandboxActivity>;
@@ -562,6 +568,13 @@ export function createMenderClient(
     },
     async revokeAgentProfile(agentId,profileId){
       const result=await client.DELETE("/agents/{agentId}/profile-grants/{profileId}",{params:{path:{agentId,profileId}}});
+      if(!result.response.ok)throwApiError(result.error,result.response);
+    },
+    async listToolSuites(){return requireData(await client.GET("/tool-suites"));},
+    async getSandboxTools(sandboxId){return requireData(await client.GET("/sandboxes/{sandboxId}/tools",{params:{path:{sandboxId}}}));},
+    async ensureSandboxTools(sandboxId){return requireData(await client.POST("/sandboxes/{sandboxId}/tools",{params:{path:{sandboxId}}}));},
+    async removeSandboxTools(sandboxId){
+      const result=await client.DELETE("/sandboxes/{sandboxId}/tools",{params:{path:{sandboxId}}});
       if(!result.response.ok)throwApiError(result.error,result.response);
     },
     async listSandboxes() {

@@ -20,6 +20,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/tool-suites": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listToolSuites"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/integrations": {
         parameters: {
             query?: never;
@@ -844,6 +860,24 @@ export interface paths {
         put?: never;
         post?: never;
         delete: operations["destroySandbox"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sandboxes/{sandboxId}/tools": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sandboxId: components["parameters"]["SandboxId"];
+            };
+            cookie?: never;
+        };
+        get: operations["getSandboxTools"];
+        put?: never;
+        post: operations["ensureSandboxTools"];
+        delete: operations["removeSandboxTools"];
         options?: never;
         head?: never;
         patch?: never;
@@ -2090,6 +2124,37 @@ export interface components {
             taskId: string;
             cancelRequested: boolean;
         };
+        ToolSuiteDefinition: {
+            /** @enum {string} */
+            suiteId: "agent.delegation" | "sandbox.workspace" | "sandbox.browser";
+            displayName: string;
+            description: string;
+            /** @enum {string} */
+            resourceKind: "agent" | "sandbox";
+            requiredCapabilities: string[];
+            toolSourceKeys: string[];
+            /** @enum {string} */
+            status: "builtin" | "unavailable";
+            issue?: string;
+        };
+        SandboxTool: {
+            toolId: string;
+            sourceKey: string;
+            name: string;
+            title: string;
+        };
+        SandboxToolSuite: {
+            /** @enum {string} */
+            suiteId: "sandbox.workspace";
+            sandboxId: string;
+            /** @enum {string} */
+            status: "missing" | "ready" | "legacy" | "incomplete" | "conflict" | "incompatible";
+            available: boolean;
+            issue?: string;
+            providerId?: string;
+            providerName?: string;
+            tools: components["schemas"]["SandboxTool"][];
+        };
         Sandbox: {
             sandboxId: string;
             name: string;
@@ -2282,6 +2347,29 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SystemStatus"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    listToolSuites: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Reviewed host-owned Tool Suite definitions; Browser is not executable */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        suites: components["schemas"]["ToolSuiteDefinition"][];
+                    };
                 };
             };
             403: components["responses"]["Forbidden"];
@@ -3890,6 +3978,78 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getSandboxTools: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sandboxId: components["parameters"]["SandboxId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Inspect resource-bound Workspace Tool Suite without executing or repairing */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SandboxToolSuite"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    ensureSandboxTools: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sandboxId: components["parameters"]["SandboxId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Explicitly create/adopt Workspace Tool Suite without granting Profile access */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SandboxToolSuite"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    removeSandboxTools: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sandboxId: components["parameters"]["SandboxId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Unreferenced resource-owned Workspace Tool Suite retired */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
