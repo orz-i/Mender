@@ -593,6 +593,8 @@ describe("management pages", () => {
     await waitFor(() => {
       expect(screen.queryByText("Echo")).toBeNull();
     });
+    // The foundation driver stays available in the advanced view.
+    fireEvent.click(screen.getByRole("button",{name:"Show foundation drivers"}));
     expect(await screen.findByText("MCP")).toBeTruthy();
   });
 
@@ -652,10 +654,49 @@ describe("management pages", () => {
     ).toBeTruthy();
   });
 
+  it("connects reviewed AnySearch without endpoint editing, scripts or implicit Profile grants",async()=>{
+    const credential={
+      reference:"credential://anysearch/key",namespace:"anysearch",name:"key",
+      displayName:"AnySearch Key",source:"native" as const,environmentVariable:"",
+      createdAt:"2026-10-12T00:00:00Z",updatedAt:"2026-10-12T00:00:00Z",
+    };
+    const createProvider=vi.fn().mockResolvedValue({provider:{providerId:"prov_connected"},sync:{created:0,updated:0,removed:0,total:0}});
+    const grantAgentProfile=vi.fn();
+    renderApp("/plugins",{
+      listIntegrationOfferings:vi.fn().mockResolvedValue({integrations:[anySearchOffering]}),
+      listProviders:vi.fn().mockResolvedValue({providers:[]}),
+      listCredentials:vi.fn().mockResolvedValue({credentials:[credential]}),
+      createProvider,grantAgentProfile,
+    });
+    fireEvent.click(await screen.findByRole("link",{name:"View AnySearch"}));
+    expect(await screen.findByRole("button",{name:"Connect"})).toBeTruthy();
+    fireEvent.click(screen.getByRole("button",{name:"Connect"}));
+    const dialog=await screen.findByRole("dialog",{name:"Connect AnySearch"});
+    expect(within(dialog).getByText("https://api.anysearch.com/mcp")).toBeTruthy();
+    expect(within(dialog).queryByRole("textbox",{name:"Endpoint"})).toBeNull();
+    expect(within(dialog).queryByRole("textbox",{name:"Local command"})).toBeNull();
+    fireEvent.change(within(dialog).getByRole("combobox",{name:"AnySearch API Credential"}),{
+      target:{value:credential.reference},
+    });
+    fireEvent.click(within(dialog).getByRole("button",{name:"Connect"}));
+    await waitFor(()=>expect(createProvider).toHaveBeenCalledWith({
+      namespace:"anysearch",displayName:"AnySearch",pluginId:"io.mender.provider.mcp",
+      config:{transport:{
+        kind:"streamable-http",endpoint:"https://api.anysearch.com/mcp",
+        headers:{"X-Anysearch-Client":"mcp/1.0.0"},
+        credentialHeaders:[{name:"Authorization",scheme:"Bearer",credentialRef:credential.reference}],
+      }},
+    }));
+    expect(grantAgentProfile).not.toHaveBeenCalled();
+  });
+
   it("opens the existing Provider create flow from a Marketplace detail", async () => {
     renderApp("/plugins", {
       listProviders: vi.fn().mockResolvedValue({ providers: [] }),
     });
+    expect(await screen.findByRole("button",{name:"Show foundation drivers"})).toBeTruthy();
+    expect(screen.queryByRole("link",{name:"View MCP"})).toBeNull();
+    fireEvent.click(screen.getByRole("button",{name:"Show foundation drivers"}));
 
     fireEvent.click(
       await screen.findByRole("link", { name: "View MCP" }),
@@ -2596,6 +2637,20 @@ function captureDockerPolling(){
   };
 }
 
+const anySearchOffering = {
+  offeringId:"io.mender.integration.anysearch",
+  displayName:"AnySearch",
+  description:"Real-time search through hosted MCP",
+  kind:"remote-mcp" as const,
+  driverPluginId:"io.mender.provider.mcp" as const,
+  transport:"streamable-http" as const,
+  endpoint:"https://api.anysearch.com/mcp",
+  headers:{"X-Anysearch-Client":"mcp/1.0.0"},
+  defaultNamespace:"anysearch",
+  authentication:"optional-bearer" as const,
+  sourceUrl:"https://github.com/anysearch-ai/anysearch-mcp-server",
+};
+
 function renderApp(
   path: string,
   client: Partial<MenderClient>,
@@ -2610,6 +2665,7 @@ function renderApp(
     capabilities:[],usageCount:0,configVersion:1,protocolVersion:1,
   });
   const resolvedClient = {
+    listIntegrationOfferings:vi.fn().mockResolvedValue({integrations:[]}),
     listPluginCatalogue:vi.fn().mockResolvedValue({plugins:[
       builtinPlugin("io.mender.provider.mcp","MCP"),
       builtinPlugin("io.mender.provider.model-tools","Model Tools"),

@@ -19,6 +19,36 @@ A Sandbox does not automatically create Tools and a Tunnel does not participate
 in Catalog discovery. Credentials, Policy, Admission, leases, budgets, Audit,
 resource identity and lifecycle orchestration always belong to Mender.
 
+## Reviewed integration offerings (Phase 34 C)
+
+Integration offerings are **configuration recipes**, not native Plugin
+Installations or live Providers. The host exposes an inert reviewed catalogue
+through `GET /api/v1/integrations` and the matching SDK/Wails APIs. In the
+Marketplace, offerings have **Available** status (not connected/healthy), a
+separate Remote MCP Integration type, and a **Connect** action.
+
+The initial AnySearch offering pins the built-in MCP driver,
+`https://api.anysearch.com/mcp`, Streamable HTTP and a reviewed
+`X-Anysearch-Client` header. The focused connection flow asks for a name,
+an optional existing Credential Reference (or anonymous use), and hides the
+default namespace under Advanced. The endpoint and protocol are read-only in
+this preset. Custom MCP endpoints remain available through the Advanced
+Provider workflow. A connection uses canonical Tool sync and existing
+Credential/Policy/Approval/Audit governance; it does **not** grant a Profile.
+
+Ordinary Marketplace discovery hides **built-in foundational Provider drivers**
+(MCP, OpenAPI, Model Tools and Workspace) by default; they remain available
+under the icon-only **Show foundation drivers** advanced control. Installed
+third-party Provider packages and the underlying technical Plugin Catalogue
+are unaffected. Agent Delegation belongs to the Agent Tools tab rather than
+the Marketplace. No directory read contacts AnySearch or requests its API key.
+
+A signed-off offering is not evidence that the service is reachable or that
+an external account/API key works; operator-side live verification is separate.
+For ownership and trust boundaries, see
+[ADR-0039](../architecture/adr/0039-offerings-resource-tool-suites.md)
+and [Phase 34 C](../planning/phase-34-c-integration-offerings.md).
+
 ## Package manifest v2
 
 New packages must carry `mender-plugin.json`:

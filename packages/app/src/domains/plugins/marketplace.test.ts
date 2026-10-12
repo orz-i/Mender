@@ -1,9 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import type { MenderClient, PluginCatalogueEntry } from "@mender/sdk";
+import type { IntegrationOffering, MenderClient, PluginCatalogueEntry } from "@mender/sdk";
 import {
   humanizePluginId,
   marketplaceCursorPage,
   pluginCatalogueToMarketplace,
+  integrationOfferingsToMarketplace,
   loadMarketplacePlugins,
   removeMarketplacePlugin,
   setMarketplacePluginEnabled,
@@ -24,7 +25,30 @@ function entry(kind:PluginCatalogueEntry["kind"],overrides:Partial<PluginCatalog
   };
 }
 
+const anySearch:IntegrationOffering={
+    offeringId:"io.mender.integration.anysearch",displayName:"AnySearch",
+    description:"Search the web through the hosted MCP server",
+    kind:"remote-mcp" as const,driverPluginId:"io.mender.provider.mcp" as const,
+    transport:"streamable-http" as const,endpoint:"https://api.anysearch.com/mcp",
+    headers:{"X-Anysearch-Client":"mcp/1.0.0"},defaultNamespace:"anysearch",
+    authentication:"optional-bearer" as const,sourceUrl:"https://github.com/anysearch-ai/anysearch-mcp-server",
+  };
 describe("canonical typed Marketplace",()=>{
+  it("offers AnySearch as a connection recipe, not an executable Provider installation",()=>{
+    const result=integrationOfferingsToMarketplace([anySearch]);
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({
+      key:"integration:io.mender.integration.anysearch",kind:"integration",
+      source:"curated",status:"available",actions:{enable:false,disable:false,remove:false},
+      createAction:{label:"Connect",href:"/providers?create=1&offeringId=io.mender.integration.anysearch"},
+    });
+    expect(result[0]?.technicalDetails.find(x=>x.label==="Endpoint")?.value).toBe("https://api.anysearch.com/mcp");
+  });
+  it("refuses an incompatible integration definition without creating a route",()=>{
+    expect(()=>integrationOfferingsToMarketplace([{
+      ...anySearch,kind:"cloud-browser" as unknown as IntegrationOffering["kind"],
+    }])).toThrow(/Unsupported reviewed integration/);
+  });
   it("does not present the Agent Delegation execution facade as an installable offering",()=>{
     const internal=entry("provider.tools",{
       key:"io.mender.provider.agent-delegation@builtin",
@@ -172,15 +196,19 @@ describe("canonical typed Marketplace",()=>{
 
   it("loads exactly one canonical catalogue and dispatches generic installation actions",async()=>{
     const listPluginCatalogue=vi.fn().mockResolvedValue({plugins:[entry("sandbox.backend")]});
+    const listIntegrationOfferings=vi.fn().mockResolvedValue({integrations:[anySearch]});
     const disablePluginInstallation=vi.fn().mockResolvedValue({});
     const deletePluginInstallation=vi.fn().mockResolvedValue(undefined);
     const client={
-      listPluginCatalogue,disablePluginInstallation,deletePluginInstallation,
+      listPluginCatalogue,listIntegrationOfferings,disablePluginInstallation,deletePluginInstallation,
     } as unknown as MenderClient;
     const result=await loadMarketplacePlugins(client);
     expect(listPluginCatalogue).toHaveBeenCalledTimes(1);
-    await setMarketplacePluginEnabled(client,result[0]!,false);
-    await removeMarketplacePlugin(client,result[0]!);
+    expect(listIntegrationOfferings).toHaveBeenCalledTimes(1);
+    expect(result).toHaveLength(2);
+    const sandbox=result.find(item=>item.kind==="sandbox")!;
+    await setMarketplacePluginEnabled(client,sandbox,false);
+    await removeMarketplacePlugin(client,sandbox);
     expect(disablePluginInstallation).toHaveBeenCalledWith(id);
     expect(deletePluginInstallation).toHaveBeenCalledWith(id);
   });

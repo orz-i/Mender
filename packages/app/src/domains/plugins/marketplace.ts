@@ -1,5 +1,6 @@
 import type {
   MenderClient,
+  IntegrationOffering,
   PluginCatalogueEntry,
   ProviderPluginInstallation,
 } from "@mender/sdk";
@@ -8,6 +9,7 @@ export type MarketplacePluginKind = string;
 export type MarketplacePluginSource = string;
 export type MarketplacePluginStatus =
   | "enabled"
+  | "available"
   | "disabled"
   | "invalid"
   | "degraded"
@@ -128,8 +130,43 @@ export function pluginCatalogueToMarketplace(entries:PluginCatalogueEntry[]):Mar
   }).toSorted(compareMarketplacePlugins);
 }
 
+export function integrationOfferingsToMarketplace(offerings:IntegrationOffering[]):MarketplacePlugin[] {
+  return offerings.map((entry):MarketplacePlugin=>{
+    if(entry.kind!=="remote-mcp"||entry.transport!=="streamable-http"||
+      entry.driverPluginId!=="io.mender.provider.mcp"||entry.authentication!=="optional-bearer"||
+      !entry.offeringId.startsWith("io.mender.integration.")||!entry.endpoint.startsWith("https://")){
+      throw new Error("Unsupported reviewed integration offering");
+    }
+    return {
+      key:"integration:"+entry.offeringId,kind:"integration",kindLabel:"Remote MCP integration",
+      displayName:entry.displayName,description:entry.description,
+      source:"curated",sourceLabel:"Curated",
+      version:"Reviewed preset",status:"available",enabled:false,
+      capabilities:["MCP","streamable-http"],
+      actions:noMarketplaceActions(),
+      technicalDetails:[
+        {label:"Offering ID",value:entry.offeringId,mono:true},
+        {label:"Protocol",value:"MCP · Streamable HTTP"},
+        {label:"Driver Plugin",value:entry.driverPluginId,mono:true},
+        {label:"Endpoint",value:entry.endpoint,mono:true},
+        {label:"Authentication",value:"Optional API Credential"},
+        {label:"Source",value:entry.sourceUrl},
+      ],
+      createAction:{
+        label:"Connect",
+        href:"/providers?"+new URLSearchParams({create:"1",offeringId:entry.offeringId}).toString(),
+      },
+    };
+  });
+}
+
 export async function loadMarketplacePlugins(client:MenderClient){
-  return pluginCatalogueToMarketplace((await client.listPluginCatalogue()).plugins);
+  const [catalogue,integrations]=await Promise.all([
+    client.listPluginCatalogue(),client.listIntegrationOfferings(),
+  ]);
+  return [...pluginCatalogueToMarketplace(catalogue.plugins),
+    ...integrationOfferingsToMarketplace(integrations.integrations)]
+    .toSorted(compareMarketplacePlugins);
 }
 
 export function marketplaceCursorPage(

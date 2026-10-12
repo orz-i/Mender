@@ -6,6 +6,7 @@ import {
   ChevronRightIcon,
   PackagePlusIcon,
   RefreshCwIcon,
+  Settings2Icon,
   PlusIcon,
   PowerIcon,
   PowerOffIcon,
@@ -57,6 +58,10 @@ type StatusFilter = "all" | MarketplacePluginStatus;
 type KindFilter = string;
 
 const MARKETPLACE_PAGE_SIZE = 12;
+const FOUNDATIONAL_PROVIDER_DRIVERS = new Set([
+  "io.mender.provider.mcp","io.mender.provider.openapi",
+  "io.mender.provider.model-tools","io.mender.provider.workspace",
+]);
 
 export function PluginsPage({
   client,
@@ -69,6 +74,7 @@ export function PluginsPage({
     useMarketplacePlugins(client);
   const [busy, setBusy] = useState("");
   const [query, setQuery] = useState("");
+  const [showFoundationDrivers, setShowFoundationDrivers] = useState(false);
   const [kindFilter, setKindFilter] = useState<KindFilter>("all");
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
@@ -101,6 +107,8 @@ export function PluginsPage({
   const visiblePlugins = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase();
     return plugins.filter((plugin) => {
+      if(!showFoundationDrivers && plugin.source==="builtin" &&
+        plugin.kind==="provider" && FOUNDATIONAL_PROVIDER_DRIVERS.has(plugin.key.split("@")[0]!))return false;
       const matchesQuery =
         normalized === "" ||
         plugin.displayName.toLocaleLowerCase().includes(normalized) ||
@@ -113,7 +121,7 @@ export function PluginsPage({
         statusFilter === "all" || plugin.status === statusFilter;
       return matchesQuery && matchesKind && matchesSource && matchesStatus;
     });
-  }, [kindFilter, plugins, query, sourceFilter, statusFilter]);
+  }, [kindFilter, plugins, query, sourceFilter, statusFilter, showFoundationDrivers]);
 
   const cursor = cursorHistory.at(-1) ?? null;
   const page = useMemo(
@@ -174,6 +182,7 @@ export function PluginsPage({
               options={[
                 { value: "all", label: "All plugin statuses" },
                 { value: "enabled", label: "Enabled" },
+                { value: "available", label: "Available" },
                 { value: "disabled", label: "Disabled" },
                 { value: "unavailable", label: "Unavailable" },
                 { value: "planned", label: "Planned" },
@@ -186,6 +195,10 @@ export function PluginsPage({
         }
         actions={
           <>
+            <IconButton type="button" variant="outline" label={t(showFoundationDrivers ? "Hide foundation drivers" : "Show foundation drivers")}
+              onClick={()=>{setShowFoundationDrivers(value=>!value);setCursorHistory([null]);}}>
+              <Settings2Icon />
+            </IconButton>
             <Button type="button" variant="outline" size="sm" disabled={busy !== ""} onClick={() => void refresh()}>
               <RefreshCwIcon data-icon="inline-start" />
               {t("Refresh")}
@@ -701,6 +714,7 @@ function DetailField({
 
 function pluginKindLabel(plugin:MarketplacePlugin){
   switch(plugin.kind){
+    case "integration":return t("Remote MCP integration");
     case "provider":return t("Provider plugin");
     case "sandbox":return t("Sandbox backend");
     case "tunnel":return t("Tunnel transport");
@@ -712,6 +726,8 @@ function pluginKindLabel(plugin:MarketplacePlugin){
 
 function pluginSourceLabel(plugin: MarketplacePlugin) {
   switch (plugin.source) {
+    case "curated":
+      return t("Curated");
     case "builtin":
       return t("Built-in");
     case "local":
@@ -725,6 +741,8 @@ function pluginSourceLabel(plugin: MarketplacePlugin) {
 
 function pluginStatusLabel(plugin: MarketplacePlugin) {
   switch (plugin.status) {
+    case "available":
+      return t("Available");
     case "enabled":
       return t("Enabled");
     case "disabled":
@@ -741,7 +759,8 @@ function pluginStatusLabel(plugin: MarketplacePlugin) {
 }
 
 function pluginVersionLabel(plugin: MarketplacePlugin) {
-  return plugin.version === "Not released" ? t("Not released") : plugin.version;
+  return plugin.version === "Not released" ? t("Not released") :
+    plugin.version === "Reviewed preset" ? t("Reviewed preset") : plugin.version;
 }
 
 function pluginDescription(plugin: MarketplacePlugin) {

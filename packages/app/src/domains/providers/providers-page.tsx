@@ -18,6 +18,7 @@ import type {
   Provider,
   ProviderPlugin,
   ProviderPluginIssue,
+  IntegrationOffering,
   UpdateProviderRequest,
 } from "@mender/sdk";
 import { Badge } from "@mender/ui/components/badge";
@@ -294,11 +295,13 @@ export function ProvidersPage({
     remainingSearchParams.delete("pluginId");
     remainingSearchParams.delete("installationId");
     remainingSearchParams.delete("agentId");
+    remainingSearchParams.delete("offeringId");
     return {
       requested: searchParams.get("create") === "1",
       pluginId: searchParams.get("pluginId"),
       installationId: searchParams.get("installationId") ?? "",
       agentId: searchParams.get("agentId") ?? "",
+      offeringId: searchParams.get("offeringId") ?? "",
       remainingSearchParams,
     };
   });
@@ -321,6 +324,11 @@ export function ProvidersPage({
   const [createForm, setCreateForm] =
     useState<ProviderFormState>(emptyProviderForm);
   const [createError, setCreateError] = useState("");
+  const [connectionOffering, setConnectionOffering] = useState<IntegrationOffering|null>(null);
+  const [offeringName, setOfferingName] = useState("");
+  const [offeringNamespace, setOfferingNamespace] = useState("");
+  const [offeringCredentialRef, setOfferingCredentialRef] = useState("");
+  const [offeringError, setOfferingError] = useState("");
 
   const [viewProvider, setViewProvider] = useState<Provider | null>(null);
   const [editProvider, setEditProvider] = useState<Provider | null>(null);
@@ -370,8 +378,9 @@ export function ProvidersPage({
       client.listProviders(),
       client.listCredentials(),
       client.listSandboxes(),
+      createRequest.offeringId ? client.listIntegrationOfferings() : Promise.resolve({integrations:[] as IntegrationOffering[]}),
     ])
-      .then(([pluginResult, providerResult, credentialResult, sandboxResult]) => {
+      .then(([pluginResult, providerResult, credentialResult, sandboxResult, offeringResult]) => {
         if (active) {
           setProviderPlugins(pluginResult.plugins);
           setProviderPluginIssues(pluginResult.issues);
@@ -379,7 +388,22 @@ export function ProvidersPage({
           setCredentials(credentialResult.credentials);
           setSandboxes(sandboxResult.sandboxes);
 
-          if (createRequest.requested) {
+          if (createRequest.requested && createRequest.offeringId) {
+            const offering=offeringResult.integrations.find(item=>item.offeringId===createRequest.offeringId);
+            if (offering===undefined || offering.kind!=="remote-mcp" ||
+              offering.driverPluginId!==MCP_PLUGIN_ID || offering.transport!=="streamable-http" ||
+              offering.authentication!=="optional-bearer" || !offering.endpoint.startsWith("https://")) {
+              setError(t("The requested item was not found."));
+            } else {
+              setConnectionOffering(offering);
+              setOfferingName(offering.displayName);
+              setOfferingNamespace(offering.defaultNamespace);
+              setOfferingCredentialRef("");
+              setOfferingError("");
+              setError("");
+            }
+            setSearchParams(createRequest.remainingSearchParams, {replace:true});
+          } else if (createRequest.requested) {
             const plugin =
               createRequest.pluginId === null
                 ? undefined
@@ -435,6 +459,39 @@ export function ProvidersPage({
     ) : normal;
   }, [inventoryQuery, providers, showInternal]);
   const providerPagination = usePagination(visibleProviders);
+
+
+  async function connectOffering() {
+    const offering=connectionOffering;
+    const namespace=canonicalizeOwnedIdentifier(offeringNamespace);
+    if(!offering || busy!=="" || !isCanonicalOwnedSlug(namespace) ||
+      offeringName.trim()==="" || new TextEncoder().encode(offeringName.trim()).length>160)return;
+    // Every trusted parameter derives from the reviewed host catalogue.
+    // No model/user-supplied Endpoint, executable or header template enters.
+    if(offering.kind!=="remote-mcp" || offering.driverPluginId!==MCP_PLUGIN_ID ||
+      offering.transport!=="streamable-http" || offering.authentication!=="optional-bearer" ||
+      !offering.endpoint.startsWith("https://"))return;
+    setBusy("integration");
+    setOfferingError("");
+    try{
+      await client.createProvider({
+        namespace,displayName:offeringName.trim(),pluginId:offering.driverPluginId,
+        config:{transport:{
+          kind:"streamable-http",endpoint:offering.endpoint,headers:offering.headers,
+          ...(offeringCredentialRef?{credentialHeaders:[{
+            name:"Authorization",scheme:"Bearer",credentialRef:offeringCredentialRef,
+          }]}:{}),
+        }},
+      });
+      setConnectionOffering(null);
+      await refresh();
+    }catch(reason){
+      setOfferingError(ownedIdentifierCreateError(reason,"provider"));
+      await refresh();
+    }finally{
+      setBusy("");
+    }
+  }
 
   async function addProvider() {
     const namespace = canonicalizeOwnedIdentifier(createForm.namespace);
@@ -691,7 +748,7 @@ export function ProvidersPage({
       <PageToolbar
         tabs={
           <span className="text-xs text-muted-foreground">
-            {tCount(providers.length, "{{count}} configured source", "{{count}} configured sources")}
+            {tCount(showInternal ? providers.length : providers.filter(p=>p.pluginId!==AGENT_DELEGATION_PLUGIN_ID).length, "{{count}} configured source", "{{count}} configured sources")}
           </span>
         }
         filters={
@@ -847,6 +904,58 @@ export function ProvidersPage({
           </EmptyPanelState>
         )}
       </ResultPanel>
+
+      {connectionOffering!==null?(
+        <Dialog open onOpenChange={open=>{
+          if(!open&&busy!=="integration"){setConnectionOffering(null);setOfferingError("");}
+        }}>
+          <DialogContent className="max-h-[calc(100dvh-2rem)] grid-rows-[auto_minmax(0,1fr)_auto] sm:max-w-xl">
+            <div className="grid gap-2">
+              <DialogHeader>
+                <DialogTitle>{t("Connect {{integration}}",{integration:connectionOffering.displayName})}</DialogTitle>
+                <DialogDescription>{t("Configure this reviewed Remote MCP integration. No Profile access is granted automatically.")}</DialogDescription>
+              </DialogHeader>
+              {offeringError?<div role="alert" className="rounded-lg border border-destructive/20 p-3 text-sm text-destructive">{offeringError}</div>:null}
+            </div>
+            <div className="min-h-0 space-y-4 overflow-y-auto pr-1">
+              <Field label="Display name">
+                <Input aria-label={t("Integration name")} value={offeringName}
+                  onChange={event=>setOfferingName(event.target.value)}/>
+              </Field>
+              <div className="rounded-lg border border-border p-3">
+                <p className="mb-1 text-xs text-muted-foreground">{t("Reviewed endpoint · Streamable HTTP")}</p>
+                <p className="break-all font-mono text-xs">{connectionOffering.endpoint}</p>
+                <p className="mt-2 text-xs text-muted-foreground">{t("The endpoint and client header come from the reviewed integration definition.")}</p>
+              </div>
+              <Field label="API Credential" optional>
+                <select aria-label={t("AnySearch API Credential")} value={offeringCredentialRef}
+                  onChange={event=>setOfferingCredentialRef(event.target.value)}
+                  className="h-9 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus:ring-2 focus:ring-ring/40">
+                  <option value="">{t("Anonymous connection (lower rate limit)")}</option>
+                  {credentials.map(item=><option key={item.reference} value={item.reference}>
+                    {item.displayName} · {item.reference}
+                  </option>)}
+                </select>
+              </Field>
+              <details className="rounded-lg border border-border">
+                <summary className="cursor-pointer px-3 py-2 text-sm font-medium">{t("Advanced settings")}</summary>
+                <div className="border-t border-border p-3">
+                  <Field label="Namespace">
+                    <Input aria-label={t("Integration namespace")} value={offeringNamespace}
+                      onChange={event=>setOfferingNamespace(event.target.value)}/>
+                  </Field>
+                </div>
+              </details>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" disabled={busy==="integration"} onClick={()=>setConnectionOffering(null)}>{t("Cancel")}</Button>
+              <Button disabled={busy!=="" || !isCanonicalOwnedSlug(canonicalizeOwnedIdentifier(offeringNamespace)) ||
+                !offeringName.trim() || new TextEncoder().encode(offeringName.trim()).length>160}
+                onClick={()=>void connectOffering()}>{t("Connect")}</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      ):null}
 
       <ProviderPluginPickerDialog
         open={pluginPickerOpen}
