@@ -73,16 +73,24 @@ export function pluginInstaller(
 export function pluginCatalogueToMarketplace(entries:PluginCatalogueEntry[]):MarketplacePlugin[]{
   return entries.map((entry):MarketplacePlugin=>{
     const kind=entry.kind==="provider.tools"?"provider":
-      entry.kind==="sandbox.backend"?"sandbox":"tunnel";
-    const labels={provider:"Provider plugin",sandbox:"Sandbox backend",tunnel:"Tunnel transport"};
+      entry.kind==="sandbox.backend"?"sandbox":
+      entry.kind==="tunnel.transport"?"tunnel":
+      entry.kind==="agent.backend"?"agent":"unsupported";
+    const labels={provider:"Provider plugin",sandbox:"Sandbox backend",
+      tunnel:"Tunnel transport",agent:"Agent backend",unsupported:"Unsupported plugin"};
     const enabled=entry.enabled && entry.issue===undefined;
     const installationId=entry.installationId;
     const params=new URLSearchParams({create:"1",pluginId:entry.pluginId});
     if(installationId)params.set("installationId",installationId);
     const pathname=kind==="provider"?"/providers":
-      kind==="sandbox"?(installationId?"/sandboxes/new/external":"/sandboxes/new"):"/tunnels";
-    const createAction=enabled?{
-      label:kind==="provider"?"Add provider":kind==="sandbox"?"Create sandbox":"Add tunnel",
+      kind==="sandbox"?(installationId?"/sandboxes/new/external":"/sandboxes/new"):
+      kind==="agent"?"/agents/new":kind==="tunnel"?"/tunnels":"";
+    // Phase 33 supports only trusted built-in Agent Backend implementations.
+    // A native package advertising this kind is not an executable Agent driver.
+    const manageableKind=kind!=="unsupported" && (kind!=="agent" || !installationId);
+    const createAction=enabled && pathname && manageableKind?{
+      label:kind==="provider"?"Add provider":kind==="sandbox"?"Create sandbox":
+        kind==="agent"?"Add agent":"Add tunnel",
       href:pathname+"?"+params.toString(),
     }:undefined;
     return {
@@ -96,7 +104,7 @@ export function pluginCatalogueToMarketplace(entries:PluginCatalogueEntry[]):Mar
         entry.status:entry.issue?"degraded":entry.status,
       enabled:entry.enabled,
       capabilities:entry.capabilities,
-      actions:installationId?{
+      actions:installationId && manageableKind?{
         enable:entry.status==="disabled"&&!entry.issue,
         disable:entry.status==="enabled"&&entry.usageCount===0,
         remove:entry.usageCount===0,

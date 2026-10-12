@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   BlocksIcon,
+  BotIcon,
   BookOpenIcon,
   BoxIcon,
   CableIcon,
@@ -68,6 +69,7 @@ const navigation: NavigationGroup[] = [
     items: [
       { to: "/runtime", label: "Runtime", icon: GaugeIcon },
       { to: "/sandboxes", label: "Sandboxes", icon: BoxIcon },
+      { to: "/agents", label: "Agents", icon: BotIcon },
       { to: "/profiles", label: "Profiles", icon: Layers3Icon },
       { to: "/tunnels", label: "Tunnels", icon: CableIcon },
       { to: "/servers", label: "Servers", icon: ServerCogIcon },

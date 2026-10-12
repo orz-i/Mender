@@ -7,6 +7,9 @@ import type {
 import { TooltipProvider } from "@mender/ui/components/tooltip";
 import { Route, Routes } from "react-router";
 
+import { AgentsPage } from "./domains/agents/agents-page";
+import { AgentCreatePage } from "./domains/agents/agent-create-page";
+import { AgentDetailPage } from "./domains/agents/agent-detail-page";
 import { AuditPage } from "./domains/audit/audit-page";
 import { CatalogPage } from "./domains/catalog/catalog-page";
 import { CredentialsPage } from "./domains/credentials/credentials-page";
@@ -98,6 +101,10 @@ export function MenderApp({
             }
           />
           <Route path="runtime" element={<RuntimePage client={client} />} />
+          <Route path="agents" element={<AgentsPage client={client} />} />
+          <Route path="agents/new" element={<AgentCreatePage client={client}
+            {...(chooseLocalDirectory===undefined?{}:{chooseLocalDirectory})} />} />
+          <Route path="agents/:agentId" element={<AgentDetailPage client={client}/>} />
           <Route path="sandboxes" element={<SandboxesPage client={client} />} />
           <Route
             path="sandboxes/new"

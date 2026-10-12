@@ -73,6 +73,7 @@ const MCP_PLUGIN_ID = "io.mender.provider.mcp";
 const MODEL_TOOLS_PLUGIN_ID = "io.mender.provider.model-tools";
 const OPENAPI_PLUGIN_ID = "io.mender.provider.openapi";
 const WORKSPACE_PLUGIN_ID = "io.mender.provider.workspace";
+const AGENT_DELEGATION_PLUGIN_ID = "io.mender.provider.agent-delegation";
 
 type ProviderTransport = "http" | "stdio";
 type ModelToolsEngine = "openai" | "anthropic" | "gemini";
@@ -291,10 +292,12 @@ export function ProvidersPage({
     remainingSearchParams.delete("create");
     remainingSearchParams.delete("pluginId");
     remainingSearchParams.delete("installationId");
+    remainingSearchParams.delete("agentId");
     return {
       requested: searchParams.get("create") === "1",
       pluginId: searchParams.get("pluginId"),
       installationId: searchParams.get("installationId") ?? "",
+      agentId: searchParams.get("agentId") ?? "",
       remainingSearchParams,
     };
   });
@@ -388,9 +391,14 @@ export function ProvidersPage({
               setError(t("The requested item was not found."));
             } else {
               setError("");
-              setCreateForm(
-                formForProviderPlugin(emptyProviderForm, plugin),
-              );
+              const base=formForProviderPlugin(emptyProviderForm, plugin);
+              const fromAgent=plugin.pluginId===AGENT_DELEGATION_PLUGIN_ID &&
+                /^agent_[0-9a-f]{32}$/.test(createRequest.agentId);
+              setCreateForm(fromAgent?{
+                ...base,namespace:"agent-"+createRequest.agentId.slice(-8),
+                displayName:"Agent Delegation",
+                genericConfig:{agentId:createRequest.agentId},
+              }:base);
               setPluginPickerOpen(false);
               setCreateCanReturnToPicker(false);
               setCreateOpen(true);

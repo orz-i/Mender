@@ -704,6 +704,8 @@ function pluginKindLabel(plugin:MarketplacePlugin){
     case "provider":return t("Provider plugin");
     case "sandbox":return t("Sandbox backend");
     case "tunnel":return t("Tunnel transport");
+    case "agent":return t("Agent backend");
+    case "unsupported":return t("Unsupported plugin");
     default:return t(plugin.kindLabel);
   }
 }

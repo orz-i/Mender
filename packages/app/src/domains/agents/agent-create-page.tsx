@@ -1,0 +1,110 @@
+import { useState } from "react";
+import { useNavigate, useSearchParams } from "react-router";
+import type { Agent, MenderClient } from "@mender/sdk";
+import { Button } from "@mender/ui/components/button";
+import { Input } from "@mender/ui/components/input";
+import { t } from "../../i18n/i18n";
+import { errorMessage } from "../../shared/errors";
+import { ErrorNotice } from "../../shared/page";
+import { PageToolbar } from "../../shared/page-toolbar";
+import { DataPanel } from "../../shared/workbench";
+
+type Backend = Agent["backend"];
+type Step = "select" | "configure" | "review";
+const backendChoices: Array<{ value: Backend; name:string; description:string }> = [
+  {value:"codex",name:"Codex",description:""},
+  {value:"grok",name:"Grok",description:""},
+];
+
+export function AgentCreatePage({
+  client, chooseLocalDirectory,
+}:{
+  client:MenderClient;
+  chooseLocalDirectory?:()=>Promise<string|null>;
+}){
+  const navigate=useNavigate();
+  const [params]=useSearchParams();
+  const selected=params.get("pluginId")==="io.mender.agent.codex"?"codex":
+    params.get("pluginId")==="io.mender.agent.grok"?"grok":null;
+  const [step,setStep]=useState<Step>(selected?"configure":"select");
+  const [backend,setBackend]=useState<Backend>(selected??"codex");
+  const [name,setName]=useState("");
+  const [root,setRoot]=useState("");
+  const [isolation,setIsolation]=useState<"restricted_host"|"host">("restricted_host");
+  const [busy,setBusy]=useState(false);
+  const [error,setError]=useState("");
+  const valid=name.trim().length>0&&name.trim().length<=120&&root.startsWith("/");
+
+  async function create(){
+    if(!valid || busy || step!=="review")return;
+    setBusy(true);setError("");
+    try{
+      const item=await client.createAgent({
+        name:name.trim(),backend,workspaceRoot:root.trim(),isolation,
+      });
+      void navigate("/agents/"+item.agentId);
+    }catch(reason){setError(errorMessage(reason));setBusy(false);}
+  }
+  async function choose(){
+    if(!chooseLocalDirectory)return;
+    try{const path=await chooseLocalDirectory();if(path)setRoot(path);}catch(reason){setError(errorMessage(reason));}
+  }
+
+  return <>
+    <PageToolbar actions={<Button variant="outline" onClick={()=>void navigate("/agents")}>{t("Back to agents")}</Button>}/>
+    {error?<ErrorNotice message={error}/>:null}
+    <DataPanel title="Add agent">
+      <div className="mx-auto flex max-w-2xl flex-col gap-5 p-5 sm:p-8">
+        <div className="text-xs text-muted-foreground">{t(step==="select"?"Select backend":step==="configure"?"Configure agent":"Review agent")}</div>
+        {step==="select"?<>
+          <p className="text-sm text-muted-foreground">{t("Choose an installed Agent CLI backend. No Agent process starts during setup.")}</p>
+          <div className="grid gap-3 sm:grid-cols-2">{backendChoices.map(choice=>
+            <button key={choice.value} type="button" aria-pressed={backend===choice.value}
+              onClick={()=>setBackend(choice.value)}
+              className={`rounded-xl border p-5 text-left transition-colors focus-visible:ring-2 focus-visible:ring-ring ${backend===choice.value?"border-foreground bg-secondary/40":"border-border hover:border-foreground/50"}`}>
+              <div className="font-medium">{choice.name}</div>
+              <p className="mt-2 text-xs leading-5 text-muted-foreground">{choice.value==="codex"?t("Codex CLI requires the separately installed codex-acp adapter."):t("Grok CLI uses its built-in ACP stdio transport.")}</p>
+            </button>)}</div>
+          <div className="flex justify-end"><Button onClick={()=>setStep("configure")}>{t("Continue")}</Button></div>
+        </>:step==="configure"?<>
+          <div className="grid gap-2">
+            <label htmlFor="agent-name" className="text-sm font-medium">{t("Agent name")}</label>
+            <Input id="agent-name" maxLength={120} placeholder={t("Code Reviewer")} value={name} onChange={e=>setName(e.target.value)}/>
+          </div>
+          <div className="grid gap-2">
+            <label htmlFor="agent-root" className="text-sm font-medium">{t("Workspace directory")}</label>
+            <div className="flex gap-2"><Input id="agent-root" value={root} onChange={e=>setRoot(e.target.value)}
+              placeholder="/Users/example/project" className="min-w-0 flex-1"/>
+              {chooseLocalDirectory?<Button variant="outline" onClick={()=>void choose()}>{t("Choose local directory")}</Button>:null}
+            </div>
+          </div>
+          <div className="grid gap-2">
+            <label htmlFor="agent-isolation" className="text-sm font-medium">{t("Process isolation")}</label>
+            <select id="agent-isolation" value={isolation} onChange={e=>setIsolation(e.target.value as typeof isolation)}
+              className="h-10 rounded-xl border border-input bg-background px-3 text-sm">
+              <option value="restricted_host">{t("Restricted host")}</option>
+              <option value="host">{t("Host (not isolated)")}</option>
+            </select>
+            <p className="text-xs text-muted-foreground">{t("Host mode can access files and credentials with the Runtime user's permissions.")}</p>
+          </div>
+          <div className="flex justify-between gap-2">
+            <Button variant="outline" onClick={()=>setStep("select")}>{t("Back")}</Button>
+            <Button disabled={!valid} onClick={()=>setStep("review")}>{t("Review")}</Button>
+          </div>
+        </>:<>
+          <div className="space-y-3 rounded-xl border border-border p-5 text-sm">
+            <div><span className="text-muted-foreground">{t("Backend")}: </span>{backend==="codex"?"Codex":"Grok"}</div>
+            <div><span className="text-muted-foreground">{t("Name")}: </span>{name}</div>
+            <div className="break-all"><span className="text-muted-foreground">{t("Workspace")}: </span>{root}</div>
+            <div><span className="text-muted-foreground">{t("Isolation")}: </span>{isolation==="host"?t("Host (not isolated)"):t("Restricted host")}</div>
+          </div>
+          <p className="text-xs leading-5 text-muted-foreground">{t("Creating an Agent saves configuration only; it does not start a model, approve tool requests, or grant any Profile access.")}</p>
+          <div className="flex justify-between gap-2">
+            <Button variant="outline" disabled={busy} onClick={()=>setStep("configure")}>{t("Back")}</Button>
+            <Button disabled={busy||!valid} onClick={()=>void create()}>{busy?t("Creating…"):t("Create agent")}</Button>
+          </div>
+        </>}
+      </div>
+    </DataPanel>
+  </>;
+}

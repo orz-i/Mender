@@ -12,7 +12,8 @@ import {
 const id = "pinst_0123456789abcdef0123456789abcdef";
 function entry(kind:PluginCatalogueEntry["kind"],overrides:Partial<PluginCatalogueEntry>={}):PluginCatalogueEntry{
   const pluginId = kind==="provider.tools"?"dev.example.provider":
-    kind==="sandbox.backend"?"dev.example.sandbox":"dev.example.tunnel";
+    kind==="sandbox.backend"?"dev.example.sandbox":
+    kind==="agent.backend"?"dev.example.agent":"dev.example.tunnel";
   return {
     key:pluginId+"@"+id,pluginId,extensionId:"main",kind,
     displayName:"Example "+kind,description:"A real typed extension",
@@ -35,6 +36,31 @@ describe("canonical typed Marketplace",()=>{
       "/sandboxes/new/external?create=1&pluginId=dev.example.sandbox&installationId="+id);
     expect(models.find((x)=>x.kind==="tunnel")?.createAction?.href).toBe(
       "/tunnels?create=1&pluginId=dev.example.tunnel&installationId="+id);
+  });
+
+  it("maps built-in Agent Backends to focused Agent creation and never routes native/unavailable Agent plugins",()=>{
+    const builtin=entry("agent.backend",{
+      pluginId:"io.mender.agent.grok",key:"io.mender.agent.grok@builtin",sourceKind:"builtin",
+      capabilities:["acp.v1"],usageCount:0,
+    });
+    delete builtin.installationId;
+    const unavailable=entry("agent.backend",{
+      pluginId:"io.mender.agent.codex",key:"io.mender.agent.codex@builtin",sourceKind:"builtin",
+      enabled:false,status:"unavailable",issue:"codex-acp missing",
+    });
+    delete unavailable.installationId;
+    const native=entry("agent.backend",{
+      pluginId:"dev.example.agent",key:"dev.example.agent@"+id,sourceKind:"local",
+    });
+    const models=pluginCatalogueToMarketplace([builtin,unavailable,native]);
+    const grok=models.find(x=>x.key==="io.mender.agent.grok@builtin");
+    expect(grok?.kind).toBe("agent");
+    expect(grok?.createAction?.href).toBe("/agents/new?create=1&pluginId=io.mender.agent.grok");
+    expect(models.find(x=>x.key==="io.mender.agent.codex@builtin")?.createAction).toBeUndefined();
+    expect(models.find(x=>x.key==="dev.example.agent@"+id)?.createAction).toBeUndefined();
+    expect(models.find(x=>x.key==="dev.example.agent@"+id)?.actions).toEqual({
+      enable:false,disable:false,remove:false,
+    });
   });
 
   it("prevents enable/remove of unavailable or referenced packages",()=>{
