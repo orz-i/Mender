@@ -1,6 +1,6 @@
 # Phase 34 — Marketplace offerings, managed facades and tool-suite governance
 
-Status: **Active (2026-10-12)**. Architecture decision: [ADR-0039](../architecture/adr/0039-offerings-resource-tool-suites.md).
+Status: **Implementation stages A–D closed (2026-10-12)**; operator-only live/browser verification remains explicitly outstanding. Architecture decision: [ADR-0039](../architecture/adr/0039-offerings-resource-tool-suites.md).
 
 ## Intent Contract
 
@@ -50,7 +50,15 @@ Stages A→B→C→D are **four bounded outcomes**, not an endlessly nested phas
 
 ### Execution log
 
-- A: pending
-- B: pending
-- C: pending
-- D: pending
+- **A — architecture, docs first:** `ab99d62` accepted ADR-0039 and Phase 34 contract.
+- **B — Agent tools and ownership:** `e16714d` backend/persistence/HTTP/SDK/Wails/CLI, `fd785d1` focused Agent UX, `6647f55` lint closure. Deterministic tests verify distinct Agent facades, old Provider/ToolID adoption, conflict fail-closed, idempotence and no implicit grants. The canonical invocation/Policy/AgentGrant pipeline stays unchanged.
+- **C — reviewed Remote MCP integrations:** `cd35d77` scoped contract, `8a0318a` inert offering inventory with HTTP/SDK/Wails parity, `b14dbd5` Marketplace AnySearch configuration action. Anonymous/credential-reference form is host-reviewed; preset discovery does not connect or confer Profile rights. Legacy custom MCP configuration remains under advanced Provider creation.
+- **D — Tool Suite definitions, binding and UX:** `e32ac3a` docs-first acceptance; `744a31f` typed `agent.delegation`, `sandbox.workspace`, unavailable `sandbox.browser` contracts, forward-only Sandbox SQLite v12 unique bindings, exact capability/lease eligibility and legacy adoption; `12b16a8` HTTP/CLI/SDK/Wails parity; `c0dd8b5` focused Sandbox Tools view; `0bcdc71` cached backend readiness and exact-owner safety hardening. Tests cover concurrent claims, wrong resource/capability, no host fallback, cross-Principal management denial, duplicate legacy facade, restart-stable ToolIDs, read-only catalogue and no automatic exposure.
+- **Unrelated test scheduler flake isolation:** `afc0cdd` makes the existing Tunnel polling test wait for its timer installation before manually firing it; no Tunnel runtime changes.
+- **Final automated gates:** `pnpm check` exited **0** after a clean generator/lint/unit/race/TypeScript/i18n/Vitest/build run; **30 Vitest files / 188 tests passed**. `pnpm security:check` exited **0** (Go symbol-level checks and JavaScript production audit; no reachable findings). `git diff --check` passed. Vite emitted non-blocking warnings about JS chunks exceeding 500 kB; code-splitting is follow-up performance work, not a failed quality gate.
+
+### Deliberately outstanding operator-only acceptance
+
+- Real Grok/Codex authentication and paid Agent task execution, live AnySearch API/anonymous handshake, external Docker/Daytona/SSH operations, packaged Wails visual smoke and actual managed cloud-browser isolation are **not** tested or claimed.
+- Browser Suite is **unavailable by design** with zero runnable Browser Tools and no managed Browser Session backend. Integrating an existing browser Remote MCP service is a regular MCP Connection, not a native Sandbox driver.
+- Third-party registry ingestion, multi-extension packages, MCP Tasks advertisement, auto-Profile grants and Agent orchestration are out of scope.

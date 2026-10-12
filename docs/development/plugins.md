@@ -49,6 +49,57 @@ For ownership and trust boundaries, see
 [ADR-0039](../architecture/adr/0039-offerings-resource-tool-suites.md)
 and [Phase 34 C](../planning/phase-34-c-integration-offerings.md).
 
+## Governed Tool Suites and resource ownership (Phase 34 D)
+
+A **Tool Suite** defines a reviewed set of operations and their required
+resource capabilities. It is **not** a native Plugin Package, an Agent Skill,
+or a Profile authorization grant. `GET /api/v1/tool-suites` and matching
+CLI/SDK/Wails reads return inert metadata. The marketplace presents these
+definitions separately from executable drivers and installable integrations.
+
+| Suite | Resource | Required capabilities | Availability |
+| --- | --- | --- | --- |
+| `agent.delegation` | Agent | `agent.task` | Built-in; managed from each Agent's Tools view |
+| `sandbox.workspace` | Sandbox | `file.read`, `file.search`, `file.edit`, `process.shell` | Built-in, only for an exact ready backend supporting **all four** operations |
+| `sandbox.browser` | Sandbox | `browser.session` | Unavailable until a verified managed Browser Session driver is implemented |
+
+An Agent or Sandbox can have resources configured without any Profile exposure.
+For Sandboxes, open the resource **Tools** view and select **Prepare Workspace
+Tools** (or explicitly adopt a unique existing Provider). Mender preserves
+existing ProviderID/ToolIDs/SourceKeys and Profile aliases. Conflicting existing
+Providers are reported, never auto-merged or renamed. New managed suite
+bindings are unique at the SQLite boundary and cannot be removed/reconfigured
+through generic Provider CRUD. Only an owner-authorized action may retire an
+unreferenced suite.
+
+The Sandbox APIs are:
+
+- `GET /api/v1/sandboxes/{sandboxId}/tools` — inert binding/availability snapshot
+- `POST /api/v1/sandboxes/{sandboxId}/tools` — explicitly ensure and sync governed Workspace tools
+- `DELETE /api/v1/sandboxes/{sandboxId}/tools` — explicitly retire an unused suite
+- `GET /api/v1/tool-suites` — reviewed definitions, including unavailable Browser
+
+CLI equivalents:
+
+~~~sh
+mender sandbox suites
+mender sandbox tools <sandbox-id>
+mender sandbox tools <sandbox-id> --prepare
+mender sandbox tools <sandbox-id> --remove --confirm
+~~~
+
+Provider Activation, ToolBinding, Policy, Sandbox grants/admission/lease,
+Runtime Budget, result guard and Audit remain mandatory during real execution.
+Preparing a suite does not start a Sandbox or grant a Profile. A Browser-only
+environment **does not** receive file or Shell tools via host fallback.
+`BrowserSession` is a separate consumer-side port with **no registered
+implementation** and no runnable Browser Tools at present; third-party browser
+Remote MCP services can instead be connected as normal reviewed/custom MCP
+integrations, with their own transport/security lifecycle.
+
+See [ADR-0039](../architecture/adr/0039-offerings-resource-tool-suites.md)
+and [Phase 34 D](../planning/phase-34-d-tool-suite-governance.md).
+
 ## Package manifest v2
 
 New packages must carry `mender-plugin.json`:

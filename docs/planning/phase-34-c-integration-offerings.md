@@ -1,6 +1,6 @@
 # Phase 34 C — Reviewed integration offerings and AnySearch Remote MCP
 
-Status: Accepted implementation contract (2026-10-12), after ADR-0039 and Phase 34 Stage B.
+Status: **Implementation closed (2026-10-12)**; operator live-service verification remains outstanding. Architecture: ADR-0039 and Phase 34 Stage B.
 
 ## Current behavior and why an integration is different from an extension
 
@@ -32,3 +32,11 @@ AnySearch's published MCP instructions (https://github.com/anysearch-ai/anysearc
 ## Follow-on
 
 The broader “Providers → Connections” navigation rename and registry ingestion can follow only after stable resource ownership/selection semantics are proven. Stage D handles typed Browser Session/Tool Suite compatibility; neither of these introduces a new Agent loop.
+
+## Implementation closure evidence
+
+- `cd35d77`: reviewed integration acceptance contract, committed before implementation.
+- `8a0318a`: reviewed, read-only AnySearch metadata and API/SDK/Wails parity. GET does not connect to AnySearch, resolve secrets, or create Providers.
+- `b14dbd5`: distinct Marketplace integration card, focused Connect form with preset HTTPS endpoint and optional existing Credential Reference; foundational drivers remain available under the advanced filter.
+- Cross-stage repository validation: `pnpm check` **exit 0**, `pnpm security:check` **exit 0**, full Vitest **188/188 passed**; custom MCP Provider workflow remains supported.
+- **Not tested:** AnySearch account authentication, anonymous endpoint reachability, real service quotas, or remote Tool schema changes. The preset remains **available to configure**, not a verified healthy live connection.

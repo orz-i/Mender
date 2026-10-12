@@ -1,6 +1,6 @@
 # Phase 34 D — Resource-owned Tool Suite bindings and typed Browser boundary
 
-- Status: Accepted implementation contract (2026-10-12)
+- Status: **Implementation closed (2026-10-12)**; real managed Browser backend/packaged Desktop testing are explicitly outstanding
 - Architecture: [ADR-0039](../architecture/adr/0039-offerings-resource-tool-suites.md)
 - Prerequisites: Phase 34 A/B/C committed; no new Agent loop or speculative browser backend
 
@@ -30,7 +30,8 @@ Browser Session is a distinct consuming-side port, with browser-specific operati
 
 - `GET /tool-suites`: reviewed metadata with status/reason; no package installation or permissions.
 - `GET /sandboxes/{sandboxId}/tools`: inspected Workspace Suite state (`missing/ready/legacy/incomplete/conflict/incompatible`), exact ProviderID and stable canonical tools, plus capability/availability diagnostics.
-- `POST /sandboxes/{sandboxId}/tools`: explicitly ensure the Workspace Suite, with owner/policy/Provider Activation checks; fail closed when unsupported/unavailable.
+- `POST /sandboxes/{sandboxId}/tools`: explicitly ensure the Workspace Suite, with exact Owner and Provider Activation governance checks; fail closed when unsupported/unavailable.
+- `DELETE /sandboxes/{sandboxId}/tools`: owner-authorized retirement only after Provider is proven unreferenced; generic Provider CRUD cannot tear down an owned suite.
 - SDK, Wails/Desktop, Go CLI and React UI use the same shapes and semantics. Keep technical IDs in detail-only views. Present Browser suite as an inert `unavailable` reviewed definition, not installable or executable.
 - Existing Agent Suite API remains unchanged and is included in generic reviewed suite definitions.
 
@@ -46,3 +47,18 @@ Browser Session is a distinct consuming-side port, with browser-specific operati
 ### Commit discipline
 
 Commit this contract **before** implementation, then backend/domain + persistence, HTTP/SDK/Wails/CLI, focused UI/tests, closure evidence. Keep stages bounded (D, not D1–D100). Do not include `.agents/`, `.pi/`, `.intent-loop/` or real credentials/resources.
+
+## Implementation closure evidence
+
+| Outcome | Commit | Verification |
+| --- | --- | --- |
+| Docs first and exact resource/capability constraints | `e32ac3a` | Accepted before code |
+| Built-in Agent/Workspace/Browser Suite metadata, unavailable Browser Session port; SQLite v12 resource-owned Workspace mappings | `744a31f` | Typed capability denial, unique concurrent claims, legacy Provider/ToolID adoption, upgrade tests |
+| HTTP/OpenAPI/SDK/Wails/CLI resource-level read, ensure and retire operations | `12b16a8` | Fixture HTTP/Desktop/CLI parity; no automatic Profile exposure |
+| Focused Sandbox detail Tools view and Marketplace Suite presentation | `c0dd8b5` | React tests and bilingual i18n |
+| Cached backend readiness, exact resource-Owner denial and restart-stable canonical Tool identity | `0bcdc71` | Go negative and restart tests |
+| Unrelated Tunnel polling-test timing isolation | `afc0cdd` | No Tunnel runtime changes; test-only race fix |
+
+**Full automated gates:** `pnpm check` **exit 0** (Go lint/tests/race, OpenAPI + Wails generator parity, strict TypeScript, ESLint, i18n, 30 Vitest files / 188 tests, Web/Desktop builds); `pnpm security:check` **exit 0**. Build emitted non-blocking large-chunk warnings.
+
+**Limits explicitly preserved:** no real managed Browser Session driver, no operational browser Tool facade or fabricated security claims, no real provider/cloud credentials used, and no packaged Wails or live Browser acceptance. Third-party browser Remote MCP remains an ordinary MCP connection rather than an implicit Workspace Sandbox.
