@@ -19,6 +19,14 @@ import { MenderApp } from "./mender-app";
 
 afterEach(cleanup);
 
+function expectAnchoredDialog(title: string) {
+  const dialog = screen.getByRole("dialog", { name: title });
+  expect(dialog.className).toContain("grid-rows-[auto_minmax(0,1fr)_auto]");
+  expect(dialog.className).toContain("overflow-hidden");
+  expect(dialog.querySelector('[data-slot="dialog-body"]')?.className).toContain("overflow-y-auto");
+  expect(dialog.querySelector('[data-slot="dialog-footer"]')).toBeTruthy();
+}
+
 describe("management pages", () => {
   it("keeps Provider creation out of the primary list surface", async () => {
     const provider = {
@@ -112,6 +120,7 @@ describe("management pages", () => {
       screen.getByRole("button", { name: "Configure authentication" }),
     );
     expect(await screen.findByText("Provider authentication")).toBeTruthy();
+    expectAnchoredDialog("Provider authentication");
     expect(screen.getAllByRole("dialog")).toHaveLength(1);
     fireEvent.click(
       screen.getByRole("button", { name: "Add credential header" }),
@@ -1051,6 +1060,7 @@ describe("management pages", () => {
       createExternalTunnel,
     });
     const form=await screen.findByRole("dialog",{name:"Create Tunnel"});
+    expectAnchoredDialog("Create Tunnel");
     expect(within(form).getByText("Fixture Tunnel Transport")).toBeTruthy();
     expect(within(form).queryByText("OpenAI Secure MCP Tunnel")).toBeNull();
     fireEvent.change(within(form).getByLabelText("Tunnel display name"),{target:{value:"Fixture Tunnel"}});
@@ -1477,6 +1487,7 @@ describe("management pages", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "View AnySearch" }));
     expect(await screen.findByText("Provider details")).toBeTruthy();
+    expectAnchoredDialog("Provider details");
     expect(screen.getByText("prov_1")).toBeTruthy();
     expect(
       screen.getAllByText("https://api.anysearch.com/mcp").length,
@@ -1707,6 +1718,7 @@ describe("management pages", () => {
     fireEvent.click(screen.getByRole("button", { name: /Create issue/ }));
 
     expect(await screen.findByText("Create issue")).toBeTruthy();
+    expectAnchoredDialog("Create issue");
     expect(getTool).toHaveBeenCalledWith("tool_1");
     expect(within(screen.getByRole("dialog")).getByText("Description")).toBeTruthy();
     expect(screen.queryByText("Input schema")).toBeNull();
@@ -2125,6 +2137,7 @@ describe("management pages", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Start server" }));
     expect(await screen.findByText("Start MCP server")).toBeTruthy();
+    expectAnchoredDialog("Start MCP server");
     expect(
       screen.getByLabelText<HTMLSelectElement>("Server profile").value,
     ).toBe("default");
@@ -2265,6 +2278,7 @@ describe("management pages", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Add rule" }));
     expect(await screen.findByText("Add Policy rule")).toBeTruthy();
+    expectAnchoredDialog("Add Policy rule");
     expect(screen.getAllByRole("dialog")).toHaveLength(1);
     expect(screen.queryByLabelText("Rule ID")).toBeNull();
     fireEvent.change(screen.getByLabelText("Policy Rule display name"), {
@@ -2430,6 +2444,7 @@ describe("management pages", () => {
     fireEvent.click(screen.getByRole("button", { name: "Runtime budget" }));
     expect(screen.queryByLabelText("Global invocations")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    expectAnchoredDialog("Runtime budget");
     const globalInput = screen.getByLabelText("Global invocations");
     fireEvent.change(globalInput, { target: { value: "12" } });
     fireEvent.click(screen.getByRole("button", { name: "Save budget" }));

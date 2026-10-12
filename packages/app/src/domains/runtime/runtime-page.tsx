@@ -9,7 +9,7 @@ import type {
 } from "@mender/sdk";
 import { Button } from "@mender/ui/components/button";
 import { Input } from "@mender/ui/components/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@mender/ui/components/dialog";
+import { Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@mender/ui/components/dialog";
 import {
   Select,
   SelectContent,
@@ -185,16 +185,16 @@ export function RuntimePage({ client }: { client: MenderClient }) {
         </DataPanel>
       )}
       <Dialog open={editor === "budget"} onOpenChange={(open) => { if (!open && !busy) { setEditor(null); setBudget(status?.budget ?? null); } }}>
-        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
+        <DialogContent className="grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden sm:max-w-2xl">
           <DialogHeader><DialogTitle>{t("Runtime budget")}</DialogTitle><DialogDescription>{t("Hard limits apply after governance admission. Profile constraints may only tighten them.")}</DialogDescription></DialogHeader>
-          <div className="grid gap-4 sm:grid-cols-2">
+          <DialogBody className="grid gap-4 sm:grid-cols-2">
             {budgetFields.map((field) => <label key={field.key} className="grid gap-1.5 text-sm">
               <span className="font-medium">{t(field.label)}</span>
               <Input type="number" aria-label={t(field.label)} min={field.min} max={field.max} value={budget?.[field.key] ?? ""}
                 onChange={(event) => setBudget((current) => current === null ? null : { ...current, [field.key]: Number(event.target.value) })} />
               <span className="text-xs text-muted-foreground">{budgetDescription(field.key)}</span>
             </label>)}
-          </div>
+          </DialogBody>
           <DialogFooter><Button variant="outline" disabled={busy !== ""} onClick={() => { setBudget(status?.budget ?? null); setEditor(null); }}>{t("Cancel")}</Button><Button disabled={busy !== ""} onClick={() => void saveBudget()}>{busy === "budget" ? t("Saving…") : t("Save budget")}</Button></DialogFooter>
         </DialogContent>
       </Dialog>

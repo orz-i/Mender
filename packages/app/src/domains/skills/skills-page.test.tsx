@@ -136,6 +136,11 @@ describe("SkillsPage", () => {
     expect(
       await screen.findByRole("heading", { name: "Skill details" }),
     ).toBeTruthy();
+    const detailsDialog = screen.getByRole("dialog", { name: "Skill details" });
+    expect(detailsDialog.className).toContain("grid-rows-[auto_minmax(0,1fr)_auto]");
+    expect(detailsDialog.className).toContain("overflow-hidden");
+    expect(detailsDialog.querySelector('[data-slot="dialog-body"]')?.className).toContain("overflow-y-auto");
+    expect(detailsDialog.querySelector('[data-slot="dialog-footer"]')).toBeTruthy();
     await waitFor(() => {
       expect(getSkillInstallation).toHaveBeenCalledWith(
         installation.installationId,

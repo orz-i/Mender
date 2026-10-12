@@ -21,6 +21,7 @@ import { Button } from "@mender/ui/components/button";
 import {
   Dialog,
   DialogContent,
+  DialogBody,
   DialogDescription,
   DialogFooter,
   DialogHeader,
@@ -502,7 +503,7 @@ function RuleEditorDialog({
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-h-[88vh] overflow-y-auto sm:max-w-3xl">
+      <DialogContent className="grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>
             {t(state.ruleId ? "Edit Policy rule" : "Add Policy rule")}
@@ -521,6 +522,7 @@ function RuleEditorDialog({
           </DialogDescription>
         </DialogHeader>
 
+        <DialogBody className="space-y-4">
         <StepIndicator step={state.step} />
 
         {state.step === 0 ? (
@@ -546,6 +548,7 @@ function RuleEditorDialog({
             {t("This Rule is broad because every selector other than its explicit action set is a wildcard. It will match every valid selected action regardless of origin, Principal, scope, or target.")}
           </div>
         ) : null}
+        </DialogBody>
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>

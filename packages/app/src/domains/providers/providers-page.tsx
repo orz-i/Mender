@@ -34,6 +34,7 @@ import {
   Dialog,
   DialogClose,
   DialogContent,
+  DialogBody,
   DialogDescription,
   DialogFooter,
   DialogHeader,
@@ -1781,7 +1782,7 @@ function ProviderAuthenticationDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent className="grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{t("Provider authentication")}</DialogTitle>
           <DialogDescription>
@@ -1789,6 +1790,7 @@ function ProviderAuthenticationDialog({
           </DialogDescription>
         </DialogHeader>
 
+        <DialogBody>
         {credentials.length ? (
           <div className="space-y-4">
             {form.pluginId === MODEL_TOOLS_PLUGIN_ID ? (
@@ -2118,6 +2120,7 @@ function ProviderAuthenticationDialog({
             description="Create a Credential first, then return here to configure Provider authentication."
           />
         )}
+        </DialogBody>
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
@@ -2145,7 +2148,7 @@ function ProviderDetailsDialog({
     provider === null ? undefined : providerPluginForProvider(plugins, provider);
   return (
     <Dialog open={provider !== null} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-xl">
+      <DialogContent className="grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>{t("Provider details")}</DialogTitle>
           <DialogDescription>
@@ -2153,6 +2156,7 @@ function ProviderDetailsDialog({
           </DialogDescription>
         </DialogHeader>
 
+        <DialogBody>
         {provider !== null ? (
           <div className="grid gap-3">
             <DetailRow label="Display name" value={provider.displayName} />
@@ -2277,6 +2281,7 @@ function ProviderDetailsDialog({
             />
           </div>
         ) : null}
+        </DialogBody>
 
         <DialogFooter showCloseButton />
       </DialogContent>

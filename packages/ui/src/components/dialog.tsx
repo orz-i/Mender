@@ -80,6 +80,18 @@ function DialogContent({
   )
 }
 
+// For dialogs with potentially long forms or lists, keep Header/Footer
+// outside this bounded middle track so primary actions remain reachable.
+function DialogBody({ className, ...props }: React.ComponentProps<"div">) {
+  return (
+    <div
+      data-slot="dialog-body"
+      className={cn("min-h-0 overflow-y-auto overscroll-contain pr-1", className)}
+      {...props}
+    />
+  )
+}
+
 function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
@@ -150,6 +162,7 @@ export {
   Dialog,
   DialogClose,
   DialogContent,
+  DialogBody,
   DialogDescription,
   DialogFooter,
   DialogHeader,

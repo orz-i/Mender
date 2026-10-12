@@ -13,6 +13,7 @@ import {
   Dialog,
   DialogClose,
   DialogContent,
+  DialogBody,
   DialogDescription,
   DialogFooter,
   DialogHeader,
@@ -357,7 +358,7 @@ export function ServersPage({
           }
         }}
       >
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>{t("Start MCP server")}</DialogTitle>
             <DialogDescription>
@@ -365,7 +366,7 @@ export function ServersPage({
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4">
+          <DialogBody className="space-y-4">
             <Field label="Profile">
               <select
                 aria-label={t("Server profile")}
@@ -412,7 +413,7 @@ export function ServersPage({
               {t("Desktop-managed servers use Streamable HTTP. stdio remains client-launched through")}{" "}
               <code>mender serve mcp --profile … --stdio</code>.
             </div>
-          </div>
+          </DialogBody>
 
           <DialogFooter>
             <DialogClose render={<Button variant="outline" />}>

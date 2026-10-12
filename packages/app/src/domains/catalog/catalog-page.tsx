@@ -13,6 +13,7 @@ import { Button } from "@mender/ui/components/button";
 import {
   Dialog,
   DialogContent,
+  DialogBody,
   DialogDescription,
   DialogFooter,
   DialogHeader,
@@ -331,7 +332,7 @@ export function CatalogPage({ client }: { client: MenderClient }) {
           }
         }}
       >
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
+        <DialogContent className="grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle>
               {toolView === "description"
@@ -351,6 +352,7 @@ export function CatalogPage({ client }: { client: MenderClient }) {
             </DialogDescription>
           </DialogHeader>
 
+          <DialogBody>
           {selected !== null && (toolView === "overview" || toolView === null) ? (
             <div className="space-y-5">
               <div className="grid gap-3 sm:grid-cols-2">
@@ -400,7 +402,7 @@ export function CatalogPage({ client }: { client: MenderClient }) {
           ) : null}
 
           {selected !== null && toolView === "description" ? (
-            <div className="max-h-[58vh] overflow-y-auto rounded-lg border border-border p-4">
+            <div className="rounded-lg border border-border p-4">
               <p className="whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
                 {selected.description || t("No description")}
               </p>
@@ -454,6 +456,7 @@ export function CatalogPage({ client }: { client: MenderClient }) {
             </div>
           ) : null}
 
+          </DialogBody>
           <DialogFooter showCloseButton>
             {toolView !== "overview" && toolView !== null ? (
               <Button variant="outline" onClick={() => setToolView("overview")}>

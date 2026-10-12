@@ -9,6 +9,7 @@ import {
   Dialog,
   DialogClose,
   DialogContent,
+  DialogBody,
   DialogDescription,
   DialogFooter,
   DialogHeader,
@@ -344,7 +345,7 @@ export function TunnelsPage({ client }: { client: MenderClient }) {
           }
         }}
       >
-        <DialogContent className="sm:max-w-xl">
+        <DialogContent className="grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden sm:max-w-xl">
           <DialogHeader>
             <DialogTitle>{t("Create Tunnel")}</DialogTitle>
             <DialogDescription>
@@ -354,7 +355,7 @@ export function TunnelsPage({ client }: { client: MenderClient }) {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4">
+          <DialogBody className="space-y-4">
             <ReadOnlyField label="Provider" value={selectedPlugin?.displayName??t("Unavailable")} />
 
             <Field label="Display name">
@@ -415,7 +416,7 @@ export function TunnelsPage({ client }: { client: MenderClient }) {
                     )}
               </p>
             </Field>
-          </div>
+          </DialogBody>
 
           <DialogFooter>
             <DialogClose render={<Button variant="outline" />}>

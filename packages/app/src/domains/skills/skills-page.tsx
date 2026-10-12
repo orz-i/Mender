@@ -31,6 +31,7 @@ import { Button } from "@mender/ui/components/button";
 import {
   Dialog,
   DialogContent,
+  DialogBody,
   DialogDescription,
   DialogFooter,
   DialogHeader,
@@ -601,7 +602,7 @@ export function SkillsPage({
           }
         }}
       >
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+        <DialogContent className="grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>
               {skillView === "overview"
@@ -620,6 +621,7 @@ export function SkillsPage({
             </DialogDescription>
           </DialogHeader>
 
+          <DialogBody>
           {selected !== null && skillView === "overview" ? (
             <div className="space-y-5">
               <div className="flex items-start gap-3 rounded-xl border border-border/70 bg-muted/15 p-4">
@@ -870,6 +872,7 @@ export function SkillsPage({
             </div>
           ) : null}
 
+          </DialogBody>
           <DialogFooter showCloseButton>
             {skillView !== "overview" ? (
               <Button
