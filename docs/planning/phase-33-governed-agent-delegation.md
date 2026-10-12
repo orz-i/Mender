@@ -61,3 +61,13 @@ A→B→C→D are bounded packages with commits at each completed, tested bounda
 - **Operator-only follow-up:** Codex CLI requires a separately installed `codex-acp` adapter; Grok's built-in adapter plans native `grok agent stdio`. Actual credentials, runtime sandbox compatibility, paid model access, version handshake against live installed CLIs, and packaged desktop screenshot smoke are **not verified** in Phase 33. They must not be inferred from passive binary detection or fixture success. No automatic installation or model charges occurred.
 
 **Explicitly not claimed:** an independent Mender Agent planning loop, persistent/recoverable ACP conversations, native approval continuation, full MCP Tasks extension advertisement, A2A, recursively exposed Mender tools, or Agent process placement on Docker/SSH. These require separate design and admission gates, not an unbounded Phase 33 follow-up.
+
+## Desktop dev Marketplace catalogue contract regression (2026-10-12)
+
+**Observed:** After the Phase 33 Agent Backend addition, the Wails development client's Marketplace reports that the desktop returned incompatible Mender data and shows an empty result. This is an adapter-validation regression, **not** a reason to delete or migrate the user's database.
+
+**Diagnosis:** Go Runtime `ListPluginCatalogue` correctly emits `agent.backend` for the built-in Codex/Grok Agent extensions. Wails `Service.ListPluginCatalogue` forwards `kind` unchanged, and the shared Marketplace UI already understands `agent.backend`. However, `apps/desktop/frontend/src/desktop-client.ts` `pluginCatalogueEntry` still validates only the pre-Phase-33 `provider.tools`, `sandbox.backend`, `tunnel.transport` enum. The first Agent entry throws a `MenderClientInvariantError`, aborting the entire list.
+
+**Repair contract:** Update only the intended Wails desktop adapter kind boundary to include `agent.backend` (no permissive unknown-kind fallback). Add a desktop adapter regression test exercising both available and unavailable Agent Backends alongside Provider/Sandbox/Tunnel and planned entries; preserve rejection of an actually unknown extension kind/status and malformed planned metadata. Confirm shared Marketplace conversion still creates `/agents/new` only for enabled built-in Agents and leaves unavailable/unsupported external Agent drivers inert. Run desktop/frontend tests, full `pnpm check`, and confirm that the live Wails dev frontend can reload the new adapter without clearing DB or restarting user processes.
+
+**Guardrail:** This is a focused bug fix; do not add an Agent Runtime/compatibility bridge or change plugin storage, permissions, install semantics, or task execution.
