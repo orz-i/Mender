@@ -132,7 +132,7 @@ func (s *Service) Create(ctx context.Context, request CreateRequest, caller gov.
 	}
 	resolved, err := filepath.EvalSymlinks(request.WorkspaceRoot)
 	if err != nil {
-		return agentdomain.Agent{}, fmt.Errorf("Agent workspace unavailable: %w", err)
+		return agentdomain.Agent{}, fmt.Errorf("agent workspace unavailable: %w", err)
 	}
 	info, err := os.Stat(resolved)
 	if err != nil {
@@ -195,7 +195,7 @@ func (s *Service) Grant(ctx context.Context, id agentdomain.ID, profileID string
 		return agentdomain.ErrForbidden
 	}
 	if err := s.profileExists(ctx, profileID); err != nil {
-		return fmt.Errorf("Agent Profile grant: %w", err)
+		return fmt.Errorf("agent Profile grant: %w", err)
 	}
 	return s.store.GrantProfile(ctx, id, profileID)
 }
@@ -275,18 +275,18 @@ func (s *Service) run(ctx context.Context, cancel context.CancelFunc, agent agen
 	}()
 	// A concurrent cancellation may fence queued → running.
 	if err := ctx.Err(); err != nil {
-		_ = s.store.Transition(context.Background(), task.ID, task.Generation, agentdomain.TaskQueued, agentdomain.TaskCancelled, "", "")
+		_ = s.store.Transition(context.WithoutCancel(ctx), task.ID, task.Generation, agentdomain.TaskQueued, agentdomain.TaskCancelled, "", "")
 		return
 	}
-	if err := s.store.Transition(context.Background(), task.ID, task.Generation, agentdomain.TaskQueued, agentdomain.TaskRunning, "", ""); err != nil {
-		_ = s.store.Transition(context.Background(), task.ID, task.Generation, agentdomain.TaskQueued, agentdomain.TaskCancelled, "", "")
+	if err := s.store.Transition(context.WithoutCancel(ctx), task.ID, task.Generation, agentdomain.TaskQueued, agentdomain.TaskRunning, "", ""); err != nil {
+		_ = s.store.Transition(context.WithoutCancel(ctx), task.ID, task.Generation, agentdomain.TaskQueued, agentdomain.TaskCancelled, "", "")
 		return
 	}
 	result, err := s.runner.Execute(ctx, agent, prompt)
 	// A runner that reports success after cancellation cannot prove it
 	// stopped executing side effects. Preserve the uncertainty instead.
 	if ctx.Err() != nil && err == nil {
-		_ = s.store.Transition(context.Background(), task.ID, task.Generation,
+		_ = s.store.Transition(context.WithoutCancel(ctx), task.ID, task.Generation,
 			agentdomain.TaskRunning, agentdomain.TaskUnknown, "", "Agent outcome unknown after cancellation")
 		return
 	}
@@ -309,7 +309,7 @@ func (s *Service) run(ctx context.Context, cancel context.CancelFunc, agent agen
 		result = ""
 		diagnostic = "Agent output exceeded the permitted limit"
 	}
-	_ = s.store.Transition(context.Background(), task.ID, task.Generation, agentdomain.TaskRunning, next, result, diagnostic)
+	_ = s.store.Transition(context.WithoutCancel(ctx), task.ID, task.Generation, agentdomain.TaskRunning, next, result, diagnostic)
 }
 func (s *Service) authorizedTask(ctx context.Context, id agentdomain.TaskID, caller gov.Context) (agentdomain.Task, agentdomain.Agent, error) {
 	task, err := s.store.GetTask(ctx, id)

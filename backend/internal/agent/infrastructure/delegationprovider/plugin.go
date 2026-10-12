@@ -20,13 +20,14 @@ import (
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
 )
 
+const ID providerplugin.ID = "io.mender.provider.agent-delegation"
+
 const (
-	ID             providerplugin.ID = "io.mender.provider.agent-delegation"
-	ConfigVersion                    = 1
-	sourceDelegate                   = "agent.delegate"
-	sourceStatus                     = "agent.status"
-	sourceResult                     = "agent.result"
-	sourceCancel                     = "agent.cancel"
+	ConfigVersion  = 1
+	sourceDelegate = "agent.delegate"
+	sourceStatus   = "agent.status"
+	sourceResult   = "agent.result"
+	sourceCancel   = "agent.cancel"
 )
 
 var configSchema = json.RawMessage(`{"type":"object","additionalProperties":false,
@@ -102,7 +103,7 @@ func (p *Plugin) InspectConfig(ctx context.Context, raw json.RawMessage) (provid
 }
 func (p *Plugin) Open(ctx context.Context, req providerplugin.OpenRequest) (providerplugin.Instance, error) {
 	if req.ConfigVersion != ConfigVersion {
-		return nil, fmt.Errorf("Agent delegation config version %d unsupported", req.ConfigVersion)
+		return nil, fmt.Errorf("agent delegation config version %d unsupported", req.ConfigVersion)
 	}
 	if err := p.ValidateConfig(ctx, req.Config); err != nil {
 		return nil, err

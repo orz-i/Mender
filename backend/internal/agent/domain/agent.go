@@ -34,7 +34,7 @@ func ParseID(raw string) (ID, error) {
 		return "", fmt.Errorf("%w: AgentID", ErrInvalid)
 	}
 	if _, err := hex.DecodeString(strings.TrimPrefix(raw, "agent_")); err != nil {
-		return "", fmt.Errorf("%w: AgentID: %v", ErrInvalid, err)
+		return "", fmt.Errorf("%w: AgentID: %w", ErrInvalid, err)
 	}
 	return ID(raw), nil
 }

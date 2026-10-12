@@ -30,6 +30,8 @@ import type {
   ToolSummary,
   Tunnel,
   Sandbox,
+  Agent,
+  AgentTask,
   SandboxActivity,
   SandboxActivityEvent,
   SandboxProfileGrants,
@@ -69,6 +71,8 @@ import {
   type ToolDetail as BindingToolDetail,
   type ToolSummary as BindingToolSummary,
   type Tunnel as BindingTunnel,
+  type Agent as BindingAgent,
+  type AgentTask as BindingAgentTask,
   type Sandbox as BindingSandbox,
   type SandboxActivity as BindingSandboxActivity,
   type SandboxProfileGrants as BindingSandboxProfileGrants,
@@ -391,6 +395,28 @@ export function createDesktopMenderClient(): MenderClient {
       return profile(await Service.SetProfileTunnel(slug, body.tunnelId));
     },
 
+    async listAgents(){
+      const result=await Service.ListAgents();
+      return {agents:(result.agents??[]).map(agent)};
+    },
+    async getAgent(agentId){return agent(await Service.GetAgent(agentId));},
+    async createAgent(body){return agent(await Service.CreateAgent({
+      name:body.name,backend:body.backend,workspaceRoot:body.workspaceRoot,
+      isolation:body.isolation??"restricted_host",
+    }));},
+    async deleteAgent(agentId){await Service.DeleteAgent(agentId);},
+    async listAgentTasks(agentId){
+      const result=await Service.ListAgentTasks(agentId);
+      return {tasks:(result.tasks??[]).map(agentTask)};
+    },
+    async getAgentTask(taskId){return agentTask(await Service.GetAgentTask(taskId));},
+    async cancelAgentTask(taskId){return Service.CancelAgentTask(taskId);},
+    async listAgentGrants(agentId){
+      const result=await Service.ListAgentGrants(agentId);
+      return {profileIds:result.profileIds??[]};
+    },
+    async grantAgentProfile(agentId,profileId){await Service.GrantAgentProfile(agentId,profileId);},
+    async revokeAgentProfile(agentId,profileId){await Service.RevokeAgentProfile(agentId,profileId);},
     async listSandboxes() {
       const result = await Service.ListSandboxes();
       return { sandboxes: (result.sandboxes ?? []).map(sandbox) };
@@ -829,6 +855,25 @@ function policyResourceOperator(
     return value;
   }
   throw new MenderClientInvariantError("Unsupported desktop Policy resource operator: " + value);
+}
+
+function agent(value:BindingAgent):Agent {
+  if(value.backend!=="codex"&&value.backend!=="grok"){
+    throw new MenderClientInvariantError("Unknown Agent Backend: "+value.backend);
+  }
+  if(value.isolation!=="host"&&value.isolation!=="restricted_host"){
+    throw new MenderClientInvariantError("Unknown Agent isolation: "+value.isolation);
+  }
+  return {...value,backend:value.backend,isolation:value.isolation};
+}
+function agentTask(value:BindingAgentTask):AgentTask {
+  switch(value.status){
+    case "queued":case "running":case "completed":case "failed":
+    case "cancelled":case "unknown":
+      return {...value,status:value.status};
+    default:
+      throw new MenderClientInvariantError("Unknown Agent Task status: "+value.status);
+  }
 }
 
 function credentialStatus(value: BindingCredentialStatus): CredentialStatus {

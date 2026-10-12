@@ -15,7 +15,7 @@ func ParseTaskID(raw string) (TaskID, error) {
 		return "", fmt.Errorf("%w: AgentTaskID", ErrInvalid)
 	}
 	if _, err := hex.DecodeString(strings.TrimPrefix(raw, "atask_")); err != nil {
-		return "", fmt.Errorf("%w: AgentTaskID: %v", ErrInvalid, err)
+		return "", fmt.Errorf("%w: AgentTaskID: %w", ErrInvalid, err)
 	}
 	return TaskID(raw), nil
 }

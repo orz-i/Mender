@@ -19,6 +19,11 @@ export type ToolDetail = components["schemas"]["ToolDetail"];
 export type InvocationResult = components["schemas"]["InvocationResult"];
 export type Profile = components["schemas"]["Profile"];
 export type Tunnel = components["schemas"]["Tunnel"];
+export type Agent = components["schemas"]["Agent"];
+export type AgentTask = components["schemas"]["AgentTask"];
+export type AgentGrants = components["schemas"]["AgentGrants"];
+export type AgentCancelReceipt = components["schemas"]["AgentCancelReceipt"];
+export type CreateAgentRequest = components["schemas"]["CreateAgentRequest"];
 export type Sandbox = components["schemas"]["Sandbox"];
 export type SandboxActivity = components["schemas"]["SandboxActivity"];
 export type SandboxActivityEvent = components["schemas"]["SandboxActivityEvent"];
@@ -168,6 +173,16 @@ export interface MenderClient {
   ): Promise<Profile>;
   removeProfileTool(slug: string, toolId: string): Promise<Profile>;
   setProfileTunnel(slug: string, body: SetProfileTunnelRequest): Promise<Profile>;
+  listAgents(): Promise<{agents:Agent[]}>;
+  getAgent(agentId:string): Promise<Agent>;
+  createAgent(body:CreateAgentRequest): Promise<Agent>;
+  deleteAgent(agentId:string): Promise<void>;
+  listAgentTasks(agentId:string): Promise<{tasks:AgentTask[]}>;
+  getAgentTask(taskId:string): Promise<AgentTask>;
+  cancelAgentTask(taskId:string): Promise<AgentCancelReceipt>;
+  listAgentGrants(agentId:string): Promise<AgentGrants>;
+  grantAgentProfile(agentId:string,profileId:string): Promise<void>;
+  revokeAgentProfile(agentId:string,profileId:string): Promise<void>;
   listSandboxes(): Promise<{ sandboxes: Sandbox[] }>;
   getSandbox(sandboxId: string): Promise<Sandbox>;
   getSandboxActivity(sandboxId: string, limit?: number): Promise<SandboxActivity>;
@@ -519,6 +534,25 @@ export function createMenderClient(
       return requireData(result);
     },
 
+    async listAgents(){return requireData(await client.GET("/agents"));},
+    async getAgent(agentId){return requireData(await client.GET("/agents/{agentId}",{params:{path:{agentId}}}));},
+    async createAgent(body){return requireData(await client.POST("/agents",{body}));},
+    async deleteAgent(agentId){
+      const result=await client.DELETE("/agents/{agentId}",{params:{path:{agentId}}});
+      if(!result.response.ok)throwApiError(result.error,result.response);
+    },
+    async listAgentTasks(agentId){return requireData(await client.GET("/agents/{agentId}/tasks",{params:{path:{agentId}}}));},
+    async getAgentTask(taskId){return requireData(await client.GET("/agent-tasks/{taskId}",{params:{path:{taskId}}}));},
+    async cancelAgentTask(taskId){return requireData(await client.POST("/agent-tasks/{taskId}/cancel",{params:{path:{taskId}}}));},
+    async listAgentGrants(agentId){return requireData(await client.GET("/agents/{agentId}/profile-grants",{params:{path:{agentId}}}));},
+    async grantAgentProfile(agentId,profileId){
+      const result=await client.PUT("/agents/{agentId}/profile-grants/{profileId}",{params:{path:{agentId,profileId}}});
+      if(!result.response.ok)throwApiError(result.error,result.response);
+    },
+    async revokeAgentProfile(agentId,profileId){
+      const result=await client.DELETE("/agents/{agentId}/profile-grants/{profileId}",{params:{path:{agentId,profileId}}});
+      if(!result.response.ok)throwApiError(result.error,result.response);
+    },
     async listSandboxes() {
       const result = await client.GET("/sandboxes");
       return requireData(result);

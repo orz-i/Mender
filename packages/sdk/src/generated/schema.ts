@@ -534,6 +534,125 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/agents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listAgents"];
+        put?: never;
+        post: operations["createAgent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{agentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        get: operations["getAgent"];
+        put?: never;
+        post?: never;
+        delete: operations["deleteAgent"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{agentId}/tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listAgentTasks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{agentId}/profile-grants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listAgentGrants"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{agentId}/profile-grants/{profileId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+                profileId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["grantAgentProfile"];
+        post?: never;
+        delete: operations["revokeAgentProfile"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agent-tasks/{taskId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                taskId: string;
+            };
+            cookie?: never;
+        };
+        get: operations["getAgentTask"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agent-tasks/{taskId}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["cancelAgentTask"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/sandboxes": {
         parameters: {
             query?: never;
@@ -1366,7 +1485,7 @@ export interface components {
             pluginId: string;
             extensionId: string;
             /** @enum {string} */
-            kind: "provider.tools" | "sandbox.backend" | "tunnel.transport";
+            kind: "provider.tools" | "sandbox.backend" | "tunnel.transport" | "agent.backend";
             displayName: string;
             description: string;
             packageVersion: string;
@@ -1818,6 +1937,54 @@ export interface components {
             root: string;
             /** @enum {string} */
             isolation: "host" | "restricted_host";
+        };
+        CreateAgentRequest: {
+            name: string;
+            /** @enum {string} */
+            backend: "codex" | "grok";
+            /** @description Explicit trusted local absolute workspace directory */
+            workspaceRoot: string;
+            /**
+             * @default restricted_host
+             * @enum {string}
+             */
+            isolation: "host" | "restricted_host";
+        };
+        Agent: {
+            agentId: string;
+            name: string;
+            /** @enum {string} */
+            backend: "codex" | "grok";
+            pluginId: string;
+            extensionId: string;
+            workspaceRoot: string;
+            /** @enum {string} */
+            isolation: "host" | "restricted_host";
+            /** Format: date-time */
+            createdAt: string;
+            backendAvailable: boolean;
+            /** @description No secret/account data */
+            issue?: string;
+        };
+        AgentTask: {
+            taskId: string;
+            agentId: string;
+            /** @enum {string} */
+            status: "queued" | "running" | "completed" | "failed" | "cancelled" | "unknown";
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            cancelRequested: boolean;
+            result?: string;
+            diagnostic?: string;
+        };
+        AgentGrants: {
+            profileIds: string[];
+        };
+        AgentCancelReceipt: {
+            taskId: string;
+            cancelRequested: boolean;
         };
         Sandbox: {
             sandboxId: string;
@@ -2987,6 +3154,239 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    listAgents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Configured Agent inventory without process activation */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        agents: components["schemas"]["Agent"][];
+                    };
+                };
+            };
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    createAgent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateAgentRequest"];
+            };
+        };
+        responses: {
+            /** @description Persisted Agent resource; no CLI launched */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Agent"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    getAgent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Agent metadata and executable availability */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Agent"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteAgent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Unreferenced Agent removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    listAgentTasks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owner-visible bounded recent Agent task records */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        tasks: components["schemas"]["AgentTask"][];
+                    };
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listAgentGrants: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Exact ProfileID grants for one Agent */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentGrants"];
+                };
+            };
+        };
+    };
+    grantAgentProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+                profileId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Profile granted Agent delegation access */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    revokeAgentProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+                profileId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Profile Agent access revoked */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getAgentTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                taskId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owner-authorized persisted task status and result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentTask"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    cancelAgentTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                taskId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cancellation requested; terminal stop not yet confirmed */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentCancelReceipt"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
     listSandboxes: {

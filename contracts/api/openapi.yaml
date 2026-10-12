@@ -686,6 +686,129 @@ paths:
                 $ref: '#/components/schemas/Profile'
         '400': { $ref: '#/components/responses/BadRequest' }
         '404': { $ref: '#/components/responses/NotFound' }
+  /agents:
+    get:
+      operationId: listAgents
+      responses:
+        '200':
+          description: Configured Agent inventory without process activation
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [agents]
+                properties:
+                  agents: { type: array, items: { $ref: '#/components/schemas/Agent' } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      operationId: createAgent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateAgentRequest' }
+      responses:
+        '201':
+          description: Persisted Agent resource; no CLI launched
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Agent' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /agents/{agentId}:
+    parameters:
+      - name: agentId
+        in: path
+        required: true
+        schema: { type: string, pattern: '^agent_[0-9a-f]{32}$' }
+    get:
+      operationId: getAgent
+      responses:
+        '200':
+          description: Agent metadata and executable availability
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Agent' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      operationId: deleteAgent
+      responses:
+        '204': { description: Unreferenced Agent removed }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /agents/{agentId}/tasks:
+    get:
+      operationId: listAgentTasks
+      parameters: [{ name: agentId, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200':
+          description: Owner-visible bounded recent Agent task records
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [tasks]
+                properties:
+                  tasks: { type: array, items: { $ref: '#/components/schemas/AgentTask' } }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /agents/{agentId}/profile-grants:
+    get:
+      operationId: listAgentGrants
+      parameters: [{ name: agentId, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200':
+          description: Exact ProfileID grants for one Agent
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentGrants' }
+  /agents/{agentId}/profile-grants/{profileId}:
+    parameters:
+      - name: agentId
+        in: path
+        required: true
+        schema: { type: string }
+      - name: profileId
+        in: path
+        required: true
+        schema: { type: string }
+    put:
+      operationId: grantAgentProfile
+      responses:
+        '204': { description: Profile granted Agent delegation access }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      operationId: revokeAgentProfile
+      responses:
+        '204': { description: Profile Agent access revoked }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /agent-tasks/{taskId}:
+    parameters:
+      - name: taskId
+        in: path
+        required: true
+        schema: { type: string, pattern: '^atask_[0-9a-f]{32}$' }
+    get:
+      operationId: getAgentTask
+      responses:
+        '200':
+          description: Owner-authorized persisted task status and result
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentTask' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /agent-tasks/{taskId}/cancel:
+    post:
+      operationId: cancelAgentTask
+      parameters: [{ name: taskId, in: path, required: true, schema: { type: string } }]
+      responses:
+        '202':
+          description: Cancellation requested; terminal stop not yet confirmed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentCancelReceipt' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
   /sandboxes:
     get:
       operationId: listSandboxes
@@ -1711,7 +1834,7 @@ components:
         key: { type: string }
         pluginId: { type: string }
         extensionId: { type: string }
-        kind: { type: string, enum: [provider.tools, sandbox.backend, tunnel.transport] }
+        kind: { type: string, enum: [provider.tools, sandbox.backend, tunnel.transport, agent.backend] }
         displayName: { type: string }
         description: { type: string }
         packageVersion: { type: string }
@@ -2340,6 +2463,56 @@ components:
         root: { type: string, minLength: 1, maxLength: 4096 }
         isolation: { type: string, enum: [host, restricted_host] }
       additionalProperties: false
+    CreateAgentRequest:
+      type: object
+      required: [name, backend, workspaceRoot]
+      additionalProperties: false
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        backend: { type: string, enum: [codex, grok] }
+        workspaceRoot: { type: string, description: Explicit trusted local absolute workspace directory }
+        isolation: { type: string, enum: [host, restricted_host], default: restricted_host }
+    Agent:
+      type: object
+      required: [agentId, name, backend, pluginId, extensionId, workspaceRoot, isolation, createdAt, backendAvailable]
+      additionalProperties: false
+      properties:
+        agentId: { type: string }
+        name: { type: string }
+        backend: { type: string, enum: [codex, grok] }
+        pluginId: { type: string }
+        extensionId: { type: string }
+        workspaceRoot: { type: string }
+        isolation: { type: string, enum: [host, restricted_host] }
+        createdAt: { type: string, format: date-time }
+        backendAvailable: { type: boolean }
+        issue: { type: string, description: No secret/account data }
+    AgentTask:
+      type: object
+      required: [taskId, agentId, status, createdAt, updatedAt, cancelRequested]
+      additionalProperties: false
+      properties:
+        taskId: { type: string }
+        agentId: { type: string }
+        status: { type: string, enum: [queued, running, completed, failed, cancelled, unknown] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        cancelRequested: { type: boolean }
+        result: { type: string, maxLength: 65536 }
+        diagnostic: { type: string, maxLength: 1024 }
+    AgentGrants:
+      type: object
+      required: [profileIds]
+      additionalProperties: false
+      properties:
+        profileIds: { type: array, items: { type: string } }
+    AgentCancelReceipt:
+      type: object
+      required: [taskId, cancelRequested]
+      additionalProperties: false
+      properties:
+        taskId: { type: string }
+        cancelRequested: { type: boolean }
     Sandbox:
       type: object
       required: [sandboxId, name, backend, isolation, state, localRoot, ownerKind, ownerRef, activeLeases, backendAvailable]

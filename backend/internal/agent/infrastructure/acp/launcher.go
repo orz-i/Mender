@@ -17,7 +17,7 @@ type LocalFactory struct{ launcher *processisolation.Launcher }
 
 func NewLocalFactory(launcher *processisolation.Launcher) (*LocalFactory, error) {
 	if launcher == nil {
-		return nil, errors.New("Agent process isolation launcher is required")
+		return nil, errors.New("agent process isolation launcher is required")
 	}
 	return &LocalFactory{launcher: launcher}, nil
 }
@@ -33,7 +33,7 @@ func (f *LocalFactory) Availability(backend agentdomain.Backend) (string, error)
 		return trustedBinary("grok")
 	case agentdomain.BackendCodex:
 		if _, err := trustedBinary("codex"); err != nil {
-			return "", fmt.Errorf("%w: Codex CLI is missing: %v", agentdomain.ErrUnavailable, err)
+			return "", fmt.Errorf("%w: Codex CLI is missing: %w", agentdomain.ErrUnavailable, err)
 		}
 		return trustedBinary("codex-acp")
 	default:
@@ -44,7 +44,7 @@ func (f *LocalFactory) Availability(backend agentdomain.Backend) (string, error)
 func trustedBinary(name string) (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return "", fmt.Errorf("%w: resolve local CLI home: %v", agentdomain.ErrUnavailable, err)
+		return "", fmt.Errorf("%w: resolve local CLI home: %w", agentdomain.ErrUnavailable, err)
 	}
 	// The executable is selected by this host-owned allowlist, *not* from
 	// inherited PATH or user-/model-supplied command-line arguments.
@@ -77,7 +77,7 @@ func (f *LocalFactory) Command(ctx context.Context, a agentdomain.Agent) (*exec.
 	}
 	root, err := filepath.EvalSymlinks(spec.WorkspaceRoot)
 	if err != nil {
-		return nil, fmt.Errorf("Agent workspace unavailable: %w", err)
+		return nil, fmt.Errorf("agent workspace unavailable: %w", err)
 	}
 	if filepath.Clean(root) != spec.WorkspaceRoot {
 		return nil, fmt.Errorf("%w: Agent workspace root changed", agentdomain.ErrUnavailable)

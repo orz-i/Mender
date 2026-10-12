@@ -14,6 +14,14 @@ import (
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 )
 
+// AgentAvailability does not launch a CLI, access an account or resolve credentials.
+func (r *Runtime) AgentAvailability(backend agentdomain.Backend) (string, error) {
+	if r == nil || r.agentLauncher == nil {
+		return "", agentdomain.ErrUnavailable
+	}
+	return r.agentLauncher.Availability(backend)
+}
+
 // newAgents composes exactly two local, host-reviewed Agent backends. External
 // plugin packages cannot silently acquire the native process authority.
 func newAgents(ctx context.Context, dbPath string, owner gov.Principal,

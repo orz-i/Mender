@@ -87,7 +87,12 @@ func fixtureAgent(t *testing.T) agentdomain.Agent {
 }
 func fixtureRunner(mode string) Runner {
 	return Runner{NewCommand: func(ctx context.Context, _ agentdomain.Agent) (*exec.Cmd, error) {
-		cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestACPFixtureProcess$")
+		binary, err := os.Executable()
+		if err != nil {
+			return nil, err
+		}
+		cmd := exec.CommandContext( // #nosec G204 -- trusted current test executable and fixed test-only arguments.
+			ctx, binary, "-test.run=^TestACPFixtureProcess$")
 		cmd.Env = append(os.Environ(), "MENDER_ACP_TEST_HELPER=1", "ACP_FIXTURE_MODE="+mode)
 		return cmd, nil
 	}}

@@ -7,10 +7,17 @@ export {
 };
 
 export type {
+    Agent,
+    AgentCancelReceipt,
+    AgentList,
+    AgentProfileGrants,
+    AgentTask,
+    AgentTaskList,
     AuditList,
     AuditRecord,
     CachedDockerImage,
     CachedDockerImageList,
+    CreateAgentInput,
     CreateDaytonaSandboxInput,
     CreateDockerSandboxInput,
     CreateExternalSandboxInput,

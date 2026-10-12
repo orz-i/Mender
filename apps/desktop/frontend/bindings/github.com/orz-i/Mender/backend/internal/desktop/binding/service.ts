@@ -28,6 +28,14 @@ export function CallTool(toolID: string, $arguments: { [_ in string]?: any } | n
     return $Call.ByID(3440826094, toolID, $arguments);
 }
 
+export function CancelAgentTask(id: string): $CancellablePromise<$models.AgentCancelReceipt> {
+    return $Call.ByID(2485846690, id);
+}
+
+export function CreateAgent(input: $models.CreateAgentInput): $CancellablePromise<$models.Agent> {
+    return $Call.ByID(3419625921, input);
+}
+
 export function CreateDaytonaSandbox(input: $models.CreateDaytonaSandboxInput): $CancellablePromise<$models.Sandbox> {
     return $Call.ByID(1474299265, input);
 }
@@ -82,6 +90,10 @@ export function CreateSSHRemoteSandbox(input: $models.CreateSSHRemoteSandboxInpu
 
 export function CreateStdioProvider($namespace: string, displayName: string, description: string, executable: string, args: string[] | null, directory: string, credentialEnvironment: $models.CredentialEnvironment[] | null): $CancellablePromise<$models.ProviderMutationResponse> {
     return $Call.ByID(3677167748, $namespace, displayName, description, executable, args, directory, credentialEnvironment);
+}
+
+export function DeleteAgent(id: string): $CancellablePromise<void> {
+    return $Call.ByID(1091263108, id);
 }
 
 export function DeleteCredential($namespace: string, name: string): $CancellablePromise<void> {
@@ -144,6 +156,14 @@ export function EnableSkillInstallation(installationID: string): $CancellablePro
     return $Call.ByID(1714532984, installationID);
 }
 
+export function GetAgent(id: string): $CancellablePromise<$models.Agent> {
+    return $Call.ByID(425014641, id);
+}
+
+export function GetAgentTask(id: string): $CancellablePromise<$models.AgentTask> {
+    return $Call.ByID(1156608320, id);
+}
+
 export function GetCredential($namespace: string, name: string): $CancellablePromise<$models.Credential> {
     return $Call.ByID(1803203361, $namespace, name);
 }
@@ -200,6 +220,10 @@ export function GetTool(toolID: string): $CancellablePromise<$models.ToolDetail>
     return $Call.ByID(973227434, toolID);
 }
 
+export function GrantAgentProfile(agentID: string, profileID: string): $CancellablePromise<void> {
+    return $Call.ByID(967894880, agentID, profileID);
+}
+
 /**
  * InstallLocalPlugin is desktop-only and receives a folder explicitly chosen
  * via the OS dialog. The manifest is parsed locally; Web cannot upload native
@@ -219,6 +243,18 @@ export function InstallProviderPlugin(sourcePath: string): $CancellablePromise<$
 
 export function InstallSkill(sourcePath: string): $CancellablePromise<$models.SkillInstallation> {
     return $Call.ByID(3234224228, sourcePath);
+}
+
+export function ListAgentGrants(id: string): $CancellablePromise<$models.AgentProfileGrants> {
+    return $Call.ByID(449330666, id);
+}
+
+export function ListAgentTasks(id: string): $CancellablePromise<$models.AgentTaskList> {
+    return $Call.ByID(1671235357, id);
+}
+
+export function ListAgents(): $CancellablePromise<$models.AgentList> {
+    return $Call.ByID(2939017906);
 }
 
 export function ListAudit(limit: number): $CancellablePromise<$models.AuditList> {
@@ -307,6 +343,10 @@ export function ReplaceProfileTools(slug: string, tools: $models.ProfileTool[] |
 
 export function RestartMCPServer(serverID: string): $CancellablePromise<$models.MCPServerInstance> {
     return $Call.ByID(2194966826, serverID);
+}
+
+export function RevokeAgentProfile(agentID: string, profileID: string): $CancellablePromise<void> {
+    return $Call.ByID(151299120, agentID, profileID);
 }
 
 export function RevokeSandboxProfileGrants(sandboxID: string, profileID: string): $CancellablePromise<$models.SandboxProfileGrants> {

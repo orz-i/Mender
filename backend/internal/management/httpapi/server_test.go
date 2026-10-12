@@ -1581,14 +1581,16 @@ func TestManagementAPIGenericProviderPluginFlow(t *testing.T) {
 		http.StatusOK,
 	)
 	items, ok := plugins["plugins"].([]any)
-	if !ok || len(items) != 4 {
+	if !ok || len(items) != 5 {
 		t.Fatalf("provider plugins = %#v", plugins)
 	}
 	issues, ok := plugins["issues"].([]any)
 	if !ok || len(issues) != 0 {
 		t.Fatalf("provider plugin issues = %#v", plugins["issues"])
 	}
-	plugin, _ := items[0].(map[string]any)
+	agentPlugin, _ := items[0].(map[string]any)
+	if agentPlugin["pluginId"] != "io.mender.provider.agent-delegation" { t.Fatalf("Agent delegation plugin = %#v", agentPlugin) }
+	plugin, _ := items[1].(map[string]any)
 	if plugin["pluginId"] != "io.mender.provider.mcp" ||
 		plugin["sourceKind"] != "builtin" ||
 		plugin["packageVersion"] == "" ||
@@ -1599,15 +1601,15 @@ func TestManagementAPIGenericProviderPluginFlow(t *testing.T) {
 	if !ok || len(capabilities) != 0 {
 		t.Fatalf("provider plugin capabilities = %#v", plugin["capabilities"])
 	}
-	modelToolsPlugin, _ := items[1].(map[string]any)
+	modelToolsPlugin, _ := items[2].(map[string]any)
 	if modelToolsPlugin["pluginId"] != "io.mender.provider.model-tools" {
 		t.Fatalf("Model Tools provider plugin = %#v", modelToolsPlugin)
 	}
-	openAPIPlugin, _ := items[2].(map[string]any)
+	openAPIPlugin, _ := items[3].(map[string]any)
 	if openAPIPlugin["pluginId"] != "io.mender.provider.openapi" {
 		t.Fatalf("OpenAPI provider plugin = %#v", openAPIPlugin)
 	}
-	workspacePlugin, _ := items[3].(map[string]any)
+	workspacePlugin, _ := items[4].(map[string]any)
 	if workspacePlugin["pluginId"] != "io.mender.provider.workspace" {
 		t.Fatalf("Workspace provider plugin = %#v", workspacePlugin)
 	}
