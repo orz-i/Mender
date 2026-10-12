@@ -25,6 +25,14 @@ function entry(kind:PluginCatalogueEntry["kind"],overrides:Partial<PluginCatalog
 }
 
 describe("canonical typed Marketplace",()=>{
+  it("does not present the Agent Delegation execution facade as an installable offering",()=>{
+    const internal=entry("provider.tools",{
+      key:"io.mender.provider.agent-delegation@builtin",
+      pluginId:"io.mender.provider.agent-delegation",sourceKind:"builtin",
+    });
+    delete internal.installationId;
+    expect(pluginCatalogueToMarketplace([internal,entry("agent.backend")])).toHaveLength(1);
+  });
   it("shows all three extension types from one authority and routes exact creation IDs",()=>{
     const models=pluginCatalogueToMarketplace([
       entry("provider.tools"),entry("sandbox.backend"),entry("tunnel.transport"),

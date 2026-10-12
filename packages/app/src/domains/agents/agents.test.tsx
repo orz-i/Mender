@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import type { Agent, AgentTask, MenderClient } from "@mender/sdk";
+import type { Agent, AgentTools, AgentTask, MenderClient } from "@mender/sdk";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resetLocaleForTesting, setLocale } from "../../i18n/i18n";
@@ -19,12 +19,20 @@ const task:AgentTask={
   status:"completed",result:"fixture reviewed",createdAt:"2026-10-11T10:00:00Z",
   updatedAt:"2026-10-11T10:01:00Z",cancelRequested:false,
 };
+const suite:AgentTools={suiteId:"agent.delegation",status:"ready",
+  providerId:"prov_00000000000000000000000000000001",providerName:"Code Reviewer",
+  tools:["delegate","status","result","cancel"].map((name,i)=>({
+    toolId:"tool_"+String(i+1).padStart(32,"0"),sourceKey:"agent."+name,name,title:name,
+  })),
+};
 beforeEach(()=>{resetLocaleForTesting();setLocale("en");});
 afterEach(()=>{cleanup();resetLocaleForTesting();});
 function show(path:string,overrides:Partial<MenderClient>={}){
   const client:Partial<MenderClient>={
     listAgents:vi.fn().mockResolvedValue({agents:[agent]}),
     getAgent:vi.fn().mockResolvedValue(agent),
+    getAgentTools:vi.fn().mockResolvedValue(suite),
+    ensureAgentTools:vi.fn().mockResolvedValue(suite),
     listAgentTasks:vi.fn().mockResolvedValue({tasks:[task]}),
     getAgentTask:vi.fn().mockResolvedValue(task),
     listAgentAdmissions:vi.fn().mockResolvedValue({events:[{
@@ -63,13 +71,23 @@ describe("Agents focused management",()=>{
     fireEvent.change(screen.getByRole("textbox",{name:"Agent name"}),{target:{value:"Grok Reviewer"}});
     fireEvent.change(screen.getByRole("textbox",{name:"Workspace directory"}),{target:{value:"/tmp/grok-sandbox"}});
     fireEvent.click(screen.getByRole("button",{name:"Review"}));
-    expect(screen.getByText(/Creating an Agent saves configuration only/)).toBeTruthy();
+    expect(screen.getByText(/Creating an Agent prepares its governed tools/)).toBeTruthy();
     expect(client.createAgent).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button",{name:"Create agent"}));
     await waitFor(()=>expect(client.createAgent).toHaveBeenCalledWith({
       name:"Grok Reviewer",backend:"grok",workspaceRoot:"/tmp/grok-sandbox",
       isolation:"restricted_host",
     }));
+  });
+  it("repairs a missing Agent suite only on explicit owner action",async()=>{
+    const client=show("/agents/"+agent.agentId,{
+      getAgentTools:vi.fn().mockResolvedValue({suiteId:"agent.delegation",status:"missing",tools:[]}),
+    });
+    fireEvent.click(await screen.findByRole("button",{name:/^Tools/}));
+    expect(await screen.findByText("No Agent tools")).toBeTruthy();
+    expect(client.ensureAgentTools).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button",{name:"Prepare Agent tools"}));
+    await waitFor(()=>expect(client.ensureAgentTools).toHaveBeenCalledWith(agent.agentId));
   });
   it("places Profile grants and tasks on separate views and requires an explicit action",async()=>{
     const profile={
@@ -79,7 +97,9 @@ describe("Agents focused management",()=>{
       listProfiles:vi.fn().mockResolvedValue({profiles:[profile]}),
     });
     expect(await screen.findByText("codex-acp adapter not installed")).toBeTruthy();
-    expect(screen.getByRole("button",{name:"Connect Agent tools"})).toBeTruthy();
+    fireEvent.click(screen.getByRole("button",{name:"View Agent tools"}));
+    expect(await screen.findByText("Code Reviewer · delegate")).toBeTruthy();
+    expect(client.ensureAgentTools).not.toHaveBeenCalled();
     expect(screen.queryByText("fixture reviewed")).toBeNull();
     fireEvent.click(screen.getByRole("button",{name:/^Access/}));
     expect(await screen.findByText("No Agent grants")).toBeTruthy();

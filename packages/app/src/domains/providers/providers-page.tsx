@@ -313,6 +313,7 @@ export function ProvidersPage({
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
   const [inventoryQuery, setInventoryQuery] = useState("");
+  const [showInternal, setShowInternal] = useState(() => searchParams.get("showInternal") === "1");
 
   const [pluginPickerOpen, setPluginPickerOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
@@ -427,11 +428,12 @@ export function ProvidersPage({
 
   const visibleProviders = useMemo(() => {
     const needle = inventoryQuery.trim().toLocaleLowerCase();
-    return needle ? providers.filter((provider) =>
+    const normal = showInternal ? providers : providers.filter(provider => provider.pluginId !== AGENT_DELEGATION_PLUGIN_ID);
+    return needle ? normal.filter((provider) =>
       [provider.displayName, provider.namespace, provider.pluginId ?? ""]
         .some((value) => value.toLocaleLowerCase().includes(needle))
-    ) : providers;
-  }, [inventoryQuery, providers]);
+    ) : normal;
+  }, [inventoryQuery, providers, showInternal]);
   const providerPagination = usePagination(visibleProviders);
 
   async function addProvider() {
@@ -699,6 +701,7 @@ export function ProvidersPage({
         }
         actions={
           <>
+            <Button variant="outline" size="sm" onClick={() => setShowInternal(value => !value)}>{t(showInternal ? "Hide internal providers" : "Show internal providers")}</Button>
             <Button variant="outline" size="sm" disabled={busy !== ""} onClick={() => void refresh()}>{t("Refresh")}</Button>
             <Button size="sm" onClick={openCreatePluginPicker}>{t("Add provider")}</Button>
           </>
@@ -847,7 +850,7 @@ export function ProvidersPage({
 
       <ProviderPluginPickerDialog
         open={pluginPickerOpen}
-        plugins={providerPlugins}
+        plugins={showInternal ? providerPlugins : providerPlugins.filter(plugin => plugin.pluginId !== AGENT_DELEGATION_PLUGIN_ID)}
         onOpenChange={setPluginPickerOpen}
         onSelect={chooseCreatePlugin}
       />

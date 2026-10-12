@@ -98,7 +98,7 @@ export function AgentCreatePage({
             <div className="break-all"><span className="text-muted-foreground">{t("Workspace")}: </span>{root}</div>
             <div><span className="text-muted-foreground">{t("Isolation")}: </span>{isolation==="host"?t("Host (not isolated)"):t("Restricted host")}</div>
           </div>
-          <p className="text-xs leading-5 text-muted-foreground">{t("Creating an Agent saves configuration only; it does not start a model, approve tool requests, or grant any Profile access.")}</p>
+          <p className="text-xs leading-5 text-muted-foreground">{t("Creating an Agent prepares its governed tools without starting a model, approving tool requests, or granting Profile access.")}</p>
           <div className="flex justify-between gap-2">
             <Button variant="outline" disabled={busy} onClick={()=>setStep("configure")}>{t("Back")}</Button>
             <Button disabled={busy||!valid} onClick={()=>void create()}>{busy?t("Creating…"):t("Create agent")}</Button>

@@ -71,7 +71,9 @@ export function pluginInstaller(
 }
 
 export function pluginCatalogueToMarketplace(entries:PluginCatalogueEntry[]):MarketplacePlugin[]{
-  return entries.map((entry):MarketplacePlugin=>{
+  // Agent Delegation is a host-owned implementation facade, not a product to
+  // install or add independently. Agents own its user-facing Tool Suite.
+  return entries.filter(entry=>entry.pluginId!=="io.mender.provider.agent-delegation").map((entry):MarketplacePlugin=>{
     const kind=entry.kind==="provider.tools"?"provider":
       entry.kind==="sandbox.backend"?"sandbox":
       entry.kind==="tunnel.transport"?"tunnel":
