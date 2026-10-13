@@ -19,12 +19,12 @@ type systemdJobRunner struct {
 }
 
 func (r systemdJobRunner) Start(ctx context.Context, unit, script string) error {
-	if r.client == nil || !validUnit(unit) || script == "" || !loginPattern.MatchString(r.user) {
+	if r.client == nil || !validUnit(unit) || script == "" || r.user != "root" {
 		return ErrJobUnavailable
 	}
 	cmd := "systemd-run --quiet --collect --service-type=exec --unit=" + quoted(strings.TrimSuffix(unit, ".service")) +
 		" --property=User=" + quoted(r.user) +
-		" --property=RuntimeMaxSec=600s --property=TasksMax=64 --property=MemoryMax=1073741824 -- /bin/sh " + quoted(script)
+		" --property=RuntimeMaxSec=14400s --property=TasksMax=64 --property=MemoryMax=1073741824 -- /bin/sh " + quoted(script)
 	_, err := r.run(ctx, cmd)
 	if err != nil {
 		return ErrJobUnknown

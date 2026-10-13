@@ -3,6 +3,7 @@ package bootstrap
 import (
 	"context"
 	"fmt"
+	"time"
 
 	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
 	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
@@ -134,6 +135,40 @@ func (s *Sandboxes) ChangeSSHRemoteLifecycle(ctx context.Context, id sandboxdoma
 	}
 	if err := s.admission.AdmitAction(ctx, caller, item, action); err != nil {
 		return sandboxdomain.Run{}, err
+	}
+	// Only SSH resources that have actually admitted managed Job submission
+	// require a remote no-active/unknown-Jobs proof. Existing unenrolled SSH
+	// resources retain their passive offline Stop/Destroy behavior. A concurrent
+	// new submit still cannot escape: the Store rechecks the marker and lease
+	// inside its atomic state transition.
+	managed, err := s.store.SSHJobManaged(ctx, id)
+	if err != nil {
+		return sandboxdomain.Run{}, err
+	}
+	if managed && action != governancedomain.ActionSandboxStart {
+		// The exact exclusive execution lease blocks new job submissions and
+		// Workspace operations during remote reconciliation. An unknown/partial
+		// remote outcome must keep the Sandbox Ready/Stopped, not invent success.
+		token, e := s.store.ReserveSSHJobLifecycle(ctx, run, caller)
+		if e != nil {
+			return sandboxdomain.Run{}, e
+		}
+		consumed := false
+		defer func() {
+			if !consumed {
+				cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+				defer cancel()
+				_ = s.store.ReleaseExecution(cleanup, id, token)
+			}
+		}()
+		if err := s.sshRemote.QuiescentJobs(ctx, id); err != nil {
+			return sandboxdomain.Run{}, fmt.Errorf("SSH jobs have unknown or active execution; lifecycle refused: %w", err)
+		}
+		next, e := s.store.ChangeSSHRemoteLifecycleFenced(ctx, run, action, caller, token)
+		if e == nil {
+			consumed = true
+		}
+		return next, e
 	}
 	if action == governancedomain.ActionSandboxStart {
 		// Re-verify the pinned identity before re-enabling new execution leases.

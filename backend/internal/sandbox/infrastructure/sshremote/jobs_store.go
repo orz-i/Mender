@@ -31,7 +31,9 @@ type jobStore struct {
 	sandboxID sandboxdomain.ID
 }
 
-func (s *jobStore) basePath() string            { return path.Join(s.root, jobStorageDir, s.sandboxID.String()) }
+// Task material is placed in a private sibling of the Workspace root.
+// Structured Workspace read/search/edit may never reach this directory.
+func (s *jobStore) basePath() string            { return path.Join(s.root+jobStorageDir, s.sandboxID.String()) }
 func (s *jobStore) taskPath(id string) string   { return path.Join(s.basePath(), id) }
 func (s *jobStore) scriptPath(id string) string { return path.Join(s.taskPath(id), "run.sh") }
 func (s *jobStore) checkedDir(p string) error {
@@ -59,7 +61,7 @@ func (s *jobStore) ensureBase(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if err := s.mkdirPrivate(path.Join(s.root, jobStorageDir)); err != nil {
+	if err := s.mkdirPrivate(s.root + jobStorageDir); err != nil {
 		return err
 	}
 	return s.mkdirPrivate(s.basePath())
@@ -106,7 +108,7 @@ func (s *jobStore) checkTask(ctx context.Context, id string) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if err := s.checkedDir(path.Join(s.root, jobStorageDir)); err != nil {
+	if err := s.checkedDir(s.root + jobStorageDir); err != nil {
 		return err
 	}
 	if err := s.checkedDir(s.basePath()); err != nil {
@@ -267,7 +269,7 @@ func (s *jobStore) list(ctx context.Context) ([]string, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if err := s.checkedDir(path.Join(s.root, jobStorageDir)); err != nil {
+	if err := s.checkedDir(s.root + jobStorageDir); err != nil {
 		return nil, ErrJobUnknown
 	}
 	if err := s.checkedDir(s.basePath()); err != nil {

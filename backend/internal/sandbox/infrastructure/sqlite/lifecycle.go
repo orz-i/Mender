@@ -3,6 +3,7 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"time"
@@ -31,15 +32,32 @@ type LifecycleEvent struct {
 // audit in one SQLite transaction. It is never used with a remote/container
 // backend, and its success does not remove actual host filesystem contents.
 func (s *Store) ChangeLocalLifecycle(ctx context.Context, expected sandboxdomain.Run, action governancedomain.Action, caller governancedomain.Context) (sandboxdomain.Run, error) {
-	return s.changePassiveLifecycle(ctx, expected, action, caller, sandboxdomain.BackendLocalWorkspace, "local_workspace:")
+	return s.changePassiveLifecycle(ctx, expected, action, caller, sandboxdomain.BackendLocalWorkspace, "local_workspace:", "")
 }
 
 // SSH stop/start/destroy only changes the local authority binding. It does
 // not mutate, reboot or delete any resource on the remote SSH host.
 func (s *Store) ChangeSSHRemoteLifecycle(ctx context.Context, expected sandboxdomain.Run, action governancedomain.Action, caller governancedomain.Context) (sandboxdomain.Run, error) {
-	return s.changePassiveLifecycle(ctx, expected, action, caller, sandboxdomain.BackendSSHRemote, "ssh_remote:")
+	return s.changePassiveLifecycle(ctx, expected, action, caller, sandboxdomain.BackendSSHRemote, "ssh_remote:", "")
 }
-func (s *Store) changePassiveLifecycle(ctx context.Context, expected sandboxdomain.Run, action governancedomain.Action, caller governancedomain.Context, backendKind sandboxdomain.BackendKind, prefix string) (sandboxdomain.Run, error) {
+
+// ChangeSSHRemoteLifecycleFenced consumes a previously reserved exclusive
+// lifecycle fence in the SAME transaction that changes the Sandbox Run.
+// The plugin's remote no-active-Jobs proof must precede this call.
+func (s *Store) ChangeSSHRemoteLifecycleFenced(ctx context.Context, expected sandboxdomain.Run,
+	action governancedomain.Action, caller governancedomain.Context, token string) (sandboxdomain.Run, error) {
+	if len(token) != 32 {
+		return sandboxdomain.Run{}, sandboxdomain.ErrConflict
+	}
+	if _, err := hex.DecodeString(token); err != nil {
+		return sandboxdomain.Run{}, sandboxdomain.ErrConflict
+	}
+	if action != governancedomain.ActionSandboxStop && action != governancedomain.ActionSandboxDestroy {
+		return sandboxdomain.Run{}, sandboxdomain.ErrConflict
+	}
+	return s.changePassiveLifecycle(ctx, expected, action, caller, sandboxdomain.BackendSSHRemote, "ssh_remote:", token)
+}
+func (s *Store) changePassiveLifecycle(ctx context.Context, expected sandboxdomain.Run, action governancedomain.Action, caller governancedomain.Context, backendKind sandboxdomain.BackendKind, prefix, fenceToken string) (sandboxdomain.Run, error) {
 	if s == nil || s.db == nil {
 		return sandboxdomain.Run{}, sandboxdomain.ErrBackendUnavailable
 	}
@@ -105,8 +123,30 @@ func (s *Store) changePassiveLifecycle(ctx context.Context, expected sandboxdoma
 	if err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM sandbox_execution_leases WHERE sandbox_id=?`, expected.SandboxID.String()).Scan(&active); err != nil {
 		return sandboxdomain.Run{}, fmt.Errorf("local Sandbox lifecycle: leases: %w", err)
 	}
-	if active != 0 {
+	// A permanent SSH Job obligation never represents task state. The plugin
+	// must prove quiescence after an exclusive fence reservation and the
+	// Run state CAS must consume that exact fence atomically.
+	if backendKind == sandboxdomain.BackendSSHRemote && action != governancedomain.ActionSandboxStart {
+		var managed int
+		if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM sandbox_ssh_job_obligations WHERE sandbox_id=?)`, expected.SandboxID.String()).Scan(&managed); err != nil {
+			return sandboxdomain.Run{}, err
+		}
+		if (managed != 0) != (fenceToken != "") {
+			return sandboxdomain.Run{}, fmt.Errorf("SSH lifecycle: job obligation requires matching fence: %w", sandboxdomain.ErrConflict)
+		}
+	}
+	if fenceToken == "" && active != 0 {
 		return sandboxdomain.Run{}, sandboxdomain.ErrConflict
+	}
+	if fenceToken != "" {
+		var held int
+		if active != 1 {
+			return sandboxdomain.Run{}, fmt.Errorf("SSH lifecycle: exclusive fence unavailable: %w", sandboxdomain.ErrConflict)
+		}
+		if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM sandbox_execution_leases WHERE sandbox_id=? AND lease_token=? AND generation=? AND principal_kind=? AND principal_ref=?)`,
+			expected.SandboxID.String(), fenceToken, expected.Generation, string(principal.Kind()), principal.Reference()).Scan(&held); err != nil || held != 1 {
+			return sandboxdomain.Run{}, fmt.Errorf("SSH lifecycle: invalid fence token or generation: %w", sandboxdomain.ErrConflict)
+		}
 	}
 	if action == governancedomain.ActionSandboxDestroy {
 		// Validate references INSIDE the same transaction as the Run CAS. The
@@ -121,7 +161,15 @@ func (s *Store) changePassiveLifecycle(ctx context.Context, expected sandboxdoma
 			return sandboxdomain.Run{}, sandboxdomain.ErrConflict
 		}
 	}
-	outcome, err := tx.ExecContext(ctx, `UPDATE sandbox_runs SET generation=?,state=?,external_id=?,updated_at=? WHERE sandbox_id=? AND generation=? AND state=? AND external_id=? AND NOT EXISTS (SELECT 1 FROM sandbox_execution_leases WHERE sandbox_id=?)`, next.Generation, string(next.State), next.ExternalID, time.Now().UTC().Format(time.RFC3339Nano), expected.SandboxID.String(), expected.Generation, string(expected.State), expected.ExternalID, expected.SandboxID.String())
+	leasePredicate := "AND NOT EXISTS (SELECT 1 FROM sandbox_execution_leases WHERE sandbox_id=?)"
+	if fenceToken != "" {
+		leasePredicate = "AND EXISTS (SELECT 1 FROM sandbox_execution_leases WHERE sandbox_id=? AND lease_token=?)"
+	}
+	args := []any{next.Generation, string(next.State), next.ExternalID, time.Now().UTC().Format(time.RFC3339Nano), expected.SandboxID.String(), expected.Generation, string(expected.State), expected.ExternalID, expected.SandboxID.String()}
+	if fenceToken != "" {
+		args = append(args, fenceToken)
+	}
+	outcome, err := tx.ExecContext(ctx, `UPDATE sandbox_runs SET generation=?,state=?,external_id=?,updated_at=? WHERE sandbox_id=? AND generation=? AND state=? AND external_id=? `+leasePredicate, args...)
 	if err != nil {
 		return sandboxdomain.Run{}, fmt.Errorf("local Sandbox lifecycle: transition: %w", err)
 	}
@@ -130,12 +178,18 @@ func (s *Store) changePassiveLifecycle(ctx context.Context, expected sandboxdoma
 		return sandboxdomain.Run{}, fmt.Errorf("local Sandbox lifecycle: state update: %w", err)
 	}
 	if changed != 1 {
-		return sandboxdomain.Run{}, sandboxdomain.ErrConflict
+		return sandboxdomain.Run{}, fmt.Errorf("sandbox lifecycle: stale run or execution fence: %w", sandboxdomain.ErrConflict)
 	}
 	scope := caller.Scope()
 	_, err = tx.ExecContext(ctx, `INSERT INTO sandbox_lifecycle_events(sandbox_id,action,previous_state,next_state,generation,principal_kind,principal_ref,origin,scope_kind,scope_ref,finished_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)`, expected.SandboxID.String(), string(action), string(expected.State), string(next.State), next.Generation, string(principal.Kind()), principal.Reference(), string(caller.Origin()), string(scope.Kind()), scope.Reference(), time.Now().UTC().Format(time.RFC3339Nano))
 	if err != nil {
 		return sandboxdomain.Run{}, fmt.Errorf("local Sandbox lifecycle: audit: %w", err)
+	}
+	if fenceToken != "" {
+		released, releaseErr := tx.ExecContext(ctx, `DELETE FROM sandbox_execution_leases WHERE sandbox_id=? AND lease_token=?`, expected.SandboxID.String(), fenceToken)
+		if releaseErr != nil || !oneRow(released) {
+			return sandboxdomain.Run{}, fmt.Errorf("SSH lifecycle: unable to consume fence: %w", sandboxdomain.ErrConflict)
+		}
 	}
 	if err = tx.Commit(); err != nil {
 		return sandboxdomain.Run{}, fmt.Errorf("local Sandbox lifecycle: commit: %w", err)

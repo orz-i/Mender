@@ -63,6 +63,38 @@ func fixtureJobs(t *testing.T, runner JobRunner) (*Jobs, func() *Jobs) {
 	}
 	return connect(), connect
 }
+func TestSSHDurableJobsSessionRequiresExplicitRootAccount(t *testing.T) {
+	template, credentials := sshFixture(t)
+	connection, err := (Dialer{Credentials: credentials}).Connect(context.Background(), template)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = connection.Close() }()
+	item := &Session{conn: connection, root: template.Root,
+		sandboxID: sandboxdomain.ID("sbx_00000000000000000000000000000011"), remoteUser: "agent"}
+	if _, err := item.Jobs(); !errors.Is(err, ErrJobUnavailable) {
+		t.Fatalf("unprivileged account unexpectedly gained systemd system-manager operations: %v", err)
+	}
+	// The fixture does not elevate the test process: it only uses the account
+	// label to confirm contract validation, without reaching any real systemd.
+	item.remoteUser = "root"
+	if _, err := item.Jobs(); err != nil {
+		t.Fatalf("explicit root SSH account rejected before backend execution: %v", err)
+	}
+}
+
+func TestSystemdJobRunnerStrictUnitNaming(t *testing.T) {
+	for _, value := range []string{"mender-job.service", "mender-sjob_abc.service", "mender-sjob_" + strings.Repeat("0", 32) + ".target", "x" + strings.Repeat("a", 40) + ".service"} {
+		if validUnit(value) {
+			t.Fatalf("accepted arbitrary unit %q", value)
+		}
+	}
+	valid := "mender-sjob_" + strings.Repeat("a", 32) + ".service"
+	if !validUnit(valid) {
+		t.Fatalf("rejected bounded fixed unit identity %q", valid)
+	}
+}
+
 func TestSSHDurableJobsIdempotencyStatusLogsAndRestart(t *testing.T) {
 	fake := &fixtureJobRunner{}
 	jobs, reconnect := fixtureJobs(t, fake)
@@ -125,6 +157,32 @@ func TestSSHDurableJobsIdempotencyStatusLogsAndRestart(t *testing.T) {
 		t.Fatalf("prune destroyed idempotency tombstone: %+v %v", again, err)
 	}
 }
+
+// Concurrent callers with the same high-entropy key share one atomic remote
+// directory reservation; there is no process-local mutex assumption.
+func TestSSHDurableJobsConcurrentIdempotencyAcrossConnections(t *testing.T) {
+	fake := &fixtureJobRunner{}
+	first, reconnect := fixtureJobs(t, fake)
+	second := reconnect()
+	request := JobRequest{IdempotencyKey: "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", Command: "echo exactly-one-start"}
+	var wg sync.WaitGroup
+	for _, engine := range []*Jobs{first, second} {
+		wg.Add(1)
+		go func(current *Jobs) {
+			defer wg.Done()
+			_, _ = current.Submit(context.Background(), request)
+		}(engine)
+	}
+	wg.Wait()
+	if fake.starts != 1 {
+		t.Fatalf("duplicate remote start count: %d", fake.starts)
+	}
+	retry, err := second.Submit(context.Background(), request)
+	if err != nil || retry.State != JobRunning || retry.TaskID != first.identity(request.IdempotencyKey) || fake.starts != 1 {
+		t.Fatalf("cross-connection retry %+v %v starts=%d", retry, err, fake.starts)
+	}
+}
+
 func TestSSHDurableJobsLostAcknowledgementAndUnknownNoReplay(t *testing.T) {
 	fake := &fixtureJobRunner{lostAck: true}
 	jobs, reconnect := fixtureJobs(t, fake)
@@ -192,7 +250,7 @@ func TestSSHDurableJobsValidateKeysAndRefuseSymlink(t *testing.T) {
 	// Directory symlink must never redirect persistent task material to a
 	// workspace-external destination. None of the fake runner methods is used.
 	other := t.TempDir()
-	if err := os.Symlink(other, filepath.Join(jobs.root, jobStorageDir)); err != nil {
+	if err := os.Symlink(other, jobs.root+jobStorageDir); err != nil {
 		t.Fatal(err)
 	}
 	_, err := jobs.Submit(context.Background(), JobRequest{IdempotencyKey: strings.Repeat("1", 32), Command: "echo nope"})
@@ -242,15 +300,39 @@ func (r *localFixtureRunner) Stop(_ context.Context, unit string) error {
 }
 func TestSSHDurableJobScriptSurvivesSSHDisconnect(t *testing.T) {
 	runner := &localFixtureRunner{}
-	jobs, reconnect := fixtureJobs(t, runner)
-	req := JobRequest{IdempotencyKey: "dddddddddddddddddddddddddddddddd", Command: "sleep 0.4; printf 'finished after disconnect\\n'"}
+	template, credentials := sshFixture(t)
+	dial := Dialer{Credentials: credentials}
 	ctx := context.Background()
-	started, err := jobs.Submit(ctx, req)
+	firstConnection, err := dial.Connect(ctx, template)
 	if err != nil {
 		t.Fatal(err)
 	}
-	// A subsequent SSH connection observes the same remote path and result.
-	restored := reconnect()
+	id := sandboxdomain.ID("sbx_00000000000000000000000000000011")
+	jobs, err := newJobs(id, template.Root, firstConnection.SFTP, runner)
+	if err != nil {
+		_ = firstConnection.Close()
+		t.Fatal(err)
+	}
+	req := JobRequest{IdempotencyKey: "dddddddddddddddddddddddddddddddd", Command: "sleep 0.4; printf 'finished after disconnect\\n'"}
+	started, err := jobs.Submit(ctx, req)
+	if err != nil {
+		_ = firstConnection.Close()
+		t.Fatal(err)
+	}
+	// Sever the ORIGINAL authenticated SSH/SFTP connection while its detached
+	// child is still running. A fresh transport must recover the same task.
+	if err := firstConnection.Close(); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := dial.Connect(ctx, template)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = reopened.Close() }()
+	restored, err := newJobs(id, template.Root, reopened.SFTP, runner)
+	if err != nil {
+		t.Fatal(err)
+	}
 	deadline := time.Now().Add(4 * time.Second)
 	for time.Now().Before(deadline) {
 		result, e := restored.Status(ctx, started.TaskID)

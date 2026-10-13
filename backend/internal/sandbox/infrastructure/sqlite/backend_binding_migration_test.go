@@ -44,6 +44,8 @@ func seedSandboxV8(t *testing.T) string {
 		"DROP TRIGGER sandbox_ssh_template_immutable_delete",
 		"DROP TABLE sandbox_ssh_remote_templates",
 		"DROP TABLE sandbox_tool_suite_bindings",
+		"DROP TABLE sandbox_ssh_job_obligations",
+		"DELETE FROM sandbox_schema_migrations WHERE version=13",
 		"DROP TRIGGER sandbox_external_config_update",
 		"DROP TRIGGER sandbox_external_config_delete",
 		"DROP TABLE sandbox_external_operations",

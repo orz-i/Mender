@@ -95,6 +95,12 @@ func (s *Session) Jobs() (*Jobs, error) {
 	if s == nil || s.conn == nil || s.conn.SFTP == nil || s.conn.SSH == nil || s.sandboxID == "" {
 		return nil, ErrJobUnavailable
 	}
+	// B supports the system-wide transient service manager only. A regular
+	// SSH account cannot safely assume systemd --user, linger or authority
+	// to create system units. Reject before reserving a durable TaskID.
+	if s.remoteUser != "root" {
+		return nil, ErrJobUnavailable
+	}
 	return newJobs(s.sandboxID, s.root, s.conn.SFTP, systemdJobRunner{client: s.conn.SSH, user: s.remoteUser})
 }
 func newJobs(id sandboxdomain.ID, root string, client *sftp.Client, runner JobRunner) (*Jobs, error) {
@@ -102,6 +108,16 @@ func newJobs(id sandboxdomain.ID, root string, client *sftp.Client, runner JobRu
 		return nil, ErrJobInvalid
 	}
 	return &Jobs{sandboxID: id, root: root, store: &jobStore{sftp: client, root: root, sandboxID: id}, runner: runner}, nil
+}
+
+// Prepare checks the remote private storage boundary before host enrolment.
+// It creates no task reservation or unit, so a concurrent Sandbox Stop can
+// still safely complete before the later atomic submission lease.
+func (j *Jobs) Prepare(ctx context.Context) error {
+	if j == nil || j.store == nil {
+		return ErrJobUnavailable
+	}
+	return j.store.ensureBase(ctx)
 }
 func (j *Jobs) identity(key string) string {
 	sum := sha256.Sum256([]byte("mender:ssh-job:v1:" + j.sandboxID.String() + ":" + key))

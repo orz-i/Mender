@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-const latestSchemaVersion = 12
+const latestSchemaVersion = 13
 
 func migrate(ctx context.Context, db *sql.DB) error {
 	tx, err := db.BeginTx(ctx, nil)
@@ -440,6 +440,35 @@ func migrate(ctx context.Context, db *sql.DB) error {
 		}
 		if _, err = tx.ExecContext(ctx, "INSERT INTO sandbox_schema_migrations(version,applied_at) VALUES(12,?)", time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
 			return fmt.Errorf("record sandbox migration 12: %w", err)
+		}
+	}
+	// Stage B: one non-sensitive, immutable plugin execution obligation per
+	// SSH Sandbox. TaskIDs, job states and logs NEVER enter Mender SQLite.
+	// A confirmed remote absence proof plus an atomic lifecycle fence is
+	// required for Stop/Destroy once a Sandbox has ever submitted Jobs.
+	var sshJobsApplied int
+	if err = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM sandbox_schema_migrations WHERE version=13").Scan(&sshJobsApplied); err != nil {
+		return fmt.Errorf("sandbox migration 13 presence: %w", err)
+	}
+	if sshJobsApplied == 0 {
+		for _, statement := range []string{
+			`CREATE TABLE sandbox_ssh_job_obligations (
+				sandbox_id TEXT PRIMARY KEY REFERENCES sandboxes(id) ON DELETE RESTRICT,
+				enrolled_at TEXT NOT NULL
+			)`,
+			`CREATE TRIGGER sandbox_ssh_job_obligation_immutable_update
+			BEFORE UPDATE ON sandbox_ssh_job_obligations
+			BEGIN SELECT RAISE(ABORT,'SSH Job obligation cannot be updated'); END`,
+			`CREATE TRIGGER sandbox_ssh_job_obligation_immutable_delete
+			BEFORE DELETE ON sandbox_ssh_job_obligations
+			BEGIN SELECT RAISE(ABORT,'SSH Job obligation cannot be deleted'); END`,
+		} {
+			if _, err = tx.ExecContext(ctx, statement); err != nil {
+				return fmt.Errorf("sandbox migration 13 SSH job obligation: %w", err)
+			}
+		}
+		if _, err = tx.ExecContext(ctx, "INSERT INTO sandbox_schema_migrations(version,applied_at) VALUES(13,?)", time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
+			return fmt.Errorf("record sandbox migration 13: %w", err)
 		}
 	}
 	// A standalone Sandbox store may precede the Provider catalogue. Install
