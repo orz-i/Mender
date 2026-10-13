@@ -88,6 +88,17 @@ func TestSandboxRegistryRejectsWrongKindClaimsAndDuplicates(t *testing.T) {
 		"overclaimed shell":       func(d *platformplugin.Descriptor) { d.Capabilities = append(d.Capabilities, "process.shell") },
 		"missing read":            func(d *platformplugin.Descriptor) { d.Capabilities = nil },
 		"wrong extension":         func(d *platformplugin.Descriptor) { d.Extension.ID = "other" },
+		"claimed durable": func(d *platformplugin.Descriptor) {
+			d.CapabilityContracts = append(d.CapabilityContracts, platformplugin.CapabilityContract{
+				ID: "job.submit", Version: platformplugin.CapabilityVersion{Major: 1}, Mode: platformplugin.ExecutionDetached})
+			d.Capabilities = append(d.Capabilities, "job.submit")
+		},
+		"claimed future version": func(d *platformplugin.Descriptor) {
+			d.CapabilityContracts[0].Version.Major = 2
+		},
+		"claimed detached mode": func(d *platformplugin.Descriptor) {
+			d.CapabilityContracts[0].Mode = platformplugin.ExecutionDetached
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			descriptor := original.Clone()

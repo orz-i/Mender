@@ -51,15 +51,16 @@ func (e Extension) Validate() error {
 // Descriptor is bounded, process-free, management-safe data.
 // A claim of sandbox isolation or tunnel readiness is not proof of enforcement.
 type Descriptor struct {
-	PluginID       ID
-	PackageVersion string
-	Extension      Extension
-	DisplayName    string
-	Description    string
-	ConfigVersion  uint32
-	ConfigSchema   json.RawMessage
-	UISchema       json.RawMessage
-	Capabilities   []string
+	PluginID            ID
+	PackageVersion      string
+	Extension           Extension
+	DisplayName         string
+	Description         string
+	ConfigVersion       uint32
+	ConfigSchema        json.RawMessage
+	UISchema            json.RawMessage
+	Capabilities        []string
+	CapabilityContracts []CapabilityContract `json:"capabilityContracts,omitempty"`
 }
 
 func (d Descriptor) Validate() error {
@@ -96,6 +97,14 @@ func (d Descriptor) Validate() error {
 		}
 		seen[c] = true
 	}
+	if err := ValidateContracts(d.CapabilityContracts); err != nil {
+		return fmt.Errorf("plugin descriptor: %w", err)
+	}
+	for _, contract := range d.CapabilityContracts {
+		if !seen[string(contract.ID)] {
+			return fmt.Errorf("plugin descriptor: capability contract %q has no matching declaration", contract.ID)
+		}
+	}
 	return nil
 }
 
@@ -103,5 +112,6 @@ func (d Descriptor) Clone() Descriptor {
 	d.ConfigSchema = slices.Clone(d.ConfigSchema)
 	d.UISchema = slices.Clone(d.UISchema)
 	d.Capabilities = slices.Clone(d.Capabilities)
+	d.CapabilityContracts = CloneContracts(d.CapabilityContracts)
 	return d
 }

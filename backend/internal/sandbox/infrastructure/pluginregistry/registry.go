@@ -53,7 +53,14 @@ func BuiltinDescriptor(backend sandboxapp.Backend) (platformplugin.Descriptor, e
 	if backend == nil {
 		return platformplugin.Descriptor{}, fmt.Errorf("sandbox plugin: backend is required")
 	}
-	return builtinDescriptor(backend.Kind(), capabilityNames(backend.Capabilities()))
+	descriptor, err := builtinDescriptor(backend.Kind(), capabilityNames(backend.Capabilities()))
+	if err != nil {
+		return descriptor, err
+	}
+	// Only an actual registered implementation derives verified contracts.
+	// Inert Docker/Daytona catalogue placeholders cannot make this claim.
+	descriptor.CapabilityContracts = workspaceV1Contracts(backend.Capabilities())
+	return descriptor, descriptor.Validate()
 }
 
 // DockerCatalogueDescriptor is inert metadata, not a Router registration.
@@ -108,6 +115,21 @@ func builtinDescriptor(kind sandboxdomain.BackendKind, capabilities []string) (p
 		Capabilities: slices.Clone(capabilities),
 	}
 	return d, d.Validate()
+}
+
+// workspaceV1Contracts projects only the four typed Workspace operations,
+// with inline v1 semantics and no inferred durability guarantees. External
+// Sandbox Protocol v1 can never offer Browser or Jobs through this projection.
+func workspaceV1Contracts(cap sandboxdomain.Capabilities) []platformplugin.CapabilityContract {
+	names := capabilityNames(cap)
+	contracts := make([]platformplugin.CapabilityContract, 0, len(names))
+	for _, name := range names {
+		contracts = append(contracts, platformplugin.CapabilityContract{
+			ID: platformplugin.CapabilityID(name), Version: platformplugin.CapabilityVersion{Major: 1},
+			Mode: platformplugin.ExecutionInline,
+		})
+	}
+	return contracts
 }
 
 func capabilityNames(cap sandboxdomain.Capabilities) []string {
@@ -179,6 +201,12 @@ func (r *Registry) registerBuiltin(backend sandboxapp.Backend,
 	if !slices.Equal(actual, claimed) {
 		return fmt.Errorf("sandbox plugin: descriptor capabilities do not match backend implementation")
 	}
+	actualContracts := workspaceV1Contracts(backend.Capabilities())
+	if !slices.EqualFunc(descriptor.CapabilityContracts, actualContracts, func(a, b platformplugin.CapabilityContract) bool {
+		return a.ID == b.ID && a.Version == b.Version && a.Mode == b.Mode && slices.Equal(a.Guarantees, b.Guarantees)
+	}) {
+		return fmt.Errorf("sandbox plugin: contract claims do not match verified Workspace backend")
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if _, ok := r.byKind[kind]; ok {
@@ -215,6 +243,11 @@ func (r *Registry) RegisterExternal(backend sandboxapp.Backend, descriptor platf
 	slices.Sort(claimed)
 	if !slices.Equal(actual, claimed) {
 		return fmt.Errorf("sandbox registry: external backend capability mismatch")
+	}
+	// External Sandbox Protocol v1 has no versioned offers. Do not let a
+	// forged descriptor attach unsupported detached or durable semantics.
+	if len(descriptor.CapabilityContracts) != 0 {
+		return fmt.Errorf("sandbox registry: external protocol v1 cannot advertise capability contracts")
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()

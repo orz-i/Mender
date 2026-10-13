@@ -80,22 +80,14 @@ func (r *Runtime) sandboxWorkspaceCapabilitySnapshot(ctx context.Context, id san
 		return false, "Sandbox backend is unavailable", nil
 	}
 	spec := item.Spec()
-	available := make([]suitedomain.Capability, 0, 4)
-	for _, entry := range []struct {
-		workspace sandboxdomain.Capability
-		generic   suitedomain.Capability
-	}{
-		{sandboxdomain.CapabilityRead, suitedomain.FileRead},
-		{sandboxdomain.CapabilitySearch, suitedomain.FileSearch},
-		{sandboxdomain.CapabilityEdit, suitedomain.FileEdit},
-		{sandboxdomain.CapabilityShell, suitedomain.ProcessShell},
-	} {
-		if _, e := r.Sandboxes.backendPlugins.ResolveBackend(spec.Backend, spec.Binding, entry.workspace); e == nil {
-			available = append(available, entry.generic)
-		}
+	// Only the exact registered backend may provide verified Workspace v1
+	// contracts. Descriptor strings alone never make a Suite executable.
+	available, err := r.Sandboxes.backendPlugins.VerifiedWorkspaceContracts(spec.Backend, spec.Binding)
+	if err != nil {
+		return false, "Workspace operations unavailable on this exact Sandbox backend", nil
 	}
 	definition, _ := suitecatalogue.Find(suitedomain.SandboxWorkspace)
-	if err = suitedomain.RequireCapabilities(definition, suitedomain.SandboxResource, available); err != nil {
+	if err = suitedomain.RequireContracts(definition, suitedomain.SandboxResource, available); err != nil {
 		return false, "Workspace operations unavailable on this exact Sandbox backend", nil
 	}
 	if run.State != sandboxdomain.StateReady {

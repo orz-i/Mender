@@ -4,6 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
+
+	platformplugin "github.com/orz-i/Mender/backend/internal/plugin"
 )
 
 var ErrIncompatible = errors.New("tool suite capabilities unavailable")
@@ -25,7 +28,9 @@ const (
 	SandboxResource ResourceKind = "sandbox"
 )
 
-type Capability string
+// Capability is the version-independent operation ID exposed in the existing
+// management API. Runtime eligibility uses RequiredContracts instead.
+type Capability = platformplugin.CapabilityID
 
 const (
 	FileRead       Capability = "file.read"
@@ -36,22 +41,29 @@ const (
 	BrowserSession Capability = "browser.session"
 )
 
-// Definition is inert, reviewed host metadata. A planned suite is not an
-// executable Tool and cannot be bound merely by listing its capabilities.
+// Definition is inert, reviewed host metadata. RequiredCapabilities preserves
+// the public management projection. RequiredContracts is the exact host-only
+// eligibility contract and MUST contain one matching versioned requirement
+// for each public operation. The curated registry, not a plugin or a model,
+// is the only source of executable definitions.
 type Definition struct {
-	SuiteID              ID           `json:"suiteId"`
-	DisplayName          string       `json:"displayName"`
-	Description          string       `json:"description"`
-	ResourceKind         ResourceKind `json:"resourceKind"`
-	RequiredCapabilities []Capability `json:"requiredCapabilities"`
-	ToolSourceKeys       []string     `json:"toolSourceKeys"`
-	Status               string       `json:"status"` // builtin, unavailable
-	Issue                string       `json:"issue,omitempty"`
+	SuiteID              ID                                  `json:"suiteId"`
+	DisplayName          string                              `json:"displayName"`
+	Description          string                              `json:"description"`
+	ResourceKind         ResourceKind                        `json:"resourceKind"`
+	RequiredCapabilities []Capability                        `json:"requiredCapabilities"`
+	RequiredContracts    []platformplugin.CapabilityContract `json:"-"`
+	ToolSourceKeys       []string                            `json:"toolSourceKeys"`
+	Status               string                              `json:"status"` // builtin, unavailable
+	Issue                string                              `json:"issue,omitempty"`
 }
 
 func (d Definition) Validate() error {
-	if d.SuiteID != AgentDelegation && d.SuiteID != SandboxWorkspace && d.SuiteID != SandboxBrowser ||
-		(d.ResourceKind != AgentResource && d.ResourceKind != SandboxResource) ||
+	if err := platformplugin.CapabilityID(d.SuiteID).Validate(); err != nil {
+		return fmt.Errorf("%w: suite ID: %w", ErrInvalid, err)
+	}
+	if (d.ResourceKind != AgentResource && d.ResourceKind != SandboxResource) ||
+		!strings.HasPrefix(string(d.SuiteID), string(d.ResourceKind)+".") ||
 		d.DisplayName == "" || d.Description == "" || len(d.RequiredCapabilities) == 0 ||
 		(d.Status != "builtin" && d.Status != "unavailable") {
 		return ErrInvalid
@@ -59,13 +71,20 @@ func (d Definition) Validate() error {
 	if d.Status == "unavailable" && len(d.ToolSourceKeys) != 0 {
 		return fmt.Errorf("%w: unavailable tool suite cannot advertise executable Tools", ErrInvalid)
 	}
-	for _, c := range d.RequiredCapabilities {
-		if c != FileRead && c != FileSearch && c != FileEdit && c != ProcessShell && c != AgentTask && c != BrowserSession {
-			return fmt.Errorf("%w: unknown capability %q", ErrInvalid, c)
-		}
+	if !unique(d.RequiredCapabilities) || !unique(d.ToolSourceKeys) ||
+		len(d.RequiredContracts) != len(d.RequiredCapabilities) {
+		return fmt.Errorf("%w: duplicate or mismatched declarations", ErrInvalid)
 	}
-	if !unique(d.RequiredCapabilities) || !unique(d.ToolSourceKeys) {
-		return fmt.Errorf("%w: duplicate declarations", ErrInvalid)
+	if err := platformplugin.ValidateContracts(d.RequiredContracts); err != nil {
+		return fmt.Errorf("%w: %w", ErrInvalid, err)
+	}
+	for index, c := range d.RequiredCapabilities {
+		if err := c.Validate(); err != nil {
+			return fmt.Errorf("%w: %w", ErrInvalid, err)
+		}
+		if d.RequiredContracts[index].ID != c {
+			return fmt.Errorf("%w: operation contract does not match %s", ErrInvalid, c)
+		}
 	}
 	return nil
 }
@@ -83,13 +102,15 @@ func unique[T comparable](items []T) bool {
 
 func (d Definition) Clone() Definition {
 	d.RequiredCapabilities = slices.Clone(d.RequiredCapabilities)
+	d.RequiredContracts = platformplugin.CloneContracts(d.RequiredContracts)
 	d.ToolSourceKeys = slices.Clone(d.ToolSourceKeys)
 	return d
 }
 
-// RequireCapabilities performs complete-set, typed negotiation: a browser
-// capability never substitutes for filesystem, search or process operations.
-func RequireCapabilities(d Definition, resourceKind ResourceKind, actual []Capability) error {
+// RequireContracts negotiates a reviewed suite against *verified* backend
+// offers, never arbitrary Descriptor.Capabilities text. Even successful
+// negotiation does not provide Principal, Profile, Policy or lease authority.
+func RequireContracts(d Definition, resourceKind ResourceKind, actual []platformplugin.CapabilityContract) error {
 	if err := d.Validate(); err != nil {
 		return err
 	}
@@ -99,10 +120,8 @@ func RequireCapabilities(d Definition, resourceKind ResourceKind, actual []Capab
 	if d.Status != "builtin" {
 		return ErrUnavailable
 	}
-	for _, required := range d.RequiredCapabilities {
-		if !slices.Contains(actual, required) {
-			return fmt.Errorf("%w: %s", ErrIncompatible, required)
-		}
+	if err := platformplugin.NegotiateCapabilities(d.RequiredContracts, actual); err != nil {
+		return fmt.Errorf("%w: %w", ErrIncompatible, err)
 	}
 	return nil
 }
