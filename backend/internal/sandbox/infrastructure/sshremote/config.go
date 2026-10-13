@@ -13,6 +13,7 @@ import (
 	"path"
 	"regexp"
 	"strings"
+	"syscall"
 	"time"
 
 	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
@@ -84,12 +85,63 @@ func (c *Connection) Close() error {
 	return nil
 }
 
+const (
+	sshConnectBudget     = 45 * time.Second
+	sshTCPAttemptTimeout = 20 * time.Second
+	sshTCPDialAttempts   = 2
+	sshTCPRetryDelay     = 300 * time.Millisecond
+)
+
 type Dialer struct {
 	Credentials invocationapp.CredentialResolver
 	Trust       *HostTrustStore
+	// Injected only by same-package tests; production uses net.Dialer.
+	tcpDial func(context.Context, string, string) (net.Conn, error)
+}
+
+// Only pre-auth TCP dial faults can be retried. Re-running SSH auth, host-key
+// verification, SFTP, file edit or shell execution is forbidden.
+func retryableTCPDialError(err error) bool {
+	var networkErr net.Error
+	return (errors.As(err, &networkErr) && networkErr.Timeout()) ||
+		errors.Is(err, context.DeadlineExceeded) || errors.Is(err, syscall.ETIMEDOUT)
+}
+
+func (d Dialer) connectTCP(ctx context.Context, endpoint string) (net.Conn, error) {
+	dial := d.tcpDial
+	if dial == nil {
+		dial = (&net.Dialer{Timeout: sshTCPAttemptTimeout}).DialContext
+	}
+	for attempt := 0; attempt < sshTCPDialAttempts; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		attemptCtx, cancel := context.WithTimeout(ctx, sshTCPAttemptTimeout)
+		raw, err := dial(attemptCtx, "tcp", endpoint)
+		cancel()
+		if err == nil {
+			return raw, nil
+		}
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		if attempt+1 == sshTCPDialAttempts || !retryableTCPDialError(err) {
+			return nil, networkFailure(err)
+		}
+		timer := time.NewTimer(sshTCPRetryDelay)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return nil, ctx.Err()
+		case <-timer.C:
+		}
+	}
+	return nil, newConnectionFailure(FailureNetworkUnreachable)
 }
 
 func (d Dialer) Connect(ctx context.Context, t Template) (*Connection, error) {
+	ctx, cancel := context.WithTimeout(ctx, sshConnectBudget)
+	defer cancel()
 	if d.Credentials == nil {
 		return nil, newConnectionFailure(FailureCredentialUnavailable)
 	}
@@ -127,13 +179,21 @@ func (d Dialer) Connect(ctx context.Context, t Template) (*Connection, error) {
 		return nil, err
 	}
 	endpoint := net.JoinHostPort(t.Host, fmt.Sprint(t.Port))
-	ctx, cancel := context.WithTimeout(ctx, 12*time.Second)
-	defer cancel()
-	raw, err := (&net.Dialer{Timeout: 8 * time.Second}).DialContext(ctx, "tcp", endpoint)
+	raw, err := d.connectTCP(ctx, endpoint)
 	if err != nil {
-		return nil, networkFailure(err)
+		return nil, err
 	}
-	_ = raw.SetDeadline(time.Now().Add(10 * time.Second))
+	// Bound the SSH handshake, SFTP initialization and root checks by the
+	// *same* overall deadline; a slow host cannot extend the budget.
+	deadline, ok := ctx.Deadline()
+	if !ok || raw.SetDeadline(deadline) != nil {
+		_ = raw.Close()
+		return nil, newConnectionFailure(FailureSSHHandshakeFailed)
+	}
+	// NewClientConn and SFTP calls do not accept a context. Unblock them on
+	// cancellation without closing a healthy connection after returning.
+	stopCancellationClose := context.AfterFunc(ctx, func() { _ = raw.Close() })
+	defer stopCancellationClose()
 	// Preserve cryptographic pinning and classify its failure separately
 	// from a rejected login. Do not return the remote host key or library text.
 	fixedHostKey := ssh.FixedHostKey(public)
@@ -147,28 +207,44 @@ func (d Dialer) Connect(ctx context.Context, t Template) (*Connection, error) {
 			}
 			return err
 		},
-		Timeout:           10 * time.Second,
+		Timeout:           sshConnectBudget,
 		HostKeyAlgorithms: pinnedHostKeyAlgorithms(public),
 	}
 	conn, channels, requests, err := ssh.NewClientConn(raw, endpoint, config)
 	if err != nil {
 		_ = raw.Close()
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
 		return nil, handshakeFailure(err, hostKeyMismatch)
 	}
 	client := ssh.NewClient(conn, channels, requests)
 	sftpClient, err := sftp.NewClient(client)
 	if err != nil {
 		_ = client.Close()
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
 		return nil, newConnectionFailure(FailureSFTPUnavailable)
 	}
 	result := &Connection{SSH: client, SFTP: sftpClient}
 	if err = ValidateRoot(sftpClient, t.Root); err != nil {
 		_ = result.Close()
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
 		return nil, workspaceFailure(err)
 	}
-	// Keep a bounded deadline through SFTP handshake and root verification.
-	// A half-open or malicious SSH server must not block create indefinitely.
-	_ = raw.SetDeadline(time.Time{})
+	// A successful connection may outlive this setup call. Ensure that no
+	// stale transport deadline remains after SSH/SFTP/root verification.
+	if err := ctx.Err(); err != nil {
+		_ = result.Close()
+		return nil, err
+	}
+	if raw.SetDeadline(time.Time{}) != nil {
+		_ = result.Close()
+		return nil, newConnectionFailure(FailureSSHHandshakeFailed)
+	}
 	return result, nil
 }
 
