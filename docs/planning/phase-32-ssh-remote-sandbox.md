@@ -2,6 +2,8 @@
 
 Status: **Closed (2026-10-11)**, following Phase 31. Document-first, incremental commits, no compatibility bridge.
 
+**Superseded manual SSH host-key input (2026-10-13):** [`ssh-managed-host-trust.md`](ssh-managed-host-trust.md) removes the required host-public-key form, reuses known_hosts trust and requires a fingerprint review on the first connection. Immutable server key pinning and trust-change blocking remain mandatory. The original host-key entry instructions below are historical only.
+
 **Superseded SSH key-format restrictions (2026-10-12):** This document preserves the original v1 acceptance decisions. The follow-up [`ssh-credential-onboarding.md`](ssh-credential-onboarding.md) supersedes the unencrypted-key and Ed25519-only host-key constraints: Mender now supports Ed25519/ECDSA/RSA >=2048, import-time passphrases, and pinned RSA-SHA2/ECDSA host keys. Explicit host pinning and the other execution trust boundaries remain mandatory.
 
 **Superseded root-login restriction (2026-10-13):** Following an explicit operator request, [`ssh-remote-root-warning.md`](ssh-remote-root-warning.md) now permits root login with a non-blocking high-privilege warning. Any original non-root-only statements below are historical, not current acceptance constraints. SSH Remote still does not isolate processes or files, and remote hosts remain explicitly pinned.

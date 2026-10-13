@@ -1,6 +1,6 @@
 # SSH Remote: managed host identity instead of mandatory manual public-key form
 
-Status: **in progress** (2026-10-13). This supersedes the manual pinned-host-key UI contract in Phase 32 and the focused SSH provision diagnostics. Document-first, incremental commits, no compatibility bridge.
+Status: **Closed (2026-10-13)**. This supersedes the manual pinned-host-key UI contract in Phase 32 and the focused SSH provision diagnostics. Document-first, incremental commits, no compatibility bridge.
 
 ## Operator problem
 - SSH login private keys authenticate a user; SSH host public keys authenticate the **server**. Cloud-provided account key pairs and uploaded SSH public keys do **not** identify the SSH server. Copying an account `id_rsa.pub` into Mender's "Pinned SSH host public key" field causes a legitimate pinned-host mismatch even if interactive `ssh -i` login succeeds.
@@ -21,3 +21,22 @@ A. Commit this contract.
 B. Implement host identity inspector and Mender-owned trust source with transport tests; commit.
 C. Implement local-authorized API/Wails/SDK exposure, adjust frontend wizard and i18n, add UI tests, commit by sub-boundary.
 D. Run full `pnpm check`, native desktop Go build, close document and commit. Ignore `.agents/`, `.pi/`, `.intent-loop/`.
+
+## Closure and acceptance (2026-10-13)
+
+Status: **Closed**. No real Rocky/third-party SSH server was contacted. The previous manual host public-key form is removed; user-supplied SSH login credentials are unchanged.
+
+### Delivered commits
+- `4a92354`: document-first host trust contract and explicit no-silent-TOFU boundary.
+- `2d0e8c0`: pre-auth cryptographic SSH host identity inspection, OpenSSH known_hosts and separate Mender-managed trust, safe mismatch detection and immutable pinned sandbox connection, tests for first-use/trusted/changed/hashed-host entries and trust-file symlinks; store exact verified host key only following successful admitted SSH/SFTP connection.
+- `dd85283`: local-operator and Sandbox Policy admitted host inspection through management HTTP, typed OpenAPI/SDK, Wails bindings, local-authority tests and generated schema.
+- `32ecd89`: drop mandatory host-key textarea from SSH creation, detect known trust automatically, first-use SHA256 fingerprint confirmation dialog (cancel means no provision), block host-key changes, localized Chinese/English guidance and UI/Wails tests.
+
+### Evidence
+- Test-owned loopback SSH/SFTP plus Sandbox admission/router/lifecycle demonstrates new/untrusted discovery, exact pinned SSH/SFTP provisioning and later known trust, without touching real host credentials.
+- Unit tests cover hashed `known_hosts`, 0600 Mender trust file, symlink rejection, changed host key blocking, no trust write during pre-auth inspect, cancelled confirmation, trusted auto-provision, and no creation without a credential. The existing SSH RSA-SHA2 / host pinning and provisioning diagnostics tests remain intact.
+- `pnpm check` passed, including Go lint/tests/race, plugin SDK/example checks, OpenAPI/SDK/Wails binding parity, strict TS and ESLint, i18n (1167/1167 keys), **202/202 frontend tests**, and Web/Desktop production builds. `GOWORK=off go build ./...` in `apps/desktop` passed with existing macOS linker deployment-target warnings. The temporary native Go executable was removed.
+- The running Mender Wails dev app, tunnel and OS keychain entries were **not restarted, read, or changed**. `.agents/`, `.pi/` and `.intent-loop/` remain untouched and uncommitted.
+
+### Operator use
+Restart the Wails dev runtime to load the new Go API and frontend. Configure host, port, user, remote workspace and existing SSH key credential; no server host key entry. On first use, Mender displays the SHA256 fingerprint returned in the SSH server-signed handshake; compare it independently (e.g. via SSH server console `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub`) before clicking **I verified the fingerprint**. A trusted host skips this prompt. If trust changes, Mender blocks until the operator verifies and repairs the trust record; it does not automatically replace trusted keys. The server may still reject root login or lack the specified workspace; existing SSH error diagnostics will explain such failures.

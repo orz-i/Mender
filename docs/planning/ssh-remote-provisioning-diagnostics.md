@@ -2,6 +2,8 @@
 
 Status: **Closed (2026-10-13)**. Follow-up to Phase 32 and root-login advisory closure; document first, incremental commits, no compatibility bridge.
 
+**Updated user flow:** [`ssh-managed-host-trust.md`](ssh-managed-host-trust.md) supersedes the manual host key entry requirement. Pre-auth inspection reuses trusted known_hosts; first-use fingerprint confirmation pins the server host identity. The failure-stage codes and diagnostics defined here remain applicable.
+
 ## Evidence and problem
 - The 2026-10-13 desktop screenshot shows a correctly reached SSH Remote review step and a generic Simplified Chinese "Unexpected error" after Create; **the actual remote failure stage is unconfirmed**.
 - The SSH dialer erases network/host-key/auth/SFTP/root validation errors to the same `sandboxdomain.ErrBackendUnavailable`. The Sandbox application also replaces the dial error with a generic wrapper. No safe stage/code reaches Wails or HTTP.
