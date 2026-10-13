@@ -56,4 +56,24 @@ This is a real *SSH session-detached* and *Mender process-reconnected* test: eac
 - `cd apps/desktop && go build ./...` **exit 0**: only pre-existing non-blocking macOS minimum target linker warnings. The generated standalone executable was removed; no running Wails/Desktop service was manually restarted. Vite still warns non-blockingly about >500kB chunks.
 - Repo commits: documentation-first `0273876`, targeted timeout fix `7fb4101`, this acceptance evidence closure. All changes staged explicitly without `.agents/`, `.pi/`, `.intent-loop/` or user-owned secrets.
 
-**Acceptance disposition:** SSH Jobs' real systemd-backed **execution / terminal result / logs / idempotency / cancellation** = **PASS** using the newly built governed CLI. ChatGPT's **already-open** Mender MCP Profile Tool exposure = **PENDING refresh**. The initial persistent `unknown` task = **OPEN safety incident**, requires an explicitly reviewed recovery implementation or operator decision; do not silently clear it.
+**Acceptance disposition:** SSH Jobs' real systemd-backed **execution / terminal result / logs / idempotency / cancellation** = **PASS** using the newly built governed CLI, and (after operator-controlled Wails/MCP/Tunnel restart and ChatGPT tools refresh) **PASS directly from ChatGPT MCP**. The initial persistent `unknown` task = **OPEN safety incident**, requires an explicitly reviewed recovery implementation or operator decision; do not silently clear it.
+
+## ChatGPT MCP refresh — follow-up acceptance (2026-10-13)
+
+**Operator action, outside assistant:** User restarted Wails Desktop, MCP Server and Tunnel, then refreshed the Mender tools in ChatGPT. The assistant did **not** restart or modify any of these live services.
+
+| Check directly from the *refreshed ChatGPT Mender connector* | Observed evidence | Result |
+| --- | --- | --- |
+| Tool discovery & schema | `mender_search_tools` returns all five reviewed Jobs Tools (`jobs.submit/status/logs/result/cancel`); `mender_describe_tool` resolves each exact ToolID and input/output schema from `prov_f16a722561fef6af629a4f4f4c7a6c17` | **PASS**, prior `MCP tool is outside profile` is resolved |
+| Old completed task | `jobs.status(sjob_135323fdb34b78e354bcce4dbc71ad69)` returns `completed`, exit `0` | **PASS**, restarted MCP observes durable historical terminal state |
+| Old cancelled task | `jobs.result(sjob_18b5b6a700be16b153fdfe0298e37754)` returns `cancelled`, exit `143`, cancel requested | **PASS**, confirmed terminal cancellation survives MCP refresh |
+| Old log recovery | `jobs.logs(...,stream=stdout,cursor=0,limit=256)` returns both prior probe START / FINISHED lines, next cursor `55`, not truncated | **PASS** |
+| Direct ChatGPT submit | New randomly keyed benign root command `printf START; sleep 8; printf FINISHED` creates `sjob_b17bd46701bd8e2520f412454d0f4744` and acknowledged systemd unit, initially `running` | **PASS**, no local CLI fallback |
+| Direct ChatGPT status / logs / result | Subsequent calls report `completed`, `exitCode=0`; returned both exact START / FINISHED markers, cursor `53`, `truncated=false`; `result` also returns exit `0` | **PASS**, output and result persisted independently of first SSH session |
+| Direct ChatGPT idempotent submit | Same exact random key and command return **the same** `sjob_b17bd46701bd8e2520f412454d0f4744`, `completed`, exit `0` | **PASS**, no duplicate execution |
+| Direct ChatGPT cancellation | New independently keyed `printf START; sleep 90; printf NATURAL_END` creates `sjob_2776851d9fe9085a2df5ba22229723b6` (`running`); `jobs.cancel` returns `cancelRequested=true`, `cancelled`, exit `143` | **PASS**, actually cancelled the running systemd-backed task |
+| Post-cancellation recovery | Separate `jobs.result` returns `cancelled`, exit `143`; stdout only contains START with no NATURAL_END, cursor `28`, no truncation | **PASS**, durable termination not just a cancel-request acknowledgment |
+| Remote OS proof | Rocky Shell read-only check reports **0 active `mender-sjob_*.service` units**, `exit=0` for completed ChatGPT task and `exit=143` for cancelled ChatGPT task | **PASS**, no new lingering transient units |
+| Legacy uncertain reservation | `jobs.status(sjob_29deeed6015ee33f63cd35f5a7038e1d)` still returns `unknown`, and remote `exit` artifact remains missing | **OPEN**, deliberately not replayed, rewritten, falsely completed or destroyed |
+
+**Updated scope:** The previously deferred ChatGPT MCP tool exposure and full five-Tool execute path are now **fully verified directly in ChatGPT** after the operator refresh. These results do **not** establish remote host reboot restart, machine-power-loss durability, a deliberately injected mid-ACK network failure, generalized exactly-once side effects, or audited reconciliation of the old ambiguous reservation. No SSH credentials, random submission keys, or private task command scripts were added to source control. No additional code fix was needed after the preceding `7fb4101` timeout patch.
