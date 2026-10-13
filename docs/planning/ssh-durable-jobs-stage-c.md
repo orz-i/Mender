@@ -1,6 +1,6 @@
 # SSH Durable Jobs — Stage C: governed optional Tool Suite
 
-- Status: Implementation in progress (2026-10-13)
+- Status: **Closed (2026-10-13)** — staged implementation and automated validation complete; real Rocky/systemd execution remains operator-only acceptance
 - Predecessors: [Stage A](plugin-capability-contract-stage-a.md), [Stage B](ssh-durable-jobs-stage-b.md), [ADR-0039](../architecture/adr/0039-offerings-resource-tool-suites.md), [ADR-0040](../architecture/adr/0040-optional-plugin-capability-contracts.md)
 
 ## Intent and invariants
@@ -37,6 +37,20 @@
 - Invocation governance: `providerplugin.GovernanceFactProvider`, `invocation/application/invoke_tool.go`, `sandbox/application/AdmitAcquire`; MCP `OutcomeKindTask` unsupported and deliberately unchanged.
 - Contract endpoints/UI: `management/httpapi/tool_suites.go`, `desktop/binding/tool_suites.go`, `contracts/api/openapi.yaml`, `packages/sdk/src/client.ts`, `packages/app/src/domains/sandboxes/{sandbox-tools-panel,sandbox-access-panel}.tsx`.
 
-## Closure evidence
+## Closure evidence (2026-10-13)
 
-_To be filled only after successful verification._
+| Cluster | Commit | Accepted result |
+| --- | --- | --- |
+| C-doc | `858fb87` | Source-based ownership, authorization and verification plan committed before implementation |
+| C-contract | `030dae8` | Host-reviewed, versioned `sandbox.jobs`; v14 grants (`job.submit`, `job.observe`, `job.cancel`) and **separate** Jobs Suite binding. Existing Workspace Suite table/ProviderID, Sandbox Run, Profile grant/event records and IDs remain intact; standalone Sandbox storage does not require the Provider table to exist when it first opens |
+| C-execute | `d768c7e` | Exact-pinned SSH-only host facade `io.mender.provider.sandbox-jobs` with five stable governed Tools and ordinary complete JSON Outcomes, not Core RemoteTask or MCP Tasks. Provider Facade is hidden from generic Provider discovery/create; existing owned configuration remains resolvable |
+| C-supply | `1c59861` | Explicit owner GET/Ensure/Remove, HTTP/OpenAPI SDK, Wails Desktop bindings, CLI `sandbox job-tools`, one-category-at-a-time Jobs/Workspace UI and bilingual labels; no automatic Profile or Tool exposure |
+| C-close | This documentation commit | Full verification and remaining operator-only acceptance below |
+
+**Automated checks passed:** `pnpm check` exited **0**: plugin protocol lint/generation; external Provider/Sandbox/Tunnel SDK and examples; Go module isolation; generated OpenAPI SDK parity; Wails/Desktop bindings and architecture parity; Go lint, unit tests and **full Go Race suite**; ESLint; strict TypeScript; **i18n 1178 required / 1178 zh-CN translations** across three source roots; **32 Vitest test files / 202 passing tests**; Web and Desktop frontend production builds. `pnpm security:check` exited **0**: no reachable Go symbol vulnerability and no known high-severity production JS dependency advisory (one indirect required Go module vulnerability was not called by the application). `cd apps/desktop && go build ./...` exited **0**; the generated standalone binary was removed after verification. `git diff --check` passed. Pre-existing nonblocking Vite >500 kB chunk-size and macOS linker minimum-deployment-target warnings remain.
+
+**Security and identity proofs:** `TestSSHJobsManagedSuiteOnlyAfterExplicitOwnerPrepare` verified inert catalogue GET, exact SSH root backend requirements, no generic Provider creation/deletion of the owned Facade, explicit five-Tool preparation, stable ProviderID and ToolIDs across Runtime restart, and zero implicit Profile grant/exposure. Versioned contract tests reject Browser/Workspace Shell substitution. v14 migration tests retain Workspace grants and historical grant event IDs, with no Core Task table. The `TestMCPSSHJobsSeparateGrantsAndReadOnlyRecoveryWithUncertainLease` test used a real **local in-memory MCP client/server and local test-owned pinned SSH/SFTP server**: Profile ToolBinding alone could not invoke Jobs; explicit `job.observe` allowed status/result/logs but neither submit nor cancel; `job.submit` did not confer cancel permission; read-only observation still worked with a deliberately held exclusive lease while a fresh submit did not. All five Tool schemas and argument rejection paths were tested with the canonical validator. Audit/Policy facts contain only reviewed effects and immutable SandboxID, never command text or output.
+
+**Operator-only verification still outstanding:** The tests do **not** establish that a real Rocky Linux 9.8 host's systemd PID1 accepted a transient service, that SELinux permits remote script/output writes, that a real root task actually continues after network loss, or that cancellation produces a durable terminal marker under remote process killing. No real Rocky command, user SSH secret, live Wails restart, MCP/Tunnel restart, or remote machine change was performed. Stage B's root-only systemd-system-manager restriction, four-hour maximum runtime, retained 64 TaskID slot limit, lack of host-reboot auto-restart/exactly-once effects, and reviewed recovery for crash-held uncertain leases are unchanged. Native MCP Tasks negotiation remains a separate future concern and is **not** advertised.
+
+**Boundary:** Stage C adds an optional governed Tool *supply* and authorization path, not a Core job daemon, Scheduler, Agent loop, centralized RemoteTask model or automatic remote replay. The SSH plugin remains the authority for TaskID, logs, result, cancellation and reconciliation; Core is limited to exact resource binding, immutable reviewed suite metadata, Policy/Principal/Scope/Audit, short-lived leases and lifecycle fencing. `.agents/`, `.pi/`, `.intent-loop/` stay outside Git staging. Real Rocky smoke testing and lease-recovery/retention policy expansion require separate scoped work rather than extending this stage.
