@@ -67,7 +67,7 @@ export function GenericProviderConfigForm({
       <p className="text-xs leading-5 text-muted-foreground">{t("Workspace Tools share the selected Sandbox filesystem and its fixed isolation boundary.")}</p>
       {available.some((item) => item.backend === "ssh_remote") ? (
         <p className="text-xs leading-5 text-muted-foreground">
-          {t("SSH Remote is not container or VM isolation. The remote shell can access everything permitted to its login account. Only connect to a trusted host and unprivileged user.")}
+          {t("SSH Remote is not container or VM isolation. The remote shell can access everything permitted to its login account. Connect only to a trusted host; prefer a non-root account.")}
         </p>
       ) : null}
       {available.length === 0 ? <p className="text-xs text-muted-foreground">{t("No ready Sandbox is available on this Runtime host.")}</p> : null}

@@ -46,8 +46,9 @@ func TestSSHRemoteHTTPRejectsMissingCredentialWithoutNetworkOrResource(t *testin
 	if arr, ok := empty["sandboxes"].([]any); !ok || len(arr) != 0 {
 		t.Fatalf("unverified SSH created a durable resource: %+v", empty)
 	}
+	// Root passes validation but, like any other login, cannot provision without the Keychain credential.
 	template["user"] = "root"
-	requestJSON(t, server.Client(), http.MethodPost, server.URL+"/api/v1/sandboxes/ssh-remote", template, http.StatusBadRequest)
+	requestJSON(t, server.Client(), http.MethodPost, server.URL+"/api/v1/sandboxes/ssh-remote", template, http.StatusServiceUnavailable)
 	template["user"] = "agent"
 	template["hostPublicKey"] = "ssh-ed25519 invalid"
 	requestJSON(t, server.Client(), http.MethodPost, server.URL+"/api/v1/sandboxes/ssh-remote", template, http.StatusBadRequest)

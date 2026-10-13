@@ -16,7 +16,6 @@ export type SSHRemoteReviewIssueCode =
   | "host_invalid"
   | "port_invalid"
   | "user_invalid"
-  | "root_login_forbidden"
   | "workspace_root_invalid"
   | "host_key_required"
   | "host_key_multiline"
@@ -75,9 +74,7 @@ export function validateSSHRemoteReview(input: SSHRemoteReviewDraft): SSHRemoteR
     issues.push({ field: "port", code: "port_invalid" });
   }
 
-  if (input.user === "root") {
-    issues.push({ field: "user", code: "root_login_forbidden" });
-  } else if (!SSH_USER_PATTERN.test(input.user)) {
+  if (!SSH_USER_PATTERN.test(input.user)) {
     issues.push({ field: "user", code: "user_invalid" });
   }
 

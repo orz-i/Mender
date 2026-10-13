@@ -92,16 +92,16 @@ describe("SSH Remote Sandbox creation", () => {
     expect(client.createSSHRemoteSandbox).not.toHaveBeenCalled();
   });
 
-  it("shows both screenshot-like blockers and allows review once corrected", async () => {
+  it("warns on root login, but only blocks malformed host keys", async () => {
     const client = renderSSH({}, true);
     await screen.findByRole("textbox", { name: "Sandbox name" });
     fillSSHFields("root", "AAAAB3NzaC1yc2EAAAADAQABAAAB");
     const user = screen.getByRole<HTMLInputElement>("textbox", { name: "SSH login user" });
     const key = screen.getByRole<HTMLTextAreaElement>("textbox", { name: "Pinned SSH host public key" });
 
-    expect(user.getAttribute("aria-invalid")).toBe("true");
+    expect(user.getAttribute("aria-invalid")).toBe("false");
     expect(key.getAttribute("aria-invalid")).toBe("true");
-    expect(screen.getByText(/Root login is not supported for SSH Remote/)).toBeTruthy();
+    expect(screen.getByText(/Root SSH login has system-wide privileges/)).toBeTruthy();
     expect(screen.getByText(/Paste the full SSH host public key/)).toBeTruthy();
 
     await screen.findByRole("option", { name: /SSH build key/ });
@@ -111,23 +111,23 @@ describe("SSH Remote Sandbox creation", () => {
     const review = screen.getByRole<HTMLButtonElement>("button", { name: "Review" });
     expect(review.disabled).toBe(false);
     fireEvent.click(review);
-    expect(screen.getByRole("status").textContent).toContain("SSH login user");
+    expect(screen.getByRole("status").textContent).not.toContain("SSH login user");
     expect(screen.getByRole("status").textContent).toContain("Pinned SSH host public key");
     expect(screen.queryByText("Review Sandbox authority")).toBeNull();
     expect(client.createSSHRemoteSandbox).not.toHaveBeenCalled();
 
-    fireEvent.change(user, { target: { value: "agent" } });
-    expect(screen.queryByText(/Root login is not supported for SSH Remote/)).toBeNull();
     fireEvent.change(key, { target: { value: hostKey + "\n" } });
     expect(key.getAttribute("aria-invalid")).toBe("false");
     fireEvent.click(review);
     expect(screen.getByText("Remote account (not isolated)")).toBeTruthy();
+    expect(screen.getByText(/Root SSH login has system-wide privileges/)).toBeTruthy();
+    expect(screen.getByRole<HTMLButtonElement>("button", { name: "Create sandbox" }).disabled).toBe(false);
     fireEvent.click(screen.getByRole("button", { name: "Create sandbox" }));
     await waitFor(() => expect(client.createSSHRemoteSandbox).toHaveBeenCalledWith({
       name: "Remote Dev",
       host: "203.0.113.25",
       port: 2222,
-      user: "agent",
+      user: "root",
       root: "/data/workspace",
       hostPublicKey: hostKey, // pasted terminal newline removed
       credentialRef: credential.reference,

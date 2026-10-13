@@ -26,12 +26,12 @@ describe("SSH Sandbox review validation", () => {
     expect(invalidCodes({ host: "2001:db8::1" })).toEqual([]);
   });
 
-  it("identifies both screenshot blockers without echoing key material", () => {
+  it("permits root login but still rejects a malformed pinned host key without echoing its contents", () => {
     const codes = invalidCodes({
       user: "root",
       hostPublicKey: "AAAAB3NzaC1yc2EAAAADAQABAAAB",
     });
-    expect(codes).toContain("root_login_forbidden");
+    expect(codes).not.toContain("user_invalid");
     expect(codes).toContain("host_key_invalid");
     expect(JSON.stringify(validateSSHRemoteReview({
       ...valid,
@@ -51,7 +51,7 @@ describe("SSH Sandbox review validation", () => {
 
   it("rejects invalid account, canonical root, port, host, and unknown credential", () => {
     expect(invalidCodes({ user: "Agent" })).toContain("user_invalid");
-    expect(invalidCodes({ user: "root" })).toContain("root_login_forbidden");
+    expect(invalidCodes({ user: "root" })).toEqual([]);
     expect(invalidCodes({ root: "/" })).toContain("workspace_root_invalid");
     expect(invalidCodes({ root: "/data//workspace" })).toContain("workspace_root_invalid");
     expect(invalidCodes({ root: "/data/../etc" })).toContain("workspace_root_invalid");

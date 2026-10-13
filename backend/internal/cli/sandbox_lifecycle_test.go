@@ -71,7 +71,7 @@ func TestCLISSHRemoteValidatesHostBindingAndNeverPersistsFailedLogin(t *testing.
 		return command.ExecuteContext(context.Background())
 	}
 	if err := invoke("root"); err == nil {
-		t.Fatal("CLI accepted SSH root login")
+		t.Fatal("CLI provisioned root SSH remote without a native Keychain credential")
 	}
 	if err := invoke("agent"); err == nil {
 		t.Fatal("CLI provisioned remote SSH without native Keychain credential")

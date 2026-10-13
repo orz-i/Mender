@@ -36,10 +36,10 @@ type Template struct {
 
 func (t Template) Validate() error {
 	if len(t.Host) == 0 || len(t.Host) > 253 || (!hostnamePattern.MatchString(t.Host) && net.ParseIP(t.Host) == nil) ||
-		strings.Contains(t.Host, "..") || !loginPattern.MatchString(t.User) || t.User == "root" || t.Port == 0 ||
+		strings.Contains(t.Host, "..") || !loginPattern.MatchString(t.User) || t.Port == 0 ||
 		len(t.Root) > 1024 || !strings.HasPrefix(t.Root, "/") || path.Clean(t.Root) != t.Root || t.Root == "/" ||
 		strings.ContainsAny(t.Root, "\x00\r\n") || t.CredentialRef.Namespace() != "ssh" {
-		return fmt.Errorf("ssh remote: invalid host, non-root user, port, workspace root or SSH credential reference")
+		return fmt.Errorf("ssh remote: invalid host, login user, port, workspace root or SSH credential reference")
 	}
 	if _, err := credentialdomain.ParseReference(t.CredentialRef.String()); err != nil {
 		return fmt.Errorf("ssh remote: SSH credential reference invalid")

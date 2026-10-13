@@ -47,10 +47,15 @@ func TestSSHKeyAndConfigValidation(t *testing.T) {
 	if err := template.Validate(); err != nil {
 		t.Fatal(err)
 	}
+	rootLogin := template
+	rootLogin.User = "root"
+	if err := rootLogin.Validate(); err != nil {
+		t.Fatalf("root login should be permitted with an advisory, not rejected: %v", err)
+	}
 	variations := []func(*Template){
 		func(t *Template) { t.Host = "https://evil.example:22" },
 		func(t *Template) { t.Port = 0 },
-		func(t *Template) { t.User = "root" },
+		func(t *Template) { t.User = "Root" },
 		func(t *Template) { t.Root = "/" },
 		func(t *Template) { t.Root = "/workspace/../etc" },
 		func(t *Template) { t.HostPublicKey = "" },

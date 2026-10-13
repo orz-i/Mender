@@ -7,6 +7,7 @@ import {
   FolderIcon,
   FolderOpenIcon,
   LockKeyholeIcon,
+  TriangleAlertIcon,
   ServerIcon,
 } from "lucide-react";
 import { Link, useNavigate, useSearchParams } from "react-router";
@@ -37,8 +38,6 @@ function sshReviewIssueText(code: SSHRemoteReviewIssueCode): string {
       return t("SSH port must be between 1 and 65535.");
     case "user_invalid":
       return t("Enter a valid lowercase SSH login name.");
-    case "root_login_forbidden":
-      return t("Root login is not supported for SSH Remote. Use a dedicated non-root SSH account.");
     case "workspace_root_invalid":
       return t("Enter a normalized absolute remote directory other than /.");
     case "host_key_required":
@@ -527,6 +526,12 @@ export function CreateSandboxPage({
                         aria-invalid={sshReviewIssues.some((issue) => issue.field === "user") && (sshReviewAttempted || sshUser !== "")}
                         onChange={(event) => setSSHUser(event.target.value.trim())}/>
                       {sshFieldFeedback("user", sshUser !== "")}
+                      {sshUser === "root" ? (
+                        <span role="note" className="flex items-start gap-2 text-xs leading-5 text-amber-700 dark:text-amber-300">
+                          <TriangleAlertIcon className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+                          {t("Root SSH login has system-wide privileges and can modify remote files and processes. SSH Remote is not isolated; prefer a non-root account when possible.")}
+                        </span>
+                      ) : null}
                     </label>
                     <label className="grid gap-2 text-sm">
                       <span className="font-medium">{t("Remote workspace root")}</span>
@@ -571,7 +576,7 @@ export function CreateSandboxPage({
                     </p>
                   ) : null}
                   <p className="text-xs leading-5 text-muted-foreground">
-                    {t("SSH Remote is not container or VM isolation. The remote shell can access everything permitted to its login account. Only connect to a trusted host and unprivileged user.")}
+                    {t("SSH Remote is not container or VM isolation. The remote shell can access everything permitted to its login account. Connect only to a trusted host; prefer a non-root account.")}
                   </p>
                 </>
               ) : (
@@ -766,8 +771,12 @@ export function CreateSandboxPage({
                 )}
               </dl>
               <div role="note" className="flex items-start gap-3 rounded-xl border border-border bg-background p-4 text-xs leading-5">
-                <LockKeyholeIcon className="mt-0.5 size-4 shrink-0 text-primary-ink" aria-hidden="true" />
-                <p>
+                {selected === "ssh_remote" && sshUser === "root" ? (
+                  <TriangleAlertIcon className="mt-0.5 size-4 shrink-0 text-amber-700 dark:text-amber-300" aria-hidden="true" />
+                ) : (
+                  <LockKeyholeIcon className="mt-0.5 size-4 shrink-0 text-primary-ink" aria-hidden="true" />
+                )}
+                <p className={selected === "ssh_remote" && sshUser === "root" ? "text-amber-700 dark:text-amber-300" : undefined}>
                   {selected === "local_workspace"
                     ? t(isolation === "host"
                         ? "Host mode is not isolated and uses the Runtime user's local file and process permissions."
@@ -775,7 +784,9 @@ export function CreateSandboxPage({
                     : selected === "docker"
                       ? t("Docker Workspace files are ephemeral; stopping and starting recreates the container and erases scratch files.")
                       : selected === "ssh_remote"
-                        ? t("SSH Remote is not container or VM isolation. The remote shell can access everything permitted to its login account. Only connect to a trusted host and unprivileged user.")
+                        ? t(sshUser === "root"
+                          ? "Root SSH login has system-wide privileges and can modify remote files and processes. SSH Remote is not isolated; prefer a non-root account when possible."
+                          : "SSH Remote is not container or VM isolation. The remote shell can access everything permitted to its login account. Connect only to a trusted host; prefer a non-root account.")
                         : t("Creating a Daytona Sandbox can incur provider charges. TTL is not a USD spending cap. Maximum 2 active remote sandboxes per Principal.")}
                 </p>
               </div>

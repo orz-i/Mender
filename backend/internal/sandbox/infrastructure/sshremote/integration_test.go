@@ -188,6 +188,27 @@ func TestSSHRemoteRSA2048UsesSHA2ForClientAndPinnedHost(t *testing.T) {
 	}
 }
 
+func TestSSHRemoteRootLoginUsesPinnedKeyAndSFTP(t *testing.T) {
+	// A test-owned SSH server accepts a login named "root"; the fixture runs
+	// under the test process account and does not contact a real root host.
+	template, credentials := sshFixture(t)
+	template.User = "root"
+	if err := template.Validate(); err != nil {
+		t.Fatalf("root SSH login should pass template validation: %v", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	connection, err := (Dialer{Credentials: credentials}).Connect(ctx, template)
+	if err != nil {
+		t.Fatalf("root SSH login with explicit pinned host key failed: %v", err)
+	}
+	defer func() { _ = connection.Close() }()
+	info, err := connection.SFTP.Stat(filepath.Join(template.Root, "hello.txt"))
+	if err != nil || info.IsDir() {
+		t.Fatalf("root SSH session SFTP verification failed: info=%v, err=%v", info, err)
+	}
+}
+
 func jsonArg(t *testing.T, content any) invocationdomain.JSONValue {
 	t.Helper()
 	data, e := json.Marshal(content)
