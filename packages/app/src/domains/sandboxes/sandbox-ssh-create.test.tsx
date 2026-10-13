@@ -58,6 +58,13 @@ describe("SSH Remote Sandbox creation",()=>{
   expect(screen.queryByRole("option",{name:/credential:\/\/other\/api/})).toBeNull();
   fireEvent.change(chooser,{target:{value:credential.reference}});
   expect(screen.getByRole<HTMLButtonElement>("button",{name:"Review"}).disabled).toBe(false);
+  // RSA host keys are allowed by UI and verified by backend during provisioning.
+  const pin=screen.getByRole("textbox",{name:"Pinned SSH host public key"});
+  fireEvent.change(pin,{target:{value:"ssh-rsa "+ "A".repeat(68)}});
+  expect(screen.getByRole<HTMLButtonElement>("button",{name:"Review"}).disabled).toBe(false);
+  fireEvent.change(pin,{target:{value:"ssh-dss "+ "A".repeat(68)}});
+  expect(screen.getByRole<HTMLButtonElement>("button",{name:"Review"}).disabled).toBe(true);
+  fireEvent.change(pin,{target:{value:hostKey}});
   fireEvent.click(screen.getByRole("button",{name:"Review"}));
   expect(screen.getByText("Remote account (not isolated)")).toBeTruthy();
   expect(screen.getByText("test.example.com")).toBeTruthy();

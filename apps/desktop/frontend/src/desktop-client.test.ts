@@ -82,6 +82,46 @@ describe("desktop Mender client", () => {
     vi.clearAllMocks();
   });
 
+  it("forwards SSH key import-only passphrases through Wails without persisting them in returned metadata", async () => {
+    const stored = {
+      reference: "credential://ssh/rocky",
+      namespace: "ssh",
+      name: "rocky",
+      displayName: "Rocky",
+      source: "native",
+      environmentVariable: "",
+      createdAt: "2026-10-12T00:00:00Z",
+      updatedAt: "2026-10-12T00:00:00Z",
+    };
+    vi.mocked(Service.CreateNativeCredential).mockResolvedValue(stored);
+    vi.mocked(Service.RotateNativeCredential).mockResolvedValue(stored);
+    const client = createDesktopMenderClient();
+
+    const created = await client.createNativeCredential({
+      namespace: "ssh", name: "rocky", displayName: "Rocky",
+      secret: "-----BEGIN RSA PRIVATE KEY-----", sshKeyPassphrase: "import-passphrase",
+    });
+    expect(Service.CreateNativeCredential).toHaveBeenCalledWith(
+      "ssh", "rocky", "Rocky", "-----BEGIN RSA PRIVATE KEY-----", "import-passphrase",
+    );
+    expect("sshKeyPassphrase" in created).toBe(false);
+
+    const rotated = await client.rotateCredential("ssh", "rocky", {
+      secret: "-----BEGIN OPENSSH PRIVATE KEY-----", sshKeyPassphrase: "rotation-passphrase",
+    });
+    expect(Service.RotateNativeCredential).toHaveBeenCalledWith(
+      "ssh", "rocky", "-----BEGIN OPENSSH PRIVATE KEY-----", "rotation-passphrase",
+    );
+    expect("sshKeyPassphrase" in rotated).toBe(false);
+
+    await client.createNativeCredential({
+      namespace: "ssh", name: "rocky", displayName: "Rocky", secret: "fixture",
+    });
+    expect(Service.CreateNativeCredential).toHaveBeenLastCalledWith(
+      "ssh", "rocky", "Rocky", "fixture", "",
+    );
+  });
+
   it("normalizes Wails status models into the shared client contract", async () => {
     vi.mocked(Service.GetSystemStatus).mockResolvedValue({
       ready: true,

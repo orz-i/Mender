@@ -29,9 +29,26 @@ export function credentialCreateError(reason: unknown): string {
     typeof reason === "object" && reason !== null && "message" in reason &&
       typeof reason.message === "string" ? reason.message : "";
 
-  if (detail.includes("ssh private key:") ||
-      detail.includes("SSH private key credentials must use")) {
-    return t("SSH private key must be an unencrypted Ed25519, ECDSA or RSA 3072-bit key stored in the OS keychain.");
+  if (detail.includes("SSH private key credentials must use")) {
+    return t("SSH keys must use the native OS credential store, not environment variables.");
+  }
+  if (detail.includes("ssh private key: passphrase too long")) {
+    return t("SSH key passphrase is too long.");
+  }
+  if (detail.includes("ssh private key: passphrase required")) {
+    return t("This SSH private key is encrypted. Enter its passphrase.");
+  }
+  if (detail.includes("ssh private key: incorrect passphrase")) {
+    return t("Incorrect SSH key passphrase or unreadable encrypted key.");
+  }
+  if (detail.includes("ssh private key: RSA key must be at least 2048 bits")) {
+    return t("RSA private keys must be at least 2048 bits. Use a newer key.");
+  }
+  if (detail.includes("ssh private key: invalid key format")) {
+    return t("This is not a supported PEM or OpenSSH private key.");
+  }
+  if (detail.includes("ssh private key:")) {
+    return t("Use an Ed25519, ECDSA or RSA 2048+ private key stored in the OS keychain.");
   }
   if (detail.includes("credential: reference already exists")) {
     return t("A credential with this reference already exists.");

@@ -62,7 +62,7 @@ afterEach(() => {
 describe("Credential create validation and feedback", () => {
   it("creates a native SSH private key credential with multiline secret and fixed SSH namespace", async()=>{
     const sshCredential:Credential={...credential,
-      reference:"credential://ssh/build",namespace:"ssh",name:"build",
+      reference:"credential://ssh/ssh-build",namespace:"ssh",name:"ssh-build",
       displayName:"SSH Build",source:"native",environmentVariable:"",
     };
     const listCredentials=vi.fn().mockResolvedValueOnce({credentials:[]})
@@ -71,22 +71,19 @@ describe("Credential create validation and feedback", () => {
     fireEvent.change(screen.getByRole("combobox",{name:"Credential source"}),{
       target:{value:"ssh-key"},
     });
-    const namespace=screen.getByRole<HTMLInputElement>("textbox",{name:"Credential namespace"});
-    expect(namespace.value).toBe("ssh");
-    expect(namespace.disabled).toBe(true);
-    fireEvent.change(screen.getByRole("textbox",{name:"Credential name"}),{
-      target:{value:"build"},
-    });
-    fireEvent.change(screen.getByRole("textbox",{name:"Credential display name"}),{
+    expect(screen.queryByRole("textbox",{name:"Credential namespace"})).toBeNull();
+    expect(screen.queryByRole("textbox",{name:"Credential display name"})).toBeNull();
+    fireEvent.change(screen.getByRole("textbox",{name:"SSH credential name"}),{
       target:{value:"SSH Build"},
     });
     const secret="-----BEGIN OPENSSH PRIVATE KEY-----\nfixture-only\n-----END OPENSSH PRIVATE KEY-----";
+    fireEvent.click(screen.getByRole("button",{name:"Paste private key"}));
     const textarea=screen.getByRole<HTMLTextAreaElement>("textbox",{name:"SSH private key"});
     fireEvent.change(textarea,{target:{value:secret}});
-    expect(screen.getByText("credential://ssh/build")).toBeTruthy();
+    expect(screen.queryByText("credential://ssh/ssh-build")).toBeNull();
     fireEvent.click(screen.getByRole("button",{name:"Create credential"}));
     await waitFor(()=>expect(createNativeCredential).toHaveBeenCalledWith({
-      namespace:"ssh",name:"build",displayName:"SSH Build",secret,
+      namespace:"ssh",name:"ssh-build",displayName:"SSH Build",secret,
     }));
     expect(createEnvironmentCredential).not.toHaveBeenCalled();
     expect(await screen.findByText("SSH Build")).toBeTruthy();
@@ -96,26 +93,24 @@ describe("Credential create validation and feedback", () => {
 
   it("does not reflect rejected SSH private-key parser details near the secret",async()=>{
     const createNativeCredential=vi.fn().mockRejectedValue(
-      new Error("ssh private key: invalid or encrypted private key"),
+      new Error("ssh private key: invalid key format: private fixture"),
     );
     showPage({createNativeCredential});
     fireEvent.change(screen.getByRole("combobox",{name:"Credential source"}),{
       target:{value:"ssh-key"},
     });
-    fireEvent.change(screen.getByRole("textbox",{name:"Credential name"}),{
-      target:{value:"build"},
-    });
-    fireEvent.change(screen.getByRole("textbox",{name:"Credential display name"}),{
+    fireEvent.change(screen.getByRole("textbox",{name:"SSH credential name"}),{
       target:{value:"SSH Build"},
     });
+    fireEvent.click(screen.getByRole("button",{name:"Paste private key"}));
     fireEvent.change(screen.getByRole("textbox",{name:"SSH private key"}),{
       target:{value:"-----BEGIN OPENSSH PRIVATE KEY-----\nprivate fixture"},
     });
     fireEvent.click(screen.getByRole("button",{name:"Create credential"}));
     const alert=await within(screen.getByRole("dialog",{name:"Add credential"}))
       .findByRole("alert");
-    expect(alert.textContent).toContain("SSH private key must be");
-    expect(alert.textContent).not.toContain("invalid or encrypted");
+    expect(alert.textContent).toContain("not a supported PEM or OpenSSH");
+    expect(alert.textContent).not.toContain("invalid key format");
     expect(alert.textContent).not.toContain("private fixture");
   });
 
@@ -139,6 +134,74 @@ describe("Credential create validation and feedback", () => {
     }));
     expect(await screen.findByText("Platform API Key")).toBeTruthy();
     expect(screen.queryByRole("dialog", { name: "Add credential" })).toBeNull();
+  });
+
+  it("imports a local RSA key file without displaying its contents and submits an optional passphrase", async () => {
+    const createNativeCredential = vi.fn().mockResolvedValue(credential);
+    showPage({ createNativeCredential });
+    fireEvent.change(screen.getByRole("combobox", { name: "Credential source" }), {
+      target: { value: "ssh-key" },
+    });
+    fireEvent.change(screen.getByRole("textbox", { name: "SSH credential name" }), {
+      target: { value: "Rocky" },
+    });
+    const secret = "-----BEGIN RSA PRIVATE KEY-----\nLOCAL-TEST-ONLY\n-----END RSA PRIVATE KEY-----";
+    const keyFile = new File([secret], "id_rsa", { type: "text/plain" });
+    Object.defineProperty(keyFile, "text", { value: vi.fn().mockResolvedValue(secret) });
+    fireEvent.change(screen.getByLabelText("SSH private key file"), {
+      target: { files: [keyFile] },
+    });
+    expect(await screen.findByText(/Key loaded from id_rsa/)).toBeTruthy();
+    expect(screen.queryByRole("textbox", { name: "SSH private key" })).toBeNull();
+    expect(screen.queryByText("LOCAL-TEST-ONLY")).toBeNull();
+    fireEvent.change(screen.getByLabelText("SSH key passphrase (optional)"), {
+      target: { value: "import-only-passphrase" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Create credential" }));
+    await waitFor(() => expect(createNativeCredential).toHaveBeenCalledWith({
+      namespace: "ssh",
+      name: "rocky",
+      displayName: "Rocky",
+      secret,
+      sshKeyPassphrase: "import-only-passphrase",
+    }));
+  });
+
+  it("rejects an oversized SSH key file before posting the credential", () => {
+    const { createNativeCredential } = showPage();
+    fireEvent.change(screen.getByRole("combobox", { name: "Credential source" }), {
+      target: { value: "ssh-key" },
+    });
+    fireEvent.change(screen.getByRole("textbox", { name: "SSH credential name" }), {
+      target: { value: "Rocky" },
+    });
+    const tooLarge = new File([new Uint8Array(64 * 1024 + 1)], "id_rsa");
+    fireEvent.change(screen.getByLabelText("SSH private key file"), {
+      target: { files: [tooLarge] },
+    });
+    expect(screen.getByText("SSH key file must be between 1 byte and 64 KiB.")).toBeTruthy();
+    expect(screen.getByRole<HTMLButtonElement>("button", { name: "Create credential" }).disabled).toBe(true);
+    expect(createNativeCredential).not.toHaveBeenCalled();
+  });
+
+  it("guides encrypted SSH key users without echoing parser errors", async () => {
+    const createNativeCredential = vi.fn().mockRejectedValue(
+      new Error("ssh private key: passphrase required"),
+    );
+    showPage({ createNativeCredential });
+    fireEvent.change(screen.getByRole("combobox", { name: "Credential source" }), {
+      target: { value: "ssh-key" },
+    });
+    fireEvent.change(screen.getByRole("textbox", { name: "SSH credential name" }), {
+      target: { value: "Rocky" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Paste private key" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "SSH private key" }), {
+      target: { value: "-----BEGIN OPENSSH PRIVATE KEY-----\nfixture" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Create credential" }));
+    expect(await screen.findByText("This SSH private key is encrypted. Enter its passphrase.")).toBeTruthy();
+    expect(screen.queryByText("passphrase required")).toBeNull();
   });
 
   it("disables submission for malformed canonical identifiers and oversized display names", () => {

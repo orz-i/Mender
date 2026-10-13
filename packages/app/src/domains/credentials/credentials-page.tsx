@@ -40,6 +40,7 @@ import {
   MAX_NATIVE_SECRET_BYTES,
   validCredentialPart,
 } from "./credential-form";
+import { SSHKeyEditor } from "./ssh-key-editor";
 
 type CredentialSource = Credential["source"] | "ssh-key";
 
@@ -49,6 +50,7 @@ const emptyCreateForm = {
   displayName: "",
   source: "native" as CredentialSource,
   secret: "",
+  sshKeyPassphrase: "",
   environmentVariable: "",
 };
 
@@ -66,6 +68,8 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
   const [rotateCredential, setRotateCredential] =
     useState<Credential | null>(null);
   const [rotateSecret, setRotateSecret] = useState("");
+  const [rotatePassphrase, setRotatePassphrase] = useState("");
+  const [rotateError, setRotateError] = useState("");
 
   const refresh = useCallback(async () => {
     try {
@@ -144,6 +148,7 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
           name,
           displayName: createForm.displayName.trim(),
           secret: createForm.secret,
+          ...(sshKeyMode && createForm.sshKeyPassphrase ? { sshKeyPassphrase: createForm.sshKeyPassphrase } : {}),
         });
       } else {
         await client.createEnvironmentCredential({
@@ -173,13 +178,18 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
       await client.rotateCredential(
         rotateCredential.namespace,
         rotateCredential.name,
-        { secret: rotateSecret },
+        {
+          secret: rotateSecret,
+          ...(rotateCredential.namespace === "ssh" && rotatePassphrase ? { sshKeyPassphrase: rotatePassphrase } : {}),
+        },
       );
       setRotateCredential(null);
       setRotateSecret("");
+      setRotatePassphrase("");
+      setRotateError("");
       await refresh();
     } catch (reason) {
-      setError(errorMessage(reason));
+      setRotateError(rotateCredential.namespace === "ssh" ? credentialCreateError(reason) : errorMessage(reason));
     } finally {
       setBusy("");
     }
@@ -262,6 +272,8 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
                             disabled={busy !== ""}
                             onClick={() => {
                               setRotateSecret("");
+                              setRotatePassphrase("");
+                              setRotateError("");
                               setRotateCredential(item);
                             }}
                           >
@@ -332,7 +344,10 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
                 onChange={(event) => updateCreateForm({
                   source: event.target.value as CredentialSource,
                   namespace: event.target.value === "ssh-key" ? "ssh" : "",
+                  name: "",
+                  displayName: "",
                   secret: "",
+                  sshKeyPassphrase: "",
                   environmentVariable: "",
                 })}
                 className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
@@ -343,6 +358,28 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
               </select>
             </Field>
 
+            {sshKeyMode ? (
+              <div className="space-y-2">
+                <Field label="Credential name">
+                  <Input
+                    aria-label={t("SSH credential name")}
+                    placeholder={t("My server")}
+                    value={createForm.displayName}
+                    aria-invalid={nameInvalid || (createForm.displayName !== "" && !displayNameValid)}
+                    onChange={(event) => updateCreateForm({
+                      name: event.target.value,
+                      displayName: event.target.value,
+                    })}
+                  />
+                </Field>
+                <p className="text-xs text-muted-foreground">{t("SSH credential identifier is generated automatically.")}</p>
+                {nameInvalid ? <p className="text-xs text-destructive">{t("Use a name starting with a letter, up to 63 letters, digits or hyphens.")}</p> : null}
+                {createForm.displayName.trim() !== "" && !displayNameValid ? (
+                  <p className="text-xs text-destructive">{t("Display name is too long (maximum 160 bytes).")}</p>
+                ) : null}
+              </div>
+            ) : (
+              <>
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Namespace">
                 <Input
@@ -386,22 +423,34 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
               <p className="text-xs text-destructive">{t("Display name is too long (maximum 160 bytes).")}</p>
             ) : null}
             <ReadOnlyField label="Reference" value={referencePreview} />
+              </>
+            )}
 
             {createForm.source !== "environment" ? (
-              <Field label={sshKeyMode ? t("SSH private key") : t("Secret")}>
-                {sshKeyMode ? (
-                  <textarea
-                    aria-label={t("SSH private key")}
-                    autoComplete="off"
-                    spellCheck={false}
-                    rows={5}
-                    value={createForm.secret}
-                    aria-invalid={createForm.secret !== "" && !secretValid}
-                    onChange={(event) => updateCreateForm({ secret: event.target.value })}
-                    className="w-full resize-y rounded-lg border border-input bg-background p-3 font-mono text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    placeholder={t("-----BEGIN OPENSSH PRIVATE KEY-----")}
-                  />
-                ) : (
+              sshKeyMode ? (
+                <div className="space-y-3">
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium">{t("SSH private key")}</p>
+                    <SSHKeyEditor value={createForm.secret} onChange={(secret) => updateCreateForm({ secret })} />
+                  </div>
+                  <Field label="SSH key passphrase (optional)">
+                    <Input
+                      type="password"
+                      autoComplete="new-password"
+                      aria-label={t("SSH key passphrase (optional)")}
+                      value={createForm.sshKeyPassphrase}
+                      onChange={(event) => updateCreateForm({ sshKeyPassphrase: event.target.value })}
+                    />
+                  </Field>
+                  <p className="text-xs leading-5 text-muted-foreground">
+                    {t("Supports Ed25519, ECDSA and RSA 2048+ private keys. Encrypted keys are decrypted once on import; the OS keychain protects the stored key.")}
+                  </p>
+                  {createForm.secret !== "" && !secretValid ? (
+                    <p className="text-xs text-destructive">{t("Secret exceeds the 64 KiB limit.")}</p>
+                  ) : null}
+                </div>
+              ) : (
+                <Field label="Secret">
                   <Input
                     type="password"
                     autoComplete="new-password"
@@ -410,15 +459,14 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
                     aria-invalid={createForm.secret !== "" && !secretValid}
                     onChange={(event) => updateCreateForm({ secret: event.target.value })}
                   />
-                )}
-                <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                  {sshKeyMode ? t("Use an unencrypted Ed25519 or ECDSA SSH private key. Mender stores it only in the OS keychain. Host public keys are configured separately in the SSH Sandbox.") :
-                    t("The value is submitted once and is never returned by Mender.")}
-                </p>
-                {createForm.secret !== "" && !secretValid ? (
-                  <p className="mt-1 text-xs text-destructive">{t("Secret exceeds the 64 KiB limit.")}</p>
-                ) : null}
-              </Field>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                    {t("The value is submitted once and is never returned by Mender.")}
+                  </p>
+                  {createForm.secret !== "" && !secretValid ? (
+                    <p className="mt-1 text-xs text-destructive">{t("Secret exceeds the 64 KiB limit.")}</p>
+                  ) : null}
+                </Field>
+              )
             ) : (
               <Field label="Environment variable">
                 <Input
@@ -436,7 +484,11 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateOpen(false)}>
+            <Button variant="outline" onClick={() => {
+              setCreateOpen(false);
+              setCreateForm(emptyCreateForm);
+              setCreateError("");
+            }}>
               {t("Cancel")}
             </Button>
             <Button
@@ -455,6 +507,8 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
           if (!open) {
             setRotateCredential(null);
             setRotateSecret("");
+            setRotatePassphrase("");
+            setRotateError("");
           }
         }}
       >
@@ -467,18 +521,29 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
               })}
             </DialogDescription>
           </DialogHeader>
-          <Field label={rotateCredential?.namespace === "ssh" ? t("SSH private key") : t("New secret")}>
-            {rotateCredential?.namespace === "ssh" ? (
-              <textarea
-                aria-label={t("New Credential secret")}
-                autoComplete="off"
-                spellCheck={false}
-                rows={5}
-                value={rotateSecret}
-                onChange={(event) => setRotateSecret(event.target.value)}
-                className="w-full resize-y rounded-lg border border-input bg-background p-3 font-mono text-xs"
-              />
-            ) : (
+          {rotateError ? <p role="alert" className="text-sm text-destructive">{rotateError}</p> : null}
+          {rotateCredential?.namespace === "ssh" ? (
+            <div className="space-y-3">
+              <p className="text-sm font-medium">{t("SSH private key")}</p>
+              <SSHKeyEditor value={rotateSecret} onChange={(secret) => {
+                setRotateSecret(secret);
+                setRotateError("");
+              }} />
+              <Field label="SSH key passphrase (optional)">
+                <Input
+                  type="password"
+                  autoComplete="new-password"
+                  aria-label={t("SSH key passphrase (optional)")}
+                  value={rotatePassphrase}
+                  onChange={(event) => {
+                    setRotatePassphrase(event.target.value);
+                    setRotateError("");
+                  }}
+                />
+              </Field>
+            </div>
+          ) : (
+            <Field label="New secret">
               <Input
                 type="password"
                 autoComplete="new-password"
@@ -486,14 +551,16 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
                 value={rotateSecret}
                 onChange={(event) => setRotateSecret(event.target.value)}
               />
-            )}
-          </Field>
+            </Field>
+          )}
           <DialogFooter>
             <Button
               variant="outline"
               onClick={() => {
                 setRotateCredential(null);
                 setRotateSecret("");
+                setRotatePassphrase("");
+                setRotateError("");
               }}
             >
               {t("Cancel")}

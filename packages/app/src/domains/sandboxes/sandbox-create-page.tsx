@@ -298,7 +298,7 @@ export function CreateSandboxPage({
     Number.isInteger(sshPort) && sshPort >= 1 && sshPort <= 65535 &&
     sshRoot.startsWith("/") && sshRoot.length > 1 && sshRoot.length <= 1024 &&
     !sshRoot.split("/").some((part) => part === ".." || part === ".") &&
-    sshHostPublicKey.trim().startsWith("ssh-ed25519 ") &&
+    /^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp(?:256|384|521))\s+\S+/.test(sshHostPublicKey.trim()) &&
     !sshHostPublicKey.includes("\n") &&
     sshCredentials.some((item) => item.reference === sshCredentialRef);
   const identityValid = Boolean(name.trim()) && (
@@ -474,8 +474,9 @@ export function CreateSandboxPage({
                     <textarea aria-label={t("Pinned SSH host public key")} rows={3} spellCheck={false}
                       value={sshHostPublicKey}
                       onChange={(event) => setSSHHostPublicKey(event.target.value)}
-                      placeholder={t("ssh-ed25519 AAAA...")}
+                      placeholder={t("ssh-ed25519 / ecdsa-sha2-nistp256 / ssh-rsa")}
                       className="w-full resize-y rounded-xl border border-input bg-card p-3 font-mono text-xs"/>
+                    <span className="text-xs leading-5 text-muted-foreground">{t("Pin a verified SSH host public key (Ed25519, ECDSA or RSA 2048+). It is checked on every connection.")}</span>
                   </label>
                   <label className="grid gap-2 text-sm">
                     <span className="font-medium">{t("SSH private key credential")}</span>
