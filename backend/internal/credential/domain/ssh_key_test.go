@@ -116,6 +116,42 @@ func TestSSHPrivateKeyImportsEncryptedOpenSSHWithoutStoringPassphrase(t *testing
 	}
 }
 
+func TestSSHPrivateKeyImportsEncryptedLegacyRSAPEM(t *testing.T) {
+	private, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	passphrase := []byte("generated-legacy-rsa-passphrase")
+	// #nosec G101 -- test-only generated passphrase, never an application secret.
+	block, err := x509.EncryptPEMBlock(rand.Reader, "RSA PRIVATE KEY",
+		x509.MarshalPKCS1PrivateKey(private), passphrase, x509.PEMCipherAES256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	encrypted := pem.EncodeToMemory(block)
+	if _, err := NormalizeSSHPrivateKey(encrypted, nil); err == nil || !strings.Contains(err.Error(), "passphrase required") {
+		t.Fatalf("expected passphrase prompt, got %v", err)
+	}
+	if _, err := NormalizeSSHPrivateKey(encrypted, []byte("wrong")); err == nil {
+		t.Fatal("wrong passphrase accepted for encrypted RSA PEM")
+	}
+	normalized, err := NormalizeSSHPrivateKey(encrypted, passphrase)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer clear(normalized)
+	signer, err := ssh.ParsePrivateKey(normalized)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if signer.PublicKey().Type() != ssh.KeyAlgoRSA {
+		t.Fatalf("unexpected type after encrypted RSA import: %s", signer.PublicKey().Type())
+	}
+	if bytes.Contains(normalized, passphrase) {
+		t.Fatal("passphrase material leaked into normalized private key")
+	}
+}
+
 func TestSSHPrivateKeyErrorDoesNotEchoSecret(t *testing.T) {
 	secret := []byte("TOP-SECRET-UNPARSEABLE-KEY")
 	_, err := NormalizeSSHPrivateKey(secret, []byte("TOP-SECRET-PASSPHRASE"))

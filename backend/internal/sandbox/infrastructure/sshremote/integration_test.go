@@ -4,7 +4,9 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/rsa"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"net"
@@ -33,6 +35,11 @@ func (c fixtureCredentials) Resolve(context.Context, credentialdomain.Reference)
 func sshFixture(t *testing.T) (Template, fixtureCredentials) {
 	t.Helper()
 	private, hostKey := testKeys(t)
+	return sshFixtureFromKey(t, private, hostKey)
+}
+
+func sshFixtureFromKey(t *testing.T, private []byte, hostKey string) (Template, fixtureCredentials) {
+	t.Helper()
 	pub, _, _, _, err := ssh.ParseAuthorizedKey([]byte(hostKey))
 	if err != nil {
 		t.Fatal(err)
@@ -149,6 +156,38 @@ func sshFixture(t *testing.T) (Template, fixtureCredentials) {
 	// #nosec G115 -- the listener port was checked to be within 1..65535.
 	return Template{Host: host, Port: uint16(port), User: "agent", Root: root, HostPublicKey: hostKey, CredentialRef: ref}, fixtureCredentials{private}
 }
+func TestSSHRemoteRSA2048UsesSHA2ForClientAndPinnedHost(t *testing.T) {
+	private, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	block, err := ssh.MarshalPrivateKey(private, "generated-fixture")
+	if err != nil {
+		t.Fatal(err)
+	}
+	keyPEM := pem.EncodeToMemory(block)
+	signer, err := ssh.NewSignerFromKey(private)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hostLine := strings.TrimSpace(string(ssh.MarshalAuthorizedKey(signer.PublicKey())))
+	template, credentials := sshFixtureFromKey(t, keyPEM, hostLine)
+	if err := credentialdomain.ValidateSSHPrivateKey(credentials.secret); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	connection, err := (Dialer{Credentials: credentials}).Connect(ctx, template)
+	if err != nil {
+		t.Fatalf("RSA-2048 pinned SSH connection failed: %v", err)
+	}
+	defer func() { _ = connection.Close() }()
+	info, err := connection.SFTP.Stat(filepath.Join(template.Root, "hello.txt"))
+	if err != nil || info.IsDir() {
+		t.Fatalf("RSA-2048 pinned SFTP failed: info=%v, err=%v", info, err)
+	}
+}
+
 func jsonArg(t *testing.T, content any) invocationdomain.JSONValue {
 	t.Helper()
 	data, e := json.Marshal(content)

@@ -49,7 +49,7 @@ func (uc CreateNative) Execute(
 		normalized, err := credentialdomain.NormalizeSSHPrivateKey(secret, request.SSHKeyPassphrase)
 		clear(secret)
 		if err != nil {
-			return credentialdomain.Credential{}, err
+			return credentialdomain.Credential{}, fmt.Errorf("%w: %w", ErrInvalidSecret, err)
 		}
 		secret = normalized
 	} else if len(request.SSHKeyPassphrase) != 0 {
@@ -216,7 +216,7 @@ func (uc RotateNativeSecret) Execute(
 		normalized, err := credentialdomain.NormalizeSSHPrivateKey(secret, sshKeyPassphrase)
 		clear(secret)
 		if err != nil {
-			return credentialdomain.Credential{}, err
+			return credentialdomain.Credential{}, fmt.Errorf("%w: %w", ErrInvalidSecret, err)
 		}
 		secret = normalized
 	} else if len(sshKeyPassphrase) != 0 {
