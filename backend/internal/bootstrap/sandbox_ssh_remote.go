@@ -16,6 +16,40 @@ type CreateSSHRemoteSandboxRequest struct {
 	Template sshremote.Template
 }
 
+// InspectSSHHostKey is an operator-only pre-auth handshake. Admission precedes
+// outbound network access; it does not create a Sandbox or resolve a key.
+func (s *Sandboxes) InspectSSHHostKey(ctx context.Context, host string, port uint16, caller governancedomain.Context) (sshremote.HostIdentity, error) {
+	if s == nil || s.sshRemote == nil || s.sshRemote.Dial.Trust == nil {
+		return sshremote.HostIdentity{}, sandboxdomain.ErrBackendUnavailable
+	}
+	if err := caller.Validate(); err != nil {
+		return sshremote.HostIdentity{}, err
+	}
+	if caller.Principal().Kind() != governancedomain.PrincipalLocalUser ||
+		caller.Origin() == governancedomain.OriginMCP {
+		return sshremote.HostIdentity{}, sandboxdomain.ErrNotAuthorized
+	}
+	id, err := sandboxidentity.Generator{}.NewSandboxID()
+	if err != nil {
+		return sshremote.HostIdentity{}, err
+	}
+	principal := caller.Principal()
+	pending, err := sandboxdomain.NewSandbox(sandboxdomain.Spec{
+		ID: id, Name: "SSH host identity inspection",
+		Backend:   sandboxdomain.BackendSSHRemote,
+		Binding:   sandboxdomain.BuiltinBinding(sandboxdomain.BackendSSHRemote),
+		Isolation: sandboxdomain.IsolationRemote,
+		OwnerKind: string(principal.Kind()), OwnerRef: principal.Reference(),
+	})
+	if err != nil {
+		return sshremote.HostIdentity{}, err
+	}
+	if err := s.admission.AdmitAction(ctx, caller, pending, governancedomain.ActionSandboxProvision); err != nil {
+		return sshremote.HostIdentity{}, err
+	}
+	return s.sshRemote.Dial.Trust.Inspect(ctx, host, port)
+}
+
 // SSH Remote is a connection-only remote account binding; there is no host
 // installation or SSH server provisioning. Admission precedes all I/O.
 func (s *Sandboxes) CreateSSHRemoteSandbox(ctx context.Context, input CreateSSHRemoteSandboxRequest, caller governancedomain.Context) (sandboxdomain.Sandbox, error) {
@@ -57,6 +91,11 @@ func (s *Sandboxes) CreateSSHRemoteSandbox(ctx context.Context, input CreateSSHR
 		return sandboxdomain.Sandbox{}, fmt.Errorf("SSH remote connection failed: %w", err)
 	}
 	defer func() { _ = conn.Close() }()
+	// Persist only the host key proven by the exact pinned SSH handshake.
+	// Mender maintains its own known_hosts; the user's SSH files stay untouched.
+	if err := s.sshRemote.Dial.Trust.RememberPinned(input.Template.Host, input.Template.Port, input.Template.HostPublicKey); err != nil {
+		return sandboxdomain.Sandbox{}, err
+	}
 	run, err := sandboxdomain.NewRun(id, 1, sandboxdomain.StateReady, "ssh_remote:"+id.String())
 	if err != nil {
 		return sandboxdomain.Sandbox{}, err

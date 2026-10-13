@@ -24,6 +24,7 @@ const (
 	FailureNetworkRefused        ConnectionFailureCode = "network_refused"
 	FailureNetworkUnreachable    ConnectionFailureCode = "network_unreachable"
 	FailureHostKeyMismatch       ConnectionFailureCode = "host_key_mismatch"
+	FailureHostTrustUnavailable  ConnectionFailureCode = "host_trust_unavailable"
 	FailureAuthenticationFailed  ConnectionFailureCode = "authentication_failed"
 	FailureSSHHandshakeFailed    ConnectionFailureCode = "ssh_handshake_failed"
 	FailureSFTPUnavailable       ConnectionFailureCode = "sftp_unavailable"

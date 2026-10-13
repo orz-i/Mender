@@ -71,7 +71,10 @@ func NewSandboxes(ctx context.Context, databasePath string, policy sandboxapplic
 	// The SSH built-in registers without connecting, resolving a key, or
 	// contacting a remote host. Only an admitted Sandbox create/open does so.
 	component.sshRemote = &sandboxssh.Backend{
-		Dial:      sandboxssh.Dialer{Credentials: credentials},
+		Dial: sandboxssh.Dialer{
+			Credentials: credentials,
+			Trust:       sandboxssh.NewHostTrustStore(filepath.Join(filepath.Dir(databasePath), "ssh_known_hosts")),
+		},
 		Templates: store,
 	}
 	backends := []sandboxapplication.Backend{localBackend, component.sshRemote}

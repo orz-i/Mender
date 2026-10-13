@@ -34,8 +34,7 @@ type Template struct {
 }
 
 func (t Template) Validate() error {
-	if len(t.Host) == 0 || len(t.Host) > 253 || (!hostnamePattern.MatchString(t.Host) && net.ParseIP(t.Host) == nil) ||
-		strings.Contains(t.Host, "..") || !loginPattern.MatchString(t.User) || t.Port == 0 ||
+	if validateSSHHostPort(t.Host, t.Port) != nil || !loginPattern.MatchString(t.User) ||
 		len(t.Root) > 1024 || !strings.HasPrefix(t.Root, "/") || path.Clean(t.Root) != t.Root || t.Root == "/" ||
 		strings.ContainsAny(t.Root, "\x00\r\n") || t.CredentialRef.Namespace() != "ssh" {
 		return fmt.Errorf("ssh remote: invalid host, login user, port, workspace root or SSH credential reference")
@@ -87,6 +86,7 @@ func (c *Connection) Close() error {
 
 type Dialer struct {
 	Credentials invocationapp.CredentialResolver
+	Trust       *HostTrustStore
 }
 
 func (d Dialer) Connect(ctx context.Context, t Template) (*Connection, error) {
@@ -122,6 +122,9 @@ func (d Dialer) Connect(ctx context.Context, t Template) (*Connection, error) {
 	public, err := parseHostKey(t.HostPublicKey)
 	if err != nil {
 		return nil, newConnectionFailure(FailureHostKeyMismatch)
+	}
+	if err := d.Trust.VerifyPin(t.Host, t.Port, public); err != nil {
+		return nil, err
 	}
 	endpoint := net.JoinHostPort(t.Host, fmt.Sprint(t.Port))
 	ctx, cancel := context.WithTimeout(ctx, 12*time.Second)

@@ -18,6 +18,36 @@ import (
 
 // An SSH credential must not be deleted while any active SSH Sandbox uses
 // its reference; reading usage does not need access to the raw keyring secret.
+func TestSSHHostIdentityInspectionRequiresLocalOperatorBeforeNetwork(t *testing.T) {
+	ctx := context.Background()
+	r, err := NewRuntime(ctx, RuntimeOptions{DatabasePath: filepath.Join(t.TempDir(), "ssh-inspection.db")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = r.Close() }()
+	service, err := gov.NewPrincipal(gov.PrincipalService, "profile:untrusted")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, input := range []struct {
+		principal gov.Principal
+		origin    gov.Origin
+	}{
+		{service, gov.OriginMCP},
+		{service, gov.OriginInternal},
+		{r.OwnerPrincipal(), gov.OriginMCP},
+	} {
+		caller, err := gov.NewContext(input.origin, input.principal, gov.CatalogScope())
+		if err != nil {
+			t.Fatal(err)
+		}
+		// No remote socket/key resolution is permitted for untrusted callers.
+		if _, err := r.Sandboxes.InspectSSHHostKey(ctx, "198.51.100.9", 22, caller); !errors.Is(err, sandboxdomain.ErrNotAuthorized) {
+			t.Fatalf("untrusted SSH inspection admitted for %s/%s: %v", input.principal.Kind(), input.origin, err)
+		}
+	}
+}
+
 func TestSSHRemoteCreateRequiresLocalOperatorBeforeKeyResolution(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()

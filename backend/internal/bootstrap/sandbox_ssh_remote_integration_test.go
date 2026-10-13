@@ -156,11 +156,19 @@ func TestRuntimeSSHRemoteAdmissionRouterWorkspaceAndLocalLifecycle(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
+	firstIdentity, err := r.Sandboxes.InspectSSHHostKey(ctx, tpl.Host, tpl.Port, caller)
+	if err != nil || firstIdentity.Status != sshremote.HostUntrusted || firstIdentity.HostPublicKey != tpl.HostPublicKey {
+		t.Fatalf("initial SSH identity should require first-use confirmation: %+v %v", firstIdentity, err)
+	}
 	item, err := r.Sandboxes.CreateSSHRemoteSandbox(ctx, CreateSSHRemoteSandboxRequest{
 		Name: "Pinned test SSH host", Template: tpl,
 	}, caller)
 	if err != nil {
 		t.Fatalf("create verified SSH resource: %v", err)
+	}
+	secondIdentity, err := r.Sandboxes.InspectSSHHostKey(ctx, tpl.Host, tpl.Port, caller)
+	if err != nil || secondIdentity.Status != sshremote.HostTrusted || secondIdentity.Fingerprint != firstIdentity.Fingerprint {
+		t.Fatalf("admitted pinned SSH creation should persist Mender-managed trust: %+v %v", secondIdentity, err)
 	}
 	if item.Backend() != sandboxdomain.BackendSSHRemote || item.Isolation() != sandboxdomain.IsolationRemote {
 		t.Fatalf("SSH resource false identity/isolation: %+v", item.Spec())
