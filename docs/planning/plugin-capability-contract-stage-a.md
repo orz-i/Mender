@@ -1,6 +1,6 @@
 # Plugin Capability Contract — Stage A closure plan
 
-- Status: In progress (2026-10-13)
+- Status: **Closed (2026-10-13)**
 - Decision: [ADR-0040](../architecture/adr/0040-optional-plugin-capability-contracts.md)
 - Scope: bounded preparatory implementation only; Stage B SSH Durable Jobs and Stage C Tool Suite supply remain separate.
 
@@ -44,4 +44,16 @@
 
 ## Verification / commit log
 
-_To be filled after verified implementation._
+| Milestone | Commit | Evidence |
+| --- | --- | --- |
+| A-doc — architecture and acceptance before source code | `533dd5f` | ADR-0040 accepted, exact scope/non-goals; docs-only commit |
+| A-contract + A-negotiate — one atomic hard cut | `e4a9f14` | Versioned capability contracts in `plugin`, host-reviewed `RequiredContracts` with unchanged public `requiredCapabilities`, exact-pinned verified Workspace v1/inline offers and contract-based suite eligibility |
+| A-verify — final evidence | Recorded in this document | See gates below; no further feature implementation |
+
+**Automated gates:** `pnpm check` exit **0**: plugin proto/SDK/examples, Go module isolation, OpenAPI/SDK generation parity, desktop binding/architecture parity, Go lint/tests/**race**, ESLint, TS strict, **i18n 1167/1167**, **32 Vitest files / 202 tests passed**, Web and Desktop frontend builds. `pnpm security:check` exit **0**: no reachable Go symbol vulnerabilities, no high-severity production JS audit findings (one indirect module finding was not reachable from application symbols). `cd apps/desktop && go build ./...` exit **0**, with existing non-blocking macOS linker deployment-target warnings. `git diff --check` passed. Vite emitted pre-existing non-blocking >500 kB chunk-size warnings.
+
+**Security / boundary checks:** invalid versions/IDs/modes/guarantees and duplicate contracts rejected; newer minor compatible only within same major, required guarantees never inferred; detached alone cannot satisfy durable requirements; Browser and detached Jobs cannot satisfy Workspace; a newly reported backend operation cannot bypass its immutable descriptor; a backend that loses support ceases to advertise it. A Tool Suite unavailable by design exposes zero runnable tool keys. Registry and descriptor snapshots are cloned; catalogue/listing never starts a backend, touches Credentials, mutates Profile grants or creates Providers.
+
+**Intentional limits:** Only existing `sandbox.workspace` is executable. External Sandbox Protocol v1 remains Workspace-only and accepts **no** versioned async/Jobs declaration. `sandbox.jobs` appears only in a contract test as an **unregistered, unavailable** definition; no Job TaskID, Job Store, remote worker, external protocol change, generic Scheduler, MCP Tasks mapping, SQLite schema change, SDK or UI change was introduced. Future Stage B must prove remote job lifecycle/idempotence and an atomic Sandbox lifecycle fence; Stage C may then add independent optional suite binding and Profile exposure with the required persisted-grant migration.
+
+**Operator safety:** No Wails/MCP/Tunnel restart, Rocky connection, remote SSH command or user credential access. `.agents/`, `.pi/`, `.intent-loop/` remained untracked and untouched. Tracked Git tree clean following code commit; only the explicit documentation closure is committed next.
