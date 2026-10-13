@@ -240,6 +240,10 @@ export function GrantAgentProfile(agentID: string, profileID: string): $Cancella
     return $Call.ByID(967894880, agentID, profileID);
 }
 
+export function InspectSSHHostKey(host: string, port: number): $CancellablePromise<$models.SSHHostIdentity> {
+    return $Call.ByID(2406930547, host, port);
+}
+
 /**
  * InstallLocalPlugin is desktop-only and receives a folder explicitly chosen
  * via the OS dialog. The manifest is parsed locally; Web cannot upload native

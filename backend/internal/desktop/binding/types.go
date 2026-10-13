@@ -81,6 +81,13 @@ type DockerBackendStatus struct {
 	DockerAvailable   bool   `json:"dockerAvailable"`
 	DockerStatus      string `json:"dockerStatus"`
 }
+type SSHHostIdentity struct {
+	Status        string `json:"status"`
+	Algorithm     string `json:"algorithm"`
+	Fingerprint   string `json:"fingerprint"`
+	HostPublicKey string `json:"hostPublicKey"`
+}
+
 type CreateSSHRemoteSandboxInput struct {
 	Name          string `json:"name"`
 	Host          string `json:"host"`

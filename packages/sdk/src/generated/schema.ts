@@ -767,6 +767,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/sandboxes/ssh-remote/host-identity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Local-operator-only, policy-admitted pre-auth SSH host identity inspection. Does not trust or persist a host or use login credentials. */
+        post: operations["inspectSSHHostKey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/sandboxes/ssh-remote": {
         parameters: {
             query?: never;
@@ -1990,6 +2007,20 @@ export interface components {
             /** @description Explicit host-operator experimental execution opt-in; disabled by default */
             daytonaConfigured: boolean;
             daytonaStatus: string;
+        };
+        InspectSSHHostKeyRequest: {
+            host: string;
+            port: number;
+        };
+        SSHHostIdentity: {
+            /** @enum {string} */
+            status: "trusted" | "untrusted" | "changed";
+            /** @description Server host public-key algorithm */
+            algorithm: string;
+            /** @description SHA256 fingerprint of the presented server host key */
+            fingerprint: string;
+            /** @description Public server host key for exact pinning on provision; do not treat it as trusted without operator confirmation */
+            hostPublicKey: string;
         };
         CreateSSHRemoteSandboxRequest: {
             name: string;
@@ -3745,6 +3776,39 @@ export interface operations {
                 };
             };
             /** @description Docker Engine is unavailable or not configured */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    inspectSSHHostKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InspectSSHHostKeyRequest"];
+            };
+        };
+        responses: {
+            /** @description Verified SSH host public identity; unknown hosts require separate fingerprint confirmation before use */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SSHHostIdentity"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            /** @description SSH pre-auth handshake or managed known_hosts unavailable */
             503: {
                 headers: {
                     [name: string]: unknown;

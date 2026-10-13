@@ -65,6 +65,7 @@ export type {
     RuntimeGovernanceStatus,
     RuntimeIsolation,
     RuntimeUsage,
+    SSHHostIdentity,
     Sandbox,
     SandboxActivity,
     SandboxActivityEvent,

@@ -36,6 +36,7 @@ vi.mock(
       DeletePluginInstallation:vi.fn(),
       CreateExternalSandbox:vi.fn(),
       CreateSSHRemoteSandbox:vi.fn(),
+      InspectSSHHostKey:vi.fn(),
       ReconcileSandbox:vi.fn(),
       CreateExternalTunnel:vi.fn(),
       InstallSkill: vi.fn(),
@@ -351,6 +352,22 @@ describe("desktop Mender client", () => {
     vi.mocked(Service.InstallLocalPlugin).mockResolvedValue(installed);
     await expect(installDesktopPlugin("/tmp/selected-plugin")).resolves.toMatchObject(installed);
     expect(Service.InstallLocalPlugin).toHaveBeenCalledWith("/tmp/selected-plugin");
+  });
+
+  it("previews the server host key through a local Wails call without submitting SSH credentials", async () => {
+    const identity = {
+      status: "untrusted", algorithm: "ssh-ed25519",
+      fingerprint: "SHA256:test-server-fingerprint",
+      hostPublicKey: "ssh-ed25519 " + "A".repeat(68),
+    };
+    vi.mocked(Service.InspectSSHHostKey).mockResolvedValue(identity);
+    const client = createDesktopMenderClient();
+    await expect(client.inspectSSHHostKey("example.org", 22)).resolves.toEqual(identity);
+    expect(Service.InspectSSHHostKey).toHaveBeenCalledExactlyOnceWith("example.org", 22);
+    expect(Service.CreateSSHRemoteSandbox).not.toHaveBeenCalled();
+
+    vi.mocked(Service.InspectSSHHostKey).mockResolvedValue({...identity, status: "invalid-state"});
+    await expect(client.inspectSSHHostKey("example.org", 22)).rejects.toBeInstanceOf(MenderClientInvariantError);
   });
 
   it("uses the native SSH Remote binding without sending private key material",async()=>{

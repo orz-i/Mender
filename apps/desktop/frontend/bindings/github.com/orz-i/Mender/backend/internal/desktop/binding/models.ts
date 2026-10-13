@@ -501,6 +501,13 @@ export interface RuntimeUsage {
     "activations": number;
 }
 
+export interface SSHHostIdentity {
+    "status": string;
+    "algorithm": string;
+    "fingerprint": string;
+    "hostPublicKey": string;
+}
+
 /**
  * Sandbox is management metadata; state reflects the last persisted observation.
  */

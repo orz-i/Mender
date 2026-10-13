@@ -495,6 +495,18 @@ export function createDesktopMenderClient(): MenderClient {
     async createSSHRemoteSandbox(body) {
       return sandbox(await Service.CreateSSHRemoteSandbox(body));
     },
+    async inspectSSHHostKey(host, port) {
+      const identity = await Service.InspectSSHHostKey(host, port);
+      if (identity.status !== "trusted" && identity.status !== "untrusted" && identity.status !== "changed") {
+        throw new MenderClientInvariantError("Unsupported SSH host trust status");
+      }
+      return {
+        status: identity.status,
+        algorithm: identity.algorithm,
+        fingerprint: identity.fingerprint,
+        hostPublicKey: identity.hostPublicKey,
+      };
+    },
     async reconcileDaytonaSandbox(sandboxId) {
       return sandbox(await Service.ReconcileDaytonaSandbox(sandboxId));
     },

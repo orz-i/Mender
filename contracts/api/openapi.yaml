@@ -920,6 +920,25 @@ paths:
                     items: { $ref: '#/components/schemas/CachedDockerImage' }
         '503':
           description: Docker Engine is unavailable or not configured
+  /sandboxes/ssh-remote/host-identity:
+    post:
+      operationId: inspectSSHHostKey
+      description: Local-operator-only, policy-admitted pre-auth SSH host identity inspection. Does not trust or persist a host or use login credentials.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/InspectSSHHostKeyRequest' }
+      responses:
+        '200':
+          description: Verified SSH host public identity; unknown hosts require separate fingerprint confirmation before use
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SSHHostIdentity' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '503':
+          description: SSH pre-auth handshake or managed known_hosts unavailable
   /sandboxes/ssh-remote:
     post:
       operationId: createSSHRemoteSandbox
@@ -2517,6 +2536,22 @@ components:
         daytonaConfigured: { type: boolean, description: Explicit host-operator experimental execution opt-in; disabled by default, never proof of live remote acceptance }
         daytonaStatus: { type: string }
       additionalProperties: false
+    InspectSSHHostKeyRequest:
+      type: object
+      additionalProperties: false
+      required: [host, port]
+      properties:
+        host: { type: string, minLength: 1, maxLength: 253 }
+        port: { type: integer, minimum: 1, maximum: 65535 }
+    SSHHostIdentity:
+      type: object
+      additionalProperties: false
+      required: [status, algorithm, fingerprint, hostPublicKey]
+      properties:
+        status: { type: string, enum: [trusted, untrusted, changed] }
+        algorithm: { type: string, description: Server host public-key algorithm, not the account's login key }
+        fingerprint: { type: string, description: SHA256 fingerprint of the presented server host key }
+        hostPublicKey: { type: string, description: Public server host key for exact pinning on provision; do not treat it as trusted without operator confirmation }
     CreateSSHRemoteSandboxRequest:
       type: object
       additionalProperties: false

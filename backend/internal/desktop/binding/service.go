@@ -222,6 +222,23 @@ func (s *Service) ReconcileSandbox(raw string) (Sandbox, error) {
 	return s.projectSandbox(item)
 }
 
+func (s *Service) InspectSSHHostKey(host string, port uint16) (SSHHostIdentity, error) {
+	caller, err := s.governanceContext()
+	if err != nil {
+		return SSHHostIdentity{}, err
+	}
+	identity, err := s.runtime.Sandboxes.InspectSSHHostKey(s.ctx, host, port, caller)
+	if err != nil {
+		return SSHHostIdentity{}, err
+	}
+	return SSHHostIdentity{
+		Status:        string(identity.Status),
+		Algorithm:     identity.Algorithm,
+		Fingerprint:   identity.Fingerprint,
+		HostPublicKey: identity.HostPublicKey,
+	}, nil
+}
+
 func (s *Service) CreateSSHRemoteSandbox(input CreateSSHRemoteSandboxInput) (Sandbox, error) {
 	ref, err := credentialdomain.ParseReference(input.CredentialRef)
 	if err != nil {

@@ -16,6 +16,7 @@ export type {
   CreateLocalSandboxRequest,
   CreateDockerSandboxRequest,
   CreateSSHRemoteSandboxRequest,
+  SSHHostIdentity,
   CachedDockerImage,
   CreateDaytonaSandboxRequest,
   SandboxBackends,

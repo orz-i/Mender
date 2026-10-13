@@ -27,6 +27,10 @@ func TestSSHRemoteHTTPRejectsMissingCredentialWithoutNetworkOrResource(t *testin
 	defer func() { _ = runtime.Close() }()
 	server := httptest.NewServer(New(runtime))
 	defer server.Close()
+	// Host inspection validates its inputs without ever contacting a remote host.
+	requestJSON(t, server.Client(), http.MethodPost,
+		server.URL+"/api/v1/sandboxes/ssh-remote/host-identity",
+		map[string]any{"host": "bad..host", "port": 22}, http.StatusBadRequest)
 	_, priv, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatal(err)
@@ -67,6 +71,10 @@ func TestSSHRemoteHTTPRejectsMissingCredentialWithoutNetworkOrResource(t *testin
 		t.Fatal(err)
 	}
 	requestJSON(t, server.Client(), http.MethodPost, server.URL+"/api/v1/sandboxes/ssh-remote", template, http.StatusForbidden)
+	// The same Sandbox provisioning policy also prevents pre-auth identity probes.
+	requestJSON(t, server.Client(), http.MethodPost,
+		server.URL+"/api/v1/sandboxes/ssh-remote/host-identity",
+		map[string]any{"host": "198.51.100.1", "port": 22}, http.StatusForbidden)
 	after := requestJSON(t, server.Client(), http.MethodGet, server.URL+"/api/v1/sandboxes", nil, http.StatusOK)
 	if arr, ok := after["sandboxes"].([]any); !ok || len(arr) != 0 {
 		t.Fatalf("denied SSH created a durable resource: %+v", after)

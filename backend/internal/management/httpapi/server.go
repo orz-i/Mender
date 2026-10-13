@@ -131,6 +131,7 @@ func (h *Handler) routes() {
 	h.mux.HandleFunc("GET /api/v1/sandboxes/backends", h.sandboxBackends)
 	h.mux.HandleFunc("GET /api/v1/sandboxes/docker/images", h.listDockerImages)
 	h.mux.HandleFunc("POST /api/v1/sandboxes/docker", h.createDockerSandbox)
+	h.mux.HandleFunc("POST /api/v1/sandboxes/ssh-remote/host-identity", h.inspectSSHHostKey)
 	h.mux.HandleFunc("POST /api/v1/sandboxes/ssh-remote", h.createSSHRemoteSandbox)
 	h.mux.HandleFunc("POST /api/v1/sandboxes/daytona", h.createDaytonaSandbox)
 	h.mux.HandleFunc("POST /api/v1/sandboxes/external", h.createExternalSandbox)

@@ -21,6 +21,46 @@ type createSSHRemoteSandboxRequest struct {
 	CredentialRef string `json:"credentialRef"`
 }
 
+type inspectSSHHostKeyRequest struct {
+	Host string `json:"host"`
+	Port uint16 `json:"port"`
+}
+
+// A local operator can inspect host identity before entering SSH credentials.
+// Probing is governed, bounded and never changes trust or creates a Sandbox.
+func (h *Handler) inspectSSHHostKey(w http.ResponseWriter, r *http.Request) {
+	var input inspectSSHHostKeyRequest
+	if err := decodeJSON(r, &input); err != nil {
+		writeAPIError(w, http.StatusBadRequest, "validation_error", err)
+		return
+	}
+	caller, err := governancedomain.NewContext(
+		governancedomain.OriginManagementHTTP,
+		h.runtime.OwnerPrincipal(), governancedomain.CatalogScope(),
+	)
+	if err != nil {
+		writeKnownError(w, err)
+		return
+	}
+	identity, err := h.runtime.Sandboxes.InspectSSHHostKey(r.Context(), input.Host, input.Port, caller)
+	if err != nil {
+		switch {
+		case errors.Is(err, sandboxdomain.ErrNotAuthorized):
+			writeAPIError(w, http.StatusForbidden, "policy_denied", sandboxdomain.ErrNotAuthorized)
+		case errors.Is(err, sandboxdomain.ErrBackendUnavailable):
+			if code, ok := sandboxssh.FailureCodeOf(err); ok {
+				writeAPIError(w, http.StatusServiceUnavailable, "ssh_remote_"+string(code), err)
+			} else {
+				writeAPIError(w, http.StatusServiceUnavailable, "ssh_remote_unavailable", sandboxdomain.ErrBackendUnavailable)
+			}
+		default:
+			writeAPIError(w, http.StatusBadRequest, "validation_error", errors.New("SSH host identity request invalid"))
+		}
+		return
+	}
+	writeJSON(w, http.StatusOK, identity)
+}
+
 func (h *Handler) createSSHRemoteSandbox(w http.ResponseWriter, r *http.Request) {
 	var input createSSHRemoteSandboxRequest
 	if err := decodeJSON(r, &input); err != nil {
