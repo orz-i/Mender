@@ -65,3 +65,4 @@ Minor implementation choices that remain inside an accepted architectural bounda
 - [ADR-0037: Multi-kind Mender Plugin Platform](0037-multi-kind-plugin-platform.md) — Accepted
 - [ADR-0038: Governed Agent Delegation](0038-governed-agent-delegation.md) — Accepted
 - [ADR-0039: Marketplace Offerings, Resources and Tool Suites](0039-offerings-resource-tool-suites.md) — Accepted
+- [ADR-0040: Versioned optional capability contracts without a Mender job runtime](0040-optional-plugin-capability-contracts.md) — Accepted
