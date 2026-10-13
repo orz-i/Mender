@@ -1019,7 +1019,12 @@ describe("management pages", () => {
     expect(screen.getByText(/SSH Remote is not container or VM isolation/)).toBeTruthy();
     expect(screen.queryByLabelText("Cached Docker image")).toBeNull();
     expect(screen.queryByLabelText("Mender Credential Reference")).toBeNull();
-    expect(screen.getByRole<HTMLButtonElement>("button",{name:"Review"}).disabled).toBe(true);
+    const review=screen.getByRole<HTMLButtonElement>("button",{name:"Review"});
+    expect(review.disabled).toBe(false);
+    fireEvent.click(review);
+    expect(screen.getByText("Enter a sandbox name (up to 160 bytes).")).toBeTruthy();
+    expect(screen.getByText("Choose an existing SSH private key credential.")).toBeTruthy();
+    expect(screen.queryByText("Review Sandbox authority")).toBeNull();
   });
 
   it("opens the experimental Daytona credential workflow only after native opt-in",async()=>{
