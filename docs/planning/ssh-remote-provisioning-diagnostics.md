@@ -1,6 +1,6 @@
 # SSH Remote provisioning diagnostics — safe errors end to end (2026-10-13)
 
-Status: **In progress**. Follow-up to Phase 32 and root-login advisory closure; document first, incremental commits, no compatibility bridge.
+Status: **Closed (2026-10-13)**. Follow-up to Phase 32 and root-login advisory closure; document first, incremental commits, no compatibility bridge.
 
 ## Evidence and problem
 - The 2026-10-13 desktop screenshot shows a correctly reached SSH Remote review step and a generic Simplified Chinese "Unexpected error" after Create; **the actual remote failure stage is unconfirmed**.
@@ -21,6 +21,25 @@ Status: **In progress**. Follow-up to Phase 32 and root-login advisory closure; 
 A. This contract committed before code.
 B. Backend typed stages + tests + HTTP propagation committed separately.
 C. Frontend localized stage-specific feedback + tests, followed by full `pnpm check` and closure evidence. Exclude `.agents/`, `.pi/`, `.intent-loop/` from all commits.
+
+## Closure and acceptance (2026-10-13)
+
+**Status: Closed.** The real Rocky server was not contacted in this phase, so the original concrete server-side cause is still undetermined. This patch makes the next failed attempt report an actionable, safe failure stage instead of a generic error; it does **not** claim that the remote connection now succeeds.
+
+### Commits
+- `6b78604` — document-first SSH provisioning error contract and data-minimization boundaries.
+- `a60b06c` — typed first-party SSH failure stages in transport, preserved through Bootstrap, HTTP 503 reason codes and Wails error strings; localhost handshake/SFTP failure injection and redaction tests.
+- `ec0cc56` — scoped SSH creation error presenter, Chinese/English messages, Web/Wails/HTTP error-code mapping, recovery suggestions and UI regression tests.
+
+### Verified behavior
+- The SSH backend classifies: credentials unavailable/invalid, network refused/timeout/unreachable, pinned host identity mismatch, authentication rejected, handshake failure, SFTP unavailable, workspace missing/access denied/invalid. All messages are allowlisted fixed codes and still satisfy `errors.Is(err, sandbox.ErrBackendUnavailable)`.
+- Test-owned SSH/SFTP server verifies the actual post-handshake stages for host-key mismatch, rejected public-key login, disabled SFTP, missing workspace, non-directory workspace and symlink ancestry. Network connection-refused and returned-SFTP-error classification tests pass. No raw public/private key, username, host, remote path or remote library message is reflected in the serialized failure.
+- HTTP handler returns sanitized stage-specific `ssh_remote_<code>` errors without changing unrelated policy/validation classifications. Wails retains typed code through its safe string rejection; UI recognizes only allowed codes and translates each into a safe operational suggestion, never dumps arbitrary remote error messages.
+- `pnpm check` **passed**: Go SDK and examples, Go lint (0 issues), Go tests, Go race, SDK/OpenAPI/Wails generated binding checks, TypeScript strict checks, ESLint, i18n (1163/1163), **202/202 Vitest tests**, Web/Desktop frontend builds. Native `GOWORK=off go build ./...` in `apps/desktop` also passed; existing macOS deployment-target linker warnings are unrelated to this change. The temporary standalone build binary was removed.
+- The running Wails development app and SSH/Tunnel connections were not restarted or modified. No user SSH private-key credential was inspected, no real SSH host contacted and no remote files/resources were created.
+
+### Operator next step
+Restart or let Wails rebuild the Go backend, retry the same SSH Sandbox configuration, and read the **new specific error**. If it says `host_key_mismatch`, verify the **server** host public key independently (for RSA typically `/etc/ssh/ssh_host_rsa_key.pub`) rather than using the account login key's `id_rsa.pub`. If it says `authentication_failed`, check the selected account's `authorized_keys` and server root public-key policy. If it says `workspace_missing`, check the existing remote `/data/workspace` directory. Never paste private key contents into bug reports.
 
 ## Operator explanation after repair
 When the user retries, show the **actual stage observed**. If it is a host-key mismatch, direct them to verify the host public key on the trusted server (e.g. `/etc/ssh/ssh_host_ed25519_key.pub`, or the corresponding RSA/ECDSA host key), which is **not** the SSH login credential's public key. If it is authentication, verify key authorization for the selected login account. If workspace missing, check the existing remote directory. Do not ask for private key contents.
