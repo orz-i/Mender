@@ -14,6 +14,54 @@ import (
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 )
 
+// Regression from first real Rocky smoke: root SSH Jobs over a distant
+// transport created a persistent manifest, but 30s generic Provider deadline
+// cancelled before the private script/systemd unit could be created.
+func TestSSHJobsImplicitTimeoutIsExactPinnedAndDoesNotLeak(t *testing.T) {
+	ctx := context.Background()
+	runtime, err := NewRuntime(ctx, RuntimeOptions{DatabasePath: filepath.Join(t.TempDir(), "jobs-timeout.sqlite")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = runtime.Close() }()
+	caller, err := governancedomain.NewContext(governancedomain.OriginInternal, runtime.OwnerPrincipal(), governancedomain.CatalogScope())
+	if err != nil {
+		t.Fatal(err)
+	}
+	template, secret, _ := startInProcessSSHForSandbox(t)
+	runtime.Sandboxes.sshRemote.Dial.Credentials = sshFixtureCredentialResolver{secret: secret}
+	template.User = "root" // local test-owned SSH fixture; no real root host or systemd
+	remote, err := runtime.Sandboxes.CreateSSHRemoteSandbox(ctx, CreateSSHRemoteSandboxRequest{Name: "Verified root SSH Jobs", Template: template}, caller)
+	if err != nil {
+		t.Fatal(err)
+	}
+	jobs, err := runtime.EnsureSandboxJobTools(ctx, remote.ID(), caller)
+	if err != nil || jobs.Status != "ready" || len(jobs.Tools) != 5 {
+		t.Fatalf("reviewed Jobs suite %+v %v", jobs, err)
+	}
+	for _, j := range jobs.Tools {
+		id, err := catalogdomain.ParseToolID(j.ToolID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !runtime.isSSHJobsTool(ctx, id) || runtime.isSSHWorkspaceTool(ctx, id) {
+			t.Fatalf("Jobs tool not classified with exact backend: %s", j.SourceKey)
+		}
+		request := invocationapplication.InvokeToolRequest{ToolID: id, Context: caller}
+		if got := runtime.withSSHWorkspaceExecutionBudget(ctx, request).Timeout; got != sshJobsInvocationTimeout {
+			t.Fatalf("%s implicit timeout %v, expected %v", j.SourceKey, got, sshJobsInvocationTimeout)
+		}
+		request.Timeout = 5 * time.Second
+		if got := runtime.withSSHWorkspaceExecutionBudget(ctx, request).Timeout; got != request.Timeout {
+			t.Fatalf("%s overwrote explicit shorter Tool deadline", j.SourceKey)
+		}
+	}
+	unrelated := catalogdomain.ToolID("tool_00000000000000000000000000000009")
+	if runtime.isSSHJobsTool(ctx, unrelated) || runtime.withSSHWorkspaceExecutionBudget(ctx, invocationapplication.InvokeToolRequest{ToolID: unrelated}).Timeout != 0 {
+		t.Fatal("unknown or arbitrary Tool gained extended SSH Jobs timeout")
+	}
+}
+
 func TestSSHWorkspaceBudgetAndTypedToolFailureAreScoped(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
 	defer cancel()
