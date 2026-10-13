@@ -24,6 +24,7 @@ import { IconButton } from "../../shared/icon-button";
 import { PageToolbar } from "../../shared/page-toolbar";
 import { DataPanel } from "../../shared/workbench";
 import { validateSSHRemoteReview, type SSHRemoteReviewField, type SSHRemoteReviewIssueCode } from "./ssh-review-validation";
+import { sshRemoteCreateError } from "./ssh-remote-create-error";
 
 type Backend = "local_workspace" | "docker" | "daytona" | "ssh_remote";
 type CreationStep = "backend" | "configure" | "limits" | "review";
@@ -411,7 +412,7 @@ export function CreateSandboxPage({
           : await client.createLocalSandbox({ name: name.trim(), root: root.trim(), isolation: isolation as "host" | "restricted_host" });
       void navigate(`/sandboxes/${sandbox.sandboxId}`);
     } catch (reason) {
-      setError(errorMessage(reason));
+      setError(selected === "ssh_remote" ? sshRemoteCreateError(reason) : errorMessage(reason));
       setBusy(false);
     }
   }

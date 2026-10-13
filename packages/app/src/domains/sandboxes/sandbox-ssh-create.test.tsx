@@ -135,6 +135,27 @@ describe("SSH Remote Sandbox creation", () => {
     expect(await screen.findByText("SSH Sandbox details")).toBeTruthy();
   });
 
+  it("shows safe SSH failure diagnostics on the review page without exposing backend text", async () => {
+    const createSSHRemoteSandbox = vi.fn().mockRejectedValue(new Error(
+      "SSH remote connection failed: ssh_remote_failure:host_key_mismatch; untrusted-key-material",
+    ));
+    renderSSH({ createSSHRemoteSandbox }, true);
+    await screen.findByRole("textbox", { name: "Sandbox name" });
+    fillSSHFields("root");
+    await screen.findByRole("option", { name: /SSH build key/ });
+    fireEvent.change(screen.getByRole("combobox", { name: "SSH private key credential" }), {
+      target: { value: credential.reference },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Review" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create sandbox" }));
+    const hint = await screen.findByText(/SSH host identity verification failed/);
+    expect(hint.textContent).toContain("pinned host public key");
+    expect(screen.queryByText(/untrusted-key-material/)).toBeNull();
+    expect(screen.queryByText("SSH Sandbox details")).toBeNull();
+    expect(screen.getByText("Review Sandbox authority")).toBeTruthy();
+    await waitFor(() => expect(screen.getByRole<HTMLButtonElement>("button", { name: "Create sandbox" }).disabled).toBe(false));
+  });
+
   it("rejects known_hosts hostname-prefix lines with clear guidance", async () => {
     renderSSH({}, true);
     await screen.findByRole("textbox", { name: "Sandbox name" });
