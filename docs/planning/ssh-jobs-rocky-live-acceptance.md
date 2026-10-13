@@ -18,6 +18,42 @@
 - Add positive and negative tests for the 90-second allowance and unchanged Workspace/generic behavior; `pnpm check`, security and targeted race checks. No fake or automatic replay after ambiguous acknowledgments.
 - Retest with a newly generated idempotency key, short read-only logs/results and one harmless bounded cancellation, observing the first old task only. If a remote systemd or private task writer still fails, report it explicitly and preserve artifacts for investigation.
 
-## Verification journal
+## Live Rocky acceptance journal
 
-_Pending scoped code and live checks._
+**Result:** Real Rocky SSH/systemd job execution, idempotency, status/results, byte-cursor logs, and confirmed cancellation **passed after the invocation timeout fix**. ChatGPT's previously established MCP server Profile snapshot did **not** reload the five newly authorized ToolBindings. One earlier manifest-only `unknown` job remains intentionally unreconciled and blocks Stop/Destroy until reviewed recovery.
+
+| Check | Evidence | Outcome |
+| --- | --- | --- |
+| Original 30s failure | `sjob_29deeed6015ee33f63cd35f5a7038e1d`: immutable `manifest.json` exists under the plugin-private sibling store; no `run.sh`, no `exit`, no systemd Unit. Owner `jobs.status` returns `unknown`; active host lease count 0 | **Confirmed bug and preserved uncertainty**, no re-execution |
+| Scoped timeout | `fix(ssh)` commit `7fb4101`: exact first-party SSH Jobs Provider only, 90s implicit budget, other Providers 30s, SSH Workspace 60s. Existing upper Runtime Budget clamps to 120s; user-specified tighter deadlines win | Scoped unit tests and lint pass; enabled live CLI submit |
+| Real `submit` | New independent random key, `printf START; sleep 14; printf FINISHED` as root login, response `running`, systemd Unit `mender-sjob_135323fdb34b78e354bcce4dbc71ad69.service` | **Pass**: real remote systemd launch acknowledged |
+| Detached result and reconnect | Separate subsequent CLI process invokes `jobs.status` and `jobs.result` for `sjob_135323fdb34b78e354bcce4dbc71ad69`: both return `completed`, `exitCode=0` | **Pass**, result persisted after original SSH session closed and transient Unit was garbage collected |
+| Cursor logs | `jobs.logs(stdout,cursor=0,limit=15)` returns `MENDER_ROCKY_PR`, next cursor 15; second request returns remaining START and FINISHED lines, cursor 55, `truncated=false` | **Pass**, exact concatenated expected output |
+| Idempotent replay | Explicit caller retry with **same exact key and command** returns **same** TaskID, `completed`, exit 0; no second systemd service launched | **Pass** |
+| Payload conflict | Same key with **different command** returns canonical Provider failure; no new TaskID or side-effecting execution | **Pass**, conflict fails closed |
+| Real cancellation | New task `sjob_18b5b6a700be16b153fdfe0298e37754` submitted `running` with a bounded `sleep 90`; explicit `jobs.cancel` returns `cancelRequested=true`, `state=cancelled`, `exitCode=143`. Separate later CLI processes confirm both `status` and `result` match; logs contain only `MENDER_CANCEL_PROBE_STARTED`, not the natural-end marker | **Pass**, cancellation terminal proof survived disconnect and reconnection |
+| Remote terminal artifacts | Private dirs have mode 0700 and file modes 0600. The completed task has `exit=0`; cancelled task has `exit=143` and `cancel`. `systemctl list-units 'mender-sjob_*.service'` shows no currently active test service | **Pass**, no lingering test systemd Unit |
+| Existing ChatGPT MCP | `mender_search_tools('job')` remains empty; `mender_describe_tool` for a newly bound ToolID returns `MCP tool is outside profile` on the already-open MCP session. DB confirms all five ToolBindings and three Job grants belong to `default` | **Needs an authorized session/server refresh**, *not* a Jobs execution failure |
+| Reboot and platform-wide lifecycle | No Rocky reboot or real network fault injection. Old manifest-only `unknown` remains a permanently reserved identity under B's fail-closed semantics, so Quiescent cannot currently prove all jobs terminal | **Not claimed**; operator-reviewed recovery required before Sandbox Stop/Destroy |
+
+### Operator safeguards
+
+- All new live tasks used separately generated caller idempotency keys, saved on the operator's local machine outside Git. Neither key nor private SSH credentials are stored in this document or project commits.
+- The original partial record was **not** retried, rewritten, falsely marked complete, or automatically removed. `systemd-run` was invoked only by the governed Jobs backend for the two new test tasks. Root command payloads only printed unique marker lines and slept. No business files, host configuration, system packages, or services were modified by test commands.
+- No Wails, Mender MCP Server or Tunnel restart was requested or performed. The current live desktop runtime may require a refresh/restart to pick up the newly committed 90s implicit budget. The CLI smoke used a rebuilt binary from the committed source, not the stale already-open MCP session.
+- The persistent `unknown` directory holds a quota slot and blocks Quiescent lifecycle. A future **operator-reviewed, evidence-based `aborted_before_launch` reconciliation** is required; do not delete the manifest or fabricate `exit=0`/`143` to force lifecycle success. This should be implemented separately from normal Jobs Tool supply, with explicit run/lease fencing and no side-effect replay.
+
+### Scope of proven guarantees
+
+This is a real *SSH session-detached* and *Mender process-reconnected* test: each Tool invocation opened and closed a distinct managed SSH transport, and on-host result files remained authoritative after systemd transient-unit collection. It is **not** proof of host reboot resume, lossless network fault tolerance during the submit ACK, checkpoint recovery, exactly-once external side effects, or new Tool exposure on the currently running ChatGPT MCP session.
+
+## Security/audit and automated closure checks
+
+- Host SQLite `invocation_audit` directly confirms the successful `jobs.submit` and `jobs.cancel` invocations each received `policy_kind=allow`, `approval=not_required`, `status=completed`, and `outcome_kind=complete`. The deliberately conflicting replay was audited as `status=failed`; the audit table contains no raw shell command or stdout column. The managed Sandbox has **zero** remaining active SQLite execution leases.
+- Remote SFTP storage inspection showed **all three** test TaskID directories `0700`, manifests/scripts/output/exit/cancel files `0600`, and **zero** currently active `mender-sjob_*.service` units. The unreconciled original reservation has ONLY its `0600` manifest and cannot be mistaken for completed execution.
+- `pnpm check` **exit 0** after timeout fix, including generated Provider/Sandbox/Tunnel contracts, SDK and Desktop binding checks, Go lint, all Go tests and **full race suite**, TypeScript strict, ESLint, **32 Vitest files / 202 tests**, **1178/1178** Chinese i18n coverage, and Web/Desktop frontend builds.
+- `pnpm security:check` **exit 0**: no reachable Go symbol vulnerabilities; one indirect module advisory not referenced by application symbols; no known high severity JavaScript production advisory.
+- `cd apps/desktop && go build ./...` **exit 0**: only pre-existing non-blocking macOS minimum target linker warnings. The generated standalone executable was removed; no running Wails/Desktop service was manually restarted. Vite still warns non-blockingly about >500kB chunks.
+- Repo commits: documentation-first `0273876`, targeted timeout fix `7fb4101`, this acceptance evidence closure. All changes staged explicitly without `.agents/`, `.pi/`, `.intent-loop/` or user-owned secrets.
+
+**Acceptance disposition:** SSH Jobs' real systemd-backed **execution / terminal result / logs / idempotency / cancellation** = **PASS** using the newly built governed CLI. ChatGPT's **already-open** Mender MCP Profile Tool exposure = **PENDING refresh**. The initial persistent `unknown` task = **OPEN safety incident**, requires an explicitly reviewed recovery implementation or operator decision; do not silently clear it.
