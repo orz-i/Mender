@@ -50,13 +50,15 @@ func (b *Backend) Open(ctx context.Context, item sandboxdomain.Sandbox, run sand
 	if err != nil {
 		return nil, err
 	}
-	return &Session{conn: conn, root: t.Root}, nil
+	return &Session{conn: conn, root: t.Root, sandboxID: item.ID(), remoteUser: t.User}, nil
 }
 
 type Session struct {
-	conn      *Connection
-	root      string
-	uncertain atomic.Bool
+	conn       *Connection
+	root       string
+	sandboxID  sandboxdomain.ID
+	remoteUser string
+	uncertain  atomic.Bool
 }
 
 func (s *Session) Close() error {
