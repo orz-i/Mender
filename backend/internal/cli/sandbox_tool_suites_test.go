@@ -12,8 +12,12 @@ func TestSandboxToolSuiteCLIManagementWithoutProfileExposure(t *testing.T) {
 	id := sandbox["sandboxId"].(string)
 	definitions := runAgentJSON(t, db, "sandbox", "suites")
 	suites := definitions["suites"].([]any)
-	if len(suites) != 3 {
+	if len(suites) != 4 {
 		t.Fatal("Tool suite catalogue unavailable from CLI")
+	}
+	jobs := runAgentJSON(t, db, "sandbox", "job-tools", id)["suite"].(map[string]any)
+	if jobs["suiteId"] != "sandbox.jobs" || jobs["available"] != false || jobs["providerId"] != nil {
+		t.Fatalf("CLI local Sandbox exposed Jobs %+v", jobs)
 	}
 	before := runAgentJSON(t, db, "sandbox", "tools", id)["suite"].(map[string]any)
 	if before["status"] != "missing" {

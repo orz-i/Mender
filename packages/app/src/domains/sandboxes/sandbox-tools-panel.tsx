@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
+import { SandboxJobsPanel } from "./sandbox-jobs-panel";
 import type { MenderClient, Sandbox, SandboxToolSuite } from "@mender/sdk";
 import { Badge } from "@mender/ui/components/badge";
 import { Button } from "@mender/ui/components/button";
@@ -16,7 +17,7 @@ import { EmptyState } from "../../shared/page";
 
 // One resource-bound category of information; GET cannot provision a
 // Provider, open a Sandbox, or expose any Tool to a Profile.
-export function SandboxToolsPanel({client,sandbox}:{client:MenderClient;sandbox:Sandbox}){
+function WorkspaceToolsPanel({client,sandbox}:{client:MenderClient;sandbox:Sandbox}){
   const navigate=useNavigate();
   const [suite,setSuite]=useState<SandboxToolSuite|null>(null);
   const [loaded,setLoaded]=useState(false);
@@ -107,4 +108,20 @@ export function SandboxToolsPanel({client,sandbox}:{client:MenderClient;sandbox:
       </DialogContent>
     </Dialog>
   </>;
+}
+
+// Keep one category visible at a time. Preparing Workspace does not prepare
+// Jobs, and selecting Jobs never implicitly changes Profile access.
+export function SandboxToolsPanel({client,sandbox}:{client:MenderClient;sandbox:Sandbox}){
+  const [category,setCategory]=useState<"workspace"|"jobs">("workspace");
+  if(sandbox.backend!=="ssh_remote")return <WorkspaceToolsPanel client={client} sandbox={sandbox}/>;
+  return <div className="space-y-4">
+    <div className="flex items-center gap-2" role="tablist" aria-label={t("Sandbox tool suite")}>
+      <Button size="sm" role="tab" aria-selected={category==="workspace"} variant={category==="workspace"?"default":"outline"}
+        onClick={()=>setCategory("workspace")}>{t("Workspace Tool Suite")}</Button>
+      <Button size="sm" role="tab" aria-selected={category==="jobs"} variant={category==="jobs"?"default":"outline"}
+        onClick={()=>setCategory("jobs")}>{t("Jobs Tool Suite")}</Button>
+    </div>
+    {category==="workspace"?<WorkspaceToolsPanel client={client} sandbox={sandbox}/>:<SandboxJobsPanel client={client} sandbox={sandbox}/>}
+  </div>;
 }

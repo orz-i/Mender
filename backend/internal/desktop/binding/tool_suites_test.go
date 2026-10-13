@@ -19,10 +19,10 @@ func TestSandboxToolSuitesDesktopBindingsMatchReviewedCapabilities(t *testing.T)
 	defer func() { _ = runtime.Close() }()
 	service := NewService(ctx, runtime)
 	definitions, err := service.ListToolSuites()
-	if err != nil || len(definitions.Suites) != 3 {
+	if err != nil || len(definitions.Suites) != 4 {
 		t.Fatalf("suite descriptors: %+v %v", definitions, err)
 	}
-	browser := definitions.Suites[2]
+	browser := definitions.Suites[3]
 	if browser.Status != "unavailable" || len(browser.ToolSourceKeys) != 0 {
 		t.Fatal("Browser falsely executable")
 	}
@@ -33,6 +33,16 @@ func TestSandboxToolSuitesDesktopBindingsMatchReviewedCapabilities(t *testing.T)
 	item, err := runtime.Sandboxes.CreateLocalSandbox(ctx, bootstrap.CreateLocalSandboxRequest{Name: "Desktop Suite", Root: t.TempDir(), Isolation: sandboxdomain.IsolationHost}, owner)
 	if err != nil {
 		t.Fatal(err)
+	}
+	jobState, err := service.GetSandboxJobTools(item.ID().String())
+	if err != nil || jobState.SuiteID != "sandbox.jobs" || jobState.Available || len(jobState.Tools) != 0 {
+		t.Fatalf("desktop local Sandbox exposed Jobs %+v %v", jobState, err)
+	}
+	if _, err = service.EnsureSandboxJobTools(item.ID().String()); err == nil {
+		t.Fatal("desktop bypassed reviewed SSH Jobs requirements")
+	}
+	if err = service.RemoveSandboxJobTools(item.ID().String()); err != nil {
+		t.Fatalf("empty Jobs binding deletion: %v", err)
 	}
 	before, err := service.GetSandboxTools(item.ID().String())
 	if err != nil || before.Status != "missing" {

@@ -900,6 +900,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/sandboxes/{sandboxId}/job-tools": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sandboxId: components["parameters"]["SandboxId"];
+            };
+            cookie?: never;
+        };
+        get: operations["getSandboxJobTools"];
+        put?: never;
+        post: operations["ensureSandboxJobTools"];
+        delete: operations["removeSandboxJobTools"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/sandboxes/{sandboxId}/activity": {
         parameters: {
             query?: never;
@@ -1956,7 +1974,7 @@ export interface components {
             runtimeCredentialRef: string;
         };
         /** @enum {string} */
-        SandboxProfileCapability: "file.read" | "file.search" | "file.edit" | "process.shell";
+        SandboxProfileCapability: "file.read" | "file.search" | "file.edit" | "process.shell" | "job.submit" | "job.observe" | "job.cancel";
         SandboxProfileGrant: {
             profileId: string;
             capabilities: components["schemas"]["SandboxProfileCapability"][];
@@ -2161,7 +2179,7 @@ export interface components {
         };
         ToolSuiteDefinition: {
             /** @enum {string} */
-            suiteId: "agent.delegation" | "sandbox.workspace" | "sandbox.browser";
+            suiteId: "agent.delegation" | "sandbox.workspace" | "sandbox.jobs" | "sandbox.browser";
             displayName: string;
             description: string;
             /** @enum {string} */
@@ -2180,7 +2198,7 @@ export interface components {
         };
         SandboxToolSuite: {
             /** @enum {string} */
-            suiteId: "sandbox.workspace";
+            suiteId: "sandbox.workspace" | "sandbox.jobs";
             sandboxId: string;
             /** @enum {string} */
             status: "missing" | "ready" | "legacy" | "incomplete" | "conflict" | "incompatible";
@@ -4112,6 +4130,78 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Unreferenced resource-owned Workspace Tool Suite retired */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getSandboxJobTools: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sandboxId: components["parameters"]["SandboxId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Read only the explicit resource-bound SSH Jobs Tool Suite; never connects remotely */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SandboxToolSuite"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    ensureSandboxJobTools: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sandboxId: components["parameters"]["SandboxId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Explicitly provision an SSH Jobs facade without assigning Profile permissions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SandboxToolSuite"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    removeSandboxJobTools: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sandboxId: components["parameters"]["SandboxId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Unreferenced */
             204: {
                 headers: {
                     [name: string]: unknown;

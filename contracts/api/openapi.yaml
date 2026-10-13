@@ -1104,6 +1104,37 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
+  /sandboxes/{sandboxId}/job-tools:
+    parameters:
+      - $ref: '#/components/parameters/SandboxId'
+    get:
+      operationId: getSandboxJobTools
+      responses:
+        '200':
+          description: Read only the explicit resource-bound SSH Jobs Tool Suite; never connects remotely
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SandboxToolSuite' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      operationId: ensureSandboxJobTools
+      responses:
+        '200':
+          description: Explicitly provision an SSH Jobs facade without assigning Profile permissions
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SandboxToolSuite' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+    delete:
+      operationId: removeSandboxJobTools
+      responses:
+        '204': { description: Unreferenced, quiescent SSH Jobs facade retired; TaskIDs and lifecycle marker remain }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
   /sandboxes/{sandboxId}/activity:
     get:
       operationId: getSandboxActivity
@@ -2449,7 +2480,7 @@ components:
       additionalProperties: false
     SandboxProfileCapability:
       type: string
-      enum: ['file.read', 'file.search', 'file.edit', 'process.shell']
+      enum: ['file.read', 'file.search', 'file.edit', 'process.shell', 'job.submit', 'job.observe', 'job.cancel']
     SandboxProfileGrant:
       type: object
       additionalProperties: false
@@ -2460,7 +2491,7 @@ components:
           type: array
           uniqueItems: true
           minItems: 1
-          maxItems: 4
+          maxItems: 7
           items: { $ref: '#/components/schemas/SandboxProfileCapability' }
     SandboxProfileGrants:
       type: object
@@ -2480,7 +2511,7 @@ components:
           type: array
           uniqueItems: true
           minItems: 1
-          maxItems: 4
+          maxItems: 7
           items: { $ref: '#/components/schemas/SandboxProfileCapability' }
     SandboxProfileGrantEvent:
       type: object
@@ -2704,7 +2735,7 @@ components:
       required: [suiteId, displayName, description, resourceKind, requiredCapabilities, toolSourceKeys, status]
       additionalProperties: false
       properties:
-        suiteId: { type: string, enum: [agent.delegation, sandbox.workspace, sandbox.browser] }
+        suiteId: { type: string, enum: [agent.delegation, sandbox.workspace, sandbox.jobs, sandbox.browser] }
         displayName: { type: string }
         description: { type: string }
         resourceKind: { type: string, enum: [agent, sandbox] }
@@ -2726,7 +2757,7 @@ components:
       required: [suiteId, sandboxId, status, available, tools]
       additionalProperties: false
       properties:
-        suiteId: { type: string, enum: [sandbox.workspace] }
+        suiteId: { type: string, enum: [sandbox.workspace, sandbox.jobs] }
         sandboxId: { type: string, pattern: '^sbx_[0-9a-f]{32}$' }
         status: { type: string, enum: [missing, ready, legacy, incomplete, conflict, incompatible] }
         available: { type: boolean }

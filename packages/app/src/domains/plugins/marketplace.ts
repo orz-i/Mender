@@ -163,7 +163,7 @@ export function integrationOfferingsToMarketplace(offerings:IntegrationOffering[
 
 export function toolSuitesToMarketplace(suites:ToolSuiteDefinition[]):MarketplacePlugin[]{
   return suites.map((entry):MarketplacePlugin=>{
-    if(!["agent.delegation","sandbox.workspace","sandbox.browser"].includes(entry.suiteId) ||
+    if(!["agent.delegation","sandbox.workspace","sandbox.jobs","sandbox.browser"].includes(entry.suiteId) ||
       !["agent","sandbox"].includes(entry.resourceKind) ||
       !["builtin","unavailable"].includes(entry.status) ||
       (entry.status==="unavailable" && entry.toolSourceKeys.length!==0)){

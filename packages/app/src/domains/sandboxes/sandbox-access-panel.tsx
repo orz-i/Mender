@@ -25,6 +25,9 @@ const CAPS = [
   { value: "file.search", label: "Search files" },
   { value: "file.edit", label: "Edit files" },
   { value: "process.shell", label: "Run shell" },
+  { value: "job.submit", label: "Submit SSH jobs" },
+  { value: "job.observe", label: "Observe SSH jobs" },
+  { value: "job.cancel", label: "Cancel SSH jobs" },
 ] as const satisfies ReadonlyArray<{ value: SandboxProfileCapability; label: string }>;
 
 type AccessView = "current" | "history";
@@ -241,7 +244,7 @@ export function SandboxAccessPanel({ client, sandbox }: { client: MenderClient; 
                 ) : null}
                 <div className="grid gap-3">
                   <p className="text-sm font-medium">{t("Allowed Sandbox capabilities")}</p>
-                  {CAPS.map((choice) => (
+                  {CAPS.filter(choice=>!choice.value.startsWith("job.") || sandbox.backend==="ssh_remote").map((choice) => (
                     <label key={choice.value} className="flex items-center gap-3 text-sm">
                       <input type="checkbox" className="size-4 accent-foreground"
                         checked={pending.capabilities.includes(choice.value)}

@@ -21,6 +21,7 @@ func (a *app) newSandboxCommand() *cobra.Command {
 	command := &cobra.Command{Use: "sandbox", Short: "Manage governed local and remote Sandbox resources"}
 	command.AddCommand(a.newSandboxListCommand())
 	command.AddCommand(a.newSandboxToolsCommand())
+	command.AddCommand(a.newSandboxJobToolsCommand())
 	command.AddCommand(a.newSandboxSuitesCommand())
 	command.AddCommand(a.newSandboxLifecycleCommand("start", governancedomain.ActionSandboxStart))
 	command.AddCommand(a.newSandboxLifecycleCommand("stop", governancedomain.ActionSandboxStop))
@@ -90,6 +91,49 @@ func (a *app) newSandboxToolsCommand() *cobra.Command {
 	command.Flags().BoolVar(&prepare, "prepare", false, "explicitly create/adopt the governed Workspace suite; no Profile grants")
 	command.Flags().BoolVar(&remove, "remove", false, "retire a suite only if no Profile or Policy references remain")
 	command.Flags().BoolVar(&confirm, "confirm", false, "confirm removal of the Workspace suite")
+	return command
+}
+func (a *app) newSandboxJobToolsCommand() *cobra.Command {
+	var prepare, remove, confirm bool
+	command := &cobra.Command{Use: "job-tools <sandbox-id>", Short: "Inspect or explicitly manage one SSH Jobs Tool Suite",
+		Args: exactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+			if prepare && remove {
+				return usageError{err: fmt.Errorf("--prepare and --remove are mutually exclusive")}
+			}
+			if remove && !confirm {
+				return usageError{err: fmt.Errorf("--remove requires --confirm")}
+			}
+			id, err := sandboxdomain.ParseID(args[0])
+			if err != nil {
+				return usageError{err: err}
+			}
+			return a.withRuntime(cmd.Context(), func(runtime *bootstrap.Runtime) error {
+				caller, err := governancedomain.NewContext(governancedomain.OriginCLI, runtime.OwnerPrincipal(), governancedomain.CatalogScope())
+				if err != nil {
+					return err
+				}
+				if remove {
+					if err := runtime.RemoveSandboxJobTools(cmd.Context(), id, caller); err != nil {
+						return err
+					}
+					return a.writeValue("SSH Jobs Tool Suite retired", map[string]any{"sandboxId": id, "removed": true})
+				}
+				var state bootstrap.SandboxToolSuite
+				if prepare {
+					state, err = runtime.EnsureSandboxJobTools(cmd.Context(), id, caller)
+				} else {
+					state, err = runtime.SandboxJobTools(cmd.Context(), id, caller)
+				}
+				if err != nil {
+					return err
+				}
+				return a.writeValue(fmt.Sprintf("Sandbox tools: %s (%d Tools)", state.Status, len(state.Tools)), map[string]any{"suite": state})
+			})
+		},
+	}
+	command.Flags().BoolVar(&prepare, "prepare", false, "explicitly create/adopt the governed Jobs suite; no Profile grants")
+	command.Flags().BoolVar(&remove, "remove", false, "retire a suite only if no Profile or Policy references remain")
+	command.Flags().BoolVar(&confirm, "confirm", false, "confirm removal of the Jobs suite")
 	return command
 }
 func (a *app) newSandboxAddLocalCommand() *cobra.Command {

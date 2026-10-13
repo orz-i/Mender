@@ -22,10 +22,10 @@ func TestSandboxToolSuiteHTTPInertReadAndExplicitOwnerMutation(t *testing.T) {
 	root := server.URL + "/api/v1"
 	catalogue := requestJSON(t, server.Client(), http.MethodGet, root+"/tool-suites", nil, http.StatusOK)
 	suites := catalogue["suites"].([]any)
-	if len(suites) != 3 {
+	if len(suites) != 4 {
 		t.Fatalf("suite catalogue %+v", catalogue)
 	}
-	browser := suites[2].(map[string]any)
+	browser := suites[3].(map[string]any)
 	if browser["suiteId"] != "sandbox.browser" || browser["status"] != "unavailable" ||
 		len(browser["toolSourceKeys"].([]any)) != 0 {
 		t.Fatalf("browser suite misadvertised: %+v", browser)
@@ -67,4 +67,12 @@ func TestSandboxToolSuiteHTTPInertReadAndExplicitOwnerMutation(t *testing.T) {
 		t.Fatalf("suite not removed: %+v", missing)
 	}
 	requestJSON(t, server.Client(), http.MethodGet, root+"/sandboxes/invalid/tools", nil, http.StatusBadRequest)
+	jobURI := root + "/sandboxes/" + id + "/job-tools"
+	jobState := requestJSON(t, server.Client(), http.MethodGet, jobURI, nil, http.StatusOK)
+	if jobState["suiteId"] != "sandbox.jobs" || jobState["available"] != false || jobState["providerId"] != nil || len(jobState["tools"].([]any)) != 0 {
+		t.Fatalf("incompatible local Sandbox unexpectedly exposed SSH Jobs: %+v", jobState)
+	}
+	requestJSON(t, server.Client(), http.MethodPost, jobURI, nil, http.StatusConflict)
+	requestJSON(t, server.Client(), http.MethodDelete, jobURI, nil, http.StatusNoContent)
+	requestJSON(t, server.Client(), http.MethodGet, root+"/sandboxes/invalid/job-tools", nil, http.StatusBadRequest)
 }

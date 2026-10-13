@@ -197,6 +197,9 @@ export interface MenderClient {
   getSandboxTools(sandboxId:string):Promise<SandboxToolSuite>;
   ensureSandboxTools(sandboxId:string):Promise<SandboxToolSuite>;
   removeSandboxTools(sandboxId:string):Promise<void>;
+  getSandboxJobTools(sandboxId:string):Promise<SandboxToolSuite>;
+  ensureSandboxJobTools(sandboxId:string):Promise<SandboxToolSuite>;
+  removeSandboxJobTools(sandboxId:string):Promise<void>;
   listSandboxes(): Promise<{ sandboxes: Sandbox[] }>;
   getSandbox(sandboxId: string): Promise<Sandbox>;
   getSandboxActivity(sandboxId: string, limit?: number): Promise<SandboxActivity>;
@@ -577,6 +580,12 @@ export function createMenderClient(
     async ensureSandboxTools(sandboxId){return requireData(await client.POST("/sandboxes/{sandboxId}/tools",{params:{path:{sandboxId}}}));},
     async removeSandboxTools(sandboxId){
       const result=await client.DELETE("/sandboxes/{sandboxId}/tools",{params:{path:{sandboxId}}});
+      if(!result.response.ok)throwApiError(result.error,result.response);
+    },
+    async getSandboxJobTools(sandboxId){return requireData(await client.GET("/sandboxes/{sandboxId}/job-tools",{params:{path:{sandboxId}}}));},
+    async ensureSandboxJobTools(sandboxId){return requireData(await client.POST("/sandboxes/{sandboxId}/job-tools",{params:{path:{sandboxId}}}));},
+    async removeSandboxJobTools(sandboxId){
+      const result=await client.DELETE("/sandboxes/{sandboxId}/job-tools",{params:{path:{sandboxId}}});
       if(!result.response.ok)throwApiError(result.error,result.response);
     },
     async listSandboxes() {

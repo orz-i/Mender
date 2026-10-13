@@ -444,6 +444,9 @@ export function createDesktopMenderClient(): MenderClient {
     async getSandboxTools(sandboxId){return sandboxToolSuite(await Service.GetSandboxTools(sandboxId));},
     async ensureSandboxTools(sandboxId){return sandboxToolSuite(await Service.EnsureSandboxTools(sandboxId));},
     async removeSandboxTools(sandboxId){await Service.RemoveSandboxTools(sandboxId);},
+    async getSandboxJobTools(sandboxId){return sandboxToolSuite(await Service.GetSandboxJobTools(sandboxId));},
+    async ensureSandboxJobTools(sandboxId){return sandboxToolSuite(await Service.EnsureSandboxJobTools(sandboxId));},
+    async removeSandboxJobTools(sandboxId){await Service.RemoveSandboxJobTools(sandboxId);},
     async listSandboxes() {
       const result = await Service.ListSandboxes();
       return { sandboxes: (result.sandboxes ?? []).map(sandbox) };
@@ -898,7 +901,7 @@ function policyResourceOperator(
 }
 
 function toolSuiteDefinition(value:BindingToolSuiteDefinition):ToolSuiteDefinition {
-  if(!["agent.delegation","sandbox.workspace","sandbox.browser"].includes(value.suiteId) ||
+  if(!["agent.delegation","sandbox.workspace","sandbox.jobs","sandbox.browser"].includes(value.suiteId) ||
     !["agent","sandbox"].includes(value.resourceKind) ||
     !["builtin","unavailable"].includes(value.status) ||
     (value.status==="unavailable"&&(value.toolSourceKeys?.length??0)!==0)){
@@ -910,11 +913,11 @@ function toolSuiteDefinition(value:BindingToolSuiteDefinition):ToolSuiteDefiniti
     requiredCapabilities:value.requiredCapabilities??[],toolSourceKeys:value.toolSourceKeys??[]};
 }
 function sandboxToolSuite(value:BindingSandboxToolSuite):SandboxToolSuite {
-  if(value.suiteId!=="sandbox.workspace" ||
+  if(!["sandbox.workspace","sandbox.jobs"].includes(value.suiteId) ||
     !["missing","ready","legacy","incomplete","conflict","incompatible"].includes(value.status)){
     throw new MenderClientInvariantError("Invalid Sandbox Tool Suite state");
   }
-  return {...value,suiteId:"sandbox.workspace",status:value.status as SandboxToolSuite["status"],
+  return {...value,suiteId:value.suiteId as SandboxToolSuite["suiteId"],status:value.status as SandboxToolSuite["status"],
     tools:(value.tools??[]).map(tool=>({...tool}))};
 }
 function integrationOffering(value:BindingIntegrationOffering):IntegrationOffering {
@@ -1527,7 +1530,7 @@ function mcpServerInstance(
 }
 
 const SANDBOX_PROFILE_CAPABILITIES: ReadonlySet<string> = new Set([
-  "file.read", "file.search", "file.edit", "process.shell",
+  "file.read", "file.search", "file.edit", "process.shell", "job.submit", "job.observe", "job.cancel",
 ]);
 
 function sandboxProfileCapability(value: string): SandboxProfileCapability {
