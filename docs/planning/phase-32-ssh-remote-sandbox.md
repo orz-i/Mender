@@ -4,6 +4,8 @@ Status: **Closed (2026-10-11)**, following Phase 31. Document-first, incremental
 
 **Superseded SSH key-format restrictions (2026-10-12):** This document preserves the original v1 acceptance decisions. The follow-up [`ssh-credential-onboarding.md`](ssh-credential-onboarding.md) supersedes the unencrypted-key and Ed25519-only host-key constraints: Mender now supports Ed25519/ECDSA/RSA >=2048, import-time passphrases, and pinned RSA-SHA2/ECDSA host keys. Explicit host pinning and the other execution trust boundaries remain mandatory.
 
+**Superseded root-login restriction (2026-10-13):** Following an explicit operator request, [`ssh-remote-root-warning.md`](ssh-remote-root-warning.md) now permits root login with a non-blocking high-privilege warning. Any original non-root-only statements below are historical, not current acceptance constraints. SSH Remote still does not isolate processes or files, and remote hosts remain explicitly pinned.
+
 ## Audited constraints
 - Mender's unified `sandbox.backend` Registry/Execution Router already applies Principal, Policy, durable Lease, Audit, and exact BackendBinding.
 - Third-party native Sandbox plugins explicitly reject Credential References (`InspectConfig.credential_refs`), and sandbox configs reject raw private keys. Reusing that path for SSH would either leak private keys into an untrusted process or weaken the guard: prohibited.

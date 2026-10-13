@@ -1,6 +1,6 @@
 # SSH Remote root-login warning instead of rejection (2026-10-13)
 
-Status: In progress. Follow-up to the focused [SSH Sandbox review validation](ssh-sandbox-review-validation.md) contract.
+Status: **Closed (2026-10-13)**. Follow-up to the focused [SSH Sandbox review validation](ssh-sandbox-review-validation.md) contract.
 
 ## User request and decision
 The operator explicitly requested that SSH Remote accept the `root` SSH login user, with a **warning only**. A remote SSH Workspace is a transport into the specified account, not an OS/container/VM isolation boundary. Root can read, write and execute across the remote host within its authentication and OS policy. Hard-rejecting a valid user name does not provide isolation.
@@ -16,3 +16,11 @@ The operator explicitly requested that SSH Remote accept the `root` SSH login us
 A. Amend this contract, commit.
 B. Remove Go/frontend root block, surface configuration and review warnings, extend tests and CLI help, commit.
 C. Run targeted/full gates, update acceptance evidence, commit closure.
+
+## Closure / verification (2026-10-13)
+- `de3c8b6` — document-first intent and explicit advisory-only root policy.
+- `cf50abf` — Go and React validation allow `root` while retaining strict host pinning, credential handling and other governance; warning appears on both configuration and review, without an extra confirmation; CLI help and non-root messaging updated.
+- `e7eadc6` — update the older Plugin Marketplace Review test to assert the current actionable (not silently disabled) button behavior.
+- Synthetic loopback SSH/SFTP server authenticated a test login named `root` without OS privilege escalation or any user-owned host access. HTTP acceptance of the root login passes validation, then fails closed with HTTP 503 on missing Keychain credentials; no remote Sandbox is persisted. CLI negative test confirms the same fail-closed behavior.
+- `pnpm check` **passed**: backend Go lint/tests/race, all plugin SDK/example gates, OpenAPI/SDK/Wails bindings and desktop architecture checks, ESLint, strict TypeScript, all 1148 zh-CN translations, **198/198 frontend tests**, and Web/Desktop builds. Existing bundle-size warnings are unrelated to SSH.
+- Current SSH Remote `root` login is allowed but not isolated: permission to authenticate remains on the remote server, and remote commands inherit that account's actual OS rights. Explicit host key pinning, Principal/Policy/Lease and audit remain required. The remote workspace root directory must still be a normalized absolute non-`/` path.

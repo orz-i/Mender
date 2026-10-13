@@ -2,6 +2,8 @@
 
 Status: **Closed (2026-10-12)**. Document-first follow-up to Phase 32 (not a new Phase or compatibility bridge).
 
+**Root-login update (2026-10-13):** The original root-login restriction described below was superseded by [`ssh-remote-root-warning.md`](ssh-remote-root-warning.md). SSH Remote now accepts a root login after displaying advisory high-privilege warnings; host pinning, Keychain and governed execution remain mandatory.
+
 ## Reproduction and diagnosis
 - SSH credentials reject valid RSA 2048 private keys with a blanket RSA >=3072 restriction, even though the default Go SSH stack supports RSA SHA-2 signatures. Do **not** re-enable SHA-1 ssh-rsa authentication or DSA.
 - A passphrase-protected key is rejected at import instead of offering passphrase entry. The current SSH form requires a disabled namespace, two names, a reference preview, and manually pasting key material.
@@ -17,7 +19,7 @@ Status: **Closed (2026-10-12)**. Document-first follow-up to Phase 32 (not a new
 6. Tests: RSA 2048/1024, Ed25519, ECDSA, encrypted PEM/OpenSSH, wrong/missing passphrase, host pin variations and one-key restrictions, create/rotation keyring content, typed HTTP/Wails/SDK, frontend import and localized error. Only generated ephemeral keys; never user-owned credentials.
 
 ## Non-goals
-No password auth, ssh-agent, hardware keys, host-key bypass, host-key auto-import, root-login relaxation, remote isolation claims, or user-owned SSH server access in tests.
+No password auth, ssh-agent, hardware keys, host-key bypass, host-key auto-import, remote isolation claims, or user-owned SSH server access in tests. (The original root-login restriction was separately superseded on 2026-10-13.)
 
 ## Delivery
 A. Contract + regressions and backend key import/host pinning.
@@ -31,4 +33,4 @@ C. Go/TypeScript tests and static checks; final security review and acceptance e
 - `9e98aee`: minimal SSH create/rotate UI, file picker with hidden contents, optional passphrase and localized diagnostics, SSH host key alternatives, frontend/Wails regression tests.
 - Final alignment: historical Phase 32 rules explicitly superseded; CLI host pin help and OpenAPI hostKey length/description corrected; test-only lint exceptions narrowly documented.
 - Verification: `go test ./backend/internal/credential/... ./backend/internal/sandbox/infrastructure/sshremote ./backend/internal/management/httpapi` passes; 42 targeted UI+Wails tests pass, `pnpm i18n:check` covers all 1135 messages; `pnpm check` passed for provider/sandbox/tunnel SDKs, Go lint/tests/race, SDK/Wails generation, TypeScript lint/typecheck, 192 frontend tests and Web/Desktop builds. Final generated contract parity is rechecked after the last documentation/alignment commit.
-- No real SSH private key or user-owned SSH host used for tests. No raw key in persistent metadata, diagnostics or plugin configurations. SHA-1 RSA signatures, weak keys, silent host trust and root logins remain blocked. The only retained unencrypted normalized key material is in the existing native OS credential store; passphrase never persists.
+- No real SSH private key or user-owned SSH host used for tests. No raw key in persistent metadata, diagnostics or plugin configurations. SHA-1 RSA signatures, weak keys and silent host trust remain blocked. Root logins, originally blocked at this phase's closure, are now permitted with a non-blocking privilege warning. The only retained unencrypted normalized key material is in the existing native OS credential store; passphrase never persists.

@@ -1,6 +1,8 @@
 # SSH Sandbox review validation feedback (2026-10-13)
 
-Status: In progress. Focused follow-up to Phase 32 and SSH credential onboarding; no new compatibility bridge.
+Status: **Implemented (2026-10-13)**, with a superseding root-login policy. Focused follow-up to Phase 32 and SSH credential onboarding; no compatibility bridge.
+
+**Current root policy:** Root-login denial described in the historical reproduction/UX contract below is superseded by [`ssh-remote-root-warning.md`](ssh-remote-root-warning.md): root is allowed and only a non-blocking high-privilege warning appears in configuration and review. All other SSH validation requirements remain in force.
 
 ## Reproduction
 The create-SSH-Sandbox wizard disables Review using one combined `sshValid` boolean with no field-level diagnostics. A form using `root` and a host-key payload missing its OpenSSH algorithm header cannot proceed, yet neither field explains why. The backend rejects root deliberately; pinned server identity must contain exactly one valid supported OpenSSH host public key. The screenshot is not evidence that the credential itself is invalid.
