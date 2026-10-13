@@ -47,6 +47,27 @@ func (*ConnectionFailure) Unwrap() error {
 	return sandboxdomain.ErrBackendUnavailable
 }
 
+// DiagnosticSummary is consumed by the existing sanitized Tool execution and
+// audit pipeline through its narrow optional interface. Never copy SSH or
+// network library diagnostics. Reject arbitrary values even if an external
+// caller constructed the exported typed error directly.
+func (e *ConnectionFailure) DiagnosticSummary() string {
+	if e == nil {
+		return ""
+	}
+	switch e.Code {
+	case FailureCredentialUnavailable, FailureCredentialInvalid,
+		FailureNetworkTimeout, FailureNetworkRefused, FailureNetworkUnreachable,
+		FailureHostKeyMismatch, FailureHostTrustUnavailable,
+		FailureAuthenticationFailed, FailureSSHHandshakeFailed,
+		FailureSFTPUnavailable, FailureWorkspaceMissing,
+		FailureWorkspacePermission, FailureWorkspaceInvalid:
+		return "ssh_remote_failure:" + string(e.Code)
+	default:
+		return ""
+	}
+}
+
 func newConnectionFailure(code ConnectionFailureCode) error {
 	return &ConnectionFailure{Code: code}
 }

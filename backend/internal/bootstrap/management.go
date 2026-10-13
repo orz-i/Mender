@@ -95,7 +95,7 @@ func (r *Runtime) CallConfiguredTool(
 	if err := r.activateConfiguredProvider(ctx, tool.ProviderID(), executionContext); err != nil {
 		return invocationapplication.InvokeToolResponse{}, fmt.Errorf("activate tool provider: %w", err)
 	}
-	return r.InvokeTool.Execute(ctx, request)
+	return r.invokeToolWithSSHTimeout(ctx, request)
 }
 
 func (r *Runtime) UpdateMCPProvider(

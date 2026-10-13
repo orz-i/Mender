@@ -136,6 +136,6 @@ func (r *Runtime) NewMCPServer(
 		DescribeTool: r.Catalog.DescribeTool.Execute,
 		GetProvider:  r.Catalog.GetProvider.Execute,
 		SearchTools:  r.Catalog.SearchTools.Execute,
-		InvokeTool:   r.InvokeTool.Execute,
+		InvokeTool:   r.invokeToolWithSSHTimeout,
 	})
 }

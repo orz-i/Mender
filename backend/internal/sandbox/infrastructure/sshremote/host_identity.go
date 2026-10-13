@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"time"
 
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/knownhosts"
@@ -142,6 +141,8 @@ var errHostKeyCaptured = errors.New("ssh host identity captured before authentic
 // The observed public key is not *trusted* until a known_hosts check succeeds
 // or a local operator explicitly confirms the displayed fingerprint.
 func (s *HostTrustStore) Inspect(ctx context.Context, host string, port uint16) (HostIdentity, error) {
+	ctx, cancel := context.WithTimeout(ctx, sshConnectBudget)
+	defer cancel()
 	if err := validateSSHHostPort(host, port); err != nil {
 		return HostIdentity{}, err
 	}
@@ -196,18 +197,25 @@ func (s *HostTrustStore) Inspect(ctx context.Context, host string, port uint16) 
 }
 
 func inspectServerHostKey(ctx context.Context, host string, port uint16, algorithms []string) (ssh.PublicKey, error) {
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, sshConnectBudget)
 	defer cancel()
 	endpoint := net.JoinHostPort(host, fmt.Sprint(port))
-	raw, err := (&net.Dialer{Timeout: 7 * time.Second}).DialContext(ctx, "tcp", endpoint)
+	// Reuse the same bounded, pre-auth TCP retry policy as SSH provisioning;
+	// inspecting a new host must not retain the old 7-second dial limit.
+	raw, err := (Dialer{}).connectTCP(ctx, endpoint)
 	if err != nil {
-		return nil, networkFailure(err)
+		return nil, err
 	}
 	defer func() { _ = raw.Close() }()
-	_ = raw.SetDeadline(time.Now().Add(8 * time.Second))
+	deadline, ok := ctx.Deadline()
+	if !ok || raw.SetDeadline(deadline) != nil {
+		return nil, newConnectionFailure(FailureSSHHandshakeFailed)
+	}
+	stopCancellationClose := context.AfterFunc(ctx, func() { _ = raw.Close() })
+	defer stopCancellationClose()
 	var public ssh.PublicKey
 	cfg := &ssh.ClientConfig{
-		User: "mender-host-identity-probe", Timeout: 8 * time.Second,
+		User: "mender-host-identity-probe", Timeout: sshConnectBudget,
 		HostKeyAlgorithms: algorithms,
 		HostKeyCallback: func(_ string, _ net.Addr, key ssh.PublicKey) error {
 			public = key
@@ -216,6 +224,9 @@ func inspectServerHostKey(ctx context.Context, host string, port uint16, algorit
 	}
 	_, _, _, err = ssh.NewClientConn(raw, endpoint, cfg)
 	if public == nil {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
 		if err != nil {
 			var netErr net.Error
 			if errors.Is(err, context.DeadlineExceeded) || errors.As(err, &netErr) && netErr.Timeout() {

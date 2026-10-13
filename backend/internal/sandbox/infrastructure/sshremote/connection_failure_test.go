@@ -33,6 +33,30 @@ func expectConnectionFailure(t *testing.T, err error, want ConnectionFailureCode
 	}
 }
 
+func TestSSHFailureToolDiagnosticOnlyEmitsAllowlistedStage(t *testing.T) {
+	for _, code := range []ConnectionFailureCode{
+		FailureCredentialUnavailable, FailureNetworkTimeout,
+		FailureHostKeyMismatch, FailureAuthenticationFailed,
+		FailureSFTPUnavailable, FailureWorkspaceMissing,
+	} {
+		err := newConnectionFailure(code)
+		var diagnostic interface{ DiagnosticSummary() string }
+		if !errors.As(err, &diagnostic) {
+			t.Fatal("typed SSH failure lacks Tool diagnostic interface")
+		}
+		if got := diagnostic.DiagnosticSummary(); got != "ssh_remote_failure:"+string(code) {
+			t.Fatalf("SSH Tool summary = %q for code %q", got, code)
+		}
+	}
+	var nilFailure *ConnectionFailure
+	if got := nilFailure.DiagnosticSummary(); got != "" {
+		t.Fatal("nil SSH failure exposed diagnostic")
+	}
+	if got := (&ConnectionFailure{Code: "untrusted/PRIVATE-KEY"}).DiagnosticSummary(); got != "" {
+		t.Fatal("arbitrary SSH error value escaped allowlist")
+	}
+}
+
 func TestConnectionFailureCodesDoNotLeakRemoteErrors(t *testing.T) {
 	t.Parallel()
 	if _, ok := FailureCodeOf(errors.New("not a connection failure")); ok {
