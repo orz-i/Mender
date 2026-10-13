@@ -22,9 +22,49 @@ import { ErrorNotice } from "../../shared/page";
 import { IconButton } from "../../shared/icon-button";
 import { PageToolbar } from "../../shared/page-toolbar";
 import { DataPanel } from "../../shared/workbench";
+import { validateSSHRemoteReview, type SSHRemoteReviewField, type SSHRemoteReviewIssueCode } from "./ssh-review-validation";
 
 type Backend = "local_workspace" | "docker" | "daytona" | "ssh_remote";
 type CreationStep = "backend" | "configure" | "limits" | "review";
+
+function sshReviewIssueText(code: SSHRemoteReviewIssueCode): string {
+  switch (code) {
+    case "name_required":
+      return t("Enter a sandbox name (up to 160 bytes).");
+    case "host_invalid":
+      return t("Enter a valid SSH hostname or IP address.");
+    case "port_invalid":
+      return t("SSH port must be between 1 and 65535.");
+    case "user_invalid":
+      return t("Enter a valid lowercase SSH login name.");
+    case "root_login_forbidden":
+      return t("Root login is not supported for SSH Remote. Use a dedicated non-root SSH account.");
+    case "workspace_root_invalid":
+      return t("Enter a normalized absolute remote directory other than /.");
+    case "host_key_required":
+      return t("Paste a verified SSH host public key, not your private login key.");
+    case "host_key_multiline":
+      return t("Paste exactly one SSH host public key line.");
+    case "host_key_known_hosts_prefix":
+      return t("Remove the hostname from the known_hosts line; paste only its key type and public key.");
+    case "host_key_invalid":
+      return t("Paste the full SSH host public key: ssh-ed25519, ECDSA or ssh-rsa followed by Base64 data.");
+    case "credential_required":
+      return t("Choose an existing SSH private key credential.");
+  }
+}
+
+function sshReviewFieldName(field: SSHRemoteReviewField): string {
+  switch (field) {
+    case "name": return t("Sandbox name");
+    case "host": return t("SSH host");
+    case "port": return t("SSH port");
+    case "user": return t("SSH login user");
+    case "root": return t("Remote workspace root");
+    case "hostPublicKey": return t("Pinned SSH host public key");
+    case "credentialRef": return t("SSH private key credential");
+  }
+}
 
 const IMAGE_DIGEST = /^[a-z0-9]+(?:[.-][a-z0-9]+)+(?:\/[a-z0-9]+(?:[._-][a-z0-9]+)*){2,}@sha256:[0-9a-f]{64}$/;
 
@@ -205,6 +245,7 @@ export function CreateSandboxPage({
   const [sshRoot, setSSHRoot] = useState("");
   const [sshHostPublicKey, setSSHHostPublicKey] = useState("");
   const [sshCredentialRef, setSSHCredentialRef] = useState("");
+  const [sshReviewAttempted, setSSHReviewAttempted] = useState(false);
   const [daytonaCPU, setDaytonaCPU] = useState(1);
   const [daytonaMemory, setDaytonaMemory] = useState(2);
   const [daytonaDisk, setDaytonaDisk] = useState(3);
@@ -292,16 +333,29 @@ export function CreateSandboxPage({
   const digestOK = IMAGE_DIGEST.test(imageDigest);
   const credentialOK = credentials.some((item) => item.reference === daytonaCredential);
   const sshCredentials = credentials.filter((item) => item.namespace === "ssh" && item.source === "native");
-  const sshValid = sshHost.length > 0 && sshHost.length <= 253 &&
-    /^[A-Za-z0-9.:-]+$/.test(sshHost) &&
-    /^[a-z_][a-z0-9_-]{0,62}$/.test(sshUser) && sshUser !== "root" &&
-    Number.isInteger(sshPort) && sshPort >= 1 && sshPort <= 65535 &&
-    sshRoot.startsWith("/") && sshRoot.length > 1 && sshRoot.length <= 1024 &&
-    !sshRoot.split("/").some((part) => part === ".." || part === ".") &&
-    sshHostPublicKey.length <= 4096 &&
-    /^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp(?:256|384|521))\s+\S+/.test(sshHostPublicKey.trim()) &&
-    !sshHostPublicKey.includes("\n") &&
-    sshCredentials.some((item) => item.reference === sshCredentialRef);
+  const sshReviewIssues = validateSSHRemoteReview({
+    name,
+    host: sshHost,
+    port: sshPort,
+    user: sshUser,
+    root: sshRoot,
+    hostPublicKey: sshHostPublicKey,
+    credentialRef: sshCredentialRef,
+    credentialRefs: sshCredentials.map((item) => item.reference),
+  });
+  const sshValid = sshReviewIssues.length === 0;
+
+  function sshFieldFeedback(field: SSHRemoteReviewField, hasInput: boolean) {
+    const issue = sshReviewIssues.find((item) => item.field === field);
+    if (!issue || (!hasInput && !sshReviewAttempted)) return null;
+    return <span role="alert" className="text-xs leading-5 text-destructive">{sshReviewIssueText(issue.code)}</span>;
+  }
+
+  const visibleSSHReviewIssues = sshReviewIssues.filter((issue) =>
+    sshReviewAttempted ||
+    (issue.field === "user" && sshUser === "root") ||
+    (issue.field === "hostPublicKey" && sshHostPublicKey.trim() !== "")
+  );
   const identityValid = Boolean(name.trim()) && (
     selected === "local_workspace" ? Boolean(root.trim() && isolation) :
       selected === "docker" ? dockerAvailable && digestOK :
@@ -323,6 +377,7 @@ export function CreateSandboxPage({
   function chooseBackend(next: Backend) {
     setSelected(next);
     setStep("configure");
+    setSSHReviewAttempted(false);
     setError("");
   }
 
@@ -409,7 +464,9 @@ export function CreateSandboxPage({
               <label className="grid gap-2 text-sm">
                 <span className="font-medium">{t("Sandbox name")}</span>
                 <Input aria-label={t("Sandbox name")} value={name} maxLength={160}
+                  aria-invalid={selected === "ssh_remote" && sshReviewAttempted && sshReviewIssues.some((item) => item.field === "name")}
                   onChange={(event) => setName(event.target.value)} />
+                {selected === "ssh_remote" ? sshFieldFeedback("name", name.trim() !== "") : null}
               </label>
 
               {selected === "local_workspace" ? (
@@ -455,33 +512,45 @@ export function CreateSandboxPage({
                     <label className="grid gap-2 text-sm">
                       <span className="font-medium">{t("SSH host")}</span>
                       <Input aria-label={t("SSH host")} value={sshHost} maxLength={253}
+                        aria-invalid={sshReviewIssues.some((issue) => issue.field === "host") && (sshReviewAttempted || sshHost !== "")}
                         placeholder={t("server.example.com")}
                         onChange={(event) => setSSHHost(event.target.value.trim())}/>
+                      {sshFieldFeedback("host", sshHost !== "")}
                     </label>
-                    <ResourceField label="SSH port" value={sshPort} onChange={setSSHPort} min={1} max={65535} />
+                    <div className="space-y-1">
+                      <ResourceField label="SSH port" value={sshPort} onChange={setSSHPort} min={1} max={65535} />
+                      {sshFieldFeedback("port", sshPort !== 22)}
+                    </div>
                     <label className="grid gap-2 text-sm">
                       <span className="font-medium">{t("SSH login user")}</span>
                       <Input aria-label={t("SSH login user")} value={sshUser}
+                        aria-invalid={sshReviewIssues.some((issue) => issue.field === "user") && (sshReviewAttempted || sshUser !== "")}
                         onChange={(event) => setSSHUser(event.target.value.trim())}/>
+                      {sshFieldFeedback("user", sshUser !== "")}
                     </label>
                     <label className="grid gap-2 text-sm">
                       <span className="font-medium">{t("Remote workspace root")}</span>
                       <Input aria-label={t("Remote workspace root")} value={sshRoot} placeholder={t("/home/agent/project")}
+                        aria-invalid={sshReviewIssues.some((issue) => issue.field === "root") && (sshReviewAttempted || sshRoot !== "")}
                         onChange={(event) => setSSHRoot(event.target.value)}/>
+                      {sshFieldFeedback("root", sshRoot !== "")}
                     </label>
                   </div>
                   <label className="grid gap-2 text-sm">
                     <span className="font-medium">{t("Pinned SSH host public key")}</span>
                     <textarea aria-label={t("Pinned SSH host public key")} rows={3} maxLength={4096} spellCheck={false}
+                      aria-invalid={sshReviewIssues.some((issue) => issue.field === "hostPublicKey") && (sshReviewAttempted || sshHostPublicKey.trim() !== "")}
                       value={sshHostPublicKey}
                       onChange={(event) => setSSHHostPublicKey(event.target.value)}
-                      placeholder={t("ssh-ed25519 / ecdsa-sha2-nistp256 / ssh-rsa")}
+                      placeholder={t("ssh-ed25519 AAAA...")}
                       className="w-full resize-y rounded-xl border border-input bg-card p-3 font-mono text-xs"/>
-                    <span className="text-xs leading-5 text-muted-foreground">{t("Pin a verified SSH host public key (Ed25519, ECDSA or RSA 2048+). It is checked on every connection.")}</span>
+                    {sshFieldFeedback("hostPublicKey", sshHostPublicKey.trim() !== "")}
+                    <span className="text-xs leading-5 text-muted-foreground">{t("Use the public host key from /etc/ssh/ssh_host_ed25519_key.pub on the trusted server. Verify its fingerprint independently and paste the whole line.")}</span>
                   </label>
                   <label className="grid gap-2 text-sm">
                     <span className="font-medium">{t("SSH private key credential")}</span>
                     <select aria-label={t("SSH private key credential")} value={sshCredentialRef}
+                      aria-invalid={sshReviewAttempted && sshReviewIssues.some((issue) => issue.field === "credentialRef")}
                       onChange={(event) => setSSHCredentialRef(event.target.value)}
                       className="h-10 w-full rounded-xl border border-input bg-card px-3 text-sm">
                       <option value="">{t("Choose a credential")}</option>
@@ -491,6 +560,7 @@ export function CreateSandboxPage({
                         </option>
                       ))}
                     </select>
+                    {sshFieldFeedback("credentialRef", sshCredentialRef !== "")}
                   </label>
                   {sshCredentials.length === 0 ? (
                     <p className="text-xs leading-5 text-muted-foreground">
@@ -581,6 +651,16 @@ export function CreateSandboxPage({
                 </>
               )}
 
+              {selected === "ssh_remote" && visibleSSHReviewIssues.length > 0 ? (
+                <p role="status" className="text-xs leading-5 text-destructive">
+                  {t("Check these SSH fields before review: {{fields}}.", {
+                    fields: visibleSSHReviewIssues.slice(0, 3).map((issue) => sshReviewFieldName(issue.field)).join(" · "),
+                  })}
+                  {visibleSSHReviewIssues.length > 3
+                    ? " " + t("And {{count}} more.", { count: visibleSSHReviewIssues.length - 3 })
+                    : null}
+                </p>
+              ) : null}
               <div className="flex flex-wrap gap-2 border-t border-border/65 pt-5">
                 <Button variant="outline" onClick={() => {
                   if(fixedBackend && chosenBuiltin){
@@ -589,7 +669,16 @@ export function CreateSandboxPage({
                   }
                   setStep("backend");
                 }}>{t("Back")}</Button>
-                <Button disabled={!identityValid} onClick={() => setStep(selected === "local_workspace" || selected === "ssh_remote" ? "review" : "limits")}>
+                <Button disabled={selected !== "ssh_remote" && !identityValid}
+                  onClick={() => {
+                    if (selected === "ssh_remote") {
+                      setSSHReviewAttempted(true);
+                      if (!sshValid) return;
+                    } else if (!identityValid) {
+                      return;
+                    }
+                    setStep(selected === "local_workspace" || selected === "ssh_remote" ? "review" : "limits");
+                  }}>
                   {t(selected === "local_workspace" || selected === "ssh_remote" ? "Review" : "Next")}
                   <ArrowRightIcon data-icon="inline-end" />
                 </Button>
