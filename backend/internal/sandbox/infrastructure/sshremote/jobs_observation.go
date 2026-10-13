@@ -6,14 +6,13 @@ import (
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 )
 
-// QuiescentJobs performs plugin-owned remote task inventory reconciliation for
-// an already admitted, exclusively fenced Sandbox lifecycle operation.
-// The caller owns the authority/fence; the plugin owns the task contents and
-// no-unknown/no-running proof. Reads never launch or repeat systemd units.
-// It works for a stopped Sandbox: Open() intentionally requires Ready, so
-// lifecycle checking uses the exact pinned SSH configuration instead.
-func (b *Backend) QuiescentJobs(ctx context.Context, id sandboxdomain.ID) error {
-	if b == nil || b.Templates == nil || b.Dial.Credentials == nil {
+// WithJobs is the SSH plugin's backend-owned recovery/observation port. The
+// caller must establish exact resource identity, Job Profile grants and
+// sandbox.acquire Policy/audit BEFORE invocation. It takes no global Sandbox
+// execution lease: an uncertain prior Submit cannot block read-only recovery.
+// The callback cannot choose another resource or arbitrary backend.
+func (b *Backend) WithJobs(ctx context.Context, id sandboxdomain.ID, execute func(*Jobs) error) error {
+	if b == nil || b.Templates == nil || b.Dial.Credentials == nil || execute == nil {
 		return ErrJobUnavailable
 	}
 	if _, err := sandboxdomain.ParseID(id.String()); err != nil {
@@ -28,11 +27,17 @@ func (b *Backend) QuiescentJobs(ctx context.Context, id sandboxdomain.ID) error 
 		return ErrJobUnknown
 	}
 	defer func() { _ = conn.Close() }()
-	stopCancellationClose := context.AfterFunc(ctx, func() { _ = conn.Close() })
-	defer stopCancellationClose()
+	stop := context.AfterFunc(ctx, func() { _ = conn.Close() })
+	defer stop()
 	jobs, err := newJobs(id, t.Root, conn.SFTP, systemdJobRunner{client: conn.SSH, user: t.User})
 	if err != nil {
 		return err
 	}
-	return jobs.Quiescent(ctx)
+	return execute(jobs)
+}
+
+// QuiescentJobs is a read-only plugin-owned proof after Core has reserved an
+// exclusive lifecycle fence. It never launches units or changes Task states.
+func (b *Backend) QuiescentJobs(ctx context.Context, id sandboxdomain.ID) error {
+	return b.WithJobs(ctx, id, func(jobs *Jobs) error { return jobs.Quiescent(ctx) })
 }

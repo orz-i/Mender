@@ -281,6 +281,7 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 	if err := providerbuiltin.Register(
 		providerPlugins,
 		sandboxes.router,
+		sandboxes,
 	); err != nil {
 		_ = providerConfigs.Close()
 		_ = configs.Close()

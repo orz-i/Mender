@@ -8,6 +8,7 @@ import (
 	"time"
 
 	gov "github.com/orz-i/Mender/backend/internal/governance/domain"
+	sandboxapp "github.com/orz-i/Mender/backend/internal/sandbox/application"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 )
 
@@ -47,7 +48,8 @@ func verifyJobFenceCaller(caller gov.Context) error {
 	}
 }
 
-// ReserveSSHJobSubmit is host-only and must follow owner and Policy admission.
+// ReserveSSHJobSubmit atomically rechecks an exact owner or Profile JobSubmit
+// grant after separate Sandbox Policy/admission and before any remote mutation.
 // It serializes against Sandbox Workspace leases and lifecycle fences. Marking
 // a permanent obligation in the SAME transaction occurs BEFORE remote side
 // effects, so an uncertain submission can never escape lifecycle blocking.
@@ -61,8 +63,12 @@ func (s *Store) ReserveSSHJobSubmit(ctx context.Context, id sandboxdomain.ID, ge
 	if generation == 0 {
 		return "", sandboxdomain.ErrConflict
 	}
-	if err := verifyJobFenceCaller(caller); err != nil {
+	if err := caller.Validate(); err != nil {
 		return "", err
+	}
+	profileID, delegated := sandboxapp.ProfileServiceID(caller)
+	if !delegated && caller.Principal().Kind() != gov.PrincipalLocalUser {
+		return "", sandboxdomain.ErrNotAuthorized
 	}
 	token, err := jobFenceToken()
 	if err != nil {
@@ -80,9 +86,12 @@ func (s *Store) ReserveSSHJobSubmit(ctx context.Context, id sandboxdomain.ID, ge
  SELECT r.sandbox_id,?,?,?,?,?,?,? FROM sandbox_runs r
  JOIN sandboxes s ON s.id=r.sandbox_id WHERE r.sandbox_id=? AND r.generation=? AND r.state='ready'
  AND s.backend='ssh_remote' AND s.backend_plugin_id='io.mender.sandbox.ssh-remote'
- AND s.backend_installation_id='' AND s.owner_kind=? AND s.owner_ref=?`,
+ AND s.backend_installation_id='' AND (
+  (s.owner_kind=? AND s.owner_ref=?) OR
+  (?=1 AND EXISTS(SELECT 1 FROM sandbox_profile_grants g WHERE g.sandbox_id=s.id AND g.profile_id=? AND g.capability='job.submit'))
+ )`,
 		token, generation, string(person.Kind()), person.Reference(), string(scope.Kind()), scope.Reference(), time.Now().UTC().Format(time.RFC3339Nano),
-		id.String(), generation, string(person.Kind()), person.Reference())
+		id.String(), generation, string(person.Kind()), person.Reference(), delegated, profileID)
 	if err != nil || !oneRow(result) {
 		return "", sandboxdomain.ErrConflict
 	}

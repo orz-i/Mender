@@ -15,6 +15,8 @@ import (
 	installationdomain "github.com/orz-i/Mender/backend/internal/plugin/installation/domain"
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
 	providerconfigstore "github.com/orz-i/Mender/backend/internal/providerplugin/configstore"
+	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
+	sshjobsplugin "github.com/orz-i/Mender/backend/internal/sshjobs/infrastructure/plugin"
 )
 
 const (
@@ -52,13 +54,16 @@ const (
 	providerPluginIssueCloseProcess      = "process_cleanup_failed"
 )
 
-// ProviderPluginDescriptors returns safe metadata for all built-in Provider
-// plugins available to this Runtime.
+// ProviderPluginDescriptors returns only user-configurable Provider
+// integrations. The Jobs Provider is a private host-owned Tool Suite facade,
+// never a generic Provider offering in the plugin marketplace.
 func (r *Runtime) ProviderPluginDescriptors() []providerplugin.Descriptor {
 	if r == nil || r.providerPlugins == nil {
 		return nil
 	}
-	return r.providerPlugins.Descriptors()
+	return slices.DeleteFunc(r.providerPlugins.Descriptors(), func(d providerplugin.Descriptor) bool {
+		return d.ID == sshjobsplugin.ID
+	})
 }
 
 // ProviderPluginDescriptorForConfig returns management-safe descriptor metadata
@@ -75,12 +80,13 @@ func (r *Runtime) ProviderPluginDescriptorForConfig(
 		)
 	}
 	if config.InstallationID == nil {
-		for _, descriptor := range r.ProviderPluginDescriptors() {
-			if descriptor.ID == config.PluginID {
-				return descriptor.Clone(), true, nil
-			}
+		// Exact persisted, already-authorized facades must remain resolvable
+		// even when their private plugin is absent from the public catalogue.
+		descriptor, err := r.providerPlugins.Lookup(config.PluginID)
+		if err != nil {
+			return providerplugin.Descriptor{}, false, nil
 		}
-		return providerplugin.Descriptor{}, false, nil
+		return descriptor.Descriptor().Clone(), true, nil
 	}
 
 	installation, err := r.pluginInstallations.Get(ctx, *config.InstallationID)
@@ -122,7 +128,7 @@ func (r *Runtime) ListAvailableProviderPluginCatalog(
 		)
 	}
 
-	builtins := r.providerPlugins.Descriptors()
+	builtins := r.ProviderPluginDescriptors()
 	plugins := make([]AvailableProviderPlugin, 0, len(builtins))
 	for _, descriptor := range builtins {
 		plugins = append(plugins, AvailableProviderPlugin{
@@ -332,6 +338,23 @@ func (r *Runtime) RegisterConfiguredProvider(
 	rawConfig json.RawMessage,
 	governanceContext governancedomain.Context,
 ) (catalogdomain.Provider, error) {
+	return r.registerConfiguredProvider(ctx, request, pluginID, rawConfig, governanceContext, false)
+}
+
+// registerConfiguredProvider may authorize an internal Jobs Provider facade
+// only from the owner-approved Tool Suite creation use case, not from
+// generic Provider CRUD, CLI, HTTP, plugins or model-controlled arguments.
+func (r *Runtime) registerConfiguredProvider(
+	ctx context.Context,
+	request catalogapplication.RegisterProviderRequest,
+	pluginID providerplugin.ID,
+	rawConfig json.RawMessage,
+	governanceContext governancedomain.Context,
+	managedJobs bool,
+) (catalogdomain.Provider, error) {
+	if pluginID == sshjobsplugin.ID && !managedJobs {
+		return catalogdomain.Provider{}, sandboxdomain.ErrNotAuthorized
+	}
 	plugin, descriptor, err := r.resolveProviderPlugin(pluginID)
 	if err != nil {
 		return catalogdomain.Provider{}, fmt.Errorf(

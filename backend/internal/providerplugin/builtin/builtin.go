@@ -8,6 +8,7 @@ import (
 	openapiplugin "github.com/orz-i/Mender/backend/internal/openapi/infrastructure/plugin"
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
 	sandboxapplication "github.com/orz-i/Mender/backend/internal/sandbox/application"
+	sshjobsplugin "github.com/orz-i/Mender/backend/internal/sshjobs/infrastructure/plugin"
 	workspaceplugin "github.com/orz-i/Mender/backend/internal/workspace/infrastructure/plugin"
 )
 
@@ -16,12 +17,13 @@ import (
 // The returned order is deterministic and intentionally follows the historical
 // Runtime registration order. Callers receive fresh plugin values so tests or
 // future implementation-local state cannot leak across Runtime instances.
-func Plugins(sandboxRouter sandboxapplication.ExecutionRouter) []providerplugin.Plugin {
+func Plugins(sandboxRouter sandboxapplication.ExecutionRouter, jobs sshjobsplugin.Port) []providerplugin.Plugin {
 	return []providerplugin.Plugin{
 		mcpplugin.New(),
 		openapiplugin.New(),
 		modeltoolsplugin.New(),
 		workspaceplugin.New(sandboxRouter),
+		sshjobsplugin.New(jobs),
 	}
 }
 
@@ -31,16 +33,17 @@ func Plugins(sandboxRouter sandboxapplication.ExecutionRouter) []providerplugin.
 func Register(
 	registry *providerplugin.Registry,
 	sandboxRouter sandboxapplication.ExecutionRouter,
+	jobs sshjobsplugin.Port,
 ) error {
 	if registry == nil {
 		return fmt.Errorf("register built-in provider plugins: registry must not be nil")
 	}
 
-	if sandboxRouter == nil {
-		return fmt.Errorf("register built-in provider plugins: sandbox execution router must not be nil")
+	if sandboxRouter == nil || jobs == nil {
+		return fmt.Errorf("register built-in provider plugins: sandbox Router and SSH Job ports required")
 	}
 
-	for _, plugin := range Plugins(sandboxRouter) {
+	for _, plugin := range Plugins(sandboxRouter, jobs) {
 		descriptor := plugin.Descriptor()
 		if err := registry.Register(plugin); err != nil {
 			return fmt.Errorf(

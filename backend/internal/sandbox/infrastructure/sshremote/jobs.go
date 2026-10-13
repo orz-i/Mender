@@ -58,19 +58,19 @@ func (r JobRequest) Validate() error {
 }
 
 type JobSnapshot struct {
-	TaskID          string
-	State           JobState
-	Unit            string
-	CancelRequested bool
-	ExitCode        *int
+	TaskID          string   `json:"taskId"`
+	State           JobState `json:"state"`
+	Unit            string   `json:"unit,omitempty"`
+	CancelRequested bool     `json:"cancelRequested"`
+	ExitCode        *int     `json:"exitCode,omitempty"`
 }
 
 type JobLogs struct {
-	TaskID    string
-	Stream    string
-	Content   string
-	Cursor    int64
-	Truncated bool
+	TaskID    string `json:"taskId"`
+	Stream    string `json:"stream"`
+	Content   string `json:"content"`
+	Cursor    int64  `json:"cursor"`
+	Truncated bool   `json:"truncated"`
 }
 
 // JobRunner owns only the remote transient service, never Mender Sandbox

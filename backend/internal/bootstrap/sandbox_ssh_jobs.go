@@ -11,11 +11,10 @@ import (
 	sshremote "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/sshremote"
 )
 
-// submitSSHJob is an INTERNAL owner-only integration seam until Stage C adds
-// dedicated job-specific Profile/Policy/Tool authorization. It must never be
-// projected directly as an MCP/HTTP/CLI Tool or use Workspace's shell grants
-// as authority for detached jobs. The SSH plugin, not this method, owns tasks.
-func (s *Sandboxes) submitSSHJob(ctx context.Context, id sandboxdomain.ID,
+// SubmitSSHJob is invoked only by the reviewed SSH Jobs Provider Facade.
+// It uses a distinct JobSubmit grant and Sandbox Policy, never Workspace Shell
+// authority. The plugin, not Mender Core, owns TaskID, runner and recovery.
+func (s *Sandboxes) SubmitSSHJob(ctx context.Context, id sandboxdomain.ID,
 	caller gov.Context, request sshremote.JobRequest) (snapshot sshremote.JobSnapshot, retErr error) {
 	if s == nil || s.sshRemote == nil || s.store == nil {
 		return snapshot, sandboxdomain.ErrBackendUnavailable
@@ -33,13 +32,6 @@ func (s *Sandboxes) submitSSHJob(ctx context.Context, id sandboxdomain.ID,
 	if err := caller.Validate(); err != nil {
 		return snapshot, err
 	}
-	authorized := sandboxapp.IsGrantManager(caller, item)
-	if !authorized && caller.Origin() == gov.OriginInternal && caller.Principal().Kind() == gov.PrincipalLocalUser && caller.Scope().Kind() == gov.ScopeCatalog {
-		authorized = sandboxapp.IsOwner(caller, item)
-	}
-	if !authorized {
-		return snapshot, sandboxdomain.ErrNotAuthorized
-	}
 	run, err := s.store.GetRun(ctx, id)
 	if err != nil {
 		return snapshot, err
@@ -48,7 +40,10 @@ func (s *Sandboxes) submitSSHJob(ctx context.Context, id sandboxdomain.ID,
 		return snapshot, sandboxdomain.ErrConflict
 	}
 	// Host-owned approval/audit before any network or Credential resolution.
-	if err := s.admission.AdmitAction(ctx, caller, item, gov.ActionSandboxAcquire); err != nil {
+	if _, err := s.VerifiedSSHJobContracts(ctx, id); err != nil {
+		return snapshot, err
+	}
+	if err := s.admission.AdmitAcquire(ctx, caller, sandboxapp.Placement{Sandbox: item, Run: run, Required: sandboxdomain.CapabilityJobSubmit}); err != nil {
 		return snapshot, err
 	}
 	session, err := s.sshRemote.Open(ctx, item, run)

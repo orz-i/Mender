@@ -43,7 +43,7 @@ func TestSSHManagedJobsUnknownOutcomeBlocksLifecycleAcrossRestart(t *testing.T) 
 	// In-process test SSH intentionally has only SFTP, no systemd or exec RPC.
 	// Durable reservation succeeds but missing systemd ACK remains UNKNOWN.
 	key := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-	job, err := runtime.Sandboxes.submitSSHJob(ctx, item.ID(), owner, sshremote.JobRequest{IdempotencyKey: key, Command: "echo side-effect-once"})
+	job, err := runtime.Sandboxes.SubmitSSHJob(ctx, item.ID(), owner, sshremote.JobRequest{IdempotencyKey: key, Command: "echo side-effect-once"})
 	if !errors.Is(err, sshremote.ErrJobUnknown) || job.State != sshremote.JobUnknown || job.TaskID == "" {
 		t.Fatalf("unknown remote submit %+v %v", job, err)
 	}
