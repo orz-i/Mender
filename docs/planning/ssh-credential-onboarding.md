@@ -1,6 +1,6 @@
 # SSH credential onboarding — compatibility without weakening trust (2026-10-12)
 
-Status: **implementation in progress**. Small document-first follow-up to Phase 32 (not a new Phase or compatibility bridge).
+Status: **Closed (2026-10-12)**. Document-first follow-up to Phase 32 (not a new Phase or compatibility bridge).
 
 ## Reproduction and diagnosis
 - SSH credentials reject valid RSA 2048 private keys with a blanket RSA >=3072 restriction, even though the default Go SSH stack supports RSA SHA-2 signatures. Do **not** re-enable SHA-1 ssh-rsa authentication or DSA.
@@ -23,3 +23,12 @@ No password auth, ssh-agent, hardware keys, host-key bypass, host-key auto-impor
 A. Contract + regressions and backend key import/host pinning.
 B. HTTP/Wails/SDK schema parity + focused SSH credential/Sandbox UI.
 C. Go/TypeScript tests and static checks; final security review and acceptance evidence.
+
+## Acceptance evidence
+- `c22f99f`: document-first compatibility and security boundaries.
+- `68e9149`: normalized SSH key import (RSA >=2048/Ed25519/ECDSA, encrypted PEM/OpenSSH, import-only passphrase), RSA-SHA2 pinned host and login signature selection, typed HTTP/OpenAPI/SDK/Wails propagation.
+- `db36c1b`: in-process RSA 2048 / SHA-2 end-to-end SSH/SFTP handshake, HTTP invalid-key 400 rather than 500, secure error redaction, native-keyring rotation tests.
+- `9e98aee`: minimal SSH create/rotate UI, file picker with hidden contents, optional passphrase and localized diagnostics, SSH host key alternatives, frontend/Wails regression tests.
+- Final alignment: historical Phase 32 rules explicitly superseded; CLI host pin help and OpenAPI hostKey length/description corrected; test-only lint exceptions narrowly documented.
+- Verification: `go test ./backend/internal/credential/... ./backend/internal/sandbox/infrastructure/sshremote ./backend/internal/management/httpapi` passes; 42 targeted UI+Wails tests pass, `pnpm i18n:check` covers all 1135 messages; `pnpm check` passed for provider/sandbox/tunnel SDKs, Go lint/tests/race, SDK/Wails generation, TypeScript lint/typecheck, 192 frontend tests and Web/Desktop builds. Final generated contract parity is rechecked after the last documentation/alignment commit.
+- No real SSH private key or user-owned SSH host used for tests. No raw key in persistent metadata, diagnostics or plugin configurations. SHA-1 RSA signatures, weak keys, silent host trust and root logins remain blocked. The only retained unencrypted normalized key material is in the existing native OS credential store; passphrase never persists.

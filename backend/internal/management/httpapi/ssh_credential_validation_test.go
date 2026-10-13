@@ -22,6 +22,7 @@ func TestSSHInvalidPrivateKeyIsClientValidationError(t *testing.T) {
 	server := httptest.NewServer(New(runtime))
 	t.Cleanup(server.Close)
 
+	// #nosec G101 -- intentionally malformed non-secret test fixture for response redaction.
 	const secret = "PRIVATE-KEY-FIXTURE-MUST-NOT-LEAK"
 	result := requestJSON(t, server.Client(), http.MethodPost,
 		server.URL+"/api/v1/credentials/native", map[string]any{

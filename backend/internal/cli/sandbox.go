@@ -332,7 +332,7 @@ func (a *app) newSandboxAddSSHRemoteCommand() *cobra.Command {
 	command.Flags().Uint16Var(&port, "port", 22, "SSH port (1..65535)")
 	command.Flags().StringVar(&user, "user", "", "unprivileged SSH login; root rejected")
 	command.Flags().StringVar(&root, "root", "", "absolute POSIX remote workspace directory")
-	command.Flags().StringVar(&publicKey, "host-public-key", "", "pinned ssh-ed25519 public host key, OpenSSH format")
+	command.Flags().StringVar(&publicKey, "host-public-key", "", "explicit pinned Ed25519, ECDSA or RSA >=2048 host public key in OpenSSH format")
 	command.Flags().StringVar(&credential, "credential-ref", "", "native OS keychain reference, credential://ssh/name; never a private key")
 	return command
 }

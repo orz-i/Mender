@@ -76,6 +76,7 @@ func TestPinnedHostKeySupportsStrongRSAAndECDSAWithNoSHA1(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// #nosec G403 -- deliberately generate a weak RSA host key to verify it is rejected.
 	rsa1024, err := rsa.GenerateKey(rand.Reader, 1024)
 	if err != nil {
 		t.Fatal(err)
@@ -111,7 +112,7 @@ func TestPinnedHostKeySupportsStrongRSAAndECDSAWithNoSHA1(t *testing.T) {
 				t.Fatal("no pinned host key algorithms")
 			}
 			for _, algo := range algos {
-				if algo == ssh.KeyAlgoRSA || algo == ssh.InsecureKeyAlgoDSA {
+				if algo == ssh.KeyAlgoRSA || algo == "ssh-dss" {
 					t.Fatal("weak SSH host signature algorithm enabled")
 				}
 			}

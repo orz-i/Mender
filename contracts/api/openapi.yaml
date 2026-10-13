@@ -2527,7 +2527,7 @@ components:
         port: { type: integer, minimum: 1, maximum: 65535 }
         user: { type: string, pattern: '^[a-z_][a-z0-9_-]{0,62}$' }
         root: { type: string, minLength: 2, maxLength: 1024, description: Absolute POSIX remote workspace root; NOT a chroot or shell containment guarantee }
-        hostPublicKey: { type: string, minLength: 45, maxLength: 1024, description: Explicit pinned ssh-ed25519 public host key in OpenSSH format, never TOFU }
+        hostPublicKey: { type: string, minLength: 45, maxLength: 4096, description: 'Exactly one explicitly verified and pinned Ed25519, ECDSA or RSA >=2048-bit host public key in OpenSSH format; never TOFU' }
         credentialRef: { type: string, pattern: '^credential://ssh/[a-z][a-z0-9-]*$', description: Keychain-backed Mender SSH private key reference, never a raw private key }
     CreateDaytonaSandboxRequest:
       type: object

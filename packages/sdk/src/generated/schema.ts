@@ -1998,7 +1998,7 @@ export interface components {
             user: string;
             /** @description Absolute POSIX remote workspace root; NOT a chroot or shell containment guarantee */
             root: string;
-            /** @description Explicit pinned ssh-ed25519 public host key in OpenSSH format */
+            /** @description Exactly one explicitly verified and pinned Ed25519, ECDSA or RSA >=2048-bit host public key in OpenSSH format; never TOFU */
             hostPublicKey: string;
             /** @description Keychain-backed Mender SSH private key reference */
             credentialRef: string;

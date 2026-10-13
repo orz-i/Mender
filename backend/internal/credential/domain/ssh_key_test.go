@@ -29,6 +29,7 @@ func TestSSHPrivateKeySupportsCommonStrongKeyTypes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// #nosec G403 -- deliberately generate a weak RSA key to assert that validation rejects it.
 	rsa1024, err := rsa.GenerateKey(rand.Reader, 1024)
 	if err != nil {
 		t.Fatal(err)
@@ -123,6 +124,7 @@ func TestSSHPrivateKeyImportsEncryptedLegacyRSAPEM(t *testing.T) {
 	}
 	passphrase := []byte("generated-legacy-rsa-passphrase")
 	// #nosec G101 -- test-only generated passphrase, never an application secret.
+	//nolint:staticcheck // compatibility regression: accept legacy encrypted RSA PEM; production code never encrypts this way.
 	block, err := x509.EncryptPEMBlock(rand.Reader, "RSA PRIVATE KEY",
 		x509.MarshalPKCS1PrivateKey(private), passphrase, x509.PEMCipherAES256)
 	if err != nil {

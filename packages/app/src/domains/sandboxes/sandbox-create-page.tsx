@@ -298,6 +298,7 @@ export function CreateSandboxPage({
     Number.isInteger(sshPort) && sshPort >= 1 && sshPort <= 65535 &&
     sshRoot.startsWith("/") && sshRoot.length > 1 && sshRoot.length <= 1024 &&
     !sshRoot.split("/").some((part) => part === ".." || part === ".") &&
+    sshHostPublicKey.length <= 4096 &&
     /^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp(?:256|384|521))\s+\S+/.test(sshHostPublicKey.trim()) &&
     !sshHostPublicKey.includes("\n") &&
     sshCredentials.some((item) => item.reference === sshCredentialRef);
@@ -471,7 +472,7 @@ export function CreateSandboxPage({
                   </div>
                   <label className="grid gap-2 text-sm">
                     <span className="font-medium">{t("Pinned SSH host public key")}</span>
-                    <textarea aria-label={t("Pinned SSH host public key")} rows={3} spellCheck={false}
+                    <textarea aria-label={t("Pinned SSH host public key")} rows={3} maxLength={4096} spellCheck={false}
                       value={sshHostPublicKey}
                       onChange={(event) => setSSHHostPublicKey(event.target.value)}
                       placeholder={t("ssh-ed25519 / ecdsa-sha2-nistp256 / ssh-rsa")}
