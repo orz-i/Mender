@@ -71,6 +71,46 @@ func TestSSHConnectExhaustionAndImmediateRefusal(t *testing.T) {
 	}
 }
 
+func TestSSHConnectSurvivesSlowPreHandshakeNetworkWithinBudget(t *testing.T) {
+	template, creds := sshFixture(t)
+	// Reproduces a terminal login that takes longer than the previous 12s
+	// overall connection budget. The endpoint is only the test-owned loopback
+	// SSH/SFTP server; this test never connects to a user-owned host.
+	delay := 13 * time.Second
+	dialer := Dialer{
+		Credentials: creds,
+		tcpDial: func(ctx context.Context, network, address string) (net.Conn, error) {
+			raw, err := (&net.Dialer{}).DialContext(ctx, network, address)
+			if err != nil {
+				return nil, err
+			}
+			timer := time.NewTimer(delay)
+			defer timer.Stop()
+			select {
+			case <-ctx.Done():
+				_ = raw.Close()
+				return nil, ctx.Err()
+			case <-timer.C:
+				return raw, nil
+			}
+		},
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 26*time.Second)
+	defer cancel()
+	started := time.Now()
+	conn, err := dialer.Connect(ctx, template)
+	if err != nil {
+		t.Fatalf("slow but valid SSH/SFTP connection should succeed: %v", err)
+	}
+	defer func() { _ = conn.Close() }()
+	if time.Since(started) < 12*time.Second {
+		t.Fatal("fixture did not exercise the historical short-timeout boundary")
+	}
+	if _, err := conn.SFTP.Stat(template.Root); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestSSHConnectCancelledDuringDialDoesNotRetry(t *testing.T) {
 	template, creds := sshFixture(t)
 	ctx, cancel := context.WithCancel(context.Background())
