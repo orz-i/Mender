@@ -10,6 +10,7 @@ type SSHFailureCode =
   | "network_refused"
   | "network_unreachable"
   | "host_key_mismatch"
+  | "host_trust_unavailable"
   | "authentication_failed"
   | "ssh_handshake_failed"
   | "sftp_unavailable"
@@ -25,6 +26,7 @@ function isSSHFailureCode(value: string): value is SSHFailureCode {
     case "network_refused":
     case "network_unreachable":
     case "host_key_mismatch":
+    case "host_trust_unavailable":
     case "authentication_failed":
     case "ssh_handshake_failed":
     case "sftp_unavailable":
@@ -73,6 +75,8 @@ export function sshRemoteCreateError(reason: unknown): string {
       return t("The SSH host refused the TCP connection. Check that SSH is running and listening on the configured port.");
     case "network_unreachable":
       return t("Could not reach the SSH host. Check its address, network route, and firewall.");
+    case "host_trust_unavailable":
+      return t("Mender could not read or safely update trusted SSH host records. Check permissions and the Mender managed known_hosts file before retrying.");
     case "host_key_mismatch":
       return t("SSH host identity verification failed. Compare the pinned host public key with the server's verified SSH host key. Do not use your login key's public key or bypass verification.");
     case "authentication_failed":

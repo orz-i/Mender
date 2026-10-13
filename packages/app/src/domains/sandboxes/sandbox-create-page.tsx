@@ -12,7 +12,11 @@ import {
 } from "lucide-react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 
-import type { CachedDockerImage, Credential, MenderClient } from "@mender/sdk";
+import type { CachedDockerImage, Credential, MenderClient, SSHHostIdentity } from "@mender/sdk";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+  DialogDescription, DialogFooter,
+} from "@mender/ui/components/dialog";
 import { Button } from "@mender/ui/components/button";
 import { Input } from "@mender/ui/components/input";
 
@@ -41,14 +45,6 @@ function sshReviewIssueText(code: SSHRemoteReviewIssueCode): string {
       return t("Enter a valid lowercase SSH login name.");
     case "workspace_root_invalid":
       return t("Enter a normalized absolute remote directory other than /.");
-    case "host_key_required":
-      return t("Paste a verified SSH host public key, not your private login key.");
-    case "host_key_multiline":
-      return t("Paste exactly one SSH host public key line.");
-    case "host_key_known_hosts_prefix":
-      return t("Remove the hostname from the known_hosts line; paste only its key type and public key.");
-    case "host_key_invalid":
-      return t("Paste the full SSH host public key: ssh-ed25519, ECDSA or ssh-rsa followed by Base64 data.");
     case "credential_required":
       return t("Choose an existing SSH private key credential.");
   }
@@ -61,7 +57,6 @@ function sshReviewFieldName(field: SSHRemoteReviewField): string {
     case "port": return t("SSH port");
     case "user": return t("SSH login user");
     case "root": return t("Remote workspace root");
-    case "hostPublicKey": return t("Pinned SSH host public key");
     case "credentialRef": return t("SSH private key credential");
   }
 }
@@ -243,7 +238,7 @@ export function CreateSandboxPage({
   const [sshPort, setSSHPort] = useState(22);
   const [sshUser, setSSHUser] = useState("");
   const [sshRoot, setSSHRoot] = useState("");
-  const [sshHostPublicKey, setSSHHostPublicKey] = useState("");
+  const [sshPendingHost, setSSHPendingHost] = useState<SSHHostIdentity | null>(null);
   const [sshCredentialRef, setSSHCredentialRef] = useState("");
   const [sshReviewAttempted, setSSHReviewAttempted] = useState(false);
   const [daytonaCPU, setDaytonaCPU] = useState(1);
@@ -339,7 +334,6 @@ export function CreateSandboxPage({
     port: sshPort,
     user: sshUser,
     root: sshRoot,
-    hostPublicKey: sshHostPublicKey,
     credentialRef: sshCredentialRef,
     credentialRefs: sshCredentials.map((item) => item.reference),
   });
@@ -353,8 +347,7 @@ export function CreateSandboxPage({
 
   const visibleSSHReviewIssues = sshReviewIssues.filter((issue) =>
     sshReviewAttempted ||
-    (issue.field === "user" && sshUser === "root") ||
-    (issue.field === "hostPublicKey" && sshHostPublicKey.trim() !== "")
+    (issue.field === "user" && sshUser === "root")
   );
   const identityValid = Boolean(name.trim()) && (
     selected === "local_workspace" ? Boolean(root.trim() && isolation) :
@@ -395,21 +388,39 @@ export function CreateSandboxPage({
     }
   }
 
-  async function create() {
+  async function create(confirmedHostKey?: string) {
     if (!formValid || step !== "review" || busy) return;
     setBusy(true);
     setError("");
     try {
+      let pinnedHostKey = confirmedHostKey ?? "";
+      if (selected === "ssh_remote" && !pinnedHostKey) {
+        // Never attempt login or create remote resources before checking the
+        // real server host identity. The preview itself is pre-auth only.
+        const identity = await client.inspectSSHHostKey(sshHost.trim(), sshPort);
+        if (identity.status === "changed") {
+          setError(t("The SSH server host key differs from previously trusted records. Connection is blocked; verify the host independently and update trusted records before retrying."));
+          setBusy(false);
+          return;
+        }
+        if (identity.status === "untrusted") {
+          setSSHPendingHost(identity);
+          setBusy(false);
+          return;
+        }
+        pinnedHostKey = identity.hostPublicKey;
+      }
       const sandbox = selected === "docker"
         ? await client.createDockerSandbox({ name: name.trim(), imageDigest, userId, groupId, cpuMilli, memoryMiB, workspaceMiB, pids })
         : selected === "ssh_remote"
           ? await client.createSSHRemoteSandbox({
               name: name.trim(), host: sshHost.trim(), port: sshPort, user: sshUser,
-              root: sshRoot.trim(), hostPublicKey: sshHostPublicKey.trim(), credentialRef: sshCredentialRef,
+              root: sshRoot.trim(), hostPublicKey: pinnedHostKey, credentialRef: sshCredentialRef,
             })
         : selected === "daytona"
           ? await client.createDaytonaSandbox({ name: name.trim(), credentialRef: daytonaCredential, imageDigest, target: "us", cpu: daytonaCPU, memoryGiB: daytonaMemory, diskGiB: daytonaDisk, ttlMinutes: daytonaTTL })
           : await client.createLocalSandbox({ name: name.trim(), root: root.trim(), isolation: isolation as "host" | "restricted_host" });
+      setSSHPendingHost(null);
       void navigate(`/sandboxes/${sandbox.sandboxId}`);
     } catch (reason) {
       setError(selected === "ssh_remote" ? sshRemoteCreateError(reason) : errorMessage(reason));
@@ -542,17 +553,9 @@ export function CreateSandboxPage({
                       {sshFieldFeedback("root", sshRoot !== "")}
                     </label>
                   </div>
-                  <label className="grid gap-2 text-sm">
-                    <span className="font-medium">{t("Pinned SSH host public key")}</span>
-                    <textarea aria-label={t("Pinned SSH host public key")} rows={3} maxLength={4096} spellCheck={false}
-                      aria-invalid={sshReviewIssues.some((issue) => issue.field === "hostPublicKey") && (sshReviewAttempted || sshHostPublicKey.trim() !== "")}
-                      value={sshHostPublicKey}
-                      onChange={(event) => setSSHHostPublicKey(event.target.value)}
-                      placeholder={t("ssh-ed25519 AAAA...")}
-                      className="w-full resize-y rounded-xl border border-input bg-card p-3 font-mono text-xs"/>
-                    {sshFieldFeedback("hostPublicKey", sshHostPublicKey.trim() !== "")}
-                    <span className="text-xs leading-5 text-muted-foreground">{t("Use the public host key from /etc/ssh/ssh_host_ed25519_key.pub on the trusted server. Verify its fingerprint independently and paste the whole line.")}</span>
-                  </label>
+                  <p className="text-xs leading-5 text-muted-foreground">
+                    {t("Mender checks your known_hosts automatically. For a new SSH server, it will ask you to verify a SHA256 host fingerprint before creating the Sandbox. No host public key needs to be pasted.")}
+                  </p>
                   <label className="grid gap-2 text-sm">
                     <span className="font-medium">{t("SSH private key credential")}</span>
                     <select aria-label={t("SSH private key credential")} value={sshCredentialRef}
@@ -743,7 +746,7 @@ export function CreateSandboxPage({
                     <ReviewField label="SSH login user" value={sshUser}/>
                     <ReviewField label="Remote workspace root" value={sshRoot}/>
                     <ReviewField label="SSH private key credential" value={sshCredentialRef}/>
-                    <ReviewField label="Pinned SSH host public key" value={sshHostPublicKey}/>
+                    <ReviewField label="SSH host identity" value={t("Automatically checked; first connection requires fingerprint confirmation")}/>
                     <ReviewField label="Isolation" value={t("Remote account (not isolated)")}/>
                   </>
                 ) : (
@@ -803,6 +806,47 @@ export function CreateSandboxPage({
           ) : null}
         </div>
       </DataPanel>
+      <Dialog
+        open={sshPendingHost !== null}
+        onOpenChange={(open) => {
+          if (!open && !busy) setSSHPendingHost(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{t("Confirm SSH server identity")}</DialogTitle>
+            <DialogDescription>
+              {t("This is the first time Mender has seen this SSH host. Its key is not yet trusted. Compare the SHA256 fingerprint through a trusted channel before continuing.")}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="rounded-xl border border-border bg-background p-4">
+              <p className="text-xs text-muted-foreground">{t("Server host-key algorithm")}</p>
+              <p className="mt-1 font-mono text-sm">{sshPendingHost?.algorithm}</p>
+              <p className="mt-3 text-xs text-muted-foreground">{t("SSH server SHA256 fingerprint")}</p>
+              <p className="mt-1 break-all font-mono text-sm" aria-label={t("SSH server SHA256 fingerprint")}>
+                {sshPendingHost?.fingerprint}
+              </p>
+            </div>
+            <p className="text-xs leading-5 text-muted-foreground">
+              {t("A login key from your cloud console is not the server host key. Confirm this fingerprint independently; trusting the wrong host can expose your SSH session.")}
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" disabled={busy} onClick={() => setSSHPendingHost(null)}>
+              {t("Cancel")}
+            </Button>
+            <Button disabled={busy || sshPendingHost === null} onClick={() => {
+              if (!sshPendingHost) return;
+              const pinned = sshPendingHost.hostPublicKey;
+              setSSHPendingHost(null);
+              void create(pinned);
+            }}>
+              {t("I verified the fingerprint — create sandbox")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

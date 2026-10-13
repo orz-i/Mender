@@ -23,6 +23,7 @@ describe("SSH Sandbox provision diagnostics", () => {
       network_refused: "refused the TCP connection",
       network_unreachable: "Could not reach",
       host_key_mismatch: "host identity verification failed",
+      host_trust_unavailable: "trusted SSH host records",
       authentication_failed: "login was rejected",
       ssh_handshake_failed: "handshake failed",
       sftp_unavailable: "SFTP subsystem is unavailable",

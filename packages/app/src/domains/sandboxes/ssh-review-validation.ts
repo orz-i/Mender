@@ -8,7 +8,6 @@ export type SSHRemoteReviewField =
   | "port"
   | "user"
   | "root"
-  | "hostPublicKey"
   | "credentialRef";
 
 export type SSHRemoteReviewIssueCode =
@@ -17,10 +16,6 @@ export type SSHRemoteReviewIssueCode =
   | "port_invalid"
   | "user_invalid"
   | "workspace_root_invalid"
-  | "host_key_required"
-  | "host_key_multiline"
-  | "host_key_known_hosts_prefix"
-  | "host_key_invalid"
   | "credential_required";
 
 export interface SSHRemoteReviewIssue {
@@ -34,15 +29,12 @@ export interface SSHRemoteReviewDraft {
   port: number;
   user: string;
   root: string;
-  hostPublicKey: string;
   credentialRef: string;
   credentialRefs: readonly string[];
 }
 
 const HOSTNAME_PATTERN = /^[a-zA-Z0-9](?:[a-zA-Z0-9.-]{0,251}[a-zA-Z0-9])?$/;
 const SSH_USER_PATTERN = /^[a-z_][a-z0-9_-]{0,62}$/;
-const PUBLIC_KEY_ALGORITHM = /^(?:ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp(?:256|384|521))$/;
-const PUBLIC_KEY_LINE = /^(?:ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp(?:256|384|521))[ \t]+[A-Za-z0-9+/]+={0,2}(?:[ \t]+[^\r\n]+)?$/;
 
 function isIPv6Address(value: string): boolean {
   if (!value.includes(":") || !/^[0-9a-fA-F:.]+$/.test(value)) return false;
@@ -84,21 +76,6 @@ export function validateSSHRemoteReview(input: SSHRemoteReviewDraft): SSHRemoteR
       parts.some((segment) => segment === "" || segment === "." || segment === "..") ||
       root.includes("\0") || root.includes("\r") || root.includes("\n")) {
     issues.push({ field: "root", code: "workspace_root_invalid" });
-  }
-
-  const key = input.hostPublicKey.trim();
-  if (key === "") {
-    issues.push({ field: "hostPublicKey", code: "host_key_required" });
-  } else if (/\r|\n/.test(key)) {
-    issues.push({ field: "hostPublicKey", code: "host_key_multiline" });
-  } else if (key.length < 45 || key.length > 4096 || !PUBLIC_KEY_LINE.test(key)) {
-    const tokens = key.split(/[ \t]+/);
-    issues.push({
-      field: "hostPublicKey",
-      code: tokens.length >= 3 && PUBLIC_KEY_ALGORITHM.test(tokens[1] ?? "")
-        ? "host_key_known_hosts_prefix"
-        : "host_key_invalid",
-    });
   }
 
   if (!input.credentialRefs.includes(input.credentialRef) || input.credentialRef === "") {
