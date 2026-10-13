@@ -41,12 +41,12 @@ func TestManagedSandboxSuiteDistinctStableAndNoImplicitExposure(t *testing.T) {
 	r := newSuiteRuntime(t)
 	owner := agentOwnerContext(t, r)
 	definitions, err := r.ListToolSuiteDefinitions(ctx)
-	if err != nil || len(definitions) != 3 {
+	if err != nil || len(definitions) != 4 {
 		t.Fatalf("definitions=%+v err=%v", definitions, err)
 	}
-	if definitions[2].SuiteID != suitedomain.SandboxBrowser || definitions[2].Status != "unavailable" ||
-		len(definitions[2].ToolSourceKeys) != 0 {
-		t.Fatalf("browser claims tools: %+v", definitions[2])
+	if definitions[3].SuiteID != suitedomain.SandboxBrowser || definitions[3].Status != "unavailable" ||
+		len(definitions[3].ToolSourceKeys) != 0 {
+		t.Fatalf("browser claims tools: %+v", definitions[3])
 	}
 	providersBefore, err := r.Catalog.ListProviders.Execute(ctx)
 	if err != nil {

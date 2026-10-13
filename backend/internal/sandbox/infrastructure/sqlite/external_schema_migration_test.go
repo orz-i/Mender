@@ -56,6 +56,8 @@ func TestSandboxV9ToV10ExternalSchemaUpgradePreservesInventory(t *testing.T) {
 		"DROP TRIGGER sandbox_ssh_template_immutable_update",
 		"DROP TRIGGER sandbox_ssh_template_immutable_delete",
 		"DROP TABLE sandbox_ssh_remote_templates",
+		"DROP TABLE sandbox_job_suite_bindings",
+		"DELETE FROM sandbox_schema_migrations WHERE version=14",
 		"DROP TABLE sandbox_tool_suite_bindings",
 		"DROP TABLE sandbox_ssh_job_obligations",
 		"DELETE FROM sandbox_schema_migrations WHERE version=13",
@@ -89,7 +91,7 @@ func TestSandboxV9ToV10ExternalSchemaUpgradePreservesInventory(t *testing.T) {
 		t.Fatalf("migrated run changed %+v %v", retained, err)
 	}
 	var version int
-	if err := upgraded.db.QueryRowContext(ctx, "SELECT MAX(version) FROM sandbox_schema_migrations").Scan(&version); err != nil || version != 13 {
+	if err := upgraded.db.QueryRowContext(ctx, "SELECT MAX(version) FROM sandbox_schema_migrations").Scan(&version); err != nil || version != 14 {
 		t.Fatalf("new schema version=%d %v", version, err)
 	}
 	if err := upgraded.Close(); err != nil {

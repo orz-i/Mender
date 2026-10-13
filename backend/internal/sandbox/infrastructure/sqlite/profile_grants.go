@@ -117,8 +117,10 @@ func (s *Store) ReplaceProfileGrants(ctx context.Context, id sandboxdomain.ID, p
 	if _, err = tx.ExecContext(ctx, "UPDATE sandbox_profile_grants SET granted_at=granted_at WHERE sandbox_id=? AND profile_id=?", id.String(), profileID); err != nil {
 		return fmt.Errorf("replace Sandbox Profile grants: acquire write reservation: %w", err)
 	}
-	var ownerKind, ownerRef, state string
-	err = tx.QueryRowContext(ctx, "SELECT s.owner_kind,s.owner_ref,r.state FROM sandboxes s JOIN sandbox_runs r ON s.id=r.sandbox_id WHERE s.id=?", id.String()).Scan(&ownerKind, &ownerRef, &state)
+	var ownerKind, ownerRef, state, backend, pluginID, loginUser string
+	err = tx.QueryRowContext(ctx, `SELECT s.owner_kind,s.owner_ref,r.state,s.backend,s.backend_plugin_id,
+		COALESCE(t.login_user,'') FROM sandboxes s JOIN sandbox_runs r ON s.id=r.sandbox_id
+		LEFT JOIN sandbox_ssh_remote_templates t ON t.sandbox_id=s.id WHERE s.id=?`, id.String()).Scan(&ownerKind, &ownerRef, &state, &backend, &pluginID, &loginUser)
 	if errors.Is(err, sql.ErrNoRows) {
 		return sandboxdomain.ErrNotFound
 	}
@@ -130,6 +132,13 @@ func (s *Store) ReplaceProfileGrants(ctx context.Context, id sandboxdomain.ID, p
 	}
 	if state == string(sandboxdomain.StateDestroyed) || state == string(sandboxdomain.StateDestroying) {
 		return sandboxdomain.ErrConflict
+	}
+	for c := range next {
+		if c == sandboxdomain.CapabilityJobSubmit || c == sandboxdomain.CapabilityJobObserve || c == sandboxdomain.CapabilityJobCancel {
+			if backend != string(sandboxdomain.BackendSSHRemote) || pluginID != "io.mender.sandbox.ssh-remote" || loginUser != "root" {
+				return sandboxdomain.ErrCapabilityUnavailable
+			}
+		}
 	}
 	rows, err := tx.QueryContext(ctx, "SELECT capability FROM sandbox_profile_grants WHERE sandbox_id=? AND profile_id=?", id.String(), profileID)
 	if err != nil {
@@ -156,7 +165,8 @@ func (s *Store) ReplaceProfileGrants(ctx context.Context, id sandboxdomain.ID, p
 		return err
 	}
 	// Stable ordering ensures deterministic audit rows and repeatable tests.
-	capabilities := []sandboxdomain.Capability{sandboxdomain.CapabilityRead, sandboxdomain.CapabilitySearch, sandboxdomain.CapabilityEdit, sandboxdomain.CapabilityShell}
+	capabilities := []sandboxdomain.Capability{sandboxdomain.CapabilityRead, sandboxdomain.CapabilitySearch, sandboxdomain.CapabilityEdit,
+		sandboxdomain.CapabilityShell, sandboxdomain.CapabilityJobSubmit, sandboxdomain.CapabilityJobObserve, sandboxdomain.CapabilityJobCancel}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	for _, capability := range capabilities {
 		had, want := current[capability], next[capability]

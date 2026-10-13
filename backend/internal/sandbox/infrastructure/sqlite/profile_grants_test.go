@@ -61,6 +61,11 @@ func TestProfileGrantRequiresOwnerAndCapability(t *testing.T) {
 		t.Fatalf("service grant %v", err)
 	}
 	owner := leasePrincipal(t)
+	for _, cap := range []sand.Capability{sand.CapabilityJobSubmit, sand.CapabilityJobObserve, sand.CapabilityJobCancel} {
+		if err := store.ReplaceProfileGrants(ctx, sandboxID, delegatedProfileID, []sand.Capability{cap}, owner); !errors.Is(err, sand.ErrCapabilityUnavailable) {
+			t.Fatalf("local Workspace accepted SSH-only grant %s: %v", cap, err)
+		}
+	}
 	if err := store.ReplaceProfileGrants(ctx, sandboxID, delegatedProfileID, []sand.Capability{sand.CapabilityRead}, owner); err != nil {
 		t.Fatal(err)
 	}

@@ -13,7 +13,7 @@ import (
 
 func TestToolSuiteCapabilitiesFailClosedForBrowserOnlyAndPartialWorkspace(t *testing.T) {
 	values := List()
-	if len(values) != 3 {
+	if len(values) != 4 {
 		t.Fatalf("suite inventory %d", len(values))
 	}
 	for _, v := range values {
@@ -23,7 +23,21 @@ func TestToolSuiteCapabilitiesFailClosedForBrowserOnlyAndPartialWorkspace(t *tes
 	}
 	workspace, _ := Find(suite.SandboxWorkspace)
 	browser, _ := Find(suite.SandboxBrowser)
+	jobs, _ := Find(suite.SandboxJobs)
 	agent, _ := Find(suite.AgentDelegation)
+	jobOffers := []platformplugin.CapabilityContract{
+		{ID: suite.JobSubmit, Version: platformplugin.CapabilityVersion{Major: 1}, Mode: platformplugin.ExecutionDetached,
+			Guarantees: []platformplugin.ExecutionGuarantee{
+				platformplugin.GuaranteeIdempotentSubmit, platformplugin.GuaranteeReconnectObservable, platformplugin.GuaranteePersistedResult}},
+		{ID: suite.JobObserve, Version: platformplugin.CapabilityVersion{Major: 1}, Mode: platformplugin.ExecutionInline},
+		{ID: suite.JobCancel, Version: platformplugin.CapabilityVersion{Major: 1}, Mode: platformplugin.ExecutionInline},
+	}
+	if err := suite.RequireContracts(jobs, suite.SandboxResource, jobOffers); err != nil {
+		t.Fatal(err)
+	}
+	if err := suite.RequireContracts(jobs, suite.SandboxResource, inlineContracts(suite.ProcessShell)); !errors.Is(err, suite.ErrIncompatible) {
+		t.Fatalf("Workspace Shell cannot provide SSH Jobs: %v", err)
+	}
 	required := inlineContracts(suite.FileRead, suite.FileSearch, suite.FileEdit, suite.ProcessShell)
 	if err := suite.RequireContracts(workspace, suite.SandboxResource, required); err != nil {
 		t.Fatal(err)

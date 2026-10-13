@@ -84,15 +84,19 @@ func (i IsolationClass) Validate() error {
 type Capability string
 
 const (
-	CapabilityRead   Capability = "file.read"
-	CapabilitySearch Capability = "file.search"
-	CapabilityEdit   Capability = "file.edit"
-	CapabilityShell  Capability = "process.shell"
+	CapabilityRead       Capability = "file.read"
+	CapabilitySearch     Capability = "file.search"
+	CapabilityEdit       Capability = "file.edit"
+	CapabilityShell      Capability = "process.shell"
+	CapabilityJobSubmit  Capability = "job.submit"
+	CapabilityJobObserve Capability = "job.observe"
+	CapabilityJobCancel  Capability = "job.cancel"
 )
 
 func (c Capability) Validate() error {
 	switch c {
-	case CapabilityRead, CapabilitySearch, CapabilityEdit, CapabilityShell:
+	case CapabilityRead, CapabilitySearch, CapabilityEdit, CapabilityShell,
+		CapabilityJobSubmit, CapabilityJobObserve, CapabilityJobCancel:
 		return nil
 	}
 	return fmt.Errorf("sandbox capability: unknown %q", c)

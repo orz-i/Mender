@@ -80,11 +80,12 @@ func (s *Store) ClaimWorkspaceSuite(ctx context.Context, id sandboxdomain.ID, pr
 	return tx.Commit()
 }
 
-// IsWorkspaceSuiteProvider lets generic Provider CRUD fail before closing
-// execution, rather than relying only on the persisted delete trigger.
-func (s *Store) IsWorkspaceSuiteProvider(ctx context.Context, providerID string) (bool, error) {
+// IsManagedSandboxSuiteProvider prevents generic Provider CRUD from editing
+// either host-owned Workspace or Jobs facade. Explicit Suite retirement is
+// separate from generic Provider deletion.
+func (s *Store) IsManagedSandboxSuiteProvider(ctx context.Context, providerID string) (bool, error) {
 	var v int
-	err := s.db.QueryRowContext(ctx, "SELECT 1 FROM sandbox_tool_suite_bindings WHERE provider_id=?", providerID).Scan(&v)
+	err := s.db.QueryRowContext(ctx, "SELECT 1 FROM sandbox_tool_suite_bindings WHERE provider_id=? UNION ALL SELECT 1 FROM sandbox_job_suite_bindings WHERE provider_id=? LIMIT 1", providerID, providerID).Scan(&v)
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, nil
 	}

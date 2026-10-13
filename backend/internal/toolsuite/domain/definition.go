@@ -18,6 +18,7 @@ type ID string
 const (
 	AgentDelegation  ID = "agent.delegation"
 	SandboxWorkspace ID = "sandbox.workspace"
+	SandboxJobs      ID = "sandbox.jobs"
 	SandboxBrowser   ID = "sandbox.browser"
 )
 
@@ -39,6 +40,9 @@ const (
 	ProcessShell   Capability = "process.shell"
 	AgentTask      Capability = "agent.task"
 	BrowserSession Capability = "browser.session"
+	JobSubmit      Capability = "job.submit"
+	JobObserve     Capability = "job.observe"
+	JobCancel      Capability = "job.cancel"
 )
 
 // Definition is inert, reviewed host metadata. RequiredCapabilities preserves

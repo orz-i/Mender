@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-const latestSchemaVersion = 13
+const latestSchemaVersion = 14
 
 func migrate(ctx context.Context, db *sql.DB) error {
 	tx, err := db.BeginTx(ctx, nil)
@@ -471,6 +471,56 @@ func migrate(ctx context.Context, db *sql.DB) error {
 			return fmt.Errorf("record sandbox migration 13: %w", err)
 		}
 	}
+	// Stage C hard cut: permit an independently bound, host-reviewed SSH Jobs
+	// suite and three narrowly scoped Job Profile grants. Preserve every
+	// existing Suite ProviderID, Workspace grant, and immutable audit event.
+	var jobsSupplyApplied int
+	if err = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM sandbox_schema_migrations WHERE version=14").Scan(&jobsSupplyApplied); err != nil {
+		return fmt.Errorf("sandbox migration 14 presence: %w", err)
+	}
+	if jobsSupplyApplied == 0 {
+		for _, statement := range []string{
+			// A standalone Sandbox store may precede the Provider Catalog table.
+			// Keep the Workspace Suite table intact and persist the optional Jobs
+			// binding independently; rebuilding the old FK table while providers
+			// does not exist fails and risks corrupting cross-context startup.
+			`CREATE TABLE sandbox_job_suite_bindings (
+				sandbox_id TEXT PRIMARY KEY REFERENCES sandboxes(id) ON DELETE RESTRICT,
+				provider_id TEXT NOT NULL UNIQUE REFERENCES providers(id) ON DELETE RESTRICT,
+				created_at TEXT NOT NULL
+			)`,
+
+			`CREATE TABLE sandbox_profile_grants_v14 (
+				sandbox_id TEXT NOT NULL REFERENCES sandboxes(id) ON DELETE RESTRICT,
+				profile_id TEXT NOT NULL,
+				capability TEXT NOT NULL CHECK(capability IN ('file.read','file.search','file.edit','process.shell','job.submit','job.observe','job.cancel')),
+				granted_at TEXT NOT NULL, PRIMARY KEY(sandbox_id,profile_id,capability)
+			)`,
+			`INSERT INTO sandbox_profile_grants_v14 SELECT sandbox_id,profile_id,capability,granted_at FROM sandbox_profile_grants`,
+			`DROP TABLE sandbox_profile_grants`,
+			`ALTER TABLE sandbox_profile_grants_v14 RENAME TO sandbox_profile_grants`,
+			`CREATE TABLE sandbox_profile_grant_events_v14 (
+				event_id INTEGER PRIMARY KEY AUTOINCREMENT,
+				sandbox_id TEXT NOT NULL REFERENCES sandboxes(id) ON DELETE RESTRICT,
+				profile_id TEXT NOT NULL,
+				capability TEXT NOT NULL CHECK(capability IN ('file.read','file.search','file.edit','process.shell','job.submit','job.observe','job.cancel')),
+				action TEXT NOT NULL CHECK(action IN ('grant','revoke')),
+				principal_kind TEXT NOT NULL CHECK(principal_kind='local_user'),
+				principal_ref TEXT NOT NULL, origin TEXT NOT NULL, occurred_at TEXT NOT NULL
+			)`,
+			`INSERT INTO sandbox_profile_grant_events_v14 SELECT event_id,sandbox_id,profile_id,capability,action,principal_kind,principal_ref,origin,occurred_at FROM sandbox_profile_grant_events`,
+			`DROP TABLE sandbox_profile_grant_events`,
+			`ALTER TABLE sandbox_profile_grant_events_v14 RENAME TO sandbox_profile_grant_events`,
+			`CREATE INDEX idx_sandbox_profile_grant_events ON sandbox_profile_grant_events(sandbox_id,event_id DESC)`,
+		} {
+			if _, err = tx.ExecContext(ctx, statement); err != nil {
+				return fmt.Errorf("sandbox migration 14 Job supply: %w", err)
+			}
+		}
+		if _, err = tx.ExecContext(ctx, "INSERT INTO sandbox_schema_migrations(version,applied_at) VALUES(14,?)", time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
+			return fmt.Errorf("record sandbox migration 14: %w", err)
+		}
+	}
 	// A standalone Sandbox store may precede the Provider catalogue. Install
 	// guards whenever the two contexts share their Runtime database.
 	var hasProviderConfigs int
@@ -480,10 +530,10 @@ func migrate(ctx context.Context, db *sql.DB) error {
 	if hasProviderConfigs > 0 {
 		for _, statement := range []string{
 			`CREATE TRIGGER IF NOT EXISTS sandbox_suite_config_delete_guard BEFORE DELETE ON provider_configs
-			WHEN EXISTS(SELECT 1 FROM sandbox_tool_suite_bindings s WHERE s.provider_id=OLD.provider_id)
+			WHEN EXISTS(SELECT 1 FROM sandbox_tool_suite_bindings s WHERE s.provider_id=OLD.provider_id) OR EXISTS(SELECT 1 FROM sandbox_job_suite_bindings j WHERE j.provider_id=OLD.provider_id)
 			BEGIN SELECT RAISE(ABORT,'Sandbox Tool Suite is resource-owned'); END`,
 			`CREATE TRIGGER IF NOT EXISTS sandbox_suite_config_update_guard BEFORE UPDATE OF plugin_id,plugin_installation_id,config_json,config_version ON provider_configs
-			WHEN EXISTS(SELECT 1 FROM sandbox_tool_suite_bindings s WHERE s.provider_id=OLD.provider_id)
+			WHEN EXISTS(SELECT 1 FROM sandbox_tool_suite_bindings s WHERE s.provider_id=OLD.provider_id) OR EXISTS(SELECT 1 FROM sandbox_job_suite_bindings j WHERE j.provider_id=OLD.provider_id)
 			BEGIN SELECT RAISE(ABORT,'Sandbox Tool Suite config immutable'); END`,
 		} {
 			if _, err = tx.ExecContext(ctx, statement); err != nil {

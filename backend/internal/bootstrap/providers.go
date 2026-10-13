@@ -539,7 +539,7 @@ func (r *Runtime) UpdateConfiguredProvider(
 	governanceContext governancedomain.Context,
 ) (catalogdomain.Provider, error) {
 	if r.Sandboxes != nil && r.Sandboxes.store != nil {
-		managed, err := r.Sandboxes.store.IsWorkspaceSuiteProvider(ctx, providerID.String())
+		managed, err := r.Sandboxes.store.IsManagedSandboxSuiteProvider(ctx, providerID.String())
 		if err != nil {
 			return catalogdomain.Provider{}, err
 		}
@@ -901,7 +901,7 @@ func (r *Runtime) DeleteConfiguredProvider(
 		}
 	}
 	if r.Sandboxes != nil && r.Sandboxes.store != nil {
-		managed, err := r.Sandboxes.store.IsWorkspaceSuiteProvider(ctx, providerID.String())
+		managed, err := r.Sandboxes.store.IsManagedSandboxSuiteProvider(ctx, providerID.String())
 		if err != nil {
 			return err
 		}
