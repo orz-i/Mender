@@ -39,6 +39,10 @@ func sshFixture(t *testing.T) (Template, fixtureCredentials) {
 }
 
 func sshFixtureFromKey(t *testing.T, private []byte, hostKey string) (Template, fixtureCredentials) {
+	return sshFixtureWithSFTP(t, private, hostKey, true)
+}
+
+func sshFixtureWithSFTP(t *testing.T, private []byte, hostKey string, enableSFTP bool) (Template, fixtureCredentials) {
 	t.Helper()
 	pub, _, _, _, err := ssh.ParseAuthorizedKey([]byte(hostKey))
 	if err != nil {
@@ -107,7 +111,7 @@ func sshFixtureFromKey(t *testing.T, private []byte, hostKey string) (Template, 
 									_ = req.Reply(false, nil)
 									return
 								}
-								if payload.Name != "sftp" {
+								if payload.Name != "sftp" || !enableSFTP {
 									_ = req.Reply(false, nil)
 									continue
 								}
@@ -207,6 +211,56 @@ func TestSSHRemoteRootLoginUsesPinnedKeyAndSFTP(t *testing.T) {
 	if err != nil || info.IsDir() {
 		t.Fatalf("root SSH session SFTP verification failed: info=%v, err=%v", info, err)
 	}
+}
+
+func TestSSHRemoteProvisioningReportsActualFailureStage(t *testing.T) {
+	t.Run("mismatched pinned host key", func(t *testing.T) {
+		template, credentials := sshFixture(t)
+		_, unrelatedHostKey := testKeys(t)
+		template.HostPublicKey = unrelatedHostKey
+		_, err := (Dialer{Credentials: credentials}).Connect(context.Background(), template)
+		expectConnectionFailure(t, err, FailureHostKeyMismatch)
+	})
+
+	t.Run("rejected public key authentication", func(t *testing.T) {
+		template, credentials := sshFixture(t)
+		unrelatedLoginKey, _ := testKeys(t)
+		credentials.secret = unrelatedLoginKey
+		_, err := (Dialer{Credentials: credentials}).Connect(context.Background(), template)
+		expectConnectionFailure(t, err, FailureAuthenticationFailed)
+	})
+
+	t.Run("SFTP subsystem not enabled", func(t *testing.T) {
+		private, hostKey := testKeys(t)
+		template, credentials := sshFixtureWithSFTP(t, private, hostKey, false)
+		_, err := (Dialer{Credentials: credentials}).Connect(context.Background(), template)
+		expectConnectionFailure(t, err, FailureSFTPUnavailable)
+	})
+
+	t.Run("remote workspace does not exist", func(t *testing.T) {
+		template, credentials := sshFixture(t)
+		template.Root = filepath.Join(template.Root, "missing-folder")
+		_, err := (Dialer{Credentials: credentials}).Connect(context.Background(), template)
+		expectConnectionFailure(t, err, FailureWorkspaceMissing)
+	})
+
+	t.Run("remote workspace is not a directory", func(t *testing.T) {
+		template, credentials := sshFixture(t)
+		template.Root = filepath.Join(template.Root, "hello.txt")
+		_, err := (Dialer{Credentials: credentials}).Connect(context.Background(), template)
+		expectConnectionFailure(t, err, FailureWorkspaceInvalid)
+	})
+
+	t.Run("remote workspace contains symbolic link", func(t *testing.T) {
+		template, credentials := sshFixture(t)
+		symlink := filepath.Join(template.Root, "redirect")
+		if err := os.Symlink(template.Root, symlink); err != nil {
+			t.Fatal(err)
+		}
+		template.Root = symlink
+		_, err := (Dialer{Credentials: credentials}).Connect(context.Background(), template)
+		expectConnectionFailure(t, err, FailureWorkspaceInvalid)
+	})
 }
 
 func jsonArg(t *testing.T, content any) invocationdomain.JSONValue {

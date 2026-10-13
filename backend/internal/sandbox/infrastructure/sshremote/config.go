@@ -17,7 +17,6 @@ import (
 
 	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
 	invocationapp "github.com/orz-i/Mender/backend/internal/invocation/application"
-	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
 )
@@ -91,64 +90,78 @@ type Dialer struct {
 }
 
 func (d Dialer) Connect(ctx context.Context, t Template) (*Connection, error) {
-	if d.Credentials == nil || t.Validate() != nil {
-		return nil, sandboxdomain.ErrBackendUnavailable
+	if d.Credentials == nil {
+		return nil, newConnectionFailure(FailureCredentialUnavailable)
+	}
+	if t.Validate() != nil {
+		return nil, newConnectionFailure(FailureWorkspaceInvalid)
 	}
 	material, err := d.Credentials.Resolve(ctx, t.CredentialRef)
 	if err != nil {
-		return nil, fmt.Errorf("ssh remote: credential unavailable: %w", sandboxdomain.ErrBackendUnavailable)
+		return nil, newConnectionFailure(FailureCredentialUnavailable)
 	}
 	defer clear(material)
 	if err = credentialdomain.ValidateSSHPrivateKey(material); err != nil {
-		return nil, fmt.Errorf("ssh remote: credential is not a valid SSH key: %w", sandboxdomain.ErrBackendUnavailable)
+		return nil, newConnectionFailure(FailureCredentialInvalid)
 	}
 	signer, err := ssh.ParsePrivateKey(material)
 	if err != nil {
-		return nil, sandboxdomain.ErrBackendUnavailable
+		return nil, newConnectionFailure(FailureCredentialInvalid)
 	}
 	// RSA keys are valid when using SHA-2 signatures, never the legacy SHA-1 ssh-rsa algorithm.
 	if signer.PublicKey().Type() == ssh.KeyAlgoRSA {
 		algorithmSigner, ok := signer.(ssh.AlgorithmSigner)
 		if !ok {
-			return nil, sandboxdomain.ErrBackendUnavailable
+			return nil, newConnectionFailure(FailureCredentialInvalid)
 		}
 		signer, err = ssh.NewSignerWithAlgorithms(algorithmSigner, []string{ssh.KeyAlgoRSASHA512, ssh.KeyAlgoRSASHA256})
 		if err != nil {
-			return nil, sandboxdomain.ErrBackendUnavailable
+			return nil, newConnectionFailure(FailureCredentialInvalid)
 		}
 	}
 	public, err := parseHostKey(t.HostPublicKey)
 	if err != nil {
-		return nil, sandboxdomain.ErrBackendUnavailable
+		return nil, newConnectionFailure(FailureHostKeyMismatch)
 	}
 	endpoint := net.JoinHostPort(t.Host, fmt.Sprint(t.Port))
 	ctx, cancel := context.WithTimeout(ctx, 12*time.Second)
 	defer cancel()
 	raw, err := (&net.Dialer{Timeout: 8 * time.Second}).DialContext(ctx, "tcp", endpoint)
 	if err != nil {
-		return nil, sandboxdomain.ErrBackendUnavailable
+		return nil, networkFailure(err)
 	}
 	_ = raw.SetDeadline(time.Now().Add(10 * time.Second))
+	// Preserve cryptographic pinning and classify its failure separately
+	// from a rejected login. Do not return the remote host key or library text.
+	fixedHostKey := ssh.FixedHostKey(public)
+	hostKeyMismatch := false
 	config := &ssh.ClientConfig{
 		User: t.User, Auth: []ssh.AuthMethod{ssh.PublicKeys(signer)},
-		HostKeyCallback: ssh.FixedHostKey(public), Timeout: 10 * time.Second,
+		HostKeyCallback: func(host string, addr net.Addr, key ssh.PublicKey) error {
+			err := fixedHostKey(host, addr, key)
+			if err != nil {
+				hostKeyMismatch = true
+			}
+			return err
+		},
+		Timeout:           10 * time.Second,
 		HostKeyAlgorithms: pinnedHostKeyAlgorithms(public),
 	}
 	conn, channels, requests, err := ssh.NewClientConn(raw, endpoint, config)
 	if err != nil {
 		_ = raw.Close()
-		return nil, sandboxdomain.ErrBackendUnavailable
+		return nil, handshakeFailure(err, hostKeyMismatch)
 	}
 	client := ssh.NewClient(conn, channels, requests)
 	sftpClient, err := sftp.NewClient(client)
 	if err != nil {
 		_ = client.Close()
-		return nil, sandboxdomain.ErrBackendUnavailable
+		return nil, newConnectionFailure(FailureSFTPUnavailable)
 	}
 	result := &Connection{SSH: client, SFTP: sftpClient}
 	if err = ValidateRoot(sftpClient, t.Root); err != nil {
 		_ = result.Close()
-		return nil, sandboxdomain.ErrBackendUnavailable
+		return nil, workspaceFailure(err)
 	}
 	// Keep a bounded deadline through SFTP handshake and root verification.
 	// A half-open or malicious SSH server must not block create indefinitely.

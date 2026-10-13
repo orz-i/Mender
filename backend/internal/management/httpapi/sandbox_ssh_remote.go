@@ -44,7 +44,11 @@ func (h *Handler) createSSHRemoteSandbox(w http.ResponseWriter, r *http.Request)
 		case errors.Is(err, sandboxdomain.ErrNotAuthorized):
 			writeAPIError(w, http.StatusForbidden, "policy_denied", err)
 		case errors.Is(err, sandboxdomain.ErrBackendUnavailable):
-			writeAPIError(w, http.StatusServiceUnavailable, "ssh_remote_unavailable", err)
+			if code, ok := sandboxssh.FailureCodeOf(err); ok {
+				writeAPIError(w, http.StatusServiceUnavailable, "ssh_remote_"+string(code), err)
+			} else {
+				writeAPIError(w, http.StatusServiceUnavailable, "ssh_remote_unavailable", err)
+			}
 		case errors.Is(err, sandboxdomain.ErrConflict):
 			writeAPIError(w, http.StatusConflict, "conflict", err)
 		default:

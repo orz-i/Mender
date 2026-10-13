@@ -41,7 +41,14 @@ func TestSSHRemoteHTTPRejectsMissingCredentialWithoutNetworkOrResource(t *testin
 		"hostPublicKey": strings.TrimSpace(string(ssh.MarshalAuthorizedKey(pub))),
 		"credentialRef": "credential://ssh/unavailable",
 	}
-	requestJSON(t, server.Client(), http.MethodPost, server.URL+"/api/v1/sandboxes/ssh-remote", template, http.StatusServiceUnavailable)
+	failed := requestJSON(t, server.Client(), http.MethodPost, server.URL+"/api/v1/sandboxes/ssh-remote", template, http.StatusServiceUnavailable)
+	if failed["code"] != "ssh_remote_credential_unavailable" {
+		t.Fatalf("missing SSH credential did not return a safe specific stage: %#v", failed)
+	}
+	if message, ok := failed["message"].(string); !ok || !strings.Contains(message, "ssh_remote_failure:credential_unavailable") ||
+		strings.Contains(message, "127.0.0.1") || strings.Contains(message, "/home/agent/work") {
+		t.Fatal("SSH provisioning error lost its stage or leaked remote configuration")
+	}
 	empty := requestJSON(t, server.Client(), http.MethodGet, server.URL+"/api/v1/sandboxes", nil, http.StatusOK)
 	if arr, ok := empty["sandboxes"].([]any); !ok || len(arr) != 0 {
 		t.Fatalf("unverified SSH created a durable resource: %+v", empty)

@@ -54,7 +54,7 @@ func (s *Sandboxes) CreateSSHRemoteSandbox(ctx context.Context, input CreateSSHR
 	}
 	conn, err := s.sshRemote.Dial.Connect(ctx, input.Template)
 	if err != nil {
-		return sandboxdomain.Sandbox{}, fmt.Errorf("SSH remote connection or host key verification failed: %w", sandboxdomain.ErrBackendUnavailable)
+		return sandboxdomain.Sandbox{}, fmt.Errorf("SSH remote connection failed: %w", err)
 	}
 	defer func() { _ = conn.Close() }()
 	run, err := sandboxdomain.NewRun(id, 1, sandboxdomain.StateReady, "ssh_remote:"+id.String())
