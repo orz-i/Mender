@@ -78,11 +78,73 @@ func TestSSHPrivateKeyCredentialRequiresNativeKeyringAndValidatedKey(t *testing.
 		t.Fatal("valid SSH credential not stored using native keyring")
 	}
 	before := append([]byte(nil), secrets.values[created.Reference()]...)
-	if _, err := NewRotateNativeSecret(repo, secrets, clock).Execute(ctx, created.Reference(), []byte("wrong key")); err == nil {
+	if _, err := NewRotateNativeSecret(repo, secrets, clock).Execute(ctx, created.Reference(), []byte("wrong key"), nil); err == nil {
 		t.Fatal("invalid rotated SSH key accepted")
 	}
 	if !bytes.Equal(before, secrets.values[created.Reference()]) {
 		t.Fatal("failed SSH rotation overwrote keyring secret")
+	}
+}
+
+func TestEncryptedSSHKeyImportAndRotationUsesNativeKeyring(t *testing.T) {
+	ctx := context.Background()
+	repo := newMemoryRepository()
+	secrets := newMemorySecrets()
+	clock := fixedClock{now: time.Date(2026, 10, 12, 12, 0, 0, 0, time.UTC)}
+	passphrase := []byte("temporary-import-only-passphrase")
+	key := func() []byte {
+		_, priv, err := ed25519.GenerateKey(rand.Reader)
+		if err != nil {
+			t.Fatal(err)
+		}
+		block, err := ssh.MarshalPrivateKeyWithPassphrase(priv, "test", passphrase)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return pem.EncodeToMemory(block)
+	}
+	encrypted := key()
+	uc := NewCreateNative(repo, secrets, clock)
+	req := CreateNativeRequest{Namespace: "ssh", Name: "build", DisplayName: "Build", Secret: encrypted}
+	if _, err := uc.Execute(ctx, req); err == nil {
+		t.Fatal("encrypted key without a passphrase was accepted")
+	}
+	req.SSHKeyPassphrase = []byte("wrong")
+	if _, err := uc.Execute(ctx, req); err == nil || secrets.putCalls != 0 {
+		t.Fatal("wrong passphrase reached keyring")
+	}
+	req.SSHKeyPassphrase = passphrase
+	created, err := uc.Execute(ctx, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stored := secrets.values[created.Reference()]
+	if err := credentialdomain.ValidateSSHPrivateKey(stored); err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Equal(stored, encrypted) || bytes.Contains(stored, passphrase) {
+		t.Fatal("encrypted input or passphrase persisted instead of normalized key")
+	}
+	before := append([]byte(nil), stored...)
+	rotate := NewRotateNativeSecret(repo, secrets, clock)
+	second := key()
+	if _, err := rotate.Execute(ctx, created.Reference(), second, []byte("wrong")); err == nil {
+		t.Fatal("rotation with wrong passphrase succeeded")
+	}
+	if !bytes.Equal(before, secrets.values[created.Reference()]) {
+		t.Fatal("failed rotation modified keyring")
+	}
+	if _, err := rotate.Execute(ctx, created.Reference(), second, passphrase); err != nil {
+		t.Fatal(err)
+	}
+	updated := secrets.values[created.Reference()]
+	if err := credentialdomain.ValidateSSHPrivateKey(updated); err != nil || bytes.Equal(before, updated) {
+		t.Fatal("rotated encrypted key did not become a new valid keyring key")
+	}
+	if _, err := NewCreateNative(repo, secrets, clock).Execute(ctx, CreateNativeRequest{
+		Namespace: "github", Name: "bad", DisplayName: "Bad", Secret: []byte("token"), SSHKeyPassphrase: passphrase,
+	}); err == nil {
+		t.Fatal("SSH key passphrase accepted on generic credential")
 	}
 }
 
@@ -167,6 +229,7 @@ func TestRotateAndDeleteNativeCredential(t *testing.T) {
 		context.Background(),
 		ref,
 		[]byte("new"),
+		nil,
 	)
 	if err != nil {
 		t.Fatal(err)

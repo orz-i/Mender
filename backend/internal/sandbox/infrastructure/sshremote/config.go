@@ -5,6 +5,7 @@ package sshremote
 
 import (
 	"context"
+	"crypto/rsa"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -47,14 +48,24 @@ func (t Template) Validate() error {
 	return err
 }
 func parseHostKey(raw string) (ssh.PublicKey, error) {
-	if len(raw) < 45 || len(raw) > 1024 || strings.ContainsAny(raw, "\r\n") {
+	if len(raw) < 45 || len(raw) > 4096 || strings.ContainsAny(raw, "\r\n") {
 		return nil, fmt.Errorf("ssh remote: pinned host public key invalid")
 	}
 	k, comment, opts, rest, err := ssh.ParseAuthorizedKey([]byte(raw))
-	if err != nil || len(opts) != 0 || len(rest) != 0 || k.Type() != ssh.KeyAlgoED25519 || strings.ContainsAny(comment, "\r\n") {
-		return nil, fmt.Errorf("ssh remote: require exactly one pinned ssh-ed25519 host public key")
+	if err != nil || len(opts) != 0 || len(rest) != 0 || strings.ContainsAny(comment, "\r\n") {
+		return nil, fmt.Errorf("ssh remote: require exactly one pinned Ed25519, ECDSA or RSA host public key")
 	}
-	return k, nil
+	switch k.Type() {
+	case ssh.KeyAlgoED25519, ssh.KeyAlgoECDSA256, ssh.KeyAlgoECDSA384, ssh.KeyAlgoECDSA521:
+		return k, nil
+	case ssh.KeyAlgoRSA:
+		if pub, ok := k.(ssh.CryptoPublicKey); ok {
+			if rsaKey, ok := pub.CryptoPublicKey().(*rsa.PublicKey); ok && rsaKey.N.BitLen() >= 2048 {
+				return k, nil
+			}
+		}
+	}
+	return nil, fmt.Errorf("ssh remote: pinned host key must be Ed25519, ECDSA or RSA >=2048 bits")
 }
 
 type Connection struct {
@@ -95,6 +106,17 @@ func (d Dialer) Connect(ctx context.Context, t Template) (*Connection, error) {
 	if err != nil {
 		return nil, sandboxdomain.ErrBackendUnavailable
 	}
+	// RSA keys are valid when using SHA-2 signatures, never the legacy SHA-1 ssh-rsa algorithm.
+	if signer.PublicKey().Type() == ssh.KeyAlgoRSA {
+		algorithmSigner, ok := signer.(ssh.AlgorithmSigner)
+		if !ok {
+			return nil, sandboxdomain.ErrBackendUnavailable
+		}
+		signer, err = ssh.NewSignerWithAlgorithms(algorithmSigner, []string{ssh.KeyAlgoRSASHA512, ssh.KeyAlgoRSASHA256})
+		if err != nil {
+			return nil, sandboxdomain.ErrBackendUnavailable
+		}
+	}
 	public, err := parseHostKey(t.HostPublicKey)
 	if err != nil {
 		return nil, sandboxdomain.ErrBackendUnavailable
@@ -110,6 +132,7 @@ func (d Dialer) Connect(ctx context.Context, t Template) (*Connection, error) {
 	config := &ssh.ClientConfig{
 		User: t.User, Auth: []ssh.AuthMethod{ssh.PublicKeys(signer)},
 		HostKeyCallback: ssh.FixedHostKey(public), Timeout: 10 * time.Second,
+		HostKeyAlgorithms: pinnedHostKeyAlgorithms(public),
 	}
 	conn, channels, requests, err := ssh.NewClientConn(raw, endpoint, config)
 	if err != nil {
@@ -131,6 +154,14 @@ func (d Dialer) Connect(ctx context.Context, t Template) (*Connection, error) {
 	// A half-open or malicious SSH server must not block create indefinitely.
 	_ = raw.SetDeadline(time.Time{})
 	return result, nil
+}
+
+// Explicitly exclude SHA-1 ssh-rsa host signatures, even for a pinned RSA key.
+func pinnedHostKeyAlgorithms(key ssh.PublicKey) []string {
+	if key.Type() == ssh.KeyAlgoRSA {
+		return []string{ssh.KeyAlgoRSASHA512, ssh.KeyAlgoRSASHA256}
+	}
+	return []string{key.Type()}
 }
 
 // ValidateRoot does not imply confinement for process.shell. It prevents

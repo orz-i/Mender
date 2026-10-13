@@ -11,10 +11,11 @@ import (
 const maxSecretBytes = 64 * 1024
 
 type CreateNativeRequest struct {
-	Namespace   string
-	Name        string
-	DisplayName string
-	Secret      []byte
+	Namespace        string
+	Name             string
+	DisplayName      string
+	Secret           []byte
+	SSHKeyPassphrase []byte // import-time only; never persisted
 }
 
 type CreateNative struct {
@@ -43,10 +44,16 @@ func (uc CreateNative) Execute(
 	if err != nil {
 		return credentialdomain.Credential{}, err
 	}
+	defer func() { clear(secret) }()
 	if request.Namespace == "ssh" {
-		if err := credentialdomain.ValidateSSHPrivateKey(secret); err != nil {
+		normalized, err := credentialdomain.NormalizeSSHPrivateKey(secret, request.SSHKeyPassphrase)
+		clear(secret)
+		if err != nil {
 			return credentialdomain.Credential{}, err
 		}
+		secret = normalized
+	} else if len(request.SSHKeyPassphrase) != 0 {
+		return credentialdomain.Credential{}, ErrInvalidSecret
 	}
 	credential, err := credentialdomain.NewCredential(
 		ref,
@@ -191,6 +198,7 @@ func (uc RotateNativeSecret) Execute(
 	ctx context.Context,
 	ref credentialdomain.Reference,
 	rawSecret []byte,
+	sshKeyPassphrase []byte,
 ) (credentialdomain.Credential, error) {
 	credential, err := uc.repository.Get(ctx, ref)
 	if err != nil {
@@ -203,10 +211,16 @@ func (uc RotateNativeSecret) Execute(
 	if err != nil {
 		return credentialdomain.Credential{}, err
 	}
+	defer func() { clear(secret) }()
 	if ref.Namespace() == "ssh" {
-		if err := credentialdomain.ValidateSSHPrivateKey(secret); err != nil {
+		normalized, err := credentialdomain.NormalizeSSHPrivateKey(secret, sshKeyPassphrase)
+		clear(secret)
+		if err != nil {
 			return credentialdomain.Credential{}, err
 		}
+		secret = normalized
+	} else if len(sshKeyPassphrase) != 0 {
+		return credentialdomain.Credential{}, ErrInvalidSecret
 	}
 	if err := uc.secrets.Put(ctx, ref, secret); err != nil {
 		return credentialdomain.Credential{}, fmt.Errorf("rotate credential secret: %w", err)

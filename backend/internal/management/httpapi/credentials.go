@@ -8,10 +8,11 @@ import (
 )
 
 type createNativeCredentialRequest struct {
-	Namespace   string `json:"namespace"`
-	Name        string `json:"name"`
-	DisplayName string `json:"displayName"`
-	Secret      string `json:"secret"`
+	Namespace        string `json:"namespace"`
+	Name             string `json:"name"`
+	DisplayName      string `json:"displayName"`
+	Secret           string `json:"secret"`
+	SSHKeyPassphrase string `json:"sshKeyPassphrase,omitempty"`
 }
 
 type createEnvironmentCredentialRequest struct {
@@ -22,7 +23,8 @@ type createEnvironmentCredentialRequest struct {
 }
 
 type rotateCredentialRequest struct {
-	Secret string `json:"secret"`
+	Secret           string `json:"secret"`
+	SSHKeyPassphrase string `json:"sshKeyPassphrase,omitempty"`
 }
 
 func (h *Handler) listCredentials(w http.ResponseWriter, r *http.Request) {
@@ -61,10 +63,11 @@ func (h *Handler) createNativeCredential(w http.ResponseWriter, r *http.Request)
 	credential, err := h.runtime.Credentials.CreateNative.Execute(
 		r.Context(),
 		credentialapplication.CreateNativeRequest{
-			Namespace:   input.Namespace,
-			Name:        input.Name,
-			DisplayName: input.DisplayName,
-			Secret:      []byte(input.Secret),
+			Namespace:        input.Namespace,
+			Name:             input.Name,
+			DisplayName:      input.DisplayName,
+			Secret:           []byte(input.Secret),
+			SSHKeyPassphrase: []byte(input.SSHKeyPassphrase),
 		},
 	)
 	if err != nil {
@@ -111,6 +114,7 @@ func (h *Handler) rotateCredential(w http.ResponseWriter, r *http.Request) {
 		r.Context(),
 		ref,
 		[]byte(input.Secret),
+		[]byte(input.SSHKeyPassphrase),
 	)
 	if err != nil {
 		writeKnownError(w, err)

@@ -205,6 +205,7 @@ func (a *app) newCredentialRotateCommand() *cobra.Command {
 					cmd.Context(),
 					ref,
 					secret,
+					nil,
 				)
 				if err != nil {
 					return err

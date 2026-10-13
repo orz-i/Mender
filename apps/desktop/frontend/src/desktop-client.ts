@@ -638,6 +638,7 @@ export function createDesktopMenderClient(): MenderClient {
           body.name,
           body.displayName,
           body.secret,
+          body.sshKeyPassphrase ?? "",
         ),
       );
     },
@@ -655,7 +656,7 @@ export function createDesktopMenderClient(): MenderClient {
 
     async rotateCredential(namespace, name, body) {
       return credential(
-        await Service.RotateNativeCredential(namespace, name, body.secret),
+        await Service.RotateNativeCredential(namespace, name, body.secret, body.sshKeyPassphrase ?? ""),
       );
     },
 

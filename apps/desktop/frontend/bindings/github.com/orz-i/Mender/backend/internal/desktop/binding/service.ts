@@ -64,8 +64,8 @@ export function CreateLocalSandbox(input: $models.CreateLocalSandboxInput): $Can
     return $Call.ByID(2786206366, input);
 }
 
-export function CreateNativeCredential($namespace: string, name: string, displayName: string, secret: string): $CancellablePromise<$models.Credential> {
-    return $Call.ByID(46061890, $namespace, name, displayName, secret);
+export function CreateNativeCredential($namespace: string, name: string, displayName: string, secret: string, sshKeyPassphrase: string): $CancellablePromise<$models.Credential> {
+    return $Call.ByID(46061890, $namespace, name, displayName, secret, sshKeyPassphrase);
 }
 
 export function CreateOpenAITunnel(displayName: string, externalTunnelID: string, runtimeCredentialRef: string): $CancellablePromise<$models.Tunnel> {
@@ -385,8 +385,8 @@ export function RevokeSandboxProfileGrants(sandboxID: string, profileID: string)
     return $Call.ByID(954645277, sandboxID, profileID);
 }
 
-export function RotateNativeCredential($namespace: string, name: string, secret: string): $CancellablePromise<$models.Credential> {
-    return $Call.ByID(3563376993, $namespace, name, secret);
+export function RotateNativeCredential($namespace: string, name: string, secret: string, sshKeyPassphrase: string): $CancellablePromise<$models.Credential> {
+    return $Call.ByID(3563376993, $namespace, name, secret, sshKeyPassphrase);
 }
 
 export function SearchTools(query: string, limit: number, providerID: string, profile: string): $CancellablePromise<$models.ToolList> {

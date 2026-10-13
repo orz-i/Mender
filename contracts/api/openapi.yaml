@@ -1911,6 +1911,7 @@ components:
         name: { type: string }
         displayName: { type: string }
         secret: { type: string, writeOnly: true }
+        sshKeyPassphrase: { type: string, writeOnly: true, description: 'Optional import-time SSH private key passphrase; never stored' }
       additionalProperties: false
     CreateEnvironmentCredentialRequest:
       type: object
@@ -1926,6 +1927,7 @@ components:
       required: [secret]
       properties:
         secret: { type: string, writeOnly: true }
+        sshKeyPassphrase: { type: string, writeOnly: true, description: 'Optional import-time SSH private key passphrase; never stored' }
       additionalProperties: false
     IntegrationOffering:
       type: object

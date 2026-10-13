@@ -1554,6 +1554,8 @@ export interface components {
             name: string;
             displayName: string;
             secret: string;
+            /** @description Optional import-time SSH private key passphrase; never stored */
+            sshKeyPassphrase?: string;
         };
         CreateEnvironmentCredentialRequest: {
             namespace: string;
@@ -1563,6 +1565,8 @@ export interface components {
         };
         RotateCredentialRequest: {
             secret: string;
+            /** @description Optional import-time SSH private key passphrase; never stored */
+            sshKeyPassphrase?: string;
         };
         IntegrationOffering: {
             offeringId: string;

@@ -2,8 +2,11 @@ package sshremote
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"crypto/ed25519"
+	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/rsa"
 	"encoding/pem"
 	"errors"
 	"io/fs"
@@ -65,6 +68,63 @@ func TestSSHKeyAndConfigValidation(t *testing.T) {
 		if err := credentialdomain.ValidateSSHPrivateKey(raw); err == nil {
 			t.Fatal("invalid SSH private key accepted")
 		}
+	}
+}
+
+func TestPinnedHostKeySupportsStrongRSAAndECDSAWithNoSHA1(t *testing.T) {
+	rsa2048, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rsa1024, err := rsa.GenerateKey(rand.Reader, 1024)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ecdsaKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name    string
+		key     any
+		allowed bool
+	}{
+		{"RSA 2048", rsa2048, true},
+		{"RSA 1024", rsa1024, false},
+		{"ECDSA", ecdsaKey, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			signer, err := ssh.NewSignerFromKey(tc.key)
+			if err != nil {
+				t.Fatal(err)
+			}
+			line := strings.TrimSpace(string(ssh.MarshalAuthorizedKey(signer.PublicKey())))
+			parsed, err := parseHostKey(line)
+			if (err == nil) != tc.allowed {
+				t.Fatalf("parseHostKey() = %v, expected allowed=%t", err, tc.allowed)
+			}
+			if !tc.allowed {
+				return
+			}
+			algos := pinnedHostKeyAlgorithms(parsed)
+			if len(algos) == 0 {
+				t.Fatal("no pinned host key algorithms")
+			}
+			for _, algo := range algos {
+				if algo == ssh.KeyAlgoRSA || algo == ssh.InsecureKeyAlgoDSA {
+					t.Fatal("weak SSH host signature algorithm enabled")
+				}
+			}
+			if parsed.Type() == ssh.KeyAlgoRSA && (len(algos) != 2 || algos[0] != ssh.KeyAlgoRSASHA512 || algos[1] != ssh.KeyAlgoRSASHA256) {
+				t.Fatal("RSA host key must use RSA-SHA2 signatures")
+			}
+			if _, err := parseHostKey(line + "\n" + line); err == nil {
+				t.Fatal("multiple pinned host keys accepted")
+			}
+			if _, err := parseHostKey("command=echo " + line); err == nil {
+				t.Fatal("authorized_keys options accepted")
+			}
+		})
 	}
 }
 

@@ -490,14 +490,16 @@ func (s *Service) CreateNativeCredential(
 	name string,
 	displayName string,
 	secret string,
+	sshKeyPassphrase string,
 ) (Credential, error) {
 	item, err := s.runtime.Credentials.CreateNative.Execute(
 		s.ctx,
 		credentialapplication.CreateNativeRequest{
-			Namespace:   namespace,
-			Name:        name,
-			DisplayName: displayName,
-			Secret:      []byte(secret),
+			Namespace:        namespace,
+			Name:             name,
+			DisplayName:      displayName,
+			Secret:           []byte(secret),
+			SSHKeyPassphrase: []byte(sshKeyPassphrase),
 		},
 	)
 	if err != nil {
@@ -531,12 +533,13 @@ func (s *Service) RotateNativeCredential(
 	namespace string,
 	name string,
 	secret string,
+	sshKeyPassphrase string,
 ) (Credential, error) {
 	ref, err := credentialdomain.NewReference(namespace, name)
 	if err != nil {
 		return Credential{}, err
 	}
-	item, err := s.runtime.Credentials.RotateNative.Execute(s.ctx, ref, []byte(secret))
+	item, err := s.runtime.Credentials.RotateNative.Execute(s.ctx, ref, []byte(secret), []byte(sshKeyPassphrase))
 	if err != nil {
 		return Credential{}, err
 	}
