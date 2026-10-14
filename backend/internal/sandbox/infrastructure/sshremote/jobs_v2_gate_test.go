@@ -51,6 +51,11 @@ func TestSSHJobsV2PlanHasNoRemoteEffectsAndOrdersExecutionGate(t *testing.T) {
 		}
 		last = at
 	}
+	// Dangling symlinks are not considered absent: a tampered resolution
+	// marker must never permit a delayed writer to execute user code.
+	if !strings.Contains(first.script, " ] || [ -L ") {
+		t.Fatal("v2 execution gate did not fail closed for dangling symlink markers")
+	}
 	// Neither plan nor inspecting source definitions writes remote records,
 	// starts systemd or delegates authority to Mender Core.
 	ids, err := jobs.store.sftp.ReadDir(jobs.store.basePath())

@@ -94,8 +94,8 @@ func gatedJobScriptV2(root, taskDir, taskID, commandDigest, attemptID, command s
 		"exec 9>> " + lock + " || exit 125\n" +
 		"flock -x 9 || exit 125\n" +
 		// Existing resolved task suppresses even a late systemd unit.
-		"if [ -e " + resolved + " ]; then exit 0; fi\n" +
-		"if [ -e " + started + " ] || [ -e " + prepared + " ]; then exit 125; fi\n" +
+		"if [ -e " + resolved + " ] || [ -L " + resolved + " ]; then exit 0; fi\n" +
+		"if [ -e " + started + " ] || [ -L " + started + " ] || [ -e " + prepared + " ] || [ -L " + prepared + " ]; then exit 125; fi\n" +
 		// Exclusive marker must be durable before any user-command side effect.
 		"set -C\n" +
 		"printf '%s\\n' " + marker + " > " + prepared + " || exit 125\n" +
