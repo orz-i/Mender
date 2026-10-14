@@ -176,6 +176,13 @@ func (j *Jobs) Status(ctx context.Context, taskID string) (JobSnapshot, error) {
 		return JobSnapshot{}, ErrJobInvalid
 	}
 	snapshot := JobSnapshot{TaskID: taskID, State: JobUnknown}
+	version, versionErr := j.store.manifestVersion(ctx, taskID)
+	if versionErr != nil {
+		return snapshot, ErrJobUnknown
+	}
+	if version == 2 {
+		return j.statusV2(ctx, taskID)
+	}
 	record, err := j.store.manifest(ctx, taskID)
 	if err != nil {
 		return snapshot, ErrJobUnknown
@@ -218,7 +225,15 @@ func (j *Jobs) Logs(ctx context.Context, id, stream string, cursor int64, limit 
 	if j == nil || j.store == nil || validateJobID(id) != nil || (stream != "stdout" && stream != "stderr") || cursor < 0 || limit < 1 || limit > maxJobLogChunk {
 		return JobLogs{}, ErrJobInvalid
 	}
-	if _, err := j.store.manifest(ctx, id); err != nil {
+	version, err := j.store.manifestVersion(ctx, id)
+	if err != nil {
+		return JobLogs{}, ErrJobUnknown
+	}
+	if version == 2 {
+		if _, _, e := j.store.readV2Manifest(ctx, id); e != nil {
+			return JobLogs{}, ErrJobUnknown
+		}
+	} else if _, e := j.store.manifest(ctx, id); e != nil {
 		return JobLogs{}, ErrJobUnknown
 	}
 	content, next, more, err := j.store.readLog(ctx, id, stream, cursor, limit)
@@ -269,6 +284,16 @@ func (j *Jobs) Quiescent(ctx context.Context) error {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
+		version, e := j.store.manifestVersion(ctx, id)
+		if e != nil {
+			return ErrJobUnknown
+		}
+		if version == 2 {
+			if e := j.v2Quiescent(ctx, id); e != nil {
+				return ErrJobUnknown
+			}
+			continue
+		}
 		state, e := j.Status(ctx, id)
 		if e != nil || !state.State.Terminal() {
 			return ErrJobUnknown
@@ -281,6 +306,15 @@ func (j *Jobs) Quiescent(ctx context.Context) error {
 // confirmed terminal result. It keeps the manifest, result and immutable
 // idempotency tombstone, so a later identical Submit can never rerun.
 func (j *Jobs) PruneOutput(ctx context.Context, id string) error {
+	version, err := j.store.manifestVersion(ctx, id)
+	if err != nil {
+		return ErrJobUnknown
+	}
+	// v2 keeps its verified gate script and journal until an independently
+	// reviewed compact tombstone protocol exists.
+	if version == 2 {
+		return ErrJobUnavailable
+	}
 	snapshot, err := j.Status(ctx, id)
 	if err != nil {
 		return err

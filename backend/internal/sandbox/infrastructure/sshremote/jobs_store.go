@@ -29,6 +29,8 @@ type jobStore struct {
 	sftp      *sftp.Client
 	root      string
 	sandboxID sandboxdomain.ID
+	// Test-only SFTP fsync seam; production always requires fsync@openssh.com.
+	v2SyncFixture v2Durability
 }
 
 // Task material is placed in a private sibling of the Workspace root.

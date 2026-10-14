@@ -28,6 +28,7 @@ type v2GateManifest struct {
 	CommandDigest string `json:"commandDigest"`
 	ScriptDigest  string `json:"scriptDigest"`
 	AttemptID     string `json:"attemptId"`
+	RunGeneration uint64 `json:"runGeneration"`
 }
 
 // planV2 is only called after first-reservation authority in a future R3b

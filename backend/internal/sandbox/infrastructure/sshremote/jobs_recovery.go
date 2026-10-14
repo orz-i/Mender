@@ -49,6 +49,20 @@ func (j *Jobs) InspectRecovery(ctx context.Context) (RecoveryReport, error) {
 			return RecoveryReport{}, err
 		}
 		ev := RecoveryEvidence{TaskID: id, Phase: "reservation_only", State: JobUnknown, Activity: "uncertain"}
+		version, versionErr := j.store.manifestVersion(ctx, id)
+		if versionErr == nil && version == 2 {
+			ev, err = j.inspectV2(ctx, id)
+			if err != nil {
+				return RecoveryReport{}, ErrJobUnknown
+			}
+			if ev.Activity == "uncertain" {
+				report.Verdict = "uncertain"
+			} else if ev.Activity == "active" && report.Verdict != "uncertain" {
+				report.Verdict = "active"
+			}
+			report.Records = append(report.Records, ev)
+			continue
+		}
 		manifest, manifestErr := j.store.manifest(ctx, id)
 		if manifestErr == nil {
 			ev.Phase = "manifest_only"

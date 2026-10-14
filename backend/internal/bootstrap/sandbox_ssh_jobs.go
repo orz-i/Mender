@@ -3,6 +3,7 @@ package bootstrap
 import (
 	"context"
 	"errors"
+	"os"
 	"time"
 
 	gov "github.com/orz-i/Mender/backend/internal/governance/domain"
@@ -76,6 +77,15 @@ func (s *Sandboxes) SubmitSSHJob(ctx context.Context, id sandboxdomain.ID,
 	if err := jobs.Prepare(ctx); err != nil {
 		return snapshot, err
 	}
+	// v2 is an explicit host-operator opt-in, never a model-selected
+	// payload flag. A failed capability/fsync check must not enroll the
+	// Sandbox or silently retry through legacy v1.
+	v2 := os.Getenv("MENDER_SSH_JOBS_V2") == "enabled"
+	if v2 {
+		if err := jobs.CheckV2(ctx); err != nil {
+			return snapshot, err
+		}
+	}
 	// Reserve and mark a non-sensitive lifecycle obligation AFTER successful
 	// transport verification but BEFORE first remote task storage mutation.
 	// SQLite's unique execution lease serializes submissions against Stop/Destroy.
@@ -88,5 +98,8 @@ func (s *Sandboxes) SubmitSSHJob(ctx context.Context, id sandboxdomain.ID,
 		defer cancel()
 		retErr = errors.Join(retErr, s.store.ReleaseExecution(releaseCtx, id, token))
 	}()
+	if v2 {
+		return jobs.SubmitV2(ctx, request, run.Generation)
+	}
 	return jobs.Submit(ctx, request)
 }
