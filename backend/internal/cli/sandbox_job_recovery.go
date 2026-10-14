@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+
 	"github.com/orz-i/Mender/backend/internal/bootstrap"
 	gov "github.com/orz-i/Mender/backend/internal/governance/domain"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"

@@ -2,6 +2,7 @@ package sshremote
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -59,7 +60,7 @@ func TestSSHRecoveryInspectorIsReadOnlyAndNeverClearsLegacyUnknown(t *testing.T)
 	if len(before) != len(after) || runner.starts != 1 || runner.stops != 0 {
 		t.Fatalf("inspection modified remote records or executed code: before=%d after=%d starts=%d stops=%d", len(before), len(after), runner.starts, runner.stops)
 	}
-	if err = reopened.Quiescent(ctx); err != ErrJobUnknown {
+	if err = reopened.Quiescent(ctx); !errors.Is(err, ErrJobUnknown) {
 		t.Fatalf("inspector cleared uncertain job: %v", err)
 	}
 	second, err := reopened.InspectRecovery(ctx)

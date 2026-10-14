@@ -16,7 +16,7 @@ func TestSSHJobPauseHTTPRequiresTypedExplicitMutation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer runtime.Close()
+	defer func() { _ = runtime.Close() }()
 	srv := httptest.NewServer(New(runtime))
 	defer srv.Close()
 	base := srv.URL + "/api/v1/sandboxes/sbx_00000000000000000000000000000011/jobs/admission"

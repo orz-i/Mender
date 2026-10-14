@@ -38,7 +38,7 @@ func TestSSHJobOwnerPausePreventsNetworkBeforeSubmissionAcrossRestart(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer next.Close()
+	defer func() { _ = next.Close() }()
 	// No valid SSH Credential is wired after restart. A paused submission
 	// MUST fail before any SSH handshake or secret resolution.
 	newOwner, _ := gov.NewContext(gov.OriginInternal, next.OwnerPrincipal(), gov.CatalogScope())

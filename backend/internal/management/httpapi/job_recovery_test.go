@@ -16,7 +16,7 @@ func TestSSHRecoveryHTTPIsOwnerAdministrativeRead(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer runtime.Close()
+	defer func() { _ = runtime.Close() }()
 	srv := httptest.NewServer(New(runtime))
 	defer srv.Close()
 	requestJSON(t, srv.Client(), http.MethodGet, srv.URL+"/api/v1/sandboxes/invalid/jobs/recovery", nil, http.StatusBadRequest)

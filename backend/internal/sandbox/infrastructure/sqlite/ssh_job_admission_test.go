@@ -17,12 +17,12 @@ func TestSSHJobPausePersistsAndAtomicallyDeniesSubmissionsAcrossRuntimes(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer first.Close()
+	defer func() { _ = first.Close() }()
 	second, err := Open(ctx, filename)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer second.Close()
+	defer func() { _ = second.Close() }()
 	paused, err := first.SSHJobSubmissionsPaused(ctx, id)
 	if err != nil || paused {
 		t.Fatalf("initial pause: %t %v", paused, err)

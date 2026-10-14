@@ -22,7 +22,7 @@ func TestSSHJobRecoveryOwnerInspectionAndNoImplicitResolution(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer runtime.Close()
+	defer func() { _ = runtime.Close() }()
 	runtime.Sandboxes.sshRemote.Dial.Credentials = sshFixtureCredentialResolver{secret: secret}
 	owner, err := gov.NewContext(gov.OriginInternal, runtime.OwnerPrincipal(), gov.CatalogScope())
 	if err != nil {

@@ -28,12 +28,12 @@ func TestSSHDestroyAtomicallyChecksEveryToolSuiteReference(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer first.Close()
+			defer func() { _ = first.Close() }()
 			second, err := Open(ctx, filename)
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer second.Close()
+			defer func() { _ = second.Close() }()
 
 			if tc.association != "" {
 				if _, err = first.db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS providers (id TEXT PRIMARY KEY)`); err != nil {
@@ -69,7 +69,11 @@ func TestSSHDestroyAtomicallyChecksEveryToolSuiteReference(t *testing.T) {
 			// Explicitly release test-owned reference, after which the normal
 			// passive SSH lifecycle (without enrolled Jobs) may proceed.
 			if tc.association != "" {
-				if _, err = first.db.ExecContext(ctx, "DELETE FROM "+tc.association+" WHERE sandbox_id=?", id.String()); err != nil {
+				query := "DELETE FROM sandbox_job_suite_bindings WHERE sandbox_id=?"
+				if tc.association == "sandbox_tool_suite_bindings" {
+					query = "DELETE FROM sandbox_tool_suite_bindings WHERE sandbox_id=?"
+				}
+				if _, err = first.db.ExecContext(ctx, query, id.String()); err != nil {
 					t.Fatal(err)
 				}
 			} else {

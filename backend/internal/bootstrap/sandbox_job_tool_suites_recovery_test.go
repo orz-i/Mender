@@ -60,7 +60,7 @@ func TestSSHJobsFacadeRecoversAfterInterruptedCreationWithoutNewIdentity(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer second.Close()
+	defer func() { _ = second.Close() }()
 	reopenedOwner, _ := gov.NewContext(gov.OriginInternal, second.OwnerPrincipal(), gov.CatalogScope())
 	repaired, err := second.EnsureSandboxJobTools(ctx, resource.ID(), reopenedOwner)
 	if err != nil || repaired.Status != "ready" || repaired.ProviderID != provider.ID().String() || len(repaired.Tools) != 5 {
