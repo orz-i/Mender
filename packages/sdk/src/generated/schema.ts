@@ -938,6 +938,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/sandboxes/{sandboxId}/jobs/protocol/activate-v2": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sandboxId: components["parameters"]["SandboxId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Owner-only, one-way and persistent SSH Jobs v2 activation. Requires paused submissions and pinned real-remote capability proof. No Profile Tool exposure or legacy replay. */
+        post: operations["activateSSHJobV2"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/sandboxes/{sandboxId}/jobs/recovery": {
         parameters: {
             query?: never;
@@ -2259,9 +2278,15 @@ export interface components {
             sandboxId: string;
             generation: number;
             paused: boolean;
+            /** @enum {string} */
+            protocol: "legacy_v1" | "durable_v2";
         };
         SetSSHJobAdmissionRequest: {
             paused: boolean;
+        };
+        ActivateSSHJobV2Request: {
+            /** @enum {boolean} */
+            confirm: true;
         };
         ResolveSSHJobRecoveryRequest: {
             fingerprint: string;
@@ -4366,6 +4391,43 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+        };
+    };
+    activateSSHJobV2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sandboxId: components["parameters"]["SandboxId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ActivateSSHJobV2Request"];
+            };
+        };
+        responses: {
+            /** @description Immutable v2 selection committed with audit; admissions remain paused */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SSHJobAdmissionState"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            /** @description Remote v2 capability unavailable, no protocol change or fallback */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     getSSHJobRecovery: {

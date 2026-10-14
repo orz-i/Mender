@@ -20,6 +20,7 @@ export function SandboxJobRecoveryPanel({ client, sandbox }: { client: MenderCli
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [pending, setPending] = useState<"pause" | "resume" | null>(null);
+  const [activateV2Open, setActivateV2Open] = useState(false);
   const [resolveTarget, setResolveTarget] = useState<SSHJobRecoveryRecord | null>(null);
   const [reviewReason, setReviewReason] = useState("");
 
@@ -39,7 +40,7 @@ export function SandboxJobRecoveryPanel({ client, sandbox }: { client: MenderCli
     try {
       const report = await client.getSSHJobRecovery(sandbox.sandboxId);
       setInspection(report);
-      setAdmission({ sandboxId: report.sandboxId, generation: report.generation, paused: report.paused });
+      setAdmission(previous => ({ sandboxId: report.sandboxId, generation: report.generation, paused: report.paused, protocol: previous?.protocol ?? "legacy_v1" }));
     } catch (reason) { setError(errorMessage(reason)); }
     finally { setBusy(false); }
   }
@@ -52,6 +53,16 @@ export function SandboxJobRecoveryPanel({ client, sandbox }: { client: MenderCli
       setPending(null);
     } catch (reason) { setError(errorMessage(reason)); }
     finally { setBusy(false); }
+  }
+
+  async function activateV2() {
+    if (busy || !admission?.paused || admission.protocol !== "legacy_v1") return;
+    setBusy(true); setError("");
+    try {
+      setAdmission(await client.activateSSHJobV2(sandbox.sandboxId, { confirm: true }));
+      setActivateV2Open(false);
+    } catch (reason) {setError(errorMessage(reason));}
+    finally {setBusy(false);}
   }
 
   async function resolvePrelaunch() {
@@ -75,13 +86,17 @@ export function SandboxJobRecoveryPanel({ client, sandbox }: { client: MenderCli
         <div className="space-y-1">
           <p className="text-sm font-medium">{t("New submissions")}</p>
           {admission ? <Badge variant="outline">{t(admission.paused ? "Paused" : "Accepting")}</Badge> : null}
+          {admission ? <p className="text-xs text-muted-foreground">{t("Job protocol")}: {t(admission.protocol === "durable_v2" ? "Durable v2 (permanent)" : "Legacy v1")}</p> : null}
           <p className="text-xs text-muted-foreground">
             {t("Pausing only blocks new submissions. Existing tasks, logs, and cancellation remain independently governed.")}
           </p>
         </div>
-        {admission ? <Button size="sm" variant="outline" disabled={busy} onClick={() => setPending(admission.paused ? "resume" : "pause")}>
-          {t(admission.paused ? "Resume submissions" : "Pause submissions")}
-        </Button> : null}
+        <div className="flex items-center gap-2">
+          {admission?.paused && admission.protocol === "legacy_v1" ? <Button size="sm" variant="outline" disabled={busy} onClick={() => setActivateV2Open(true)}>{t("Enable v2 permanently")}</Button> : null}
+          {admission ? <Button size="sm" variant="outline" disabled={busy} onClick={() => setPending(admission.paused ? "resume" : "pause")}>
+            {t(admission.paused ? "Resume submissions" : "Pause submissions")}
+          </Button> : null}
+        </div>
       </div>
       <div className="flex flex-wrap items-center justify-between gap-3 p-4">
         <div className="space-y-1">
@@ -112,6 +127,16 @@ export function SandboxJobRecoveryPanel({ client, sandbox }: { client: MenderCli
         </Table> : <EmptyPanelState><p className="text-sm text-muted-foreground">{t("No SSH Jobs to inspect.")}</p></EmptyPanelState>}
       </> : null}
     </DataPanel>
+    <Dialog open={activateV2Open} onOpenChange={open => {if (!busy) setActivateV2Open(open);}}>
+      <DialogContent><DialogHeader>
+        <DialogTitle>{t("Permanently enable SSH Jobs v2")}</DialogTitle>
+        <DialogDescription>{t("The pinned SSH host must support durable fsync and execution fencing. Once enabled, future jobs will use v2 across restarts. Legacy records remain unchanged and there is no downgrade. Submissions stay paused until you resume them.")}</DialogDescription>
+      </DialogHeader>
+      <DialogFooter>
+        <Button variant="outline" disabled={busy} onClick={() => setActivateV2Open(false)}>{t("Cancel")}</Button>
+        <Button disabled={busy || !admission?.paused || admission.protocol !== "legacy_v1"} onClick={() => void activateV2()}>{t("Confirm permanent v2 activation")}</Button>
+      </DialogFooter></DialogContent>
+    </Dialog>
     <Dialog open={resolveTarget !== null} onOpenChange={open => {if (!open && !busy) setResolveTarget(null);}}>
       <DialogContent><DialogHeader>
         <DialogTitle>{t("Resolve verified prelaunch job")}</DialogTitle>

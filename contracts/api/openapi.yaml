@@ -1167,6 +1167,29 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
+  /sandboxes/{sandboxId}/jobs/protocol/activate-v2:
+    parameters:
+      - $ref: '#/components/parameters/SandboxId'
+    post:
+      operationId: activateSSHJobV2
+      description: Owner-only, one-way and persistent SSH Jobs v2 activation. Requires paused submissions and pinned real-remote capability proof. No Profile Tool exposure or legacy replay.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ActivateSSHJobV2Request' }
+      responses:
+        '200':
+          description: Immutable v2 selection committed with audit; admissions remain paused
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SSHJobAdmissionState' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '503':
+          description: Remote v2 capability unavailable, no protocol change or fallback
   /sandboxes/{sandboxId}/jobs/recovery:
     parameters:
       - $ref: '#/components/parameters/SandboxId'
@@ -2829,17 +2852,24 @@ components:
     SSHJobAdmissionState:
       type: object
       additionalProperties: false
-      required: [sandboxId, generation, paused]
+      required: [sandboxId, generation, paused, protocol]
       properties:
         sandboxId: { type: string, pattern: '^sbx_[0-9a-f]{32}$' }
         generation: { type: integer, minimum: 1 }
         paused: { type: boolean }
+        protocol: { type: string, enum: [legacy_v1, durable_v2] }
     SetSSHJobAdmissionRequest:
       type: object
       additionalProperties: false
       required: [paused]
       properties:
         paused: { type: boolean }
+    ActivateSSHJobV2Request:
+      type: object
+      additionalProperties: false
+      required: [confirm]
+      properties:
+        confirm: { type: boolean, enum: [true] }
     ResolveSSHJobRecoveryRequest:
       type: object
       additionalProperties: false

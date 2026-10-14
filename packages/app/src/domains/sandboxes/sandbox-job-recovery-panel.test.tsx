@@ -14,7 +14,7 @@ it("does not inspect SSH or change admissions until explicit owner actions", asy
     state: "ready", ownerKind: "local_user", ownerRef: "fixture", localRoot: "",
     activeLeases: 0, backendAvailable: true,
   };
-  const admission: SSHJobAdmissionState = { sandboxId: sandbox.sandboxId, generation: 1, paused: false };
+  const admission: SSHJobAdmissionState = { sandboxId: sandbox.sandboxId, generation: 1, paused: false, protocol: "legacy_v1" };
   const recovery: SSHJobRecoveryView = {
     sandboxId: sandbox.sandboxId, generation: 1, managed: true, paused: false,
     evidence: {
@@ -66,7 +66,7 @@ it("requires paused admissions and an explicit reviewed reason before v2 resolut
     sandboxId: sandbox.sandboxId, generation: 5, evidence: resolved.evidence.records[0],
   });
   render(<SandboxJobRecoveryPanel client={{
-    getSSHJobAdmission: vi.fn().mockResolvedValue({ sandboxId: sandbox.sandboxId, generation: 5, paused: true }),
+    getSSHJobAdmission: vi.fn().mockResolvedValue({ sandboxId: sandbox.sandboxId, generation: 5, paused: true, protocol: "durable_v2" }),
     getSSHJobRecovery, resolveSSHJobRecovery,
   } as unknown as MenderClient} sandbox={sandbox} />);
   expect(await screen.findByText("Paused")).toBeTruthy();
@@ -88,4 +88,34 @@ it("requires paused admissions and an explicit reviewed reason before v2 resolut
   ));
   expect(await screen.findByText("resolved_before_launch")).toBeTruthy();
   expect(getSSHJobRecovery).toHaveBeenCalledTimes(2);
+});
+
+it("permanently activates v2 only after pause and explicit owner confirmation", async () => {
+  resetLocaleForTesting(); setLocale("en");
+  const sandbox: Sandbox = {
+    sandboxId: "sbx_" + "6".repeat(32), name: "Rocky v2 activation fixture",
+    backend: "ssh_remote", isolation: "remote", state: "ready", localRoot: "",
+    ownerKind: "local_user", ownerRef: "fixture", activeLeases: 0, backendAvailable: true,
+  };
+  const admission: SSHJobAdmissionState = {
+    sandboxId: sandbox.sandboxId, generation: 1, paused: false, protocol: "legacy_v1",
+  };
+  const paused: SSHJobAdmissionState = {...admission, paused: true};
+  const activated: SSHJobAdmissionState = {...paused, protocol: "durable_v2"};
+  const getSSHJobAdmission = vi.fn().mockResolvedValue(admission);
+  const setSSHJobAdmission = vi.fn().mockResolvedValue(paused);
+  const activateSSHJobV2 = vi.fn().mockResolvedValue(activated);
+  render(<SandboxJobRecoveryPanel client={{getSSHJobAdmission,setSSHJobAdmission,activateSSHJobV2} as unknown as MenderClient} sandbox={sandbox}/>);
+  expect(await screen.findByText(/Job protocol: Legacy v1/)).toBeTruthy();
+  expect(screen.queryByRole("button",{name:"Enable v2 permanently"})).toBeNull();
+  fireEvent.click(screen.getByRole("button",{name:"Pause submissions"}));
+  fireEvent.click(within(screen.getByRole("dialog",{name:"Pause new SSH Jobs"})).getByRole("button",{name:"Confirm"}));
+  await waitFor(() => expect(setSSHJobAdmission).toHaveBeenCalledWith(sandbox.sandboxId,{paused:true}));
+  fireEvent.click(screen.getByRole("button",{name:"Enable v2 permanently"}));
+  expect(activateSSHJobV2).not.toHaveBeenCalled();
+  fireEvent.click(within(screen.getByRole("dialog",{name:"Permanently enable SSH Jobs v2"})).getByRole("button",{name:"Confirm permanent v2 activation"}));
+  await waitFor(() => expect(activateSSHJobV2).toHaveBeenCalledWith(sandbox.sandboxId,{confirm:true}));
+  expect(await screen.findByText(/Job protocol: Durable v2 \(permanent\)/)).toBeTruthy();
+  expect(screen.queryByRole("button",{name:"Enable v2 permanently"})).toBeNull();
+  expect(screen.getByText("Paused")).toBeTruthy();
 });

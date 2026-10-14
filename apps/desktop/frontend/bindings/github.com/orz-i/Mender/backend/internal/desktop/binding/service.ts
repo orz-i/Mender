@@ -16,6 +16,14 @@ import { Call as $Call, CancellablePromise as $CancellablePromise } from "@wails
 // @ts-ignore: Unused imports
 import * as $models from "./models.js";
 
+/**
+ * Irreversible owner-only SSH Job submission protocol upgrade. This cannot
+ * be invoked by a Profile, an MCP Tool, or a browser-supplied SSH command.
+ */
+export function ActivateSSHJobV2(raw: string): $CancellablePromise<$models.SSHJobAdmissionState> {
+    return $Call.ByID(1274430888, raw);
+}
+
 export function AddProfileTool(slug: string, tool: $models.ProfileTool): $CancellablePromise<$models.Profile> {
     return $Call.ByID(296290586, slug, tool);
 }

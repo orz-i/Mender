@@ -67,6 +67,7 @@ export type {
   ResolveSSHJobRecoveryRequest,
   SSHJobResolutionReceipt,
   SSHJobAdmissionState,
+  ActivateSSHJobV2Request,
   SetSSHJobAdmissionRequest,
   ToolSuiteDefinition,
   SandboxActivity,

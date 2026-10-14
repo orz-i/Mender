@@ -146,6 +146,7 @@ func (h *Handler) routes() {
 	h.mux.HandleFunc("POST /api/v1/sandboxes/{sandboxId}/jobs/recovery/{taskId}/resolve", h.resolveSSHJobRecovery)
 	h.mux.HandleFunc("GET /api/v1/sandboxes/{sandboxId}/jobs/admission", h.getSSHJobAdmission)
 	h.mux.HandleFunc("PUT /api/v1/sandboxes/{sandboxId}/jobs/admission", h.setSSHJobAdmission)
+	h.mux.HandleFunc("POST /api/v1/sandboxes/{sandboxId}/jobs/protocol/activate-v2", h.activateSSHJobV2)
 	h.mux.HandleFunc("POST /api/v1/sandboxes/{sandboxId}/job-tools", h.ensureSandboxJobTools)
 	h.mux.HandleFunc("DELETE /api/v1/sandboxes/{sandboxId}/job-tools", h.removeSandboxJobTools)
 	h.mux.HandleFunc("GET /api/v1/sandboxes/{sandboxId}/activity", h.getSandboxActivity)
