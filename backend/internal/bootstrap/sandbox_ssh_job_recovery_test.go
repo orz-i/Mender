@@ -16,7 +16,7 @@ import (
 func TestSSHJobRecoveryOwnerInspectionAndNoImplicitResolution(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 35*time.Second)
 	defer cancel()
-	template, secret, _ := startInProcessSSHForSandbox(t)
+	template, secret, root := startInProcessSSHForSandbox(t)
 	template.User = "root"
 	runtime, err := NewRuntime(ctx, RuntimeOptions{DatabasePath: filepath.Join(t.TempDir(), "recovery.sqlite")})
 	if err != nil {
@@ -47,19 +47,21 @@ func TestSSHJobRecoveryOwnerInspectionAndNoImplicitResolution(t *testing.T) {
 	if err != nil || initial.Managed || initial.Evidence.Verdict != "not_enrolled" || len(initial.Evidence.Records) != 0 {
 		t.Fatalf("fresh SSH issued plugin side effects: %+v %v", initial, err)
 	}
-	// The in-process SSH fixture has SFTP but cannot start systemd, so the
-	// job manifests are reliably left UNKNOWN with no real remote command.
-	submitted, err := runtime.Sandboxes.SubmitSSHJob(ctx, item.ID(), owner, sshremote.JobRequest{IdempotencyKey: strings.Repeat("9", 32), Command: "echo never-run"})
-	if !errors.Is(err, sshremote.ErrJobUnknown) {
-		t.Fatalf("expected unknown fixture: %+v %v", submitted, err)
+	// A test-owned v2 journal is injected without remote systemd execution.
+	// In-process SSH lacks real fsync, so the owner Submit path fails closed.
+	_, err = runtime.Sandboxes.SubmitSSHJob(ctx, item.ID(), owner, sshremote.JobRequest{IdempotencyKey: strings.Repeat("9", 32), Command: "echo no"})
+	if !errors.Is(err, sshremote.ErrJobUnavailable) {
+		t.Fatalf("unsupported v2 admitted: %v", err)
 	}
+	enrollSSHJobV2Fixture(t, ctx, runtime, item.ID(), owner)
+	testJob := seedSSHJobV2(t, root, item.ID(), "sjob_"+strings.Repeat("9", 32), false)
 	inspected, err := runtime.Sandboxes.InspectSSHJobRecovery(ctx, item.ID(), owner)
 	if err != nil || !inspected.Managed || inspected.Evidence.Verdict != "uncertain" || len(inspected.Evidence.Records) != 1 {
-		t.Fatalf("owner recovery evidence unavailable: %+v %v", inspected, err)
+		t.Fatalf("owner v2 recovery evidence: %+v %v", inspected, err)
 	}
 	record := inspected.Evidence.Records[0]
-	if record.TaskID != submitted.TaskID || record.Activity != "uncertain" || record.Recoverable || record.Fingerprint == "" {
-		t.Fatalf("inspector fabricated v1 recovery: %+v", record)
+	if record.TaskID != testJob.ID || record.Activity != "uncertain" || !record.Recoverable || record.Fingerprint == "" {
+		t.Fatalf("v2 inspection incorrectly classified evidence: %+v", record)
 	}
 	count, err := runtime.Sandboxes.ActiveLeases(ctx, item.ID())
 	if err != nil || count != 0 {

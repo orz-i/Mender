@@ -26,7 +26,7 @@ func TestSSHRecoveryFenceRequiresPausedOwnedGenerationAndTracksAudit(t *testing.
 	if _, err = first.ReserveSSHJobRecovery(ctx, run, owner); !errors.Is(err, sandboxdomain.ErrConflict) {
 		t.Fatalf("unmanaged unpaused sandbox acquired recovery fence: %v", err)
 	}
-	token, err := first.ReserveSSHJobSubmit(ctx, id, run.Generation, owner, SSHJobProtocolLegacy)
+	token, err := first.ReserveSSHJobSubmit(ctx, id, run.Generation, owner)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,7 +48,7 @@ func TestSSHRecoveryFenceRequiresPausedOwnedGenerationAndTracksAudit(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = first.ReserveSSHJobSubmit(ctx, id, run.Generation, owner, SSHJobProtocolLegacy); !errors.Is(err, sandboxdomain.ErrConflict) {
+	if _, err = first.ReserveSSHJobSubmit(ctx, id, run.Generation, owner); !errors.Is(err, sandboxdomain.ErrConflict) {
 		t.Fatalf("submit bypassed recovery: %v", err)
 	}
 	if _, err = first.ReserveSSHJobLifecycle(ctx, run, owner); !errors.Is(err, sandboxdomain.ErrConflict) {

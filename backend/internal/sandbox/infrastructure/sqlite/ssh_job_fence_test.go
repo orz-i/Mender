@@ -68,7 +68,7 @@ func TestSSHJobLifecycleFenceAtomicAcrossRuntimes(t *testing.T) {
 	if err != nil || managed {
 		t.Fatalf("fresh SSH incorrectly job-enrolled: %t %v", managed, err)
 	}
-	submit, err := first.ReserveSSHJobSubmit(ctx, id, run.Generation, caller, SSHJobProtocolLegacy)
+	submit, err := first.ReserveSSHJobSubmit(ctx, id, run.Generation, caller)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,7 +97,7 @@ func TestSSHJobLifecycleFenceAtomicAcrossRuntimes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = first.ReserveSSHJobSubmit(ctx, id, run.Generation, caller, SSHJobProtocolLegacy); !errors.Is(err, sandboxdomain.ErrConflict) {
+	if _, err = first.ReserveSSHJobSubmit(ctx, id, run.Generation, caller); !errors.Is(err, sandboxdomain.ErrConflict) {
 		t.Fatalf("submit escaped lifecycle fence: %v", err)
 	}
 	if _, err = first.ChangeSSHRemoteLifecycleFenced(ctx, run, gov.ActionSandboxStop, caller, "0123456789abcdef0123456789abcdef"); !errors.Is(err, sandboxdomain.ErrConflict) {
@@ -115,7 +115,7 @@ func TestSSHJobLifecycleFenceAtomicAcrossRuntimes(t *testing.T) {
 	if err != nil || leases != 0 {
 		t.Fatalf("fence not consumed: %d %v", leases, err)
 	}
-	if _, err = first.ReserveSSHJobSubmit(ctx, id, run.Generation, caller, SSHJobProtocolLegacy); !errors.Is(err, sandboxdomain.ErrConflict) {
+	if _, err = first.ReserveSSHJobSubmit(ctx, id, run.Generation, caller); !errors.Is(err, sandboxdomain.ErrConflict) {
 		t.Fatalf("stopped sandbox accepted job: %v", err)
 	}
 	restarted, err := first.ChangeSSHRemoteLifecycle(ctx, stopped, gov.ActionSandboxStart, caller)
@@ -164,7 +164,7 @@ func TestSSHJobFirstSubmitRacesPassiveStopAcrossRuntimes(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			<-start
-			submitToken, submitErr = first.ReserveSSHJobSubmit(ctx, id, run.Generation, caller, SSHJobProtocolLegacy)
+			submitToken, submitErr = first.ReserveSSHJobSubmit(ctx, id, run.Generation, caller)
 		}()
 		go func() {
 			defer wg.Done()
@@ -216,12 +216,12 @@ func TestSSHJobFenceAuthorizationAndNoEnrolledFalsePositive(t *testing.T) {
 	defer func() { _ = store.Close() }()
 	otherPrincipal, _ := gov.NewPrincipal(gov.PrincipalLocalUser, "os:other")
 	other, _ := gov.NewContext(gov.OriginCLI, otherPrincipal, gov.CatalogScope())
-	if _, err = store.ReserveSSHJobSubmit(ctx, id, 1, other, SSHJobProtocolLegacy); !errors.Is(err, sandboxdomain.ErrConflict) {
+	if _, err = store.ReserveSSHJobSubmit(ctx, id, 1, other); !errors.Is(err, sandboxdomain.ErrConflict) {
 		t.Fatalf("other owner enrolled job: %v", err)
 	}
 	servicePrincipal, _ := gov.NewPrincipal(gov.PrincipalService, "profile:prof_00000000000000000000000000000011")
 	service, _ := gov.NewContext(gov.OriginInternal, servicePrincipal, gov.CatalogScope())
-	if _, err = store.ReserveSSHJobSubmit(ctx, id, 1, service, SSHJobProtocolLegacy); !errors.Is(err, sandboxdomain.ErrNotAuthorized) {
+	if _, err = store.ReserveSSHJobSubmit(ctx, id, 1, service); !errors.Is(err, sandboxdomain.ErrNotAuthorized) {
 		t.Fatalf("service bypassed owner-only seam: %v", err)
 	}
 	if _, err = store.ReserveSSHJobLifecycle(ctx, run, owner); !errors.Is(err, sandboxdomain.ErrConflict) {

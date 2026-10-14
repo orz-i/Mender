@@ -12,9 +12,9 @@ import (
 	sshremote "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/sshremote"
 )
 
-func TestSSHRecoveryV1RemainsUnknownAndOwnerResolveIsFenced(t *testing.T) {
+func TestSSHRecoveryV2OwnerResolveIsFenced(t *testing.T) {
 	ctx := context.Background()
-	tpl, secret, _ := startInProcessSSHForSandbox(t)
+	tpl, secret, root := startInProcessSSHForSandbox(t)
 	tpl.User = "root"
 	runtime, err := NewRuntime(ctx, RuntimeOptions{DatabasePath: filepath.Join(t.TempDir(), "job-r3b.sqlite")})
 	if err != nil {
@@ -23,23 +23,19 @@ func TestSSHRecoveryV1RemainsUnknownAndOwnerResolveIsFenced(t *testing.T) {
 	defer func() { _ = runtime.Close() }()
 	runtime.Sandboxes.sshRemote.Dial.Credentials = sshFixtureCredentialResolver{secret: secret}
 	owner, _ := gov.NewContext(gov.OriginInternal, runtime.OwnerPrincipal(), gov.CatalogScope())
-	item, err := runtime.Sandboxes.CreateSSHRemoteSandbox(ctx, CreateSSHRemoteSandboxRequest{Name: "legacy recovery exclusion", Template: tpl}, owner)
+	item, err := runtime.Sandboxes.CreateSSHRemoteSandbox(ctx, CreateSSHRemoteSandboxRequest{Name: "v2 owner recovery fence", Template: tpl}, owner)
 	if err != nil {
 		t.Fatal(err)
 	}
-	submitted, err := runtime.Sandboxes.SubmitSSHJob(ctx, item.ID(), owner, sshremote.JobRequest{
-		IdempotencyKey: strings.Repeat("f", 32), Command: "echo protected task",
-	})
-	if !errors.Is(err, sshremote.ErrJobUnknown) || submitted.TaskID == "" {
-		t.Fatalf("fixture must create v1 unknown: %+v %v", submitted, err)
-	}
+	enrollSSHJobV2Fixture(t, ctx, runtime, item.ID(), owner)
+	submitted := seedSSHJobV2(t, root, item.ID(), "sjob_"+strings.Repeat("f", 32), false)
 	observed, err := runtime.Sandboxes.InspectSSHJobRecovery(ctx, item.ID(), owner)
-	if err != nil || len(observed.Evidence.Records) != 1 {
-		t.Fatalf("cannot inspect legacy: %+v %v", observed, err)
+	if err != nil || len(observed.Evidence.Records) != 1 || !observed.Evidence.Records[0].Recoverable {
+		t.Fatalf("cannot inspect fenced v2 task: %+v %v", observed, err)
 	}
 	fingerprint := observed.Evidence.Records[0].Fingerprint
-	req := SSHJobResolutionRequest{TaskID: submitted.TaskID, Generation: observed.Generation,
-		Fingerprint: fingerprint, Reason: "operator reviewed legacy v1"}
+	req := SSHJobResolutionRequest{TaskID: submitted.ID, Generation: observed.Generation,
+		Fingerprint: fingerprint, Reason: "operator reviewed v2 prelaunch evidence"}
 	if _, err = runtime.Sandboxes.ResolveSSHJobRecovery(ctx, item.ID(), req, owner); !errors.Is(err, sandboxdomain.ErrConflict) {
 		t.Fatalf("unpaused recovery was admitted: %v", err)
 	}
@@ -52,12 +48,12 @@ func TestSSHRecoveryV1RemainsUnknownAndOwnerResolveIsFenced(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err = runtime.Sandboxes.ResolveSSHJobRecovery(ctx, item.ID(), SSHJobResolutionRequest{
-		TaskID: submitted.TaskID, Generation: observed.Generation + 1, Fingerprint: fingerprint, Reason: req.Reason,
+		TaskID: submitted.ID, Generation: observed.Generation + 1, Fingerprint: fingerprint, Reason: req.Reason,
 	}, owner); !errors.Is(err, sandboxdomain.ErrConflict) {
 		t.Fatalf("stale Run generation admitted: %v", err)
 	}
 	if _, err = runtime.Sandboxes.ResolveSSHJobRecovery(ctx, item.ID(), req, owner); err == nil {
-		t.Fatal("legacy v1 Task was falsely operationally resolved")
+		t.Fatal("unsupported v2 backend could not be resolved, but success was fabricated")
 	}
 	auditCount, err := runtime.Sandboxes.store.SSHRecoveryAuditCount(ctx, item.ID())
 	if err != nil || auditCount != 1 {
@@ -67,14 +63,14 @@ func TestSSHRecoveryV1RemainsUnknownAndOwnerResolveIsFenced(t *testing.T) {
 	if err != nil || len(after.Evidence.Records) != 1 ||
 		after.Evidence.Records[0].Fingerprint != fingerprint ||
 		after.Evidence.Records[0].Activity != "uncertain" ||
-		after.Evidence.Records[0].Recoverable {
-		t.Fatalf("legacy v1 was mutated/cleared: %+v %v", after, err)
+		!after.Evidence.Records[0].Recoverable {
+		t.Fatalf("unproven v2 was mutated/cleared: %+v %v", after, err)
 	}
 	lease, err := runtime.Sandboxes.ActiveLeases(ctx, item.ID())
 	if err != nil || lease != 0 {
 		t.Fatalf("failed recovery leaked short fence: %d %v", lease, err)
 	}
 	if _, err = runtime.Sandboxes.ChangeLifecycle(ctx, item.ID(), gov.ActionSandboxDestroy, owner); !errors.Is(err, sshremote.ErrJobUnknown) {
-		t.Fatalf("unknown v1 record allowed lifecycle after failed Resolve: %v", err)
+		t.Fatalf("unknown v2 record allowed lifecycle after failed Resolve: %v", err)
 	}
 }

@@ -10,8 +10,8 @@ import (
 )
 
 // SSHJobRecoveryView joins Core-owned resource metadata with unmodified,
-// bounded SSH-plugin evidence. Neither Core nor adapters interpret a v1
-// fingerprint as permission to release a lifecycle obligation.
+// bounded v2 SSH-plugin evidence. Core never interprets a Task fingerprint
+// as permission to release a lifecycle obligation.
 type SSHJobRecoveryView struct {
 	SandboxID  sandboxdomain.ID         `json:"sandboxId"`
 	Generation uint64                   `json:"generation"`

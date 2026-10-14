@@ -37,7 +37,7 @@ func TestSSHJobPausePersistsAndAtomicallyDeniesSubmissionsAcrossRuntimes(t *test
 	if err != nil || !paused {
 		t.Fatalf("pause not durable across runtimes: %t %v", paused, err)
 	}
-	if _, err = second.ReserveSSHJobSubmit(ctx, id, run.Generation, owner, SSHJobProtocolLegacy); !errors.Is(err, sandboxdomain.ErrConflict) {
+	if _, err = second.ReserveSSHJobSubmit(ctx, id, run.Generation, owner); !errors.Is(err, sandboxdomain.ErrConflict) {
 		t.Fatalf("new job passed paused admission: %v", err)
 	}
 	managed, err := second.SSHJobManaged(ctx, id)
@@ -60,7 +60,7 @@ func TestSSHJobPausePersistsAndAtomicallyDeniesSubmissionsAcrossRuntimes(t *test
 	if err != nil || paused {
 		t.Fatalf("resume not propagated: %t %v", paused, err)
 	}
-	token, err := first.ReserveSSHJobSubmit(ctx, id, run.Generation, owner, SSHJobProtocolLegacy)
+	token, err := first.ReserveSSHJobSubmit(ctx, id, run.Generation, owner)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,7 +72,7 @@ func TestSSHJobPausePersistsAndAtomicallyDeniesSubmissionsAcrossRuntimes(t *test
 	if err = first.ReleaseExecution(ctx, id, token); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = first.ReserveSSHJobSubmit(ctx, id, run.Generation, owner, SSHJobProtocolLegacy); !errors.Is(err, sandboxdomain.ErrConflict) {
+	if _, err = first.ReserveSSHJobSubmit(ctx, id, run.Generation, owner); !errors.Is(err, sandboxdomain.ErrConflict) {
 		t.Fatalf("admission resumed implicitly after older lease finished: %v", err)
 	}
 	if _, err = second.ChangeSSHRemoteLifecycle(ctx, run, gov.ActionSandboxStop, owner); !errors.Is(err, sandboxdomain.ErrConflict) {
@@ -104,7 +104,7 @@ func TestSSHJobPauseRacesFirstSubmissionWithoutLosingState(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			<-start
-			tok, submitErr = one.ReserveSSHJobSubmit(ctx, id, run.Generation, owner, SSHJobProtocolLegacy)
+			tok, submitErr = one.ReserveSSHJobSubmit(ctx, id, run.Generation, owner)
 		}()
 		go func() {
 			defer wg.Done()
@@ -128,7 +128,7 @@ func TestSSHJobPauseRacesFirstSubmissionWithoutLosingState(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
-		if _, err = two.ReserveSSHJobSubmit(ctx, id, run.Generation, owner, SSHJobProtocolLegacy); !errors.Is(err, sandboxdomain.ErrConflict) {
+		if _, err = two.ReserveSSHJobSubmit(ctx, id, run.Generation, owner); !errors.Is(err, sandboxdomain.ErrConflict) {
 			t.Fatalf("iteration %d: post-pause submission accepted: %v", i, err)
 		}
 		_ = one.Close()

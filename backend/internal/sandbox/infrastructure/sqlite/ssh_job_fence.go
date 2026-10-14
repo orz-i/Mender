@@ -54,15 +54,13 @@ func verifyJobFenceCaller(caller gov.Context) error {
 // a permanent obligation in the SAME transaction occurs BEFORE remote side
 // effects, so an uncertain submission can never escape lifecycle blocking.
 // The acquired lease is short-lived and MUST be released after the SSH submit
-// attempt (even if the result is uncertain); the plugin's remote record owns
-// the ongoing execution and recovery status. The expected protocol is checked
-// in the SAME SQLite write transaction: a suspended legacy dispatcher cannot
-// reserve new v1 work after a committed v2 activation.
-func (s *Store) ReserveSSHJobSubmit(ctx context.Context, id sandboxdomain.ID, generation uint64, caller gov.Context, expectedProtocol int) (string, error) {
+// attempt (even if the result is uncertain); the plugin's v2 journal owns
+// the ongoing execution and recovery status.
+func (s *Store) ReserveSSHJobSubmit(ctx context.Context, id sandboxdomain.ID, generation uint64, caller gov.Context) (string, error) {
 	if _, err := sandboxdomain.ParseID(id.String()); err != nil {
 		return "", err
 	}
-	if generation == 0 || (expectedProtocol != SSHJobProtocolLegacy && expectedProtocol != SSHJobProtocolV2) {
+	if generation == 0 {
 		return "", sandboxdomain.ErrConflict
 	}
 	if err := caller.Validate(); err != nil {
@@ -90,14 +88,12 @@ func (s *Store) ReserveSSHJobSubmit(ctx context.Context, id sandboxdomain.ID, ge
  AND s.backend='ssh_remote' AND s.backend_plugin_id='io.mender.sandbox.ssh-remote'
  AND s.backend_installation_id=''
  AND NOT EXISTS (SELECT 1 FROM sandbox_ssh_job_admission_controls c WHERE c.sandbox_id=r.sandbox_id AND c.paused=1)
- AND ((?=2 AND EXISTS(SELECT 1 FROM sandbox_ssh_job_protocols p WHERE p.sandbox_id=r.sandbox_id AND p.protocol=2))
-   OR (?=1 AND NOT EXISTS(SELECT 1 FROM sandbox_ssh_job_protocols p WHERE p.sandbox_id=r.sandbox_id)))
  AND (
   (s.owner_kind=? AND s.owner_ref=?) OR
   (?=1 AND EXISTS(SELECT 1 FROM sandbox_profile_grants g WHERE g.sandbox_id=s.id AND g.profile_id=? AND g.capability='job.submit'))
  )`,
 		token, generation, string(person.Kind()), person.Reference(), string(scope.Kind()), scope.Reference(), time.Now().UTC().Format(time.RFC3339Nano),
-		id.String(), generation, expectedProtocol, expectedProtocol, string(person.Kind()), person.Reference(), delegated, profileID)
+		id.String(), generation, string(person.Kind()), person.Reference(), delegated, profileID)
 	if err != nil || !oneRow(result) {
 		return "", sandboxdomain.ErrConflict
 	}

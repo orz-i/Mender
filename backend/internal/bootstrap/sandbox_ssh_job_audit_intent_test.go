@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
@@ -25,7 +24,7 @@ func (s *auditFailureCredentialSpy) Resolve(context.Context, credentialdomain.Re
 
 func TestSSHRecoveryAuditIntentCommitsBeforeAnyRemoteContact(t *testing.T) {
 	ctx := context.Background()
-	template, secret, _ := startInProcessSSHForSandbox(t)
+	template, secret, root := startInProcessSSHForSandbox(t)
 	template.User = "root"
 	databasePath := filepath.Join(t.TempDir(), "r3b-preflight-audit.db")
 	runtime, err := NewRuntime(ctx, RuntimeOptions{DatabasePath: databasePath})
@@ -43,14 +42,11 @@ func TestSSHRecoveryAuditIntentCommitsBeforeAnyRemoteContact(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	submitted, err := runtime.Sandboxes.SubmitSSHJob(ctx, resource.ID(), owner,
-		sshremote.JobRequest{IdempotencyKey: strings.Repeat("7", 32), Command: "echo never-replay"})
-	if !errors.Is(err, sshremote.ErrJobUnknown) {
-		t.Fatalf("expected safely uncertain legacy v1 fixture: %+v %v", submitted, err)
-	}
+	enrollSSHJobV2Fixture(t, ctx, runtime, resource.ID(), owner)
+	testJob := seedSSHJobV2(t, root, resource.ID(), "sjob_77777777777777777777777777777777", false)
 	view, err := runtime.Sandboxes.InspectSSHJobRecovery(ctx, resource.ID(), owner)
-	if err != nil || len(view.Evidence.Records) != 1 {
-		t.Fatalf("read-only evidence unavailable: %+v %v", view, err)
+	if err != nil || len(view.Evidence.Records) != 1 || !view.Evidence.Records[0].Recoverable {
+		t.Fatalf("native v2 prelaunch evidence unavailable: %+v %v", view, err)
 	}
 	if _, err = runtime.Sandboxes.SetSSHJobSubmissionsPaused(ctx, resource.ID(), true, owner); err != nil {
 		t.Fatal(err)
@@ -72,7 +68,7 @@ func TestSSHRecoveryAuditIntentCommitsBeforeAnyRemoteContact(t *testing.T) {
 	spy := &auditFailureCredentialSpy{}
 	runtime.Sandboxes.sshRemote.Dial.Credentials = spy
 	_, err = runtime.Sandboxes.ResolveSSHJobRecovery(ctx, resource.ID(), SSHJobResolutionRequest{
-		TaskID: submitted.TaskID, Generation: view.Generation,
+		TaskID: testJob.ID, Generation: view.Generation,
 		Fingerprint: view.Evidence.Records[0].Fingerprint,
 		Reason:      "verified evidence requires owner-only recovery",
 	}, owner)

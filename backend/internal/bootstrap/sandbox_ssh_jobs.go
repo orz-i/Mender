@@ -8,7 +8,6 @@ import (
 	gov "github.com/orz-i/Mender/backend/internal/governance/domain"
 	sandboxapp "github.com/orz-i/Mender/backend/internal/sandbox/application"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
-	sandboxsqlite "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/sqlite"
 	sshremote "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/sshremote"
 )
 
@@ -50,13 +49,6 @@ func (s *Sandboxes) SubmitSSHJob(ctx context.Context, id sandboxdomain.ID,
 	if paused {
 		return snapshot, sandboxdomain.ErrConflict
 	}
-	// A Sandbox-scoped protocol selection survives Wails/CLI/host restarts.
-	// The authoritative Reserve below also compares the expected version
-	// atomically, so a late v1 writer cannot bypass permanent v2 activation.
-	protocol, err := s.store.SSHJobProtocol(ctx, id)
-	if err != nil {
-		return snapshot, err
-	}
 	// Host-owned approval/audit before any network or Credential resolution.
 	if _, err := s.VerifiedSSHJobContracts(ctx, id); err != nil {
 		return snapshot, err
@@ -84,17 +76,15 @@ func (s *Sandboxes) SubmitSSHJob(ctx context.Context, id sandboxdomain.ID,
 	if err := jobs.Prepare(ctx); err != nil {
 		return snapshot, err
 	}
-	// Once the owner has permanently activated v2, failed remote fsync or
-	// host capabilities MUST fail closed: no fallback to legacy v1.
-	if protocol == sandboxsqlite.SSHJobProtocolV2 {
-		if err := jobs.CheckV2(ctx); err != nil {
-			return snapshot, err
-		}
+	// Production accepts only the execution-fenced v2 protocol. Missing
+	// remote fsync/flock capability fails closed before admission.
+	if err := jobs.CheckV2(ctx); err != nil {
+		return snapshot, err
 	}
 	// Reserve and mark a non-sensitive lifecycle obligation AFTER successful
 	// transport verification but BEFORE first remote task storage mutation.
 	// SQLite's unique execution lease serializes submissions against Stop/Destroy.
-	token, err := s.store.ReserveSSHJobSubmit(ctx, id, run.Generation, caller, protocol)
+	token, err := s.store.ReserveSSHJobSubmit(ctx, id, run.Generation, caller)
 	if err != nil {
 		return snapshot, err
 	}
@@ -103,8 +93,5 @@ func (s *Sandboxes) SubmitSSHJob(ctx context.Context, id sandboxdomain.ID,
 		defer cancel()
 		retErr = errors.Join(retErr, s.store.ReleaseExecution(releaseCtx, id, token))
 	}()
-	if protocol == sandboxsqlite.SSHJobProtocolV2 {
-		return jobs.SubmitV2(ctx, request, run.Generation)
-	}
-	return jobs.Submit(ctx, request)
+	return jobs.Submit(ctx, request, run.Generation)
 }

@@ -2,7 +2,6 @@ package bootstrap
 
 import (
 	"context"
-	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -14,7 +13,6 @@ import (
 	profileapp "github.com/orz-i/Mender/backend/internal/profile/application"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
-	sshremote "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/sshremote"
 )
 
 // Real in-memory MCP client -> Profile ToolBinding -> Invocation Policy/Audit
@@ -23,7 +21,7 @@ import (
 func TestMCPSSHJobsSeparateGrantsAndReadOnlyRecoveryWithUncertainLease(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
-	template, secret, _ := startInProcessSSHForSandbox(t)
+	template, secret, root := startInProcessSSHForSandbox(t)
 	template.User = "root"
 	r, err := NewRuntime(ctx, RuntimeOptions{DatabasePath: filepath.Join(t.TempDir(), "jobs-mcp.sqlite")})
 	if err != nil {
@@ -110,18 +108,17 @@ func TestMCPSSHJobsSeparateGrantsAndReadOnlyRecoveryWithUncertainLease(t *testin
 	if invoke("submit", req) || invoke("status", task) || invoke("cancel", task) {
 		t.Fatal("Profile ToolBindings alone bypassed missing SSH Job grants")
 	}
-	// An owner-only fixture submit reserves a durable remote TaskID without
-	// executing code (this local SSH fixture has no systemd exec subsystem).
-	prior, priorErr := r.Sandboxes.SubmitSSHJob(ctx, item.ID(), owner, sshremote.JobRequest{IdempotencyKey: strings.Repeat("d", 32), Command: "echo test-owned pending record"})
-	if !errors.Is(priorErr, sshremote.ErrJobUnknown) || prior.TaskID == "" {
-		t.Fatalf("no task record for observe test %+v %v", prior, priorErr)
-	}
+	// A native v2 record is staged only inside the test SFTP fixture. The
+	// mock host intentionally lacks fsync, so new submissions must fail closed.
+	enrollSSHJobV2Fixture(t, ctx, r, item.ID(), owner)
+	prior := seedSSHJobV2(t, root, item.ID(), "sjob_"+strings.Repeat("d", 32), false)
+	task = map[string]any{"taskId": prior.ID}
 	if err = r.Sandboxes.SetProfileGrants(ctx, item.ID(), profile.ID().String(), []sandboxdomain.Capability{
 		sandboxdomain.CapabilityJobObserve}, owner); err != nil {
 		t.Fatal(err)
 	}
 	if !invoke("status", task) || !invoke("result", task) || !invoke("logs", map[string]any{
-		"taskId": prior.TaskID, "stream": "stdout", "cursor": 0, "limit": 1024}) {
+		"taskId": prior.ID, "stream": "stdout", "cursor": 0, "limit": 1024}) {
 		t.Fatal("explicit JobObserve grant cannot query remote TaskID")
 	}
 	if invoke("submit", req) || invoke("cancel", task) {
@@ -131,8 +128,8 @@ func TestMCPSSHJobsSeparateGrantsAndReadOnlyRecoveryWithUncertainLease(t *testin
 		sandboxdomain.CapabilityJobObserve, sandboxdomain.CapabilityJobSubmit}, owner); err != nil {
 		t.Fatal(err)
 	}
-	if !invoke("submit", req) {
-		t.Fatal("JobSubmit grant rejected fake SSH unknown receipt")
+	if invoke("submit", req) {
+		t.Fatal("unsupported v2 capability was bypassed by Profile JobSubmit")
 	}
 	if invoke("cancel", task) {
 		t.Fatal("JobSubmit elevated to cancel")

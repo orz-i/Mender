@@ -25,7 +25,6 @@ func (a *app) newSandboxCommand() *cobra.Command {
 	command.AddCommand(a.newSandboxJobRecoveryCommand())
 	command.AddCommand(a.newSandboxJobResolutionCommand())
 	command.AddCommand(a.newSandboxJobAdmissionCommand())
-	command.AddCommand(a.newSandboxJobProtocolCommand())
 	command.AddCommand(a.newSandboxSuitesCommand())
 	command.AddCommand(a.newSandboxLifecycleCommand("start", governancedomain.ActionSandboxStart))
 	command.AddCommand(a.newSandboxLifecycleCommand("stop", governancedomain.ActionSandboxStop))
