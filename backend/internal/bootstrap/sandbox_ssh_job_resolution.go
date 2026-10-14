@@ -62,24 +62,41 @@ func (s *Sandboxes) ResolveSSHJobRecovery(ctx context.Context, id sandboxdomain.
 		defer cancel()
 		retErr = errors.Join(retErr, s.store.ReleaseExecution(cleanup, id, token))
 	}()
+	// Persist the minimal owner decision INTENT before contacting SSH. If the
+	// remote marker commits but the final audit write fails, this record still
+	// establishes who requested the operation and which immutable evidence
+	// and reason digest were reviewed. No remote side effect may be attempted
+	// without a committed intent under the exact recovery lease.
+	recordAudit := func(outcome string) error {
+		auditCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		defer cancel()
+		return s.store.RecordSSHJobRecoveryAttempt(auditCtx, sandboxsqlite.SSHRecoveryAuditInput{
+			SandboxID: id, TaskID: req.TaskID, Fingerprint: req.Fingerprint, Reason: req.Reason,
+			Generation: run.Generation, Outcome: outcome, Token: token, Caller: caller,
+		})
+	}
+	// "unknown" here is intentionally a pending decision, not a forged
+	// completion: the existing audit schema admits only real, conflict and
+	// unconfirmed outcomes. A later resolved/conflict event is appended only
+	// after the backend returns proof.
+	if err := recordAudit("unknown"); err != nil {
+		return receipt, errors.Join(sshremote.ErrJobUnknown, err)
+	}
+
 	evidence, operationErr := s.sshRemote.ResolveJobRecovery(ctx, id, backendRequest)
+	if operationErr != nil && !errors.Is(operationErr, sshremote.ErrJobConflict) {
+		// The persisted intent already records an unconfirmed remote result.
+		// Never replay a lost-ACK resolution just to generate a second event.
+		return receipt, operationErr
+	}
 	outcome := "resolved"
 	if operationErr != nil {
-		outcome = "unknown"
-		if errors.Is(operationErr, sshremote.ErrJobConflict) {
-			outcome = "conflict"
-		}
+		outcome = "conflict"
 	}
-	// Even if remote commit succeeded, a missing authoritative host audit
-	// prevents a claimed success. The operator may inspect before retrying.
-	auditCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-	defer cancel()
-	auditErr := s.store.RecordSSHJobRecoveryAttempt(auditCtx, sandboxsqlite.SSHRecoveryAuditInput{
-		SandboxID: id, TaskID: req.TaskID, Fingerprint: req.Fingerprint, Reason: req.Reason,
-		Generation: run.Generation, Outcome: outcome, Token: token, Caller: caller,
-	})
-	if auditErr != nil {
-		return receipt, errors.Join(sshremote.ErrJobUnknown, auditErr)
+	// Even if the remote commit succeeded, a missing final confirmation audit
+	// prevents claiming success. The prior intent remains durable.
+	if err := recordAudit(outcome); err != nil {
+		return receipt, errors.Join(sshremote.ErrJobUnknown, err)
 	}
 	if operationErr != nil {
 		return receipt, operationErr

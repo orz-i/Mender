@@ -47,3 +47,7 @@ A correctly formatted `resolution.json` is **not by itself durable execution-fen
 - A lost original resolution ACK can be recovered by another positive durability inspection without replaying `Resolve` or the user's shell command. An unresolved v1 record remains protected exactly as before.
 
 Local Go/SFTP fixture tests cover loss and restoration of the proof, and disposable Linux (`flock` and GNU sync) tests cover the fresh marker+directory flush, held-lock refusal and wrong-digest denial. **No live remote SSH or systemd experiment was made**. The operator-approved throwaway Rocky acceptance gate remains mandatory before declaring real-host production readiness.
+
+### Audit ordering closure
+
+Before contacting the SSH Backend for a recovery mutation, Core now commits a minimal **unconfirmed (`unknown`) owner intent** under its exact exclusive recovery lease. The pending event carries the reviewed TaskID, generation, evidence digest, principal and reason digest but no command, secret or free-text reason. If this local write fails, no remote Credential or SSH connection is attempted. Only after the remote evidence-bound resolution returns does Core append a `resolved` or `conflict` confirmation. A lost remote response retains the original unknown intent, and a failed final audit prevents a claimed success without erasing that durable owner trail. Task execution state stays exclusively with the SSH Backend. This uses the existing v16 audit event schema; no Core RemoteTask or new migration is required.
