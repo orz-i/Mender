@@ -1,6 +1,6 @@
 # SSH Durable Jobs — per-Sandbox permanent v2 activation
 
-- Status: implementation contract, 2026-10-14.
+- Status: **closed — permanent Rocky activation, Wails restart and actual ChatGPT cloud MCP canary verified**, 2026-10-14.
 - Decision: one-way owner-authorized v2 upgrade for an exact built-in SSH Sandbox, recorded in the shared Runtime SQLite. No process environment flag in the production Submit path. Once committed, all Runtime processes (Wails, CLI, Tool/MCP) must submit exclusively through v2 for that Sandbox.
 - Scope: Core owns the Sandbox binding and owner-only admission/protocol selection; SSH Backend owns v1/v2 journal, remote fsync/flock capabilities, TaskID, execution-point fence and recovery. No Core RemoteTask or scheduler.
 - Reuse existing TaskID namespace; a previously reserved v1 key cannot be silently replayed under v2 and is treated as conflict/unknown. Legacy v1 observation, status and recovery remain intact.
