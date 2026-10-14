@@ -43,7 +43,7 @@ func newFencedSSHFixture(t *testing.T) (string, sandboxdomain.ID, sandboxdomain.
 	}
 	// The isolated store has no Provider catalogue. The existing lifecycle
 	// guard queries this shape only for a Sandbox Destroy.
-	if _, err := store.db.ExecContext(ctx, `CREATE TABLE provider_configs(plugin_id TEXT,plugin_installation_id TEXT,config_version INTEGER,config_json TEXT)`); err != nil {
+	if _, err := store.db.ExecContext(ctx, `CREATE TABLE provider_configs(provider_id TEXT,plugin_id TEXT,plugin_installation_id TEXT,config_version INTEGER,config_json TEXT)`); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.Close(); err != nil {
