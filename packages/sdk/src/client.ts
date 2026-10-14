@@ -31,6 +31,9 @@ export type Sandbox = components["schemas"]["Sandbox"];
 export type ToolSuiteDefinition=components["schemas"]["ToolSuiteDefinition"];
 export type SandboxToolSuite=components["schemas"]["SandboxToolSuite"];
 export type SSHJobRecoveryView=components["schemas"]["SSHJobRecoveryView"];
+export type SSHJobRecoveryRecord=components["schemas"]["SSHJobRecoveryRecord"];
+export type ResolveSSHJobRecoveryRequest=components["schemas"]["ResolveSSHJobRecoveryRequest"];
+export type SSHJobResolutionReceipt=components["schemas"]["SSHJobResolutionReceipt"];
 export type SSHJobAdmissionState=components["schemas"]["SSHJobAdmissionState"];
 export type SetSSHJobAdmissionRequest=components["schemas"]["SetSSHJobAdmissionRequest"];
 export type SandboxActivity = components["schemas"]["SandboxActivity"];
@@ -202,6 +205,7 @@ export interface MenderClient {
   removeSandboxTools(sandboxId:string):Promise<void>;
   getSandboxJobTools(sandboxId:string):Promise<SandboxToolSuite>;
   getSSHJobRecovery(sandboxId:string):Promise<SSHJobRecoveryView>;
+  resolveSSHJobRecovery(sandboxId:string,taskId:string,body:ResolveSSHJobRecoveryRequest):Promise<SSHJobResolutionReceipt>;
   getSSHJobAdmission(sandboxId:string):Promise<SSHJobAdmissionState>;
   setSSHJobAdmission(sandboxId:string,body:SetSSHJobAdmissionRequest):Promise<SSHJobAdmissionState>;
   ensureSandboxJobTools(sandboxId:string):Promise<SandboxToolSuite>;
@@ -590,6 +594,7 @@ export function createMenderClient(
     },
     async getSandboxJobTools(sandboxId){return requireData(await client.GET("/sandboxes/{sandboxId}/job-tools",{params:{path:{sandboxId}}}));},
     async getSSHJobRecovery(sandboxId){return requireData(await client.GET("/sandboxes/{sandboxId}/jobs/recovery",{params:{path:{sandboxId}}}));},
+    async resolveSSHJobRecovery(sandboxId,taskId,body){return requireData(await client.POST("/sandboxes/{sandboxId}/jobs/recovery/{taskId}/resolve",{params:{path:{sandboxId,taskId}},body}));},
     async getSSHJobAdmission(sandboxId){return requireData(await client.GET("/sandboxes/{sandboxId}/jobs/admission",{params:{path:{sandboxId}}}));},
     async setSSHJobAdmission(sandboxId,body){return requireData(await client.PUT("/sandboxes/{sandboxId}/jobs/admission",{params:{path:{sandboxId}},body}));},
     async ensureSandboxJobTools(sandboxId){return requireData(await client.POST("/sandboxes/{sandboxId}/job-tools",{params:{path:{sandboxId}}}));},

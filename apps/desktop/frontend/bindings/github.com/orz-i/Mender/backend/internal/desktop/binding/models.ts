@@ -537,6 +537,12 @@ export interface SSHJobRecoveryView {
     "evidence": SSHJobRecoveryEvidence;
 }
 
+export interface SSHJobResolutionReceipt {
+    "sandboxId": string;
+    "generation": number;
+    "evidence": SSHJobRecoveryRecord;
+}
+
 /**
  * Sandbox is management metadata; state reflects the last persisted observation.
  */

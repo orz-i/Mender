@@ -397,6 +397,10 @@ export function ReplaceProfileTools(slug: string, tools: $models.ProfileTool[] |
     return $Call.ByID(1466001064, slug, tools);
 }
 
+export function ResolveSSHJobRecovery(sandboxID: string, taskID: string, fingerprint: string, generation: number, reason: string): $CancellablePromise<$models.SSHJobResolutionReceipt> {
+    return $Call.ByID(1860452454, sandboxID, taskID, fingerprint, generation, reason);
+}
+
 export function RestartMCPServer(serverID: string): $CancellablePromise<$models.MCPServerInstance> {
     return $Call.ByID(2194966826, serverID);
 }

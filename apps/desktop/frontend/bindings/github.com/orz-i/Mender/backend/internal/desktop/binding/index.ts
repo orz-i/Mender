@@ -70,6 +70,7 @@ export type {
     SSHJobRecoveryEvidence,
     SSHJobRecoveryRecord,
     SSHJobRecoveryView,
+    SSHJobResolutionReceipt,
     Sandbox,
     SandboxActivity,
     SandboxActivityEvent,

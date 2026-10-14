@@ -40,3 +40,52 @@ it("does not inspect SSH or change admissions until explicit owner actions", asy
   await waitFor(() => expect(setSSHJobAdmission).toHaveBeenCalledWith(sandbox.sandboxId, { paused: true }));
   expect(await screen.findByText("Paused")).toBeTruthy();
 });
+
+it("requires paused admissions and an explicit reviewed reason before v2 resolution", async () => {
+  resetLocaleForTesting(); setLocale("en");
+  const sandbox: Sandbox = {
+    sandboxId: "sbx_" + "7".repeat(32), name: "R3b fixture SSH",
+    backend: "ssh_remote", isolation: "remote", state: "ready", localRoot: "",
+    ownerKind: "local_user", ownerRef: "fixture", activeLeases: 0, backendAvailable: true,
+  };
+  const record = {
+    taskId: "sjob_" + "b".repeat(32), phase: "prelaunch_candidate" as const,
+    state: "unknown", activity: "uncertain" as const, fingerprint: "a".repeat(64),
+    recoverable: true,
+  };
+  const report: SSHJobRecoveryView = {
+    sandboxId: sandbox.sandboxId, generation: 5, managed: true, paused: true,
+    evidence: { inspectedAt: "2026-10-13T10:00:00Z", verdict: "uncertain", records: [record] },
+  };
+  const resolved: SSHJobRecoveryView = {
+    ...report, evidence: { ...report.evidence, verdict: "quiescent_proved",
+      records: [{ ...record, phase: "resolved_before_launch", activity: "quiescent_proved", recoverable: false }] },
+  };
+  const getSSHJobRecovery = vi.fn().mockResolvedValueOnce(report).mockResolvedValueOnce(resolved);
+  const resolveSSHJobRecovery = vi.fn().mockResolvedValue({
+    sandboxId: sandbox.sandboxId, generation: 5, evidence: resolved.evidence.records[0],
+  });
+  render(<SandboxJobRecoveryPanel client={{
+    getSSHJobAdmission: vi.fn().mockResolvedValue({ sandboxId: sandbox.sandboxId, generation: 5, paused: true }),
+    getSSHJobRecovery, resolveSSHJobRecovery,
+  } as unknown as MenderClient} sandbox={sandbox} />);
+  expect(await screen.findByText("Paused")).toBeTruthy();
+  expect(resolveSSHJobRecovery).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "Inspect remote evidence" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Review prelaunch resolution" }));
+  const modal = screen.getByRole("dialog", { name: "Resolve verified prelaunch job" });
+  const confirm = within(modal).getByRole("button", { name: "Confirm prelaunch resolution" });
+  expect(confirm.hasAttribute("disabled")).toBe(true);
+  fireEvent.change(within(modal).getByLabelText("Review reason"), {
+    target: { value: "Validated persisted prelaunch evidence" },
+  });
+  fireEvent.click(confirm);
+  await waitFor(() => expect(resolveSSHJobRecovery).toHaveBeenCalledWith(
+    sandbox.sandboxId, record.taskId, {
+      fingerprint: record.fingerprint, generation: 5,
+      reason: "Validated persisted prelaunch evidence",
+    },
+  ));
+  expect(await screen.findByText("resolved_before_launch")).toBeTruthy();
+  expect(getSSHJobRecovery).toHaveBeenCalledTimes(2);
+});

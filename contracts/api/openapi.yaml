@@ -1172,7 +1172,7 @@ paths:
       - $ref: '#/components/parameters/SandboxId'
     get:
       operationId: getSSHJobRecovery
-      description: Owner-only read-only evidence of legacy SSH Jobs; does not release leases or change tasks.
+      description: Owner-only read-only evidence for v1/v2 SSH Jobs; does not release leases or mutate tasks.
       responses:
         '200':
           description: Bounded backend-owned recovery evidence. No command, log, credential or remote path.
@@ -1182,6 +1182,33 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
+  /sandboxes/{sandboxId}/jobs/recovery/{taskId}/resolve:
+    parameters:
+      - $ref: '#/components/parameters/SandboxId'
+      - in: path
+        name: taskId
+        required: true
+        schema: { type: string, pattern: '^sjob_[0-9a-f]{32}$' }
+    post:
+      operationId: resolveSSHJobRecovery
+      description: Owner-only explicit v2 prelaunch adjudication after a persisted admission pause and exact evidence review; never a model-facing Tool.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ResolveSSHJobRecoveryRequest' }
+      responses:
+        '200':
+          description: Operational quiescence proven without fabricating command exit; audit committed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SSHJobResolutionReceipt' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '503':
+          description: Backend unavailable or recovery proof not established; unknown preserved
   /sandboxes/{sandboxId}/activity:
     get:
       operationId: getSandboxActivity
@@ -2813,13 +2840,29 @@ components:
       required: [paused]
       properties:
         paused: { type: boolean }
+    ResolveSSHJobRecoveryRequest:
+      type: object
+      additionalProperties: false
+      required: [fingerprint, generation, reason]
+      properties:
+        fingerprint: { type: string, pattern: '^[0-9a-f]{64}$' }
+        generation: { type: integer, minimum: 1 }
+        reason: { type: string, minLength: 5, maxLength: 512 }
+    SSHJobResolutionReceipt:
+      type: object
+      additionalProperties: false
+      required: [sandboxId, generation, evidence]
+      properties:
+        sandboxId: { type: string, pattern: '^sbx_[0-9a-f]{32}$' }
+        generation: { type: integer, minimum: 1 }
+        evidence: { $ref: '#/components/schemas/SSHJobRecoveryRecord' }
     SSHJobRecoveryRecord:
       type: object
       additionalProperties: false
       required: [taskId, phase, state, activity, fingerprint, recoverable]
       properties:
         taskId: { type: string, pattern: '^sjob_[0-9a-f]{32}$' }
-        phase: { type: string, enum: [reservation_only, manifest_only, dispatch_uncertain, active, terminal, unverified] }
+        phase: { type: string, enum: [reservation_only, manifest_only, prelaunch_candidate, dispatch_uncertain, active, terminal, resolved_before_launch, unverified] }
         state: { type: string }
         activity: { type: string, enum: [active, quiescent_proved, uncertain] }
         fingerprint: { type: string, pattern: '^[0-9a-f]{64}$' }

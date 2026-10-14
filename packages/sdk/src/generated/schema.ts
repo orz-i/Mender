@@ -947,10 +947,30 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** @description Owner-only read-only evidence of legacy SSH Jobs; does not release leases or change tasks. */
+        /** @description Owner-only read-only evidence for v1/v2 SSH Jobs; does not release leases or mutate tasks. */
         get: operations["getSSHJobRecovery"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sandboxes/{sandboxId}/jobs/recovery/{taskId}/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sandboxId: components["parameters"]["SandboxId"];
+                taskId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Owner-only explicit v2 prelaunch adjudication after a persisted admission pause and exact evidence review; never a model-facing Tool. */
+        post: operations["resolveSSHJobRecovery"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2243,10 +2263,20 @@ export interface components {
         SetSSHJobAdmissionRequest: {
             paused: boolean;
         };
+        ResolveSSHJobRecoveryRequest: {
+            fingerprint: string;
+            generation: number;
+            reason: string;
+        };
+        SSHJobResolutionReceipt: {
+            sandboxId: string;
+            generation: number;
+            evidence: components["schemas"]["SSHJobRecoveryRecord"];
+        };
         SSHJobRecoveryRecord: {
             taskId: string;
             /** @enum {string} */
-            phase: "reservation_only" | "manifest_only" | "dispatch_uncertain" | "active" | "terminal" | "unverified";
+            phase: "reservation_only" | "manifest_only" | "prelaunch_candidate" | "dispatch_uncertain" | "active" | "terminal" | "resolved_before_launch" | "unverified";
             state: string;
             /** @enum {string} */
             activity: "active" | "quiescent_proved" | "uncertain";
@@ -4361,6 +4391,44 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+        };
+    };
+    resolveSSHJobRecovery: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sandboxId: components["parameters"]["SandboxId"];
+                taskId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResolveSSHJobRecoveryRequest"];
+            };
+        };
+        responses: {
+            /** @description Operational quiescence proven without fabricating command exit; audit committed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SSHJobResolutionReceipt"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            /** @description Backend unavailable or recovery proof not established; unknown preserved */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     getSandboxActivity: {

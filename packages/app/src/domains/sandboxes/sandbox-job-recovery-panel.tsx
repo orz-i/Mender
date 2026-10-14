@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import type { MenderClient, Sandbox, SSHJobAdmissionState, SSHJobRecoveryView } from "@mender/sdk";
+import type { MenderClient, Sandbox, SSHJobAdmissionState, SSHJobRecoveryView, SSHJobRecoveryRecord } from "@mender/sdk";
 import { Badge } from "@mender/ui/components/badge";
 import { Button } from "@mender/ui/components/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@mender/ui/components/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@mender/ui/components/table";
+import { Textarea } from "@mender/ui/components/textarea";
 import { t } from "../../i18n/i18n";
 import { errorMessage } from "../../shared/errors";
 import { ErrorNotice } from "../../shared/page";
@@ -19,6 +20,8 @@ export function SandboxJobRecoveryPanel({ client, sandbox }: { client: MenderCli
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [pending, setPending] = useState<"pause" | "resume" | null>(null);
+  const [resolveTarget, setResolveTarget] = useState<SSHJobRecoveryRecord | null>(null);
+  const [reviewReason, setReviewReason] = useState("");
 
   useEffect(() => {
     let live = true;
@@ -47,6 +50,21 @@ export function SandboxJobRecoveryPanel({ client, sandbox }: { client: MenderCli
     try {
       setAdmission(await client.setSSHJobAdmission(sandbox.sandboxId, { paused: pending === "pause" }));
       setPending(null);
+    } catch (reason) { setError(errorMessage(reason)); }
+    finally { setBusy(false); }
+  }
+
+  async function resolvePrelaunch() {
+    if (busy || !inspection || !admission?.paused || !resolveTarget || reviewReason.trim().length < 5) return;
+    setBusy(true); setError("");
+    try {
+      await client.resolveSSHJobRecovery(sandbox.sandboxId, resolveTarget.taskId, {
+        fingerprint: resolveTarget.fingerprint, generation: inspection.generation, reason: reviewReason,
+      });
+      // A fresh inspection is authoritative. Never present a success based
+      // solely on a remote marker write or an uncertain acknowledgment.
+      setInspection(await client.getSSHJobRecovery(sandbox.sandboxId));
+      setResolveTarget(null); setReviewReason("");
     } catch (reason) { setError(errorMessage(reason)); }
     finally { setBusy(false); }
   }
@@ -82,15 +100,34 @@ export function SandboxJobRecoveryPanel({ client, sandbox }: { client: MenderCli
         </div>
         {inspection.evidence.records.length ? <Table>
           <TableHeader><TableRow>
-            <TableHead>{t("Task ID")}</TableHead><TableHead>{t("Evidence phase")}</TableHead><TableHead>{t("Activity")}</TableHead>
+            <TableHead>{t("Task ID")}</TableHead><TableHead>{t("Evidence phase")}</TableHead><TableHead>{t("Activity")}</TableHead><TableHead>{t("Recovery action")}</TableHead>
           </TableRow></TableHeader>
           <TableBody>{inspection.evidence.records.map(record => <TableRow key={record.taskId}>
             <TableCell className="font-mono text-xs" title={record.fingerprint}>{record.taskId}</TableCell>
             <TableCell>{record.phase}</TableCell><TableCell>{record.activity}</TableCell>
+            <TableCell>{record.recoverable && admission?.paused ?
+              <Button size="sm" variant="outline" disabled={busy} onClick={() => {setResolveTarget(record);setReviewReason("");}}>{t("Review prelaunch resolution")}</Button>:
+              <span className="text-xs text-muted-foreground">{t("Not eligible for automatic resolution")}</span>}</TableCell>
           </TableRow>)}</TableBody>
         </Table> : <EmptyPanelState><p className="text-sm text-muted-foreground">{t("No SSH Jobs to inspect.")}</p></EmptyPanelState>}
       </> : null}
     </DataPanel>
+    <Dialog open={resolveTarget !== null} onOpenChange={open => {if (!open && !busy) setResolveTarget(null);}}>
+      <DialogContent><DialogHeader>
+        <DialogTitle>{t("Resolve verified prelaunch job")}</DialogTitle>
+        <DialogDescription>{t("Only a verified v2 prelaunch candidate may be resolved. This does not mark the command as completed or failed. Unknown v1 tasks remain blocked.")}</DialogDescription>
+      </DialogHeader>
+      {resolveTarget ? <div className="space-y-3">
+        <p className="font-mono text-xs break-all">{resolveTarget.taskId}</p>
+        <p className="font-mono text-xs text-muted-foreground break-all">{resolveTarget.fingerprint}</p>
+        <label htmlFor="ssh-job-recovery-reason" className="text-sm font-medium">{t("Review reason")}</label>
+        <Textarea id="ssh-job-recovery-reason" value={reviewReason} maxLength={512}
+          onChange={event => setReviewReason(event.target.value)} placeholder={t("Explain the verified prelaunch evidence")} />
+      </div> : null}
+      <DialogFooter><Button variant="outline" disabled={busy} onClick={() => setResolveTarget(null)}>{t("Cancel")}</Button>
+        <Button disabled={busy || reviewReason.trim().length < 5} onClick={() => void resolvePrelaunch()}>{t("Confirm prelaunch resolution")}</Button>
+      </DialogFooter></DialogContent>
+    </Dialog>
     <Dialog open={pending !== null} onOpenChange={open => { if (!open && !busy) setPending(null); }}>
       <DialogContent><DialogHeader>
         <DialogTitle>{t(pending === "pause" ? "Pause new SSH Jobs" : "Resume new SSH Jobs")}</DialogTitle>

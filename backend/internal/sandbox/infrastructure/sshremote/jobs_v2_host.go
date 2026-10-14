@@ -48,12 +48,12 @@ func (r systemdJobRunner) PersistV2Directory(ctx context.Context, dir string) er
 // derived from a pinned v2 TaskID and Sandbox template; the remote command is
 // fixed backend code. Both the delayed gate and this resolver lock FD 9 on
 // the same immutable task-scoped inode before observing start/resolution.
-func (r systemdJobRunner) ResolveV2UnderLock(ctx context.Context, req v2RemoteResolution) error {
-	if r.user != "root" || !path.IsAbs(req.TaskDir) || path.Clean(req.TaskDir) != req.TaskDir ||
+func v2RecoveryShell(req v2RemoteResolution) (string, error) {
+	if !path.IsAbs(req.TaskDir) || path.Clean(req.TaskDir) != req.TaskDir ||
 		!hex64(req.ManifestHash) || !hex64(req.ScriptHash) ||
 		(req.LaunchPresent && !hex64(req.LaunchHash)) || (!req.LaunchPresent && req.LaunchHash != "") ||
 		len(req.Marker) == 0 || len(req.Marker) > 2048 || strings.ContainsRune(string(req.Marker), 0) {
-		return ErrJobInvalid
+		return "", ErrJobInvalid
 	}
 	dir := quoted(req.TaskDir)
 	manifest := quoted(path.Join(req.TaskDir, "manifest.json"))
@@ -89,6 +89,17 @@ func (r systemdJobRunner) ResolveV2UnderLock(ctx context.Context, req v2RemoteRe
 		"sync -f " + dir + "; " +
 		"test \"$(sha256sum " + resolution + " | cut -d' ' -f1)\" = " + quoted(hex.EncodeToString(markerHash[:])) + "; " +
 		"printf '%s' mender-v2-resolved"
+	return command, nil
+}
+
+func (r systemdJobRunner) ResolveV2UnderLock(ctx context.Context, req v2RemoteResolution) error {
+	if r.user != "root" {
+		return ErrJobUnavailable
+	}
+	command, err := v2RecoveryShell(req)
+	if err != nil {
+		return err
+	}
 	out, err := r.run(ctx, command)
 	if err != nil || out != "mender-v2-resolved" {
 		return errors.Join(ErrJobUnknown, fmt.Errorf("v2 remote recovery unconfirmed"))
