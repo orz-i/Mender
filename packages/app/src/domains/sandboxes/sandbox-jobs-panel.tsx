@@ -56,7 +56,7 @@ export function SandboxJobsPanel({ client, sandbox }: { client: MenderClient; sa
         <div className="flex gap-2">
           {suite?.available && suite.status !== "ready" && suite.status !== "conflict" ?
             <Button size="sm" disabled={busy} onClick={() => void prepare()}>{t("Prepare Jobs Tools")}</Button> : null}
-          {suite?.providerId ? <Button size="sm" variant="outline" disabled={busy} onClick={() => setConfirmRemove(true)}>
+          {suite?.providerId && suite.status === "ready" ? <Button size="sm" variant="outline" disabled={busy} onClick={() => setConfirmRemove(true)}>
             {t("Retire Jobs Tools")}
           </Button> : null}
         </div>

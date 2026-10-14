@@ -83,10 +83,6 @@ func (r *Runtime) SandboxJobTools(ctx context.Context, id sandboxdomain.ID, call
 		return result, nil
 	}
 	providerID := matches[0]
-	if pinned == "" {
-		result.Status = "conflict"
-		return result, nil
-	}
 	provider, err := r.Catalog.GetProvider.Execute(ctx, providerID)
 	if err != nil {
 		result.Status = "conflict"
@@ -105,6 +101,12 @@ func (r *Runtime) SandboxJobTools(ctx context.Context, id sandboxdomain.ID, call
 	}
 	definition, _ := suitecatalogue.Find(suitedomain.SandboxJobs)
 	result.Status = "ready"
+	// One exact, host-managed Provider may have been persisted before the
+	// Suite claim completed. Treat it as incomplete and allow a fresh explicit
+	// owner prepare to Sync/Claim it; never silently adopt on a GET.
+	if pinned == "" {
+		result.Status = "incomplete"
+	}
 	if len(present) != len(definition.ToolSourceKeys) {
 		result.Status = "incomplete"
 	}
@@ -197,7 +199,9 @@ func (r *Runtime) RemoveSandboxJobTools(ctx context.Context, id sandboxdomain.ID
 	if err != nil {
 		return err
 	}
-	if state.Status == "conflict" {
+	if state.Status == "conflict" || (state.Status == "incomplete" && state.ProviderID != "") {
+		// A partially created facade is repaired by Ensure, not implicitly
+		// retired; in particular it must not skip its resource ownership claim.
 		return sandboxdomain.ErrConflict
 	}
 	if state.ProviderID == "" {
