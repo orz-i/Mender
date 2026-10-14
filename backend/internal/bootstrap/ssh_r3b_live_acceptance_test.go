@@ -77,6 +77,18 @@ func TestR3bRealSSHLiveAcceptance(t *testing.T) {
 	}
 	id := owned.ID()
 	t.Logf("LIVE_ACCEPTANCE_SANDBOX_ID=%s (dedicated task namespace)", id)
+	// Permanent per-Sandbox v2 activation is required before the first
+	// live submit. The old process environment switch no longer routes jobs.
+	if _, err = r.Sandboxes.SetSSHJobSubmissionsPaused(ctx, id, true, caller); err != nil {
+		t.Fatal(err)
+	}
+	activated, err := r.Sandboxes.ActivateSSHJobV2(ctx, id, caller)
+	if err != nil || activated.Protocol != "durable_v2" || !activated.Paused {
+		t.Fatalf("live temporary v2 activation refused: %+v %v", activated, err)
+	}
+	if _, err = r.Sandboxes.SetSSHJobSubmissionsPaused(ctx, id, false, caller); err != nil {
+		t.Fatal(err)
+	}
 	var key [16]byte
 	if _, err = rand.Read(key[:]); err != nil {
 		t.Fatal(err)

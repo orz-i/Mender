@@ -364,3 +364,24 @@ func TestV2ForgedResolutionFingerprintNeverClearsQuiescence(t *testing.T) {
 		t.Fatalf("forged resolution made Task recoverable: %+v %v", report, err)
 	}
 }
+
+func TestV2UpgradeRefusesExistingLegacyTaskIDWithoutReplay(t *testing.T) {
+	ctx := context.Background()
+	j, _, runner := fixtureV2Jobs(t)
+	if err := j.Prepare(ctx); err != nil {
+		t.Fatal(err)
+	}
+	request := JobRequest{IdempotencyKey: strings.Repeat("1", 32), Command: "printf old-v1"}
+	first, err := j.Submit(ctx, request)
+	if err != nil || first.TaskID == "" || runner.starts != 1 {
+		t.Fatalf("could not create a legacy v1 tombstone: %+v %v", first, err)
+	}
+	second, err := j.SubmitV2(ctx, request, 1)
+	if !errors.Is(err, ErrJobConflict) || second.TaskID != first.TaskID || runner.starts != 1 {
+		t.Fatalf("v1 key was replayed under v2: %+v %v", second, err)
+	}
+	version, err := j.store.manifestVersion(ctx, first.TaskID)
+	if err != nil || version != 1 {
+		t.Fatalf("v1 record was overwritten: version=%d %v", version, err)
+	}
+}

@@ -98,6 +98,10 @@ func TestR3bRealRockyPrelaunchFaultInjection(t *testing.T) {
 	if name != "R3b Rocky acceptance temporary" || state != "ready" || generation != 1 {
 		t.Fatal("live fault injection refused non-dedicated or non-Ready resource")
 	}
+	var permanentProtocol int
+	if err = data.QueryRowContext(ctx, `SELECT protocol FROM sandbox_ssh_job_protocols WHERE sandbox_id=?`, id.String()).Scan(&permanentProtocol); err != nil || permanentProtocol != 2 {
+		t.Fatal("live fault injection refused a Sandbox without durable v2 activation")
+	}
 	var host string
 	var port int
 	var user, root, hostKey, rawReference string
