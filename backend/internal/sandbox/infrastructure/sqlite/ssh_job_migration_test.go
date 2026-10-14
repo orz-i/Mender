@@ -18,7 +18,8 @@ func TestSandboxV12ToV13SSHJobObligationMigration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, statement := range []string{"DROP TABLE sandbox_ssh_job_recovery_events", "DELETE FROM sandbox_schema_migrations WHERE version=16",
+	for _, statement := range []string{"DROP TABLE sandbox_ssh_job_protocol_events", "DROP TABLE sandbox_ssh_job_protocols", "DELETE FROM sandbox_schema_migrations WHERE version=17",
+		"DROP TABLE sandbox_ssh_job_recovery_events", "DELETE FROM sandbox_schema_migrations WHERE version=16",
 		"DROP TABLE sandbox_ssh_job_admission_events", "DROP TABLE sandbox_ssh_job_admission_controls", "DELETE FROM sandbox_schema_migrations WHERE version=15"} {
 		if _, e := raw.ExecContext(ctx, statement); e != nil {
 			t.Fatal(e)
@@ -52,7 +53,7 @@ func TestSandboxV12ToV13SSHJobObligationMigration(t *testing.T) {
 		t.Fatalf("migration implicitly enrolled job: %t %v", managed, err)
 	}
 	var version int
-	if err = upgraded.db.QueryRowContext(ctx, `SELECT MAX(version) FROM sandbox_schema_migrations`).Scan(&version); err != nil || version != 16 {
+	if err = upgraded.db.QueryRowContext(ctx, `SELECT MAX(version) FROM sandbox_schema_migrations`).Scan(&version); err != nil || version != 17 {
 		t.Fatalf("upgrade version: %d %v", version, err)
 	}
 	var taskTables int

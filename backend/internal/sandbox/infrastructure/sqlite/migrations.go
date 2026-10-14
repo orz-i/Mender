@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-const latestSchemaVersion = 16
+const latestSchemaVersion = 17
 
 func migrate(ctx context.Context, db *sql.DB) error {
 	tx, err := db.BeginTx(ctx, nil)
@@ -580,6 +580,44 @@ func migrate(ctx context.Context, db *sql.DB) error {
 		}
 		if _, err = tx.ExecContext(ctx, "INSERT INTO sandbox_schema_migrations(version,applied_at) VALUES(16,?)", time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
 			return fmt.Errorf("record sandbox migration 16: %w", err)
+		}
+	}
+	// SSH v2 release: protocol is a durable, one-way per-Sandbox owner
+	// admission choice, not an SSH Task state table. No process-local flag
+	// may determine which journal version a Profile submission writes.
+	var v2ProtocolApplied int
+	if err = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM sandbox_schema_migrations WHERE version=17").Scan(&v2ProtocolApplied); err != nil {
+		return fmt.Errorf("sandbox migration 17 presence: %w", err)
+	}
+	if v2ProtocolApplied == 0 {
+		for _, statement := range []string{
+			`CREATE TABLE sandbox_ssh_job_protocols (
+				sandbox_id TEXT PRIMARY KEY REFERENCES sandboxes(id) ON DELETE RESTRICT,
+				protocol INTEGER NOT NULL CHECK(protocol=2),
+				generation INTEGER NOT NULL CHECK(generation > 0),
+				activated_at TEXT NOT NULL
+			)`,
+			`CREATE TABLE sandbox_ssh_job_protocol_events (
+				event_id INTEGER PRIMARY KEY AUTOINCREMENT,
+				sandbox_id TEXT NOT NULL REFERENCES sandboxes(id) ON DELETE RESTRICT,
+				action TEXT NOT NULL CHECK(action='enable_v2'),
+				generation INTEGER NOT NULL,
+				principal_kind TEXT NOT NULL,
+				principal_ref TEXT NOT NULL,
+				origin TEXT NOT NULL,
+				occurred_at TEXT NOT NULL
+			)`,
+			`CREATE TRIGGER sandbox_ssh_job_protocol_no_delete BEFORE DELETE ON sandbox_ssh_job_protocols
+				BEGIN SELECT RAISE(ABORT,'SSH v2 protocol activation is permanent'); END`,
+			`CREATE TRIGGER sandbox_ssh_job_protocol_no_update BEFORE UPDATE ON sandbox_ssh_job_protocols
+				BEGIN SELECT RAISE(ABORT,'SSH v2 protocol activation is immutable'); END`,
+		} {
+			if _, err = tx.ExecContext(ctx, statement); err != nil {
+				return fmt.Errorf("sandbox migration 17 SSH v2 protocol: %w", err)
+			}
+		}
+		if _, err = tx.ExecContext(ctx, "INSERT INTO sandbox_schema_migrations(version,applied_at) VALUES(17,?)", time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
+			return fmt.Errorf("record sandbox migration 17: %w", err)
 		}
 	}
 	// A standalone Sandbox store may precede the Provider catalogue. Install
