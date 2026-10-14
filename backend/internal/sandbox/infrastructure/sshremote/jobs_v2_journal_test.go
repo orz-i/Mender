@@ -43,11 +43,12 @@ func (f *fixtureV2Runner) ProveV2ResolutionDurable(_ context.Context, dir, expec
 		return failure
 	}
 	lockPath := filepath.Join(dir, "launch.lock")
+	// #nosec G703 -- the v2 fixture operates only on test-owned job directories.
 	info, err := os.Lstat(lockPath)
 	if err != nil || !info.Mode().IsRegular() {
 		return ErrJobUnknown
 	}
-	// #nosec G304 -- exclusively test-owned private job directory.
+	// #nosec G304 G703 -- exclusively test-owned private job directory.
 	lock, err := os.OpenFile(lockPath, os.O_RDWR, 0)
 	if err != nil {
 		return ErrJobUnknown
@@ -58,17 +59,18 @@ func (f *fixtureV2Runner) ProveV2ResolutionDurable(_ context.Context, dir, expec
 	}
 	defer func() { _ = syscall.Flock(int(lock.Fd()), syscall.LOCK_UN) }()
 	markerPath := filepath.Join(dir, "resolution.json")
+	// #nosec G703 -- exclusively test-owned resolution marker.
 	info, err = os.Lstat(markerPath)
 	if err != nil || !info.Mode().IsRegular() {
 		return ErrJobUnknown
 	}
-	// #nosec G304 -- exclusively test-owned private resolution marker.
+	// #nosec G304 G703 -- exclusively test-owned private resolution marker.
 	marker, err := os.Open(markerPath)
 	if err != nil {
 		return ErrJobUnknown
 	}
 	defer func() { _ = marker.Close() }()
-	raw, err := os.ReadFile(markerPath) // #nosec G304 -- test-owned marker
+	raw, err := os.ReadFile(markerPath) // #nosec G304 G703 -- test-owned marker
 	if err != nil {
 		return ErrJobUnknown
 	}
@@ -76,7 +78,7 @@ func (f *fixtureV2Runner) ProveV2ResolutionDurable(_ context.Context, dir, expec
 	if hex.EncodeToString(hash[:]) != expectedHash || marker.Sync() != nil {
 		return ErrJobUnknown
 	}
-	folder, err := os.Open(dir) // #nosec G304 -- test-owned directory
+	folder, err := os.Open(dir) // #nosec G304 G703 -- test-owned directory
 	if err != nil {
 		return ErrJobUnknown
 	}
