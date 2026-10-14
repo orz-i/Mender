@@ -74,6 +74,12 @@ If any of these steps is unimplemented, do not register a `resolve` route or exp
 
 All local regression tests must use disposable SSH/SFTP fixtures and fault-injected fake runners; no real user remote resources, root shells, keychain entries or existing unknown TaskIDs are mutated. Before claiming a real supported v2 backend, the operator must separately approve a **throwaway** Rocky Linux/systemd 252 acceptance target and verify exact `flock`, `fsync`, filesystem and systemd-run behavior.
 
+## R3a implementation checkpoint (inert, not a supported remote capability)
+
+- `backend/internal/sandbox/infrastructure/sshremote/jobs_v2_gate.go` now defines a backend-owned v2 manifest/attempt preparation value and a fail-closed Linux execution-point script generator. Its order is: per-TaskID exclusive `flock` → check resolution/start markers → exclusive start-intent create → `sync -f` of marker and directory → user shell. A later invocation with the same marker will not re-execute command side effects.
+- `jobs_v2_gate_test.go` verifies bounded input/identity handling, script digest/attempt separation and launch ordering. It also contains **Linux-only** dynamic gate tests against disposable local filesystem commands; macOS skips them because util-linux `flock` is unavailable.
+- The production `Jobs.Submit` path **still writes legacy v1**. This checkpoint deliberately does not implement SFTP durable manifest/launch-intent persistence, remote capability probing, owner Resolve, proof-bearing resolution markers or a lifecycle QuiescenceProof. Therefore it is **not R3a closure and must not be advertised as `job.recover` or safe to run**.
+
 ## Delivery boundary
 
 Implement R3 in the SSH Backend in two independent, verifiable steps:
