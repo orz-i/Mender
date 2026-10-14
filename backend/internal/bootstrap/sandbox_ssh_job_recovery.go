@@ -5,7 +5,6 @@ import (
 	"time"
 
 	gov "github.com/orz-i/Mender/backend/internal/governance/domain"
-	sandboxapp "github.com/orz-i/Mender/backend/internal/sandbox/application"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 	sshremote "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/sshremote"
 )
@@ -25,28 +24,9 @@ type SSHJobRecoveryView struct {
 // Tool or Profile grant. Policy admission is recorded before credentials,
 // network or plugin observations. It does not acquire an exclusive lease.
 func (s *Sandboxes) InspectSSHJobRecovery(ctx context.Context, id sandboxdomain.ID, caller gov.Context) (SSHJobRecoveryView, error) {
-	if s == nil || s.store == nil || s.sshRemote == nil {
-		return SSHJobRecoveryView{}, sandboxdomain.ErrBackendUnavailable
-	}
-	if err := caller.Validate(); err != nil {
-		return SSHJobRecoveryView{}, err
-	}
-	item, err := s.store.Get(ctx, id)
+	item, run, err := s.sshJobOwner(ctx, id, caller)
 	if err != nil {
 		return SSHJobRecoveryView{}, err
-	}
-	if item.Backend() != sandboxdomain.BackendSSHRemote ||
-		item.Spec().Binding != sandboxdomain.BuiltinBinding(sandboxdomain.BackendSSHRemote) ||
-		!sandboxapp.IsOwner(caller, item) || caller.Scope().Kind() != gov.ScopeCatalog ||
-		caller.Principal().Kind() != gov.PrincipalLocalUser || caller.Origin() == gov.OriginMCP {
-		return SSHJobRecoveryView{}, sandboxdomain.ErrNotAuthorized
-	}
-	run, err := s.store.GetRun(ctx, id)
-	if err != nil {
-		return SSHJobRecoveryView{}, err
-	}
-	if run.State == sandboxdomain.StateDestroyed || run.State == sandboxdomain.StateDestroying {
-		return SSHJobRecoveryView{}, sandboxdomain.ErrConflict
 	}
 	if err = s.admission.AdmitAction(ctx, caller, item, gov.ActionSandboxReconcile); err != nil {
 		return SSHJobRecoveryView{}, err
@@ -62,5 +42,9 @@ func (s *Sandboxes) InspectSSHJobRecovery(ctx context.Context, id sandboxdomain.
 			return SSHJobRecoveryView{}, err
 		}
 	}
-	return SSHJobRecoveryView{SandboxID: id, Generation: run.Generation, Managed: managed, Evidence: report}, nil
+	paused, err := s.store.SSHJobSubmissionsPaused(ctx, id)
+	if err != nil {
+		return SSHJobRecoveryView{}, err
+	}
+	return SSHJobRecoveryView{SandboxID: id, Generation: run.Generation, Managed: managed, Paused: paused, Evidence: report}, nil
 }

@@ -86,7 +86,9 @@ func (s *Store) ReserveSSHJobSubmit(ctx context.Context, id sandboxdomain.ID, ge
  SELECT r.sandbox_id,?,?,?,?,?,?,? FROM sandbox_runs r
  JOIN sandboxes s ON s.id=r.sandbox_id WHERE r.sandbox_id=? AND r.generation=? AND r.state='ready'
  AND s.backend='ssh_remote' AND s.backend_plugin_id='io.mender.sandbox.ssh-remote'
- AND s.backend_installation_id='' AND (
+ AND s.backend_installation_id=''
+ AND NOT EXISTS (SELECT 1 FROM sandbox_ssh_job_admission_controls c WHERE c.sandbox_id=r.sandbox_id AND c.paused=1)
+ AND (
   (s.owner_kind=? AND s.owner_ref=?) OR
   (?=1 AND EXISTS(SELECT 1 FROM sandbox_profile_grants g WHERE g.sandbox_id=s.id AND g.profile_id=? AND g.capability='job.submit'))
  )`,

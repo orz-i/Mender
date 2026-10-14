@@ -508,6 +508,12 @@ export interface SSHHostIdentity {
     "hostPublicKey": string;
 }
 
+export interface SSHJobAdmissionState {
+    "sandboxId": string;
+    "generation": number;
+    "paused": boolean;
+}
+
 export interface SSHJobRecoveryEvidence {
     "records": SSHJobRecoveryRecord[] | null;
     "inspectedAt": string;

@@ -39,6 +39,16 @@ func (s *Sandboxes) SubmitSSHJob(ctx context.Context, id sandboxdomain.ID,
 	if run.State != sandboxdomain.StateReady {
 		return snapshot, sandboxdomain.ErrConflict
 	}
+	// Fast local rejection avoids remote session/credential access for paused
+	// admissions. The atomic SQLite Reserve below is still authoritative when
+	// another Runtime pauses between this read and a live SSH handshake.
+	paused, err := s.store.SSHJobSubmissionsPaused(ctx, id)
+	if err != nil {
+		return snapshot, err
+	}
+	if paused {
+		return snapshot, sandboxdomain.ErrConflict
+	}
 	// Host-owned approval/audit before any network or Credential resolution.
 	if _, err := s.VerifiedSSHJobContracts(ctx, id); err != nil {
 		return snapshot, err

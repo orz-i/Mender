@@ -63,6 +63,8 @@ export type {
   Sandbox,
   SandboxToolSuite,
   SSHJobRecoveryView,
+  SSHJobAdmissionState,
+  SetSSHJobAdmissionRequest,
   ToolSuiteDefinition,
   SandboxActivity,
   SandboxActivityEvent,

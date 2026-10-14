@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { SandboxJobsPanel } from "./sandbox-jobs-panel";
+import { SandboxJobRecoveryPanel } from "./sandbox-job-recovery-panel";
 import type { MenderClient, Sandbox, SandboxToolSuite } from "@mender/sdk";
 import { Badge } from "@mender/ui/components/badge";
 import { Button } from "@mender/ui/components/button";
@@ -113,7 +114,7 @@ function WorkspaceToolsPanel({client,sandbox}:{client:MenderClient;sandbox:Sandb
 // Keep one category visible at a time. Preparing Workspace does not prepare
 // Jobs, and selecting Jobs never implicitly changes Profile access.
 export function SandboxToolsPanel({client,sandbox}:{client:MenderClient;sandbox:Sandbox}){
-  const [category,setCategory]=useState<"workspace"|"jobs">("workspace");
+  const [category,setCategory]=useState<"workspace"|"jobs"|"recovery">("workspace");
   if(sandbox.backend!=="ssh_remote")return <WorkspaceToolsPanel client={client} sandbox={sandbox}/>;
   return <div className="space-y-4">
     <div className="flex items-center gap-2" role="tablist" aria-label={t("Sandbox tool suite")}>
@@ -121,7 +122,11 @@ export function SandboxToolsPanel({client,sandbox}:{client:MenderClient;sandbox:
         onClick={()=>setCategory("workspace")}>{t("Workspace Tool Suite")}</Button>
       <Button size="sm" role="tab" aria-selected={category==="jobs"} variant={category==="jobs"?"default":"outline"}
         onClick={()=>setCategory("jobs")}>{t("Jobs Tool Suite")}</Button>
+      <Button size="sm" role="tab" aria-selected={category==="recovery"} variant={category==="recovery"?"default":"outline"}
+        onClick={()=>setCategory("recovery")}>{t("SSH Job Recovery")}</Button>
     </div>
-    {category==="workspace"?<WorkspaceToolsPanel client={client} sandbox={sandbox}/>:<SandboxJobsPanel client={client} sandbox={sandbox}/>}
+    {category==="workspace"?<WorkspaceToolsPanel client={client} sandbox={sandbox}/>:
+      category==="jobs"?<SandboxJobsPanel client={client} sandbox={sandbox}/>:
+      <SandboxJobRecoveryPanel client={client} sandbox={sandbox}/>}
   </div>;
 }

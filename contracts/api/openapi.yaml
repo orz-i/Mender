@@ -1135,6 +1135,38 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
+  /sandboxes/{sandboxId}/jobs/admission:
+    parameters:
+      - $ref: '#/components/parameters/SandboxId'
+    get:
+      operationId: getSSHJobAdmission
+      description: Read persisted owner-controlled pause state; never connects to SSH.
+      responses:
+        '200':
+          description: Current local admission flag and Run generation
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SSHJobAdmissionState' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      operationId: setSSHJobAdmission
+      description: Owner-only pause/resume new Jobs; does not stop existing tasks.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SetSSHJobAdmissionRequest' }
+      responses:
+        '200':
+          description: Committed pause state with durable change event
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SSHJobAdmissionState' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
   /sandboxes/{sandboxId}/jobs/recovery:
     parameters:
       - $ref: '#/components/parameters/SandboxId'
@@ -2767,6 +2799,20 @@ components:
         sourceKey: { type: string }
         name: { type: string }
         title: { type: string }
+    SSHJobAdmissionState:
+      type: object
+      additionalProperties: false
+      required: [sandboxId, generation, paused]
+      properties:
+        sandboxId: { type: string, pattern: '^sbx_[0-9a-f]{32}$' }
+        generation: { type: integer, minimum: 1 }
+        paused: { type: boolean }
+    SetSSHJobAdmissionRequest:
+      type: object
+      additionalProperties: false
+      required: [paused]
+      properties:
+        paused: { type: boolean }
     SSHJobRecoveryRecord:
       type: object
       additionalProperties: false

@@ -31,6 +31,8 @@ export type Sandbox = components["schemas"]["Sandbox"];
 export type ToolSuiteDefinition=components["schemas"]["ToolSuiteDefinition"];
 export type SandboxToolSuite=components["schemas"]["SandboxToolSuite"];
 export type SSHJobRecoveryView=components["schemas"]["SSHJobRecoveryView"];
+export type SSHJobAdmissionState=components["schemas"]["SSHJobAdmissionState"];
+export type SetSSHJobAdmissionRequest=components["schemas"]["SetSSHJobAdmissionRequest"];
 export type SandboxActivity = components["schemas"]["SandboxActivity"];
 export type SandboxActivityEvent = components["schemas"]["SandboxActivityEvent"];
 export type SandboxProfileGrants = components["schemas"]["SandboxProfileGrants"];
@@ -200,6 +202,8 @@ export interface MenderClient {
   removeSandboxTools(sandboxId:string):Promise<void>;
   getSandboxJobTools(sandboxId:string):Promise<SandboxToolSuite>;
   getSSHJobRecovery(sandboxId:string):Promise<SSHJobRecoveryView>;
+  getSSHJobAdmission(sandboxId:string):Promise<SSHJobAdmissionState>;
+  setSSHJobAdmission(sandboxId:string,body:SetSSHJobAdmissionRequest):Promise<SSHJobAdmissionState>;
   ensureSandboxJobTools(sandboxId:string):Promise<SandboxToolSuite>;
   removeSandboxJobTools(sandboxId:string):Promise<void>;
   listSandboxes(): Promise<{ sandboxes: Sandbox[] }>;
@@ -586,6 +590,8 @@ export function createMenderClient(
     },
     async getSandboxJobTools(sandboxId){return requireData(await client.GET("/sandboxes/{sandboxId}/job-tools",{params:{path:{sandboxId}}}));},
     async getSSHJobRecovery(sandboxId){return requireData(await client.GET("/sandboxes/{sandboxId}/jobs/recovery",{params:{path:{sandboxId}}}));},
+    async getSSHJobAdmission(sandboxId){return requireData(await client.GET("/sandboxes/{sandboxId}/jobs/admission",{params:{path:{sandboxId}}}));},
+    async setSSHJobAdmission(sandboxId,body){return requireData(await client.PUT("/sandboxes/{sandboxId}/jobs/admission",{params:{path:{sandboxId}},body}));},
     async ensureSandboxJobTools(sandboxId){return requireData(await client.POST("/sandboxes/{sandboxId}/job-tools",{params:{path:{sandboxId}}}));},
     async removeSandboxJobTools(sandboxId){
       const result=await client.DELETE("/sandboxes/{sandboxId}/job-tools",{params:{path:{sandboxId}}});

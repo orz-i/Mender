@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-const latestSchemaVersion = 14
+const latestSchemaVersion = 15
 
 func migrate(ctx context.Context, db *sql.DB) error {
 	tx, err := db.BeginTx(ctx, nil)
@@ -519,6 +519,40 @@ func migrate(ctx context.Context, db *sql.DB) error {
 		}
 		if _, err = tx.ExecContext(ctx, "INSERT INTO sandbox_schema_migrations(version,applied_at) VALUES(14,?)", time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
 			return fmt.Errorf("record sandbox migration 14: %w", err)
+		}
+	}
+	// Recovery R2: owner-controlled admission pause. A missing row means
+	// unpaused. The flag is checked in the same write transaction as Job
+	// submission lease reservation, independent of running remote Tasks.
+	var pauseApplied int
+	if err = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM sandbox_schema_migrations WHERE version=15").Scan(&pauseApplied); err != nil {
+		return fmt.Errorf("sandbox migration 15 presence: %w", err)
+	}
+	if pauseApplied == 0 {
+		for _, statement := range []string{
+			`CREATE TABLE sandbox_ssh_job_admission_controls (
+				sandbox_id TEXT PRIMARY KEY REFERENCES sandboxes(id) ON DELETE RESTRICT,
+				paused INTEGER NOT NULL CHECK(paused IN (0,1)),
+				revision INTEGER NOT NULL CHECK(revision > 0),
+				updated_at TEXT NOT NULL
+			)`,
+			`CREATE TABLE sandbox_ssh_job_admission_events (
+				event_id INTEGER PRIMARY KEY AUTOINCREMENT,
+				sandbox_id TEXT NOT NULL REFERENCES sandboxes(id) ON DELETE RESTRICT,
+				action TEXT NOT NULL CHECK(action IN ('pause','resume')),
+				generation INTEGER NOT NULL,
+				principal_kind TEXT NOT NULL,
+				principal_ref TEXT NOT NULL,
+				origin TEXT NOT NULL,
+				occurred_at TEXT NOT NULL
+			)`,
+		} {
+			if _, err = tx.ExecContext(ctx, statement); err != nil {
+				return fmt.Errorf("sandbox migration 15 SSH Job pause: %w", err)
+			}
+		}
+		if _, err = tx.ExecContext(ctx, "INSERT INTO sandbox_schema_migrations(version,applied_at) VALUES(15,?)", time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
+			return fmt.Errorf("record sandbox migration 15: %w", err)
 		}
 	}
 	// A standalone Sandbox store may precede the Provider catalogue. Install

@@ -204,6 +204,10 @@ export function GetRuntimeGovernance(): $CancellablePromise<$models.RuntimeGover
     return $Call.ByID(4089393752);
 }
 
+export function GetSSHJobAdmission(raw: string): $CancellablePromise<$models.SSHJobAdmissionState> {
+    return $Call.ByID(1047015478, raw);
+}
+
 export function GetSSHJobRecovery(raw: string): $CancellablePromise<$models.SSHJobRecoveryView> {
     return $Call.ByID(1855596822, raw);
 }
@@ -423,6 +427,10 @@ export function SetPolicyRuleEnabled(ruleID: string, enabled: boolean): $Cancell
 
 export function SetProfileTunnel(slug: string, tunnelID: string): $CancellablePromise<$models.Profile> {
     return $Call.ByID(1012038523, slug, tunnelID);
+}
+
+export function SetSSHJobAdmission(raw: string, paused: boolean): $CancellablePromise<$models.SSHJobAdmissionState> {
+    return $Call.ByID(3180772690, raw, paused);
 }
 
 export function StartMCPServer(profile: string, address: string): $CancellablePromise<$models.MCPServerInstance> {

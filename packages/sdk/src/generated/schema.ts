@@ -918,6 +918,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/sandboxes/{sandboxId}/jobs/admission": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sandboxId: components["parameters"]["SandboxId"];
+            };
+            cookie?: never;
+        };
+        /** @description Read persisted owner-controlled pause state; never connects to SSH. */
+        get: operations["getSSHJobAdmission"];
+        /** @description Owner-only pause/resume new Jobs; does not stop existing tasks. */
+        put: operations["setSSHJobAdmission"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/sandboxes/{sandboxId}/jobs/recovery": {
         parameters: {
             query?: never;
@@ -2214,6 +2234,14 @@ export interface components {
             sourceKey: string;
             name: string;
             title: string;
+        };
+        SSHJobAdmissionState: {
+            sandboxId: string;
+            generation: number;
+            paused: boolean;
+        };
+        SetSSHJobAdmissionRequest: {
+            paused: boolean;
         };
         SSHJobRecoveryRecord: {
             taskId: string;
@@ -4251,6 +4279,60 @@ export interface operations {
                 };
                 content?: never;
             };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getSSHJobAdmission: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sandboxId: components["parameters"]["SandboxId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current local admission flag and Run generation */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SSHJobAdmissionState"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    setSSHJobAdmission: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sandboxId: components["parameters"]["SandboxId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetSSHJobAdmissionRequest"];
+            };
+        };
+        responses: {
+            /** @description Committed pause state with durable change event */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SSHJobAdmissionState"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];

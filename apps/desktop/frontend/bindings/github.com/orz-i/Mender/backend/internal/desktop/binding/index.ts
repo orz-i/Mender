@@ -66,6 +66,7 @@ export type {
     RuntimeIsolation,
     RuntimeUsage,
     SSHHostIdentity,
+    SSHJobAdmissionState,
     SSHJobRecoveryEvidence,
     SSHJobRecoveryRecord,
     SSHJobRecoveryView,
