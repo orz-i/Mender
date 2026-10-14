@@ -86,3 +86,21 @@
 - `backend/internal/bootstrap/ssh_r3b_live_acceptance_test.go`：`//go:build liveacceptance`，使用显式运行时数据库及原 Rocky Template，执行前预检、真实 v2 canary 与生命周期验收，或创建用于故障注入的专用 Sandbox。
 - `backend/internal/sandbox/infrastructure/sshremote/ssh_r3b_live_fault_test.go`：`//go:build liveacceptance`，严格只接受名称为 `R3b Rocky acceptance temporary` 且 Run=`ready`、generation=1、仅已有 1 条 terminal record 的专用 Sandbox；使用已授权本地 Keychain 连接真实 SSH，在每个阶段固定的持久化回执边界返回 `unknown`，且明确断言从未调用 systemd-run。
 - 默认测试没有对应显式环境授权时直接跳过。切勿将此用例指向原用户 Rocky Sandbox。
+
+## 7. 最终工程门禁与提交
+
+完成实机验收并保留构建标签测试后，在仓库最新源码上运行：
+
+- `pnpm check`：**exit=0**。包括 Provider/Sandbox/Tunnel SDK + 示例、Protobuf、模块隔离、OpenAPI SDK、Wails Bindings 与架构守卫、Go Lint、Go 全量测试及 `go test -race`、TypeScript、前端测试、生产构建。
+- Vitest：**33 个测试文件、204 项测试全部通过**。i18n：**1205/1205** 中文翻译覆盖检查通过。
+- `golangci-lint run --build-tags liveacceptance ./backend/...`：**0 issues**。
+- `go test -tags liveacceptance` 在未给出实机授权环境变量时：两项实时测试均 **SKIP**；不会意外连接用户 SSH 主机。
+- 两项实际运行的带标签 Rocky 验收任务均 **exit=0**，且两个临时 Sandbox 均已完成逻辑 Destroy。
+- 最终 Git 仅剩原有的 `.agents/`、`.pi/`、`.intent-loop/` 等 Skills 相关未跟踪目录，未触碰、未纳入提交，也未推送远端。
+
+提交采用文档先行、测试随后：
+
+- `d8ec6db`：`docs(ssh): record Rocky 252 R3b recovery and late systemd acceptance`
+- `3e1a504`：`test(ssh): retain opt-in Rocky R3b live acceptance harness`
+
+**对外状态**：R3b 核心恢复链路的 Rocky 实机验收已通过；v2 切换为常态运行需单独在 Wails 启动环境显式启用，并重新验证 Profile Tool 的 v2 供应路径。真实主机断电、内核崩溃、物理网络分区仍是独立的灾难测试，不应因本次成功而宣称被完全覆盖。
