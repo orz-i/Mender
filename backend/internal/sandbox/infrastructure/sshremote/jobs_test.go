@@ -4,16 +4,16 @@ import (
 	"context"
 	"errors"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 )
 
+// A fake JobRunner is an in-memory systemd service for the test-owned SFTP
+// fixture. It has no privileged shell or real SSH side effects.
 type fixtureJobRunner struct {
 	mu      sync.Mutex
 	starts  int
@@ -55,11 +55,11 @@ func fixtureJobs(t *testing.T, runner JobRunner) (*Jobs, func() *Jobs) {
 			t.Fatal(err)
 		}
 		t.Cleanup(func() { _ = conn.Close() })
-		engine, err := newJobs(sandboxdomain.ID("sbx_00000000000000000000000000000011"), template.Root, conn.SFTP, runner)
+		jobs, err := newJobs(sandboxdomain.ID("sbx_00000000000000000000000000000011"), template.Root, conn.SFTP, runner)
 		if err != nil {
 			t.Fatal(err)
 		}
-		return engine
+		return jobs
 	}
 	return connect(), connect
 }
@@ -70,280 +70,133 @@ func TestSSHDurableJobsSessionRequiresExplicitRootAccount(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = connection.Close() }()
-	item := &Session{conn: connection, root: template.Root,
-		sandboxID: sandboxdomain.ID("sbx_00000000000000000000000000000011"), remoteUser: "agent"}
-	if _, err := item.Jobs(); !errors.Is(err, ErrJobUnavailable) {
-		t.Fatalf("unprivileged account unexpectedly gained systemd system-manager operations: %v", err)
+	item := &Session{conn: connection, root: template.Root, sandboxID: sandboxdomain.ID("sbx_00000000000000000000000000000011"), remoteUser: "agent"}
+	if _, err = item.Jobs(); !errors.Is(err, ErrJobUnavailable) {
+		t.Fatalf("non-root account accepted: %v", err)
 	}
-	// The fixture does not elevate the test process: it only uses the account
-	// label to confirm contract validation, without reaching any real systemd.
 	item.remoteUser = "root"
-	if _, err := item.Jobs(); err != nil {
-		t.Fatalf("explicit root SSH account rejected before backend execution: %v", err)
+	if _, err = item.Jobs(); err != nil {
+		t.Fatalf("root account unavailable: %v", err)
 	}
 }
-
 func TestSystemdJobRunnerStrictUnitNaming(t *testing.T) {
 	for _, value := range []string{"mender-job.service", "mender-sjob_abc.service", "mender-sjob_" + strings.Repeat("0", 32) + ".target", "x" + strings.Repeat("a", 40) + ".service"} {
 		if validUnit(value) {
 			t.Fatalf("accepted arbitrary unit %q", value)
 		}
 	}
-	valid := "mender-sjob_" + strings.Repeat("a", 32) + ".service"
-	if !validUnit(valid) {
-		t.Fatalf("rejected bounded fixed unit identity %q", valid)
+	if !validUnit("mender-sjob_" + strings.Repeat("a", 32) + ".service") {
+		t.Fatal("bounded service identity rejected")
 	}
 }
-
-func TestSSHDurableJobsIdempotencyStatusLogsAndRestart(t *testing.T) {
-	fake := &fixtureJobRunner{}
-	jobs, reconnect := fixtureJobs(t, fake)
-	key := "0123456789abcdef0123456789abcdef"
-	ctx := context.Background()
-	request := JobRequest{IdempotencyKey: key, Command: "echo test-side-effect"}
-	first, err := jobs.Submit(ctx, request)
-	if err != nil || first.State != JobRunning || !jobIDPattern.MatchString(first.TaskID) {
-		t.Fatalf("first submit: %+v %v", first, err)
-	}
-	next, err := jobs.Submit(ctx, request)
-	if err != nil || next.TaskID != first.TaskID || next.State != JobRunning || fake.starts != 1 {
-		t.Fatalf("non-idempotent retry: %+v %v start=%d", next, err, fake.starts)
-	}
-	conflict, err := jobs.Submit(ctx, JobRequest{IdempotencyKey: key, Command: "echo DIFFERENT"})
-	if !errors.Is(err, ErrJobConflict) || conflict.TaskID != first.TaskID || fake.starts != 1 {
-		t.Fatalf("conflict executed: %+v %v", conflict, err)
-	}
-	home := jobs.store.taskPath(first.TaskID)
-	// #nosec G304 -- home is inside this test's private temporary SSH fixture.
-	if data, err := os.ReadFile(filepath.Join(home, "run.sh")); err != nil || !strings.Contains(string(data), "echo test-side-effect") {
-		t.Fatalf("missing durable script: %v", err)
-	}
-	for _, name := range []string{"manifest.json", "run.sh"} {
-		info, e := os.Stat(filepath.Join(home, name))
-		if e != nil || info.Mode().Perm()&0077 != 0 {
-			t.Fatalf("unsafe job file permissions %s %v %v", name, info, e)
-		}
-	}
-	if info, e := os.Stat(home); e != nil || info.Mode().Perm()&0077 != 0 {
-		t.Fatalf("unsafe task directory %v %v", info, e)
-	}
-	if err = os.WriteFile(filepath.Join(home, "stdout"), []byte("hello world"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	log, e := jobs.Logs(ctx, first.TaskID, "stdout", 0, 5)
-	if e != nil || log.Content != "hello" || log.Cursor != 5 || !log.Truncated {
-		t.Fatalf("first logs %+v %v", log, e)
-	}
-	log, e = jobs.Logs(ctx, first.TaskID, "stdout", log.Cursor, 16)
-	if e != nil || log.Content != " world" || log.Cursor != 11 || log.Truncated {
-		t.Fatalf("resume logs %+v %v", log, e)
-	}
-	if err = os.WriteFile(filepath.Join(home, "exit"), []byte("0\n"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	restarted := reconnect()
-	done, err := restarted.Status(ctx, first.TaskID)
-	if err != nil || done.State != JobCompleted || done.ExitCode == nil || *done.ExitCode != 0 || fake.starts != 1 {
-		t.Fatalf("restart lost result: %+v %v", done, err)
-	}
-	if err = restarted.Quiescent(ctx); err != nil {
-		t.Fatalf("terminal proof failed: %v", err)
-	}
-	if err = restarted.PruneOutput(ctx, first.TaskID); err != nil {
-		t.Fatal(err)
-	}
-	again, err := restarted.Submit(ctx, request)
-	if err != nil || again.State != JobCompleted || fake.starts != 1 {
-		t.Fatalf("prune destroyed idempotency tombstone: %+v %v", again, err)
-	}
-}
-
-// Concurrent callers with the same high-entropy key share one atomic remote
-// directory reservation; there is no process-local mutex assumption.
-func TestSSHDurableJobsConcurrentIdempotencyAcrossConnections(t *testing.T) {
-	fake := &fixtureJobRunner{}
-	first, reconnect := fixtureJobs(t, fake)
-	second := reconnect()
-	request := JobRequest{IdempotencyKey: "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", Command: "echo exactly-one-start"}
-	var wg sync.WaitGroup
-	for _, engine := range []*Jobs{first, second} {
-		wg.Add(1)
-		go func(current *Jobs) {
-			defer wg.Done()
-			_, _ = current.Submit(context.Background(), request)
-		}(engine)
-	}
-	wg.Wait()
-	if fake.starts != 1 {
-		t.Fatalf("duplicate remote start count: %d", fake.starts)
-	}
-	retry, err := second.Submit(context.Background(), request)
-	if err != nil || retry.State != JobRunning || retry.TaskID != first.identity(request.IdempotencyKey) || fake.starts != 1 {
-		t.Fatalf("cross-connection retry %+v %v starts=%d", retry, err, fake.starts)
-	}
-}
-
-func TestSSHDurableJobsLostAcknowledgementAndUnknownNoReplay(t *testing.T) {
-	fake := &fixtureJobRunner{lostAck: true}
-	jobs, reconnect := fixtureJobs(t, fake)
-	ctx := context.Background()
-	request := JobRequest{IdempotencyKey: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", Command: "echo only-once"}
-	first, err := jobs.Submit(ctx, request)
-	if !errors.Is(err, ErrJobUnknown) || first.State != JobUnknown || fake.starts != 1 {
-		t.Fatalf("ACK loss: %+v %v", first, err)
-	}
-	restored := reconnect()
-	same, err := restored.Submit(ctx, request)
-	if err != nil || same.State != JobRunning || fake.starts != 1 {
-		t.Fatalf("ACK replay: %+v %v start=%d", same, err, fake.starts)
-	}
-	// A reservation with no complete manifest is never considered safe to replay.
-	pendingKey := "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
-	pendingID := jobs.identity(pendingKey)
-	if err = os.Mkdir(jobs.store.taskPath(pendingID), 0700); err != nil {
-		t.Fatal(err)
-	}
-	uncertain, e := restored.Submit(ctx, JobRequest{IdempotencyKey: pendingKey, Command: "echo unknown"})
-	if !errors.Is(e, ErrJobUnknown) || uncertain.State != JobUnknown || fake.starts != 1 {
-		t.Fatalf("partial reservation replayed: %+v %v", uncertain, e)
-	}
-	if err = restored.Quiescent(ctx); !errors.Is(err, ErrJobUnknown) {
-		t.Fatalf("uncertain job did not fence lifecycle: %v", err)
-	}
-}
-func TestSSHDurableJobsCancelDoesNotFabricateTermination(t *testing.T) {
-	fake := &fixtureJobRunner{}
-	jobs, _ := fixtureJobs(t, fake)
-	ctx := context.Background()
-	req := JobRequest{IdempotencyKey: "cccccccccccccccccccccccccccccccc", Command: "sleep 30"}
-	first, err := jobs.Submit(ctx, req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	cancel, err := jobs.Cancel(ctx, first.TaskID)
-	if err != nil || !cancel.CancelRequested || cancel.State != JobUnknown || fake.stops != 1 {
-		t.Fatalf("cancel falsely terminal: %+v %v", cancel, err)
-	}
-	if err = jobs.Quiescent(ctx); !errors.Is(err, ErrJobUnknown) {
-		t.Fatalf("unconfirmed stop permitted lifecycle: %v", err)
-	}
-	// Only the durable remote wrapper exit is proof of terminal state.
-	if err = os.WriteFile(filepath.Join(jobs.store.taskPath(first.TaskID), "exit"), []byte("143\n"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	stopped, err := jobs.Status(ctx, first.TaskID)
-	if err != nil || stopped.State != JobCancelled || !stopped.CancelRequested {
-		t.Fatalf("no confirmed cancellation %+v %v", stopped, err)
-	}
-}
-func TestSSHDurableJobsValidateKeysAndRefuseSymlink(t *testing.T) {
+func TestSSHJobsV2ValidateRequestAndSymlink(t *testing.T) {
 	for _, key := range []string{"", "not-random", "AAAA0000111122223333444455556666", strings.Repeat("0", 33)} {
 		if (JobRequest{IdempotencyKey: key, Command: "echo hi"}).Validate() == nil {
-			t.Fatalf("accepted invalid key %q", key)
+			t.Fatalf("invalid key %q accepted", key)
 		}
 	}
 	if (JobRequest{IdempotencyKey: strings.Repeat("a", 32), Command: strings.Repeat("x", maxJobCommandBytes+1)}).Validate() == nil {
-		t.Fatal("oversized command")
+		t.Fatal("oversized command accepted")
 	}
-	fake := &fixtureJobRunner{}
-	jobs, _ := fixtureJobs(t, fake)
-	// Directory symlink must never redirect persistent task material to a
-	// workspace-external destination. None of the fake runner methods is used.
-	other := t.TempDir()
-	if err := os.Symlink(other, jobs.root+jobStorageDir); err != nil {
+	jobs, _, runner := fixtureV2Jobs(t)
+	if err := os.Symlink(t.TempDir(), jobs.root+jobStorageDir); err != nil {
 		t.Fatal(err)
 	}
-	_, err := jobs.Submit(context.Background(), JobRequest{IdempotencyKey: strings.Repeat("1", 32), Command: "echo nope"})
-	if err == nil || fake.starts != 0 {
-		t.Fatalf("symlink task store accepted: %v", err)
+	_, err := jobs.Submit(context.Background(), JobRequest{IdempotencyKey: strings.Repeat("1", 32), Command: "echo no"}, 1)
+	if err == nil || runner.starts != 0 {
+		t.Fatalf("symlinked task store accepted: %v", err)
 	}
 }
-
-// This runner starts only a test-owned child process under a temp workspace;
-// it does not invoke systemd, SSH to a real machine, or touch user credentials.
-type localFixtureRunner struct {
-	mu     sync.Mutex
-	starts int
-	cmds   map[string]*exec.Cmd
-}
-
-func (r *localFixtureRunner) Start(_ context.Context, unit, script string) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if r.cmds == nil {
-		r.cmds = map[string]*exec.Cmd{}
-	}
-	command := exec.Command("/bin/sh", script) // #nosec G204 -- script is written exclusively in a test-owned temporary workspace
-	if err := command.Start(); err != nil {
-		return err
-	}
-	r.cmds[unit] = command
-	r.starts++
-	go func() { _ = command.Wait() }()
-	return nil
-}
-func (r *localFixtureRunner) Observe(_ context.Context, unit string) (JobState, error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if _, ok := r.cmds[unit]; ok {
-		return JobRunning, nil
-	}
-	return JobUnknown, nil
-}
-func (r *localFixtureRunner) Stop(_ context.Context, unit string) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if command := r.cmds[unit]; command != nil && command.Process != nil {
-		_ = command.Process.Kill()
-	}
-	return nil
-}
-func TestSSHDurableJobScriptSurvivesSSHDisconnect(t *testing.T) {
-	runner := &localFixtureRunner{}
-	template, credentials := sshFixture(t)
-	dial := Dialer{Credentials: credentials}
+func TestSSHJobsV2StatusLogsAndCancellation(t *testing.T) {
 	ctx := context.Background()
-	firstConnection, err := dial.Connect(ctx, template)
+	jobs, reconnect, runner := fixtureV2Jobs(t)
+	if err := jobs.Prepare(ctx); err != nil {
+		t.Fatal(err)
+	}
+	req := JobRequest{IdempotencyKey: strings.Repeat("a", 32), Command: "echo test-only"}
+	first, err := jobs.Submit(ctx, req, 1)
+	if err != nil || first.TaskID == "" {
+		t.Fatalf("submit failed: %+v %v", first, err)
+	}
+	manifest, _, err := jobs.store.readV2Manifest(ctx, first.TaskID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	id := sandboxdomain.ID("sbx_00000000000000000000000000000011")
-	jobs, err := newJobs(id, template.Root, firstConnection.SFTP, runner)
-	if err != nil {
-		_ = firstConnection.Close()
+	start := "v2:" + first.TaskID + ":" + manifest.AttemptID + ":" + manifest.CommandDigest + "\n"
+	dir := jobs.store.taskPath(first.TaskID)
+	if err = os.WriteFile(filepath.Join(dir, "start.intent"), []byte(start), 0600); err != nil {
 		t.Fatal(err)
 	}
-	req := JobRequest{IdempotencyKey: "dddddddddddddddddddddddddddddddd", Command: "sleep 0.4; printf 'finished after disconnect\\n'"}
-	started, err := jobs.Submit(ctx, req)
-	if err != nil {
-		_ = firstConnection.Close()
+	if err = os.WriteFile(filepath.Join(dir, "stdout"), []byte("hello from v2"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	// Sever the ORIGINAL authenticated SSH/SFTP connection while its detached
-	// child is still running. A fresh transport must recover the same task.
-	if err := firstConnection.Close(); err != nil {
+	log, err := jobs.Logs(ctx, first.TaskID, "stdout", 0, 5)
+	if err != nil || log.Content != "hello" || log.Cursor != 5 || !log.Truncated {
+		t.Fatalf("bounded log: %+v %v", log, err)
+	}
+	resumed := reconnect()
+	log, err = resumed.Logs(ctx, first.TaskID, "stdout", log.Cursor, 512)
+	if err != nil || log.Content != " from v2" || log.Truncated {
+		t.Fatalf("resumed log: %+v %v", log, err)
+	}
+	running, err := resumed.Status(ctx, first.TaskID)
+	if err != nil || running.State != JobRunning {
+		t.Fatalf("start evidence not observed: %+v %v", running, err)
+	}
+	stopped, err := resumed.Cancel(ctx, first.TaskID)
+	if err != nil || !stopped.CancelRequested || stopped.State != JobUnknown || runner.stops != 1 {
+		t.Fatalf("cancel fabricated terminal: %+v %v", stopped, err)
+	}
+	if err = resumed.Quiescent(ctx); !errors.Is(err, ErrJobUnknown) {
+		t.Fatalf("cancelled-but-unproved task allowed lifecycle: %v", err)
+	}
+	if err = os.WriteFile(filepath.Join(dir, "exit"), []byte("143\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	reopened, err := dial.Connect(ctx, template)
-	if err != nil {
+	done, err := resumed.Status(ctx, first.TaskID)
+	if err != nil || done.State != JobCancelled || done.ExitCode == nil || *done.ExitCode != 143 {
+		t.Fatalf("cancel result not verified: %+v %v", done, err)
+	}
+	if err = resumed.Quiescent(ctx); err != nil {
+		t.Fatalf("terminal evidence rejected: %v", err)
+	}
+}
+func TestSSHJobsV2RetiredIDsPreventReplayWithoutTaskData(t *testing.T) {
+	ctx := context.Background()
+	jobs, reconnect, runner := fixtureV2Jobs(t)
+	if err := jobs.Prepare(ctx); err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = reopened.Close() }()
-	restored, err := newJobs(id, template.Root, reopened.SFTP, runner)
-	if err != nil {
+	req := JobRequest{IdempotencyKey: strings.Repeat("b", 32), Command: "echo never-execute-retired"}
+	id := jobs.identity(req.IdempotencyKey)
+	marker := jobs.store.retiredMarkerPath(id)
+	if err := os.WriteFile(marker, []byte(retiredMarker), 0600); err != nil {
 		t.Fatal(err)
 	}
-	deadline := time.Now().Add(4 * time.Second)
-	for time.Now().Before(deadline) {
-		result, e := restored.Status(ctx, started.TaskID)
-		if e == nil && result.State == JobCompleted {
-			logs, e := restored.Logs(ctx, started.TaskID, "stdout", 0, 1024)
-			if e != nil || logs.Content != "finished after disconnect\n" || runner.starts != 1 {
-				t.Fatalf("result %+v %v", logs, e)
-			}
-			return
-		}
-		time.Sleep(30 * time.Millisecond)
+	snap, err := jobs.Submit(ctx, req, 1)
+	if !errors.Is(err, ErrJobConflict) || snap.TaskID != id || runner.starts != 0 {
+		t.Fatalf("retired ID replayed: %+v %v", snap, err)
 	}
-	t.Fatal("detached script did not produce a durable completion file")
+	reopened := reconnect()
+	_, err = reopened.Submit(ctx, req, 1)
+	if !errors.Is(err, ErrJobConflict) {
+		t.Fatalf("restarted runtime forgot retired TaskID: %v", err)
+	}
+	report, err := reopened.InspectRecovery(ctx)
+	if err != nil || len(report.Records) != 0 {
+		t.Fatalf("retired marker exposed as running task: %+v %v", report, err)
+	}
+	if err = reopened.Quiescent(ctx); err != nil {
+		t.Fatalf("retired-only inventory blocked lifecycle: %v", err)
+	}
+	if err = os.Remove(marker); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.Symlink("/tmp/forged-retired-marker", marker); err != nil {
+		t.Fatal(err)
+	}
+	_, err = reopened.Submit(ctx, req, 1)
+	if !errors.Is(err, ErrJobUnknown) {
+		t.Fatalf("symlinked retired marker permitted replay: %v", err)
+	}
 }

@@ -119,6 +119,10 @@ func (j *Jobs) Prepare(ctx context.Context) error {
 	}
 	return j.store.ensureBase(ctx)
 }
+
+// The opaque ID salt is stable across the protocol hard cut so retired
+// TaskID tombstones still reject reuse of a previously admitted key.
+// It is an identifier format, not a v1 journal compatibility reader.
 func (j *Jobs) identity(key string) string {
 	sum := sha256.Sum256([]byte("mender:ssh-job:v1:" + j.sandboxID.String() + ":" + key))
 	return "sjob_" + hex.EncodeToString(sum[:16])
@@ -131,109 +135,20 @@ func validateJobID(raw string) error {
 	return nil
 }
 
-// Submit never invokes Start twice for one idempotency key, including after
-// an SSH ACK is lost. A partial reservation is durable UNKNOWN, never replayed.
-func (j *Jobs) Submit(ctx context.Context, request JobRequest) (JobSnapshot, error) {
-	if j == nil || j.store == nil || j.runner == nil || request.Validate() != nil {
-		return JobSnapshot{}, ErrJobInvalid
-	}
-	if err := ctx.Err(); err != nil {
-		return JobSnapshot{}, err
-	}
-	id := j.identity(request.IdempotencyKey)
-	digest := sha256.Sum256([]byte(request.Command))
-	manifest := jobManifest{Version: 1, TaskID: id, SandboxID: j.sandboxID.String(), CommandDigest: hex.EncodeToString(digest[:]), Unit: j.unit(id)}
-	created, err := j.store.reserve(ctx, id)
-	if err != nil {
-		return JobSnapshot{TaskID: id, State: JobUnknown}, err
-	}
-	if !created {
-		saved, e := j.store.manifest(ctx, id)
-		if e != nil {
-			return JobSnapshot{TaskID: id, State: JobUnknown}, ErrJobUnknown
-		}
-		if saved != manifest {
-			return JobSnapshot{TaskID: id, State: JobUnknown}, ErrJobConflict
-		}
-		return j.Status(ctx, id)
-	}
-	if err = j.store.writeManifest(ctx, id, manifest); err != nil {
-		return JobSnapshot{TaskID: id, State: JobUnknown}, ErrJobUnknown
-	}
-	if err = j.store.writeScript(ctx, id, jobScript(j.root, j.store.taskPath(id), request.Command)); err != nil {
-		return JobSnapshot{TaskID: id, State: JobUnknown}, ErrJobUnknown
-	}
-	if err = j.runner.Start(ctx, manifest.Unit, j.store.scriptPath(id)); err != nil {
-		// The remote manager may have accepted the unit before the SSH ACK was
-		// lost. Do not retry a side-effecting command from this branch.
-		return JobSnapshot{TaskID: id, State: JobUnknown, Unit: manifest.Unit}, ErrJobUnknown
-	}
-	return JobSnapshot{TaskID: id, State: JobRunning, Unit: manifest.Unit}, nil
-}
-
+// Status accepts only the durable v2 journal. There is no legacy
+// parsing, replay, protocol dispatch or fallback.
 func (j *Jobs) Status(ctx context.Context, taskID string) (JobSnapshot, error) {
 	if j == nil || j.store == nil || j.runner == nil || validateJobID(taskID) != nil {
 		return JobSnapshot{}, ErrJobInvalid
 	}
-	snapshot := JobSnapshot{TaskID: taskID, State: JobUnknown}
-	version, versionErr := j.store.manifestVersion(ctx, taskID)
-	if versionErr != nil {
-		return snapshot, ErrJobUnknown
-	}
-	if version == 2 {
-		return j.statusV2(ctx, taskID)
-	}
-	record, err := j.store.manifest(ctx, taskID)
-	if err != nil {
-		return snapshot, ErrJobUnknown
-	}
-	if record.TaskID != taskID || record.SandboxID != j.sandboxID.String() || record.Unit != j.unit(taskID) {
-		return snapshot, ErrJobUnknown
-	}
-	snapshot.Unit = record.Unit
-	snapshot.CancelRequested, err = j.store.cancelRequested(ctx, taskID)
-	if err != nil {
-		return snapshot, ErrJobUnknown
-	}
-	if exit, exists, e := j.store.exitCode(ctx, taskID); e != nil {
-		return snapshot, ErrJobUnknown
-	} else if exists {
-		snapshot.ExitCode = &exit
-		switch {
-		case exit == 0:
-			snapshot.State = JobCompleted
-		case snapshot.CancelRequested && exit == 143:
-			snapshot.State = JobCancelled
-		default:
-			snapshot.State = JobFailed
-		}
-		return snapshot, nil
-	}
-	state, err := j.runner.Observe(ctx, record.Unit)
-	if err != nil {
-		return snapshot, ErrJobUnknown
-	}
-	if state == JobRunning {
-		snapshot.State = JobRunning
-	}
-	// A collected or failed systemd unit without a durable result file proves
-	// neither success nor cancellation: preserve unknown until reviewed.
-	return snapshot, nil
+	return j.statusV2(ctx, taskID)
 }
 
 func (j *Jobs) Logs(ctx context.Context, id, stream string, cursor int64, limit int) (JobLogs, error) {
 	if j == nil || j.store == nil || validateJobID(id) != nil || (stream != "stdout" && stream != "stderr") || cursor < 0 || limit < 1 || limit > maxJobLogChunk {
 		return JobLogs{}, ErrJobInvalid
 	}
-	version, err := j.store.manifestVersion(ctx, id)
-	if err != nil {
-		return JobLogs{}, ErrJobUnknown
-	}
-	if version == 2 {
-		if _, _, e := j.store.readV2Manifest(ctx, id); e != nil {
-			return JobLogs{}, ErrJobUnknown
-		}
-	} else if _, e := j.store.manifest(ctx, id); e != nil {
+	if _, _, err := j.store.readV2Manifest(ctx, id); err != nil {
 		return JobLogs{}, ErrJobUnknown
 	}
 	content, next, more, err := j.store.readLog(ctx, id, stream, cursor, limit)
@@ -269,9 +184,8 @@ func (j *Jobs) Cancel(ctx context.Context, id string) (JobSnapshot, error) {
 	return j.Status(ctx, id)
 }
 
-// Quiescent is a backend-owned absence proof. Unknown, partially reserved,
-// cancelled-but-unconfirmed, and running tasks all block Sandbox lifecycle.
-// It performs no cleanup or shell execution.
+// Quiescent only trusts v2 terminal or independently fsynced resolution
+// evidence. An unknown or partial v2 record blocks resource lifecycle.
 func (j *Jobs) Quiescent(ctx context.Context) error {
 	if j == nil || j.store == nil {
 		return ErrJobUnavailable
@@ -284,59 +198,11 @@ func (j *Jobs) Quiescent(ctx context.Context) error {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		version, e := j.store.manifestVersion(ctx, id)
-		if e != nil {
-			return ErrJobUnknown
-		}
-		if version == 2 {
-			if e := j.v2Quiescent(ctx, id); e != nil {
-				return ErrJobUnknown
-			}
-			continue
-		}
-		state, e := j.Status(ctx, id)
-		if e != nil || !state.State.Terminal() {
+		if err := j.v2Quiescent(ctx, id); err != nil {
 			return ErrJobUnknown
 		}
 	}
 	return nil
-}
-
-// PruneOutput discards old logs and the executable script only after a
-// confirmed terminal result. It keeps the manifest, result and immutable
-// idempotency tombstone, so a later identical Submit can never rerun.
-func (j *Jobs) PruneOutput(ctx context.Context, id string) error {
-	version, err := j.store.manifestVersion(ctx, id)
-	if err != nil {
-		return ErrJobUnknown
-	}
-	// v2 keeps its verified gate script and journal until an independently
-	// reviewed compact tombstone protocol exists.
-	if version == 2 {
-		return ErrJobUnavailable
-	}
-	snapshot, err := j.Status(ctx, id)
-	if err != nil {
-		return err
-	}
-	if !snapshot.State.Terminal() {
-		return ErrJobUnknown
-	}
-	return j.store.pruneOutput(ctx, id)
-}
-func jobScript(root, taskPath, command string) string {
-	result := path.Join(taskPath, "exit")
-	temporary := path.Join(taskPath, "exit.tmp")
-	stdout := path.Join(taskPath, "stdout")
-	stderr := path.Join(taskPath, "stderr")
-	// The command is shell-quoted as one argument to sh -c. Executing arbitrary
-	// code as the selected remote account is the explicit SSH Sandbox privilege.
-	return "#!/bin/sh\n" +
-		"umask 077\n" +
-		"cd " + quoted(root) + " || exit 125\n" +
-		"finish() { rc=$?; printf '%s\\n' \"$rc\" > " + quoted(temporary) + "; mv -f " + quoted(temporary) + " " + quoted(result) + "; }\n" +
-		"trap finish EXIT\ntrap 'exit 143' TERM\n" +
-		"(ulimit -f 8192; exec /bin/sh -c " + quoted(command) + ") > " + quoted(stdout) + " 2> " + quoted(stderr) + "\n"
 }
 func parseExit(raw string) (int, error) {
 	if len(raw) > 8 || strings.TrimSpace(raw) != raw {

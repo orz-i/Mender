@@ -13,7 +13,7 @@ func TestV2ResolutionRequiresFreshRemoteDurabilityProof(t *testing.T) {
 	if err := jobs.Prepare(ctx); err != nil {
 		t.Fatal(err)
 	}
-	submitted, err := jobs.SubmitV2(ctx, JobRequest{
+	submitted, err := jobs.Submit(ctx, JobRequest{
 		IdempotencyKey: strings.Repeat("2", 32), Command: "echo must-remain-one-shot",
 	}, 1)
 	if err != nil {

@@ -194,22 +194,22 @@ func TestV2JournalUnknownNeverReplaysOnLostAck(t *testing.T) {
 	if err := j.Prepare(ctx); err != nil {
 		t.Fatal(err)
 	}
-	first, e := j.SubmitV2(ctx, req, 1)
+	first, e := j.Submit(ctx, req, 1)
 	if !errors.Is(e, ErrJobUnknown) || first.TaskID == "" || runner.starts != 1 {
 		t.Fatalf("expected lost-ACK without replay: %+v %v", first, e)
 	}
 	reopened := again()
-	snapshot, e := reopened.SubmitV2(ctx, req, 1)
+	snapshot, e := reopened.Submit(ctx, req, 1)
 	if e != nil || snapshot.TaskID != first.TaskID || runner.starts != 1 {
 		t.Fatalf("retried v2 side effects %+v %v", snapshot, e)
 	}
-	other, e := reopened.SubmitV2(ctx, JobRequest{IdempotencyKey: req.IdempotencyKey, Command: "echo DIFFERENT"}, 1)
+	other, e := reopened.Submit(ctx, JobRequest{IdempotencyKey: req.IdempotencyKey, Command: "echo DIFFERENT"}, 1)
 	if !errors.Is(e, ErrJobConflict) || other.TaskID != first.TaskID {
 		t.Fatalf("v2 conflicting key: %+v %v", other, e)
 	}
-	version, e := j.store.manifestVersion(ctx, first.TaskID)
-	if e != nil || version != 2 {
-		t.Fatalf("expected v2 on disk: %d %v", version, e)
+	manifest, _, e := j.store.readV2Manifest(ctx, first.TaskID)
+	if e != nil || manifest.Version != 2 {
+		t.Fatalf("expected v2 manifest on disk: %+v %v", manifest, e)
 	}
 	inspection, e := reopened.InspectRecovery(ctx)
 	if e != nil || len(inspection.Records) != 1 || inspection.Records[0].Phase != "prelaunch_candidate" || !inspection.Records[0].Recoverable {
@@ -224,7 +224,7 @@ func TestV2ResolveUnderLockStaleEvidenceAndOperationalQuiescence(t *testing.T) {
 		t.Fatal(err)
 	}
 	req := JobRequest{IdempotencyKey: strings.Repeat("a", 32), Command: "echo do-not-run"}
-	snapshot, e := j.SubmitV2(ctx, req, 1)
+	snapshot, e := j.Submit(ctx, req, 1)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -279,7 +279,7 @@ func TestV2RecoveryRejectsUnsafePartialAndStartEvidence(t *testing.T) {
 			if e := j.Prepare(ctx); e != nil {
 				t.Fatal(e)
 			}
-			snapshot, e := j.SubmitV2(ctx, JobRequest{IdempotencyKey: strings.Repeat("c", 32), Command: "echo noop"}, 1)
+			snapshot, e := j.Submit(ctx, JobRequest{IdempotencyKey: strings.Repeat("c", 32), Command: "echo noop"}, 1)
 			if e != nil {
 				t.Fatal(e)
 			}
@@ -311,7 +311,7 @@ func TestV2DurabilityPrerequisitesNeverFallBackToV1(t *testing.T) {
 		t.Fatal(e)
 	}
 	j.store.v2SyncFixture = nil // fixture SFTP offers no fsync@openssh.com.
-	_, e := j.SubmitV2(ctx, JobRequest{IdempotencyKey: strings.Repeat("e", 32), Command: "echo no"}, 1)
+	_, e := j.Submit(ctx, JobRequest{IdempotencyKey: strings.Repeat("e", 32), Command: "echo no"}, 1)
 	if !errors.Is(e, ErrJobUnavailable) {
 		t.Fatalf("unsupported v2 fsync admitted: %v", e)
 	}
@@ -319,7 +319,7 @@ func TestV2DurabilityPrerequisitesNeverFallBackToV1(t *testing.T) {
 		t.Fatal("failed v2 preflight executed command")
 	}
 	j.store.v2SyncFixture = func(*sftp.File) error { return errors.New("fsync lost") }
-	snapshot, e := j.SubmitV2(ctx, JobRequest{IdempotencyKey: strings.Repeat("f", 32), Command: "echo no"}, 1)
+	snapshot, e := j.Submit(ctx, JobRequest{IdempotencyKey: strings.Repeat("f", 32), Command: "echo no"}, 1)
 	if !errors.Is(e, ErrJobUnknown) || snapshot.TaskID == "" || runner.starts != 0 {
 		t.Fatalf("uncertain fsync replayed: %+v %v", snapshot, e)
 	}
@@ -335,7 +335,7 @@ func TestV2ForgedResolutionFingerprintNeverClearsQuiescence(t *testing.T) {
 		t.Fatal(err)
 	}
 	req := JobRequest{IdempotencyKey: strings.Repeat("1", 32), Command: "echo no-auto-clear"}
-	snap, err := j.SubmitV2(ctx, req, 1)
+	snap, err := j.Submit(ctx, req, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -362,26 +362,5 @@ func TestV2ForgedResolutionFingerprintNeverClearsQuiescence(t *testing.T) {
 	if err != nil || len(report.Records) != 1 || report.Records[0].Recoverable ||
 		report.Records[0].Activity != "uncertain" {
 		t.Fatalf("forged resolution made Task recoverable: %+v %v", report, err)
-	}
-}
-
-func TestV2UpgradeRefusesExistingLegacyTaskIDWithoutReplay(t *testing.T) {
-	ctx := context.Background()
-	j, _, runner := fixtureV2Jobs(t)
-	if err := j.Prepare(ctx); err != nil {
-		t.Fatal(err)
-	}
-	request := JobRequest{IdempotencyKey: strings.Repeat("1", 32), Command: "printf old-v1"}
-	first, err := j.Submit(ctx, request)
-	if err != nil || first.TaskID == "" || runner.starts != 1 {
-		t.Fatalf("could not create a legacy v1 tombstone: %+v %v", first, err)
-	}
-	second, err := j.SubmitV2(ctx, request, 1)
-	if !errors.Is(err, ErrJobConflict) || second.TaskID != first.TaskID || runner.starts != 1 {
-		t.Fatalf("v1 key was replayed under v2: %+v %v", second, err)
-	}
-	version, err := j.store.manifestVersion(ctx, first.TaskID)
-	if err != nil || version != 1 {
-		t.Fatalf("v1 record was overwritten: version=%d %v", version, err)
 	}
 }

@@ -68,7 +68,7 @@ func (r3bKeychainResolver) Resolve(ctx context.Context, ref credentialdomain.Ref
 }
 
 func TestR3bRealRockyPrelaunchFaultInjection(t *testing.T) {
-	if os.Getenv("MENDER_SSH_LIVE_FAULT_INJECTION") != "enabled" || os.Getenv("MENDER_SSH_JOBS_V2") != "enabled" {
+	if os.Getenv("MENDER_SSH_LIVE_FAULT_INJECTION") != "enabled" {
 		t.Skip("real SSH prelaunch fault injection requires explicit operator opt-in")
 	}
 	db := strings.TrimSpace(os.Getenv("MENDER_DB"))
@@ -97,10 +97,6 @@ func TestR3bRealRockyPrelaunchFaultInjection(t *testing.T) {
 	}
 	if name != "R3b Rocky acceptance temporary" || state != "ready" || generation != 1 {
 		t.Fatal("live fault injection refused non-dedicated or non-Ready resource")
-	}
-	var permanentProtocol int
-	if err = data.QueryRowContext(ctx, `SELECT protocol FROM sandbox_ssh_job_protocols WHERE sandbox_id=?`, id.String()).Scan(&permanentProtocol); err != nil || permanentProtocol != 2 {
-		t.Fatal("live fault injection refused a Sandbox without durable v2 activation")
 	}
 	var host string
 	var port int
@@ -146,7 +142,7 @@ func TestR3bRealRockyPrelaunchFaultInjection(t *testing.T) {
 	if _, err = rand.Read(randomKey[:]); err != nil {
 		t.Fatal(err)
 	}
-	snapshot, err := jobs.SubmitV2(ctx, JobRequest{
+	snapshot, err := jobs.Submit(ctx, JobRequest{
 		IdempotencyKey: hex.EncodeToString(randomKey[:]),
 		Command:        "printf 'mender-r3b-should-never-start\\n'",
 	}, generation)

@@ -12,10 +12,9 @@ import (
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 )
 
-// v2GatePlan is a backend-owned, inert preparation plan. No current Sandbox
-// supplies this capability: R3b must prove remote fsync/flock support and
-// execute these instructions only after its exact reviewed enablement gate.
-// Production v1 Submit/Status/Quiescent and existing IDs remain untouched.
+// v2GatePlan is the only executable job preparation plan. Real host
+// fsync/flock preflight and the Core submission lease are mandatory before
+// creating TaskID material or submitting to the managed systemd unit.
 type v2GatePlan struct {
 	manifest v2GateManifest
 	script   string
@@ -31,8 +30,7 @@ type v2GateManifest struct {
 	RunGeneration uint64 `json:"runGeneration"`
 }
 
-// planV2 is only called after first-reservation authority in a future R3b
-// executor, never when replaying a previously reserved idempotency key.
+// planV2 is called only for an exclusive new reservation, never on replay.
 func (j *Jobs) planV2(request JobRequest) (v2GatePlan, error) {
 	if j == nil || j.store == nil || request.Validate() != nil {
 		return v2GatePlan{}, ErrJobInvalid

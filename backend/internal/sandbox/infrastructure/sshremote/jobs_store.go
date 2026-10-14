@@ -2,28 +2,19 @@ package sshremote
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"io/fs"
 	"os"
 	"path"
-	"strings"
 
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 	"github.com/pkg/sftp"
 )
 
-const jobStorageDir = ".mender-ssh-jobs-v1"
-
-type jobManifest struct {
-	Version       int    `json:"version"`
-	TaskID        string `json:"taskId"`
-	SandboxID     string `json:"sandboxId"`
-	CommandDigest string `json:"commandDigest"`
-	Unit          string `json:"unit"`
-}
+const jobStorageDir = ".mender-ssh-jobs-v2"
+const retiredLedgerDir = ".retired-ids"
+const retiredMarker = "retired\n"
 
 type jobStore struct {
 	sftp      *sftp.Client
@@ -35,9 +26,11 @@ type jobStore struct {
 
 // Task material is placed in a private sibling of the Workspace root.
 // Structured Workspace read/search/edit may never reach this directory.
-func (s *jobStore) basePath() string            { return path.Join(s.root+jobStorageDir, s.sandboxID.String()) }
-func (s *jobStore) taskPath(id string) string   { return path.Join(s.basePath(), id) }
-func (s *jobStore) scriptPath(id string) string { return path.Join(s.taskPath(id), "run.sh") }
+func (s *jobStore) basePath() string                   { return path.Join(s.root+jobStorageDir, s.sandboxID.String()) }
+func (s *jobStore) taskPath(id string) string          { return path.Join(s.basePath(), id) }
+func (s *jobStore) scriptPath(id string) string        { return path.Join(s.taskPath(id), "run.sh") }
+func (s *jobStore) retiredBasePath() string            { return path.Join(s.basePath(), retiredLedgerDir) }
+func (s *jobStore) retiredMarkerPath(id string) string { return path.Join(s.retiredBasePath(), id) }
 func (s *jobStore) checkedDir(p string) error {
 	info, err := s.sftp.Lstat(p)
 	if err != nil || !info.IsDir() || info.Mode()&fs.ModeSymlink != 0 || info.Mode().Perm()&0077 != 0 {
@@ -66,7 +59,41 @@ func (s *jobStore) ensureBase(ctx context.Context) error {
 	if err := s.mkdirPrivate(s.root + jobStorageDir); err != nil {
 		return err
 	}
-	return s.mkdirPrivate(s.basePath())
+	if err := s.mkdirPrivate(s.basePath()); err != nil {
+		return err
+	}
+	return s.mkdirPrivate(s.retiredBasePath())
+}
+
+// retiredTask checks the version-independent, minimal replay-prevention
+// ledger before any TaskID reservation. A retired key NEVER launches again.
+// Corrupt or symlinked markers fail closed; no v1 journal is interpreted.
+func (s *jobStore) retiredTask(ctx context.Context, id string) (bool, error) {
+	if err := s.checkedDir(s.retiredBasePath()); err != nil {
+		return false, ErrJobUnknown
+	}
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	p := s.retiredMarkerPath(id)
+	info, err := s.sftp.Lstat(p)
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil || !info.Mode().IsRegular() || info.Mode()&fs.ModeSymlink != 0 ||
+		info.Mode().Perm()&0077 != 0 || info.Size() != int64(len(retiredMarker)) {
+		return false, ErrJobUnknown
+	}
+	file, err := s.sftp.Open(p)
+	if err != nil {
+		return false, ErrJobUnknown
+	}
+	defer func() { _ = file.Close() }()
+	data, err := io.ReadAll(io.LimitReader(file, int64(len(retiredMarker)+1)))
+	if err != nil || string(data) != retiredMarker {
+		return false, ErrJobUnknown
+	}
+	return true, nil
 }
 func (s *jobStore) reserve(ctx context.Context, id string) (bool, error) {
 	if validateJobID(id) != nil {
@@ -75,20 +102,35 @@ func (s *jobStore) reserve(ctx context.Context, id string) (bool, error) {
 	if err := s.ensureBase(ctx); err != nil {
 		return false, err
 	}
+	retired, err := s.retiredTask(ctx, id)
+	if err != nil {
+		return false, err
+	}
+	if retired {
+		return false, ErrJobConflict
+	}
 	entries, err := s.sftp.ReadDir(s.basePath())
 	if err != nil {
 		return false, ErrJobUnavailable
 	}
+	count := 0
 	for _, entry := range entries {
+		if entry.Name() == retiredLedgerDir {
+			if !entry.IsDir() || entry.Mode()&fs.ModeSymlink != 0 || entry.Mode().Perm()&0077 != 0 {
+				return false, ErrJobUnknown
+			}
+			continue
+		}
 		if validateJobID(entry.Name()) != nil || !entry.IsDir() || entry.Mode()&fs.ModeSymlink != 0 || entry.Mode().Perm()&0077 != 0 {
 			return false, ErrJobUnknown
 		}
+		count++
 	}
 	// Existing reservations always remain queryable, even at the quota ceiling.
 	if s.checkedDir(s.taskPath(id)) == nil {
 		return false, nil
 	}
-	if len(entries) >= maxJobRecords {
+	if count >= maxJobRecords {
 		return false, ErrJobUnavailable
 	}
 	err = s.sftp.Mkdir(s.taskPath(id))
@@ -142,22 +184,6 @@ func (s *jobStore) writeExclusive(ctx context.Context, p string, data []byte) er
 	}
 	return nil
 }
-func (s *jobStore) writeManifest(ctx context.Context, id string, m jobManifest) error {
-	if err := s.checkTask(ctx, id); err != nil {
-		return err
-	}
-	raw, err := json.Marshal(m)
-	if err != nil {
-		return ErrJobInvalid
-	}
-	return s.writeExclusive(ctx, path.Join(s.taskPath(id), "manifest.json"), raw)
-}
-func (s *jobStore) writeScript(ctx context.Context, id, script string) error {
-	if err := s.checkTask(ctx, id); err != nil {
-		return err
-	}
-	return s.writeExclusive(ctx, s.scriptPath(id), []byte(script))
-}
 func (s *jobStore) readFile(ctx context.Context, id, name string, limit int) ([]byte, error) {
 	if err := s.checkTask(ctx, id); err != nil {
 		return nil, err
@@ -183,18 +209,6 @@ func (s *jobStore) readFile(ctx context.Context, id, name string, limit int) ([]
 		return nil, ctx.Err()
 	}
 	return raw, nil
-}
-func (s *jobStore) manifest(ctx context.Context, id string) (jobManifest, error) {
-	var m jobManifest
-	raw, err := s.readFile(ctx, id, "manifest.json", 1024)
-	if err != nil {
-		return m, ErrJobUnknown
-	}
-	if json.Unmarshal(raw, &m) != nil || m.Version != 1 || m.TaskID != id || m.SandboxID != s.sandboxID.String() ||
-		m.Unit != "mender-"+id+".service" || len(m.CommandDigest) != 64 {
-		return jobManifest{}, ErrJobUnknown
-	}
-	return m, nil
 }
 func (s *jobStore) cancelRequested(ctx context.Context, id string) (bool, error) {
 	if err := s.checkTask(ctx, id); err != nil {
@@ -222,20 +236,6 @@ func (s *jobStore) markCancel(ctx context.Context, id string) error {
 		return ErrJobUnknown
 	}
 	return nil
-}
-func (s *jobStore) exitCode(ctx context.Context, id string) (int, bool, error) {
-	raw, err := s.readFile(ctx, id, "exit", 16)
-	if errors.Is(err, os.ErrNotExist) {
-		return 0, false, nil
-	}
-	if err != nil {
-		return 0, false, ErrJobUnknown
-	}
-	code, e := parseExit(strings.TrimSuffix(string(raw), "\n"))
-	if e != nil {
-		return 0, false, ErrJobUnknown
-	}
-	return code, true, nil
 }
 func (s *jobStore) readLog(ctx context.Context, id, name string, cursor int64, limit int) (string, int64, bool, error) {
 	if err := s.checkTask(ctx, id); err != nil {
@@ -277,31 +277,28 @@ func (s *jobStore) list(ctx context.Context) ([]string, error) {
 	if err := s.checkedDir(s.basePath()); err != nil {
 		return nil, ErrJobUnknown
 	}
+	if err := s.checkedDir(s.retiredBasePath()); err != nil {
+		return nil, ErrJobUnknown
+	}
 	entries, err := s.sftp.ReadDir(s.basePath())
-	if err != nil || len(entries) > maxJobRecords {
+	if err != nil || len(entries) > maxJobRecords+1 {
 		return nil, ErrJobUnknown
 	}
 	ids := make([]string, 0, len(entries))
 	for _, entry := range entries {
+		if entry.Name() == retiredLedgerDir {
+			if !entry.IsDir() || entry.Mode()&fs.ModeSymlink != 0 || entry.Mode().Perm()&0077 != 0 {
+				return nil, ErrJobUnknown
+			}
+			continue
+		}
 		if validateJobID(entry.Name()) != nil || !entry.IsDir() || entry.Mode()&fs.ModeSymlink != 0 || entry.Mode().Perm()&0077 != 0 {
 			return nil, ErrJobUnknown
 		}
 		ids = append(ids, entry.Name())
 	}
+	if len(ids) > maxJobRecords {
+		return nil, ErrJobUnknown
+	}
 	return ids, nil
-}
-func (s *jobStore) pruneOutput(ctx context.Context, id string) error {
-	if err := s.checkTask(ctx, id); err != nil {
-		return err
-	}
-	for _, name := range []string{"stdout", "stderr", "run.sh"} {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		p := path.Join(s.taskPath(id), name)
-		if err := s.sftp.Remove(p); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("prune SSH job output: %w", ErrJobUnknown)
-		}
-	}
-	return nil
 }

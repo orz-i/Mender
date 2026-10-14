@@ -9,21 +9,6 @@ import (
 	"strings"
 )
 
-// manifestVersion never silently coerces a malformed v2 journal to v1.
-func (s *jobStore) manifestVersion(ctx context.Context, id string) (int, error) {
-	raw, err := s.readFile(ctx, id, "manifest.json", 2048)
-	if err != nil {
-		return 0, ErrJobUnknown
-	}
-	var header struct {
-		Version int `json:"version"`
-	}
-	if json.Unmarshal(raw, &header) != nil || (header.Version != 1 && header.Version != 2) {
-		return 0, ErrJobUnknown
-	}
-	return header.Version, nil
-}
-
 // CheckV2 is a capability gate executed before Core enrolls this Sandbox in
 // a task obligation. No v2 attempt may fall back to v1.
 func (j *Jobs) CheckV2(ctx context.Context) error {
@@ -37,10 +22,10 @@ func (j *Jobs) CheckV2(ctx context.Context) error {
 	return host.VerifyV2(ctx, j.store.basePath())
 }
 
-// SubmitV2 is an opt-in, plugin-owned detached submission. The caller must
-// already have obtained Core's short exact Sandbox/job.submit lease.
+// Submit is the sole, v2-only detached execution entry. Core must hold
+// the exact Sandbox/job.submit lease before it is called.
 // Existing key/tombstone is always observed, never recreated or launched.
-func (j *Jobs) SubmitV2(ctx context.Context, request JobRequest, generation uint64) (JobSnapshot, error) {
+func (j *Jobs) Submit(ctx context.Context, request JobRequest, generation uint64) (JobSnapshot, error) {
 	if j == nil || j.store == nil || j.runner == nil || request.Validate() != nil || generation == 0 {
 		return JobSnapshot{}, ErrJobInvalid
 	}
@@ -58,13 +43,6 @@ func (j *Jobs) SubmitV2(ctx context.Context, request JobRequest, generation uint
 		return JobSnapshot{TaskID: id, State: JobUnknown}, err
 	}
 	if !created {
-		version, e := j.store.manifestVersion(ctx, id)
-		if e != nil {
-			return JobSnapshot{TaskID: id, State: JobUnknown}, ErrJobUnknown
-		}
-		if version != 2 {
-			return JobSnapshot{TaskID: id, State: JobUnknown}, ErrJobConflict
-		}
 		m, _, e := j.store.readV2Manifest(ctx, id)
 		if e != nil {
 			return JobSnapshot{TaskID: id, State: JobUnknown}, ErrJobUnknown
