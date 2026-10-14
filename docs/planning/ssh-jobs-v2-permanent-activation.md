@@ -30,3 +30,13 @@
 - Owner HTTP rejects malformed body and unconfirmed operation. UI requires explicit Pause, explicit confirmation and maintains pause state after activation.
 - Rocky v2 enablement is to be rolled out only after `pnpm check`, local app rebuild and owner-selected database backup. Then reopen Wails and verify a uniquely keyed Profile v2 canary.
 - The older `liveacceptance` smoke harness now activates v2 on its **new test-owned Sandbox** before first submit; the prelaunch fault injector refuses Sandboxes lacking the durable v2 activation row. It never touches the existing user-owned Rocky TaskID.
+
+## Actual Rocky rollout — 2026-10-14
+
+- Full `pnpm check` passed (`exit=0`); Go race, desktop bindings, SDK, UI and build included. Separate live-tag lint passed.
+- Backed up the live Wails SQLite consistently to `~/Library/Application Support/Mender/backups/mender-pre-ssh-v2-20261014-151308.db`, integrity `ok`, mode `0600`. Backup is local and must not be published.
+- With the trusted owner CLI and the existing Rocky Sandbox `sbx_1b80d48ebb2591ecae6df534d9721e63`, paused admissions, verified real remote fsync/flock, and committed the irreversible v2 activation event in schema v17. No old SSH task was modified.
+- Restarted the Wails v3 dev process with freshly rebuilt Go/TypeScript source. New Wails process launched successfully, reading the same shared SQLite. Resumed admissions; final SQL verification: `protocol=2`, `paused=0`, schema `17`, Run still Ready.
+- Invoked the unchanged `default` Profile's canonical SSH job submit Tool using the updated owner CLI, with a new random idempotency key and a harmless fixed-output command. New TaskID `sjob_35b4cd43e820de0109fea3cc69215b31` was accepted (`running`), then via the same Profile result Tool returned `completed`, `exitCode=0`. This confirms the ordinary governed Profile -> Core -> v2 SSH Backend path. It is NOT a claim that the ChatGPT cloud MCP tunnel was available during this verification.
+- Existing v1 Job history stays under the same Sandbox. The previous unknown TaskID must remain unknown and cannot be auto-upgraded/replayed. This production setting survives process/system restart without exported environment flags.
+- **Separate connectivity note:** the Wails dev restart left the previous OpenAI Tunnel not running; it must be explicitly re-established through the normal managed MCP server/Tunnel workflow. Do not infer cloud ChatGPT connectivity solely from the Profile CLI canary. No replacement Tunnel was provisioned.
