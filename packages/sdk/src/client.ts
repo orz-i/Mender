@@ -35,7 +35,6 @@ export type SSHJobRecoveryRecord=components["schemas"]["SSHJobRecoveryRecord"];
 export type ResolveSSHJobRecoveryRequest=components["schemas"]["ResolveSSHJobRecoveryRequest"];
 export type SSHJobResolutionReceipt=components["schemas"]["SSHJobResolutionReceipt"];
 export type SSHJobAdmissionState=components["schemas"]["SSHJobAdmissionState"];
-export type ActivateSSHJobV2Request=components["schemas"]["ActivateSSHJobV2Request"];
 export type SetSSHJobAdmissionRequest=components["schemas"]["SetSSHJobAdmissionRequest"];
 export type SandboxActivity = components["schemas"]["SandboxActivity"];
 export type SandboxActivityEvent = components["schemas"]["SandboxActivityEvent"];
@@ -209,7 +208,6 @@ export interface MenderClient {
   resolveSSHJobRecovery(sandboxId:string,taskId:string,body:ResolveSSHJobRecoveryRequest):Promise<SSHJobResolutionReceipt>;
   getSSHJobAdmission(sandboxId:string):Promise<SSHJobAdmissionState>;
   setSSHJobAdmission(sandboxId:string,body:SetSSHJobAdmissionRequest):Promise<SSHJobAdmissionState>;
-  activateSSHJobV2(sandboxId:string,body:ActivateSSHJobV2Request):Promise<SSHJobAdmissionState>;
   ensureSandboxJobTools(sandboxId:string):Promise<SandboxToolSuite>;
   removeSandboxJobTools(sandboxId:string):Promise<void>;
   listSandboxes(): Promise<{ sandboxes: Sandbox[] }>;
@@ -599,7 +597,6 @@ export function createMenderClient(
     async resolveSSHJobRecovery(sandboxId,taskId,body){return requireData(await client.POST("/sandboxes/{sandboxId}/jobs/recovery/{taskId}/resolve",{params:{path:{sandboxId,taskId}},body}));},
     async getSSHJobAdmission(sandboxId){return requireData(await client.GET("/sandboxes/{sandboxId}/jobs/admission",{params:{path:{sandboxId}}}));},
     async setSSHJobAdmission(sandboxId,body){return requireData(await client.PUT("/sandboxes/{sandboxId}/jobs/admission",{params:{path:{sandboxId}},body}));},
-    async activateSSHJobV2(sandboxId,body){return requireData(await client.POST("/sandboxes/{sandboxId}/jobs/protocol/activate-v2",{params:{path:{sandboxId}},body}));},
     async ensureSandboxJobTools(sandboxId){return requireData(await client.POST("/sandboxes/{sandboxId}/job-tools",{params:{path:{sandboxId}}}));},
     async removeSandboxJobTools(sandboxId){
       const result=await client.DELETE("/sandboxes/{sandboxId}/job-tools",{params:{path:{sandboxId}}});

@@ -512,7 +512,6 @@ export interface SSHJobAdmissionState {
     "sandboxId": string;
     "generation": number;
     "paused": boolean;
-    "protocol": string;
 }
 
 export interface SSHJobRecoveryEvidence {
