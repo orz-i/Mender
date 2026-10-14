@@ -91,6 +91,17 @@ func (s *Store) setSSHJobSubmissionsPausedOnce(ctx context.Context, id sandboxdo
 	if !paused && state != "ready" {
 		return sandboxdomain.ErrConflict
 	}
+	// A recovery fence must not be bypassed by resuming submissions in a
+	// second Runtime while the remote decision is still in flight.
+	if !paused {
+		var active int
+		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM sandbox_execution_leases WHERE sandbox_id=?`, id.String()).Scan(&active); err != nil {
+			return err
+		}
+		if active != 0 {
+			return sandboxdomain.ErrConflict
+		}
+	}
 
 	var current int
 	err = tx.QueryRowContext(ctx, `SELECT paused FROM sandbox_ssh_job_admission_controls WHERE sandbox_id=?`, id.String()).Scan(&current)

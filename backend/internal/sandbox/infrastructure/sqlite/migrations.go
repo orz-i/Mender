@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-const latestSchemaVersion = 15
+const latestSchemaVersion = 16
 
 func migrate(ctx context.Context, db *sql.DB) error {
 	tx, err := db.BeginTx(ctx, nil)
@@ -553,6 +553,33 @@ func migrate(ctx context.Context, db *sql.DB) error {
 		}
 		if _, err = tx.ExecContext(ctx, "INSERT INTO sandbox_schema_migrations(version,applied_at) VALUES(15,?)", time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
 			return fmt.Errorf("record sandbox migration 15: %w", err)
+		}
+	}
+	// R3b: immutable, minimal owner recovery decision journal. This is NOT a
+	// task-state table; plugin task outcomes and records stay on the SSH host.
+	var recoveryApplied int
+	if err = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM sandbox_schema_migrations WHERE version=16").Scan(&recoveryApplied); err != nil {
+		return fmt.Errorf("sandbox migration 16 presence: %w", err)
+	}
+	if recoveryApplied == 0 {
+		if _, err = tx.ExecContext(ctx, `CREATE TABLE sandbox_ssh_job_recovery_events (
+			event_id INTEGER PRIMARY KEY AUTOINCREMENT,
+			sandbox_id TEXT NOT NULL REFERENCES sandboxes(id) ON DELETE RESTRICT,
+			task_id TEXT NOT NULL,
+			action TEXT NOT NULL CHECK(action='aborted_before_launch'),
+			evidence_digest TEXT NOT NULL,
+			reason_digest TEXT NOT NULL,
+			outcome TEXT NOT NULL CHECK(outcome IN ('resolved','unknown','conflict')),
+			generation INTEGER NOT NULL,
+			principal_kind TEXT NOT NULL,
+			principal_ref TEXT NOT NULL,
+			origin TEXT NOT NULL,
+			occurred_at TEXT NOT NULL
+		)`); err != nil {
+			return fmt.Errorf("sandbox migration 16 recovery events: %w", err)
+		}
+		if _, err = tx.ExecContext(ctx, "INSERT INTO sandbox_schema_migrations(version,applied_at) VALUES(16,?)", time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
+			return fmt.Errorf("record sandbox migration 16: %w", err)
 		}
 	}
 	// A standalone Sandbox store may precede the Provider catalogue. Install

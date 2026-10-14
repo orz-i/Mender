@@ -48,6 +48,7 @@ func TestSSHRemoteV10ToV11MigrationPreservesInventoryAndCreatesSingleBackup(t *t
 		"DROP TRIGGER sandbox_ssh_template_immutable_update",
 		"DROP TRIGGER sandbox_ssh_template_immutable_delete",
 		"DROP TABLE sandbox_ssh_remote_templates",
+		"DROP TABLE sandbox_ssh_job_recovery_events", "DELETE FROM sandbox_schema_migrations WHERE version=16",
 		"DROP TABLE sandbox_ssh_job_admission_events",
 		"DROP TABLE sandbox_ssh_job_admission_controls",
 		"DELETE FROM sandbox_schema_migrations WHERE version=15",
@@ -79,7 +80,7 @@ func TestSSHRemoteV10ToV11MigrationPreservesInventoryAndCreatesSingleBackup(t *t
 		t.Fatalf("migrated run %+v %v", observed, err)
 	}
 	var version int
-	if err := upgraded.db.QueryRowContext(ctx, "SELECT MAX(version) FROM sandbox_schema_migrations").Scan(&version); err != nil || version != 15 {
+	if err := upgraded.db.QueryRowContext(ctx, "SELECT MAX(version) FROM sandbox_schema_migrations").Scan(&version); err != nil || version != 16 {
 		t.Fatalf("new schema version=%d %v", version, err)
 	}
 	if err := upgraded.Close(); err != nil {

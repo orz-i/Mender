@@ -194,7 +194,7 @@ type V2ResolveRequest struct {
 	Reason      string
 }
 
-func (r V2ResolveRequest) validate() error {
+func (r V2ResolveRequest) Validate() error {
 	if validateJobID(r.TaskID) != nil || !hex64(r.Fingerprint) || r.Generation == 0 ||
 		len(r.Actor) < 3 || len(r.Actor) > 256 || strings.ContainsAny(r.Actor, "\r\n\x00") ||
 		len(strings.TrimSpace(r.Reason)) < 5 || len(r.Reason) > 512 || strings.ContainsRune(r.Reason, 0) {
@@ -208,7 +208,7 @@ func (r V2ResolveRequest) validate() error {
 // exclusive launch lock as the gate; no successful response is possible on an
 // unproved v1, running, corrupt, partial, or stale-evidence Task.
 func (j *Jobs) ResolveV2UnderFence(ctx context.Context, req V2ResolveRequest) (RecoveryEvidence, error) {
-	if j == nil || j.store == nil || req.validate() != nil {
+	if j == nil || j.store == nil || req.Validate() != nil {
 		return RecoveryEvidence{}, ErrJobInvalid
 	}
 	host, ok := j.runner.(v2HostOperations)

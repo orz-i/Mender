@@ -49,6 +49,19 @@ func (b *Backend) InspectJobRecovery(ctx context.Context, id sandboxdomain.ID) (
 	return report, err
 }
 
+// ResolveJobRecovery is called only after Core owner authorization and an
+// exact exclusive recovery lease. The SSH plugin owns both evidence and the
+// remote execution-point lock; the caller cannot choose a filesystem path.
+func (b *Backend) ResolveJobRecovery(ctx context.Context, id sandboxdomain.ID, request V2ResolveRequest) (RecoveryEvidence, error) {
+	var evidence RecoveryEvidence
+	err := b.WithJobs(ctx, id, func(j *Jobs) error {
+		var operationErr error
+		evidence, operationErr = j.ResolveV2UnderFence(ctx, request)
+		return operationErr
+	})
+	return evidence, err
+}
+
 // QuiescentJobs is a read-only plugin-owned proof after Core has reserved an
 // exclusive lifecycle fence. It never launches units or changes Task states.
 func (b *Backend) QuiescentJobs(ctx context.Context, id sandboxdomain.ID) error {
