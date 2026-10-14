@@ -36,6 +36,19 @@ func (b *Backend) WithJobs(ctx context.Context, id sandboxdomain.ID, execute fun
 	return execute(jobs)
 }
 
+// InspectJobRecovery is an owner-admin read-only evidence port. The host
+// must perform a separate owner-only sandbox.reconcile Policy admission
+// before any SSH connection. Inspection never reserves/releases a lease.
+func (b *Backend) InspectJobRecovery(ctx context.Context, id sandboxdomain.ID) (RecoveryReport, error) {
+	var report RecoveryReport
+	err := b.WithJobs(ctx, id, func(j *Jobs) error {
+		var inspectErr error
+		report, inspectErr = j.InspectRecovery(ctx)
+		return inspectErr
+	})
+	return report, err
+}
+
 // QuiescentJobs is a read-only plugin-owned proof after Core has reserved an
 // exclusive lifecycle fence. It never launches units or changes Task states.
 func (b *Backend) QuiescentJobs(ctx context.Context, id sandboxdomain.ID) error {

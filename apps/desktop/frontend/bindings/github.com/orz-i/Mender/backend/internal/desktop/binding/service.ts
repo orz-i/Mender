@@ -204,6 +204,10 @@ export function GetRuntimeGovernance(): $CancellablePromise<$models.RuntimeGover
     return $Call.ByID(4089393752);
 }
 
+export function GetSSHJobRecovery(raw: string): $CancellablePromise<$models.SSHJobRecoveryView> {
+    return $Call.ByID(1855596822, raw);
+}
+
 export function GetSandbox(sandboxID: string): $CancellablePromise<$models.Sandbox> {
     return $Call.ByID(1347185727, sandboxID);
 }

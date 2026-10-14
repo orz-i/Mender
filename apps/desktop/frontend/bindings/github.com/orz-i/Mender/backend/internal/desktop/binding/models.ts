@@ -508,6 +508,29 @@ export interface SSHHostIdentity {
     "hostPublicKey": string;
 }
 
+export interface SSHJobRecoveryEvidence {
+    "records": SSHJobRecoveryRecord[] | null;
+    "inspectedAt": string;
+    "verdict": string;
+}
+
+export interface SSHJobRecoveryRecord {
+    "taskId": string;
+    "phase": string;
+    "state": string;
+    "activity": string;
+    "fingerprint": string;
+    "recoverable": boolean;
+}
+
+export interface SSHJobRecoveryView {
+    "sandboxId": string;
+    "generation": number;
+    "managed": boolean;
+    "paused": boolean;
+    "evidence": SSHJobRecoveryEvidence;
+}
+
 /**
  * Sandbox is management metadata; state reflects the last persisted observation.
  */

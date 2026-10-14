@@ -1135,6 +1135,21 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
+  /sandboxes/{sandboxId}/jobs/recovery:
+    parameters:
+      - $ref: '#/components/parameters/SandboxId'
+    get:
+      operationId: getSSHJobRecovery
+      description: Owner-only read-only evidence of legacy SSH Jobs; does not release leases or change tasks.
+      responses:
+        '200':
+          description: Bounded backend-owned recovery evidence. No command, log, credential or remote path.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SSHJobRecoveryView' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
   /sandboxes/{sandboxId}/activity:
     get:
       operationId: getSandboxActivity
@@ -2752,6 +2767,38 @@ components:
         sourceKey: { type: string }
         name: { type: string }
         title: { type: string }
+    SSHJobRecoveryRecord:
+      type: object
+      additionalProperties: false
+      required: [taskId, phase, state, activity, fingerprint, recoverable]
+      properties:
+        taskId: { type: string, pattern: '^sjob_[0-9a-f]{32}$' }
+        phase: { type: string, enum: [reservation_only, manifest_only, dispatch_uncertain, active, terminal, unverified] }
+        state: { type: string }
+        activity: { type: string, enum: [active, quiescent_proved, uncertain] }
+        fingerprint: { type: string, pattern: '^[0-9a-f]{64}$' }
+        recoverable: { type: boolean }
+    SSHJobRecoveryEvidence:
+      type: object
+      additionalProperties: false
+      required: [records, inspectedAt, verdict]
+      properties:
+        records:
+          type: array
+          maxItems: 64
+          items: { $ref: '#/components/schemas/SSHJobRecoveryRecord' }
+        inspectedAt: { type: string, format: date-time }
+        verdict: { type: string, enum: [not_enrolled, active, quiescent_proved, uncertain] }
+    SSHJobRecoveryView:
+      type: object
+      additionalProperties: false
+      required: [sandboxId, generation, managed, paused, evidence]
+      properties:
+        sandboxId: { type: string, pattern: '^sbx_[0-9a-f]{32}$' }
+        generation: { type: integer, minimum: 1 }
+        managed: { type: boolean }
+        paused: { type: boolean }
+        evidence: { $ref: '#/components/schemas/SSHJobRecoveryEvidence' }
     SandboxToolSuite:
       type: object
       required: [suiteId, sandboxId, status, available, tools]

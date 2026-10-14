@@ -32,6 +32,7 @@ import type {
   Tunnel,
   Sandbox,
   SandboxToolSuite,
+  SSHJobRecoveryView,
   ToolSuiteDefinition,
   Agent,
   AgentTools,
@@ -445,6 +446,7 @@ export function createDesktopMenderClient(): MenderClient {
     async ensureSandboxTools(sandboxId){return sandboxToolSuite(await Service.EnsureSandboxTools(sandboxId));},
     async removeSandboxTools(sandboxId){await Service.RemoveSandboxTools(sandboxId);},
     async getSandboxJobTools(sandboxId){return sandboxToolSuite(await Service.GetSandboxJobTools(sandboxId));},
+    async getSSHJobRecovery(sandboxId){return await Service.GetSSHJobRecovery(sandboxId) as SSHJobRecoveryView;},
     async ensureSandboxJobTools(sandboxId){return sandboxToolSuite(await Service.EnsureSandboxJobTools(sandboxId));},
     async removeSandboxJobTools(sandboxId){await Service.RemoveSandboxJobTools(sandboxId);},
     async listSandboxes() {

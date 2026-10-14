@@ -918,6 +918,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/sandboxes/{sandboxId}/jobs/recovery": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sandboxId: components["parameters"]["SandboxId"];
+            };
+            cookie?: never;
+        };
+        /** @description Owner-only read-only evidence of legacy SSH Jobs; does not release leases or change tasks. */
+        get: operations["getSSHJobRecovery"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/sandboxes/{sandboxId}/activity": {
         parameters: {
             query?: never;
@@ -2195,6 +2214,30 @@ export interface components {
             sourceKey: string;
             name: string;
             title: string;
+        };
+        SSHJobRecoveryRecord: {
+            taskId: string;
+            /** @enum {string} */
+            phase: "reservation_only" | "manifest_only" | "dispatch_uncertain" | "active" | "terminal" | "unverified";
+            state: string;
+            /** @enum {string} */
+            activity: "active" | "quiescent_proved" | "uncertain";
+            fingerprint: string;
+            recoverable: boolean;
+        };
+        SSHJobRecoveryEvidence: {
+            records: components["schemas"]["SSHJobRecoveryRecord"][];
+            /** Format: date-time */
+            inspectedAt: string;
+            /** @enum {string} */
+            verdict: "not_enrolled" | "active" | "quiescent_proved" | "uncertain";
+        };
+        SSHJobRecoveryView: {
+            sandboxId: string;
+            generation: number;
+            managed: boolean;
+            paused: boolean;
+            evidence: components["schemas"]["SSHJobRecoveryEvidence"];
         };
         SandboxToolSuite: {
             /** @enum {string} */
@@ -4207,6 +4250,31 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getSSHJobRecovery: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sandboxId: components["parameters"]["SandboxId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Bounded backend-owned recovery evidence. No command, log, credential or remote path. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SSHJobRecoveryView"];
+                };
             };
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];

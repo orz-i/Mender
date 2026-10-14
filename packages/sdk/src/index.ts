@@ -62,6 +62,7 @@ export type {
   CreateAgentRequest,
   Sandbox,
   SandboxToolSuite,
+  SSHJobRecoveryView,
   ToolSuiteDefinition,
   SandboxActivity,
   SandboxActivityEvent,
