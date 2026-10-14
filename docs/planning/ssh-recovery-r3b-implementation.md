@@ -36,3 +36,14 @@ A safe owner workflow for **new v2 candidates only**:
 - Core SQLite/HTTP/desktop tests: authorization, pause/resume, cross-Runtime lease conflict, Run CAS, audit hashes, malformed request rejection and explicit confirmation.
 - Real Rocky Linux/systemd 252 acceptance is **not established**. This is an operator-owned validation gate, not an implicit approval to connect to an existing remote host. Do not claim supported production recovery until verified against a disposable pinned SSH target.
 - The fixed 64-record tombstone quota remains separately tracked; R3 does not add retention or automatic re-execution. Legacy v1 incomplete TaskIDs remain unresolved and continue to fence destructive lifecycle.
+
+### Post-ACK durability proof hardening
+
+A correctly formatted `resolution.json` is **not by itself durable execution-fence proof**. If an SSH response is lost after the rename but before the directory fsync acknowledgement, that JSON can be visible in page cache yet disappear after a host crash. R3b therefore requires a fresh, positive backend-owned `ProveV2ResolutionDurable` check before reporting `quiescent_proved` or permitting Stop/Destroy:
+
+- Verify the **exact per-task** filesystem and Linux host capabilities (not just the shared storage parent), then verify the immutable resolution marker digest under the **same nonblocking `launch.lock` flock** as the execution gate.
+- Do not create another TaskID, marker or lock; fsync the **existing marker and its directory**, compare the digest again and re-read the bounded journal. An fsync error, lock contention, digest drift, unsupported filesystem or lost response results in `unknown`/`uncertain`, not release.
+- The owner Inspect operation remains *logically read-only*: it never changes task outcome, journal records, scripts, grants or TaskID. It may request safe durability verification of existing records; this can flush pending filesystem metadata but cannot create or rewrite a task record.
+- A lost original resolution ACK can be recovered by another positive durability inspection without replaying `Resolve` or the user's shell command. An unresolved v1 record remains protected exactly as before.
+
+Local Go/SFTP fixture tests cover loss and restoration of the proof, and disposable Linux (`flock` and GNU sync) tests cover the fresh marker+directory flush, held-lock refusal and wrong-digest denial. **No live remote SSH or systemd experiment was made**. The operator-approved throwaway Rocky acceptance gate remains mandatory before declaring real-host production readiness.

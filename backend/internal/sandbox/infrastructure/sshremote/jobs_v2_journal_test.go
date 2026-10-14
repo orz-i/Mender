@@ -22,6 +22,8 @@ type fixtureV2Runner struct {
 	verifyErr    error
 	syncErr      error
 	recoveryErr  error
+	proofErr     error
+	proofCalls   int
 	recovered    int
 	recoveryHold chan struct{}
 	locked       chan struct{}
@@ -29,6 +31,61 @@ type fixtureV2Runner struct {
 
 func (f *fixtureV2Runner) VerifyV2(_ context.Context, _ string) error           { return f.verifyErr }
 func (f *fixtureV2Runner) PersistV2Directory(_ context.Context, _ string) error { return f.syncErr }
+
+// The fixture models an independent, content-checked fsync acknowledgement
+// without creating a new marker or lock; only its temporary job files exist.
+func (f *fixtureV2Runner) ProveV2ResolutionDurable(_ context.Context, dir, expectedHash string) error {
+	f.muV2.Lock()
+	f.proofCalls++
+	failure := f.proofErr
+	f.muV2.Unlock()
+	if failure != nil {
+		return failure
+	}
+	lockPath := filepath.Join(dir, "launch.lock")
+	info, err := os.Lstat(lockPath)
+	if err != nil || !info.Mode().IsRegular() {
+		return ErrJobUnknown
+	}
+	// #nosec G304 -- exclusively test-owned private job directory.
+	lock, err := os.OpenFile(lockPath, os.O_RDWR, 0)
+	if err != nil {
+		return ErrJobUnknown
+	}
+	defer func() { _ = lock.Close() }()
+	if err = syscall.Flock(int(lock.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		return ErrJobUnknown
+	}
+	defer func() { _ = syscall.Flock(int(lock.Fd()), syscall.LOCK_UN) }()
+	markerPath := filepath.Join(dir, "resolution.json")
+	info, err = os.Lstat(markerPath)
+	if err != nil || !info.Mode().IsRegular() {
+		return ErrJobUnknown
+	}
+	// #nosec G304 -- exclusively test-owned private resolution marker.
+	marker, err := os.Open(markerPath)
+	if err != nil {
+		return ErrJobUnknown
+	}
+	defer func() { _ = marker.Close() }()
+	raw, err := os.ReadFile(markerPath) // #nosec G304 -- test-owned marker
+	if err != nil {
+		return ErrJobUnknown
+	}
+	hash := sha256.Sum256(raw)
+	if hex.EncodeToString(hash[:]) != expectedHash || marker.Sync() != nil {
+		return ErrJobUnknown
+	}
+	folder, err := os.Open(dir) // #nosec G304 -- test-owned directory
+	if err != nil {
+		return ErrJobUnknown
+	}
+	defer func() { _ = folder.Close() }()
+	if err = folder.Sync(); err != nil {
+		return ErrJobUnknown
+	}
+	return nil
+}
 func (f *fixtureV2Runner) ResolveV2UnderLock(_ context.Context, r v2RemoteResolution) error {
 	if f.recoveryErr != nil {
 		return f.recoveryErr

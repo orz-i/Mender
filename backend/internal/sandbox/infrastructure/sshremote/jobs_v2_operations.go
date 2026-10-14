@@ -76,6 +76,12 @@ func (j *Jobs) SubmitV2(ctx context.Context, request JobRequest, generation uint
 	}
 	// Once the task directory exists, all interruptions preserve the idempotency
 	// tombstone as UNKNOWN. No write is ever replayed.
+	// The task directory may have been bind-mounted independently from its
+	// parent. Validate the exact execution filesystem before any script or
+	// launch-intent material can be created.
+	if err = host.VerifyV2(ctx, j.store.taskPath(id)); err != nil {
+		return JobSnapshot{TaskID: id, State: JobUnknown}, ErrJobUnknown
+	}
 	if err = host.PersistV2Directory(ctx, j.store.basePath()); err != nil {
 		return JobSnapshot{TaskID: id, State: JobUnknown}, ErrJobUnknown
 	}
@@ -153,8 +159,13 @@ func (j *Jobs) inspectV2(ctx context.Context, id string) (RecoveryEvidence, erro
 	report.Fingerprint = ev.fingerprint
 	switch {
 	case ev.resolved:
-		report.Phase = "resolved_before_launch"
-		report.Activity = "quiescent_proved"
+		// A marker can be visible after a lost directory-sync ACK without
+		// being durable. Confirm fsync of the existing marker+directory under
+		// the launch lock before advertising any quiescence proof.
+		if j.proveV2Resolution(ctx, id, ev) == nil {
+			report.Phase = "resolved_before_launch"
+			report.Activity = "quiescent_proved"
+		}
 	case ev.terminal:
 		report.Phase = "terminal"
 		report.Activity = "quiescent_proved"
@@ -258,6 +269,38 @@ func (j *Jobs) ResolveV2UnderFence(ctx context.Context, req V2ResolveRequest) (R
 func (j *Jobs) v2Quiescent(ctx context.Context, id string) error {
 	e, err := j.store.readV2Evidence(ctx, id)
 	if err != nil || (!e.terminal && !e.resolved) {
+		return ErrJobUnknown
+	}
+	if e.resolved {
+		return j.proveV2Resolution(ctx, id, e)
+	}
+	return nil
+}
+
+// proveV2Resolution obtains a fresh, positive remote durability certificate
+// under the same execution-point lock. Reading a valid marker is insufficient
+// if a prior SSH ACK was lost before the directory fsync completed.
+func (j *Jobs) proveV2Resolution(ctx context.Context, id string, evidence v2Evidence) error {
+	if j == nil || j.runner == nil || j.store == nil || !evidence.resolved ||
+		!j.store.v2FileSyncAvailable() {
+		return ErrJobUnknown
+	}
+	host, ok := j.runner.(v2HostOperations)
+	if !ok || host.VerifyV2(ctx, j.store.taskPath(id)) != nil {
+		return ErrJobUnknown
+	}
+	raw, err := j.store.readFile(ctx, id, "resolution.json", 2048)
+	if err != nil {
+		return ErrJobUnknown
+	}
+	digest := sha256.Sum256(raw)
+	if err = host.ProveV2ResolutionDurable(ctx, j.store.taskPath(id), hex.EncodeToString(digest[:])); err != nil {
+		return ErrJobUnknown
+	}
+	// A concurrent remote change between inspection and the proof must not
+	// turn uncertain evidence into a lifecycle-release acknowledgement.
+	after, err := j.store.readV2Evidence(ctx, id)
+	if err != nil || !after.resolved || after.fingerprint != evidence.fingerprint {
 		return ErrJobUnknown
 	}
 	return nil

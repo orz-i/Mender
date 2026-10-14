@@ -89,6 +89,13 @@ func TestSSHJobsV2LinuxRecoveryLockAndDelayedLaunch(t *testing.T) {
 		if err != nil || out != "mender-v2-resolved" {
 			t.Fatalf("locked resolution: %q %v", out, err)
 		}
+		proof, err := v2ResolutionProofShell(s.dir, hash(s.req.Marker))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if out, err = run("/bin/sh", "-c", proof); err != nil || out != "mender-v2-durable" {
+			t.Fatalf("resolution file and directory fsync not proven: %q %v", out, err)
+		}
 		_, err = run("/bin/sh", s.script)
 		if err != nil {
 			t.Fatalf("late gated unit should exit without execution: %v", err)
@@ -160,6 +167,45 @@ func TestSSHJobsV2LinuxRecoveryLockAndDelayedLaunch(t *testing.T) {
 		}
 		if _, err = run("/bin/sh", "-c", command); err == nil {
 			t.Fatal("stale launch evidence was accepted")
+		}
+	})
+	t.Run("durability_proof_requires_same_lock_and_digest", func(t *testing.T) {
+		s := makeScenario(strings.Repeat("e", 32))
+		command, err := v2RecoveryShell(s.req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err = run("/bin/sh", "-c", command); err != nil {
+			t.Fatal(err)
+		}
+		proof, err := v2ResolutionProofShell(s.dir, hash(s.req.Marker))
+		if err != nil {
+			t.Fatal(err)
+		}
+		lockPath := filepath.Join(s.dir, "launch.lock")
+		// #nosec G304 -- isolated, test-owned lock inode.
+		held, err := os.OpenFile(lockPath, os.O_RDWR, 0600)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = syscall.Flock(int(held.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+			t.Fatal(err)
+		}
+		if _, err = run("/bin/sh", "-c", proof); err == nil {
+			t.Fatal("durability proof bypassed running launch gate")
+		}
+		if err = syscall.Flock(int(held.Fd()), syscall.LOCK_UN); err != nil {
+			t.Fatal(err)
+		}
+		if err = held.Close(); err != nil {
+			t.Fatal(err)
+		}
+		if out, e := run("/bin/sh", "-c", proof); e != nil || out != "mender-v2-durable" {
+			t.Fatalf("remote durable proof not established: %q %v", out, e)
+		}
+		// A content mismatch cannot be fsynced into a false affirmative.
+		if _, e := run("/bin/sh", "-c", strings.Replace(proof, hash(s.req.Marker), strings.Repeat("0", 64), 1)); e == nil {
+			t.Fatal("wrong marker digest passed durability proof")
 		}
 	})
 }

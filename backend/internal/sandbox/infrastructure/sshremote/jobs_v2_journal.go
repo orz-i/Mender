@@ -21,6 +21,10 @@ type v2HostOperations interface {
 	VerifyV2(context.Context, string) error
 	PersistV2Directory(context.Context, string) error
 	ResolveV2UnderLock(context.Context, v2RemoteResolution) error
+	// Reacquires the exact execution lock, verifies immutable resolution bytes
+	// and re-fsyncs the file and directory. Presence without this fresh proof
+	// cannot release a Sandbox lifecycle after a lost recovery ACK.
+	ProveV2ResolutionDurable(context.Context, string, string) error
 }
 type v2RemoteResolution struct {
 	TaskDir       string
