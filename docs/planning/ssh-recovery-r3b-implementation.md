@@ -1,0 +1,11 @@
+# R3b implementation contract — bounded v2 SSH recovery
+
+- **Status:** Implementation in progress, 2026-10-13
+- **Project boundary:** Mender remains an LLM/Agent Tool and Resource aggregation, governance and supply platform. No core task database, scheduler, agent loop, or generic RemoteTask.
+- **Supported rollback:** Existing v1 TaskIDs, ToolIDs, grants and lifecycle remain unchanged. New v2 is explicit opt-in and must fail closed if remote Linux/fsync/flock/atomic-rename prerequisites fail.
+- **Safe unit:** A v2 record shares the existing per-Sandbox TaskID namespace and dedup tombstones; the manifest selects v1/v2. There is no silent v1 fallback on a v2 attempt and no automatic retry for an uncertain execution.
+- **Evidence:** SSH plugin owns immutable per-task v2 manifest, gate script, launch-intent, start-intent, exit and resolution, and produces a versioned evidence digest with Activity distinct from execution outcome.
+- **Recovery:** Owner-only, explicit, paused admissions, exact generation/owner/Policy, Core exclusive short recovery lease, evidence-digest optimistic check, then backend under the same remote `flock` used by the script: revalidate script+manifest+launch, reject start/exit/partial files, append and fsync immutable operational resolution. Only verified resolution can inform a fresh Quiescent proof. Loss of ACK remains unknown; inspect again, never auto-retry.
+- **Failure posture:** No TTL release, no v1 adjudication, no intervention in real existing remote records. Distinct Linux test-owned dynamic gate tests and fake SFTP fault injection required, then separate operator-approved real Rocky/systemd 252 acceptance before claiming production reliability.
+- **Owner views:** Resolution is not an MCP Tool or Agent/LLM operation. UI reveals review/resolve only for verified recoverable v2 candidates, with reason and explicit confirmation; no raw shell text, logs, private path, credential, or arbitrary TaskID command.
+- **Test criteria:** No double execution across disconnect/ACK loss, no post-resolution user command even if late systemd-run, recovery vs gate serialized, rejected corrupt/symlink/unknown/v1/active cases, paused concurrent submit denied, reconciliation vs stop/destroy CAS, audit of successful resolution, full `pnpm check` and Linux-specific dynamic tests.
