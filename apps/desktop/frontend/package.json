@@ -12,7 +12,7 @@
     "@mender/app": "workspace:*",
     "@mender/sdk": "workspace:*",
     "@mender/ui": "workspace:*",
-    "@wailsio/runtime": "3.0.0-beta.26",
+    "@wailsio/runtime": "3.0.0-beta.28",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "react-router": "^8.4.0"
@@ -21,8 +21,8 @@
     "@tailwindcss/vite": "^4.3.3",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
-    "@vitejs/plugin-react": "^6.1.1",
+    "@vitejs/plugin-react": "^6.1.2",
     "tailwindcss": "^4.3.3",
-    "vite": "^8.3.1"
+    "vite": "^8.3.4"
   }
 }
