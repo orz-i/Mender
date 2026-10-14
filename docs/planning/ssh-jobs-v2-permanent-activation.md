@@ -40,3 +40,19 @@
 - Invoked the unchanged `default` Profile's canonical SSH job submit Tool using the updated owner CLI, with a new random idempotency key and a harmless fixed-output command. New TaskID `sjob_35b4cd43e820de0109fea3cc69215b31` was accepted (`running`), then via the same Profile result Tool returned `completed`, `exitCode=0`. This confirms the ordinary governed Profile -> Core -> v2 SSH Backend path. It is NOT a claim that the ChatGPT cloud MCP tunnel was available during this verification.
 - Existing v1 Job history stays under the same Sandbox. The previous unknown TaskID must remain unknown and cannot be auto-upgraded/replayed. This production setting survives process/system restart without exported environment flags.
 - **Separate connectivity note:** the Wails dev restart left the previous OpenAI Tunnel not running; it must be explicitly re-established through the normal managed MCP server/Tunnel workflow. Do not infer cloud ChatGPT connectivity solely from the Profile CLI canary. No replacement Tunnel was provisioned.
+
+## Final ChatGPT cloud MCP closure — 2026-10-14
+
+The rollout connectivity note above records the earlier, before-restart state. It is superseded by the following verified, live evidence.
+
+- After the operator restarted Wails and refreshed ChatGPT, the existing Mender connector discovered the five governed SSH Durable Jobs tools: `submit`, `status`, `result`, `logs`, and `cancel`. The original `tunnel-client` process runs under the current Wails desktop process with the existing Tunnel ID. No new Tunnel, credential, Provider, Profile grant, or plugin was created.
+- ChatGPT cloud `jobs.status` found the previous v2 canary `sjob_35b4cd43e820de0109fea3cc69215b31` at `completed/exitCode=0` while the original legacy v1 `sjob_29deeed6015ee33f63cd35f5a7038e1d` remained `unknown`; no old job was mutated.
+- ChatGPT then invoked `jobs.submit` for one harmless fixed-output command, `printf 'mender-r3b-cloud-v2-final-canary\n'`, using a fresh random 128-bit idempotency key. The returned TaskID was **`sjob_f997dd607f8d03fe954e300bf95a9b95`**, initially `running`. The same cloud connector's `jobs.result` returned `completed`, exit code `0`; `jobs.logs` returned exactly the marker line, cursor `33`, `truncated=false`.
+- The same ChatGPT `jobs.submit` with the **same key and command** returned the **same TaskID** already `completed/exitCode=0`, with no second reservation or execution.
+- Through the ChatGPT-visible Rocky SSH shell tool, a read-only check of only the exact test and historical manifests confirmed the new cloud canary has `manifest.json.version=2` while the historical unknown TaskID has `manifest.json.version=1`. The old TaskID's execution state was not reclassified.
+- A separate read-only Mac mini SQLite verification confirmed schema **17**, Rocky Sandbox `ready` generation **1**, immutable `protocol=2`, `paused=0`, exactly **1** activation event, and **0** active execution leases. The local protected pre-upgrade backup still exists.
+- The latest full `pnpm check` on the same application source returned `exit=0`; this final acceptance commit changes documentation only.
+
+**Closure result:** the actual **ChatGPT cloud → existing OpenAI Tunnel → Wails/Mender Profile → governed SSH Jobs Provider → pinned Rocky systemd/SFTP → ChatGPT result and logs** chain is accepted. Permanent v2 activation and v1/v2 coexistence have now been verified through the ChatGPT connector itself, not only a local CLI.
+
+**Scope not covered:** unattended Tunnel relaunch after a cold OS boot, physical network partition/power-loss injection, malicious root command exactly-once semantics, historical v1 `unknown` resolution, and the current 64-task remote tombstone quota. None are silently treated as passing.
