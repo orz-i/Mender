@@ -1,6 +1,6 @@
 # R3b implementation contract — bounded v2 SSH recovery
 
-- **Status:** Implementation in progress, 2026-10-13
+- **Status:** Implementation closed for local verification (2026-10-13); operator-approved Rocky Linux/systemd real-host acceptance remains pending. Not a production-readiness declaration.
 - **Project boundary:** Mender remains an LLM/Agent Tool and Resource aggregation, governance and supply platform. No core task database, scheduler, agent loop, or generic RemoteTask.
 - **Supported rollback:** Existing v1 TaskIDs, ToolIDs, grants and lifecycle remain unchanged. New v2 is explicit opt-in and must fail closed if remote Linux/fsync/flock/atomic-rename prerequisites fail.
 - **Safe unit:** A v2 record shares the existing per-Sandbox TaskID namespace and dedup tombstones; the manifest selects v1/v2. There is no silent v1 fallback on a v2 attempt and no automatic retry for an uncertain execution.
