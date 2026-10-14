@@ -1,0 +1,13 @@
+# SSH Durable Jobs — per-Sandbox permanent v2 activation
+
+- Status: implementation contract, 2026-10-14.
+- Decision: one-way owner-authorized v2 upgrade for an exact built-in SSH Sandbox, recorded in the shared Runtime SQLite. No process environment flag in the production Submit path. Once committed, all Runtime processes (Wails, CLI, Tool/MCP) must submit exclusively through v2 for that Sandbox.
+- Scope: Core owns the Sandbox binding and owner-only admission/protocol selection; SSH Backend owns v1/v2 journal, remote fsync/flock capabilities, TaskID, execution-point fence and recovery. No Core RemoteTask or scheduler.
+- Reuse existing TaskID namespace; a previously reserved v1 key cannot be silently replayed under v2 and is treated as conflict/unknown. Legacy v1 observation, status and recovery remain intact.
+- Activation authority: exact SandboxID, owner local Principal, Catalog scope, `sandbox.reconcile` Policy/approval/audit; Run=Ready with exact generation; **pause new submissions** first, verify pinned SSH host and actual v2 SFTP/fsync/util-linux/GNU/local-fs capabilities, then commit one immutable protocol=2 row and audit event under SQLite CAS requiring pause and zero active leases. No auto-downgrade or runtime fallback.
+- Every submission re-reads the protocol and reserves its execution lease with the **expected protocol checked in the same SQLite INSERT transaction**; this blocks an old in-flight v1 writer that was suspended before its lease and resumes after activation.
+- Failed remote capability check leaves protocol=v1 and Sandbox paused until owner explicitly resumes; no task ID or remote command is created. Activation never overwrites remote files or changes user grants.
+- Administrative interfaces: CLI owner `sandbox job-protocol <id>` and `--enable-v2 --confirm`, GET / POST owner management HTTP (no Profile Tool), Wails read-only protocol status/owner activation; existing admission UI shows protocol.
+- Post activation: owner resumes submissions. Wails's refreshed Runtime and any later instance observe the same committed protocol without relying on an exported shell variable. Any wrong-host/missing fsync/flock becomes unavailable, no v1 fallback.
+- Tests: migration across legacy DB, paused/owner/Run/lease failures, two-SQL-connection race vs Submit, same key v1 remains conflict, local SSH unsupported host unchanged, status across process restart, contract + UI tests, real Rocky capability preflight and a uniquely keyed Profile canary, `pnpm check`.
+- Real network must not be changed until local migration and runtime gates pass. Do not clear the existing v1 `unknown` task `sjob_29deeed6015ee33f63cd35f5a7038e1d`; no remote cancellation/deletion.
