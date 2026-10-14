@@ -9,3 +9,30 @@
 - **Failure posture:** No TTL release, no v1 adjudication, no intervention in real existing remote records. Distinct Linux test-owned dynamic gate tests and fake SFTP fault injection required, then separate operator-approved real Rocky/systemd 252 acceptance before claiming production reliability.
 - **Owner views:** Resolution is not an MCP Tool or Agent/LLM operation. UI reveals review/resolve only for verified recoverable v2 candidates, with reason and explicit confirmation; no raw shell text, logs, private path, credential, or arbitrary TaskID command.
 - **Test criteria:** No double execution across disconnect/ACK loss, no post-resolution user command even if late systemd-run, recovery vs gate serialized, rejected corrupt/symlink/unknown/v1/active cases, paused concurrent submit denied, reconciliation vs stop/destroy CAS, audit of successful resolution, full `pnpm check` and Linux-specific dynamic tests.
+
+## R3b source implementation and operator handoff
+
+R3b implementation commits:
+
+- `a1ed873`: opt-in SSH v2 durable SFTP journal and execution-point lock adapter. The SFTP transport must advertise `fsync@openssh.com`, the pinned Linux host must support verified util-linux `flock`, GNU `sync -f`/`mv`, and a reviewed local filesystem (xfs, ext2/ext3, btrfs). The v2 job uses the **same TaskID reservation namespace** as v1, with no retry of uncertain creates.
+- `c7a4c27`: Core-only recovery CAS with persisted paused admission, exact Run generation and local owner/Policy, plus a minimized decision audit (task ID, evidence and reason digests; never raw command). No Core task result table or model-facing recover Tool.
+- `19c518b`: explicit owner HTTP/CLI/Wails/SDK recovery APIs, typed OpenAPI contracts, a separate review/confirm UI, and Linux execution-point lock race regression tests.
+- Closure hardening also verifies that the signed operational resolution references the exact previously inspected v2 evidence digest; a syntactically valid but mismatched resolution marker cannot release Quiescence. Linux tests use standard-library flock constants to preserve Go module isolation.
+
+The opt-in switch is `MENDER_SSH_JOBS_V2=enabled` **on the trusted Mender host Runtime environment**. Default is legacy v1. A v2 attempt that lacks fsync, verified Linux host prerequisites or an exact binding fails closed; it must not fall back to v1. Do not enable against real user hosts without operator-approved target verification.
+
+A safe owner workflow for **new v2 candidates only**:
+
+1. Pause future submissions: `mender sandbox job-admission <sandbox-id> --pause`.
+2. Inspect immutable evidence: `mender sandbox job-recovery <sandbox-id>` (use JSON output to obtain exact fingerprint and generation).
+3. If and only if the record reports `prelaunch_candidate` with `recoverable=true`, review the host and evidence, then explicitly request `mender sandbox job-resolve <sandbox-id> <task-id> --generation <observed-generation> --fingerprint <64-char-digest> --reason '<reviewed reason>' --confirm`.
+4. Observe the fresh record. A verified `resolved_before_launch` changes **activity proof only**, not the shell exit (`JobState` remains `unknown`); a lost acknowledgment, filesystem mismatch, stale writer, rejected lock or vanished host remains unknown.
+5. Retire Tool Suite / Stop / Destroy only when independently authorized and the backend returns fresh quiescent evidence under its lifecycle fence. The permanent Job obligation and TaskID tombstones remain.
+
+### Acceptance evidence and limits
+
+- Real Linux util-linux `flock` + GNU sync/mv shell gate and resolver exercised inside a disposable, network-disabled local Linux container: resolve-before-late-launch, launch-before-resolve, occupied lock, changed Launch Intent and duplicate TaskID execution. No real systemd/SSH host or credentials were used.
+- Local Go in-process SSH/SFTP fixture fault injection: lost `systemd-run` ACK, fsync unavailable/failure, wrong fingerprint, corrupt/symlink/partial records, restart/reconnect, v1 refusal, and operational quiescence.
+- Core SQLite/HTTP/desktop tests: authorization, pause/resume, cross-Runtime lease conflict, Run CAS, audit hashes, malformed request rejection and explicit confirmation.
+- Real Rocky Linux/systemd 252 acceptance is **not established**. This is an operator-owned validation gate, not an implicit approval to connect to an existing remote host. Do not claim supported production recovery until verified against a disposable pinned SSH target.
+- The fixed 64-record tombstone quota remains separately tracked; R3 does not add retention or automatic re-execution. Legacy v1 incomplete TaskIDs remain unresolved and continue to fence destructive lifecycle.

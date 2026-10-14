@@ -257,18 +257,23 @@ func (s *jobStore) readV2Evidence(ctx context.Context, id string) (v2Evidence, e
 		if json.Unmarshal(b, &ev.resolution) != nil || ev.resolution.Version != 2 ||
 			ev.resolution.TaskID != id || ev.resolution.Disposition != "aborted_before_launch" ||
 			ev.resolution.ManifestHash != ev.manifestHash || ev.resolution.ScriptHash != ev.scriptHash ||
-			ev.resolution.AttemptID != m.AttemptID || !hex64(ev.resolution.EvidenceFingerprint) ||
+			ev.resolution.AttemptID != m.AttemptID ||
+			ev.resolution.EvidenceFingerprint != v2EvidenceFingerprint(id, ev, false) ||
 			!hex64(ev.resolution.ReasonDigest) || ev.resolution.Actor == "" || ev.started || ev.terminal || ev.startPartial {
 			return ev, ErrJobUnknown
 		}
 		ev.resolved = true
 	}
-	// Fingerprint is recomputable and binds exactly the immutable manifest,
-	// script, launch existence/content and mutable decision state.
+	// Fingerprint is recomputable and binds immutable manifest/script,
+	// launch evidence, and mutable decision/terminal state. A post-resolve
+	// read also verifies that the marker named exactly its pre-decision proof.
+	ev.fingerprint = v2EvidenceFingerprint(id, ev, ev.resolved)
+	return ev, nil
+}
+func v2EvidenceFingerprint(id string, ev v2Evidence, resolved bool) string {
 	signature := strings.Join([]string{"mender-ssh-v2-evidence", id, ev.manifestHash, ev.scriptHash,
 		ev.launchHash, fmt.Sprint(ev.launchPresent), fmt.Sprint(ev.started), fmt.Sprint(ev.startPartial),
-		fmt.Sprint(ev.terminal), fmt.Sprint(ev.cancel), fmt.Sprint(ev.resolved)}, ":")
+		fmt.Sprint(ev.terminal), fmt.Sprint(ev.cancel), fmt.Sprint(resolved)}, ":")
 	digest := sha256.Sum256([]byte(signature))
-	ev.fingerprint = hex.EncodeToString(digest[:])
-	return ev, nil
+	return hex.EncodeToString(digest[:])
 }

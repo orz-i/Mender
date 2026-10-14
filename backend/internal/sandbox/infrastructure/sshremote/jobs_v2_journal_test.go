@@ -4,15 +4,16 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 
 	"github.com/pkg/sftp"
-	"golang.org/x/sys/unix"
 )
 
 type fixtureV2Runner struct {
@@ -37,10 +38,10 @@ func (f *fixtureV2Runner) ResolveV2UnderLock(_ context.Context, r v2RemoteResolu
 		return err
 	}
 	defer func() { _ = lock.Close() }()
-	if err = unix.Flock(int(lock.Fd()), unix.LOCK_EX|unix.LOCK_NB); err != nil {
+	if err = syscall.Flock(int(lock.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
 		return ErrJobUnknown
 	}
-	defer func() { _ = unix.Flock(int(lock.Fd()), unix.LOCK_UN) }()
+	defer func() { _ = syscall.Flock(int(lock.Fd()), syscall.LOCK_UN) }()
 	if f.locked != nil {
 		select {
 		case f.locked <- struct{}{}:
@@ -265,5 +266,42 @@ func TestV2DurabilityPrerequisitesNeverFallBackToV1(t *testing.T) {
 	}
 	if e = j.Quiescent(ctx); !errors.Is(e, ErrJobUnknown) {
 		t.Fatalf("lost fsync allowed quiescence: %v", e)
+	}
+}
+
+func TestV2ForgedResolutionFingerprintNeverClearsQuiescence(t *testing.T) {
+	ctx := context.Background()
+	j, _, _ := fixtureV2Jobs(t)
+	if err := j.Prepare(ctx); err != nil {
+		t.Fatal(err)
+	}
+	req := JobRequest{IdempotencyKey: strings.Repeat("1", 32), Command: "echo no-auto-clear"}
+	snap, err := j.SubmitV2(ctx, req, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ev, err := j.store.readV2Evidence(ctx, snap.TaskID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	marker := v2ResolutionMarker{
+		Version: 2, TaskID: snap.TaskID, Disposition: "aborted_before_launch", ManifestHash: ev.manifestHash,
+		ScriptHash: ev.scriptHash, AttemptID: ev.manifest.AttemptID, EvidenceFingerprint: strings.Repeat("d", 64),
+		Actor: "local:forged", ReasonDigest: strings.Repeat("a", 64),
+	}
+	payload, err := json.Marshal(marker)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(filepath.Join(j.store.taskPath(snap.TaskID), "resolution.json"), payload, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err = j.Quiescent(ctx); !errors.Is(err, ErrJobUnknown) {
+		t.Fatalf("forged resolution passed Quiescent: %v", err)
+	}
+	report, err := j.InspectRecovery(ctx)
+	if err != nil || len(report.Records) != 1 || report.Records[0].Recoverable ||
+		report.Records[0].Activity != "uncertain" {
+		t.Fatalf("forged resolution made Task recoverable: %+v %v", report, err)
 	}
 }

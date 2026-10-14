@@ -1,7 +1,7 @@
 # SSH Durable Jobs R3 — execution-point fencing and evidence-bound resolution
 
 - Date: 2026-10-13
-- Status: **design / acceptance gate; not enabled**
+- Status: **R3b implemented as host-operator opt-in; local Linux/Go acceptance complete; real Rocky host acceptance pending**
 - Predecessors: ADR-0040, ADR-0041 and `ssh-jobs-exception-recovery-lifecycle-research.md`
 - Resource boundary: SSH Backend owns TaskID, remote evidence, launch gate, resolution and result recovery. Mender Core remains a Tool/Resource aggregation, governance and supply platform; it owns Principal/Policy/Audit, explicit Profile capability grants, short resource access fences and Run-generation lifecycle CAS.
 
@@ -78,7 +78,7 @@ All local regression tests must use disposable SSH/SFTP fixtures and fault-injec
 
 - `backend/internal/sandbox/infrastructure/sshremote/jobs_v2_gate.go` now defines a backend-owned v2 manifest/attempt preparation value and a fail-closed Linux execution-point script generator. Its order is: per-TaskID exclusive `flock` → check resolution/start markers → exclusive start-intent create → `sync -f` of marker and directory → user shell. A later invocation with the same marker will not re-execute command side effects.
 - `jobs_v2_gate_test.go` verifies bounded input/identity handling, script digest/attempt separation and launch ordering. It also contains **Linux-only** dynamic gate tests against disposable local filesystem commands; macOS skips them because util-linux `flock` is unavailable.
-- The production `Jobs.Submit` path **still writes legacy v1**. This checkpoint deliberately does not implement SFTP durable manifest/launch-intent persistence, remote capability probing, owner Resolve, proof-bearing resolution markers or a lifecycle QuiescenceProof. Therefore it is **not R3a closure and must not be advertised as `job.recover` or safe to run**.
+- This paragraph records the original R3a checkpoint. The later R3b implementation described below now provides bounded v2 journal persistence, capability probing, owner Resolve, and plugin-owned operational quiescence. Existing v1 remains the default without explicit host opt-in.
 
 ## Delivery boundary
 

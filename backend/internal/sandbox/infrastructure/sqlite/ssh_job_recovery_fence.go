@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -115,5 +114,3 @@ func (s *Store) SSHRecoveryAuditCount(ctx context.Context, id sandboxdomain.ID) 
 	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM sandbox_ssh_job_recovery_events WHERE sandbox_id=?`, id.String()).Scan(&count)
 	return count, err
 }
-
-var _ = errors.Is

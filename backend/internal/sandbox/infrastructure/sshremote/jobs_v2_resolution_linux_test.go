@@ -15,7 +15,7 @@ import (
 	"time"
 
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
-	"golang.org/x/sys/unix"
+	"syscall"
 )
 
 // Only a disposable Linux filesystem and local commands are touched. No
@@ -129,7 +129,7 @@ func TestSSHJobsV2LinuxRecoveryLockAndDelayedLaunch(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err = unix.Flock(int(lock.Fd()), unix.LOCK_EX|unix.LOCK_NB); err != nil {
+		if err = syscall.Flock(int(lock.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
 			t.Fatal(err)
 		}
 		command, err := v2RecoveryShell(s.req)
@@ -139,7 +139,7 @@ func TestSSHJobsV2LinuxRecoveryLockAndDelayedLaunch(t *testing.T) {
 		if _, err = run("/bin/sh", "-c", command); err == nil {
 			t.Fatal("recovery overtook active gate lock")
 		}
-		if err = unix.Flock(int(lock.Fd()), unix.LOCK_UN); err != nil {
+		if err = syscall.Flock(int(lock.Fd()), syscall.LOCK_UN); err != nil {
 			t.Fatal(err)
 		}
 		if err = lock.Close(); err != nil {
