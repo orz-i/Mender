@@ -44,3 +44,7 @@ No live Client restart, Profile/Policy/Credential mutation, database table drop,
 ## Conclusion
 
 The bounded source-compatibility removal is complete with full quality and security gates. A future destructive installation/header retirement is a separate, evidence-bound migration decision, not part of this code-only hard cut.
+
+## Post-restart acceptance
+
+The 2026-10-15 [live read-only acceptance](phase-38-post-restart-acceptance-2026-10-15.md) verified the rebuilt Wails Runtime, canonical SQLite state, connected Tunnel, retired CLI command behavior, and a successful Rocky SSH read-only Tool invocation. The Docker Workspace read call remains unavailable because its Sandbox is stopped; this is an operational caveat, not a reopened Phase 38 source-compatibility regression.
