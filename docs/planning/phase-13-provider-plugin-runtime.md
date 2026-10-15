@@ -983,6 +983,8 @@ Phase 13 is complete when:
 
 ## Closeout
 
+> Historical snapshot, dated 2026-09-27. The MCP dual store and HTTP/Wails compatibility paths described below were hard-retired by ADR-0043; hidden CLI transport aliases and Profile membership adapters were hard-retired by ADR-0044 on 2026-10-15. Do not use the former interfaces for new integrations.
+
 Phase 13 completed on 2026-09-27.
 
 The implementation now has a real Provider Plugin Runtime rather than a collection of MCP-specific Runtime branches:

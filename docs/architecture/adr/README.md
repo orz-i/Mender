@@ -69,3 +69,4 @@ Minor implementation choices that remain inside an accepted architectural bounda
 - [ADR-0041: SSH Jobs lifecycle invariants and evidence-bound recovery](0041-ssh-jobs-lifecycle-recovery.md) — Accepted
 - [ADR-0042: P2 durable resource contracts and native plugin isolation posture](0042-p2-contracts-isolation-complexity.md) — Accepted
 - [ADR-0043: Hard retire dual MCP config persistence and Workspace v1 adapters](0043-hard-retire-provider-compatibility.md) — Accepted
+- [ADR-0044: Hard-cut residual source compatibility and Profile binding adapters](0044-hard-cut-residual-source-compatibility.md) — Accepted
