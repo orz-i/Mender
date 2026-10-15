@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import {
   ArrowLeftIcon,
   EyeIcon,
@@ -54,7 +54,7 @@ import { Textarea } from "@mender/ui/components/textarea";
 import { errorMessage } from "../../shared/errors";
 import { canonicalizeOwnedIdentifier, isCanonicalOwnedSlug, ownedIdentifierCreateError } from "../../shared/form-identifiers";
 import { IconButton } from "../../shared/icon-button";
-import { EmptyState, ErrorNotice } from "../../shared/page";
+import { EmptyState, ErrorNotice, InsightBanner } from "../../shared/page";
 import { PageToolbar, ResultPanel } from "../../shared/page-toolbar";
 import { usePagination } from "../../shared/pagination";
 import { TablePagination } from "../../shared/table-pagination";
@@ -220,6 +220,7 @@ export function ProvidersPage({
 }: {
   client: MenderClient;
 }) {
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [createRequest] = useState(() => {
     const remainingSearchParams = new URLSearchParams(searchParams);
@@ -698,7 +699,18 @@ export function ProvidersPage({
       />
       {error ? <ErrorNotice message={error} /> : null}
       {providerPluginIssues.length ? (
-        <ErrorNotice message={t("Some Provider plugins need attention. Review Plugin Marketplace for installation details.")} />
+        <InsightBanner
+          title="Some Provider plugins need attention. Review Plugin Marketplace for installation details."
+          actions={
+            <Button
+              size="sm"
+              variant="primary"
+              onClick={() => void navigate("/plugins")}
+            >
+              {t("Review Marketplace")}
+            </Button>
+          }
+        />
       ) : null}
       <ResultPanel title="Provider inventory">
         {!loaded ? (

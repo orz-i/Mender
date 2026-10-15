@@ -1146,7 +1146,6 @@ export const zhCNMessages: Readonly<Record<string, string>> = {
   "Type": "类型",
   "View {{plugin}}": "查看 {{plugin}}",
   "No plugin description.": "暂无插件描述。",
-  "Some Provider plugins need attention. Review Plugin Marketplace for installation details.": "部分提供方插件需要处理。请前往插件市场查看安装详情。",
   "Updated": "更新时间",
   "Value": "值",
   "Action": "动作",
@@ -1206,4 +1205,14 @@ export const zhCNMessages: Readonly<Record<string, string>> = {
   "Confirm Tunnel removal": "确认删除隧道",
   "Sandbox backend": "沙盒后端",
   "Tunnel transport": "隧道传输插件",
+  "System recommendation": "系统建议",
+  "Dismiss recommendation": "忽略建议",
+  "Get started with tool providers": "开始配置工具提供方",
+  "Register external MCP servers, OpenAPI services, or local workspaces to equip your profiles with governed tools.": "注册外部 MCP 服务器、OpenAPI 服务或本地工作区，为配置档配备受管控的工具。",
+  "Explore Marketplace": "探索插件市场",
+  "Configure an exposure boundary": "配置工具暴露边界",
+  "Tool providers are registered. Create a Profile to define which tools and sandboxes are exposed to agent clients.": "工具提供方已注册。请创建配置档以定义向智能体客户端暴露哪些工具与沙箱。",
+  "Some Provider plugins need attention. Review Plugin Marketplace for installation details.": "部分提供方插件需要处理。请前往插件市场查看安装详情。",
+  "Review Marketplace": "查看插件市场",
 };
+

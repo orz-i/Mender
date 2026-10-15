@@ -42,3 +42,6 @@ export function EmptyState({
     </div>
   );
 }
+
+export { InsightBanner, type InsightBannerProps } from "./insight-banner";
+

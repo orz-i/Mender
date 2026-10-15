@@ -31,7 +31,7 @@ import {
 
 import { formatDateTime, formatNumber, t } from "../../i18n/i18n";
 import { errorMessage } from "../../shared/errors";
-import { ErrorNotice } from "../../shared/page";
+import { ErrorNotice, InsightBanner } from "../../shared/page";
 import { FocusSwitch } from "../../shared/focus-switch";
 import { PageToolbar } from "../../shared/page-toolbar";
 import { usePagination } from "../../shared/pagination";
@@ -86,6 +86,7 @@ export function OverviewPage({ client }: { client: MenderClient }) {
   const [data, setData] = useState<OverviewState | null>(null);
   const [error, setError] = useState("");
   const [view, setView] = useState<"activity" | "resources">("activity");
+  const [dismissedInsight, setDismissedInsight] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -126,17 +127,48 @@ export function OverviewPage({ client }: { client: MenderClient }) {
 
       <PageToolbar
         tabs={
-        <FocusSwitch
-          label="Overview"
-          value={view}
-          onChange={setView}
-          items={[
-            { value: "activity", label: "Recent invocations" },
-            { value: "resources", label: `${t("Providers")} / ${t("Profiles")}` },
-          ]}
-        />
+          <FocusSwitch
+            label="Overview"
+            value={view}
+            onChange={setView}
+            items={[
+              { value: "activity", label: "Recent invocations" },
+              { value: "resources", label: `${t("Providers")} / ${t("Profiles")}` },
+            ]}
+          />
         }
       />
+
+      {!dismissedInsight && data !== null && data.providers.length === 0 ? (
+        <InsightBanner
+          title="Get started with tool providers"
+          description="Register external MCP servers, OpenAPI services, or local workspaces to equip your profiles with governed tools."
+          onDismiss={() => setDismissedInsight(true)}
+          actions={
+            <Link
+              to="/plugins"
+              className="inline-flex h-8 items-center justify-center rounded-xl bg-primary px-3 text-xs font-semibold text-primary-foreground transition-all hover:bg-primary/90"
+            >
+              {t("Explore Marketplace")}
+            </Link>
+          }
+        />
+      ) : !dismissedInsight && data !== null && data.providers.length > 0 && data.profiles.length === 0 ? (
+        <InsightBanner
+          title="Configure an exposure boundary"
+          description="Tool providers are registered. Create a Profile to define which tools and sandboxes are exposed to agent clients."
+          onDismiss={() => setDismissedInsight(true)}
+          actions={
+            <Link
+              to="/profiles"
+              className="inline-flex h-8 items-center justify-center rounded-xl bg-primary px-3 text-xs font-semibold text-primary-foreground transition-all hover:bg-primary/90"
+            >
+              {t("Create profile")}
+            </Link>
+          }
+        />
+      ) : null}
+
       <MetricStrip>
         <MetricTile
           icon={ActivityIcon}
