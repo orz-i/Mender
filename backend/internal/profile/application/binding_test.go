@@ -29,7 +29,7 @@ func TestAddToolStoresFullBindingConfiguration(t *testing.T) {
 	)
 	add := NewAddTool(repository, bindingToolLookup{
 		tool.ID(): tool,
-	})
+	}, nil)
 
 	updated, err := add.Execute(context.Background(), AddToolRequest{
 		ProfileSlug:           profile.Slug(),
@@ -93,7 +93,7 @@ func TestReplaceToolsRejectsEffectiveDirectNameCollisionBeforeSave(t *testing.T)
 	replace := NewReplaceTools(repository, bindingToolLookup{
 		first.ID():  first,
 		second.ID(): second,
-	})
+	}, nil)
 
 	_, err := replace.Execute(context.Background(), ReplaceToolsRequest{
 		ProfileSlug: profile.Slug(),
@@ -140,7 +140,7 @@ func TestReplaceToolsValidatesEveryToolBeforeSave(t *testing.T) {
 	missing, _ := catalogdomain.ParseToolID("tool_00000000000000000000000000000025")
 	replace := NewReplaceTools(repository, bindingToolLookup{
 		valid.ID(): valid,
-	})
+	}, nil)
 
 	_, err := replace.Execute(context.Background(), ReplaceToolsRequest{
 		ProfileSlug: profile.Slug(),

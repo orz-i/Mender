@@ -30,7 +30,7 @@ func TestProfileApplicationCreateAddListRemove(t *testing.T) {
 		t.Fatalf("CreateProfile.Execute() error = %v", err)
 	}
 
-	add := NewAddTool(repository, fakeToolLookup{tool: tool})
+	add := NewAddTool(repository, fakeToolLookup{tool: tool}, nil)
 	profile, err = add.Execute(context.Background(), AddToolRequest{
 		ProfileSlug: profile.Slug(),
 		ToolID:      tool.ID(),
@@ -43,7 +43,7 @@ func TestProfileApplicationCreateAddListRemove(t *testing.T) {
 		t.Fatalf("profile selections = %+v", profile.Bindings())
 	}
 
-	replace := NewReplaceTools(repository, fakeToolLookup{tool: tool})
+	replace := NewReplaceTools(repository, fakeToolLookup{tool: tool}, nil)
 	profile, err = replace.Execute(context.Background(), ReplaceToolsRequest{
 		ProfileSlug: profile.Slug(),
 		Tools: []ToolBindingInput{

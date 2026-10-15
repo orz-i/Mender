@@ -21,16 +21,12 @@ type ReplaceTools struct {
 func NewReplaceTools(
 	repository Repository,
 	tools ToolLookup,
-	credentials ...CredentialLookup,
+	credentials CredentialLookup,
 ) ReplaceTools {
-	var credentialLookup CredentialLookup
-	if len(credentials) != 0 {
-		credentialLookup = credentials[0]
-	}
 	return ReplaceTools{
 		repository:  repository,
 		tools:       tools,
-		credentials: credentialLookup,
+		credentials: credentials,
 	}
 }
 

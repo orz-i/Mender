@@ -30,16 +30,12 @@ type AddTool struct {
 func NewAddTool(
 	repository Repository,
 	tools ToolLookup,
-	credentials ...CredentialLookup,
+	credentials CredentialLookup,
 ) AddTool {
-	var credentialLookup CredentialLookup
-	if len(credentials) != 0 {
-		credentialLookup = credentials[0]
-	}
 	return AddTool{
 		repository:  repository,
 		tools:       tools,
-		credentials: credentialLookup,
+		credentials: credentials,
 	}
 }
 

@@ -23,36 +23,7 @@ type Profiles struct {
 	store *profilesqlite.Store
 }
 
-func NewProfiles(
-	ctx context.Context,
-	databasePath string,
-	tools profileapplication.ToolLookup,
-	credentials ...profileapplication.CredentialLookup,
-) (*Profiles, error) {
-	var credentialLookup profileapplication.CredentialLookup
-	if len(credentials) != 0 {
-		credentialLookup = credentials[0]
-	}
-	return newProfiles(
-		ctx,
-		databasePath,
-		tools,
-		credentialLookup,
-		nil,
-	)
-}
-
 func NewProfilesWithTunnelLookup(
-	ctx context.Context,
-	databasePath string,
-	tools profileapplication.ToolLookup,
-	credentials profileapplication.CredentialLookup,
-	tunnels profileapplication.TunnelLookup,
-) (*Profiles, error) {
-	return newProfiles(ctx, databasePath, tools, credentials, tunnels)
-}
-
-func newProfiles(
 	ctx context.Context,
 	databasePath string,
 	tools profileapplication.ToolLookup,
