@@ -1,6 +1,7 @@
 # SSH Jobs v1 Retirement — hard cut to v2
 
-- Date: 2026-10-14.
+- Date: 2026-10-14～15.
+- **Status: CLOSED** — v2-only code committed, pnpm check exit=0, live Rocky migration and cloud canary completed. See [Rocky acceptance evidence](ssh-jobs-v1-retirement-rocky-acceptance.md).
 - **Intent:** remove v1 execution, protocol selection/activation UI and API, v1 read/inspect compatibility and v1 task payloads. SSH Backend remains the sole owner of task journals; Mender Core only admission/fencing/audit/lifecycle. No migration runtime bridge or global RemoteTask.
 - **Initial real-host inventory:** Rocky `sbx_1b80d48ebb2591ecae6df534d9721e63` has 7 task directories in the physical `.mender-ssh-jobs-v1` root, of which 5 are v1 (4 terminal with exit artifacts, 1 manifest-only and UNKNOWN) and 2 are successfully completed v2. Systemd reports no active managed units, no Mender SSH runner processes. Core Run is Ready, schema 17, one-way v2 selection. Admission has been paused before making remote changes; no execution lease is held.
 - **Why simple deletion is incorrect:** v2 completed journals share the old-named physical root. Removing the old TaskID directories without an immutable replay ledger permits a later client to reuse a previously accepted 128-bit key. The old v1 `unknown` record does not prove the shell command never ran, and a late v1 shell writer must not be able to create the deleted path and launch a unit.
