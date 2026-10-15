@@ -1,6 +1,6 @@
 # Phase 37 — hard-cut deprecated MCP and Workspace compatibility
 
-- Status: **CODE CLOSED — isolated production-snapshot migration rehearsal passed; live v4 upgrade awaits operator rebuild/restart** (2026-10-15).
+- Status: **CODE + LIVE PROVIDER HARD-CUT ACCEPTED** (2026-10-15). Developer Wails restart, production schema v4 migration and data-integrity smoke passed. Pre-existing SSH Job observation returned unknown, tracked separately; packaged release remains untested.
 - Decision: [ADR-0043](../architecture/adr/0043-hard-retire-provider-compatibility.md)
 - User outcome: “继续收敛边界，硬切的方式，清理数据，清理代码”.
 - Commit docs first, bounded commits thereafter. Preserve `.agents/`, `.pi/`, `.intent-loop/` outside Git.
@@ -14,7 +14,7 @@
 
 ## Safety
 
-The live Mender process is currently using the old dual-store runtime. Do not drop tables in its open DB while it runs. Do not erase backups, active credentials, Profiles, Agent history or SSH obligations. The one-way migration on next rebuild/restart removes only previously verified duplicate/obsolete tables. Fail closed on gaps rather than importing missing legacy data.
+During implementation, the prior Mender process continued using the old dual-store runtime; no live DB was touched by development tests. The operator has since restarted a new Runtime, which performed the validated one-way migration. Do not erase historical backups, active credentials, Profiles, Agent history or SSH obligations. Reject missing canonical data instead of reimporting legacy configuration.
 
 ## Implementation and closure evidence
 
@@ -51,4 +51,24 @@ The live Mender process is currently using the old dual-store runtime. Do not dr
 - **Requires operator rebuild/restart with new Runtime**. The running older Wails binary is still using the previous schema v3; its currently open production DB retains old tables until the new Runtime migrates it on a clean start. Do not concurrently run old and new binaries against the same DB.
 - After stopping the current Runtime, take an exact retained pre-upgrade SQLite backup. The first new startup removes only the validated obsolete tables and records Provider Config schema v4. Old binaries fail closed after v4; downgrades require restoring that backup.
 - No live provider/credential/profile/SSH job data, historical backups or remote TaskIDs were deleted by this implementation turn. Logical DROP TABLE does not guarantee forensic erasure from SQLite freed pages or existing backups.
-- Production post-restart schema validation and read-only MCP smoke are a distinct acceptance check, pending the operator's new build/restart.
+- The operator has now rebuilt/restarted; the verified post-restart read-only result is recorded below. Third-party plugin activation, packaged Wails and disruptive remote SSH tests remain outside this acceptance.
+
+### Post-restart Phase 37 live read-only acceptance (2026-10-15)
+
+After the operator rebuilt/restarted and refreshed the connector, Mac Pi observed a new Wails development Desktop process (PID 70520, launched at 17:39:17 Mac local time) and its child OpenAI tunnel-client (PID 71013, launched at 17:40:08). lsof confirmed that this exact Mender Desktop process has the live `~/Library/Application Support/Mender/mender.db` open.
+
+**Read-only production database results:**
+
+- `PRAGMA integrity_check = ok`; Provider Config schema **4** (v4 migration row present), Agent **5**, Profile **5**, Sandbox **18**.
+- All three retired tables (`mcp_provider_configs`, `mcp_config_schema_migrations`, `provider_config_imports`) absent; legacy table/view count **0**.
+- Both Workspace v2-only SQL guards installed; all seven P1 Provider/Profile/Policy reference guards present; Agent Facade immutable configuration guard still pins `config_version`.
+- Canonical inventory matches the pre-restart snapshot: **6 Providers / 25 Tools / 21 Profile ToolBindings / 2 Agent Tasks / 6 Provider configs**. There is still one canonical `io.mender.provider.mcp` Provider Config v1 and two canonical Workspace v2 configs. No Workspace v1 configs.
+- No missing/orphan Provider configs, dangling Profile ToolBindings, dangling Policy ProviderIDs/ToolIDs, or invalid Provider config JSON.
+- Persisted isolation choices remain `workspace_shell=restricted_host`, `external_provider=host`, `tunnel_client=restricted_host`; no silent permission change or restart-side reauthorization.
+
+**Connected Mender smoke:**
+
+- ChatGPT's refreshed Mender MCP connection successfully discovered SSH Jobs status and Workspace read/search Tools, demonstrating Tool catalogue exposure and connector reachability after the hard cut.
+- **Separate SSH Job evidence caveat:** the previously observed terminal task `sjob_1618d76ba93daa0c1dcbfd26f6a13532` now returns `{state: "unknown", cancelRequested: false}` from **both** `jobs.status` (repeated) and `jobs.result`. Its provider still binds to a `ready` SSH Sandbox. This is not evidence that the old command ran again or failed, but it is **not** a successful remote terminal-result smoke. V2 correctly refuses to assert completion without verifiable remote evidence. The previous `completed/exitCode=0` observation must not be repeated as a current fact. Remote availability/evidence should be investigated separately before claiming SSH Jobs end-to-end recovery is healthy.
+
+**Acceptance verdict:** Phase 37's **Provider hard-cut migration, data preservation, elimination of duplicate MCP state and Profile tool discovery pass on the real restarted developer Runtime**. SSH remote job terminal observation remains **unverified/unknown**; packaged Wails and third-party native plugin compatibility remain outside this acceptance. These checks made zero production database writes, no changes to Provider/Policy/Secret/SSH state and did not launch/replay remote commands. Documentation-only changes are committed separately.
