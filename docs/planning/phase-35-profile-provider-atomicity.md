@@ -66,3 +66,16 @@ No automatic replay, no generic remote task manager, no background mutation of r
 
 - The existing Provider instance manager intentionally shuts down a Provider *before* durable deletion. If a competing reference commits in that small interval, the new atomic SQL operation rejects and rolls back deletion while retaining Provider config/Catalog; the now-closed local instance may need a separately governed activation/sync. This is an availability/recovery consideration, not a dangling-reference or unauthorized-Tool reauthorization path. The P1 referential safety invariant is closed; no implicit plugin restart or secret use is added as error compensation.
 - Deploying this change requires a **new Runtime binary**; the first startup upgrades Profile SQLite to schema 5 and installs the reference guards. Do not run old and new binaries against a migrated production database. Manual packaged Desktop/real-world operational acceptance is separate from this isolated code closure.
+
+### Post-restart live read-only smoke (2026-10-15, Mac mini local time)
+
+After the operator rebuilt and restarted the Wails development client, Mac Pi observed a fresh `mender-desktop` process and its child OpenAI `tunnel-client`; the managed loopback MCP endpoint was listening. This was an observation, not a startup or process mutation by the audit.
+
+On the actual `~/Library/Application Support/Mender/mender.db`, `sqlite3 -readonly` confirmed:
+
+- `PRAGMA integrity_check = ok`; Profile schema **5**, Sandbox schema **18**, migration 5 present, and `profiles.revision` installed.
+- All **7** Runtime Provider/Profile/Policy reference SQL triggers present: two Profile Tool, two Provider Config, two Policy, one Provider delete.
+- Inventory: **1 Profile**, **6 Providers**, **25 Tools**. Revisions valid (`min=0`, `max=0`); counts of dangling Profile ToolBindings, provider configurations, Policy ProviderID/ToolID references, invalid Policy match JSON and dangling Profile ownership all **0**.
+- From ChatGPT's connected Mender MCP Profile, both `jobs` and `workspace` Tool discovery succeeded. The pre-existing, already terminal Rocky SSH job `sjob_1618d76ba93daa0c1dcbfd26f6a13532` was observed via the **read-only** `jobs.status` Tool: `completed`, `exitCode=0`, `cancelRequested=false`. No new SSH task, shell command, policy change or resource modification occurred.
+
+**Live acceptance scope:** deployment, schema migration, integrity, trigger registration, Profile-facing Tool discovery and existing read-only invocation are verified. Profile CAS and concurrent Provider retirement invariants were proved in isolated cross-Runtime SQLite tests, **not by intentionally racing or editing production grants**. A packaged Wails UI acceptance or real crash/interruption rehearsal remains outside this smoke. Phase 35 P1 safety closure remains accepted.
