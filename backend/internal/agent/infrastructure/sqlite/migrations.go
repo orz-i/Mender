@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-const latestSchemaVersion = 4
+const latestSchemaVersion = 5
 
 // migrate owns Agent state exclusively, and never changes the existing
 // Providers/Sandboxes/Tunnels/Plugin inventory.
@@ -171,6 +171,19 @@ func migrate(ctx context.Context, db *sql.DB) error {
 			return err
 		}
 	}
+	// V5 hardens the exact managed facade contract. The old trigger omitted
+	// config_version, permitting a claimed Provider to be retargeted to a
+	// different protocol schema without changing its AgentID. Recreate that
+	// trigger in the same forward-only schema transaction.
+	if !version.Valid || version.Int64 < 5 {
+		if _, err = tx.ExecContext(ctx, `DROP TRIGGER IF EXISTS agent_facade_provider_config_update_guard`); err != nil {
+			return fmt.Errorf("agent v5 drop legacy facade guard: %w", err)
+		}
+		if _, err = tx.ExecContext(ctx, `INSERT INTO agent_schema_migrations VALUES(?,?)`,
+			5, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
+			return fmt.Errorf("agent v5 migration record: %w", err)
+		}
+	}
 	// Standalone Agent stores may not yet have a Provider catalogue. The
 	// guards are installed whenever the Runtime composes both domains.
 	if providerConfigs > 0 {
@@ -178,7 +191,7 @@ func migrate(ctx context.Context, db *sql.DB) error {
 			`CREATE TRIGGER IF NOT EXISTS agent_facade_provider_config_delete_guard BEFORE DELETE ON provider_configs
 				WHEN EXISTS(SELECT 1 FROM agent_tool_facades f WHERE f.provider_id=OLD.provider_id)
 				BEGIN SELECT RAISE(ABORT,'managed Agent facade must be detached by owner'); END`,
-			`CREATE TRIGGER IF NOT EXISTS agent_facade_provider_config_update_guard BEFORE UPDATE OF plugin_id, config_json, plugin_installation_id ON provider_configs
+			`CREATE TRIGGER IF NOT EXISTS agent_facade_provider_config_update_guard BEFORE UPDATE OF plugin_id, config_json, config_version, plugin_installation_id ON provider_configs
 				WHEN EXISTS(SELECT 1 FROM agent_tool_facades f WHERE f.provider_id=OLD.provider_id)
 				BEGIN SELECT RAISE(ABORT,'managed Agent facade config is immutable'); END`,
 		} {

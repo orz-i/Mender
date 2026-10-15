@@ -12,6 +12,7 @@ import (
 )
 
 const delegationPluginID = "io.mender.provider.agent-delegation"
+const delegationConfigVersion = 1
 
 // GetToolFacade is a metadata-only lookup. A missing row is an explicitly
 // unbound resource; reads never create Providers or run Agent processes.
@@ -57,16 +58,17 @@ func (s *Store) ClaimToolFacade(ctx context.Context, id agentdomain.ID, provider
 		return err
 	}
 	var pluginID, configJSON string
+	var configVersion int
 	err = tx.QueryRowContext(ctx,
-		"SELECT plugin_id,config_json FROM provider_configs WHERE provider_id=? AND plugin_installation_id IS NULL",
-		providerID).Scan(&pluginID, &configJSON)
+		"SELECT plugin_id,config_version,config_json FROM provider_configs WHERE provider_id=? AND plugin_installation_id IS NULL",
+		providerID).Scan(&pluginID, &configVersion, &configJSON)
 	if err != nil {
 		return fmt.Errorf("%w: agent facade provider missing configuration: %w", agentdomain.ErrConflict, err)
 	}
 	var config struct {
 		AgentID string `json:"agentId"`
 	}
-	if pluginID != delegationPluginID || json.Unmarshal([]byte(configJSON), &config) != nil || config.AgentID != string(id) {
+	if pluginID != delegationPluginID || configVersion != delegationConfigVersion || json.Unmarshal([]byte(configJSON), &config) != nil || config.AgentID != string(id) {
 		return fmt.Errorf("%w: Agent facade Provider targets a different resource", agentdomain.ErrConflict)
 	}
 	if _, err = tx.ExecContext(ctx,
