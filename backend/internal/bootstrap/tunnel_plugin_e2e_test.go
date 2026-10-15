@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -28,7 +29,11 @@ func exampleTunnelPackage(t *testing.T) string {
 	if err := os.MkdirAll(filepath.Join(path, "bin"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	command := exec.Command("go", "build", "-o", filepath.Join(path, "bin", "mender-tunnel-example"), "./cmd/mender-tunnel-example") // #nosec G204 -- fixed local repository fixture built into TempDir.
+	binName := "mender-tunnel-example"
+	if runtime.GOOS == "windows" {
+		binName += ".exe"
+	}
+	command := exec.Command("go", "build", "-o", filepath.Join(path, "bin", binName), "./cmd/mender-tunnel-example") // #nosec G204 -- fixed local repository fixture built into TempDir.
 	command.Dir = source
 	command.Env = append(os.Environ(), "GOWORK=off")
 	if output, err := command.CombinedOutput(); err != nil {

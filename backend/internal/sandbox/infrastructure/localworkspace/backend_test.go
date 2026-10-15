@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -32,7 +33,12 @@ func (l *testLauncher) Command(ctx context.Context, mode sandboxdomain.Isolation
 		return nil, errors.New("restricted host backend unavailable")
 	}
 	// #nosec G204 -- test-only launcher deliberately executes a fixed test shell command.
-	cmd := exec.CommandContext(ctx, "/bin/sh", "-lc", command)
+	var cmd *exec.Cmd
+	if runtime.GOOS == "windows" {
+		cmd = exec.CommandContext(ctx, "powershell.exe", "-NoProfile", "-NonInteractive", "-Command", command)
+	} else {
+		cmd = exec.CommandContext(ctx, "/bin/sh", "-lc", command)
+	}
 	cmd.Dir = dir
 	cmd.Env = append([]string(nil), env...)
 	return cmd, nil

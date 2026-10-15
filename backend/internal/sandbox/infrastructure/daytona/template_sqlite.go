@@ -28,7 +28,11 @@ func OpenTemplateStore(ctx context.Context, path string) (*TemplateStore, error)
 	if err != nil {
 		return nil, err
 	}
-	uri := url.URL{Scheme: "file", Path: filepath.ToSlash(absolute)}
+	slashed := filepath.ToSlash(absolute)
+	if !strings.HasPrefix(slashed, "/") {
+		slashed = "/" + slashed
+	}
+	uri := url.URL{Scheme: "file", Path: slashed}
 	params := uri.Query()
 	params.Add("_pragma", "foreign_keys(1)")
 	params.Add("_pragma", "busy_timeout(5000)")

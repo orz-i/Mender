@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -59,7 +60,7 @@ func TestHostIdentityFirstUseTrustAndPinnedReuse(t *testing.T) {
 		t.Fatal("repeated provisioning created duplicate known_hosts pins")
 	}
 	info, err := os.Stat(trust.ManagedFile)
-	if err != nil || info.Mode().Perm() != 0600 {
+	if err != nil || (runtime.GOOS != "windows" && info.Mode().Perm() != 0600) {
 		t.Fatalf("Mender trust file permissions = %v, err %v", info, err)
 	}
 }

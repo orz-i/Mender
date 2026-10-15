@@ -71,7 +71,7 @@ func seedSandboxV8(t *testing.T) string {
 	}
 	now := time.Date(2026, 10, 9, 5, 6, 7, 0, time.UTC).Format(time.RFC3339Nano)
 	items := []struct{ id, name, backend, isolation, localRoot string }{
-		{legacyLocalID, "Legacy Local", "local_workspace", "host", "/tmp/mender-v8-workspace"},
+		{legacyLocalID, "Legacy Local", "local_workspace", "host", filepath.Join(t.TempDir(), "mender-v8-workspace")},
 		{legacyDockerID, "Legacy Docker", "docker", "container", ""},
 		{legacyDaytonaID, "Legacy Daytona", "daytona", "remote", ""},
 	}

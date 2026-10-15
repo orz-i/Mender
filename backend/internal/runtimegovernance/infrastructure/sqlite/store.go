@@ -30,7 +30,11 @@ func Open(
 	if err != nil {
 		return nil, fmt.Errorf("open runtime governance sqlite: absolute path: %w", err)
 	}
-	dsn := (&url.URL{Scheme: "file", Path: absolute}).String() + "?_pragma=busy_timeout(5000)"
+	slashed := filepath.ToSlash(absolute)
+	if !strings.HasPrefix(slashed, "/") {
+		slashed = "/" + slashed
+	}
+	dsn := (&url.URL{Scheme: "file", Path: slashed}).String() + "?_pragma=busy_timeout(5000)"
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("open runtime governance sqlite: %w", err)

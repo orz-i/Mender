@@ -3,6 +3,7 @@ package agentskill
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -72,7 +73,7 @@ allowed-tools: Bash(git:*) Read
 		kinds["LICENSE.txt"] != skilldomain.ResourceOther {
 		t.Fatalf("resource kinds = %+v", kinds)
 	}
-	if !executable {
+	if runtime.GOOS != "windows" && !executable {
 		t.Fatal("scripts/run.sh executable = false, want true")
 	}
 

@@ -24,7 +24,7 @@ func TestSandboxV9ToV10ExternalSchemaUpgradePreservesInventory(t *testing.T) {
 		ID:   "sbx_11111111111111111111111111111111",
 		Name: "Persisted local workspace", Backend: sandboxdomain.BackendLocalWorkspace,
 		Binding:   sandboxdomain.BuiltinBinding(sandboxdomain.BackendLocalWorkspace),
-		Isolation: sandboxdomain.IsolationHost, LocalRoot: "/tmp/test-workspace",
+		Isolation: sandboxdomain.IsolationHost, LocalRoot: filepath.Join(t.TempDir(), "test-workspace"),
 		OwnerKind: "local_user", OwnerRef: "owner",
 	})
 	if err != nil {

@@ -24,7 +24,7 @@ func TestSSHRemoteV10ToV11MigrationPreservesInventoryAndCreatesSingleBackup(t *t
 	item, err := sandboxdomain.NewSandbox(sandboxdomain.Spec{
 		ID: id, Name: "Preexisting local resource", Backend: sandboxdomain.BackendLocalWorkspace,
 		Binding:   sandboxdomain.BuiltinBinding(sandboxdomain.BackendLocalWorkspace),
-		Isolation: sandboxdomain.IsolationHost, LocalRoot: "/tmp/mender-preexisting-root",
+		Isolation: sandboxdomain.IsolationHost, LocalRoot: filepath.Join(t.TempDir(), "mender-preexisting-root"),
 		OwnerKind: "local_user", OwnerRef: "os:existing",
 	})
 	if err != nil {

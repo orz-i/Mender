@@ -254,7 +254,7 @@ paths:
 `)
 
 	bindings, err := discoverOperationBindings(parsed, Config{
-		Source:    SourceConfig{Kind: SourceFile, Path: "/tmp/openapi.yaml"},
+		Source:    SourceConfig{Kind: SourceFile, Path: filepath.Join(t.TempDir(), "openapi.yaml")},
 		ServerURL: "https://api.example.test",
 		Credentials: map[string]credentialdomain.Reference{
 			"BearerAuth": ref,

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -41,11 +42,11 @@ func ParseEngineEndpoint(raw string) (EngineEndpoint, error) {
 	if u.Scheme != "unix" || u.Host != "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || u.Opaque != "" || u.RawPath != "" {
 		return EngineEndpoint{}, fmt.Errorf("docker Engine: only explicit local unix:///absolute/socket endpoints are allowed")
 	}
-	path := u.Path
-	if !filepath.IsAbs(path) || path != filepath.Clean(path) || len(path) > 4096 || strings.ContainsRune(path, '\x00') || raw != "unix://"+path {
+	p := u.Path
+	if !strings.HasPrefix(p, "/") || p != path.Clean(p) || len(p) > 4096 || strings.ContainsRune(p, '\x00') || raw != "unix://"+p {
 		return EngineEndpoint{}, fmt.Errorf("docker Engine: socket must be a canonical absolute UNIX path without escapes")
 	}
-	return EngineEndpoint{socketPath: path}, nil
+	return EngineEndpoint{socketPath: p}, nil
 }
 func (e EngineEndpoint) URL() string {
 	if e.socketPath == "" {

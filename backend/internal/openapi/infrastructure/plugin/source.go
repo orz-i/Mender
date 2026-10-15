@@ -147,9 +147,13 @@ func (sourceLoader) loadFile(path string) (loadedSource, error) {
 	if err != nil {
 		return loadedSource{}, fmt.Errorf("load OpenAPI description file: %w", err)
 	}
+	slashed := filepath.ToSlash(absolute)
+	if !strings.HasPrefix(slashed, "/") {
+		slashed = "/" + slashed
+	}
 	location := &url.URL{
 		Scheme: "file",
-		Path:   filepath.ToSlash(absolute),
+		Path:   slashed,
 	}
 	return loadedSource{
 		data:     data,

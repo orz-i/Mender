@@ -75,6 +75,7 @@ func TestDecodeConfigRejectsUnknownFields(t *testing.T) {
 func TestSourceConfigValidation(t *testing.T) {
 	t.Parallel()
 
+	absFile := filepath.Join(t.TempDir(), "openapi.yaml")
 	tests := []struct {
 		name   string
 		source SourceConfig
@@ -115,14 +116,14 @@ func TestSourceConfigValidation(t *testing.T) {
 			source: SourceConfig{
 				Kind: SourceURL,
 				URL:  "https://example.test/openapi.yaml",
-				Path: "/tmp/openapi.yaml",
+				Path: absFile,
 			},
 		},
 		{
 			name: "absolute file",
 			source: SourceConfig{
 				Kind: SourceFile,
-				Path: "/tmp/openapi.yaml",
+				Path: absFile,
 			},
 			ok: true,
 		},

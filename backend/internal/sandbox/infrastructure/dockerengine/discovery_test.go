@@ -1,14 +1,13 @@
 package dockerengine
 
 import (
-	"path/filepath"
 	"reflect"
 	"testing"
 )
 
 func TestKnownLocalEndpointsAreFixedAndOrdered(t *testing.T) {
 	t.Parallel()
-	home := filepath.Join(string(filepath.Separator), "Users", "example")
+	home := "/Users/example"
 	tests := []struct {
 		name     string
 		platform string

@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"testing"
 	"time"
@@ -64,7 +65,12 @@ func (hostLauncher) CheckIsolation(mode sandboxdomain.IsolationClass) error {
 }
 func (hostLauncher) Command(ctx context.Context, _ sandboxdomain.IsolationClass, _, workingDirectory, command string, env []string) (*exec.Cmd, error) {
 	// #nosec G204 -- test-only shell for bounded Sandbox integration tests.
-	cmd := exec.CommandContext(ctx, "/bin/sh", "-lc", command)
+	var cmd *exec.Cmd
+	if runtime.GOOS == "windows" {
+		cmd = exec.CommandContext(ctx, "powershell.exe", "-NoProfile", "-NonInteractive", "-Command", command)
+	} else {
+		cmd = exec.CommandContext(ctx, "/bin/sh", "-lc", command)
+	}
 	cmd.Dir = workingDirectory
 	cmd.Env = env
 	return cmd, nil

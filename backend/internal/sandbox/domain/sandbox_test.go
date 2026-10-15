@@ -2,6 +2,7 @@ package domain
 
 import (
 	"errors"
+	"path/filepath"
 	"testing"
 )
 
@@ -13,7 +14,7 @@ func TestSandboxIdentityAndIsolation(t *testing.T) {
 			t.Errorf("accepted %q", bad)
 		}
 	}
-	good := Spec{ID: validID, Name: "Test", Backend: BackendLocalWorkspace, Binding: BuiltinBinding(BackendLocalWorkspace), Isolation: IsolationHost, LocalRoot: "/tmp/mender", OwnerKind: "local_user", OwnerRef: "owner"}
+	good := Spec{ID: validID, Name: "Test", Backend: BackendLocalWorkspace, Binding: BuiltinBinding(BackendLocalWorkspace), Isolation: IsolationHost, LocalRoot: filepath.Join(t.TempDir(), "mender"), OwnerKind: "local_user", OwnerRef: "owner"}
 	if _, err := NewSandbox(good); err != nil {
 		t.Fatal(err)
 	}

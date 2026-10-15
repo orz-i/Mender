@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"encoding/json"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -62,7 +63,7 @@ components:
 `)
 
 	bindings, err := discoverOperationBindings(parsed, Config{
-		Source:    SourceConfig{Kind: SourceFile, Path: "/tmp/openapi.yaml"},
+		Source:    SourceConfig{Kind: SourceFile, Path: filepath.Join(t.TempDir(), "openapi.yaml")},
 		ServerURL: "https://api.example.test",
 	})
 	if err != nil {
@@ -156,7 +157,7 @@ paths:
           description: ok
 `)
 
-	config := Config{Source: SourceConfig{Kind: SourceFile, Path: "/tmp/openapi.yaml"}, ServerURL: "https://api.example.test"}
+	config := Config{Source: SourceConfig{Kind: SourceFile, Path: filepath.Join(t.TempDir(), "openapi.yaml")}, ServerURL: "https://api.example.test"}
 	first, err := discoverOperationBindings(parsed, config)
 	if err != nil {
 		t.Fatal(err)
@@ -203,7 +204,7 @@ paths:
         "200":
           description: ok
 `)
-	base := Config{Source: SourceConfig{Kind: SourceFile, Path: "/tmp/openapi.yaml"}, ServerURL: "https://api.example.test"}
+	base := Config{Source: SourceConfig{Kind: SourceFile, Path: filepath.Join(t.TempDir(), "openapi.yaml")}, ServerURL: "https://api.example.test"}
 
 	if _, err := discoverOperationBindings(parsed, base); err == nil ||
 		!strings.Contains(err.Error(), "HEAD") {
@@ -259,7 +260,7 @@ paths:
 `)
 
 	_, err := discoverOperationBindings(parsed, Config{
-		Source:    SourceConfig{Kind: SourceFile, Path: "/tmp/openapi.yaml"},
+		Source:    SourceConfig{Kind: SourceFile, Path: filepath.Join(t.TempDir(), "openapi.yaml")},
 		ServerURL: "https://api.example.test",
 	})
 	if err == nil || !strings.Contains(err.Error(), "application/json") {
@@ -290,7 +291,7 @@ paths:
 `)
 
 	_, err := discoverOperationBindings(parsed, Config{
-		Source:    SourceConfig{Kind: SourceFile, Path: "/tmp/openapi.yaml"},
+		Source:    SourceConfig{Kind: SourceFile, Path: filepath.Join(t.TempDir(), "openapi.yaml")},
 		ServerURL: "https://api.example.test",
 	})
 	if err == nil || !strings.Contains(err.Error(), "Security Scheme") {
@@ -323,7 +324,7 @@ paths:
 `)
 
 	bindings, err := discoverOperationBindings(parsed, Config{
-		Source:    SourceConfig{Kind: SourceFile, Path: "/tmp/openapi.yaml"},
+		Source:    SourceConfig{Kind: SourceFile, Path: filepath.Join(t.TempDir(), "openapi.yaml")},
 		ServerURL: "https://api.example.test",
 	})
 	if err != nil {

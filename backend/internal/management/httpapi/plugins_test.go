@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -166,6 +167,9 @@ func TestUnifiedPluginCatalogueHTTPExternalResourceFlow(t *testing.T) {
 		fixture := filepath.Join(repository, "examples", folder)
 		packageRoot := filepath.Join(t.TempDir(), folder)
 		executable := filepath.Join(packageRoot, "bin", binary)
+		if runtime.GOOS == "windows" {
+			executable += ".exe"
+		}
 		if err := os.MkdirAll(filepath.Dir(executable), 0o700); err != nil {
 			t.Fatal(err)
 		}

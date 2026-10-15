@@ -2,6 +2,7 @@ package dockerengine
 
 import (
 	"maps"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -169,7 +170,7 @@ func TestNewPlanRefusesUntrustedProviderAndRun(t *testing.T) {
 			s.Backend = sandboxdomain.BackendLocalWorkspace
 			s.Binding = sandboxdomain.BuiltinBinding(sandboxdomain.BackendLocalWorkspace)
 			s.Isolation = sandboxdomain.IsolationHost
-			s.LocalRoot = "/tmp"
+			s.LocalRoot = filepath.Clean(t.TempDir())
 		}, sandboxdomain.StateProvisioning, "", ""},
 		{"already ready", nil, sandboxdomain.StateReady, "container-id", ""},
 		{"unknown run", nil, sandboxdomain.StateUnknown, "", ""},

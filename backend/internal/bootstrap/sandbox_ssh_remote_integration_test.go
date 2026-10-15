@@ -136,8 +136,12 @@ func startInProcessSSHForSandbox(t *testing.T) (sshremote.Template, []byte, stri
 		t.Fatal("invalid SSH fixture port")
 	}
 	ref, _ := credentialdomain.ParseReference("credential://ssh/fixture")
+	slashedRoot := filepath.ToSlash(root)
+	if !strings.HasPrefix(slashedRoot, "/") {
+		slashedRoot = "/" + slashedRoot
+	}
 	// #nosec G115 -- ephemeral listener port was verified to be 1..65535.
-	tpl := sshremote.Template{Host: host, Port: uint16(port), User: "agent", Root: root, CredentialRef: ref,
+	tpl := sshremote.Template{Host: host, Port: uint16(port), User: "agent", Root: slashedRoot, CredentialRef: ref,
 		HostPublicKey: strings.TrimSpace(string(ssh.MarshalAuthorizedKey(hostSigner.PublicKey())))}
 	return tpl, secret, root
 }

@@ -24,7 +24,11 @@ func openProviderReferenceDB(ctx context.Context, path string) (*sql.DB, error) 
 	if err != nil {
 		return nil, err
 	}
-	uri := url.URL{Scheme: "file", Path: filepath.ToSlash(absolute)}
+	slashed := filepath.ToSlash(absolute)
+	if !strings.HasPrefix(slashed, "/") {
+		slashed = "/" + slashed
+	}
+	uri := url.URL{Scheme: "file", Path: slashed}
 	q := uri.Query()
 	q.Add("_pragma", "foreign_keys(1)")
 	q.Add("_pragma", "busy_timeout(5000)")

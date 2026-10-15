@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"syscall"
 	"testing"
 
 	"github.com/pkg/sftp"
@@ -54,10 +53,10 @@ func (f *fixtureV2Runner) ProveV2ResolutionDurable(_ context.Context, dir, expec
 		return ErrJobUnknown
 	}
 	defer func() { _ = lock.Close() }()
-	if err = syscall.Flock(int(lock.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+	if err = lockFileEx(lock.Fd()); err != nil {
 		return ErrJobUnknown
 	}
-	defer func() { _ = syscall.Flock(int(lock.Fd()), syscall.LOCK_UN) }()
+	defer func() { _ = unlockFile(lock.Fd()) }()
 	markerPath := filepath.Join(dir, "resolution.json")
 	// #nosec G703 -- exclusively test-owned resolution marker.
 	info, err = os.Lstat(markerPath)
@@ -97,10 +96,10 @@ func (f *fixtureV2Runner) ResolveV2UnderLock(_ context.Context, r v2RemoteResolu
 		return err
 	}
 	defer func() { _ = lock.Close() }()
-	if err = syscall.Flock(int(lock.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+	if err = lockFileEx(lock.Fd()); err != nil {
 		return ErrJobUnknown
 	}
-	defer func() { _ = syscall.Flock(int(lock.Fd()), syscall.LOCK_UN) }()
+	defer func() { _ = unlockFile(lock.Fd()) }()
 	if f.locked != nil {
 		select {
 		case f.locked <- struct{}{}:

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -83,8 +84,10 @@ func TestStoreInstallsResolvesAndRemovesImmutableSkill(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := info.Mode().Perm(); got != 0o400 {
-		t.Fatalf("managed SKILL.md mode = %#o, want 0400", got)
+	if runtime.GOOS != "windows" {
+		if got := info.Mode().Perm(); got != 0o400 {
+			t.Fatalf("managed SKILL.md mode = %#o, want 0400", got)
+		}
 	}
 
 	if err := store.Remove(context.Background(), id); err != nil {

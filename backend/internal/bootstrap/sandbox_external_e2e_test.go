@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	goruntime "runtime"
 	"strings"
 	"testing"
 	"time"
@@ -32,7 +33,11 @@ func exampleSandboxPluginPackage(t *testing.T) string {
 	if err := os.MkdirAll(filepath.Join(pkg, "bin"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	cmd := exec.Command("go", "build", "-o", filepath.Join(pkg, "bin", "mender-sandbox-example"), "./cmd/mender-sandbox-example") // #nosec G204 -- fixed checked-in fixture in a temporary path.
+	binName := "mender-sandbox-example"
+	if goruntime.GOOS == "windows" {
+		binName += ".exe"
+	}
+	cmd := exec.Command("go", "build", "-o", filepath.Join(pkg, "bin", binName), "./cmd/mender-sandbox-example") // #nosec G204 -- fixed checked-in fixture in a temporary path.
 	cmd.Dir = source
 	cmd.Env = append(os.Environ(), "GOWORK=off")
 	if output, err := cmd.CombinedOutput(); err != nil {
@@ -363,7 +368,11 @@ func TestExternalSandboxPackageTamperFailsClosed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	executable := filepath.Join(managed, item.ID().String(), "bin", "mender-sandbox-example")
+	binName := "mender-sandbox-example"
+	if goruntime.GOOS == "windows" {
+		binName += ".exe"
+	}
+	executable := filepath.Join(managed, item.ID().String(), "bin", binName)
 	// Only modify this test's installation, never an installed user package.
 	if err := os.Chmod(executable, 0o600); err != nil {
 		t.Fatal(err)

@@ -58,6 +58,9 @@ func TestHostCommandUsesExactExecutable(t *testing.T) {
 
 func TestDarwinRestrictedCommandUsesCanonicalProfile(t *testing.T) {
 	t.Parallel()
+	if runtime.GOOS == "windows" {
+		t.Skip("unix executable assertion")
+	}
 	root := t.TempDir()
 	launcher := newLauncher("darwin", "/usr/bin/sandbox-exec", "/Users/test", "seatbelt")
 	cmd, err := launcher.Command(
@@ -175,6 +178,9 @@ func TestRestrictedHostReadOnlyRootInsideTempWhenAvailable(t *testing.T) {
 
 func TestLinuxRestrictedCommandDoesNotMountHome(t *testing.T) {
 	t.Parallel()
+	if runtime.GOOS == "windows" {
+		t.Skip("unix executable assertion")
+	}
 	root := t.TempDir()
 	launcher := newLauncher("linux", "/usr/bin/bwrap", "/home/test", "bubblewrap")
 	cmd, err := launcher.Command(
