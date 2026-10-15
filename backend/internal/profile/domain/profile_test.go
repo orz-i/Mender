@@ -18,33 +18,33 @@ func TestProfileExposureModesNormalizeDirectSelection(t *testing.T) {
 	tests := []struct {
 		name       string
 		mode       ExposureMode
-		selections []ToolSelection
+		selections []ToolBinding
 		wantDirect []catalogdomain.ToolID
 	}{
 		{
 			name: "direct",
 			mode: ExposureDirect,
-			selections: []ToolSelection{
-				{ToolID: first, Direct: false},
-				{ToolID: second, Direct: false},
+			selections: []ToolBinding{
+				mustBinding(t, first, false),
+				mustBinding(t, second, false),
 			},
 			wantDirect: []catalogdomain.ToolID{first, second},
 		},
 		{
 			name: "dynamic",
 			mode: ExposureDynamic,
-			selections: []ToolSelection{
-				{ToolID: first, Direct: true},
-				{ToolID: second, Direct: true},
+			selections: []ToolBinding{
+				mustBinding(t, first, true),
+				mustBinding(t, second, true),
 			},
 			wantDirect: nil,
 		},
 		{
 			name: "hybrid",
 			mode: ExposureHybrid,
-			selections: []ToolSelection{
-				{ToolID: first, Direct: true},
-				{ToolID: second, Direct: false},
+			selections: []ToolBinding{
+				mustBinding(t, first, true),
+				mustBinding(t, second, false),
 			},
 			wantDirect: []catalogdomain.ToolID{first},
 		},
@@ -55,9 +55,9 @@ func TestProfileExposureModesNormalizeDirectSelection(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			profile, err := NewProfile(id, slug, "Default", tc.mode, tc.selections)
+			profile, err := NewProfileWithBindings(id, slug, "Default", tc.mode, tc.selections)
 			if err != nil {
-				t.Fatalf("NewProfile() error = %v", err)
+				t.Fatalf("NewProfileWithBindings() error = %v", err)
 			}
 			if !slices.Equal(profile.DirectToolIDs(), tc.wantDirect) {
 				t.Fatalf("DirectToolIDs() = %v, want %v", profile.DirectToolIDs(), tc.wantDirect)
@@ -76,18 +76,18 @@ func TestProfileRejectsDuplicateToolMembership(t *testing.T) {
 	id, _ := ParseProfileID("prof_00000000000000000000000000000001")
 	slug, _ := NewSlug("default")
 
-	_, err := NewProfile(
+	_, err := NewProfileWithBindings(
 		id,
 		slug,
 		"Default",
 		ExposureHybrid,
-		[]ToolSelection{
-			{ToolID: toolID, Direct: true},
-			{ToolID: toolID, Direct: false},
+		[]ToolBinding{
+			mustBinding(t, toolID, true),
+			mustBinding(t, toolID, false),
 		},
 	)
 	if err == nil {
-		t.Fatal("NewProfile() expected duplicate ToolID error")
+		t.Fatal("NewProfileWithBindings() expected duplicate ToolID error")
 	}
 }
 
@@ -120,4 +120,13 @@ func mustToolID(t *testing.T, raw string) catalogdomain.ToolID {
 		t.Fatal(err)
 	}
 	return id
+}
+
+func mustBinding(t *testing.T, toolID catalogdomain.ToolID, direct bool) ToolBinding {
+	t.Helper()
+	binding, err := NewToolBinding(ToolBindingSpec{ToolID: toolID, Direct: direct})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return binding
 }

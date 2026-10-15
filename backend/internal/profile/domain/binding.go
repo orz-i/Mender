@@ -126,16 +126,6 @@ func NewToolBinding(spec ToolBindingSpec) (ToolBinding, error) {
 	}, nil
 }
 
-// DefaultToolBinding constructs a behavior-compatible binding from legacy membership state.
-func DefaultToolBinding(toolID catalogdomain.ToolID, direct bool) (ToolBinding, error) {
-	return NewToolBinding(ToolBindingSpec{
-		ToolID:                toolID,
-		Direct:                direct,
-		PolicyConstraint:      PolicyInherit,
-		ConcurrencyConstraint: ConcurrencyInherit,
-	})
-}
-
 func (b ToolBinding) ToolID() catalogdomain.ToolID {
 	return b.toolID
 }
@@ -193,11 +183,4 @@ func normalizeCredentialRefs(
 func (b ToolBinding) withDirect(direct bool) ToolBinding {
 	b.direct = direct
 	return b
-}
-
-// ToolSelection is the legacy membership input retained while adapters migrate to ToolBinding.
-// Deprecated: use ToolBindingSpec and NewToolBinding.
-type ToolSelection struct {
-	ToolID catalogdomain.ToolID
-	Direct bool
 }

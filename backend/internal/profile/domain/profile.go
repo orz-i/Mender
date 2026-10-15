@@ -38,26 +38,6 @@ func (p Profile) WithRevision(revision uint64) Profile {
 	return p
 }
 
-// NewProfile is the legacy membership constructor retained while adapters migrate.
-// Deprecated: use NewProfileWithBindings.
-func NewProfile(
-	id ProfileID,
-	slug Slug,
-	displayName string,
-	mode ExposureMode,
-	selections []ToolSelection,
-) (Profile, error) {
-	bindings := make([]ToolBinding, 0, len(selections))
-	for _, selection := range selections {
-		binding, err := DefaultToolBinding(selection.ToolID, selection.Direct)
-		if err != nil {
-			return Profile{}, err
-		}
-		bindings = append(bindings, binding)
-	}
-	return NewProfileWithBindings(id, slug, displayName, mode, bindings)
-}
-
 // NewProfileWithBindings constructs a Profile and normalizes binding exposure by mode.
 func NewProfileWithBindings(
 	id ProfileID,
@@ -177,19 +157,6 @@ func (p Profile) TunnelID() (tunneldomain.TunnelID, bool) {
 
 func (p Profile) Bindings() []ToolBinding {
 	return slices.Clone(p.bindings)
-}
-
-// Selections returns behavior-compatible legacy membership state.
-// Deprecated: use Bindings.
-func (p Profile) Selections() []ToolSelection {
-	selections := make([]ToolSelection, 0, len(p.bindings))
-	for _, binding := range p.bindings {
-		selections = append(selections, ToolSelection{
-			ToolID: binding.ToolID(),
-			Direct: binding.Direct(),
-		})
-	}
-	return selections
 }
 
 func (p Profile) Binding(toolID catalogdomain.ToolID) (ToolBinding, bool) {

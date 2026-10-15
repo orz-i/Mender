@@ -950,8 +950,8 @@ func (r *Runtime) ensureProviderUnused(
 		return fmt.Errorf("check provider usage: list profiles: %w", err)
 	}
 	for _, profile := range profiles {
-		for _, selection := range profile.Selections() {
-			tool, describeErr := r.Catalog.DescribeTool.Execute(ctx, selection.ToolID)
+		for _, binding := range profile.Bindings() {
+			tool, describeErr := r.Catalog.DescribeTool.Execute(ctx, binding.ToolID())
 			if describeErr != nil {
 				if errors.Is(describeErr, catalogapplication.ErrToolNotFound) {
 					return fmt.Errorf("%w: Profile %s contains an unresolved ToolID", ErrProviderInUse, profile.Slug())

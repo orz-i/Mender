@@ -34,7 +34,7 @@ func (uc CreateProfile) Execute(
 	if err != nil {
 		return profiledomain.Profile{}, fmt.Errorf("create profile: allocate id: %w", err)
 	}
-	profile, err := profiledomain.NewProfile(
+	profile, err := profiledomain.NewProfileWithBindings(
 		id,
 		slug,
 		request.DisplayName,

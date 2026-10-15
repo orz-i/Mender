@@ -13,7 +13,7 @@ func TestStreamableHTTPHandlerNegotiatesLatestStatelessProtocol(t *testing.T) {
 	t.Parallel()
 
 	fixture := newServerFixture(t)
-	profile := fixture.profile(t, profiledomain.ExposureDynamic, []profiledomain.ToolSelection{
+	profile := fixture.profile(t, profiledomain.ExposureDynamic, []profiledomain.ToolBindingSpec{
 		{ToolID: fixture.tools[0].ID()},
 	})
 	adapter := fixture.adapter(t, profile)

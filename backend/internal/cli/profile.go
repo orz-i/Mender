@@ -95,7 +95,7 @@ func (a *app) newProfileListCommand() *cobra.Command {
 						profile.Slug(),
 						profile.ID(),
 						profile.Mode(),
-						len(profile.Selections()),
+						len(profile.Bindings()),
 						profile.DisplayName(),
 					)
 				}
@@ -127,7 +127,7 @@ func (a *app) newProfileShowCommand() *cobra.Command {
 						profile.Slug(),
 						profile.ID(),
 						profile.Mode(),
-						len(profile.Selections()),
+						len(profile.Bindings()),
 					),
 					profileProjection(profile),
 				)

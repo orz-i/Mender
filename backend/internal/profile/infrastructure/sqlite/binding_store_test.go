@@ -74,7 +74,7 @@ func TestProfileRestoreFailsClosedOnMalformedBindingState(t *testing.T) {
 	slug, _ := profiledomain.NewSlug("malformed")
 	toolID, _ := catalogdomain.ParseToolID("tool_00000000000000000000000000000012")
 
-	binding, err := profiledomain.DefaultToolBinding(toolID, false)
+	binding, err := profiledomain.NewToolBinding(profiledomain.ToolBindingSpec{ToolID: toolID, Direct: false})
 	if err != nil {
 		t.Fatal(err)
 	}

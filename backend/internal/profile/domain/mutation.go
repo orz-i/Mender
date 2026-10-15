@@ -35,30 +35,6 @@ func (p Profile) ClearTunnel() (Profile, error) {
 	return p.rebuild(p.bindings, "")
 }
 
-// AddTool is the legacy membership mutation retained while application adapters migrate.
-// Deprecated: use AddBinding.
-func (p Profile) AddTool(toolID catalogdomain.ToolID, direct bool) (Profile, error) {
-	binding, err := DefaultToolBinding(toolID, direct)
-	if err != nil {
-		return Profile{}, err
-	}
-	return p.AddBinding(binding)
-}
-
-// ReplaceTools is the legacy membership mutation retained while application adapters migrate.
-// Deprecated: use ReplaceBindings.
-func (p Profile) ReplaceTools(selections []ToolSelection) (Profile, error) {
-	bindings := make([]ToolBinding, 0, len(selections))
-	for _, selection := range selections {
-		binding, err := DefaultToolBinding(selection.ToolID, selection.Direct)
-		if err != nil {
-			return Profile{}, err
-		}
-		bindings = append(bindings, binding)
-	}
-	return p.ReplaceBindings(bindings)
-}
-
 // RemoveTool returns a new Profile without one ToolBinding.
 func (p Profile) RemoveTool(toolID catalogdomain.ToolID) (Profile, error) {
 	if !p.Contains(toolID) {

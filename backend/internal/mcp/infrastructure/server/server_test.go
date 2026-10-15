@@ -24,7 +24,7 @@ func TestDirectProfileListsAndCallsOnlySelectedTools(t *testing.T) {
 	t.Parallel()
 
 	fixture := newServerFixture(t)
-	profile := fixture.profile(t, profiledomain.ExposureDirect, []profiledomain.ToolSelection{
+	profile := fixture.profile(t, profiledomain.ExposureDirect, []profiledomain.ToolBindingSpec{
 		{ToolID: fixture.tools[0].ID()},
 	})
 	adapter := fixture.adapter(t, profile)
@@ -67,7 +67,7 @@ func TestDynamicProfileExposesMetaToolsAndEnforcesMembership(t *testing.T) {
 	t.Parallel()
 
 	fixture := newServerFixture(t)
-	profile := fixture.profile(t, profiledomain.ExposureDynamic, []profiledomain.ToolSelection{
+	profile := fixture.profile(t, profiledomain.ExposureDynamic, []profiledomain.ToolBindingSpec{
 		{ToolID: fixture.tools[0].ID()},
 	})
 	adapter := fixture.adapter(t, profile)
@@ -268,11 +268,11 @@ func TestMCPDirectProjectionRejectsNormalizedNameCollision(t *testing.T) {
 	)
 	fixture.tools = []catalogdomain.Tool{first, second}
 
-	firstBinding, err := profiledomain.DefaultToolBinding(first.ID(), true)
+	firstBinding, err := profiledomain.NewToolBinding(profiledomain.ToolBindingSpec{ToolID: first.ID(), Direct: true})
 	if err != nil {
 		t.Fatal(err)
 	}
-	secondBinding, err := profiledomain.DefaultToolBinding(second.ID(), true)
+	secondBinding, err := profiledomain.NewToolBinding(profiledomain.ToolBindingSpec{ToolID: second.ID(), Direct: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -309,7 +309,7 @@ func TestHybridProfileCombinesDirectAndDynamicExposure(t *testing.T) {
 	t.Parallel()
 
 	fixture := newServerFixture(t)
-	profile := fixture.profile(t, profiledomain.ExposureHybrid, []profiledomain.ToolSelection{
+	profile := fixture.profile(t, profiledomain.ExposureHybrid, []profiledomain.ToolBindingSpec{
 		{ToolID: fixture.tools[0].ID(), Direct: true},
 		{ToolID: fixture.tools[1].ID(), Direct: false},
 	})
@@ -435,15 +435,17 @@ func newServerFixture(t *testing.T) *serverFixture {
 	}
 }
 
-func (f *serverFixture) profile(t *testing.T, mode profiledomain.ExposureMode, selections []profiledomain.ToolSelection) profiledomain.Profile {
+func (f *serverFixture) profile(t *testing.T, mode profiledomain.ExposureMode, specs []profiledomain.ToolBindingSpec) profiledomain.Profile {
 	t.Helper()
-	id, _ := profiledomain.ParseProfileID("prof_00000000000000000000000000000001")
-	slug, _ := profiledomain.NewSlug("default")
-	profile, err := profiledomain.NewProfile(id, slug, "Default", mode, selections)
-	if err != nil {
-		t.Fatal(err)
+	bindings := make([]profiledomain.ToolBinding, 0, len(specs))
+	for _, spec := range specs {
+		binding, err := profiledomain.NewToolBinding(spec)
+		if err != nil {
+			t.Fatal(err)
+		}
+		bindings = append(bindings, binding)
 	}
-	return profile
+	return f.profileBindings(t, mode, bindings)
 }
 
 func (f *serverFixture) profileBindings(

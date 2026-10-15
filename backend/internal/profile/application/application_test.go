@@ -40,13 +40,13 @@ func TestProfileApplicationCreateAddListRemove(t *testing.T) {
 		t.Fatalf("AddTool.Execute() error = %v", err)
 	}
 	if !profile.Contains(tool.ID()) || len(profile.DirectToolIDs()) != 1 {
-		t.Fatalf("profile selections = %+v", profile.Selections())
+		t.Fatalf("profile selections = %+v", profile.Bindings())
 	}
 
 	replace := NewReplaceTools(repository, fakeToolLookup{tool: tool})
 	profile, err = replace.Execute(context.Background(), ReplaceToolsRequest{
 		ProfileSlug: profile.Slug(),
-		Tools: []ReplaceToolSelection{
+		Tools: []ToolBindingInput{
 			{ToolID: tool.ID(), Direct: false},
 		},
 	})
@@ -54,7 +54,7 @@ func TestProfileApplicationCreateAddListRemove(t *testing.T) {
 		t.Fatalf("ReplaceTools.Execute() error = %v", err)
 	}
 	if !profile.Contains(tool.ID()) {
-		t.Fatalf("replaced profile selections = %+v", profile.Selections())
+		t.Fatalf("replaced profile selections = %+v", profile.Bindings())
 	}
 
 	list := NewListProfiles(repository)

@@ -211,7 +211,7 @@ func TestProfileWithBindingsRejectsDuplicateToolIDs(t *testing.T) {
 	id, _ := ParseProfileID("prof_00000000000000000000000000000001")
 	slug, _ := NewSlug("default")
 	toolID := mustToolID(t, "tool_00000000000000000000000000000001")
-	first, _ := DefaultToolBinding(toolID, true)
+	first, _ := NewToolBinding(ToolBindingSpec{ToolID: toolID, Direct: true})
 	second, _ := NewToolBinding(ToolBindingSpec{
 		ToolID:           toolID,
 		Alias:            "alternate",

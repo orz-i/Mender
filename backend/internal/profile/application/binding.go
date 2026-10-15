@@ -21,10 +21,6 @@ type ToolBindingInput struct {
 	CredentialRefs        []credentialdomain.Reference
 }
 
-// ReplaceToolSelection is retained for source compatibility while adapters migrate.
-// Deprecated: use ToolBindingInput.
-type ReplaceToolSelection = ToolBindingInput
-
 func newToolBinding(input ToolBindingInput) (profiledomain.ToolBinding, error) {
 	return profiledomain.NewToolBinding(profiledomain.ToolBindingSpec{
 		ToolID:                input.ToolID,

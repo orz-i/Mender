@@ -17,7 +17,7 @@ func auditProfile(t *testing.T, store *Store) profiledomain.Profile {
 	t.Helper()
 	id, _ := profiledomain.ParseProfileID("prof_00000000000000000000000000000001")
 	slug, _ := profiledomain.NewSlug("audit-profile")
-	profile, err := profiledomain.NewProfile(id, slug, "Audit Profile", profiledomain.ExposureDynamic, nil)
+	profile, err := profiledomain.NewProfileWithBindings(id, slug, "Audit Profile", profiledomain.ExposureDynamic, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -36,13 +36,22 @@ func auditTool(t *testing.T, id string) catalogdomain.ToolID {
 	return result
 }
 
+func auditBinding(t *testing.T, toolID catalogdomain.ToolID, direct bool) profiledomain.ToolBinding {
+	t.Helper()
+	binding, err := profiledomain.NewToolBinding(profiledomain.ToolBindingSpec{ToolID: toolID, Direct: direct})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return binding
+}
+
 func TestProfileRevisionPreventsStaleRevocationRestore(t *testing.T) {
 	ctx := context.Background()
 	store := openTestStore(t)
 	initial := auditProfile(t, store)
 	toolA := auditTool(t, "tool_00000000000000000000000000000001")
 	toolB := auditTool(t, "tool_00000000000000000000000000000002")
-	initial, err := initial.AddTool(toolA, true)
+	initial, err := initial.AddBinding(auditBinding(t, toolA, true))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,7 +79,7 @@ func TestProfileRevisionPreventsStaleRevocationRestore(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	staleAdder, err = staleAdder.AddTool(toolB, true)
+	staleAdder, err = staleAdder.AddBinding(auditBinding(t, toolB, true))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +94,7 @@ func TestProfileRevisionPreventsStaleRevocationRestore(t *testing.T) {
 	if got.Contains(toolA) || got.Contains(toolB) || got.Revision() != 2 {
 		t.Fatalf("revoke must hold: A=%v B=%v rev=%d", got.Contains(toolA), got.Contains(toolB), got.Revision())
 	}
-	fresh, err := got.AddTool(toolB, true)
+	fresh, err := got.AddBinding(auditBinding(t, toolB, true))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,8 +173,8 @@ func TestProfileRevisionCASAcrossSQLiteConnections(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	snapshotA, _ = snapshotA.AddTool(auditTool(t, "tool_00000000000000000000000000000001"), true)
-	snapshotB, _ = snapshotB.AddTool(auditTool(t, "tool_00000000000000000000000000000002"), true)
+	snapshotA, _ = snapshotA.AddBinding(auditBinding(t, auditTool(t, "tool_00000000000000000000000000000001"), true))
+	snapshotB, _ = snapshotB.AddBinding(auditBinding(t, auditTool(t, "tool_00000000000000000000000000000002"), true))
 
 	start := make(chan struct{})
 	results := make(chan error, 2)

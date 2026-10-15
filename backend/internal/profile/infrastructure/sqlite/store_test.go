@@ -21,11 +21,11 @@ func TestProfileRoundTripAndMembershipPersistence(t *testing.T) {
 	first, _ := catalogdomain.ParseToolID("tool_00000000000000000000000000000001")
 	second, _ := catalogdomain.ParseToolID("tool_00000000000000000000000000000002")
 
-	firstBinding, err := profiledomain.DefaultToolBinding(first, true)
+	firstBinding, err := profiledomain.NewToolBinding(profiledomain.ToolBindingSpec{ToolID: first, Direct: true})
 	if err != nil {
 		t.Fatal(err)
 	}
-	secondBinding, err := profiledomain.DefaultToolBinding(second, false)
+	secondBinding, err := profiledomain.NewToolBinding(profiledomain.ToolBindingSpec{ToolID: second, Direct: false})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,8 +94,8 @@ func TestProfileSlugConflict(t *testing.T) {
 	slug, _ := profiledomain.NewSlug("default")
 	firstID, _ := profiledomain.ParseProfileID("prof_00000000000000000000000000000001")
 	secondID, _ := profiledomain.ParseProfileID("prof_00000000000000000000000000000002")
-	first, _ := profiledomain.NewProfile(firstID, slug, "First", profiledomain.ExposureDynamic, nil)
-	second, _ := profiledomain.NewProfile(secondID, slug, "Second", profiledomain.ExposureDynamic, nil)
+	first, _ := profiledomain.NewProfileWithBindings(firstID, slug, "First", profiledomain.ExposureDynamic, nil)
+	second, _ := profiledomain.NewProfileWithBindings(secondID, slug, "Second", profiledomain.ExposureDynamic, nil)
 
 	if err := store.CreateProfile(context.Background(), first); err != nil {
 		t.Fatal(err)
