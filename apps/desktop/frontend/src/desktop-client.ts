@@ -257,74 +257,13 @@ export function createDesktopMenderClient(): MenderClient {
       );
     },
 
-    async createHTTPProvider(body) {
-      return providerMutation(
-        await Service.CreateHTTPProvider(
-          body.namespace,
-          body.displayName,
-          body.description ?? "",
-          body.endpoint,
-          body.headers ?? {},
-          body.credentialHeaders ?? [],
-        ),
-      );
-    },
-
-    async createStdioProvider(body) {
-      return providerMutation(
-        await Service.CreateStdioProvider(
-          body.namespace,
-          body.displayName,
-          body.description ?? "",
-          body.executable,
-          body.args ?? [],
-          body.directory ?? "",
-          body.credentialEnvironment ?? [],
-        ),
-      );
-    },
-
     async updateProvider(providerId, body) {
-      if ("config" in body) {
-        return providerMutation(
-          await Service.UpdateConfiguredProvider(
-            providerId,
-            body.displayName,
-            body.description ?? "",
-            body.config,
-          ),
-        );
-      }
-      if (body.transport === "http") {
-        return providerMutation(
-          await Service.UpdateProvider(
-            providerId,
-            body.displayName,
-            body.description ?? "",
-            "http",
-            body.endpoint,
-            body.headers ?? {},
-            body.credentialHeaders ?? [],
-            "",
-            [],
-            "",
-            [],
-          ),
-        );
-      }
       return providerMutation(
-        await Service.UpdateProvider(
+        await Service.UpdateConfiguredProvider(
           providerId,
           body.displayName,
           body.description ?? "",
-          "stdio",
-          "",
-          {},
-          [],
-          body.executable,
-          body.args ?? [],
-          body.directory ?? "",
-          body.credentialEnvironment ?? [],
+          body.config,
         ),
       );
     },

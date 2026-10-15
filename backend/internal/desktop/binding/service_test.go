@@ -93,16 +93,10 @@ func TestServiceEndToEndUsesSharedRuntime(t *testing.T) {
 		t.Fatalf("updated runtime governance = %#v", updatedRuntime)
 	}
 
-	created, err := service.CreateHTTPProvider(
-		"upstream",
-		"Upstream",
-		"",
-		upstreamHTTP.URL,
-		nil,
-		nil,
-	)
+	config := map[string]any{"transport": map[string]any{"kind": "streamable-http", "endpoint": upstreamHTTP.URL}}
+	created, err := service.CreateProvider("upstream", "Upstream", "", "io.mender.provider.mcp", "", config)
 	if err != nil {
-		t.Fatalf("CreateHTTPProvider() error = %v", err)
+		t.Fatalf("CreateProvider() error = %v", err)
 	}
 	if created.Provider.ProviderID == "" || created.Provider.Transport != "http" {
 		t.Fatalf("created provider = %#v", created.Provider)
@@ -111,21 +105,9 @@ func TestServiceEndToEndUsesSharedRuntime(t *testing.T) {
 		t.Fatalf("sync result = %#v", created.Sync)
 	}
 
-	updated, err := service.UpdateProvider(
-		created.Provider.ProviderID,
-		"Upstream edited",
-		"Edited provider",
-		"http",
-		upstreamHTTP.URL,
-		nil,
-		nil,
-		"",
-		nil,
-		"",
-		nil,
-	)
+	updated, err := service.UpdateConfiguredProvider(created.Provider.ProviderID, "Upstream edited", "Edited provider", config)
 	if err != nil {
-		t.Fatalf("UpdateProvider() error = %v", err)
+		t.Fatalf("UpdateConfiguredProvider() error = %v", err)
 	}
 	if updated.Provider.Namespace != "upstream" ||
 		updated.Provider.DisplayName != "Upstream edited" ||

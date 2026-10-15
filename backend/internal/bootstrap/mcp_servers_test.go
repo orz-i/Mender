@@ -15,7 +15,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
 	credentialapplication "github.com/orz-i/Mender/backend/internal/credential/application"
-	mcpconfigstore "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/configstore"
+	mcpplugin "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/plugin"
 	profileapplication "github.com/orz-i/Mender/backend/internal/profile/application"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 	tunnelapplication "github.com/orz-i/Mender/backend/internal/tunnel/application"
@@ -62,17 +62,15 @@ func TestManagedMCPHTTPServerLifecycle(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = runtime.Close() })
 
-	provider, err := runtime.RegisterMCPProvider(
-		ctx,
-		catalogapplication.RegisterProviderRequest{
-			Namespace:   "upstream",
-			DisplayName: "Upstream",
-		},
-		mcpconfigstore.Config{
-			Transport: mcpconfigstore.TransportHTTP,
-			Endpoint:  upstreamHTTP.URL,
-		},
-	)
+	rawMCP, err := json.Marshal(mcpplugin.Config{
+		Transport: mcpplugin.TransportConfig{Kind: mcpplugin.TransportStreamableHTTP, Endpoint: upstreamHTTP.URL},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider, err := registerConfiguredProviderTest(t, runtime, ctx, catalogapplication.RegisterProviderRequest{
+		Namespace: "upstream", DisplayName: "Upstream",
+	}, mcpplugin.ID, rawMCP)
 	if err != nil {
 		t.Fatal(err)
 	}

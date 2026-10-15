@@ -12,7 +12,7 @@ import (
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 )
 
-func TestDeleteMCPProviderRejectsProfileReference(t *testing.T) {
+func TestDeleteConfiguredProviderRejectsProfileReference(t *testing.T) {
 	t.Parallel()
 
 	runtime, err := NewRuntime(context.Background(), RuntimeOptions{
@@ -79,9 +79,9 @@ func TestDeleteMCPProviderRejectsProfileReference(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = runtime.DeleteMCPProvider(context.Background(), provider.ID())
+	err = runtime.DeleteConfiguredProvider(context.Background(), provider.ID())
 	if !errors.Is(err, ErrProviderInUse) {
-		t.Fatalf("DeleteMCPProvider() error = %v, want ErrProviderInUse", err)
+		t.Fatalf("DeleteConfiguredProvider() error = %v, want ErrProviderInUse", err)
 	}
 }
 

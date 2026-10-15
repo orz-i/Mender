@@ -63,7 +63,6 @@ vi.mock(
       UpdatePolicyRule: vi.fn(),
       UpdateRuntimeBudget: vi.fn(),
       UpdateRuntimeIsolation: vi.fn(),
-      UpdateProvider: vi.fn(),
     },
   }),
 );
@@ -754,8 +753,8 @@ describe("desktop Mender client", () => {
     });
   });
 
-  it("adapts Provider updates and header templates to the Wails binding", async () => {
-    vi.mocked(Service.UpdateProvider).mockResolvedValue({
+  it("sends typed MCP config through the single Wails Provider update method", async () => {
+    vi.mocked(Service.UpdateConfiguredProvider).mockResolvedValue({
       provider: {
         providerId: "prov_00000000000000000000000000000001",
         namespace: "upstream",
@@ -766,74 +765,25 @@ describe("desktop Mender client", () => {
         transport: "http",
         toolCount: 1,
         endpoint: "https://example.test/mcp",
-        headers: {
-          "X-Legacy": "${EXAMPLE_METADATA}",
-        },
-        credentialHeaders: [
-          {
-            name: "Authorization",
-            scheme: "Bearer",
-            credentialRef: "credential://github/work",
-          },
-        ],
       },
       sync: { created: 0, updated: 1, removed: 0, total: 1 },
     });
-
     const client = createDesktopMenderClient();
+    const config = {transport: {kind: "streamable-http", endpoint: "https://example.test/mcp",
+      headers: {"X-Mode": "read"},
+    }};
     const result = await client.updateProvider(
       "prov_00000000000000000000000000000001",
-      {
-        transport: "http",
-        displayName: "Upstream edited",
-        description: "Edited",
-        endpoint: "https://example.test/mcp",
-        headers: {
-          "X-Legacy": "${EXAMPLE_METADATA}",
-        },
-        credentialHeaders: [
-          {
-            name: "Authorization",
-            scheme: "Bearer",
-            credentialRef: "credential://github/work",
-          },
-        ],
-      },
+      {displayName: "Upstream edited", description: "Edited", config},
     );
-
-    expect(Service.UpdateProvider).toHaveBeenCalledWith(
+    expect(Service.UpdateConfiguredProvider).toHaveBeenCalledWith(
       "prov_00000000000000000000000000000001",
       "Upstream edited",
       "Edited",
-      "http",
-      "https://example.test/mcp",
-      {
-        "X-Legacy": "${EXAMPLE_METADATA}",
-      },
-      [
-        {
-          name: "Authorization",
-          scheme: "Bearer",
-          credentialRef: "credential://github/work",
-        },
-      ],
-      "",
-      [],
-      "",
-      [],
+      config,
     );
     expect(result.provider.displayName).toBe("Upstream edited");
     expect(result.provider.toolCount).toBe(1);
-    expect(result.provider.headers).toEqual({
-      "X-Legacy": "${EXAMPLE_METADATA}",
-    });
-    expect(result.provider.credentialHeaders).toEqual([
-      {
-        name: "Authorization",
-        scheme: "Bearer",
-        credentialRef: "credential://github/work",
-      },
-    ]);
   });
 
   it("browses compact synchronized Tools through Wails", async () => {

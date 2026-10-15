@@ -13,7 +13,6 @@ import (
 	credentialapplication "github.com/orz-i/Mender/backend/internal/credential/application"
 	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
-	mcpconfigstore "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/configstore"
 	mcpserver "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/server"
 	policyapplication "github.com/orz-i/Mender/backend/internal/policy/application"
 	profileapplication "github.com/orz-i/Mender/backend/internal/profile/application"
@@ -251,7 +250,7 @@ func exitCode(err error) int {
 		errors.Is(err, skillapplication.ErrDeploymentTargetExists),
 		errors.Is(err, skillapplication.ErrAgentPluginTargetExists),
 		errors.Is(err, bootstrap.ErrBuiltInSkillImmutable),
-		errors.Is(err, mcpconfigstore.ErrNotFound):
+		errors.Is(err, bootstrap.ErrProviderInUse):
 		return ExitConfig
 	case errors.Is(err, skillapplication.ErrInvalidAgentPluginPackage):
 		return ExitUsage

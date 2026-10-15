@@ -379,48 +379,6 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '409': { $ref: '#/components/responses/Conflict' }
         '502': { $ref: '#/components/responses/BadGateway' }
-  /providers/http:
-    post:
-      deprecated: true
-      operationId: createHTTPProvider
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CreateHTTPProviderRequest'
-      responses:
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '201':
-          description: Provider created
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ProviderMutationResponse'
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '409': { $ref: '#/components/responses/Conflict' }
-        '502': { $ref: '#/components/responses/BadGateway' }
-  /providers/stdio:
-    post:
-      deprecated: true
-      operationId: createStdioProvider
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CreateStdioProviderRequest'
-      responses:
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '201':
-          description: Provider created
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ProviderMutationResponse'
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '409': { $ref: '#/components/responses/Conflict' }
-        '502': { $ref: '#/components/responses/BadGateway' }
   /providers/{providerId}/rebind:
     post:
       operationId: rebindProvider
@@ -2294,42 +2252,7 @@ components:
           type: object
           additionalProperties: true
       additionalProperties: false
-    CreateHTTPProviderRequest:
-      type: object
-      required: [namespace, displayName, endpoint]
-      properties:
-        namespace: { type: string }
-        displayName: { type: string }
-        description: { type: string }
-        endpoint: { type: string, format: uri }
-        headers:
-          $ref: '#/components/schemas/HeaderTemplates'
-        credentialHeaders:
-          type: array
-          items: { $ref: '#/components/schemas/CredentialHeaderBinding' }
-      additionalProperties: false
-    CreateStdioProviderRequest:
-      type: object
-      required: [namespace, displayName, executable]
-      properties:
-        namespace: { type: string }
-        displayName: { type: string }
-        description: { type: string }
-        executable: { type: string }
-        args:
-          type: array
-          items: { type: string }
-        directory: { type: string }
-        credentialEnvironment:
-          type: array
-          items: { $ref: '#/components/schemas/CredentialEnvironmentBinding' }
-      additionalProperties: false
     UpdateProviderRequest:
-      oneOf:
-        - $ref: '#/components/schemas/UpdateConfiguredProviderRequest'
-        - $ref: '#/components/schemas/UpdateHTTPProviderRequest'
-        - $ref: '#/components/schemas/UpdateStdioProviderRequest'
-    UpdateConfiguredProviderRequest:
       type: object
       required: [displayName, config]
       properties:
@@ -2338,36 +2261,6 @@ components:
         config:
           type: object
           additionalProperties: true
-      additionalProperties: false
-    UpdateHTTPProviderRequest:
-      type: object
-      required: [transport, displayName, endpoint]
-      properties:
-        transport: { type: string, const: http }
-        displayName: { type: string }
-        description: { type: string }
-        endpoint: { type: string, format: uri }
-        headers:
-          $ref: '#/components/schemas/HeaderTemplates'
-        credentialHeaders:
-          type: array
-          items: { $ref: '#/components/schemas/CredentialHeaderBinding' }
-      additionalProperties: false
-    UpdateStdioProviderRequest:
-      type: object
-      required: [transport, displayName, executable]
-      properties:
-        transport: { type: string, const: stdio }
-        displayName: { type: string }
-        description: { type: string }
-        executable: { type: string }
-        args:
-          type: array
-          items: { type: string }
-        directory: { type: string }
-        credentialEnvironment:
-          type: array
-          items: { $ref: '#/components/schemas/CredentialEnvironmentBinding' }
       additionalProperties: false
     CredentialHeaderBinding:
       type: object

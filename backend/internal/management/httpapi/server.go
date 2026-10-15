@@ -15,7 +15,6 @@ import (
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	credentialapplication "github.com/orz-i/Mender/backend/internal/credential/application"
 	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
-	mcpconfigstore "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/configstore"
 	installationapplication "github.com/orz-i/Mender/backend/internal/plugin/installation/application"
 	policyapplication "github.com/orz-i/Mender/backend/internal/policy/application"
 	profileapplication "github.com/orz-i/Mender/backend/internal/profile/application"
@@ -93,8 +92,6 @@ func (h *Handler) routes() {
 	h.mux.HandleFunc("GET /api/v1/tool-suites", h.listToolSuites)
 	h.mux.HandleFunc("GET /api/v1/providers", h.listProviders)
 	h.mux.HandleFunc("POST /api/v1/providers", h.createProvider)
-	h.mux.HandleFunc("POST /api/v1/providers/http", h.createHTTPProvider)
-	h.mux.HandleFunc("POST /api/v1/providers/stdio", h.createStdioProvider)
 	h.mux.HandleFunc("POST /api/v1/providers/{providerId}/rebind", h.rebindProvider)
 	h.mux.HandleFunc("POST /api/v1/providers/{providerId}/sync", h.syncProvider)
 	h.mux.HandleFunc("PUT /api/v1/providers/{providerId}", h.updateProvider)
@@ -258,7 +255,6 @@ func writeKnownError(w http.ResponseWriter, err error) {
 		errors.Is(err, policyapplication.ErrRuleNotFound),
 		errors.Is(err, credentialapplication.ErrCredentialNotFound),
 		errors.Is(err, profileapplication.ErrProfileNotFound),
-		errors.Is(err, mcpconfigstore.ErrNotFound),
 		errors.Is(err, providerconfigstore.ErrNotFound),
 		errors.Is(err, installationapplication.ErrInstallationNotFound),
 		errors.Is(err, skillapplication.ErrInstallationNotFound),

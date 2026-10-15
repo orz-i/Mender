@@ -8,9 +8,7 @@ import (
 	"fmt"
 	"net/url"
 	"path/filepath"
-	"regexp"
 	"strings"
-	"time"
 
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
@@ -18,12 +16,8 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-var (
-	// ErrNotFound indicates no persisted Provider plugin configuration exists.
-	ErrNotFound = errors.New("provider config: not found")
-
-	importNamePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,127}$`)
-)
+// ErrNotFound indicates no persisted Provider plugin configuration exists.
+var ErrNotFound = errors.New("provider config: not found")
 
 // Store persists generic Provider plugin configuration.
 type Store struct {
@@ -180,86 +174,6 @@ func (s *Store) Delete(
 		providerID.String(),
 	); err != nil {
 		return fmt.Errorf("delete provider config: %w", err)
-	}
-	return nil
-}
-
-// ImportOnce atomically imports a named compatibility snapshot exactly once.
-//
-// Existing generic Provider rows win over imported rows. This lets a migration
-// resume safely without overwriting a configuration that has already moved to
-// the generic store.
-func (s *Store) ImportOnce(
-	ctx context.Context,
-	name string,
-	configs []providerplugin.Configuration,
-) error {
-	name = strings.TrimSpace(name)
-	if !importNamePattern.MatchString(name) {
-		return fmt.Errorf("import provider configs: invalid import name %q", name)
-	}
-	for _, config := range configs {
-		if err := config.ValidateForPersistence(); err != nil {
-			return fmt.Errorf("import provider configs: %w", err)
-		}
-	}
-
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("import provider configs: begin: %w", err)
-	}
-	defer func() { _ = tx.Rollback() }()
-
-	var applied int
-	if err := tx.QueryRowContext(
-		ctx,
-		"SELECT COUNT(*) FROM provider_config_imports WHERE name = ?",
-		name,
-	).Scan(&applied); err != nil {
-		return fmt.Errorf("import provider configs: check marker: %w", err)
-	}
-	if applied != 0 {
-		return nil
-	}
-
-	for _, config := range configs {
-		credentialRefsJSON, connectionSummary, metadataErr := encodeConfigMetadata(config.Metadata)
-		if metadataErr != nil {
-			return fmt.Errorf("import provider configs: metadata %s: %w", config.ProviderID, metadataErr)
-		}
-		if _, err := tx.ExecContext(
-			ctx,
-			`INSERT INTO provider_configs(
-				provider_id, plugin_id, plugin_installation_id, config_version, revision, config_json,
-				credential_refs_json, connection_summary
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-			ON CONFLICT(provider_id) DO NOTHING`,
-			config.ProviderID.String(),
-			config.PluginID.String(),
-			nullableInstallationID(config.InstallationID),
-			config.ConfigVersion,
-			config.Revision,
-			string(config.Config),
-			credentialRefsJSON,
-			connectionSummary,
-		); err != nil {
-			return fmt.Errorf(
-				"import provider configs: insert %s: %w",
-				config.ProviderID,
-				err,
-			)
-		}
-	}
-	if _, err := tx.ExecContext(
-		ctx,
-		"INSERT INTO provider_config_imports(name, applied_at) VALUES (?, ?)",
-		name,
-		time.Now().UTC().Format(time.RFC3339Nano),
-	); err != nil {
-		return fmt.Errorf("import provider configs: record marker: %w", err)
-	}
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("import provider configs: commit: %w", err)
 	}
 	return nil
 }

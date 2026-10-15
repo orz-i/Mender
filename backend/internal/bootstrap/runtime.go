@@ -22,7 +22,6 @@ import (
 	governancelocaluser "github.com/orz-i/Mender/backend/internal/governance/infrastructure/localuser"
 	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
 	invocationrouter "github.com/orz-i/Mender/backend/internal/invocation/infrastructure/router"
-	mcpconfigstore "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/configstore"
 	platformplugin "github.com/orz-i/Mender/backend/internal/plugin"
 	installationdomain "github.com/orz-i/Mender/backend/internal/plugin/installation/domain"
 	installationlocalfs "github.com/orz-i/Mender/backend/internal/plugin/installation/infrastructure/localfs"
@@ -34,7 +33,6 @@ import (
 	providerbuiltin "github.com/orz-i/Mender/backend/internal/providerplugin/builtin"
 	providerconfigstore "github.com/orz-i/Mender/backend/internal/providerplugin/configstore"
 	providerexternal "github.com/orz-i/Mender/backend/internal/providerplugin/external"
-	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 	sandboxexternal "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/external"
 	tunnelapplication "github.com/orz-i/Mender/backend/internal/tunnel/application"
 	tunnelexternal "github.com/orz-i/Mender/backend/internal/tunnel/infrastructure/external"
@@ -74,7 +72,6 @@ type Runtime struct {
 
 	audit                *auditsqlite.Store
 	executors            *invocationrouter.Router
-	mcpConfigs           *mcpconfigstore.Store
 	providerPlugins      *providerplugin.Registry
 	providerResolver     providerplugin.Resolver
 	externalResolver     *providerexternal.Resolver
@@ -170,19 +167,8 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		return nil, fmt.Errorf("compose runtime: policy: %w", err)
 	}
 
-	configs, err := mcpconfigstore.Open(ctx, options.DatabasePath)
-	if err != nil {
-		_ = policies.Close()
-		_ = profiles.Close()
-		_ = credentials.Close()
-		_ = auditStore.Close()
-		_ = catalog.Close()
-		return nil, fmt.Errorf("compose runtime: MCP configs: %w", err)
-	}
-
 	providerConfigs, err := providerconfigstore.Open(ctx, options.DatabasePath)
 	if err != nil {
-		_ = configs.Close()
 		_ = policies.Close()
 		_ = profiles.Close()
 		_ = credentials.Close()
@@ -190,21 +176,10 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		_ = catalog.Close()
 		return nil, fmt.Errorf("compose runtime: provider configs: %w", err)
 	}
-	if err := importLegacyMCPProviderConfigs(ctx, configs, providerConfigs); err != nil {
-		_ = providerConfigs.Close()
-		_ = configs.Close()
-		_ = policies.Close()
-		_ = profiles.Close()
-		_ = credentials.Close()
-		_ = auditStore.Close()
-		_ = catalog.Close()
-		return nil, fmt.Errorf("compose runtime: migrate provider configs: %w", err)
-	}
 
 	runtimeGovernance, err := NewRuntimeGovernance(ctx, options.DatabasePath)
 	if err != nil {
 		_ = providerConfigs.Close()
-		_ = configs.Close()
 		_ = policies.Close()
 		_ = profiles.Close()
 		_ = credentials.Close()
@@ -233,7 +208,6 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 	// normal composition proceeds, the established owner/closer chain applies.
 	closeBootstrapStores := func() {
 		_ = providerConfigs.Close()
-		_ = configs.Close()
 		_ = policies.Close()
 		_ = profiles.Close()
 		_ = credentials.Close()
@@ -258,15 +232,6 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 			_ = sandboxes.Close()
 		}
 	}()
-	priorIsolation, err := runtimeGovernance.GetIsolation.Execute(ctx)
-	if err != nil {
-		closeBootstrapStores()
-		return nil, fmt.Errorf("compose runtime: load Workspace isolation for migration: %w", err)
-	}
-	if err := migrateWorkspaceProviderV1ToSandbox(ctx, options.DatabasePath, ownerPrincipal, sandboxdomain.IsolationClass(priorIsolation.WorkspaceShell())); err != nil {
-		closeBootstrapStores()
-		return nil, fmt.Errorf("compose runtime: migrate Workspace Providers to Sandbox: %w", err)
-	}
 	if err := installSandboxProviderBindingGuards(ctx, options.DatabasePath); err != nil {
 		closeBootstrapStores()
 		return nil, fmt.Errorf("compose runtime: Workspace Sandbox binding guards: %w", err)
@@ -279,7 +244,6 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		sandboxes,
 	); err != nil {
 		_ = providerConfigs.Close()
-		_ = configs.Close()
 		_ = policies.Close()
 		_ = profiles.Close()
 		_ = credentials.Close()
@@ -290,7 +254,6 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 	pluginInstallations, err := installationsqlite.Open(ctx, options.DatabasePath)
 	if err != nil {
 		_ = providerConfigs.Close()
-		_ = configs.Close()
 		_ = policies.Close()
 		_ = profiles.Close()
 		_ = credentials.Close()
@@ -305,7 +268,6 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 	if err != nil {
 		_ = pluginInstallations.Close()
 		_ = providerConfigs.Close()
-		_ = configs.Close()
 		_ = policies.Close()
 		_ = profiles.Close()
 		_ = credentials.Close()
@@ -317,7 +279,6 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 	if err != nil {
 		_ = pluginInstallations.Close()
 		_ = providerConfigs.Close()
-		_ = configs.Close()
 		_ = policies.Close()
 		_ = profiles.Close()
 		_ = credentials.Close()
@@ -333,7 +294,6 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 	if err != nil {
 		_ = pluginInstallations.Close()
 		_ = providerConfigs.Close()
-		_ = configs.Close()
 		_ = policies.Close()
 		_ = profiles.Close()
 		_ = credentials.Close()
@@ -414,7 +374,6 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		_ = externalProcesses.CloseAll()
 		_ = pluginInstallations.Close()
 		_ = providerConfigs.Close()
-		_ = configs.Close()
 		_ = policies.Close()
 		_ = profiles.Close()
 		_ = credentials.Close()
@@ -445,7 +404,6 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		_ = externalProcesses.CloseAll()
 		_ = pluginInstallations.Close()
 		_ = providerConfigs.Close()
-		_ = configs.Close()
 		_ = policies.Close()
 		_ = profiles.Close()
 		_ = credentials.Close()
@@ -459,7 +417,6 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		_ = externalProcesses.CloseAll()
 		_ = pluginInstallations.Close()
 		_ = providerConfigs.Close()
-		_ = configs.Close()
 		_ = policies.Close()
 		_ = profiles.Close()
 		_ = credentials.Close()
@@ -473,7 +430,6 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		_ = externalProcesses.CloseAll()
 		_ = pluginInstallations.Close()
 		_ = providerConfigs.Close()
-		_ = configs.Close()
 		_ = policies.Close()
 		_ = profiles.Close()
 		_ = credentials.Close()
@@ -537,7 +493,6 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		ListProviderActivationAudit: auditapplication.NewListProviderActivations(auditStore),
 		audit:                       auditStore,
 		executors:                   executors,
-		mcpConfigs:                  configs,
 		providerPlugins:             providerPlugins,
 		providerResolver:            providerResolver,
 		externalResolver:            externalResolver,
@@ -638,7 +593,6 @@ func (r *Runtime) Close() error {
 		r.RuntimeGovernance.Close(),
 		r.pluginInstallations.Close(),
 		r.providerConfigs.Close(),
-		r.mcpConfigs.Close(),
 		r.Policy.Close(),
 		r.Profiles.Close(),
 		r.Tunnels.Close(),

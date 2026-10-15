@@ -202,12 +202,10 @@ describe("Mender SDK", () => {
       expect(request.method).toBe("PUT");
       expect(request.url).toContain("/api/v1/providers/prov_1");
       await expect(request.json()).resolves.toEqual({
-        transport: "http",
         displayName: "Demo edited",
-        endpoint: "https://example.test/mcp",
-        headers: {
-          Authorization: "Bearer ${EXAMPLE_API_KEY}",
-        },
+        config: {transport: {kind: "streamable-http", endpoint: "https://example.test/mcp",
+          headers: {Authorization: "Bearer TEST_TOKEN"},
+        }},
       });
       return new Response(
         JSON.stringify({
@@ -240,12 +238,10 @@ describe("Mender SDK", () => {
     });
 
     const result = await client.updateProvider("prov_1", {
-      transport: "http",
       displayName: "Demo edited",
-      endpoint: "https://example.test/mcp",
-      headers: {
-        Authorization: "Bearer ${EXAMPLE_API_KEY}",
-      },
+      config: {transport: {kind: "streamable-http", endpoint: "https://example.test/mcp",
+        headers: {Authorization: "Bearer TEST_TOKEN"},
+      }},
     });
     expect(result.provider.displayName).toBe("Demo edited");
   });

@@ -21,7 +21,7 @@ import (
 	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
 	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
-	mcpconfigstore "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/configstore"
+	mcpplugin "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/plugin"
 	openapiplugin "github.com/orz-i/Mender/backend/internal/openapi/infrastructure/plugin"
 	profileapplication "github.com/orz-i/Mender/backend/internal/profile/application"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
@@ -91,24 +91,21 @@ func TestCredentialBackedHTTPProviderEnforcesProfileScope(t *testing.T) {
 	}
 	ref := credential.Reference()
 
-	provider, err := runtime.RegisterMCPProvider(
-		ctx,
-		catalogapplication.RegisterProviderRequest{
-			Namespace:   "upstream",
-			DisplayName: "Upstream",
-		},
-		mcpconfigstore.Config{
-			Transport: mcpconfigstore.TransportHTTP,
-			Endpoint:  httpServer.URL,
-			CredentialHeaders: []mcpconfigstore.CredentialHeader{
-				{
-					Name:      "Authorization",
-					Scheme:    "Bearer",
-					Reference: ref,
-				},
+	rawMCP, err := json.Marshal(mcpplugin.Config{
+		Transport: mcpplugin.TransportConfig{
+			Kind:     mcpplugin.TransportStreamableHTTP,
+			Endpoint: httpServer.URL,
+			CredentialHeaders: []mcpplugin.CredentialHeader{
+				{Name: "Authorization", Scheme: "Bearer", Reference: ref},
 			},
 		},
-	)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider, err := registerConfiguredProviderTest(t, runtime, ctx, catalogapplication.RegisterProviderRequest{
+		Namespace: "upstream", DisplayName: "Upstream",
+	}, mcpplugin.ID, rawMCP)
 	if err != nil {
 		t.Fatal(err)
 	}

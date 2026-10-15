@@ -325,11 +325,10 @@ func TestManagementAPIEndToEnd(t *testing.T) {
 		t,
 		server.Client(),
 		http.MethodPost,
-		server.URL+"/api/v1/providers/http",
+		server.URL+"/api/v1/providers",
 		map[string]any{
-			"namespace":   "upstream",
-			"displayName": "Upstream",
-			"endpoint":    upstreamHTTP.URL,
+			"namespace": "upstream", "displayName": "Upstream", "pluginId": "io.mender.provider.mcp",
+			"config": map[string]any{"transport": map[string]any{"kind": "streamable-http", "endpoint": upstreamHTTP.URL}},
 		},
 		http.StatusCreated,
 	)
@@ -364,10 +363,8 @@ func TestManagementAPIEndToEnd(t *testing.T) {
 		http.MethodPut,
 		server.URL+"/api/v1/providers/"+providerID,
 		map[string]any{
-			"transport":   "http",
-			"displayName": "Upstream edited",
-			"description": "Edited provider",
-			"endpoint":    upstreamHTTP.URL,
+			"displayName": "Upstream edited", "description": "Edited provider",
+			"config": map[string]any{"transport": map[string]any{"kind": "streamable-http", "endpoint": upstreamHTTP.URL}},
 		},
 		http.StatusOK,
 	)
@@ -809,14 +806,13 @@ func TestManagementAPIResolvesHTTPHeaderTemplatesAtConnectionTime(t *testing.T) 
 		t,
 		server.Client(),
 		http.MethodPost,
-		server.URL+"/api/v1/providers/http",
+		server.URL+"/api/v1/providers",
 		map[string]any{
-			"namespace":   "secured",
-			"displayName": "Secured",
-			"endpoint":    upstreamHTTP.URL,
-			"headers": map[string]any{
-				"Authorization": "Bearer ${" + envName + "}",
-			},
+			"namespace": "secured", "displayName": "Secured", "pluginId": "io.mender.provider.mcp",
+			"config": map[string]any{"transport": map[string]any{
+				"kind": "streamable-http", "endpoint": upstreamHTTP.URL,
+				"headers": map[string]any{"Authorization": "Bearer ${" + envName + "}"},
+			}},
 		},
 		http.StatusCreated,
 	)
@@ -917,12 +913,13 @@ func TestManagementAPICredentialBackedProviderAuth(t *testing.T) {
 		t,
 		server.Client(),
 		http.MethodPost,
-		server.URL+"/api/v1/providers/http",
+		server.URL+"/api/v1/providers",
 		map[string]any{
-			"namespace":         "secured",
-			"displayName":       "Secured",
-			"endpoint":          upstreamHTTP.URL,
-			"credentialHeaders": credentialHeaders,
+			"namespace": "secured", "displayName": "Secured", "pluginId": "io.mender.provider.mcp",
+			"config": map[string]any{"transport": map[string]any{
+				"kind": "streamable-http", "endpoint": upstreamHTTP.URL,
+				"credentialHeaders": credentialHeaders,
+			}},
 		},
 		http.StatusCreated,
 	)

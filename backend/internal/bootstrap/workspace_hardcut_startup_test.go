@@ -2,155 +2,110 @@ package bootstrap
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
-	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
-	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
-	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	profileapplication "github.com/orz-i/Mender/backend/internal/profile/application"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
-	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
 	workspaceplugin "github.com/orz-i/Mender/backend/internal/workspace/infrastructure/plugin"
+	_ "modernc.org/sqlite"
 )
 
-func TestRuntimeStartupMigratesLegacyWorkspaceWithoutChangingToolOrProfile(t *testing.T) {
+// A v1 Workspace Provider is intentionally NOT upgraded by the Runtime.
+// Operators must run the older one-way upgrade before crossing this hard cut.
+// A failed upgrade preserves the exact Tool and Profile authorization rows.
+func TestRuntimeRejectsWorkspaceV1WithoutRewritingToolOrProfile(t *testing.T) {
 	ctx := context.Background()
-	db := filepath.Join(t.TempDir(), "legacy-workspace.db")
-	root, err := filepath.EvalSymlinks(t.TempDir())
+	path := filepath.Join(t.TempDir(), "old-workspace.db")
+	runtime, err := NewRuntime(ctx, RuntimeOptions{DatabasePath: path})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(root, "original.txt"), []byte("persisted workspace"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	old, err := NewRuntime(ctx, RuntimeOptions{DatabasePath: db})
+	caller, err := governancedomain.NewContext(governancedomain.OriginInternal, runtime.OwnerPrincipal(), governancedomain.CatalogScope())
 	if err != nil {
 		t.Fatal(err)
 	}
-	principal := old.OwnerPrincipal()
-	caller, err := governancedomain.NewContext(governancedomain.OriginInternal, principal, governancedomain.CatalogScope())
+	sb, err := runtime.Sandboxes.CreateLocalSandbox(ctx, CreateLocalSandboxRequest{
+		Name: "preupgrade", Root: t.TempDir(), Isolation: "host",
+	}, caller)
 	if err != nil {
 		t.Fatal(err)
 	}
-	sandbox, err := old.Sandboxes.CreateLocalSandbox(ctx, CreateLocalSandboxRequest{Name: "preupgrade", Root: root, Isolation: "host"}, caller)
+	raw, err := json.Marshal(workspaceplugin.Config{SandboxID: sb.ID().String()})
 	if err != nil {
 		t.Fatal(err)
 	}
-	cfg, _ := json.Marshal(workspaceplugin.Config{SandboxID: sandbox.ID().String()})
-	provider, err := old.RegisterConfiguredProvider(ctx, catalogapplication.RegisterProviderRequest{Namespace: "migration-stable", DisplayName: "Migrating Workspace"}, workspaceplugin.ID, cfg, caller)
+	provider, err := runtime.RegisterConfiguredProvider(ctx, catalogapplication.RegisterProviderRequest{
+		Namespace: "workspace-v1-hardcut", DisplayName: "Workspace"}, workspaceplugin.ID, raw, caller)
 	if err != nil {
 		t.Fatal(err)
 	}
-	syncResult, err := old.SyncConfiguredProvider(ctx, provider.ID(), caller)
-	if err != nil || syncResult.Total != 4 {
-		t.Fatalf("sync %+v %v", syncResult, err)
+	result, err := runtime.SyncConfiguredProvider(ctx, provider.ID(), caller)
+	if err != nil || result.Total != 4 {
+		t.Fatalf("sync %+v, %v", result, err)
 	}
-	tools, err := old.Catalog.store.ListProviderTools(ctx, provider.ID())
+	tools, err := runtime.Catalog.store.ListProviderTools(ctx, provider.ID())
+	if err != nil || len(tools) != 4 {
+		t.Fatalf("tools %+v %v", tools, err)
+	}
+	profile, err := runtime.Profiles.Create.Execute(ctx, profileapplication.CreateProfileRequest{
+		Slug: "v1-bound", DisplayName: "Bound", Mode: profiledomain.ExposureDynamic,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	var readID catalogdomain.ToolID
-	for _, tool := range tools {
-		if tool.SourceKey() == "workspace.read" {
-			readID = tool.ID()
+	if _, err = runtime.Profiles.AddTool.Execute(ctx, profileapplication.AddToolRequest{
+		ProfileSlug: profile.Slug(), ToolID: tools[0].ID(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := runtime.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	// Construct an exact pre-hard-cut (v3) schema in a disposable database,
+	// bypassing the current version gate only for this negative fixture.
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	for _, stmt := range []string{
+		"DROP TRIGGER workspace_v2_only_provider_config_insert",
+		"DROP TRIGGER workspace_v2_only_provider_config_update",
+		"DELETE FROM provider_config_schema_migrations WHERE version=4",
+	} {
+		if _, err := db.ExecContext(ctx, stmt); err != nil {
+			t.Fatal(err)
 		}
 	}
-	if readID == "" {
-		t.Fatal("no stable read tool")
-	}
-	profile, err := old.Profiles.Create.Execute(ctx, profileapplication.CreateProfileRequest{Slug: "migration-editor", DisplayName: "Editor", Mode: profiledomain.ExposureDynamic})
-	if err != nil {
+	if _, err := db.ExecContext(ctx,
+		"UPDATE provider_configs SET config_version=1,config_json=? WHERE provider_id=?",
+		`{"root":"/tmp"}`, provider.ID().String()); err != nil {
 		t.Fatal(err)
 	}
-	profile, err = old.Profiles.AddTool.Execute(ctx, profileapplication.AddToolRequest{ProfileSlug: profile.Slug(), ToolID: readID})
-	if err != nil {
-		t.Fatal(err)
+	upgraded, err := NewRuntime(ctx, RuntimeOptions{DatabasePath: path})
+	if err == nil {
+		_ = upgraded.Close()
+		t.Fatal("Workspace v1 silently upgraded")
 	}
-	legacyJSON, _ := json.Marshal(map[string]string{"root": root})
-	legacy, err := providerplugin.NewConfiguration(provider.ID(), workspaceplugin.ID, 1, legacyJSON)
-	if err != nil {
-		t.Fatal(err)
+	if !strings.Contains(err.Error(), "not v2-only") {
+		t.Fatalf("unexpected refusal: %v", err)
 	}
-	if err := old.providerConfigs.Save(ctx, legacy); err != nil {
-		t.Fatal(err)
+	var version int
+	if err := db.QueryRowContext(ctx, "SELECT MAX(version) FROM provider_config_schema_migrations").Scan(&version); err != nil || version != 3 {
+		t.Fatalf("upgrade version=%d err=%v", version, err)
 	}
-	if err := old.Close(); err != nil {
-		t.Fatal(err)
+	var retained int
+	if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM profile_tools WHERE profile_id=? AND tool_id=?", profile.ID().String(), tools[0].ID().String()).Scan(&retained); err != nil || retained != 1 {
+		t.Fatalf("Profile binding lost: count=%d err=%v", retained, err)
 	}
-	upgraded, err := NewRuntime(ctx, RuntimeOptions{DatabasePath: db})
-	if err != nil {
-		t.Fatalf("startup migration: %v", err)
-	}
-	defer func() { _ = upgraded.Close() }()
-	configs, err := upgraded.providerConfigs.GetProviderConfig(ctx, provider.ID())
-	if err != nil || configs.ConfigVersion != 2 {
-		t.Fatalf("migrated config %+v %v", configs, err)
-	}
-	var binding workspaceplugin.Config
-	if err := json.Unmarshal(configs.Config, &binding); err != nil || binding.SandboxID == "" {
-		t.Fatalf("migrated binding %+v %v", binding, err)
-	}
-	if binding.SandboxID == sandbox.ID().String() {
-		t.Fatal("legacy migration should derive stable Provider-owned Sandbox, not reuse old config")
-	}
-	afterTools, err := upgraded.Catalog.store.ListProviderTools(ctx, provider.ID())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(afterTools) != 4 {
-		t.Fatalf("tools missing: %d", len(afterTools))
-	}
-	var sameID bool
-	for _, tool := range afterTools {
-		if tool.SourceKey() == "workspace.read" && tool.ID() == readID {
-			sameID = true
-		}
-	}
-	if !sameID {
-		t.Fatal("ToolID changed after startup migration")
-	}
-	loadedProfile, err := upgraded.Profiles.GetByID.Execute(ctx, profile.ID())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(loadedProfile.Bindings()) != 1 || loadedProfile.Bindings()[0].ToolID() != readID {
-		t.Fatalf("Profile binding lost: %+v", loadedProfile.Bindings())
-	}
-	scope, err := governancedomain.ProfileScope(profile.ID().String())
-	if err != nil {
-		t.Fatal(err)
-	}
-	scopedCaller, err := governancedomain.NewContext(governancedomain.OriginInternal, principal, scope)
-	if err != nil {
-		t.Fatal(err)
-	}
-	outcome, err := upgraded.CallConfiguredTool(ctx, readID, []byte(`{"path":"original.txt"}`), scopedCaller)
-	if err != nil || outcome.Outcome.Kind() != invocationdomain.OutcomeKindComplete {
-		t.Fatalf("post-migration tool: %v %s", err, outcome.Outcome.Kind())
-	}
-	var output struct {
-		Content string `json:"content"`
-	}
-	if err := json.Unmarshal(outcome.Outcome.Content().Bytes(), &output); err != nil || output.Content != "persisted workspace" {
-		t.Fatalf("post-migration file read: %+v %v", output, err)
-	}
-	if err := upgraded.Close(); err != nil {
-		t.Fatal(err)
-	}
-	reopened, err := NewRuntime(ctx, RuntimeOptions{DatabasePath: db})
-	if err != nil {
-		t.Fatalf("repeat startup migration: %v", err)
-	}
-	defer func() { _ = reopened.Close() }()
-	unchanged, err := reopened.providerConfigs.GetProviderConfig(ctx, provider.ID())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if unchanged.Revision != configs.Revision {
-		t.Fatal("idempotent migration changed config revision")
+	if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM tools WHERE provider_id=?", provider.ID().String()).Scan(&retained); err != nil || retained != 4 {
+		t.Fatalf("canonical ToolIDs changed: count=%d err=%v", retained, err)
 	}
 }

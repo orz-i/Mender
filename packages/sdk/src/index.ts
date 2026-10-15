@@ -10,7 +10,6 @@ export type {
   BrowseToolsInput,
   CreateEnvironmentCredentialRequest,
   CreateProviderRequest,
-  CreateHTTPProviderRequest,
   CreateNativeCredentialRequest,
   CreateOpenAITunnelRequest,
   CreateLocalSandboxRequest,
@@ -21,7 +20,6 @@ export type {
   CreateDaytonaSandboxRequest,
   SandboxBackends,
   CreateProfileRequest,
-  CreateStdioProviderRequest,
   Credential,
   CredentialStatus,
   InvocationResult,
@@ -87,6 +85,5 @@ export type {
   ToolDetail,
   ToolSummary,
   Tunnel,
-  UpdateConfiguredProviderRequest,
   UpdateProviderRequest,
 } from "./client";

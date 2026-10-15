@@ -87,14 +87,8 @@ export type ProviderMutationResponse =
   components["schemas"]["ProviderMutationResponse"];
 export type CreateProviderRequest = components["schemas"]["CreateProviderRequest"];
 export type RebindProviderRequest = components["schemas"]["RebindProviderRequest"];
-export type CreateHTTPProviderRequest =
-  components["schemas"]["CreateHTTPProviderRequest"];
-export type CreateStdioProviderRequest =
-  components["schemas"]["CreateStdioProviderRequest"];
 export type UpdateProviderRequest =
   components["schemas"]["UpdateProviderRequest"];
-export type UpdateConfiguredProviderRequest =
-  components["schemas"]["UpdateConfiguredProviderRequest"];
 export type CreateProfileRequest = components["schemas"]["CreateProfileRequest"];
 export type AddProfileToolRequest =
   components["schemas"]["AddProfileToolRequest"];
@@ -152,12 +146,6 @@ export interface MenderClient {
   undeploySkill(deploymentId: string): Promise<void>;
   listProviders(): Promise<{ providers: Provider[] }>;
   createProvider(body: CreateProviderRequest): Promise<ProviderMutationResponse>;
-  createHTTPProvider(
-    body: CreateHTTPProviderRequest,
-  ): Promise<ProviderMutationResponse>;
-  createStdioProvider(
-    body: CreateStdioProviderRequest,
-  ): Promise<ProviderMutationResponse>;
   updateProvider(
     providerId: string,
     body: UpdateProviderRequest,
@@ -421,16 +409,6 @@ export function createMenderClient(
 
     async createProvider(body: CreateProviderRequest) {
       const result = await client.POST("/providers", { body });
-      return requireData(result);
-    },
-
-    async createHTTPProvider(body: CreateHTTPProviderRequest) {
-      const result = await client.POST("/providers/http", { body });
-      return requireData(result);
-    },
-
-    async createStdioProvider(body: CreateStdioProviderRequest) {
-      const result = await client.POST("/providers/stdio", { body });
       return requireData(result);
     },
 

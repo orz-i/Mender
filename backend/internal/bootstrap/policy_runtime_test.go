@@ -354,9 +354,9 @@ func TestProviderDeletionIsBlockedByPolicyReference(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = runtime.DeleteMCPProvider(ctx, tool.ProviderID())
+	err = runtime.DeleteConfiguredProvider(ctx, tool.ProviderID())
 	if !errors.Is(err, ErrProviderInUse) {
-		t.Fatalf("DeleteMCPProvider() error = %v, want ErrProviderInUse", err)
+		t.Fatalf("DeleteConfiguredProvider() error = %v, want ErrProviderInUse", err)
 	}
 }
 

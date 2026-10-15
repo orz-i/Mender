@@ -340,40 +340,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/providers/http": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** @deprecated */
-        post: operations["createHTTPProvider"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/providers/stdio": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** @deprecated */
-        post: operations["createStdioProvider"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/providers/{providerId}/rebind": {
         parameters: {
             query?: never;
@@ -1854,51 +1820,12 @@ export interface components {
                 [key: string]: unknown;
             };
         };
-        CreateHTTPProviderRequest: {
-            namespace: string;
-            displayName: string;
-            description?: string;
-            /** Format: uri */
-            endpoint: string;
-            headers?: components["schemas"]["HeaderTemplates"];
-            credentialHeaders?: components["schemas"]["CredentialHeaderBinding"][];
-        };
-        CreateStdioProviderRequest: {
-            namespace: string;
-            displayName: string;
-            description?: string;
-            executable: string;
-            args?: string[];
-            directory?: string;
-            credentialEnvironment?: components["schemas"]["CredentialEnvironmentBinding"][];
-        };
-        UpdateProviderRequest: components["schemas"]["UpdateConfiguredProviderRequest"] | components["schemas"]["UpdateHTTPProviderRequest"] | components["schemas"]["UpdateStdioProviderRequest"];
-        UpdateConfiguredProviderRequest: {
+        UpdateProviderRequest: {
             displayName: string;
             description?: string;
             config: {
                 [key: string]: unknown;
             };
-        };
-        UpdateHTTPProviderRequest: {
-            /** @constant */
-            transport: "http";
-            displayName: string;
-            description?: string;
-            /** Format: uri */
-            endpoint: string;
-            headers?: components["schemas"]["HeaderTemplates"];
-            credentialHeaders?: components["schemas"]["CredentialHeaderBinding"][];
-        };
-        UpdateStdioProviderRequest: {
-            /** @constant */
-            transport: "stdio";
-            displayName: string;
-            description?: string;
-            executable: string;
-            args?: string[];
-            directory?: string;
-            credentialEnvironment?: components["schemas"]["CredentialEnvironmentBinding"][];
         };
         CredentialHeaderBinding: {
             name: string;
@@ -3040,62 +2967,6 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["CreateProviderRequest"];
-            };
-        };
-        responses: {
-            /** @description Provider created */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProviderMutationResponse"];
-                };
-            };
-            400: components["responses"]["BadRequest"];
-            403: components["responses"]["Forbidden"];
-            409: components["responses"]["Conflict"];
-            502: components["responses"]["BadGateway"];
-        };
-    };
-    createHTTPProvider: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateHTTPProviderRequest"];
-            };
-        };
-        responses: {
-            /** @description Provider created */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProviderMutationResponse"];
-                };
-            };
-            400: components["responses"]["BadRequest"];
-            403: components["responses"]["Forbidden"];
-            409: components["responses"]["Conflict"];
-            502: components["responses"]["BadGateway"];
-        };
-    };
-    createStdioProvider: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateStdioProviderRequest"];
             };
         };
         responses: {

@@ -18,7 +18,6 @@ import (
 	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
 	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
-	mcpconfigstore "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/configstore"
 	mcpplugin "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/plugin"
 	platformplugin "github.com/orz-i/Mender/backend/internal/plugin"
 	installationdomain "github.com/orz-i/Mender/backend/internal/plugin/installation/domain"
@@ -1059,112 +1058,6 @@ func (s *Service) RebindProvider(
 	}, nil
 }
 
-func (s *Service) CreateHTTPProvider(
-	namespace string,
-	displayName string,
-	description string,
-	endpoint string,
-	headers map[string]string,
-	credentialHeaders []CredentialHeader,
-) (ProviderMutationResponse, error) {
-	if strings.TrimSpace(namespace) == "" ||
-		strings.TrimSpace(displayName) == "" ||
-		strings.TrimSpace(endpoint) == "" {
-		return ProviderMutationResponse{}, fmt.Errorf(
-			"namespace, displayName, and endpoint are required",
-		)
-	}
-
-	parsedCredentialHeaders, err := parseCredentialHeaders(credentialHeaders)
-	if err != nil {
-		return ProviderMutationResponse{}, err
-	}
-	provider, err := s.runtime.RegisterMCPProvider(
-		s.ctx,
-		catalogapplication.RegisterProviderRequest{
-			Namespace:   namespace,
-			DisplayName: displayName,
-			Description: description,
-		},
-		mcpconfigstore.Config{
-			Transport:         mcpconfigstore.TransportHTTP,
-			Endpoint:          endpoint,
-			Headers:           cloneHeaders(headers),
-			CredentialHeaders: parsedCredentialHeaders,
-		},
-	)
-	if err != nil {
-		return ProviderMutationResponse{}, err
-	}
-	result, err := s.syncConfiguredProvider(s.ctx, provider.ID())
-	if err != nil {
-		return ProviderMutationResponse{}, err
-	}
-	config, err := s.runtime.ProviderConfig(s.ctx, provider.ID())
-	if err != nil {
-		return ProviderMutationResponse{}, err
-	}
-	descriptor := desktopDescriptorForProviderConfig(s.ctx, s.runtime, config)
-	return ProviderMutationResponse{
-		Provider: providerProjection(provider, &config, descriptor, result.Total),
-		Sync:     syncProjection(result),
-	}, nil
-}
-
-func (s *Service) CreateStdioProvider(
-	namespace string,
-	displayName string,
-	description string,
-	executable string,
-	args []string,
-	directory string,
-	credentialEnvironment []CredentialEnvironment,
-) (ProviderMutationResponse, error) {
-	if strings.TrimSpace(namespace) == "" ||
-		strings.TrimSpace(displayName) == "" ||
-		strings.TrimSpace(executable) == "" {
-		return ProviderMutationResponse{}, fmt.Errorf(
-			"namespace, displayName, and executable are required",
-		)
-	}
-
-	parsedCredentialEnvironment, err := parseCredentialEnvironment(credentialEnvironment)
-	if err != nil {
-		return ProviderMutationResponse{}, err
-	}
-	provider, err := s.runtime.RegisterMCPProvider(
-		s.ctx,
-		catalogapplication.RegisterProviderRequest{
-			Namespace:   namespace,
-			DisplayName: displayName,
-			Description: description,
-		},
-		mcpconfigstore.Config{
-			Transport:             mcpconfigstore.TransportStdio,
-			Executable:            executable,
-			Args:                  append([]string(nil), args...),
-			Directory:             directory,
-			CredentialEnvironment: parsedCredentialEnvironment,
-		},
-	)
-	if err != nil {
-		return ProviderMutationResponse{}, err
-	}
-	result, err := s.syncConfiguredProvider(s.ctx, provider.ID())
-	if err != nil {
-		return ProviderMutationResponse{}, err
-	}
-	config, err := s.runtime.ProviderConfig(s.ctx, provider.ID())
-	if err != nil {
-		return ProviderMutationResponse{}, err
-	}
-	descriptor := desktopDescriptorForProviderConfig(s.ctx, s.runtime, config)
-	return ProviderMutationResponse{
-		Provider: providerProjection(provider, &config, descriptor, result.Total),
-		Sync:     syncProjection(result),
-	}, nil
-}
-
 func (s *Service) UpdateConfiguredProvider(
 	providerID string,
 	displayName string,
@@ -1206,84 +1099,6 @@ func (s *Service) UpdateConfiguredProvider(
 	}, nil
 }
 
-func (s *Service) UpdateProvider(
-	providerID string,
-	displayName string,
-	description string,
-	transport string,
-	endpoint string,
-	headers map[string]string,
-	credentialHeaders []CredentialHeader,
-	executable string,
-	args []string,
-	directory string,
-	credentialEnvironment []CredentialEnvironment,
-) (ProviderMutationResponse, error) {
-	id, err := catalogdomain.ParseProviderID(providerID)
-	if err != nil {
-		return ProviderMutationResponse{}, err
-	}
-	if strings.TrimSpace(displayName) == "" {
-		return ProviderMutationResponse{}, fmt.Errorf("displayName is required")
-	}
-
-	var config mcpconfigstore.Config
-	switch transport {
-	case string(mcpconfigstore.TransportHTTP):
-		parsedCredentialHeaders, parseErr := parseCredentialHeaders(credentialHeaders)
-		if parseErr != nil {
-			return ProviderMutationResponse{}, parseErr
-		}
-		config = mcpconfigstore.Config{
-			Transport:         mcpconfigstore.TransportHTTP,
-			Endpoint:          endpoint,
-			Headers:           cloneHeaders(headers),
-			CredentialHeaders: parsedCredentialHeaders,
-		}
-	case string(mcpconfigstore.TransportStdio):
-		parsedCredentialEnvironment, parseErr := parseCredentialEnvironment(credentialEnvironment)
-		if parseErr != nil {
-			return ProviderMutationResponse{}, parseErr
-		}
-		config = mcpconfigstore.Config{
-			Transport:             mcpconfigstore.TransportStdio,
-			Executable:            executable,
-			Args:                  append([]string(nil), args...),
-			Directory:             directory,
-			CredentialEnvironment: parsedCredentialEnvironment,
-		}
-	default:
-		return ProviderMutationResponse{}, fmt.Errorf("transport must be http or stdio")
-	}
-
-	provider, err := s.runtime.UpdateMCPProvider(
-		s.ctx,
-		id,
-		catalogapplication.UpdateProviderRequest{
-			DisplayName: displayName,
-			Description: description,
-		},
-		config,
-	)
-	if err != nil {
-		return ProviderMutationResponse{}, err
-	}
-	result, err := s.syncConfiguredProvider(s.ctx, id)
-	if err != nil {
-		return ProviderMutationResponse{}, err
-	}
-	stored, err := s.runtime.ProviderConfig(s.ctx, id)
-	if err != nil {
-		return ProviderMutationResponse{}, err
-	}
-	descriptor := desktopDescriptorForProviderConfig(s.ctx, s.runtime, stored)
-
-	return ProviderMutationResponse{
-		Provider: providerProjection(provider, &stored, descriptor, result.Total),
-		Sync:     syncProjection(result),
-	}, nil
-}
-
 func (s *Service) SyncProvider(providerID string) (SyncResult, error) {
 	id, err := catalogdomain.ParseProviderID(providerID)
 	if err != nil {
@@ -1301,7 +1116,7 @@ func (s *Service) DeleteProvider(providerID string) error {
 	if err != nil {
 		return err
 	}
-	return s.runtime.DeleteMCPProvider(s.ctx, id)
+	return s.runtime.DeleteConfiguredProvider(s.ctx, id)
 }
 
 func (s *Service) ListMCPServers() MCPServerList {
@@ -1875,37 +1690,6 @@ func credentialProjection(item credentialdomain.Credential) Credential {
 		CreatedAt:           item.CreatedAt().Format(timeFormat),
 		UpdatedAt:           item.UpdatedAt().Format(timeFormat),
 	}
-}
-
-func parseCredentialHeaders(items []CredentialHeader) ([]mcpconfigstore.CredentialHeader, error) {
-	result := make([]mcpconfigstore.CredentialHeader, 0, len(items))
-	for _, item := range items {
-		ref, err := credentialdomain.ParseReference(item.CredentialRef)
-		if err != nil {
-			return nil, err
-		}
-		result = append(result, mcpconfigstore.CredentialHeader{
-			Name:      item.Name,
-			Scheme:    item.Scheme,
-			Reference: ref,
-		})
-	}
-	return result, nil
-}
-
-func parseCredentialEnvironment(items []CredentialEnvironment) ([]mcpconfigstore.CredentialEnvironment, error) {
-	result := make([]mcpconfigstore.CredentialEnvironment, 0, len(items))
-	for _, item := range items {
-		ref, err := credentialdomain.ParseReference(item.CredentialRef)
-		if err != nil {
-			return nil, err
-		}
-		result = append(result, mcpconfigstore.CredentialEnvironment{
-			Name:      item.Name,
-			Reference: ref,
-		})
-	}
-	return result, nil
 }
 
 func availableProviderPluginProjection(

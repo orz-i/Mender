@@ -56,10 +56,6 @@ export function CreateExternalTunnel(displayName: string, installationID: string
     return $Call.ByID(565443465, displayName, installationID, externalID, credentialRef);
 }
 
-export function CreateHTTPProvider($namespace: string, displayName: string, description: string, endpoint: string, headers: { [_ in string]?: string } | null, credentialHeaders: $models.CredentialHeader[] | null): $CancellablePromise<$models.ProviderMutationResponse> {
-    return $Call.ByID(2466151773, $namespace, displayName, description, endpoint, headers, credentialHeaders);
-}
-
 export function CreateLocalSandbox(input: $models.CreateLocalSandboxInput): $CancellablePromise<$models.Sandbox> {
     return $Call.ByID(2786206366, input);
 }
@@ -86,10 +82,6 @@ export function CreateProvider($namespace: string, displayName: string, descript
 
 export function CreateSSHRemoteSandbox(input: $models.CreateSSHRemoteSandboxInput): $CancellablePromise<$models.Sandbox> {
     return $Call.ByID(2154512183, input);
-}
-
-export function CreateStdioProvider($namespace: string, displayName: string, description: string, executable: string, args: string[] | null, directory: string, credentialEnvironment: $models.CredentialEnvironment[] | null): $CancellablePromise<$models.ProviderMutationResponse> {
-    return $Call.ByID(3677167748, $namespace, displayName, description, executable, args, directory, credentialEnvironment);
 }
 
 export function DeleteAgent(id: string): $CancellablePromise<void> {
@@ -475,10 +467,6 @@ export function UpdateConfiguredProvider(providerID: string, displayName: string
 
 export function UpdatePolicyRule(ruleID: string, input: $models.PolicyRuleInput): $CancellablePromise<$models.PolicyRule> {
     return $Call.ByID(3306678577, ruleID, input);
-}
-
-export function UpdateProvider(providerID: string, displayName: string, description: string, transport: string, endpoint: string, headers: { [_ in string]?: string } | null, credentialHeaders: $models.CredentialHeader[] | null, executable: string, args: string[] | null, directory: string, credentialEnvironment: $models.CredentialEnvironment[] | null): $CancellablePromise<$models.ProviderMutationResponse> {
-    return $Call.ByID(2087755724, providerID, displayName, description, transport, endpoint, headers, credentialHeaders, executable, args, directory, credentialEnvironment);
 }
 
 export function UpdateRuntimeBudget(input: $models.RuntimeBudget): $CancellablePromise<$models.RuntimeGovernanceStatus> {
