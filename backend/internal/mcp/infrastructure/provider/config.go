@@ -11,7 +11,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
-	"github.com/orz-i/Mender/backend/internal/mcp/infrastructure/transportpolicy"
+	"github.com/orz-i/Mender/backend/internal/providerhttp"
 )
 
 // CommandConfig configures a local upstream MCP Provider over stdio.
@@ -66,7 +66,7 @@ func ConnectCommand(ctx context.Context, config CommandConfig) (*Connection, err
 // ConnectHTTP connects to a remote MCP server over Streamable HTTP.
 func ConnectHTTP(ctx context.Context, config HTTPConfig) (*Connection, error) {
 	endpoint := strings.TrimSpace(config.Endpoint)
-	if err := transportpolicy.ValidateHTTPEndpoint(endpoint); err != nil {
+	if err := providerhttp.ValidateEndpoint(endpoint); err != nil {
 		return nil, fmt.Errorf("connect MCP HTTP: %w", err)
 	}
 

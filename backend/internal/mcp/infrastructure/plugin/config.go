@@ -11,7 +11,7 @@ import (
 
 	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
 	"github.com/orz-i/Mender/backend/internal/mcp/infrastructure/headertemplate"
-	"github.com/orz-i/Mender/backend/internal/mcp/infrastructure/transportpolicy"
+	"github.com/orz-i/Mender/backend/internal/providerhttp"
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
 )
 
@@ -99,7 +99,7 @@ func (c Config) Validate() error {
 		if strings.TrimSpace(c.Transport.Endpoint) == "" {
 			return fmt.Errorf("MCP plugin config: HTTP endpoint must not be empty")
 		}
-		if err := transportpolicy.ValidateHTTPEndpoint(c.Transport.Endpoint); err != nil {
+		if err := providerhttp.ValidateEndpoint(c.Transport.Endpoint); err != nil {
 			return fmt.Errorf("MCP plugin config: %w", err)
 		}
 		if err := headertemplate.Validate(c.Transport.Headers); err != nil {
