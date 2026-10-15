@@ -55,6 +55,37 @@ func TestProviderPluginCommandSurface(t *testing.T) {
 	}
 }
 
+func TestProviderAddRetiresLegacyTransportAliases(t *testing.T) {
+	t.Parallel()
+
+	root := NewRootCommand(Options{
+		Stdin:  strings.NewReader(""),
+		Stdout: io.Discard,
+		Stderr: io.Discard,
+	})
+	add, _, err := root.Find([]string{"provider", "add"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, name := range []string{"http", "stdio"} {
+		for _, child := range add.Commands() {
+			if child.Name() == name {
+				t.Fatalf("retired provider add %s alias is still registered", name)
+			}
+		}
+		mcp, _, err := root.Find([]string{"provider", "add", "mcp", name})
+		if err != nil || mcp.Name() != name {
+			t.Fatalf("canonical provider add mcp %s missing: %v", name, err)
+		}
+
+		root.SetArgs([]string{"provider", "add", name})
+		if err := root.ExecuteContext(context.Background()); err == nil {
+			t.Fatalf("retired provider add %s command unexpectedly accepted", name)
+		}
+	}
+}
+
 func TestCredentialNativeCommandDoesNotExposeSecretFlag(t *testing.T) {
 	t.Parallel()
 

@@ -38,6 +38,10 @@ func (a *app) newProviderAddCommand() *cobra.Command {
 	command := &cobra.Command{
 		Use:   "add",
 		Short: "Register a Provider through a built-in plugin",
+		Args:  cobra.NoArgs,
+		RunE: func(*cobra.Command, []string) error {
+			return usageError{err: fmt.Errorf("select a Provider plugin under provider add")}
+		},
 	}
 	command.AddCommand(a.newProviderAddMCPCommand())
 	command.AddCommand(a.newProviderAddOpenAPICommand())
@@ -45,15 +49,6 @@ func (a *app) newProviderAddCommand() *cobra.Command {
 	command.AddCommand(a.newProviderAddWorkspaceCommand())
 	command.AddCommand(a.newProviderAddExternalCommand())
 
-	// Phase 5 compatibility aliases. They are intentionally hidden so normal
-	// CLI discovery teaches plugin-first Provider semantics.
-	legacyHTTP := a.newProviderAddMCPHTTPCommand()
-	legacyHTTP.Hidden = true
-	command.AddCommand(legacyHTTP)
-
-	legacyStdio := a.newProviderAddMCPStdioCommand()
-	legacyStdio.Hidden = true
-	command.AddCommand(legacyStdio)
 	return command
 }
 
