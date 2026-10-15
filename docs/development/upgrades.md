@@ -2,7 +2,7 @@
 
 Mender uses forward-only, context-owned SQLite migrations.
 
-Catalog, Audit, Profiles, Provider plugin configuration, and the transitional MCP compatibility configuration share the configured SQLite database file but maintain separate schema migration tables.
+Catalog, Audit, Profiles, canonical Provider plugin configuration, Agent/Sandbox resources, and Runtime governance share the configured SQLite database file with context-owned migration versions. The legacy MCP configuration store has been retired; there is only one runtime Provider configuration authority.
 
 ## Migration ownership
 
@@ -13,13 +13,17 @@ Current migration tables are:
 - `profile_schema_migrations`,
 - `provider_config_schema_migrations`,
 - `provider_plugin_installation_schema_migrations`,
-- `mcp_config_schema_migrations`.
+- `agent_schema_migrations`,
+- `sandbox_schema_migrations`,
+- `runtime_governance_schema_migrations`.
+
+The retired `mcp_config_schema_migrations` and `provider_config_imports` tables are **not** recreated.
 
 Each bounded context applies only its own migrations.
 
 Migration execution is transactional.
 
-The current generic Provider plugin configuration schema is version 3. Version 2 added nullable `plugin_installation_id` to `provider_configs`; external Provider rows require an exact Installation ID so package upgrades cannot silently retarget a configured Provider. Version 3 adds nullable `credential_refs_json` and `connection_summary` host projections. New/updated Provider configs persist normalized Credential References and bounded connection summary metadata from `InspectConfig` alongside the exact config revision; no resolved secret bytes are stored. A null Credential metadata column on a migrated older row means “not yet normalized”, not “verified empty”. Existing Provider rows retain ProviderID, PluginID, config version/revision, plugin-owned JSON, ToolIDs, Profile bindings, Policy targets, and Audit identity.
+The canonical Provider plugin configuration schema is **version 4**. Version 2 added nullable `plugin_installation_id` to `provider_configs`; external Provider rows require an exact Installation ID so package upgrades cannot silently retarget a configured Provider. Version 3 added nullable `credential_refs_json` and `connection_summary` host projections. New/updated Provider configs persist normalized Credential References and bounded connection summary metadata from `InspectConfig` alongside the exact config revision; no resolved secret bytes are stored. A null Credential metadata column on a migrated older row means “not yet normalized”, not “verified empty”. Existing Provider rows retain ProviderID, PluginID, config version/revision, plugin-owned JSON, ToolIDs, Profile bindings, Policy targets, and Audit identity.
 
 The external Provider plugin installation schema is version 2. Version 1 stored non-secret installation identity and package metadata including PluginID, package version, source kind/reference, content digest, manifest JSON, administrative status, and installation timestamp. Version 2 adds nullable `verified_descriptor_json`, a bounded snapshot of the runtime descriptor verified during installation. Normal plugin catalog reads use this snapshot instead of starting third-party processes. Legacy version-1 rows may be verified/backfilled lazily. Plugin executable/package files remain in the managed plugin root rather than SQLite.
 
@@ -27,7 +31,7 @@ Phase 14 OpenAPI and Phase 15 Model Tools still use the generic Provider table a
 
 Downgrading to a binary that supports only provider-config schema version 2 fails closed during Provider config store startup after version 3 has been recorded; binaries that understand only plugin-installation schema version 1 likewise fail closed after installation schema version 2 is recorded. Restore the pre-upgrade database backup before running such an older binary; do not delete migration rows or rewrite/null new columns to force a downgrade. A binary that understands current schemas but lacks a particular built-in or installed external plugin still fails closed when that Provider is activated rather than substituting another implementation.
 
-The legacy MCP Provider compatibility schema is version 4. Versions 1–3 contain the historical HTTP/stdio projection, including non-secret header templates and Credential References. Version 4 is an ownership sentinel with no additional secret-bearing columns: generic `provider_configs` is the Runtime source of truth, while the old MCP table is temporarily dual-written for first-party compatibility contracts. Pre-Phase-13 binaries that understand at most version 3 therefore fail closed after this migration instead of modifying the compatibility projection during an unsupported downgrade.
+**Provider Config version 4 is a destructive hard-cut upgrade.** It checks that every legacy `mcp_provider_configs` ProviderID has a valid canonical `io.mender.provider.mcp` Plugin configuration at version 1, and that no built-in Workspace Provider remains at ConfigVersion 1. It then atomically removes obsolete `mcp_provider_configs`, `mcp_config_schema_migrations`, and `provider_config_imports` tables, installing SQL guards against reintroducing Workspace v1. A missing/invalid canonical mapping or remaining Workspace v1 causes an error **before any legacy table is removed**. The Runtime no longer imports or dual-writes old MCP configs, nor interprets obsolete flat MCP HTTP/stdio Provider create/update API requests. Only typed plugin configs through generic Provider CRUD remain. An old binary that supports Provider Config schema 3 will fail closed after version 4 is recorded; use a verified backup for any downgrade.
 
 The current Audit schema is version 2. Version 2 adds `error_summary TEXT NOT NULL DEFAULT ''`. Existing Audit rows migrate with an empty summary. New failed Invocations may store only the bounded/redacted diagnostic summary produced at the Invocation boundary; arguments and full result payloads remain absent from Audit storage.
 

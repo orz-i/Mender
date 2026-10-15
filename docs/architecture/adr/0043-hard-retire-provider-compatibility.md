@@ -19,7 +19,7 @@ Workspace Provider v1→Sandbox v2 startup migration is also still invoked on ev
 
 ## Operational and destructive boundary
 
-Runtime code migration will delete **only** the named obsolete SQLite tables and their duplicate MCP configuration rows; it does not remove canonical resources, secret storage, old backup snapshots, or SSH Job remote state. Migration is executed on the operator's **next restart** with the new binary, not by mutating SQLite under the running older client. Take a validated pre-upgrade database snapshot before first deployment. Old CLI/SDK/Wails clients using deleted interfaces must upgrade as part of this hard cut; no compatibility bridge will be added.
+Runtime code migration will delete **only** the named obsolete SQLite tables and their duplicate MCP configuration rows; it does not remove canonical resources, secret storage, old backup snapshots, or SSH Job remote state. Migration is executed on the operator's **next restart** with the new binary, not by mutating SQLite under the running older client. Take a validated pre-upgrade database snapshot before first deployment. Logical SQLite table removal is **not** guaranteed secure erasure of freed pages or historical database backups; cleanup of those backups is an independent retention/security decision. Old CLI/SDK/Wails clients using deleted interfaces must upgrade as part of this hard cut; no compatibility bridge will be added.
 
 ## Non-goals
 
