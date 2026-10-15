@@ -1,6 +1,6 @@
 # Phase 36 — P2 architecture governance closure
 
-- Status: **CODE CLOSED — all constituent quality gates verified** (2026-10-14/15; Mac mini local timezone). Packaged/live deployment acceptance remains separate.
+- Status: **CODE CLOSED; post-restart developer Wails read-only smoke accepted** (2026-10-15, Mac mini local time). Packaged distribution and disruptive production-race acceptance remain separate.
 - Architecture: [ADR-0042](../architecture/adr/0042-p2-contracts-isolation-complexity.md)
 - Operate on `main` with document-first, bounded commits. Preserve `.agents/`, `.pi/`, `.intent-loop/`.
 
@@ -45,4 +45,21 @@ No new compatibility bridge or speculative plugin framework. No mixing Tool Suit
 - Rebuild/restart the Runtime before claiming operational adoption. The Agent schema upgrades to **5** only on the new Runtime's first startup; old binaries that cannot read that schema must not be co-hosted on the upgraded DB.
 - Existing `external_provider=host` persists after upgrade by design. Administrators may opt into `restricted_host` after plugin compatibility review. Existing host-mode processes will not be terminated merely because a new fresh default exists.
 - `restricted_host` constrains selected filesystem paths, not outbound network traffic or kernel/container isolation. The host override is still available for explicitly trusted plugins; successful SDK unit tests cannot establish safety for every third-party executable.
-- Packaged Wails Desktop, third-party native plugin compatibility and production migration read-only smoke were not run in this change. The implementation P2 contracts are closed by isolated evidence; operator deployment remains a separate manual acceptance.
+- The initial code-only acceptance did not include a packaged Wails Desktop, third-party native plugin compatibility or live database smoke. A subsequent **read-only smoke after the operator rebuilt/restarted the developer Wails client** is recorded below. Packaged release, native plugin filesystem compatibility and intentional production grant/race mutations remain untested.
+
+
+### Post-restart developer Wails read-only acceptance (2026-10-15)
+
+After the operator rebuilt/restarted Mender and refreshed the ChatGPT connection, Mac Pi observed a new Wails dev mender-desktop process (PID 23994, launched 16:45:26 Mac local time) and a child OpenAI tunnel-client (PID 24416, launched 16:46:11). lsof confirmed that this exact desktop process has the live Application Support/Mender/mender.db database open rather than a separate test database.
+
+**Read-only production SQLite probes:**
+
+- PRAGMA integrity_check = ok; Agent schema **5**, Profile schema **5**, Sandbox schema **18**, and the Agent v5 migration record exists.
+- agent_facade_provider_config_update_guard exists and includes **config_version**; agent_facade_provider_config_delete_guard and agent_bound_provider_delete_guard are installed. All seven P1 Profile/Policy/Provider reference guards remain installed.
+- Inventory: **2 Agents**, **0 claimed Agent Tool Facades**, **6 Providers**, **25 Tools**, **1 Profile**, **2 persisted Agent Tasks**. No orphan Facade Agent/Provider references, mismatched Facade plugin/version references, orphan Provider configs, dangling Profile ToolBindings, or invalid Policy ProviderID/ToolID references.
+- Persisted isolation: workspace_shell=restricted_host, external_provider=host, tunnel_client=restricted_host. **host for external native Providers is intentionally retained**, as promised by ADR-0042, rather than automatically changed by a migration.
+- Refreshed ChatGPT → Mender MCP discovery found SSH Jobs and Workspace Tools. A previous terminal Rocky SSH Job (sjob_1618d76ba93daa0c1dcbfd26f6a13532) was observed through **read-only** jobs.status: completed, exitCode=0, cancelRequested=false. No remote job was started or replayed.
+
+**Limits:** The production database has no claimed Agent Tool Facades, so this proves the upgraded SQL guard is installed and contains config_version; rejection of deliberately mismatched values is covered by isolated cross-connection Go tests, not by production writes. The UI host-mode warning and acknowledgement have React test coverage, not a packaged-GUI acceptance. No live grants, Provider settings, production database records, credentials, or Rocky task lifecycle were altered by these checks.
+
+**Outcome:** Phase 36 code closure and post-restart developer-Wails read-only deployment smoke accepted. Packaged release, third-party native plugin compatibility and deliberate production race/permission mutations remain outside this acceptance.
