@@ -145,6 +145,9 @@ func (s *Store) CreateRule(ctx context.Context, rule policydomain.Rule) error {
 		rule.UpdatedAt().Format(time.RFC3339Nano),
 	)
 	if err != nil {
+		if strings.Contains(err.Error(), "Policy reference unavailable") {
+			return policyapplication.ErrReferenceConflict
+		}
 		if strings.Contains(strings.ToLower(err.Error()), "unique") ||
 			strings.Contains(strings.ToLower(err.Error()), "primary key") {
 			return policyapplication.ErrRuleConflict
@@ -194,6 +197,9 @@ func (s *Store) UpdateRule(ctx context.Context, rule policydomain.Rule) error {
 		rule.ID().String(),
 	)
 	if err != nil {
+		if strings.Contains(err.Error(), "Policy reference unavailable") {
+			return policyapplication.ErrReferenceConflict
+		}
 		return fmt.Errorf("update policy rule: %w", err)
 	}
 	count, err := result.RowsAffected()

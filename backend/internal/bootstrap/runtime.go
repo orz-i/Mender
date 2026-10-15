@@ -78,22 +78,23 @@ type Runtime struct {
 	ListAudit                   auditapplication.ListRecords
 	ListProviderActivationAudit auditapplication.ListProviderActivations
 
-	audit               *auditsqlite.Store
-	executors           *invocationrouter.Router
-	mcpConfigs          *mcpconfigstore.Store
-	providerPlugins     *providerplugin.Registry
-	providerResolver    providerplugin.Resolver
-	externalResolver    *providerexternal.Resolver
-	providerConfigs     *providerconfigstore.Store
-	pluginInstallations *installationsqlite.Store
-	pluginPackages      *installationlocalfs.Store
-	externalProcesses   *providerexternal.Supervisor
-	tunnelPlugins       *tunnelregistry.Registry
-	providerInstances   *providerplugin.Manager
-	providerActivation  provideractivationapplication.Admit
-	ownerPrincipal      governancedomain.Principal
-	agentStore          *agentsqlite.Store
-	agentLauncher       *agentacp.LocalFactory
+	audit                *auditsqlite.Store
+	executors            *invocationrouter.Router
+	mcpConfigs           *mcpconfigstore.Store
+	providerPlugins      *providerplugin.Registry
+	providerResolver     providerplugin.Resolver
+	externalResolver     *providerexternal.Resolver
+	providerConfigs      *providerconfigstore.Store
+	pluginInstallations  *installationsqlite.Store
+	pluginPackages       *installationlocalfs.Store
+	externalProcesses    *providerexternal.Supervisor
+	tunnelPlugins        *tunnelregistry.Registry
+	providerInstances    *providerplugin.Manager
+	providerDatabasePath string
+	providerActivation   provideractivationapplication.Admit
+	ownerPrincipal       governancedomain.Principal
+	agentStore           *agentsqlite.Store
+	agentLauncher        *agentacp.LocalFactory
 
 	closersMu sync.Mutex
 	closers   []io.Closer
@@ -576,6 +577,7 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		externalProcesses:           externalProcesses,
 		tunnelPlugins:               tunnelRegistry,
 		providerInstances:           providerInstances,
+		providerDatabasePath:        options.DatabasePath,
 		providerActivation:          providerActivation,
 		ownerPrincipal:              ownerPrincipal,
 		agentStore:                  agentStore,
@@ -585,6 +587,11 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 	tunnels.Delete = tunnelapplication.NewDeleteTunnel(tunnels.store, runtimeTunnelUsageChecker{
 		profiles: profiles, active: result.isTunnelActive,
 	})
+	// The shared DB is the final authority for cross-context Tool/Policy refs.
+	// Register persistence guards only after every bounded-context table exists.
+	if err := installProviderReferenceGuards(ctx, options.DatabasePath); err != nil {
+		return nil, errors.Join(fmt.Errorf("compose runtime: provider reference guards: %w", err), result.Close())
+	}
 	return result, nil
 }
 

@@ -14,7 +14,6 @@ import (
 	platformplugin "github.com/orz-i/Mender/backend/internal/plugin"
 	installationdomain "github.com/orz-i/Mender/backend/internal/plugin/installation/domain"
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
-	providerconfigstore "github.com/orz-i/Mender/backend/internal/providerplugin/configstore"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 	sshjobsplugin "github.com/orz-i/Mender/backend/internal/sshjobs/infrastructure/plugin"
 )
@@ -936,35 +935,10 @@ func (r *Runtime) DeleteConfiguredProvider(
 		return err
 	}
 
-	config, err := r.providerConfigs.GetProviderConfig(ctx, providerID)
-	if err != nil && !errors.Is(err, providerconfigstore.ErrNotFound) {
-		return fmt.Errorf("delete configured provider: load config: %w", err)
-	}
-	hadConfig := err == nil
-
 	if err := r.providerInstances.CloseProvider(providerID); err != nil {
 		return fmt.Errorf("delete configured provider: close active instance: %w", err)
 	}
-
-	if hadConfig {
-		if err := r.providerConfigs.Delete(ctx, providerID); err != nil {
-			return fmt.Errorf("delete configured provider: delete config: %w", err)
-		}
-	}
-	if err := r.Catalog.RemoveProvider.Execute(ctx, providerID); err != nil {
-		var restoreErr error
-		if hadConfig {
-			restoreErr = r.providerConfigs.Save(ctx, config)
-		}
-		return errors.Join(
-			fmt.Errorf("delete configured provider: remove provider: %w", err),
-			wrapOptionalError(
-				"delete configured provider: restore config",
-				restoreErr,
-			),
-		)
-	}
-	return nil
+	return deleteConfiguredProviderRows(ctx, r.providerDatabasePath, providerID)
 }
 
 func (r *Runtime) ensureProviderUnused(
@@ -980,7 +954,7 @@ func (r *Runtime) ensureProviderUnused(
 			tool, describeErr := r.Catalog.DescribeTool.Execute(ctx, selection.ToolID)
 			if describeErr != nil {
 				if errors.Is(describeErr, catalogapplication.ErrToolNotFound) {
-					continue
+					return fmt.Errorf("%w: Profile %s contains an unresolved ToolID", ErrProviderInUse, profile.Slug())
 				}
 				return fmt.Errorf(
 					"check provider usage: inspect profile %s: %w",
@@ -1006,12 +980,23 @@ func (r *Runtime) ensureProviderUnused(
 	for _, rule := range policy.Rules() {
 		for _, referencedProviderID := range rule.Match().ProviderIDs() {
 			if referencedProviderID == providerID.String() {
-				return fmt.Errorf(
-					"%w: Policy Rule %s references Provider %s",
-					ErrProviderInUse,
-					rule.ID(),
-					providerID,
-				)
+				return fmt.Errorf("%w: Policy Rule %s references Provider %s", ErrProviderInUse, rule.ID(), providerID)
+			}
+		}
+		for _, rawToolID := range rule.Match().ToolIDs() {
+			toolID, parseErr := catalogdomain.ParseToolID(rawToolID)
+			if parseErr != nil {
+				return fmt.Errorf("%w: Policy Rule %s has invalid ToolID", ErrProviderInUse, rule.ID())
+			}
+			tool, lookupErr := r.Catalog.DescribeTool.Execute(ctx, toolID)
+			if errors.Is(lookupErr, catalogapplication.ErrToolNotFound) {
+				return fmt.Errorf("%w: Policy Rule %s refers to unresolved ToolID", ErrProviderInUse, rule.ID())
+			}
+			if lookupErr != nil {
+				return lookupErr
+			}
+			if tool.ProviderID() == providerID {
+				return fmt.Errorf("%w: Policy Rule %s references Tool %s", ErrProviderInUse, rule.ID(), rawToolID)
 			}
 		}
 	}

@@ -269,6 +269,7 @@ func writeKnownError(w http.ResponseWriter, err error) {
 
 	case errors.Is(err, catalogapplication.ErrNamespaceConflict),
 		errors.Is(err, policyapplication.ErrRuleConflict),
+		errors.Is(err, policyapplication.ErrReferenceConflict),
 		errors.Is(err, credentialapplication.ErrReferenceConflict),
 		errors.Is(err, credentialapplication.ErrCredentialInUse),
 		errors.Is(err, profileapplication.ErrSlugConflict),
