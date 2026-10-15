@@ -66,3 +66,5 @@ Minor implementation choices that remain inside an accepted architectural bounda
 - [ADR-0038: Governed Agent Delegation](0038-governed-agent-delegation.md) — Accepted
 - [ADR-0039: Marketplace Offerings, Resources and Tool Suites](0039-offerings-resource-tool-suites.md) — Accepted
 - [ADR-0040: Versioned optional capability contracts without a Mender job runtime](0040-optional-plugin-capability-contracts.md) — Accepted
+- [ADR-0041: SSH Jobs lifecycle invariants and evidence-bound recovery](0041-ssh-jobs-lifecycle-recovery.md) — Accepted
+- [ADR-0042: P2 durable resource contracts and native plugin isolation posture](0042-p2-contracts-isolation-complexity.md) — Accepted

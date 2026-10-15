@@ -44,7 +44,9 @@ Discovery begins as an application capability around Catalog and may become its 
 
 A bounded context owns its behavior and data semantics.
 
-One context must not reach into another context's repository or database tables as a shortcut. Cross-context collaboration happens through explicit application boundaries.
+One context must not reach into another context's repository or database tables as a shortcut. Cross-context business collaboration happens through explicit application boundaries.
+
+**Narrow persistence exception:** resource retirement and grant acquisition must be serialized at a shared SQLite commit point. Explicit infrastructure-only Provider/Profile/Policy/Agent/Sandbox reference guards and lifecycle CAS may inspect another context's physical rows for that atomicity, as documented by ADR-0039/0041/0042. These constraints need forward-only upgrade tests, cross-connection race fixtures and fail-closed semantics. They are not permission to import foreign repositories into domain/application logic.
 
 A shared physical database does not imply shared domain ownership.
 

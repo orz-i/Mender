@@ -3,44 +3,43 @@
 ## High-level view
 
 ```text
-                          Humans / Agents
-                                |
-       +------------------------+------------------------+
-       |                        |                        |
-       v                        v                        v
-      CLI                 MCP Clients              Agent Skills
-       |                        |                        |
-       +------------------------+------------------------+
-                                |
-                                v
-                    Interfaces / Adapters
-                                |
-                                v
-                      Application Layer
-                                |
-         +-----------+----------+----------+-----------+
-         |           |                     |           |
-         v           v                     v           v
-      Catalog      Profile             Invocation    Policy
-         |                                  ^          ^
-         v                                  |          |
- Provider Activation -----------------------+----------+
-         |                                             |
-         +----------------> Governance <-------------+
-                              |
-                    Principal / Credential / Audit
-                              |
-                              v
-                         Domain Model
-                                ^
-                                |
-              +-----------------+------------------+
-              |                 |                  |
-              v                 v                  v
-         MCP Providers       Storage          Secret Stores
-              |
-              v
-       External systems
+                   External LLMs / Agents
+                       |        |
+               CLI / MCP / Agent Skills
+                       |        |              Managed Tunnel
+                       v        v                    |
+                Protocol / UI Adapters <-------------+
+                       |
+             Catalog or Profile Scope
+             (ToolID / ToolBinding)
+                       |
+                       v
+               Governed Invocation
+             / Principal / Policy /
+             Runtime Budget / Credential
+                 Result Guard / Audit
+                       |
+                       v
+           Canonical Tool / Provider Facade
+                       |
+        +--------------+-----------------+
+        |              |                 |
+        v              v                 v
+   Built-in /      Managed Tool       External native
+   Remote MCP      Suite facades      Plugin Extensions
+   / OpenAPI        (Agent/SSH/             |
+   / Model Tools    Workspace)              |
+        |              |                    |
+        +--------------+--------------------+
+                       |
+              Configured Resources
+         Provider / Agent / Sandbox / Tunnel
+                       |
+           Platform, network, runtime hosts
+
+  Persistence: SQLite context stores + reviewed commit-point guards
+  Secrets: OS Keyring / execution-bound environment (never Catalog)
+  Agent loop, LLM reasoning, planning and model scheduling: external
 ```
 
 ## Core domain language

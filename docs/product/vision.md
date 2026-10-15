@@ -10,15 +10,16 @@ Mender exists to provide a single runtime and management plane for those capabil
 
 ## Product statement
 
-Mender is a local-first tool runtime and gateway for LLMs and agents.
+Mender is a local-first **Tool and Resource aggregation, governance, and supply platform** for external LLMs and Agents. It is not an Agent reasoning/execution loop.
 
-A tool is registered once into Mender's canonical catalog and can then be discovered, authorized, invoked, audited, and exposed through different adapters without duplicating execution logic.
+Mender manages version-pinned native Plugin Packages and typed Extensions, configured Provider/Agent/Sandbox/Tunnel Resources, reviewed Tool Suites and Marketplace integration offerings. Resource ownership and executable Tool exposure are separate decisions. A canonical Tool is registered once and may then be discovered, authorized, invoked, audited, and supplied through CLI, MCP, and Agent Skills without duplicating the governance pipeline.
 
 ## Primary capabilities
 
 Mender should eventually provide:
 
-- Provider plugin registration, installation, configuration, synchronization, and lifecycle management, including explicitly trusted external Provider types.
+- Native Plugin Package installation, exact Extension pinning and independent configured Provider, Agent, Sandbox and Tunnel Resource lifecycles, including explicitly trusted external types.
+- Reviewed integration offerings and host-owned resource-bound Tool Suites; configuration does not imply Profile exposure or Policy authorization.
 - A canonical tool catalog independent from MCP or any other protocol.
 - Search, describe, and invoke workflows for large catalogs.
 - Profiles whose ToolBindings combine membership, exposure, aliases/presentation, and restrictive execution governance.
@@ -56,7 +57,7 @@ Mender is not initially intended to be:
 
 - An agent framework.
 - A model orchestration framework.
-- A new MCP registry or marketplace.
+- A public/unreviewed MCP registry, native-plugin download network, or general-purpose third-party marketplace. Mender's built-in Marketplace is a curated configuration and local Plugin inventory surface.
 - A proprietary replacement for MCP, Agent Skills, or MCPB.
 - A general-purpose workflow engine.
 - A hosted SaaS requirement for local operation.
