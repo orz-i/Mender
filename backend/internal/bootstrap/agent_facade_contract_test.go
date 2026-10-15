@@ -39,20 +39,18 @@ func TestAgentFacadeConfigVersionIsImmutableAcrossSQLiteConnections(t *testing.T
 		t.Fatal(err)
 	}
 	defer func() { _ = independent.Close() }()
-	for _, field := range []string{"config_version", "config_json", "plugin_id", "plugin_installation_id"} {
-		query := "UPDATE provider_configs SET " + field + "=? WHERE provider_id=?"
-		var value any = 2
-		switch field {
-		case "config_json":
-			value = `{"agentId":"agent_attacker"}`
-		case "plugin_id":
-			value = "io.mender.provider.mcp"
-		case "plugin_installation_id":
-			value = "pinst_fake"
-		}
-		_, err := independent.ExecContext(ctx, query, value, state.ProviderID)
+	for _, test := range []struct {
+		name, query string
+		value       any
+	}{
+		{"config_version", "UPDATE provider_configs SET config_version=? WHERE provider_id=?", 2},
+		{"config_json", "UPDATE provider_configs SET config_json=? WHERE provider_id=?", `{"agentId":"agent_attacker"}`},
+		{"plugin_id", "UPDATE provider_configs SET plugin_id=? WHERE provider_id=?", "io.mender.provider.mcp"},
+		{"plugin_installation_id", "UPDATE provider_configs SET plugin_installation_id=? WHERE provider_id=?", "pinst_fake"},
+	} {
+		_, err := independent.ExecContext(ctx, test.query, test.value, state.ProviderID)
 		if err == nil || !strings.Contains(err.Error(), "managed Agent facade config is immutable") {
-			t.Fatalf("update %s error=%v, want facade immutable", field, err)
+			t.Fatalf("update %s error=%v, want facade immutable", test.name, err)
 		}
 	}
 	if _, err := independent.ExecContext(ctx, "UPDATE provider_configs SET revision='metadata-refresh' WHERE provider_id=?", state.ProviderID); err != nil {
