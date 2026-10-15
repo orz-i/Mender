@@ -82,7 +82,7 @@ func (uc AddTool) Execute(
 	if err := uc.repository.SaveProfile(ctx, updated); err != nil {
 		return profiledomain.Profile{}, fmt.Errorf("add profile tool: save: %w", err)
 	}
-	return updated, nil
+	return updated.WithRevision(updated.Revision() + 1), nil
 }
 
 type RemoveToolRequest struct {
@@ -113,5 +113,5 @@ func (uc RemoveTool) Execute(
 	if err := uc.repository.SaveProfile(ctx, updated); err != nil {
 		return profiledomain.Profile{}, fmt.Errorf("remove profile tool: save: %w", err)
 	}
-	return updated, nil
+	return updated.WithRevision(updated.Revision() + 1), nil
 }

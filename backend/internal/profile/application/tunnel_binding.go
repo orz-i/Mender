@@ -38,7 +38,7 @@ func (uc SetTunnel) Execute(
 		if err := uc.repository.SaveProfile(ctx, updated); err != nil {
 			return profiledomain.Profile{}, fmt.Errorf("clear profile tunnel: save: %w", err)
 		}
-		return updated, nil
+		return updated.WithRevision(updated.Revision() + 1), nil
 	}
 	if uc.tunnels == nil {
 		return profiledomain.Profile{}, fmt.Errorf("set profile tunnel: tunnel lookup is unavailable")
@@ -57,5 +57,5 @@ func (uc SetTunnel) Execute(
 	if err := uc.repository.SaveProfile(ctx, updated); err != nil {
 		return profiledomain.Profile{}, fmt.Errorf("set profile tunnel: save: %w", err)
 	}
-	return updated, nil
+	return updated.WithRevision(updated.Revision() + 1), nil
 }

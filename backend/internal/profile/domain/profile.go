@@ -26,6 +26,16 @@ type Profile struct {
 	mode        ExposureMode
 	tunnelID    tunneldomain.TunnelID
 	bindings    []ToolBinding
+	revision    uint64
+}
+
+// Revision is the persisted aggregate revision. It is not a client authority token.
+func (p Profile) Revision() uint64 { return p.revision }
+
+// WithRevision restores the persisted version after an authoritative repository read.
+func (p Profile) WithRevision(revision uint64) Profile {
+	p.revision = revision
+	return p
 }
 
 // NewProfile is the legacy membership constructor retained while adapters migrate.

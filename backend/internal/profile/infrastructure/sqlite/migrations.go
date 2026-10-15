@@ -28,7 +28,7 @@ func migrate(ctx context.Context, db *sql.DB) error {
 	).Scan(&recordedVersion); err != nil {
 		return fmt.Errorf("check profile schema version: %w", err)
 	}
-	const latestSupportedVersion = 4
+	const latestSupportedVersion = 5
 	if recordedVersion.Valid && recordedVersion.Int64 > latestSupportedVersion {
 		return fmt.Errorf(
 			"profile schema version %d is newer than supported version %d",
@@ -146,6 +146,19 @@ func migrate(ctx context.Context, db *sql.DB) error {
 			time.Now().UTC().Format(time.RFC3339Nano),
 		); err != nil {
 			return fmt.Errorf("record profile migration 4: %w", err)
+		}
+	}
+
+	applied = 0
+	if err := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM profile_schema_migrations WHERE version = 5").Scan(&applied); err != nil {
+		return fmt.Errorf("check profile migration 5: %w", err)
+	}
+	if applied == 0 {
+		if _, err := tx.ExecContext(ctx, "ALTER TABLE profiles ADD COLUMN revision INTEGER NOT NULL DEFAULT 0 CHECK(revision >= 0)"); err != nil {
+			return fmt.Errorf("apply profile migration 5: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx, "INSERT INTO profile_schema_migrations(version, applied_at) VALUES (5, ?)", time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
+			return fmt.Errorf("record profile migration 5: %w", err)
 		}
 	}
 

@@ -17,50 +17,22 @@ func (p Profile) AddBinding(binding ToolBinding) (Profile, error) {
 	}
 	bindings := p.Bindings()
 	bindings = append(bindings, binding)
-	return NewProfileWithBindingsAndTunnel(
-		p.id,
-		p.slug,
-		p.displayName,
-		p.mode,
-		p.tunnelID,
-		bindings,
-	)
+	return p.rebuild(bindings, p.tunnelID)
 }
 
 // ReplaceBindings returns the same Profile identity with an exact ToolBinding set.
 func (p Profile) ReplaceBindings(bindings []ToolBinding) (Profile, error) {
-	return NewProfileWithBindingsAndTunnel(
-		p.id,
-		p.slug,
-		p.displayName,
-		p.mode,
-		p.tunnelID,
-		bindings,
-	)
+	return p.rebuild(bindings, p.tunnelID)
 }
 
 // SetTunnel returns the same Profile with one Tunnel binding.
 func (p Profile) SetTunnel(tunnelID tunneldomain.TunnelID) (Profile, error) {
-	return NewProfileWithBindingsAndTunnel(
-		p.id,
-		p.slug,
-		p.displayName,
-		p.mode,
-		tunnelID,
-		p.bindings,
-	)
+	return p.rebuild(p.bindings, tunnelID)
 }
 
 // ClearTunnel returns the same Profile with no Tunnel binding.
 func (p Profile) ClearTunnel() (Profile, error) {
-	return NewProfileWithBindingsAndTunnel(
-		p.id,
-		p.slug,
-		p.displayName,
-		p.mode,
-		"",
-		p.bindings,
-	)
+	return p.rebuild(p.bindings, "")
 }
 
 // AddTool is the legacy membership mutation retained while application adapters migrate.
@@ -99,12 +71,14 @@ func (p Profile) RemoveTool(toolID catalogdomain.ToolID) (Profile, error) {
 			bindings = append(bindings, binding)
 		}
 	}
-	return NewProfileWithBindingsAndTunnel(
-		p.id,
-		p.slug,
-		p.displayName,
-		p.mode,
-		p.tunnelID,
-		bindings,
-	)
+	return p.rebuild(bindings, p.tunnelID)
+}
+
+// rebuild preserves the read aggregate revision for optimistic concurrency.
+func (p Profile) rebuild(bindings []ToolBinding, tunnelID tunneldomain.TunnelID) (Profile, error) {
+	next, err := NewProfileWithBindingsAndTunnel(p.id, p.slug, p.displayName, p.mode, tunnelID, bindings)
+	if err != nil {
+		return Profile{}, err
+	}
+	return next.WithRevision(p.revision), nil
 }

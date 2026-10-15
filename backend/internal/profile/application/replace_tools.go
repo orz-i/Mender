@@ -74,5 +74,5 @@ func (uc ReplaceTools) Execute(
 			err,
 		)
 	}
-	return updated, nil
+	return updated.WithRevision(updated.Revision() + 1), nil
 }

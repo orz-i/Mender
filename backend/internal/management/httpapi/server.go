@@ -272,6 +272,8 @@ func writeKnownError(w http.ResponseWriter, err error) {
 		errors.Is(err, credentialapplication.ErrReferenceConflict),
 		errors.Is(err, credentialapplication.ErrCredentialInUse),
 		errors.Is(err, profileapplication.ErrSlugConflict),
+		errors.Is(err, profileapplication.ErrRevisionConflict),
+		errors.Is(err, profileapplication.ErrToolReferenceConflict),
 		errors.Is(err, profileapplication.ErrBindingNameConflict),
 		errors.Is(err, installationapplication.ErrInstallationConflict),
 		errors.Is(err, installationapplication.ErrPackageAlreadyInstalled),
