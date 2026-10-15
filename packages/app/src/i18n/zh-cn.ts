@@ -421,6 +421,8 @@ export const zhCNMessages: Readonly<Record<string, string>> = {
   "Isolation changes host filesystem authority; it does not change Policy decisions.": "隔离会改变主机文件系统权限，但不会改变策略判定。",
   "Workspace shell": "工作区 Shell",
   "External Providers": "外部提供方",
+  "External native Providers use the Runtime user's full host process authority in Host mode. Install only trusted plugins; restricted_host limits filesystem access but not network egress.": "外部原生提供方使用主机模式时，拥有运行时用户的完整本地进程权限。只安装可信插件；restricted_host 约束文件系统访问，但不限制网络出口。",
+  "I trust the installed external native plugins and accept unrestricted Host process access.": "我信任已安装的外部原生插件，并接受不受限制的主机进程访问权限。",
   "Host": "主机",
   "Save isolation": "保存隔离设置",
   "Saving…": "正在保存…",

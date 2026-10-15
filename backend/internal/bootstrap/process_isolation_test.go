@@ -74,3 +74,36 @@ func TestTunnelClientIsolationLauncherFailsWhenExecutableMissing(t *testing.T) {
 		t.Fatal("Command() error = nil for missing tunnel-client")
 	}
 }
+
+// Native Provider children must be wrapped by the platform's verified
+// restriction when a fresh Runtime elects restricted_host. Do not silently
+// execute the underlying binary with full host authority.
+func TestFreshExternalProviderUsesVerifiedRestrictedHostLauncher(t *testing.T) {
+	ctx := context.Background()
+	governance, err := NewRuntimeGovernance(ctx, filepath.Join(t.TempDir(), "mender.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = governance.Close() }()
+	if !governance.IsolationBackend().RestrictedHostAvailable {
+		t.Skip("no verified restricted host backend")
+	}
+	isolation, err := governance.GetIsolation.Execute(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if isolation.ExternalProvider() != runtimegovernancedomain.IsolationRestrictedHost {
+		t.Fatalf("fresh native Provider isolation = %s", isolation.ExternalProvider())
+	}
+	root := t.TempDir()
+	cmd, err := (externalProviderIsolationLauncher{governance: governance}).Command(ctx, "/bin/true", root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cmd.Path == "/bin/true" {
+		t.Fatal("restricted external Provider bypassed the isolation wrapper")
+	}
+	if len(cmd.Args) == 0 || cmd.Args[0] == "/bin/true" {
+		t.Fatalf("unexpected unrestricted command: %q", cmd.Args)
+	}
+}

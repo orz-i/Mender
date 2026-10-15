@@ -14,7 +14,7 @@ func TestDefaultIsolationIncludesTunnelClient(t *testing.T) {
 
 	restricted := DefaultIsolation(true)
 	if restricted.WorkspaceShell() != IsolationRestrictedHost ||
-		restricted.ExternalProvider() != IsolationHost ||
+		restricted.ExternalProvider() != IsolationRestrictedHost ||
 		restricted.TunnelClient() != IsolationRestrictedHost {
 		t.Fatalf("restricted default = %#v", restricted.Spec())
 	}

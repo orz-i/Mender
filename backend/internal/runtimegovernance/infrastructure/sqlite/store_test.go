@@ -122,3 +122,31 @@ func TestStoreDefaultsAndUpdatesBudget(t *testing.T) {
 		t.Fatalf("loaded isolation = %#v", loadedIsolation.Spec())
 	}
 }
+
+// Existing operators may have deliberately permitted native Provider plugins
+// to run with host privileges. Upgrading to the safer fresh default must not
+// silently rewrite their persisted choice or restart those processes.
+func TestStorePreservesLegacyHostProviderAfterSaferDefault(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "runtime.db")
+	first, err := Open(ctx, path, runtimegovernancedomain.DefaultIsolation(false))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := first.Close(); err != nil {
+		t.Fatal(err)
+	}
+	second, err := Open(ctx, path, runtimegovernancedomain.DefaultIsolation(true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = second.Close() }()
+	got, err := second.GetIsolation(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ExternalProvider() != runtimegovernancedomain.IsolationHost {
+		t.Fatalf("reopen mutated persisted native Provider authority: %v", got.ExternalProvider())
+	}
+}

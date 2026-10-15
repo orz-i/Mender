@@ -182,9 +182,9 @@ ExternalProvider = host | restricted_host
 Fresh defaults:
 
 - WorkspaceShell = restricted_host when the backend is available at first initialization, otherwise host;
-- ExternalProvider = host.
+- ExternalProvider = host (**historical Phase 23 baseline**; replaced for new settings rows by ADR-0042).
 
-The default asymmetry is deliberate. workspace.shell is an explicitly arbitrary-command capability under Mender control. External Provider plugins may legitimately require host-visible files and integrations; administrators opt into restricted_host after validating requirements.
+The original default asymmetry was chosen for external-plugin compatibility. **ADR-0042 now chooses restricted_host for fresh external Providers when verified support is available**, while preserving any persisted host choice; operators can explicitly select host for plugins requiring additional filesystem access. Neither mode implies network-egress policy or a VM/container boundary.
 
 Persisted restricted_host never silently degrades to host when support later disappears.
 

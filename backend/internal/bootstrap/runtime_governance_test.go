@@ -59,8 +59,8 @@ func TestRuntimeGovernanceInitialIsolationFollowsBackendAvailability(t *testing.
 			governance.processIsolation.Info(),
 		)
 	}
-	if isolation.ExternalProvider() != runtimegovernancedomain.IsolationHost {
-		t.Fatalf("external Provider isolation = %q, want host", isolation.ExternalProvider())
+	if isolation.ExternalProvider() != expectedWorkspace {
+		t.Fatalf("external Provider isolation = %q, want %q", isolation.ExternalProvider(), expectedWorkspace)
 	}
 	if isolation.TunnelClient() != expectedWorkspace {
 		t.Fatalf(

@@ -117,7 +117,7 @@ Runtime Budget:
 Runtime Isolation:
 
 - workspace.shell: restricted_host when backend is available at first initialization, otherwise host;
-- external Provider: host.
+- external Provider: host (Phase 23 initial default; **superseded for fresh settings by ADR-0042 / Phase 36**).
 
 Persisted restricted_host remains fail-closed if support later disappears.
 

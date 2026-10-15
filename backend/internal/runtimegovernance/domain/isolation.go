@@ -36,8 +36,10 @@ func DefaultIsolation(restrictedHostAvailable bool) Isolation {
 		workspace = IsolationRestrictedHost
 	}
 	value, err := NewIsolation(IsolationSpec{
-		WorkspaceShell:   workspace,
-		ExternalProvider: IsolationHost,
+		WorkspaceShell: workspace,
+		// Fresh native plugins use verified restricted host when supported;
+		// persisted choices, including explicit host, are never rewritten.
+		ExternalProvider: workspace,
 		TunnelClient:     workspace,
 	})
 	if err != nil {

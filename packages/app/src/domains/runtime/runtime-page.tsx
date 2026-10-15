@@ -70,6 +70,7 @@ export function RuntimePage({ client }: { client: MenderClient }) {
   const [busy, setBusy] = useState("");
   const [editor, setEditor] = useState<"budget" | "isolation" | null>(null);
   const [focus, setFocus] = useState<"status" | "budget" | "isolation">("status");
+  const [acknowledgeExternalHost, setAcknowledgeExternalHost] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -108,7 +109,7 @@ export function RuntimePage({ client }: { client: MenderClient }) {
   }
 
   async function saveIsolation() {
-    if (isolation === null) return;
+    if (isolation === null || (externalHostEscalation && !acknowledgeExternalHost)) return;
     setBusy("isolation");
     try {
       const next = await client.updateRuntimeIsolation(isolation);
@@ -117,6 +118,7 @@ export function RuntimePage({ client }: { client: MenderClient }) {
       setIsolation(next.isolation);
       setError("");
       setEditor(null);
+      setAcknowledgeExternalHost(false);
     } catch (reason) {
       setError(errorMessage(reason));
     } finally {
@@ -124,6 +126,7 @@ export function RuntimePage({ client }: { client: MenderClient }) {
     }
   }
 
+  const externalHostEscalation = status?.isolation.externalProvider === "restricted_host" && isolation?.externalProvider === "host";
   const restrictedAvailable = status?.backend.restrictedHostAvailable ?? false;
 
   return (
@@ -146,7 +149,7 @@ export function RuntimePage({ client }: { client: MenderClient }) {
           focus === "budget" ? (
             <Button size="sm" variant="outline" disabled={budget === null} onClick={() => setEditor("budget")}>{t("Edit")}</Button>
           ) : focus === "isolation" ? (
-            <Button size="sm" variant="outline" disabled={isolation === null} onClick={() => setEditor("isolation")}>{t("Edit")}</Button>
+            <Button size="sm" variant="outline" disabled={isolation === null} onClick={() => { setAcknowledgeExternalHost(false); setEditor("isolation"); }}>{t("Edit")}</Button>
           ) : null
         }
       />
@@ -178,6 +181,7 @@ export function RuntimePage({ client }: { client: MenderClient }) {
                 <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium">{t((isolation?.[key] ?? "host") === "host" ? "Host" : "Restricted host")}</span>
               </div>
             ))}
+            {isolation?.externalProvider === "host" ? <p role="status" className="pt-4 text-xs leading-5 text-muted-foreground">{t("External native Providers use the Runtime user's full host process authority in Host mode. Install only trusted plugins; restricted_host limits filesystem access but not network egress.")}</p> : null}
             <p className="pt-4 text-xs leading-5 text-muted-foreground">{restrictedAvailable
               ? t("restricted_host provides host containment, not a VM or container. Network access remains available in this phase.")
               : t("restricted_host is unavailable on this Runtime. Host mode keeps the local process authority of the Runtime user.")}</p>
@@ -198,16 +202,20 @@ export function RuntimePage({ client }: { client: MenderClient }) {
           <DialogFooter><Button variant="outline" disabled={busy !== ""} onClick={() => { setBudget(status?.budget ?? null); setEditor(null); }}>{t("Cancel")}</Button><Button disabled={busy !== ""} onClick={() => void saveBudget()}>{busy === "budget" ? t("Saving…") : t("Save budget")}</Button></DialogFooter>
         </DialogContent>
       </Dialog>
-      <Dialog open={editor === "isolation"} onOpenChange={(open) => { if (!open && !busy) { setEditor(null); setIsolation(status?.isolation ?? null); } }}>
+      <Dialog open={editor === "isolation"} onOpenChange={(open) => { if (!open && !busy) { setEditor(null); setIsolation(status?.isolation ?? null); setAcknowledgeExternalHost(false); } }}>
         <DialogContent className="sm:max-w-xl">
           <DialogHeader><DialogTitle>{t("Process isolation")}</DialogTitle><DialogDescription>{t("Isolation changes host filesystem authority; it does not change Policy decisions.")}</DialogDescription></DialogHeader>
           <div className="grid gap-5">
             {(["workspaceShell", "externalProvider", "tunnelClient"] as const).map((key, i) => <IsolationField key={key}
               label={[t("Workspace shell"), t("External Providers"), t("Tunnel client")][i]!}
               value={isolation?.[key] ?? "host"} restrictedAvailable={restrictedAvailable}
-              onChange={(value) => setIsolation((current) => current === null ? null : { ...current, [key]: value })} />)}
+              onChange={(value) => { setAcknowledgeExternalHost(false); setIsolation((current) => current === null ? null : { ...current, [key]: value }); }} />)}
+            {externalHostEscalation ? <label className="flex items-start gap-2 rounded-lg border border-border p-3 text-xs leading-5">
+              <input type="checkbox" className="mt-1 size-4 accent-foreground" checked={acknowledgeExternalHost} onChange={(event) => setAcknowledgeExternalHost(event.target.checked)} />
+              <span>{t("I trust the installed external native plugins and accept unrestricted Host process access.")}</span>
+            </label> : null}
           </div>
-          <DialogFooter><Button variant="outline" disabled={busy !== ""} onClick={() => { setIsolation(status?.isolation ?? null); setEditor(null); }}>{t("Cancel")}</Button><Button disabled={busy !== ""} onClick={() => void saveIsolation()}>{busy === "isolation" ? t("Saving…") : t("Save isolation")}</Button></DialogFooter>
+          <DialogFooter><Button variant="outline" disabled={busy !== ""} onClick={() => { setIsolation(status?.isolation ?? null); setEditor(null); setAcknowledgeExternalHost(false); }}>{t("Cancel")}</Button><Button disabled={busy !== "" || (externalHostEscalation && !acknowledgeExternalHost)} onClick={() => void saveIsolation()}>{busy === "isolation" ? t("Saving…") : t("Save isolation")}</Button></DialogFooter>
         </DialogContent>
       </Dialog>
 
