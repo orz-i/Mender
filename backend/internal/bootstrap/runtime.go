@@ -21,11 +21,6 @@ import (
 	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	governancelocaluser "github.com/orz-i/Mender/backend/internal/governance/infrastructure/localuser"
 	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
-	invocationevents "github.com/orz-i/Mender/backend/internal/invocation/infrastructure/events"
-	invocationexecutionguard "github.com/orz-i/Mender/backend/internal/invocation/infrastructure/executionguard"
-	invocationidentity "github.com/orz-i/Mender/backend/internal/invocation/infrastructure/identity"
-	invocationjsonschema "github.com/orz-i/Mender/backend/internal/invocation/infrastructure/jsonschema"
-	invocationresultguard "github.com/orz-i/Mender/backend/internal/invocation/infrastructure/resultguard"
 	invocationrouter "github.com/orz-i/Mender/backend/internal/invocation/infrastructure/router"
 	mcpconfigstore "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/configstore"
 	platformplugin "github.com/orz-i/Mender/backend/internal/plugin"
@@ -35,7 +30,6 @@ import (
 	policylocal "github.com/orz-i/Mender/backend/internal/policy/infrastructure/local"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 	provideractivationapplication "github.com/orz-i/Mender/backend/internal/provideractivation/application"
-	provideractivationidentity "github.com/orz-i/Mender/backend/internal/provideractivation/infrastructure/identity"
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
 	providerbuiltin "github.com/orz-i/Mender/backend/internal/providerplugin/builtin"
 	providerconfigstore "github.com/orz-i/Mender/backend/internal/providerplugin/configstore"
@@ -488,43 +482,19 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		return nil, fmt.Errorf("compose runtime: skills: %w", err)
 	}
 
-	ids := invocationidentity.NewGenerator()
-	providerActivation := provideractivationapplication.NewAdmit(
-		policies.Evaluate,
-		approvalGate,
-		runtimeGovernance.controller,
-		auditStore,
-		provideractivationidentity.NewGenerator(),
-		systemClock{},
-	)
-
-	schemaValidator := invocationjsonschema.Validator{}
-	bindingExecutionGuard := options.BindingExecutionGuard
-	if bindingExecutionGuard == nil {
-		bindingExecutionGuard = invocationexecutionguard.NewProfileBindingSerial()
-	}
-	observer := options.InvocationObserver
-	if observer == nil {
-		observer = invocationevents.NoopObserver{}
-	}
-	invokeTool := invocationapplication.NewInvokeTool(
-		catalog.store,
-		newInvocationProfileScopeResolver(profiles.GetByID),
-		schemaValidator,
-		newInvocationGovernanceFactExtractor(providerConfigs, providerPlugins),
-		newInvocationPolicyEvaluator(policies.Evaluate),
-		approvalGate,
-		runtimeGovernance.controller,
-		bindingExecutionGuard,
-		invocationresultguard.New(schemaValidator),
-		observer,
-		executors,
-		credentials.Resolver,
-		auditStore,
-		ids,
-		systemClock{},
-		options.DefaultTimeout,
-	)
+	providerActivation, invokeTool := (runtimeInvocationWiring{
+		options:         options,
+		catalog:         catalog,
+		profiles:        profiles,
+		providerConfigs: providerConfigs,
+		plugins:         providerPlugins,
+		policy:          policies,
+		governance:      runtimeGovernance,
+		executors:       executors,
+		credentials:     credentials,
+		audit:           auditStore,
+		approval:        approvalGate,
+	}).compose()
 
 	agents, agentStore, agentLauncher, err := newAgents(ctx, options.DatabasePath, ownerPrincipal, profiles, policies, runtimeGovernance, options.AgentExecutor)
 	if err != nil {
