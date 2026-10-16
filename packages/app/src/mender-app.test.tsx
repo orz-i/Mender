@@ -116,7 +116,12 @@ describe("MenderApp", () => {
     fireEvent.click(collapse);
 
     const expand = screen.getByRole("button", { name: "Expand sidebar" });
+    const logoContainer = document.querySelector('[data-slot="sidebar-brand-logo"]');
     expect(brand?.contains(expand)).toBe(true);
+    expect(logoContainer?.contains(expand)).toBe(true);
+    expect(brand?.classList.contains("justify-center")).toBe(true);
+    expect(expand.classList.contains("opacity-0")).toBe(true);
+    expect(expand.classList.contains("group-hover/brand:opacity-100")).toBe(true);
     expect(screen.getByRole("link", { name: "Providers" })).toBeTruthy();
     expect(window.localStorage.getItem("mender.sidebar.collapsed")).toBe("true");
 

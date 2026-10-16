@@ -164,37 +164,68 @@ export function ManagementShell({ client }: { client: MenderClient }) {
           className={[
             "flex h-[88px] shrink-0 items-center",
             collapsed
-              ? "justify-center px-2 lg:justify-between lg:px-1"
+              ? "justify-center px-2"
               : "justify-center px-3 lg:justify-start lg:gap-3 lg:px-5",
           ].join(" ")}
         >
-          <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-foreground text-background">
-            <BlocksIcon className="size-[19px]" aria-hidden="true" />
-          </div>
-          {!collapsed ? (
-            <div className="hidden min-w-0 flex-1 lg:block">
-              <p className="truncate text-[23px] leading-6 font-semibold tracking-[-0.045em]">Mender</p>
-            </div>
-          ) : null}
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  aria-label={t(collapsed ? "Expand sidebar" : "Collapse sidebar")}
-                  onClick={() => setCollapsed((current) => !current)}
-                  className="hidden size-8 shrink-0 text-muted-foreground hover:text-foreground lg:inline-flex"
-                />
-              }
+          {collapsed ? (
+            <div
+              data-slot="sidebar-brand-logo"
+              className="group/brand relative flex size-9 shrink-0 items-center justify-center rounded-xl bg-foreground text-background"
             >
-              {collapsed ? <PanelLeftOpenIcon /> : <PanelLeftCloseIcon />}
-            </TooltipTrigger>
-            <TooltipContent side="right">
-              {t(collapsed ? "Expand sidebar" : "Collapse sidebar")}
-            </TooltipContent>
-          </Tooltip>
+              <BlocksIcon
+                className="size-[19px] transition-opacity duration-150 group-hover/brand:opacity-0"
+                aria-hidden="true"
+              />
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      aria-label={t("Expand sidebar")}
+                      onClick={() => setCollapsed(false)}
+                      className="absolute inset-0 size-9 rounded-xl text-background opacity-0 transition-opacity duration-150 hover:bg-foreground/80 hover:text-background focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-ring group-hover/brand:opacity-100"
+                    />
+                  }
+                >
+                  <PanelLeftOpenIcon className="size-[19px]" />
+                </TooltipTrigger>
+                <TooltipContent side="right">
+                  {t("Expand sidebar")}
+                </TooltipContent>
+              </Tooltip>
+            </div>
+          ) : (
+            <>
+              <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-foreground text-background">
+                <BlocksIcon className="size-[19px]" aria-hidden="true" />
+              </div>
+              <div className="hidden min-w-0 flex-1 lg:block">
+                <p className="truncate text-[23px] leading-6 font-semibold tracking-[-0.045em]">Mender</p>
+              </div>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      aria-label={t("Collapse sidebar")}
+                      onClick={() => setCollapsed(true)}
+                      className="hidden size-8 shrink-0 text-muted-foreground hover:text-foreground lg:inline-flex"
+                    />
+                  }
+                >
+                  <PanelLeftCloseIcon />
+                </TooltipTrigger>
+                <TooltipContent side="right">
+                  {t("Collapse sidebar")}
+                </TooltipContent>
+              </Tooltip>
+            </>
+          )}
         </div>
 
         <nav
