@@ -139,10 +139,8 @@ func (r Runner) ExecuteConfigured(ctx context.Context, agent agentdomain.Agent, 
 		return "", fmt.Errorf("%w: invalid Task prompt", agentdomain.ErrInvalid)
 	}
 	return r.withSession(ctx, agent, config, func(wire *stream, sessionID string, session json.RawMessage, readErrors <-chan error) (string, error) {
-		if config.Model != "" {
-			if err := selectModel(ctx, wire, sessionID, session, config.Model); err != nil {
-				return "", err
-			}
+		if err := applySessionChoices(ctx, wire, sessionID, session, config.Model, config.ReasoningEffort); err != nil {
+			return "", err
 		}
 		var result strings.Builder
 		var outputOverflow bool

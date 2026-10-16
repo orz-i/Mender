@@ -66,17 +66,18 @@ func (b Backend) PluginID() platformplugin.ID {
 }
 
 type Spec struct {
-	ID            ID                         `json:"agentId"`
-	Name          string                     `json:"name"`
-	Backend       Backend                    `json:"backend"`
-	PluginID      platformplugin.ID          `json:"pluginId"`
-	ExtensionID   platformplugin.ExtensionID `json:"extensionId"`
-	WorkspaceRoot string                     `json:"workspaceRoot"`
-	DefaultModel  string                     `json:"defaultModel,omitempty"`
-	Isolation     string                     `json:"isolation"`
-	OwnerKind     string                     `json:"ownerKind"`
-	OwnerRef      string                     `json:"ownerRef"`
-	CreatedAt     time.Time                  `json:"createdAt"`
+	ID                     ID                         `json:"agentId"`
+	Name                   string                     `json:"name"`
+	Backend                Backend                    `json:"backend"`
+	PluginID               platformplugin.ID          `json:"pluginId"`
+	ExtensionID            platformplugin.ExtensionID `json:"extensionId"`
+	WorkspaceRoot          string                     `json:"workspaceRoot"`
+	DefaultModel           string                     `json:"defaultModel,omitempty"`
+	DefaultReasoningEffort string                     `json:"defaultReasoningEffort,omitempty"`
+	Isolation              string                     `json:"isolation"`
+	OwnerKind              string                     `json:"ownerKind"`
+	OwnerRef               string                     `json:"ownerRef"`
+	CreatedAt              time.Time                  `json:"createdAt"`
 }
 
 // Agent is a configured Resource bound to one built-in Backend, not a Provider.
@@ -94,6 +95,9 @@ func NewAgent(spec Spec) (Agent, error) {
 		return Agent{}, fmt.Errorf("%w: invalid display name", ErrInvalid)
 	}
 	if err := ValidateModel(spec.DefaultModel); err != nil {
+		return Agent{}, err
+	}
+	if err := ValidateReasoningEffort(spec.DefaultReasoningEffort); err != nil {
 		return Agent{}, err
 	}
 	if spec.WorkspaceRoot == "" || !filepath.IsAbs(spec.WorkspaceRoot) ||
@@ -123,6 +127,21 @@ func ValidateModel(model string) error {
 	if len(model) > 128 || strings.TrimSpace(model) != model ||
 		strings.ContainsAny(model, "\x00\r\n\t") {
 		return fmt.Errorf("%w: invalid model identifier", ErrInvalid)
+	}
+	return nil
+}
+
+// ValidateReasoningEffort bounds one ACP v1 thought_level selector ID.
+// Empty means the Backend default; a concrete nonempty ID must also be
+// advertised and confirmed by the actual Agent session before any prompt.
+func ValidateReasoningEffort(value string) error {
+	if len(value) > 64 {
+		return fmt.Errorf("%w: invalid reasoning effort identifier", ErrInvalid)
+	}
+	for _, r := range value {
+		if (r < 'a' || r > 'z') && (r < '0' || r > '9') && r != '_' && r != '-' {
+			return fmt.Errorf("%w: invalid reasoning effort identifier", ErrInvalid)
+		}
 	}
 	return nil
 }

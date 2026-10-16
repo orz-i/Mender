@@ -41,7 +41,8 @@ func TestACPFixtureProcess(t *testing.T) {
 				result["configOptions"] = []any{map[string]any{
 					"id": "model", "category": "model", "type": "select", "currentValue": "fixture-one",
 					"options": []any{map[string]string{"value": "fixture-one", "name": "Fixture One"}, map[string]string{"value": "fixture-two", "name": "Fixture Two"}},
-				}}
+				}, map[string]any{"id": "reasoning_effort", "category": "thought_level", "type": "select", "currentValue": "high",
+					"options": []any{map[string]string{"value": "high", "name": "High"}, map[string]string{"value": "xhigh", "name": "Extra high"}}}}
 			}
 			send(map[string]any{"jsonrpc": "2.0", "id": msg.ID, "result": result})
 		case "session/prompt":

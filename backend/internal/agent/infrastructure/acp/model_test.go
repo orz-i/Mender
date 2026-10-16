@@ -24,7 +24,7 @@ func TestInspectModelsRequiresExplicitNoPromptACPv1Session(t *testing.T) {
 func TestModelChoicesRejectUnreviewedOrUnboundedOptions(t *testing.T) {
 	for _, raw := range []string{
 		`{}`,
-		`{"configOptions":[{"id":"reasoning_effort","category":"thought_level","type":"select","options":[{"value":"high"}]}]}`,
+		`{"configOptions":[{"id":"reasoning_effort","category":"thought_level","type":"select","currentValue":"surprise","options":[{"value":"high"}]}]}`,
 		`{"configOptions":[{"id":"model","category":"model","type":"select","currentValue":"unexpected","options":[{"value":"safe"}]}]}`,
 	} {
 		if _, err := ReadModelChoices(json.RawMessage(raw)); err == nil {

@@ -121,7 +121,7 @@ func (*Instance) Close() error { return nil }
 
 var submitInput = []byte(`{"type":"object","additionalProperties":false,"required":["prompt"],
 	"properties":{"prompt":{"type":"string","minLength":1,"maxLength":65536},
-	"model":{"type":"string","maxLength":128},"workspace":{"type":"string","minLength":1,"maxLength":64,"pattern":"^[a-z0-9_-]+$"}}}`)
+	"model":{"type":"string","maxLength":128},"reasoningEffort":{"type":"string","maxLength":64,"pattern":"^[a-z0-9_-]*$"},"workspace":{"type":"string","minLength":1,"maxLength":64,"pattern":"^[a-z0-9_-]+$"}}}`)
 var taskInput = []byte(`{"type":"object","additionalProperties":false,"required":["taskId"],
 	"properties":{"taskId":{"type":"string","pattern":"^atask_[0-9a-f]{32}$"}}}`)
 var submitOutput = []byte(`{"type":"object","additionalProperties":false,"required":["taskId","status"],
@@ -173,14 +173,15 @@ func (i *Instance) Execute(ctx context.Context, req invocationapplication.Execut
 	switch req.Tool.SourceKey() {
 	case sourceDelegate:
 		var args struct {
-			Prompt    string `json:"prompt"`
-			Model     string `json:"model"`
-			Workspace string `json:"workspace"`
+			Prompt          string `json:"prompt"`
+			Model           string `json:"model"`
+			ReasoningEffort string `json:"reasoningEffort"`
+			Workspace       string `json:"workspace"`
 		}
 		if err := strictDecode(req.Arguments.Bytes(), &args); err != nil {
 			return invocationdomain.Outcome{}, err
 		}
-		task, err := i.service.SubmitWithOptions(ctx, i.agentID, args.Prompt, agentapplication.SubmitOptions{Model: args.Model, Workspace: args.Workspace}, req.Context)
+		task, err := i.service.SubmitWithOptions(ctx, i.agentID, args.Prompt, agentapplication.SubmitOptions{Model: args.Model, ReasoningEffort: args.ReasoningEffort, Workspace: args.Workspace}, req.Context)
 		if err != nil {
 			return invocationdomain.Outcome{}, err
 		}

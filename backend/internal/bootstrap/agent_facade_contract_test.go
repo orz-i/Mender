@@ -107,7 +107,7 @@ func TestAgentFacadeClaimRejectsWrongPluginConfigVersion(t *testing.T) {
 	}
 }
 
-func TestAgentFacadeV6PreservesStrictConfigGuard(t *testing.T) {
+func TestAgentFacadeV7PreservesStrictConfigGuard(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "mender.db")
@@ -148,7 +148,7 @@ func TestAgentFacadeV6PreservesStrictConfigGuard(t *testing.T) {
 	}
 	defer func() { _ = verify.Close() }()
 	var version int
-	if err := verify.QueryRowContext(ctx, "SELECT MAX(version) FROM agent_schema_migrations").Scan(&version); err != nil || version != 6 {
+	if err := verify.QueryRowContext(ctx, "SELECT MAX(version) FROM agent_schema_migrations").Scan(&version); err != nil || version != 7 {
 		t.Fatalf("migrated version=%d err=%v", version, err)
 	}
 	_, err = verify.ExecContext(ctx, "UPDATE provider_configs SET config_version=2 WHERE provider_id=?", state.ProviderID)

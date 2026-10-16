@@ -65,6 +65,7 @@ type Task struct {
 	AgentID         ID         `json:"agentId"`
 	Status          TaskStatus `json:"status"`
 	Model           string     `json:"model,omitempty"`
+	ReasoningEffort string     `json:"reasoningEffort,omitempty"`
 	WorkspaceKey    string     `json:"workspace,omitempty"`
 	WorkspaceRoot   string     `json:"-"` // admitted immutable local cwd; never disclose via MCP
 	Origin          string     `json:"-"`
@@ -98,6 +99,9 @@ func (t Task) Validate() error {
 		return fmt.Errorf("%w: incomplete Task caller identity", ErrInvalid)
 	}
 	if err := ValidateModel(t.Model); err != nil {
+		return err
+	}
+	if err := ValidateReasoningEffort(t.ReasoningEffort); err != nil {
 		return err
 	}
 	if t.WorkspaceKey != "" {

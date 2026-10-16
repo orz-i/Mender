@@ -94,7 +94,7 @@ func TestRuntimeSelectionsRequireExplicitWorkspaceGrantAndSnapshot(t *testing.T)
 		t.Fatal(err)
 	}
 	defer func() { _ = s.Close() }()
-	agent, err := s.Create(ctx, CreateRequest{Name: "Reusable", Backend: agentdomain.BackendCodex, WorkspaceRoot: root, DefaultModel: "example-model"}, caller)
+	agent, err := s.Create(ctx, CreateRequest{Name: "Reusable", Backend: agentdomain.BackendCodex, WorkspaceRoot: root, DefaultModel: "example-model", DefaultReasoningEffort: "medium"}, caller)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -122,19 +122,19 @@ func TestRuntimeSelectionsRequireExplicitWorkspaceGrantAndSnapshot(t *testing.T)
 	if err := s.GrantWorkspace(ctx, agent.ID(), "project-b", goodProfileID, caller); err != nil {
 		t.Fatal(err)
 	}
-	task, err := s.SubmitWithOptions(ctx, agent.ID(), "review", SubmitOptions{Workspace: "project-b", Model: "other-model"}, remote)
+	task, err := s.SubmitWithOptions(ctx, agent.ID(), "review", SubmitOptions{Workspace: "project-b", Model: "other-model", ReasoningEffort: "xhigh"}, remote)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := s.RevokeWorkspace(ctx, agent.ID(), "project-b", goodProfileID, caller); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.UpdateDefaultModel(ctx, agent.ID(), "new-default", caller); err != nil {
+	if _, err := s.UpdateDefaults(ctx, agent.ID(), "new-default", "high", caller); err != nil {
 		t.Fatal(err)
 	}
 	select {
 	case selection := <-runner.calls:
-		if selection.WorkspaceRoot != other || selection.Model != "other-model" {
+		if selection.WorkspaceRoot != other || selection.Model != "other-model" || selection.ReasoningEffort != "xhigh" {
 			t.Fatalf("admitted snapshot changed: %+v", selection)
 		}
 	case <-time.After(5 * time.Second):
@@ -144,7 +144,7 @@ func TestRuntimeSelectionsRequireExplicitWorkspaceGrantAndSnapshot(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if persisted.Model != "other-model" || persisted.WorkspaceKey != "project-b" || persisted.WorkspaceRoot != other {
+	if persisted.Model != "other-model" || persisted.ReasoningEffort != "xhigh" || persisted.WorkspaceKey != "project-b" || persisted.WorkspaceRoot != other {
 		t.Fatalf("snapshot lost: %+v", persisted)
 	}
 	if _, err := s.SubmitWithOptions(ctx, agent.ID(), "again", SubmitOptions{Workspace: "project-b"}, remote); !errors.Is(err, agentdomain.ErrForbidden) {

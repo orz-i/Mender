@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-const latestSchemaVersion = 6
+const latestSchemaVersion = 7
 
 // migrate owns Agent state exclusively, and never changes the existing
 // Providers/Sandboxes/Tunnels/Plugin inventory.
@@ -208,6 +208,21 @@ func migrate(ctx context.Context, db *sql.DB) error {
 			}
 		}
 		if _, err = tx.ExecContext(ctx, `INSERT INTO agent_schema_migrations VALUES(?,?)`, 6, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
+			return err
+		}
+	}
+	if !version.Valid || version.Int64 < 7 {
+		// Existing Agent and Task identities remain unchanged. Empty effort
+		// means the agent backend default and never rewrites old snapshots.
+		for _, statement := range []string{
+			`ALTER TABLE agents ADD COLUMN default_reasoning_effort TEXT NOT NULL DEFAULT ''`,
+			`ALTER TABLE agent_tasks ADD COLUMN reasoning_effort TEXT NOT NULL DEFAULT ''`,
+		} {
+			if _, err = tx.ExecContext(ctx, statement); err != nil {
+				return fmt.Errorf("agent v7 reasoning effort: %w", err)
+			}
+		}
+		if _, err = tx.ExecContext(ctx, `INSERT INTO agent_schema_migrations VALUES(?,?)`, 7, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
 			return err
 		}
 	}

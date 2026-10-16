@@ -38,7 +38,7 @@ type Repository interface {
 	ListAdmissions(context.Context, agentdomain.ID, int) ([]agentdomain.AdmissionEvent, error)
 	GrantProfile(context.Context, agentdomain.ID, string) error
 	RevokeProfile(context.Context, agentdomain.ID, string) error
-	SetDefaultModel(context.Context, agentdomain.ID, string) error
+	SetDefaults(context.Context, agentdomain.ID, string, string) error
 	BindWorkspace(context.Context, agentdomain.ID, string, string) error
 	Workspace(context.Context, agentdomain.ID, string) (string, error)
 	HasWorkspaceGrant(context.Context, agentdomain.ID, string, string) (bool, error)
@@ -58,8 +58,9 @@ type ConfiguredExecutor interface {
 	ExecuteConfigured(context.Context, agentdomain.Agent, string, RunConfig) (string, error)
 }
 type RunConfig struct {
-	WorkspaceRoot string
-	Model         string
+	WorkspaceRoot   string
+	Model           string
+	ReasoningEffort string
 }
 
 // WorkspaceTarget contains inert metadata about a registered local Sandbox.
@@ -143,11 +144,12 @@ func (s *Service) allowed(ctx context.Context, agent agentdomain.Agent, caller g
 }
 
 type CreateRequest struct {
-	Name          string              `json:"name"`
-	Backend       agentdomain.Backend `json:"backend"`
-	WorkspaceRoot string              `json:"workspaceRoot"`
-	Isolation     string              `json:"isolation"`
-	DefaultModel  string              `json:"defaultModel,omitempty"`
+	Name                   string              `json:"name"`
+	Backend                agentdomain.Backend `json:"backend"`
+	WorkspaceRoot          string              `json:"workspaceRoot"`
+	Isolation              string              `json:"isolation"`
+	DefaultModel           string              `json:"defaultModel,omitempty"`
+	DefaultReasoningEffort string              `json:"defaultReasoningEffort,omitempty"`
 }
 
 // Create stores one owner-selected backend and canonical local directory;
@@ -160,6 +162,9 @@ func (s *Service) Create(ctx context.Context, request CreateRequest, caller gov.
 		return agentdomain.Agent{}, agentdomain.ErrInvalid
 	}
 	if err := agentdomain.ValidateModel(request.DefaultModel); err != nil {
+		return agentdomain.Agent{}, err
+	}
+	if err := agentdomain.ValidateReasoningEffort(request.DefaultReasoningEffort); err != nil {
 		return agentdomain.Agent{}, err
 	}
 	if !filepath.IsAbs(request.WorkspaceRoot) {
@@ -186,7 +191,7 @@ func (s *Service) Create(ctx context.Context, request CreateRequest, caller gov.
 	}
 	agent, err := agentdomain.NewAgent(agentdomain.Spec{ID: id, Name: request.Name, Backend: request.Backend,
 		PluginID: request.Backend.PluginID(), ExtensionID: "main", WorkspaceRoot: filepath.Clean(resolved),
-		Isolation: isolation, DefaultModel: request.DefaultModel, OwnerKind: string(s.owner.Kind()), OwnerRef: s.owner.Reference(),
+		Isolation: isolation, DefaultModel: request.DefaultModel, DefaultReasoningEffort: request.DefaultReasoningEffort, OwnerKind: string(s.owner.Kind()), OwnerRef: s.owner.Reference(),
 		CreatedAt: time.Now().UTC()})
 	if err != nil {
 		return agentdomain.Agent{}, err
@@ -271,8 +276,9 @@ func (s *Service) Admissions(ctx context.Context, id agentdomain.ID, caller gov.
 }
 
 type SubmitOptions struct {
-	Model     string `json:"model,omitempty"`
-	Workspace string `json:"workspace,omitempty"`
+	Model           string `json:"model,omitempty"`
+	ReasoningEffort string `json:"reasoningEffort,omitempty"`
+	Workspace       string `json:"workspace,omitempty"`
 }
 
 func (s *Service) Submit(ctx context.Context, id agentdomain.ID, prompt string, caller gov.Context) (agentdomain.Task, error) {
@@ -299,6 +305,13 @@ func (s *Service) SubmitWithOptions(ctx context.Context, id agentdomain.ID, prom
 	model := options.Model
 	if model == "" {
 		model = agent.Spec().DefaultModel
+	}
+	if err := agentdomain.ValidateReasoningEffort(options.ReasoningEffort); err != nil {
+		return agentdomain.Task{}, err
+	}
+	effort := options.ReasoningEffort
+	if effort == "" {
+		effort = agent.Spec().DefaultReasoningEffort
 	}
 	root := agent.Spec().WorkspaceRoot
 	if options.Workspace != "" {
@@ -330,10 +343,10 @@ func (s *Service) SubmitWithOptions(ctx context.Context, id agentdomain.ID, prom
 		}
 		root = target.Root
 	}
-	if (model != "" || options.Workspace != "") && s.runner == nil {
+	if (model != "" || effort != "" || options.Workspace != "") && s.runner == nil {
 		return agentdomain.Task{}, agentdomain.ErrUnavailable
 	}
-	if model != "" || options.Workspace != "" {
+	if model != "" || effort != "" || options.Workspace != "" {
 		if _, ok := s.runner.(ConfiguredExecutor); !ok {
 			return agentdomain.Task{}, agentdomain.ErrUnavailable
 		}
@@ -350,7 +363,7 @@ func (s *Service) SubmitWithOptions(ctx context.Context, id agentdomain.ID, prom
 	}
 	now := time.Now().UTC()
 	task := agentdomain.Task{ID: taskID, AgentID: id, Status: agentdomain.TaskQueued,
-		Model: model, WorkspaceKey: options.Workspace, WorkspaceRoot: root,
+		Model: model, ReasoningEffort: effort, WorkspaceKey: options.Workspace, WorkspaceRoot: root,
 		Origin: string(caller.Origin()), PrincipalKind: string(caller.Principal().Kind()),
 		PrincipalRef: caller.Principal().Reference(), ScopeKind: string(caller.Scope().Kind()),
 		ScopeRef: caller.Scope().Reference(), Generation: 1, CreatedAt: now, UpdatedAt: now}
@@ -391,7 +404,7 @@ func (s *Service) run(ctx context.Context, cancel context.CancelFunc, agent agen
 	var result string
 	var err error
 	if runner, ok := s.runner.(ConfiguredExecutor); ok {
-		result, err = runner.ExecuteConfigured(ctx, agent, prompt, RunConfig{WorkspaceRoot: task.WorkspaceRoot, Model: task.Model})
+		result, err = runner.ExecuteConfigured(ctx, agent, prompt, RunConfig{WorkspaceRoot: task.WorkspaceRoot, Model: task.Model, ReasoningEffort: task.ReasoningEffort})
 	} else {
 		result, err = s.runner.Execute(ctx, agent, prompt)
 	}

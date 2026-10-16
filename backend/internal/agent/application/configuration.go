@@ -16,9 +16,14 @@ type ModelChoice struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
 }
-type ModelChoices struct {
+type OptionChoices struct {
 	Current string        `json:"current"`
-	Models  []ModelChoice `json:"models"`
+	Choices []ModelChoice `json:"choices"`
+}
+type ModelChoices struct {
+	Current         string         `json:"current"`
+	Models          []ModelChoice  `json:"models"`
+	ReasoningEffort *OptionChoices `json:"reasoningEffort,omitempty"`
 }
 type ModelInspector interface {
 	InspectModels(context.Context, agentdomain.Agent) (ModelChoices, error)
@@ -69,11 +74,17 @@ func (s *Service) validateTarget(a agentdomain.Agent, target WorkspaceTarget) er
 	}
 	return nil
 }
-func (s *Service) UpdateDefaultModel(ctx context.Context, id agentdomain.ID, model string, caller gov.Context) (agentdomain.Agent, error) {
+
+// UpdateDefaults changes the model and reasoning effort together, so tasks
+// always admit one coherent defaults snapshot without a two-step write.
+func (s *Service) UpdateDefaults(ctx context.Context, id agentdomain.ID, model, effort string, caller gov.Context) (agentdomain.Agent, error) {
 	if err := s.requireOwner(caller); err != nil {
 		return agentdomain.Agent{}, err
 	}
 	if err := agentdomain.ValidateModel(model); err != nil {
+		return agentdomain.Agent{}, err
+	}
+	if err := agentdomain.ValidateReasoningEffort(effort); err != nil {
 		return agentdomain.Agent{}, err
 	}
 	a, err := s.store.GetAgent(ctx, id)
@@ -83,7 +94,7 @@ func (s *Service) UpdateDefaultModel(ctx context.Context, id agentdomain.ID, mod
 	if !a.OwnedBy(string(s.owner.Kind()), s.owner.Reference()) {
 		return agentdomain.Agent{}, agentdomain.ErrForbidden
 	}
-	if err := s.store.SetDefaultModel(ctx, id, model); err != nil {
+	if err := s.store.SetDefaults(ctx, id, model, effort); err != nil {
 		return agentdomain.Agent{}, err
 	}
 	return s.store.GetAgent(ctx, id)

@@ -10,11 +10,14 @@ import (
 	agentdomain "github.com/orz-i/Mender/backend/internal/agent/domain"
 )
 
-func (s *Store) SetDefaultModel(ctx context.Context, id agentdomain.ID, model string) error {
+func (s *Store) SetDefaults(ctx context.Context, id agentdomain.ID, model, effort string) error {
 	if err := agentdomain.ValidateModel(model); err != nil {
 		return err
 	}
-	result, err := s.db.ExecContext(ctx, "UPDATE agents SET default_model=? WHERE agent_id=?", model, id)
+	if err := agentdomain.ValidateReasoningEffort(effort); err != nil {
+		return err
+	}
+	result, err := s.db.ExecContext(ctx, "UPDATE agents SET default_model=?,default_reasoning_effort=? WHERE agent_id=?", model, effort, id)
 	if err != nil {
 		return err
 	}
