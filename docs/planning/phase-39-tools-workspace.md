@@ -1,6 +1,6 @@
 # Phase 39 — Tools workspace and canonical source projection
 
-Status: In progress · 2026-10-16
+Status: Automated acceptance closed · 2026-10-16
 Architecture: [ADR-0046](../architecture/adr/0046-unified-tools-workspace.md)
 
 ## Scope and constraints
@@ -19,6 +19,23 @@ Implement **Option B** from the Provider/Catalog audit: unify the *product* entr
 
 Every schema/API shape update must compile across OpenAPI generated TS, HTTP API, CLI and Wails bindings. User data are only read in acceptance; test writes use disposable SQLite. A running Wails app must be rebuilt/restarted by the operator for new source to take effect. The previous routes are hard-retired, not redirected to an alternative implementation. If an unavoidable migration is identified, fail closed with a documented recovery path rather than automatically reassigning IDs.
 
-## Evidence
+## Acceptance evidence (2026-10-16)
 
-To be filled only from executed tests and committed changes.
+**Commit sequence (bounded):**
+- `0cf35a8` — ADR and first product/ownership intent.
+- `36fe731` — hard cut of standalone Provider/Catalog routes and redundant Provider plugin picker (the interim two-tab UI was later retired, not preserved as a bridge).
+- `0bd3e4a` — exact persisted Agent/Sandbox owner projection, parity across HTTP/OpenAPI/SDK/Wails.
+- `9aa92c2` — user-driven refinement to a simpler **named service → its tools** product model.
+- `95d741d` — `/tools` service cards and `/tools/:providerId` drilldown; removes internal/external filter, SDK-provider-first labels and temporary dual-view switch.
+- `505508d` — invariant for revision-scoped opaque cursors.
+- `c0f55d0` — transactional `catalog_tool_revision` migration, bounded compact browse/FTS paging with exact Profile restrictions, HTTP/SDK/Wails parity, Profile picker load-more without losing prior bindings.
+
+**Automated checks:** A fresh `pnpm check` returned **exit code 0** (log `/tmp/mender-phase39-final/pnpm-check.log`), including Plugin SDK/examples and module isolation, OpenAPI/SDK generated-schema drift, Wails generated-binding drift, desktop architecture, Go lint and full Go test/race, ESLint/TS/i18n, **41 frontend test files / 227 tests passed**, and Web/Desktop production builds. **1200/1200** required zh-CN translations passed. Vite warns about large JS chunks; no build failure. Catalog/HTTP pager integration tests covered **205–253+ Tools**, verified no duplicates/gaps, deterministic scoping, invalid/cross-provider/cross-Profile cursor rejection and revision invalidation. Profile picker tests covered Tool 105 across pages and preserved existing ToolIDs.
+
+**Security:** A fresh `pnpm security:check` returned **exit code 0** (log `/tmp/mender-phase39-final/security-confirm.log`): govulncheck found no reachable vulnerable Go symbols in the backend, Desktop, Plugin SDKs or examples; it noted one required-module vulnerability which these applications do not appear to call. The production JavaScript audit found no known vulnerabilities.
+
+**Isolated runtime acceptance:** A separate source-built Go `menderd` at `127.0.0.1:18085` used exclusively disposable database `/tmp/mender-phase39-qa/qa.db`; a local in-process MCP fixture at `127.0.0.1:18232` returned `web_search` and `page_lookup`. It created exactly one configured MCP Provider **displayed as AnySearch**, synchronized two canonical ToolIDs. Chromium testing of the Web frontend at `127.0.0.1:5182` verified **one actual AnySearch link**, its **2 tools** count, scoped `/tools/:providerId` tool list, Back to services, absence of the technical Provider/internal/external toggle, and the reviewed AnySearch Marketplace Connect dialog with its preconfigured HTTPS endpoint. No JavaScript runtime exceptions. Screenshot/log evidence under `/tmp/mender-phase39-qa/`. All four dedicated QA listeners (MCP fixture, menderd, Vite, Chromium) were terminated and verified closed, the temporary Vite config and disposable SQLite database were deleted, and the user-owned Wails process was left running. This confirms the product workflow **without contacting the actual AnySearch remote service**.
+
+**Real user data safety:** Read-only check of `~/Library/Application Support/Mender/mender.db`: `PRAGMA integrity_check=ok`, 0 foreign-key violations. Live counts at check time: 9 configured Providers, 25 Tools, 6 Sandboxes, 2 Agents, 1 Profile, 21 Profile Tool bindings, 2 Credentials. No live Provider, Tool, Credential, Profile or Sandbox was created/removed or re-synced for acceptance. The running Wails app still uses the previous Catalog schema; new revision table/trigger migration v2 is deferred to the operator's next rebuild/restart. Historical migration backups were not touched.
+
+**Remaining release limit:** No claim of native Wails-window visual acceptance after the operator restarts the newly compiled build, nor of real AnySearch service availability, provider credential validity or execution authorization. The source and automated tests are closed; the packaged/native runtime transition remains operator-verified.
