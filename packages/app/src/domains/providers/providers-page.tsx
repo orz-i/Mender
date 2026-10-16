@@ -719,8 +719,8 @@ export function ProvidersPage({
           </div>
         ) : visibleProviders.length ? (
           <>
-            <Table>
-              <TableHeader>
+            <Table aria-label={t("Provider inventory")} className="max-md:block max-md:w-full">
+              <TableHeader className="max-md:sr-only">
                 <TableRow>
                   <TableHead>{t("Provider")}</TableHead>
                   <TableHead>{t("Plugin")}</TableHead>
@@ -729,26 +729,34 @@ export function ProvidersPage({
                   <TableHead className="text-right">{t("Actions")}</TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody>
+              <TableBody className="max-md:block">
                 {providerPagination.items.map((provider) => (
-                  <TableRow key={provider.providerId}>
-                    <TableCell className="font-medium">
-                      {provider.displayName || provider.namespace}
+                  <TableRow
+                    key={provider.providerId}
+                    className="md:[&>td]:py-3 max-md:grid max-md:grid-cols-[minmax(0,1fr)_auto] max-md:items-start max-md:gap-x-3 max-md:gap-y-1.5 max-md:px-4 max-md:py-3.5 max-md:border-b max-md:last:border-b-0"
+                  >
+                    <TableCell className="font-medium max-md:col-start-1 max-md:row-start-1 max-md:block max-md:min-w-0 max-md:p-0">
+                      <span className="block truncate font-medium text-sm text-foreground" title={provider.displayName || provider.namespace}>
+                        {provider.displayName || provider.namespace}
+                      </span>
                     </TableCell>
-                    <TableCell>
-                      <Badge variant="outline">
+                    <TableCell className="max-md:col-start-2 max-md:row-start-1 max-md:block max-md:p-0 max-md:justify-self-end">
+                      <Badge variant="outline" className="max-md:text-[11px] max-md:px-2 max-md:py-0.5">
                         {providerPluginLabelForProvider(
                           providerPlugins,
                           provider,
                         )}
                       </Badge>
                     </TableCell>
-                    <TableCell className="max-w-[360px] truncate font-mono text-xs">
-                      {connectionSummary(provider)}
+                    <TableCell className="max-w-[360px] truncate font-mono text-xs max-md:col-start-1 max-md:row-start-2 max-md:block max-md:min-w-0 max-md:p-0">
+                      <span className="block truncate font-mono text-xs text-muted-foreground max-md:text-[11px]" title={connectionSummary(provider)}>
+                        {connectionSummary(provider)}
+                      </span>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="max-md:col-start-2 max-md:row-start-2 max-md:block max-md:p-0 max-md:justify-self-end">
                       <Badge
                         variant={provider.toolCount ? "outline" : "secondary"}
+                        className="max-md:text-[11px] max-md:px-2 max-md:py-0.5"
                       >
                         {tCount(
                           provider.toolCount,
@@ -757,8 +765,8 @@ export function ProvidersPage({
                         )}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-1">
+                    <TableCell className="text-right max-md:col-span-2 max-md:row-start-3 max-md:block max-md:p-0 max-md:pt-2.5 max-md:mt-1 max-md:border-t max-md:border-border/40">
+                      <div className="flex justify-end gap-1 max-md:justify-end">
                         <IconButton
                           variant="ghost"
                           label={t("View {{provider}}", {

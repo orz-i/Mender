@@ -84,21 +84,86 @@ export function SandboxesPage({ client }: { client: MenderClient }) {
     />
     {error ? <ErrorNotice message={error} /> : null}
     <ResultPanel title="Sandbox inventory">
-        {!loaded ? <div className="p-8 text-sm text-muted-foreground">{t("Loading Sandboxes…")}</div> : filtered.length ? <>
-          <Table><TableHeader><TableRow>
-            <TableHead>{t("Name")}</TableHead><TableHead>{t("Backend")}</TableHead><TableHead>{t("Isolation")}</TableHead><TableHead>{t("State")}</TableHead><TableHead>{t("Workspace")}</TableHead><TableHead className="text-right">{t("Actions")}</TableHead>
-          </TableRow></TableHeader><TableBody>{pagination.items.map((item) =>
-            <TableRow key={item.sandboxId}>
-              <TableCell className="font-medium">{item.name}</TableCell>
-              <TableCell>{sandboxBackend(item)}</TableCell>
-              <TableCell>{isolationLabel(item.isolation)}</TableCell>
-              <TableCell><Badge variant="outline">{item.state === "destroyed" || item.backendAvailable ? sandboxStateLabel(item.state) : t("Backend unavailable")}</Badge></TableCell>
-              <TableCell className="max-w-[240px] truncate font-mono text-xs text-muted-foreground" title={item.localRoot}>{item.localRoot || "—"}</TableCell>
-              <TableCell className="text-right"><Button size="sm" variant="outline" onClick={()=>{void navigate(`/sandboxes/${item.sandboxId}`);}}>{t("View")}</Button></TableCell>
-            </TableRow>)}
-          </TableBody></Table>
-          <div className="px-4 pb-3"><TablePagination label="Sandboxes" pagination={pagination}/></div>
-        </> : <EmptyPanelState><EmptyState title={items.length ? t("No matching sandboxes") : t("No sandboxes")} description={items.length ? t("Try a different search or filter.") : t("Create a local Sandbox before binding Workspace tools to it.")} /></EmptyPanelState>}
+        {!loaded ? (
+          <div className="p-8 text-sm text-muted-foreground">{t("Loading Sandboxes…")}</div>
+        ) : filtered.length ? (
+          <>
+            <Table aria-label={t("Sandbox inventory")} className="max-md:block max-md:w-full">
+              <TableHeader className="max-md:sr-only">
+                <TableRow>
+                  <TableHead>{t("Name")}</TableHead>
+                  <TableHead>{t("Backend")}</TableHead>
+                  <TableHead>{t("Isolation")}</TableHead>
+                  <TableHead>{t("State")}</TableHead>
+                  <TableHead>{t("Workspace")}</TableHead>
+                  <TableHead className="text-right">{t("Actions")}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody className="max-md:block">
+                {pagination.items.map((item) => (
+                  <TableRow
+                    key={item.sandboxId}
+                    className="md:[&>td]:py-3 max-md:grid max-md:grid-cols-[minmax(0,1fr)_auto] max-md:items-start max-md:gap-x-3 max-md:gap-y-1.5 max-md:px-4 max-md:py-3.5 max-md:border-b max-md:last:border-b-0"
+                  >
+                    <TableCell className="font-medium max-md:col-start-1 max-md:row-start-1 max-md:block max-md:min-w-0 max-md:p-0">
+                      <span className="block truncate font-medium text-sm text-foreground" title={item.name}>
+                        {item.name}
+                      </span>
+                    </TableCell>
+                    <TableCell className="max-md:col-start-1 max-md:row-start-2 max-md:block max-md:min-w-0 max-md:p-0">
+                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <span>{sandboxBackend(item)}</span>
+                        <span className="text-muted-foreground/50 md:hidden">·</span>
+                        <span className="md:hidden">{isolationLabel(item.isolation)}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="max-md:hidden">
+                      {isolationLabel(item.isolation)}
+                    </TableCell>
+                    <TableCell className="max-md:col-start-2 max-md:row-start-1 max-md:block max-md:p-0 max-md:justify-self-end">
+                      <Badge variant="outline" className="max-md:text-[11px] max-md:px-2 max-md:py-0.5">
+                        {item.state === "destroyed" || item.backendAvailable
+                          ? sandboxStateLabel(item.state)
+                          : t("Backend unavailable")}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="max-w-[240px] truncate font-mono text-xs text-muted-foreground max-md:col-start-1 max-md:row-start-3 max-md:block max-md:min-w-0 max-md:p-0">
+                      <span className="block truncate font-mono text-[11px] text-muted-foreground/80" title={item.localRoot}>
+                        {item.localRoot || "—"}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-right max-md:col-start-2 max-md:row-start-2 max-md:row-span-2 max-md:block max-md:self-center max-md:p-0 max-md:justify-self-end">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="max-md:h-7 max-md:px-2.5 max-md:text-xs"
+                        onClick={() => {
+                          void navigate(`/sandboxes/${item.sandboxId}`);
+                        }}
+                      >
+                        {t("View")}
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            <div className="px-4 pb-3">
+              <TablePagination label="Sandboxes" pagination={pagination} />
+            </div>
+          </>
+        ) : (
+          <EmptyPanelState>
+            <EmptyState
+              title={items.length ? t("No matching sandboxes") : t("No sandboxes")}
+              description={
+                items.length
+                  ? t("Try a different search or filter.")
+                  : t("Create a local Sandbox before binding Workspace tools to it.")
+              }
+            />
+          </EmptyPanelState>
+        )}
     </ResultPanel>
   </>;
 }
