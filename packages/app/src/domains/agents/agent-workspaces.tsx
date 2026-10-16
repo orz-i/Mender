@@ -27,7 +27,7 @@ export function AgentWorkspaceSettings({
   let active=true;
   void Promise.all([client.listAgentWorkspaces(agent.agentId),client.listProfiles()])
    .then(([w,p])=>{
-    if(active){setItems(w.workspaces);setProfiles(p.profiles);setError("");}
+    if(active){setItems(w.workspaces);setProfiles(p.profiles);}
    }).catch((e:unknown)=>{if(active)setError(errorMessage(e));});
   return ()=>{active=false;};
  },[client,agent.agentId,revision]);
@@ -45,9 +45,9 @@ export function AgentWorkspaceSettings({
    setAction(null);setRevision(v=>v+1);
   }catch(e){setError(errorMessage(e));}finally{setBusy(false);}
  }
- function openAdd(){setKey("");setRoot("");setAction({kind:"add"});}
+ function openAdd(){setError("");setKey("");setRoot("");setAction({kind:"add"});}
  function openGrant(key:string,granted:string[]){
-  setProfile(profiles.find(p=>!granted.includes(p.profileId))?.profileId??"");
+  setError("");setProfile(profiles.find(p=>!granted.includes(p.profileId))?.profileId??"");
   setAction({kind:"grant",key});
  }
  async function choose(){
@@ -118,6 +118,7 @@ export function AgentWorkspaceSettings({
        .map(p=><option key={p.profileId} value={p.profileId}>{p.displayName}</option>)}
      </select>
     </>:null}
+    {error?<p role="alert" className="text-xs text-destructive">{error}</p>:null}
     <DialogFooter>
      <Button variant="outline" disabled={busy} onClick={()=>setAction(null)}>{t("Cancel")}</Button>
      <Button disabled={busy||!valid} onClick={()=>void submit()}>{t("Confirm")}</Button>

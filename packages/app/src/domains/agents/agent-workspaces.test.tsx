@@ -80,4 +80,21 @@ describe("Agent owner-approved local workspace editor",()=>{
   fireEvent.click(screen.getByRole("button",{name:"Confirm"}));
   await waitFor(()=>expect(grantAgentWorkspace).toHaveBeenCalledWith(agent.agentId,"gar",profileId));
  });
+ it("shows backend rejection inside the editing dialog instead of failing invisibly",async()=>{
+  const bindAgentWorkspace=vi.fn().mockRejectedValue(new Error("local directory unavailable"));
+  const client={
+   listAgentWorkspaces:vi.fn().mockResolvedValue({workspaces:[]}),
+   listProfiles:vi.fn().mockResolvedValue({profiles:[]}),bindAgentWorkspace,
+  } as unknown as MenderClient;
+  render(<MemoryRouter><AgentWorkspaceSettings client={client} agent={agent}/></MemoryRouter>);
+  expect(await screen.findByText("No additional workspaces")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button",{name:"Add workspace"}));
+  fireEvent.change(screen.getByRole("textbox",{name:"Workspace key"}),{target:{value:"GAR"}});
+  fireEvent.change(screen.getByRole("textbox",{name:"Workspace directory"}),{target:{value:localRoot}});
+  fireEvent.click(screen.getByRole("button",{name:"Confirm"}));
+  await waitFor(()=>expect(screen.getByRole("dialog").textContent).toContain("local directory unavailable"));
+  expect(screen.getByRole("dialog")).toBeTruthy();
+  expect(bindAgentWorkspace).toHaveBeenCalledTimes(1);
+ });
+
 });
