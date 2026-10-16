@@ -21,6 +21,7 @@ import (
 	provideractivationapplication "github.com/orz-i/Mender/backend/internal/provideractivation/application"
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
 	providerconfigstore "github.com/orz-i/Mender/backend/internal/providerplugin/configstore"
+	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 	skillapplication "github.com/orz-i/Mender/backend/internal/skill/application"
 	tunnelapplication "github.com/orz-i/Mender/backend/internal/tunnel/application"
 )
@@ -309,7 +310,8 @@ func writeKnownError(w http.ResponseWriter, err error) {
 		errors.Is(err, credentialapplication.ErrEnvironmentMissing):
 		writeAPIError(w, http.StatusServiceUnavailable, "credential_unavailable", err)
 
-	case errors.Is(err, invocationapplication.ErrPolicyDenied),
+	case errors.Is(err, sandboxdomain.ErrNotAuthorized),
+		errors.Is(err, invocationapplication.ErrPolicyDenied),
 		errors.Is(err, invocationapplication.ErrApprovalDenied),
 		errors.Is(err, provideractivationapplication.ErrPolicyDenied),
 		errors.Is(err, provideractivationapplication.ErrApprovalDenied):

@@ -213,10 +213,10 @@ func (r *Runtime) EnsureSandboxWorkspaceTools(ctx context.Context, id sandboxdom
 		if e != nil {
 			return state, e
 		}
-		provider, e := r.RegisterConfiguredProvider(ctx, catalogapplication.RegisterProviderRequest{
+		provider, e := r.registerConfiguredProvider(ctx, catalogapplication.RegisterProviderRequest{
 			Namespace: sandboxFacadeNamespace(id), DisplayName: item.Spec().Name + " Workspace",
 			Description: "Managed Workspace Tools for " + item.Spec().Name,
-		}, workspaceplugin.ID, config, caller)
+		}, workspaceplugin.ID, config, caller, true)
 		if e != nil {
 			current, readErr := r.SandboxWorkspaceTools(ctx, id, caller)
 			if readErr != nil || current.ProviderID == "" || current.Status == "conflict" {

@@ -86,6 +86,9 @@ func pluginEntry(descriptor platformplugin.Descriptor, kind string, installation
 // may lead to a resource create flow. Descriptive capabilities are not input.
 func reviewedMarketplaceAction(descriptor platformplugin.Descriptor, installed bool) MarketplaceAction {
 	if installed {
+		if isManagedProviderFacade(providerplugin.ID(descriptor.PluginID)) {
+			return MarketplaceNone
+		}
 		switch descriptor.Extension.Kind {
 		case platformplugin.ProviderTools:
 			return MarketplaceCreateProvider
@@ -181,7 +184,9 @@ func (r *Runtime) ListPluginCatalogue(ctx context.Context) ([]PluginCatalogueEnt
 		usage[a.Spec().PluginID.String()+"@builtin"]++
 	}
 	result := make([]PluginCatalogueEntry, 0, len(installations)+12)
-	for _, p := range r.ProviderPluginDescriptors() {
+	// The technical inventory remains complete even though private facades
+	// are no longer selectable in the Provider creation catalogue.
+	for _, p := range r.providerPlugins.Descriptors() {
 		descriptor, err := providerpluginPlatformDescriptor(p)
 		if err != nil {
 			return nil, err

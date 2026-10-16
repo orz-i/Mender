@@ -116,7 +116,7 @@ func TestSandboxDestroyConflictsWithWorkspaceProviderAndPreservesHostFiles(t *te
 	if err != nil {
 		t.Fatal(err)
 	}
-	provider, err := r.RegisterConfiguredProvider(ctx, catalogapplication.RegisterProviderRequest{Namespace: "lifecycle-reference", DisplayName: "Workspace"}, workspaceplugin.ID, raw, caller)
+	provider, err := r.registerConfiguredProvider(ctx, catalogapplication.RegisterProviderRequest{Namespace: "lifecycle-reference", DisplayName: "Workspace"}, workspaceplugin.ID, raw, caller, true)
 	if err != nil {
 		t.Fatal(err)
 	}

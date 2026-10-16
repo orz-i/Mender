@@ -147,7 +147,7 @@ func TestDaytonaLiveRuntimeProviderAndCleanup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	provider, err := runtime.RegisterConfiguredProvider(ctx, catalogapplication.RegisterProviderRequest{Namespace: "daytona-live", DisplayName: "Daytona Live Workspace"}, workspaceplugin.ID, rawConfig, caller)
+	provider, err := runtime.registerConfiguredProvider(ctx, catalogapplication.RegisterProviderRequest{Namespace: "daytona-live", DisplayName: "Daytona Live Workspace"}, workspaceplugin.ID, rawConfig, caller, true)
 	if err != nil {
 		t.Fatalf("remote Workspace Provider bind: %v", err)
 	}

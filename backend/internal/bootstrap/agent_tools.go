@@ -146,11 +146,11 @@ func (r *Runtime) EnsureAgentTools(ctx context.Context, id agentdomain.ID, calle
 		if err != nil {
 			return state, err
 		}
-		provider, err := r.RegisterConfiguredProvider(ctx, catalogapplication.RegisterProviderRequest{
+		provider, err := r.registerConfiguredProvider(ctx, catalogapplication.RegisterProviderRequest{
 			Namespace:   agentFacadeNamespace(agent.Spec().Name, id),
 			DisplayName: agent.Spec().Name,
 			Description: "Managed Agent Delegation tools for " + agent.Spec().Name,
-		}, agentdelegation.ID, raw, caller)
+		}, agentdelegation.ID, raw, caller, true)
 		if err != nil {
 			// A concurrent create may have won the unique namespace. Retry
 			// only the metadata lookup, never the side-effecting create.

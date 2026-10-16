@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 
+	agentdelegation "github.com/orz-i/Mender/backend/internal/agent/infrastructure/delegationprovider"
 	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
@@ -16,6 +17,7 @@ import (
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 	sshjobsplugin "github.com/orz-i/Mender/backend/internal/sshjobs/infrastructure/plugin"
+	workspaceplugin "github.com/orz-i/Mender/backend/internal/workspace/infrastructure/plugin"
 )
 
 const (
@@ -53,15 +55,25 @@ const (
 	providerPluginIssueCloseProcess      = "process_cleanup_failed"
 )
 
-// ProviderPluginDescriptors returns only user-configurable Provider
-// integrations. The Jobs Provider is a private host-owned Tool Suite facade,
-// never a generic Provider offering in the plugin marketplace.
+// isManagedProviderFacade identifies host-owned resource Tool Suite adapters.
+// Their Provider/Tool identities stay in the technical registry, never the
+// user-selectable Provider creation catalogue.
+func isManagedProviderFacade(id providerplugin.ID) bool {
+	switch id {
+	case agentdelegation.ID, workspaceplugin.ID, sshjobsplugin.ID:
+		return true
+	default:
+		return false
+	}
+}
+
+// ProviderPluginDescriptors returns independently configurable Provider drivers.
 func (r *Runtime) ProviderPluginDescriptors() []providerplugin.Descriptor {
 	if r == nil || r.providerPlugins == nil {
 		return nil
 	}
 	return slices.DeleteFunc(r.providerPlugins.Descriptors(), func(d providerplugin.Descriptor) bool {
-		return d.ID == sshjobsplugin.ID
+		return isManagedProviderFacade(d.ID)
 	})
 }
 
@@ -340,18 +352,20 @@ func (r *Runtime) RegisterConfiguredProvider(
 	return r.registerConfiguredProvider(ctx, request, pluginID, rawConfig, governanceContext, false)
 }
 
-// registerConfiguredProvider may authorize an internal Jobs Provider facade
-// only from the owner-approved Tool Suite creation use case, not from
-// generic Provider CRUD, CLI, HTTP, plugins or model-controlled arguments.
+// registerConfiguredProvider admits private Tool Suite facade creation only
+// when called by an Agent/Sandbox resource-owner use case, never generic
+// Provider CRUD, CLI, HTTP or model-controlled arguments.
 func (r *Runtime) registerConfiguredProvider(
 	ctx context.Context,
 	request catalogapplication.RegisterProviderRequest,
 	pluginID providerplugin.ID,
 	rawConfig json.RawMessage,
 	governanceContext governancedomain.Context,
-	managedJobs bool,
+	managedFacade bool,
 ) (catalogdomain.Provider, error) {
-	if pluginID == sshjobsplugin.ID && !managedJobs {
+	// A resource-owned facade may only be created by its owner workflow.
+	// The public Provider API/CLI never gets a creation authorization bit.
+	if isManagedProviderFacade(pluginID) != managedFacade {
 		return catalogdomain.Provider{}, sandboxdomain.ErrNotAuthorized
 	}
 	plugin, descriptor, err := r.resolveProviderPlugin(pluginID)
@@ -451,6 +465,9 @@ func (r *Runtime) RegisterInstalledProvider(
 	rawConfig json.RawMessage,
 	governanceContext governancedomain.Context,
 ) (catalogdomain.Provider, error) {
+	if isManagedProviderFacade(pluginID) {
+		return catalogdomain.Provider{}, sandboxdomain.ErrNotAuthorized
+	}
 	if r == nil || r.externalResolver == nil {
 		return catalogdomain.Provider{}, fmt.Errorf(
 			"register installed provider: external plugin resolver is unavailable",
@@ -587,6 +604,9 @@ func (r *Runtime) UpdateConfiguredProvider(
 			"update configured provider: load config: %w",
 			err,
 		)
+	}
+	if isManagedProviderFacade(currentConfig.PluginID) {
+		return catalogdomain.Provider{}, fmt.Errorf("%w: Provider belongs to a resource-owned Tool Suite", ErrProviderInUse)
 	}
 	resolved, err := r.providerResolver.Resolve(ctx, currentConfig)
 	if err != nil {

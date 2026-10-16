@@ -40,8 +40,8 @@ func TestRuntimeRejectsWorkspaceV1WithoutRewritingToolOrProfile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	provider, err := runtime.RegisterConfiguredProvider(ctx, catalogapplication.RegisterProviderRequest{
-		Namespace: "workspace-v1-hardcut", DisplayName: "Workspace"}, workspaceplugin.ID, raw, caller)
+	provider, err := runtime.registerConfiguredProvider(ctx, catalogapplication.RegisterProviderRequest{
+		Namespace: "workspace-v1-hardcut", DisplayName: "Workspace"}, workspaceplugin.ID, raw, caller, true)
 	if err != nil {
 		t.Fatal(err)
 	}

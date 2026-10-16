@@ -32,31 +32,17 @@ func TestRuntimeExposesBuiltInProviderPluginDescriptors(t *testing.T) {
 
 	runtime := newProviderTestRuntime(t)
 	descriptors := runtime.ProviderPluginDescriptors()
-	if len(descriptors) != 5 {
-		t.Fatalf("ProviderPluginDescriptors() len = %d, want 5", len(descriptors))
+	if len(descriptors) != 3 {
+		t.Fatalf("ProviderPluginDescriptors() len = %d, want 3 independent drivers", len(descriptors))
 	}
 	wantIDs := []providerplugin.ID{
-		"io.mender.provider.agent-delegation",
 		"io.mender.provider.mcp",
 		"io.mender.provider.model-tools",
 		"io.mender.provider.openapi",
-		"io.mender.provider.workspace",
 	}
 	for index, descriptor := range descriptors {
-		if descriptor.ID != wantIDs[index] {
-			t.Fatalf(
-				"ProviderPluginDescriptors()[%d].ID = %s, want %s",
-				index,
-				descriptor.ID,
-				wantIDs[index],
-			)
-		}
-		wantVersion := 1
-		if descriptor.ID == "io.mender.provider.workspace" {
-			wantVersion = 2
-		}
-		if descriptor.ConfigVersion != wantVersion {
-			t.Fatalf("ProviderPluginDescriptors()[%d].ConfigVersion = %d, want %d", index, descriptor.ConfigVersion, wantVersion)
+		if descriptor.ID != wantIDs[index] || descriptor.ConfigVersion != 1 {
+			t.Fatalf("selectable Provider descriptor[%d] = %+v, want %s v1", index, descriptor, wantIDs[index])
 		}
 	}
 
@@ -64,8 +50,8 @@ func TestRuntimeExposesBuiltInProviderPluginDescriptors(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListAvailableProviderPlugins() error = %v", err)
 	}
-	if len(available) != 5 {
-		t.Fatalf("ListAvailableProviderPlugins() len = %d, want 5", len(available))
+	if len(available) != 3 {
+		t.Fatalf("ListAvailableProviderPlugins() len = %d, want 3", len(available))
 	}
 	for _, item := range available {
 		if item.SourceKind != ProviderPluginSourceBuiltIn ||
@@ -211,8 +197,8 @@ func TestListAvailableProviderPluginsIsolatesBrokenLegacyInstallation(t *testing
 	if err != nil {
 		t.Fatalf("ListAvailableProviderPluginCatalog() error = %v", err)
 	}
-	if len(catalog.Plugins) != 5 {
-		t.Fatalf("available plugins = %d, want 5 healthy built-ins", len(catalog.Plugins))
+	if len(catalog.Plugins) != 3 {
+		t.Fatalf("available plugins = %d, want 3 independent built-ins", len(catalog.Plugins))
 	}
 	for _, item := range catalog.Plugins {
 		if item.SourceKind != ProviderPluginSourceBuiltIn {

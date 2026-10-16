@@ -231,7 +231,7 @@ func TestRuntimeDockerSandboxProviderEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	provider, err := runtime.RegisterConfiguredProvider(ctx, catalogapplication.RegisterProviderRequest{Namespace: "docker-test", DisplayName: "Docker Workspace"}, workspaceplugin.ID, raw, caller)
+	provider, err := runtime.registerConfiguredProvider(ctx, catalogapplication.RegisterProviderRequest{Namespace: "docker-test", DisplayName: "Docker Workspace"}, workspaceplugin.ID, raw, caller, true)
 	if err != nil {
 		t.Fatal(err)
 	}

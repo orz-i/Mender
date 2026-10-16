@@ -53,13 +53,14 @@ func registerConfiguredProviderTest(
 	rawConfig json.RawMessage,
 ) (catalogdomain.Provider, error) {
 	t.Helper()
-	return runtime.RegisterConfiguredProvider(
-		ctx,
-		request,
-		pluginID,
-		rawConfig,
-		testCatalogGovernanceContext(t, governancedomain.OriginInternal, "register"),
-	)
+	caller := testCatalogGovernanceContext(t, governancedomain.OriginInternal, "register")
+	if isManagedProviderFacade(pluginID) {
+		// Historical fixture only: construct a pre-ownership Provider so
+		// adoption/conflict tests can prove that identities remain unchanged.
+		// Production HTTP/CLI and exported Runtime creation stay denied.
+		return runtime.registerConfiguredProvider(ctx, request, pluginID, rawConfig, caller, true)
+	}
+	return runtime.RegisterConfiguredProvider(ctx, request, pluginID, rawConfig, caller)
 }
 
 func registerInstalledProviderTest(
