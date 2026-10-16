@@ -310,8 +310,8 @@ export function CatalogPage({ client, providerId }: { client: MenderClient; prov
                 }
                 description={
                   searched
-                    ? t("Try a different search intent or Provider filter.")
-                    : t("Sync a Provider to populate the Catalog. Schemas load only when you inspect a Tool.")
+                    ? t("Try a different search.")
+                    : t("No tools have been discovered for this service yet.")
                 }
               />
             </EmptyPanelState>

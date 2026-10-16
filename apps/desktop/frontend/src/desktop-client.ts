@@ -1249,8 +1249,19 @@ function skillDeploymentDrift(
 
 function provider(value: BindingProvider): Provider {
   const transport = providerTransport(value.transport);
+  const sourceKind = value.toolSourceKind;
+  if (sourceKind && !["provider", "agent", "sandbox", "unclaimed"].includes(sourceKind)) {
+    throw new MenderClientInvariantError("Unsupported Tool source kind: " + sourceKind);
+  }
+  if ((sourceKind === "agent" || sourceKind === "sandbox") &&
+      (!value.toolSourceId || !value.toolSourceName)) {
+    throw new MenderClientInvariantError("Resource-owned Tool source is missing its verified owner");
+  }
   return {
     providerId: value.providerId,
+    ...(sourceKind ? { toolSourceKind: sourceKind as NonNullable<Provider["toolSourceKind"]> } : {}),
+    ...(value.toolSourceId ? { toolSourceId: value.toolSourceId } : {}),
+    ...(value.toolSourceName ? { toolSourceName: value.toolSourceName } : {}),
     namespace: value.namespace,
     displayName: value.displayName,
     description: value.description,

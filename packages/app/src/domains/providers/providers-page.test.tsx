@@ -1,6 +1,6 @@
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import type { MenderClient, Provider, ProviderPlugin } from "@mender/sdk";
-import { MemoryRouter } from "react-router";
+import { MemoryRouter, Route, Routes } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { resetLocaleForTesting, setLocale } from "../../i18n/i18n";
@@ -72,5 +72,68 @@ describe("Tool services responsive cards", () => {
     expect(screen.getByRole("button",{name:"View tools"})).toBeTruthy();
     expect(screen.getByRole("button",{name:"View Echo Service"})).toBeTruthy();
     expect(screen.queryByRole("button",{name:"Show internal providers"})).toBeNull();
+  });
+});
+
+describe("resource-owned Tool service navigation", () => {
+  it.each([
+    {
+      kind: "agent" as const,
+      pluginId: "io.mender.provider.agent-delegation",
+      ownerId: "agent_grok",
+      ownerName: "Grok - executor",
+      visibleName: "Grok - executor",
+      destination: "Agent owner details",
+    },
+    {
+      kind: "sandbox" as const,
+      pluginId: "io.mender.provider.workspace",
+      ownerId: "sbx_rocky",
+      ownerName: "Rocky",
+      visibleName: "Rocky · Workspace",
+      destination: "Sandbox owner details",
+    },
+    {
+      kind: "sandbox" as const,
+      pluginId: "io.mender.provider.sandbox-jobs",
+      ownerId: "sbx_rocky",
+      ownerName: "Rocky",
+      visibleName: "Rocky · Jobs",
+      destination: "Sandbox owner details",
+    },
+  ])("opens $kind owner for $visibleName without generic Provider mutation controls", async ({
+    kind, pluginId, ownerId, ownerName, visibleName, destination,
+  }) => {
+    const source: Provider = {
+      ...sampleProvider,
+      providerId: "prov_managed_01",
+      displayName: "Internal Facade",
+      pluginId,
+      toolSourceKind: kind,
+      toolSourceId: ownerId,
+      toolSourceName: ownerName,
+    };
+    const client = {
+      listProviders: vi.fn().mockResolvedValue({ providers: [source] }),
+      listProviderPlugins: vi.fn().mockResolvedValue({ plugins: [], issues: [] }),
+      listCredentials: vi.fn().mockResolvedValue({ credentials: [] }),
+    } as unknown as MenderClient;
+
+    render(
+      <MemoryRouter initialEntries={["/tools"]}>
+        <Routes>
+          <Route path="/tools" element={<ProvidersPage client={client} />} />
+          <Route path="/agents/:agentId" element={<div>Agent owner details</div>} />
+          <Route path="/sandboxes/:sandboxId" element={<div>Sandbox owner details</div>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    const link = await screen.findByRole("link", { name: visibleName });
+    const card = link.closest<HTMLElement>('[data-slot="card"]');
+    expect(card).toBeTruthy();
+    expect(within(card!).queryByRole("button", { name: "Edit " + visibleName })).toBeNull();
+    expect(within(card!).queryByRole("button", { name: "Delete " + visibleName })).toBeNull();
+    fireEvent.click(within(card!).getByRole("button", { name: "Manage" }));
+    expect(await screen.findByText(destination)).toBeTruthy();
   });
 });

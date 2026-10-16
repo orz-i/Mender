@@ -109,7 +109,7 @@ it("keeps Tool Picker selection across pages while keeping Search and Save contr
   expect(picker.className).toContain("grid-rows-[auto_minmax(0,1fr)_auto]");
   expect(picker.className).toContain("overflow-hidden");
   expect(within(picker).getByRole("textbox", { name: "Profile tool search" })).toBeTruthy();
-  expect(within(picker).getByRole("combobox", { name: "Provider filter" })).toBeTruthy();
+  expect(within(picker).getByRole("combobox", { name: "Service filter" })).toBeTruthy();
   expect(within(picker).getByRole("button", { name: "Save selection" })).toBeTruthy();
   const list = picker.querySelector('[data-slot="profile-tool-picker-list"]');
   expect(list?.className).toContain("overflow-y-auto");
@@ -169,7 +169,7 @@ it("submits Profile picker search with exact service scope before ranking",async
   fireEvent.click(await screen.findByRole("button",{name:"Manage Large Profile"}));
   fireEvent.click(screen.getByRole("button",{name:"Choose tools"}));
   const picker=await screen.findByRole("dialog",{name:"Choose tools"});
-  fireEvent.change(within(picker).getByRole("combobox",{name:"Provider filter"}),{
+  fireEvent.change(within(picker).getByRole("combobox",{name:"Service filter"}),{
     target:{value:"prov_2"},
   });
   fireEvent.change(within(picker).getByRole("textbox",{name:"Profile tool search"}),{

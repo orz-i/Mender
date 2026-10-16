@@ -1394,7 +1394,7 @@ function ToolPickerDialog({
             }}
           />
           <select
-            aria-label={t("Provider filter")}
+            aria-label={t("Service filter")}
             value={providerId}
             onChange={(event) => {
               onProviderChange(event.target.value);
@@ -1402,7 +1402,7 @@ function ToolPickerDialog({
             }}
             className="h-8 rounded-lg border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
           >
-            <option value="">{t("All Providers")}</option>
+            <option value="">{t("All services")}</option>
             {providers.map((provider) => (
               <option key={provider.providerId} value={provider.providerId}>
                 {toolSourceLabel(provider)}
