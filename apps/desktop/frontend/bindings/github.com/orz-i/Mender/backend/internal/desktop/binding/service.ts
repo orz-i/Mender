@@ -260,6 +260,10 @@ export function GrantAgentWorkspace(id: string, key: string, profileID: string):
     return $Call.ByID(2075628980, id, key, profileID);
 }
 
+export function InspectAgentModels(id: string): $CancellablePromise<$models.AgentModelChoices> {
+    return $Call.ByID(1085633447, id);
+}
+
 export function InspectSSHHostKey(host: string, port: number): $CancellablePromise<$models.SSHHostIdentity> {
     return $Call.ByID(2406930547, host, port);
 }

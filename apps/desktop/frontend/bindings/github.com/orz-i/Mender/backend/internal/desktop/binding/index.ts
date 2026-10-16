@@ -12,6 +12,8 @@ export type {
     AgentAdmissionList,
     AgentCancelReceipt,
     AgentList,
+    AgentModelChoice,
+    AgentModelChoices,
     AgentProfileGrants,
     AgentTask,
     AgentTaskList,

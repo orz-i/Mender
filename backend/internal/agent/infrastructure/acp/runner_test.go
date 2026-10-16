@@ -36,9 +36,19 @@ func TestACPFixtureProcess(t *testing.T) {
 			}
 			send(map[string]any{"jsonrpc": "2.0", "id": msg.ID, "result": map[string]any{"protocolVersion": version}})
 		case "session/new":
-			send(map[string]any{"jsonrpc": "2.0", "id": msg.ID, "result": map[string]any{"sessionId": "fixture-1"}})
+			result := map[string]any{"sessionId": "fixture-1"}
+			if os.Getenv("ACP_FIXTURE_MODE") == "models" {
+				result["configOptions"] = []any{map[string]any{
+					"id": "model", "category": "model", "type": "select", "currentValue": "fixture-one",
+					"options": []any{map[string]string{"value": "fixture-one", "name": "Fixture One"}, map[string]string{"value": "fixture-two", "name": "Fixture Two"}},
+				}}
+			}
+			send(map[string]any{"jsonrpc": "2.0", "id": msg.ID, "result": result})
 		case "session/prompt":
 			mode := os.Getenv("ACP_FIXTURE_MODE")
+			if mode == "models" {
+				os.Exit(92)
+			} // inspection must not send a prompt
 			if mode == "invalid-json" {
 				_, _ = fmt.Fprintln(writer, `{"jsonrpc":`)
 				_ = writer.Flush()

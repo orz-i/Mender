@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 
-import type { Agent, AgentTools, AgentTask, AgentAdmissionEvent, MenderClient, Profile } from "@mender/sdk";
+import type { Agent, AgentTools, AgentTask, AgentAdmissionEvent, AgentModelChoices, MenderClient, Profile } from "@mender/sdk";
 import { Badge } from "@mender/ui/components/badge";
 import { Button } from "@mender/ui/components/button";
 import {
@@ -52,6 +52,9 @@ export function AgentDetailPage({client}:{client:MenderClient}){
   const [viewTask,setViewTask]=useState<AgentTask|null>(null);
   const [settingsOpen,setSettingsOpen]=useState(false);
   const [modelDraft,setModelDraft]=useState("");
+  const [modelChoices,setModelChoices]=useState<AgentModelChoices|null>(null);
+  const [modelLoading,setModelLoading]=useState(false);
+  const [modelInspectionError,setModelInspectionError]=useState("");
 
   useEffect(()=>{
     if(!agentId)return;
@@ -124,6 +127,20 @@ export function AgentDetailPage({client}:{client:MenderClient}){
     }catch(reason){setError(errorMessage(reason));}
     finally{setBusy(false)}
   }
+  async function inspectModels(){
+    if(!agentId)return;
+    setModelLoading(true);setModelInspectionError("");
+    try {setModelChoices(await client.inspectAgentModels(agentId));}
+    catch(reason){setModelInspectionError(errorMessage(reason));setModelChoices(null);}
+    finally{setModelLoading(false);}
+  }
+  function editDefaultModel(){
+    setModelDraft(agent?.defaultModel??"");
+    setModelChoices(null);setModelInspectionError("");
+    setSettingsOpen(true);
+    // Explicit owner intent: inspection launches a bounded ACP session, no prompt.
+    void inspectModels();
+  }
   async function saveSettings(){
     if(!agentId||busy)return;
     setBusy(true);setError("");
@@ -172,7 +189,8 @@ export function AgentDetailPage({client}:{client:MenderClient}){
       <div className="flex flex-wrap justify-between gap-2 border-t border-border p-4">
         <p className="max-w-xl text-xs leading-5 text-muted-foreground">{t("Grant Profile access explicitly; this Agent will not run until invoked through an authorized Tool.")}</p>
         <div className="flex flex-wrap gap-2">
-          <Button size="sm" variant="outline" onClick={()=>{setModelDraft(agent.defaultModel??"");setSettingsOpen(true);}}>{t("Edit default model")}</Button>
+          <Button size="sm" variant="outline" onClick={editDefaultModel}>{t("Edit default model")}</Button>
+          <Button size="sm" variant="outline" onClick={()=>setTopic("workspaces")}>{t("Manage workspaces")}</Button>
           <Button size="sm" onClick={()=>setTopic("tools")}>{t("View Agent tools")}</Button>
           <Button size="sm" variant="destructive" onClick={()=>setConfirm({kind:"delete",id:agent.agentId})}>{t("Delete agent")}</Button>
         </div>
@@ -252,11 +270,26 @@ export function AgentDetailPage({client}:{client:MenderClient}){
 
     <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
       <DialogContent><DialogHeader><DialogTitle>{t("Edit default model")}</DialogTitle>
-        <DialogDescription>{t("The Agent must advertise the selected model when a task runs.")}</DialogDescription>
+        <DialogDescription>{t("Model choices come from this Agent's authenticated ACP session; no prompt is sent.")}</DialogDescription>
       </DialogHeader>
-      <Input maxLength={128} value={modelDraft} onChange={e=>setModelDraft(e.target.value)} placeholder={t("Use Agent default")}/>
+      <div className="space-y-3">
+        {modelLoading?<p className="text-sm text-muted-foreground">{t("Inspecting available models…")}</p>:null}
+        {modelChoices?
+          <select aria-label={t("Agent model")} className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
+            value={modelDraft} onChange={e=>setModelDraft(e.target.value)}>
+            <option value="">{t("Use Agent default")} ({modelChoices.current})</option>
+            {modelChoices.models.map(model=><option key={model.id} value={model.id}>{model.name} ({model.id})</option>)}
+            {modelDraft!==""&&!modelChoices.models.some(model=>model.id===modelDraft)?
+              <option value={modelDraft} disabled>{modelDraft} — {t("Not currently advertised")}</option>:null}
+          </select>:
+          !modelLoading?<Input aria-label={t("Agent model")} maxLength={128} value={modelDraft} onChange={e=>setModelDraft(e.target.value)}
+            placeholder={t("Use Agent default")}/>:null}
+        {modelInspectionError?<p role="alert" className="text-xs text-destructive">{t("Model inspection unavailable")}: {modelInspectionError}</p>:null}
+        <Button variant="outline" size="sm" disabled={modelLoading} onClick={()=>void inspectModels()}>{t("Refresh model choices")}</Button>
+      </div>
       <DialogFooter><Button variant="outline" onClick={()=>setSettingsOpen(false)}>{t("Cancel")}</Button>
-        <Button disabled={busy} onClick={()=>void saveSettings()}>{t("Save")}</Button></DialogFooter>
+        <Button disabled={busy||modelLoading||(modelChoices!==null&&modelDraft!==""&&!modelChoices.models.some(model=>model.id===modelDraft))}
+          onClick={()=>void saveSettings()}>{t("Save")}</Button></DialogFooter>
       </DialogContent>
     </Dialog>
     <Dialog open={grantOpen} onOpenChange={setGrantOpen}>

@@ -38,6 +38,7 @@ import type {
   Agent,
   AgentTools,
   AgentWorkspace,
+  AgentModelChoices,
   WorkspaceToolTarget,
   AgentTask,
   AgentAdmissionEvent,
@@ -84,6 +85,7 @@ import {
   type Agent as BindingAgent,
   type AgentTools as BindingAgentTools,
   type AgentWorkspace as BindingAgentWorkspace,
+  type AgentModelChoices as BindingAgentModelChoices,
   type WorkspaceToolTarget as BindingWorkspaceToolTarget,
   type AgentTask as BindingAgentTask,
   type AgentAdmissionEvent as BindingAgentAdmissionEvent,
@@ -370,6 +372,7 @@ export function createDesktopMenderClient(): MenderClient {
       isolation:body.isolation??"restricted_host",defaultModel:body.defaultModel??"",
     }));},
     async updateAgentSettings(agentId,defaultModel){return agent(await Service.UpdateAgentSettings(agentId,defaultModel));},
+    async inspectAgentModels(agentId){return agentModelChoices(await Service.InspectAgentModels(agentId));},
     async listAgentWorkspaces(agentId){const r=await Service.ListAgentWorkspaces(agentId);return {workspaces:(r.workspaces??[]).map(agentWorkspace)};},
     async bindAgentWorkspace(agentId,key,sandboxId){await Service.BindAgentWorkspace(agentId,key,sandboxId);},
     async unbindAgentWorkspace(agentId,key){await Service.UnbindAgentWorkspace(agentId,key);},
@@ -908,6 +911,9 @@ function agent(value:BindingAgent):Agent {
 }
 function workspaceToolTarget(value:BindingWorkspaceToolTarget):WorkspaceToolTarget {
   return {key:value.key,sandboxId:value.sandboxId};
+}
+function agentModelChoices(value:BindingAgentModelChoices):AgentModelChoices {
+  return {current:value.current,models:(value.models??[]).map(m=>({id:m.id,name:m.name}))};
 }
 function agentWorkspace(value:BindingAgentWorkspace):AgentWorkspace {
   return {key:value.key,sandboxId:value.sandboxId,profileIds:value.profileIds??[]};

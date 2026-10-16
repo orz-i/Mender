@@ -12,6 +12,47 @@ import (
 	gov "github.com/orz-i/Mender/backend/internal/governance/domain"
 )
 
+type inspectingFake struct{ probes int }
+
+func (f *inspectingFake) Execute(context.Context, agentdomain.Agent, string) (string, error) {
+	return "", nil
+}
+func (f *inspectingFake) InspectModels(context.Context, agentdomain.Agent) (ModelChoices, error) {
+	f.probes++
+	return ModelChoices{Current: "fixture-one", Models: []ModelChoice{{ID: "fixture-one", Name: "Fixture One"}}}, nil
+}
+func TestAgentModelInspectionRequiresOwnerAndNoTask(t *testing.T) {
+	executor := &inspectingFake{}
+	service, caller := newFixtureService(t, executor)
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	agent, err := service.Create(context.Background(), CreateRequest{
+		Name: "Model Test", Backend: agentdomain.BackendGrok, WorkspaceRoot: root,
+	}, caller)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.InspectModels(context.Background(), agent.ID(), profile(t, goodProfileID)); !errors.Is(err, agentdomain.ErrForbidden) {
+		t.Fatalf("profile inspector was allowed: %v", err)
+	}
+	if executor.probes != 0 {
+		t.Fatal("untrusted Profile launched ACP probe")
+	}
+	models, err := service.InspectModels(context.Background(), agent.ID(), caller)
+	if err != nil || len(models.Models) != 1 || models.Current != "fixture-one" {
+		t.Fatalf("choices=%+v err=%v", models, err)
+	}
+	if executor.probes != 1 {
+		t.Fatalf("unexpected probe calls %d", executor.probes)
+	}
+	tasks, err := service.Tasks(context.Background(), agent.ID(), caller)
+	if err != nil || len(tasks) != 0 {
+		t.Fatalf("inspection created task: %+v %v", tasks, err)
+	}
+}
+
 type selectionRunner struct{ calls chan RunConfig }
 
 func (r selectionRunner) Execute(context.Context, agentdomain.Agent, string) (string, error) {

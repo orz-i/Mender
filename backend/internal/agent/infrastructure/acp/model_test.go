@@ -6,8 +6,32 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 )
 
+func TestInspectModelsRequiresExplicitNoPromptACPv1Session(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	defer cancel()
+	choice, err := fixtureRunner("models").InspectModels(ctx, fixtureAgent(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if choice.Current != "fixture-one" || len(choice.Models) != 2 ||
+		choice.Models[1].ID != "fixture-two" || choice.Models[1].Name != "Fixture Two" {
+		t.Fatalf("wrong advertised models: %+v", choice)
+	}
+}
+func TestModelChoicesRejectUnreviewedOrUnboundedOptions(t *testing.T) {
+	for _, raw := range []string{
+		`{}`,
+		`{"configOptions":[{"id":"reasoning_effort","category":"thought_level","type":"select","options":[{"value":"high"}]}]}`,
+		`{"configOptions":[{"id":"model","category":"model","type":"select","currentValue":"unexpected","options":[{"value":"safe"}]}]}`,
+	} {
+		if _, err := ReadModelChoices(json.RawMessage(raw)); err == nil {
+			t.Fatalf("accepted missing or invalid model options: %s", raw)
+		}
+	}
+}
 func TestSelectModelUsesAdvertisedACPv1Options(t *testing.T) {
 	session := json.RawMessage(`{"configOptions":[{"id":"model","category":"model","type":"select","currentValue":"default","options":[{"value":"default","name":"Default"},{"value":"test-model","name":"Test"}]}]}`)
 	updates := make(chan rpcMessage, 1)

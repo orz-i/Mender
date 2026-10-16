@@ -4,10 +4,52 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"time"
 
 	agentdomain "github.com/orz-i/Mender/backend/internal/agent/domain"
 	gov "github.com/orz-i/Mender/backend/internal/governance/domain"
 )
+
+// ModelChoice is host-reviewed, bounded ACP v1 session metadata.
+// It is not a catalog of models that Mender can invoke independently.
+type ModelChoice struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+type ModelChoices struct {
+	Current string        `json:"current"`
+	Models  []ModelChoice `json:"models"`
+}
+type ModelInspector interface {
+	InspectModels(context.Context, agentdomain.Agent) (ModelChoices, error)
+}
+
+// InspectModels is an explicit owner action, never executed during Agent listing.
+// A bounded ACP session is created solely to inspect advertised model options;
+// no Task, prompt, credentials or Agent defaults are mutated.
+func (s *Service) InspectModels(ctx context.Context, id agentdomain.ID, caller gov.Context) (ModelChoices, error) {
+	if err := s.requireOwner(caller); err != nil {
+		return ModelChoices{}, err
+	}
+	agent, err := s.store.GetAgent(ctx, id)
+	if err != nil {
+		return ModelChoices{}, err
+	}
+	if !agent.OwnedBy(string(s.owner.Kind()), s.owner.Reference()) {
+		return ModelChoices{}, agentdomain.ErrForbidden
+	}
+	inspector, ok := s.runner.(ModelInspector)
+	if !ok {
+		return ModelChoices{}, agentdomain.ErrUnavailable
+	}
+	probeCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	choices, err := inspector.InspectModels(probeCtx, agent)
+	if err != nil {
+		return ModelChoices{}, fmt.Errorf("%w: model options unavailable", agentdomain.ErrUnavailable)
+	}
+	return choices, nil
+}
 
 func (s *Service) SetWorkspaceResolver(resolver WorkspaceResolver) error {
 	if s == nil || resolver == nil {

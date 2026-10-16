@@ -17,6 +17,7 @@ func (a *app) newAgentCommand() *cobra.Command {
 	command.AddCommand(a.newAgentAddCommand())
 	command.AddCommand(a.newAgentShowCommand())
 	command.AddCommand(a.newAgentModelCommand())
+	command.AddCommand(a.newAgentModelsCommand())
 	command.AddCommand(a.newAgentWorkspaceCommand())
 	command.AddCommand(a.newAgentToolsCommand())
 	command.AddCommand(a.newAgentRemoveCommand())

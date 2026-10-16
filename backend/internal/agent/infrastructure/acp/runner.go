@@ -135,11 +135,75 @@ func (r Runner) Execute(ctx context.Context, agent agentdomain.Agent, prompt str
 	return r.ExecuteConfigured(ctx, agent, prompt, agentapplication.RunConfig{WorkspaceRoot: agent.Spec().WorkspaceRoot})
 }
 func (r Runner) ExecuteConfigured(ctx context.Context, agent agentdomain.Agent, prompt string, config agentapplication.RunConfig) (string, error) {
-	if r.NewCommand == nil {
-		return "", errors.New("ACP process launcher unavailable")
-	}
 	if len(prompt) == 0 || len(prompt) > agentdomain.MaxPromptBytes || strings.TrimSpace(prompt) == "" {
 		return "", fmt.Errorf("%w: invalid Task prompt", agentdomain.ErrInvalid)
+	}
+	return r.withSession(ctx, agent, config, func(wire *stream, sessionID string, session json.RawMessage, readErrors <-chan error) (string, error) {
+		if config.Model != "" {
+			if err := selectModel(ctx, wire, sessionID, session, config.Model); err != nil {
+				return "", err
+			}
+		}
+		var result strings.Builder
+		var outputOverflow bool
+		onUpdate := func(msg rpcMessage) error {
+			if msg.Method != "session/update" {
+				return nil
+			}
+			var params struct {
+				SessionID string `json:"sessionId"`
+				Update    struct {
+					SessionUpdate string `json:"sessionUpdate"`
+					Content       struct {
+						Type string `json:"type"`
+						Text string `json:"text"`
+					} `json:"content"`
+				} `json:"update"`
+			}
+			if err := json.Unmarshal(msg.Params, &params); err != nil {
+				return errors.New("ACP malformed session update")
+			}
+			if params.SessionID != sessionID {
+				return errors.New("ACP update from unexpected SessionID")
+			}
+			if params.Update.SessionUpdate == "agent_message_chunk" && params.Update.Content.Type == "text" {
+				if len(params.Update.Content.Text) > agentdomain.MaxResultBytes-result.Len() {
+					outputOverflow = true
+					return errors.New("ACP Agent result exceeds limit")
+				}
+				_, _ = result.WriteString(params.Update.Content.Text)
+			}
+			return nil
+		}
+		outcome, err := wire.call(ctx, 3, "session/prompt", map[string]any{
+			"sessionId": sessionID, "prompt": []any{map[string]string{"type": "text", "text": prompt}},
+		}, onUpdate)
+		if err != nil {
+			if outputOverflow {
+				return "", errors.New("ACP Agent result exceeds limit")
+			}
+			return "", annotateRead(err, readErrors)
+		}
+		var completed struct {
+			StopReason string `json:"stopReason"`
+		}
+		if err := json.Unmarshal(outcome, &completed); err != nil {
+			return "", errors.New("ACP invalid prompt outcome")
+		}
+		if completed.StopReason != "end_turn" {
+			return "", fmt.Errorf("ACP Agent did not complete task (stop reason %q)", completed.StopReason)
+		}
+		return result.String(), nil
+	})
+}
+
+// withSession owns all child-process cleanup and ACP v1 initialization.
+// Inspection never sends a prompt; execution is bounded by the caller's context.
+func (r Runner) withSession(ctx context.Context, agent agentdomain.Agent, config agentapplication.RunConfig,
+	visit func(*stream, string, json.RawMessage, <-chan error) (string, error),
+) (string, error) {
+	if r.NewCommand == nil {
+		return "", errors.New("ACP process launcher unavailable")
 	}
 	// The per-task command has no persistent Agent session. Cancel its context
 	// when the prompt ends so the owned process group and scanner are drained.
@@ -245,62 +309,9 @@ func (r Runner) ExecuteConfigured(ctx context.Context, agent agentdomain.Agent, 
 	if err := json.Unmarshal(session, &created); err != nil || created.SessionID == "" || len(created.SessionID) > 512 {
 		return "", errors.New("ACP Agent returned invalid SessionID")
 	}
-	if config.Model != "" {
-		if err := selectModel(ctx, &wire, created.SessionID, session, config.Model); err != nil {
-			return "", err
-		}
-	}
-	var result strings.Builder
-	var outputOverflow bool
-	onUpdate := func(msg rpcMessage) error {
-		if msg.Method != "session/update" {
-			return nil
-		}
-		var params struct {
-			SessionID string `json:"sessionId"`
-			Update    struct {
-				SessionUpdate string `json:"sessionUpdate"`
-				Content       struct {
-					Type string `json:"type"`
-					Text string `json:"text"`
-				} `json:"content"`
-			} `json:"update"`
-		}
-		if err := json.Unmarshal(msg.Params, &params); err != nil {
-			return errors.New("ACP malformed session update")
-		}
-		if params.SessionID != created.SessionID {
-			return errors.New("ACP update from unexpected SessionID")
-		}
-		if params.Update.SessionUpdate == "agent_message_chunk" && params.Update.Content.Type == "text" {
-			if len(params.Update.Content.Text) > agentdomain.MaxResultBytes-result.Len() {
-				outputOverflow = true
-				return errors.New("ACP Agent result exceeds limit")
-			}
-			_, _ = result.WriteString(params.Update.Content.Text)
-		}
-		return nil
-	}
-	outcome, err := wire.call(ctx, 3, "session/prompt", map[string]any{
-		"sessionId": created.SessionID, "prompt": []any{map[string]string{"type": "text", "text": prompt}},
-	}, onUpdate)
-	if err != nil {
-		if outputOverflow {
-			return "", errors.New("ACP Agent result exceeds limit")
-		}
-		return "", annotateRead(err, readErrors)
-	}
-	var completed struct {
-		StopReason string `json:"stopReason"`
-	}
-	if err := json.Unmarshal(outcome, &completed); err != nil {
-		return "", errors.New("ACP invalid prompt outcome")
-	}
-	if completed.StopReason != "end_turn" {
-		return "", fmt.Errorf("ACP Agent did not complete task (stop reason %q)", completed.StopReason)
-	}
-	return result.String(), nil
+	return visit(&wire, created.SessionID, session, readErrors)
 }
+
 func annotateRead(err error, streamErrors <-chan error) error {
 	select {
 	case streamErr := <-streamErrors:

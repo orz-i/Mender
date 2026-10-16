@@ -4,6 +4,35 @@ import (
 	agentdomain "github.com/orz-i/Mender/backend/internal/agent/domain"
 )
 
+type AgentModelChoice struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+type AgentModelChoices struct {
+	Current string             `json:"current"`
+	Models  []AgentModelChoice `json:"models"`
+}
+
+func (s *Service) InspectAgentModels(id string) (AgentModelChoices, error) {
+	caller, err := s.agentOwnerContext()
+	if err != nil {
+		return AgentModelChoices{}, err
+	}
+	parsed, err := agentdomain.ParseID(id)
+	if err != nil {
+		return AgentModelChoices{}, err
+	}
+	value, err := s.runtime.Agents.InspectModels(s.ctx, parsed, caller)
+	if err != nil {
+		return AgentModelChoices{}, err
+	}
+	response := AgentModelChoices{Current: value.Current, Models: make([]AgentModelChoice, 0, len(value.Models))}
+	for _, m := range value.Models {
+		response.Models = append(response.Models, AgentModelChoice{ID: m.ID, Name: m.Name})
+	}
+	return response, nil
+}
+
 type AgentWorkspace struct {
 	Key        string   `json:"key"`
 	SandboxID  string   `json:"sandboxId"`

@@ -6,6 +6,26 @@ import (
 	agentdomain "github.com/orz-i/Mender/backend/internal/agent/domain"
 )
 
+// Explicit owner-only ACP inspection. This POST starts a bounded CLI
+// handshake, but never submits a prompt or changes a persisted Agent.
+func (h *Handler) inspectAgentModels(w http.ResponseWriter, r *http.Request) {
+	id, err := agentdomain.ParseID(r.PathValue("agentId"))
+	if err != nil {
+		h.agentError(w, err)
+		return
+	}
+	caller, err := h.agentOwnerContext()
+	if err != nil {
+		h.agentError(w, err)
+		return
+	}
+	choices, err := h.runtime.Agents.InspectModels(r.Context(), id, caller)
+	if err != nil {
+		h.agentError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, choices)
+}
 func (h *Handler) updateAgentSettings(w http.ResponseWriter, r *http.Request) {
 	id, err := agentdomain.ParseID(r.PathValue("agentId"))
 	if err != nil {

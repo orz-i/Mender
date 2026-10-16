@@ -79,6 +79,21 @@ describe("Agents focused management",()=>{
       isolation:"restricted_host",defaultModel:"",
     }));
   });
+  it("loads advertised ACP model choices only when editing and keeps the same Agent",async()=>{
+    const inspectAgentModels=vi.fn().mockResolvedValue({current:"fixture-one",
+      models:[{id:"fixture-one",name:"Fixture One"},{id:"fixture-two",name:"Fixture Two"}]});
+    const updateAgentSettings=vi.fn().mockResolvedValue({...agent,defaultModel:"fixture-two"});
+    const client=show("/agents/"+agent.agentId,{inspectAgentModels,updateAgentSettings});
+    expect(await screen.findByText("Code Reviewer")).toBeTruthy();
+    expect(inspectAgentModels).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button",{name:"Edit default model"}));
+    await waitFor(()=>expect(inspectAgentModels).toHaveBeenCalledWith(agent.agentId));
+    const picker=await screen.findByRole("combobox",{name:"Agent model"});
+    fireEvent.change(picker,{target:{value:"fixture-two"}});
+    fireEvent.click(screen.getByRole("button",{name:"Save"}));
+    await waitFor(()=>expect(updateAgentSettings).toHaveBeenCalledWith(agent.agentId,"fixture-two"));
+    expect(client.createAgent).not.toHaveBeenCalled();
+  });
   it("repairs a missing Agent suite only on explicit owner action",async()=>{
     const client=show("/agents/"+agent.agentId,{
       getAgentTools:vi.fn().mockResolvedValue({suiteId:"agent.delegation",status:"missing",tools:[]}),

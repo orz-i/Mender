@@ -621,6 +621,25 @@ export interface paths {
         patch: operations["updateAgentSettings"];
         trace?: never;
     };
+    "/agents/{agentId}/models/inspect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Owner-only explicit bounded ACP session inspection. Starts a CLI but submits no prompt and never persists state. */
+        post: operations["inspectAgentModels"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/agents/{agentId}/workspaces": {
         parameters: {
             query?: never;
@@ -2239,6 +2258,14 @@ export interface components {
         BindAgentWorkspaceRequest: {
             sandboxId: string;
         };
+        AgentModelChoice: {
+            id: string;
+            name: string;
+        };
+        AgentModelChoices: {
+            current: string;
+            models: components["schemas"]["AgentModelChoice"][];
+        };
         AgentWorkspace: {
             key: string;
             sandboxId: string;
@@ -3742,6 +3769,37 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             403: components["responses"]["Forbidden"];
+        };
+    };
+    inspectAgentModels: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Only models advertised by the Agent's current authenticated ACP v1 session */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentModelChoices"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description Backend ACP model inspection unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     listAgentWorkspaces: {

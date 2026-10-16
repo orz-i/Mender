@@ -54,6 +54,7 @@ export type {
   Agent,
   AgentTools,
   AgentWorkspace,
+  AgentModelChoices,
   WorkspaceToolTarget,
   AgentTask,
   AgentAdmissionEvent,

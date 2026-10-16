@@ -1,4 +1,10 @@
 export const zhCNMessages: Readonly<Record<string, string>> = {
+  "Agent model": "智能体模型",
+  "Inspecting available models…": "正在查询可用模型…",
+  "Model choices come from this Agent's authenticated ACP session; no prompt is sent.": "从当前智能体已授权的 ACP 会话获取模型选项，不发送提示词。",
+  "Model inspection unavailable": "无法查询模型选项",
+  "Not currently advertised": "当前未声明支持",
+  "Refresh model choices": "刷新模型选项",
   "Add an existing Sandbox to reuse these four tools.": "添加已有沙盒，复用这一组工具。",
   "Back to service tools": "返回服务工具",
   "Manage permissions": "管理权限",

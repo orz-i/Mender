@@ -9,6 +9,26 @@ import (
 )
 
 // These commands administer existing Agent resources; no Agent is run by inspection.
+func (a *app) newAgentModelsCommand() *cobra.Command {
+	return &cobra.Command{Use: "models <agent-id>", Short: "Explicitly inspect authenticated ACP model choices (no prompt)",
+		Args: exactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+			id, err := agentdomain.ParseID(args[0])
+			if err != nil {
+				return usageError{err: err}
+			}
+			return a.withRuntime(cmd.Context(), func(r *bootstrap.Runtime) error {
+				caller, err := agentCLIContext(r)
+				if err != nil {
+					return err
+				}
+				choices, err := r.Agents.InspectModels(cmd.Context(), id, caller)
+				if err != nil {
+					return err
+				}
+				return a.writeValue(fmt.Sprintf("%d advertised ACP models", len(choices.Models)), map[string]any{"models": choices})
+			})
+		}}
+}
 func (a *app) newAgentModelCommand() *cobra.Command {
 	return &cobra.Command{Use: "model <agent-id> <model-id-or-empty>", Short: "Set an Agent's default ACP model identifier (empty uses backend default)",
 		Args: exactArgs(2), RunE: func(cmd *cobra.Command, args []string) error {

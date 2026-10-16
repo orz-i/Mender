@@ -800,6 +800,24 @@ paths:
               schema: { $ref: '#/components/schemas/Agent' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '403': { $ref: '#/components/responses/Forbidden' }
+  /agents/{agentId}/models/inspect:
+    parameters:
+      - name: agentId
+        in: path
+        required: true
+        schema: { type: string, pattern: '^agent_[0-9a-f]{32}$' }
+    post:
+      operationId: inspectAgentModels
+      description: Owner-only explicit bounded ACP session inspection. Starts a CLI but submits no prompt and never persists state.
+      responses:
+        '200':
+          description: Only models advertised by the Agent's current authenticated ACP v1 session
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentModelChoices' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { description: Backend ACP model inspection unavailable }
   /agents/{agentId}/workspaces:
     parameters:
       - name: agentId
@@ -2799,6 +2817,23 @@ components:
       additionalProperties: false
       properties:
         sandboxId: { type: string, pattern: '^sbx_[0-9a-f]{32}$' }
+    AgentModelChoice:
+      type: object
+      required: [id, name]
+      additionalProperties: false
+      properties:
+        id: { type: string, minLength: 1, maxLength: 128 }
+        name: { type: string, minLength: 1, maxLength: 120 }
+    AgentModelChoices:
+      type: object
+      required: [current, models]
+      additionalProperties: false
+      properties:
+        current: { type: string, maxLength: 128 }
+        models:
+          type: array
+          maxItems: 64
+          items: { $ref: '#/components/schemas/AgentModelChoice' }
     AgentWorkspace:
       type: object
       required: [key, sandboxId, profileIds]

@@ -23,6 +23,7 @@ export type Tunnel = components["schemas"]["Tunnel"];
 export type Agent = components["schemas"]["Agent"];
 export type AgentTools = components["schemas"]["AgentTools"];
 export type AgentWorkspace = components["schemas"]["AgentWorkspace"];
+export type AgentModelChoices = components["schemas"]["AgentModelChoices"];
 export type WorkspaceToolTarget = components["schemas"]["WorkspaceToolTarget"];
 export type AgentTask = components["schemas"]["AgentTask"];
 export type AgentAdmissionEvent = components["schemas"]["AgentAdmissionEvent"];
@@ -184,6 +185,7 @@ export interface MenderClient {
   ensureAgentTools(agentId:string): Promise<AgentTools>;
   createAgent(body:CreateAgentRequest): Promise<Agent>;
   updateAgentSettings(agentId:string,defaultModel:string):Promise<Agent>;
+  inspectAgentModels(agentId:string):Promise<AgentModelChoices>;
   listAgentWorkspaces(agentId:string):Promise<{workspaces:AgentWorkspace[]}>;
   bindAgentWorkspace(agentId:string,key:string,sandboxId:string):Promise<void>;
   unbindAgentWorkspace(agentId:string,key:string):Promise<void>;
@@ -562,6 +564,7 @@ export function createMenderClient(
     async ensureAgentTools(agentId){return requireData(await client.POST("/agents/{agentId}/tools",{params:{path:{agentId}}}));},
     async createAgent(body){return requireData(await client.POST("/agents",{body}));},
     async updateAgentSettings(agentId,defaultModel){return requireData(await client.PATCH("/agents/{agentId}/settings",{params:{path:{agentId}},body:{defaultModel}}));},
+    async inspectAgentModels(agentId){return requireData(await client.POST("/agents/{agentId}/models/inspect",{params:{path:{agentId}}}));},
     async listAgentWorkspaces(agentId){return requireData(await client.GET("/agents/{agentId}/workspaces",{params:{path:{agentId}}}));},
     async bindAgentWorkspace(agentId,workspaceKey,sandboxId){const r=await client.PUT("/agents/{agentId}/workspaces/{workspaceKey}",{params:{path:{agentId,workspaceKey}},body:{sandboxId}});if(!r.response.ok)throwApiError(r.error,r.response);},
     async unbindAgentWorkspace(agentId,workspaceKey){const r=await client.DELETE("/agents/{agentId}/workspaces/{workspaceKey}",{params:{path:{agentId,workspaceKey}}});if(!r.response.ok)throwApiError(r.error,r.response);},

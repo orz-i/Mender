@@ -40,6 +40,16 @@ export interface AgentList {
     "agents": Agent[] | null;
 }
 
+export interface AgentModelChoice {
+    "id": string;
+    "name": string;
+}
+
+export interface AgentModelChoices {
+    "current": string;
+    "models": AgentModelChoice[] | null;
+}
+
 export interface AgentProfileGrants {
     "profileIds": string[] | null;
 }
