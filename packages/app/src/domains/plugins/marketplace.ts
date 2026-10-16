@@ -76,12 +76,16 @@ export function pluginCatalogueToMarketplace(entries:PluginCatalogueEntry[]):Mar
   // or a guessed route. Native installations remain for repair/removal.
   return entries.filter(entry=>entry.marketplaceAction!=="none" || Boolean(entry.installationId))
     .map((entry):MarketplacePlugin=>{
-    const kind=entry.kind==="provider.tools"?"provider":
-      entry.kind==="sandbox.backend"?"sandbox":
-      entry.kind==="tunnel.transport"?"tunnel":
-      entry.kind==="agent.backend"?"agent":"unsupported";
+    const kinds:Record<PluginCatalogueEntry["kind"], "provider"|"sandbox"|"tunnel"|"agent">={
+      "provider.tools":"provider",
+      "sandbox.backend":"sandbox",
+      "tunnel.transport":"tunnel",
+      "agent.backend":"agent",
+    };
+    const kind=kinds[entry.kind];
+    if(kind===undefined){throw new Error("Unsupported plugin extension kind");}
     const labels={provider:"Provider plugin",sandbox:"Sandbox backend",
-      tunnel:"Tunnel transport",agent:"Agent backend",unsupported:"Unsupported plugin"};
+      tunnel:"Tunnel transport",agent:"Agent backend"};
     const enabled=entry.enabled && entry.status==="enabled" && entry.issue===undefined;
     const installationId=entry.installationId;
     const action=entry.marketplaceAction;

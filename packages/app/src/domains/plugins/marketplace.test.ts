@@ -92,6 +92,15 @@ describe("Host-reviewed Marketplace projection",()=>{
     ])).toHaveLength(0);
   });
 
+  it("fails closed on unknown native extension kinds",()=>{
+    expect(()=>pluginCatalogueToMarketplace([
+      entry("provider.tools",{
+        kind:"provider.future" as PluginCatalogueEntry["kind"],
+        marketplaceAction:"none",
+      }),
+    ])).toThrow(/Unsupported plugin extension kind/);
+  });
+
   it("keeps native Agent packages visible for diagnosis only, not create or unsupported management",()=>{
     const models=pluginCatalogueToMarketplace([
       builtin("agent.backend","io.mender.agent.grok","create.agent"),

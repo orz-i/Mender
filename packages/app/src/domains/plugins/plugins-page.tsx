@@ -747,27 +747,21 @@ function DetailField({
 
 function pluginKindLabel(plugin:MarketplacePlugin){
   switch(plugin.kind){
-    case "suite":return t("Tool Suite");
     case "integration":return t("Remote MCP integration");
     case "provider":return t("Provider plugin");
     case "sandbox":return t("Sandbox backend");
     case "tunnel":return t("Tunnel transport");
     case "agent":return t("Agent backend");
-    case "unsupported":return t("Unsupported plugin");
     default:return t(plugin.kindLabel);
   }
 }
 
-function pluginSourceLabel(plugin: MarketplacePlugin) {
-  switch (plugin.source) {
-    case "curated":
-      return t("Curated");
-    case "builtin":
-      return t("Built-in");
-    case "local":
-      return t("Local package");
-    default:
-      return plugin.sourceLabel;
+function pluginSourceLabel(plugin:MarketplacePlugin){
+  switch(plugin.source){
+    case "curated":return t("Curated");
+    case "builtin":return t("Built-in");
+    case "local":return t("Local package");
+    default:return t(plugin.sourceLabel);
   }
 }
 
@@ -789,9 +783,7 @@ function pluginStatusLabel(plugin: MarketplacePlugin) {
 }
 
 function pluginVersionLabel(plugin: MarketplacePlugin) {
-  return plugin.version === "Not released" ? t("Not released") :
-    plugin.version === "Reviewed preset" ? t("Reviewed preset") :
-    plugin.version;
+  return plugin.version === "Reviewed preset" ? t("Reviewed preset") : plugin.version;
 }
 
 function pluginDescription(plugin: MarketplacePlugin) {

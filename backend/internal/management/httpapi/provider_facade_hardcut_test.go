@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/orz-i/Mender/backend/internal/bootstrap"
+	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 )
 
 func TestPrivateProviderFacadesCannotBeCreatedThroughHTTP(t *testing.T) {
@@ -50,5 +51,47 @@ func TestPrivateProviderFacadesCannotBeCreatedThroughHTTP(t *testing.T) {
 	providers, err := runtime.Catalog.ListProviders.Execute(ctx)
 	if err != nil || len(providers) != 0 {
 		t.Fatalf("denied HTTP creations mutated Providers: %d %v", len(providers), err)
+	}
+}
+
+func TestManagedProviderSyncIsOnlyAllowedFromSandboxToolSuiteOwner(t *testing.T) {
+	ctx := context.Background()
+	runtime, err := bootstrap.NewRuntime(ctx, bootstrap.RuntimeOptions{
+		DatabasePath: filepath.Join(t.TempDir(), "mender.db"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = runtime.Close() }()
+	caller, err := governancedomain.NewContext(
+		governancedomain.OriginInternal, runtime.OwnerPrincipal(), governancedomain.CatalogScope(),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sandbox, err := runtime.Sandboxes.CreateLocalSandbox(ctx, bootstrap.CreateLocalSandboxRequest{
+		Name: "HTTP facade test", Root: t.TempDir(), Isolation: "host",
+	}, caller)
+	if err != nil {
+		t.Fatal(err)
+	}
+	suite, err := runtime.EnsureSandboxWorkspaceTools(ctx, sandbox.ID(), caller)
+	if err != nil || suite.Status != "ready" || len(suite.Tools) != 4 {
+		t.Fatalf("owner preparation: %+v, %v", suite, err)
+	}
+	server := httptest.NewServer(New(runtime))
+	defer server.Close()
+	requestJSON(t, server.Client(), http.MethodPost,
+		server.URL+"/api/v1/providers/"+suite.ProviderID+"/sync", nil, http.StatusConflict)
+	after, err := runtime.SandboxWorkspaceTools(ctx, sandbox.ID(), caller)
+	if err != nil || after.ProviderID != suite.ProviderID || after.Status != "ready" ||
+		len(after.Tools) != len(suite.Tools) {
+		t.Fatalf("generic sync altered managed tools: %+v %v", after, err)
+	}
+	for i := range after.Tools {
+		if after.Tools[i].ToolID != suite.Tools[i].ToolID {
+			t.Fatalf("ToolID changed after denied generic sync: %s != %s",
+				after.Tools[i].ToolID, suite.Tools[i].ToolID)
+		}
 	}
 }
