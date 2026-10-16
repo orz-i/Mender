@@ -150,7 +150,7 @@ func ValidateReasoningEffort(value string) error {
 	return nil
 }
 
-// WorkspaceKey identifies one owner-configured, local-only Sandbox binding.
+// WorkspaceKey identifies one owner-configured, local-only Agent directory.
 // The implicit default workspace is selected by the empty key.
 func ValidateWorkspaceKey(key string) error {
 	if len(key) == 0 || len(key) > 64 || key == "default" {
@@ -165,9 +165,9 @@ func ValidateWorkspaceKey(key string) error {
 }
 
 type WorkspaceBinding struct {
-	Key        string   `json:"key"`
-	SandboxID  string   `json:"sandboxId"`
-	ProfileIDs []string `json:"profileIds"`
+	Key           string   `json:"key"`
+	WorkspaceRoot string   `json:"workspaceRoot"`
+	ProfileIDs    []string `json:"profileIds"`
 }
 
 func (a Agent) Spec() Spec { return a.spec }

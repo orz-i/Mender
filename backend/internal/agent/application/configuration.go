@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -56,21 +57,35 @@ func (s *Service) InspectModels(ctx context.Context, id agentdomain.ID, caller g
 	return choices, nil
 }
 
-func (s *Service) SetWorkspaceResolver(resolver WorkspaceResolver) error {
-	if s == nil || resolver == nil {
+// canonicalLocalWorkspace is an explicit owner-selected directory, not a
+// Sandbox resource or a path provided by an MCP task.
+func canonicalLocalWorkspace(root string) (string, error) {
+	if !filepath.IsAbs(root) {
+		return "", fmt.Errorf("%w: local workspace must be an absolute path", agentdomain.ErrInvalid)
+	}
+	canonical, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return "", fmt.Errorf("%w: workspace path unavailable: %w", agentdomain.ErrInvalid, err)
+	}
+	info, err := os.Stat(canonical)
+	if err != nil {
+		return "", fmt.Errorf("%w: workspace path unavailable: %w", agentdomain.ErrInvalid, err)
+	}
+	if !info.IsDir() {
+		return "", fmt.Errorf("%w: workspace is not a directory", agentdomain.ErrInvalid)
+	}
+	return filepath.Clean(canonical), nil
+}
+
+// validateRegisteredWorkspaceRoot rechecks the approved root before task
+// admission. A replaced symlink cannot silently redirect an old Profile grant.
+func validateRegisteredWorkspaceRoot(root string) error {
+	canonical, err := canonicalLocalWorkspace(root)
+	if err != nil {
 		return agentdomain.ErrUnavailable
 	}
-	s.workspaceResolver = resolver
-	return nil
-}
-func (s *Service) validateTarget(a agentdomain.Agent, target WorkspaceTarget) error {
-	spec := a.Spec()
-	if target.ID == "" || target.Backend != "local_workspace" ||
-		target.OwnerKind != spec.OwnerKind || target.OwnerRef != spec.OwnerRef ||
-		(target.Isolation != "host" && target.Isolation != "restricted_host") ||
-		(target.Isolation == "restricted_host" && spec.Isolation == "host") ||
-		!filepath.IsAbs(target.Root) || filepath.Clean(target.Root) != target.Root {
-		return fmt.Errorf("%w: local workspace owner/backend/isolation mismatch", agentdomain.ErrForbidden)
+	if canonical != root {
+		return fmt.Errorf("%w: approved workspace root changed", agentdomain.ErrUnavailable)
 	}
 	return nil
 }
@@ -100,9 +115,9 @@ func (s *Service) UpdateDefaults(ctx context.Context, id agentdomain.ID, model, 
 	return s.store.GetAgent(ctx, id)
 }
 
-// BindWorkspace is owner-only and references an existing, local Sandbox.
-// No new agent, provider, or filesystem resource is created by this operation.
-func (s *Service) BindWorkspace(ctx context.Context, id agentdomain.ID, key, sandboxID string, caller gov.Context) error {
+// BindWorkspace registers an existing local directory, without creating a
+// Sandbox, Agent or Provider. Only the Agent owner may approve a root.
+func (s *Service) BindWorkspace(ctx context.Context, id agentdomain.ID, key, workspaceRoot string, caller gov.Context) error {
 	if err := s.requireOwner(caller); err != nil {
 		return err
 	}
@@ -113,25 +128,17 @@ func (s *Service) BindWorkspace(ctx context.Context, id agentdomain.ID, key, san
 	if err != nil {
 		return err
 	}
-	if s.workspaceResolver == nil {
-		return agentdomain.ErrUnavailable
+	if !a.OwnedBy(string(s.owner.Kind()), s.owner.Reference()) {
+		return agentdomain.ErrForbidden
 	}
-	target, err := s.workspaceResolver(ctx, sandboxID)
+	canonical, err := canonicalLocalWorkspace(workspaceRoot)
 	if err != nil {
 		return err
 	}
-	if err := s.validateTarget(a, target); err != nil {
-		return err
+	if canonical == a.Spec().WorkspaceRoot {
+		return fmt.Errorf("%w: directory already used by Agent default workspace", agentdomain.ErrConflict)
 	}
-	// Never silently trust a stale/symlinked external location.
-	actual, err := filepath.EvalSymlinks(target.Root)
-	if err != nil {
-		return fmt.Errorf("%w: sandbox root unavailable: %w", agentdomain.ErrUnavailable, err)
-	}
-	if actual != target.Root {
-		return agentdomain.ErrUnavailable
-	}
-	return s.store.BindWorkspace(ctx, id, key, sandboxID)
+	return s.store.BindWorkspace(ctx, id, key, canonical)
 }
 func (s *Service) Workspaces(ctx context.Context, id agentdomain.ID, caller gov.Context) ([]agentdomain.WorkspaceBinding, error) {
 	if err := s.requireOwner(caller); err != nil {

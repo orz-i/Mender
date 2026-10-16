@@ -23,7 +23,7 @@ func migrateAgentBackendV8(ctx context.Context, db *sql.DB) (retErr error) {
 	if err := conn.QueryRowContext(ctx, "SELECT MAX(version) FROM agent_schema_migrations").Scan(&version); err != nil {
 		return err
 	}
-	if version == 8 {
+	if version >= 8 {
 		return nil
 	}
 	if version != 7 {

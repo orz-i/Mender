@@ -31,14 +31,14 @@ func (s *Store) SetDefaults(ctx context.Context, id agentdomain.ID, model, effor
 	return nil
 }
 
-// BindWorkspace never creates a workspace; it only references a preapproved local Sandbox.
-// Caller must validate Sandbox owner, backend, and canonical root first.
-func (s *Store) BindWorkspace(ctx context.Context, id agentdomain.ID, key, sandboxID string) error {
+// BindWorkspace records an owner-approved canonical local directory on one
+// Agent. The path is never an MCP Tool argument, and grants remain separate.
+func (s *Store) BindWorkspace(ctx context.Context, id agentdomain.ID, key, root string) error {
 	if err := agentdomain.ValidateWorkspaceKey(key); err != nil {
 		return err
 	}
-	_, err := s.db.ExecContext(ctx, `INSERT INTO agent_workspaces(agent_id,workspace_key,sandbox_id,created_at)
- VALUES(?,?,?,?)`, id, key, sandboxID, time.Now().UTC().Format(time.RFC3339Nano))
+	_, err := s.db.ExecContext(ctx, `INSERT INTO agent_workspaces(agent_id,workspace_key,workspace_root,created_at)
+ VALUES(?,?,?,?)`, id, key, root, time.Now().UTC().Format(time.RFC3339Nano))
 	if err != nil {
 		return fmt.Errorf("%w: workspace binding: %w", agentdomain.ErrConflict, err)
 	}
@@ -48,15 +48,15 @@ func (s *Store) Workspace(ctx context.Context, id agentdomain.ID, key string) (s
 	if err := agentdomain.ValidateWorkspaceKey(key); err != nil {
 		return "", err
 	}
-	var sandboxID string
-	err := s.db.QueryRowContext(ctx, "SELECT sandbox_id FROM agent_workspaces WHERE agent_id=? AND workspace_key=?", id, key).Scan(&sandboxID)
+	var root string
+	err := s.db.QueryRowContext(ctx, "SELECT workspace_root FROM agent_workspaces WHERE agent_id=? AND workspace_key=?", id, key).Scan(&root)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", agentdomain.ErrNotFound
 	}
-	return sandboxID, err
+	return root, err
 }
 func (s *Store) ListWorkspaces(ctx context.Context, id agentdomain.ID) ([]agentdomain.WorkspaceBinding, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT w.workspace_key,w.sandbox_id,g.profile_id FROM agent_workspaces w
+	rows, err := s.db.QueryContext(ctx, `SELECT w.workspace_key,w.workspace_root,g.profile_id FROM agent_workspaces w
  LEFT JOIN agent_workspace_grants g ON w.agent_id=g.agent_id AND w.workspace_key=g.workspace_key
  WHERE w.agent_id=? ORDER BY w.workspace_key,g.profile_id`, id)
 	if err != nil {
@@ -65,13 +65,13 @@ func (s *Store) ListWorkspaces(ctx context.Context, id agentdomain.ID) ([]agentd
 	defer func() { _ = rows.Close() }()
 	items := []agentdomain.WorkspaceBinding{}
 	for rows.Next() {
-		var key, sandboxID string
+		var key, root string
 		var profileID sql.NullString
-		if err := rows.Scan(&key, &sandboxID, &profileID); err != nil {
+		if err := rows.Scan(&key, &root, &profileID); err != nil {
 			return nil, err
 		}
 		if len(items) == 0 || items[len(items)-1].Key != key {
-			items = append(items, agentdomain.WorkspaceBinding{Key: key, SandboxID: sandboxID, ProfileIDs: []string{}})
+			items = append(items, agentdomain.WorkspaceBinding{Key: key, WorkspaceRoot: root, ProfileIDs: []string{}})
 		}
 		if profileID.Valid {
 			items[len(items)-1].ProfileIDs = append(items[len(items)-1].ProfileIDs, profileID.String)

@@ -13,12 +13,13 @@ import (
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	profileapp "github.com/orz-i/Mender/backend/internal/profile/application"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
+	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 	_ "modernc.org/sqlite"
 )
 
 // downgradeAgentsToV7Fixture reproduces the actual v7 CHECK constraint in
 // an isolated fixture. Production schemas/data are NEVER downgraded.
-func downgradeAgentsToV7Fixture(t *testing.T, path string) {
+func downgradeAgentsToV7Fixture(t *testing.T, path string, sandboxID ...string) {
 	t.Helper()
 	db, err := sql.Open("sqlite", path)
 	if err != nil {
@@ -53,9 +54,16 @@ func downgradeAgentsToV7Fixture(t *testing.T, path string) {
     AND (json_valid(p.config_json)=0 OR json_extract(p.config_json,'$.agentId')=OLD.agent_id))
     BEGIN SELECT RAISE(ABORT,'Agent is referenced by a Provider'); END`,
 		`DELETE FROM agent_schema_migrations WHERE version=8`,
+		`DELETE FROM agent_schema_migrations WHERE version=9`,
+		`ALTER TABLE agent_workspaces RENAME COLUMN workspace_root TO sandbox_id`,
 	} {
 		if _, err := tx.ExecContext(ctx, sqlText); err != nil {
 			t.Fatalf("synthetic downgrade: %s: %v", sqlText, err)
+		}
+	}
+	if len(sandboxID) > 0 {
+		if _, err := tx.ExecContext(ctx, "UPDATE agent_workspaces SET sandbox_id=? WHERE workspace_key='secondary'", sandboxID[0]); err != nil {
+			t.Fatal(err)
 		}
 	}
 	if err := tx.Commit(); err != nil {
@@ -103,7 +111,17 @@ func TestOpenCodeAgentV7ToV8PreservesAllLiveRelationships(t *testing.T) {
 		ProfileSlug: profile.Slug(), ToolID: mustToolID(t, delegateID), Direct: true}); err != nil {
 		t.Fatal(err)
 	}
-	if err := r.agentStore.BindWorkspace(ctx, agent.ID(), "secondary", "sbx_12345678901234567890123456789012"); err != nil {
+	linkedRoot, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacySandbox, err := r.Sandboxes.CreateLocalSandbox(ctx, CreateLocalSandboxRequest{
+		Name: "Linked local workspace fixture", Root: linkedRoot, Isolation: sandboxdomain.IsolationHost,
+	}, owner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := r.agentStore.BindWorkspace(ctx, agent.ID(), "secondary", linkedRoot); err != nil {
 		t.Fatal(err)
 	}
 	if err := r.agentStore.GrantWorkspace(ctx, agent.ID(), "secondary", profile.ID().String()); err != nil {
@@ -129,7 +147,7 @@ func TestOpenCodeAgentV7ToV8PreservesAllLiveRelationships(t *testing.T) {
 	if err := r.Close(); err != nil {
 		t.Fatal(err)
 	}
-	downgradeAgentsToV7Fixture(t, dbPath)
+	downgradeAgentsToV7Fixture(t, dbPath, legacySandbox.ID().String())
 	// The migration is idempotent after one startup, changes only the CHECK,
 	// and keeps all FK relationships and active Provider guards intact.
 	r, err = NewRuntime(ctx, RuntimeOptions{DatabasePath: dbPath, AgentExecutor: fixtureAgentExecutor{}})
@@ -151,7 +169,7 @@ func TestOpenCodeAgentV7ToV8PreservesAllLiveRelationships(t *testing.T) {
 		t.Fatalf("lost AgentGrant %+v %v", grants, err)
 	}
 	workspaces, err := r.Agents.Workspaces(ctx, agent.ID(), owner)
-	if err != nil || len(workspaces) != 1 || workspaces[0].Key != "secondary" || len(workspaces[0].ProfileIDs) != 1 {
+	if err != nil || len(workspaces) != 1 || workspaces[0].Key != "secondary" || workspaces[0].WorkspaceRoot != linkedRoot || len(workspaces[0].ProfileIDs) != 1 {
 		t.Fatalf("lost workspace and its Profile grant %+v %v", workspaces, err)
 	}
 	after, err := r.AgentTools(ctx, agent.ID(), owner)
@@ -173,7 +191,7 @@ func TestOpenCodeAgentV7ToV8PreservesAllLiveRelationships(t *testing.T) {
 		t.Fatalf("lost Profile ToolBinding %d %v", profileToolBindings, err)
 	}
 	var version int
-	if err := raw.QueryRowContext(ctx, "SELECT MAX(version) FROM agent_schema_migrations").Scan(&version); err != nil || version != 8 {
+	if err := raw.QueryRowContext(ctx, "SELECT MAX(version) FROM agent_schema_migrations").Scan(&version); err != nil || version != 9 {
 		t.Fatalf("expected v8 got %d %v", version, err)
 	}
 	checkRows, err := raw.QueryContext(ctx, "PRAGMA foreign_key_check")

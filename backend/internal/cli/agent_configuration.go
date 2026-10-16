@@ -96,7 +96,7 @@ func (a *app) newAgentWorkspaceCommand() *cobra.Command {
 			return a.writeValue(fmt.Sprintf("%d registered Agent workspaces", len(items)), map[string]any{"workspaces": items})
 		})
 	}})
-	root.AddCommand(&cobra.Command{Use: "bind <agent-id> <key> <local-sandbox-id>", Args: exactArgs(3), RunE: func(cmd *cobra.Command, args []string) error {
+	root.AddCommand(&cobra.Command{Use: "bind <agent-id> <key> <absolute-local-directory>", Args: exactArgs(3), RunE: func(cmd *cobra.Command, args []string) error {
 		id, err := agentdomain.ParseID(args[0])
 		if err != nil {
 			return usageError{err: err}
@@ -109,7 +109,7 @@ func (a *app) newAgentWorkspaceCommand() *cobra.Command {
 			if err := runtime.Agents.BindWorkspace(cmd.Context(), id, args[1], args[2], caller); err != nil {
 				return err
 			}
-			return a.writeValue("Agent workspace bound", map[string]string{"agentId": args[0], "workspace": args[1], "sandboxId": args[2]})
+			return a.writeValue("Agent workspace bound", map[string]string{"agentId": args[0], "workspace": args[1], "workspaceRoot": args[2]})
 		})
 	}})
 	root.AddCommand(&cobra.Command{Use: "unbind <agent-id> <key>", Args: exactArgs(2), RunE: func(cmd *cobra.Command, args []string) error {

@@ -63,32 +63,21 @@ type RunConfig struct {
 	ReasoningEffort string
 }
 
-// WorkspaceTarget contains inert metadata about a registered local Sandbox.
-type WorkspaceTarget struct {
-	ID        string
-	Root      string
-	Backend   string
-	Isolation string
-	OwnerKind string
-	OwnerRef  string
-}
-type WorkspaceResolver func(context.Context, string) (WorkspaceTarget, error)
 type Admission func(context.Context, gov.Context, agentdomain.Agent, gov.Action) error
 type ProfileExists func(context.Context, string) error
 
 type Service struct {
-	store             Repository
-	runner            Executor
-	admit             Admission
-	profileExists     ProfileExists
-	workspaceResolver WorkspaceResolver
-	owner             gov.Principal
-	rootContext       context.Context
-	rootCancel        context.CancelFunc
-	mu                sync.Mutex
-	active            map[agentdomain.TaskID]context.CancelFunc
-	closed            bool
-	wg                sync.WaitGroup
+	store         Repository
+	runner        Executor
+	admit         Admission
+	profileExists ProfileExists
+	owner         gov.Principal
+	rootContext   context.Context
+	rootCancel    context.CancelFunc
+	mu            sync.Mutex
+	active        map[agentdomain.TaskID]context.CancelFunc
+	closed        bool
+	wg            sync.WaitGroup
 }
 
 func NewService(store Repository, runner Executor, admit Admission, owner gov.Principal, profileExists ProfileExists) (*Service, error) {
@@ -318,18 +307,13 @@ func (s *Service) SubmitWithOptions(ctx context.Context, id agentdomain.ID, prom
 		if err := agentdomain.ValidateWorkspaceKey(options.Workspace); err != nil {
 			return agentdomain.Task{}, err
 		}
-		if s.workspaceResolver == nil {
-			return agentdomain.Task{}, agentdomain.ErrUnavailable
-		}
-		sandboxID, err := s.store.Workspace(ctx, id, options.Workspace)
+		registeredRoot, err := s.store.Workspace(ctx, id, options.Workspace)
 		if err != nil {
 			return agentdomain.Task{}, err
 		}
-		target, err := s.workspaceResolver(ctx, sandboxID)
-		if err != nil {
-			return agentdomain.Task{}, err
-		}
-		if err := s.validateTarget(agent, target); err != nil {
+		// Registration does not authorize an arbitrary task-supplied path.
+		// Verify the stored canonical directory before task admission.
+		if err := validateRegisteredWorkspaceRoot(registeredRoot); err != nil {
 			return agentdomain.Task{}, err
 		}
 		if profileID != "" {
@@ -341,7 +325,7 @@ func (s *Service) SubmitWithOptions(ctx context.Context, id agentdomain.ID, prom
 				return agentdomain.Task{}, agentdomain.ErrForbidden
 			}
 		}
-		root = target.Root
+		root = registeredRoot
 	}
 	if (model != "" || effort != "" || options.Workspace != "") && s.runner == nil {
 		return agentdomain.Task{}, agentdomain.ErrUnavailable

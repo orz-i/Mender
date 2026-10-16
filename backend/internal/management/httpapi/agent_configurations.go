@@ -77,7 +77,7 @@ func (h *Handler) bindAgentWorkspace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var payload struct {
-		SandboxID string `json:"sandboxId"`
+		WorkspaceRoot string `json:"workspaceRoot"`
 	}
 	if err := decodeJSON(r, &payload); err != nil {
 		writeAPIError(w, http.StatusBadRequest, "validation_error", err)
@@ -88,7 +88,7 @@ func (h *Handler) bindAgentWorkspace(w http.ResponseWriter, r *http.Request) {
 		h.agentError(w, err)
 		return
 	}
-	if err := h.runtime.Agents.BindWorkspace(r.Context(), id, r.PathValue("workspaceKey"), payload.SandboxID, caller); err != nil {
+	if err := h.runtime.Agents.BindWorkspace(r.Context(), id, r.PathValue("workspaceKey"), payload.WorkspaceRoot, caller); err != nil {
 		h.agentError(w, err)
 		return
 	}

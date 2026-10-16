@@ -84,16 +84,16 @@ func TestAgentHTTPManagementAndGrantLifecycle(t *testing.T) {
 	if len(got["profileIds"].([]any)) != 1 {
 		t.Fatal("grant missing", got)
 	}
-	wsRoot := t.TempDir()
-	sandbox := requestJSON(t, server.Client(), http.MethodPost, api+"/sandboxes/local", map[string]any{
-		"name": "Extra project", "root": wsRoot, "isolation": "restricted_host",
-	}, http.StatusCreated)
-	sandboxID := sandbox["sandboxId"].(string)
+	wsRoot, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
 	workspacePath := api + "/agents/" + id + "/workspaces/other-project"
-	requestJSON(t, server.Client(), http.MethodPut, workspacePath, map[string]any{"sandboxId": sandboxID}, http.StatusNoContent)
+	requestJSON(t, server.Client(), http.MethodPut, workspacePath, map[string]any{"workspaceRoot": filepath.Join(wsRoot, "nonexistent")}, http.StatusBadRequest)
+	requestJSON(t, server.Client(), http.MethodPut, workspacePath, map[string]any{"workspaceRoot": wsRoot}, http.StatusNoContent)
 	requestJSON(t, server.Client(), http.MethodPut, workspacePath+"/profile-grants/"+profileID, nil, http.StatusNoContent)
 	workspaces := requestJSON(t, server.Client(), http.MethodGet, api+"/agents/"+id+"/workspaces", nil, http.StatusOK)
-	if len(workspaces["workspaces"].([]any)) != 1 {
+	if len(workspaces["workspaces"].([]any)) != 1 || workspaces["workspaces"].([]any)[0].(map[string]any)["workspaceRoot"] != wsRoot {
 		t.Fatal("workspace not bound", workspaces)
 	}
 	requestJSON(t, server.Client(), http.MethodDelete, workspacePath+"/profile-grants/"+profileID, nil, http.StatusNoContent)

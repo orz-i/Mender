@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -98,11 +99,9 @@ func TestRuntimeSelectionsRequireExplicitWorkspaceGrantAndSnapshot(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	sandboxID := "sbx_0123456789abcdef0123456789abcdef"
-	if err := s.SetWorkspaceResolver(func(_ context.Context, id string) (WorkspaceTarget, error) {
-		return WorkspaceTarget{ID: id, Root: other, Backend: "local_workspace", Isolation: "restricted_host", OwnerKind: string(caller.Principal().Kind()), OwnerRef: caller.Principal().Reference()}, nil
-	}); err != nil {
-		t.Fatal(err)
+	// Adding a local Agent cwd requires no Sandbox resource or router.
+	if err := s.BindWorkspace(ctx, agent.ID(), "missing", filepath.Join(other, "not-found"), caller); !errors.Is(err, agentdomain.ErrInvalid) {
+		t.Fatalf("nonexistent directory accepted: %v", err)
 	}
 	if _, err := s.SubmitWithOptions(ctx, agent.ID(), "review", SubmitOptions{ReasoningEffort: "XHIGH"}, caller); !errors.Is(err, agentdomain.ErrInvalid) {
 		t.Fatalf("unsafe effort accepted: %v", err)
@@ -112,7 +111,7 @@ func TestRuntimeSelectionsRequireExplicitWorkspaceGrantAndSnapshot(t *testing.T)
 		t.Fatal("unsafe effort launched Agent")
 	default:
 	}
-	if err := s.BindWorkspace(ctx, agent.ID(), "project-b", sandboxID, caller); err != nil {
+	if err := s.BindWorkspace(ctx, agent.ID(), "project-b", other, caller); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.Grant(ctx, agent.ID(), goodProfileID, caller); err != nil {
@@ -173,5 +172,104 @@ func TestRuntimeSelectionsRequireExplicitWorkspaceGrantAndSnapshot(t *testing.T)
 	}
 	if _, err := s.SubmitWithOptions(ctx, agent.ID(), "again", SubmitOptions{Workspace: "project-b"}, remote); !errors.Is(err, agentdomain.ErrForbidden) {
 		t.Fatalf("revoked workspace admitted: %v", err)
+	}
+}
+
+func TestLocalAgentWorkspaceApprovalRejectsPathRedirectionWithoutLaunching(t *testing.T) {
+	ctx := context.Background()
+	store, err := agentsqlite.Open(ctx, filepath.Join(t.TempDir(), "local-agent-workspace.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = store.Close() }()
+	runner := selectionRunner{calls: make(chan RunConfig, 2)}
+	caller := owner(t)
+	service, err := NewService(store, runner,
+		func(context.Context, gov.Context, agentdomain.Agent, gov.Action) error { return nil },
+		caller.Principal(), func(_ context.Context, id string) error {
+			if id == goodProfileID {
+				return nil
+			}
+			return errors.New("unknown Profile")
+		})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = service.Close() }()
+	defaultRoot, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	agent, err := service.Create(ctx, CreateRequest{Name: "Local direct workspaces", Backend: agentdomain.BackendOpenCode,
+		WorkspaceRoot: defaultRoot, Isolation: "host"}, caller)
+	if err != nil {
+		t.Fatal(err)
+	}
+	approved, err := filepath.EvalSymlinks(filepath.Join(t.TempDir(), "approved"))
+	if err == nil {
+		t.Fatal("unexpectedly resolved nonexistent target", approved)
+	}
+	parent, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	approved = filepath.Join(parent, "approved")
+	if err := os.Mkdir(approved, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	alias := filepath.Join(parent, "short-link")
+	if err := os.Symlink(approved, alias); err != nil {
+		t.Fatal(err)
+	}
+	if err := service.BindWorkspace(ctx, agent.ID(), "project-b", alias, profile(t, goodProfileID)); !errors.Is(err, agentdomain.ErrForbidden) {
+		t.Fatalf("Profile could register arbitrary host cwd: %v", err)
+	}
+	if err := service.BindWorkspace(ctx, agent.ID(), "project-b", alias, caller); err != nil {
+		t.Fatal(err)
+	}
+	bindings, err := service.Workspaces(ctx, agent.ID(), caller)
+	if err != nil || len(bindings) != 1 || bindings[0].WorkspaceRoot != approved {
+		t.Fatalf("owner-registered canonical root not persisted %+v %v", bindings, err)
+	}
+	if err := service.Grant(ctx, agent.ID(), goodProfileID, caller); err != nil {
+		t.Fatal(err)
+	}
+	trustedProfile := profile(t, goodProfileID)
+	if _, err := service.SubmitWithOptions(ctx, agent.ID(), "safe read",
+		SubmitOptions{Workspace: "project-b"}, trustedProfile); !errors.Is(err, agentdomain.ErrForbidden) {
+		t.Fatalf("ungranted profile selected extra workspace: %v", err)
+	}
+	if err := service.GrantWorkspace(ctx, agent.ID(), "project-b", goodProfileID, caller); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.SubmitWithOptions(ctx, agent.ID(), "safe read",
+		SubmitOptions{Workspace: "project-b"}, trustedProfile); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case actual := <-runner.calls:
+		if actual.WorkspaceRoot != approved {
+			t.Fatalf("unexpected admitted cwd: %+v", actual)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("approved path never reached executor")
+	}
+	// A canonical registered directory replaced by a symlink must not gain
+	// access to an arbitrary new target under the existing Profile grant.
+	if err := os.Remove(approved); err != nil {
+		t.Fatal(err)
+	}
+	replacement := t.TempDir()
+	if err := os.Symlink(replacement, approved); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.SubmitWithOptions(ctx, agent.ID(), "MUST NOT EXECUTE",
+		SubmitOptions{Workspace: "project-b"}, trustedProfile); !errors.Is(err, agentdomain.ErrUnavailable) {
+		t.Fatalf("changed directory escaped selection review: %v", err)
+	}
+	select {
+	case got := <-runner.calls:
+		t.Fatalf("unapproved workspace launched: %+v", got)
+	default:
 	}
 }

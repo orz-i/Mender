@@ -46,9 +46,9 @@ func (s *Service) InspectAgentModels(id string) (AgentModelChoices, error) {
 }
 
 type AgentWorkspace struct {
-	Key        string   `json:"key"`
-	SandboxID  string   `json:"sandboxId"`
-	ProfileIDs []string `json:"profileIds"`
+	Key           string   `json:"key"`
+	WorkspaceRoot string   `json:"workspaceRoot"`
+	ProfileIDs    []string `json:"profileIds"`
 }
 type AgentWorkspaceList struct {
 	Workspaces []AgentWorkspace `json:"workspaces"`
@@ -84,11 +84,11 @@ func (s *Service) ListAgentWorkspaces(id string) (AgentWorkspaceList, error) {
 	}
 	result := AgentWorkspaceList{Workspaces: make([]AgentWorkspace, 0, len(bindings))}
 	for _, item := range bindings {
-		result.Workspaces = append(result.Workspaces, AgentWorkspace{Key: item.Key, SandboxID: item.SandboxID, ProfileIDs: item.ProfileIDs})
+		result.Workspaces = append(result.Workspaces, AgentWorkspace{Key: item.Key, WorkspaceRoot: item.WorkspaceRoot, ProfileIDs: item.ProfileIDs})
 	}
 	return result, nil
 }
-func (s *Service) BindAgentWorkspace(id, key, sandboxID string) error {
+func (s *Service) BindAgentWorkspace(id, key, workspaceRoot string) error {
 	caller, err := s.agentOwnerContext()
 	if err != nil {
 		return err
@@ -97,7 +97,7 @@ func (s *Service) BindAgentWorkspace(id, key, sandboxID string) error {
 	if err != nil {
 		return err
 	}
-	return s.runtime.Agents.BindWorkspace(s.ctx, parsed, key, sandboxID, caller)
+	return s.runtime.Agents.BindWorkspace(s.ctx, parsed, key, workspaceRoot, caller)
 }
 func (s *Service) UnbindAgentWorkspace(id, key string) error {
 	caller, err := s.agentOwnerContext()

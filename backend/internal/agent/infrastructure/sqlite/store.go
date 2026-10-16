@@ -183,7 +183,7 @@ func (s *Store) CreateAdmittedTask(ctx context.Context, t agentdomain.Task, maxA
 	  AND (SELECT COUNT(*) FROM agent_tasks WHERE principal_kind=? AND principal_ref=?
 	       AND status IN ('queued','running')) < ?
 	  AND (?='' OR EXISTS(SELECT 1 FROM agent_grants WHERE agent_id=? AND profile_id=?))
-	  AND (?='' OR EXISTS(SELECT 1 FROM agent_workspaces WHERE agent_id=? AND workspace_key=?))
+	  AND (?='' OR EXISTS(SELECT 1 FROM agent_workspaces WHERE agent_id=? AND workspace_key=? AND workspace_root=?))
 	  AND (?='' OR ?='' OR EXISTS(SELECT 1 FROM agent_workspace_grants WHERE agent_id=? AND workspace_key=? AND profile_id=?))`,
 		string(t.ID), string(t.AgentID), string(t.Status), t.Origin, t.PrincipalKind, t.PrincipalRef,
 		t.ScopeKind, t.ScopeRef, t.Generation, t.Result, t.Diagnostic, 0,
@@ -192,7 +192,7 @@ func (s *Store) CreateAdmittedTask(ctx context.Context, t agentdomain.Task, maxA
 		string(t.AgentID), maxActive, globalTaskLimit,
 		t.PrincipalKind, t.PrincipalRef, principalTaskLimit,
 		profileID, string(t.AgentID), profileID,
-		t.WorkspaceKey, string(t.AgentID), t.WorkspaceKey,
+		t.WorkspaceKey, string(t.AgentID), t.WorkspaceKey, t.WorkspaceRoot,
 		profileID, t.WorkspaceKey, string(t.AgentID), t.WorkspaceKey, profileID)
 	if err != nil {
 		return fmt.Errorf("reserve Agent task: %w", err)
