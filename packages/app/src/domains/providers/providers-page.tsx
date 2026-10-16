@@ -85,6 +85,7 @@ import {
 import { formatDateTime, formatNumber, t, tCount } from "../../i18n/i18n";
 import { ToolsViewSwitch } from "../tools/tools-view-switch";
 import type { ToolsView } from "../tools/tools-view-switch";
+import { toolSourceLabel } from "../tools/tool-source-label";
 
 function providerPluginSelectionKey(plugin: ProviderPlugin) {
   return plugin.installationId
@@ -367,7 +368,7 @@ export function ProvidersPage({
     const needle = inventoryQuery.trim().toLocaleLowerCase();
     const normal = showInternal ? providers : providers.filter(provider => !isInternalProvider(provider.pluginId));
     return needle ? normal.filter((provider) =>
-      [provider.displayName, provider.namespace, provider.pluginId ?? ""]
+      [provider.displayName, provider.namespace, provider.pluginId ?? "", provider.toolSourceName ?? ""]
         .some((value) => value.toLocaleLowerCase().includes(needle))
     ) : normal;
   }, [inventoryQuery, providers, showInternal]);
@@ -685,7 +686,7 @@ export function ProvidersPage({
                   >
                     <TableCell className="font-medium max-md:col-start-1 max-md:row-start-1 max-md:block max-md:min-w-0 max-md:p-0">
                       <span className="block truncate font-medium text-sm text-foreground" title={provider.displayName || provider.namespace}>
-                        {provider.displayName || provider.namespace}
+                        {isInternalProvider(provider.pluginId) ? toolSourceLabel(provider) : provider.displayName || provider.namespace}
                       </span>
                     </TableCell>
                     <TableCell className="max-md:col-start-2 max-md:row-start-1 max-md:block max-md:p-0 max-md:justify-self-end">

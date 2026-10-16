@@ -37,6 +37,7 @@ import {
 } from "@mender/ui/components/table";
 
 import { errorMessage } from "../../shared/errors";
+import { toolSourceLabel } from "../tools/tool-source-label";
 import { canonicalizeOwnedIdentifier, isCanonicalOwnedSlug, ownedIdentifierCreateError } from "../../shared/form-identifiers";
 import { IconButton } from "../../shared/icon-button";
 import { EmptyState, ErrorNotice } from "../../shared/page";
@@ -1378,7 +1379,7 @@ function ToolPickerDialog({
             <option value="">{t("All Providers")}</option>
             {providers.map((provider) => (
               <option key={provider.providerId} value={provider.providerId}>
-                {provider.displayName || provider.namespace}
+                {toolSourceLabel(provider)}
               </option>
             ))}
           </select>
@@ -1424,9 +1425,7 @@ function ToolPickerDialog({
                       {tool.title || tool.name}
                     </p>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      {provider?.displayName ||
-                        provider?.namespace ||
-                        t("Unknown Provider")}
+                      {toolSourceLabel(provider)}
                     </p>
                     {tool.description ? (
                       <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">

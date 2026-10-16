@@ -1783,6 +1783,12 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
+            /** @enum {string} */
+            toolSourceKind?: "provider" | "agent" | "sandbox" | "unclaimed";
+            /** @description Verified resource ID or ProviderID for direct sources */
+            toolSourceId?: string;
+            /** @description Verified resource display name; not a runtime-health claim */
+            toolSourceName?: string;
             pluginId?: string;
             installationId?: string;
             pluginVersion?: string;

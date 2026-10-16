@@ -932,6 +932,10 @@ func (s *Service) ListProviders() (ProviderList, error) {
 	if err != nil {
 		return ProviderList{}, err
 	}
+	owners, err := s.runtime.ListToolSourceOwners(s.ctx)
+	if err != nil {
+		return ProviderList{}, err
+	}
 	items := make([]Provider, 0, len(providers))
 	for _, provider := range providers {
 		config, configured := configByProvider[provider.ID()]
@@ -946,12 +950,12 @@ func (s *Service) ListProviders() (ProviderList, error) {
 				config,
 			)
 		}
-		items = append(items, providerProjection(
-			provider,
-			configPtr,
-			descriptorPtr,
-			toolCounts[provider.ID()],
-		))
+		item := providerProjection(provider, configPtr, descriptorPtr, toolCounts[provider.ID()])
+		owner := bootstrap.ToolSourceForProvider(provider, configPtr, owners)
+		item.ToolSourceKind = owner.Kind
+		item.ToolSourceID = owner.ResourceID
+		item.ToolSourceName = owner.Name
+		items = append(items, item)
 	}
 	return ProviderList{Providers: items}, nil
 }

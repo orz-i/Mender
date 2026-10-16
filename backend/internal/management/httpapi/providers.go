@@ -72,6 +72,11 @@ func (h *Handler) listProviders(w http.ResponseWriter, r *http.Request) {
 		writeKnownError(w, err)
 		return
 	}
+	owners, err := h.runtime.ListToolSourceOwners(r.Context())
+	if err != nil {
+		writeKnownError(w, err)
+		return
+	}
 
 	configByProvider := make(
 		map[catalogdomain.ProviderID]providerplugin.Configuration,
@@ -94,15 +99,16 @@ func (h *Handler) listProviders(w http.ResponseWriter, r *http.Request) {
 				config,
 			)
 		}
-		items = append(
-			items,
-			providerProjection(
-				provider,
-				configPtr,
-				descriptorPtr,
-				toolCounts[provider.ID()],
-			),
-		)
+		item := providerProjection(provider, configPtr, descriptorPtr, toolCounts[provider.ID()])
+		owner := bootstrap.ToolSourceForProvider(provider, configPtr, owners)
+		item["toolSourceKind"] = owner.Kind
+		if owner.ResourceID != "" {
+			item["toolSourceId"] = owner.ResourceID
+		}
+		if owner.Name != "" {
+			item["toolSourceName"] = owner.Name
+		}
+		items = append(items, item)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"providers": items})
 }

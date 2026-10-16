@@ -81,6 +81,19 @@ func TestManagedProviderSyncIsOnlyAllowedFromSandboxToolSuiteOwner(t *testing.T)
 	}
 	server := httptest.NewServer(New(runtime))
 	defer server.Close()
+	sources := requestJSON(t, server.Client(), http.MethodGet,
+		server.URL+"/api/v1/providers", nil, http.StatusOK)
+	providerItems, ok := sources["providers"].([]any)
+	if !ok || len(providerItems) != 1 {
+		t.Fatalf("managed Provider sources = %#v", sources)
+	}
+	item, ok := providerItems[0].(map[string]any)
+	if !ok || item["providerId"] != suite.ProviderID ||
+		item["toolSourceKind"] != "sandbox" ||
+		item["toolSourceId"] != sandbox.ID().String() ||
+		item["toolSourceName"] != "HTTP facade test" {
+		t.Fatalf("Tool source attribution did not use resource ownership binding: %#v", item)
+	}
 	requestJSON(t, server.Client(), http.MethodPost,
 		server.URL+"/api/v1/providers/"+suite.ProviderID+"/sync", nil, http.StatusConflict)
 	after, err := runtime.SandboxWorkspaceTools(ctx, sandbox.ID(), caller)

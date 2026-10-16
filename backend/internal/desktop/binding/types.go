@@ -380,6 +380,9 @@ type SkillDeploymentList struct {
 
 type Provider struct {
 	ProviderID            string                  `json:"providerId"`
+	ToolSourceKind        string                  `json:"toolSourceKind,omitempty"`
+	ToolSourceID          string                  `json:"toolSourceId,omitempty"`
+	ToolSourceName        string                  `json:"toolSourceName,omitempty"`
 	Namespace             string                  `json:"namespace"`
 	DisplayName           string                  `json:"displayName"`
 	Description           string                  `json:"description"`

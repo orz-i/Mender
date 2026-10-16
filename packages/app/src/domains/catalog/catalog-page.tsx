@@ -43,6 +43,7 @@ import {
 import { formatNumber, t } from "../../i18n/i18n";
 import { ToolsViewSwitch } from "../tools/tools-view-switch";
 import type { ToolsView } from "../tools/tools-view-switch";
+import { toolSourceLabel } from "../tools/tool-source-label";
 
 type ToolView = "overview" | "description" | "schemas" | "invoke";
 
@@ -210,15 +211,15 @@ export function CatalogPage({ client, onViewChange }: { client: MenderClient; on
               />
             </div>
             <select
-              aria-label={t("Catalog provider filter")}
+              aria-label={t("Tool source filter")}
               value={providerId}
               onChange={(event) => setProviderId(event.target.value)}
               className="h-9 w-40 min-w-0 rounded-xl border border-input bg-card px-3 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              <option value="">{t("All Providers")}</option>
+              <option value="">{t("All tool sources")}</option>
               {providers.map((provider) => (
                 <option key={provider.providerId} value={provider.providerId}>
-                  {provider.displayName || provider.namespace}
+                  {toolSourceLabel(provider)}
                 </option>
               ))}
             </select>
@@ -249,7 +250,7 @@ export function CatalogPage({ client, onViewChange }: { client: MenderClient; on
               <TableHeader>
                 <TableRow>
                   <TableHead>{t("Tool")}</TableHead>
-                  <TableHead>{t("Provider")}</TableHead>
+                  <TableHead>{t("Source")}</TableHead>
                   <TableHead>{t("Description")}</TableHead>
                   <TableHead className="hidden xl:table-cell">{t("Rank")}</TableHead>
                   <TableHead className="w-20 text-right">{t("Actions")}</TableHead>
@@ -349,7 +350,7 @@ export function CatalogPage({ client, onViewChange }: { client: MenderClient; on
           {selected !== null && (toolView === "overview" || toolView === null) ? (
             <div className="space-y-5">
               <div className="grid gap-3 sm:grid-cols-2">
-                <ToolMeta label="Provider" value={providerLabel(providers, selected.providerId)} />
+                <ToolMeta label="Source" value={providerLabel(providers, selected.providerId)} />
                 <ToolMeta label="Name" value={selected.name} />
                 <ToolMeta label="Tool ID" value={selected.toolId} mono />
                 <ToolMeta label="Source key" value={selected.sourceKey} mono />
@@ -499,9 +500,5 @@ function JsonBlock({ title, value }: { title: string; value: unknown }) {
 }
 
 function providerLabel(providers: Provider[], providerId: string) {
-  const provider = providers.find((item) => item.providerId === providerId);
-  if (provider === undefined) {
-    return t("Unknown Provider");
-  }
-  return provider.displayName || provider.namespace;
+  return toolSourceLabel(providers.find((item) => item.providerId === providerId));
 }

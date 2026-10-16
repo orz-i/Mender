@@ -367,6 +367,9 @@ export interface ProfileTool {
 
 export interface Provider {
     "providerId": string;
+    "toolSourceKind"?: string;
+    "toolSourceId"?: string;
+    "toolSourceName"?: string;
     "namespace": string;
     "displayName": string;
     "description": string;

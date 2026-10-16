@@ -1709,7 +1709,7 @@ describe("management pages", () => {
       screen.getByRole("columnheader", { name: "Actions" }),
     ).toBeTruthy();
 
-    fireEvent.change(screen.getByLabelText("Catalog provider filter"), {
+    fireEvent.change(screen.getByLabelText("Tool source filter"), {
       target: { value: "prov_1" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Browse" }));

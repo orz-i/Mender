@@ -2203,6 +2203,9 @@ components:
         description: { type: string }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
+        toolSourceKind: { type: string, enum: [provider, agent, sandbox, unclaimed] }
+        toolSourceId: { type: string, description: Verified resource ID or ProviderID for direct sources }
+        toolSourceName: { type: string, description: Verified resource display name; not a runtime-health claim }
         pluginId: { type: string }
         installationId: { type: string }
         pluginVersion: { type: string }

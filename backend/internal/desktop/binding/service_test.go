@@ -104,6 +104,13 @@ func TestServiceEndToEndUsesSharedRuntime(t *testing.T) {
 	if created.Sync.Total != 1 {
 		t.Fatalf("sync result = %#v", created.Sync)
 	}
+	sourceList, err := service.ListProviders()
+	if err != nil || len(sourceList.Providers) != 1 ||
+		sourceList.Providers[0].ToolSourceKind != "provider" ||
+		sourceList.Providers[0].ToolSourceID != created.Provider.ProviderID ||
+		sourceList.Providers[0].ToolSourceName != "Upstream" {
+		t.Fatalf("Wails direct Tool source projection = %+v, %v", sourceList, err)
+	}
 
 	updated, err := service.UpdateConfiguredProvider(created.Provider.ProviderID, "Upstream edited", "Edited provider", config)
 	if err != nil {
