@@ -1214,5 +1214,8 @@ export const zhCNMessages: Readonly<Record<string, string>> = {
   "Tool providers are registered. Create a Profile to define which tools and sandboxes are exposed to agent clients.": "工具提供方已注册。请创建配置档以定义向智能体客户端暴露哪些工具与沙箱。",
   "Some Provider plugins need attention. Review Plugin Marketplace for installation details.": "部分提供方插件需要处理。请前往插件市场查看安装详情。",
   "Review Marketplace": "查看插件市场",
+  "Filters": "筛选",
+  "Filter & sort": "筛选与排序",
+  "Reset": "重置",
 };
 

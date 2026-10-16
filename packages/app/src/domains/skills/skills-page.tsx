@@ -45,9 +45,9 @@ import { EmptyState, ErrorNotice } from "../../shared/page";
 import { PageTab, PageTabs, PageToolbar, ResultPanel } from "../../shared/page-toolbar";
 import { usePagination } from "../../shared/pagination";
 import { TablePagination } from "../../shared/table-pagination";
+import { FilterPopover, FilterSelectField } from "../../shared/filter-popover";
 import {
   EmptyPanelState,
-  FilterSelect,
   SearchField,
 } from "../../shared/workbench";
 
@@ -368,41 +368,51 @@ export function SkillsPage({
         }
         filters={
           <>
-            <div className="w-full min-w-0 sm:w-40 sm:shrink-0">
+            <div className="w-full min-w-0 sm:w-48 sm:shrink-0">
               <SearchField value={query} onChange={setQuery} placeholder="Search Skills…" label="Search Skills" />
             </div>
-            <FilterSelect
-              value={sourceFilter}
-              onValueChange={(value) => setSourceFilter(value as SkillSourceFilter)}
-              label="Skill source filter"
-              options={[
-                { value: "all", label: "All Sources" },
-                { value: "builtin", label: "Built-in" },
-                { value: "local", label: "Local" },
-              ]}
-              className="w-28 min-w-0"
-            />
-            <FilterSelect
-              value={statusFilter}
-              onValueChange={(value) => setStatusFilter(value as SkillStatusFilter)}
-              label="Skill status filter"
-              options={[
-                { value: "all", label: "All Status" },
-                { value: "enabled", label: "Enabled" },
-                { value: "disabled", label: "Disabled" },
-              ]}
-              className="w-28 min-w-0"
-            />
-            <FilterSelect
-              value={sort}
-              onValueChange={(value) => setSort(value as SkillSort)}
-              label="Skill sort"
-              options={[
-                { value: "name", label: "Name" },
-                { value: "version", label: "Version" },
-              ]}
-              className="w-24 min-w-0"
-            />
+            <FilterPopover
+              activeCount={
+                (sourceFilter !== "all" ? 1 : 0) +
+                (statusFilter !== "all" ? 1 : 0) +
+                (sort !== "name" ? 1 : 0)
+              }
+              onReset={() => {
+                setSourceFilter("all");
+                setStatusFilter("all");
+                setSort("name");
+              }}
+            >
+              <FilterSelectField
+                label="Skill source filter"
+                value={sourceFilter}
+                onChange={(value) => setSourceFilter(value as SkillSourceFilter)}
+                options={[
+                  { value: "all", label: "All Sources" },
+                  { value: "builtin", label: "Built-in" },
+                  { value: "local", label: "Local" },
+                ]}
+              />
+              <FilterSelectField
+                label="Skill status filter"
+                value={statusFilter}
+                onChange={(value) => setStatusFilter(value as SkillStatusFilter)}
+                options={[
+                  { value: "all", label: "All Status" },
+                  { value: "enabled", label: "Enabled" },
+                  { value: "disabled", label: "Disabled" },
+                ]}
+              />
+              <FilterSelectField
+                label="Skill sort"
+                value={sort}
+                onChange={(value) => setSort(value as SkillSort)}
+                options={[
+                  { value: "name", label: "Name" },
+                  { value: "version", label: "Version" },
+                ]}
+              />
+            </FilterPopover>
           </>
         }
         actions={
