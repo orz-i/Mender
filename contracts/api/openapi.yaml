@@ -449,6 +449,54 @@ paths:
           description: Provider deleted
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
+  /tool-services/{providerId}/workspaces:
+    parameters:
+      - name: providerId
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      operationId: listWorkspaceToolTargets
+      responses:
+        '200':
+          description: Additional owner-configured Sandbox targets for an existing Workspace Tool service
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [workspaces]
+                properties:
+                  workspaces: { type: array, items: { $ref: '#/components/schemas/WorkspaceToolTarget' } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /tool-services/{providerId}/workspaces/{workspaceKey}:
+    parameters:
+      - name: providerId
+        in: path
+        required: true
+        schema: { type: string }
+      - name: workspaceKey
+        in: path
+        required: true
+        schema: { type: string, pattern: '^[a-z0-9_-]{1,64}$' }
+    put:
+      operationId: bindWorkspaceToolTarget
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BindWorkspaceToolTargetRequest' }
+      responses:
+        '204': { description: Additional governed target bound without creating another Provider or Tool }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+    delete:
+      operationId: unbindWorkspaceToolTarget
+      responses:
+        '204': { description: Target alias removed without altering existing ToolIDs }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /tools/browse:
     get:
       operationId: browseTools
@@ -2904,6 +2952,19 @@ components:
         managed: { type: boolean }
         paused: { type: boolean }
         evidence: { $ref: '#/components/schemas/SSHJobRecoveryEvidence' }
+    WorkspaceToolTarget:
+      type: object
+      required: [key, sandboxId]
+      additionalProperties: false
+      properties:
+        key: { type: string }
+        sandboxId: { type: string }
+    BindWorkspaceToolTargetRequest:
+      type: object
+      required: [sandboxId]
+      additionalProperties: false
+      properties:
+        sandboxId: { type: string, pattern: '^sbx_[0-9a-f]{32}$' }
     SandboxToolSuite:
       type: object
       required: [suiteId, sandboxId, status, available, tools]

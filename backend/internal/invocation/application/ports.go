@@ -142,6 +142,10 @@ type ExecutionRequest struct {
 	InvocationID invocationdomain.InvocationID
 	Tool         catalogdomain.Tool
 	Arguments    invocationdomain.JSONValue
+	// AdmittedFacts are the exact host-reviewed facts used for this
+	// invocation's Policy decision. Executors may compare mutable target
+	// resolution against this snapshot, but cannot broaden its authority.
+	AdmittedFacts invocationdomain.GovernanceFacts
 	// Context is supplied by canonical Invocation after Policy/approval admission.
 	// Executors must never derive Principal/Scope from Tool arguments.
 	Context governancedomain.Context

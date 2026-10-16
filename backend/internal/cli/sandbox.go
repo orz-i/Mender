@@ -21,6 +21,7 @@ func (a *app) newSandboxCommand() *cobra.Command {
 	command := &cobra.Command{Use: "sandbox", Short: "Manage governed local and remote Sandbox resources"}
 	command.AddCommand(a.newSandboxListCommand())
 	command.AddCommand(a.newSandboxToolsCommand())
+	command.AddCommand(a.newSandboxWorkspaceTargetsCommand())
 	command.AddCommand(a.newSandboxJobToolsCommand())
 	command.AddCommand(a.newSandboxJobRecoveryCommand())
 	command.AddCommand(a.newSandboxJobResolutionCommand())

@@ -95,9 +95,11 @@ func TestWorkspaceGovernanceFactsAreStructuredWithoutTouchingWorkspace(t *testin
 				t.Fatalf("Effects() = %v, want %s", effects, test.effect)
 			}
 			resources := facts.Resources()
-			if len(resources) != 1 ||
+			if len(resources) != 2 ||
 				resources[0].Kind() != "workspace_path" ||
-				resources[0].Value() != test.resource {
+				resources[0].Value() != test.resource ||
+				resources[1].Kind() != "sandbox_id" ||
+				resources[1].Value() != testSandboxID {
 				t.Fatalf("Resources() = %#v", resources)
 			}
 		})

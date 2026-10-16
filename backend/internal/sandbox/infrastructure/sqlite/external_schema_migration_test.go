@@ -50,6 +50,7 @@ func TestSandboxV9ToV10ExternalSchemaUpgradePreservesInventory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	rewindWorkspaceTargetsV19Fixture(t, raw)
 	for _, statement := range []string{
 		"DROP TRIGGER sandbox_extension_binding_insert",
 		"DROP TRIGGER sandbox_extension_binding_update",
@@ -96,7 +97,7 @@ func TestSandboxV9ToV10ExternalSchemaUpgradePreservesInventory(t *testing.T) {
 		t.Fatalf("migrated run changed %+v %v", retained, err)
 	}
 	var version int
-	if err := upgraded.db.QueryRowContext(ctx, "SELECT MAX(version) FROM sandbox_schema_migrations").Scan(&version); err != nil || version != 18 {
+	if err := upgraded.db.QueryRowContext(ctx, "SELECT MAX(version) FROM sandbox_schema_migrations").Scan(&version); err != nil || version != 19 {
 		t.Fatalf("new schema version=%d %v", version, err)
 	}
 	if err := upgraded.Close(); err != nil {

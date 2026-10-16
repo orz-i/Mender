@@ -21,6 +21,7 @@ var readInputSchema = []byte(`{
   "additionalProperties":false,
   "required":["path"],
   "properties":{
+    "workspace":{"type":"string","minLength":1,"maxLength":64,"pattern":"^[a-z0-9_-]+$","description":"Owner-registered workspace alias; omit for this Tool source default"},
     "path":{"type":"string","minLength":1,"maxLength":4096},
     "offset":{"type":"integer","minimum":1,"maximum":1000000000},
     "limit":{"type":"integer","minimum":1,"maximum":2000}
@@ -45,6 +46,7 @@ var searchInputSchema = []byte(`{
   "additionalProperties":false,
   "required":["mode"],
   "properties":{
+    "workspace":{"type":"string","minLength":1,"maxLength":64,"pattern":"^[a-z0-9_-]+$","description":"Owner-registered workspace alias; omit for this Tool source default"},
     "mode":{"type":"string","enum":["files","content"]},
     "path":{"type":"string","maxLength":4096},
     "query":{"type":"string","maxLength":4096},
@@ -83,6 +85,7 @@ var editInputSchema = []byte(`{
   "additionalProperties":false,
   "required":["path","operation"],
   "properties":{
+    "workspace":{"type":"string","minLength":1,"maxLength":64,"pattern":"^[a-z0-9_-]+$","description":"Owner-registered workspace alias; omit for this Tool source default"},
     "path":{"type":"string","minLength":1,"maxLength":4096},
     "operation":{"type":"string","enum":["create","replace","delete"]},
     "content":{"type":"string"},
@@ -121,6 +124,7 @@ var shellInputSchema = []byte(`{
   "additionalProperties":false,
   "required":["command"],
   "properties":{
+    "workspace":{"type":"string","minLength":1,"maxLength":64,"pattern":"^[a-z0-9_-]+$","description":"Owner-registered workspace alias; omit for this Tool source default"},
     "command":{"type":"string","minLength":1,"maxLength":65536},
     "cwd":{"type":"string","maxLength":4096},
     "timeoutMs":{"type":"integer","minimum":1,"maximum":120000}

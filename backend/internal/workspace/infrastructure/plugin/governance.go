@@ -8,10 +8,11 @@ import (
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
+	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 )
 
 func (p *Plugin) ExtractGovernanceFacts(
-	_ context.Context,
+	ctx context.Context,
 	rawConfig json.RawMessage,
 	tool catalogdomain.Tool,
 	arguments invocationdomain.JSONValue,
@@ -19,7 +20,12 @@ func (p *Plugin) ExtractGovernanceFacts(
 	if p == nil {
 		return invocationdomain.GovernanceFacts{}, fmt.Errorf("workspace governance extractor is nil")
 	}
-	if _, err := DecodeConfig(rawConfig); err != nil {
+	config, err := DecodeConfig(rawConfig)
+	if err != nil {
+		return invocationdomain.GovernanceFacts{}, err
+	}
+	selection, clean, err := resolveSelection(ctx, p.targets, tool.ProviderID().String(), sandboxdomain.ID(config.SandboxID), arguments)
+	if err != nil {
 		return invocationdomain.GovernanceFacts{}, err
 	}
 
@@ -28,7 +34,7 @@ func (p *Plugin) ExtractGovernanceFacts(
 	switch tool.SourceKey() {
 	case sourceKeyRead:
 		var input readInput
-		if err := decodeStrict(arguments.Bytes(), &input, "decode workspace.read governance arguments"); err != nil {
+		if err := decodeStrict(clean.Bytes(), &input, "decode workspace.read governance arguments"); err != nil {
 			return invocationdomain.GovernanceFacts{}, err
 		}
 		normalized, err := normalizeRelativePath(input.Path, false)
@@ -40,7 +46,7 @@ func (p *Plugin) ExtractGovernanceFacts(
 
 	case sourceKeySearch:
 		var input searchInput
-		if err := decodeStrict(arguments.Bytes(), &input, "decode workspace.search governance arguments"); err != nil {
+		if err := decodeStrict(clean.Bytes(), &input, "decode workspace.search governance arguments"); err != nil {
 			return invocationdomain.GovernanceFacts{}, err
 		}
 		if input.Path == "" {
@@ -55,7 +61,7 @@ func (p *Plugin) ExtractGovernanceFacts(
 
 	case sourceKeyEdit:
 		var input editInput
-		if err := decodeStrict(arguments.Bytes(), &input, "decode workspace.edit governance arguments"); err != nil {
+		if err := decodeStrict(clean.Bytes(), &input, "decode workspace.edit governance arguments"); err != nil {
 			return invocationdomain.GovernanceFacts{}, err
 		}
 		normalized, err := normalizeRelativePath(input.Path, false)
@@ -67,7 +73,7 @@ func (p *Plugin) ExtractGovernanceFacts(
 
 	case sourceKeyShell:
 		var input shellInput
-		if err := decodeStrict(arguments.Bytes(), &input, "decode workspace.shell governance arguments"); err != nil {
+		if err := decodeStrict(clean.Bytes(), &input, "decode workspace.shell governance arguments"); err != nil {
 			return invocationdomain.GovernanceFacts{}, err
 		}
 		cwd := input.Cwd
@@ -89,9 +95,13 @@ func (p *Plugin) ExtractGovernanceFacts(
 	if err != nil {
 		return invocationdomain.GovernanceFacts{}, err
 	}
+	sandboxResource, err := invocationdomain.NewResourceFact("sandbox_id", selection.String())
+	if err != nil {
+		return invocationdomain.GovernanceFacts{}, err
+	}
 	return invocationdomain.KnownGovernanceFacts(
 		[]invocationdomain.EffectFact{effect},
-		[]invocationdomain.ResourceFact{resource},
+		[]invocationdomain.ResourceFact{resource, sandboxResource},
 	)
 }
 

@@ -17,12 +17,12 @@ import (
 // The returned order is deterministic and intentionally follows the historical
 // Runtime registration order. Callers receive fresh plugin values so tests or
 // future implementation-local state cannot leak across Runtime instances.
-func Plugins(sandboxRouter sandboxapplication.ExecutionRouter, jobs sshjobsplugin.Port) []providerplugin.Plugin {
+func Plugins(sandboxRouter sandboxapplication.ExecutionRouter, jobs sshjobsplugin.Port, targets ...workspaceplugin.TargetLookup) []providerplugin.Plugin {
 	return []providerplugin.Plugin{
 		mcpplugin.New(),
 		openapiplugin.New(),
 		modeltoolsplugin.New(),
-		workspaceplugin.New(sandboxRouter),
+		workspaceplugin.New(sandboxRouter, targets...),
 		sshjobsplugin.New(jobs),
 	}
 }
@@ -34,6 +34,7 @@ func Register(
 	registry *providerplugin.Registry,
 	sandboxRouter sandboxapplication.ExecutionRouter,
 	jobs sshjobsplugin.Port,
+	targets ...workspaceplugin.TargetLookup,
 ) error {
 	if registry == nil {
 		return fmt.Errorf("register built-in provider plugins: registry must not be nil")
@@ -43,7 +44,7 @@ func Register(
 		return fmt.Errorf("register built-in provider plugins: sandbox Router and SSH Job ports required")
 	}
 
-	for _, plugin := range Plugins(sandboxRouter, jobs) {
+	for _, plugin := range Plugins(sandboxRouter, jobs, targets...) {
 		descriptor := plugin.Descriptor()
 		if err := registry.Register(plugin); err != nil {
 			return fmt.Errorf(

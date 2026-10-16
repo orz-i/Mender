@@ -38,6 +38,7 @@ import type {
   Agent,
   AgentTools,
   AgentWorkspace,
+  WorkspaceToolTarget,
   AgentTask,
   AgentAdmissionEvent,
   SandboxActivity,
@@ -83,6 +84,7 @@ import {
   type Agent as BindingAgent,
   type AgentTools as BindingAgentTools,
   type AgentWorkspace as BindingAgentWorkspace,
+  type WorkspaceToolTarget as BindingWorkspaceToolTarget,
   type AgentTask as BindingAgentTask,
   type AgentAdmissionEvent as BindingAgentAdmissionEvent,
   type Sandbox as BindingSandbox,
@@ -390,6 +392,9 @@ export function createDesktopMenderClient(): MenderClient {
     },
     async grantAgentProfile(agentId,profileId){await Service.GrantAgentProfile(agentId,profileId);},
     async revokeAgentProfile(agentId,profileId){await Service.RevokeAgentProfile(agentId,profileId);},
+    async listWorkspaceToolTargets(providerId){const r=await Service.ListWorkspaceToolTargets(providerId);return {workspaces:(r.workspaces??[]).map(workspaceToolTarget)};},
+    async bindWorkspaceToolTarget(providerId,key,sandboxId){await Service.BindWorkspaceToolTarget(providerId,key,sandboxId);},
+    async unbindWorkspaceToolTarget(providerId,key){await Service.UnbindWorkspaceToolTarget(providerId,key);},
     async listToolSuites(){
       const result=await Service.ListToolSuites();
       return {suites:(result.suites??[]).map(toolSuiteDefinition)};
@@ -900,6 +905,9 @@ function agent(value:BindingAgent):Agent {
     throw new MenderClientInvariantError("Unknown Agent isolation: "+value.isolation);
   }
   return {...value,backend:value.backend,isolation:value.isolation};
+}
+function workspaceToolTarget(value:BindingWorkspaceToolTarget):WorkspaceToolTarget {
+  return {key:value.key,sandboxId:value.sandboxId};
 }
 function agentWorkspace(value:BindingAgentWorkspace):AgentWorkspace {
   return {key:value.key,sandboxId:value.sandboxId,profileIds:value.profileIds??[]};

@@ -388,6 +388,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/tool-services/{providerId}/workspaces": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                providerId: string;
+            };
+            cookie?: never;
+        };
+        get: operations["listWorkspaceToolTargets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tool-services/{providerId}/workspaces/{workspaceKey}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                providerId: string;
+                workspaceKey: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["bindWorkspaceToolTarget"];
+        post?: never;
+        delete: operations["unbindWorkspaceToolTarget"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/tools/browse": {
         parameters: {
             query?: never;
@@ -2324,6 +2361,13 @@ export interface components {
             paused: boolean;
             evidence: components["schemas"]["SSHJobRecoveryEvidence"];
         };
+        WorkspaceToolTarget: {
+            key: string;
+            sandboxId: string;
+        };
+        BindWorkspaceToolTargetRequest: {
+            sandboxId: string;
+        };
         SandboxToolSuite: {
             /** @enum {string} */
             suiteId: "sandbox.workspace" | "sandbox.jobs";
@@ -3192,6 +3236,83 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+        };
+    };
+    listWorkspaceToolTargets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                providerId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Additional owner-configured Sandbox targets for an existing Workspace Tool service */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        workspaces: components["schemas"]["WorkspaceToolTarget"][];
+                    };
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    bindWorkspaceToolTarget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                providerId: string;
+                workspaceKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BindWorkspaceToolTargetRequest"];
+            };
+        };
+        responses: {
+            /** @description Additional governed target bound without creating another Provider or Tool */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    unbindWorkspaceToolTarget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                providerId: string;
+                workspaceKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Target alias removed without altering existing ToolIDs */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     browseTools: {

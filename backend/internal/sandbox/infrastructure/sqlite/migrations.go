@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-const latestSchemaVersion = 18
+const latestSchemaVersion = 19
 
 func migrate(ctx context.Context, db *sql.DB) error {
 	tx, err := db.BeginTx(ctx, nil)
@@ -599,6 +599,33 @@ func migrate(ctx context.Context, db *sql.DB) error {
 		}
 		if _, err = tx.ExecContext(ctx, "INSERT INTO sandbox_schema_migrations(version,applied_at) VALUES(18,?)", time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
 			return fmt.Errorf("record sandbox migration 18: %w", err)
+		}
+	}
+	if !recorded.Valid || recorded.Int64 < 19 {
+		// A Provider's existing four Workspace Tools may target further
+		// approved Sandboxes by alias. No second Provider, Tool or resource ID.
+		for _, statement := range []string{
+			`CREATE TABLE workspace_tool_targets (
+			 provider_id TEXT NOT NULL,
+			 workspace_key TEXT NOT NULL,
+			 sandbox_id TEXT NOT NULL REFERENCES sandboxes(id) ON DELETE RESTRICT,
+			 created_at TEXT NOT NULL,
+			 PRIMARY KEY(provider_id,workspace_key), UNIQUE(provider_id,sandbox_id),
+			 CHECK(length(workspace_key) BETWEEN 1 AND 64), CHECK(workspace_key!='default')
+			)`,
+			`CREATE TRIGGER workspace_tool_target_suite_guard BEFORE DELETE ON sandbox_tool_suite_bindings
+			 WHEN EXISTS(SELECT 1 FROM workspace_tool_targets WHERE provider_id=OLD.provider_id)
+			 BEGIN SELECT RAISE(ABORT,'Workspace targets must be detached before retiring Tool Suite'); END`,
+			`CREATE TRIGGER workspace_tool_target_sandbox_guard BEFORE DELETE ON sandboxes
+			 WHEN EXISTS(SELECT 1 FROM workspace_tool_targets WHERE sandbox_id=OLD.id)
+			 BEGIN SELECT RAISE(ABORT,'Workspace target is still bound to a Tool Suite'); END`,
+		} {
+			if _, err = tx.ExecContext(ctx, statement); err != nil {
+				return fmt.Errorf("sandbox v19 workspace targets: %w", err)
+			}
+		}
+		if _, err = tx.ExecContext(ctx, "INSERT INTO sandbox_schema_migrations(version,applied_at) VALUES(19,?)", time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
+			return err
 		}
 	}
 	// A standalone Sandbox store may precede the Provider catalogue. Install

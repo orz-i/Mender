@@ -18,6 +18,7 @@ func TestSSHJobsV17ToV18DropsSelectorWithoutResourceLoss(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	rewindWorkspaceTargetsV19Fixture(t, raw)
 	stmts := []string{
 		"DELETE FROM sandbox_schema_migrations WHERE version=18",
 		"CREATE TABLE sandbox_ssh_job_protocols(sandbox_id TEXT PRIMARY KEY,protocol INTEGER NOT NULL,generation INTEGER NOT NULL,activated_at TEXT NOT NULL)",
@@ -39,7 +40,7 @@ func TestSSHJobsV17ToV18DropsSelectorWithoutResourceLoss(t *testing.T) {
 	}
 	defer func() { _ = store.Close() }()
 	var schema int
-	if err = store.db.QueryRowContext(ctx, "SELECT MAX(version) FROM sandbox_schema_migrations").Scan(&schema); err != nil || schema != 18 {
+	if err = store.db.QueryRowContext(ctx, "SELECT MAX(version) FROM sandbox_schema_migrations").Scan(&schema); err != nil || schema != 19 {
 		t.Fatalf("hard cut schema: %d %v", schema, err)
 	}
 	for _, table := range []string{"sandbox_ssh_job_protocols", "sandbox_ssh_job_protocol_events"} {

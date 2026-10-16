@@ -98,6 +98,9 @@ func (h *Handler) routes() {
 	h.mux.HandleFunc("PUT /api/v1/providers/{providerId}", h.updateProvider)
 	h.mux.HandleFunc("DELETE /api/v1/providers/{providerId}", h.deleteProvider)
 
+	h.mux.HandleFunc("GET /api/v1/tool-services/{providerId}/workspaces", h.listWorkspaceTargets)
+	h.mux.HandleFunc("PUT /api/v1/tool-services/{providerId}/workspaces/{workspaceKey}", h.bindWorkspaceTarget)
+	h.mux.HandleFunc("DELETE /api/v1/tool-services/{providerId}/workspaces/{workspaceKey}", h.unbindWorkspaceTarget)
 	h.mux.HandleFunc("GET /api/v1/tools", h.searchTools)
 	h.mux.HandleFunc("GET /api/v1/tools/browse", h.browseTools)
 	h.mux.HandleFunc("GET /api/v1/tools/{toolId}", h.getTool)

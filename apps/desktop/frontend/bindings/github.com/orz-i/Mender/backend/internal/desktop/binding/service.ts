@@ -24,6 +24,10 @@ export function BindAgentWorkspace(id: string, key: string, sandboxID: string): 
     return $Call.ByID(441566533, id, key, sandboxID);
 }
 
+export function BindWorkspaceToolTarget(providerID: string, key: string, sandboxID: string): $CancellablePromise<void> {
+    return $Call.ByID(3051048187, providerID, key, sandboxID);
+}
+
 export function BrowseTools(limit: number, providerID: string, cursor: string): $CancellablePromise<$models.ToolList> {
     return $Call.ByID(594360793, limit, providerID, cursor);
 }
@@ -365,6 +369,10 @@ export function ListTunnels(): $CancellablePromise<$models.TunnelList> {
     return $Call.ByID(3666209663);
 }
 
+export function ListWorkspaceToolTargets(providerID: string): $CancellablePromise<$models.WorkspaceToolTargets> {
+    return $Call.ByID(1567910759, providerID);
+}
+
 export function PutSandboxProfileGrants(sandboxID: string, profileID: string, capabilities: string[] | null): $CancellablePromise<$models.SandboxProfileGrants> {
     return $Call.ByID(3444082118, sandboxID, profileID, capabilities);
 }
@@ -471,6 +479,10 @@ export function TrustSkillInstallation(installationID: string): $CancellableProm
 
 export function UnbindAgentWorkspace(id: string, key: string): $CancellablePromise<void> {
     return $Call.ByID(57772674, id, key);
+}
+
+export function UnbindWorkspaceToolTarget(providerID: string, key: string): $CancellablePromise<void> {
+    return $Call.ByID(2928939058, providerID, key);
 }
 
 export function UndeploySkill(deploymentID: string): $CancellablePromise<void> {

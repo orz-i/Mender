@@ -98,5 +98,7 @@ export type {
     ToolSuiteDefinitionList,
     ToolSummary,
     Tunnel,
-    TunnelList
+    TunnelList,
+    WorkspaceToolTarget,
+    WorkspaceToolTargets
 } from "./models.js";

@@ -23,6 +23,7 @@ export type Tunnel = components["schemas"]["Tunnel"];
 export type Agent = components["schemas"]["Agent"];
 export type AgentTools = components["schemas"]["AgentTools"];
 export type AgentWorkspace = components["schemas"]["AgentWorkspace"];
+export type WorkspaceToolTarget = components["schemas"]["WorkspaceToolTarget"];
 export type AgentTask = components["schemas"]["AgentTask"];
 export type AgentAdmissionEvent = components["schemas"]["AgentAdmissionEvent"];
 export type AgentGrants = components["schemas"]["AgentGrants"];
@@ -197,6 +198,9 @@ export interface MenderClient {
   grantAgentProfile(agentId:string,profileId:string): Promise<void>;
   revokeAgentProfile(agentId:string,profileId:string): Promise<void>;
   listToolSuites(): Promise<{suites:ToolSuiteDefinition[]}>;
+  listWorkspaceToolTargets(providerId:string):Promise<{workspaces:WorkspaceToolTarget[]}>;
+  bindWorkspaceToolTarget(providerId:string,key:string,sandboxId:string):Promise<void>;
+  unbindWorkspaceToolTarget(providerId:string,key:string):Promise<void>;
   getSandboxTools(sandboxId:string):Promise<SandboxToolSuite>;
   ensureSandboxTools(sandboxId:string):Promise<SandboxToolSuite>;
   removeSandboxTools(sandboxId:string):Promise<void>;
@@ -581,6 +585,9 @@ export function createMenderClient(
       if(!result.response.ok)throwApiError(result.error,result.response);
     },
     async listToolSuites(){return requireData(await client.GET("/tool-suites"));},
+    async listWorkspaceToolTargets(providerId){return requireData(await client.GET("/tool-services/{providerId}/workspaces",{params:{path:{providerId}}}));},
+    async bindWorkspaceToolTarget(providerId,workspaceKey,sandboxId){const r=await client.PUT("/tool-services/{providerId}/workspaces/{workspaceKey}",{params:{path:{providerId,workspaceKey}},body:{sandboxId}});if(!r.response.ok)throwApiError(r.error,r.response);},
+    async unbindWorkspaceToolTarget(providerId,workspaceKey){const r=await client.DELETE("/tool-services/{providerId}/workspaces/{workspaceKey}",{params:{path:{providerId,workspaceKey}}});if(!r.response.ok)throwApiError(r.error,r.response);},
     async getSandboxTools(sandboxId){return requireData(await client.GET("/sandboxes/{sandboxId}/tools",{params:{path:{sandboxId}}}));},
     async ensureSandboxTools(sandboxId){return requireData(await client.POST("/sandboxes/{sandboxId}/tools",{params:{path:{sandboxId}}}));},
     async removeSandboxTools(sandboxId){

@@ -23,10 +23,21 @@ import (
 type Plugin struct {
 	descriptor providerplugin.Descriptor
 	router     sandboxapplication.ExecutionRouter
+	targets    TargetLookup
 }
 
-func New(router sandboxapplication.ExecutionRouter) *Plugin {
-	return &Plugin{descriptor: Descriptor(), router: router}
+// TargetLookup resolves only owner-registered aliases under the exact Provider.
+// The default pinned Sandbox remains in Provider config v2, unchanged.
+type TargetLookup interface {
+	ResolveWorkspaceTarget(context.Context, string, string) (sandboxdomain.ID, error)
+}
+
+func New(router sandboxapplication.ExecutionRouter, targets ...TargetLookup) *Plugin {
+	p := &Plugin{descriptor: Descriptor(), router: router}
+	if len(targets) > 0 {
+		p.targets = targets[0]
+	}
+	return p
 }
 func (p *Plugin) Descriptor() providerplugin.Descriptor {
 	if p == nil {
@@ -69,13 +80,15 @@ func (p *Plugin) Open(_ context.Context, request providerplugin.OpenRequest) (pr
 		return nil, fmt.Errorf("open Sandbox Workspace Tools: %w", err)
 	}
 	// Do not resolve or acquire Sandbox on Provider activation or discovery.
-	return &Instance{sandboxID: sandboxdomain.ID(config.SandboxID), router: p.router, tools: discoveredFileTools()}, nil
+	return &Instance{sandboxID: sandboxdomain.ID(config.SandboxID), providerID: request.ProviderID.String(), targets: p.targets, router: p.router, tools: discoveredFileTools()}, nil
 }
 
 type Instance struct {
-	sandboxID sandboxdomain.ID
-	router    sandboxapplication.ExecutionRouter
-	tools     []catalogapplication.DiscoveredTool
+	sandboxID  sandboxdomain.ID
+	providerID string
+	targets    TargetLookup
+	router     sandboxapplication.ExecutionRouter
+	tools      []catalogapplication.DiscoveredTool
 }
 
 func (i *Instance) DiscoverTools(_ context.Context, _ catalogdomain.Provider) ([]catalogapplication.DiscoveredTool, error) {
@@ -108,7 +121,20 @@ func (i *Instance) Execute(ctx context.Context, request invocationapplication.Ex
 	default:
 		return invocationdomain.Outcome{}, sandboxdomain.ErrCapabilityUnavailable
 	}
-	placement, err := i.router.Resolve(ctx, i.sandboxID, capability)
+	selection, arguments, err := resolveSelection(ctx, i.targets, i.providerID, i.sandboxID, request.Arguments)
+	if err != nil {
+		return invocationdomain.Outcome{}, err
+	}
+	// A target alias can be unbound/rebound between Policy preflight and
+	// execution. Never acquire a different Sandbox than the one whose facts
+	// Policy actually approved. An explicit alias without admitted facts
+	// is not authorized, even if that Sandbox otherwise grants the Profile.
+	if selection != i.sandboxID || request.AdmittedFacts.Knowledge() == invocationdomain.FactKnowledgeKnown {
+		if !admittedSandboxTarget(request.AdmittedFacts, selection) {
+			return invocationdomain.Outcome{}, sandboxdomain.ErrNotAuthorized
+		}
+	}
+	placement, err := i.router.Resolve(ctx, selection, capability)
 	if err != nil {
 		return invocationdomain.Outcome{}, fmt.Errorf("resolve Sandbox Workspace execution: %w", err)
 	}
@@ -123,7 +149,7 @@ func (i *Instance) Execute(ctx context.Context, request invocationapplication.Ex
 	if !ok {
 		return invocationdomain.Outcome{}, errors.Join(sandboxdomain.ErrCapabilityUnavailable, lease.Close())
 	}
-	result, runErr := session.ExecuteWorkspace(ctx, capability, request.Arguments)
+	result, runErr := session.ExecuteWorkspace(ctx, capability, arguments)
 	closeErr := lease.Close()
 	if closeErr != nil {
 		return invocationdomain.Outcome{}, errors.Join(runErr, fmt.Errorf("release Sandbox Workspace lease: %w", closeErr))

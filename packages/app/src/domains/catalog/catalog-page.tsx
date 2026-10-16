@@ -242,6 +242,7 @@ export function CatalogPage({ client, providerId }: { client: MenderClient; prov
             <Button size="sm" onClick={() => void search()} disabled={busy !== "" || !query.trim()}>
               {t(busy === "search" ? "Searching…" : "Search")}
             </Button>
+            {providers.some(p=>p.providerId===providerId&&p.toolSourceKind==="sandbox"&&p.pluginId==="io.mender.provider.workspace")?<Button size="sm" variant="outline" onClick={()=>void navigate(`/tools/${providerId}/workspaces`)}>{t("Manage workspaces")}</Button>:null}
             <Button size="sm" variant="outline" onClick={() => void browseAll()} disabled={busy !== ""}>
               {t(busy === "browse" ? "Loading…" : "Browse")}
             </Button>

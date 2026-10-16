@@ -16,6 +16,7 @@ func TestSandboxV13ToV14JobsSupplyPreservesWorkspaceGrants(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	rewindWorkspaceTargetsV19Fixture(t, raw)
 	profile := "prof_0123456789abcdef0123456789abcdef"
 	_, err = raw.ExecContext(ctx, `INSERT INTO sandbox_profile_grants(sandbox_id,profile_id,capability,granted_at) VALUES(?,?,'file.read','2026-10-13T00:00:00Z')`, id.String(), profile)
 	if err != nil {
@@ -59,7 +60,7 @@ func TestSandboxV13ToV14JobsSupplyPreservesWorkspaceGrants(t *testing.T) {
 		t.Fatalf("audit event ID changed %d %v", eventID, err)
 	}
 	var version int
-	if err = upgraded.db.QueryRowContext(ctx, `SELECT MAX(version) FROM sandbox_schema_migrations`).Scan(&version); err != nil || version != 18 {
+	if err = upgraded.db.QueryRowContext(ctx, `SELECT MAX(version) FROM sandbox_schema_migrations`).Scan(&version); err != nil || version != 19 {
 		t.Fatalf("v14=%d %v", version, err)
 	}
 	var jobsCount int

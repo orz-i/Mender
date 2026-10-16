@@ -244,6 +244,7 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		providerPlugins,
 		sandboxes.router,
 		sandboxes,
+		sandboxes,
 	); err != nil {
 		_ = providerConfigs.Close()
 		_ = policies.Close()

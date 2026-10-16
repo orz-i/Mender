@@ -444,6 +444,7 @@ func (uc InvokeTool) Execute(
 			scopeGovernance,
 			budgetSnapshot,
 			emitter,
+			facts,
 		)
 
 	case policydomain.DecisionAllow:
@@ -459,6 +460,7 @@ func (uc InvokeTool) Execute(
 			scopeGovernance,
 			budgetSnapshot,
 			emitter,
+			facts,
 		)
 
 	default:
@@ -699,6 +701,7 @@ func (uc InvokeTool) execute(
 	scopeGovernance invocationdomain.ScopedBindingGovernance,
 	budgetSnapshot runtimegovernancedomain.Budget,
 	emitter *eventEmitter,
+	facts invocationdomain.GovernanceFacts,
 ) (InvokeToolResponse, error) {
 	timeout := request.Timeout
 	if timeout == 0 {
@@ -956,10 +959,11 @@ func (uc InvokeTool) execute(
 		execCtx,
 		executor,
 		ExecutionRequest{
-			InvocationID: response.InvocationID,
-			Tool:         tool,
-			Arguments:    arguments,
-			Context:      request.Context,
+			InvocationID:  response.InvocationID,
+			Tool:          tool,
+			Arguments:     arguments,
+			AdmittedFacts: facts,
+			Context:       request.Context,
 		},
 		executionCredentials,
 		emitter,

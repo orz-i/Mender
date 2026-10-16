@@ -37,6 +37,7 @@ func seedSandboxV8(t *testing.T) string {
 		t.Fatal(err)
 	}
 	defer func() { _ = db.Close() }()
+	rewindWorkspaceTargetsV19Fixture(t, db)
 	for _, statement := range []string{
 		"DROP TRIGGER sandbox_extension_binding_insert",
 		"DROP TRIGGER sandbox_extension_binding_update",

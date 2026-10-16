@@ -777,3 +777,12 @@ export interface Tunnel {
 export interface TunnelList {
     "tunnels": Tunnel[] | null;
 }
+
+export interface WorkspaceToolTarget {
+    "key": string;
+    "sandboxId": string;
+}
+
+export interface WorkspaceToolTargets {
+    "workspaces": WorkspaceToolTarget[] | null;
+}
