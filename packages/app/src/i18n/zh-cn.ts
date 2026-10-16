@@ -1,4 +1,5 @@
 export const zhCNMessages: Readonly<Record<string, string>> = {
+  "Load more tools": "加载更多工具",
   "Add a service from Plugin Marketplace to discover its tools.": "从插件市场添加服务，即可发现它提供的工具。",
   "Add tool service": "添加服务",
   "Back to services": "返回服务列表",

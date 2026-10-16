@@ -74,6 +74,8 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
   const [credentials, setCredentials] = useState<Credential[]>([]);
   const [tunnels, setTunnels] = useState<Tunnel[]>([]);
   const [catalogTools, setCatalogTools] = useState<ToolSummary[]>([]);
+  const [initialBrowseTools,setInitialBrowseTools] = useState<ToolSummary[]>([]);
+  const [catalogNextCursor,setCatalogNextCursor] = useState<string|null>(null);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -91,6 +93,9 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
   const [pickerQuery, setPickerQuery] = useState("");
   const [pickerProvider, setPickerProvider] = useState("");
   const [pickerTools, setPickerTools] = useState<ToolSummary[]>([]);
+  const [pickerNextCursor,setPickerNextCursor] = useState<string|null>(null);
+  const [pickerAppliedQuery,setPickerAppliedQuery] = useState("");
+  const [pickerAppliedProvider,setPickerAppliedProvider] = useState("");
   const [pickerSelected, setPickerSelected] = useState<Set<string>>(new Set());
   const [pickerDirect, setPickerDirect] = useState<Record<string, boolean>>({});
 
@@ -149,6 +154,8 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
           setCredentials(credentialResult.credentials);
           setTunnels(tunnelResult.tunnels);
           setCatalogTools(toolResult.tools);
+          setInitialBrowseTools(toolResult.tools);
+          setCatalogNextCursor(toolResult.nextCursor??null);
           setError("");
           setLoaded(true);
         }
@@ -294,7 +301,10 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
         ]),
       ),
     );
-    setPickerTools(catalogTools);
+    setPickerTools(initialBrowseTools);
+    setPickerNextCursor(catalogNextCursor);
+    setPickerAppliedQuery("");
+    setPickerAppliedProvider("");
 
     // Base UI modal dialogs must never overlap here. Close Manage first,
     // then open the independent Tool Picker on the next task after focus/inert
@@ -307,30 +317,40 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
     setBusy(true);
     setError("");
     try {
-      let tools: ToolSummary[];
-      if (pickerQuery.trim()) {
-        const result = await client.searchTools({
-          query: pickerQuery,
-          limit: 100,
-        });
-        tools = result.tools;
-        if (pickerProvider) {
-          tools = tools.filter((tool) => tool.providerId === pickerProvider);
-        }
-      } else {
-        const result = await client.browseTools({
-          limit: 100,
-          ...(pickerProvider ? { providerId: pickerProvider } : {}),
-        });
-        tools = result.tools;
-      }
-      setPickerTools(tools);
-      setCatalogTools((current) => mergeTools(current, tools));
+      const query=pickerQuery.trim();
+      const providerId=pickerProvider;
+      const response=query
+        ? await client.searchTools({query,limit:100,...(providerId?{providerId}:{})})
+        : await client.browseTools({limit:100,...(providerId?{providerId}:{})});
+      setPickerTools(response.tools);
+      setPickerNextCursor(response.nextCursor??null);
+      setPickerAppliedQuery(query);
+      setPickerAppliedProvider(providerId);
+      setCatalogTools(current=>mergeTools(current,response.tools));
     } catch (reason) {
       setError(errorMessage(reason));
     } finally {
       setBusy(false);
     }
+  }
+
+  async function loadMorePicker() {
+    if (!pickerNextCursor || busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      const response=pickerAppliedQuery
+        ? await client.searchTools({query:pickerAppliedQuery,limit:100,cursor:pickerNextCursor,
+            ...(pickerAppliedProvider?{providerId:pickerAppliedProvider}:{})})
+        : await client.browseTools({limit:100,cursor:pickerNextCursor,
+            ...(pickerAppliedProvider?{providerId:pickerAppliedProvider}:{})});
+      setPickerTools(current=>mergeTools(current,response.tools));
+      setCatalogTools(current=>mergeTools(current,response.tools));
+      setPickerNextCursor(response.nextCursor??null);
+    } catch(reason) {
+      setPickerNextCursor(null);
+      setError(errorMessage(reason));
+    } finally {setBusy(false);}
   }
 
   async function saveToolSelection() {
@@ -1277,6 +1297,8 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
         profile={pickerProfile}
         providers={providers}
         tools={pickerTools}
+        hasMore={pickerNextCursor!==null && pickerAppliedQuery===pickerQuery.trim() && pickerAppliedProvider===pickerProvider}
+        onLoadMore={() => void loadMorePicker()}
         query={pickerQuery}
         providerId={pickerProvider}
         selected={pickerSelected}
@@ -1299,6 +1321,8 @@ function ToolPickerDialog({
   profile,
   providers,
   tools,
+  hasMore,
+  onLoadMore,
   query,
   providerId,
   selected,
@@ -1316,6 +1340,8 @@ function ToolPickerDialog({
   profile: Profile | null;
   providers: Provider[];
   tools: ToolSummary[];
+  hasMore: boolean;
+  onLoadMore: () => void;
   query: string;
   providerId: string;
   selected: Set<string>;
@@ -1460,6 +1486,11 @@ function ToolPickerDialog({
 
         <div className="shrink-0">
           <TablePagination label="Catalog Tools" pagination={pickerPagination} />
+          {hasMore?<div className="flex justify-center py-2">
+            <Button type="button" size="sm" variant="outline" disabled={busy} onClick={onLoadMore}>
+              {t("Load more tools")}
+            </Button>
+          </div>:null}
         </div>
         </div>
         <DialogFooter>

@@ -264,7 +264,8 @@ func writeKnownError(w http.ResponseWriter, err error) {
 		errors.Is(err, bootstrap.ErrMCPServerNotFound):
 		writeAPIError(w, http.StatusNotFound, "not_found", err)
 
-	case errors.Is(err, catalogapplication.ErrNamespaceConflict),
+	case errors.Is(err, catalogapplication.ErrStaleToolCursor),
+		errors.Is(err, catalogapplication.ErrNamespaceConflict),
 		errors.Is(err, policyapplication.ErrRuleConflict),
 		errors.Is(err, policyapplication.ErrReferenceConflict),
 		errors.Is(err, credentialapplication.ErrReferenceConflict),
@@ -291,7 +292,8 @@ func writeKnownError(w http.ResponseWriter, err error) {
 		errors.Is(err, bootstrap.ErrProviderInUse):
 		writeAPIError(w, http.StatusConflict, "conflict", err)
 
-	case errors.Is(err, catalogapplication.ErrInvalidSearchLimit),
+	case errors.Is(err, catalogapplication.ErrInvalidToolCursor),
+		errors.Is(err, catalogapplication.ErrInvalidSearchLimit),
 		errors.Is(err, policyapplication.ErrInvalidRule),
 		errors.Is(err, policyapplication.ErrProfileReferenceNotFound),
 		errors.Is(err, policyapplication.ErrProviderReferenceNotFound),

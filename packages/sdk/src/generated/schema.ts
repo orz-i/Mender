@@ -3107,6 +3107,7 @@ export interface operations {
             query?: {
                 limit?: number;
                 providerId?: string;
+                cursor?: string;
             };
             header?: never;
             path?: never;
@@ -3121,12 +3122,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
+                        /** @description Opaque continuation cursor bound to scope and Catalog revision */
+                        nextCursor?: string;
                         tools: components["schemas"]["ToolSummary"][];
                     };
                 };
             };
             400: components["responses"]["BadRequest"];
             403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
         };
     };
     searchTools: {
@@ -3135,10 +3139,8 @@ export interface operations {
                 query: string;
                 limit?: number;
                 providerId?: string;
-                /**
-                 * @deprecated
-                 * @description Legacy Profile-scoped search. Catalog UI uses providerId.
-                 */
+                cursor?: string;
+                /** @description Optional Profile slug; search is restricted to the Profile\u0027s bound ToolIDs, not an invocation grant. */
                 profile?: string;
             };
             header?: never;
@@ -3154,6 +3156,8 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
+                        /** @description Opaque continuation cursor bound to scope and Catalog revision */
+                        nextCursor?: string;
                         tools: components["schemas"]["ToolSummary"][];
                     };
                 };
@@ -3161,6 +3165,7 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
     getTool: {

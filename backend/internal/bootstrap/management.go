@@ -32,6 +32,27 @@ func (r *Runtime) Status() RuntimeStatus {
 	}
 }
 
+// PageCatalog is a read-only, revision-bound Tool discovery projection.
+// Profile-scoped search remains filtered by the exact current ToolIDs.
+func (r *Runtime) PageCatalog(ctx context.Context, request catalogapplication.PageToolsRequest,
+	profileSlug *profiledomain.Slug) (catalogapplication.ToolPage, error) {
+	if profileSlug != nil {
+		if request.Mode != "search" {
+			return catalogapplication.ToolPage{}, catalogapplication.ErrInvalidToolCursor
+		}
+		profile, err := r.Profiles.Get.Execute(ctx, *profileSlug)
+		if err != nil {
+			return catalogapplication.ToolPage{}, err
+		}
+		request.Profile = profileSlug.String()
+		request.AllowedToolIDs = profile.ToolIDs()
+		if request.AllowedToolIDs == nil {
+			request.AllowedToolIDs = []catalogdomain.ToolID{} // empty Profile never broadens search
+		}
+	}
+	return r.Catalog.PageTools.Execute(ctx, request)
+}
+
 func (r *Runtime) SearchCatalog(
 	ctx context.Context,
 	query string,

@@ -49,6 +49,22 @@ var catalogMigrations = []migration{
 			)`,
 		},
 	},
+	{
+		version: 2,
+		statements: []string{
+			`CREATE TABLE catalog_tool_revision (
+				id INTEGER PRIMARY KEY CHECK(id=1),
+				revision INTEGER NOT NULL CHECK(revision>=0)
+			)`,
+			`INSERT INTO catalog_tool_revision(id,revision) VALUES(1,0)`,
+			`CREATE TRIGGER catalog_tool_insert_revision AFTER INSERT ON tools
+			 BEGIN UPDATE catalog_tool_revision SET revision=revision+1 WHERE id=1; END`,
+			`CREATE TRIGGER catalog_tool_update_revision AFTER UPDATE ON tools
+			 BEGIN UPDATE catalog_tool_revision SET revision=revision+1 WHERE id=1; END`,
+			`CREATE TRIGGER catalog_tool_delete_revision AFTER DELETE ON tools
+			 BEGIN UPDATE catalog_tool_revision SET revision=revision+1 WHERE id=1; END`,
+		},
+	},
 }
 
 func migrate(ctx context.Context, db *sql.DB) error {

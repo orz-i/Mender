@@ -1162,7 +1162,7 @@ func (s *Service) StopMCPServer(serverID string) error {
 	return s.runtime.StopMCPServer(s.ctx, serverID)
 }
 
-func (s *Service) BrowseTools(limit int, providerID string) (ToolList, error) {
+func (s *Service) BrowseTools(limit int, providerID string, cursor string) (ToolList, error) {
 	if limit == 0 {
 		limit = 100
 	}
@@ -1174,36 +1174,16 @@ func (s *Service) BrowseTools(limit int, providerID string) (ToolList, error) {
 		}
 		id = &parsed
 	}
-	results, err := s.runtime.Catalog.BrowseTools.Execute(
-		s.ctx,
-		catalogapplication.BrowseToolsRequest{
-			Limit:      limit,
-			ProviderID: id,
-		},
-	)
+	page, err := s.runtime.PageCatalog(s.ctx, catalogapplication.PageToolsRequest{
+		Mode: "browse", Limit: limit, ProviderID: id, Cursor: cursor,
+	}, nil)
 	if err != nil {
 		return ToolList{}, err
 	}
-	items := make([]ToolSummary, 0, len(results))
-	for index, result := range results {
-		items = append(items, ToolSummary{
-			Rank:        index + 1,
-			ToolID:      result.ToolID.String(),
-			ProviderID:  result.ProviderID.String(),
-			Name:        result.Name,
-			Title:       result.Title,
-			Description: result.Description,
-		})
-	}
-	return ToolList{Tools: items}, nil
+	return toolPageProjection(page), nil
 }
 
-func (s *Service) SearchTools(
-	query string,
-	limit int,
-	providerID string,
-	profile string,
-) (ToolList, error) {
+func (s *Service) SearchTools(query string, limit int, providerID string, profile string, cursor string) (ToolList, error) {
 	if limit == 0 {
 		limit = defaultToolSearchLimit
 	}
@@ -1223,28 +1203,25 @@ func (s *Service) SearchTools(
 		}
 		profileSlug = &slug
 	}
-	results, err := s.runtime.SearchCatalog(
-		s.ctx,
-		query,
-		limit,
-		provider,
-		profileSlug,
-	)
+	page, err := s.runtime.PageCatalog(s.ctx, catalogapplication.PageToolsRequest{
+		Mode: "search", Query: query, Limit: limit, ProviderID: provider, Cursor: cursor,
+	}, profileSlug)
 	if err != nil {
 		return ToolList{}, err
 	}
-	items := make([]ToolSummary, 0, len(results))
-	for _, result := range results {
+	return toolPageProjection(page), nil
+}
+
+func toolPageProjection(page catalogapplication.ToolPage) ToolList {
+	items := make([]ToolSummary, 0, len(page.Tools))
+	for index, result := range page.Tools {
 		items = append(items, ToolSummary{
-			Rank:        result.Rank,
-			ToolID:      result.ToolID.String(),
-			ProviderID:  result.ProviderID.String(),
-			Name:        result.Name,
-			Title:       result.Title,
-			Description: result.Description,
+			Rank: page.Offset + index + 1, ToolID: result.ToolID.String(),
+			ProviderID: result.ProviderID.String(), Name: result.Name,
+			Title: result.Title, Description: result.Description,
 		})
 	}
-	return ToolList{Tools: items}, nil
+	return ToolList{Tools: items, NextCursor: page.NextCursor}
 }
 
 func (s *Service) GetTool(toolID string) (ToolDetail, error) {

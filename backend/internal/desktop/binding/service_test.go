@@ -122,7 +122,7 @@ func TestServiceEndToEndUsesSharedRuntime(t *testing.T) {
 		t.Fatalf("updated provider = %#v", updated.Provider)
 	}
 
-	browse, err := service.BrowseTools(100, created.Provider.ProviderID)
+	browse, err := service.BrowseTools(100, created.Provider.ProviderID, "")
 	if err != nil {
 		t.Fatalf("BrowseTools() error = %v", err)
 	}
@@ -130,7 +130,7 @@ func TestServiceEndToEndUsesSharedRuntime(t *testing.T) {
 		t.Fatalf("browse tools = %#v", browse.Tools)
 	}
 
-	search, err := service.SearchTools("echo", 10, "", "")
+	search, err := service.SearchTools("echo", 10, "", "", "")
 	if err != nil {
 		t.Fatalf("SearchTools() error = %v", err)
 	}
@@ -195,6 +195,7 @@ func TestServiceEndToEndUsesSharedRuntime(t *testing.T) {
 		10,
 		created.Provider.ProviderID,
 		"",
+		"",
 	)
 	if err != nil {
 		t.Fatalf("provider SearchTools() error = %v", err)
@@ -203,7 +204,7 @@ func TestServiceEndToEndUsesSharedRuntime(t *testing.T) {
 		t.Fatalf("provider search tools = %#v", providerScoped.Tools)
 	}
 
-	scoped, err := service.SearchTools("echo", 10, "", "default")
+	scoped, err := service.SearchTools("echo", 10, "", "default", "")
 	if err != nil {
 		t.Fatalf("profile SearchTools() error = %v", err)
 	}

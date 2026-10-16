@@ -722,6 +722,7 @@ export interface ToolDetail {
 
 export interface ToolList {
     "tools": ToolSummary[] | null;
+    "nextCursor"?: string;
 }
 
 export interface ToolSuiteDefinition {

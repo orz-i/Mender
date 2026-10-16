@@ -8,23 +8,28 @@ import (
 	"github.com/orz-i/Mender/backend/internal/catalog/domain"
 )
 
-func (s *Store) BrowseTools(
+func (s *Store) BrowseTools(ctx context.Context, limit int, providerID *domain.ProviderID) ([]application.ToolListItem, error) {
+	return s.PagedBrowseTools(ctx, limit, providerID, 0)
+}
+
+func (s *Store) PagedBrowseTools(
 	ctx context.Context,
 	limit int,
 	providerID *domain.ProviderID,
+	offset int,
 ) ([]application.ToolListItem, error) {
 	query := `SELECT id, provider_id, name, title, description
 		FROM tools
 		ORDER BY provider_id, name, id
-		LIMIT ?`
-	args := []any{limit}
+		LIMIT ? OFFSET ?`
+	args := []any{limit, offset}
 	if providerID != nil {
 		query = `SELECT id, provider_id, name, title, description
 			FROM tools
 			WHERE provider_id = ?
 			ORDER BY name, id
-			LIMIT ?`
-		args = []any{providerID.String(), limit}
+			LIMIT ? OFFSET ?`
+		args = []any{providerID.String(), limit, offset}
 	}
 
 	rows, err := s.db.QueryContext(ctx, query, args...)

@@ -290,8 +290,10 @@ export function createDesktopMenderClient(): MenderClient {
       const result = await Service.BrowseTools(
         input.limit ?? 100,
         input.providerId ?? "",
+        input.cursor ?? "",
       );
-      return { tools: (result.tools ?? []).map(toolSummary) };
+      return { tools: (result.tools ?? []).map(toolSummary),
+        ...(result.nextCursor ? { nextCursor: result.nextCursor } : {}) };
     },
 
     async searchTools(input) {
@@ -300,8 +302,10 @@ export function createDesktopMenderClient(): MenderClient {
         input.limit ?? 20,
         input.providerId ?? "",
         input.profile ?? "",
+        input.cursor ?? "",
       );
-      return { tools: (result.tools ?? []).map(toolSummary) };
+      return { tools: (result.tools ?? []).map(toolSummary),
+        ...(result.nextCursor ? { nextCursor: result.nextCursor } : {}) };
     },
 
     async getTool(toolId) {

@@ -20,8 +20,8 @@ export function AddProfileTool(slug: string, tool: $models.ProfileTool): $Cancel
     return $Call.ByID(296290586, slug, tool);
 }
 
-export function BrowseTools(limit: number, providerID: string): $CancellablePromise<$models.ToolList> {
-    return $Call.ByID(594360793, limit, providerID);
+export function BrowseTools(limit: number, providerID: string, cursor: string): $CancellablePromise<$models.ToolList> {
+    return $Call.ByID(594360793, limit, providerID, cursor);
 }
 
 export function CallTool(toolID: string, $arguments: { [_ in string]?: any } | null): $CancellablePromise<$models.InvocationResult> {
@@ -409,8 +409,8 @@ export function RotateNativeCredential($namespace: string, name: string, secret:
     return $Call.ByID(3563376993, $namespace, name, secret, sshKeyPassphrase);
 }
 
-export function SearchTools(query: string, limit: number, providerID: string, profile: string): $CancellablePromise<$models.ToolList> {
-    return $Call.ByID(1688287699, query, limit, providerID, profile);
+export function SearchTools(query: string, limit: number, providerID: string, profile: string, cursor: string): $CancellablePromise<$models.ToolList> {
+    return $Call.ByID(1688287699, query, limit, providerID, profile, cursor);
 }
 
 export function SetPolicyDefault(decision: string): $CancellablePromise<$models.Policy> {

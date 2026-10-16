@@ -25,7 +25,7 @@ FROM tools_fts
 JOIN tools AS t ON t.id = tools_fts.tool_id
 WHERE tools_fts MATCH ?
 ORDER BY bm25(tools_fts), t.id
-LIMIT ?`
+LIMIT ? OFFSET ?`
 
 const searchProviderToolsQuery = `SELECT
 	t.id,
@@ -44,7 +44,7 @@ JOIN tools AS t ON t.id = tools_fts.tool_id
 WHERE tools_fts MATCH ?
 	AND tools_fts.provider_id = ?
 ORDER BY bm25(tools_fts), t.id
-LIMIT ?`
+LIMIT ? OFFSET ?`
 
 const searchToolIDsUnboundedQuery = `SELECT tool_id
 FROM tools_fts
@@ -64,6 +64,13 @@ func (s *Store) SearchTools(
 	limit int,
 	scope application.ToolSearchScope,
 ) ([]domain.Tool, error) {
+	return s.pagedSearchToolDomain(ctx, query, limit, scope, 0)
+}
+
+func (s *Store) pagedSearchToolDomain(
+	ctx context.Context, query string, limit int,
+	scope application.ToolSearchScope, offset int,
+) ([]domain.Tool, error) {
 	match := ftsQuery(query)
 	if match == "" {
 		return []domain.Tool{}, nil
@@ -72,10 +79,10 @@ func (s *Store) SearchTools(
 		if len(scope.AllowedToolIDs) == 0 {
 			return []domain.Tool{}, nil
 		}
-		return s.searchAllowedTools(ctx, match, limit, scope)
+		return s.searchAllowedToolsPage(ctx, match, limit, scope, offset)
 	}
 
-	statement, args := searchStatement(match, limit, scope)
+	statement, args := searchStatement(match, limit, scope, offset)
 	rows, err := s.db.QueryContext(ctx, statement, args...)
 	if err != nil {
 		return nil, fmt.Errorf("search tools: %w", err)
@@ -102,11 +109,12 @@ func (s *Store) SearchTools(
 	return tools, nil
 }
 
-func (s *Store) searchAllowedTools(
+func (s *Store) searchAllowedToolsPage(
 	ctx context.Context,
 	match string,
 	limit int,
 	scope application.ToolSearchScope,
+	offset int,
 ) ([]domain.Tool, error) {
 	statement := searchToolIDsUnboundedQuery
 	args := []any{match}
@@ -127,6 +135,7 @@ func (s *Store) searchAllowedTools(
 	}
 
 	matched := make([]domain.ToolID, 0, limit)
+	skipped := 0
 	for rows.Next() {
 		var rawID string
 		if err := rows.Scan(&rawID); err != nil {
@@ -134,6 +143,10 @@ func (s *Store) searchAllowedTools(
 		}
 		id, visible := allowed[rawID]
 		if !visible {
+			continue
+		}
+		if skipped < offset {
+			skipped++
 			continue
 		}
 		matched = append(matched, id)
@@ -160,14 +173,12 @@ func (s *Store) searchAllowedTools(
 }
 
 func searchStatement(
-	match string,
-	limit int,
-	scope application.ToolSearchScope,
+	match string, limit int, scope application.ToolSearchScope, offset int,
 ) (string, []any) {
 	if scope.ProviderID != nil {
-		return searchProviderToolsQuery, []any{match, scope.ProviderID.String(), limit}
+		return searchProviderToolsQuery, []any{match, scope.ProviderID.String(), limit, offset}
 	}
-	return searchToolsQuery, []any{match, limit}
+	return searchToolsQuery, []any{match, limit, offset}
 }
 
 func ftsQuery(query string) string {

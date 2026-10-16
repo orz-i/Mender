@@ -42,7 +42,7 @@ const providers: Provider[] = Array.from({ length: 3 }, (_, i) => ({
   toolCount: 25,
 }));
 
-function show() {
+function show(overrides:Partial<MenderClient>={}) {
   const replaceProfileTools = vi.fn().mockImplementation((_slug: string, body: { tools: Profile["tools"] }) => Promise.resolve({ ...profile, tools: body.tools }));
   const client = {
     listProfiles: vi.fn().mockResolvedValue({ profiles: [profile] }),
@@ -51,6 +51,7 @@ function show() {
     listTunnels: vi.fn().mockResolvedValue({ tunnels: [] }),
     browseTools: vi.fn().mockResolvedValue({ tools }),
     replaceProfileTools,
+    ...overrides,
   } as unknown as MenderClient;
 
   render(
@@ -125,4 +126,57 @@ it("keeps Tool Picker selection across pages while keeping Search and Save contr
   expect(sent?.tools.some((selection) => selection.toolId === "tool_0001")).toBe(false);
   expect(sent?.tools.some((selection) => selection.toolId === "tool_0011")).toBe(false);
   expect(sent?.tools.some((selection) => selection.toolId === "tool_0065")).toBe(true);
+});
+
+it("selects Tool 105 using backend cursor without dropping Profile's first-page bindings",async()=>{
+  const more:ToolSummary[]=Array.from({length:105},(_,i)=>({
+    rank:i+1,toolId:"tool_"+String(i+1).padStart(4,"0"),
+    providerId:"prov_0",name:"tool_"+(i+1),title:"Work tool "+(i+1),
+    description:"Search service Tool "+(i+1),
+  }));
+  const browse=vi.fn().mockResolvedValueOnce({
+    tools:more.slice(0,100),nextCursor:"profile-page-two",
+  }).mockResolvedValueOnce({tools:more.slice(100)});
+  const {replaceProfileTools}=show({browseTools:browse as MenderClient["browseTools"]});
+  fireEvent.click(await screen.findByRole("button",{name:"Manage Large Profile"}));
+  fireEvent.click(screen.getByRole("button",{name:"Choose tools"}));
+  const picker=await screen.findByRole("dialog",{name:"Choose tools"});
+  expect(within(picker).getByRole("button",{name:"Load more tools"})).toBeTruthy();
+  fireEvent.click(within(picker).getByRole("button",{name:"Load more tools"}));
+  await vi.waitFor(()=>expect(browse).toHaveBeenLastCalledWith({
+    limit:100,cursor:"profile-page-two",
+  }));
+  await vi.waitFor(()=>expect(within(picker).queryByRole("button",{name:"Load more tools"})).toBeNull());
+  fireEvent.change(within(picker).getByRole("combobox",{name:"Catalog Tools rows per page"}),{
+    target:{value:"50"},
+  });
+  fireEvent.click(within(picker).getByRole("button",{name:"Catalog Tools next page"}));
+  fireEvent.click(within(picker).getByRole("button",{name:"Catalog Tools next page"}));
+  const newTool=await within(picker).findByRole("checkbox",{name:"Select Work tool 105"});
+  expect((newTool as HTMLInputElement).checked).toBe(false);
+  fireEvent.click(newTool);
+  fireEvent.click(within(picker).getByRole("button",{name:"Save selection"}));
+  await vi.waitFor(()=>expect(replaceProfileTools).toHaveBeenCalledOnce());
+  const sent=(replaceProfileTools.mock.calls[0] as [string,{tools:Profile["tools"]}] | undefined)?.[1];
+  expect(sent?.tools).toHaveLength(66);
+  expect(sent?.tools.some(item=>item.toolId==="tool_0001")).toBe(true);
+  expect(sent?.tools.some(item=>item.toolId==="tool_0105")).toBe(true);
+});
+
+it("submits Profile picker search with exact service scope before ranking",async()=>{
+  const searchTools=vi.fn().mockResolvedValue({tools:[]});
+  show({searchTools:searchTools as MenderClient["searchTools"]});
+  fireEvent.click(await screen.findByRole("button",{name:"Manage Large Profile"}));
+  fireEvent.click(screen.getByRole("button",{name:"Choose tools"}));
+  const picker=await screen.findByRole("dialog",{name:"Choose tools"});
+  fireEvent.change(within(picker).getByRole("combobox",{name:"Provider filter"}),{
+    target:{value:"prov_2"},
+  });
+  fireEvent.change(within(picker).getByRole("textbox",{name:"Profile tool search"}),{
+    target:{value:"search"},
+  });
+  fireEvent.click(within(picker).getByRole("button",{name:"Apply"}));
+  await vi.waitFor(()=>expect(searchTools).toHaveBeenCalledWith({
+    query:"search",limit:100,providerId:"prov_2",
+  }));
 });

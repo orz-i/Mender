@@ -27,6 +27,7 @@ type Catalog struct {
 	RemoveProvider          application.RemoveProvider
 	DescribeTool            application.DescribeTool
 	BrowseTools             application.BrowseTools
+	PageTools               application.PageTools
 	SearchTools             application.SearchTools
 	ListProviderToolCounts  application.ListProviderToolCounts
 
@@ -54,6 +55,7 @@ func NewCatalog(ctx context.Context, options CatalogOptions) (*Catalog, error) {
 		RemoveProvider:          application.NewRemoveProvider(store),
 		DescribeTool:            application.NewDescribeTool(store),
 		BrowseTools:             application.NewBrowseTools(store),
+		PageTools:               application.NewPageTools(store),
 		SearchTools:             application.NewSearchTools(store),
 		ListProviderToolCounts:  application.NewListProviderToolCounts(store),
 		store:                   store,

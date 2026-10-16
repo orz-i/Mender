@@ -36,22 +36,18 @@ func (h *Handler) browseTools(w http.ResponseWriter, r *http.Request) {
 		providerID = &parsed
 	}
 
-	results, err := h.runtime.Catalog.BrowseTools.Execute(
-		r.Context(),
-		catalogapplication.BrowseToolsRequest{
-			Limit:      limit,
-			ProviderID: providerID,
-		},
-	)
+	page, err := h.runtime.PageCatalog(r.Context(), catalogapplication.PageToolsRequest{
+		Mode: "browse", Limit: limit, ProviderID: providerID, Cursor: r.URL.Query().Get("cursor"),
+	}, nil)
 	if err != nil {
 		writeKnownError(w, err)
 		return
 	}
 
-	items := make([]map[string]any, 0, len(results))
-	for index, result := range results {
+	items := make([]map[string]any, 0, len(page.Tools))
+	for index, result := range page.Tools {
 		items = append(items, map[string]any{
-			"rank":        index + 1,
+			"rank":        page.Offset + index + 1,
 			"toolId":      result.ToolID.String(),
 			"providerId":  result.ProviderID.String(),
 			"name":        result.Name,
@@ -59,7 +55,11 @@ func (h *Handler) browseTools(w http.ResponseWriter, r *http.Request) {
 			"description": result.Description,
 		})
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"tools": items})
+	result := map[string]any{"tools": items}
+	if page.NextCursor != "" {
+		result["nextCursor"] = page.NextCursor
+	}
+	writeJSON(w, http.StatusOK, result)
 }
 
 func (h *Handler) searchTools(w http.ResponseWriter, r *http.Request) {
@@ -99,21 +99,17 @@ func (h *Handler) searchTools(w http.ResponseWriter, r *http.Request) {
 		profileSlug = &slug
 	}
 
-	results, err := h.runtime.SearchCatalog(
-		r.Context(),
-		query,
-		limit,
-		providerID,
-		profileSlug,
-	)
+	page, err := h.runtime.PageCatalog(r.Context(), catalogapplication.PageToolsRequest{
+		Mode: "search", Query: query, Limit: limit, ProviderID: providerID, Cursor: r.URL.Query().Get("cursor"),
+	}, profileSlug)
 	if err != nil {
 		writeKnownError(w, err)
 		return
 	}
-	items := make([]map[string]any, 0, len(results))
-	for _, result := range results {
+	items := make([]map[string]any, 0, len(page.Tools))
+	for index, result := range page.Tools {
 		items = append(items, map[string]any{
-			"rank":        result.Rank,
+			"rank":        page.Offset + index + 1,
 			"toolId":      result.ToolID.String(),
 			"providerId":  result.ProviderID.String(),
 			"name":        result.Name,
@@ -121,7 +117,11 @@ func (h *Handler) searchTools(w http.ResponseWriter, r *http.Request) {
 			"description": result.Description,
 		})
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"tools": items})
+	result := map[string]any{"tools": items}
+	if page.NextCursor != "" {
+		result["nextCursor"] = page.NextCursor
+	}
+	writeJSON(w, http.StatusOK, result)
 }
 
 func (h *Handler) getTool(w http.ResponseWriter, r *http.Request) {

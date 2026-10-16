@@ -459,6 +459,9 @@ paths:
         - name: providerId
           in: query
           schema: { type: string }
+        - name: cursor
+          in: query
+          schema: { type: string, maxLength: 4096 }
       responses:
         '403': { $ref: '#/components/responses/Forbidden' }
         '200':
@@ -469,11 +472,13 @@ paths:
                 type: object
                 required: [tools]
                 properties:
+                  nextCursor: { type: string, description: Opaque continuation cursor bound to scope and Catalog revision }
                   tools:
                     type: array
                     items:
                       $ref: '#/components/schemas/ToolSummary'
         '400': { $ref: '#/components/responses/BadRequest' }
+        '409': { $ref: '#/components/responses/Conflict' }
   /tools:
     get:
       operationId: searchTools
@@ -488,10 +493,12 @@ paths:
         - name: providerId
           in: query
           schema: { type: string }
+        - name: cursor
+          in: query
+          schema: { type: string, maxLength: 4096 }
         - name: profile
           in: query
-          deprecated: true
-          description: Legacy Profile-scoped search. Catalog UI uses providerId.
+          description: Optional Profile slug; search is restricted to the Profile\u0027s bound ToolIDs, not an invocation grant.
           schema: { type: string }
       responses:
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -503,11 +510,13 @@ paths:
                 type: object
                 required: [tools]
                 properties:
+                  nextCursor: { type: string, description: Opaque continuation cursor bound to scope and Catalog revision }
                   tools:
                     type: array
                     items:
                       $ref: '#/components/schemas/ToolSummary'
         '400': { $ref: '#/components/responses/BadRequest' }
+        '409': { $ref: '#/components/responses/Conflict' }
         '404': { $ref: '#/components/responses/NotFound' }
   /tools/{toolId}:
     get:

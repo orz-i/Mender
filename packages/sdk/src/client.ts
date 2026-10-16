@@ -98,9 +98,11 @@ export type ReplaceProfileToolsRequest =
 export interface BrowseToolsInput {
   limit?: number;
   providerId?: string;
+  cursor?: string;
 }
 
 export interface SearchToolsInput {
+  cursor?: string;
   query: string;
   limit?: number;
   providerId?: string;
@@ -156,8 +158,8 @@ export interface MenderClient {
   ): Promise<ProviderMutationResponse>;
   syncProvider(providerId: string): Promise<SyncResult>;
   deleteProvider(providerId: string): Promise<void>;
-  browseTools(input?: BrowseToolsInput): Promise<{ tools: ToolSummary[] }>;
-  searchTools(input: SearchToolsInput): Promise<{ tools: ToolSummary[] }>;
+  browseTools(input?: BrowseToolsInput): Promise<{ tools: ToolSummary[]; nextCursor?: string }>;
+  searchTools(input: SearchToolsInput): Promise<{ tools: ToolSummary[]; nextCursor?: string }>;
   getTool(toolId: string): Promise<ToolDetail>;
   callTool(
     toolId: string,
@@ -452,6 +454,7 @@ export function createMenderClient(
             ...(input.providerId === undefined
               ? {}
               : { providerId: input.providerId }),
+            ...(input.cursor === undefined ? {} : { cursor: input.cursor }),
           },
         },
       });
@@ -467,6 +470,7 @@ export function createMenderClient(
             ...(input.providerId === undefined
               ? {}
               : { providerId: input.providerId }),
+            ...(input.cursor === undefined ? {} : { cursor: input.cursor }),
             ...(input.profile === undefined ? {} : { profile: input.profile }),
           },
         },

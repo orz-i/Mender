@@ -806,7 +806,7 @@ describe("desktop Mender client", () => {
         },
       ],
     });
-    expect(Service.BrowseTools).toHaveBeenCalledWith(100, "");
+    expect(Service.BrowseTools).toHaveBeenCalledWith(100, "", "");
   });
 
   it("forwards Provider-scoped Tool search through Wails", async () => {
@@ -839,7 +839,30 @@ describe("desktop Mender client", () => {
       30,
       "prov_1",
       "",
+      "",
     );
+  });
+
+
+  it("forwards revision-scoped tool cursors and nextCursor through Wails",async()=>{
+    vi.mocked(Service.BrowseTools).mockResolvedValue({
+      tools:[{rank:51,toolId:"tool_51",providerId:"prov_1",name:"search",
+        title:"Search",description:"Search the web"}],
+      nextCursor:"browse-next",
+    });
+    vi.mocked(Service.SearchTools).mockResolvedValue({
+      tools:[{rank:31,toolId:"tool_31",providerId:"prov_1",name:"search",
+        title:"Search",description:"Search the web"}],
+      nextCursor:"search-next",
+    });
+    const client=createDesktopMenderClient();
+    await expect(client.browseTools({limit:50,providerId:"prov_1",cursor:"opaque-browse"}))
+      .resolves.toMatchObject({nextCursor:"browse-next",tools:[{toolId:"tool_51",rank:51}]});
+    expect(Service.BrowseTools).toHaveBeenCalledWith(50,"prov_1","opaque-browse");
+    await expect(client.searchTools({query:"search",limit:30,providerId:"prov_1",
+      profile:"default",cursor:"opaque-search"}))
+      .resolves.toMatchObject({nextCursor:"search-next",tools:[{toolId:"tool_31",rank:31}]});
+    expect(Service.SearchTools).toHaveBeenCalledWith("search",30,"prov_1","default","opaque-search");
   });
 
   it("maps Credential inventory without exposing secret values", async () => {

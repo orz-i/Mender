@@ -432,7 +432,8 @@ type ToolSummary struct {
 }
 
 type ToolList struct {
-	Tools []ToolSummary `json:"tools"`
+	Tools      []ToolSummary `json:"tools"`
+	NextCursor string        `json:"nextCursor,omitempty"`
 }
 
 type MCPServerInstance struct {

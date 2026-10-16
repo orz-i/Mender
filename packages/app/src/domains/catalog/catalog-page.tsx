@@ -52,6 +52,8 @@ export function CatalogPage({ client, providerId }: { client: MenderClient; prov
   const [providers, setProviders] = useState<Provider[]>([]);
   const [results, setResults] = useState<ToolSummary[]>([]);
   const [searched, setSearched] = useState(false);
+  const [activeQuery, setActiveQuery] = useState("");
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
 
   const [selected, setSelected] = useState<ToolDetail | null>(null);
   const [toolView, setToolView] = useState<ToolView | null>(null);
@@ -74,6 +76,8 @@ export function CatalogPage({ client, providerId }: { client: MenderClient; prov
         if (active) {
           setProviders(providerResult.providers);
           setResults(toolResult.tools.filter(tool=>tool.providerId===providerId));
+          setNextCursor(toolResult.nextCursor ?? null);
+          setActiveQuery("");
           setSearched(false);
         }
       })
@@ -93,6 +97,8 @@ export function CatalogPage({ client, providerId }: { client: MenderClient; prov
     try {
       const response = await client.browseTools({ limit: 100, providerId });
       setResults(response.tools.filter(tool=>tool.providerId===providerId));
+      setNextCursor(response.nextCursor ?? null);
+      setActiveQuery("");
       catalogPagination.reset();
       setSearched(false);
       setSelected(null);
@@ -118,6 +124,8 @@ export function CatalogPage({ client, providerId }: { client: MenderClient; prov
         providerId,
       });
       setResults(response.tools.filter(tool=>tool.providerId===providerId));
+      setNextCursor(response.nextCursor ?? null);
+      setActiveQuery(query.trim());
       catalogPagination.reset();
       setSearched(true);
       setSelected(null);
@@ -128,6 +136,25 @@ export function CatalogPage({ client, providerId }: { client: MenderClient; prov
     } finally {
       setBusy("");
     }
+  }
+
+  async function loadMore() {
+    if (!nextCursor || busy !== "") return;
+    setBusy("more");
+    setError("");
+    try {
+      const page = searched
+        ? await client.searchTools({query:activeQuery,providerId,limit:30,cursor:nextCursor})
+        : await client.browseTools({providerId,limit:100,cursor:nextCursor});
+      setResults(current=>{
+        const seen=new Set(current.map(tool=>tool.toolId));
+        return [...current,...page.tools.filter(tool=>tool.providerId===providerId&&!seen.has(tool.toolId))];
+      });
+      setNextCursor(page.nextCursor??null);
+    } catch(reason) {
+      setNextCursor(null);
+      setError(errorMessage(reason));
+    } finally {setBusy("");}
   }
 
   async function viewTool(tool: ToolSummary) {
@@ -295,6 +322,11 @@ export function CatalogPage({ client, providerId }: { client: MenderClient; prov
         label="Service tools"
         pagination={catalogPagination}
       />
+      {nextCursor ? <div className="flex justify-center py-3">
+        <Button size="sm" variant="outline" disabled={busy!==""} onClick={()=>void loadMore()}>
+          {t(busy==="more"?"Loading…":"Load more tools")}
+        </Button>
+      </div> : null}
 
       <Dialog
         open={selected !== null}
