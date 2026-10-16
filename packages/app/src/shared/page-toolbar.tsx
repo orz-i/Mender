@@ -19,7 +19,7 @@ export function PageToolbar({
   return (
     <div
       data-slot="page-toolbar"
-      className={["mb-4 flex min-w-0 flex-col gap-3 xl:flex-row xl:flex-wrap xl:items-center xl:justify-between", className].join(" ")}
+      className={["mb-5 flex min-w-0 flex-col gap-3 xl:flex-row xl:flex-wrap xl:items-center xl:justify-between", className].join(" ")}
     >
       {tabs ? <div data-slot="page-toolbar-tabs" className="flex w-full min-w-0 max-w-full flex-wrap items-center gap-2 xl:w-auto xl:shrink-0">{tabs}</div> : null}
       {filters || actions ? (

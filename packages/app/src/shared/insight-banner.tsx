@@ -34,7 +34,7 @@ export function InsightBanner({
       aria-label={typeof title === "string" ? t(title) : t("System recommendation")}
       data-slot="insight-banner"
       className={cn(
-        "mb-5 flex min-w-0 flex-col gap-4 rounded-2xl border border-[#c6eac3] bg-[#eaf7ec] p-4 text-foreground shadow-xs sm:flex-row sm:items-center sm:justify-between dark:border-[#2a452e] dark:bg-[#1a281c]",
+        "mb-5 flex min-w-0 flex-col gap-4 rounded-[22px] border border-[#c6eac3] bg-[#eaf7ec] p-4 text-foreground shadow-xs sm:flex-row sm:items-center sm:justify-between dark:border-[#2a452e] dark:bg-[#1a281c]",
         className,
       )}
     >

@@ -31,6 +31,7 @@ import {
 } from "@mender/ui/components/select";
 
 import { formatNumber, t } from "../i18n/i18n";
+import { cn } from "@mender/ui/lib/utils";
 
 const panelIcons: Record<string, LucideIcon> = {
   "Recent invocations": ActivityIcon,
@@ -61,9 +62,20 @@ const panelIcons: Record<string, LucideIcon> = {
   "Catalog": PackageSearchIcon,
 };
 
-export function MetricStrip({ children }: { children: ReactNode }) {
+export function MetricStrip({
+  children,
+  className = "",
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
   return (
-    <div className="grid overflow-hidden rounded-[22px] border border-border/40 bg-card shadow-[var(--card-elevation)] sm:grid-cols-2 xl:grid-cols-4">
+    <div
+      className={cn(
+        "mb-5 grid overflow-hidden rounded-[22px] border border-border/40 bg-card shadow-[var(--card-elevation)] sm:grid-cols-2 xl:grid-cols-4",
+        className,
+      )}
+    >
       {children}
     </div>
   );
