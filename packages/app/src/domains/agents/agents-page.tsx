@@ -12,6 +12,7 @@ import { EmptyState, ErrorNotice } from "../../shared/page";
 import { PageToolbar, PageTab, PageTabs, ResultPanel } from "../../shared/page-toolbar";
 import { usePagination } from "../../shared/pagination";
 import { TablePagination } from "../../shared/table-pagination";
+import { agentBackendLabel } from "./agent-backends";
 import { EmptyPanelState, SearchField } from "../../shared/workbench";
 
 type Filter = "all" | "available" | "unavailable";
@@ -79,7 +80,7 @@ export function AgentsPage({ client }: { client: MenderClient }) {
           </TableRow></TableHeader>
           <TableBody>{pagination.items.map(a=><TableRow key={a.agentId}>
             <TableCell className="max-w-[200px] truncate font-medium">{a.name}</TableCell>
-            <TableCell>{a.backend==="codex"?"Codex":"Grok"}</TableCell>
+            <TableCell>{agentBackendLabel(a.backend)}</TableCell>
             <TableCell>{a.isolation==="host"?t("Host (not isolated)"):t("Restricted host")}</TableCell>
             <TableCell><Badge variant="outline">{a.backendAvailable?t("CLI detected"):t("CLI missing")}</Badge></TableCell>
             <TableCell className="max-w-[280px] truncate font-mono text-xs text-muted-foreground" title={a.workspaceRoot}>{a.workspaceRoot}</TableCell>

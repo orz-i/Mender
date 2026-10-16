@@ -1,4 +1,5 @@
 export const zhCNMessages: Readonly<Record<string, string>> = {
+  "Unknown Agent backend plugin.": "无法识别的智能体后端插件。",
   "Refresh Agent tools": "刷新智能体工具",
   "Default reasoning effort": "默认思考等级",
   "Edit runtime defaults": "编辑运行默认配置",

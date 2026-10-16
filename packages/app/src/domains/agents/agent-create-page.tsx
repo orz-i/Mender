@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
-import type { Agent, MenderClient } from "@mender/sdk";
+import type { MenderClient } from "@mender/sdk";
 import { Button } from "@mender/ui/components/button";
 import { Input } from "@mender/ui/components/input";
 import { t } from "../../i18n/i18n";
@@ -8,14 +8,12 @@ import { errorMessage } from "../../shared/errors";
 import { ErrorNotice } from "../../shared/page";
 import { PageToolbar } from "../../shared/page-toolbar";
 import { DataPanel } from "../../shared/workbench";
+import {
+  agentBackendDescription, agentBackendForPluginId, agentBackendLabel, agentBackendOptions,
+  type AgentBackend,
+} from "./agent-backends";
 
-type Backend = Agent["backend"];
 type Step = "select" | "configure" | "review";
-const backendChoices: Array<{ value: Backend; name:string; description:string }> = [
-  {value:"codex",name:"Codex",description:""},
-  {value:"grok",name:"Grok",description:""},
-  {value:"opencode",name:"OpenCode",description:""},
-];
 
 export function AgentCreatePage({
   client, chooseLocalDirectory,
@@ -23,23 +21,43 @@ export function AgentCreatePage({
   client:MenderClient;
   chooseLocalDirectory?:()=>Promise<string|null>;
 }){
-  const navigate=useNavigate();
   const [params]=useSearchParams();
-  const selected=params.get("pluginId")==="io.mender.agent.codex"?"codex":
-    params.get("pluginId")==="io.mender.agent.grok"?"grok":
-    params.get("pluginId")==="io.mender.agent.opencode"?"opencode":null;
-  const [step,setStep]=useState<Step>(selected?"configure":"select");
-  const [backend,setBackend]=useState<Backend>(selected??"codex");
+  const navigate=useNavigate();
+  const pluginId=params.get("pluginId");
+  const pinnedBackend=pluginId===null?null:agentBackendForPluginId(pluginId);
+  if(pluginId!==null&&pinnedBackend===null){
+    return <>
+      <PageToolbar actions={<Button variant="outline" onClick={()=>void navigate("/plugins")}>{t("Back")}</Button>}/>
+      <ErrorNotice message={t("Unknown Agent backend plugin.")}/>
+    </>;
+  }
+  // React Router may keep this route mounted while pluginId changes. Remount
+  // the focused form, so a previous plugin's backend/draft cannot carry over.
+  return <AgentCreateForm key={pluginId??"generic"} client={client}
+    {...(chooseLocalDirectory===undefined?{}:{chooseLocalDirectory})} pinnedBackend={pinnedBackend}/>;
+}
+
+function AgentCreateForm({
+  client, chooseLocalDirectory, pinnedBackend,
+}:{
+  client:MenderClient;
+  chooseLocalDirectory?:()=>Promise<string|null>;
+  pinnedBackend:AgentBackend|null;
+}){
+  const navigate=useNavigate();
+  const [step,setStep]=useState<Step>(pinnedBackend?"configure":"select");
+  const [selectedBackend,setSelectedBackend]=useState<AgentBackend|null>(pinnedBackend);
+  const backend=pinnedBackend??selectedBackend;
   const [name,setName]=useState("");
   const [root,setRoot]=useState("");
   const [defaultModel,setDefaultModel]=useState("");
   const [isolation,setIsolation]=useState<"restricted_host"|"host">("restricted_host");
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState("");
-  const valid=name.trim().length>0&&name.trim().length<=120&&root.startsWith("/");
+  const valid=backend!==null&&name.trim().length>0&&name.trim().length<=120&&root.startsWith("/");
 
   async function create(){
-    if(!valid || busy || step!=="review")return;
+    if(!valid || backend===null || busy || step!=="review")return;
     setBusy(true);setError("");
     try{
       const item=await client.createAgent({
@@ -54,23 +72,21 @@ export function AgentCreatePage({
   }
 
   return <>
-    <PageToolbar actions={<Button variant="outline" onClick={()=>void navigate("/agents")}>{t("Back to agents")}</Button>}/>
+    <PageToolbar actions={<Button variant="outline" onClick={()=>void navigate(pinnedBackend?"/plugins":"/agents")}>{t(pinnedBackend?"Back":"Back to agents")}</Button>}/>
     {error?<ErrorNotice message={error}/>:null}
     <DataPanel title="Add agent">
       <div className="mx-auto flex max-w-2xl flex-col gap-5 p-5 sm:p-8">
         <div className="text-xs text-muted-foreground">{t(step==="select"?"Select backend":step==="configure"?"Configure agent":"Review agent")}</div>
         {step==="select"?<>
           <p className="text-sm text-muted-foreground">{t("Choose an installed Agent CLI backend. No Agent process starts during setup.")}</p>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{backendChoices.map(choice=>
-            <button key={choice.value} type="button" aria-pressed={backend===choice.value}
-              onClick={()=>setBackend(choice.value)}
-              className={`rounded-xl border p-5 text-left transition-colors focus-visible:ring-2 focus-visible:ring-ring ${backend===choice.value?"border-foreground bg-secondary/40":"border-border hover:border-foreground/50"}`}>
-              <div className="font-medium">{choice.name}</div>
-              <p className="mt-2 text-xs leading-5 text-muted-foreground">{choice.value==="codex"?t("Codex CLI requires the separately installed codex-acp adapter."):
-                choice.value==="grok"?t("Grok CLI uses its built-in ACP stdio transport."):
-                t("OpenCode CLI uses its native ACP stdio transport.")}</p>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{agentBackendOptions.map(choice=>
+            <button key={choice} type="button" aria-pressed={backend===choice}
+              onClick={()=>{if(selectedBackend!==choice)setDefaultModel("");setSelectedBackend(choice);}}
+              className={`rounded-xl border p-5 text-left transition-colors focus-visible:ring-2 focus-visible:ring-ring ${backend===choice?"border-foreground bg-secondary/40":"border-border hover:border-foreground/50"}`}>
+              <div className="font-medium">{agentBackendLabel(choice)}</div>
+              <p className="mt-2 text-xs leading-5 text-muted-foreground">{agentBackendDescription(choice)}</p>
             </button>)}</div>
-          <div className="flex justify-end"><Button onClick={()=>setStep("configure")}>{t("Continue")}</Button></div>
+          <div className="flex justify-end"><Button disabled={backend===null} onClick={()=>setStep("configure")}>{t("Continue")}</Button></div>
         </>:step==="configure"?<>
           <div className="grid gap-2">
             <label htmlFor="agent-name" className="text-sm font-medium">{t("Agent name")}</label>
@@ -100,12 +116,12 @@ export function AgentCreatePage({
               <p className="text-xs text-muted-foreground">{t("OpenCode may need local account and config access that Restricted host prevents. Choose Host explicitly only if you accept its filesystem and credential access.")}</p>:null}
           </div>
           <div className="flex justify-between gap-2">
-            <Button variant="outline" onClick={()=>setStep("select")}>{t("Back")}</Button>
+            <Button variant="outline" onClick={()=>pinnedBackend?void navigate("/plugins"):setStep("select")}>{t("Back")}</Button>
             <Button disabled={!valid} onClick={()=>setStep("review")}>{t("Review")}</Button>
           </div>
         </>:<>
           <div className="space-y-3 rounded-xl border border-border p-5 text-sm">
-            <div><span className="text-muted-foreground">{t("Backend")}: </span>{backendChoices.find(choice=>choice.value===backend)?.name??backend}</div>
+            <div><span className="text-muted-foreground">{t("Backend")}: </span>{backend===null?t("Select backend"):agentBackendLabel(backend)}</div>
             <div><span className="text-muted-foreground">{t("Name")}: </span>{name}</div>
             <div className="break-all"><span className="text-muted-foreground">{t("Workspace")}: </span>{root}</div>
             <div><span className="text-muted-foreground">{t("Default model (optional)")}: </span>{defaultModel||t("Use Agent default")}</div>

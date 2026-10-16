@@ -18,6 +18,7 @@ import { TablePagination } from "../../shared/table-pagination";
 import { EmptyPanelState } from "../../shared/workbench";
 import { Input } from "@mender/ui/components/input";
 import { AgentWorkspaceSettings } from "./agent-workspaces";
+import { agentBackendLabel } from "./agent-backends";
 
 function taskStatusText(value:AgentTask["status"]):string{
   switch(value){
@@ -176,7 +177,7 @@ export function AgentDetailPage({client}:{client:MenderClient}){
     topic==="overview"?<ResultPanel title="Agent overview">
       <dl className="grid grid-cols-1 gap-5 p-5 sm:grid-cols-2">
         <div><dt className="text-xs text-muted-foreground">{t("Name")}</dt><dd className="mt-1 font-medium">{agent.name}</dd></div>
-        <div><dt className="text-xs text-muted-foreground">{t("Backend")}</dt><dd className="mt-1">{agent.backend==="codex"?"Codex":"Grok"}</dd></div>
+        <div><dt className="text-xs text-muted-foreground">{t("Backend")}</dt><dd className="mt-1">{agentBackendLabel(agent.backend)}</dd></div>
         <div><dt className="text-xs text-muted-foreground">{t("Status")}</dt>
           <dd className="mt-1"><Badge variant="outline">{agent.backendAvailable?t("CLI detected"):t("CLI missing")}</Badge></dd></div>
         <div><dt className="text-xs text-muted-foreground">{t("Isolation")}</dt>
