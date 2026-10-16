@@ -20,6 +20,10 @@ export function AddProfileTool(slug: string, tool: $models.ProfileTool): $Cancel
     return $Call.ByID(296290586, slug, tool);
 }
 
+export function BindAgentWorkspace(id: string, key: string, sandboxID: string): $CancellablePromise<void> {
+    return $Call.ByID(441566533, id, key, sandboxID);
+}
+
 export function BrowseTools(limit: number, providerID: string, cursor: string): $CancellablePromise<$models.ToolList> {
     return $Call.ByID(594360793, limit, providerID, cursor);
 }
@@ -248,6 +252,10 @@ export function GrantAgentProfile(agentID: string, profileID: string): $Cancella
     return $Call.ByID(967894880, agentID, profileID);
 }
 
+export function GrantAgentWorkspace(id: string, key: string, profileID: string): $CancellablePromise<void> {
+    return $Call.ByID(2075628980, id, key, profileID);
+}
+
 export function InspectSSHHostKey(host: string, port: number): $CancellablePromise<$models.SSHHostIdentity> {
     return $Call.ByID(2406930547, host, port);
 }
@@ -283,6 +291,10 @@ export function ListAgentGrants(id: string): $CancellablePromise<$models.AgentPr
 
 export function ListAgentTasks(id: string): $CancellablePromise<$models.AgentTaskList> {
     return $Call.ByID(1671235357, id);
+}
+
+export function ListAgentWorkspaces(id: string): $CancellablePromise<$models.AgentWorkspaceList> {
+    return $Call.ByID(2898670863, id);
 }
 
 export function ListAgents(): $CancellablePromise<$models.AgentList> {
@@ -401,6 +413,10 @@ export function RevokeAgentProfile(agentID: string, profileID: string): $Cancell
     return $Call.ByID(151299120, agentID, profileID);
 }
 
+export function RevokeAgentWorkspace(id: string, key: string, profileID: string): $CancellablePromise<void> {
+    return $Call.ByID(3947733508, id, key, profileID);
+}
+
 export function RevokeSandboxProfileGrants(sandboxID: string, profileID: string): $CancellablePromise<$models.SandboxProfileGrants> {
     return $Call.ByID(954645277, sandboxID, profileID);
 }
@@ -453,12 +469,20 @@ export function TrustSkillInstallation(installationID: string): $CancellableProm
     return $Call.ByID(3977894639, installationID);
 }
 
+export function UnbindAgentWorkspace(id: string, key: string): $CancellablePromise<void> {
+    return $Call.ByID(57772674, id, key);
+}
+
 export function UndeploySkill(deploymentID: string): $CancellablePromise<void> {
     return $Call.ByID(1941215937, deploymentID);
 }
 
 export function UntrustSkillInstallation(installationID: string): $CancellablePromise<$models.SkillInstallation> {
     return $Call.ByID(3196712560, installationID);
+}
+
+export function UpdateAgentSettings(id: string, defaultModel: string): $CancellablePromise<$models.Agent> {
+    return $Call.ByID(1897007619, id, defaultModel);
 }
 
 export function UpdateConfiguredProvider(providerID: string, displayName: string, description: string, config: { [_ in string]?: any } | null): $CancellablePromise<$models.ProviderMutationResponse> {

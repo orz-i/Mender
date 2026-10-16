@@ -8,6 +8,7 @@ export interface Agent {
     "pluginId": string;
     "extensionId": string;
     "workspaceRoot": string;
+    "defaultModel": string;
     "isolation": string;
     "createdAt": string;
     "backendAvailable": boolean;
@@ -47,6 +48,8 @@ export interface AgentTask {
     "taskId": string;
     "agentId": string;
     "status": string;
+    "model"?: string;
+    "workspace"?: string;
     "result"?: string;
     "diagnostic"?: string;
     "createdAt": string;
@@ -71,6 +74,16 @@ export interface AgentTools {
     "providerId"?: string;
     "providerName"?: string;
     "tools": AgentTool[] | null;
+}
+
+export interface AgentWorkspace {
+    "key": string;
+    "sandboxId": string;
+    "profileIds": string[] | null;
+}
+
+export interface AgentWorkspaceList {
+    "workspaces": AgentWorkspace[] | null;
 }
 
 export interface AuditList {
@@ -118,6 +131,7 @@ export interface CreateAgentInput {
     "name": string;
     "backend": string;
     "workspaceRoot": string;
+    "defaultModel": string;
     "isolation": string;
 }
 

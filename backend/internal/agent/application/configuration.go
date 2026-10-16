@@ -73,7 +73,7 @@ func (s *Service) BindWorkspace(ctx context.Context, id agentdomain.ID, key, san
 	// Never silently trust a stale/symlinked external location.
 	actual, err := filepath.EvalSymlinks(target.Root)
 	if err != nil {
-		return fmt.Errorf("%w: sandbox root unavailable: %v", agentdomain.ErrUnavailable, err)
+		return fmt.Errorf("%w: sandbox root unavailable: %w", agentdomain.ErrUnavailable, err)
 	}
 	if actual != target.Root {
 		return agentdomain.ErrUnavailable

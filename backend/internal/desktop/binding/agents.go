@@ -18,6 +18,7 @@ type Agent struct {
 	PluginID         string `json:"pluginId"`
 	ExtensionID      string `json:"extensionId"`
 	WorkspaceRoot    string `json:"workspaceRoot"`
+	DefaultModel     string `json:"defaultModel"`
 	Isolation        string `json:"isolation"`
 	CreatedAt        string `json:"createdAt"`
 	BackendAvailable bool   `json:"backendAvailable"`
@@ -43,6 +44,8 @@ type AgentTask struct {
 	TaskID          string `json:"taskId"`
 	AgentID         string `json:"agentId"`
 	Status          string `json:"status"`
+	Model           string `json:"model,omitempty"`
+	Workspace       string `json:"workspace,omitempty"`
 	Result          string `json:"result,omitempty"`
 	Diagnostic      string `json:"diagnostic,omitempty"`
 	CreatedAt       string `json:"createdAt"`
@@ -78,6 +81,7 @@ type CreateAgentInput struct {
 	Name          string `json:"name"`
 	Backend       string `json:"backend"`
 	WorkspaceRoot string `json:"workspaceRoot"`
+	DefaultModel  string `json:"defaultModel"`
 	Isolation     string `json:"isolation"`
 }
 
@@ -91,7 +95,7 @@ func (s *Service) projectAgent(a agentdomain.Agent) Agent {
 	spec := a.Spec()
 	out := Agent{AgentID: string(spec.ID), Name: spec.Name, Backend: string(spec.Backend),
 		PluginID: string(spec.PluginID), ExtensionID: string(spec.ExtensionID),
-		WorkspaceRoot: spec.WorkspaceRoot, Isolation: spec.Isolation,
+		WorkspaceRoot: spec.WorkspaceRoot, DefaultModel: spec.DefaultModel, Isolation: spec.Isolation,
 		CreatedAt: spec.CreatedAt.UTC().Format(time.RFC3339Nano)}
 	if _, err := s.runtime.AgentAvailability(spec.Backend); err == nil {
 		out.BackendAvailable = true
@@ -101,7 +105,7 @@ func (s *Service) projectAgent(a agentdomain.Agent) Agent {
 	return out
 }
 func projectTask(t agentdomain.Task) AgentTask {
-	return AgentTask{TaskID: string(t.ID), AgentID: string(t.AgentID), Status: string(t.Status),
+	return AgentTask{TaskID: string(t.ID), AgentID: string(t.AgentID), Status: string(t.Status), Model: t.Model, Workspace: t.WorkspaceKey,
 		Result: t.Result, Diagnostic: t.Diagnostic, CreatedAt: t.CreatedAt.UTC().Format(time.RFC3339Nano),
 		UpdatedAt: t.UpdatedAt.UTC().Format(time.RFC3339Nano), CancelRequested: t.CancelRequested}
 }
@@ -141,7 +145,7 @@ func (s *Service) CreateAgent(input CreateAgentInput) (Agent, error) {
 		return Agent{}, err
 	}
 	a, err := s.runtime.CreateAgentWithTools(s.ctx, agentapplication.CreateRequest{
-		Name: input.Name, Backend: agentdomain.Backend(input.Backend), WorkspaceRoot: input.WorkspaceRoot, Isolation: input.Isolation,
+		Name: input.Name, Backend: agentdomain.Backend(input.Backend), WorkspaceRoot: input.WorkspaceRoot, DefaultModel: input.DefaultModel, Isolation: input.Isolation,
 	}, caller)
 	if err != nil {
 		return Agent{}, err

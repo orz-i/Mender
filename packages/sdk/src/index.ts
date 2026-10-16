@@ -53,6 +53,7 @@ export type {
   RuntimeIsolation,
   Agent,
   AgentTools,
+  AgentWorkspace,
   AgentTask,
   AgentAdmissionEvent,
   AgentGrants,

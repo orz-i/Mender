@@ -566,6 +566,81 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/agents/{agentId}/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["updateAgentSettings"];
+        trace?: never;
+    };
+    "/agents/{agentId}/workspaces": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        get: operations["listAgentWorkspaces"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{agentId}/workspaces/{workspaceKey}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+                workspaceKey: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["bindAgentWorkspace"];
+        post?: never;
+        delete: operations["unbindAgentWorkspace"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{agentId}/workspaces/{workspaceKey}/profile-grants/{profileId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+                workspaceKey: string;
+                profileId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["grantAgentWorkspace"];
+        post?: never;
+        delete: operations["revokeAgentWorkspace"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/agents/{agentId}/tools": {
         parameters: {
             query?: never;
@@ -2096,6 +2171,8 @@ export interface components {
             backend: "codex" | "grok";
             /** @description Explicit trusted local absolute workspace directory */
             workspaceRoot: string;
+            /** @description Optional ACP-advertised model ID; empty uses Agent backend default */
+            defaultModel?: string;
             /**
              * @default restricted_host
              * @enum {string}
@@ -2110,6 +2187,7 @@ export interface components {
             pluginId: string;
             extensionId: string;
             workspaceRoot: string;
+            defaultModel?: string;
             /** @enum {string} */
             isolation: "host" | "restricted_host";
             /** Format: date-time */
@@ -2117,6 +2195,17 @@ export interface components {
             backendAvailable: boolean;
             /** @description No secret/account data */
             issue?: string;
+        };
+        UpdateAgentSettingsRequest: {
+            defaultModel: string;
+        };
+        BindAgentWorkspaceRequest: {
+            sandboxId: string;
+        };
+        AgentWorkspace: {
+            key: string;
+            sandboxId: string;
+            profileIds: string[];
         };
         AgentTool: {
             toolId: string;
@@ -2138,6 +2227,9 @@ export interface components {
             agentId: string;
             /** @enum {string} */
             status: "queued" | "running" | "completed" | "failed" | "cancelled" | "unknown";
+            model?: string;
+            /** @description Approved workspace key */
+            workspace?: string;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
@@ -3501,6 +3593,150 @@ export interface operations {
             };
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+        };
+    };
+    updateAgentSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateAgentSettingsRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated default ACP model; existing tasks unaffected */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Agent"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    listAgentWorkspaces: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owner-approved local Sandbox workspace bindings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        workspaces: components["schemas"]["AgentWorkspace"][];
+                    };
+                };
+            };
+        };
+    };
+    bindAgentWorkspace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+                workspaceKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BindAgentWorkspaceRequest"];
+            };
+        };
+        responses: {
+            /** @description Exact local Sandbox bound without new Agent/Tool */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    unbindAgentWorkspace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+                workspaceKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Workspace binding revoked for future tasks */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    grantAgentWorkspace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+                workspaceKey: string;
+                profileId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Explicit Profile workspace selection grant */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    revokeAgentWorkspace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+                workspaceKey: string;
+                profileId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Profile workspace grant revoked */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     getAgentTools: {

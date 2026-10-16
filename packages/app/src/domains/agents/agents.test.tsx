@@ -76,7 +76,7 @@ describe("Agents focused management",()=>{
     fireEvent.click(screen.getByRole("button",{name:"Create agent"}));
     await waitFor(()=>expect(client.createAgent).toHaveBeenCalledWith({
       name:"Grok Reviewer",backend:"grok",workspaceRoot:"/tmp/grok-sandbox",
-      isolation:"restricted_host",
+      isolation:"restricted_host",defaultModel:"",
     }));
   });
   it("repairs a missing Agent suite only on explicit owner action",async()=>{

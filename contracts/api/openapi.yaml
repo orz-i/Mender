@@ -731,6 +731,92 @@ paths:
         '204': { description: Unreferenced Agent removed }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
+  /agents/{agentId}/settings:
+    parameters:
+      - name: agentId
+        in: path
+        required: true
+        schema: { type: string }
+    patch:
+      operationId: updateAgentSettings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateAgentSettingsRequest' }
+      responses:
+        '200':
+          description: Updated default ACP model; existing tasks unaffected
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Agent' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /agents/{agentId}/workspaces:
+    parameters:
+      - name: agentId
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      operationId: listAgentWorkspaces
+      responses:
+        '200':
+          description: Owner-approved local Sandbox workspace bindings
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [workspaces]
+                properties:
+                  workspaces: { type: array, items: { $ref: '#/components/schemas/AgentWorkspace' } }
+  /agents/{agentId}/workspaces/{workspaceKey}:
+    parameters:
+      - name: agentId
+        in: path
+        required: true
+        schema: { type: string }
+      - name: workspaceKey
+        in: path
+        required: true
+        schema: { type: string, pattern: '^[a-z0-9_-]{1,64}$' }
+    put:
+      operationId: bindAgentWorkspace
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BindAgentWorkspaceRequest' }
+      responses:
+        '204': { description: Exact local Sandbox bound without new Agent/Tool }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '409': { $ref: '#/components/responses/Conflict' }
+    delete:
+      operationId: unbindAgentWorkspace
+      responses:
+        '204': { description: Workspace binding revoked for future tasks }
+  /agents/{agentId}/workspaces/{workspaceKey}/profile-grants/{profileId}:
+    parameters:
+      - name: agentId
+        in: path
+        required: true
+        schema: { type: string }
+      - name: workspaceKey
+        in: path
+        required: true
+        schema: { type: string }
+      - name: profileId
+        in: path
+        required: true
+        schema: { type: string }
+    put:
+      operationId: grantAgentWorkspace
+      responses:
+        '204': { description: Explicit Profile workspace selection grant }
+    delete:
+      operationId: revokeAgentWorkspace
+      responses:
+        '204': { description: Profile workspace grant revoked }
   /agents/{agentId}/tools:
     parameters:
       - name: agentId
@@ -2635,6 +2721,7 @@ components:
         name: { type: string, minLength: 1, maxLength: 120 }
         backend: { type: string, enum: [codex, grok] }
         workspaceRoot: { type: string, description: Explicit trusted local absolute workspace directory }
+        defaultModel: { type: string, maxLength: 128, description: Optional ACP-advertised model ID; empty uses Agent backend default }
         isolation: { type: string, enum: [host, restricted_host], default: restricted_host }
     Agent:
       type: object
@@ -2647,10 +2734,31 @@ components:
         pluginId: { type: string }
         extensionId: { type: string }
         workspaceRoot: { type: string }
+        defaultModel: { type: string }
         isolation: { type: string, enum: [host, restricted_host] }
         createdAt: { type: string, format: date-time }
         backendAvailable: { type: boolean }
         issue: { type: string, description: No secret/account data }
+    UpdateAgentSettingsRequest:
+      type: object
+      required: [defaultModel]
+      additionalProperties: false
+      properties:
+        defaultModel: { type: string, maxLength: 128 }
+    BindAgentWorkspaceRequest:
+      type: object
+      required: [sandboxId]
+      additionalProperties: false
+      properties:
+        sandboxId: { type: string, pattern: '^sbx_[0-9a-f]{32}$' }
+    AgentWorkspace:
+      type: object
+      required: [key, sandboxId, profileIds]
+      additionalProperties: false
+      properties:
+        key: { type: string }
+        sandboxId: { type: string }
+        profileIds: { type: array, items: { type: string } }
     AgentTool:
       type: object
       required: [toolId, sourceKey, name, title]
@@ -2678,6 +2786,8 @@ components:
         taskId: { type: string }
         agentId: { type: string }
         status: { type: string, enum: [queued, running, completed, failed, cancelled, unknown] }
+        model: { type: string }
+        workspace: { type: string, description: Approved workspace key, not a host path }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
         cancelRequested: { type: boolean }

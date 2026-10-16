@@ -1,6 +1,6 @@
 # Agent Runtime Configuration & Workspace Reuse — Phase 40
 
-Status: **active** (2026-10-16). Authority: [ADR-0047](../architecture/adr/0047-agent-runtime-configuration-workspace-reuse.md).
+Status: **B1 complete; B2 integrated and tests passed; Stage C next** (2026-10-16). Authority: [ADR-0047](../architecture/adr/0047-agent-runtime-configuration-workspace-reuse.md).
 
 ## Intent Contract
 
@@ -21,6 +21,12 @@ Status: **active** (2026-10-16). Authority: [ADR-0047](../architecture/adr/0047-
 | B2 integration | ACP v1 configOptions, launcher cwd, Tool schema, HTTP/OpenAPI/SDK/Wails/UI | Synthetic ACP tests, MCP fixture, Go/TS frontend/SDK tests |
 | C workspace | Multi-target Workspace Tools bindings, authorization, route/facts, API/UI | Sandbox grant/lease negative tests, old ToolID identity check |
 | D closure | Cleanup, docs, parity and full repository checks | `pnpm check`; audit no changed skill paths |
+
+### Evidence from Stage B
+
+- B1: `c7a6286` persists default model, per-task immutable selection, explicit local Sandbox workspace bindings and Profile workspace grants with SQLite atomic admission fencing. Synthetic grant/revocation tests pass.
+- B2: ACP v1 model selector reads session `configOptions`, requires an advertised model and confirmed `session/set_config_option`, passes pre-authorized local cwd into process launch and `session/new`. The four stable delegation Tools accept optional model/workspace. Owner management is available through CLI, HTTP, SDK, Wails and focused Agent UI. New synthetic ACP model-choice fixtures and HTTP bind/grant lifecycle test pass; no real Agent account or model invoked.
+- Validation B2: `go test ./backend/internal/cli ./backend/internal/management/httpapi ./backend/internal/agent/...` passed, `go test ./backend/internal/bootstrap` passed, `pnpm lint`, `pnpm test` (232 tests), `pnpm typecheck`, `pnpm i18n:check`, `pnpm go:lint`, desktop architecture check passed. SDK and Wails generation completed; clean-diff drift checks rerun after tracked generated bindings are committed.
 
 No extra conceptual tiers such as Agent Presets, Workspaces inventory or Provider clones. A failed gate stays open and is recorded honestly; don't claim an unverified acceptance.
 

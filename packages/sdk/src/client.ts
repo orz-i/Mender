@@ -22,6 +22,7 @@ export type Profile = components["schemas"]["Profile"];
 export type Tunnel = components["schemas"]["Tunnel"];
 export type Agent = components["schemas"]["Agent"];
 export type AgentTools = components["schemas"]["AgentTools"];
+export type AgentWorkspace = components["schemas"]["AgentWorkspace"];
 export type AgentTask = components["schemas"]["AgentTask"];
 export type AgentAdmissionEvent = components["schemas"]["AgentAdmissionEvent"];
 export type AgentGrants = components["schemas"]["AgentGrants"];
@@ -181,6 +182,12 @@ export interface MenderClient {
   getAgentTools(agentId:string): Promise<AgentTools>;
   ensureAgentTools(agentId:string): Promise<AgentTools>;
   createAgent(body:CreateAgentRequest): Promise<Agent>;
+  updateAgentSettings(agentId:string,defaultModel:string):Promise<Agent>;
+  listAgentWorkspaces(agentId:string):Promise<{workspaces:AgentWorkspace[]}>;
+  bindAgentWorkspace(agentId:string,key:string,sandboxId:string):Promise<void>;
+  unbindAgentWorkspace(agentId:string,key:string):Promise<void>;
+  grantAgentWorkspace(agentId:string,key:string,profileId:string):Promise<void>;
+  revokeAgentWorkspace(agentId:string,key:string,profileId:string):Promise<void>;
   deleteAgent(agentId:string): Promise<void>;
   listAgentTasks(agentId:string): Promise<{tasks:AgentTask[]}>;
   listAgentAdmissions(agentId:string):Promise<{events:AgentAdmissionEvent[]}>;
@@ -550,6 +557,12 @@ export function createMenderClient(
     async getAgentTools(agentId){return requireData(await client.GET("/agents/{agentId}/tools",{params:{path:{agentId}}}));},
     async ensureAgentTools(agentId){return requireData(await client.POST("/agents/{agentId}/tools",{params:{path:{agentId}}}));},
     async createAgent(body){return requireData(await client.POST("/agents",{body}));},
+    async updateAgentSettings(agentId,defaultModel){return requireData(await client.PATCH("/agents/{agentId}/settings",{params:{path:{agentId}},body:{defaultModel}}));},
+    async listAgentWorkspaces(agentId){return requireData(await client.GET("/agents/{agentId}/workspaces",{params:{path:{agentId}}}));},
+    async bindAgentWorkspace(agentId,workspaceKey,sandboxId){const r=await client.PUT("/agents/{agentId}/workspaces/{workspaceKey}",{params:{path:{agentId,workspaceKey}},body:{sandboxId}});if(!r.response.ok)throwApiError(r.error,r.response);},
+    async unbindAgentWorkspace(agentId,workspaceKey){const r=await client.DELETE("/agents/{agentId}/workspaces/{workspaceKey}",{params:{path:{agentId,workspaceKey}}});if(!r.response.ok)throwApiError(r.error,r.response);},
+    async grantAgentWorkspace(agentId,workspaceKey,profileId){const r=await client.PUT("/agents/{agentId}/workspaces/{workspaceKey}/profile-grants/{profileId}",{params:{path:{agentId,workspaceKey,profileId}}});if(!r.response.ok)throwApiError(r.error,r.response);},
+    async revokeAgentWorkspace(agentId,workspaceKey,profileId){const r=await client.DELETE("/agents/{agentId}/workspaces/{workspaceKey}/profile-grants/{profileId}",{params:{path:{agentId,workspaceKey,profileId}}});if(!r.response.ok)throwApiError(r.error,r.response);},
     async deleteAgent(agentId){
       const result=await client.DELETE("/agents/{agentId}",{params:{path:{agentId}}});
       if(!result.response.ok)throwApiError(result.error,result.response);

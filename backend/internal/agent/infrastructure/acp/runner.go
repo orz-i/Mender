@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync"
 
+	agentapplication "github.com/orz-i/Mender/backend/internal/agent/application"
 	agentdomain "github.com/orz-i/Mender/backend/internal/agent/domain"
 )
 
@@ -26,7 +27,8 @@ var errClientPermissionDenied = errors.New("ACP Agent requested a client capabil
 type CommandFactory func(context.Context, agentdomain.Agent) (*exec.Cmd, error)
 
 type Runner struct {
-	NewCommand CommandFactory
+	NewCommand            CommandFactory
+	NewCommandInWorkspace func(context.Context, agentdomain.Agent, string) (*exec.Cmd, error)
 }
 
 type rpcMessage struct {
@@ -130,6 +132,9 @@ func (s *stream) respondToAgent(msg rpcMessage) error {
 // tool execution details are not retained. Context cancellation interrupts
 // the entire process, not just the in-memory Task status.
 func (r Runner) Execute(ctx context.Context, agent agentdomain.Agent, prompt string) (string, error) {
+	return r.ExecuteConfigured(ctx, agent, prompt, agentapplication.RunConfig{WorkspaceRoot: agent.Spec().WorkspaceRoot})
+}
+func (r Runner) ExecuteConfigured(ctx context.Context, agent agentdomain.Agent, prompt string, config agentapplication.RunConfig) (string, error) {
 	if r.NewCommand == nil {
 		return "", errors.New("ACP process launcher unavailable")
 	}
@@ -140,7 +145,18 @@ func (r Runner) Execute(ctx context.Context, agent agentdomain.Agent, prompt str
 	// when the prompt ends so the owned process group and scanner are drained.
 	runCtx, stop := context.WithCancel(ctx)
 	defer stop()
-	cmd, err := r.NewCommand(runCtx, agent)
+	if config.WorkspaceRoot == "" {
+		config.WorkspaceRoot = agent.Spec().WorkspaceRoot
+	}
+	var cmd *exec.Cmd
+	var err error
+	if config.WorkspaceRoot == agent.Spec().WorkspaceRoot {
+		cmd, err = r.NewCommand(runCtx, agent)
+	} else if r.NewCommandInWorkspace != nil {
+		cmd, err = r.NewCommandInWorkspace(runCtx, agent, config.WorkspaceRoot)
+	} else {
+		return "", agentdomain.ErrUnavailable
+	}
 	if err != nil {
 		return "", err
 	}
@@ -218,7 +234,7 @@ func (r Runner) Execute(ctx context.Context, agent agentdomain.Agent, prompt str
 		return "", errors.New("ACP Agent does not support stable protocol v1")
 	}
 	session, err := wire.call(ctx, 2, "session/new", map[string]any{
-		"cwd": agent.Spec().WorkspaceRoot, "mcpServers": []any{},
+		"cwd": config.WorkspaceRoot, "mcpServers": []any{},
 	}, noUpdates)
 	if err != nil {
 		return "", annotateRead(err, readErrors)
@@ -228,6 +244,11 @@ func (r Runner) Execute(ctx context.Context, agent agentdomain.Agent, prompt str
 	}
 	if err := json.Unmarshal(session, &created); err != nil || created.SessionID == "" || len(created.SessionID) > 512 {
 		return "", errors.New("ACP Agent returned invalid SessionID")
+	}
+	if config.Model != "" {
+		if err := selectModel(ctx, &wire, created.SessionID, session, config.Model); err != nil {
+			return "", err
+		}
 	}
 	var result strings.Builder
 	var outputOverflow bool

@@ -41,7 +41,7 @@ type Repository interface {
 	SetDefaultModel(context.Context, agentdomain.ID, string) error
 	BindWorkspace(context.Context, agentdomain.ID, string, string) error
 	Workspace(context.Context, agentdomain.ID, string) (string, error)
-	HasWorkspaceGrant(context.Context,agentdomain.ID,string,string)(bool,error)
+	HasWorkspaceGrant(context.Context, agentdomain.ID, string, string) (bool, error)
 	ListWorkspaces(context.Context, agentdomain.ID) ([]agentdomain.WorkspaceBinding, error)
 	UnbindWorkspace(context.Context, agentdomain.ID, string) error
 	GrantWorkspace(context.Context, agentdomain.ID, string, string) error
@@ -319,10 +319,14 @@ func (s *Service) SubmitWithOptions(ctx context.Context, id agentdomain.ID, prom
 		if err := s.validateTarget(agent, target); err != nil {
 			return agentdomain.Task{}, err
 		}
-		if profileID!="" {
-			granted,err:=s.store.HasWorkspaceGrant(ctx,id,options.Workspace,profileID)
-			if err!=nil{return agentdomain.Task{},err}
-			if !granted{return agentdomain.Task{},agentdomain.ErrForbidden}
+		if profileID != "" {
+			granted, err := s.store.HasWorkspaceGrant(ctx, id, options.Workspace, profileID)
+			if err != nil {
+				return agentdomain.Task{}, err
+			}
+			if !granted {
+				return agentdomain.Task{}, agentdomain.ErrForbidden
+			}
 		}
 		root = target.Root
 	}

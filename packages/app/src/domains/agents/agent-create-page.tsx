@@ -30,6 +30,7 @@ export function AgentCreatePage({
   const [backend,setBackend]=useState<Backend>(selected??"codex");
   const [name,setName]=useState("");
   const [root,setRoot]=useState("");
+  const [defaultModel,setDefaultModel]=useState("");
   const [isolation,setIsolation]=useState<"restricted_host"|"host">("restricted_host");
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState("");
@@ -40,7 +41,7 @@ export function AgentCreatePage({
     setBusy(true);setError("");
     try{
       const item=await client.createAgent({
-        name:name.trim(),backend,workspaceRoot:root.trim(),isolation,
+        name:name.trim(),backend,workspaceRoot:root.trim(),isolation,defaultModel:defaultModel.trim(),
       });
       void navigate("/agents/"+item.agentId);
     }catch(reason){setError(errorMessage(reason));setBusy(false);}
@@ -79,6 +80,11 @@ export function AgentCreatePage({
             </div>
           </div>
           <div className="grid gap-2">
+            <label htmlFor="agent-default-model" className="text-sm font-medium">{t("Default model (optional)")}</label>
+            <Input id="agent-default-model" maxLength={128} value={defaultModel} onChange={e=>setDefaultModel(e.target.value)} placeholder={t("Use Agent default")}/>
+            <p className="text-xs text-muted-foreground">{t("The Agent must advertise the selected model when a task runs.")}</p>
+          </div>
+          <div className="grid gap-2">
             <label htmlFor="agent-isolation" className="text-sm font-medium">{t("Process isolation")}</label>
             <select id="agent-isolation" value={isolation} onChange={e=>setIsolation(e.target.value as typeof isolation)}
               className="h-10 rounded-xl border border-input bg-background px-3 text-sm">
@@ -96,6 +102,7 @@ export function AgentCreatePage({
             <div><span className="text-muted-foreground">{t("Backend")}: </span>{backend==="codex"?"Codex":"Grok"}</div>
             <div><span className="text-muted-foreground">{t("Name")}: </span>{name}</div>
             <div className="break-all"><span className="text-muted-foreground">{t("Workspace")}: </span>{root}</div>
+            <div><span className="text-muted-foreground">{t("Default model (optional)")}: </span>{defaultModel||t("Use Agent default")}</div>
             <div><span className="text-muted-foreground">{t("Isolation")}: </span>{isolation==="host"?t("Host (not isolated)"):t("Restricted host")}</div>
           </div>
           <p className="text-xs leading-5 text-muted-foreground">{t("Creating an Agent prepares its governed tools without starting a model, approving tool requests, or granting Profile access.")}</p>

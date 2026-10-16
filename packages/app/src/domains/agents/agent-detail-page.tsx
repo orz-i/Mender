@@ -16,6 +16,8 @@ import { PageTab, PageTabs, PageToolbar, ResultPanel } from "../../shared/page-t
 import { usePagination } from "../../shared/pagination";
 import { TablePagination } from "../../shared/table-pagination";
 import { EmptyPanelState } from "../../shared/workbench";
+import { Input } from "@mender/ui/components/input";
+import { AgentWorkspaceSettings } from "./agent-workspaces";
 
 function taskStatusText(value:AgentTask["status"]):string{
   switch(value){
@@ -27,7 +29,7 @@ function taskStatusText(value:AgentTask["status"]):string{
     case "unknown":return t("Unknown");
   }
 }
-type Topic = "overview" | "tools" | "tasks" | "access" | "activity";
+type Topic = "overview" | "workspaces" | "tools" | "tasks" | "access" | "activity";
 type ConfirmAction = {kind:"cancel"|"revoke"|"delete";id:string} | null;
 
 export function AgentDetailPage({client}:{client:MenderClient}){
@@ -48,6 +50,8 @@ export function AgentDetailPage({client}:{client:MenderClient}){
   const [selectedProfile,setSelectedProfile]=useState("");
   const [confirm,setConfirm]=useState<ConfirmAction>(null);
   const [viewTask,setViewTask]=useState<AgentTask|null>(null);
+  const [settingsOpen,setSettingsOpen]=useState(false);
+  const [modelDraft,setModelDraft]=useState("");
 
   useEffect(()=>{
     if(!agentId)return;
@@ -120,6 +124,12 @@ export function AgentDetailPage({client}:{client:MenderClient}){
     }catch(reason){setError(errorMessage(reason));}
     finally{setBusy(false)}
   }
+  async function saveSettings(){
+    if(!agentId||busy)return;
+    setBusy(true);setError("");
+    try{setAgent(await client.updateAgentSettings(agentId,modelDraft.trim()));setSettingsOpen(false);setRevision(v=>v+1);}
+    catch(reason){setError(errorMessage(reason));}finally{setBusy(false);}
+  }
   async function openTask(id:string){
     try{
       const value=await client.getAgentTask(id);
@@ -130,6 +140,7 @@ export function AgentDetailPage({client}:{client:MenderClient}){
     <PageToolbar
       tabs={agent?<PageTabs label="Agent details">
         <PageTab label="Overview" active={topic==="overview"} onClick={()=>setTopic("overview")}/>
+        <PageTab label="Workspaces" active={topic==="workspaces"} onClick={()=>setTopic("workspaces")}/>
         <PageTab label="Tools" count={tools?.tools.length??0} active={topic==="tools"} onClick={()=>setTopic("tools")}/>
         <PageTab label="Tasks" count={tasks.length} active={topic==="tasks"} onClick={()=>setTopic("tasks")}/>
         <PageTab label="Access" count={grants.length} active={topic==="access"} onClick={()=>setTopic("access")}/>
@@ -151,6 +162,8 @@ export function AgentDetailPage({client}:{client:MenderClient}){
           <dd className="mt-1"><Badge variant="outline">{agent.backendAvailable?t("CLI detected"):t("CLI missing")}</Badge></dd></div>
         <div><dt className="text-xs text-muted-foreground">{t("Isolation")}</dt>
           <dd className="mt-1">{agent.isolation==="host"?t("Host (not isolated)"):t("Restricted host")}</dd></div>
+        <div><dt className="text-xs text-muted-foreground">{t("Default model (optional)")}</dt>
+          <dd className="mt-1 text-sm">{agent.defaultModel||t("Use Agent default")}</dd></div>
         <div className="sm:col-span-2"><dt className="text-xs text-muted-foreground">{t("Workspace directory")}</dt>
           <dd className="mt-1 break-all font-mono text-xs">{agent.workspaceRoot}</dd></div>
         <div><dt className="text-xs text-muted-foreground">{t("Created at")}</dt><dd className="mt-1 text-sm">{formatDateTime(agent.createdAt)}</dd></div>
@@ -159,11 +172,13 @@ export function AgentDetailPage({client}:{client:MenderClient}){
       <div className="flex flex-wrap justify-between gap-2 border-t border-border p-4">
         <p className="max-w-xl text-xs leading-5 text-muted-foreground">{t("Grant Profile access explicitly; this Agent will not run until invoked through an authorized Tool.")}</p>
         <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant="outline" onClick={()=>{setModelDraft(agent.defaultModel??"");setSettingsOpen(true);}}>{t("Edit default model")}</Button>
           <Button size="sm" onClick={()=>setTopic("tools")}>{t("View Agent tools")}</Button>
           <Button size="sm" variant="destructive" onClick={()=>setConfirm({kind:"delete",id:agent.agentId})}>{t("Delete agent")}</Button>
         </div>
       </div>
     </ResultPanel>:
+    topic==="workspaces"?<AgentWorkspaceSettings client={client} agent={agent}/>:
     topic==="tools"?<ResultPanel title="Agent tools">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4">
         <div className="min-w-0 space-y-1">
@@ -235,6 +250,15 @@ export function AgentDetailPage({client}:{client:MenderClient}){
         <EmptyPanelState><EmptyState title="No Agent grants" description="Profiles have no access to this Agent until explicitly granted."/></EmptyPanelState>}
     </ResultPanel>}
 
+    <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
+      <DialogContent><DialogHeader><DialogTitle>{t("Edit default model")}</DialogTitle>
+        <DialogDescription>{t("The Agent must advertise the selected model when a task runs.")}</DialogDescription>
+      </DialogHeader>
+      <Input maxLength={128} value={modelDraft} onChange={e=>setModelDraft(e.target.value)} placeholder={t("Use Agent default")}/>
+      <DialogFooter><Button variant="outline" onClick={()=>setSettingsOpen(false)}>{t("Cancel")}</Button>
+        <Button disabled={busy} onClick={()=>void saveSettings()}>{t("Save")}</Button></DialogFooter>
+      </DialogContent>
+    </Dialog>
     <Dialog open={grantOpen} onOpenChange={setGrantOpen}>
       <DialogContent><DialogHeader><DialogTitle>{t("Grant Profile")}</DialogTitle>
         <DialogDescription>{t("Choose a Profile to authorize Agent delegation. Tool membership and Policy still apply.")}</DialogDescription>

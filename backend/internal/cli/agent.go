@@ -16,6 +16,8 @@ func (a *app) newAgentCommand() *cobra.Command {
 	command.AddCommand(a.newAgentListCommand())
 	command.AddCommand(a.newAgentAddCommand())
 	command.AddCommand(a.newAgentShowCommand())
+	command.AddCommand(a.newAgentModelCommand())
+	command.AddCommand(a.newAgentWorkspaceCommand())
 	command.AddCommand(a.newAgentToolsCommand())
 	command.AddCommand(a.newAgentRemoveCommand())
 	command.AddCommand(a.newAgentTasksCommand())
@@ -34,7 +36,7 @@ func agentCLIProjection(runtime *bootstrap.Runtime, item agentdomain.Agent) map[
 	spec := item.Spec()
 	out := map[string]any{
 		"agentId": spec.ID, "name": spec.Name, "backend": spec.Backend, "pluginId": spec.PluginID,
-		"workspaceRoot": spec.WorkspaceRoot, "isolation": spec.Isolation, "createdAt": spec.CreatedAt,
+		"workspaceRoot": spec.WorkspaceRoot, "defaultModel": spec.DefaultModel, "isolation": spec.Isolation, "createdAt": spec.CreatedAt,
 		"backendAvailable": false,
 	}
 	if _, err := runtime.AgentAvailability(spec.Backend); err != nil {
@@ -79,7 +81,7 @@ func (a *app) newAgentListCommand() *cobra.Command {
 	}
 }
 func (a *app) newAgentAddCommand() *cobra.Command {
-	var name, backend, root, isolation string
+	var name, backend, root, isolation, defaultModel string
 	command := &cobra.Command{Use: "add", Short: "Create a local Agent resource; never executes an Agent",
 		Args: exactArgs(0), RunE: func(cmd *cobra.Command, _ []string) error {
 			if name == "" || backend == "" || root == "" {
@@ -91,7 +93,7 @@ func (a *app) newAgentAddCommand() *cobra.Command {
 					return err
 				}
 				agent, err := runtime.CreateAgentWithTools(cmd.Context(), agentapplication.CreateRequest{
-					Name: name, Backend: agentdomain.Backend(backend), WorkspaceRoot: root, Isolation: isolation,
+					Name: name, Backend: agentdomain.Backend(backend), WorkspaceRoot: root, Isolation: isolation, DefaultModel: defaultModel,
 				}, caller)
 				if err != nil {
 					return err
@@ -104,6 +106,7 @@ func (a *app) newAgentAddCommand() *cobra.Command {
 	command.Flags().StringVar(&backend, "backend", "", "codex or grok")
 	command.Flags().StringVar(&root, "root", "", "absolute existing local workspace directory")
 	command.Flags().StringVar(&isolation, "isolation", "restricted_host", "restricted_host or explicit unisolated host")
+	command.Flags().StringVar(&defaultModel, "default-model", "", "optional ACP model selection; requires protocol advertisement when run")
 	return command
 }
 func (a *app) newAgentShowCommand() *cobra.Command {

@@ -37,7 +37,7 @@ func (s *Store) BindWorkspace(ctx context.Context, id agentdomain.ID, key, sandb
 	_, err := s.db.ExecContext(ctx, `INSERT INTO agent_workspaces(agent_id,workspace_key,sandbox_id,created_at)
  VALUES(?,?,?,?)`, id, key, sandboxID, time.Now().UTC().Format(time.RFC3339Nano))
 	if err != nil {
-		return fmt.Errorf("%w: workspace binding: %v", agentdomain.ErrConflict, err)
+		return fmt.Errorf("%w: workspace binding: %w", agentdomain.ErrConflict, err)
 	}
 	return nil
 }
@@ -53,36 +53,26 @@ func (s *Store) Workspace(ctx context.Context, id agentdomain.ID, key string) (s
 	return sandboxID, err
 }
 func (s *Store) ListWorkspaces(ctx context.Context, id agentdomain.ID) ([]agentdomain.WorkspaceBinding, error) {
-	rows, err := s.db.QueryContext(ctx, "SELECT workspace_key,sandbox_id FROM agent_workspaces WHERE agent_id=? ORDER BY workspace_key", id)
+	rows, err := s.db.QueryContext(ctx, `SELECT w.workspace_key,w.sandbox_id,g.profile_id FROM agent_workspaces w
+ LEFT JOIN agent_workspace_grants g ON w.agent_id=g.agent_id AND w.workspace_key=g.workspace_key
+ WHERE w.agent_id=? ORDER BY w.workspace_key,g.profile_id`, id)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []agentdomain.WorkspaceBinding{}
 	for rows.Next() {
-		var b agentdomain.WorkspaceBinding
-		if err := rows.Scan(&b.Key, &b.SandboxID); err != nil {
+		var key, sandboxID string
+		var profileID sql.NullString
+		if err := rows.Scan(&key, &sandboxID, &profileID); err != nil {
 			return nil, err
 		}
-		b.ProfileIDs = []string{}
-		grantRows, err := s.db.QueryContext(ctx, `SELECT profile_id FROM agent_workspace_grants WHERE agent_id=? AND workspace_key=? ORDER BY profile_id`, id, b.Key)
-		if err != nil {
-			return nil, err
+		if len(items) == 0 || items[len(items)-1].Key != key {
+			items = append(items, agentdomain.WorkspaceBinding{Key: key, SandboxID: sandboxID, ProfileIDs: []string{}})
 		}
-		for grantRows.Next() {
-			var ref string
-			if err := grantRows.Scan(&ref); err != nil {
-				grantRows.Close()
-				return nil, err
-			}
-			b.ProfileIDs = append(b.ProfileIDs, ref)
+		if profileID.Valid {
+			items[len(items)-1].ProfileIDs = append(items[len(items)-1].ProfileIDs, profileID.String)
 		}
-		if err := grantRows.Err(); err != nil {
-			grantRows.Close()
-			return nil, err
-		}
-		grantRows.Close()
-		items = append(items, b)
 	}
 	return items, rows.Err()
 }
@@ -102,11 +92,13 @@ func (s *Store) UnbindWorkspace(ctx context.Context, id agentdomain.ID, key stri
 	}
 	return nil
 }
-func (s *Store) HasWorkspaceGrant(ctx context.Context,id agentdomain.ID,key,profileID string)(bool,error){
- if err:=agentdomain.ValidateWorkspaceKey(key);err!=nil{return false,err}
- var present bool
- err:=s.db.QueryRowContext(ctx,`SELECT EXISTS(SELECT 1 FROM agent_workspace_grants WHERE agent_id=? AND workspace_key=? AND profile_id=?)`,id,key,profileID).Scan(&present)
- return present,err
+func (s *Store) HasWorkspaceGrant(ctx context.Context, id agentdomain.ID, key, profileID string) (bool, error) {
+	if err := agentdomain.ValidateWorkspaceKey(key); err != nil {
+		return false, err
+	}
+	var present bool
+	err := s.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM agent_workspace_grants WHERE agent_id=? AND workspace_key=? AND profile_id=?)`, id, key, profileID).Scan(&present)
+	return present, err
 }
 func (s *Store) GrantWorkspace(ctx context.Context, id agentdomain.ID, key, profileID string) error {
 	if err := agentdomain.ValidateWorkspaceKey(key); err != nil {
@@ -114,7 +106,7 @@ func (s *Store) GrantWorkspace(ctx context.Context, id agentdomain.ID, key, prof
 	}
 	_, err := s.db.ExecContext(ctx, `INSERT INTO agent_workspace_grants(agent_id,workspace_key,profile_id,created_at) VALUES(?,?,?,?)`, id, key, profileID, time.Now().UTC().Format(time.RFC3339Nano))
 	if err != nil {
-		return fmt.Errorf("%w: workspace grant: %v", agentdomain.ErrConflict, err)
+		return fmt.Errorf("%w: workspace grant: %w", agentdomain.ErrConflict, err)
 	}
 	return nil
 }

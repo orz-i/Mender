@@ -31,9 +31,15 @@ func TestRuntimeSelectionsRequireExplicitWorkspaceGrantAndSnapshot(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer store.Close()
-	root,err := filepath.EvalSymlinks(t.TempDir());if err!=nil{t.Fatal(err)}
-	other,err := filepath.EvalSymlinks(t.TempDir());if err!=nil{t.Fatal(err)}
+	defer func() { _ = store.Close() }()
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
 	runner := selectionRunner{calls: make(chan RunConfig, 4)}
 	caller := owner(t)
 	s, err := NewService(store, runner, func(context.Context, gov.Context, agentdomain.Agent, gov.Action) error { return nil },
@@ -46,7 +52,7 @@ func TestRuntimeSelectionsRequireExplicitWorkspaceGrantAndSnapshot(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 	agent, err := s.Create(ctx, CreateRequest{Name: "Reusable", Backend: agentdomain.BackendCodex, WorkspaceRoot: root, DefaultModel: "example-model"}, caller)
 	if err != nil {
 		t.Fatal(err)

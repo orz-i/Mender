@@ -37,6 +37,7 @@ import type {
   ToolSuiteDefinition,
   Agent,
   AgentTools,
+  AgentWorkspace,
   AgentTask,
   AgentAdmissionEvent,
   SandboxActivity,
@@ -81,6 +82,7 @@ import {
   type Tunnel as BindingTunnel,
   type Agent as BindingAgent,
   type AgentTools as BindingAgentTools,
+  type AgentWorkspace as BindingAgentWorkspace,
   type AgentTask as BindingAgentTask,
   type AgentAdmissionEvent as BindingAgentAdmissionEvent,
   type Sandbox as BindingSandbox,
@@ -363,8 +365,14 @@ export function createDesktopMenderClient(): MenderClient {
     async ensureAgentTools(agentId){return agentTools(await Service.EnsureAgentTools(agentId));},
     async createAgent(body){return agent(await Service.CreateAgent({
       name:body.name,backend:body.backend,workspaceRoot:body.workspaceRoot,
-      isolation:body.isolation??"restricted_host",
+      isolation:body.isolation??"restricted_host",defaultModel:body.defaultModel??"",
     }));},
+    async updateAgentSettings(agentId,defaultModel){return agent(await Service.UpdateAgentSettings(agentId,defaultModel));},
+    async listAgentWorkspaces(agentId){const r=await Service.ListAgentWorkspaces(agentId);return {workspaces:(r.workspaces??[]).map(agentWorkspace)};},
+    async bindAgentWorkspace(agentId,key,sandboxId){await Service.BindAgentWorkspace(agentId,key,sandboxId);},
+    async unbindAgentWorkspace(agentId,key){await Service.UnbindAgentWorkspace(agentId,key);},
+    async grantAgentWorkspace(agentId,key,profileId){await Service.GrantAgentWorkspace(agentId,key,profileId);},
+    async revokeAgentWorkspace(agentId,key,profileId){await Service.RevokeAgentWorkspace(agentId,key,profileId);},
     async deleteAgent(agentId){await Service.DeleteAgent(agentId);},
     async listAgentTasks(agentId){
       const result=await Service.ListAgentTasks(agentId);
@@ -892,6 +900,9 @@ function agent(value:BindingAgent):Agent {
     throw new MenderClientInvariantError("Unknown Agent isolation: "+value.isolation);
   }
   return {...value,backend:value.backend,isolation:value.isolation};
+}
+function agentWorkspace(value:BindingAgentWorkspace):AgentWorkspace {
+  return {key:value.key,sandboxId:value.sandboxId,profileIds:value.profileIds??[]};
 }
 function agentTools(value:BindingAgentTools):AgentTools {
   if(value.suiteId!=="agent.delegation") {

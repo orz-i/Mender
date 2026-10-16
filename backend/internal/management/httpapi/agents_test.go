@@ -33,7 +33,7 @@ func TestAgentHTTPManagementAndGrantLifecycle(t *testing.T) {
 		"name": "Illegal", "backend": "shell", "workspaceRoot": t.TempDir()}, http.StatusBadRequest)
 	agent := requestJSON(t, server.Client(), http.MethodPost, api+"/agents", map[string]any{
 		"name": "Code Reviewer", "backend": "codex", "workspaceRoot": t.TempDir(),
-		"isolation": "restricted_host",
+		"isolation": "restricted_host", "defaultModel": "example-model",
 	}, http.StatusCreated)
 	id := agent["agentId"].(string)
 	if agent["backend"] != "codex" || agent["pluginId"] != "io.mender.agent.codex" || agent["backendAvailable"] == nil {
@@ -47,6 +47,13 @@ func TestAgentHTTPManagementAndGrantLifecycle(t *testing.T) {
 	get := requestJSON(t, server.Client(), http.MethodGet, api+"/agents/"+id, nil, http.StatusOK)
 	if get["agentId"] != id {
 		t.Fatal("get Agent mismatch", get)
+	}
+	if get["defaultModel"] != "example-model" {
+		t.Fatal("default model not persisted", get)
+	}
+	updated := requestJSON(t, server.Client(), http.MethodPatch, api+"/agents/"+id+"/settings", map[string]any{"defaultModel": "other-model"}, http.StatusOK)
+	if updated["defaultModel"] != "other-model" {
+		t.Fatal("settings not changed", updated)
 	}
 	toolPath := api + "/agents/" + id + "/tools"
 	firstTools := requestJSON(t, server.Client(), http.MethodGet, toolPath, nil, http.StatusOK)
@@ -77,6 +84,20 @@ func TestAgentHTTPManagementAndGrantLifecycle(t *testing.T) {
 	if len(got["profileIds"].([]any)) != 1 {
 		t.Fatal("grant missing", got)
 	}
+	wsRoot := t.TempDir()
+	sandbox := requestJSON(t, server.Client(), http.MethodPost, api+"/sandboxes/local", map[string]any{
+		"name": "Extra project", "root": wsRoot, "isolation": "restricted_host",
+	}, http.StatusCreated)
+	sandboxID := sandbox["sandboxId"].(string)
+	workspacePath := api + "/agents/" + id + "/workspaces/other-project"
+	requestJSON(t, server.Client(), http.MethodPut, workspacePath, map[string]any{"sandboxId": sandboxID}, http.StatusNoContent)
+	requestJSON(t, server.Client(), http.MethodPut, workspacePath+"/profile-grants/"+profileID, nil, http.StatusNoContent)
+	workspaces := requestJSON(t, server.Client(), http.MethodGet, api+"/agents/"+id+"/workspaces", nil, http.StatusOK)
+	if len(workspaces["workspaces"].([]any)) != 1 {
+		t.Fatal("workspace not bound", workspaces)
+	}
+	requestJSON(t, server.Client(), http.MethodDelete, workspacePath+"/profile-grants/"+profileID, nil, http.StatusNoContent)
+	requestJSON(t, server.Client(), http.MethodDelete, workspacePath, nil, http.StatusNoContent)
 	requestJSON(t, server.Client(), http.MethodDelete, path, nil, http.StatusNoContent)
 	got = requestJSON(t, server.Client(), http.MethodGet, api+"/agents/"+id+"/profile-grants", nil, http.StatusOK)
 	if len(got["profileIds"].([]any)) != 0 {

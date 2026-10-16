@@ -70,16 +70,22 @@ func trustedBinary(name string) (string, error) {
 // Command returns a governed process plan, not a runnable shell string.
 // Agent-owned flags, cwd, environment and executable are never Tool arguments.
 func (f *LocalFactory) Command(ctx context.Context, a agentdomain.Agent) (*exec.Cmd, error) {
+	return f.CommandInWorkspace(ctx, a, a.Spec().WorkspaceRoot)
+}
+
+// CommandInWorkspace only changes the cwd to a previously admitted canonical
+// local root. Its caller owns the workspace selection and Profile authorization.
+func (f *LocalFactory) CommandInWorkspace(ctx context.Context, a agentdomain.Agent, workspaceRoot string) (*exec.Cmd, error) {
 	spec := a.Spec()
 	executable, err := f.Availability(spec.Backend)
 	if err != nil {
 		return nil, err
 	}
-	root, err := filepath.EvalSymlinks(spec.WorkspaceRoot)
+	root, err := filepath.EvalSymlinks(workspaceRoot)
 	if err != nil {
 		return nil, fmt.Errorf("agent workspace unavailable: %w", err)
 	}
-	if filepath.Clean(root) != spec.WorkspaceRoot {
+	if filepath.Clean(root) != workspaceRoot {
 		return nil, fmt.Errorf("%w: Agent workspace root changed", agentdomain.ErrUnavailable)
 	}
 	info, err := os.Stat(root)
