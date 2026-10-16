@@ -70,3 +70,6 @@ Minor implementation choices that remain inside an accepted architectural bounda
 - [ADR-0042: P2 durable resource contracts and native plugin isolation posture](0042-p2-contracts-isolation-complexity.md) — Accepted
 - [ADR-0043: Hard retire dual MCP config persistence and Workspace v1 adapters](0043-hard-retire-provider-compatibility.md) — Accepted
 - [ADR-0044: Hard-cut residual source compatibility and Profile binding adapters](0044-hard-cut-residual-source-compatibility.md) — Accepted
+- [ADR-0045: Govern Marketplace Offering eligibility](0045-marketplace-offering-eligibility.md) — Accepted
+- [ADR-0046: One user-facing Tools workspace](0046-unified-tools-workspace.md) — Accepted
+- [ADR-0047: Agent runtime configuration and reusable workspace targets](0047-agent-runtime-configuration-workspace-reuse.md) — Accepted

@@ -36,3 +36,12 @@ ACP v1 session creation uses `cwd` and may advertise `configOptions`; `session/s
 - [ADR-0046 Unified Tools workspace](0046-unified-tools-workspace.md)
 - https://agentclientprotocol.com/protocol/v1/session-setup
 - https://github.com/agentclientprotocol/agent-client-protocol/blob/main/docs/protocol/v2/migration.mdx
+
+
+## Implementation note (2026-10-16)
+
+Phase 40 implemented this decision without changing the stable Agent, Provider, Tool or Profile identity model. Agent schema v6 stores the optional default model, workspace bindings/grants and immutable accepted Task selections. Sandbox schema v19 stores additional Workspace Tool target aliases; the original Provider ConfigVersion 2 `sandboxId` stays authoritative for omitted selections.
+
+An additional TOCTOU invariant applies at the canonical Invocation boundary: the host passes the **same reviewed GovernanceFacts used in the Policy decision** into the Executor request. The Workspace Tool Executor re-resolves the target and rejects an alias if its exact `sandbox_id` differs from the one preflight approved, **before** Sandbox acquisition. This avoids approving one target and executing against another following concurrent rebinding. Other executors continue to use the canonical Invocation pipeline without any new model-controlled authority.
+
+Acceptance used isolated SQLite migrations, synthetic ACP sessions, a real in-memory MCP client against Sandbox/Agent service facades and strict ToolID-preservation tests. This is not evidence of live external Agent model entitlements or remote Agent process execution.
