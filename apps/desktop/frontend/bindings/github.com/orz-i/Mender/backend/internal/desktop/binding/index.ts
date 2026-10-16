@@ -15,6 +15,7 @@ export type {
     AgentModelChoice,
     AgentModelChoices,
     AgentProfileGrants,
+    AgentSelectChoices,
     AgentTask,
     AgentTaskList,
     AgentTool,

@@ -1,4 +1,9 @@
 export const zhCNMessages: Readonly<Record<string, string>> = {
+  "Default reasoning effort": "默认思考等级",
+  "Edit runtime defaults": "编辑运行默认配置",
+  "Reasoning effort": "思考等级",
+  "Available reasoning levels may change when the model changes; execution revalidates them.": "可选思考等级可能随模型改变；执行时会重新核验。",
+  "This Agent does not advertise a reasoning effort selector.": "当前智能体未声明可调节的思考等级。",
   "Agent model": "智能体模型",
   "Inspecting available models…": "正在查询可用模型…",
   "Model choices come from this Agent's authenticated ACP session; no prompt is sent.": "从当前智能体已授权的 ACP 会话获取模型选项，不发送提示词。",
@@ -22,7 +27,6 @@ export const zhCNMessages: Readonly<Record<string, string>> = {
   "Agent workspaces": "智能体工作区",
   "Default model (optional)": "默认模型（可选）",
   "Default workspace": "默认工作区",
-  "Edit default model": "编辑默认模型",
   "Local Sandbox": "本地沙盒",
   "No Profile workspace access": "尚无 Profile 工作区授权",
   "No additional workspaces": "没有附加工作区",

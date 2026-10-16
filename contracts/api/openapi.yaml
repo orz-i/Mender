@@ -794,7 +794,7 @@ paths:
             schema: { $ref: '#/components/schemas/UpdateAgentSettingsRequest' }
       responses:
         '200':
-          description: Updated default ACP model; existing tasks unaffected
+          description: Atomically updated model and reasoning effort defaults; admitted tasks unchanged
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Agent' }
@@ -2788,6 +2788,7 @@ components:
         backend: { type: string, enum: [codex, grok] }
         workspaceRoot: { type: string, description: Explicit trusted local absolute workspace directory }
         defaultModel: { type: string, maxLength: 128, description: Optional ACP-advertised model ID; empty uses Agent backend default }
+        defaultReasoningEffort: { type: string, maxLength: 64, pattern: '^[a-z0-9_-]*$', description: Optional ACP thought-level ID; empty uses Backend default }
         isolation: { type: string, enum: [host, restricted_host], default: restricted_host }
     Agent:
       type: object
@@ -2801,16 +2802,18 @@ components:
         extensionId: { type: string }
         workspaceRoot: { type: string }
         defaultModel: { type: string }
+        defaultReasoningEffort: { type: string }
         isolation: { type: string, enum: [host, restricted_host] }
         createdAt: { type: string, format: date-time }
         backendAvailable: { type: boolean }
         issue: { type: string, description: No secret/account data }
     UpdateAgentSettingsRequest:
       type: object
-      required: [defaultModel]
+      required: [defaultModel, defaultReasoningEffort]
       additionalProperties: false
       properties:
         defaultModel: { type: string, maxLength: 128 }
+        defaultReasoningEffort: { type: string, maxLength: 64, pattern: '^[a-z0-9_-]*$' }
     BindAgentWorkspaceRequest:
       type: object
       required: [sandboxId]
@@ -2824,6 +2827,16 @@ components:
       properties:
         id: { type: string, minLength: 1, maxLength: 128 }
         name: { type: string, minLength: 1, maxLength: 120 }
+    AgentSelectChoices:
+      type: object
+      required: [current, choices]
+      additionalProperties: false
+      properties:
+        current: { type: string, maxLength: 64 }
+        choices:
+          type: array
+          maxItems: 64
+          items: { $ref: '#/components/schemas/AgentModelChoice' }
     AgentModelChoices:
       type: object
       required: [current, models]
@@ -2834,6 +2847,7 @@ components:
           type: array
           maxItems: 64
           items: { $ref: '#/components/schemas/AgentModelChoice' }
+        reasoningEffort: { $ref: '#/components/schemas/AgentSelectChoices' }
     AgentWorkspace:
       type: object
       required: [key, sandboxId, profileIds]
@@ -2870,6 +2884,7 @@ components:
         agentId: { type: string }
         status: { type: string, enum: [queued, running, completed, failed, cancelled, unknown] }
         model: { type: string }
+        reasoningEffort: { type: string }
         workspace: { type: string, description: Approved workspace key, not a host path }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }

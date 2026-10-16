@@ -52,6 +52,7 @@ export function AgentDetailPage({client}:{client:MenderClient}){
   const [viewTask,setViewTask]=useState<AgentTask|null>(null);
   const [settingsOpen,setSettingsOpen]=useState(false);
   const [modelDraft,setModelDraft]=useState("");
+  const [effortDraft,setEffortDraft]=useState("");
   const [modelChoices,setModelChoices]=useState<AgentModelChoices|null>(null);
   const [modelLoading,setModelLoading]=useState(false);
   const [modelInspectionError,setModelInspectionError]=useState("");
@@ -136,6 +137,7 @@ export function AgentDetailPage({client}:{client:MenderClient}){
   }
   function editDefaultModel(){
     setModelDraft(agent?.defaultModel??"");
+    setEffortDraft(agent?.defaultReasoningEffort??"");
     setModelChoices(null);setModelInspectionError("");
     setSettingsOpen(true);
     // Explicit owner intent: inspection launches a bounded ACP session, no prompt.
@@ -144,7 +146,7 @@ export function AgentDetailPage({client}:{client:MenderClient}){
   async function saveSettings(){
     if(!agentId||busy)return;
     setBusy(true);setError("");
-    try{setAgent(await client.updateAgentSettings(agentId,modelDraft.trim()));setSettingsOpen(false);setRevision(v=>v+1);}
+    try{setAgent(await client.updateAgentSettings(agentId,modelDraft.trim(),effortDraft));setSettingsOpen(false);setRevision(v=>v+1);}
     catch(reason){setError(errorMessage(reason));}finally{setBusy(false);}
   }
   async function openTask(id:string){
@@ -181,6 +183,8 @@ export function AgentDetailPage({client}:{client:MenderClient}){
           <dd className="mt-1">{agent.isolation==="host"?t("Host (not isolated)"):t("Restricted host")}</dd></div>
         <div><dt className="text-xs text-muted-foreground">{t("Default model (optional)")}</dt>
           <dd className="mt-1 text-sm">{agent.defaultModel||t("Use Agent default")}</dd></div>
+        <div><dt className="text-xs text-muted-foreground">{t("Default reasoning effort")}</dt>
+          <dd className="mt-1 text-sm">{agent.defaultReasoningEffort||t("Use Agent default")}</dd></div>
         <div className="sm:col-span-2"><dt className="text-xs text-muted-foreground">{t("Workspace directory")}</dt>
           <dd className="mt-1 break-all font-mono text-xs">{agent.workspaceRoot}</dd></div>
         <div><dt className="text-xs text-muted-foreground">{t("Created at")}</dt><dd className="mt-1 text-sm">{formatDateTime(agent.createdAt)}</dd></div>
@@ -189,7 +193,7 @@ export function AgentDetailPage({client}:{client:MenderClient}){
       <div className="flex flex-wrap justify-between gap-2 border-t border-border p-4">
         <p className="max-w-xl text-xs leading-5 text-muted-foreground">{t("Grant Profile access explicitly; this Agent will not run until invoked through an authorized Tool.")}</p>
         <div className="flex flex-wrap gap-2">
-          <Button size="sm" variant="outline" onClick={editDefaultModel}>{t("Edit default model")}</Button>
+          <Button size="sm" variant="outline" onClick={editDefaultModel}>{t("Edit runtime defaults")}</Button>
           <Button size="sm" variant="outline" onClick={()=>setTopic("workspaces")}>{t("Manage workspaces")}</Button>
           <Button size="sm" onClick={()=>setTopic("tools")}>{t("View Agent tools")}</Button>
           <Button size="sm" variant="destructive" onClick={()=>setConfirm({kind:"delete",id:agent.agentId})}>{t("Delete agent")}</Button>
@@ -269,7 +273,7 @@ export function AgentDetailPage({client}:{client:MenderClient}){
     </ResultPanel>}
 
     <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
-      <DialogContent><DialogHeader><DialogTitle>{t("Edit default model")}</DialogTitle>
+      <DialogContent><DialogHeader><DialogTitle>{t("Edit runtime defaults")}</DialogTitle>
         <DialogDescription>{t("Model choices come from this Agent's authenticated ACP session; no prompt is sent.")}</DialogDescription>
       </DialogHeader>
       <div className="space-y-3">
@@ -284,11 +288,26 @@ export function AgentDetailPage({client}:{client:MenderClient}){
           </select>:
           !modelLoading?<Input aria-label={t("Agent model")} maxLength={128} value={modelDraft} onChange={e=>setModelDraft(e.target.value)}
             placeholder={t("Use Agent default")}/>:null}
+        {modelChoices?.reasoningEffort?
+          <div className="space-y-2">
+            <label htmlFor="agent-reasoning-effort" className="text-sm font-medium">{t("Reasoning effort")}</label>
+            <select id="agent-reasoning-effort" className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
+              value={effortDraft} onChange={e=>setEffortDraft(e.target.value)}>
+              <option value="">{t("Use Agent default")} ({modelChoices.reasoningEffort.current})</option>
+              {modelChoices.reasoningEffort.choices.map(choice=><option key={choice.id} value={choice.id}>{choice.name} ({choice.id})</option>)}
+              {effortDraft!==""&&!modelChoices.reasoningEffort.choices.some(choice=>choice.id===effortDraft)?
+                <option value={effortDraft} disabled>{effortDraft} — {t("Not currently advertised")}</option>:null}
+            </select>
+            <p className="text-xs text-muted-foreground">{t("Available reasoning levels may change when the model changes; execution revalidates them.")}</p>
+          </div>:
+          modelChoices?<p className="text-xs text-muted-foreground">{t("This Agent does not advertise a reasoning effort selector.")}</p>:null}
         {modelInspectionError?<p role="alert" className="text-xs text-destructive">{t("Model inspection unavailable")}: {modelInspectionError}</p>:null}
         <Button variant="outline" size="sm" disabled={modelLoading} onClick={()=>void inspectModels()}>{t("Refresh model choices")}</Button>
       </div>
       <DialogFooter><Button variant="outline" onClick={()=>setSettingsOpen(false)}>{t("Cancel")}</Button>
-        <Button disabled={busy||modelLoading||(modelChoices!==null&&modelDraft!==""&&!modelChoices.models.some(model=>model.id===modelDraft))}
+        <Button disabled={busy||modelLoading||(modelChoices!==null&&modelDraft!==""&&!modelChoices.models.some(model=>model.id===modelDraft)) ||
+          (modelChoices?.reasoningEffort!==undefined&&modelChoices.reasoningEffort!==null&&effortDraft!==""&&
+           !modelChoices.reasoningEffort.choices.some(choice=>choice.id===effortDraft))}
           onClick={()=>void saveSettings()}>{t("Save")}</Button></DialogFooter>
       </DialogContent>
     </Dialog>
@@ -321,6 +340,11 @@ export function AgentDetailPage({client}:{client:MenderClient}){
         <DialogHeader><DialogTitle>{t("Agent task result")}</DialogTitle>
           <DialogDescription>{viewTask?.taskId} · {viewTask?.status}</DialogDescription>
         </DialogHeader>
+        {viewTask?.model||viewTask?.reasoningEffort||viewTask?.workspace?<dl className="grid grid-cols-2 gap-3 text-sm">
+          {viewTask.model?<div><dt className="text-xs text-muted-foreground">{t("Agent model")}</dt><dd>{viewTask.model}</dd></div>:null}
+          {viewTask.reasoningEffort?<div><dt className="text-xs text-muted-foreground">{t("Reasoning effort")}</dt><dd>{viewTask.reasoningEffort}</dd></div>:null}
+          {viewTask.workspace?<div><dt className="text-xs text-muted-foreground">{t("Workspace")}</dt><dd>{viewTask.workspace}</dd></div>:null}
+        </dl>:null}
         {viewTask?.result?<pre className="max-h-[45vh] overflow-auto whitespace-pre-wrap break-words rounded-lg bg-muted p-4 text-xs">{viewTask.result}</pre>:
           <p className="text-sm text-muted-foreground">{viewTask?.diagnostic||t("No result available.")}</p>}
         <DialogFooter><Button variant="outline" onClick={()=>setViewTask(null)}>{t("Close")}</Button></DialogFooter>

@@ -2229,6 +2229,8 @@ export interface components {
             workspaceRoot: string;
             /** @description Optional ACP-advertised model ID; empty uses Agent backend default */
             defaultModel?: string;
+            /** @description Optional ACP thought-level ID; empty uses Backend default */
+            defaultReasoningEffort?: string;
             /**
              * @default restricted_host
              * @enum {string}
@@ -2244,6 +2246,7 @@ export interface components {
             extensionId: string;
             workspaceRoot: string;
             defaultModel?: string;
+            defaultReasoningEffort?: string;
             /** @enum {string} */
             isolation: "host" | "restricted_host";
             /** Format: date-time */
@@ -2254,6 +2257,7 @@ export interface components {
         };
         UpdateAgentSettingsRequest: {
             defaultModel: string;
+            defaultReasoningEffort: string;
         };
         BindAgentWorkspaceRequest: {
             sandboxId: string;
@@ -2262,9 +2266,14 @@ export interface components {
             id: string;
             name: string;
         };
+        AgentSelectChoices: {
+            current: string;
+            choices: components["schemas"]["AgentModelChoice"][];
+        };
         AgentModelChoices: {
             current: string;
             models: components["schemas"]["AgentModelChoice"][];
+            reasoningEffort?: components["schemas"]["AgentSelectChoices"];
         };
         AgentWorkspace: {
             key: string;
@@ -2292,6 +2301,7 @@ export interface components {
             /** @enum {string} */
             status: "queued" | "running" | "completed" | "failed" | "cancelled" | "unknown";
             model?: string;
+            reasoningEffort?: string;
             /** @description Approved workspace key */
             workspace?: string;
             /** Format: date-time */
@@ -3758,7 +3768,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Updated default ACP model; existing tasks unaffected */
+            /** @description Atomically updated model and reasoning effort defaults; admitted tasks unchanged */
             200: {
                 headers: {
                     [name: string]: unknown;

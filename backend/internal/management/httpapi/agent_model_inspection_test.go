@@ -22,7 +22,7 @@ func (x *modelInspectionFixture) InspectModels(_ context.Context, _ agentdomain.
 	x.calls.Add(1)
 	return agentapp.ModelChoices{Current: "fixture-one", Models: []agentapp.ModelChoice{
 		{ID: "fixture-one", Name: "Fixture One"}, {ID: "fixture-two", Name: "Fixture Two"},
-	}}, nil
+	}, ReasoningEffort: &agentapp.OptionChoices{Current: "high", Choices: []agentapp.ModelChoice{{ID: "high", Name: "High"}, {ID: "xhigh", Name: "Extra high"}}}}, nil
 }
 
 func TestAgentModelInspectionRequiresExplicitOwnerActionWithoutTask(t *testing.T) {
@@ -48,7 +48,7 @@ func TestAgentModelInspectionRequiresExplicitOwnerActionWithoutTask(t *testing.T
 		t.Fatal("passive Agent reads launched ACP inspection")
 	}
 	models := requestJSON(t, server.Client(), http.MethodPost, base+"/agents/"+id+"/models/inspect", nil, http.StatusOK)
-	if models["current"] != "fixture-one" || len(models["models"].([]any)) != 2 {
+	if models["current"] != "fixture-one" || len(models["models"].([]any)) != 2 || models["reasoningEffort"].(map[string]any)["current"] != "high" {
 		t.Fatalf("unexpected model projection: %+v", models)
 	}
 	if inspector.calls.Load() != 1 {

@@ -369,9 +369,9 @@ export function createDesktopMenderClient(): MenderClient {
     async ensureAgentTools(agentId){return agentTools(await Service.EnsureAgentTools(agentId));},
     async createAgent(body){return agent(await Service.CreateAgent({
       name:body.name,backend:body.backend,workspaceRoot:body.workspaceRoot,
-      isolation:body.isolation??"restricted_host",defaultModel:body.defaultModel??"",
+      isolation:body.isolation??"restricted_host",defaultModel:body.defaultModel??"",defaultReasoningEffort:body.defaultReasoningEffort??"",
     }));},
-    async updateAgentSettings(agentId,defaultModel){return agent(await Service.UpdateAgentSettings(agentId,defaultModel));},
+    async updateAgentSettings(agentId,defaultModel,defaultReasoningEffort){return agent(await Service.UpdateAgentSettings(agentId,defaultModel,defaultReasoningEffort));},
     async inspectAgentModels(agentId){return agentModelChoices(await Service.InspectAgentModels(agentId));},
     async listAgentWorkspaces(agentId){const r=await Service.ListAgentWorkspaces(agentId);return {workspaces:(r.workspaces??[]).map(agentWorkspace)};},
     async bindAgentWorkspace(agentId,key,sandboxId){await Service.BindAgentWorkspace(agentId,key,sandboxId);},
@@ -913,7 +913,10 @@ function workspaceToolTarget(value:BindingWorkspaceToolTarget):WorkspaceToolTarg
   return {key:value.key,sandboxId:value.sandboxId};
 }
 function agentModelChoices(value:BindingAgentModelChoices):AgentModelChoices {
-  return {current:value.current,models:(value.models??[]).map(m=>({id:m.id,name:m.name}))};
+  return {current:value.current,models:(value.models??[]).map(m=>({id:m.id,name:m.name})),
+    ...(value.reasoningEffort?{reasoningEffort:{current:value.reasoningEffort.current,
+      choices:(value.reasoningEffort.choices??[]).map(m=>({id:m.id,name:m.name}))}}:{}),
+  };
 }
 function agentWorkspace(value:BindingAgentWorkspace):AgentWorkspace {
   return {key:value.key,sandboxId:value.sandboxId,profileIds:value.profileIds??[]};

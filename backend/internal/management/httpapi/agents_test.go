@@ -33,7 +33,7 @@ func TestAgentHTTPManagementAndGrantLifecycle(t *testing.T) {
 		"name": "Illegal", "backend": "shell", "workspaceRoot": t.TempDir()}, http.StatusBadRequest)
 	agent := requestJSON(t, server.Client(), http.MethodPost, api+"/agents", map[string]any{
 		"name": "Code Reviewer", "backend": "codex", "workspaceRoot": t.TempDir(),
-		"isolation": "restricted_host", "defaultModel": "example-model",
+		"isolation": "restricted_host", "defaultModel": "example-model", "defaultReasoningEffort": "medium",
 	}, http.StatusCreated)
 	id := agent["agentId"].(string)
 	if agent["backend"] != "codex" || agent["pluginId"] != "io.mender.agent.codex" || agent["backendAvailable"] == nil {
@@ -51,8 +51,8 @@ func TestAgentHTTPManagementAndGrantLifecycle(t *testing.T) {
 	if get["defaultModel"] != "example-model" {
 		t.Fatal("default model not persisted", get)
 	}
-	updated := requestJSON(t, server.Client(), http.MethodPatch, api+"/agents/"+id+"/settings", map[string]any{"defaultModel": "other-model"}, http.StatusOK)
-	if updated["defaultModel"] != "other-model" {
+	updated := requestJSON(t, server.Client(), http.MethodPatch, api+"/agents/"+id+"/settings", map[string]any{"defaultModel": "other-model", "defaultReasoningEffort": "high"}, http.StatusOK)
+	if updated["defaultModel"] != "other-model" || updated["defaultReasoningEffort"] != "high" {
 		t.Fatal("settings not changed", updated)
 	}
 	toolPath := api + "/agents/" + id + "/tools"

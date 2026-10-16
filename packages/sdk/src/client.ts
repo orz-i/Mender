@@ -184,7 +184,7 @@ export interface MenderClient {
   getAgentTools(agentId:string): Promise<AgentTools>;
   ensureAgentTools(agentId:string): Promise<AgentTools>;
   createAgent(body:CreateAgentRequest): Promise<Agent>;
-  updateAgentSettings(agentId:string,defaultModel:string):Promise<Agent>;
+  updateAgentSettings(agentId:string,defaultModel:string,defaultReasoningEffort:string):Promise<Agent>;
   inspectAgentModels(agentId:string):Promise<AgentModelChoices>;
   listAgentWorkspaces(agentId:string):Promise<{workspaces:AgentWorkspace[]}>;
   bindAgentWorkspace(agentId:string,key:string,sandboxId:string):Promise<void>;
@@ -563,7 +563,7 @@ export function createMenderClient(
     async getAgentTools(agentId){return requireData(await client.GET("/agents/{agentId}/tools",{params:{path:{agentId}}}));},
     async ensureAgentTools(agentId){return requireData(await client.POST("/agents/{agentId}/tools",{params:{path:{agentId}}}));},
     async createAgent(body){return requireData(await client.POST("/agents",{body}));},
-    async updateAgentSettings(agentId,defaultModel){return requireData(await client.PATCH("/agents/{agentId}/settings",{params:{path:{agentId}},body:{defaultModel}}));},
+    async updateAgentSettings(agentId,defaultModel,defaultReasoningEffort){return requireData(await client.PATCH("/agents/{agentId}/settings",{params:{path:{agentId}},body:{defaultModel,defaultReasoningEffort}}));},
     async inspectAgentModels(agentId){return requireData(await client.POST("/agents/{agentId}/models/inspect",{params:{path:{agentId}}}));},
     async listAgentWorkspaces(agentId){return requireData(await client.GET("/agents/{agentId}/workspaces",{params:{path:{agentId}}}));},
     async bindAgentWorkspace(agentId,workspaceKey,sandboxId){const r=await client.PUT("/agents/{agentId}/workspaces/{workspaceKey}",{params:{path:{agentId,workspaceKey}},body:{sandboxId}});if(!r.response.ok)throwApiError(r.error,r.response);},

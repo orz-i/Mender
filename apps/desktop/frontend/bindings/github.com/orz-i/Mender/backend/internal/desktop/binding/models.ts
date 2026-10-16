@@ -9,6 +9,7 @@ export interface Agent {
     "extensionId": string;
     "workspaceRoot": string;
     "defaultModel": string;
+    "defaultReasoningEffort": string;
     "isolation": string;
     "createdAt": string;
     "backendAvailable": boolean;
@@ -48,10 +49,16 @@ export interface AgentModelChoice {
 export interface AgentModelChoices {
     "current": string;
     "models": AgentModelChoice[] | null;
+    "reasoningEffort"?: AgentSelectChoices | null;
 }
 
 export interface AgentProfileGrants {
     "profileIds": string[] | null;
+}
+
+export interface AgentSelectChoices {
+    "current": string;
+    "choices": AgentModelChoice[] | null;
 }
 
 export interface AgentTask {
@@ -59,6 +66,7 @@ export interface AgentTask {
     "agentId": string;
     "status": string;
     "model"?: string;
+    "reasoningEffort"?: string;
     "workspace"?: string;
     "result"?: string;
     "diagnostic"?: string;
@@ -142,6 +150,7 @@ export interface CreateAgentInput {
     "backend": string;
     "workspaceRoot": string;
     "defaultModel": string;
+    "defaultReasoningEffort": string;
     "isolation": string;
 }
 

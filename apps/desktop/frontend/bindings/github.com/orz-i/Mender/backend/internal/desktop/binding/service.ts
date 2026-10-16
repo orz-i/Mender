@@ -497,8 +497,8 @@ export function UntrustSkillInstallation(installationID: string): $CancellablePr
     return $Call.ByID(3196712560, installationID);
 }
 
-export function UpdateAgentSettings(id: string, defaultModel: string): $CancellablePromise<$models.Agent> {
-    return $Call.ByID(1897007619, id, defaultModel);
+export function UpdateAgentSettings(id: string, defaultModel: string, defaultReasoningEffort: string): $CancellablePromise<$models.Agent> {
+    return $Call.ByID(1897007619, id, defaultModel, defaultReasoningEffort);
 }
 
 export function UpdateConfiguredProvider(providerID: string, displayName: string, description: string, config: { [_ in string]?: any } | null): $CancellablePromise<$models.ProviderMutationResponse> {

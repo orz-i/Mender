@@ -10,7 +10,7 @@ import (
 
 // These commands administer existing Agent resources; no Agent is run by inspection.
 func (a *app) newAgentModelsCommand() *cobra.Command {
-	return &cobra.Command{Use: "models <agent-id>", Short: "Explicitly inspect authenticated ACP model choices (no prompt)",
+	return &cobra.Command{Use: "models <agent-id>", Short: "Explicitly inspect authenticated ACP model and reasoning choices (no prompt)",
 		Args: exactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
 			id, err := agentdomain.ParseID(args[0])
 			if err != nil {
@@ -25,7 +25,7 @@ func (a *app) newAgentModelsCommand() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				return a.writeValue(fmt.Sprintf("%d advertised ACP models", len(choices.Models)), map[string]any{"models": choices})
+				return a.writeValue(fmt.Sprintf("%d advertised ACP models", len(choices.Models)), map[string]any{"sessionChoices": choices})
 			})
 		}}
 }
@@ -41,11 +41,39 @@ func (a *app) newAgentModelCommand() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				item, err := runtime.Agents.UpdateDefaultModel(cmd.Context(), id, args[1], caller)
+				existing, err := runtime.Agents.Get(cmd.Context(), id, caller)
+				if err != nil {
+					return err
+				}
+				item, err := runtime.Agents.UpdateDefaults(cmd.Context(), id, args[1], existing.Spec().DefaultReasoningEffort, caller)
 				if err != nil {
 					return err
 				}
 				return a.writeValue(fmt.Sprintf("Agent %s default model updated", id), map[string]any{"agent": agentCLIProjection(runtime, item)})
+			})
+		}}
+}
+func (a *app) newAgentEffortCommand() *cobra.Command {
+	return &cobra.Command{Use: "effort <agent-id> <effort-or-empty>", Short: "Set an Agent's default ACP reasoning effort",
+		Args: exactArgs(2), RunE: func(cmd *cobra.Command, args []string) error {
+			id, err := agentdomain.ParseID(args[0])
+			if err != nil {
+				return usageError{err: err}
+			}
+			return a.withRuntime(cmd.Context(), func(r *bootstrap.Runtime) error {
+				caller, err := agentCLIContext(r)
+				if err != nil {
+					return err
+				}
+				old, err := r.Agents.Get(cmd.Context(), id, caller)
+				if err != nil {
+					return err
+				}
+				updated, err := r.Agents.UpdateDefaults(cmd.Context(), id, old.Spec().DefaultModel, args[1], caller)
+				if err != nil {
+					return err
+				}
+				return a.writeValue("Agent effort updated", map[string]any{"agent": agentCLIProjection(r, updated)})
 			})
 		}}
 }

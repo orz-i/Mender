@@ -79,19 +79,21 @@ describe("Agents focused management",()=>{
       isolation:"restricted_host",defaultModel:"",
     }));
   });
-  it("loads advertised ACP model choices only when editing and keeps the same Agent",async()=>{
+  it("selects ACP model and reasoning effort together without duplicating Agent",async()=>{
     const inspectAgentModels=vi.fn().mockResolvedValue({current:"fixture-one",
-      models:[{id:"fixture-one",name:"Fixture One"},{id:"fixture-two",name:"Fixture Two"}]});
-    const updateAgentSettings=vi.fn().mockResolvedValue({...agent,defaultModel:"fixture-two"});
+      models:[{id:"fixture-one",name:"Fixture One"},{id:"fixture-two",name:"Fixture Two"}],
+      reasoningEffort:{current:"medium",choices:[{id:"medium",name:"Medium"},{id:"xhigh",name:"Extra High"}]}});
+    const updateAgentSettings=vi.fn().mockResolvedValue({...agent,defaultModel:"fixture-two",defaultReasoningEffort:"xhigh"});
     const client=show("/agents/"+agent.agentId,{inspectAgentModels,updateAgentSettings});
     expect(await screen.findByText("Code Reviewer")).toBeTruthy();
     expect(inspectAgentModels).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button",{name:"Edit default model"}));
+    fireEvent.click(screen.getByRole("button",{name:"Edit runtime defaults"}));
     await waitFor(()=>expect(inspectAgentModels).toHaveBeenCalledWith(agent.agentId));
     const picker=await screen.findByRole("combobox",{name:"Agent model"});
     fireEvent.change(picker,{target:{value:"fixture-two"}});
+    fireEvent.change(await screen.findByRole("combobox",{name:"Reasoning effort"}),{target:{value:"xhigh"}});
     fireEvent.click(screen.getByRole("button",{name:"Save"}));
-    await waitFor(()=>expect(updateAgentSettings).toHaveBeenCalledWith(agent.agentId,"fixture-two"));
+    await waitFor(()=>expect(updateAgentSettings).toHaveBeenCalledWith(agent.agentId,"fixture-two","xhigh"));
     expect(client.createAgent).not.toHaveBeenCalled();
   });
   it("repairs a missing Agent suite only on explicit owner action",async()=>{

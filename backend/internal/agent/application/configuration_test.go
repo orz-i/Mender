@@ -104,6 +104,14 @@ func TestRuntimeSelectionsRequireExplicitWorkspaceGrantAndSnapshot(t *testing.T)
 	}); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := s.SubmitWithOptions(ctx, agent.ID(), "review", SubmitOptions{ReasoningEffort: "XHIGH"}, caller); !errors.Is(err, agentdomain.ErrInvalid) {
+		t.Fatalf("unsafe effort accepted: %v", err)
+	}
+	select {
+	case <-runner.calls:
+		t.Fatal("unsafe effort launched Agent")
+	default:
+	}
 	if err := s.BindWorkspace(ctx, agent.ID(), "project-b", sandboxID, caller); err != nil {
 		t.Fatal(err)
 	}
@@ -146,6 +154,22 @@ func TestRuntimeSelectionsRequireExplicitWorkspaceGrantAndSnapshot(t *testing.T)
 	}
 	if persisted.Model != "other-model" || persisted.ReasoningEffort != "xhigh" || persisted.WorkspaceKey != "project-b" || persisted.WorkspaceRoot != other {
 		t.Fatalf("snapshot lost: %+v", persisted)
+	}
+	defaultTask, err := s.Submit(ctx, agent.ID(), "using defaults", caller)
+	if err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case config := <-runner.calls:
+		if config.Model != "new-default" || config.ReasoningEffort != "high" || config.WorkspaceRoot != root {
+			t.Fatalf("defaults not resolved together: %+v", config)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("default runner did not start")
+	}
+	storedDefault, err := s.Task(ctx, defaultTask.ID, caller)
+	if err != nil || storedDefault.Model != "new-default" || storedDefault.ReasoningEffort != "high" {
+		t.Fatalf("wrong persisted default snapshot %+v err=%v", storedDefault, err)
 	}
 	if _, err := s.SubmitWithOptions(ctx, agent.ID(), "again", SubmitOptions{Workspace: "project-b"}, remote); !errors.Is(err, agentdomain.ErrForbidden) {
 		t.Fatalf("revoked workspace admitted: %v", err)

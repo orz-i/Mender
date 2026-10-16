@@ -33,7 +33,8 @@ func (h *Handler) updateAgentSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var payload struct {
-		DefaultModel string `json:"defaultModel"`
+		DefaultModel           string `json:"defaultModel"`
+		DefaultReasoningEffort string `json:"defaultReasoningEffort"`
 	}
 	if err := decodeJSON(r, &payload); err != nil {
 		writeAPIError(w, http.StatusBadRequest, "validation_error", err)
@@ -44,7 +45,7 @@ func (h *Handler) updateAgentSettings(w http.ResponseWriter, r *http.Request) {
 		h.agentError(w, err)
 		return
 	}
-	agent, err := h.runtime.Agents.UpdateDefaultModel(r.Context(), id, payload.DefaultModel, caller)
+	agent, err := h.runtime.Agents.UpdateDefaults(r.Context(), id, payload.DefaultModel, payload.DefaultReasoningEffort, caller)
 	if err != nil {
 		h.agentError(w, err)
 		return

@@ -8,9 +8,14 @@ type AgentModelChoice struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
 }
-type AgentModelChoices struct {
+type AgentSelectChoices struct {
 	Current string             `json:"current"`
-	Models  []AgentModelChoice `json:"models"`
+	Choices []AgentModelChoice `json:"choices"`
+}
+type AgentModelChoices struct {
+	Current         string              `json:"current"`
+	Models          []AgentModelChoice  `json:"models"`
+	ReasoningEffort *AgentSelectChoices `json:"reasoningEffort,omitempty"`
 }
 
 func (s *Service) InspectAgentModels(id string) (AgentModelChoices, error) {
@@ -30,6 +35,13 @@ func (s *Service) InspectAgentModels(id string) (AgentModelChoices, error) {
 	for _, m := range value.Models {
 		response.Models = append(response.Models, AgentModelChoice{ID: m.ID, Name: m.Name})
 	}
+	if value.ReasoningEffort != nil {
+		choices := &AgentSelectChoices{Current: value.ReasoningEffort.Current, Choices: make([]AgentModelChoice, 0, len(value.ReasoningEffort.Choices))}
+		for _, option := range value.ReasoningEffort.Choices {
+			choices.Choices = append(choices.Choices, AgentModelChoice{ID: option.ID, Name: option.Name})
+		}
+		response.ReasoningEffort = choices
+	}
 	return response, nil
 }
 
@@ -42,7 +54,7 @@ type AgentWorkspaceList struct {
 	Workspaces []AgentWorkspace `json:"workspaces"`
 }
 
-func (s *Service) UpdateAgentSettings(id, defaultModel string) (Agent, error) {
+func (s *Service) UpdateAgentSettings(id, defaultModel, defaultReasoningEffort string) (Agent, error) {
 	caller, err := s.agentOwnerContext()
 	if err != nil {
 		return Agent{}, err
@@ -51,7 +63,7 @@ func (s *Service) UpdateAgentSettings(id, defaultModel string) (Agent, error) {
 	if err != nil {
 		return Agent{}, err
 	}
-	a, err := s.runtime.Agents.UpdateDefaultModel(s.ctx, parsed, defaultModel, caller)
+	a, err := s.runtime.Agents.UpdateDefaults(s.ctx, parsed, defaultModel, defaultReasoningEffort, caller)
 	if err != nil {
 		return Agent{}, err
 	}

@@ -31,7 +31,7 @@ func (h *Handler) agentError(w http.ResponseWriter, err error) {
 func (h *Handler) agentProjection(a agentdomain.Agent) map[string]any {
 	s := a.Spec()
 	out := map[string]any{"agentId": s.ID, "name": s.Name, "backend": s.Backend, "pluginId": s.PluginID,
-		"extensionId": s.ExtensionID, "workspaceRoot": s.WorkspaceRoot, "defaultModel": s.DefaultModel, "isolation": s.Isolation, "createdAt": s.CreatedAt,
+		"extensionId": s.ExtensionID, "workspaceRoot": s.WorkspaceRoot, "defaultModel": s.DefaultModel, "defaultReasoningEffort": s.DefaultReasoningEffort, "isolation": s.Isolation, "createdAt": s.CreatedAt,
 		"backendAvailable": false}
 	if _, err := h.runtime.AgentAvailability(s.Backend); err != nil {
 		out["issue"] = err.Error()
