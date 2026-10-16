@@ -19,7 +19,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@mender/ui/components/dialog";
-import { Input } from "@mender/ui/components/input";
 import {
   Table,
   TableBody,
@@ -38,6 +37,7 @@ import { usePagination } from "../../shared/pagination";
 import { TablePagination } from "../../shared/table-pagination";
 import {
   EmptyPanelState,
+  SearchField,
 } from "../../shared/workbench";
 
 import { formatNumber, t, tCount } from "../../i18n/i18n";
@@ -207,14 +207,15 @@ export function CatalogPage({ client }: { client: MenderClient }) {
         }
         filters={
           <>
-            <Input
-              aria-label={t("Catalog search")}
-              placeholder={t("Search intent, e.g. create issue")}
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              onKeyDown={(event) => { if (event.key === "Enter") void search(); }}
-              className="h-9 w-full min-w-0 sm:w-60 sm:shrink-0"
-            />
+            <div className="w-full min-w-0 sm:w-60 sm:shrink-0">
+              <SearchField
+                label="Catalog search"
+                placeholder="Search intent, e.g. create issue"
+                value={query}
+                onChange={setQuery}
+                onKeyDown={(event) => { if (event.key === "Enter") void search(); }}
+              />
+            </div>
             <select
               aria-label={t("Catalog provider filter")}
               value={providerId}

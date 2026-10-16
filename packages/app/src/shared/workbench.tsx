@@ -178,12 +178,14 @@ export function WorkbenchToolbar({ children }: { children: ReactNode }) {
 export function SearchField({
   value,
   onChange,
+  onKeyDown,
   placeholder,
   label,
   className = "",
 }: {
   value: string;
   onChange: (value: string) => void;
+  onKeyDown?: (event: React.KeyboardEvent<HTMLInputElement>) => void;
   placeholder: string;
   label: string;
   className?: string;
@@ -198,6 +200,7 @@ export function SearchField({
         aria-label={t(label)}
         value={value}
         onChange={(event) => onChange(event.target.value)}
+        onKeyDown={onKeyDown}
         placeholder={t(placeholder)}
         className="h-9 bg-background pl-9"
       />

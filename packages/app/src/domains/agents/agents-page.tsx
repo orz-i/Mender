@@ -54,7 +54,11 @@ export function AgentsPage({ client }: { client: MenderClient }) {
         <PageTab label="Available agents" active={filter==="available"} count={agents.filter(a=>a.backendAvailable).length} onClick={()=>setFilter("available")}/>
         <PageTab label="Unavailable agents" active={filter==="unavailable"} count={agents.filter(a=>!a.backendAvailable).length} onClick={()=>setFilter("unavailable")}/>
       </PageTabs>}
-      filters={<SearchField value={query} onChange={setQuery} placeholder="Search agents…" label="Search agents"/>}
+      filters={
+        <div className="w-full min-w-0 sm:w-56 sm:shrink-0">
+          <SearchField value={query} onChange={setQuery} placeholder="Search agents…" label="Search agents" />
+        </div>
+      }
       actions={<>
         <Button size="sm" variant="outline" onClick={()=>setReload(n=>n+1)}>{t("Refresh")}</Button>
         <Button size="sm" onClick={()=>void navigate("/agents/new")}>{t("Add agent")}</Button>
