@@ -86,7 +86,7 @@ func TestAgentToolFacadeAdoptsLegacyWithoutRebinding(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = r.SyncConfiguredProvider(ctx, provider.ID(), owner); err != nil {
+	if _, err = r.syncConfiguredProviderForOwner(ctx, provider.ID(), owner, true); err != nil {
 		t.Fatal(err)
 	}
 	before, err := r.AgentTools(ctx, agent.ID(), owner)

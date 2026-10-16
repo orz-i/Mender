@@ -298,7 +298,7 @@ func (h *Handler) syncProvider(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.syncConfiguredProvider(r.Context(), providerID)
 	if err != nil {
-		writeAPIError(w, http.StatusBadGateway, "provider_error", err)
+		writeKnownError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, syncProjection(result))

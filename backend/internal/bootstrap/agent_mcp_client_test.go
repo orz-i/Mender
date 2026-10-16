@@ -47,7 +47,7 @@ func TestAgentDelegationThroughMCPClientSession(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = r.SyncConfiguredProvider(ctx, provider.ID(), owner); err != nil {
+	if _, err = r.syncConfiguredProviderForOwner(ctx, provider.ID(), owner, true); err != nil {
 		t.Fatal(err)
 	}
 	tools, err := r.Catalog.store.ListProviderTools(ctx, provider.ID())

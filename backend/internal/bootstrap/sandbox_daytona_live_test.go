@@ -151,7 +151,7 @@ func TestDaytonaLiveRuntimeProviderAndCleanup(t *testing.T) {
 	if err != nil {
 		t.Fatalf("remote Workspace Provider bind: %v", err)
 	}
-	syncResult, err := runtime.SyncConfiguredProvider(ctx, provider.ID(), caller)
+	syncResult, err := runtime.syncConfiguredProviderForOwner(ctx, provider.ID(), caller, true)
 	if err != nil || syncResult.Total != 4 {
 		t.Fatalf("Daytona Workspace tool sync: %v total=%d", err, syncResult.Total)
 	}

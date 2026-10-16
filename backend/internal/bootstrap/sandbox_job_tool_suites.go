@@ -172,7 +172,7 @@ func (r *Runtime) EnsureSandboxJobTools(ctx context.Context, id sandboxdomain.ID
 	if e != nil {
 		return state, e
 	}
-	if _, e = r.SyncConfiguredProvider(ctx, providerID, caller); e != nil {
+	if _, e = r.syncConfiguredProviderForOwner(ctx, providerID, caller, true); e != nil {
 		return state, e
 	}
 	if e = r.Sandboxes.store.ClaimJobSuite(ctx, id, providerID.String()); e != nil {

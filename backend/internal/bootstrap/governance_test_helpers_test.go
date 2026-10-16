@@ -108,11 +108,15 @@ func syncConfiguredProviderTest(
 	providerID catalogdomain.ProviderID,
 ) (catalogapplication.SyncProviderToolsResult, error) {
 	t.Helper()
-	return runtime.SyncConfiguredProvider(
-		ctx,
-		providerID,
-		testCatalogGovernanceContext(t, governancedomain.OriginInternal, "sync"),
-	)
+	governance := testCatalogGovernanceContext(t, governancedomain.OriginInternal, "sync")
+	config, err := runtime.ProviderConfig(ctx, providerID)
+	if err != nil {
+		return catalogapplication.SyncProviderToolsResult{}, err
+	}
+	if isManagedProviderFacade(config.PluginID) {
+		return runtime.syncConfiguredProviderForOwner(ctx, providerID, governance, true)
+	}
+	return runtime.SyncConfiguredProvider(ctx, providerID, governance)
 }
 
 func rebindProviderInstallationTest(

@@ -98,6 +98,10 @@ func TestManagedAgentProviderCannotBeEditedThroughGenericProviderAPI(t *testing.
 	if !errors.Is(err, ErrProviderInUse) {
 		t.Fatalf("generic managed Provider update accepted: %v", err)
 	}
+	_, err = r.SyncConfiguredProvider(ctx, providerID, owner)
+	if !errors.Is(err, ErrProviderInUse) {
+		t.Fatalf("generic managed Provider sync accepted: %v", err)
+	}
 	state, err := r.AgentTools(ctx, agent.ID(), owner)
 	if err != nil || state.Status != "ready" || state.ProviderID != tools.ProviderID {
 		t.Fatalf("generic update mutated facade: %+v %v", state, err)

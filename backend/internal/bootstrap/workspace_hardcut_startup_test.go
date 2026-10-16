@@ -45,7 +45,7 @@ func TestRuntimeRejectsWorkspaceV1WithoutRewritingToolOrProfile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := runtime.SyncConfiguredProvider(ctx, provider.ID(), caller)
+	result, err := runtime.syncConfiguredProviderForOwner(ctx, provider.ID(), caller, true)
 	if err != nil || result.Total != 4 {
 		t.Fatalf("sync %+v, %v", result, err)
 	}

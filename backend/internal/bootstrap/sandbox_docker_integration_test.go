@@ -235,7 +235,7 @@ func TestRuntimeDockerSandboxProviderEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	synced, err := runtime.SyncConfiguredProvider(ctx, provider.ID(), caller)
+	synced, err := runtime.syncConfiguredProviderForOwner(ctx, provider.ID(), caller, true)
 	if err != nil || synced.Total != 4 {
 		t.Fatalf("Docker provider Sync %+v %v", synced, err)
 	}

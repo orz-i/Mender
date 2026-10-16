@@ -108,7 +108,7 @@ func TestSandboxSuiteAdoptsLegacyIdentityAndRejectsDuplicates(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = r.SyncConfiguredProvider(ctx, legacy.ID(), owner); err != nil {
+	if _, err = r.syncConfiguredProviderForOwner(ctx, legacy.ID(), owner, true); err != nil {
 		t.Fatal(err)
 	}
 	before, err := r.SandboxWorkspaceTools(ctx, sandbox.ID(), owner)

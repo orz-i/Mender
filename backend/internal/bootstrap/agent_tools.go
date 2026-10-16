@@ -168,7 +168,7 @@ func (r *Runtime) EnsureAgentTools(ctx context.Context, id agentdomain.ID, calle
 	if err != nil {
 		return state, err
 	}
-	if _, err = r.SyncConfiguredProvider(ctx, providerID, caller); err != nil {
+	if _, err = r.syncConfiguredProviderForOwner(ctx, providerID, caller, true); err != nil {
 		return state, fmt.Errorf("synchronize Agent tool facade: %w", err)
 	}
 	if err = r.agentStore.ClaimToolFacade(ctx, id, providerID.String()); err != nil {

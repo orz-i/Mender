@@ -231,7 +231,7 @@ func (r *Runtime) EnsureSandboxWorkspaceTools(ctx context.Context, id sandboxdom
 	if err != nil {
 		return state, err
 	}
-	if _, err = r.SyncConfiguredProvider(ctx, providerID, caller); err != nil {
+	if _, err = r.syncConfiguredProviderForOwner(ctx, providerID, caller, true); err != nil {
 		return state, fmt.Errorf("synchronize Sandbox Workspace facade: %w", err)
 	}
 	if err = r.Sandboxes.store.ClaimWorkspaceSuite(ctx, id, providerID.String()); err != nil {
