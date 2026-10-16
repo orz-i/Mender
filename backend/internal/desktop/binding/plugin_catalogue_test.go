@@ -28,6 +28,12 @@ func TestWailsPluginCatalogueExposesAllFourExtensionKinds(t *testing.T) {
 	agents := map[string]bool{}
 	for _, entry := range result.Plugins {
 		kinds[entry.Kind] = true
+		if entry.MarketplaceAction == "" {
+			t.Fatalf("Wails catalogue omitted host-owned Marketplace eligibility: %+v", entry)
+		}
+		if entry.PluginID == "io.mender.provider.workspace" && entry.MarketplaceAction != "none" {
+			t.Fatalf("private Workspace facade advertised as independent offering: %+v", entry)
+		}
 		if entry.Kind != "agent.backend" {
 			continue
 		}

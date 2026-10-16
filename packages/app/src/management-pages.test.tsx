@@ -519,7 +519,7 @@ describe("management pages", () => {
     const disabled = { ...installation, status: "disabled" as const };
     const echo=(status:"enabled"|"disabled")=>({
       key:installation.pluginId+"@"+installation.installationId,
-      pluginId:installation.pluginId,extensionId:"main",kind:"provider.tools" as const,
+      pluginId:installation.pluginId,extensionId:"main",kind:"provider.tools" as const,marketplaceAction:"create.provider",
       displayName:"Echo",description:"External Echo",packageVersion:installation.packageVersion,
       sourceKind:"local" as const,status,enabled:status==="enabled",
       capabilities:[],usageCount:0,installationId:installation.installationId,
@@ -532,7 +532,7 @@ describe("management pages", () => {
       .mockResolvedValueOnce({plugins:[echo("disabled")]})
       .mockResolvedValueOnce({plugins:[{
         key:"io.mender.provider.mcp@builtin",pluginId:"io.mender.provider.mcp",
-        extensionId:"main",kind:"provider.tools",displayName:"MCP",
+        extensionId:"main",kind:"provider.tools",marketplaceAction:"create.provider",displayName:"MCP",
         description:"Model Context Protocol Provider",packageVersion:"1.0.0",
         sourceKind:"builtin",status:"enabled",enabled:true,
         capabilities:[],usageCount:0,
@@ -593,9 +593,9 @@ describe("management pages", () => {
     await waitFor(() => {
       expect(screen.queryByText("Echo")).toBeNull();
     });
-    // The foundation driver stays available in the advanced view.
-    fireEvent.click(screen.getByRole("button",{name:"Show foundation drivers"}));
-    expect(await screen.findByText("MCP")).toBeTruthy();
+    // Installed packages and built-in creatable offerings remain separate.
+    fireEvent.click(screen.getByRole("button",{name:"Discover"}));
+    expect(await screen.findByRole("link",{name:"View MCP"})).toBeTruthy();
   });
 
   it("uses cursor navigation for the Marketplace card grid", async () => {
@@ -614,7 +614,7 @@ describe("management pages", () => {
     renderApp("/plugins", {
       listPluginCatalogue:vi.fn().mockResolvedValue({plugins:plugins.map(plugin=>({
         key:plugin.pluginId+"@builtin",pluginId:plugin.pluginId,extensionId:"main",
-        kind:"provider.tools",displayName:plugin.displayName,description:plugin.description,
+        kind:"provider.tools",marketplaceAction:"create.provider",displayName:plugin.displayName,description:plugin.description,
         packageVersion:plugin.packageVersion,sourceKind:"builtin",status:"enabled",
         enabled:true,capabilities:[],usageCount:0,configVersion:1,protocolVersion:1,
       }))}),
@@ -694,9 +694,7 @@ describe("management pages", () => {
     renderApp("/plugins", {
       listProviders: vi.fn().mockResolvedValue({ providers: [] }),
     });
-    expect(await screen.findByRole("button",{name:"Show foundation drivers"})).toBeTruthy();
-    expect(screen.queryByRole("link",{name:"View MCP"})).toBeNull();
-    fireEvent.click(screen.getByRole("button",{name:"Show foundation drivers"}));
+    expect(await screen.findByRole("link",{name:"View MCP"})).toBeTruthy();
 
     fireEvent.click(
       await screen.findByRole("link", { name: "View MCP" }),
@@ -773,7 +771,7 @@ describe("management pages", () => {
     const installPlugin = vi.fn().mockResolvedValue(installed);
     const installedEntry={
       key:installed.pluginId+"@"+installed.installationId,
-      pluginId:installed.pluginId,extensionId:"main",kind:"provider.tools" as const,
+      pluginId:installed.pluginId,extensionId:"main",kind:"provider.tools" as const,marketplaceAction:"create.provider",
       displayName:"Local",description:"Example local plugin",packageVersion:installed.packageVersion,
       sourceKind:"local" as const,status:"enabled" as const,enabled:true,
       capabilities:[],usageCount:0,installationId:installed.installationId,
@@ -783,7 +781,7 @@ describe("management pages", () => {
     const listPluginCatalogue=vi.fn()
       .mockResolvedValueOnce({plugins:[]})
       .mockResolvedValueOnce({plugins:[installedEntry]});
-    renderApp("/plugins",{listPluginCatalogue},{installPlugin});
+    renderApp("/plugins?view=installed",{listPluginCatalogue},{installPlugin});
 
     expect(
       await screen.findByRole("button", {
@@ -806,7 +804,7 @@ describe("management pages", () => {
       getRuntimeGovernance:vi.fn().mockResolvedValue({backend:{restrictedHostAvailable:true}}),
       listPluginCatalogue:vi.fn().mockResolvedValue({plugins:[{
         key:pluginId+"@builtin",pluginId,extensionId:"main",
-        kind:"sandbox.backend",displayName:"Local workspace",description:"Trusted builtin",
+        kind:"sandbox.backend",marketplaceAction:"create.sandbox",displayName:"Local workspace",description:"Trusted builtin",
         packageVersion:"1.0.0",sourceKind:"builtin",status:"enabled",enabled:true,
         capabilities:["file.read"],usageCount:0,
       }]}),
@@ -851,7 +849,7 @@ describe("management pages", () => {
   it("automatically refreshes the dormant Docker card when the host connects",async()=>{
     const docker=(ready:boolean)=>({
       key:"io.mender.sandbox.docker@builtin",
-      pluginId:"io.mender.sandbox.docker",extensionId:"main",kind:"sandbox.backend" as const,
+      pluginId:"io.mender.sandbox.docker",extensionId:"main",kind:"sandbox.backend" as const,marketplaceAction:"create.sandbox",
       displayName:"Docker Engine",description:"Trusted Docker backend",
       packageVersion:"1.0.0",sourceKind:"builtin" as const,
       status:ready?"enabled" as const:"unavailable" as const,enabled:ready,
@@ -878,7 +876,7 @@ describe("management pages", () => {
   it("updates a connected Docker card on outage and same-Engine recovery",async()=>{
     const docker=(status:"enabled"|"unavailable")=>({
       key:"io.mender.sandbox.docker@builtin",
-      pluginId:"io.mender.sandbox.docker",extensionId:"main",kind:"sandbox.backend" as const,
+      pluginId:"io.mender.sandbox.docker",extensionId:"main",kind:"sandbox.backend" as const,marketplaceAction:"create.sandbox",
       displayName:"Docker Engine",description:"Trusted Docker backend",
       packageVersion:"1.0.0",sourceKind:"builtin" as const,
       status,enabled:status==="enabled",capabilities:["file.read"],usageCount:0,
@@ -906,7 +904,7 @@ describe("management pages", () => {
   it("keeps unverified Docker unavailable without a privileged Web action",async()=>{
     const pluginId="io.mender.sandbox.docker";
     const listPluginCatalogue=vi.fn().mockResolvedValue({plugins:[{
-      key:pluginId+"@builtin",pluginId,extensionId:"main",kind:"sandbox.backend",
+      key:pluginId+"@builtin",pluginId,extensionId:"main",kind:"sandbox.backend",marketplaceAction:"create.sandbox",
       displayName:"Docker Engine",description:"Docker",
       packageVersion:"1.0.0",sourceKind:"builtin",status:"unavailable",enabled:false,
       issue:"Docker Engine not detected",capabilities:["file.read"],usageCount:0,
@@ -926,9 +924,9 @@ describe("management pages", () => {
     }
   });
 
-  it("shows all four Sandbox backends with truthful Marketplace statuses and no E2B provisioning",async()=>{
+  it("shows only available Sandbox offerings, not unavailable or unimplemented backends",async()=>{
     const builtin=(pluginId:string,displayName:string,status:"enabled"|"unavailable"="enabled")=>({
-      key:pluginId+"@builtin",pluginId,extensionId:"main",kind:"sandbox.backend" as const,
+      key:pluginId+"@builtin",pluginId,extensionId:"main",kind:"sandbox.backend" as const,marketplaceAction:"create.sandbox",
       displayName,description:displayName+" Sandbox backend",
       packageVersion:"1.0.0",sourceKind:"builtin" as const,
       status,enabled:status==="enabled",usageCount:0,capabilities:["file.read"],
@@ -938,36 +936,21 @@ describe("management pages", () => {
       builtin("io.mender.sandbox.local-workspace","Local Workspace"),
       builtin("io.mender.sandbox.docker","Docker Engine"),
       builtin("io.mender.sandbox.daytona","Daytona (experimental)","unavailable"),
-      {
-        key:"io.mender.sandbox.e2b@planned",pluginId:"io.mender.sandbox.e2b",
-        extensionId:"main",kind:"sandbox.backend",displayName:"E2B",
-        description:"Planned Sandbox backend; not implemented or available for provisioning",
-        packageVersion:"",sourceKind:"planned",status:"planned",
-        enabled:false,usageCount:0,capabilities:[],
-      },
     ]});
     renderApp("/plugins",{listPluginCatalogue});
-    for(const displayName of ["Local Workspace","Docker Engine","Daytona (experimental)","E2B"]){
-      expect(await screen.findByRole("link",{name:"View "+displayName})).toBeTruthy();
-    }
-    fireEvent.click(screen.getByRole("link",{name:"View E2B"}));
-    expect(await screen.findByText("Planned Sandbox backend; not implemented or available for provisioning")).toBeTruthy();
-    expect(screen.getAllByText("Planned").length).toBeGreaterThan(0);
-    expect(screen.getByText("Roadmap")).toBeTruthy();
-    expect(screen.getByText("Not released")).toBeTruthy();
-    expect(screen.queryByRole("button",{name:"Create sandbox"})).toBeNull();
-    expect(screen.queryByRole("button",{name:"Enable E2B"})).toBeNull();
-    expect(screen.queryByRole("button",{name:"Remove E2B"})).toBeNull();
-    fireEvent.click(screen.getByRole("button",{name:"Back"}));
-    fireEvent.click(await screen.findByRole("link",{name:"View Daytona (experimental)"}));
-    expect(await screen.findByText(/MENDER_DAYTONA_EXPERIMENTAL=enabled/)).toBeTruthy();
-    expect(screen.queryByRole("button",{name:"Create sandbox"})).toBeNull();
+    expect(await screen.findByRole("link",{name:"View Local Workspace"})).toBeTruthy();
+    expect(screen.getByRole("link",{name:"View Docker Engine"})).toBeTruthy();
+    expect(screen.queryByRole("link",{name:"View Daytona (experimental)"})).toBeNull();
+    expect(screen.queryByRole("link",{name:"View E2B"})).toBeNull();
+    // An unavailable technical entry can still be inspected at its exact URL.
+    fireEvent.click(screen.getByRole("link",{name:"View Docker Engine"}));
+    expect(await screen.findByRole("button",{name:"Create sandbox"})).toBeTruthy();
   });
 
   it("opens only the selected built-in Sandbox form from the Marketplace",async()=>{
     const local={
       key:"io.mender.sandbox.local-workspace@builtin",
-      pluginId:"io.mender.sandbox.local-workspace",extensionId:"main",kind:"sandbox.backend",
+      pluginId:"io.mender.sandbox.local-workspace",extensionId:"main",kind:"sandbox.backend",marketplaceAction:"create.sandbox",
       displayName:"Local Workspace",description:"Host workspace",
       packageVersion:"1.0.0",sourceKind:"builtin",status:"enabled",enabled:true,
       usageCount:0,capabilities:["file.read","file.search","file.edit","process.shell"],
@@ -997,7 +980,7 @@ describe("management pages", () => {
   it("opens the trusted SSH Remote plugin directly in its own credential-gated create flow",async()=>{
     const pluginId="io.mender.sandbox.ssh-remote";
     const plugin={
-      key:pluginId+"@builtin",pluginId,extensionId:"main",kind:"sandbox.backend",
+      key:pluginId+"@builtin",pluginId,extensionId:"main",kind:"sandbox.backend",marketplaceAction:"create.sandbox",
       displayName:"SSH Remote",description:"Pinned SSH remote account",
       packageVersion:"1.0.0",sourceKind:"builtin",status:"enabled",enabled:true,
       capabilities:["file.read","file.search","file.edit","process.shell"],usageCount:0,
@@ -1030,7 +1013,7 @@ describe("management pages", () => {
   it("opens the experimental Daytona credential workflow only after native opt-in",async()=>{
     const plugin={
       key:"io.mender.sandbox.daytona@builtin",pluginId:"io.mender.sandbox.daytona",
-      extensionId:"main",kind:"sandbox.backend",displayName:"Daytona (experimental)",
+      extensionId:"main",kind:"sandbox.backend",marketplaceAction:"create.sandbox",displayName:"Daytona (experimental)",
       description:"Credential-gated experimental",packageVersion:"1.0.0",
       sourceKind:"builtin",status:"enabled",enabled:true,
       usageCount:0,capabilities:["file.read","file.search","file.edit","process.shell"],
@@ -1058,7 +1041,7 @@ describe("management pages", () => {
     renderApp("/sandboxes/new/external?create=1&pluginId="+pluginId+"&installationId="+installationId,{
       listPluginCatalogue:vi.fn().mockResolvedValue({plugins:[{
         key:pluginId+"@"+installationId,pluginId,extensionId:"main",
-        kind:"sandbox.backend",displayName:"Fixture Sandbox",description:"Mock",
+        kind:"sandbox.backend",marketplaceAction:"create.sandbox",displayName:"Fixture Sandbox",description:"Mock",
         packageVersion:"1.0.0",sourceKind:"local",status:"enabled",enabled:true,
         installationId,usageCount:0,capabilities:["file.read"],
         configVersion:1,protocolVersion:1,configSchema:{
@@ -1093,7 +1076,7 @@ describe("management pages", () => {
     });
     renderApp("/tunnels?create=1&pluginId="+pluginId+"&installationId="+installationId,{
       listPluginCatalogue:vi.fn().mockResolvedValue({plugins:[{
-        key:pluginId+"@"+installationId,pluginId,extensionId:"main",kind:"tunnel.transport",
+        key:pluginId+"@"+installationId,pluginId,extensionId:"main",kind:"tunnel.transport",marketplaceAction:"create.tunnel",
         displayName:"Fixture Tunnel Transport",description:"Only loopback reachability",
         packageVersion:"1.0.0",sourceKind:"local",status:"enabled",enabled:true,
         installationId,usageCount:0,capabilities:["loopback-mcp-proxy"],
@@ -2665,7 +2648,7 @@ function renderApp(
   } = {},
 ) {
   const builtinPlugin=(id:string,name:string)=>({
-    key:id+"@builtin",pluginId:id,extensionId:"main",kind:"provider.tools" as const,
+    key:id+"@builtin",pluginId:id,extensionId:"main",kind:"provider.tools" as const,marketplaceAction:"create.provider",
     displayName:name,description:name+" Provider plugin",packageVersion:"1.0.0",
     sourceKind:"builtin" as const,status:"enabled" as const,enabled:true,
     capabilities:[],usageCount:0,configVersion:1,protocolVersion:1,
@@ -2678,7 +2661,7 @@ function renderApp(
       builtinPlugin("io.mender.provider.model-tools","Model Tools"),
       builtinPlugin("io.mender.provider.openapi","OpenAPI"),
       {...builtinPlugin("io.mender.tunnel.openai","OpenAI Secure MCP Tunnel"),
-        kind:"tunnel.transport" as const},
+        kind:"tunnel.transport" as const,marketplaceAction:"create.tunnel"},
     ]}),
     listProviderPlugins: vi.fn().mockResolvedValue({
       plugins: [

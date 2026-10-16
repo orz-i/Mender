@@ -51,11 +51,7 @@ func TestCanonicalPluginCatalogueAllTypesInertAndStable(t *testing.T) {
 				t.Fatalf("quarantined Sandbox must remain discoverable but unavailable: %+v", plugin)
 			}
 		case "io.mender.sandbox.e2b":
-			if plugin.SourceKind != "planned" || plugin.Status != "planned" || plugin.Enabled ||
-				plugin.Key != "io.mender.sandbox.e2b@planned" || len(plugin.Capabilities) != 0 ||
-				plugin.PackageVersion != "" || plugin.ProtocolVersion != 0 || plugin.ConfigVersion != 0 {
-				t.Fatalf("E2B roadmap preview masquerades as an installed plugin: %+v", plugin)
-			}
+			t.Fatal("unimplemented E2B must not appear in the technical plugin inventory")
 		case "io.mender.agent.codex", "io.mender.agent.grok":
 			if plugin.SourceKind != "builtin" || plugin.Kind != platformplugin.AgentBackend || len(plugin.Capabilities) != 3 ||
 				(plugin.Status != "enabled" && plugin.Status != "unavailable") ||
@@ -83,7 +79,6 @@ func TestCanonicalPluginCatalogueAllTypesInertAndStable(t *testing.T) {
 		"io.mender.sandbox.docker@builtin",
 		"io.mender.sandbox.daytona@builtin",
 		"io.mender.sandbox.ssh-remote@builtin",
-		"io.mender.sandbox.e2b@planned",
 	} {
 		if !keys[key] {
 			t.Fatalf("Sandbox option %q missing from canonical Marketplace", key)
@@ -139,13 +134,47 @@ func TestCanonicalCatalogueExperimentalDaytonaOptInOnlyChangesItsAvailability(t 
 			}
 		case "io.mender.sandbox.e2b":
 			e2b++
-			if entry.Status != "planned" || entry.Enabled || entry.SourceKind != "planned" {
-				t.Fatalf("Daytona opt-in activated unrelated E2B preview: %+v", entry)
-			}
+			t.Fatalf("Daytona opt-in must not publish unimplemented E2B: %+v", entry)
 		}
 	}
-	if daytona != 1 || e2b != 1 {
-		t.Fatalf("incorrect Sandbox Marketplace cardinality: Daytona=%d E2B=%d", daytona, e2b)
+	if daytona != 1 || e2b != 0 {
+		t.Fatalf("incorrect technical Sandbox catalogue: Daytona=%d E2B=%d", daytona, e2b)
+	}
+}
+
+// Marketplace classification is entirely host-reviewed, not inferred from
+// arbitrary advertised native capabilities or plugin names.
+func TestReviewedMarketplaceActionRejectsInternalAndUnknownExtensions(t *testing.T) {
+	for _, tt := range []struct {
+		id        string
+		kind      platformplugin.Kind
+		installed bool
+		want      MarketplaceAction
+	}{
+		{"io.mender.provider.mcp", platformplugin.ProviderTools, false, MarketplaceCreateProvider},
+		{"io.mender.provider.openapi", platformplugin.ProviderTools, false, MarketplaceCreateProvider},
+		{"io.mender.provider.model-tools", platformplugin.ProviderTools, false, MarketplaceCreateProvider},
+		{"io.mender.provider.workspace", platformplugin.ProviderTools, false, MarketplaceNone},
+		{"io.mender.provider.agent-delegation", platformplugin.ProviderTools, false, MarketplaceNone},
+		{"io.mender.provider.sandbox-jobs", platformplugin.ProviderTools, false, MarketplaceNone},
+		{"io.mender.sandbox.ssh-remote", platformplugin.SandboxBackend, false, MarketplaceCreateSandbox},
+		{"io.mender.tunnel.openai", platformplugin.TunnelTransport, false, MarketplaceCreateTunnel},
+		{"io.mender.agent.grok", platformplugin.AgentBackend, false, MarketplaceCreateAgent},
+		{"io.mender.provider.mcp", platformplugin.AgentBackend, false, MarketplaceNone},
+		{"dev.example.unreviewed", platformplugin.ProviderTools, false, MarketplaceNone},
+		{"dev.example.provider", platformplugin.ProviderTools, true, MarketplaceCreateProvider},
+		{"dev.example.sandbox", platformplugin.SandboxBackend, true, MarketplaceCreateSandbox},
+		{"dev.example.tunnel", platformplugin.TunnelTransport, true, MarketplaceCreateTunnel},
+		{"dev.example.agent", platformplugin.AgentBackend, true, MarketplaceNone},
+	} {
+		t.Run(tt.id+"/"+string(tt.kind), func(t *testing.T) {
+			d := platformplugin.Descriptor{PluginID: platformplugin.ID(tt.id),
+				Extension:    platformplugin.Extension{Kind: tt.kind},
+				Capabilities: []string{"claimed.privileged.capability"}}
+			if got := reviewedMarketplaceAction(d, tt.installed); got != tt.want {
+				t.Fatalf("reviewedMarketplaceAction()=%q, want %q", got, tt.want)
+			}
+		})
 	}
 }
 
@@ -219,7 +248,8 @@ func TestCanonicalCatalogueInstalledThreeKindsAndUsage(t *testing.T) {
 				continue
 			}
 			found = true
-			if entry.Kind != installed.Extension().Kind || entry.UsageCount != 0 || entry.InstallationID != installed.ID().String() ||
+			if entry.Kind != installed.Extension().Kind || entry.MarketplaceAction == MarketplaceNone ||
+				entry.UsageCount != 0 || entry.InstallationID != installed.ID().String() ||
 				!entry.Enabled || entry.SourceKind != "local" || entry.ProtocolVersion != 1 {
 				t.Fatalf("mismatched typed catalogue entry: %+v", entry)
 			}

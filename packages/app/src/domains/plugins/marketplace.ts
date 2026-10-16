@@ -1,7 +1,6 @@
 import type {
   MenderClient,
   IntegrationOffering,
-  ToolSuiteDefinition,
   PluginCatalogueEntry,
   ProviderPluginInstallation,
 } from "@mender/sdk";
@@ -14,8 +13,7 @@ export type MarketplacePluginStatus =
   | "disabled"
   | "invalid"
   | "degraded"
-  | "unavailable"
-  | "planned";
+  | "unavailable";
 
 export interface MarketplacePluginActions {
   enable: boolean;
@@ -74,42 +72,46 @@ export function pluginInstaller(
 }
 
 export function pluginCatalogueToMarketplace(entries:PluginCatalogueEntry[]):MarketplacePlugin[]{
-  // Agent Delegation is a host-owned implementation facade, not a product to
-  // install or add independently. Agents own its user-facing Tool Suite.
-  return entries.filter(entry=>entry.pluginId!=="io.mender.provider.agent-delegation").map((entry):MarketplacePlugin=>{
+  // Marketplace eligibility comes from the Host, not from capability claims
+  // or a guessed route. Native installations remain for repair/removal.
+  return entries.filter(entry=>entry.marketplaceAction!=="none" || Boolean(entry.installationId))
+    .map((entry):MarketplacePlugin=>{
     const kind=entry.kind==="provider.tools"?"provider":
       entry.kind==="sandbox.backend"?"sandbox":
       entry.kind==="tunnel.transport"?"tunnel":
       entry.kind==="agent.backend"?"agent":"unsupported";
     const labels={provider:"Provider plugin",sandbox:"Sandbox backend",
       tunnel:"Tunnel transport",agent:"Agent backend",unsupported:"Unsupported plugin"};
-    const enabled=entry.enabled && entry.issue===undefined;
+    const enabled=entry.enabled && entry.status==="enabled" && entry.issue===undefined;
     const installationId=entry.installationId;
+    const action=entry.marketplaceAction;
+    const actionKind=action==="create.provider"?"provider":action==="create.sandbox"?"sandbox":
+      action==="create.agent"?"agent":action==="create.tunnel"?"tunnel":null;
+    if(actionKind!==null && actionKind!==kind){
+      throw new Error("Host Marketplace action and plugin extension kind disagree");
+    }
     const params=new URLSearchParams({create:"1",pluginId:entry.pluginId});
     if(installationId)params.set("installationId",installationId);
-    const pathname=kind==="provider"?"/providers":
-      kind==="sandbox"?(installationId?"/sandboxes/new/external":"/sandboxes/new"):
-      kind==="agent"?"/agents/new":kind==="tunnel"?"/tunnels":"";
-    // Phase 33 supports only trusted built-in Agent Backend implementations.
-    // A native package advertising this kind is not an executable Agent driver.
-    const manageableKind=kind!=="unsupported" && (kind!=="agent" || !installationId);
-    const createAction=enabled && pathname && manageableKind?{
-      label:kind==="provider"?"Add provider":kind==="sandbox"?"Create sandbox":
-        kind==="agent"?"Add agent":"Add tunnel",
+    const pathname=action==="create.provider"?"/providers":
+      action==="create.sandbox"?(installationId?"/sandboxes/new/external":"/sandboxes/new"):
+      action==="create.agent"?"/agents/new":action==="create.tunnel"?"/tunnels":null;
+    const createAction=enabled && pathname?{
+      label:action==="create.provider"?"Add provider":action==="create.sandbox"?"Create sandbox":
+        action==="create.agent"?"Add agent":"Add tunnel",
       href:pathname+"?"+params.toString(),
     }:undefined;
+    // An installation is managed by its exact ID, not by a creatable route.
+    const manageableInstallation=!!installationId && ["provider","sandbox","tunnel"].includes(kind);
     return {
       key:entry.key,kind,kindLabel:labels[kind],
       displayName:entry.displayName||humanizePluginId(entry.pluginId),
       description:entry.description,
-      source:entry.sourceKind,sourceLabel:entry.sourceKind==="builtin"?"Built-in":
-        entry.sourceKind==="planned"?"Roadmap":"Local package",
-      version:entry.packageVersion||"Not released",
-      status:entry.status==="unavailable"||entry.status==="planned"?
-        entry.status:entry.issue?"degraded":entry.status,
+      source:entry.sourceKind,sourceLabel:entry.sourceKind==="builtin"?"Built-in":"Local package",
+      version:entry.packageVersion,
+      status:entry.status==="unavailable"?"unavailable":entry.issue?"degraded":entry.status,
       enabled:entry.enabled,
       capabilities:entry.capabilities,
-      actions:installationId && manageableKind?{
+      actions:manageableInstallation?{
         enable:entry.status==="disabled"&&!entry.issue,
         disable:entry.status==="enabled"&&entry.usageCount===0,
         remove:entry.usageCount===0,
@@ -161,41 +163,12 @@ export function integrationOfferingsToMarketplace(offerings:IntegrationOffering[
   });
 }
 
-export function toolSuitesToMarketplace(suites:ToolSuiteDefinition[]):MarketplacePlugin[]{
-  return suites.map((entry):MarketplacePlugin=>{
-    if(!["agent.delegation","sandbox.workspace","sandbox.jobs","sandbox.browser"].includes(entry.suiteId) ||
-      !["agent","sandbox"].includes(entry.resourceKind) ||
-      !["builtin","unavailable"].includes(entry.status) ||
-      (entry.status==="unavailable" && entry.toolSourceKeys.length!==0)){
-      throw new Error("Unsupported reviewed Tool Suite definition");
-    }
-    return {
-      key:"suite:"+entry.suiteId,kind:"suite",kindLabel:"Tool Suite",
-      displayName:entry.displayName,description:entry.description,
-      source:"builtin",sourceLabel:"Built-in",
-      version:"Reviewed suite",status:entry.status==="builtin"?"available":"unavailable",
-      enabled:false,capabilities:entry.requiredCapabilities,
-      actions:noMarketplaceActions(),
-      technicalDetails:[
-        {label:"Suite ID",value:entry.suiteId,mono:true},
-        {label:"Target resource",value:entry.resourceKind},
-        {label:"Required capabilities",value:entry.requiredCapabilities.join(", ")},
-        {label:"Declared tools",value:entry.toolSourceKeys.join(", ")||"Not executable"},
-      ],
-      ...(entry.issue?{issue:{code:"suite_unavailable",message:entry.issue}}:{}),
-      // The Tools view of a specific authorized resource owns the Bind action;
-      // a catalogue cannot choose a SandboxID from model-controlled inputs.
-    };
-  });
-}
-
 export async function loadMarketplacePlugins(client:MenderClient){
-  const [catalogue,integrations,suites]=await Promise.all([
-    client.listPluginCatalogue(),client.listIntegrationOfferings(),client.listToolSuites(),
+  const [catalogue,integrations]=await Promise.all([
+    client.listPluginCatalogue(),client.listIntegrationOfferings(),
   ]);
   return [...pluginCatalogueToMarketplace(catalogue.plugins),
-    ...integrationOfferingsToMarketplace(integrations.integrations),
-    ...toolSuitesToMarketplace(suites.suites)]
+    ...integrationOfferingsToMarketplace(integrations.integrations)]
     .toSorted(compareMarketplacePlugins);
 }
 

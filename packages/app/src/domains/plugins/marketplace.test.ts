@@ -1,11 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import type { IntegrationOffering, MenderClient, PluginCatalogueEntry, ToolSuiteDefinition } from "@mender/sdk";
+import type { IntegrationOffering, MenderClient, PluginCatalogueEntry } from "@mender/sdk";
 import {
   humanizePluginId,
   marketplaceCursorPage,
   pluginCatalogueToMarketplace,
   integrationOfferingsToMarketplace,
-  toolSuitesToMarketplace,
   loadMarketplacePlugins,
   removeMarketplacePlugin,
   setMarketplacePluginEnabled,
@@ -13,225 +12,183 @@ import {
 
 const id = "pinst_0123456789abcdef0123456789abcdef";
 function entry(kind:PluginCatalogueEntry["kind"],overrides:Partial<PluginCatalogueEntry>={}):PluginCatalogueEntry{
-  const pluginId = kind==="provider.tools"?"dev.example.provider":
+  const pluginId=kind==="provider.tools"?"dev.example.provider":
     kind==="sandbox.backend"?"dev.example.sandbox":
     kind==="agent.backend"?"dev.example.agent":"dev.example.tunnel";
   return {
     key:pluginId+"@"+id,pluginId,extensionId:"main",kind,
-    displayName:"Example "+kind,description:"A real typed extension",
+    marketplaceAction:kind==="provider.tools"?"create.provider":
+      kind==="sandbox.backend"?"create.sandbox":
+        kind==="tunnel.transport"?"create.tunnel":"none",
+    displayName:"Example "+kind,description:"A verified native extension",
     packageVersion:"1.0.0",sourceKind:"local",status:"enabled",enabled:true,
-    installationId:id,digest:"sha256"+"a".repeat(64),installedAt:"2026-09-30T00:00:00Z",
+    installationId:id,digest:"sha256:"+"a".repeat(64),installedAt:"2026-09-30T00:00:00Z",
     configVersion:1,protocolVersion:1,capabilities:["file.read"],usageCount:0,
     ...overrides,
   };
 }
-
+function builtin(kind:PluginCatalogueEntry["kind"],pluginId:string,
+  action:PluginCatalogueEntry["marketplaceAction"],overrides:Partial<PluginCatalogueEntry>={}):PluginCatalogueEntry{
+  const value=entry(kind,{
+    pluginId,key:pluginId+"@builtin",sourceKind:"builtin",
+    marketplaceAction:action, ...overrides,
+  });
+  delete value.installationId;
+  return value;
+}
 const anySearch:IntegrationOffering={
-    offeringId:"io.mender.integration.anysearch",displayName:"AnySearch",
-    description:"Search the web through the hosted MCP server",
-    kind:"remote-mcp" as const,driverPluginId:"io.mender.provider.mcp" as const,
-    transport:"streamable-http" as const,endpoint:"https://api.anysearch.com/mcp",
-    headers:{"X-Anysearch-Client":"mcp/1.0.0"},defaultNamespace:"anysearch",
-    authentication:"optional-bearer" as const,sourceUrl:"https://github.com/anysearch-ai/anysearch-mcp-server",
-  };
-describe("canonical typed Marketplace",()=>{
-  it("keeps Browser Suite explicitly unavailable with no executable Tools or Add action",()=>{
-    const browser:ToolSuiteDefinition={
-      suiteId:"sandbox.browser",displayName:"Browser Tools",
-      description:"Browser-specific navigation",
-      resourceKind:"sandbox",requiredCapabilities:["browser.session"],
-      toolSourceKeys:[],status:"unavailable",
-      issue:"No verified managed Browser Session backend",
-    };
-    const item=toolSuitesToMarketplace([browser])[0]!;
-    expect(item).toMatchObject({kind:"suite",status:"unavailable",enabled:false,
-      actions:{enable:false,disable:false,remove:false}});
-    expect(item.createAction).toBeUndefined();
-    expect(item.capabilities).toEqual(["browser.session"]);
-    expect(item.issue?.code).toBe("suite_unavailable");
+  offeringId:"io.mender.integration.anysearch",displayName:"AnySearch",
+  description:"Hosted MCP search",kind:"remote-mcp",
+  driverPluginId:"io.mender.provider.mcp",transport:"streamable-http",
+  endpoint:"https://api.anysearch.com/mcp",
+  headers:{"X-Anysearch-Client":"mcp/1.0.0"},defaultNamespace:"anysearch",
+  authentication:"optional-bearer",sourceUrl:"https://github.com/anysearch-ai/anysearch-mcp-server",
+};
+
+describe("Host-reviewed Marketplace projection",()=>{
+  it("never projects private managed facades or unreviewed built-ins",()=>{
+    const records=[
+      builtin("provider.tools","io.mender.provider.workspace","none"),
+      builtin("provider.tools","io.mender.provider.agent-delegation","none"),
+      builtin("provider.tools","io.mender.provider.sandbox-jobs","none"),
+      builtin("provider.tools","dev.example.unknown","none"),
+      entry("provider.tools"),
+    ];
+    const result=pluginCatalogueToMarketplace(records);
+    expect(result.map(x=>x.key)).toEqual(["dev.example.provider@"+id]);
   });
-  it("offers AnySearch as a connection recipe, not an executable Provider installation",()=>{
-    const result=integrationOfferingsToMarketplace([anySearch]);
-    expect(result).toHaveLength(1);
-    expect(result[0]).toMatchObject({
-      key:"integration:io.mender.integration.anysearch",kind:"integration",
-      source:"curated",status:"available",actions:{enable:false,disable:false,remove:false},
-      createAction:{label:"Connect",href:"/providers?create=1&offeringId=io.mender.integration.anysearch"},
-    });
-    expect(result[0]?.technicalDetails.find(x=>x.label==="Endpoint")?.value).toBe("https://api.anysearch.com/mcp");
+
+  it("makes MCP, OpenAPI and Model Tools first-class creatable offerings",()=>{
+    const models=pluginCatalogueToMarketplace([
+      builtin("provider.tools","io.mender.provider.mcp","create.provider"),
+      builtin("provider.tools","io.mender.provider.openapi","create.provider"),
+      builtin("provider.tools","io.mender.provider.model-tools","create.provider"),
+    ]);
+    expect(models).toHaveLength(3);
+    for(const model of models){
+      expect(model.createAction?.href).toBe("/providers?create=1&pluginId="+model.key.split("@")[0]);
+      expect(model.actions).toEqual({enable:false,disable:false,remove:false});
+    }
   });
-  it("refuses an incompatible integration definition without creating a route",()=>{
-    expect(()=>integrationOfferingsToMarketplace([{
-      ...anySearch,kind:"cloud-browser" as unknown as IntegrationOffering["kind"],
-    }])).toThrow(/Unsupported reviewed integration/);
-  });
-  it("does not present the Agent Delegation execution facade as an installable offering",()=>{
-    const internal=entry("provider.tools",{
-      key:"io.mender.provider.agent-delegation@builtin",
-      pluginId:"io.mender.provider.agent-delegation",sourceKind:"builtin",
-    });
-    delete internal.installationId;
-    expect(pluginCatalogueToMarketplace([internal,entry("agent.backend")])).toHaveLength(1);
-  });
-  it("shows all three extension types from one authority and routes exact creation IDs",()=>{
+
+  it("routes exact installed Provider, Sandbox and Tunnel IDs",()=>{
     const models=pluginCatalogueToMarketplace([
       entry("provider.tools"),entry("sandbox.backend"),entry("tunnel.transport"),
     ]);
-    expect(models).toHaveLength(3);
-    expect(models.find((x)=>x.kind==="provider")?.createAction?.href).toBe(
+    expect(models.find(x=>x.kind==="provider")?.createAction?.href).toBe(
       "/providers?create=1&pluginId=dev.example.provider&installationId="+id);
-    expect(models.find((x)=>x.kind==="sandbox")?.createAction?.href).toBe(
+    expect(models.find(x=>x.kind==="sandbox")?.createAction?.href).toBe(
       "/sandboxes/new/external?create=1&pluginId=dev.example.sandbox&installationId="+id);
-    expect(models.find((x)=>x.kind==="tunnel")?.createAction?.href).toBe(
+    expect(models.find(x=>x.kind==="tunnel")?.createAction?.href).toBe(
       "/tunnels?create=1&pluginId=dev.example.tunnel&installationId="+id);
   });
 
-  it("maps built-in Agent Backends to focused Agent creation and never routes native/unavailable Agent plugins",()=>{
-    const builtin=entry("agent.backend",{
-      pluginId:"io.mender.agent.grok",key:"io.mender.agent.grok@builtin",sourceKind:"builtin",
-      capabilities:["acp.v1"],usageCount:0,
-    });
-    delete builtin.installationId;
-    const unavailable=entry("agent.backend",{
-      pluginId:"io.mender.agent.codex",key:"io.mender.agent.codex@builtin",sourceKind:"builtin",
-      enabled:false,status:"unavailable",issue:"codex-acp missing",
-    });
-    delete unavailable.installationId;
-    const native=entry("agent.backend",{
-      pluginId:"dev.example.agent",key:"dev.example.agent@"+id,sourceKind:"local",
-    });
-    const models=pluginCatalogueToMarketplace([builtin,unavailable,native]);
-    const grok=models.find(x=>x.key==="io.mender.agent.grok@builtin");
-    expect(grok?.kind).toBe("agent");
-    expect(grok?.createAction?.href).toBe("/agents/new?create=1&pluginId=io.mender.agent.grok");
-    expect(models.find(x=>x.key==="io.mender.agent.codex@builtin")?.createAction).toBeUndefined();
-    expect(models.find(x=>x.key==="dev.example.agent@"+id)?.createAction).toBeUndefined();
-    expect(models.find(x=>x.key==="dev.example.agent@"+id)?.actions).toEqual({
-      enable:false,disable:false,remove:false,
-    });
+  it("refuses inconsistent actions, even when the extension claims attractive capabilities",()=>{
+    expect(()=>pluginCatalogueToMarketplace([
+      entry("sandbox.backend",{marketplaceAction:"create.provider"}),
+    ])).toThrow(/action and plugin extension kind disagree/);
+    expect(pluginCatalogueToMarketplace([
+      builtin("agent.backend","io.mender.agent.codex","none"),
+    ])).toHaveLength(0);
   });
 
-  it("prevents enable/remove of unavailable or referenced packages",()=>{
+  it("keeps native Agent packages visible for diagnosis only, not create or unsupported management",()=>{
+    const models=pluginCatalogueToMarketplace([
+      builtin("agent.backend","io.mender.agent.grok","create.agent"),
+      builtin("agent.backend","io.mender.agent.codex","create.agent",{
+        status:"unavailable",enabled:false,issue:"codex-acp missing",
+      }),
+      entry("agent.backend"),
+    ]);
+    expect(models.find(x=>x.key==="io.mender.agent.grok@builtin")?.createAction?.href)
+      .toBe("/agents/new?create=1&pluginId=io.mender.agent.grok");
+    expect(models.find(x=>x.key==="io.mender.agent.codex@builtin")?.createAction).toBeUndefined();
+    expect(models.find(x=>x.key==="dev.example.agent@"+id)).toMatchObject({
+      actions:{enable:false,disable:false,remove:false},
+    });
+    expect(models.find(x=>x.key==="dev.example.agent@"+id)?.createAction).toBeUndefined();
+  });
+
+  it("preserves disabled, unavailable, invalid and referenced installation diagnostics",()=>{
     const models=pluginCatalogueToMarketplace([
       entry("sandbox.backend",{enabled:false,status:"disabled",usageCount:2}),
       entry("tunnel.transport",{enabled:true,usageCount:1}),
-      entry("provider.tools",{enabled:true,issue:"verification failed"}),
+      entry("provider.tools",{enabled:false,status:"invalid",issue:"verification failed",
+        marketplaceAction:"none"}),
+      builtin("sandbox.backend","io.mender.sandbox.docker","create.sandbox",{
+        enabled:false,status:"unavailable",issue:"Docker Engine not configured",
+      }),
     ]);
-    expect(models.find(x=>x.kind==="sandbox")?.actions).toEqual({enable:true,disable:false,remove:false});
-    expect(models.find(x=>x.kind==="tunnel")?.actions).toEqual({enable:false,disable:false,remove:false});
-    expect(models.find(x=>x.kind==="provider")?.createAction).toBeUndefined();
-    expect(models.find(x=>x.kind==="provider")?.status).toBe("degraded");
+    expect(models.find(x=>x.kind==="sandbox"&&x.source==="local")?.actions)
+      .toEqual({enable:true,disable:false,remove:false});
+    expect(models.find(x=>x.kind==="tunnel")?.actions)
+      .toEqual({enable:false,disable:false,remove:false});
+    const invalid=models.find(x=>x.kind==="provider");
+    expect(invalid).toMatchObject({status:"degraded",
+      actions:{enable:false,disable:false,remove:true}});
+    expect(invalid?.createAction).toBeUndefined();
+    const docker=models.find(x=>x.key==="io.mender.sandbox.docker@builtin");
+    expect(docker?.createAction).toBeUndefined();
+    expect(docker?.issue?.code).toBe("runtime_unavailable");
   });
 
-  it("keeps builtin entries inert and prevents unsafe install management",()=>{
-    const builtin=entry("tunnel.transport",{
-      key:"io.mender.tunnel.openai@builtin",pluginId:"io.mender.tunnel.openai",
-      sourceKind:"builtin",usageCount:0,
-    });
-    delete builtin.installationId;
-    const model=pluginCatalogueToMarketplace([builtin])[0];
-    expect(model?.actions).toEqual({enable:false,disable:false,remove:false});
-    expect(model?.createAction?.href).toBe("/tunnels?create=1&pluginId=io.mender.tunnel.openai");
-  });
-
-  it("shows the dormant Docker built-in without enabling unsafe creation",()=>{
-    const builtin=entry("sandbox.backend",{
-      key:"io.mender.sandbox.docker@builtin",
-      pluginId:"io.mender.sandbox.docker",
-      displayName:"Docker Engine",
-      sourceKind:"builtin",
-      status:"unavailable",
-      enabled:false,
-      usageCount:0,
-      issue:"Docker Engine is not configured",
-    });
-    delete builtin.installationId;
-    const result=pluginCatalogueToMarketplace([builtin])[0]!;
-    expect(result.status).toBe("unavailable");
-    expect(result.issue).toEqual({code:"runtime_unavailable",message:"Docker Engine is not configured"});
-    expect(result.createAction).toBeUndefined();
-    expect(result.actions).toEqual({enable:false,disable:false,remove:false});
-  });
-
-  it("maps all Sandbox picker entries into honest Marketplace actions",()=>{
-    const builtin=(pluginId:string, overrides:Partial<PluginCatalogueEntry>={}):PluginCatalogueEntry=>{
-      const base=entry("sandbox.backend",{
-        key:pluginId+"@builtin",pluginId,sourceKind:"builtin",
-        displayName:pluginId.split(".").at(-1)||pluginId,
-        enabled:true,status:"enabled",usageCount:0,
-      });
-      delete base.installationId;
-      return {...base,...overrides};
-    };
-    const preview=builtin("io.mender.sandbox.e2b",{
-      key:"io.mender.sandbox.e2b@planned",displayName:"E2B",
-      sourceKind:"planned",status:"planned",enabled:false,
-      packageVersion:"",capabilities:[],
-    });
-    delete preview.configVersion;
-    delete preview.protocolVersion;
+  it("keeps approved Sandbox options and rejects a missing implementation",()=>{
     const models=pluginCatalogueToMarketplace([
-      builtin("io.mender.sandbox.local-workspace",{displayName:"Local Workspace"}),
-      builtin("io.mender.sandbox.docker",{displayName:"Docker Engine"}),
-      builtin("io.mender.sandbox.daytona",{displayName:"Daytona",enabled:false,
-        status:"unavailable",issue:"Experimental Daytona disabled"}),
-      preview,
+      builtin("sandbox.backend","io.mender.sandbox.local-workspace","create.sandbox"),
+      builtin("sandbox.backend","io.mender.sandbox.ssh-remote","create.sandbox"),
+      builtin("sandbox.backend","io.mender.sandbox.daytona","create.sandbox",{enabled:false,status:"unavailable"}),
+      builtin("sandbox.backend","io.mender.sandbox.e2b","none"),
     ]);
-    expect(models).toHaveLength(4);
+    expect(models).toHaveLength(3);
+    expect(models.find(x=>x.key==="io.mender.sandbox.e2b@builtin")).toBeUndefined();
     expect(models.find(x=>x.key==="io.mender.sandbox.local-workspace@builtin")?.createAction?.href)
       .toBe("/sandboxes/new?create=1&pluginId=io.mender.sandbox.local-workspace");
-    expect(models.find(x=>x.key==="io.mender.sandbox.docker@builtin")?.createAction?.href)
-      .toBe("/sandboxes/new?create=1&pluginId=io.mender.sandbox.docker");
-    expect(models.find(x=>x.key==="io.mender.sandbox.daytona@builtin")?.createAction).toBeUndefined();
-    const planned=models.find(x=>x.key==="io.mender.sandbox.e2b@planned");
-    expect(planned).toMatchObject({
-      status:"planned",source:"planned",sourceLabel:"Roadmap",version:"Not released",
-      enabled:false,capabilities:[],actions:{enable:false,disable:false,remove:false},
-    });
-    expect(planned?.createAction).toBeUndefined();
-    expect(planned?.actionRef).toBeUndefined();
-    expect(planned?.issue).toBeUndefined();
-    const enabledDaytona=pluginCatalogueToMarketplace([
-      builtin("io.mender.sandbox.daytona",{displayName:"Daytona (experimental)"}),
-    ])[0]!;
-    expect(enabledDaytona.createAction?.href)
-      .toBe("/sandboxes/new?create=1&pluginId=io.mender.sandbox.daytona");
   });
 
-  it("uses stable cursor pagination",()=>{
+  it("offers AnySearch as a connection recipe, not another Provider installation",()=>{
+    const [item]=integrationOfferingsToMarketplace([anySearch]);
+    expect(item).toMatchObject({kind:"integration",source:"curated",status:"available",
+      actions:{enable:false,disable:false,remove:false},
+      createAction:{label:"Connect",href:"/providers?create=1&offeringId=io.mender.integration.anysearch"},
+    });
+    expect(item?.technicalDetails.find(x=>x.label==="Endpoint")?.value).toBe("https://api.anysearch.com/mcp");
+    expect(()=>integrationOfferingsToMarketplace([
+      {...anySearch,kind:"cloud-browser" as IntegrationOffering["kind"]},
+    ])).toThrow(/Unsupported reviewed/);
+  });
+
+  it("supports stable cursor pagination",()=>{
     const models=pluginCatalogueToMarketplace(
       Array.from({length:13},(_,i)=>entry("provider.tools",{
         pluginId:"dev.example.plugin-"+String(i).padStart(2,"0"),
         displayName:"Plugin "+String(i).padStart(2,"0"),
-        key:"dev.example.plugin-"+String(i).padStart(2,"0")+"@builtin",
+        key:"dev.example.plugin-"+String(i).padStart(2,"0")+"@"+id,
       })));
-    const page=marketplaceCursorPage(models,null,12);
-    expect(page.items).toHaveLength(12);
-    expect(marketplaceCursorPage(models,page.nextCursor,12).items).toHaveLength(1);
+    const first=marketplaceCursorPage(models,null,12);
+    expect(first.items).toHaveLength(12);
+    expect(marketplaceCursorPage(models,first.nextCursor,12).items).toHaveLength(1);
   });
 
-  it("loads exactly one canonical catalogue and dispatches generic installation actions",async()=>{
+  it("reads one catalogue and curated integrations without querying Tool Suites for sale",async()=>{
     const listPluginCatalogue=vi.fn().mockResolvedValue({plugins:[entry("sandbox.backend")]});
     const listIntegrationOfferings=vi.fn().mockResolvedValue({integrations:[anySearch]});
-    const listToolSuites=vi.fn().mockResolvedValue({suites:[]});
+    const listToolSuites=vi.fn();
     const disablePluginInstallation=vi.fn().mockResolvedValue({});
     const deletePluginInstallation=vi.fn().mockResolvedValue(undefined);
-    const client={
-      listPluginCatalogue,listIntegrationOfferings,listToolSuites,disablePluginInstallation,deletePluginInstallation,
-    } as unknown as MenderClient;
+    const client={listPluginCatalogue,listIntegrationOfferings,listToolSuites,
+      disablePluginInstallation,deletePluginInstallation} as unknown as MenderClient;
     const result=await loadMarketplacePlugins(client);
-    expect(listPluginCatalogue).toHaveBeenCalledTimes(1);
-    expect(listIntegrationOfferings).toHaveBeenCalledTimes(1);
-    expect(listToolSuites).toHaveBeenCalledTimes(1);
     expect(result).toHaveLength(2);
-    const sandbox=result.find(item=>item.kind==="sandbox")!;
+    expect(listPluginCatalogue).toHaveBeenCalledOnce();
+    expect(listIntegrationOfferings).toHaveBeenCalledOnce();
+    expect(listToolSuites).not.toHaveBeenCalled();
+    const sandbox=result.find(x=>x.kind==="sandbox")!;
     await setMarketplacePluginEnabled(client,sandbox,false);
     await removeMarketplacePlugin(client,sandbox);
     expect(disablePluginInstallation).toHaveBeenCalledWith(id);
     expect(deletePluginInstallation).toHaveBeenCalledWith(id);
   });
-
-  it("humanizes unknown ids without exposing full technical identifier",()=>{
+  it("humanizes technical names only as fallback",()=>{
     expect(humanizePluginId("dev.example.audit-exporter")).toBe("Audit Exporter");
   });
 });

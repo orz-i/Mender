@@ -17,28 +17,41 @@ import (
 	sandboxpluginregistry "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/pluginregistry"
 )
 
+// MarketplaceAction is a host-reviewed user resource creation contract, not
+// a plugin-supplied capability, permission or statement of runtime health.
+type MarketplaceAction string
+
+const (
+	MarketplaceNone           MarketplaceAction = "none"
+	MarketplaceCreateProvider MarketplaceAction = "create.provider"
+	MarketplaceCreateSandbox  MarketplaceAction = "create.sandbox"
+	MarketplaceCreateAgent    MarketplaceAction = "create.agent"
+	MarketplaceCreateTunnel   MarketplaceAction = "create.tunnel"
+)
+
 // PluginCatalogueEntry is an inert, host-reviewed projection of exactly one
 // built-in Extension or one exact installation; it never launches plugin code.
 type PluginCatalogueEntry struct {
-	Key             string              `json:"key"`
-	PluginID        string              `json:"pluginId"`
-	ExtensionID     string              `json:"extensionId"`
-	Kind            platformplugin.Kind `json:"kind"`
-	DisplayName     string              `json:"displayName"`
-	Description     string              `json:"description"`
-	PackageVersion  string              `json:"packageVersion"`
-	SourceKind      string              `json:"sourceKind"`
-	Status          string              `json:"status"`
-	Enabled         bool                `json:"enabled"`
-	InstallationID  string              `json:"installationId,omitempty"`
-	Digest          string              `json:"digest,omitempty"`
-	InstalledAt     string              `json:"installedAt,omitempty"`
-	ConfigVersion   uint32              `json:"configVersion,omitempty"`
-	ProtocolVersion uint32              `json:"protocolVersion,omitempty"`
-	ConfigSchema    json.RawMessage     `json:"configSchema,omitempty"`
-	Capabilities    []string            `json:"capabilities"`
-	UsageCount      int                 `json:"usageCount"`
-	Issue           string              `json:"issue,omitempty"`
+	Key               string              `json:"key"`
+	PluginID          string              `json:"pluginId"`
+	ExtensionID       string              `json:"extensionId"`
+	Kind              platformplugin.Kind `json:"kind"`
+	MarketplaceAction MarketplaceAction   `json:"marketplaceAction"`
+	DisplayName       string              `json:"displayName"`
+	Description       string              `json:"description"`
+	PackageVersion    string              `json:"packageVersion"`
+	SourceKind        string              `json:"sourceKind"`
+	Status            string              `json:"status"`
+	Enabled           bool                `json:"enabled"`
+	InstallationID    string              `json:"installationId,omitempty"`
+	Digest            string              `json:"digest,omitempty"`
+	InstalledAt       string              `json:"installedAt,omitempty"`
+	ConfigVersion     uint32              `json:"configVersion,omitempty"`
+	ProtocolVersion   uint32              `json:"protocolVersion,omitempty"`
+	ConfigSchema      json.RawMessage     `json:"configSchema,omitempty"`
+	Capabilities      []string            `json:"capabilities"`
+	UsageCount        int                 `json:"usageCount"`
+	Issue             string              `json:"issue,omitempty"`
 }
 
 func pluginEntry(descriptor platformplugin.Descriptor, kind string, installation *installationdomain.Installation, usage int) PluginCatalogueEntry {
@@ -47,7 +60,8 @@ func pluginEntry(descriptor platformplugin.Descriptor, kind string, installation
 	enabled := true
 	result := PluginCatalogueEntry{
 		Key: key, PluginID: descriptor.PluginID.String(), ExtensionID: descriptor.Extension.ID.String(),
-		Kind: descriptor.Extension.Kind, DisplayName: descriptor.DisplayName,
+		Kind: descriptor.Extension.Kind, MarketplaceAction: reviewedMarketplaceAction(descriptor, installation != nil),
+		DisplayName: descriptor.DisplayName,
 		Description: descriptor.Description, PackageVersion: descriptor.PackageVersion,
 		SourceKind: kind, Status: status, Enabled: enabled,
 		ConfigVersion: descriptor.ConfigVersion, ProtocolVersion: descriptor.Extension.ProtocolVersion,
@@ -66,6 +80,42 @@ func pluginEntry(descriptor platformplugin.Descriptor, kind string, installation
 		result.Capabilities = []string{}
 	}
 	return result
+}
+
+// Only supported installed extension contracts or exact built-in identities
+// may lead to a resource create flow. Descriptive capabilities are not input.
+func reviewedMarketplaceAction(descriptor platformplugin.Descriptor, installed bool) MarketplaceAction {
+	if installed {
+		switch descriptor.Extension.Kind {
+		case platformplugin.ProviderTools:
+			return MarketplaceCreateProvider
+		case platformplugin.SandboxBackend:
+			return MarketplaceCreateSandbox
+		case platformplugin.TunnelTransport:
+			return MarketplaceCreateTunnel
+		default:
+			return MarketplaceNone // no external Agent driver runtime/installer
+		}
+	}
+	switch descriptor.PluginID.String() {
+	case "io.mender.provider.mcp", "io.mender.provider.model-tools", "io.mender.provider.openapi":
+		if descriptor.Extension.Kind == platformplugin.ProviderTools {
+			return MarketplaceCreateProvider
+		}
+	case "io.mender.sandbox.local-workspace", "io.mender.sandbox.docker", "io.mender.sandbox.daytona", "io.mender.sandbox.ssh-remote":
+		if descriptor.Extension.Kind == platformplugin.SandboxBackend {
+			return MarketplaceCreateSandbox
+		}
+	case "io.mender.agent.codex", "io.mender.agent.grok":
+		if descriptor.Extension.Kind == platformplugin.AgentBackend {
+			return MarketplaceCreateAgent
+		}
+	case "io.mender.tunnel.openai":
+		if descriptor.Extension.Kind == platformplugin.TunnelTransport {
+			return MarketplaceCreateTunnel
+		}
+	}
+	return MarketplaceNone
 }
 
 func (r *Runtime) ListPluginCatalogue(ctx context.Context) ([]PluginCatalogueEntry, error) {
@@ -187,16 +237,6 @@ func (r *Runtime) ListPluginCatalogue(ctx context.Context) ([]PluginCatalogueEnt
 		item.Issue = r.Sandboxes.DaytonaStatus()
 		result = append(result, item)
 	}
-	// E2B is only a product roadmap preview, not an installed extension:
-	// a distinct @planned identity and source MUST NOT enter the Registry
-	// or acquire a Sandbox, even through an exact PluginID request.
-	result = append(result, PluginCatalogueEntry{
-		Key: "io.mender.sandbox.e2b@planned", PluginID: "io.mender.sandbox.e2b",
-		ExtensionID: "main", Kind: platformplugin.SandboxBackend,
-		DisplayName: "E2B", Description: "Planned Sandbox backend; not implemented or available for provisioning",
-		SourceKind: "planned", Status: "planned", Enabled: false,
-		Capabilities: []string{}, UsageCount: 0,
-	})
 	// Agent backends are configured resources and do not produce Tools by
 	// themselves. The marketplace snapshot checks only executable existence;
 	// it never starts an Agent, probes accounts or imports session secrets.
@@ -244,6 +284,7 @@ func (r *Runtime) ListPluginCatalogue(ctx context.Context) ([]PluginCatalogueEnt
 			entry.Issue = "No verified extension descriptor; package is unavailable until explicitly verified"
 			entry.Status = "invalid"
 			entry.Enabled = false
+			entry.MarketplaceAction = MarketplaceNone
 		}
 		result = append(result, entry)
 	}

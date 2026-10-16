@@ -585,7 +585,8 @@ func (s *Service) ListPluginCatalogue() (PluginCatalogueList, error) {
 		}
 		result = append(result, PluginCatalogueEntry{
 			Key: entry.Key, PluginID: entry.PluginID, ExtensionID: entry.ExtensionID, Kind: string(entry.Kind),
-			DisplayName: entry.DisplayName, Description: entry.Description, PackageVersion: entry.PackageVersion,
+			MarketplaceAction: string(entry.MarketplaceAction),
+			DisplayName:       entry.DisplayName, Description: entry.Description, PackageVersion: entry.PackageVersion,
 			SourceKind: entry.SourceKind, Status: entry.Status, Enabled: entry.Enabled,
 			InstallationID: entry.InstallationID, Digest: entry.Digest, InstalledAt: entry.InstalledAt,
 			ConfigVersion: entry.ConfigVersion, ProtocolVersion: entry.ProtocolVersion, ConfigSchema: schema,

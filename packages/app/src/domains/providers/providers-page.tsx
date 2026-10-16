@@ -67,7 +67,6 @@ import {
   MODEL_TOOLS_PLUGIN_ID,
   OPENAPI_PLUGIN_ID,
   WORKSPACE_PLUGIN_ID,
-  AGENT_DELEGATION_PLUGIN_ID,
   isInternalProvider,
   type ProviderFormState,
   providerRenderer,
@@ -227,13 +226,11 @@ export function ProvidersPage({
     remainingSearchParams.delete("create");
     remainingSearchParams.delete("pluginId");
     remainingSearchParams.delete("installationId");
-    remainingSearchParams.delete("agentId");
     remainingSearchParams.delete("offeringId");
     return {
       requested: searchParams.get("create") === "1",
       pluginId: searchParams.get("pluginId"),
       installationId: searchParams.get("installationId") ?? "",
-      agentId: searchParams.get("agentId") ?? "",
       offeringId: searchParams.get("offeringId") ?? "",
       remainingSearchParams,
     };
@@ -346,18 +343,13 @@ export function ProvidersPage({
                       (candidate.installationId ?? "") ===
                         createRequest.installationId,
                   );
-            if (plugin === undefined) {
+            if (plugin === undefined || isInternalProvider(plugin.pluginId)) {
+              // Resource-owned Tool Suites must be prepared on their Agent or
+              // Sandbox; a generic Provider deep link is never that authority.
               setError(t("The requested item was not found."));
             } else {
               setError("");
-              const base=formForProviderPlugin(emptyProviderForm, plugin);
-              const fromAgent=plugin.pluginId===AGENT_DELEGATION_PLUGIN_ID &&
-                /^agent_[0-9a-f]{32}$/.test(createRequest.agentId);
-              setCreateForm(fromAgent?{
-                ...base,namespace:"agent-"+createRequest.agentId.slice(-8),
-                displayName:"Agent Delegation",
-                genericConfig:{agentId:createRequest.agentId},
-              }:base);
+              setCreateForm(formForProviderPlugin(emptyProviderForm, plugin));
               setPluginPickerOpen(false);
               setCreateCanReturnToPicker(false);
               setCreateOpen(true);
@@ -910,7 +902,7 @@ export function ProvidersPage({
 
       <ProviderPluginPickerDialog
         open={pluginPickerOpen}
-        plugins={showInternal ? providerPlugins : providerPlugins.filter(plugin => !isInternalProvider(plugin.pluginId))}
+        plugins={providerPlugins.filter(plugin => !isInternalProvider(plugin.pluginId))}
         onOpenChange={setPluginPickerOpen}
         onSelect={chooseCreatePlugin}
       />

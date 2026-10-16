@@ -2029,17 +2029,18 @@ components:
         sourceUrl: { type: string, format: uri }
     PluginCatalogueEntry:
       type: object
-      required: [key, pluginId, extensionId, kind, displayName, description, packageVersion, sourceKind, status, enabled, capabilities, usageCount]
+      required: [key, pluginId, extensionId, kind, marketplaceAction, displayName, description, packageVersion, sourceKind, status, enabled, capabilities, usageCount]
       properties:
         key: { type: string }
         pluginId: { type: string }
         extensionId: { type: string }
         kind: { type: string, enum: [provider.tools, sandbox.backend, tunnel.transport, agent.backend] }
+        marketplaceAction: { type: string, enum: [none, create.provider, create.sandbox, create.agent, create.tunnel] }
         displayName: { type: string }
         description: { type: string }
         packageVersion: { type: string }
-        sourceKind: { type: string, enum: [builtin, local, planned] }
-        status: { type: string, enum: [enabled, disabled, invalid, unavailable, planned] }
+        sourceKind: { type: string, enum: [builtin, local] }
+        status: { type: string, enum: [enabled, disabled, invalid, unavailable] }
         enabled: { type: boolean }
         capabilities:
           type: array

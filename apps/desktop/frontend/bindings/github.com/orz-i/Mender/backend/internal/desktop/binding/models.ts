@@ -268,6 +268,7 @@ export interface PluginCatalogueEntry {
     "pluginId": string;
     "extensionId": string;
     "kind": string;
+    "marketplaceAction": string;
     "displayName": string;
     "description": string;
     "packageVersion": string;

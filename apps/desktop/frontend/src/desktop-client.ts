@@ -1040,18 +1040,10 @@ function providerPluginUISchema(
 
 function pluginCatalogueEntry(value:BindingPluginCatalogueEntry):PluginCatalogueEntry {
   if(!["provider.tools","sandbox.backend","tunnel.transport","agent.backend"].includes(value.kind) ||
-     !["builtin","local","planned"].includes(value.sourceKind) ||
-     !["enabled","disabled","invalid","unavailable","planned"].includes(value.status)){
-    throw new MenderClientInvariantError("Unsupported typed plugin catalogue entry");
-  }
-  // A planned Marketplace preview is inert metadata, never an executable
-  // built-in or a forged installed package. Fail closed on mismatched shapes.
-  const planned=value.sourceKind==="planned";
-  if(planned!==(value.status==="planned") ||
-     (planned && (value.enabled || Boolean(value.installationId) ||
-       Boolean(value.digest) || value.packageVersion!=="" ||
-       (value.capabilities?.length??0)!==0))){
-    throw new MenderClientInvariantError("Unsupported planned plugin catalogue state");
+     !["builtin","local"].includes(value.sourceKind) ||
+     !["enabled","disabled","invalid","unavailable"].includes(value.status) ||
+     !["none","create.provider","create.sandbox","create.agent","create.tunnel"].includes(value.marketplaceAction)){
+    throw new MenderClientInvariantError("Unsupported typed plugin catalogue entry or Marketplace action");
   }
   const schema:unknown=value.configSchema;
   if(schema!==undefined && typeof schema!=="boolean" &&
@@ -1060,7 +1052,8 @@ function pluginCatalogueEntry(value:BindingPluginCatalogueEntry):PluginCatalogue
   }
   return {
     key:value.key,pluginId:value.pluginId,extensionId:value.extensionId,
-    kind:value.kind as PluginCatalogueEntry["kind"],displayName:value.displayName,
+    kind:value.kind as PluginCatalogueEntry["kind"],marketplaceAction:value.marketplaceAction as PluginCatalogueEntry["marketplaceAction"],
+    displayName:value.displayName,
     description:value.description,packageVersion:value.packageVersion,
     sourceKind:value.sourceKind as PluginCatalogueEntry["sourceKind"],
     status:value.status as PluginCatalogueEntry["status"],

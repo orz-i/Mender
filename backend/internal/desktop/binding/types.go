@@ -248,25 +248,26 @@ type CredentialEnvironment struct {
 
 // PluginCatalogueEntry mirrors the inert all-kind management catalogue.
 type PluginCatalogueEntry struct {
-	Key             string   `json:"key"`
-	PluginID        string   `json:"pluginId"`
-	ExtensionID     string   `json:"extensionId"`
-	Kind            string   `json:"kind"`
-	DisplayName     string   `json:"displayName"`
-	Description     string   `json:"description"`
-	PackageVersion  string   `json:"packageVersion"`
-	SourceKind      string   `json:"sourceKind"`
-	Status          string   `json:"status"`
-	Enabled         bool     `json:"enabled"`
-	InstallationID  string   `json:"installationId,omitempty"`
-	Digest          string   `json:"digest,omitempty"`
-	InstalledAt     string   `json:"installedAt,omitempty"`
-	ConfigVersion   uint32   `json:"configVersion,omitempty"`
-	ProtocolVersion uint32   `json:"protocolVersion,omitempty"`
-	ConfigSchema    any      `json:"configSchema,omitempty"`
-	Capabilities    []string `json:"capabilities"`
-	UsageCount      int      `json:"usageCount"`
-	Issue           string   `json:"issue,omitempty"`
+	Key               string   `json:"key"`
+	PluginID          string   `json:"pluginId"`
+	ExtensionID       string   `json:"extensionId"`
+	Kind              string   `json:"kind"`
+	MarketplaceAction string   `json:"marketplaceAction"`
+	DisplayName       string   `json:"displayName"`
+	Description       string   `json:"description"`
+	PackageVersion    string   `json:"packageVersion"`
+	SourceKind        string   `json:"sourceKind"`
+	Status            string   `json:"status"`
+	Enabled           bool     `json:"enabled"`
+	InstallationID    string   `json:"installationId,omitempty"`
+	Digest            string   `json:"digest,omitempty"`
+	InstalledAt       string   `json:"installedAt,omitempty"`
+	ConfigVersion     uint32   `json:"configVersion,omitempty"`
+	ProtocolVersion   uint32   `json:"protocolVersion,omitempty"`
+	ConfigSchema      any      `json:"configSchema,omitempty"`
+	Capabilities      []string `json:"capabilities"`
+	UsageCount        int      `json:"usageCount"`
+	Issue             string   `json:"issue,omitempty"`
 }
 type PluginCatalogueList struct {
 	Plugins []PluginCatalogueEntry `json:"plugins"`

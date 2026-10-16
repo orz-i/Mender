@@ -6,13 +6,12 @@ import {
   ChevronRightIcon,
   PackagePlusIcon,
   RefreshCwIcon,
-  Settings2Icon,
   PlusIcon,
   PowerIcon,
   PowerOffIcon,
   Trash2Icon,
 } from "lucide-react";
-import { Link, useNavigate, useParams } from "react-router";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 
 import type { MenderClient } from "@mender/sdk";
 import { Badge } from "@mender/ui/components/badge";
@@ -58,10 +57,6 @@ type StatusFilter = "all" | MarketplacePluginStatus;
 type KindFilter = string;
 
 const MARKETPLACE_PAGE_SIZE = 12;
-const FOUNDATIONAL_PROVIDER_DRIVERS = new Set([
-  "io.mender.provider.mcp","io.mender.provider.openapi",
-  "io.mender.provider.model-tools","io.mender.provider.workspace",
-]);
 
 export function PluginsPage({
   client,
@@ -72,9 +67,12 @@ export function PluginsPage({
 }) {
   const { plugins, loaded, error, setError, refresh } =
     useMarketplacePlugins(client);
+  const [searchParams] = useSearchParams();
+  const [view,setView] = useState<"discover"|"installed">(
+    ()=>searchParams.get("view")==="installed"?"installed":"discover"
+  );
   const [busy, setBusy] = useState("");
   const [query, setQuery] = useState("");
-  const [showFoundationDrivers, setShowFoundationDrivers] = useState(false);
   const [kindFilter, setKindFilter] = useState<KindFilter>("all");
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
@@ -82,33 +80,35 @@ export function PluginsPage({
     null,
   ]);
 
+  const scopedPlugins = useMemo(() => plugins.filter(plugin =>
+    view==="discover" ? plugin.createAction!==undefined : plugin.actionRef!==undefined
+  ),[plugins,view]);
+
   const kindOptions = useMemo(() => {
     const labelsByKind = new Map<string, string>();
-    for (const plugin of plugins) {
+    for (const plugin of scopedPlugins) {
       labelsByKind.set(plugin.kind, plugin.kindLabel);
     }
     return [
       { value: "all", label: "All plugin types" },
       ...Array.from(labelsByKind, ([value, label]) => ({ value, label })),
     ];
-  }, [plugins]);
+  }, [scopedPlugins]);
 
   const sourceOptions = useMemo(() => {
     const labelsBySource = new Map<string, string>();
-    for (const plugin of plugins) {
+    for (const plugin of scopedPlugins) {
       labelsBySource.set(plugin.source, plugin.sourceLabel);
     }
     return [
       { value: "all", label: "All plugin sources" },
       ...Array.from(labelsBySource, ([value, label]) => ({ value, label })),
     ];
-  }, [plugins]);
+  }, [scopedPlugins]);
 
   const visiblePlugins = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase();
-    return plugins.filter((plugin) => {
-      if(!showFoundationDrivers && plugin.source==="builtin" &&
-        plugin.kind==="provider" && FOUNDATIONAL_PROVIDER_DRIVERS.has(plugin.key.split("@")[0]!))return false;
+    return scopedPlugins.filter((plugin) => {
       const matchesQuery =
         normalized === "" ||
         plugin.displayName.toLocaleLowerCase().includes(normalized) ||
@@ -121,7 +121,7 @@ export function PluginsPage({
         statusFilter === "all" || plugin.status === statusFilter;
       return matchesQuery && matchesKind && matchesSource && matchesStatus;
     });
-  }, [kindFilter, plugins, query, sourceFilter, statusFilter, showFoundationDrivers]);
+  }, [kindFilter, scopedPlugins, query, sourceFilter, statusFilter]);
 
   const cursor = cursorHistory.at(-1) ?? null;
   const page = useMemo(
@@ -151,6 +151,19 @@ export function PluginsPage({
   return (
     <>
       <PageToolbar
+        tabs={<FocusSwitch
+          label="Marketplace view"
+          value={view}
+          onChange={(next)=>{
+            setView(next);
+            setKindFilter("all");setSourceFilter("all");setStatusFilter("all");
+            setQuery("");setCursorHistory([null]);
+          }}
+          items={[
+            {value:"discover",label:"Discover"},
+            {value:"installed",label:"Installed plugins"},
+          ]}
+        />}
         filters={
           <>
             <div className="w-full min-w-0 sm:w-48 sm:shrink-0">
@@ -205,7 +218,6 @@ export function PluginsPage({
                   { value: "available", label: "Available" },
                   { value: "disabled", label: "Disabled" },
                   { value: "unavailable", label: "Unavailable" },
-                  { value: "planned", label: "Planned" },
                   { value: "degraded", label: "Degraded" },
                   { value: "invalid", label: "Invalid" },
                 ]}
@@ -215,15 +227,11 @@ export function PluginsPage({
         }
         actions={
           <>
-            <IconButton type="button" variant="outline" label={t(showFoundationDrivers ? "Hide foundation drivers" : "Show foundation drivers")}
-              onClick={()=>{setShowFoundationDrivers(value=>!value);setCursorHistory([null]);}}>
-              <Settings2Icon />
-            </IconButton>
             <Button type="button" variant="outline" size="sm" disabled={busy !== ""} onClick={() => void refresh()}>
               <RefreshCwIcon data-icon="inline-start" />
               {t("Refresh")}
             </Button>
-            {installers.map((installer) => (
+            {view==="installed" && installers.map((installer) => (
               <Button key={installer.key} type="button" size="sm" disabled={busy !== ""} onClick={() => void installPlugin(installer)}>
                 <PackagePlusIcon data-icon="inline-start" />
                 {t(busy === "install:" + installer.key ? installer.pendingLabel : installer.label)}
@@ -235,7 +243,7 @@ export function PluginsPage({
 
       {error ? <ErrorNotice message={error} /> : null}
 
-      <ResultPanel title="Plugin catalog">
+      <ResultPanel title={view==="discover"?"Plugin catalog":"Installed plugins"}>
         {!loaded ? (
           <div className="px-4 py-12 text-center text-sm text-muted-foreground">
             {t("Loading plugins…")}
@@ -244,7 +252,7 @@ export function PluginsPage({
           <div className="p-4">
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {page.items.map((plugin) => (
-                <PluginCard key={plugin.key} plugin={plugin} />
+                <PluginCard key={plugin.key} plugin={plugin} view={view} />
               ))}
             </div>
           </div>
@@ -283,6 +291,8 @@ export function PluginsPage({
 
 export function PluginDetailPage({ client }: { client: MenderClient }) {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const backPath=searchParams.get("view")==="installed"?"/plugins?view=installed":"/plugins";
   const { pluginKey = "" } = useParams();
   const { plugins, loaded, error, setError, refresh } =
     useMarketplacePlugins(client);
@@ -314,7 +324,7 @@ export function PluginDetailPage({ client }: { client: MenderClient }) {
     try {
       await removeMarketplacePlugin(client, current);
       setRemoveTarget(null);
-      void navigate("/plugins", { replace: true });
+      void navigate("/plugins?view=installed", { replace: true });
     } catch (reason) {
       setError(errorMessage(reason));
     } finally {
@@ -342,7 +352,7 @@ export function PluginDetailPage({ client }: { client: MenderClient }) {
             <Button
               type="button"
               variant="outline"
-              onClick={() => void navigate("/plugins")}
+              onClick={() => void navigate(backPath)}
             >
               <ArrowLeftIcon data-icon="inline-start" />
               {t("Back")}
@@ -588,10 +598,10 @@ function useMarketplacePlugins(client: MenderClient) {
   };
 }
 
-function PluginCard({ plugin }: { plugin: MarketplacePlugin }) {
+function PluginCard({ plugin,view }: { plugin: MarketplacePlugin; view:"discover"|"installed" }) {
   return (
     <Link
-      to={`/plugins/${encodeURIComponent(plugin.key)}`}
+      to={`/plugins/${encodeURIComponent(plugin.key)}?view=${view}`}
       aria-label={t("View {{plugin}}", {
         plugin: plugin.displayName,
       })}
@@ -756,8 +766,6 @@ function pluginSourceLabel(plugin: MarketplacePlugin) {
       return t("Built-in");
     case "local":
       return t("Local package");
-    case "planned":
-      return t("Roadmap");
     default:
       return plugin.sourceLabel;
   }
@@ -777,20 +785,15 @@ function pluginStatusLabel(plugin: MarketplacePlugin) {
       return t("Degraded");
     case "unavailable":
       return t("Unavailable");
-    case "planned":
-      return t("Planned");
   }
 }
 
 function pluginVersionLabel(plugin: MarketplacePlugin) {
   return plugin.version === "Not released" ? t("Not released") :
     plugin.version === "Reviewed preset" ? t("Reviewed preset") :
-    plugin.version === "Reviewed suite" ? t("Reviewed suite") : plugin.version;
+    plugin.version;
 }
 
 function pluginDescription(plugin: MarketplacePlugin) {
-  if (plugin.key === "io.mender.sandbox.e2b@planned") {
-    return t("Planned Sandbox backend; not implemented or available for provisioning");
-  }
   return plugin.description;
 }

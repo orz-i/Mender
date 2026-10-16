@@ -1655,13 +1655,15 @@ export interface components {
             extensionId: string;
             /** @enum {string} */
             kind: "provider.tools" | "sandbox.backend" | "tunnel.transport" | "agent.backend";
+            /** @enum {string} */
+            marketplaceAction: "none" | "create.provider" | "create.sandbox" | "create.agent" | "create.tunnel";
             displayName: string;
             description: string;
             packageVersion: string;
             /** @enum {string} */
-            sourceKind: "builtin" | "local" | "planned";
+            sourceKind: "builtin" | "local";
             /** @enum {string} */
-            status: "enabled" | "disabled" | "invalid" | "unavailable" | "planned";
+            status: "enabled" | "disabled" | "invalid" | "unavailable";
             enabled: boolean;
             capabilities: string[];
             usageCount: number;

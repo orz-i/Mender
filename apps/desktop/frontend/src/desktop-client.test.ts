@@ -206,11 +206,11 @@ describe("desktop Mender client", () => {
   it("uses one typed Wails catalogue for all extension kinds",async()=>{
     vi.mocked(Service.ListPluginCatalogue).mockResolvedValue({plugins:[
       {key:"io.mender.tunnel.openai@builtin",pluginId:"io.mender.tunnel.openai",extensionId:"main",
-        kind:"tunnel.transport",displayName:"OpenAI Secure MCP Tunnel",description:"Internal",
+        kind:"tunnel.transport",marketplaceAction:"create.tunnel",displayName:"OpenAI Secure MCP Tunnel",description:"Internal",
         packageVersion:"1.0.0",sourceKind:"builtin",status:"enabled",enabled:true,
         capabilities:["managed-loopback-mcp"],usageCount:0},
       {key:"dev.example.sandbox@pinst_0123456789abcdef0123456789abcdef",
-        pluginId:"dev.example.sandbox",extensionId:"main",kind:"sandbox.backend",
+        pluginId:"dev.example.sandbox",extensionId:"main",kind:"sandbox.backend",marketplaceAction:"create.sandbox",
         displayName:"Example Sandbox",description:"Fixture",packageVersion:"1.0.0",
         sourceKind:"local",status:"enabled",enabled:true,
         installationId:"pinst_0123456789abcdef0123456789abcdef",
@@ -226,6 +226,8 @@ describe("desktop Mender client", () => {
   it("accepts the Phase 33 Agent Backends alongside all previous Wails marketplace extension kinds",async()=>{
     const builtin=(pluginId:string,kind:string,overrides:Record<string,unknown>={})=>({
       key:pluginId+"@builtin",pluginId,extensionId:"main",kind,
+      marketplaceAction:kind==="provider.tools"?"create.provider":kind==="sandbox.backend"?"create.sandbox":
+        kind==="tunnel.transport"?"create.tunnel":"create.agent",
       displayName:pluginId,description:"Host-reviewed built-in extension",
       packageVersion:"1.0.0",sourceKind:"builtin",status:"enabled",
       enabled:true,capabilities:[],usageCount:0,configVersion:1,protocolVersion:1,
@@ -243,10 +245,6 @@ describe("desktop Mender client", () => {
       builtin("io.mender.sandbox.local-workspace","sandbox.backend"),
       builtin("io.mender.tunnel.openai","tunnel.transport"),
       codex,grok,
-      {key:"io.mender.sandbox.e2b@planned",pluginId:"io.mender.sandbox.e2b",
-        extensionId:"main",kind:"sandbox.backend",displayName:"E2B",
-        description:"Roadmap only",packageVersion:"",sourceKind:"planned",
-        status:"planned",enabled:false,capabilities:[],usageCount:0},
     ];
     vi.mocked(Service.ListPluginCatalogue).mockResolvedValue({plugins:entries});
     const result=await createDesktopMenderClient().listPluginCatalogue();
@@ -266,7 +264,7 @@ describe("desktop Mender client", () => {
   it("rejects genuinely unrecognized Wails extension kinds, rather than treating them as Agent plugins",async()=>{
     vi.mocked(Service.ListPluginCatalogue).mockResolvedValue({plugins:[{
       key:"io.mender.agent.unknown@builtin",pluginId:"io.mender.agent.unknown",
-      extensionId:"main",kind:"agent.unknown",displayName:"Unknown Agent",
+      extensionId:"main",kind:"agent.unknown",marketplaceAction:"none",displayName:"Unknown Agent",
       description:"Unexpected new kind",packageVersion:"1.0.0",
       sourceKind:"builtin",status:"enabled",enabled:true,
       capabilities:[],usageCount:0,
@@ -275,25 +273,19 @@ describe("desktop Mender client", () => {
       .rejects.toBeInstanceOf(MenderClientInvariantError);
   });
 
-  it("accepts roadmap-only E2B while rejecting executable planned plugin claims",async()=>{
-    const planned={
-      key:"io.mender.sandbox.e2b@planned",
-      pluginId:"io.mender.sandbox.e2b",extensionId:"main",kind:"sandbox.backend",
-      displayName:"E2B",description:"Planned Sandbox backend",
+  it("rejects roadmap-only entries and missing host-reviewed actions from Wails",async()=>{
+    const fixture={
+      key:"io.mender.sandbox.e2b@builtin",pluginId:"io.mender.sandbox.e2b",
+      extensionId:"main",kind:"sandbox.backend",marketplaceAction:"none",
+      displayName:"E2B",description:"Not an installed backend",
       packageVersion:"",sourceKind:"planned",status:"planned",
       enabled:false,capabilities:[],usageCount:0,
     };
-    vi.mocked(Service.ListPluginCatalogue).mockResolvedValue({plugins:[planned]});
-    await expect(createDesktopMenderClient().listPluginCatalogue()).resolves.toEqual({
-      plugins:[planned],
-    });
-    vi.mocked(Service.ListPluginCatalogue).mockResolvedValue({
-      plugins:[{...planned,enabled:true}],
-    });
+    vi.mocked(Service.ListPluginCatalogue).mockResolvedValue({plugins:[fixture]});
     await expect(createDesktopMenderClient().listPluginCatalogue())
       .rejects.toBeInstanceOf(MenderClientInvariantError);
     vi.mocked(Service.ListPluginCatalogue).mockResolvedValue({
-      plugins:[{...planned,status:"enabled"}],
+      plugins:[{...fixture,sourceKind:"builtin",status:"unavailable",marketplaceAction:"forged.create"}],
     });
     await expect(createDesktopMenderClient().listPluginCatalogue())
       .rejects.toBeInstanceOf(MenderClientInvariantError);
@@ -313,7 +305,7 @@ describe("desktop Mender client", () => {
     const docker={
       key:"io.mender.sandbox.docker@builtin",
       pluginId:"io.mender.sandbox.docker",extensionId:"main",
-      kind:"sandbox.backend",displayName:"Docker Engine",
+      kind:"sandbox.backend",marketplaceAction:"create.sandbox",displayName:"Docker Engine",
       description:"Trusted opt-in Docker Engine backend",
       packageVersion:"1.0.0",sourceKind:"builtin",
       status:"unavailable",enabled:false,
@@ -332,7 +324,7 @@ describe("desktop Mender client", () => {
     vi.mocked(Service.ListPluginCatalogue).mockResolvedValue({plugins:[{
       key:"io.mender.sandbox.docker@builtin",
       pluginId:"io.mender.sandbox.docker",extensionId:"main",
-      kind:"sandbox.backend",displayName:"Docker Engine",description:"Docker",
+      kind:"sandbox.backend",marketplaceAction:"create.sandbox",displayName:"Docker Engine",description:"Docker",
       packageVersion:"1.0.0",sourceKind:"builtin",
       status:"unsupported_future_status",enabled:false,
       capabilities:[],usageCount:0,
