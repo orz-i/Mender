@@ -114,9 +114,9 @@ export function SandboxActivityPage({ client }: { client: MenderClient }) {
               ))}
             </TableBody>
           </Table>
-          <div className="px-4 pb-3"><TablePagination label={t("Events")} pagination={pagination}/></div>
         </>}
     </ResultPanel>
+    <TablePagination label={t("Events")} pagination={pagination} />
   </>;
 }
 

@@ -403,12 +403,6 @@ export function PolicyPage({ client }: { client: MenderClient }) {
                 ))}
               </TableBody>
               </Table>
-              <div className="px-4 pb-3">
-                <TablePagination
-                  label="Policy rules"
-                  pagination={rulePagination}
-                />
-              </div>
             </>
           ) : (
             <EmptyPanelState>
@@ -419,6 +413,11 @@ export function PolicyPage({ client }: { client: MenderClient }) {
             </EmptyPanelState>
           )}
       </ResultPanel>
+
+      <TablePagination
+        label="Policy rules"
+        pagination={rulePagination}
+      />
 
       <Dialog open={defaultOpen} onOpenChange={setDefaultOpen}>
         <DialogContent className="sm:max-w-lg">

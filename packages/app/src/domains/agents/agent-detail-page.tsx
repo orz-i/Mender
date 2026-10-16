@@ -185,7 +185,7 @@ export function AgentDetailPage({client}:{client:MenderClient}){
       </TableRow>)}</TableBody></Table>:
       <EmptyPanelState><EmptyState title="No Agent tools" description="Prepare Agent tools to make them available for explicit Profile selection."/></EmptyPanelState>}
     </ResultPanel>:
-    topic==="tasks"?<ResultPanel title="Agent tasks">
+    topic==="tasks"?<><ResultPanel title="Agent tasks">
       {tasks.length?<><Table><TableHeader><TableRow>
         <TableHead>{t("Task")}</TableHead><TableHead>{t("Status")}</TableHead>
         <TableHead>{t("Created at")}</TableHead><TableHead className="text-right">{t("Actions")}</TableHead>
@@ -199,9 +199,10 @@ export function AgentDetailPage({client}:{client:MenderClient}){
             <Button size="sm" variant="outline" disabled={task.cancelRequested}
               onClick={()=>setConfirm({kind:"cancel",id:task.taskId})}>{t("Cancel task")}</Button>:null}
         </TableCell>
-      </TableRow>)}</TableBody></Table><div className="px-4 pb-3"><TablePagination label="Tasks" pagination={pagination}/></div></>
+      </TableRow>)}</TableBody></Table></>
       :<EmptyPanelState><EmptyState title="No Agent tasks" description="Delegated task history will appear here."/></EmptyPanelState>}
-    </ResultPanel>:
+    </ResultPanel>
+    {pagination.total > 0 ? <TablePagination label="Tasks" pagination={pagination}/> : null}</>:
     topic==="activity"?<ResultPanel title="Agent activity">
       {activity.length?<Table><TableHeader><TableRow>
         <TableHead>{t("Time")}</TableHead>

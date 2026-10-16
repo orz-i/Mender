@@ -385,12 +385,6 @@ export function ServersPage({
                 ))}
               </TableBody>
               </Table>
-              <div className="px-4 pb-3">
-                <TablePagination
-                  label="Servers"
-                  pagination={serverPagination}
-                />
-              </div>
             </>
           ) : (
             <EmptyPanelState>
@@ -405,6 +399,11 @@ export function ServersPage({
             </EmptyPanelState>
           )}
       </ResultPanel>
+
+      <TablePagination
+        label="Servers"
+        pagination={serverPagination}
+      />
 
       <Dialog
         open={startOpen}

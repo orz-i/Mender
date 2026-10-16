@@ -338,12 +338,6 @@ export function AuditPage({ client }: { client: MenderClient }) {
                 ))}
               </TableBody>
             </Table>
-            <div className="px-5 pb-4">
-              <TablePagination
-                label={topic === "invocations" ? "Audit" : "Provider activations"}
-                pagination={activePagination}
-              />
-            </div>
           </>
         ) : (
           <div className="px-5 py-5">
@@ -365,6 +359,11 @@ export function AuditPage({ client }: { client: MenderClient }) {
           </div>
         )}
       </ResultPanel>
+
+      <TablePagination
+        label={topic === "invocations" ? "Audit" : "Provider activations"}
+        pagination={activePagination}
+      />
 
       <AuditDetailDialog
         selection={selected}

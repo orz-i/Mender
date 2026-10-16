@@ -83,11 +83,11 @@ export function AgentsPage({ client }: { client: MenderClient }) {
               onClick={()=>void navigate("/agents/"+a.agentId)}>{t("View")}</Button></TableCell>
           </TableRow>)}</TableBody>
         </Table>
-        <div className="px-4 pb-3"><TablePagination label="Agents" pagination={pagination}/></div>
       </>:<EmptyPanelState><EmptyState
         title={agents.length?t("No matching agents"):t("No agents")}
         description={agents.length?t("Try a different search or filter."):t("Add an Agent to delegate tasks through a Profile.")}/>
       </EmptyPanelState>}
     </ResultPanel>
+    {pagination.total > 0 ? <TablePagination label="Agents" pagination={pagination} /> : null}
   </>;
 }

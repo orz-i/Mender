@@ -3,13 +3,16 @@ import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import { formatNumber, t } from "../i18n/i18n";
 import { IconButton } from "./icon-button";
 import type { PaginationState } from "./pagination";
+import { cn } from "@mender/ui/lib/utils";
 
 export function TablePagination<T>({
   label,
   pagination,
+  className,
 }: {
   label: string;
   pagination: PaginationState<T>;
+  className?: string;
 }) {
   if (pagination.total === 0) {
     return null;
@@ -18,7 +21,10 @@ export function TablePagination<T>({
   return (
     <nav
       aria-label={t("{{label}} pagination", { label: t(label) })}
-      className="mt-4 flex flex-col gap-3 border-t border-border pt-4 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between"
+      className={cn(
+        "mt-4 flex flex-col gap-3 px-1 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between",
+        className,
+      )}
     >
       <p aria-live="polite">
         {t("Rows {{from}}–{{to}} of {{total}}", {

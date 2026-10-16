@@ -301,12 +301,6 @@ export function CatalogPage({ client }: { client: MenderClient }) {
                 ))}
               </TableBody>
               </Table>
-              <div className="px-4 pb-3">
-                <TablePagination
-                  label="Catalog tools"
-                  pagination={catalogPagination}
-                />
-              </div>
             </>
           ) : (
             <EmptyPanelState>
@@ -323,6 +317,11 @@ export function CatalogPage({ client }: { client: MenderClient }) {
             </EmptyPanelState>
           )}
       </ResultPanel>
+
+      <TablePagination
+        label="Catalog tools"
+        pagination={catalogPagination}
+      />
 
       <Dialog
         open={selected !== null}

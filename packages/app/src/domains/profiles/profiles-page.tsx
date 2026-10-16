@@ -672,12 +672,6 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
                 ))}
               </TableBody>
               </Table>
-              <div className="px-4 pb-3">
-                <TablePagination
-                  label="Profiles"
-                  pagination={profilePagination}
-                />
-              </div>
             </>
           ) : (
             <EmptyPanelState>
@@ -688,6 +682,11 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
             </EmptyPanelState>
           )}
       </ResultPanel>
+
+      <TablePagination
+        label="Profiles"
+        pagination={profilePagination}
+      />
 
       <Dialog
         open={createOpen}

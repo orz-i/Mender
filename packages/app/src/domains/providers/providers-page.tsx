@@ -840,12 +840,6 @@ export function ProvidersPage({
                 ))}
               </TableBody>
             </Table>
-            <div className="px-4 pb-3">
-              <TablePagination
-                label="Providers"
-                pagination={providerPagination}
-              />
-            </div>
           </>
         ) : (
           <EmptyPanelState>
@@ -856,6 +850,11 @@ export function ProvidersPage({
           </EmptyPanelState>
         )}
       </ResultPanel>
+
+      <TablePagination
+        label="Providers"
+        pagination={providerPagination}
+      />
 
       {connectionOffering!==null?(
         <Dialog open onOpenChange={open=>{

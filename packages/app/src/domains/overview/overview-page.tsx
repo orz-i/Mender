@@ -231,9 +231,6 @@ export function OverviewPage({ client }: { client: MenderClient }) {
                   ))}
                 </TableBody>
               </Table>
-              <div className="px-4 pb-3">
-                <TablePagination label="Recent invocations" pagination={invocationPagination} />
-              </div>
             </>
           ) : (
             <div className="px-5 pb-5">
@@ -250,6 +247,9 @@ export function OverviewPage({ client }: { client: MenderClient }) {
             </div>
           )}
         </DataPanel>
+        {data?.records.length ? (
+          <TablePagination label="Recent invocations" pagination={invocationPagination} />
+        ) : null}
 
         </div>
       ) : (

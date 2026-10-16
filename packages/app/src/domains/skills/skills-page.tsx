@@ -586,13 +586,12 @@ export function SkillsPage({
                 </div>
               )}
 
-              {visibleInstallations.length ? (
-                <div className="px-1">
-                  <TablePagination label="Skills" pagination={skillPagination} />
-                </div>
-              ) : null}
             </div>
       </ResultPanel>
+
+      {visibleInstallations.length ? (
+        <TablePagination label="Skills" pagination={skillPagination} />
+      ) : null}
 
       <Dialog
         open={selected !== null}

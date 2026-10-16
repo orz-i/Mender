@@ -263,9 +263,6 @@ export function TunnelsPage({ client }: { client: MenderClient }) {
                 ))}
               </TableBody>
             </Table>
-            <div className="px-4 pb-3">
-              <TablePagination label="Tunnels" pagination={pagination} />
-            </div>
           </>
         ) : (
           <EmptyPanelState>
@@ -276,6 +273,8 @@ export function TunnelsPage({ client }: { client: MenderClient }) {
           </EmptyPanelState>
         )}
       </ResultPanel>
+
+      <TablePagination label="Tunnels" pagination={pagination} />
 
       <Dialog open={removeTarget!==null} onOpenChange={(open)=>{
         if(!open && busy==="")setRemoveTarget(null);

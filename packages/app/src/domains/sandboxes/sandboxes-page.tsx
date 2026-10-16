@@ -148,9 +148,6 @@ export function SandboxesPage({ client }: { client: MenderClient }) {
                 ))}
               </TableBody>
             </Table>
-            <div className="px-4 pb-3">
-              <TablePagination label="Sandboxes" pagination={pagination} />
-            </div>
           </>
         ) : (
           <EmptyPanelState>
@@ -165,5 +162,6 @@ export function SandboxesPage({ client }: { client: MenderClient }) {
           </EmptyPanelState>
         )}
     </ResultPanel>
+    <TablePagination label="Sandboxes" pagination={pagination} />
   </>;
 }

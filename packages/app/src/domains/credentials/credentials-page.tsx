@@ -294,12 +294,6 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
                 ))}
               </TableBody>
               </Table>
-              <div className="px-4 pb-3">
-                <TablePagination
-                  label="Credentials"
-                  pagination={credentialPagination}
-                />
-              </div>
             </>
           ) : (
             <EmptyPanelState>
@@ -310,6 +304,11 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
             </EmptyPanelState>
           )}
       </ResultPanel>
+
+      <TablePagination
+        label="Credentials"
+        pagination={credentialPagination}
+      />
 
       <Dialog
         open={createOpen}
