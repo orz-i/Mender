@@ -1,6 +1,8 @@
 # Plugin Marketplace
 
-Status: Complete
+Status: Historical implementation baseline; user-facing discovery eligibility superseded by [ADR-0045](../architecture/adr/0045-marketplace-offering-eligibility.md) and [Phase 38](phase-38-marketplace-offering-hardcut.md).
+
+This file records the original package-catalogue launch. In the current product, native installation inventory is distinct from actionable Marketplace offerings; built-in MCP/OpenAPI/Model Tools are visible by default and resource-owned Tool Suites/managed facades are not Marketplace products.
 
 ## Goal
 

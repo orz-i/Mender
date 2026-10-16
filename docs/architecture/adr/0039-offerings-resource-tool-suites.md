@@ -3,6 +3,7 @@
 - Status: Accepted for Phase 34
 - Date: 2026-10-12
 - Supersedes: none; refines ADR-0035, ADR-0037, and ADR-0038 without replacing their security invariants
+- Presentation update: ADR-0045 narrows Marketplace discovery to actionable reviewed offerings; Tool Suite Bind belongs to the owning resource detail rather than an independent Marketplace card.
 
 ## Context and inspected baseline
 
