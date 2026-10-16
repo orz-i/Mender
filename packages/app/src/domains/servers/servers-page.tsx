@@ -392,8 +392,8 @@ export function ServersPage({
                 title="No running MCP servers"
                 description={
                   profiles.length
-                    ? "Start a Profile as a loopback Streamable HTTP server."
-                    : "Create a Profile before starting an MCP server."
+                    ? t("Start a Profile as a loopback Streamable HTTP server.")
+                    : t("Create a Profile before starting an MCP server.")
                 }
               />
             </EmptyPanelState>

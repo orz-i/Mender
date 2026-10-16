@@ -111,10 +111,20 @@ for (const file of sourceRoots.flatMap(sourceFiles)) {
     if (
       ts.isJsxAttribute(node) &&
       translatablePropNames.has(node.name.getText(sourceFile)) &&
-      node.initializer !== undefined &&
-      ts.isStringLiteral(node.initializer)
+      node.initializer !== undefined
     ) {
-      requiredMessages.add(node.initializer.text);
+      if (ts.isStringLiteral(node.initializer)) {
+        requiredMessages.add(node.initializer.text);
+      } else if (
+        ts.isJsxExpression(node.initializer) &&
+        node.initializer.expression &&
+        (ts.isConditionalExpression(node.initializer.expression) ||
+          (ts.isBinaryExpression(node.initializer.expression) &&
+            (node.initializer.expression.operatorToken.kind === ts.SyntaxKind.BarBarToken ||
+              node.initializer.expression.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken)))
+      ) {
+        collectRenderedMessageKeys(node.initializer.expression, requiredMessages);
+      }
     }
 
     if (

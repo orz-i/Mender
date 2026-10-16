@@ -951,8 +951,8 @@ export function ProvidersPage({
           onSubmit={() => void saveAuthentication()}
           submitLabel={
             authenticationProvider === null
-              ? "Use authentication"
-              : "Save authentication"
+              ? t("Use authentication")
+              : t("Save authentication")
           }
         />
       ) : null}

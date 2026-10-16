@@ -306,12 +306,12 @@ export function CatalogPage({ client }: { client: MenderClient }) {
             <EmptyPanelState>
               <EmptyState
                 title={
-                  searched ? "No matching tools" : "No synchronized tools"
+                  searched ? t("No matching tools") : t("No synchronized tools")
                 }
                 description={
                   searched
-                    ? "Try a different search intent or Provider filter."
-                    : "Sync a Provider to populate the Catalog. Schemas load only when you inspect a Tool."
+                    ? t("Try a different search intent or Provider filter.")
+                    : t("Sync a Provider to populate the Catalog. Schemas load only when you inspect a Tool.")
                 }
               />
             </EmptyPanelState>
