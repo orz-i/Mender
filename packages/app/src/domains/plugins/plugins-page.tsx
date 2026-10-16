@@ -37,10 +37,10 @@ import { IconButton } from "../../shared/icon-button";
 import { EmptyState, ErrorNotice } from "../../shared/page";
 import { FocusSwitch } from "../../shared/focus-switch";
 import { PageToolbar, ResultPanel } from "../../shared/page-toolbar";
+import { FilterPopover, FilterSelectField } from "../../shared/filter-popover";
 import {
   DataPanel,
   EmptyPanelState,
-  FilterSelect,
   SearchField,
 } from "../../shared/workbench";
 import {
@@ -161,36 +161,56 @@ export function PluginsPage({
                 placeholder="Search plugins…"
               />
             </div>
-            <FilterSelect
-              value={kindFilter}
-              onValueChange={(value) => { setKindFilter(value); setCursorHistory([null]); }}
-              label="Plugin type filter"
-              options={kindOptions}
-              className="w-32 min-w-0"
-            />
-            <FilterSelect
-              value={sourceFilter}
-              onValueChange={(value) => { setSourceFilter(value); setCursorHistory([null]); }}
-              label="Plugin source filter"
-              options={sourceOptions}
-              className="w-32 min-w-0"
-            />
-            <FilterSelect
-              value={statusFilter}
-              onValueChange={(value) => { setStatusFilter(value as StatusFilter); setCursorHistory([null]); }}
-              label="Plugin status filter"
-              options={[
-                { value: "all", label: "All plugin statuses" },
-                { value: "enabled", label: "Enabled" },
-                { value: "available", label: "Available" },
-                { value: "disabled", label: "Disabled" },
-                { value: "unavailable", label: "Unavailable" },
-                { value: "planned", label: "Planned" },
-                { value: "degraded", label: "Degraded" },
-                { value: "invalid", label: "Invalid" },
-              ]}
-              className="w-32 min-w-0"
-            />
+            <FilterPopover
+              activeCount={
+                (kindFilter !== "all" ? 1 : 0) +
+                (sourceFilter !== "all" ? 1 : 0) +
+                (statusFilter !== "all" ? 1 : 0)
+              }
+              onReset={() => {
+                setKindFilter("all");
+                setSourceFilter("all");
+                setStatusFilter("all");
+                setCursorHistory([null]);
+              }}
+            >
+              <FilterSelectField
+                label="Plugin type filter"
+                value={kindFilter}
+                onChange={(value) => {
+                  setKindFilter(value);
+                  setCursorHistory([null]);
+                }}
+                options={kindOptions}
+              />
+              <FilterSelectField
+                label="Plugin source filter"
+                value={sourceFilter}
+                onChange={(value) => {
+                  setSourceFilter(value);
+                  setCursorHistory([null]);
+                }}
+                options={sourceOptions}
+              />
+              <FilterSelectField
+                label="Plugin status filter"
+                value={statusFilter}
+                onChange={(value) => {
+                  setStatusFilter(value as StatusFilter);
+                  setCursorHistory([null]);
+                }}
+                options={[
+                  { value: "all", label: "All plugin statuses" },
+                  { value: "enabled", label: "Enabled" },
+                  { value: "available", label: "Available" },
+                  { value: "disabled", label: "Disabled" },
+                  { value: "unavailable", label: "Unavailable" },
+                  { value: "planned", label: "Planned" },
+                  { value: "degraded", label: "Degraded" },
+                  { value: "invalid", label: "Invalid" },
+                ]}
+              />
+            </FilterPopover>
           </>
         }
         actions={
