@@ -82,6 +82,7 @@ describe("Agents focused management",()=>{
   it("opens OpenCode-specific creation from the built-in marketplace without cloning Grok",async()=>{
     const client=show("/agents/new?pluginId=io.mender.agent.opencode");
     expect(screen.getByRole("textbox",{name:"Agent name"})).toBeTruthy();
+    expect(screen.getByText(/OpenCode may need local account and config access/)).toBeTruthy();
     expect(screen.queryByText("Grok CLI uses its built-in ACP stdio transport.")).toBeNull();
     fireEvent.change(screen.getByRole("textbox",{name:"Agent name"}),{target:{value:"OpenCode Local"}});
     fireEvent.change(screen.getByRole("textbox",{name:"Workspace directory"}),{target:{value:"/tmp/opencode-fixture"}});

@@ -215,6 +215,7 @@ export const zhCNMessages: Readonly<Record<string, string>> = {
   "Codex CLI requires the separately installed codex-acp adapter.": "Codex CLI 需要另行安装 codex-acp 适配器。",
   "Grok CLI uses its built-in ACP stdio transport.": "Grok CLI 使用内置 ACP 标准输入输出协议。",
   "OpenCode CLI uses its native ACP stdio transport.": "OpenCode CLI 使用原生 ACP 标准输入输出协议。",
+  "OpenCode may need local account and config access that Restricted host prevents. Choose Host explicitly only if you accept its filesystem and credential access.": "OpenCode 可能需要访问受限主机模式所阻止的本地账户及配置。只有接受其本地文件与凭据访问权限时，才主动选择主机模式。",
   "CLI detected": "已检测到 CLI",
   "CLI missing": "未检测到 CLI",
   "Queued": "排队中",

@@ -96,6 +96,8 @@ export function AgentCreatePage({
               <option value="host">{t("Host (not isolated)")}</option>
             </select>
             <p className="text-xs text-muted-foreground">{t("Host mode can access files and credentials with the Runtime user's permissions.")}</p>
+            {backend==="opencode"&&isolation==="restricted_host"?
+              <p className="text-xs text-muted-foreground">{t("OpenCode may need local account and config access that Restricted host prevents. Choose Host explicitly only if you accept its filesystem and credential access.")}</p>:null}
           </div>
           <div className="flex justify-between gap-2">
             <Button variant="outline" onClick={()=>setStep("select")}>{t("Back")}</Button>
