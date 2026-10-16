@@ -247,23 +247,6 @@ export function PluginsPage({
                 <PluginCard key={plugin.key} plugin={plugin} />
               ))}
             </div>
-            <MarketplaceCursorPagination
-              page={page}
-              canGoPrevious={cursorHistory.length > 1}
-              onPrevious={() =>
-                setCursorHistory((history) =>
-                  history.length > 1 ? history.slice(0, -1) : history,
-                )
-              }
-              onNext={() => {
-                if (page.nextCursor !== null) {
-                  setCursorHistory((history) => [
-                    ...history,
-                    page.nextCursor,
-                  ]);
-                }
-              }}
-            />
           </div>
         ) : (
           <EmptyPanelState>
@@ -274,6 +257,26 @@ export function PluginsPage({
           </EmptyPanelState>
         )}
       </ResultPanel>
+
+      {visiblePlugins.length ? (
+        <MarketplaceCursorPagination
+          page={page}
+          canGoPrevious={cursorHistory.length > 1}
+          onPrevious={() =>
+            setCursorHistory((history) =>
+              history.length > 1 ? history.slice(0, -1) : history,
+            )
+          }
+          onNext={() => {
+            if (page.nextCursor !== null) {
+              setCursorHistory((history) => [
+                ...history,
+                page.nextCursor,
+              ]);
+            }
+          }}
+        />
+      ) : null}
     </>
   );
 }
@@ -669,7 +672,7 @@ function MarketplaceCursorPagination({
       aria-label={t("{{label}} pagination", {
         label: t("Plugin Marketplace"),
       })}
-      className="mt-4 flex items-center justify-between gap-4 border-t border-border pt-4 text-sm text-muted-foreground"
+      className="mt-4 flex flex-col gap-3 px-1 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between"
     >
       <p aria-live="polite">
         {t("Plugins {{from}}–{{to}} of {{total}}", {
