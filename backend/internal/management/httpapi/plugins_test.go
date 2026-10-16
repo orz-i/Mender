@@ -45,6 +45,19 @@ func TestUnifiedPluginCatalogueManagementContract(t *testing.T) {
 			t.Fatal("missing typed extension kind")
 		}
 		kinds[kind] = true
+		if _, ok := item["marketplaceAction"].(string); !ok {
+			t.Fatalf("missing host-reviewed Marketplace action: %+v", item)
+		}
+		switch item["pluginId"] {
+		case "io.mender.provider.mcp", "io.mender.provider.openapi", "io.mender.provider.model-tools":
+			if item["marketplaceAction"] != "create.provider" {
+				t.Fatalf("configurable Provider hidden from Marketplace: %+v", item)
+			}
+		case "io.mender.provider.workspace", "io.mender.provider.agent-delegation":
+			if item["marketplaceAction"] != "none" {
+				t.Fatalf("internal Provider facade advertised: %+v", item)
+			}
+		}
 		if kind == "sandbox.backend" {
 			key := item["key"].(string)
 			sandboxKeys[key]++
@@ -64,11 +77,7 @@ func TestUnifiedPluginCatalogueManagementContract(t *testing.T) {
 					t.Fatalf("quarantined Sandbox unexpectedly enabled: %+v", item)
 				}
 			case "io.mender.sandbox.e2b@planned":
-				if item["sourceKind"] != "planned" || item["status"] != "planned" ||
-					item["enabled"] != false || item["installationId"] != nil || item["packageVersion"] != "" ||
-					item["configVersion"] != nil || item["protocolVersion"] != nil {
-					t.Fatalf("E2B roadmap item misrepresented as executable: %+v", item)
-				}
+				t.Fatalf("unimplemented E2B must not exist in the technical catalogue: %+v", item)
 			}
 		}
 	}
@@ -77,7 +86,6 @@ func TestUnifiedPluginCatalogueManagementContract(t *testing.T) {
 		"io.mender.sandbox.docker@builtin",
 		"io.mender.sandbox.daytona@builtin",
 		"io.mender.sandbox.ssh-remote@builtin",
-		"io.mender.sandbox.e2b@planned",
 	} {
 		if sandboxKeys[key] != 1 {
 			t.Fatalf("expected one canonical Sandbox entry %q, got %d", key, sandboxKeys[key])
