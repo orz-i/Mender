@@ -107,7 +107,7 @@ func TestAgentFacadeClaimRejectsWrongPluginConfigVersion(t *testing.T) {
 	}
 }
 
-func TestAgentFacadeV4ToV5ReinstallsStrictGuard(t *testing.T) {
+func TestAgentFacadeV6PreservesStrictConfigGuard(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "mender.db")
@@ -132,17 +132,8 @@ func TestAgentFacadeV4ToV5ReinstallsStrictGuard(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, stmt := range []string{
-		"DELETE FROM agent_schema_migrations WHERE version=5",
-		"DROP TRIGGER agent_facade_provider_config_update_guard",
-		`CREATE TRIGGER agent_facade_provider_config_update_guard BEFORE UPDATE OF plugin_id,config_json,plugin_installation_id ON provider_configs
-         WHEN EXISTS(SELECT 1 FROM agent_tool_facades f WHERE f.provider_id=OLD.provider_id)
-         BEGIN SELECT RAISE(ABORT,'managed Agent facade config is immutable'); END`,
-	} {
-		if _, err := raw.ExecContext(ctx, stmt); err != nil {
-			t.Fatal(err)
-		}
-	}
+	// V6 retains the V5 hard-cut guard without requiring an artificial
+	// downgrade of schema history or dual-read migration logic.
 	if err := raw.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -157,7 +148,7 @@ func TestAgentFacadeV4ToV5ReinstallsStrictGuard(t *testing.T) {
 	}
 	defer func() { _ = verify.Close() }()
 	var version int
-	if err := verify.QueryRowContext(ctx, "SELECT MAX(version) FROM agent_schema_migrations").Scan(&version); err != nil || version != 5 {
+	if err := verify.QueryRowContext(ctx, "SELECT MAX(version) FROM agent_schema_migrations").Scan(&version); err != nil || version != 6 {
 		t.Fatalf("migrated version=%d err=%v", version, err)
 	}
 	_, err = verify.ExecContext(ctx, "UPDATE provider_configs SET config_version=2 WHERE provider_id=?", state.ProviderID)

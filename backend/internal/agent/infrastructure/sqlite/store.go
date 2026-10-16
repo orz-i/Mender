@@ -53,9 +53,9 @@ func Open(ctx context.Context, path string) (*Store, error) {
 func (s *Store) Close() error { return s.db.Close() }
 func (s *Store) CreateAgent(ctx context.Context, a agentdomain.Agent) error {
 	v := a.Spec()
-	_, err := s.db.ExecContext(ctx, `INSERT INTO agents VALUES(?,?,?,?,?,?,?,?,?,?)`,
+	_, err := s.db.ExecContext(ctx, `INSERT INTO agents(`+agentColumns+`) VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
 		string(v.ID), v.Name, string(v.Backend), string(v.PluginID), string(v.ExtensionID),
-		v.WorkspaceRoot, v.Isolation, v.OwnerKind, v.OwnerRef, v.CreatedAt.Format(time.RFC3339Nano))
+		v.WorkspaceRoot, v.Isolation, v.OwnerKind, v.OwnerRef, v.CreatedAt.Format(time.RFC3339Nano), v.DefaultModel)
 	if err != nil {
 		return fmt.Errorf("create Agent: %w", err)
 	}
@@ -65,7 +65,7 @@ func scanAgent(scanner interface{ Scan(...any) error }) (agentdomain.Agent, erro
 	var spec agentdomain.Spec
 	var id, backend, pluginID, extensionID, created string
 	err := scanner.Scan(&id, &spec.Name, &backend, &pluginID, &extensionID,
-		&spec.WorkspaceRoot, &spec.Isolation, &spec.OwnerKind, &spec.OwnerRef, &created)
+		&spec.WorkspaceRoot, &spec.Isolation, &spec.OwnerKind, &spec.OwnerRef, &created, &spec.DefaultModel)
 	if err != nil {
 		return agentdomain.Agent{}, err
 	}
@@ -79,7 +79,7 @@ func scanAgent(scanner interface{ Scan(...any) error }) (agentdomain.Agent, erro
 	return agentdomain.NewAgent(spec)
 }
 
-const agentColumns = `agent_id,name,backend,plugin_id,extension_id,workspace_root,isolation,owner_kind,owner_ref,created_at`
+const agentColumns = `agent_id,name,backend,plugin_id,extension_id,workspace_root,isolation,owner_kind,owner_ref,created_at,default_model`
 
 func (s *Store) GetAgent(ctx context.Context, id agentdomain.ID) (agentdomain.Agent, error) {
 	if _, err := agentdomain.ParseID(string(id)); err != nil {
@@ -123,14 +123,15 @@ func (s *Store) DeleteAgent(ctx context.Context, id agentdomain.ID) error {
 	return nil
 }
 
-const taskColumns = `task_id,agent_id,status,origin,principal_kind,principal_ref,scope_kind,scope_ref,generation,result_text,diagnostic,cancel_requested,created_at,updated_at`
+const taskColumns = `task_id,agent_id,status,origin,principal_kind,principal_ref,scope_kind,scope_ref,generation,result_text,diagnostic,cancel_requested,created_at,updated_at,model,workspace_key,workspace_root`
 
 func scanTask(scanner interface{ Scan(...any) error }) (agentdomain.Task, error) {
 	var t agentdomain.Task
 	var id, agentID, state, created, updated string
 	var cancel int
 	if err := scanner.Scan(&id, &agentID, &state, &t.Origin, &t.PrincipalKind, &t.PrincipalRef,
-		&t.ScopeKind, &t.ScopeRef, &t.Generation, &t.Result, &t.Diagnostic, &cancel, &created, &updated); err != nil {
+		&t.ScopeKind, &t.ScopeRef, &t.Generation, &t.Result, &t.Diagnostic, &cancel, &created, &updated,
+		&t.Model, &t.WorkspaceKey, &t.WorkspaceRoot); err != nil {
 		return t, err
 	}
 	t.ID = agentdomain.TaskID(id)
@@ -153,10 +154,11 @@ func (s *Store) CreateTask(ctx context.Context, t agentdomain.Task) error {
 	if t.Status != agentdomain.TaskQueued || t.CancelRequested {
 		return fmt.Errorf("%w: new Task must be queued", agentdomain.ErrInvalid)
 	}
-	_, err := s.db.ExecContext(ctx, `INSERT INTO agent_tasks(`+taskColumns+`) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+	_, err := s.db.ExecContext(ctx, `INSERT INTO agent_tasks(`+taskColumns+`) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		string(t.ID), string(t.AgentID), string(t.Status), t.Origin, t.PrincipalKind, t.PrincipalRef,
 		t.ScopeKind, t.ScopeRef, t.Generation, t.Result, t.Diagnostic, 0,
-		t.CreatedAt.UTC().Format(time.RFC3339Nano), t.UpdatedAt.UTC().Format(time.RFC3339Nano))
+		t.CreatedAt.UTC().Format(time.RFC3339Nano), t.UpdatedAt.UTC().Format(time.RFC3339Nano),
+		t.Model, t.WorkspaceKey, t.WorkspaceRoot)
 	return err
 }
 
@@ -175,18 +177,23 @@ func (s *Store) CreateAdmittedTask(ctx context.Context, t agentdomain.Task, maxA
 	const globalTaskLimit = 8
 	const principalTaskLimit = 2
 	result, err := s.db.ExecContext(ctx, `INSERT INTO agent_tasks(`+taskColumns+`)
-	SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,?
+	SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?
 	WHERE (SELECT COUNT(*) FROM agent_tasks WHERE agent_id=? AND status IN ('queued','running')) < ?
 	  AND (SELECT COUNT(*) FROM agent_tasks WHERE status IN ('queued','running')) < ?
 	  AND (SELECT COUNT(*) FROM agent_tasks WHERE principal_kind=? AND principal_ref=?
 	       AND status IN ('queued','running')) < ?
-	  AND (?='' OR EXISTS(SELECT 1 FROM agent_grants WHERE agent_id=? AND profile_id=?))`,
+	  AND (?='' OR EXISTS(SELECT 1 FROM agent_grants WHERE agent_id=? AND profile_id=?))
+	  AND (?='' OR EXISTS(SELECT 1 FROM agent_workspaces WHERE agent_id=? AND workspace_key=?))
+	  AND (?='' OR ?='' OR EXISTS(SELECT 1 FROM agent_workspace_grants WHERE agent_id=? AND workspace_key=? AND profile_id=?))`,
 		string(t.ID), string(t.AgentID), string(t.Status), t.Origin, t.PrincipalKind, t.PrincipalRef,
 		t.ScopeKind, t.ScopeRef, t.Generation, t.Result, t.Diagnostic, 0,
 		t.CreatedAt.UTC().Format(time.RFC3339Nano), t.UpdatedAt.UTC().Format(time.RFC3339Nano),
+		t.Model, t.WorkspaceKey, t.WorkspaceRoot,
 		string(t.AgentID), maxActive, globalTaskLimit,
 		t.PrincipalKind, t.PrincipalRef, principalTaskLimit,
-		profileID, string(t.AgentID), profileID)
+		profileID, string(t.AgentID), profileID,
+		t.WorkspaceKey, string(t.AgentID), t.WorkspaceKey,
+		profileID, t.WorkspaceKey, string(t.AgentID), t.WorkspaceKey, profileID)
 	if err != nil {
 		return fmt.Errorf("reserve Agent task: %w", err)
 	}

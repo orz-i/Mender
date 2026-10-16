@@ -72,6 +72,7 @@ type Spec struct {
 	PluginID      platformplugin.ID          `json:"pluginId"`
 	ExtensionID   platformplugin.ExtensionID `json:"extensionId"`
 	WorkspaceRoot string                     `json:"workspaceRoot"`
+	DefaultModel  string                     `json:"defaultModel,omitempty"`
 	Isolation     string                     `json:"isolation"`
 	OwnerKind     string                     `json:"ownerKind"`
 	OwnerRef      string                     `json:"ownerRef"`
@@ -92,6 +93,9 @@ func NewAgent(spec Spec) (Agent, error) {
 	if spec.Name == "" || strings.TrimSpace(spec.Name) != spec.Name || len(spec.Name) > 120 {
 		return Agent{}, fmt.Errorf("%w: invalid display name", ErrInvalid)
 	}
+	if err := ValidateModel(spec.DefaultModel); err != nil {
+		return Agent{}, err
+	}
 	if spec.WorkspaceRoot == "" || !filepath.IsAbs(spec.WorkspaceRoot) ||
 		filepath.Clean(spec.WorkspaceRoot) != spec.WorkspaceRoot {
 		return Agent{}, fmt.Errorf("%w: workspace root must be canonical absolute path", ErrInvalid)
@@ -111,6 +115,36 @@ func NewAgent(spec Spec) (Agent, error) {
 	}
 	spec.CreatedAt = spec.CreatedAt.UTC()
 	return Agent{spec: spec}, nil
+}
+
+// ValidateModel accepts one explicit ACP-advertised value identifier, not a CLI flag.
+// The empty identifier means the backend's own default.
+func ValidateModel(model string) error {
+	if len(model) > 128 || strings.TrimSpace(model) != model ||
+		strings.ContainsAny(model, "\x00\r\n\t") {
+		return fmt.Errorf("%w: invalid model identifier", ErrInvalid)
+	}
+	return nil
+}
+
+// WorkspaceKey identifies one owner-configured, local-only Sandbox binding.
+// The implicit default workspace is selected by the empty key.
+func ValidateWorkspaceKey(key string) error {
+	if len(key) == 0 || len(key) > 64 || key == "default" {
+		return fmt.Errorf("%w: invalid workspace key", ErrInvalid)
+	}
+	for _, c := range key {
+		if !(c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '-' || c == '_') {
+			return fmt.Errorf("%w: invalid workspace key", ErrInvalid)
+		}
+	}
+	return nil
+}
+
+type WorkspaceBinding struct {
+	Key        string   `json:"key"`
+	SandboxID  string   `json:"sandboxId"`
+	ProfileIDs []string `json:"profileIds"`
 }
 
 func (a Agent) Spec() Spec { return a.spec }

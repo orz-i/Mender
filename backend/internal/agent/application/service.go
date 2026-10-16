@@ -38,27 +38,56 @@ type Repository interface {
 	ListAdmissions(context.Context, agentdomain.ID, int) ([]agentdomain.AdmissionEvent, error)
 	GrantProfile(context.Context, agentdomain.ID, string) error
 	RevokeProfile(context.Context, agentdomain.ID, string) error
+	SetDefaultModel(context.Context, agentdomain.ID, string) error
+	BindWorkspace(context.Context, agentdomain.ID, string, string) error
+	Workspace(context.Context, agentdomain.ID, string) (string, error)
+	HasWorkspaceGrant(context.Context,agentdomain.ID,string,string)(bool,error)
+	ListWorkspaces(context.Context, agentdomain.ID) ([]agentdomain.WorkspaceBinding, error)
+	UnbindWorkspace(context.Context, agentdomain.ID, string) error
+	GrantWorkspace(context.Context, agentdomain.ID, string, string) error
+	RevokeWorkspace(context.Context, agentdomain.ID, string, string) error
 }
 
 // Executor is supplied by the ACP Backend adapter, not by the upstream Tool.
 type Executor interface {
 	Execute(context.Context, agentdomain.Agent, string) (string, error)
 }
+
+// ConfiguredExecutor runs one admitted immutable selection without changing Agent identity.
+type ConfiguredExecutor interface {
+	ExecuteConfigured(context.Context, agentdomain.Agent, string, RunConfig) (string, error)
+}
+type RunConfig struct {
+	WorkspaceRoot string
+	Model         string
+}
+
+// WorkspaceTarget contains inert metadata about a registered local Sandbox.
+type WorkspaceTarget struct {
+	ID        string
+	Root      string
+	Backend   string
+	Isolation string
+	OwnerKind string
+	OwnerRef  string
+}
+type WorkspaceResolver func(context.Context, string) (WorkspaceTarget, error)
 type Admission func(context.Context, gov.Context, agentdomain.Agent, gov.Action) error
 type ProfileExists func(context.Context, string) error
 
 type Service struct {
-	store         Repository
-	runner        Executor
-	admit         Admission
-	profileExists ProfileExists
-	owner         gov.Principal
-	rootContext   context.Context
-	rootCancel    context.CancelFunc
-	mu            sync.Mutex
-	active        map[agentdomain.TaskID]context.CancelFunc
-	closed        bool
-	wg            sync.WaitGroup
+	store             Repository
+	runner            Executor
+	admit             Admission
+	profileExists     ProfileExists
+	workspaceResolver WorkspaceResolver
+	owner             gov.Principal
+	rootContext       context.Context
+	rootCancel        context.CancelFunc
+	mu                sync.Mutex
+	active            map[agentdomain.TaskID]context.CancelFunc
+	closed            bool
+	wg                sync.WaitGroup
 }
 
 func NewService(store Repository, runner Executor, admit Admission, owner gov.Principal, profileExists ProfileExists) (*Service, error) {
@@ -118,6 +147,7 @@ type CreateRequest struct {
 	Backend       agentdomain.Backend `json:"backend"`
 	WorkspaceRoot string              `json:"workspaceRoot"`
 	Isolation     string              `json:"isolation"`
+	DefaultModel  string              `json:"defaultModel,omitempty"`
 }
 
 // Create stores one owner-selected backend and canonical local directory;
@@ -128,6 +158,9 @@ func (s *Service) Create(ctx context.Context, request CreateRequest, caller gov.
 	}
 	if request.Backend.PluginID() == "" {
 		return agentdomain.Agent{}, agentdomain.ErrInvalid
+	}
+	if err := agentdomain.ValidateModel(request.DefaultModel); err != nil {
+		return agentdomain.Agent{}, err
 	}
 	if !filepath.IsAbs(request.WorkspaceRoot) {
 		return agentdomain.Agent{}, agentdomain.ErrInvalid
@@ -153,7 +186,7 @@ func (s *Service) Create(ctx context.Context, request CreateRequest, caller gov.
 	}
 	agent, err := agentdomain.NewAgent(agentdomain.Spec{ID: id, Name: request.Name, Backend: request.Backend,
 		PluginID: request.Backend.PluginID(), ExtensionID: "main", WorkspaceRoot: filepath.Clean(resolved),
-		Isolation: isolation, OwnerKind: string(s.owner.Kind()), OwnerRef: s.owner.Reference(),
+		Isolation: isolation, DefaultModel: request.DefaultModel, OwnerKind: string(s.owner.Kind()), OwnerRef: s.owner.Reference(),
 		CreatedAt: time.Now().UTC()})
 	if err != nil {
 		return agentdomain.Agent{}, err
@@ -237,7 +270,15 @@ func (s *Service) Admissions(ctx context.Context, id agentdomain.ID, caller gov.
 	return s.store.ListAdmissions(ctx, id, limit)
 }
 
+type SubmitOptions struct {
+	Model     string `json:"model,omitempty"`
+	Workspace string `json:"workspace,omitempty"`
+}
+
 func (s *Service) Submit(ctx context.Context, id agentdomain.ID, prompt string, caller gov.Context) (agentdomain.Task, error) {
+	return s.SubmitWithOptions(ctx, id, prompt, SubmitOptions{}, caller)
+}
+func (s *Service) SubmitWithOptions(ctx context.Context, id agentdomain.ID, prompt string, options SubmitOptions, caller gov.Context) (agentdomain.Task, error) {
 	if caller.Validate() != nil {
 		return agentdomain.Task{}, agentdomain.ErrForbidden
 	}
@@ -252,6 +293,47 @@ func (s *Service) Submit(ctx context.Context, id agentdomain.ID, prompt string, 
 	if err != nil {
 		return agentdomain.Task{}, err
 	}
+	if err := agentdomain.ValidateModel(options.Model); err != nil {
+		return agentdomain.Task{}, err
+	}
+	model := options.Model
+	if model == "" {
+		model = agent.Spec().DefaultModel
+	}
+	root := agent.Spec().WorkspaceRoot
+	if options.Workspace != "" {
+		if err := agentdomain.ValidateWorkspaceKey(options.Workspace); err != nil {
+			return agentdomain.Task{}, err
+		}
+		if s.workspaceResolver == nil {
+			return agentdomain.Task{}, agentdomain.ErrUnavailable
+		}
+		sandboxID, err := s.store.Workspace(ctx, id, options.Workspace)
+		if err != nil {
+			return agentdomain.Task{}, err
+		}
+		target, err := s.workspaceResolver(ctx, sandboxID)
+		if err != nil {
+			return agentdomain.Task{}, err
+		}
+		if err := s.validateTarget(agent, target); err != nil {
+			return agentdomain.Task{}, err
+		}
+		if profileID!="" {
+			granted,err:=s.store.HasWorkspaceGrant(ctx,id,options.Workspace,profileID)
+			if err!=nil{return agentdomain.Task{},err}
+			if !granted{return agentdomain.Task{},agentdomain.ErrForbidden}
+		}
+		root = target.Root
+	}
+	if (model != "" || options.Workspace != "") && s.runner == nil {
+		return agentdomain.Task{}, agentdomain.ErrUnavailable
+	}
+	if model != "" || options.Workspace != "" {
+		if _, ok := s.runner.(ConfiguredExecutor); !ok {
+			return agentdomain.Task{}, agentdomain.ErrUnavailable
+		}
+	}
 	// Admission is before process, CLI/account, workspace and credential access.
 	for _, action := range []gov.Action{gov.ActionAgentActivate, gov.ActionAgentTaskSubmit} {
 		if err := s.admit(ctx, caller, agent, action); err != nil {
@@ -264,6 +346,7 @@ func (s *Service) Submit(ctx context.Context, id agentdomain.ID, prompt string, 
 	}
 	now := time.Now().UTC()
 	task := agentdomain.Task{ID: taskID, AgentID: id, Status: agentdomain.TaskQueued,
+		Model: model, WorkspaceKey: options.Workspace, WorkspaceRoot: root,
 		Origin: string(caller.Origin()), PrincipalKind: string(caller.Principal().Kind()),
 		PrincipalRef: caller.Principal().Reference(), ScopeKind: string(caller.Scope().Kind()),
 		ScopeRef: caller.Scope().Reference(), Generation: 1, CreatedAt: now, UpdatedAt: now}
@@ -301,7 +384,13 @@ func (s *Service) run(ctx context.Context, cancel context.CancelFunc, agent agen
 		_ = s.store.Transition(context.WithoutCancel(ctx), task.ID, task.Generation, agentdomain.TaskQueued, agentdomain.TaskCancelled, "", "")
 		return
 	}
-	result, err := s.runner.Execute(ctx, agent, prompt)
+	var result string
+	var err error
+	if runner, ok := s.runner.(ConfiguredExecutor); ok {
+		result, err = runner.ExecuteConfigured(ctx, agent, prompt, RunConfig{WorkspaceRoot: task.WorkspaceRoot, Model: task.Model})
+	} else {
+		result, err = s.runner.Execute(ctx, agent, prompt)
+	}
 	// A runner that reports success after cancellation cannot prove it
 	// stopped executing side effects. Preserve the uncertainty instead.
 	if ctx.Err() != nil && err == nil {

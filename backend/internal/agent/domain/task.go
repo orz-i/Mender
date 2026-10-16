@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -63,6 +64,9 @@ type Task struct {
 	ID              TaskID     `json:"taskId"`
 	AgentID         ID         `json:"agentId"`
 	Status          TaskStatus `json:"status"`
+	Model           string     `json:"model,omitempty"`
+	WorkspaceKey    string     `json:"workspace,omitempty"`
+	WorkspaceRoot   string     `json:"-"` // admitted immutable local cwd; never disclose via MCP
 	Origin          string     `json:"-"`
 	PrincipalKind   string     `json:"-"`
 	PrincipalRef    string     `json:"-"`
@@ -92,6 +96,17 @@ func (t Task) Validate() error {
 	if t.PrincipalKind == "" || t.PrincipalRef == "" || t.ScopeKind == "" || t.Origin == "" ||
 		len(t.PrincipalRef) > 255 || len(t.ScopeRef) > 255 {
 		return fmt.Errorf("%w: incomplete Task caller identity", ErrInvalid)
+	}
+	if err := ValidateModel(t.Model); err != nil {
+		return err
+	}
+	if t.WorkspaceKey != "" {
+		if err := ValidateWorkspaceKey(t.WorkspaceKey); err != nil {
+			return err
+		}
+	}
+	if t.WorkspaceRoot != "" && (!filepath.IsAbs(t.WorkspaceRoot) || filepath.Clean(t.WorkspaceRoot) != t.WorkspaceRoot) {
+		return fmt.Errorf("%w: invalid Task workspace root", ErrInvalid)
 	}
 	if len(t.Result) > MaxResultBytes || len(t.Diagnostic) > 1024 {
 		return fmt.Errorf("%w: Task output exceeds limit", ErrInvalid)

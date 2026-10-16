@@ -11,6 +11,7 @@ import (
 	"time"
 
 	agentapplication "github.com/orz-i/Mender/backend/internal/agent/application"
+	agentdomain "github.com/orz-i/Mender/backend/internal/agent/domain"
 	agentacp "github.com/orz-i/Mender/backend/internal/agent/infrastructure/acp"
 	agentdelegation "github.com/orz-i/Mender/backend/internal/agent/infrastructure/delegationprovider"
 	agentsqlite "github.com/orz-i/Mender/backend/internal/agent/infrastructure/sqlite"
@@ -33,6 +34,7 @@ import (
 	providerbuiltin "github.com/orz-i/Mender/backend/internal/providerplugin/builtin"
 	providerconfigstore "github.com/orz-i/Mender/backend/internal/providerplugin/configstore"
 	providerexternal "github.com/orz-i/Mender/backend/internal/providerplugin/external"
+	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 	sandboxexternal "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/external"
 	tunnelapplication "github.com/orz-i/Mender/backend/internal/tunnel/application"
 	tunnelexternal "github.com/orz-i/Mender/backend/internal/tunnel/infrastructure/external"
@@ -460,6 +462,25 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		_ = pluginInstallations.Close()
 		closeBootstrapStores()
 		return nil, fmt.Errorf("compose runtime: Agent backend: %w", err)
+	}
+
+	if err := agents.SetWorkspaceResolver(func(ctx context.Context, id string) (agentapplication.WorkspaceTarget, error) {
+		parsed, err := sandboxdomain.ParseID(id)
+		if err != nil {
+			return agentapplication.WorkspaceTarget{}, err
+		}
+		sandbox, err := sandboxes.Get(ctx, parsed)
+		if err != nil {
+			return agentapplication.WorkspaceTarget{}, err
+		}
+		run, err := sandboxes.GetRun(ctx, parsed)
+		if err != nil || run.State != sandboxdomain.StateReady {
+			return agentapplication.WorkspaceTarget{}, fmt.Errorf("%w: local workspace is not ready", agentdomain.ErrUnavailable)
+		}
+		sp := sandbox.Spec()
+		return agentapplication.WorkspaceTarget{ID: id, Root: sp.LocalRoot, Backend: string(sp.Backend), Isolation: string(sp.Isolation), OwnerKind: sp.OwnerKind, OwnerRef: sp.OwnerRef}, nil
+	}); err != nil {
+		return nil, err
 	}
 
 	// The Tool facade is only registered after its Agent service is ready.

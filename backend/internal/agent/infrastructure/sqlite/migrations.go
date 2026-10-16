@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-const latestSchemaVersion = 5
+const latestSchemaVersion = 6
 
 // migrate owns Agent state exclusively, and never changes the existing
 // Providers/Sandboxes/Tunnels/Plugin inventory.
@@ -182,6 +182,33 @@ func migrate(ctx context.Context, db *sql.DB) error {
 		if _, err = tx.ExecContext(ctx, `INSERT INTO agent_schema_migrations VALUES(?,?)`,
 			5, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
 			return fmt.Errorf("agent v5 migration record: %w", err)
+		}
+	}
+	if !version.Valid || version.Int64 < 6 {
+		// Keep live Agent and Tool identities. Runtime selections are snapshot
+		// fields, and additional local targets remain explicit owner bindings.
+		for _, statement := range []string{
+			`ALTER TABLE agents ADD COLUMN default_model TEXT NOT NULL DEFAULT ''`,
+			`ALTER TABLE agent_tasks ADD COLUMN model TEXT NOT NULL DEFAULT ''`,
+			`ALTER TABLE agent_tasks ADD COLUMN workspace_key TEXT NOT NULL DEFAULT ''`,
+			`ALTER TABLE agent_tasks ADD COLUMN workspace_root TEXT NOT NULL DEFAULT ''`,
+			`CREATE TABLE agent_workspaces (
+				agent_id TEXT NOT NULL REFERENCES agents(agent_id) ON DELETE CASCADE,
+				workspace_key TEXT NOT NULL, sandbox_id TEXT NOT NULL,
+				created_at TEXT NOT NULL, PRIMARY KEY(agent_id,workspace_key),
+				UNIQUE(agent_id,sandbox_id))`,
+			`CREATE TABLE agent_workspace_grants (
+				agent_id TEXT NOT NULL,workspace_key TEXT NOT NULL,profile_id TEXT NOT NULL,
+				created_at TEXT NOT NULL,
+				PRIMARY KEY(agent_id,workspace_key,profile_id),
+				FOREIGN KEY(agent_id,workspace_key) REFERENCES agent_workspaces(agent_id,workspace_key) ON DELETE CASCADE)`,
+		} {
+			if _, err = tx.ExecContext(ctx, statement); err != nil {
+				return fmt.Errorf("agent v6 runtime selections: %w", err)
+			}
+		}
+		if _, err = tx.ExecContext(ctx, `INSERT INTO agent_schema_migrations VALUES(?,?)`, 6, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
+			return err
 		}
 	}
 	// Standalone Agent stores may not yet have a Provider catalogue. The
