@@ -828,7 +828,7 @@ paths:
       operationId: listAgentWorkspaces
       responses:
         '200':
-          description: Owner-approved local Sandbox workspace bindings
+          description: Owner-approved Agent-local directory paths, not Sandbox resources
           content:
             application/json:
               schema:
@@ -854,7 +854,7 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/BindAgentWorkspaceRequest' }
       responses:
-        '204': { description: Exact local Sandbox bound without new Agent/Tool }
+        '204': { description: Existing canonical local directory bound without a Sandbox, Agent or Tool resource }
         '400': { $ref: '#/components/responses/BadRequest' }
         '409': { $ref: '#/components/responses/Conflict' }
     delete:
@@ -2816,10 +2816,10 @@ components:
         defaultReasoningEffort: { type: string, maxLength: 64, pattern: '^[a-z0-9_-]*$' }
     BindAgentWorkspaceRequest:
       type: object
-      required: [sandboxId]
+      required: [workspaceRoot]
       additionalProperties: false
       properties:
-        sandboxId: { type: string, pattern: '^sbx_[0-9a-f]{32}$' }
+        workspaceRoot: { type: string, minLength: 1, description: Existing absolute local directory approved by the Agent owner; no Sandbox required }
     AgentModelChoice:
       type: object
       required: [id, name]
@@ -2850,11 +2850,11 @@ components:
         reasoningEffort: { $ref: '#/components/schemas/AgentSelectChoices' }
     AgentWorkspace:
       type: object
-      required: [key, sandboxId, profileIds]
+      required: [key, workspaceRoot, profileIds]
       additionalProperties: false
       properties:
         key: { type: string }
-        sandboxId: { type: string }
+        workspaceRoot: { type: string }
         profileIds: { type: array, items: { type: string } }
     AgentTool:
       type: object

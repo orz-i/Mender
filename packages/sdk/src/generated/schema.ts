@@ -2260,7 +2260,8 @@ export interface components {
             defaultReasoningEffort: string;
         };
         BindAgentWorkspaceRequest: {
-            sandboxId: string;
+            /** @description Existing absolute local directory approved by the Agent owner; no Sandbox required */
+            workspaceRoot: string;
         };
         AgentModelChoice: {
             id: string;
@@ -2277,7 +2278,7 @@ export interface components {
         };
         AgentWorkspace: {
             key: string;
-            sandboxId: string;
+            workspaceRoot: string;
             profileIds: string[];
         };
         AgentTool: {
@@ -3823,7 +3824,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Owner-approved local Sandbox workspace bindings */
+            /** @description Owner-approved Agent-local directory paths, not Sandbox resources */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -3852,7 +3853,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Exact local Sandbox bound without new Agent/Tool */
+            /** @description Existing canonical local directory bound without a Sandbox */
             204: {
                 headers: {
                     [name: string]: unknown;

@@ -20,8 +20,8 @@ export function AddProfileTool(slug: string, tool: $models.ProfileTool): $Cancel
     return $Call.ByID(296290586, slug, tool);
 }
 
-export function BindAgentWorkspace(id: string, key: string, sandboxID: string): $CancellablePromise<void> {
-    return $Call.ByID(441566533, id, key, sandboxID);
+export function BindAgentWorkspace(id: string, key: string, workspaceRoot: string): $CancellablePromise<void> {
+    return $Call.ByID(441566533, id, key, workspaceRoot);
 }
 
 export function BindWorkspaceToolTarget(providerID: string, key: string, sandboxID: string): $CancellablePromise<void> {

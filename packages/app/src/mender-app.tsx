@@ -102,7 +102,8 @@ export function MenderApp({
           <Route path="agents" element={<AgentsPage client={client} />} />
           <Route path="agents/new" element={<AgentCreatePage client={client}
             {...(chooseLocalDirectory===undefined?{}:{chooseLocalDirectory})} />} />
-          <Route path="agents/:agentId" element={<AgentDetailPage client={client}/>} />
+          <Route path="agents/:agentId" element={<AgentDetailPage client={client}
+            {...(chooseLocalDirectory===undefined?{}:{chooseLocalDirectory})}/>} />
           <Route path="sandboxes" element={<SandboxesPage client={client} />} />
           <Route
             path="sandboxes/new"

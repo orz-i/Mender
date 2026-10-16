@@ -33,7 +33,7 @@ function taskStatusText(value:AgentTask["status"]):string{
 type Topic = "overview" | "workspaces" | "tools" | "tasks" | "access" | "activity";
 type ConfirmAction = {kind:"cancel"|"revoke"|"delete";id:string} | null;
 
-export function AgentDetailPage({client}:{client:MenderClient}){
+export function AgentDetailPage({client,chooseLocalDirectory}:{client:MenderClient;chooseLocalDirectory?:()=>Promise<string|null>}){
   const {agentId}=useParams();
   const navigate=useNavigate();
   const [agent,setAgent]=useState<Agent|null>(null);
@@ -201,7 +201,8 @@ export function AgentDetailPage({client}:{client:MenderClient}){
         </div>
       </div>
     </ResultPanel>:
-    topic==="workspaces"?<AgentWorkspaceSettings client={client} agent={agent}/>:
+    topic==="workspaces"?<AgentWorkspaceSettings client={client} agent={agent}
+      {...(chooseLocalDirectory===undefined?{}:{chooseLocalDirectory})}/>:
     topic==="tools"?<ResultPanel title="Agent tools">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4">
         <div className="min-w-0 space-y-1">

@@ -96,7 +96,7 @@ export interface AgentTools {
 
 export interface AgentWorkspace {
     "key": string;
-    "sandboxId": string;
+    "workspaceRoot": string;
     "profileIds": string[] | null;
 }
 

@@ -187,7 +187,7 @@ export interface MenderClient {
   updateAgentSettings(agentId:string,defaultModel:string,defaultReasoningEffort:string):Promise<Agent>;
   inspectAgentModels(agentId:string):Promise<AgentModelChoices>;
   listAgentWorkspaces(agentId:string):Promise<{workspaces:AgentWorkspace[]}>;
-  bindAgentWorkspace(agentId:string,key:string,sandboxId:string):Promise<void>;
+  bindAgentWorkspace(agentId:string,key:string,workspaceRoot:string):Promise<void>;
   unbindAgentWorkspace(agentId:string,key:string):Promise<void>;
   grantAgentWorkspace(agentId:string,key:string,profileId:string):Promise<void>;
   revokeAgentWorkspace(agentId:string,key:string,profileId:string):Promise<void>;
@@ -566,7 +566,7 @@ export function createMenderClient(
     async updateAgentSettings(agentId,defaultModel,defaultReasoningEffort){return requireData(await client.PATCH("/agents/{agentId}/settings",{params:{path:{agentId}},body:{defaultModel,defaultReasoningEffort}}));},
     async inspectAgentModels(agentId){return requireData(await client.POST("/agents/{agentId}/models/inspect",{params:{path:{agentId}}}));},
     async listAgentWorkspaces(agentId){return requireData(await client.GET("/agents/{agentId}/workspaces",{params:{path:{agentId}}}));},
-    async bindAgentWorkspace(agentId,workspaceKey,sandboxId){const r=await client.PUT("/agents/{agentId}/workspaces/{workspaceKey}",{params:{path:{agentId,workspaceKey}},body:{sandboxId}});if(!r.response.ok)throwApiError(r.error,r.response);},
+    async bindAgentWorkspace(agentId,workspaceKey,workspaceRoot){const r=await client.PUT("/agents/{agentId}/workspaces/{workspaceKey}",{params:{path:{agentId,workspaceKey}},body:{workspaceRoot}});if(!r.response.ok)throwApiError(r.error,r.response);},
     async unbindAgentWorkspace(agentId,workspaceKey){const r=await client.DELETE("/agents/{agentId}/workspaces/{workspaceKey}",{params:{path:{agentId,workspaceKey}}});if(!r.response.ok)throwApiError(r.error,r.response);},
     async grantAgentWorkspace(agentId,workspaceKey,profileId){const r=await client.PUT("/agents/{agentId}/workspaces/{workspaceKey}/profile-grants/{profileId}",{params:{path:{agentId,workspaceKey,profileId}}});if(!r.response.ok)throwApiError(r.error,r.response);},
     async revokeAgentWorkspace(agentId,workspaceKey,profileId){const r=await client.DELETE("/agents/{agentId}/workspaces/{workspaceKey}/profile-grants/{profileId}",{params:{path:{agentId,workspaceKey,profileId}}});if(!r.response.ok)throwApiError(r.error,r.response);},

@@ -374,7 +374,7 @@ export function createDesktopMenderClient(): MenderClient {
     async updateAgentSettings(agentId,defaultModel,defaultReasoningEffort){return agent(await Service.UpdateAgentSettings(agentId,defaultModel,defaultReasoningEffort));},
     async inspectAgentModels(agentId){return agentModelChoices(await Service.InspectAgentModels(agentId));},
     async listAgentWorkspaces(agentId){const r=await Service.ListAgentWorkspaces(agentId);return {workspaces:(r.workspaces??[]).map(agentWorkspace)};},
-    async bindAgentWorkspace(agentId,key,sandboxId){await Service.BindAgentWorkspace(agentId,key,sandboxId);},
+    async bindAgentWorkspace(agentId,key,workspaceRoot){await Service.BindAgentWorkspace(agentId,key,workspaceRoot);},
     async unbindAgentWorkspace(agentId,key){await Service.UnbindAgentWorkspace(agentId,key);},
     async grantAgentWorkspace(agentId,key,profileId){await Service.GrantAgentWorkspace(agentId,key,profileId);},
     async revokeAgentWorkspace(agentId,key,profileId){await Service.RevokeAgentWorkspace(agentId,key,profileId);},
@@ -919,7 +919,7 @@ function agentModelChoices(value:BindingAgentModelChoices):AgentModelChoices {
   };
 }
 function agentWorkspace(value:BindingAgentWorkspace):AgentWorkspace {
-  return {key:value.key,sandboxId:value.sandboxId,profileIds:value.profileIds??[]};
+  return {key:value.key,workspaceRoot:value.workspaceRoot,profileIds:value.profileIds??[]};
 }
 function agentTools(value:BindingAgentTools):AgentTools {
   if(value.suiteId!=="agent.delegation") {
