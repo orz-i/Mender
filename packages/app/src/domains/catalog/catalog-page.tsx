@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router";
 import { EyeIcon } from "lucide-react";
 
 import type {
@@ -41,15 +42,13 @@ import {
 } from "../../shared/workbench";
 
 import { formatNumber, t } from "../../i18n/i18n";
-import { ToolsViewSwitch } from "../tools/tools-view-switch";
-import type { ToolsView } from "../tools/tools-view-switch";
 import { toolSourceLabel } from "../tools/tool-source-label";
 
 type ToolView = "overview" | "description" | "schemas" | "invoke";
 
-export function CatalogPage({ client, onViewChange }: { client: MenderClient; onViewChange: (view: ToolsView) => void }) {
+export function CatalogPage({ client, providerId }: { client: MenderClient; providerId: string }) {
+  const navigate = useNavigate();
   const [query, setQuery] = useState("");
-  const [providerId, setProviderId] = useState("");
   const [providers, setProviders] = useState<Provider[]>([]);
   const [results, setResults] = useState<ToolSummary[]>([]);
   const [searched, setSearched] = useState(false);
@@ -69,12 +68,12 @@ export function CatalogPage({ client, onViewChange }: { client: MenderClient; on
     let active = true;
     void Promise.all([
       client.listProviders(),
-      client.browseTools({ limit: 100 }),
+      client.browseTools({ limit: 100, providerId }),
     ])
       .then(([providerResult, toolResult]) => {
         if (active) {
           setProviders(providerResult.providers);
-          setResults(toolResult.tools);
+          setResults(toolResult.tools.filter(tool=>tool.providerId===providerId));
           setSearched(false);
         }
       })
@@ -86,17 +85,14 @@ export function CatalogPage({ client, onViewChange }: { client: MenderClient; on
     return () => {
       active = false;
     };
-  }, [client]);
+  }, [client,providerId]);
 
   async function browseAll() {
     setBusy("browse");
     setError("");
     try {
-      const response = await client.browseTools({
-        limit: 100,
-        ...(providerId ? { providerId } : {}),
-      });
-      setResults(response.tools);
+      const response = await client.browseTools({ limit: 100, providerId });
+      setResults(response.tools.filter(tool=>tool.providerId===providerId));
       catalogPagination.reset();
       setSearched(false);
       setSelected(null);
@@ -119,9 +115,9 @@ export function CatalogPage({ client, onViewChange }: { client: MenderClient; on
       const response = await client.searchTools({
         query,
         limit: 30,
-        ...(providerId ? { providerId } : {}),
+        providerId,
       });
-      setResults(response.tools);
+      setResults(response.tools.filter(tool=>tool.providerId===providerId));
       catalogPagination.reset();
       setSearched(true);
       setSelected(null);
@@ -198,7 +194,9 @@ export function CatalogPage({ client, onViewChange }: { client: MenderClient; on
       {error ? <ErrorNotice message={error} /> : null}
 
       <PageToolbar
-        tabs={<ToolsViewSwitch view="catalog" onChange={onViewChange} />}
+        tabs={<Button size="sm" variant="outline" onClick={() => void navigate("/tools")}>
+          {t("Back to services")}
+        </Button>}
         filters={
           <>
             <div className="w-full min-w-0 sm:w-60 sm:shrink-0">
@@ -210,19 +208,6 @@ export function CatalogPage({ client, onViewChange }: { client: MenderClient; on
                 onKeyDown={(event) => { if (event.key === "Enter") void search(); }}
               />
             </div>
-            <select
-              aria-label={t("Tool source filter")}
-              value={providerId}
-              onChange={(event) => setProviderId(event.target.value)}
-              className="h-9 w-40 min-w-0 rounded-xl border border-input bg-card px-3 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <option value="">{t("All tool sources")}</option>
-              {providers.map((provider) => (
-                <option key={provider.providerId} value={provider.providerId}>
-                  {toolSourceLabel(provider)}
-                </option>
-              ))}
-            </select>
           </>
         }
         actions={
@@ -236,13 +221,12 @@ export function CatalogPage({ client, onViewChange }: { client: MenderClient; on
           </>
         }
       />
-      <ResultPanel title="Tools">
+      <ResultPanel title={toolSourceLabel(providers.find(provider=>provider.providerId===providerId))}>
           {results.length ? (
             <>
               <Table className="table-fixed">
               <colgroup>
-                <col className="w-[28%]" />
-                <col className="w-[24%]" />
+                <col className="w-[34%]" />
                 <col />
                 <col className="hidden w-16 xl:table-column" />
                 <col className="w-20" />
@@ -250,7 +234,6 @@ export function CatalogPage({ client, onViewChange }: { client: MenderClient; on
               <TableHeader>
                 <TableRow>
                   <TableHead>{t("Tool")}</TableHead>
-                  <TableHead>{t("Source")}</TableHead>
                   <TableHead>{t("Description")}</TableHead>
                   <TableHead className="hidden xl:table-cell">{t("Rank")}</TableHead>
                   <TableHead className="w-20 text-right">{t("Actions")}</TableHead>
@@ -262,11 +245,6 @@ export function CatalogPage({ client, onViewChange }: { client: MenderClient; on
                     <TableCell className="min-w-0">
                       <div className="truncate font-medium">
                         {tool.title || tool.name}
-                      </div>
-                    </TableCell>
-                    <TableCell className="min-w-0">
-                      <div className="truncate text-sm">
-                        {providerLabel(providers, tool.providerId)}
                       </div>
                     </TableCell>
                     <TableCell className="min-w-0">
@@ -314,7 +292,7 @@ export function CatalogPage({ client, onViewChange }: { client: MenderClient; on
       </ResultPanel>
 
       <TablePagination
-        label="Catalog tools"
+        label="Service tools"
         pagination={catalogPagination}
       />
 

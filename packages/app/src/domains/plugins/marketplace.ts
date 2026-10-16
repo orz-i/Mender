@@ -95,7 +95,6 @@ export function pluginCatalogueToMarketplace(entries:PluginCatalogueEntry[]):Mar
       throw new Error("Host Marketplace action and plugin extension kind disagree");
     }
     const params=new URLSearchParams({create:"1",pluginId:entry.pluginId});
-    if(action==="create.provider")params.set("view","sources");
     if(installationId)params.set("installationId",installationId);
     const pathname=action==="create.provider"?"/tools":
       action==="create.sandbox"?(installationId?"/sandboxes/new/external":"/sandboxes/new"):
@@ -162,7 +161,7 @@ export function integrationOfferingsToMarketplace(offerings:IntegrationOffering[
       ],
       createAction:{
         label:"Connect",
-        href:"/tools?"+new URLSearchParams({view:"sources",create:"1",offeringId:entry.offeringId}).toString(),
+        href:"/tools?"+new URLSearchParams({create:"1",offeringId:entry.offeringId}).toString(),
       },
     };
   });

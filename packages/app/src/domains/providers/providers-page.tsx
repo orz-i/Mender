@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router";
+import { Link, useNavigate, useSearchParams } from "react-router";
 import {
+  ArrowRightIcon,
   EyeIcon,
   KeyRoundIcon,
   Link2Icon,
@@ -18,6 +19,7 @@ import type {
   IntegrationOffering,
 } from "@mender/sdk";
 import { Badge } from "@mender/ui/components/badge";
+import { Card, CardHeader, CardTitle, CardDescription, CardAction, CardContent } from "@mender/ui/components/card";
 import { Button } from "@mender/ui/components/button";
 import {
   Dialog,
@@ -30,14 +32,6 @@ import {
   DialogTitle,
 } from "@mender/ui/components/dialog";
 import { Input } from "@mender/ui/components/input";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@mender/ui/components/table";
 import { Textarea } from "@mender/ui/components/textarea";
 
 import { errorMessage } from "../../shared/errors";
@@ -83,8 +77,6 @@ import {
 } from "./generic-provider-config-schema";
 
 import { formatDateTime, formatNumber, t, tCount } from "../../i18n/i18n";
-import { ToolsViewSwitch } from "../tools/tools-view-switch";
-import type { ToolsView } from "../tools/tools-view-switch";
 import { toolSourceLabel } from "../tools/tool-source-label";
 
 function providerPluginSelectionKey(plugin: ProviderPlugin) {
@@ -206,12 +198,7 @@ function formForProviderPlugin(
   };
 }
 
-export function ProvidersPage({
-  client, onViewChange,
-}: {
-  client: MenderClient;
-  onViewChange: (view: ToolsView) => void;
-}) {
+export function ProvidersPage({ client }: { client: MenderClient }) {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const createHandledRef = useRef(false);
@@ -239,7 +226,6 @@ export function ProvidersPage({
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
   const [inventoryQuery, setInventoryQuery] = useState("");
-  const [showInternal, setShowInternal] = useState(() => searchParams.get("showInternal") === "1");
 
   const [createOpen, setCreateOpen] = useState(false);
   const [createForm, setCreateForm] =
@@ -366,12 +352,12 @@ export function ProvidersPage({
 
   const visibleProviders = useMemo(() => {
     const needle = inventoryQuery.trim().toLocaleLowerCase();
-    const normal = showInternal ? providers : providers.filter(provider => !isInternalProvider(provider.pluginId));
-    return needle ? normal.filter((provider) =>
-      [provider.displayName, provider.namespace, provider.pluginId ?? "", provider.toolSourceName ?? ""]
-        .some((value) => value.toLocaleLowerCase().includes(needle))
-    ) : normal;
-  }, [inventoryQuery, providers, showInternal]);
+    return providers.filter(provider =>
+      !needle || [toolSourceLabel(provider), provider.description,
+        provider.displayName, provider.namespace, provider.toolSourceName ?? ""]
+        .some(value => value.toLocaleLowerCase().includes(needle))
+    );
+  }, [inventoryQuery, providers]);
   const providerPagination = usePagination(visibleProviders);
 
 
@@ -632,17 +618,15 @@ export function ProvidersPage({
   return (
     <>
       <PageToolbar
-        tabs={<ToolsViewSwitch view="sources" onChange={onViewChange} />}
         filters={
-          <div className="w-full min-w-0 sm:w-56 sm:shrink-0">
-            <SearchField label="Search providers" placeholder="Search providers…" value={inventoryQuery} onChange={setInventoryQuery} />
+          <div className="w-full min-w-0 sm:w-64 sm:shrink-0">
+            <SearchField label="Search services" placeholder="Search services…" value={inventoryQuery} onChange={setInventoryQuery} />
           </div>
         }
         actions={
           <>
-            <Button variant="outline" size="sm" onClick={() => setShowInternal(value => !value)}>{t(showInternal ? "Hide internal providers" : "Show internal providers")}</Button>
             <Button variant="outline" size="sm" disabled={busy !== ""} onClick={() => void refresh()}>{t("Refresh")}</Button>
-            <Button size="sm" onClick={() => void navigate("/plugins?intent=source")}>{t("Add tool source")}</Button>
+            <Button size="sm" onClick={() => void navigate("/plugins?intent=source")}>{t("Add tool service")}</Button>
           </>
         }
       />
@@ -661,149 +645,83 @@ export function ProvidersPage({
           }
         />
       ) : null}
-      <ResultPanel title="Provider inventory">
+      <ResultPanel title="Tool services">
         {!loaded ? (
           <div className="px-4 py-12 text-center text-sm text-muted-foreground">
-            {t("Loading providers…")}
+            {t("Loading services…")}
           </div>
         ) : visibleProviders.length ? (
-          <>
-            <Table aria-label={t("Provider inventory")} className="max-md:block max-md:w-full">
-              <TableHeader className="max-md:sr-only">
-                <TableRow>
-                  <TableHead>{t("Provider")}</TableHead>
-                  <TableHead>{t("Plugin")}</TableHead>
-                  <TableHead>{t("Connection")}</TableHead>
-                  <TableHead>{t("Tools")}</TableHead>
-                  <TableHead className="text-right">{t("Actions")}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody className="max-md:block">
-                {providerPagination.items.map((provider) => (
-                  <TableRow
-                    key={provider.providerId}
-                    className="md:[&>td]:py-3 max-md:grid max-md:grid-cols-[minmax(0,1fr)_auto] max-md:items-start max-md:gap-x-3 max-md:gap-y-1.5 max-md:px-4 max-md:py-3.5 max-md:border-b max-md:last:border-b-0"
-                  >
-                    <TableCell className="font-medium max-md:col-start-1 max-md:row-start-1 max-md:block max-md:min-w-0 max-md:p-0">
-                      <span className="block truncate font-medium text-sm text-foreground" title={provider.displayName || provider.namespace}>
-                        {isInternalProvider(provider.pluginId) ? toolSourceLabel(provider) : provider.displayName || provider.namespace}
-                      </span>
-                    </TableCell>
-                    <TableCell className="max-md:col-start-2 max-md:row-start-1 max-md:block max-md:p-0 max-md:justify-self-end">
-                      <Badge variant="outline" className="max-md:text-[11px] max-md:px-2 max-md:py-0.5">
-                        {providerPluginLabelForProvider(
-                          providerPlugins,
-                          provider,
-                        )}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="max-w-[360px] truncate font-mono text-xs max-md:col-start-1 max-md:row-start-2 max-md:block max-md:min-w-0 max-md:p-0">
-                      <span className="block truncate font-mono text-xs text-muted-foreground max-md:text-[11px]" title={connectionSummary(provider)}>
-                        {connectionSummary(provider)}
-                      </span>
-                    </TableCell>
-                    <TableCell className="max-md:col-start-2 max-md:row-start-2 max-md:block max-md:p-0 max-md:justify-self-end">
-                      <Badge
-                        variant={provider.toolCount ? "outline" : "secondary"}
-                        className="max-md:text-[11px] max-md:px-2 max-md:py-0.5"
-                      >
-                        {tCount(
-                          provider.toolCount,
-                          "{{count}} synced Tool",
-                          "{{count}} synced Tools",
-                        )}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right max-md:col-span-2 max-md:row-start-3 max-md:block max-md:p-0 max-md:pt-2.5 max-md:mt-1 max-md:border-t max-md:border-border/40">
-                      <div className="flex justify-end gap-1 max-md:justify-end">
-                        <IconButton
-                          variant="ghost"
-                          label={t("View {{provider}}", {
-                            provider: provider.displayName || provider.namespace,
-                          })}
-                          onClick={() => setViewProvider(provider)}
-                        >
-                          <EyeIcon />
-                        </IconButton>
-                        <IconButton
-                          variant="ghost"
-                          label={t("Edit {{provider}}", {
-                            provider: provider.displayName || provider.namespace,
-                          })}
-                          disabled={busy !== "" || !provider.pluginId || isInternalProvider(provider.pluginId)}
-                          onClick={() => beginEdit(provider)}
-                        >
-                          <PencilIcon />
-                        </IconButton>
-                        <IconButton
-                          variant="outline"
-                          label={t("Authentication {{provider}}", {
-                            provider: provider.displayName || provider.namespace,
-                          })}
-                          disabled={
-                            busy !== "" ||
-                            !providerSupportsFirstPartyAuthentication(provider)
-                          }
-                          onClick={() => openProviderAuthentication(provider)}
-                        >
-                          <KeyRoundIcon />
-                        </IconButton>
-                        {providerRebindCandidates(
-                          providerPlugins,
-                          provider,
-                        ).length ? (
-                          <IconButton
-                            variant="outline"
-                            label={t("Rebind {{provider}}", {
-                              provider: provider.displayName || provider.namespace,
-                            })}
-                            disabled={busy !== ""}
-                            onClick={() => beginRebind(provider)}
-                          >
-                            <Link2Icon />
-                          </IconButton>
-                        ) : null}
-                        <IconButton
-                          variant="outline"
-                          label={t("Sync {{provider}}", {
-                            provider: provider.displayName || provider.namespace,
-                          })}
-                          disabled={busy !== "" || isInternalProvider(provider.pluginId)}
-                          onClick={() => void syncProvider(provider)}
-                        >
-                          <RefreshCwIcon />
-                        </IconButton>
-                        <IconButton
-                          variant="destructive"
-                          label={t("Delete {{provider}}", {
-                            provider: provider.displayName || provider.namespace,
-                          })}
-                          disabled={busy !== "" || isInternalProvider(provider.pluginId)}
-                          onClick={() => void deleteProvider(provider)}
-                        >
-                          <Trash2Icon />
-                        </IconButton>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </>
+          <div className="grid gap-4 p-4 md:grid-cols-2 xl:grid-cols-3">
+            {providerPagination.items.map(provider => {
+              const name=toolSourceLabel(provider);
+              const managed=provider.toolSourceKind==="agent" || provider.toolSourceKind==="sandbox" ||
+                isInternalProvider(provider.pluginId);
+              const ownerPath=provider.toolSourceKind==="agent" && provider.toolSourceId
+                ? "/agents/"+encodeURIComponent(provider.toolSourceId)
+                : provider.toolSourceKind==="sandbox" && provider.toolSourceId
+                  ? "/sandboxes/"+encodeURIComponent(provider.toolSourceId)
+                  : null;
+              return <Card key={provider.providerId} size="sm">
+                <CardHeader>
+                  <CardTitle>
+                    <Link className="hover:underline focus-visible:rounded focus-visible:outline-2 focus-visible:outline-ring"
+                      to={"/tools/"+encodeURIComponent(provider.providerId)}>{name}</Link>
+                  </CardTitle>
+                  <CardDescription className="line-clamp-2">
+                    {provider.description || t("Explore the tools provided by this service.")}
+                  </CardDescription>
+                  <CardAction>
+                    <Badge variant="secondary">
+                      {tCount(provider.toolCount,"{{count}} tool","{{count}} tools")}
+                    </Badge>
+                  </CardAction>
+                </CardHeader>
+                <CardContent className="flex flex-wrap items-center gap-2">
+                  <Button size="sm" onClick={() => void navigate("/tools/"+encodeURIComponent(provider.providerId))}>
+                    {t("View tools")} <ArrowRightIcon data-icon="inline-end" />
+                  </Button>
+                  {ownerPath ? (
+                    <Button size="sm" variant="outline" onClick={() => void navigate(ownerPath)}>
+                      {t("Manage")}
+                    </Button>
+                  ) : managed ? (
+                    <Button size="sm" variant="outline" onClick={() => setViewProvider(provider)}>
+                      {t("Details")}
+                    </Button>
+                  ) : (
+                    <>
+                      <IconButton variant="ghost" label={t("View {{provider}}", {provider:name})}
+                        onClick={() => setViewProvider(provider)}><EyeIcon /></IconButton>
+                      <IconButton variant="ghost" label={t("Edit {{provider}}", {provider:name})}
+                        disabled={busy!=="" || !provider.pluginId}
+                        onClick={() => beginEdit(provider)}><PencilIcon /></IconButton>
+                      {providerSupportsFirstPartyAuthentication(provider) ? (
+                        <IconButton variant="outline" label={t("Authentication {{provider}}", {provider:name})}
+                          disabled={busy!==""}
+                          onClick={() => openProviderAuthentication(provider)}><KeyRoundIcon /></IconButton>
+                      ) : null}
+                      {providerRebindCandidates(providerPlugins,provider).length ? (
+                        <IconButton variant="outline" label={t("Rebind {{provider}}", {provider:name})}
+                          disabled={busy!==""} onClick={() => beginRebind(provider)}><Link2Icon /></IconButton>
+                      ) : null}
+                      <IconButton variant="outline" label={t("Sync {{provider}}", {provider:name})}
+                        disabled={busy!==""} onClick={() => void syncProvider(provider)}><RefreshCwIcon /></IconButton>
+                      <IconButton variant="destructive" label={t("Delete {{provider}}", {provider:name})}
+                        disabled={busy!==""} onClick={() => void deleteProvider(provider)}><Trash2Icon /></IconButton>
+                    </>
+                  )}
+                </CardContent>
+              </Card>;
+            })}
+          </div>
         ) : (
           <EmptyPanelState>
-            <EmptyState
-              title={providers.length ? t("No matching providers") : t("No providers")}
-              description={providers.length ? t("Try a different search or filter.") : t("Add a Provider plugin and configure its connection to populate the Catalog.")}
-            />
+            <EmptyState title={providers.length?t("No matching services"):t("No tool services")}
+              description={providers.length?t("Try a different search or filter."):t("Add a service from Plugin Marketplace to discover its tools.")}/>
           </EmptyPanelState>
         )}
       </ResultPanel>
-
-      <TablePagination
-        label="Providers"
-        pagination={providerPagination}
-      />
+      <TablePagination label="Tool services" pagination={providerPagination} />
 
       {connectionOffering!==null?(
         <Dialog open onOpenChange={open=>{

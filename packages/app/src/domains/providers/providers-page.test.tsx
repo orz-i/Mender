@@ -44,7 +44,7 @@ function mount(providers: Provider[] = [sampleProvider], plugins: ProviderPlugin
 
   render(
     <MemoryRouter>
-      <ProvidersPage client={client} onViewChange={() => {}} />
+      <ProvidersPage client={client} />
     </MemoryRouter>,
   );
   return { client };
@@ -60,25 +60,17 @@ afterEach(() => {
   resetLocaleForTesting();
 });
 
-describe("ProvidersPage responsive table", () => {
-  it("renders mobile-card-ready layout and responsive grid classes", async () => {
+describe("Tool services responsive cards", () => {
+  it("shows one named service card with a Tool drilldown action", async () => {
     mount();
-    const table = await screen.findByRole("table", { name: "Provider inventory" });
-    expect(table).toBeTruthy();
-    expect(table.className).toContain("max-md:block");
-
-    const header = table.querySelector("thead");
-    expect(header?.className).toContain("max-md:sr-only");
-
-    const rows = table.querySelectorAll("tbody tr");
-    expect(rows.length).toBe(1);
-    expect(rows[0]?.className).toContain("max-md:grid");
-
-    expect(within(table).getByText("Echo Service")).toBeTruthy();
-    expect(within(table).getByText("Model Context Protocol")).toBeTruthy();
-    expect(within(table).getByText("5 synced Tools")).toBeTruthy();
-
-    const viewButton = screen.getByRole("button", { name: "View Echo Service" });
-    expect(viewButton).toBeTruthy();
+    const link=await screen.findByRole("link",{name:"Echo Service"});
+    expect(link.getAttribute("href")).toBe("/tools/prov_echo_01");
+    const card=link.closest<HTMLElement>('[data-slot="card"]');
+    expect(card).toBeTruthy();
+    expect(within(card!).getByText("5 tools")).toBeTruthy();
+    expect(within(card!).queryByText("Model Context Protocol")).toBeNull();
+    expect(screen.getByRole("button",{name:"View tools"})).toBeTruthy();
+    expect(screen.getByRole("button",{name:"View Echo Service"})).toBeTruthy();
+    expect(screen.queryByRole("button",{name:"Show internal providers"})).toBeNull();
   });
 });

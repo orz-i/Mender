@@ -28,24 +28,38 @@ function expectAnchoredDialog(title: string) {
 }
 
 describe("management pages", () => {
-  it("uses one Tools route with focused Catalog/Sources views and Marketplace discovery", async () => {
-    const client = {
-      listProviders: vi.fn().mockResolvedValue({ providers: [] }),
-      browseTools: vi.fn().mockResolvedValue({ tools: [] }),
-      searchTools: vi.fn(),
+  it("shows AnySearch as a service then only AnySearch Tools on drilldown",async()=>{
+    const anySearch={
+      providerId:"prov_anysearch",namespace:"anysearch",displayName:"AnySearch",
+      description:"Search the web",pluginId:"io.mender.provider.mcp",
+      toolSourceKind:"provider" as const,toolSourceName:"AnySearch",
+      toolCount:2,transport:"http" as const,
+      createdAt:"2026-10-16T00:00:00Z",updatedAt:"2026-10-16T00:00:00Z",
     };
-    renderApp("/tools", client);
-    expect((await screen.findByRole("button", { name: "Tool catalog" })).getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getByRole("button", { name: "Tool sources" }).getAttribute("aria-pressed")).toBe("false");
-    expect(screen.getByRole("textbox", { name: "Catalog search" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Tool sources" }));
-    expect(await screen.findByText("No providers")).toBeTruthy();
-    expect(screen.queryByRole("textbox", { name: "Catalog search" })).toBeNull();
-    expect(screen.getByRole("button", { name: "Tool sources" }).getAttribute("aria-pressed")).toBe("true");
-    expect(screen.queryByRole("dialog", { name: "Choose Provider plugin" })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Add tool source" }));
-    expect(await screen.findByRole("link", { name: "View MCP" })).toBeTruthy();
-    expect(screen.queryByRole("link", { name: "View OpenAI Secure MCP Tunnel" })).toBeNull();
+    const browseTools=vi.fn().mockResolvedValue({tools:[
+      {rank:1,toolId:"tool_search",providerId:"prov_anysearch",name:"web_search",title:"Web search",description:"Find web pages"},
+      {rank:2,toolId:"tool_other",providerId:"prov_other",name:"read",title:"Other source tool",description:"Excluded"},
+    ]});
+    renderApp("/tools",{
+      listProviders:vi.fn().mockResolvedValue({providers:[anySearch]}),browseTools,
+    });
+    const cardLink=await screen.findByRole("link",{name:"AnySearch"});
+    expect(screen.getByText("2 tools")).toBeTruthy();
+    expect(screen.queryByText("MCP provider")).toBeNull();
+    expect(screen.queryByRole("button",{name:"Tool sources"})).toBeNull();
+    expect(screen.queryByRole("button",{name:"Show internal providers"})).toBeNull();
+    fireEvent.click(cardLink);
+    await waitFor(()=>expect(browseTools).toHaveBeenCalledWith({
+      limit:100,providerId:"prov_anysearch",
+    }));
+    expect(await screen.findByText("Web search")).toBeTruthy();
+    expect(screen.queryByText("Other source tool")).toBeNull();
+    fireEvent.click(screen.getByRole("button",{name:"Back to services"}));
+    expect(await screen.findByRole("link",{name:"AnySearch"})).toBeTruthy();
+    expect(screen.queryByText("Web search")).toBeNull();
+    fireEvent.click(screen.getByRole("button",{name:"Add tool service"}));
+    expect(await screen.findByRole("link",{name:"View MCP"})).toBeTruthy();
+    expect(screen.queryByRole("link",{name:"View OpenAI Secure MCP Tunnel"})).toBeNull();
   });
 
   it("keeps Provider creation out of the primary list surface", async () => {
@@ -82,13 +96,13 @@ describe("management pages", () => {
       sync: { created: 1, updated: 0, removed: 0, total: 1 },
     });
 
-    renderApp("/tools?view=sources&create=1&pluginId=io.mender.provider.mcp", {
+    renderApp("/tools?create=1&pluginId=io.mender.provider.mcp", {
       listProviders,
       listCredentials: vi.fn().mockResolvedValue({ credentials: [credential] }),
       createProvider,
     });
 
-    expect(await screen.findByText("No providers")).toBeTruthy();
+    expect(await screen.findByText("No tool services")).toBeTruthy();
     const createDialog = await screen.findByRole("dialog", {
       name: "Add MCP provider",
     });
@@ -156,7 +170,7 @@ describe("management pages", () => {
   });
 
   it("routes Provider plugin degradation to Marketplace without hiding healthy plugins", async () => {
-    renderApp("/tools?view=sources", {
+    renderApp("/tools", {
       listProviderPlugins: vi.fn().mockResolvedValue({
         plugins: [
           {
@@ -182,7 +196,7 @@ describe("management pages", () => {
       listProviders: vi.fn().mockResolvedValue({ providers: [] }),
     });
 
-    expect(await screen.findByText("No providers")).toBeTruthy();
+    expect(await screen.findByText("No tool services")).toBeTruthy();
     expect(
       screen.getByText(
         "Some Provider plugins need attention. Review Plugin Marketplace for installation details.",
@@ -294,7 +308,7 @@ describe("management pages", () => {
       sync: { created: 0, updated: 1, removed: 0, total: 1 },
     });
 
-    renderApp("/tools?view=sources&create=1&pluginId=dev.example.echo&installationId=pinst_0123456789abcdef0123456789abcdef", {
+    renderApp("/tools?create=1&pluginId=dev.example.echo&installationId=pinst_0123456789abcdef0123456789abcdef", {
       listProviderPlugins: vi.fn().mockResolvedValue({
         plugins: [
           {
@@ -320,7 +334,7 @@ describe("management pages", () => {
       rebindProvider,
     });
 
-    expect(await screen.findByText("No providers")).toBeTruthy();
+    expect(await screen.findByText("No tool services")).toBeTruthy();
     beginProviderCreate("External Echo · 1.2.3");
 
     expect(
@@ -367,8 +381,8 @@ describe("management pages", () => {
       expect(screen.queryByRole("dialog", {name:"Add External Echo · 1.2.3 provider"})).toBeNull();
     });
     expect(await screen.findByText("External Echo Provider")).toBeTruthy();
-    expect(screen.getByText("External Echo · 1.2.3")).toBeTruthy();
-    expect(screen.getByText("External Echo · production")).toBeTruthy();
+    expect(screen.queryByText("External Echo · 1.2.3")).toBeNull();
+    expect(screen.queryByText("External Echo · production")).toBeNull();
 
     fireEvent.click(
       screen.getByRole("button", { name: "Rebind External Echo Provider" }),
@@ -439,7 +453,7 @@ describe("management pages", () => {
 
   it("fails closed on unsupported external Provider JSON Schema features", async () => {
     const installationId = "pinst_fedcba9876543210fedcba9876543210";
-    renderApp("/tools?view=sources&create=1&pluginId=io.mender.provider.mcp&installationId=pinst_fedcba9876543210fedcba9876543210", {
+    renderApp("/tools?create=1&pluginId=io.mender.provider.mcp&installationId=pinst_fedcba9876543210fedcba9876543210", {
       listProviderPlugins: vi.fn().mockResolvedValue({
         plugins: [
           {
@@ -479,7 +493,7 @@ describe("management pages", () => {
       listProviders: vi.fn().mockResolvedValue({ providers: [] }),
     });
 
-    expect(await screen.findByText("No providers")).toBeTruthy();
+    expect(await screen.findByText("No tool services")).toBeTruthy();
     beginProviderCreate("Unsupported External · 1.0.0");
 
     expect(screen.queryByText("Remote endpoint")).toBeNull();
@@ -732,7 +746,7 @@ describe("management pages", () => {
     };
 
     renderApp(
-      `/tools?view=sources&create=1&pluginId=dev.example.echo&installationId=${installationId}`,
+      `/tools?create=1&pluginId=dev.example.echo&installationId=${installationId}`,
       {
         listProviderPlugins: vi.fn().mockResolvedValue({
           plugins: [plugin],
@@ -1133,13 +1147,13 @@ describe("management pages", () => {
       sync: { created: 1, updated: 0, removed: 0, total: 1 },
     });
 
-    renderApp("/tools?view=sources&create=1&pluginId=io.mender.provider.model-tools", {
+    renderApp("/tools?create=1&pluginId=io.mender.provider.model-tools", {
       listProviders,
       listCredentials: vi.fn().mockResolvedValue({ credentials: [credential] }),
       createProvider,
     });
 
-    expect(await screen.findByText("No providers")).toBeTruthy();
+    expect(await screen.findByText("No tool services")).toBeTruthy();
     beginProviderCreate("Model Tools");
     fireEvent.click(screen.getByRole("button", { name: "Anthropic" }));
 
@@ -1237,13 +1251,13 @@ describe("management pages", () => {
       sync: { created: 1, updated: 0, removed: 0, total: 1 },
     });
 
-    renderApp("/tools?view=sources&create=1&pluginId=io.mender.provider.openapi", {
+    renderApp("/tools?create=1&pluginId=io.mender.provider.openapi", {
       listProviders,
       listCredentials: vi.fn().mockResolvedValue({ credentials: [credential] }),
       createProvider,
     });
 
-    expect(await screen.findByText("No providers")).toBeTruthy();
+    expect(await screen.findByText("No tool services")).toBeTruthy();
     beginProviderCreate("OpenAPI");
 
     fireEvent.change(screen.getByLabelText("Namespace"), {
@@ -1346,12 +1360,12 @@ describe("management pages", () => {
       sync: { created: 4, updated: 0, removed: 0, total: 4 },
     });
 
-    renderApp("/tools?view=sources&create=1&pluginId=io.mender.provider.mcp", {
+    renderApp("/tools?create=1&pluginId=io.mender.provider.mcp", {
       listProviders,
       createProvider,
     });
 
-    expect(await screen.findByText("No providers")).toBeTruthy();
+    expect(await screen.findByText("No tool services")).toBeTruthy();
     beginProviderCreate();
     fireEvent.click(screen.getByText("Advanced settings"));
 
@@ -1429,12 +1443,12 @@ describe("management pages", () => {
       sync: { created: 1, updated: 0, removed: 0, total: 1 },
     });
 
-    renderApp("/tools?view=sources&create=1&pluginId=io.mender.provider.mcp", {
+    renderApp("/tools?create=1&pluginId=io.mender.provider.mcp", {
       listProviders,
       createProvider,
     });
 
-    expect(await screen.findByText("No providers")).toBeTruthy();
+    expect(await screen.findByText("No tool services")).toBeTruthy();
     beginProviderCreate();
     fireEvent.click(screen.getByRole("button", { name: "Local command" }));
 
@@ -1499,7 +1513,7 @@ describe("management pages", () => {
       sync: { created: 0, updated: 1, removed: 0, total: 1 },
     });
 
-    renderApp("/tools?view=sources", {
+    renderApp("/tools", {
       listProviders,
       updateProvider,
     });
@@ -1513,7 +1527,7 @@ describe("management pages", () => {
     expect(screen.getByText("prov_1")).toBeTruthy();
     expect(
       screen.getAllByText("https://api.anysearch.com/mcp").length,
-    ).toBeGreaterThanOrEqual(2);
+    ).toBeGreaterThanOrEqual(1);
 
     const closeButtons = screen.getAllByRole("button", { name: "Close" });
     fireEvent.click(closeButtons[0]!);
@@ -1589,7 +1603,7 @@ describe("management pages", () => {
       sync: { created: 0, updated: 1, removed: 0, total: 1 },
     });
 
-    renderApp("/tools?view=sources", {
+    renderApp("/tools", {
       listProviders,
       listCredentials: vi.fn().mockResolvedValue({ credentials: [credential] }),
       updateProvider,
@@ -1675,7 +1689,7 @@ describe("management pages", () => {
       ],
     });
 
-    renderApp("/tools?view=catalog", {
+    renderApp("/tools/prov_1", {
       listProviders: vi.fn().mockResolvedValue({
         providers: [
           {
@@ -1709,10 +1723,7 @@ describe("management pages", () => {
       screen.getByRole("columnheader", { name: "Actions" }),
     ).toBeTruthy();
 
-    fireEvent.change(screen.getByLabelText("Tool source filter"), {
-      target: { value: "prov_1" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Browse" }));
+        fireEvent.click(screen.getByRole("button", { name: "Browse" }));
     await waitFor(() => {
       expect(browseTools).toHaveBeenLastCalledWith({
         limit: 100,

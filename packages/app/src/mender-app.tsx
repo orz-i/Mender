@@ -20,7 +20,7 @@ import {
 import { pluginInstaller } from "./domains/plugins/marketplace";
 import { PolicyPage } from "./domains/policy/policy-page";
 import { ProfilesPage } from "./domains/profiles/profiles-page";
-import { ToolsPage } from "./domains/tools/tools-page";
+import { ToolsPage, ToolServicePage } from "./domains/tools/tools-page";
 import { RuntimePage } from "./domains/runtime/runtime-page";
 import { SandboxesPage, CreateSandboxPage, SandboxDetailPage } from "./domains/sandboxes/sandboxes-page";
 import { SandboxActivityPage } from "./domains/sandboxes/sandbox-activity-page";
@@ -74,6 +74,7 @@ export function MenderApp({
             element={<PluginDetailPage client={client} />}
           />
           <Route path="tools" element={<ToolsPage client={client} />} />
+          <Route path="tools/:providerId" element={<ToolServicePage client={client} />} />
           <Route
             path="skills"
             element={

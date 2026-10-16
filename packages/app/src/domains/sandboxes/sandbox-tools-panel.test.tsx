@@ -63,7 +63,7 @@ it("rejects an unavailable or conflicting Sandbox Suite without a fake Add actio
  show({getSandboxTools:vi.fn().mockResolvedValue({...empty,status:"conflict"})});
  expect(await screen.findByText(/Multiple Workspace Providers target this Sandbox/)).toBeTruthy();
  expect(screen.queryByRole("button",{name:"Prepare Workspace Tools"})).toBeNull();
- fireEvent.click(screen.getByRole("button",{name:"Review internal providers"}));
+ fireEvent.click(screen.getByRole("button",{name:"View tool services"}));
  expect(await screen.findByText("Internal provider management")).toBeTruthy();
 });
 it("displays a separate Tools topic without loading it on Sandbox overview",async()=>{

@@ -72,7 +72,7 @@ function WorkspaceToolsPanel({client,sandbox}:{client:MenderClient;sandbox:Sandb
           </p>
         </div>
         {suite?.status==="conflict"?
-          <Button variant="outline" size="sm" onClick={()=>void navigate("/tools?view=sources&showInternal=1")}>{t("Review internal providers")}</Button>
+          <Button variant="outline" size="sm" onClick={()=>void navigate("/tools")}>{t("View tool services")}</Button>
           :<div className="flex flex-wrap gap-2">
             {suite?.available && suite.status!=="ready"?
               <Button size="sm" disabled={busy} onClick={()=>void prepare()}>

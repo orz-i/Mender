@@ -174,7 +174,7 @@ export function AgentDetailPage({client}:{client:MenderClient}){
             t("Agent tools are not ready; review and repair the binding.")}</p>
         </div>
         {tools?.status==="conflict"?
-          <Button size="sm" variant="outline" onClick={()=>void navigate("/tools?view=sources&showInternal=1")}>{t("Review internal providers")}</Button>:
+          <Button size="sm" variant="outline" onClick={()=>void navigate("/tools")}>{t("View tool services")}</Button>:
           tools?.status!=="ready"?<Button size="sm" disabled={busy} onClick={()=>void repairTools()}>{t("Prepare Agent tools")}</Button>:null}
       </div>
       {tools?.tools.length?<Table><TableHeader><TableRow>

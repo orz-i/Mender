@@ -1,18 +1,16 @@
 import type { MenderClient } from "@mender/sdk";
-import { useSearchParams } from "react-router";
+import { useParams } from "react-router";
 
 import { CatalogPage } from "../catalog/catalog-page";
 import { ProvidersPage } from "../providers/providers-page";
-import type { ToolsView } from "./tools-view-switch";
 
-/** Product navigation only: underlying Catalog/Provider identities remain distinct. */
+/** The Tools workspace has two levels: added services, then that service's Tools. */
 export function ToolsPage({ client }: { client: MenderClient }) {
-  const [params, setParams] = useSearchParams();
-  const view: ToolsView = params.get("view") === "sources" ? "sources" : "catalog";
-  const changeView = (next: ToolsView) => {
-    setParams(new URLSearchParams({ view: next }));
-  };
-  return view === "sources"
-    ? <ProvidersPage client={client} onViewChange={changeView} />
-    : <CatalogPage client={client} onViewChange={changeView} />;
+  return <ProvidersPage client={client} />;
+}
+
+export function ToolServicePage({ client }: { client: MenderClient }) {
+  const { providerId } = useParams();
+  if (!providerId) return null;
+  return <CatalogPage client={client} providerId={providerId} />;
 }

@@ -28,8 +28,8 @@ it.each([
     createProvider,
   } as unknown as MenderClient;
   const query=new URLSearchParams({create:"1",pluginId,agentId:"agent_0123456789abcdef0123456789abcdef"});
-  render(<MemoryRouter initialEntries={["/tools?view=sources&"+query.toString()]}>
-    <TooltipProvider><ProvidersPage client={client} onViewChange={() => {}}/></TooltipProvider>
+  render(<MemoryRouter initialEntries={["/tools?"+query.toString()]}>
+    <TooltipProvider><ProvidersPage client={client}/></TooltipProvider>
   </MemoryRouter>);
   expect(await screen.findByText("The requested item was not found.")).toBeTruthy();
   expect(screen.queryByRole("dialog",{name:/Add Internal Resource Tools/})).toBeNull();
