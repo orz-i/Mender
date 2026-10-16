@@ -66,7 +66,7 @@ describe("Host-reviewed Marketplace projection",()=>{
     ]);
     expect(models).toHaveLength(3);
     for(const model of models){
-      expect(model.createAction?.href).toBe("/providers?create=1&pluginId="+model.key.split("@")[0]);
+      expect(model.createAction?.href).toBe("/tools?create=1&pluginId="+model.key.split("@")[0]+"&view=sources");
       expect(model.actions).toEqual({enable:false,disable:false,remove:false});
     }
   });
@@ -76,7 +76,7 @@ describe("Host-reviewed Marketplace projection",()=>{
       entry("provider.tools"),entry("sandbox.backend"),entry("tunnel.transport"),
     ]);
     expect(models.find(x=>x.kind==="provider")?.createAction?.href).toBe(
-      "/providers?create=1&pluginId=dev.example.provider&installationId="+id);
+      "/tools?create=1&pluginId=dev.example.provider&view=sources&installationId="+id);
     expect(models.find(x=>x.kind==="sandbox")?.createAction?.href).toBe(
       "/sandboxes/new/external?create=1&pluginId=dev.example.sandbox&installationId="+id);
     expect(models.find(x=>x.kind==="tunnel")?.createAction?.href).toBe(
@@ -158,7 +158,7 @@ describe("Host-reviewed Marketplace projection",()=>{
     const [item]=integrationOfferingsToMarketplace([anySearch]);
     expect(item).toMatchObject({kind:"integration",source:"curated",status:"available",
       actions:{enable:false,disable:false,remove:false},
-      createAction:{label:"Connect",href:"/providers?create=1&offeringId=io.mender.integration.anysearch"},
+      createAction:{label:"Connect",href:"/tools?view=sources&create=1&offeringId=io.mender.integration.anysearch"},
     });
     expect(item?.technicalDetails.find(x=>x.label==="Endpoint")?.value).toBe("https://api.anysearch.com/mcp");
     expect(()=>integrationOfferingsToMarketplace([

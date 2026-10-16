@@ -31,9 +31,8 @@ describe("MenderApp", () => {
     for (const name of [
       "Overview",
       "Plugin Marketplace",
-      "Providers",
+      "Tools",
       "Skills",
-      "Catalog",
       "Profiles",
       "Agents",
       "Servers",
@@ -126,7 +125,7 @@ describe("MenderApp", () => {
     expect(brand?.classList.contains("justify-center")).toBe(true);
     expect(expand.classList.contains("opacity-0")).toBe(true);
     expect(expand.classList.contains("group-hover/brand:opacity-100")).toBe(true);
-    expect(screen.getByRole("link", { name: "Providers" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Tools" })).toBeTruthy();
     expect(window.localStorage.getItem("mender.sidebar.collapsed")).toBe("true");
 
     fireEvent.click(expand);
@@ -150,7 +149,7 @@ describe("MenderApp", () => {
 
     expect(screen.getByRole("heading", { name: "概览" })).toBeTruthy();
     expect(screen.getByRole("link", { name: "插件市场" })).toBeTruthy();
-    expect(screen.getByRole("link", { name: "提供方" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "工具" })).toBeTruthy();
     expect(screen.getByRole("link", { name: "技能" })).toBeTruthy();
     expect(
       screen.queryByText("本地控制平面状态与近期 Mender 活动。"),

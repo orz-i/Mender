@@ -31,7 +31,7 @@ function show(client:Partial<MenderClient>,fullPage=false){
   <Routes>
    <Route path="/" element={<SandboxToolsPanel {...props}/>}/>
    <Route path="/sandboxes/:sandboxId" element={<SandboxDetailPage client={client as MenderClient}/>}/>
-   <Route path="/providers" element={<div>Internal provider management</div>}/>
+   <Route path="/tools" element={<div>Internal provider management</div>}/>
   </Routes>
  </MemoryRouter>);
 }

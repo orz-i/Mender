@@ -44,7 +44,7 @@ function mount(providers: Provider[] = [sampleProvider], plugins: ProviderPlugin
 
   render(
     <MemoryRouter>
-      <ProvidersPage client={client} />
+      <ProvidersPage client={client} onViewChange={() => {}} />
     </MemoryRouter>,
   );
   return { client };

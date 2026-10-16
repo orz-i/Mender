@@ -28,6 +28,26 @@ function expectAnchoredDialog(title: string) {
 }
 
 describe("management pages", () => {
+  it("uses one Tools route with focused Catalog/Sources views and Marketplace discovery", async () => {
+    const client = {
+      listProviders: vi.fn().mockResolvedValue({ providers: [] }),
+      browseTools: vi.fn().mockResolvedValue({ tools: [] }),
+      searchTools: vi.fn(),
+    };
+    renderApp("/tools", client);
+    expect((await screen.findByRole("button", { name: "Tool catalog" })).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "Tool sources" }).getAttribute("aria-pressed")).toBe("false");
+    expect(screen.getByRole("textbox", { name: "Catalog search" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Tool sources" }));
+    expect(await screen.findByText("No providers")).toBeTruthy();
+    expect(screen.queryByRole("textbox", { name: "Catalog search" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Tool sources" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.queryByRole("dialog", { name: "Choose Provider plugin" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Add tool source" }));
+    expect(await screen.findByRole("link", { name: "View MCP" })).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "View OpenAI Secure MCP Tunnel" })).toBeNull();
+  });
+
   it("keeps Provider creation out of the primary list surface", async () => {
     const provider = {
       providerId: "prov_1",
@@ -62,49 +82,19 @@ describe("management pages", () => {
       sync: { created: 1, updated: 0, removed: 0, total: 1 },
     });
 
-    renderApp("/providers", {
+    renderApp("/tools?view=sources&create=1&pluginId=io.mender.provider.mcp", {
       listProviders,
       listCredentials: vi.fn().mockResolvedValue({ credentials: [credential] }),
       createProvider,
     });
 
     expect(await screen.findByText("No providers")).toBeTruthy();
-    expect(screen.queryByText("Remote endpoint")).toBeNull();
-    expect(screen.queryByText("Local command")).toBeNull();
-
-    fireEvent.click(screen.getByRole("button", { name: "Add provider" }));
-    const chooser = screen.getByRole("dialog", {
-      name: "Choose Provider plugin",
-    });
-    expect(within(chooser).queryByText("Remote endpoint")).toBeNull();
-    expect(within(chooser).queryByText("Local command")).toBeNull();
-    fireEvent.click(
-      within(chooser).getByRole("button", { name: "Add MCP provider" }),
-    );
-
-    const createDialog = screen.getByRole("dialog", {
+    const createDialog = await screen.findByRole("dialog", {
       name: "Add MCP provider",
     });
     expect(within(createDialog).getByText("Remote endpoint")).toBeTruthy();
     expect(within(createDialog).getByText("Local command")).toBeTruthy();
-    expect(
-      within(createDialog).queryByRole("button", {
-        name: "Add Model Tools provider",
-      }),
-    ).toBeNull();
-
-    fireEvent.click(
-      within(createDialog).getByRole("button", { name: "Back to plugins" }),
-    );
-    const reopenedChooser = await screen.findByRole("dialog", {
-      name: "Choose Provider plugin",
-    });
-    expect(within(reopenedChooser).queryByText("Remote endpoint")).toBeNull();
-    fireEvent.click(
-      within(reopenedChooser).getByRole("button", {
-        name: "Add MCP provider",
-      }),
-    );
+    expect(within(createDialog).queryByRole("button", { name: "Add Model Tools provider" })).toBeNull();
 
     fireEvent.change(screen.getByLabelText("Namespace"), {
       target: { value: "demo" },
@@ -166,7 +156,7 @@ describe("management pages", () => {
   });
 
   it("routes Provider plugin degradation to Marketplace without hiding healthy plugins", async () => {
-    renderApp("/providers", {
+    renderApp("/tools?view=sources", {
       listProviderPlugins: vi.fn().mockResolvedValue({
         plugins: [
           {
@@ -304,7 +294,7 @@ describe("management pages", () => {
       sync: { created: 0, updated: 1, removed: 0, total: 1 },
     });
 
-    renderApp("/providers", {
+    renderApp("/tools?view=sources&create=1&pluginId=dev.example.echo&installationId=pinst_0123456789abcdef0123456789abcdef", {
       listProviderPlugins: vi.fn().mockResolvedValue({
         plugins: [
           {
@@ -372,6 +362,9 @@ describe("management pages", () => {
           enabled: true,
         },
       });
+    });
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", {name:"Add External Echo · 1.2.3 provider"})).toBeNull();
     });
     expect(await screen.findByText("External Echo Provider")).toBeTruthy();
     expect(screen.getByText("External Echo · 1.2.3")).toBeTruthy();
@@ -446,7 +439,7 @@ describe("management pages", () => {
 
   it("fails closed on unsupported external Provider JSON Schema features", async () => {
     const installationId = "pinst_fedcba9876543210fedcba9876543210";
-    renderApp("/providers", {
+    renderApp("/tools?view=sources&create=1&pluginId=io.mender.provider.mcp&installationId=pinst_fedcba9876543210fedcba9876543210", {
       listProviderPlugins: vi.fn().mockResolvedValue({
         plugins: [
           {
@@ -739,7 +732,7 @@ describe("management pages", () => {
     };
 
     renderApp(
-      `/providers?create=1&pluginId=dev.example.echo&installationId=${installationId}`,
+      `/tools?view=sources&create=1&pluginId=dev.example.echo&installationId=${installationId}`,
       {
         listProviderPlugins: vi.fn().mockResolvedValue({
           plugins: [plugin],
@@ -1140,7 +1133,7 @@ describe("management pages", () => {
       sync: { created: 1, updated: 0, removed: 0, total: 1 },
     });
 
-    renderApp("/providers", {
+    renderApp("/tools?view=sources&create=1&pluginId=io.mender.provider.model-tools", {
       listProviders,
       listCredentials: vi.fn().mockResolvedValue({ credentials: [credential] }),
       createProvider,
@@ -1244,7 +1237,7 @@ describe("management pages", () => {
       sync: { created: 1, updated: 0, removed: 0, total: 1 },
     });
 
-    renderApp("/providers", {
+    renderApp("/tools?view=sources&create=1&pluginId=io.mender.provider.openapi", {
       listProviders,
       listCredentials: vi.fn().mockResolvedValue({ credentials: [credential] }),
       createProvider,
@@ -1353,7 +1346,7 @@ describe("management pages", () => {
       sync: { created: 4, updated: 0, removed: 0, total: 4 },
     });
 
-    renderApp("/providers", {
+    renderApp("/tools?view=sources&create=1&pluginId=io.mender.provider.mcp", {
       listProviders,
       createProvider,
     });
@@ -1436,7 +1429,7 @@ describe("management pages", () => {
       sync: { created: 1, updated: 0, removed: 0, total: 1 },
     });
 
-    renderApp("/providers", {
+    renderApp("/tools?view=sources&create=1&pluginId=io.mender.provider.mcp", {
       listProviders,
       createProvider,
     });
@@ -1506,7 +1499,7 @@ describe("management pages", () => {
       sync: { created: 0, updated: 1, removed: 0, total: 1 },
     });
 
-    renderApp("/providers", {
+    renderApp("/tools?view=sources", {
       listProviders,
       updateProvider,
     });
@@ -1596,7 +1589,7 @@ describe("management pages", () => {
       sync: { created: 0, updated: 1, removed: 0, total: 1 },
     });
 
-    renderApp("/providers", {
+    renderApp("/tools?view=sources", {
       listProviders,
       listCredentials: vi.fn().mockResolvedValue({ credentials: [credential] }),
       updateProvider,
@@ -1682,7 +1675,7 @@ describe("management pages", () => {
       ],
     });
 
-    renderApp("/catalog", {
+    renderApp("/tools?view=catalog", {
       listProviders: vi.fn().mockResolvedValue({
         providers: [
           {
@@ -2596,15 +2589,7 @@ describe("management pages", () => {
 });
 
 function beginProviderCreate(pluginLabel = "MCP") {
-  fireEvent.click(screen.getByRole("button", { name: "Add provider" }));
-  const chooser = screen.getByRole("dialog", {
-    name: "Choose Provider plugin",
-  });
-  fireEvent.click(
-    within(chooser).getByRole("button", {
-      name: `Add ${pluginLabel} provider`,
-    }),
-  );
+  expect(screen.getByRole("dialog", {name: `Add ${pluginLabel} provider`})).toBeTruthy();
 }
 
 function captureDockerPolling(){

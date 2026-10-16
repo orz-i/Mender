@@ -40,17 +40,18 @@ import {
   SearchField,
 } from "../../shared/workbench";
 
-import { formatNumber, t, tCount } from "../../i18n/i18n";
+import { formatNumber, t } from "../../i18n/i18n";
+import { ToolsViewSwitch } from "../tools/tools-view-switch";
+import type { ToolsView } from "../tools/tools-view-switch";
 
 type ToolView = "overview" | "description" | "schemas" | "invoke";
 
-export function CatalogPage({ client }: { client: MenderClient }) {
+export function CatalogPage({ client, onViewChange }: { client: MenderClient; onViewChange: (view: ToolsView) => void }) {
   const [query, setQuery] = useState("");
   const [providerId, setProviderId] = useState("");
   const [providers, setProviders] = useState<Provider[]>([]);
   const [results, setResults] = useState<ToolSummary[]>([]);
   const [searched, setSearched] = useState(false);
-  const [loaded, setLoaded] = useState(false);
 
   const [selected, setSelected] = useState<ToolDetail | null>(null);
   const [toolView, setToolView] = useState<ToolView | null>(null);
@@ -74,13 +75,11 @@ export function CatalogPage({ client }: { client: MenderClient }) {
           setProviders(providerResult.providers);
           setResults(toolResult.tools);
           setSearched(false);
-          setLoaded(true);
         }
       })
       .catch((reason: unknown) => {
         if (active) {
           setError(errorMessage(reason));
-          setLoaded(true);
         }
       });
     return () => {
@@ -198,13 +197,7 @@ export function CatalogPage({ client }: { client: MenderClient }) {
       {error ? <ErrorNotice message={error} /> : null}
 
       <PageToolbar
-        tabs={
-          <span className="text-xs font-medium text-muted-foreground" aria-live="polite">
-            {!loaded ? t("Loading synchronized Tools…") :
-              searched ? tCount(results.length, "{{count}} compact match", "{{count}} compact matches") :
-              tCount(results.length, "{{count}} synchronized Tool", "{{count}} synchronized Tools")}
-          </span>
-        }
+        tabs={<ToolsViewSwitch view="catalog" onChange={onViewChange} />}
         filters={
           <>
             <div className="w-full min-w-0 sm:w-60 sm:shrink-0">

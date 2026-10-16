@@ -10,14 +10,13 @@ import {
   LanguagesIcon,
   Layers3Icon,
   LayoutDashboardIcon,
-  PackageSearchIcon,
   PanelLeftCloseIcon,
   PanelLeftOpenIcon,
-  PlugIcon,
   ScrollTextIcon,
   SearchIcon,
   ServerCogIcon,
   ShieldCheckIcon,
+  WrenchIcon,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
@@ -59,9 +58,8 @@ const navigation: NavigationGroup[] = [
     items: [
       { to: "/", label: "Overview", icon: LayoutDashboardIcon },
       { to: "/plugins", label: "Plugin Marketplace", icon: BlocksIcon },
-      { to: "/providers", label: "Providers", icon: PlugIcon },
+      { to: "/tools", label: "Tools", icon: WrenchIcon },
       { to: "/skills", label: "Skills", icon: BookOpenIcon },
-      { to: "/catalog", label: "Catalog", icon: PackageSearchIcon },
     ],
   },
   {

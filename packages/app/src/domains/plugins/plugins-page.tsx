@@ -80,9 +80,12 @@ export function PluginsPage({
     null,
   ]);
 
+  const sourceIntent = searchParams.get("intent") === "source";
   const scopedPlugins = useMemo(() => plugins.filter(plugin =>
-    view==="discover" ? plugin.createAction!==undefined : plugin.actionRef!==undefined
-  ),[plugins,view]);
+    view==="discover"
+      ? plugin.createAction!==undefined && (!sourceIntent || ["provider","integration"].includes(plugin.kind))
+      : plugin.actionRef!==undefined
+  ),[plugins,view,sourceIntent]);
 
   const kindOptions = useMemo(() => {
     const labelsByKind = new Map<string, string>();

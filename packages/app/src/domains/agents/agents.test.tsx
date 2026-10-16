@@ -50,7 +50,7 @@ function show(path:string,overrides:Partial<MenderClient>={}){
     <Route path="/agents" element={<AgentsPage client={client as MenderClient}/>}/>
     <Route path="/agents/new" element={<AgentCreatePage client={client as MenderClient}/>}/>
     <Route path="/agents/:agentId" element={<AgentDetailPage client={client as MenderClient}/>}/>
-    <Route path="/providers" element={<div>Provider creation target</div>}/>
+    <Route path="/tools" element={<div>Provider creation target</div>}/>
   </Routes></MemoryRouter>);
   return client;
 }

@@ -11,7 +11,6 @@ import { AgentsPage } from "./domains/agents/agents-page";
 import { AgentCreatePage } from "./domains/agents/agent-create-page";
 import { AgentDetailPage } from "./domains/agents/agent-detail-page";
 import { AuditPage } from "./domains/audit/audit-page";
-import { CatalogPage } from "./domains/catalog/catalog-page";
 import { CredentialsPage } from "./domains/credentials/credentials-page";
 import { OverviewPage } from "./domains/overview/overview-page";
 import {
@@ -21,7 +20,7 @@ import {
 import { pluginInstaller } from "./domains/plugins/marketplace";
 import { PolicyPage } from "./domains/policy/policy-page";
 import { ProfilesPage } from "./domains/profiles/profiles-page";
-import { ProvidersPage } from "./domains/providers/providers-page";
+import { ToolsPage } from "./domains/tools/tools-page";
 import { RuntimePage } from "./domains/runtime/runtime-page";
 import { SandboxesPage, CreateSandboxPage, SandboxDetailPage } from "./domains/sandboxes/sandboxes-page";
 import { SandboxActivityPage } from "./domains/sandboxes/sandbox-activity-page";
@@ -74,10 +73,7 @@ export function MenderApp({
             path="plugins/:pluginKey"
             element={<PluginDetailPage client={client} />}
           />
-          <Route
-            path="providers"
-            element={<ProvidersPage client={client} />}
-          />
+          <Route path="tools" element={<ToolsPage client={client} />} />
           <Route
             path="skills"
             element={
@@ -88,7 +84,6 @@ export function MenderApp({
               />
             }
           />
-          <Route path="catalog" element={<CatalogPage client={client} />} />
           <Route path="profiles" element={<ProfilesPage client={client} />} />
           <Route path="tunnels" element={<TunnelsPage client={client} />} />
           <Route

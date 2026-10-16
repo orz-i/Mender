@@ -1,12 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import {
-  ArrowLeftIcon,
   EyeIcon,
   KeyRoundIcon,
   Link2Icon,
   PencilIcon,
-  PlusIcon,
   RefreshCwIcon,
   Trash2Icon,
 } from "lucide-react";
@@ -21,14 +19,6 @@ import type {
 } from "@mender/sdk";
 import { Badge } from "@mender/ui/components/badge";
 import { Button } from "@mender/ui/components/button";
-import {
-  Card,
-  CardAction,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@mender/ui/components/card";
 import {
   Dialog,
   DialogClose,
@@ -93,6 +83,8 @@ import {
 } from "./generic-provider-config-schema";
 
 import { formatDateTime, formatNumber, t, tCount } from "../../i18n/i18n";
+import { ToolsViewSwitch } from "../tools/tools-view-switch";
+import type { ToolsView } from "../tools/tools-view-switch";
 
 function providerPluginSelectionKey(plugin: ProviderPlugin) {
   return plugin.installationId
@@ -214,12 +206,14 @@ function formForProviderPlugin(
 }
 
 export function ProvidersPage({
-  client,
+  client, onViewChange,
 }: {
   client: MenderClient;
+  onViewChange: (view: ToolsView) => void;
 }) {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const createHandledRef = useRef(false);
   const [createRequest] = useState(() => {
     const remainingSearchParams = new URLSearchParams(searchParams);
     remainingSearchParams.delete("create");
@@ -246,9 +240,7 @@ export function ProvidersPage({
   const [inventoryQuery, setInventoryQuery] = useState("");
   const [showInternal, setShowInternal] = useState(() => searchParams.get("showInternal") === "1");
 
-  const [pluginPickerOpen, setPluginPickerOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
-  const [createCanReturnToPicker, setCreateCanReturnToPicker] = useState(false);
   const [createForm, setCreateForm] =
     useState<ProviderFormState>(emptyProviderForm);
   const [createError, setCreateError] = useState("");
@@ -314,7 +306,8 @@ export function ProvidersPage({
           setProviders(providerResult.providers);
           setCredentials(credentialResult.credentials);
 
-          if (createRequest.requested && createRequest.offeringId) {
+          if (createRequest.requested && !createHandledRef.current && createRequest.offeringId) {
+            createHandledRef.current = true;
             const offering=offeringResult.integrations.find(item=>item.offeringId===createRequest.offeringId);
             if (offering===undefined || offering.kind!=="remote-mcp" ||
               offering.driverPluginId!==MCP_PLUGIN_ID || offering.transport!=="streamable-http" ||
@@ -329,7 +322,8 @@ export function ProvidersPage({
               setError("");
             }
             setSearchParams(createRequest.remainingSearchParams, {replace:true});
-          } else if (createRequest.requested) {
+          } else if (createRequest.requested && !createHandledRef.current) {
+            createHandledRef.current = true;
             const plugin =
               createRequest.pluginId === null
                 ? undefined
@@ -346,14 +340,12 @@ export function ProvidersPage({
             } else {
               setError("");
               setCreateForm(formForProviderPlugin(emptyProviderForm, plugin));
-              setPluginPickerOpen(false);
-              setCreateCanReturnToPicker(false);
-              setCreateOpen(true);
+                      setCreateOpen(true);
             }
             setSearchParams(createRequest.remainingSearchParams, {
               replace: true,
             });
-          } else {
+          } else if (!createRequest.requested) {
             setError("");
           }
           setLoaded(true);
@@ -435,7 +427,6 @@ export function ProvidersPage({
       });
 
       setCreateOpen(false);
-      setCreateCanReturnToPicker(false);
       setCreateForm(emptyProviderForm);
       await refresh();
     } catch (reason) {
@@ -629,37 +620,10 @@ export function ProvidersPage({
     }
   }
 
-  function openCreatePluginPicker() {
-    setError("");
-    setCreateError("");
-    setCreateOpen(false);
-    setCreateCanReturnToPicker(false);
-    setCreateForm(emptyProviderForm);
-    setPluginPickerOpen(true);
-  }
-
-  function chooseCreatePlugin(plugin: ProviderPlugin) {
-    setError("");
-    setCreateError("");
-    setCreateForm(formForProviderPlugin(emptyProviderForm, plugin));
-    setPluginPickerOpen(false);
-    setCreateCanReturnToPicker(true);
-    setCreateOpen(true);
-  }
-
-  function returnToCreatePluginPicker() {
-    setCreateError("");
-    setCreateOpen(false);
-    setCreateCanReturnToPicker(false);
-    setCreateForm(emptyProviderForm);
-    window.setTimeout(() => setPluginPickerOpen(true), 0);
-  }
-
   function setCreateDialogOpen(open: boolean) {
     setCreateOpen(open);
     if (!open) {
       setCreateError("");
-      setCreateCanReturnToPicker(false);
       setCreateForm(emptyProviderForm);
     }
   }
@@ -667,11 +631,7 @@ export function ProvidersPage({
   return (
     <>
       <PageToolbar
-        tabs={
-          <span className="text-xs text-muted-foreground">
-            {tCount(showInternal ? providers.length : providers.filter(p=>!isInternalProvider(p.pluginId)).length, "{{count}} configured source", "{{count}} configured sources")}
-          </span>
-        }
+        tabs={<ToolsViewSwitch view="sources" onChange={onViewChange} />}
         filters={
           <div className="w-full min-w-0 sm:w-56 sm:shrink-0">
             <SearchField label="Search providers" placeholder="Search providers…" value={inventoryQuery} onChange={setInventoryQuery} />
@@ -681,7 +641,7 @@ export function ProvidersPage({
           <>
             <Button variant="outline" size="sm" onClick={() => setShowInternal(value => !value)}>{t(showInternal ? "Hide internal providers" : "Show internal providers")}</Button>
             <Button variant="outline" size="sm" disabled={busy !== ""} onClick={() => void refresh()}>{t("Refresh")}</Button>
-            <Button size="sm" onClick={openCreatePluginPicker}>{t("Add provider")}</Button>
+            <Button size="sm" onClick={() => void navigate("/plugins?intent=source")}>{t("Add tool source")}</Button>
           </>
         }
       />
@@ -693,7 +653,7 @@ export function ProvidersPage({
             <Button
               size="sm"
               variant="primary"
-              onClick={() => void navigate("/plugins")}
+              onClick={() => void navigate("/plugins?view=installed")}
             >
               {t("Review Marketplace")}
             </Button>
@@ -896,13 +856,6 @@ export function ProvidersPage({
         </Dialog>
       ):null}
 
-      <ProviderPluginPickerDialog
-        open={pluginPickerOpen}
-        plugins={providerPlugins.filter(plugin => !isInternalProvider(plugin.pluginId))}
-        onOpenChange={setPluginPickerOpen}
-        onSelect={chooseCreatePlugin}
-      />
-
       <ProviderFormDialog
         open={createOpen}
         mode="create"
@@ -918,9 +871,6 @@ export function ProvidersPage({
           setCreateForm(next);
         }}
         onAuthentication={openCreateAuthentication}
-        {...(createCanReturnToPicker
-          ? { onBack: returnToCreatePluginPicker }
-          : {})}
         onSubmit={() => void addProvider()}
       />
 
@@ -1125,78 +1075,6 @@ function ProviderRebindDialog({
   );
 }
 
-function ProviderPluginPickerDialog({
-  open,
-  plugins,
-  onOpenChange,
-  onSelect,
-}: {
-  open: boolean;
-  plugins: ProviderPlugin[];
-  onOpenChange: (open: boolean) => void;
-  onSelect: (plugin: ProviderPlugin) => void;
-}) {
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>{t("Choose Provider plugin")}</DialogTitle>
-          <DialogDescription>
-            {t(
-              "Select a Provider plugin first. Configuration opens after you choose a plugin.",
-            )}
-          </DialogDescription>
-        </DialogHeader>
-
-        {plugins.length ? (
-          <div className="flex max-h-[60vh] flex-col gap-3 overflow-y-auto pr-1">
-            {plugins.map((plugin) => (
-              <Card key={providerPluginSelectionKey(plugin)} size="sm">
-                <CardHeader>
-                  <CardTitle>{plugin.displayName}</CardTitle>
-                  <CardAction>
-                    <Button
-                      type="button"
-                      size="sm"
-                      aria-label={t("Add {{plugin}} provider", {
-                        plugin: providerPluginChoiceLabel(plugin),
-                      })}
-                      onClick={() => onSelect(plugin)}
-                    >
-                      <PlusIcon data-icon="inline-start" />
-                      {t("Add")}
-                    </Button>
-                  </CardAction>
-                  <CardDescription className="line-clamp-2">
-                    {plugin.description || t("No plugin description.")}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="flex flex-wrap gap-2">
-                  <Badge variant="outline">
-                    {t(plugin.sourceKind === "builtin" ? "Built-in" : "Local package")}
-                  </Badge>
-                  <Badge variant="secondary">{plugin.packageVersion}</Badge>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        ) : (
-          <EmptyState
-            title="No Provider plugins"
-            description="Install or enable a Provider plugin before creating a Provider."
-          />
-        )}
-
-        <DialogFooter>
-          <DialogClose render={<Button variant="outline" />}>
-            {t("Cancel")}
-          </DialogClose>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 function ProviderFormDialog({
   open,
   mode,
@@ -1208,7 +1086,6 @@ function ProviderFormDialog({
   onOpenChange,
   onChange,
   onAuthentication,
-  onBack,
   onSubmit,
 }: {
   open: boolean;
@@ -1221,7 +1098,6 @@ function ProviderFormDialog({
   onOpenChange: (open: boolean) => void;
   onChange: (value: ProviderFormState) => void;
   onAuthentication?: () => void;
-  onBack?: () => void;
   onSubmit: () => void;
 }) {
   const [importError, setImportError] = useState("");
@@ -1717,17 +1593,6 @@ function ProviderFormDialog({
         </div>
 
         <DialogFooter>
-          {creating && onBack !== undefined ? (
-            <Button
-              type="button"
-              variant="outline"
-              disabled={busy}
-              onClick={onBack}
-            >
-              <ArrowLeftIcon data-icon="inline-start" />
-              {t("Back to plugins")}
-            </Button>
-          ) : null}
           <DialogClose render={<Button variant="outline" />}>
             {t("Cancel")}
           </DialogClose>

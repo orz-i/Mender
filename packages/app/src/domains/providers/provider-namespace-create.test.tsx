@@ -40,14 +40,12 @@ function showPage(overrides: Partial<MenderClient> = {}) {
     createProvider,
     ...overrides,
   } as unknown as MenderClient;
-  render(<MemoryRouter><TooltipProvider><ProvidersPage client={client} /></TooltipProvider></MemoryRouter>);
+  render(<MemoryRouter initialEntries={["/tools?view=sources&create=1&pluginId=io.mender.provider.mcp"]}><TooltipProvider><ProvidersPage client={client} onViewChange={() => {}} /></TooltipProvider></MemoryRouter>);
   return { createProvider, listProviders };
 }
 
 async function openMcp() {
   await screen.findByText("No providers");
-  fireEvent.click(screen.getByRole("button", { name: "Add provider" }));
-  fireEvent.click(within(screen.getByRole("dialog", { name: "Choose Provider plugin" })).getByRole("button", { name: "Add MCP provider" }));
   return within(await screen.findByRole("dialog", { name: "Add MCP provider" }));
 }
 

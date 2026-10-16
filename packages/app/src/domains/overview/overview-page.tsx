@@ -258,7 +258,7 @@ export function OverviewPage({ client }: { client: MenderClient }) {
           <DataPanel
             title="Providers"
             description="Registered tool sources"
-            actions={<PanelLink to="/providers" label="View" destination="Providers" />}
+            actions={<PanelLink to="/tools?view=sources" label="View" destination="Tool sources" />}
           >
             {data?.providers.length ? (
               <div className="divide-y divide-border/70 px-5 pb-2">
