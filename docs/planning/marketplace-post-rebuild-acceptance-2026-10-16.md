@@ -66,7 +66,7 @@ Mender remains the LLM/Agent Tool/Resource supply and governance platform; it do
 - pnpm lint, pnpm typecheck, pnpm test: pass; 39 Vitest files, 219 tests, 1208/1208 Chinese translations.
 - pnpm build: pass for Web and Desktop frontend; pre-existing JavaScript chunk size warnings remain.
 - pnpm security:check: pass; zero reachable Go vulnerabilities, one uncalled transitive module finding, no known production JavaScript vulnerabilities.
-- The monolithic pnpm check request was interrupted during all-package Go Race and never returned a final status. All regular backend Go tests completed without reported failure; affected packages passed a separately run Race test, and remaining frontend checks were individually rerun and passed. Do not report the interrupted monolithic command as successful.
+- The first monolithic `pnpm check` request was interrupted by the remote execution connection during all-package Go Race; no success was claimed for that attempt. A subsequent complete, fresh `pnpm check` run finished with **exit code 0**, including all plugin SDK/example gates, protocol and Wails binding drift checks, complete Go tests and Race, ESLint, TypeScript, i18n, Vitest (39 files / 219 tests), and Web/Desktop production builds. The final run was captured in `/tmp/mender-marketplace-postbuild-acceptance/final-pnpm-check.log`, with its exit code recorded in `final-pnpm-check.exit`. The Vite output only reported non-blocking large-chunk warnings.
 - No real remote SSH/Agent task, chargeable sandbox, tunnel or Credential used for acceptance.
 
 ### Operational follow-up
