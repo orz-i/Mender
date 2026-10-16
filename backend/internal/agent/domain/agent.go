@@ -23,8 +23,9 @@ var (
 )
 
 const (
-	CodexPluginID = "io.mender.agent.codex"
-	GrokPluginID  = "io.mender.agent.grok"
+	CodexPluginID    = "io.mender.agent.codex"
+	GrokPluginID     = "io.mender.agent.grok"
+	OpenCodePluginID = "io.mender.agent.opencode"
 )
 
 type ID string
@@ -50,8 +51,9 @@ func NewID() (ID, error) {
 type Backend string
 
 const (
-	BackendCodex Backend = "codex"
-	BackendGrok  Backend = "grok"
+	BackendCodex    Backend = "codex"
+	BackendGrok     Backend = "grok"
+	BackendOpenCode Backend = "opencode"
 )
 
 func (b Backend) PluginID() platformplugin.ID {
@@ -60,6 +62,8 @@ func (b Backend) PluginID() platformplugin.ID {
 		return platformplugin.ID(CodexPluginID)
 	case BackendGrok:
 		return platformplugin.ID(GrokPluginID)
+	case BackendOpenCode:
+		return platformplugin.ID(OpenCodePluginID)
 	default:
 		return ""
 	}

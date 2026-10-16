@@ -43,6 +43,21 @@ func TestAgentIdentityAndSafety(t *testing.T) {
 	}
 }
 
+func TestOpenCodeBackendHasDistinctExactBuiltinIdentity(t *testing.T) {
+	spec := sampleSpec(t)
+	spec.Backend = BackendOpenCode
+	spec.PluginID = BackendOpenCode.PluginID()
+	if spec.PluginID != OpenCodePluginID {
+		t.Fatal("wrong OpenCode plugin identity")
+	}
+	if _, err := NewAgent(spec); err != nil {
+		t.Fatalf("OpenCode resource rejected: %v", err)
+	}
+	spec.PluginID = GrokPluginID
+	if _, err := NewAgent(spec); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("OpenCode masqueraded as Grok: %v", err)
+	}
+}
 func TestTaskStateIsMonotonic(t *testing.T) {
 	if err := NextStatus(TaskQueued, TaskRunning); err != nil {
 		t.Fatal(err)

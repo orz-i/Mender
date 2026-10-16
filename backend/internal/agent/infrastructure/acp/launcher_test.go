@@ -22,6 +22,7 @@ func TestLocalAgentBackendAvailabilityIsInert(t *testing.T) {
 	// a real credential/session or modifies a user workspace.
 	_, _ = launcher.Availability(agentdomain.BackendCodex)
 	_, _ = launcher.Availability(agentdomain.BackendGrok)
+	_, _ = launcher.Availability(agentdomain.BackendOpenCode)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	_, err = launcher.Command(ctx, fixtureAgent(t))

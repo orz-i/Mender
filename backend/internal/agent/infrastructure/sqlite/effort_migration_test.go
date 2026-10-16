@@ -63,6 +63,7 @@ func TestAgentV6ToV7ReasoningEffortMigrationPreservesIdentity(t *testing.T) {
 		"ALTER TABLE agents DROP COLUMN default_reasoning_effort",
 		"ALTER TABLE agent_tasks DROP COLUMN reasoning_effort",
 		"DELETE FROM agent_schema_migrations WHERE version=7",
+		"DELETE FROM agent_schema_migrations WHERE version=8",
 	} {
 		if _, err := raw.ExecContext(ctx, statement); err != nil {
 			t.Fatal("fixture downgrade", statement, err)
@@ -90,7 +91,7 @@ func TestAgentV6ToV7ReasoningEffortMigrationPreservesIdentity(t *testing.T) {
 		t.Fatalf("Profile AgentGrant removed: %v", err)
 	}
 	var version int
-	if err := updated.db.QueryRowContext(ctx, "SELECT MAX(version) FROM agent_schema_migrations").Scan(&version); err != nil || version != 7 {
+	if err := updated.db.QueryRowContext(ctx, "SELECT MAX(version) FROM agent_schema_migrations").Scan(&version); err != nil || version != 8 {
 		t.Fatalf("migration not applied: v%d %v", version, err)
 	}
 }

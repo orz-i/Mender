@@ -24,7 +24,7 @@ func (r *Runtime) AgentAvailability(backend agentdomain.Backend) (string, error)
 	return r.agentLauncher.Availability(backend)
 }
 
-// newAgents composes exactly two local, host-reviewed Agent backends. External
+// newAgents composes a host-reviewed set of local ACP Agent backends. External
 // plugin packages cannot silently acquire the native process authority.
 func newAgents(ctx context.Context, dbPath string, owner gov.Principal,
 	profiles *Profiles, policies *Policies, governance *RuntimeGovernance,

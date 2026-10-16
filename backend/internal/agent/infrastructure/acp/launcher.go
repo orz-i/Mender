@@ -31,6 +31,8 @@ func (f *LocalFactory) Availability(backend agentdomain.Backend) (string, error)
 	switch backend {
 	case agentdomain.BackendGrok:
 		return trustedBinary("grok")
+	case agentdomain.BackendOpenCode:
+		return trustedBinary("opencode")
 	case agentdomain.BackendCodex:
 		if _, err := trustedBinary("codex"); err != nil {
 			return "", fmt.Errorf("%w: Codex CLI is missing: %w", agentdomain.ErrUnavailable, err)
@@ -103,6 +105,8 @@ func (f *LocalFactory) CommandInWorkspace(ctx context.Context, a agentdomain.Age
 	switch spec.Backend {
 	case agentdomain.BackendGrok:
 		arguments = []string{"agent", "stdio"}
+	case agentdomain.BackendOpenCode:
+		arguments = []string{"acp"}
 	case agentdomain.BackendCodex:
 		codex, err := trustedBinary("codex")
 		if err != nil {
