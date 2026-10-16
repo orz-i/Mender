@@ -6,8 +6,9 @@ export const MODEL_TOOLS_PLUGIN_ID = "io.mender.provider.model-tools";
 export const OPENAPI_PLUGIN_ID = "io.mender.provider.openapi";
 export const WORKSPACE_PLUGIN_ID = "io.mender.provider.workspace";
 export const AGENT_DELEGATION_PLUGIN_ID = "io.mender.provider.agent-delegation";
+export const SANDBOX_JOBS_PLUGIN_ID = "io.mender.provider.sandbox-jobs";
 export function isInternalProvider(pluginId:string|undefined){
-  return pluginId===AGENT_DELEGATION_PLUGIN_ID || pluginId===WORKSPACE_PLUGIN_ID;
+  return pluginId===AGENT_DELEGATION_PLUGIN_ID || pluginId===WORKSPACE_PLUGIN_ID || pluginId===SANDBOX_JOBS_PLUGIN_ID;
 }
 
 type ProviderTransport = "http" | "stdio";

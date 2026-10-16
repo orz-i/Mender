@@ -13,7 +13,6 @@ import {
 
 import type {
   Credential,
-  Sandbox,
   MenderClient,
   Provider,
   ProviderPlugin,
@@ -241,7 +240,6 @@ export function ProvidersPage({
     ProviderPluginIssue[]
   >([]);
   const [credentials, setCredentials] = useState<Credential[]>([]);
-  const [sandboxes, setSandboxes] = useState<Sandbox[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
@@ -307,16 +305,14 @@ export function ProvidersPage({
       client.listProviderPlugins(),
       client.listProviders(),
       client.listCredentials(),
-      client.listSandboxes(),
       createRequest.offeringId ? client.listIntegrationOfferings() : Promise.resolve({integrations:[] as IntegrationOffering[]}),
     ])
-      .then(([pluginResult, providerResult, credentialResult, sandboxResult, offeringResult]) => {
+      .then(([pluginResult, providerResult, credentialResult, offeringResult]) => {
         if (active) {
           setProviderPlugins(pluginResult.plugins);
           setProviderPluginIssues(pluginResult.issues);
           setProviders(providerResult.providers);
           setCredentials(credentialResult.credentials);
-          setSandboxes(sandboxResult.sandboxes);
 
           if (createRequest.requested && createRequest.offeringId) {
             const offering=offeringResult.integrations.find(item=>item.offeringId===createRequest.offeringId);
@@ -773,7 +769,7 @@ export function ProvidersPage({
                           label={t("Edit {{provider}}", {
                             provider: provider.displayName || provider.namespace,
                           })}
-                          disabled={busy !== "" || !provider.pluginId}
+                          disabled={busy !== "" || !provider.pluginId || isInternalProvider(provider.pluginId)}
                           onClick={() => beginEdit(provider)}
                         >
                           <PencilIcon />
@@ -811,7 +807,7 @@ export function ProvidersPage({
                           label={t("Sync {{provider}}", {
                             provider: provider.displayName || provider.namespace,
                           })}
-                          disabled={busy !== ""}
+                          disabled={busy !== "" || isInternalProvider(provider.pluginId)}
                           onClick={() => void syncProvider(provider)}
                         >
                           <RefreshCwIcon />
@@ -821,7 +817,7 @@ export function ProvidersPage({
                           label={t("Delete {{provider}}", {
                             provider: provider.displayName || provider.namespace,
                           })}
-                          disabled={busy !== ""}
+                          disabled={busy !== "" || isInternalProvider(provider.pluginId)}
                           onClick={() => void deleteProvider(provider)}
                         >
                           <Trash2Icon />
@@ -913,7 +909,7 @@ export function ProvidersPage({
         form={createForm}
         plugins={providerPlugins}
         credentials={credentials}
-        sandboxes={sandboxes}
+
         busy={busy === "create"}
         createError={createError}
         onOpenChange={setCreateDialogOpen}
@@ -966,7 +962,7 @@ export function ProvidersPage({
           form={editForm}
           plugins={providerPlugins}
           credentials={credentials}
-          sandboxes={sandboxes}
+
           busy={
             editProvider !== null && busy === editProvider.providerId
           }
@@ -1207,7 +1203,6 @@ function ProviderFormDialog({
   form,
   plugins,
   credentials,
-  sandboxes,
   busy,
   createError,
   onOpenChange,
@@ -1221,7 +1216,6 @@ function ProviderFormDialog({
   form: ProviderFormState;
   plugins: ProviderPlugin[];
   credentials: Credential[];
-  sandboxes: Sandbox[];
   busy: boolean;
   createError?: string;
   onOpenChange: (open: boolean) => void;
@@ -1480,8 +1474,7 @@ function ProviderFormDialog({
                 uiSchema={selectedPlugin?.uiSchema}
                 value={form.genericConfig}
                 credentials={credentials}
-                sandboxes={sandboxes}
-                pluginId={selectedPlugin?.pluginId}
+
                 onChange={(genericConfig) =>
                   onChange({ ...form, genericConfig })
                 }

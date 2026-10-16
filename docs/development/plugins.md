@@ -36,12 +36,14 @@ this preset. Custom MCP endpoints remain available through the Advanced
 Provider workflow. A connection uses canonical Tool sync and existing
 Credential/Policy/Approval/Audit governance; it does **not** grant a Profile.
 
-Ordinary Marketplace discovery hides **built-in foundational Provider drivers**
-(MCP, OpenAPI, Model Tools and Workspace) by default; they remain available
-under the icon-only **Show foundation drivers** advanced control. Installed
-third-party Provider packages and the underlying technical Plugin Catalogue
-are unaffected. Agent Delegation belongs to the Agent Tools tab rather than
-the Marketplace. No directory read contacts AnySearch or requests its API key.
+Ordinary Marketplace **Discover** shows MCP, OpenAPI and Model Tools as
+first-class, directly configurable Provider offerings, alongside healthy
+Sandbox/Agent/Tunnel drivers and reviewed integrations. An **Installed plugins**
+view manages native installation status, versions and removal separately. The
+Workspace, Agent Delegation and SSH Jobs Provider adapters are internal
+resource-owned Tool Suites, not independently selectable Market/Provider items.
+The complete technical Registry remains available for existing-resource
+resolution; no catalogue read contacts AnySearch or requests its API key.
 
 A signed-off offering is not evidence that the service is reachable or that
 an external account/API key works; operator-side live verification is separate.
@@ -54,8 +56,8 @@ and [Phase 34 C](../planning/phase-34-c-integration-offerings.md).
 A **Tool Suite** defines a reviewed set of operations and their required
 resource capabilities. It is **not** a native Plugin Package, an Agent Skill,
 or a Profile authorization grant. `GET /api/v1/tool-suites` and matching
-CLI/SDK/Wails reads return inert metadata. The marketplace presents these
-definitions separately from executable drivers and installable integrations.
+CLI/SDK/Wails reads return inert metadata. Suite binding and repair belong
+exclusively to the owning Agent/Sandbox details, not Marketplace cards.
 
 | Suite | Resource | Required capabilities | Availability |
 | --- | --- | --- | --- |

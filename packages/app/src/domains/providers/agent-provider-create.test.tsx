@@ -10,31 +10,28 @@ import { ProvidersPage } from "./providers-page";
 beforeEach(() => { resetLocaleForTesting(); setLocale("en"); });
 afterEach(() => { cleanup(); resetLocaleForTesting(); });
 
-it("rejects legacy Agent Delegation Provider deep links without creating a second facade", async () => {
-  const agentId="agent_0123456789abcdef0123456789abcdef";
+it.each([
+  "io.mender.provider.agent-delegation",
+  "io.mender.provider.workspace",
+  "io.mender.provider.sandbox-jobs",
+])("rejects a generic Provider deep link to managed facade %s", async (pluginId) => {
   const plugin={
-    pluginId:"io.mender.provider.agent-delegation",
-    displayName:"Agent Delegation Tools",sourceKind:"builtin",enabled:true,
+    pluginId,displayName:"Internal Resource Tools",sourceKind:"builtin",enabled:true,
     version:"1.0.0",packageVersion:"1.0.0",configVersion:1,
-    capabilities:["agent.delegate"],
-    configSchema:{
-      type:"object",additionalProperties:false,
-      required:["agentId"],properties:{agentId:{type:"string"}},
-    },
+    capabilities:["internal.tool"],configSchema:{type:"object"},
   };
   const createProvider=vi.fn();
   const client={
     listProviderPlugins:vi.fn().mockResolvedValue({plugins:[plugin],issues:[]}),
     listProviders:vi.fn().mockResolvedValue({providers:[]}),
     listCredentials:vi.fn().mockResolvedValue({credentials:[]}),
-    listSandboxes:vi.fn().mockResolvedValue({sandboxes:[]}),
     createProvider,
   } as unknown as MenderClient;
-  const query=new URLSearchParams({create:"1",pluginId:plugin.pluginId,agentId});
+  const query=new URLSearchParams({create:"1",pluginId,agentId:"agent_0123456789abcdef0123456789abcdef"});
   render(<MemoryRouter initialEntries={["/providers?"+query.toString()]}>
     <TooltipProvider><ProvidersPage client={client}/></TooltipProvider>
   </MemoryRouter>);
   expect(await screen.findByText("The requested item was not found.")).toBeTruthy();
-  expect(screen.queryByRole("dialog",{name:/Add Agent Delegation/})).toBeNull();
+  expect(screen.queryByRole("dialog",{name:/Add Internal Resource Tools/})).toBeNull();
   expect(createProvider).not.toHaveBeenCalled();
 });

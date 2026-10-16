@@ -15,7 +15,7 @@ import (
 	mcpserver "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/server"
 )
 
-func TestCLIAddsWorkspaceProvider(t *testing.T) {
+func TestCLIWorkspaceToolsUseSandboxOwnedCreationOnly(t *testing.T) {
 	t.Parallel()
 
 	dbPath := filepath.Join(t.TempDir(), "mender.db")
@@ -29,24 +29,24 @@ func TestCLIAddsWorkspaceProvider(t *testing.T) {
 	if !ok || sandboxID == "" {
 		t.Fatalf("missing SandboxID: %#v", created)
 	}
-	registered := executeJSONCommand(
-		t,
-		dbPath,
-		"provider", "add", "workspace",
-		"--namespace", "workspace-cli",
-		"--name", "Workspace CLI",
-		"--sandbox", sandboxID,
-	)
-	provider, ok := registered["provider"].(map[string]any)
-	if !ok {
-		t.Fatalf("provider add output = %#v", registered)
+	registered := executeJSONCommand(t, dbPath, "sandbox", "tools", sandboxID, "--prepare")
+	suite, ok := registered["suite"].(map[string]any)
+	if !ok || suite["status"] != "ready" {
+		t.Fatalf("sandbox owned Workspace tools = %#v", registered)
 	}
-	if provider["pluginId"] != "io.mender.provider.workspace" {
-		t.Fatalf("provider pluginId = %#v", provider["pluginId"])
+	tools, ok := suite["tools"].([]any)
+	if !ok || len(tools) != 4 {
+		t.Fatalf("sandbox owned Workspace Tool count = %#v", suite["tools"])
 	}
-	syncResult, ok := registered["sync"].(map[string]any)
-	if !ok || syncResult["total"] != float64(4) {
-		t.Fatalf("provider sync = %#v", registered["sync"])
+	root := NewRootCommand(Options{})
+	add, _, err := root.Find([]string{"provider", "add"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, command := range add.Commands() {
+		if command.Name() == "workspace" {
+			t.Fatal("retired generic Workspace Provider CLI command remains available")
+		}
 	}
 
 	listed := executeJSONCommand(t, dbPath, "provider", "list")
@@ -55,8 +55,8 @@ func TestCLIAddsWorkspaceProvider(t *testing.T) {
 		t.Fatalf("provider list = %#v", listed)
 	}
 	item, _ := providers[0].(map[string]any)
-	if item["pluginId"] != "io.mender.provider.workspace" {
-		t.Fatalf("listed provider = %#v", item)
+	if item["pluginId"] != "io.mender.provider.workspace" || item["providerId"] != suite["providerId"] {
+		t.Fatalf("resource-owned Provider identity = %#v, suite=%#v", item, suite)
 	}
 }
 

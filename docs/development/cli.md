@@ -133,14 +133,16 @@ mender provider add model-tools \
 
 `--engine` accepts `openai`, `anthropic`, or `gemini`. Phase 15 exposes one normalized capability, `web_search`; the provider model executes its own hosted/server search tool internally, and Mender verifies that search actually occurred before accepting the final answer. The configured API Credential is resolved only during governed execution, so Profile Credential scope applies before any model-provider network request.
 
-Add a local Workspace Provider:
+Prepare resource-owned Workspace Tools for an existing Sandbox:
 
 ```bash
-mender provider add workspace \
-  --namespace project \
-  --name "Project workspace" \
-  --root /absolute/path/to/project
+mender sandbox add local --name "Project workspace" --root /absolute/path/to/project --isolation host
+mender sandbox tools <sandbox-id> --prepare
 ```
+
+The internal Workspace Provider facade is created and governed by the Sandbox
+Tool Suite workflow; generic `provider add workspace` has been retired. The
+command does not automatically grant Tool access to a Profile.
 
 The Workspace plugin exposes four stable canonical capabilities: `workspace.read`, `workspace.search`, `workspace.edit`, and `workspace.shell`. `read`, `search`, and `edit` use bounded structured filesystem operations and reject traversal/symlink escapes outside the configured root. `shell` starts in a workspace-contained directory with a reduced non-secret environment, bounded output, and timeout handling, but it runs with the Mender host user's OS authority and is **not** a filesystem/container sandbox. Profiles can expose any subset of the four Tools. Mender does not add model calls, prompt construction, planning, memory, or an Agent Loop around them.
 
