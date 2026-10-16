@@ -73,13 +73,14 @@ See [ADR-0038](../architecture/adr/0038-governed-agent-delegation.md) and [Phase
 
 ## Phase 40 — Reusable model and local workspace selections
 
-An Agent's **identity is stable** across model and workspace changes. New Agents may specify an optional default ACP model; existing Agents can change it through **Agents → Overview → Edit default model** without deleting the Agent, modifying its tool identities or changing Profile bindings. The selected model must be advertised by that specific ACP v1 session and confirmed through `session/set_config_option` before any prompt is sent. An empty model uses the Backend's default. Model discovery on catalogue reads and CLI flag interpolation are not supported. In **Agent → Overview → Edit default model**, an owner action starts a bounded no-prompt ACP session to inspect the currently authenticated Backend's model selector. The dialog lists the live choices and Backend default; the owner may save an explicit default without changing AgentID or ToolIDs. The equivalent CLI command is `mender agent models <agent-id>` and the owner-only management action is `POST /agents/{agentId}/models/inspect`. Neither inspection nor opening the Agent inventory creates a Task or invokes paid inference.
+An Agent's **identity is stable** across model and workspace changes. New Agents may specify an optional default ACP model; existing Agents can change it through **Agents → Overview → Edit runtime defaults** without deleting the Agent, modifying its tool identities or changing Profile bindings. The selected model must be advertised by that specific ACP v1 session and confirmed through `session/set_config_option` before any prompt is sent. An empty model uses the Backend's default. Model discovery on catalogue reads and CLI flag interpolation are not supported. In **Agent → Overview → Edit runtime defaults**, an owner action starts a bounded no-prompt ACP session to inspect the currently authenticated Backend's model selector. The dialog lists live model and optional reasoning-effort choices and Backend defaults; the owner may save explicit defaults atomically without changing AgentID or ToolIDs. The equivalent CLI command is `mender agent models <agent-id>` and the owner-only management action is `POST /agents/{agentId}/models/inspect`. Neither inspection nor opening the Agent inventory creates a Task or invokes paid inference.
 
 In **Agents → Workspaces**, the owner can associate additional **ready local_workspace Sandboxes** with concise aliases such as `project-b`. Each additional alias needs an explicit **Agent workspace grant** to the Profile, in addition to its existing AgentGrant, ToolBinding and Policy. Arbitrary paths, raw `sandboxId` values, Docker/SSH Sandbox IDs and remote process execution remain invalid Agent Tool inputs. Existing `workspaceRoot` remains the default.
 
 ```sh
 mender agent add --name "Code Reviewer" --backend codex --root /absolute/project/path --isolation restricted_host --default-model <acp-advertised-model>
 mender agent model <agent-id> <acp-advertised-model>
+mender agent effort <agent-id> <acp-advertised-reasoning-effort>
 mender agent workspace bind <agent-id> project-b <local-sandbox-id>
 mender agent workspace grant <agent-id> project-b <profile-id>
 mender agent workspace list <agent-id>
@@ -87,17 +88,18 @@ mender agent workspace revoke <agent-id> project-b <profile-id>
 mender agent workspace unbind <agent-id> project-b
 ```
 
-The existing `delegate` Tool keeps its ToolID, SourceKey and external identity. It now accepts two optional fields:
+The existing `delegate` Tool keeps its ToolID, SourceKey and external identity. It now accepts three optional fields:
 
 ```json
 {
   "prompt": "Review this project",
   "model": "a-supported-acp-model-id",
+  "reasoningEffort": "high",
   "workspace": "project-b"
 }
 ```
 
-Omitting those fields preserves default selection. The admitted Task persists the effective model and exact local working directory snapshot, which cannot be retargeted by later default edits. Each Task still creates a **new ACP session**; persistent Agent sessions and remote Agent execution remain out of scope.
+Omitting those fields preserves default selection. A nonempty `reasoningEffort` must appear in the current ACP `thought_level` / `reasoning_effort` options; Mender applies a selected model first, validates its updated effort choices, then confirms the selected effort with `session/set_config_option` before submitting the prompt. Unsupported combinations fail closed. The Backend may advertise different levels for different models, so the UI shows current capabilities and explicitly warns that execution rechecks changed options. After updating an existing Mender installation, open **Agent → Tools → Refresh Agent tools** once: this explicitly republishes the new optional input Schema while retaining the original ProviderID, ToolIDs, Profile ToolBindings and AgentGrant. No automatic permission is added. The admitted Task persists the effective model, reasoning effort and exact local working directory snapshot, which cannot be retargeted by later default edits. Each Task still creates a **new ACP session**; persistent Agent sessions and remote Agent execution remain out of scope.
 
 The `restricted_host` process boundary is not a VM or general Sandbox lease: registering a local Sandbox as an Agent directory option does not grant the Agent stronger isolation. `host` mode must remain an explicit owner choice. Real Codex/Grok login, subscription/model entitlements, API billing, host filesystem policy and live compatibility are not proven by fixture tests or a detected CLI binary.
 
