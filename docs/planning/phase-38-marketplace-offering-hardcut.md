@@ -1,6 +1,6 @@
 # Phase 38 — Plugin Marketplace Offering boundary hard cut
 
-Status: In progress · 2026-10-15
+Status: **Closed for automated acceptance (2026-10-15)**; packaged Desktop/live-runtime visual acceptance remains operator-only.
 Architecture: [ADR-0045](../architecture/adr/0045-marketplace-offering-eligibility.md)
 
 ## Intent and invariants
@@ -17,24 +17,26 @@ Architecture: [ADR-0045](../architecture/adr/0045-marketplace-offering-eligibili
 - SC4: Provider creation picker contains only independent, user-configurable Provider types. Agent/Sandbox Tool Suites continue to be prepared and repaired on their owners; no automated Profile exposure.
 - SC5: End-to-end links open focused forms and preserve plugin and installation IDs; Go/TS tests, generation drift, lint, i18n, build/security gates pass. Existing users' resources are not touched by tests.
 
-## Bounded commits and checks
+## Bounded implementation and commits
 
-### A — Docs-only decision (must commit first)
+- **A — document-first decision:** `c0ffbc4` — ADR-0045, this contract, ADR-0039 presentation amendment, historical Marketplace document.
+- **B/C — Host-reviewed projection, contracts and focused UX:** `bdd041e` — typed `marketplaceAction` shared across HTTP/OpenAPI/SDK/Wails, remove synthetic E2B technical item, default Discover/Installed separation, restore MCP/OpenAPI/Model Tools cards, retire Tool Suite cards and Foundation Driver toggle, reject independent managed-facade Provider UI creation. Keep exact native installation diagnostics and source/binding IDs.
+- **D1 — lint closure:** `34416e6` — correct test-only shell invocation gosec annotations and remove obsolete E2B test counter; Go lint remains fully enabled.
+- **D2 — HTTP contract regression closure:** `fbeceb0` — HTTP catalogue asserts Host action classification, correct first-party create eligibility, internal facade none, and no phantom E2B.
 
-Record ADR-0045, this acceptance contract and superseding Marketplace product wording. Check git diff and staging scope; no code modifications.
+## Verification evidence
 
-### B — Host-owned projection and contracts
+- Targeted React/desktop contracts: **4 test files / 77 tests passed**.
+- Full frontend suite: `pnpm test` **40 test files / 217 tests passed**, with **1216/1216** Chinese locale messages.
+- `pnpm lint`, `pnpm typecheck`: **PASS**, including Web and Desktop frontend.
+- `pnpm build`: **PASS** for Web and Desktop frontend. Existing non-blocking Vite warnings about JavaScript chunks over 500 kB remain.
+- `pnpm go:lint`: **PASS**, zero issues.
+- `go test ./backend/internal/bootstrap ./backend/internal/desktop/binding -count=1`: **PASS**.
+- `go test ./backend/internal/management/httpapi -run '^TestUnifiedPluginCatalogueManagementContract$' -count=1`: **PASS**.
+- Combined `pnpm check` covered plugin SDK/example lint/test/race/build, Go module isolation, SDK schema generation drift, Wails binding drift, Desktop architecture, Go lint, all `go test ./backend/...` and `go test -race ./backend/...` without reported failures, then the remote tool request ended during the `eslint apps packages` phase. Subsequent standalone `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build` **all passed**. Do not claim the monolithic command itself returned zero.
+- `pnpm security:check`: **PASS**. No reachable Go vulnerability found; an uncalled dependency-module finding was reported, and production JavaScript audit reported no known vulnerabilities.
+- `git diff --check`, explicit staged paths, generated contract parity, clean tracked worktree verified. Pre-existing untracked `.agents/`, `.pi/` and `.intent-loop/` were excluded from every commit.
 
-Add action eligibility derived solely from reviewed built-in IDs and supported verified native typed extensions. Apply it identically to HTTP/OpenAPI/SDK and Wails/Desktop. Retire E2B as a synthetic installed Marketplace catalogue entry while retaining the backend's nonexecutability safeguards and an optional Sandbox-specific roadmap reference. Add tests for internal/unknown/unavailable/installed cases. Commit independently.
+## Deliberate acceptance limits
 
-### C — Focused UI and owned create workflows
-
-Use only the host-declared action. Default discovery shows actionable entries plus curated integration recipes; split installed package management from discovery with an existing focused switch/card grid, not duplicate inventories. Remove Foundation Driver toggle, Tool Suite card transformation and manual internal Provider chooser eligibility. Keep focused create flows, exact pinned installation links, resource-owned Suite views and i18n. Update tests and commit independently.
-
-### D — Closure
-
-Run deterministic Go/TS tests, full `pnpm check`, `pnpm security:check`, drift/build checks, `git diff --check` and review final staged/unstaged scope. Fix actual regressions without weakening checks; commit bounded fixes if needed. Desktop live UI smoke is separate if no active running Desktop/UI availability can be verified.
-
-## Evidence
-
-(To be completed from actual commands and commits; no pass claimed in advance.)
+No real user Provider, Sandbox, Agent, Tunnel, Profile, Credential or package installation was modified for acceptance. Packaged Wails visual navigation and live third-party/remote service checks were not claimed as complete. Synthetic test fixtures do not establish that external remote services are reachable. No data migration is needed: this is a projection/entrypoint hard cut, preserving canonical resource and installation identities.
