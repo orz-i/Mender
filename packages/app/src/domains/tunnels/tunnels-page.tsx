@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { CableIcon, Trash2Icon } from "lucide-react";
+import { Trash2Icon } from "lucide-react";
 import { useSearchParams } from "react-router";
 
 import type { Credential, MenderClient, Tunnel, PluginCatalogueEntry } from "@mender/sdk";
@@ -57,7 +57,6 @@ export function TunnelsPage({ client }: { client: MenderClient }) {
     pluginId:searchParams.get("pluginId")??"",
     installationId:searchParams.get("installationId")??"",
   }));
-  const [helpOpen, setHelpOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [createForm, setCreateForm] = useState(emptyCreateForm);
 
@@ -198,22 +197,16 @@ export function TunnelsPage({ client }: { client: MenderClient }) {
           </div>
         }
         actions={
-          <>
-            <Button size="sm" variant="outline" onClick={() => setHelpOpen(true)}>
-              <CableIcon data-icon="inline-start" />
-              {t("OpenAI Secure MCP Tunnel")}
-            </Button>
-            <Button
-              size="sm"
-              disabled={busy !== ""}
-              onClick={() => {
-                setError("");
-                setSelectionOpen(true);
-              }}
-            >
-              {t("Add tunnel")}
-            </Button>
-          </>
+          <Button
+            size="sm"
+            disabled={busy !== ""}
+            onClick={() => {
+              setError("");
+              setSelectionOpen(true);
+            }}
+          >
+            {t("Add tunnel")}
+          </Button>
         }
       />
       {error ? <ErrorNotice message={error} /> : null}
@@ -268,7 +261,7 @@ export function TunnelsPage({ client }: { client: MenderClient }) {
           <EmptyPanelState>
             <EmptyState
               title="No Tunnels"
-              description="Add an OpenAI Secure MCP Tunnel to make a managed local Profile MCP server reachable from supported OpenAI surfaces."
+              description="Add a Tunnel to make a managed local Profile MCP server reachable from external clients."
             />
           </EmptyPanelState>
         )}
@@ -314,24 +307,6 @@ export function TunnelsPage({ client }: { client: MenderClient }) {
             ))}
             {enabledPlugins.length===0?<p className="text-sm text-muted-foreground">{t("No available Tunnel transport plugins.")}</p>:null}
           </div>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={helpOpen} onOpenChange={setHelpOpen}>
-        <DialogContent className="sm:max-w-xl" showCloseButton={false}>
-          <DialogHeader>
-            <DialogTitle>{t("OpenAI Secure MCP Tunnel")}</DialogTitle>
-            <DialogDescription>
-              {t("OpenAI Secure MCP Tunnel keeps the MCP server private and carries traffic through outbound HTTPS to supported OpenAI surfaces. It does not create a general public MCP URL.")}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="rounded-xl border border-border bg-background p-4 text-sm">
-            {t("Install the client first:")}{" "}
-            <code className="break-all font-mono text-xs">{t("brew install openai/tools/tunnel-client")}</code>
-          </div>
-          <DialogFooter>
-            <DialogClose render={<Button variant="outline" />}>{t("Close")}</DialogClose>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
 

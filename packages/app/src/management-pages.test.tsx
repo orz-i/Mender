@@ -1819,11 +1819,12 @@ describe("management pages", () => {
     });
 
     expect(await screen.findByText("No Tunnels")).toBeTruthy();
-    expect(screen.queryByText(/does not create a general public MCP URL/)).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "OpenAI Secure MCP Tunnel" }));
-    const help = within(screen.getByRole("dialog", { name: "OpenAI Secure MCP Tunnel" }));
-    expect(help.getByText(/does not create a general public MCP URL/)).toBeTruthy();
-    fireEvent.click(help.getByRole("button", { name: "Close" }));
+    expect(
+      screen.getByText(
+        "Add a Tunnel to make a managed local Profile MCP server reachable from external clients.",
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "OpenAI Secure MCP Tunnel" })).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Add tunnel" }));
     const chooser=await screen.findByRole("dialog",{name:"Choose Tunnel transport"});
