@@ -434,20 +434,20 @@ export function SkillsPage({
       {error ? <ErrorNotice message={error} /> : null}
 
       <ResultPanel title="Skill Library">
-            <div className="p-3">
-              {!loaded ? (
-                <p className="px-3 py-10 text-center text-sm text-muted-foreground">
-                  {t("Loading…")}
-                </p>
-              ) : visibleInstallations.length === 0 ? (
-                <EmptyPanelState>
-                  <EmptyState
-                    title="No matching Skills"
-                    description="Try a different search or filter."
-                  />
-                </EmptyPanelState>
-              ) : (
-                <div className="space-y-2">
+        {!loaded ? (
+          <p className="px-3 py-10 text-center text-sm text-muted-foreground">
+            {t("Loading…")}
+          </p>
+        ) : visibleInstallations.length === 0 ? (
+          <EmptyPanelState>
+            <EmptyState
+              title="No matching Skills"
+              description="Try a different search or filter."
+            />
+          </EmptyPanelState>
+        ) : (
+          <div className="p-3">
+            <div className="space-y-2">
                   {skillPagination.items.map((item) => (
                       <div
                         key={item.installationId}
@@ -594,9 +594,8 @@ export function SkillsPage({
                       </div>
                   ))}
                 </div>
-              )}
-
-            </div>
+              </div>
+            )}
       </ResultPanel>
 
       {visibleInstallations.length ? (

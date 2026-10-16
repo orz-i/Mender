@@ -241,6 +241,23 @@ export function FilterSelect({
   );
 }
 
-export function EmptyPanelState({ children }: { children: ReactNode }) {
-  return <div className="px-5 py-8">{children}</div>;
+export function EmptyPanelState({
+  children,
+  className = "",
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      data-slot="empty-panel-state"
+      className={cn(
+        "flex min-h-[46vh] w-full flex-1 flex-col items-center justify-center py-10 px-4 text-center sm:px-6",
+        className,
+      )}
+    >
+      {children}
+    </div>
+  );
 }
+EmptyPanelState.displayName = "EmptyPanelState";

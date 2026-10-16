@@ -144,7 +144,7 @@ describe("MenderApp", () => {
     const topbar = within(screen.getByRole("banner"));
     const switchLanguage = topbar.getByRole("button", { name: "Language" });
     const connection = topbar.getByRole("status");
-    expect(connection.compareDocumentPosition(switchLanguage) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(switchLanguage.compareDocumentPosition(connection) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(within(screen.getByRole("complementary")).queryByRole("combobox", { name: "Language" })).toBeNull();
     fireEvent.click(switchLanguage);
 

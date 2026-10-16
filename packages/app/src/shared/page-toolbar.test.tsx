@@ -3,6 +3,8 @@ import { useState } from "react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { PageTab, PageTabs, PageToolbar, ResultPanel } from "./page-toolbar";
+import { EmptyState } from "./page";
+import { EmptyPanelState } from "./workbench";
 
 afterEach(cleanup);
 
@@ -44,6 +46,31 @@ describe("page-level toolbar and results surface", () => {
     expect(within(results).getByText("Result row")).toBeTruthy();
     expect(within(results).getByRole("navigation", { name: "Pagination" })).toBeTruthy();
     expect(results.querySelector('[data-slot="card-header"]')).toBeNull();
+    expect(results.querySelector('[data-slot="card"]')).not.toBeNull();
+  });
+
+  it("omits the outer Card wrapper and centers the empty state in the viewport", () => {
+    render(
+      <main>
+        <ResultPanel title="Sandbox inventory">
+          <EmptyPanelState>
+            <EmptyState title="No sandboxes" description="Create a local sandbox first." />
+          </EmptyPanelState>
+        </ResultPanel>
+      </main>,
+    );
+
+    const region = screen.getByRole("region", { name: "Sandbox inventory" });
+    expect(region).toBeTruthy();
+    // The outer Card wrapper must be removed
+    expect(region.querySelector('[data-slot="card"]')).toBeNull();
+    // The plain centered container must be rendered instead
+    const plain = region.querySelector('[data-slot="result-panel-plain"]');
+    expect(plain).not.toBeNull();
+    expect(plain?.className).toContain("justify-center");
+    // Empty state should be rendered inside
+    expect(within(region).getByText("No sandboxes")).toBeTruthy();
+    expect(within(region).getByText("Create a local sandbox first.")).toBeTruthy();
   });
 
   it("preserves an accessible selected category and count when switching tabs", () => {

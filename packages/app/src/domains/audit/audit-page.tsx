@@ -26,6 +26,7 @@ import { EmptyState, ErrorNotice } from "../../shared/page";
 import { usePagination } from "../../shared/pagination";
 import { TablePagination } from "../../shared/table-pagination";
 import {
+  EmptyPanelState,
   FilterSelect,
   SearchField,
 } from "../../shared/workbench";
@@ -340,7 +341,7 @@ export function AuditPage({ client }: { client: MenderClient }) {
             </Table>
           </>
         ) : (
-          <div className="px-5 py-5">
+          <EmptyPanelState>
             <EmptyState
               title={activeRecords.length
                 ? t("No matching audit records")
@@ -350,13 +351,11 @@ export function AuditPage({ client }: { client: MenderClient }) {
                 : topic === "invocations"
                   ? t("Invocation outcomes will appear here after Tools are called.")
                   : t("Provider activation admission outcomes will appear here when Providers are created, synchronized, rebound, or activated for Tool execution.")}
-            />
-            {activeRecords.length ? (
-              <div className="mt-3 flex justify-center">
+              action={activeRecords.length ? (
                 <Button size="sm" variant="outline" onClick={resetFilters}>{t("Clear filters")}</Button>
-              </div>
-            ) : null}
-          </div>
+              ) : null}
+            />
+          </EmptyPanelState>
         )}
       </ResultPanel>
 

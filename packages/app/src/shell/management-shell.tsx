@@ -357,13 +357,13 @@ export function ManagementShell({ client }: { client: MenderClient }) {
           </div>
         </header>
 
-        <main className="min-w-0 flex-1">
+        <main className="flex min-w-0 flex-1 flex-col">
           <motion.div
             key={location.pathname}
             initial={reduceMotion ? false : { opacity: 0, y: 5 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.17, ease: "easeOut" }}
-            className="mx-auto w-full max-w-[1700px] px-4 pt-2 pb-9 sm:px-6 xl:px-8"
+            className="mx-auto flex w-full max-w-[1700px] flex-1 flex-col px-4 pt-2 pb-9 sm:px-6 xl:px-8"
           >
             <Outlet />
           </motion.div>

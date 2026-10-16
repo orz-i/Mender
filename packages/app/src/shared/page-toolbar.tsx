@@ -1,8 +1,39 @@
 import type { ReactNode } from "react";
+import { isValidElement } from "react";
 
 import { Card } from "@mender/ui/components/card";
+import { cn } from "@mender/ui/lib/utils";
 
 import { formatNumber, t } from "../i18n/i18n";
+import { EmptyState } from "./page";
+import { EmptyPanelState } from "./workbench";
+
+function hasEmptyState(node: ReactNode): boolean {
+  if (!node) return false;
+  if (Array.isArray(node)) {
+    return node.some(hasEmptyState);
+  }
+  if (isValidElement(node)) {
+    if (
+      node.type === EmptyState ||
+      node.type === EmptyPanelState ||
+      (typeof node.type === "function" &&
+        (node.type.name === "EmptyState" || node.type.name === "EmptyPanelState")) ||
+      (typeof (node.type as { displayName?: string })?.displayName === "string" &&
+        ((node.type as { displayName?: string }).displayName === "EmptyState" ||
+          (node.type as { displayName?: string }).displayName === "EmptyPanelState")) ||
+      (node.props as { "data-slot"?: string })?.["data-slot"] === "empty-panel-state" ||
+      (node.props as { "data-slot"?: string })?.["data-slot"] === "empty-state"
+    ) {
+      return true;
+    }
+    const props = node.props as { children?: ReactNode };
+    if (props && props.children) {
+      return hasEmptyState(props.children);
+    }
+  }
+  return false;
+}
 
 /** Page-level controls: tabs on the left, filters + actions to the right. */
 export function PageToolbar({
@@ -44,17 +75,36 @@ export function ResultPanel({
   title,
   children,
   className = "",
+  variant,
+  empty,
 }: {
   title: string;
   children: ReactNode;
   className?: string;
+  variant?: "card" | "plain";
+  empty?: boolean;
 }) {
+  const isPlain =
+    variant === "plain" ||
+    empty === true ||
+    (variant !== "card" && empty !== false && hasEmptyState(children));
+
   return (
-    <section aria-label={t(title)} data-slot="result-panel" className="min-w-0">
-      <Card className={["gap-0 py-0", className].join(" ")}>
-        <h2 className="sr-only">{t(title)}</h2>
-        {children}
-      </Card>
+    <section
+      aria-label={t(title)}
+      data-slot="result-panel"
+      className={cn("min-w-0", isPlain && "flex flex-1 flex-col justify-center")}
+    >
+      <h2 className="sr-only">{t(title)}</h2>
+      {isPlain ? (
+        <div data-slot="result-panel-plain" className={cn("flex min-w-0 flex-1 flex-col items-center justify-center", className)}>
+          {children}
+        </div>
+      ) : (
+        <Card className={cn("gap-0 py-0", className)}>
+          {children}
+        </Card>
+      )}
     </section>
   );
 }
