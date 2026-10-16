@@ -1,10 +1,10 @@
 # Agent CLI Delegation (Phase 33)
 
-Phase 33 adds `agent.backend` alongside Provider, Sandbox and Tunnel extension kinds. Mender remains a resource/Tool governance service; Codex, Grok or another subordinate CLI owns its own Agent reasoning loop.
+Phase 33 adds `agent.backend` alongside Provider, Sandbox and Tunnel extension kinds. Mender remains a resource/Tool governance service; Codex, Grok, OpenCode or another subordinate CLI owns its own Agent reasoning loop.
 
 ## What is implemented
 
-- Built-in typed `io.mender.agent.codex` and `io.mender.agent.grok` backend descriptors; offline binary discovery in host-reviewed locations only.
+- Built-in typed `io.mender.agent.codex`, `io.mender.agent.grok` and `io.mender.agent.opencode` backend descriptors; offline binary discovery in host-reviewed locations only. OpenCode uses its own native `opencode acp` executable.
 - Configured Agent records with canonical default local workspace root, optional default ACP model, explicit `host` or `restricted_host` process isolation, owner identity and an immutable backend binding. Phase 40 adds explicitly registered extra local workspace selections.
 - Local ACP v1 stdio client: `initialize`, `session/new`, optional advertised model selection through `session/set_config_option`, `session/prompt` and bounded text updates. No automatic approvals or arbitrary client filesystem/terminal requests. Requesting unavailable client authority fails closed and ends the task.
 - Durable TaskID and task status/result/cancel with a 10-minute hard deadline, 64 KiB bounded result, two concurrent tasks per Agent/Principal and eight global tasks. A cancellation request is separate from confirmed cancellation; uncertain shutdown/timeout/restart is `unknown`.
@@ -16,7 +16,7 @@ An Agent resource is not itself a Provider. The canonical Provider remains an **
 
 ## Getting started in the desktop UI
 
-1. Open **Agents** (Runtime group), select **Add agent**, choose Codex or Grok, then configure the local directory and execution isolation. Review before saving. Creation prepares an internal governed four-Tool facade but **does not start an Agent CLI or grant any Profile**.
+1. Open **Agents** (Runtime group), select **Add agent**, choose Codex, Grok or OpenCode, then configure the local directory and execution isolation. Review before saving. Creation prepares an internal governed four-Tool facade but **does not start an Agent CLI or grant any Profile**.
 2. In the new Agent detail, verify binary detection under Overview. **Detected** means only that the executable/adapter is present, **not** that protocol, login, model, network or tool permissions are verified.
 3. Open the Agent **Tools** tab to inspect the four canonical Tools and their stable identity. If the Agent predates Phase 34 or a prior tool setup failed, use **Prepare Agent tools** to explicitly adopt/repair the binding. A conflict directs you to Advanced internal Provider management; reads alone never repair data.
 4. Open **Profiles** and bind only the Agent tools the Profile needs. Separately, open the Agent's **Access** tab and grant that ProfileID. Both ToolBinding and AgentGrant are required. Existing Policy must allow `tool.invoke` and `agent.activate` / `agent.task.submit`; a second `agent.task.cancel` decision governs cancellation.
@@ -48,8 +48,8 @@ The `--output json` flag is a root persistent flag; scripts can pass it before `
 
 ## Execution and security boundaries
 
-- Codex needs the **separately installed `codex-acp` binary** as well as `codex`; Mender does not download it or run npm/npx during discovery. Grok uses native `grok agent stdio`.
-- The default `restricted_host` process isolation is deliberately **not** a Docker sandbox or VM. It constrains filesystem access and may prevent existing CLI authentication credentials from being read. Do not silently retry in unisolated `host` mode. `host` must be explicitly selected by the owner, and uses the Runtime account's local authority.
+- Codex needs the **separately installed `codex-acp` binary** as well as `codex`; Mender does not download it or run npm/npx during discovery. Grok uses native `grok agent stdio`; OpenCode uses native `opencode acp` over ACP v1 stdio. OpenCode's `model`, `effort` (category `thought_level`) and `mode` are session options. Mender exposes model and effort from actual ACP capabilities, while OpenCode itself owns its default mode.
+- The default `restricted_host` process isolation is deliberately **not** a Docker sandbox or VM. It constrains filesystem access and may prevent existing CLI authentication credentials from being read. On the currently tested Mac, OpenCode's owner-initiated no-prompt model inspection failed in `restricted_host`; explicitly selecting `host` on a newly created, temporary OpenCode Agent succeeded. There is **no automatic isolation downgrade**. Only choose Host after accepting its local user filesystem/credential authority. Do not silently retry in unisolated `host` mode. `host` must be explicitly selected by the owner, and uses the Runtime account's local authority.
 - Mender uses a minimal child environment and does not automatically pass arbitrary Environment Credential values, the Runtime's MCP tools or Agent plugins to the child. No arbitrary parent directory, remote SSH or Docker execution is supported by this Agent backend.
 - Directory and binary detection is passive. Credentials/login, actual task completion, external model cost, network dependency, and real-world model permissions are **not proven** by a healthy plugin card.
 - ACP permission and client-side filesystem/terminal requests fail closed. Subordinate Agents may still possess their own internal Tools; the Agent's host isolation boundary remains essential. Audit does not imply a complete record of all subordinate Tool calls.
@@ -104,3 +104,20 @@ Omitting those fields preserves default selection. A nonempty `reasoningEffort` 
 The `restricted_host` process boundary is not a VM or general Sandbox lease: registering a local Sandbox as an Agent directory option does not grant the Agent stronger isolation. `host` mode must remain an explicit owner choice. Real Codex/Grok login, subscription/model entitlements, API billing, host filesystem policy and live compatibility are not proven by fixture tests or a detected CLI binary.
 
 For multi-target **Workspace Tools** (a separate resource/tool capability), see [Workspace Tool targets](workspace-tool-targets.md). Agent workspace grants and Sandbox Workspace Tool grants remain different authority checks.
+
+## OpenCode local ACP backend (Phase 41)
+
+OpenCode is a third, *built-in* Agent backend (`io.mender.agent.opencode`) rather than an MCP Provider or a copy of a Grok/Codex Agent. It uses the installed OpenCode CLI at a host-owned trusted executable path and launches the fixed `opencode acp` command over ACP v1 stdio. Its native `model` and `effort` (ACP category `thought_level`) selectors are discovered from the current authenticated CLI session, and still use Mender's same model/effort/workspace defaults and per-task overrides. OpenCode also reports a `mode` option, which remains OpenCode-owned in this phase.
+
+From **Plugin Marketplace → OpenCode Agent → Add agent**, choose a name, local workspace and process isolation. The backend is detected passively; adding it does **not** start inference or grant Profiles. The default isolation is `restricted_host`. On the tested Mac, explicit no-prompt OpenCode capability inspection in this mode was unavailable, while inspection with the owner's explicit `host` choice succeeded. The UI warns that Host grants the local CLI access to the Runtime user's files and credentials. **Mender never changes this choice automatically.** OpenCode may require prior login in the terminal, per its own documentation, but Mender does not initiate one.
+
+```sh
+mender agent add --name "OpenCode Local" --backend opencode --root /absolute/approved/project --isolation host
+mender agent models <agent-id>  # explicit no-prompt ACP option discovery
+```
+
+The owner can adjust its default model and thought level under **Agent → Overview → Edit runtime defaults**, then grant Profiles under **Access**. Task calls use the existing `agent.delegate` arguments, including `model`, `reasoningEffort` and registered `workspace`. Agent execution still requires Profile ToolBinding, AgentGrant and Policy; no `--auto`, arbitrary CLI flags, agent-side client filesystem permission grants, background OpenCode API service, SSH Agent process or cross-workspace escalation are introduced. A selected model is applied before the effort, so only its currently advertised effort IDs can be chosen.
+
+This has been accepted through no-prompt local ACP protocol tests and deterministic delegated-task fixtures. Live OpenCode inference/entitlement or paid model success **has not been tested**.
+
+[ADR-0048](../architecture/adr/0048-opencode-native-acp-agent-backend.md) · [Phase 41](../planning/phase-41-opencode-native-agent-backend.md)

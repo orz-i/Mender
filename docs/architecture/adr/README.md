@@ -73,3 +73,4 @@ Minor implementation choices that remain inside an accepted architectural bounda
 - [ADR-0045: Govern Marketplace Offering eligibility](0045-marketplace-offering-eligibility.md) — Accepted
 - [ADR-0046: One user-facing Tools workspace](0046-unified-tools-workspace.md) — Accepted
 - [ADR-0047: Agent runtime configuration and reusable workspace targets](0047-agent-runtime-configuration-workspace-reuse.md) — Accepted
+- [ADR-0048: Built-in OpenCode native ACP Agent backend](0048-opencode-native-acp-agent-backend.md) — Accepted
