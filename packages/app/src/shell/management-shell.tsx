@@ -304,21 +304,6 @@ export function ManagementShell({ client }: { client: MenderClient }) {
                 {t("⌘K")}
               </span>
             </button>
-            <div role="status" className="flex h-9 items-center gap-2 rounded-full border border-border/80 bg-card px-3 text-xs">
-              <span
-                className={[
-                  "size-2 rounded-full",
-                  runtimeReady === true ? "bg-teal" : runtimeReady === false ? "bg-destructive" : "bg-muted-foreground",
-                ].join(" ")}
-                aria-hidden="true"
-              />
-              <span className="hidden font-medium text-foreground sm:inline">
-                {runtimeReady === true ? t("Connected") : runtimeReady === false ? t("Unavailable") : t("Loading")}
-              </span>
-              <span className="sr-only sm:hidden">
-                {runtimeReady === true ? t("Connected") : runtimeReady === false ? t("Unavailable") : t("Loading")}
-              </span>
-            </div>
             <Tooltip>
               <TooltipTrigger
                 render={
@@ -338,6 +323,35 @@ export function ManagementShell({ client }: { client: MenderClient }) {
                 {t("Language")}: {locale === "en" ? t("English") : t("Simplified Chinese")}
                 {" → "}
                 {locale === "en" ? t("Simplified Chinese") : t("English")}
+              </TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <div
+                    role="status"
+                    aria-label={runtimeReady === true ? t("Connected") : runtimeReady === false ? t("Unavailable") : t("Loading")}
+                    className="flex size-7 items-center justify-center cursor-default"
+                  >
+                    <span
+                      className={[
+                        "size-2.5 rounded-full transition-colors",
+                        runtimeReady === true
+                          ? "bg-teal shadow-[0_0_6px_rgba(20,184,166,0.6)]"
+                          : runtimeReady === false
+                            ? "bg-destructive shadow-[0_0_6px_rgba(239,68,68,0.6)]"
+                            : "bg-muted-foreground animate-pulse",
+                      ].join(" ")}
+                      aria-hidden="true"
+                    />
+                    <span className="sr-only">
+                      {runtimeReady === true ? t("Connected") : runtimeReady === false ? t("Unavailable") : t("Loading")}
+                    </span>
+                  </div>
+                }
+              />
+              <TooltipContent side="bottom">
+                {runtimeReady === true ? t("Connected") : runtimeReady === false ? t("Unavailable") : t("Loading")}
               </TooltipContent>
             </Tooltip>
           </div>

@@ -59,6 +59,10 @@ describe("MenderApp", () => {
     expect(header.querySelector("p")).toBeNull();
     expect(screen.queryByText("Tool control plane")).toBeNull();
 
+    const status = within(header).getByRole("status");
+    expect(status).toBeTruthy();
+    expect(status.querySelector("span[aria-hidden='true']")).toBeTruthy();
+
     fireEvent.click(within(header).getByRole("button", { name: "Language" }));
     expect(within(header).getByRole("heading", { name: "概览" })).toBeTruthy();
     expect(screen.queryByText("工具控制平面")).toBeNull();
