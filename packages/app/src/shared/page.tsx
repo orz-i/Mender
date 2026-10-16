@@ -43,7 +43,7 @@ export function EmptyState({
     <div
       data-slot="empty-state"
       className={cn(
-        "w-full max-w-xl rounded-[22px] border border-dashed border-border/80 bg-card/60 px-6 py-12 text-center backdrop-blur-sm sm:px-10 sm:py-14",
+        "w-full max-w-xl rounded-[22px] border border-dashed border-border/80 bg-transparent px-6 py-12 text-center sm:px-10 sm:py-14",
         className,
       )}
     >
