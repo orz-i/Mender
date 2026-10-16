@@ -212,7 +212,7 @@ export function AgentDetailPage({client}:{client:MenderClient}){
         </div>
         {tools?.status==="conflict"?
           <Button size="sm" variant="outline" onClick={()=>void navigate("/tools")}>{t("View tool services")}</Button>:
-          tools?.status!=="ready"?<Button size="sm" disabled={busy} onClick={()=>void repairTools()}>{t("Prepare Agent tools")}</Button>:null}
+          <Button size="sm" disabled={busy} onClick={()=>void repairTools()}>{tools?.status==="ready"?t("Refresh Agent tools"):t("Prepare Agent tools")}</Button>}
       </div>
       {tools?.tools.length?<Table><TableHeader><TableRow>
         <TableHead>{t("Tool")}</TableHead><TableHead>{t("Source key")}</TableHead>

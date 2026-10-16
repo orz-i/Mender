@@ -139,7 +139,17 @@ func (r *Runtime) EnsureAgentTools(ctx context.Context, id agentdomain.ID, calle
 		return state, fmt.Errorf("%w: Agent has multiple or mismatched delegation Providers", agentdomain.ErrConflict)
 	}
 	if state.Status == "ready" {
-		return state, nil
+		// Explicit owner action also refreshes schema of an already-ready suite.
+		// Phase 40 reasoningEffort is a new optional field on the same ToolID,
+		// so the existing Profile ToolBindings and AgentGrant must remain stable.
+		providerID, err := catalogdomain.ParseProviderID(state.ProviderID)
+		if err != nil {
+			return state, err
+		}
+		if _, err = r.syncConfiguredProviderForOwner(ctx, providerID, caller, true); err != nil {
+			return state, fmt.Errorf("refresh managed Agent tool schema: %w", err)
+		}
+		return r.AgentTools(ctx, id, caller)
 	}
 	if state.ProviderID == "" {
 		raw, err := json.Marshal(map[string]string{"agentId": string(id)})

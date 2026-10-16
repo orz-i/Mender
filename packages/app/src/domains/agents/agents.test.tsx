@@ -96,6 +96,14 @@ describe("Agents focused management",()=>{
     await waitFor(()=>expect(updateAgentSettings).toHaveBeenCalledWith(agent.agentId,"fixture-two","xhigh"));
     expect(client.createAgent).not.toHaveBeenCalled();
   });
+  it("refreshes a ready Agent Tool schema only after explicit action",async()=>{
+    const client=show("/agents/"+agent.agentId);
+    fireEvent.click(await screen.findByRole("button",{name:/^Tools/}));
+    expect(await screen.findByText("Code Reviewer · delegate")).toBeTruthy();
+    expect(client.ensureAgentTools).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button",{name:"Refresh Agent tools"}));
+    await waitFor(()=>expect(client.ensureAgentTools).toHaveBeenCalledWith(agent.agentId));
+  });
   it("repairs a missing Agent suite only on explicit owner action",async()=>{
     const client=show("/agents/"+agent.agentId,{
       getAgentTools:vi.fn().mockResolvedValue({suiteId:"agent.delegation",status:"missing",tools:[]}),
