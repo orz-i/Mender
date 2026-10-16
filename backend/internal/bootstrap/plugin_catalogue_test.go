@@ -123,7 +123,7 @@ func TestCanonicalCatalogueExperimentalDaytonaOptInOnlyChangesItsAvailability(t 
 	if err != nil {
 		t.Fatal(err)
 	}
-	var daytona, e2b int
+	var daytona int
 	for _, entry := range entries {
 		switch entry.PluginID {
 		case "io.mender.sandbox.daytona":
@@ -133,12 +133,11 @@ func TestCanonicalCatalogueExperimentalDaytonaOptInOnlyChangesItsAvailability(t 
 				t.Fatalf("opted-in Daytona did not become configurable: %+v", entry)
 			}
 		case "io.mender.sandbox.e2b":
-			e2b++
 			t.Fatalf("Daytona opt-in must not publish unimplemented E2B: %+v", entry)
 		}
 	}
-	if daytona != 1 || e2b != 0 {
-		t.Fatalf("incorrect technical Sandbox catalogue: Daytona=%d E2B=%d", daytona, e2b)
+	if daytona != 1 {
+		t.Fatalf("incorrect technical Sandbox catalogue: Daytona=%d", daytona)
 	}
 }
 

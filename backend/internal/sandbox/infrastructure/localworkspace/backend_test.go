@@ -32,11 +32,12 @@ func (l *testLauncher) Command(ctx context.Context, mode sandboxdomain.Isolation
 	if mode != sandboxdomain.IsolationHost {
 		return nil, errors.New("restricted host backend unavailable")
 	}
-	// #nosec G204 -- test-only launcher deliberately executes a fixed test shell command.
 	var cmd *exec.Cmd
 	if runtime.GOOS == "windows" {
+		// #nosec G204 -- test-only launcher intentionally executes fixture shell input.
 		cmd = exec.CommandContext(ctx, "powershell.exe", "-NoProfile", "-NonInteractive", "-Command", command)
 	} else {
+		// #nosec G204 -- test-only launcher intentionally executes fixture shell input.
 		cmd = exec.CommandContext(ctx, "/bin/sh", "-lc", command)
 	}
 	cmd.Dir = dir

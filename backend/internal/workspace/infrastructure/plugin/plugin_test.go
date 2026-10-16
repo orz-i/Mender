@@ -64,11 +64,12 @@ func (hostLauncher) CheckIsolation(mode sandboxdomain.IsolationClass) error {
 	return nil
 }
 func (hostLauncher) Command(ctx context.Context, _ sandboxdomain.IsolationClass, _, workingDirectory, command string, env []string) (*exec.Cmd, error) {
-	// #nosec G204 -- test-only shell for bounded Sandbox integration tests.
 	var cmd *exec.Cmd
 	if runtime.GOOS == "windows" {
+		// #nosec G204 -- deterministic test fixture exercising governed shell execution.
 		cmd = exec.CommandContext(ctx, "powershell.exe", "-NoProfile", "-NonInteractive", "-Command", command)
 	} else {
+		// #nosec G204 -- deterministic test fixture exercising governed shell execution.
 		cmd = exec.CommandContext(ctx, "/bin/sh", "-lc", command)
 	}
 	cmd.Dir = workingDirectory
