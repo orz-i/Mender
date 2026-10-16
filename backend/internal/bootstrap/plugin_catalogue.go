@@ -109,7 +109,7 @@ func reviewedMarketplaceAction(descriptor platformplugin.Descriptor, installed b
 		if descriptor.Extension.Kind == platformplugin.SandboxBackend {
 			return MarketplaceCreateSandbox
 		}
-	case "io.mender.agent.codex", "io.mender.agent.grok":
+	case "io.mender.agent.codex", "io.mender.agent.grok", "io.mender.agent.opencode":
 		if descriptor.Extension.Kind == platformplugin.AgentBackend {
 			return MarketplaceCreateAgent
 		}
@@ -251,6 +251,7 @@ func (r *Runtime) ListPluginCatalogue(ctx context.Context) ([]PluginCatalogueEnt
 	}{
 		{agentdomain.BackendCodex, "Codex Agent", "Codex CLI through the separately installed codex-acp adapter"},
 		{agentdomain.BackendGrok, "Grok Agent", "Grok CLI through its native ACP stdio protocol"},
+		{agentdomain.BackendOpenCode, "OpenCode Agent", "OpenCode CLI through its native ACP v1 stdio protocol"},
 	} {
 		descriptor := platformplugin.Descriptor{
 			PluginID: backend.kind.PluginID(), PackageVersion: "1.0.0",

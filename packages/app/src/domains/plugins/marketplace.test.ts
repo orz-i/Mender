@@ -104,6 +104,7 @@ describe("Host-reviewed Marketplace projection",()=>{
   it("keeps native Agent packages visible for diagnosis only, not create or unsupported management",()=>{
     const models=pluginCatalogueToMarketplace([
       builtin("agent.backend","io.mender.agent.grok","create.agent"),
+      builtin("agent.backend","io.mender.agent.opencode","create.agent"),
       builtin("agent.backend","io.mender.agent.codex","create.agent",{
         status:"unavailable",enabled:false,issue:"codex-acp missing",
       }),
@@ -111,6 +112,8 @@ describe("Host-reviewed Marketplace projection",()=>{
     ]);
     expect(models.find(x=>x.key==="io.mender.agent.grok@builtin")?.createAction?.href)
       .toBe("/agents/new?create=1&pluginId=io.mender.agent.grok");
+    expect(models.find(x=>x.key==="io.mender.agent.opencode@builtin")?.createAction?.href)
+      .toBe("/agents/new?create=1&pluginId=io.mender.agent.opencode");
     expect(models.find(x=>x.key==="io.mender.agent.codex@builtin")?.createAction).toBeUndefined();
     expect(models.find(x=>x.key==="dev.example.agent@"+id)).toMatchObject({
       actions:{enable:false,disable:false,remove:false},

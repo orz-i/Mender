@@ -240,11 +240,14 @@ describe("desktop Mender client", () => {
     const grok=builtin("io.mender.agent.grok","agent.backend",{
       capabilities:["acp.v1","tasks","local_workspace"],
     });
+    const opencode=builtin("io.mender.agent.opencode","agent.backend",{
+      capabilities:["acp.v1","tasks","local_workspace"],
+    });
     const entries=[
       builtin("io.mender.provider.mcp","provider.tools"),
       builtin("io.mender.sandbox.local-workspace","sandbox.backend"),
       builtin("io.mender.tunnel.openai","tunnel.transport"),
-      codex,grok,
+      codex,grok,opencode,
     ];
     vi.mocked(Service.ListPluginCatalogue).mockResolvedValue({plugins:entries});
     const result=await createDesktopMenderClient().listPluginCatalogue();
@@ -257,6 +260,9 @@ describe("desktop Mender client", () => {
     expect(result.plugins.find(p=>p.pluginId==="io.mender.agent.grok")).toMatchObject({
       kind:"agent.backend",sourceKind:"builtin",status:"enabled",enabled:true,
       capabilities:["acp.v1","tasks","local_workspace"],
+    });
+    expect(result.plugins.find(p=>p.pluginId==="io.mender.agent.opencode")).toMatchObject({
+      kind:"agent.backend",sourceKind:"builtin",status:"enabled",enabled:true,
     });
     expect(Service.ListPluginCatalogue).toHaveBeenCalledOnce();
   });

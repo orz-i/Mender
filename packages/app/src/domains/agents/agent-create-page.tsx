@@ -14,6 +14,7 @@ type Step = "select" | "configure" | "review";
 const backendChoices: Array<{ value: Backend; name:string; description:string }> = [
   {value:"codex",name:"Codex",description:""},
   {value:"grok",name:"Grok",description:""},
+  {value:"opencode",name:"OpenCode",description:""},
 ];
 
 export function AgentCreatePage({
@@ -25,7 +26,8 @@ export function AgentCreatePage({
   const navigate=useNavigate();
   const [params]=useSearchParams();
   const selected=params.get("pluginId")==="io.mender.agent.codex"?"codex":
-    params.get("pluginId")==="io.mender.agent.grok"?"grok":null;
+    params.get("pluginId")==="io.mender.agent.grok"?"grok":
+    params.get("pluginId")==="io.mender.agent.opencode"?"opencode":null;
   const [step,setStep]=useState<Step>(selected?"configure":"select");
   const [backend,setBackend]=useState<Backend>(selected??"codex");
   const [name,setName]=useState("");
@@ -59,12 +61,14 @@ export function AgentCreatePage({
         <div className="text-xs text-muted-foreground">{t(step==="select"?"Select backend":step==="configure"?"Configure agent":"Review agent")}</div>
         {step==="select"?<>
           <p className="text-sm text-muted-foreground">{t("Choose an installed Agent CLI backend. No Agent process starts during setup.")}</p>
-          <div className="grid gap-3 sm:grid-cols-2">{backendChoices.map(choice=>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{backendChoices.map(choice=>
             <button key={choice.value} type="button" aria-pressed={backend===choice.value}
               onClick={()=>setBackend(choice.value)}
               className={`rounded-xl border p-5 text-left transition-colors focus-visible:ring-2 focus-visible:ring-ring ${backend===choice.value?"border-foreground bg-secondary/40":"border-border hover:border-foreground/50"}`}>
               <div className="font-medium">{choice.name}</div>
-              <p className="mt-2 text-xs leading-5 text-muted-foreground">{choice.value==="codex"?t("Codex CLI requires the separately installed codex-acp adapter."):t("Grok CLI uses its built-in ACP stdio transport.")}</p>
+              <p className="mt-2 text-xs leading-5 text-muted-foreground">{choice.value==="codex"?t("Codex CLI requires the separately installed codex-acp adapter."):
+                choice.value==="grok"?t("Grok CLI uses its built-in ACP stdio transport."):
+                t("OpenCode CLI uses its native ACP stdio transport.")}</p>
             </button>)}</div>
           <div className="flex justify-end"><Button onClick={()=>setStep("configure")}>{t("Continue")}</Button></div>
         </>:step==="configure"?<>
@@ -99,7 +103,7 @@ export function AgentCreatePage({
           </div>
         </>:<>
           <div className="space-y-3 rounded-xl border border-border p-5 text-sm">
-            <div><span className="text-muted-foreground">{t("Backend")}: </span>{backend==="codex"?"Codex":"Grok"}</div>
+            <div><span className="text-muted-foreground">{t("Backend")}: </span>{backendChoices.find(choice=>choice.value===backend)?.name??backend}</div>
             <div><span className="text-muted-foreground">{t("Name")}: </span>{name}</div>
             <div className="break-all"><span className="text-muted-foreground">{t("Workspace")}: </span>{root}</div>
             <div><span className="text-muted-foreground">{t("Default model (optional)")}: </span>{defaultModel||t("Use Agent default")}</div>

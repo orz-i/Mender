@@ -214,6 +214,7 @@ export const zhCNMessages: Readonly<Record<string, string>> = {
   "Agent backend": "智能体后端",
   "Codex CLI requires the separately installed codex-acp adapter.": "Codex CLI 需要另行安装 codex-acp 适配器。",
   "Grok CLI uses its built-in ACP stdio transport.": "Grok CLI 使用内置 ACP 标准输入输出协议。",
+  "OpenCode CLI uses its native ACP stdio transport.": "OpenCode CLI 使用原生 ACP 标准输入输出协议。",
   "CLI detected": "已检测到 CLI",
   "CLI missing": "未检测到 CLI",
   "Queued": "排队中",

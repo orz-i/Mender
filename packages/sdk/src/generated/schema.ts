@@ -2224,7 +2224,7 @@ export interface components {
         CreateAgentRequest: {
             name: string;
             /** @enum {string} */
-            backend: "codex" | "grok";
+            backend: "codex" | "grok" | "opencode";
             /** @description Explicit trusted local absolute workspace directory */
             workspaceRoot: string;
             /** @description Optional ACP-advertised model ID; empty uses Agent backend default */
@@ -2241,7 +2241,7 @@ export interface components {
             agentId: string;
             name: string;
             /** @enum {string} */
-            backend: "codex" | "grok";
+            backend: "codex" | "grok" | "opencode";
             pluginId: string;
             extensionId: string;
             workspaceRoot: string;

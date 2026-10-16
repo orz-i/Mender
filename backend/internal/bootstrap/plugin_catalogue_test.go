@@ -52,7 +52,7 @@ func TestCanonicalPluginCatalogueAllTypesInertAndStable(t *testing.T) {
 			}
 		case "io.mender.sandbox.e2b":
 			t.Fatal("unimplemented E2B must not appear in the technical plugin inventory")
-		case "io.mender.agent.codex", "io.mender.agent.grok":
+		case "io.mender.agent.codex", "io.mender.agent.grok", "io.mender.agent.opencode":
 			if plugin.SourceKind != "builtin" || plugin.Kind != platformplugin.AgentBackend || len(plugin.Capabilities) != 3 ||
 				(plugin.Status != "enabled" && plugin.Status != "unavailable") ||
 				(plugin.Status == "unavailable" && (plugin.Enabled || plugin.Issue == "")) {
@@ -79,6 +79,7 @@ func TestCanonicalPluginCatalogueAllTypesInertAndStable(t *testing.T) {
 		"io.mender.sandbox.docker@builtin",
 		"io.mender.sandbox.daytona@builtin",
 		"io.mender.sandbox.ssh-remote@builtin",
+		"io.mender.agent.opencode@builtin",
 	} {
 		if !keys[key] {
 			t.Fatalf("Sandbox option %q missing from canonical Marketplace", key)
@@ -159,6 +160,7 @@ func TestReviewedMarketplaceActionRejectsInternalAndUnknownExtensions(t *testing
 		{"io.mender.sandbox.ssh-remote", platformplugin.SandboxBackend, false, MarketplaceCreateSandbox},
 		{"io.mender.tunnel.openai", platformplugin.TunnelTransport, false, MarketplaceCreateTunnel},
 		{"io.mender.agent.grok", platformplugin.AgentBackend, false, MarketplaceCreateAgent},
+		{"io.mender.agent.opencode", platformplugin.AgentBackend, false, MarketplaceCreateAgent},
 		{"io.mender.provider.mcp", platformplugin.AgentBackend, false, MarketplaceNone},
 		{"dev.example.unreviewed", platformplugin.ProviderTools, false, MarketplaceNone},
 		{"dev.example.provider", platformplugin.ProviderTools, true, MarketplaceCreateProvider},

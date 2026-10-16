@@ -79,6 +79,20 @@ describe("Agents focused management",()=>{
       isolation:"restricted_host",defaultModel:"",
     }));
   });
+  it("opens OpenCode-specific creation from the built-in marketplace without cloning Grok",async()=>{
+    const client=show("/agents/new?pluginId=io.mender.agent.opencode");
+    expect(screen.getByRole("textbox",{name:"Agent name"})).toBeTruthy();
+    expect(screen.queryByText("Grok CLI uses its built-in ACP stdio transport.")).toBeNull();
+    fireEvent.change(screen.getByRole("textbox",{name:"Agent name"}),{target:{value:"OpenCode Local"}});
+    fireEvent.change(screen.getByRole("textbox",{name:"Workspace directory"}),{target:{value:"/tmp/opencode-fixture"}});
+    fireEvent.click(screen.getByRole("button",{name:"Review"}));
+    expect(screen.getByText("OpenCode")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button",{name:"Create agent"}));
+    await waitFor(()=>expect(client.createAgent).toHaveBeenCalledWith({
+      name:"OpenCode Local",backend:"opencode",workspaceRoot:"/tmp/opencode-fixture",
+      isolation:"restricted_host",defaultModel:"",
+    }));
+  });
   it("selects ACP model and reasoning effort together without duplicating Agent",async()=>{
     const inspectAgentModels=vi.fn().mockResolvedValue({current:"fixture-one",
       models:[{id:"fixture-one",name:"Fixture One"},{id:"fixture-two",name:"Fixture Two"}],
