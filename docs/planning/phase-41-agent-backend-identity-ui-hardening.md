@@ -1,6 +1,6 @@
 # Agent Backend Identity UI Hardening — Phase 41 follow-up
 
-Status: confirmed and being repaired (2026-10-16). Scope: UI/UX contract and regression tests; no persisted resource migration.
+Status: implementation completed and automated acceptance passed (2026-10-16). Native Wails window click remains unverified due to OS accessibility permission. Scope: UI/UX contract and regression tests; no persisted resource migration.
 
 ## Reproduction evidence
 
@@ -19,3 +19,13 @@ The owner attached three real Wails screenshots: an Agent named OpenCode display
 - Document first and commit separately; then fix TypeScript, run targeted tests, `pnpm check`, commit; inspect current Wails frontend using existing Agent and a **non-submitted** OpenCode creation review. Do not create or delete user Agents during acceptance. Avoid `.agents/`, `.pi/`, `.intent-loop/`, `.commandcode/` in commits.
 
 The plugin detail URL already uses `/agents/new?create=1&pluginId=...` with the reviewed plugin ID, and the Backend schema permits only the exact three built-ins. The live store proves the mislabeling is not a migration/data error.
+## Implementation and acceptance evidence (2026-10-16)
+
+- **Docs-first:** `26b13b7` documented the observed wrong labels and the stale React Router query-param backend default. **Code:** `79150e7` introduced a typed, exhaustive SDK-backed identity mapping used by Agent inventory, detail, selection and creation review. It separated marketplace-pinned and manual creation, keyed the inner form to the exact reviewed `pluginId`, disallowed unknown plugin fallback, removed the implicit Codex default and prevented Back from silently changing the marketplace-selected backend.
+- **Production data integrity:** read-only live SQLite inspection confirmed existing `OpenCode` resource stored as `backend=opencode`, `plugin_id=io.mender.agent.opencode`. No Agent, Task, Provider, ToolID, Profile, grant or other persisted resource was modified. A `PRAGMA quick_check` returned `ok`. The misleading Grok UI label was not a migration failure, so no data fix or extra compatibility bridge was appropriate.
+- **Regression tests:** the focused Agent test suite passed **12/12**, covering the three exact backend labels in inventory and details, generic explicit choice, unknown plugin fail-closed, marketplace-pinned Back, and repeated `pluginId` changes between Grok → OpenCode → Codex → OpenCode without unmounting the route; the final submitted body retained the exact OpenCode backend without stale names or roots.
+- **Complete validation:** canonical `pnpm check` completed with exit code **0** at `/tmp/mender-backend-identity-final.exit`; complete log `/tmp/mender-backend-identity-final.log`. This includes Go full tests/race, plugin SDK/protocol/examples, Go/ESLint, strict TS, i18n **1246/1246**, Vitest **42 files / 241 tests**, generated SDK/Wails parity and Web/Desktop builds. The non-blocking Vite large-chunk advisory was not a regression.
+- **Running Wails development frontend:** native Mender process and Vite server remained running. The Vite server on `http://127.0.0.1:9245/` returned HTTP 200 and served the updated `agentBackendLabel` and `pinnedBackend` source modules; the HMR log confirmed agent page and creation page updates. No native backend restart is required for this React-only change.
+- **Explicit limit:** macOS refused a subsequent remote GUI automation request (`osascript` was not allowed Accessibility access), so **native window clicking was not revalidated after the fix**. Do not claim end-user visual acceptance on that basis. The owner can refresh the running Wails page and confirm `Agents → OpenCode` shows Backend **OpenCode**, then use `Plugin Marketplace → OpenCode Agent → Add agent → Review` to verify the selected backend, without clicking Create. No system Accessibility permissions were modified by this task.
+
+**Closure:** no changed tracked source outside the scoped UI/tests/docs; skill directories were excluded from commits. UI identity now derives from the exact Agent Backend and the creation flow cannot silently substitute a different backend when a plugin URL is present.
