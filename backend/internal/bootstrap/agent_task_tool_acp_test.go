@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -18,6 +20,8 @@ import (
 	agentdomain "github.com/orz-i/Mender/backend/internal/agent/domain"
 	agentacp "github.com/orz-i/Mender/backend/internal/agent/infrastructure/acp"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
+	runtimedomain "github.com/orz-i/Mender/backend/internal/runtimegovernance/domain"
+	processisolation "github.com/orz-i/Mender/backend/internal/runtimegovernance/infrastructure/processisolation"
 )
 
 func TestGenericTaskToolACPFixtureProcess(t *testing.T) {
@@ -81,9 +85,40 @@ func TestGenericTaskToolACPFixtureProcess(t *testing.T) {
 			if session == nil {
 				os.Exit(194)
 			}
+			confined := os.Getenv("MENDER_TASK_TOOL_ACP_CONFINED") == "1"
 			tools, err := session.ListTools(context.Background(), nil)
-			if err != nil || len(tools.Tools) != 1 || tools.Tools[0].Name != "mender_read" {
+			expected := 1
+			if confined {
+				expected = 2
+			}
+			if err != nil || len(tools.Tools) != expected {
 				os.Exit(195)
+			}
+			visible := make(map[string]bool, len(tools.Tools))
+			for _, tool := range tools.Tools {
+				visible[tool.Name] = true
+			}
+			if len(visible) != expected || !visible["mender_read"] {
+				os.Exit(195)
+			}
+			if confined {
+				if !visible["mender_edit"] {
+					os.Exit(199)
+				}
+				// The process is in a Seatbelt read-only root. A built-in/native
+				// Agent file write must fail without a Mender Tool invocation.
+				if err := os.WriteFile("native-bypass.txt", []byte("must not exist"), 0o600); err == nil {
+					os.Exit(200)
+				}
+				// Only the *existing* canonical Mender workspace.edit can create
+				// this disposable file with current Profile and Sandbox grants.
+				edited, e := session.CallTool(context.Background(), &mcp.CallToolParams{
+					Name:      "mender_edit",
+					Arguments: json.RawMessage(`{"path":"controlled-edit.txt","operation":"create","content":"through Mender only"}`),
+				})
+				if e != nil || edited.IsError {
+					os.Exit(201)
+				}
 			}
 			result, err := session.CallTool(context.Background(), &mcp.CallToolParams{
 				Name: "mender_read", Arguments: json.RawMessage(`{"path":"review.txt"}`),
@@ -157,4 +192,61 @@ func TestGenericACPTaskToolsUseExistingMenderGovernedInvocation(t *testing.T) {
 
 func bearerTestHTTPClient(token string) *http.Client {
 	return &http.Client{Transport: taskBearerTransport{base: http.DefaultTransport, token: token}}
+}
+
+func TestRestrictedGenericACPAgentCannotNativeWriteButCanInvokeMenderEdit(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("native macOS Seatbelt acceptance")
+	}
+	isolate := processisolation.New()
+	if !isolate.Info().RestrictedHostAvailable {
+		t.Skip("restricted-host process unavailable")
+	}
+	f := setupGovernedTaskToolFixture(t)
+	server, err := f.runtime.openAgentTaskToolMCPServer(context.Background(), f.task.ID, f.sandbox.ID(),
+		[]catalogdomain.ToolID{f.ids["workspace.read"], f.ids["workspace.edit"]})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = server.close() }()
+	runner := agentacp.Runner{
+		NewCommandWithConfig: func(ctx context.Context, _ agentdomain.Agent, _ agentapp.RunConfig) (*exec.Cmd, error) {
+			current, err := os.Executable()
+			if err != nil {
+				return nil, err
+			}
+			return isolate.Command(ctx, runtimedomain.IsolationRestrictedHost, processisolation.CommandSpec{
+				Executable:       current,
+				Arguments:        []string{"-test.run=^TestGenericTaskToolACPFixtureProcess$"},
+				WorkingDirectory: f.root,
+				PermittedRoot:    f.root,
+				RootWritable:     false,
+				Environment: []string{
+					"PATH=/usr/bin:/bin:/opt/homebrew/bin",
+					"TMPDIR=" + os.TempDir(),
+					"MENDER_TASK_TOOL_ACP_HELPER=1",
+					"MENDER_TASK_TOOL_ACP_CONFINED=1",
+				},
+			})
+		},
+		NewCommand: func(context.Context, agentdomain.Agent) (*exec.Cmd, error) {
+			return nil, errors.New("unrestricted Agent process fallback must not run")
+		},
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 22*time.Second)
+	defer cancel()
+	result, err := runner.ExecuteConfigured(ctx, f.agent, "synthetic confined Agent tool call",
+		agentapp.RunConfig{WorkspaceRoot: f.root, ToolSupply: agentapp.ToolSupply{
+			Delivery: agentapp.ToolDeliveryMCPHTTP, Endpoint: server.endpoint, BearerToken: server.token,
+		}})
+	if err != nil || result != "governed temporary contents" {
+		t.Fatalf("confined ACP Tool supply did not complete: result=%q err=%v", result, err)
+	}
+	if _, err := os.Stat(filepath.Join(f.root, "native-bypass.txt")); !os.IsNotExist(err) {
+		t.Fatalf("restricted native Agent wrote directly: %v", err)
+	}
+	created, err := os.ReadFile(filepath.Join(f.root, "controlled-edit.txt"))
+	if err != nil || string(created) != "through Mender only" {
+		t.Fatalf("Mender-governed edit did not execute: %q err=%v", created, err)
+	}
 }
