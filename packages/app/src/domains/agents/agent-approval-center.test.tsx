@@ -73,6 +73,31 @@ describe("owner Agent approval center",()=>{
   await waitFor(()=>expect(set).toHaveBeenCalledWith(agent.agentId,"","workspace_read"));
   await waitFor(()=>expect(release).toHaveBeenCalledWith(agent.agentId,""));
  });
+ it("keeps additional workspace authorization separate from the default root",async()=>{
+  const set=vi.fn().mockResolvedValue({...defaultPolicy,workspaceKey:"secondary",mode:"workspace_read"});
+  const client=makeClient({
+   listAgentWorkspaces:vi.fn().mockResolvedValue({workspaces:[{
+    key:"secondary",workspaceRoot:"/private/tmp/mender-agent-review/secondary",profileIds:[],
+   }]}),
+   listAgentApprovalPolicies:vi.fn().mockResolvedValue({
+    policies:[{...defaultPolicy,mode:"workspace_read"}],
+   }),
+   setAgentApprovalPolicy:set,
+  });
+  render(<AgentApprovalCenter client={client}/>);
+  expect(await screen.findByText("Review Agent")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button",{name:"Set authorization mode"}));
+  const dialog=await screen.findByRole("dialog");
+  expect(within(dialog).getByRole<HTMLInputElement>("radio",{name:"Allow workspace reads"}).checked).toBe(true);
+  fireEvent.change(within(dialog).getByRole("combobox",{name:"Workspace"}),{
+   target:{value:"secondary"},
+  });
+  expect(within(dialog).getByText("/private/tmp/mender-agent-review/secondary")).toBeTruthy();
+  expect(within(dialog).getByRole<HTMLInputElement>("radio",{name:"Ask every time"}).checked).toBe(true);
+  fireEvent.click(within(dialog).getByRole("radio",{name:"Allow workspace reads"}));
+  fireEvent.click(within(dialog).getByRole("button",{name:"Save"}));
+  await waitFor(()=>expect(set).toHaveBeenCalledWith(agent.agentId,"secondary","workspace_read"));
+ });
  it("requires a separate risk acknowledgement for 24-hour native Host trust",async()=>{
   const set=vi.fn().mockResolvedValue({...defaultPolicy,mode:"trusted",expiresAt:"2099-01-01T00:00:00Z"});
   const client=makeClient({setAgentApprovalPolicy:set});
