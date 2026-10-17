@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 
+	agentapplication "github.com/orz-i/Mender/backend/internal/agent/application"
 	agentdomain "github.com/orz-i/Mender/backend/internal/agent/domain"
 	runtimedomain "github.com/orz-i/Mender/backend/internal/runtimegovernance/domain"
 	processisolation "github.com/orz-i/Mender/backend/internal/runtimegovernance/infrastructure/processisolation"
@@ -95,6 +96,27 @@ func (f *LocalFactory) Command(ctx context.Context, a agentdomain.Agent) (*exec.
 // CommandInWorkspace only changes the cwd to a previously admitted canonical
 // local root. Its caller owns the workspace selection and Profile authorization.
 func (f *LocalFactory) CommandInWorkspace(ctx context.Context, a agentdomain.Agent, workspaceRoot string) (*exec.Cmd, error) {
+	return f.commandInWorkspace(ctx, a, workspaceRoot, true)
+}
+
+// CommandWithConfig rejects task Tool supply to any unrestricted host Agent,
+// independent of Grok/OpenCode/Codex backend names. The process is confined
+// before receiving any Task HTTP MCP connection secret.
+func (f *LocalFactory) CommandWithConfig(ctx context.Context, a agentdomain.Agent,
+	cfg agentapplication.RunConfig) (*exec.Cmd, error) {
+	if err := cfg.ToolSupply.Validate(); err != nil {
+		return nil, err
+	}
+	if cfg.ToolSupply.IsZero() {
+		return f.CommandInWorkspace(ctx, a, cfg.WorkspaceRoot)
+	}
+	if a.Spec().Isolation != "restricted_host" {
+		return nil, fmt.Errorf("%w: governed Tool supply requires restricted_host", agentdomain.ErrUnavailable)
+	}
+	return f.commandInWorkspace(ctx, a, cfg.WorkspaceRoot, false)
+}
+
+func (f *LocalFactory) commandInWorkspace(ctx context.Context, a agentdomain.Agent, workspaceRoot string, rootWritable bool) (*exec.Cmd, error) {
 	spec := a.Spec()
 	executable, err := f.Availability(spec.Backend)
 	if err != nil {
@@ -138,6 +160,6 @@ func (f *LocalFactory) CommandInWorkspace(ctx context.Context, a agentdomain.Age
 	}
 	return f.launcher.Command(ctx, isolation, processisolation.CommandSpec{
 		Executable: executable, Arguments: arguments, WorkingDirectory: root,
-		PermittedRoot: root, RootWritable: true, Environment: environment,
+		PermittedRoot: root, RootWritable: rootWritable, Environment: environment,
 	})
 }

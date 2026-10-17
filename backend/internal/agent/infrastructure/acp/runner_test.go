@@ -35,8 +35,35 @@ func TestACPFixtureProcess(t *testing.T) {
 			if os.Getenv("ACP_FIXTURE_MODE") == "version2" {
 				version = 2
 			}
-			send(map[string]any{"jsonrpc": "2.0", "id": msg.ID, "result": map[string]any{"protocolVersion": version}})
+			hello := map[string]any{"protocolVersion": version}
+			if os.Getenv("ACP_FIXTURE_MODE") == "mcp-http" {
+				hello["agentCapabilities"] = map[string]any{"mcpCapabilities": map[string]any{"http": true}}
+			}
+			send(map[string]any{"jsonrpc": "2.0", "id": msg.ID, "result": hello})
 		case "session/new":
+			if os.Getenv("ACP_FIXTURE_MODE") == "mcp-http" {
+				var supply struct {
+					MCPServers []struct {
+						Type    string `json:"type"`
+						Name    string `json:"name"`
+						URL     string `json:"url"`
+						Headers []struct {
+							Name  string `json:"name"`
+							Value string `json:"value"`
+						} `json:"headers"`
+					} `json:"mcpServers"`
+				}
+				if json.Unmarshal(msg.Params, &supply) != nil || len(supply.MCPServers) != 1 {
+					os.Exit(160)
+				}
+				server := supply.MCPServers[0]
+				if server.Type != "http" || server.Name != "mender-task-tools" ||
+					server.URL != "http://127.0.0.1:12345/mcp" ||
+					len(server.Headers) != 1 || server.Headers[0].Name != "Authorization" ||
+					server.Headers[0].Value != "Bearer "+strings.Repeat("a", 64) {
+					os.Exit(161)
+				}
+			}
 			result := map[string]any{"sessionId": "fixture-1"}
 			if os.Getenv("ACP_FIXTURE_MODE") == "models" {
 				result["configOptions"] = []any{map[string]any{
@@ -194,7 +221,7 @@ func fixtureAgent(t *testing.T) agentdomain.Agent {
 	return a
 }
 func fixtureRunner(mode string) Runner {
-	return Runner{NewCommand: func(ctx context.Context, a agentdomain.Agent) (*exec.Cmd, error) {
+	factory := func(ctx context.Context, a agentdomain.Agent) (*exec.Cmd, error) {
 		binary, err := os.Executable()
 		if err != nil {
 			return nil, err
@@ -203,6 +230,9 @@ func fixtureRunner(mode string) Runner {
 			ctx, binary, "-test.run=^TestACPFixtureProcess$")
 		cmd.Env = append(os.Environ(), "MENDER_ACP_TEST_HELPER=1", "ACP_FIXTURE_MODE="+mode, "ACP_FIXTURE_TARGET_PATH="+filepath.Join(a.Spec().WorkspaceRoot, "fixture.txt"))
 		return cmd, nil
+	}
+	return Runner{NewCommand: factory, NewCommandWithConfig: func(ctx context.Context, a agentdomain.Agent, _ agentapplication.RunConfig) (*exec.Cmd, error) {
+		return factory(ctx, a)
 	}}
 }
 
@@ -276,5 +306,61 @@ func TestACPRejectsBadPrompts(t *testing.T) {
 		if _, err := executeFixture(ctx, "completed", a, input); !errors.Is(err, agentdomain.ErrInvalid) {
 			t.Fatal("accepted unsafe prompt", err)
 		}
+	}
+}
+func TestACPTaskToolSupplyUsesNegotiatedHTTPWithoutBackendAssumptions(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	defer cancel()
+	// The fixture intentionally identifies as Grok. The ACP transport
+	// negotiation is protocol-based, never a hardcoded OpenCode branch.
+	agent := fixtureAgent(t)
+	result, err := fixtureRunner("mcp-http").ExecuteConfigured(ctx, agent, "bounded task",
+		agentapplication.RunConfig{
+			WorkspaceRoot: agent.Spec().WorkspaceRoot,
+			ToolSupply: agentapplication.ToolSupply{
+				Delivery:    agentapplication.ToolDeliveryMCPHTTP,
+				Endpoint:    "http://127.0.0.1:12345/mcp",
+				BearerToken: strings.Repeat("a", 64),
+			},
+		})
+	if err != nil || result != "fixture completed" {
+		t.Fatalf("advertised MCP HTTP Tool delivery failed: %q %v", result, err)
+	}
+}
+func TestACPTaskToolSupplyFailsClosedWhenHTTPIsNotAdvertised(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	defer cancel()
+	agent := fixtureAgent(t)
+	result, err := fixtureRunner("completed").ExecuteConfigured(ctx, agent, "bounded task",
+		agentapplication.RunConfig{
+			WorkspaceRoot: agent.Spec().WorkspaceRoot,
+			ToolSupply: agentapplication.ToolSupply{
+				Delivery:    agentapplication.ToolDeliveryMCPHTTP,
+				Endpoint:    "http://127.0.0.1:12345/mcp",
+				BearerToken: strings.Repeat("a", 64),
+			},
+		})
+	if !errors.Is(err, agentdomain.ErrUnavailable) || result != "" {
+		t.Fatalf("unadvertised HTTP tool supply silently downgraded: %q %v", result, err)
+	}
+}
+func TestACPRejectsInvalidToolSupplyBeforeLaunchingAnyAgent(t *testing.T) {
+	launched := false
+	agent := fixtureAgent(t)
+	runner := Runner{NewCommand: func(context.Context, agentdomain.Agent) (*exec.Cmd, error) {
+		launched = true
+		return nil, errors.New("should not launch")
+	}}
+	_, err := runner.ExecuteConfigured(context.Background(), agent, "bounded task",
+		agentapplication.RunConfig{
+			WorkspaceRoot: agent.Spec().WorkspaceRoot,
+			ToolSupply: agentapplication.ToolSupply{
+				Delivery:    agentapplication.ToolDeliveryMCPHTTP,
+				Endpoint:    "https://untrusted.example/mcp",
+				BearerToken: strings.Repeat("a", 64),
+			},
+		})
+	if err == nil || launched {
+		t.Fatalf("unsafe Task MCP endpoint permitted: launched=%t err=%v", launched, err)
 	}
 }

@@ -103,7 +103,7 @@ func newAgents(ctx context.Context, dbPath string, owner gov.Principal,
 	}
 	runner := fixtureRunner
 	if runner == nil {
-		runner = agentacp.Runner{NewCommand: launcher.Command, NewCommandInWorkspace: launcher.CommandInWorkspace}
+		runner = agentacp.Runner{NewCommand: launcher.Command, NewCommandInWorkspace: launcher.CommandInWorkspace, NewCommandWithConfig: launcher.CommandWithConfig}
 	}
 	service, err := agentapplication.NewService(store, runner, admit, owner, profileExists)
 	if err != nil {

@@ -64,6 +64,7 @@ type RunConfig struct {
 	Model               string
 	ReasoningEffort     string
 	PermissionRequester PermissionRequester
+	ToolSupply          ToolSupply // optional backend-neutral, Task-scoped tool delivery
 }
 
 type Admission func(context.Context, gov.Context, agentdomain.Agent, gov.Action) error
@@ -363,6 +364,18 @@ func (s *Service) SubmitWithOptions(ctx context.Context, id agentdomain.ID, prom
 	s.mu.Unlock()
 	go s.run(runCtx, cancel, agent, task, prompt, caller)
 	return task, nil
+}
+
+// TaskLocallyActive fences a Task to the exact in-memory Runtime that
+// admitted it. Other processes may read the same SQLite Task history, but
+// they cannot mint governed Tool capabilities for an orphan/stale Task.
+func (s *Service) TaskLocallyActive(id agentdomain.TaskID) bool {
+	if s == nil {
+		return false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return !s.closed && s.active[id] != nil
 }
 
 func (s *Service) run(ctx context.Context, cancel context.CancelFunc, agent agentdomain.Agent, task agentdomain.Task, prompt string, caller gov.Context) {

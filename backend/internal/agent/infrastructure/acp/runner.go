@@ -30,6 +30,9 @@ type CommandFactory func(context.Context, agentdomain.Agent) (*exec.Cmd, error)
 type Runner struct {
 	NewCommand            CommandFactory
 	NewCommandInWorkspace func(context.Context, agentdomain.Agent, string) (*exec.Cmd, error)
+	// Required for task-supplied governed Tools: only a verified restrictive
+	// process plan can receive an MCP bearer. No fallback to old host launcher.
+	NewCommandWithConfig func(context.Context, agentdomain.Agent, agentapplication.RunConfig) (*exec.Cmd, error)
 }
 
 type rpcMessage struct {
@@ -242,6 +245,9 @@ func (r Runner) withSession(ctx context.Context, agent agentdomain.Agent, config
 	if r.NewCommand == nil {
 		return "", errors.New("ACP process launcher unavailable")
 	}
+	if err := config.ToolSupply.Validate(); err != nil {
+		return "", fmt.Errorf("invalid Agent tool supply: %w", err)
+	}
 	// The per-task command has no persistent Agent session. Cancel its context
 	// when the prompt ends so the owned process group and scanner are drained.
 	runCtx, stop := context.WithCancel(ctx)
@@ -254,7 +260,12 @@ func (r Runner) withSession(ctx context.Context, agent agentdomain.Agent, config
 	}
 	var cmd *exec.Cmd
 	var err error
-	if config.WorkspaceRoot == agent.Spec().WorkspaceRoot {
+	if !config.ToolSupply.IsZero() {
+		if agent.Spec().Isolation != "restricted_host" || r.NewCommandWithConfig == nil {
+			return "", fmt.Errorf("%w: task Tool supply requires a verified restricted Agent process plan", agentdomain.ErrUnavailable)
+		}
+		cmd, err = r.NewCommandWithConfig(runCtx, agent, config)
+	} else if config.WorkspaceRoot == agent.Spec().WorkspaceRoot {
 		cmd, err = r.NewCommand(runCtx, agent)
 	} else if r.NewCommandInWorkspace != nil {
 		cmd, err = r.NewCommandInWorkspace(runCtx, agent, config.WorkspaceRoot)
@@ -327,13 +338,30 @@ func (r Runner) withSession(ctx context.Context, agent agentdomain.Agent, config
 		return "", annotateRead(err, readErrors)
 	}
 	var hello struct {
-		ProtocolVersion int `json:"protocolVersion"`
+		ProtocolVersion   int `json:"protocolVersion"`
+		AgentCapabilities struct {
+			MCPCapabilities struct {
+				HTTP bool `json:"http"`
+			} `json:"mcpCapabilities"`
+		} `json:"agentCapabilities"`
 	}
 	if err := json.Unmarshal(init, &hello); err != nil || hello.ProtocolVersion != 1 {
 		return "", errors.New("ACP Agent does not support stable protocol v1")
 	}
+	servers := []any{}
+	if !config.ToolSupply.IsZero() {
+		// ACP v1 only. HTTP is OPTIONAL for every backend; no assumption
+		// based on a Grok/OpenCode/Codex name and no host-side fallback.
+		if !hello.AgentCapabilities.MCPCapabilities.HTTP {
+			return "", fmt.Errorf("%w: Agent does not advertise ACP v1 HTTP MCP support", agentdomain.ErrUnavailable)
+		}
+		servers = append(servers, map[string]any{
+			"type": "http", "name": "mender-task-tools", "url": config.ToolSupply.Endpoint,
+			"headers": []map[string]string{{"name": "Authorization", "value": "Bearer " + config.ToolSupply.BearerToken}},
+		})
+	}
 	session, err := wire.call(ctx, 2, "session/new", map[string]any{
-		"cwd": config.WorkspaceRoot, "mcpServers": []any{},
+		"cwd": config.WorkspaceRoot, "mcpServers": servers,
 	}, noUpdates)
 	if err != nil {
 		return "", annotateRead(err, readErrors)

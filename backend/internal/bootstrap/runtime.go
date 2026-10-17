@@ -86,6 +86,7 @@ type Runtime struct {
 	ownerPrincipal       governancedomain.Principal
 	agentStore           *agentsqlite.Store
 	agentLauncher        *agentacp.LocalFactory
+	agentToolGateway     agentTaskToolGateway
 
 	closersMu sync.Mutex
 	closers   []io.Closer
@@ -571,6 +572,8 @@ func (r *Runtime) addCloser(closer io.Closer) {
 
 // Close releases all runtime-owned infrastructure.
 func (r *Runtime) Close() error {
+	r.closeAgentTaskToolMCPServers()
+	r.closeAgentTaskToolGateway()
 	agentErr := r.Agents.Close()
 	serverErr := r.closeManagedMCPServers()
 	providerErr := r.providerInstances.CloseAll()
