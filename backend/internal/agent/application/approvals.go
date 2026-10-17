@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -33,7 +34,9 @@ type PermissionDecision struct {
 }
 type PermissionRequester func(context.Context, PermissionRequest) (PermissionDecision, error)
 type pendingApproval struct {
-	decision chan PermissionDecision
+	offers   chan pendingApprovalHandoff // unbuffered, handoff requires a live request consumer
+	done     chan struct{}               // closes when the ACP request leaves its waiter
+	reserved bool                        // only one owner/policy delivery can commit
 }
 
 // requestPermission starts one bounded owner decision wait, without blocking
@@ -73,7 +76,7 @@ func (s *Service) requestPermission(ctx context.Context, task agentdomain.Task, 
 	if decision, accepted, err := s.tryAutomaticApproval(ctx, task, a); err != nil || accepted {
 		return decision, err
 	}
-	waiter := &pendingApproval{decision: make(chan PermissionDecision, 1)}
+	waiter := &pendingApproval{offers: make(chan pendingApprovalHandoff), done: make(chan struct{})}
 	s.mu.Lock()
 	if s.closed || s.active[task.ID] == nil {
 		s.mu.Unlock()
@@ -82,6 +85,7 @@ func (s *Service) requestPermission(ctx context.Context, task agentdomain.Task, 
 	s.pending[approvalID] = waiter
 	s.mu.Unlock()
 	defer func() {
+		close(waiter.done) // signal detachment before waiting for the Service mutex
 		s.mu.Lock()
 		delete(s.pending, approvalID)
 		s.mu.Unlock()
@@ -94,16 +98,35 @@ func (s *Service) requestPermission(ctx context.Context, task agentdomain.Task, 
 	}
 	timer := time.NewTimer(time.Until(limit))
 	defer timer.Stop()
-	select {
-	case <-ctx.Done():
-		return none, ctx.Err()
-	case <-timer.C:
-		return none, agentdomain.ErrUnavailable
-	case decision := <-waiter.decision:
-		if ctx.Err() != nil {
+	for {
+		select {
+		case <-ctx.Done():
 			return none, ctx.Err()
+		case <-timer.C:
+			return none, agentdomain.ErrUnavailable
+		case offer := <-waiter.offers:
+			// ACP cannot observe an allowed choice until durable storage
+			// has accepted the exact current Task, grants and Policy epoch.
+			select {
+			case persistErr := <-offer.committed:
+				if errors.Is(persistErr, agentdomain.ErrConflict) {
+					// An outdated approval attempt has not selected an ACP
+					// option. Keep a still-live request in the manual inbox.
+					continue
+				}
+				if persistErr != nil {
+					return none, persistErr
+				}
+				if ctx.Err() != nil {
+					return none, ctx.Err()
+				}
+				return offer.decision, nil
+			case <-ctx.Done():
+				return none, ctx.Err()
+			case <-timer.C:
+				return none, agentdomain.ErrUnavailable
+			}
 		}
-		return decision, nil
 	}
 }
 
@@ -146,13 +169,7 @@ func (s *Service) DecideApproval(ctx context.Context, id agentdomain.ApprovalID,
 		task.Status != agentdomain.TaskRunning || task.CancelRequested || !approval.ExpiresAt.After(time.Now()) {
 		return agentdomain.Approval{}, agentdomain.ErrConflict
 	}
-	s.mu.Lock()
-	waiter := s.pending[id]
-	active := s.active[task.ID] != nil && !s.closed
-	s.mu.Unlock()
-	if !active || waiter == nil {
-		return agentdomain.Approval{}, agentdomain.ErrConflict
-	}
+	var policyRevision int64 // zero for owner rejection; never grants authority
 	if choice == agentdomain.ApprovalAllowOnce {
 		if !approval.CanAllow || approval.Kind != "read" {
 			return agentdomain.Approval{}, agentdomain.ErrForbidden
@@ -168,6 +185,13 @@ func (s *Service) DecideApproval(ctx context.Context, id agentdomain.ApprovalID,
 		if err != nil {
 			return agentdomain.Approval{}, err
 		}
+		// Capture Policy before admission, fence the same version in the
+		// durable SQLite decision; a concurrent mutation cannot reuse the
+		// earlier Policy check result.
+		policyRevision, err = s.store.CurrentPolicyRevision(ctx)
+		if err != nil {
+			return agentdomain.Approval{}, err
+		}
 		if err := s.allowedForApproval(ctx, agent, original); err != nil {
 			return agentdomain.Approval{}, err
 		}
@@ -175,20 +199,19 @@ func (s *Service) DecideApproval(ctx context.Context, id agentdomain.ApprovalID,
 			return agentdomain.Approval{}, err
 		}
 	}
+	// A reject needs no Policy revision: it can never grant authority.
+	// A positive decision must match its prior admission generation.
+	// All decisions remain individually task bound and owner only.
 	// Reject is always an owner action and cannot grant new authority.
 	// It remains available after Profile/workspace grants are revoked.
 	status := agentdomain.ApprovalRejected
 	if choice == agentdomain.ApprovalAllowOnce {
 		status = agentdomain.ApprovalAllowedOnce
 	}
-	if err := s.store.ResolveApproval(ctx, id, status); err != nil {
+	if err := s.resolveWaitingApproval(ctx, id, task.ID, PermissionDecision{Choice: choice}, func() error {
+		return s.store.ResolveApproval(ctx, id, status, policyRevision)
+	}); err != nil {
 		return agentdomain.Approval{}, err
-	}
-	// A buffered channel is deliberately nonblocking: expiry, cancellation
-	// or shutdown may have detached the waiter concurrently with owner action.
-	select {
-	case waiter.decision <- PermissionDecision{Choice: choice}:
-	default:
 	}
 	approval.Status = status
 	approval.ResolvedAt = time.Now().UTC()

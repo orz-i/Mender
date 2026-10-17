@@ -10,12 +10,18 @@ import (
 // ResolveApprovalByPolicy is for an EXISTING pending human-visible request
 // after the owner explicitly enabled a matching workspace policy. Its SQL
 // rechecks the live policy/Task/grants atomically and records policy provenance.
-// Ordinary DecideApproval remains read-only and never expands its authority.
-func (s *Store) ResolveApprovalByPolicy(ctx context.Context, id agentdomain.ApprovalID, mode agentdomain.ApprovalMode) error {
+// It enforces the same strict per-Task cap of 64 prior policy decisions
+// (`<64`) as RecordAutomaticApproval, inside the same atomic UPDATE, so the
+// release path fails closed to owner review after the cap. Ordinary
+// DecideApproval remains read-only and never expands its authority.
+func (s *Store) ResolveApprovalByPolicy(ctx context.Context, id agentdomain.ApprovalID, mode agentdomain.ApprovalMode, policyRevision int64) error {
 	if _, err := agentdomain.ParseApprovalID(string(id)); err != nil {
 		return err
 	}
 	if mode != agentdomain.ApprovalWorkspaceRead && mode != agentdomain.ApprovalTrusted {
+		return agentdomain.ErrForbidden
+	}
+	if policyRevision < 1 {
 		return agentdomain.ErrForbidden
 	}
 	now := time.Now().UTC()
@@ -40,8 +46,11 @@ func (s *Store) ResolveApprovalByPolicy(ctx context.Context, id agentdomain.Appr
     AND (t.scope_kind!='profile' OR t.workspace_key='' OR EXISTS(
       SELECT 1 FROM agent_workspace_grants gw WHERE gw.agent_id=t.agent_id
       AND gw.workspace_key=t.workspace_key AND gw.profile_id=t.scope_ref))
+    AND EXISTS(SELECT 1 FROM policy_settings ps WHERE ps.singleton_id=1 AND ps.revision=?)
+    AND (SELECT COUNT(*) FROM agent_task_approvals q
+      WHERE q.task_id=t.task_id AND q.decision_source='policy')<64
  )`,
-		now.Format(time.RFC3339Nano), id, now.UnixMilli(), mode, mode, mode, now.UnixMilli())
+		now.Format(time.RFC3339Nano), id, now.UnixMilli(), mode, mode, mode, now.UnixMilli(), policyRevision)
 	if err != nil {
 		return err
 	}

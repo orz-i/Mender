@@ -63,7 +63,9 @@ func waitPendingApproval(t *testing.T, s *Service, taskID agentdomain.TaskID, ow
 }
 func TestExplicitOwnerApprovalAllowsOnceWithoutProfileImpersonation(t *testing.T) {
 	ctx := context.Background()
-	db, err := agentsqlite.Open(ctx, filepath.Join(t.TempDir(), "owner-approval.db"))
+	dbPath := filepath.Join(t.TempDir(), "owner-approval.db")
+	requireApprovalFixturePolicy(t, dbPath)
+	db, err := agentsqlite.Open(ctx, dbPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -162,7 +164,9 @@ func TestPendingAgentApprovalCannotOutliveProfileRevocationOrTaskCancel(t *testi
 func newApprovalFixture(t *testing.T) (*Service, gov.Context, *approvalExecutorFixture) {
 	t.Helper()
 	ctx := context.Background()
-	db, err := agentsqlite.Open(ctx, filepath.Join(t.TempDir(), "approval.db"))
+	dbPath := filepath.Join(t.TempDir(), "approval.db")
+	requireApprovalFixturePolicy(t, dbPath)
+	db, err := agentsqlite.Open(ctx, dbPath)
 	if err != nil {
 		t.Fatal(err)
 	}

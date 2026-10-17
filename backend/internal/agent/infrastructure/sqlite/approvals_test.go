@@ -57,6 +57,7 @@ func newFixtureApproval(t *testing.T, a agentdomain.Agent, task agentdomain.Task
 func TestApprovalStoreV10OneShotCASAndImmutableHistory(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "approval-v10.db")
+	setupApprovalPolicyFenceFixture(t, path)
 	s, err := Open(ctx, path)
 	if err != nil {
 		t.Fatal(err)
@@ -78,14 +79,14 @@ func TestApprovalStoreV10OneShotCASAndImmutableHistory(t *testing.T) {
 	if err := s.CreateApproval(ctx, three); !errors.Is(err, agentdomain.ErrConflict) {
 		t.Fatalf("unbounded permission queue: %v", err)
 	}
-	if err := s.ResolveApproval(ctx, one.ID, agentdomain.ApprovalAllowedOnce); err != nil {
+	if err := s.ResolveApproval(ctx, one.ID, agentdomain.ApprovalAllowedOnce, 1); err != nil {
 		t.Fatal(err)
 	}
 	resolved, err := s.GetApproval(ctx, one.ID)
 	if err != nil || resolved.Status != agentdomain.ApprovalAllowedOnce || resolved.ResolvedAt.IsZero() {
 		t.Fatalf("missing allowed-once ledger record: %+v %v", resolved, err)
 	}
-	if err := s.ResolveApproval(ctx, one.ID, agentdomain.ApprovalRejected); !errors.Is(err, agentdomain.ErrConflict) {
+	if err := s.ResolveApproval(ctx, one.ID, agentdomain.ApprovalRejected, 0); !errors.Is(err, agentdomain.ErrConflict) {
 		t.Fatalf("terminal approval replay accepted: %v", err)
 	}
 	if err := s.InvalidateApproval(ctx, one.ID); err != nil {
@@ -98,7 +99,7 @@ func TestApprovalStoreV10OneShotCASAndImmutableHistory(t *testing.T) {
 	if err := s.RequestCancel(ctx, task.ID, 1); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.ResolveApproval(ctx, two.ID, agentdomain.ApprovalAllowedOnce); !errors.Is(err, agentdomain.ErrConflict) {
+	if err := s.ResolveApproval(ctx, two.ID, agentdomain.ApprovalAllowedOnce, 1); !errors.Is(err, agentdomain.ErrConflict) {
 		t.Fatalf("cancelled task permit accepted: %v", err)
 	}
 	if err := s.InvalidateApproval(ctx, two.ID); err != nil {
@@ -116,6 +117,7 @@ func TestApprovalStoreV10OneShotCASAndImmutableHistory(t *testing.T) {
 func TestApprovalStoreStartupInvalidatesInterruptedACPDecision(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "interrupted.db")
+	setupApprovalPolicyFenceFixture(t, path)
 	s, err := Open(ctx, path)
 	if err != nil {
 		t.Fatal(err)
@@ -137,7 +139,7 @@ func TestApprovalStoreStartupInvalidatesInterruptedACPDecision(t *testing.T) {
 	if err != nil || recovered.Status != agentdomain.ApprovalExpired {
 		t.Fatalf("restarted runtime kept a stale authorization: %+v %v", recovered, err)
 	}
-	if err := restarted.ResolveApproval(ctx, approval.ID, agentdomain.ApprovalAllowedOnce); !errors.Is(err, agentdomain.ErrConflict) {
+	if err := restarted.ResolveApproval(ctx, approval.ID, agentdomain.ApprovalAllowedOnce, 1); !errors.Is(err, agentdomain.ErrConflict) {
 		t.Fatalf("stale approval could be replayed: %v", err)
 	}
 	if got, err := restarted.GetTask(ctx, task.ID); err != nil || got.Status != agentdomain.TaskRunning {
@@ -146,7 +148,9 @@ func TestApprovalStoreStartupInvalidatesInterruptedACPDecision(t *testing.T) {
 }
 func TestApprovalStoreRejectsUnreviewableNativeActionAtSQLiteCAS(t *testing.T) {
 	ctx := context.Background()
-	s, err := Open(ctx, filepath.Join(t.TempDir(), "approval-reviewability.db"))
+	path := filepath.Join(t.TempDir(), "approval-reviewability.db")
+	setupApprovalPolicyFenceFixture(t, path)
+	s, err := Open(ctx, path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -159,14 +163,14 @@ func TestApprovalStoreRejectsUnreviewableNativeActionAtSQLiteCAS(t *testing.T) {
 	if err := s.CreateApproval(ctx, approval); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.ResolveApproval(ctx, approval.ID, agentdomain.ApprovalAllowedOnce); !errors.Is(err, agentdomain.ErrConflict) {
+	if err := s.ResolveApproval(ctx, approval.ID, agentdomain.ApprovalAllowedOnce, 1); !errors.Is(err, agentdomain.ErrConflict) {
 		t.Fatalf("SQLite allowed an unreviewable operation: %v", err)
 	}
 	pending, err := s.GetApproval(ctx, approval.ID)
 	if err != nil || pending.Status != agentdomain.ApprovalPending {
 		t.Fatalf("denied write mutated request state: %+v %v", pending, err)
 	}
-	if err := s.ResolveApproval(ctx, approval.ID, agentdomain.ApprovalRejected); err != nil {
+	if err := s.ResolveApproval(ctx, approval.ID, agentdomain.ApprovalRejected, 0); err != nil {
 		t.Fatalf("rejection of unsafe operation failed: %v", err)
 	}
 }

@@ -49,15 +49,17 @@ type Repository interface {
 	CreateApproval(context.Context, agentdomain.Approval) error
 	GetApproval(context.Context, agentdomain.ApprovalID) (agentdomain.Approval, error)
 	ListTaskApprovals(context.Context, agentdomain.TaskID) ([]agentdomain.Approval, error)
-	ResolveApproval(context.Context, agentdomain.ApprovalID, agentdomain.ApprovalStatus) error
+	ResolveApproval(context.Context, agentdomain.ApprovalID, agentdomain.ApprovalStatus, int64) error
 	InvalidateApproval(context.Context, agentdomain.ApprovalID) error
 	ApprovalPolicy(context.Context, agentdomain.ID, string) (agentdomain.ApprovalPolicy, error)
 	ListApprovalPolicies(context.Context, agentdomain.ID) ([]agentdomain.ApprovalPolicy, error)
 	SetApprovalPolicy(context.Context, agentdomain.ApprovalPolicy) error
 	ClearApprovalPolicy(context.Context, agentdomain.ID, string) error
-	RecordAutomaticApproval(context.Context, agentdomain.Approval, agentdomain.ApprovalMode) error
-	ResolveApprovalByPolicy(context.Context, agentdomain.ApprovalID, agentdomain.ApprovalMode) error
+	CurrentPolicyRevision(context.Context) (int64, error)
+	RecordAutomaticApproval(context.Context, agentdomain.Approval, agentdomain.ApprovalMode, int64) error
+	ResolveApprovalByPolicy(context.Context, agentdomain.ApprovalID, agentdomain.ApprovalMode, int64) error
 	ListPendingApprovals(context.Context, int) ([]agentdomain.PendingApproval, error)
+	ListPendingApprovalsForWorkspace(context.Context, agentdomain.ID, string, agentdomain.ApprovalMode, int) ([]agentdomain.PendingApproval, error)
 }
 
 // Executor receives only one immutable, admitted task configuration.

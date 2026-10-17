@@ -121,60 +121,73 @@ func (s *Service) AllowPendingWithCurrentPolicy(ctx context.Context, id agentdom
 	if p.Mode == agentdomain.ApprovalManual {
 		return 0, nil
 	}
-	pending, err := s.store.ListPendingApprovals(ctx, 50)
-	if err != nil {
-		return 0, err
-	}
+	// Each page is filtered by exact AgentID/workspace and action eligibility
+	// BEFORE SQL LIMIT. Bounded batches prevent one owner click from starving
+	// other owners or keeping the UI blocked on an unlimited queue.
+	const batchSize, maxBatches = 50, 4
 	count := 0
-	for _, row := range pending {
-		a := row.Approval
-		if a.AgentID != id || row.WorkspaceKey != key || !p.Allows(a.Kind, a.CanAllow, time.Now().UTC()) {
-			continue
+	for page := 0; page < maxBatches; page++ {
+		pending, err := s.store.ListPendingApprovalsForWorkspace(ctx, id, key, p.Mode, batchSize)
+		if err != nil {
+			return count, err
 		}
-		task, agent, e := s.authorizedTask(ctx, a.TaskID, owner)
-		if e != nil {
-			return count, e
+		if len(pending) == 0 {
+			break
 		}
-		if task.WorkspaceKey != key || task.WorkspaceRoot != p.WorkspaceRoot {
-			continue
-		}
-		s.mu.Lock()
-		waiter := s.pending[a.ID]
-		active := s.active[task.ID] != nil && !s.closed
-		s.mu.Unlock()
-		if !active || waiter == nil {
-			continue
-		}
-		canonical, e := filepath.EvalSymlinks(task.WorkspaceRoot)
-		if e != nil || canonical != task.WorkspaceRoot {
-			return count, agentdomain.ErrForbidden
-		}
-		if p.Mode == agentdomain.ApprovalWorkspaceRead {
-			if e := revalidateReadPreview(task.WorkspaceRoot, a.Target); e != nil {
-				return count, e
+		progress := false
+		for _, row := range pending {
+			a := row.Approval
+			if !p.Allows(a.Kind, a.CanAllow, time.Now().UTC()) {
+				continue
 			}
-		}
-		caller, e := approvalCaller(task)
-		if e != nil {
-			return count, e
-		}
-		if e := s.allowedForApproval(ctx, agent, caller); e != nil {
-			return count, e
-		}
-		if e := s.admit(ctx, caller, agent, gov.ActionAgentTaskSubmit); e != nil {
-			return count, e
-		}
-		if e := s.store.ResolveApprovalByPolicy(ctx, a.ID, p.Mode); e != nil {
+			task, agent, e := s.authorizedTask(ctx, a.TaskID, owner)
 			if errors.Is(e, agentdomain.ErrConflict) {
 				continue
 			}
-			return count, e
+			if e != nil {
+				return count, e
+			}
+			if task.WorkspaceKey != key || task.WorkspaceRoot != p.WorkspaceRoot {
+				continue
+			}
+			canonical, e := filepath.EvalSymlinks(task.WorkspaceRoot)
+			if e != nil || canonical != task.WorkspaceRoot {
+				return count, agentdomain.ErrForbidden
+			}
+			if p.Mode == agentdomain.ApprovalWorkspaceRead {
+				if e := revalidateReadPreview(task.WorkspaceRoot, a.Target); e != nil {
+					return count, e
+				}
+			}
+			caller, e := approvalCaller(task)
+			if e != nil {
+				return count, e
+			}
+			policyRevision, e := s.store.CurrentPolicyRevision(ctx)
+			if e != nil {
+				return count, e
+			}
+			if e := s.allowedForApproval(ctx, agent, caller); e != nil {
+				return count, e
+			}
+			if e := s.admit(ctx, caller, agent, gov.ActionAgentTaskSubmit); e != nil {
+				return count, e
+			}
+			e = s.resolveWaitingApproval(ctx, a.ID, task.ID,
+				PermissionDecision{Choice: agentdomain.ApprovalAllowOnce, AuthorizedByPolicy: true},
+				func() error { return s.store.ResolveApprovalByPolicy(ctx, a.ID, p.Mode, policyRevision) })
+			if errors.Is(e, agentdomain.ErrConflict) {
+				continue
+			}
+			if e != nil {
+				return count, e
+			}
+			count++
+			progress = true
 		}
-		select {
-		case waiter.decision <- PermissionDecision{Choice: agentdomain.ApprovalAllowOnce, AuthorizedByPolicy: true}:
-		default:
+		if len(pending) < batchSize || !progress {
+			break
 		}
-		count++
 	}
 	return count, nil
 }
@@ -205,6 +218,10 @@ func (s *Service) tryAutomaticApproval(ctx context.Context, task agentdomain.Tas
 	if err != nil {
 		return empty, false, err
 	}
+	policyRevision, err := s.store.CurrentPolicyRevision(ctx)
+	if err != nil {
+		return empty, false, err
+	}
 	agent, err := s.store.GetAgent(ctx, task.AgentID)
 	if err != nil {
 		return empty, false, err
@@ -215,7 +232,12 @@ func (s *Service) tryAutomaticApproval(ctx context.Context, task agentdomain.Tas
 	if err := s.admit(ctx, original, agent, gov.ActionAgentTaskSubmit); err != nil {
 		return empty, false, err
 	}
-	if err := s.store.RecordAutomaticApproval(ctx, a, p.Mode); err != nil {
+	if err := s.store.RecordAutomaticApproval(ctx, a, p.Mode, policyRevision); err != nil {
+		if errors.Is(err, agentdomain.ErrConflict) {
+			// A changed Policy, grant, expiry or per-task budget must never
+			// reuse the old allow. Still-live requests enter manual review.
+			return empty, false, nil
+		}
 		return empty, false, err
 	}
 	return PermissionDecision{Choice: agentdomain.ApprovalAllowOnce, AuthorizedByPolicy: true}, true, nil

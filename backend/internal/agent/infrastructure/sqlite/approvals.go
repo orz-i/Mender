@@ -103,14 +103,26 @@ func (s *Store) ListTaskApprovals(ctx context.Context, id agentdomain.TaskID) ([
 // ResolveApproval atomically checks the current Task, generation, cancellation,
 // Profile AgentGrant and exact registered workspace/root/grant. An old approve
 // cannot resurrect a permission after any grant was revoked or root rebound.
-func (s *Store) ResolveApproval(ctx context.Context, id agentdomain.ApprovalID, status agentdomain.ApprovalStatus) error {
+func (s *Store) ResolveApproval(ctx context.Context, id agentdomain.ApprovalID, status agentdomain.ApprovalStatus, policyRevision int64) error {
 	if _, err := agentdomain.ParseApprovalID(string(id)); err != nil {
 		return err
 	}
 	if status != agentdomain.ApprovalAllowedOnce && status != agentdomain.ApprovalRejected {
 		return agentdomain.ErrInvalid
 	}
+	if status == agentdomain.ApprovalAllowedOnce && policyRevision < 1 {
+		return agentdomain.ErrForbidden
+	}
 	now := time.Now().UTC()
+	// A rejected request grants nothing. Only a positive decision checks
+	// Policy v3; this keeps owner rejection possible even after Policy store
+	// availability is lost, and never falls back for a positive approval.
+	policyFence := ""
+	args := []any{string(status), now.Format(time.RFC3339Nano), string(id), now.UnixMilli(), string(status), string(status)}
+	if status == agentdomain.ApprovalAllowedOnce {
+		policyFence = " AND EXISTS(SELECT 1 FROM policy_settings ps WHERE ps.singleton_id=1 AND ps.revision=?)"
+		args = append(args, policyRevision)
+	}
 	res, err := s.db.ExecContext(ctx, `UPDATE agent_task_approvals
   SET status=?,resolved_at=?
   WHERE approval_id=? AND status='pending' AND expires_unix_ms>?
@@ -130,8 +142,7 @@ func (s *Store) ResolveApproval(ctx context.Context, id agentdomain.ApprovalID, 
          SELECT 1 FROM agent_workspace_grants gw WHERE gw.agent_id=t.agent_id
           AND gw.workspace_key=t.workspace_key AND gw.profile_id=t.scope_ref))
      ))
-   )`,
-		string(status), now.Format(time.RFC3339Nano), string(id), now.UnixMilli(), string(status), string(status))
+   )`+policyFence, args...)
 	if err != nil {
 		return err
 	}

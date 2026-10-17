@@ -61,7 +61,9 @@ const otherProfileID = "prof_00000000000000000000000000000003"
 
 func newFixtureService(t *testing.T, run Executor) (*Service, gov.Context) {
 	t.Helper()
-	s, err := agentsqlite.Open(context.Background(), filepath.Join(t.TempDir(), "agents.db"))
+	dbPath := filepath.Join(t.TempDir(), "agents.db")
+	requireApprovalFixturePolicy(t, dbPath)
+	s, err := agentsqlite.Open(context.Background(), dbPath)
 	if err != nil {
 		t.Fatal(err)
 	}

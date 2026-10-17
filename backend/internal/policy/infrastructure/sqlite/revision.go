@@ -14,7 +14,7 @@ func (s *Store) CurrentRevision(ctx context.Context) (int64, error) {
 		return 0, fmt.Errorf("read Policy revision: %w", err)
 	}
 	if revision < 1 {
-		return 0, fmt.Errorf("Policy revision must be positive")
+		return 0, fmt.Errorf("policy revision must be positive")
 	}
 	return revision, nil
 }

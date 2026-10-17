@@ -103,9 +103,12 @@ func (s *Store) ClearApprovalPolicy(ctx context.Context, agentID agentdomain.ID,
 // RecordAutomaticApproval writes an immutable, automatic allow-once receipt.
 // The owner-selected policy and EXACT Task caller/grants are rechecked inside
 // the same SQLite write; a concurrently revoked grant cannot be reused.
-func (s *Store) RecordAutomaticApproval(ctx context.Context, a agentdomain.Approval, mode agentdomain.ApprovalMode) error {
+func (s *Store) RecordAutomaticApproval(ctx context.Context, a agentdomain.Approval, mode agentdomain.ApprovalMode, policyRevision int64) error {
 	if err := a.Validate(); err != nil {
 		return err
+	}
+	if policyRevision < 1 {
+		return agentdomain.ErrForbidden
 	}
 	allowed := false
 	switch mode {
@@ -140,8 +143,9 @@ func (s *Store) RecordAutomaticApproval(ctx context.Context, a agentdomain.Appro
    AND (t.scope_kind!='profile' OR t.workspace_key='' OR EXISTS(
      SELECT 1 FROM agent_workspace_grants gw WHERE gw.agent_id=t.agent_id
      AND gw.workspace_key=t.workspace_key AND gw.profile_id=t.scope_ref))
+   AND EXISTS(SELECT 1 FROM policy_settings ps WHERE ps.singleton_id=1 AND ps.revision=?)
    AND (SELECT COUNT(*) FROM agent_task_approvals q WHERE q.task_id=t.task_id AND q.decision_source='policy')<64`,
-		a.TaskID, a.AgentID, a.Generation, mode, now.UnixMilli()).Scan(&count)
+		a.TaskID, a.AgentID, a.Generation, mode, now.UnixMilli(), policyRevision).Scan(&count)
 	if err != nil {
 		return err
 	}
