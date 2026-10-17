@@ -17,6 +17,8 @@ export const zhCNMessages: Readonly<Record<string, string>> = {
   "Existing tools selected": "已选择工具",
   "Shell and Agent delegation are never supplied in this mode.": "此模式不会供应 Shell 或智能体委派工具。",
   "Disable governed tools": "关闭受治理工具",
+  "Could not save governed tools. The Sandbox, workspace or selected Tools may have changed. Close and reopen this dialog, check the current state, and retry.": "无法保存受治理工具配置：沙盒、工作区或已选工具可能已发生变化。请关闭并重新打开配置窗口，核对当前状态后重试。",
+  "Could not confirm governed tools were disabled. Close this dialog and refresh the Agent to check the current state before retrying.": "无法确认受治理工具是否已关闭。请关闭窗口并刷新智能体，检查当前状态后再重试。",
   "Read": "读取",
   "Execute": "执行",
   "Proposed file": "请求的文件",

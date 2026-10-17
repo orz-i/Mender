@@ -13,6 +13,16 @@ const eligibleKeys=["workspace.read","workspace.search","workspace.edit"];
 const keyLabel=(key:string)=>key===""?t("Default workspace"):key;
 const sourceLabel=(key:string)=>key==="workspace.read"?t("Read"):
  key==="workspace.search"?t("Search"):key==="workspace.edit"?t("Edit"):key;
+// Wails may reject owner mutations with an unstructured error string. Keep
+// specific API diagnostics, but replace an unknown error with actionable
+// context instead of exposing raw backend details or a generic surprise.
+function placementActionError(reason:unknown,action:"save"|"disable"):string{
+ const message=errorMessage(reason);
+ if(message!==t("Unexpected error"))return message;
+ return action==="save"?
+  t("Could not save governed tools. The Sandbox, workspace or selected Tools may have changed. Close and reopen this dialog, check the current state, and retry."):
+  t("Could not confirm governed tools were disabled. Close this dialog and refresh the Agent to check the current state before retrying.");
+}
 
 export function AgentToolExecutionSettings({client,agent}:{client:MenderClient;agent:Agent}){
  const [workspaces,setWorkspaces]=useState<AgentWorkspace[]>([]);
@@ -70,7 +80,7 @@ export function AgentToolExecutionSettings({client,agent}:{client:MenderClient;a
   try{
    await client.configureAgentToolPlacement(agent.agentId,editing.key,selectedSandbox,selectedTools);
    setEditing(null);setRevision(x=>x+1);
-  }catch(e){setError(errorMessage(e));}finally{setBusy(false);}
+  }catch(e){setError(placementActionError(e,"save"));}finally{setBusy(false);}
  }
  async function disable(){
   if(!editing||!current||busy)return;
@@ -78,7 +88,7 @@ export function AgentToolExecutionSettings({client,agent}:{client:MenderClient;a
   try{
    await client.disableAgentToolPlacement(agent.agentId,editing.key);
    setEditing(null);setRevision(x=>x+1);
-  }catch(e){setError(errorMessage(e));}finally{setBusy(false);}
+  }catch(e){setError(placementActionError(e,"disable"));}finally{setBusy(false);}
  }
  const ready=agent.isolation==="restricted_host";
  return <>

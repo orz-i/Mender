@@ -110,6 +110,41 @@ describe("optional Agent governed tool execution",()=>{
   expect(within(dialog).getByRole<HTMLInputElement>("checkbox",{name:"Read"}).checked).toBe(true);
   expect(configure).toHaveBeenCalledOnce();
  });
+ it("gives a recoverable Chinese error for stale unstructured Wails save rejection",async()=>{
+  setLocale("zh-CN");
+  const configure=vi.fn().mockRejectedValue("agent backend unavailable");
+  const client={...base,configureAgentToolPlacement:configure} as unknown as MenderClient;
+  render(<AgentToolExecutionSettings client={client} agent={agent}/>);
+  expect(await screen.findByText(root)).toBeTruthy();
+  fireEvent.click(screen.getByRole("button",{name:"配置"}));
+  const dialog=screen.getByRole("dialog");
+  expect(await within(dialog).findByRole("option",{name:"Approved local root"})).toBeTruthy();
+  fireEvent.change(within(dialog).getByRole("combobox",{name:"执行环境"}),{
+   target:{value:sandboxes[0]!.sandboxId},
+  });
+  fireEvent.click(await within(dialog).findByRole("checkbox",{name:"读取"}));
+  fireEvent.click(within(dialog).getByRole("button",{name:"保存"}));
+  expect(await within(dialog).findByText(/无法保存受治理工具配置/)).toBeTruthy();
+  expect(within(dialog).getByRole<HTMLInputElement>("checkbox",{name:"读取"}).checked).toBe(true);
+  expect(configure).toHaveBeenCalledOnce();
+ });
+ it("gives a recoverable Chinese error for an uncertain Wails disable result",async()=>{
+  setLocale("zh-CN");
+  const placement:AgentToolPlacement={
+   agentId:agent.agentId,workspaceKey:"",workspaceRoot:root,
+   sandboxId:sandboxes[0]!.sandboxId,toolIds:[toolRead],updatedAt:"2026-10-17T00:00:00Z",
+  };
+  const disable=vi.fn().mockRejectedValue(new Error("agent backend unavailable"));
+  const client={...base,listAgentToolPlacements:vi.fn().mockResolvedValue({placements:[placement]}),
+   disableAgentToolPlacement:disable} as unknown as MenderClient;
+  render(<AgentToolExecutionSettings client={client} agent={agent}/>);
+  expect(await screen.findByText("已配置")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button",{name:"编辑配置"}));
+  const dialog=screen.getByRole("dialog");
+  fireEvent.click(within(dialog).getByRole("button",{name:"关闭受治理工具"}));
+  expect(await within(dialog).findByText(/无法确认受治理工具是否已关闭/)).toBeTruthy();
+  expect(disable).toHaveBeenCalledWith(agent.agentId,"");
+ });
  it("explicitly disables an existing placement instead of deleting a workspace",async()=>{
   const placement:AgentToolPlacement={
    agentId:agent.agentId,workspaceKey:"",workspaceRoot:root,
