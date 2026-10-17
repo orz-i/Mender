@@ -157,14 +157,14 @@ func TestDetachedACPWaiterCannotPersistApproval(t *testing.T) {
 	}
 	alreadyDone := make(chan struct{})
 	close(alreadyDone)
-	w := &pendingApproval{offers: make(chan pendingApprovalHandoff), done: alreadyDone}
+	w := &pendingApproval{offers: make(chan *pendingApprovalHandoff), done: alreadyDone}
 	s.mu.Lock()
 	s.active[taskID] = func() {}
 	s.pending[id] = w
 	s.mu.Unlock()
 	var called atomic.Bool
 	err = s.resolveWaitingApproval(context.Background(), id, taskID, PermissionDecision{Choice: agentdomain.ApprovalAllowOnce},
-		func() error { called.Store(true); return nil })
+		func(context.Context) error { called.Store(true); return nil })
 	if !errors.Is(err, agentdomain.ErrConflict) || called.Load() {
 		t.Fatalf("detached waiter received or persisted positive approval: err=%v writes=%v", err, called.Load())
 	}

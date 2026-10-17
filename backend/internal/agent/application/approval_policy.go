@@ -126,15 +126,19 @@ func (s *Service) AllowPendingWithCurrentPolicy(ctx context.Context, id agentdom
 	// other owners or keeping the UI blocked on an unlimited queue.
 	const batchSize, maxBatches = 50, 4
 	count := 0
+	var after agentdomain.ApprovalID
 	for page := 0; page < maxBatches; page++ {
-		pending, err := s.store.ListPendingApprovalsForWorkspace(ctx, id, key, p.Mode, batchSize)
+		pending, err := s.store.ListPendingApprovalsForWorkspace(ctx, id, key, p.Mode, after, batchSize)
 		if err != nil {
 			return count, err
 		}
 		if len(pending) == 0 {
 			break
 		}
-		progress := false
+		// The cursor moves by the immutable pending row identity, not the
+		// number of approvals resolved. Invalid or unavailable previews stay
+		// in the owner inbox without blocking later valid requests.
+		after = pending[len(pending)-1].Approval.ID
 		for _, row := range pending {
 			a := row.Approval
 			if !p.Allows(a.Kind, a.CanAllow, time.Now().UTC()) {
@@ -156,7 +160,9 @@ func (s *Service) AllowPendingWithCurrentPolicy(ctx context.Context, id agentdom
 			}
 			if p.Mode == agentdomain.ApprovalWorkspaceRead {
 				if e := revalidateReadPreview(task.WorkspaceRoot, a.Target); e != nil {
-					return count, e
+					// A missing or invalid preview is not an authorization.
+					// Leave it pending for the owner; proceed to other files.
+					continue
 				}
 			}
 			caller, e := approvalCaller(task)
@@ -175,7 +181,9 @@ func (s *Service) AllowPendingWithCurrentPolicy(ctx context.Context, id agentdom
 			}
 			e = s.resolveWaitingApproval(ctx, a.ID, task.ID,
 				PermissionDecision{Choice: agentdomain.ApprovalAllowOnce, AuthorizedByPolicy: true},
-				func() error { return s.store.ResolveApprovalByPolicy(ctx, a.ID, p.Mode, policyRevision) })
+				func(commitCtx context.Context) error {
+					return s.store.ResolveApprovalByPolicy(commitCtx, a.ID, p.Mode, policyRevision)
+				})
 			if errors.Is(e, agentdomain.ErrConflict) {
 				continue
 			}
@@ -183,9 +191,8 @@ func (s *Service) AllowPendingWithCurrentPolicy(ctx context.Context, id agentdom
 				return count, e
 			}
 			count++
-			progress = true
 		}
-		if len(pending) < batchSize || !progress {
+		if len(pending) < batchSize {
 			break
 		}
 	}

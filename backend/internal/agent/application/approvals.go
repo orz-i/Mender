@@ -2,7 +2,6 @@ package application
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -34,9 +33,9 @@ type PermissionDecision struct {
 }
 type PermissionRequester func(context.Context, PermissionRequest) (PermissionDecision, error)
 type pendingApproval struct {
-	offers   chan pendingApprovalHandoff // unbuffered, handoff requires a live request consumer
-	done     chan struct{}               // closes when the ACP request leaves its waiter
-	reserved bool                        // only one owner/policy delivery can commit
+	offers   chan *pendingApprovalHandoff // unbuffered, handoff requires a live request consumer
+	done     chan struct{}                // closes when the ACP request leaves its waiter
+	reserved bool                         // only one owner/policy delivery can commit
 }
 
 // requestPermission starts one bounded owner decision wait, without blocking
@@ -76,7 +75,7 @@ func (s *Service) requestPermission(ctx context.Context, task agentdomain.Task, 
 	if decision, accepted, err := s.tryAutomaticApproval(ctx, task, a); err != nil || accepted {
 		return decision, err
 	}
-	waiter := &pendingApproval{offers: make(chan pendingApprovalHandoff), done: make(chan struct{})}
+	waiter := &pendingApproval{offers: make(chan *pendingApprovalHandoff), done: make(chan struct{})}
 	s.mu.Lock()
 	if s.closed || s.active[task.ID] == nil {
 		s.mu.Unlock()
@@ -105,27 +104,13 @@ func (s *Service) requestPermission(ctx context.Context, task agentdomain.Task, 
 		case <-timer.C:
 			return none, agentdomain.ErrUnavailable
 		case offer := <-waiter.offers:
-			// ACP cannot observe an allowed choice until durable storage
-			// has accepted the exact current Task, grants and Policy epoch.
-			select {
-			case persistErr := <-offer.committed:
-				if errors.Is(persistErr, agentdomain.ErrConflict) {
-					// An outdated approval attempt has not selected an ACP
-					// option. Keep a still-live request in the manual inbox.
-					continue
-				}
-				if persistErr != nil {
-					return none, persistErr
-				}
-				if ctx.Err() != nil {
-					return none, ctx.Err()
-				}
-				return offer.decision, nil
-			case <-ctx.Done():
-				return none, ctx.Err()
-			case <-timer.C:
-				return none, agentdomain.ErrUnavailable
+			decision, retry, err := waitForApprovalCommit(ctx, timer.C, offer)
+			if retry {
+				// Policy changed while the owner was reviewing: the original
+				// pending request remains live and eligible for fresh review.
+				continue
 			}
+			return decision, err
 		}
 	}
 }
@@ -208,8 +193,8 @@ func (s *Service) DecideApproval(ctx context.Context, id agentdomain.ApprovalID,
 	if choice == agentdomain.ApprovalAllowOnce {
 		status = agentdomain.ApprovalAllowedOnce
 	}
-	if err := s.resolveWaitingApproval(ctx, id, task.ID, PermissionDecision{Choice: choice}, func() error {
-		return s.store.ResolveApproval(ctx, id, status, policyRevision)
+	if err := s.resolveWaitingApproval(ctx, id, task.ID, PermissionDecision{Choice: choice}, func(commitCtx context.Context) error {
+		return s.store.ResolveApproval(commitCtx, id, status, policyRevision)
 	}); err != nil {
 		return agentdomain.Approval{}, err
 	}

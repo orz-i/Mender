@@ -59,7 +59,7 @@ type Repository interface {
 	RecordAutomaticApproval(context.Context, agentdomain.Approval, agentdomain.ApprovalMode, int64) error
 	ResolveApprovalByPolicy(context.Context, agentdomain.ApprovalID, agentdomain.ApprovalMode, int64) error
 	ListPendingApprovals(context.Context, int) ([]agentdomain.PendingApproval, error)
-	ListPendingApprovalsForWorkspace(context.Context, agentdomain.ID, string, agentdomain.ApprovalMode, int) ([]agentdomain.PendingApproval, error)
+	ListPendingApprovalsForWorkspace(context.Context, agentdomain.ID, string, agentdomain.ApprovalMode, agentdomain.ApprovalID, int) ([]agentdomain.PendingApproval, error)
 }
 
 // Executor receives only one immutable, admitted task configuration.

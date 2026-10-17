@@ -16,7 +16,7 @@ import (
 // workspace/Profile grants and current running/not-cancelled Task generation
 // against the same rows ResolveApprovalByPolicy will judge, without recording
 // any decision or widening the owner-only global inbox (ListPendingApprovals).
-func (s *Store) ListPendingApprovalsForWorkspace(ctx context.Context, agentID agentdomain.ID, workspaceKey string, mode agentdomain.ApprovalMode, limit int) ([]agentdomain.PendingApproval, error) {
+func (s *Store) ListPendingApprovalsForWorkspace(ctx context.Context, agentID agentdomain.ID, workspaceKey string, mode agentdomain.ApprovalMode, after agentdomain.ApprovalID, limit int) ([]agentdomain.PendingApproval, error) {
 	if _, err := agentdomain.ParseID(string(agentID)); err != nil {
 		return nil, err
 	}
@@ -25,6 +25,11 @@ func (s *Store) ListPendingApprovalsForWorkspace(ctx context.Context, agentID ag
 	}
 	if workspaceKey != "" {
 		if err := agentdomain.ValidateWorkspaceKey(workspaceKey); err != nil {
+			return nil, err
+		}
+	}
+	if after != "" {
+		if _, err := agentdomain.ParseApprovalID(string(after)); err != nil {
 			return nil, err
 		}
 	}
@@ -37,6 +42,7 @@ func (s *Store) ListPendingApprovalsForWorkspace(ctx context.Context, agentID ag
 	 JOIN agent_tasks t ON t.task_id=p.task_id AND t.agent_id=p.agent_id AND t.generation=p.generation
 	 JOIN agents g ON g.agent_id=p.agent_id
 	 WHERE p.agent_id=? AND t.workspace_key=?
+	   AND p.rowid>COALESCE((SELECT rowid FROM agent_task_approvals WHERE approval_id=?),0)
 	   AND p.status='pending' AND p.expires_unix_ms>?
 	   AND t.status='running' AND t.cancel_requested=0
 	   AND ( (?='workspace_read' AND p.action_kind='read' AND p.can_allow=1)
@@ -58,8 +64,10 @@ func (s *Store) ListPendingApprovalsForWorkspace(ctx context.Context, agentID ag
 	   AND (t.scope_kind!='profile' OR t.workspace_key='' OR EXISTS(
 	     SELECT 1 FROM agent_workspace_grants gw WHERE gw.agent_id=t.agent_id
 	     AND gw.workspace_key=t.workspace_key AND gw.profile_id=t.scope_ref))
-	 ORDER BY p.created_at ASC,p.approval_id ASC LIMIT ?`,
-		agentID, workspaceKey, now.UnixMilli(), mode, mode, mode, now.UnixMilli(), limit)
+	 -- Cursor over persisted insertion order: resolved/invalid earlier rows do
+	 -- not skip or starve still-pending rows in subsequent pages.
+	 ORDER BY p.rowid ASC LIMIT ?`,
+		agentID, workspaceKey, after, now.UnixMilli(), mode, mode, mode, now.UnixMilli(), limit)
 	if err != nil {
 		return nil, err
 	}

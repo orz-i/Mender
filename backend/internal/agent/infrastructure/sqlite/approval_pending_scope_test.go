@@ -169,7 +169,7 @@ func TestWorkspaceScopePendingListFiltersBeforeLimit(t *testing.T) {
 		t.Fatalf("expected the capped global inbox window, got %d", len(inbox))
 	}
 
-	rows, err := s.ListPendingApprovalsForWorkspace(ctx, target.ID(), "scope", agentdomain.ApprovalWorkspaceRead, 50)
+	rows, err := s.ListPendingApprovalsForWorkspace(ctx, target.ID(), "scope", agentdomain.ApprovalWorkspaceRead, "", 50)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -188,7 +188,7 @@ func TestWorkspaceScopePendingListFiltersBeforeLimit(t *testing.T) {
 	}
 
 	// The unrelated Agent's own workspace view must stay empty.
-	noiseRows, err := s.ListPendingApprovalsForWorkspace(ctx, noiseAgent.ID(), "", agentdomain.ApprovalWorkspaceRead, 50)
+	noiseRows, err := s.ListPendingApprovalsForWorkspace(ctx, noiseAgent.ID(), "", agentdomain.ApprovalWorkspaceRead, "", 50)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -239,7 +239,7 @@ func TestWorkspaceScopePendingListKeepsEligibleSameAgentRequests(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rows, err := s.ListPendingApprovalsForWorkspace(ctx, target.ID(), "mixed", agentdomain.ApprovalWorkspaceRead, 2)
+	rows, err := s.ListPendingApprovalsForWorkspace(ctx, target.ID(), "mixed", agentdomain.ApprovalWorkspaceRead, "", 2)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -284,7 +284,7 @@ func TestWorkspaceScopePendingListKeepsEligibleSameAgentRequests(t *testing.T) {
 	if err := s.CreateApproval(ctx, edit); err != nil {
 		t.Fatal(err)
 	}
-	trustedRows, err := s.ListPendingApprovalsForWorkspace(ctx, target.ID(), "mixed", agentdomain.ApprovalTrusted, 50)
+	trustedRows, err := s.ListPendingApprovalsForWorkspace(ctx, target.ID(), "mixed", agentdomain.ApprovalTrusted, "", 50)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -297,7 +297,7 @@ func TestWorkspaceScopePendingListKeepsEligibleSameAgentRequests(t *testing.T) {
 	}
 
 	// manual mode is never a policy-release path and stays forbidden.
-	if _, err := s.ListPendingApprovalsForWorkspace(ctx, target.ID(), "mixed", agentdomain.ApprovalManual, 50); !errors.Is(err, agentdomain.ErrForbidden) {
+	if _, err := s.ListPendingApprovalsForWorkspace(ctx, target.ID(), "mixed", agentdomain.ApprovalManual, "", 50); !errors.Is(err, agentdomain.ErrForbidden) {
 		t.Fatalf("manual mode accepted for automatic release: %v", err)
 	}
 }
