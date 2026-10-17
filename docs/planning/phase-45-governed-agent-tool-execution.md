@@ -4,7 +4,7 @@ Status: A accepted, B in progress (2026-10-17).
 
 ## Goal
 
-Give a subordinate ACP Agent a genuine, Task-scoped way to invoke **Mender's existing governed Workspace Tools**, while keeping native Agent executors outside the trusted Tool boundary and retaining OpenCode's Agent Loop. This is deliberately narrower than "give OpenCode arbitrary host filesystem/shell permissions".
+Give **any supported subordinate Agent** a genuine, Task-scoped way to invoke **Mender's existing governed Workspace Tools**, while keeping native Agent executors outside the trusted Tool boundary and retaining each external Agent's own Agent Loop. This is deliberately narrower than "give OpenCode arbitrary host filesystem/shell permissions".
 
 ## Work and commits
 
@@ -12,7 +12,7 @@ Give a subordinate ACP Agent a genuine, Task-scoped way to invoke **Mender's exi
 |---|---|---|
 | A | ADR-0051 + threat matrix / acceptance plan | Docs-first commit |
 | B | Runtime-issued ephemeral Task tool capability; exact Agent/Task/Principal/Root/Profile/ToolID validation for every invocation; reuses existing InvokeTool, Policy/Sandbox Router/Audit | Real `workspace.read` and disposable `workspace.edit` through canonical invoke pipeline; negative cross-Task/ToolID/revocation/budget tests |
-| C | ACP v1 task-bound MCP stdio service and transport + explicitly reviewed strong placement preflight | Can list/invoke only permitted ToolIDs, no self-delegation, no host fallback, cancellation closes capabilities |
+| C | Backend-neutral ToolSupply contract + negotiated delivery adapters (ACP v1 HTTP first), explicit strong placement preflight | Supports only a negotiated protocol/transport; fail-closed when unavailable, no self-delegation, no host fallback, cancellation closes capabilities |
 | D | Restricted/isolated OpenCode or synthetic ACP native bypass tests, read/write/shell verification, full check + operator acceptance | Native write cannot bypass gateway. If blocked by CLI credentials/isolation, do not claim completion |
 
 ## Constraints and risk
@@ -32,3 +32,14 @@ Give a subordinate ACP Agent a genuine, Task-scoped way to invoke **Mender's exi
 - **D proven**: native Agent execution demonstrably cannot bypass protected roots and sensitive Mender Tool calls pass current grants/policy/isolation checks.
 
 The work must not expand into an unbounded series of phases, compatibility adapters or a second full Agent Loop.
+
+## Cross-Agent capability matrix (runtime detection, not user-visible Provider layers)
+
+| Backend | Agent loop | ACP v1 | HTTP MCP injection | Other tool delivery | Strong isolation |
+|---|---|---|---|---|---|
+| OpenCode | External | Confirmed in local v2.0.30 | Observed in real `initialize` | Must be independently reviewed | Not proven for host process |
+| Grok | External | Existing Mender ACP integration | **Unverified**, negotiate; never infer | Unverified | Not proven |
+| Codex | External | Requires local `codex-acp` adapter; may be missing | **Unverified**, negotiate | Unverified | Not proven |
+| Future Agent | External | Optional | Optional | Backend-specific port, no bridge guessing | Explicitly verified |
+
+The **authorization core** knows canonical ToolIDs, Task generation, Principal, Profile grants, Sandbox lease and Policy only; capability transport is an adapter concern. User UI should display the Agent's practical capabilities (e.g. can request governed Tools), not ACP/Provider jargon.

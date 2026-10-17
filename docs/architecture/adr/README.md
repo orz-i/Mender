@@ -76,3 +76,4 @@ Minor implementation choices that remain inside an accepted architectural bounda
 - [ADR-0048: Built-in OpenCode native ACP Agent backend](0048-opencode-native-acp-agent-backend.md) — Accepted
 - [ADR-0049: Agent-owned local workspace paths without Sandbox prerequisites](0049-agent-owned-local-workspace-paths.md) — Accepted
 - [ADR-0050: ACP approval mediation and governed Agent tool execution](0050-acp-agent-tool-approval-governance.md) — Accepted
+- [ADR-0051: Task-bound governed Agent tool execution](0051-task-bound-governed-agent-tool-execution.md) — Accepted
