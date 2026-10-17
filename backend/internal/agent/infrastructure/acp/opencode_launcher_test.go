@@ -98,12 +98,12 @@ func TestOpenCodeLocalLaunchUsesPinnedExecutableAndACPStdioOnly(t *testing.T) {
 		}
 		got[rule.Action] = rule.Effect
 	}
-	for _, action := range []string{"read", "edit", "shell"} {
+	for _, action := range []string{"read", "edit", "shell", "execute"} {
 		if got[action] != "ask" {
 			t.Fatalf("OpenCode native %s not reviewed: %+v", action, got)
 		}
 	}
-	for _, action := range []string{"external_directory", "subagent", "execute"} {
+	for _, action := range []string{"external_directory", "subagent"} {
 		if got[action] != "deny" {
 			t.Fatalf("OpenCode %s not denied: %+v", action, got)
 		}

@@ -108,8 +108,8 @@ func TestOpenCodeGovernedToolSupplyUsesNarrowV2CodeModePolicy(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, rule := range normalConfig["permissions"] {
-		if rule["action"] == "execute" && rule["effect"] != "deny" {
-			t.Fatal("ordinary/Host Agent Code Mode was silently enabled")
+		if rule["action"] == "execute" && rule["effect"] != "ask" {
+			t.Fatal("ordinary Host Agent Code Mode must remain approval-gated")
 		}
 	}
 }

@@ -16,8 +16,11 @@ import (
 
 // opencodeACPReviewConfig is a host-selected, task-scoped OpenCode v2
 // inline overlay. It is deliberately fixed and NEVER derived from model Tool
-// arguments. It makes routine native file and shell operations *ask* for a
-// cooperative ACP owner decision. This DOES NOT confine a host-mode process;
+// arguments. It makes native file/shell and OpenCode v2 Code Mode `execute`
+// *ask* for a cooperative ACP owner decision. An unreviewable `execute`
+// cannot be manually approved; only a separately configured, time-limited
+// owner `trusted` mode can authorize its original ACP allow_once choice.
+// This DOES NOT confine a host-mode process;
 // project-defined Agents/plugins or runtime-user authority can still bypass
 // protocol-level review, so the UI must not advertise strong enforcement.
 //
@@ -28,7 +31,7 @@ const opencodeACPReviewConfig = `{"permissions":[
  {"action":"shell","resource":"*","effect":"ask"},
  {"action":"external_directory","resource":"*","effect":"deny"},
  {"action":"subagent","resource":"*","effect":"deny"},
- {"action":"execute","resource":"*","effect":"deny"}
+ {"action":"execute","resource":"*","effect":"ask"}
 ]}`
 
 // OpenCode v2 places ACP-injected MCP servers behind Code Mode by default.
@@ -172,8 +175,10 @@ func (f *LocalFactory) commandInWorkspace(ctx context.Context, a agentdomain.Age
 				"OPENCODE_CONFIG_CONTENT="+opencodeACPGovernedConfig,
 				"OPENCODE_DISABLE_PROJECT_CONFIG=1")
 		} else {
-			// Ordinary Host/restricted tasks keep the prior cooperative
-			// review overlay: no Code Mode execute permission is added.
+			// Ordinary Host/restricted tasks require cooperative owner review
+			// before Code Mode execute. The default manual mode still blocks
+			// unreviewable execute; explicit time-limited trusted mode may
+			// authorize one ACP execute call. No implicit allow is added.
 			environment = append(environment, "OPENCODE_CONFIG_CONTENT="+opencodeACPReviewConfig)
 		}
 	case agentdomain.BackendCodex:
