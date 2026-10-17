@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	agentapplication "github.com/orz-i/Mender/backend/internal/agent/application"
 	agentdomain "github.com/orz-i/Mender/backend/internal/agent/domain"
@@ -48,6 +49,14 @@ type stream struct {
 	sendMu  sync.Mutex
 	stdin   io.Writer
 	updates <-chan rpcMessage
+
+	// Only configured for the live session/prompt; initialize, session/new,
+	// model inspection and all unrelated ACP client calls stay fail-closed.
+	permissionSession   string
+	permissionRequester agentapplication.PermissionRequester
+	permissionErrors    chan error
+	seenRequests        map[string]struct{} // raw RPC and ToolCallID replay guard
+	pendingPermissions  atomic.Int32
 }
 
 func (s *stream) send(message any) error {
@@ -70,6 +79,8 @@ func (s *stream) call(ctx context.Context, id int, method string, params any, no
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
+		case err := <-s.permissionErrors:
+			return nil, err
 		case msg, ok := <-s.updates:
 			if !ok {
 				return nil, errors.New("ACP server closed before response")
@@ -78,6 +89,12 @@ func (s *stream) call(ctx context.Context, id int, method string, params any, no
 				return nil, errors.New("unsupported ACP JSON-RPC version")
 			}
 			if len(msg.ID) > 0 && msg.Method != "" {
+				if msg.Method == "session/request_permission" && s.permissionRequester != nil {
+					if err := s.dispatchPermission(ctx, msg); err != nil {
+						return nil, err
+					}
+					continue
+				}
 				if err := s.respondToAgent(msg); err != nil {
 					return nil, err
 				}
@@ -101,6 +118,9 @@ func (s *stream) call(ctx context.Context, id int, method string, params any, no
 			}
 			if len(msg.Result) == 0 {
 				return nil, fmt.Errorf("ACP %s: missing result", method)
+			}
+			if s.pendingPermissions.Load() != 0 {
+				return nil, errors.New("ACP returned while a permission request is unresolved")
 			}
 			return msg.Result, nil
 		}
@@ -139,6 +159,14 @@ func (r Runner) ExecuteConfigured(ctx context.Context, agent agentdomain.Agent, 
 		if err := applySessionChoices(ctx, wire, sessionID, session, config.Model, config.ReasoningEffort); err != nil {
 			return "", err
 		}
+		// This callback is installed only for this admitted Task's ACP
+		// session. It never approves a request itself; the owner decision
+		// is awaited asynchronously while the reader keeps processing
+		// cancellation and unrelated notifications.
+		wire.permissionSession = sessionID
+		wire.permissionRequester = config.PermissionRequester
+		wire.permissionErrors = make(chan error, 2)
+		wire.seenRequests = map[string]struct{}{}
 		var result strings.Builder
 		var outputOverflow bool
 		onUpdate := func(msg rpcMessage) error {

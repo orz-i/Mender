@@ -24,7 +24,7 @@ func migrateAgentWorkspaceV9(ctx context.Context, db *sql.DB) error {
 	if err := tx.QueryRowContext(ctx, "SELECT MAX(version) FROM agent_schema_migrations").Scan(&version); err != nil {
 		return err
 	}
-	if version == 9 {
+	if version >= 9 {
 		return nil
 	}
 	if version != 8 {

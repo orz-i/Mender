@@ -44,6 +44,9 @@ func Open(ctx context.Context, path string) (*Store, error) {
 	if err = db.PingContext(ctx); err == nil {
 		err = migrate(ctx, db)
 	}
+	if err == nil {
+		err = (&Store{db: db}).InvalidateAllPendingApprovals(ctx)
+	}
 	if err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("open agent sqlite: %w", err)

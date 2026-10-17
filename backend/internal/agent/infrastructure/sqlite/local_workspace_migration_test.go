@@ -48,6 +48,8 @@ func TestAgentWorkspaceV9MigrationRefusesOrphanedLegacyBinding(t *testing.T) {
 	for _, statement := range []string{
 		"ALTER TABLE agent_workspaces RENAME COLUMN workspace_root TO sandbox_id",
 		"UPDATE agent_workspaces SET sandbox_id='sbx_00000000000000000000000000000000'",
+		"DELETE FROM agent_schema_migrations WHERE version=10",
+		"DROP TABLE agent_task_approvals",
 		"DELETE FROM agent_schema_migrations WHERE version=9",
 	} {
 		if _, err := raw.ExecContext(ctx, statement); err != nil {

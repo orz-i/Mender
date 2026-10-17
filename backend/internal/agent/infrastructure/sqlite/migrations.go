@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-const latestSchemaVersion = 9
+const latestSchemaVersion = 10
 
 // migrate owns Agent state exclusively, and never changes the existing
 // Providers/Sandboxes/Tunnels/Plugin inventory.
@@ -248,5 +248,8 @@ func migrate(ctx context.Context, db *sql.DB) error {
 	if err := migrateAgentBackendV8(ctx, db); err != nil {
 		return err
 	}
-	return migrateAgentWorkspaceV9(ctx, db)
+	if err := migrateAgentWorkspaceV9(ctx, db); err != nil {
+		return err
+	}
+	return migrateApprovalsV10(ctx, db)
 }

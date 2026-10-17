@@ -46,6 +46,11 @@ type Repository interface {
 	UnbindWorkspace(context.Context, agentdomain.ID, string) error
 	GrantWorkspace(context.Context, agentdomain.ID, string, string) error
 	RevokeWorkspace(context.Context, agentdomain.ID, string, string) error
+	CreateApproval(context.Context, agentdomain.Approval) error
+	GetApproval(context.Context, agentdomain.ApprovalID) (agentdomain.Approval, error)
+	ListTaskApprovals(context.Context, agentdomain.TaskID) ([]agentdomain.Approval, error)
+	ResolveApproval(context.Context, agentdomain.ApprovalID, agentdomain.ApprovalStatus) error
+	InvalidateApproval(context.Context, agentdomain.ApprovalID) error
 }
 
 // Executor receives only one immutable, admitted task configuration.
@@ -55,9 +60,10 @@ type Executor interface {
 	ExecuteConfigured(context.Context, agentdomain.Agent, string, RunConfig) (string, error)
 }
 type RunConfig struct {
-	WorkspaceRoot   string
-	Model           string
-	ReasoningEffort string
+	WorkspaceRoot       string
+	Model               string
+	ReasoningEffort     string
+	PermissionRequester PermissionRequester
 }
 
 type Admission func(context.Context, gov.Context, agentdomain.Agent, gov.Action) error
@@ -73,6 +79,7 @@ type Service struct {
 	rootCancel    context.CancelFunc
 	mu            sync.Mutex
 	active        map[agentdomain.TaskID]context.CancelFunc
+	pending       map[agentdomain.ApprovalID]*pendingApproval
 	closed        bool
 	wg            sync.WaitGroup
 }
@@ -85,7 +92,8 @@ func NewService(store Repository, runner Executor, admit Admission, owner gov.Pr
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Service{store: store, runner: runner, admit: admit, owner: owner,
 		profileExists: profileExists, rootContext: ctx, rootCancel: cancel,
-		active: map[agentdomain.TaskID]context.CancelFunc{}}, nil
+		active:  map[agentdomain.TaskID]context.CancelFunc{},
+		pending: map[agentdomain.ApprovalID]*pendingApproval{}}, nil
 }
 
 func (s *Service) isOwner(caller gov.Context) bool {
@@ -353,11 +361,11 @@ func (s *Service) SubmitWithOptions(ctx context.Context, id agentdomain.ID, prom
 	s.active[taskID] = cancel
 	s.wg.Add(1)
 	s.mu.Unlock()
-	go s.run(runCtx, cancel, agent, task, prompt)
+	go s.run(runCtx, cancel, agent, task, prompt, caller)
 	return task, nil
 }
 
-func (s *Service) run(ctx context.Context, cancel context.CancelFunc, agent agentdomain.Agent, task agentdomain.Task, prompt string) {
+func (s *Service) run(ctx context.Context, cancel context.CancelFunc, agent agentdomain.Agent, task agentdomain.Task, prompt string, caller gov.Context) {
 	defer s.wg.Done()
 	defer func() {
 		cancel()
@@ -375,7 +383,10 @@ func (s *Service) run(ctx context.Context, cancel context.CancelFunc, agent agen
 		return
 	}
 	result, err := s.runner.ExecuteConfigured(ctx, agent, prompt,
-		RunConfig{WorkspaceRoot: task.WorkspaceRoot, Model: task.Model, ReasoningEffort: task.ReasoningEffort})
+		RunConfig{WorkspaceRoot: task.WorkspaceRoot, Model: task.Model, ReasoningEffort: task.ReasoningEffort,
+			PermissionRequester: func(ctx context.Context, req PermissionRequest) (PermissionDecision, error) {
+				return s.requestPermission(ctx, task, caller, req)
+			}})
 	// A runner that reports success after cancellation cannot prove it
 	// stopped executing side effects. Preserve the uncertainty instead.
 	if ctx.Err() != nil && err == nil {

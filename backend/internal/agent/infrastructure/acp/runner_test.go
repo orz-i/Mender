@@ -72,6 +72,47 @@ func TestACPFixtureProcess(t *testing.T) {
 					os.Exit(82)
 				}
 			}
+			if mode == "approve-once" || mode == "reject-once" || mode == "approved-client-file" {
+				send(map[string]any{"jsonrpc": "2.0", "id": 197, "method": "session/request_permission",
+					"params": map[string]any{"sessionId": "fixture-1",
+						"toolCall": map[string]any{"toolCallId": "fixture-tool", "kind": "edit", "title": "Do not persist"},
+						"options": []any{
+							map[string]string{"optionId": "offered-once", "kind": "allow_once"},
+							map[string]string{"optionId": "offered-always", "kind": "allow_always"},
+							map[string]string{"optionId": "offered-reject", "kind": "reject_once"},
+						},
+					},
+				})
+				if !scan.Scan() {
+					os.Exit(151)
+				}
+				var response struct {
+					Result struct {
+						Outcome struct {
+							Outcome  string `json:"outcome"`
+							OptionID string `json:"optionId"`
+						} `json:"outcome"`
+					} `json:"result"`
+				}
+				if json.Unmarshal(scan.Bytes(), &response) != nil || response.Result.Outcome.Outcome != "selected" {
+					os.Exit(152)
+				}
+				selected := response.Result.Outcome.OptionID
+				if selected == "offered-always" || (mode == "reject-once" && selected != "offered-reject") || (mode != "reject-once" && selected != "offered-once") {
+					os.Exit(153)
+				}
+				if mode == "approved-client-file" {
+					send(map[string]any{"jsonrpc": "2.0", "id": 198, "method": "fs/write_text_file",
+						"params": map[string]string{"path": "/tmp/mender-not-authorized", "content": "write forbidden"}})
+					if !scan.Scan() {
+						os.Exit(154)
+					}
+					var denied rpcMessage
+					if json.Unmarshal(scan.Bytes(), &denied) != nil || denied.Error == nil || denied.Error.Code != -32601 {
+						os.Exit(155)
+					}
+				}
+			}
 			if mode == "permission" {
 				send(map[string]any{"jsonrpc": "2.0", "id": 97, "method": "session/request_permission", "params": map[string]any{
 					"sessionId": "fixture-1", "options": []any{map[string]string{"optionId": "allow_once", "name": "Allow", "kind": "allow_once"}},
