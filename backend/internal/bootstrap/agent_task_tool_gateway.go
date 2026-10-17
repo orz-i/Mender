@@ -23,15 +23,16 @@ import (
 // the canonical, pinned Sandbox Workspace suite. It is never advertised to
 // other MCP/Agent profiles.
 type agentTaskToolCapability struct {
-	taskID        agentdomain.TaskID
-	agentID       agentdomain.ID
-	generation    uint64
-	profileID     string
-	workspaceRoot string
-	sandboxID     sandboxdomain.ID
-	caller        gov.Context
-	allowed       map[catalogdomain.ToolID]string // ToolID -> immutable Workspace SourceKey
-	expiresAt     time.Time
+	taskID              agentdomain.TaskID
+	agentID             agentdomain.ID
+	generation          uint64
+	profileID           string
+	workspaceRoot       string
+	sandboxID           sandboxdomain.ID
+	caller              gov.Context
+	allowed             map[catalogdomain.ToolID]string // ToolID -> immutable Workspace SourceKey
+	configuredPlacement *agentdomain.ToolPlacement      // nil for internal Phase 45 synthetic callers
+	expiresAt           time.Time
 }
 
 type agentTaskToolGateway struct {
@@ -219,6 +220,13 @@ func (r *Runtime) invokeAgentTaskTool(ctx context.Context, token string, id cata
 	}
 	if _, ok := capability.allowed[id]; !ok {
 		return invocationapp.InvokeToolResponse{}, agentdomain.ErrForbidden
+	}
+	if capability.configuredPlacement != nil {
+		pinned := capability.configuredPlacement
+		current, readErr := r.agentStore.GetToolPlacement(ctx, capability.agentID, pinned.WorkspaceKey)
+		if readErr != nil || !agentdomain.SameToolPlacement(current, *pinned) {
+			return invocationapp.InvokeToolResponse{}, agentdomain.ErrForbidden
+		}
 	}
 	task, err := r.agentStore.GetTask(ctx, capability.taskID)
 	if err != nil {

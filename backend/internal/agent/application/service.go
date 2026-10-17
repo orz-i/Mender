@@ -70,19 +70,24 @@ type RunConfig struct {
 type Admission func(context.Context, gov.Context, agentdomain.Agent, gov.Action) error
 type ProfileExists func(context.Context, string) error
 
+// ToolSupplyResolver is the trusted Runtime's optional, backend-neutral
+// capability issuer. It is never populated by a model/Tool request.
+type ToolSupplyResolver func(context.Context, agentdomain.Task) (ToolSupply, func(), error)
+
 type Service struct {
-	store         Repository
-	runner        Executor
-	admit         Admission
-	profileExists ProfileExists
-	owner         gov.Principal
-	rootContext   context.Context
-	rootCancel    context.CancelFunc
-	mu            sync.Mutex
-	active        map[agentdomain.TaskID]context.CancelFunc
-	pending       map[agentdomain.ApprovalID]*pendingApproval
-	closed        bool
-	wg            sync.WaitGroup
+	store              Repository
+	runner             Executor
+	admit              Admission
+	profileExists      ProfileExists
+	toolSupplyResolver ToolSupplyResolver
+	owner              gov.Principal
+	rootContext        context.Context
+	rootCancel         context.CancelFunc
+	mu                 sync.Mutex
+	active             map[agentdomain.TaskID]context.CancelFunc
+	pending            map[agentdomain.ApprovalID]*pendingApproval
+	closed             bool
+	wg                 sync.WaitGroup
 }
 
 func NewService(store Repository, runner Executor, admit Admission, owner gov.Principal, profileExists ProfileExists) (*Service, error) {
@@ -369,6 +374,20 @@ func (s *Service) SubmitWithOptions(ctx context.Context, id agentdomain.ID, prom
 // TaskLocallyActive fences a Task to the exact in-memory Runtime that
 // admitted it. Other processes may read the same SQLite Task history, but
 // they cannot mint governed Tool capabilities for an orphan/stale Task.
+// ConfigureToolSupplyResolver is a one-time bootstrap operation before any
+// Task can start. No user/Plugin API can replace the resolver at runtime.
+func (s *Service) ConfigureToolSupplyResolver(resolve ToolSupplyResolver) error {
+	if resolve == nil {
+		return agentdomain.ErrInvalid
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed || s.toolSupplyResolver != nil || len(s.active) != 0 {
+		return agentdomain.ErrConflict
+	}
+	s.toolSupplyResolver = resolve
+	return nil
+}
 func (s *Service) TaskLocallyActive(id agentdomain.TaskID) bool {
 	if s == nil {
 		return false
@@ -395,11 +414,23 @@ func (s *Service) run(ctx context.Context, cancel context.CancelFunc, agent agen
 		_ = s.store.Transition(context.WithoutCancel(ctx), task.ID, task.Generation, agentdomain.TaskQueued, agentdomain.TaskCancelled, "", "")
 		return
 	}
-	result, err := s.runner.ExecuteConfigured(ctx, agent, prompt,
-		RunConfig{WorkspaceRoot: task.WorkspaceRoot, Model: task.Model, ReasoningEffort: task.ReasoningEffort,
-			PermissionRequester: func(ctx context.Context, req PermissionRequest) (PermissionDecision, error) {
-				return s.requestPermission(ctx, task, caller, req)
-			}})
+	config := RunConfig{WorkspaceRoot: task.WorkspaceRoot, Model: task.Model, ReasoningEffort: task.ReasoningEffort,
+		PermissionRequester: func(ctx context.Context, req PermissionRequest) (PermissionDecision, error) {
+			return s.requestPermission(ctx, task, caller, req)
+		}}
+	if s.toolSupplyResolver != nil {
+		supply, release, supplyErr := s.toolSupplyResolver(ctx, task)
+		if supplyErr != nil {
+			_ = s.store.Transition(context.WithoutCancel(ctx), task.ID, task.Generation,
+				agentdomain.TaskRunning, agentdomain.TaskFailed, "", "Governed tool execution unavailable")
+			return
+		}
+		if release != nil {
+			defer release()
+		}
+		config.ToolSupply = supply
+	}
+	result, err := s.runner.ExecuteConfigured(ctx, agent, prompt, config)
 	// A runner that reports success after cancellation cannot prove it
 	// stopped executing side effects. Preserve the uncertainty instead.
 	if ctx.Err() != nil && err == nil {

@@ -19,9 +19,18 @@ import (
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 )
 
-type waitingForTaskToolExecutor struct{ started chan struct{} }
+type waitingForTaskToolExecutor struct {
+	started  chan struct{}
+	selected chan agentapp.ToolSupply
+}
 
-func (e waitingForTaskToolExecutor) ExecuteConfigured(ctx context.Context, _ agentdomain.Agent, _ string, _ agentapp.RunConfig) (string, error) {
+func (e waitingForTaskToolExecutor) ExecuteConfigured(ctx context.Context, _ agentdomain.Agent, _ string, cfg agentapp.RunConfig) (string, error) {
+	if e.selected != nil {
+		select {
+		case e.selected <- cfg.ToolSupply:
+		default:
+		}
+	}
 	select {
 	case e.started <- struct{}{}:
 	default:
@@ -31,21 +40,22 @@ func (e waitingForTaskToolExecutor) ExecuteConfigured(ctx context.Context, _ age
 }
 
 type governedTaskToolFixture struct {
-	runtime *Runtime
-	task    agentdomain.Task
-	agent   agentdomain.Agent
-	sandbox sandboxdomain.Sandbox
-	profile profiledomain.Profile
-	owner   gov.Context
-	ids     map[string]catalogdomain.ToolID
-	root    string
-	token   string
+	runtime  *Runtime
+	task     agentdomain.Task
+	agent    agentdomain.Agent
+	sandbox  sandboxdomain.Sandbox
+	profile  profiledomain.Profile
+	owner    gov.Context
+	ids      map[string]catalogdomain.ToolID
+	root     string
+	token    string
+	executor waitingForTaskToolExecutor
 }
 
 func setupGovernedTaskToolFixture(t *testing.T) *governedTaskToolFixture {
 	t.Helper()
 	ctx := context.Background()
-	exec := waitingForTaskToolExecutor{started: make(chan struct{}, 1)}
+	exec := waitingForTaskToolExecutor{started: make(chan struct{}, 2), selected: make(chan agentapp.ToolSupply, 2)}
 	r, err := NewRuntime(ctx, RuntimeOptions{
 		DatabasePath:  filepath.Join(t.TempDir(), "governed-task-tools.db"),
 		AgentExecutor: exec,
@@ -127,7 +137,7 @@ func setupGovernedTaskToolFixture(t *testing.T) *governedTaskToolFixture {
 	}
 	t.Cleanup(func() { r.closeAgentTaskToolCapability(token) })
 	return &governedTaskToolFixture{runtime: r, task: task, agent: agent, sandbox: sandbox,
-		profile: profile, owner: owner, ids: ids, root: root, token: token}
+		profile: profile, owner: owner, ids: ids, root: root, token: token, executor: exec}
 }
 func callTaskTool(t *testing.T, f *governedTaskToolFixture, key string, raw string) invocationdomain.Outcome {
 	t.Helper()

@@ -511,6 +511,9 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		agentLauncher:               agentLauncher,
 		mcpServers:                  make(map[string]*managedMCPServer),
 	}
+	if err := result.Agents.ConfigureToolSupplyResolver(result.resolveAgentToolSupply); err != nil {
+		return nil, errors.Join(fmt.Errorf("compose runtime: Agent tool delivery: %w", err), result.Close())
+	}
 	tunnels.Delete = tunnelapplication.NewDeleteTunnel(tunnels.store, runtimeTunnelUsageChecker{
 		profiles: profiles, active: result.isTunnelActive,
 	})
