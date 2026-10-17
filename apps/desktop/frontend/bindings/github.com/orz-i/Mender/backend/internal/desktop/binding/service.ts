@@ -184,6 +184,10 @@ export function GetAgent(id: string): $CancellablePromise<$models.Agent> {
     return $Call.ByID(425014641, id);
 }
 
+export function GetAgentApprovalPolicy(agentID: string, workspaceKey: string): $CancellablePromise<$models.AgentApprovalPolicy> {
+    return $Call.ByID(2771955452, agentID, workspaceKey);
+}
+
 export function GetAgentTask(id: string): $CancellablePromise<$models.AgentTask> {
     return $Call.ByID(1156608320, id);
 }
@@ -305,6 +309,10 @@ export function ListAgentAdmissions(id: string): $CancellablePromise<$models.Age
     return $Call.ByID(184228319, id);
 }
 
+export function ListAgentApprovalPolicies(agentID: string): $CancellablePromise<$models.AgentApprovalPolicyList> {
+    return $Call.ByID(3216503788, agentID);
+}
+
 /**
  * Task approval methods are intentionally exposed ONLY through the owner
  * desktop binding. A delegated Profile/MCP Tool cannot call these methods.
@@ -351,6 +359,10 @@ export function ListIntegrationOfferings(): $CancellablePromise<$models.Integrat
 
 export function ListMCPServers(): $CancellablePromise<$models.MCPServerList> {
     return $Call.ByID(3824735736);
+}
+
+export function ListPendingAgentApprovals(): $CancellablePromise<$models.AgentPendingApprovalList> {
+    return $Call.ByID(1000803228);
 }
 
 export function ListPluginCatalogue(): $CancellablePromise<$models.PluginCatalogueList> {
@@ -421,6 +433,10 @@ export function ReconcileSandbox(raw: string): $CancellablePromise<$models.Sandb
     return $Call.ByID(1011418727, raw);
 }
 
+export function ReleasePendingAgentApprovals(agentID: string, workspaceKey: string): $CancellablePromise<$models.AgentApprovalReleaseReceipt> {
+    return $Call.ByID(1162198235, agentID, workspaceKey);
+}
+
 export function RemoveProfileTool(slug: string, toolID: string): $CancellablePromise<$models.Profile> {
     return $Call.ByID(610642707, slug, toolID);
 }
@@ -463,6 +479,10 @@ export function RotateNativeCredential($namespace: string, name: string, secret:
 
 export function SearchTools(query: string, limit: number, providerID: string, profile: string, cursor: string): $CancellablePromise<$models.ToolList> {
     return $Call.ByID(1688287699, query, limit, providerID, profile, cursor);
+}
+
+export function SetAgentApprovalPolicy(agentID: string, workspaceKey: string, mode: string): $CancellablePromise<$models.AgentApprovalPolicy> {
+    return $Call.ByID(756462392, agentID, workspaceKey, mode);
 }
 
 export function SetPolicyDefault(decision: string): $CancellablePromise<$models.Policy> {

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   BlocksIcon,
+  BellIcon,
   BotIcon,
   BookOpenIcon,
   BoxIcon,
@@ -79,6 +80,7 @@ const navigation: NavigationGroup[] = [
       { to: "/policy", label: "Policy", icon: ShieldCheckIcon },
       { to: "/credentials", label: "Credentials", icon: KeyRoundIcon },
       { to: "/audit", label: "Audit", icon: ScrollTextIcon },
+      { to: "/approvals", label: "Approvals", icon: BellIcon },
     ],
   },
 ];
@@ -97,6 +99,7 @@ export function ManagementShell({ client }: { client: MenderClient }) {
   const [runtimeReady, setRuntimeReady] = useState<boolean | null>(null);
   const [commandOpen, setCommandOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [pendingApprovalCount, setPendingApprovalCount] = useState(0);
 
   useEffect(() => {
     window.localStorage.setItem(SIDEBAR_STORAGE_KEY, String(collapsed));
@@ -116,6 +119,19 @@ export function ManagementShell({ client }: { client: MenderClient }) {
   }, [client]);
 
   useEffect(() => {
+    if(client.supportsLocalAgentApprovals!==true)return;
+    let live=true;
+    const poll=()=>{
+      void client.listPendingAgentApprovals().then(({approvals})=>{
+        if(live)setPendingApprovalCount(approvals.length);
+      }).catch(()=>{if(live)setPendingApprovalCount(0);});
+    };
+    poll();
+    const timer=setInterval(poll,2500);
+    return()=>{live=false;clearInterval(timer);};
+  },[client]);
+
+  useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
@@ -133,11 +149,12 @@ export function ManagementShell({ client }: { client: MenderClient }) {
         : location.pathname.startsWith(item.to),
     ) ?? flatNavigation[0]!;
   const normalizedQuery = query.trim().toLocaleLowerCase();
+  const visibleNavigation=flatNavigation.filter(item=>item.to!=="/approvals"||client.supportsLocalAgentApprovals===true);
   const filteredNavigation = normalizedQuery
-    ? flatNavigation.filter((item) =>
+    ? visibleNavigation.filter((item) =>
         t(item.label).toLocaleLowerCase().includes(normalizedQuery),
       )
-    : flatNavigation;
+    : visibleNavigation;
 
   function goTo(to: string) {
     void navigate(to);
@@ -239,7 +256,7 @@ export function ManagementShell({ client }: { client: MenderClient }) {
               ) : null}
               <div className={groupIndex === 0 ? "hidden" : "mx-2 mb-3 border-t border-border/80 lg:hidden"} />
               <div className="flex flex-col gap-1">
-                {group.items.map((item) => {
+                {group.items.filter(item=>item.to!=="/approvals"||client.supportsLocalAgentApprovals===true).map((item) => {
                   const Icon = item.icon;
                   const link = (
                     <NavLink
@@ -302,6 +319,18 @@ export function ManagementShell({ client }: { client: MenderClient }) {
                 {t("⌘K")}
               </span>
             </button>
+            {client.supportsLocalAgentApprovals===true?<Tooltip>
+              <TooltipTrigger render={<Button type="button" variant="ghost" size="icon-lg"
+                aria-label={t("Pending approvals")} onClick={()=>void navigate("/approvals")}
+                className="relative size-9 rounded-xl text-muted-foreground hover:bg-card hover:text-foreground"/>}>
+                <BellIcon className="size-4"/>
+                {pendingApprovalCount>0?<span aria-label={t("Pending approvals")+": "+pendingApprovalCount}
+                  className="absolute -right-1 -top-1 flex min-w-4 items-center justify-center rounded-full bg-foreground px-1 text-[10px] text-background">
+                  {pendingApprovalCount>99?"99+":pendingApprovalCount}
+                </span>:null}
+              </TooltipTrigger>
+              <TooltipContent side="bottom">{t("Pending approvals")} ({pendingApprovalCount})</TooltipContent>
+            </Tooltip>:null}
             <Tooltip>
               <TooltipTrigger
                 render={

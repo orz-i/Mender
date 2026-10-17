@@ -42,6 +42,8 @@ import type {
   WorkspaceToolTarget,
   AgentTask,
   AgentApproval,
+  AgentApprovalPolicy,
+  PendingAgentApproval,
   AgentToolPlacement,
   AgentAdmissionEvent,
   SandboxActivity,
@@ -91,6 +93,8 @@ import {
   type WorkspaceToolTarget as BindingWorkspaceToolTarget,
   type AgentTask as BindingAgentTask,
   type AgentApproval as BindingAgentApproval,
+  type AgentApprovalPolicy as BindingAgentApprovalPolicy,
+  type AgentPendingApproval as BindingAgentPendingApproval,
   type AgentToolPlacement as BindingAgentToolPlacement,
   type AgentAdmissionEvent as BindingAgentAdmissionEvent,
   type Sandbox as BindingSandbox,
@@ -403,6 +407,13 @@ export function createDesktopMenderClient(): MenderClient {
     async listAgentApprovals(taskId){const data=await Service.ListAgentApprovals(taskId);
       return {approvals:(data.approvals??[]).map(agentApproval)};},
     async decideAgentApproval(approvalId,choice){return agentApproval(await Service.DecideAgentApproval(approvalId,choice));},
+    async listPendingAgentApprovals(){const result=await Service.ListPendingAgentApprovals();
+      return {approvals:(result.approvals??[]).map(pendingAgentApproval)};},
+    async getAgentApprovalPolicy(agentId,key){return agentApprovalPolicy(await Service.GetAgentApprovalPolicy(agentId,key));},
+    async listAgentApprovalPolicies(agentId){const result=await Service.ListAgentApprovalPolicies(agentId);
+      return {policies:(result.policies??[]).map(agentApprovalPolicy)};},
+    async setAgentApprovalPolicy(agentId,key,mode){return agentApprovalPolicy(await Service.SetAgentApprovalPolicy(agentId,key,mode));},
+    async releasePendingAgentApprovals(agentId,key){return Service.ReleasePendingAgentApprovals(agentId,key);},
     async cancelAgentTask(taskId){return Service.CancelAgentTask(taskId);},
     async listAgentGrants(agentId){
       const result=await Service.ListAgentGrants(agentId);
@@ -987,7 +998,21 @@ function agentApproval(value:BindingAgentApproval):AgentApproval {
     case "read":case "edit":case "execute":case "other":break;
     default:throw new MenderClientInvariantError("Unknown Agent approval kind: "+value.kind);
   }
-  return {...value,kind:value.kind,status:value.status};
+  if(value.decisionSource!==undefined&&value.decisionSource!=="owner"&&value.decisionSource!=="policy") {
+    throw new MenderClientInvariantError("Unknown Agent approval decision source: "+value.decisionSource);
+  }
+  const {decisionSource:rawSource,...fields}=value;
+  return {...fields,kind:value.kind,status:value.status,
+    ...(rawSource==="owner"||rawSource==="policy"?{decisionSource:rawSource}:{})};
+}
+function agentApprovalPolicy(value:BindingAgentApprovalPolicy):AgentApprovalPolicy {
+  if(value.mode!=="manual"&&value.mode!=="workspace_read"&&value.mode!=="trusted") {
+    throw new MenderClientInvariantError("Unknown Agent approval mode: "+value.mode);
+  }
+  return {...value,mode:value.mode};
+}
+function pendingAgentApproval(value:BindingAgentPendingApproval):PendingAgentApproval {
+  return {...value,approval:agentApproval(value.approval)};
 }
 function agentTask(value:BindingAgentTask):AgentTask {
   switch(value.status){

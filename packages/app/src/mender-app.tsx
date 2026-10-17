@@ -10,6 +10,7 @@ import { Route, Routes } from "react-router";
 import { AgentsPage } from "./domains/agents/agents-page";
 import { AgentCreatePage } from "./domains/agents/agent-create-page";
 import { AgentDetailPage } from "./domains/agents/agent-detail-page";
+import { AgentApprovalCenter } from "./domains/agents/agent-approval-center";
 import { AuditPage } from "./domains/audit/audit-page";
 import { CredentialsPage } from "./domains/credentials/credentials-page";
 import { OverviewPage } from "./domains/overview/overview-page";
@@ -100,6 +101,7 @@ export function MenderApp({
           />
           <Route path="runtime" element={<RuntimePage client={client} />} />
           <Route path="agents" element={<AgentsPage client={client} />} />
+          <Route path="approvals" element={<AgentApprovalCenter client={client} />} />
           <Route path="agents/new" element={<AgentCreatePage client={client}
             {...(chooseLocalDirectory===undefined?{}:{chooseLocalDirectory})} />} />
           <Route path="agents/:agentId" element={<AgentDetailPage client={client}

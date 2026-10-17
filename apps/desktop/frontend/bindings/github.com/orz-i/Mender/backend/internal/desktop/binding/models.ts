@@ -40,6 +40,7 @@ export interface AgentApproval {
     "target"?: string;
     "canAllow": boolean;
     "status": string;
+    "decisionSource"?: string;
     "createdAt": string;
     "expiresAt": string;
     "resolvedAt"?: string;
@@ -47,6 +48,22 @@ export interface AgentApproval {
 
 export interface AgentApprovalList {
     "approvals": AgentApproval[] | null;
+}
+
+export interface AgentApprovalPolicy {
+    "agentId": string;
+    "workspaceKey": string;
+    "mode": string;
+    "expiresAt"?: string;
+    "updatedAt"?: string;
+}
+
+export interface AgentApprovalPolicyList {
+    "policies": AgentApprovalPolicy[] | null;
+}
+
+export interface AgentApprovalReleaseReceipt {
+    "released": number;
 }
 
 export interface AgentCancelReceipt {
@@ -67,6 +84,16 @@ export interface AgentModelChoices {
     "current": string;
     "models": AgentModelChoice[] | null;
     "reasoningEffort"?: AgentSelectChoices | null;
+}
+
+export interface AgentPendingApproval {
+    "approval": AgentApproval;
+    "agentName": string;
+    "workspaceKey": string;
+}
+
+export interface AgentPendingApprovalList {
+    "approvals": AgentPendingApproval[] | null;
 }
 
 export interface AgentProfileGrants {
