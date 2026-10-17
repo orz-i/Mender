@@ -228,3 +228,71 @@ func TestRuntimeShutdownDoesNotClaimCallerCancellation(t *testing.T) {
 		t.Fatalf("runtime shutdown incorrectly claimed confirmed cancellation: %+v", observed)
 	}
 }
+
+func TestGovernedToolSupplyFailureNeverLaunchesAgentAndIsExplicit(t *testing.T) {
+	executor := fakeExecutor{started: make(chan struct{}), release: make(chan struct{})}
+	service, ownerCtx := newFixtureService(t, executor)
+	if err := service.ConfigureToolSupplyResolver(func(context.Context, agentdomain.Task) (ToolSupply, func(), error) {
+		return ToolSupply{}, nil, agentdomain.ErrUnavailable
+	}); err != nil {
+		t.Fatal(err)
+	}
+	agent, err := service.Create(context.Background(), CreateRequest{
+		Name: "Unavailable governed placement", Backend: agentdomain.BackendGrok, WorkspaceRoot: t.TempDir(),
+	}, ownerCtx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	task, err := service.Submit(context.Background(), agent.ID(), "fixture no process", ownerCtx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	terminal := waitTask(t, service, task.ID, ownerCtx, agentdomain.TaskFailed)
+	if terminal.Diagnostic != "Governed tool execution unavailable" {
+		t.Fatalf("resolver error was hidden: %+v", terminal)
+	}
+	select {
+	case <-executor.started:
+		t.Fatal("Agent process started despite invalid governed placement")
+	default:
+	}
+}
+func TestCancelDuringGovernedToolResolutionRetainsCancelledLifecycle(t *testing.T) {
+	executor := fakeExecutor{started: make(chan struct{}), release: make(chan struct{})}
+	service, ownerCtx := newFixtureService(t, executor)
+	entering := make(chan struct{})
+	if err := service.ConfigureToolSupplyResolver(func(ctx context.Context, _ agentdomain.Task) (ToolSupply, func(), error) {
+		close(entering)
+		<-ctx.Done()
+		return ToolSupply{}, nil, ctx.Err()
+	}); err != nil {
+		t.Fatal(err)
+	}
+	agent, err := service.Create(context.Background(), CreateRequest{
+		Name: "Cancelled while resolving", Backend: agentdomain.BackendGrok, WorkspaceRoot: t.TempDir(),
+	}, ownerCtx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	task, err := service.Submit(context.Background(), agent.ID(), "fixture cancellation", ownerCtx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-entering:
+	case <-time.After(4 * time.Second):
+		t.Fatal("Task never entered governed resolver")
+	}
+	if err := service.Cancel(context.Background(), task.ID, ownerCtx); err != nil {
+		t.Fatal(err)
+	}
+	after := waitTask(t, service, task.ID, ownerCtx, agentdomain.TaskCancelled)
+	if after.Diagnostic != "Task cancelled" || !after.CancelRequested {
+		t.Fatalf("resolver cancellation silently became a failure: %+v", after)
+	}
+	select {
+	case <-executor.started:
+		t.Fatal("Agent started after cancellation")
+	default:
+	}
+}

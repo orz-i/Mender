@@ -418,19 +418,25 @@ func (s *Service) run(ctx context.Context, cancel context.CancelFunc, agent agen
 		PermissionRequester: func(ctx context.Context, req PermissionRequest) (PermissionDecision, error) {
 			return s.requestPermission(ctx, task, caller, req)
 		}}
+	var result string
+	var err error
+	supplyFailed := false
 	if s.toolSupplyResolver != nil {
-		supply, release, supplyErr := s.toolSupplyResolver(ctx, task)
-		if supplyErr != nil {
-			_ = s.store.Transition(context.WithoutCancel(ctx), task.ID, task.Generation,
-				agentdomain.TaskRunning, agentdomain.TaskFailed, "", "Governed tool execution unavailable")
-			return
+		var supply ToolSupply
+		var release func()
+		supply, release, err = s.toolSupplyResolver(ctx, task)
+		if err != nil {
+			supplyFailed = true
+		} else {
+			if release != nil {
+				defer release()
+			}
+			config.ToolSupply = supply
 		}
-		if release != nil {
-			defer release()
-		}
-		config.ToolSupply = supply
 	}
-	result, err := s.runner.ExecuteConfigured(ctx, agent, prompt, config)
+	if err == nil {
+		result, err = s.runner.ExecuteConfigured(ctx, agent, prompt, config)
+	}
 	// A runner that reports success after cancellation cannot prove it
 	// stopped executing side effects. Preserve the uncertainty instead.
 	if ctx.Err() != nil && err == nil {
@@ -443,6 +449,9 @@ func (s *Service) run(ctx context.Context, cancel context.CancelFunc, agent agen
 	if err != nil {
 		next = agentdomain.TaskFailed
 		diagnostic = "Agent execution failed"
+		if supplyFailed {
+			diagnostic = "Governed tool execution unavailable"
+		}
 		if errors.Is(err, context.Canceled) {
 			// The request to stop can originate from the caller or from
 			// Mender shutting down. Only a caller-initiated cancellation
