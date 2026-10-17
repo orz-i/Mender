@@ -1,6 +1,6 @@
 # ADR-0050 — ACP approval mediation and governed Agent tool execution
 
-- Status: Proposed for Phase 44, research only. Not an enabled runtime capability.
+- Status: Accepted for staged Phase 44 implementation (owner approved 2026-10-17). Individual capabilities remain unavailable until implemented and accepted.
 - Date: 2026-10-17 (Mac local).
 - Refines: ADR-0038, ADR-0034, ADR-0035, ADR-0047, ADR-0049.
 - Mender remains a platform for aggregating, governing and supplying tools and resources to LLM/Agents. OpenCode retains the Agent Loop, model inference and choice of actions.

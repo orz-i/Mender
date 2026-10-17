@@ -1,7 +1,7 @@
 # Phase 44 research — ACP approvals and governed OpenCode tools
 
-- Status: research complete, **implementation pending explicit go-ahead**, 2026-10-17 (Mac local).
-- Authority: [ADR-0050 — ACP approval mediation](../architecture/adr/0050-acp-agent-tool-approval-governance.md), Proposed.
+- Status: **implementation authorized, Phase B in progress** (owner approved 2026-10-17, Mac local).
+- Authority: [ADR-0050 — ACP approval mediation](../architecture/adr/0050-acp-agent-tool-approval-governance.md), Accepted.
 - Product identity: Mender serves and governs tools/resources. OpenCode owns the model, plans, native tools and Agent Loop.
 
 ## Findings
@@ -51,4 +51,4 @@ ACP: https://agentclientprotocol.com/protocol/v1/tool-calls ; https://agentclien
 
 OpenCode v2: https://dev.opencode.ai/v2/docs/cli/acp/ ; https://dev.opencode.ai/v2/docs/permissions/ ; https://dev.opencode.ai/v2/docs/config/ ; https://dev.opencode.ai/v2/docs/policies/
 
-**No code, database schema, local Agent permissions or user files were modified in this research phase.** Proposal approval is needed before implementation.
+**Implementation gates:** Stage B must keep all client-file/terminal requests rejected; only an actual ACP permission event can create a pending review. Never enable the OpenCode native host read/write claim by merely adding UI. No production data modifications until a tested forward migration and a controlled operator restart.
