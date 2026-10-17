@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -75,7 +76,11 @@ func TestExplicitOwnerApprovalAllowsOnceWithoutProfileImpersonation(t *testing.T
 		t.Fatal(err)
 	}
 	defer func() { _ = service.Close() }()
-	a, err := service.Create(ctx, CreateRequest{Name: "ACP Owner Approval", Backend: agentdomain.BackendGrok, WorkspaceRoot: t.TempDir()}, ownerCtx)
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "fixture.txt"), []byte("approval fixture"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	a, err := service.Create(ctx, CreateRequest{Name: "ACP Owner Approval", Backend: agentdomain.BackendGrok, WorkspaceRoot: root}, ownerCtx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -203,6 +208,86 @@ func TestOwnerCannotAllowUnreviewableNativeShellOperation(t *testing.T) {
 		}
 	case <-time.After(3 * time.Second):
 		t.Fatal("reject never reached waiting Agent")
+	}
+	_ = waitTask(t, service, task.ID, ownerCtx, agentdomain.TaskCompleted)
+}
+func TestOwnerCanRejectAfterProfileGrantRevocation(t *testing.T) {
+	ctx := context.Background()
+	service, ownerCtx, executor := newApprovalFixture(t)
+	agent, err := service.Create(ctx, CreateRequest{Name: "Grant revoked while waiting", Backend: agentdomain.BackendGrok, WorkspaceRoot: t.TempDir()}, ownerCtx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := service.Grant(ctx, agent.ID(), goodProfileID, ownerCtx); err != nil {
+		t.Fatal(err)
+	}
+	task, err := service.Submit(ctx, agent.ID(), "synthetic pending review", profile(t, goodProfileID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	<-executor.ready
+	pending := waitPendingApproval(t, service, task.ID, ownerCtx)
+	if err := service.Revoke(ctx, agent.ID(), goodProfileID, ownerCtx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.DecideApproval(ctx, pending.ID, agentdomain.ApprovalAllowOnce, ownerCtx); !errors.Is(err, agentdomain.ErrForbidden) {
+		t.Fatalf("revoked Profile still permitted an allow: %v", err)
+	}
+	decided, err := service.DecideApproval(ctx, pending.ID, agentdomain.ApprovalReject, ownerCtx)
+	if err != nil || decided.Status != agentdomain.ApprovalRejected {
+		t.Fatalf("owner could not reject revoked request: %+v %v", decided, err)
+	}
+	select {
+	case result := <-executor.decision:
+		if result != agentdomain.ApprovalReject {
+			t.Fatalf("unexpected permission decision: %v", result)
+		}
+	case <-time.After(4 * time.Second):
+		t.Fatal("rejected request never reached downstream ACP executor")
+	}
+	_ = waitTask(t, service, task.ID, ownerCtx, agentdomain.TaskCompleted)
+}
+func TestOwnerCannotApproveChangedSymlinkTarget(t *testing.T) {
+	ctx := context.Background()
+	service, ownerCtx, executor := newApprovalFixture(t)
+	root := t.TempDir()
+	target := filepath.Join(root, "fixture.txt")
+	if err := os.WriteFile(target, []byte("in workspace"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	agent, err := service.Create(ctx, CreateRequest{Name: "Changed path", Backend: agentdomain.BackendOpenCode, WorkspaceRoot: root}, ownerCtx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	task, err := service.Submit(ctx, agent.ID(), "synthetic read preview", ownerCtx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	<-executor.ready
+	pending := waitPendingApproval(t, service, task.ID, ownerCtx)
+	if err := os.Remove(target); err != nil {
+		t.Fatal(err)
+	}
+	outside := filepath.Join(t.TempDir(), "unrelated.txt")
+	if err := os.WriteFile(outside, []byte("outside workspace"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, target); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.DecideApproval(ctx, pending.ID, agentdomain.ApprovalAllowOnce, ownerCtx); !errors.Is(err, agentdomain.ErrForbidden) {
+		t.Fatalf("symlink changed outside workspace but owner allow passed: %v", err)
+	}
+	if _, err := service.DecideApproval(ctx, pending.ID, agentdomain.ApprovalReject, ownerCtx); err != nil {
+		t.Fatalf("could not reject unsafe request: %v", err)
+	}
+	select {
+	case decision := <-executor.decision:
+		if decision != agentdomain.ApprovalReject {
+			t.Fatalf("unexpected allow: %v", decision)
+		}
+	case <-time.After(4 * time.Second):
+		t.Fatal("rejection not delivered")
 	}
 	_ = waitTask(t, service, task.ID, ownerCtx, agentdomain.TaskCompleted)
 }

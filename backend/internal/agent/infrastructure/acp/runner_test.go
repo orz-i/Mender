@@ -75,7 +75,7 @@ func TestACPFixtureProcess(t *testing.T) {
 			if mode == "approve-once" || mode == "reject-once" || mode == "approved-client-file" {
 				send(map[string]any{"jsonrpc": "2.0", "id": 197, "method": "session/request_permission",
 					"params": map[string]any{"sessionId": "fixture-1",
-						"toolCall": map[string]any{"toolCallId": "fixture-tool", "kind": "read", "title": "Do not persist", "locations": []any{map[string]string{"path": os.Getenv("ACP_FIXTURE_TARGET_PATH")}}},
+						"toolCall": map[string]any{"toolCallId": "fixture-tool", "kind": "read", "title": "Do not persist", "locations": []any{map[string]string{"path": os.Getenv("ACP_FIXTURE_TARGET_PATH")}}, "rawInput": map[string]string{"path": os.Getenv("ACP_FIXTURE_TARGET_PATH")}},
 						"options": []any{
 							map[string]string{"optionId": "offered-once", "kind": "allow_once"},
 							map[string]string{"optionId": "offered-always", "kind": "allow_always"},

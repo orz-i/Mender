@@ -119,16 +119,18 @@ func (s *Store) ResolveApproval(ctx context.Context, id agentdomain.ApprovalID, 
      AND t.agent_id=agent_task_approvals.agent_id
      AND t.generation=agent_task_approvals.generation
      AND t.status='running' AND t.cancel_requested=0
-     AND (t.scope_kind!='profile' OR EXISTS(
-       SELECT 1 FROM agent_grants g WHERE g.agent_id=t.agent_id AND g.profile_id=t.scope_ref))
-     AND (t.workspace_key='' OR EXISTS(
-       SELECT 1 FROM agent_workspaces w WHERE w.agent_id=t.agent_id
-        AND w.workspace_key=t.workspace_key AND w.workspace_root=t.workspace_root))
-     AND (t.scope_kind!='profile' OR t.workspace_key='' OR EXISTS(
-       SELECT 1 FROM agent_workspace_grants gw WHERE gw.agent_id=t.agent_id
-        AND gw.workspace_key=t.workspace_key AND gw.profile_id=t.scope_ref))
+     AND (?='rejected' OR (
+       (t.scope_kind!='profile' OR EXISTS(
+         SELECT 1 FROM agent_grants g WHERE g.agent_id=t.agent_id AND g.profile_id=t.scope_ref))
+       AND (t.workspace_key='' OR EXISTS(
+         SELECT 1 FROM agent_workspaces w WHERE w.agent_id=t.agent_id
+          AND w.workspace_key=t.workspace_key AND w.workspace_root=t.workspace_root))
+       AND (t.scope_kind!='profile' OR t.workspace_key='' OR EXISTS(
+         SELECT 1 FROM agent_workspace_grants gw WHERE gw.agent_id=t.agent_id
+          AND gw.workspace_key=t.workspace_key AND gw.profile_id=t.scope_ref))
+     ))
    )`,
-		string(status), now.Format(time.RFC3339Nano), string(id), now.UnixMilli(), string(status))
+		string(status), now.Format(time.RFC3339Nano), string(id), now.UnixMilli(), string(status), string(status))
 	if err != nil {
 		return err
 	}

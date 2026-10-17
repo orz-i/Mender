@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -125,11 +126,11 @@ func TestACPReviewTargetRequiresSingleCanonicalWorkspaceFile(t *testing.T) {
 	if err := os.WriteFile(inside, []byte("safe fixture"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	relative, allowed := reviewACPFileTarget(root, "read", []permissionLocation{{Path: inside}})
+	relative, allowed := reviewACPFileTarget(root, "read", []permissionLocation{{Path: inside}}, inside)
 	if !allowed || relative != "visible.txt" {
 		t.Fatalf("expected in-root read: %q %v", relative, allowed)
 	}
-	_, allowShell := reviewACPFileTarget(root, "execute", []permissionLocation{{Path: inside}})
+	_, allowShell := reviewACPFileTarget(root, "execute", []permissionLocation{{Path: inside}}, inside)
 	if allowShell {
 		t.Fatal("shell approval based on a file hint")
 	}
@@ -141,14 +142,67 @@ func TestACPReviewTargetRequiresSingleCanonicalWorkspaceFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, target := range []string{outside, filepath.Join(root, "escape"), "../private.txt"} {
-		if value, allow := reviewACPFileTarget(root, "read", []permissionLocation{{Path: target}}); allow {
+		if value, allow := reviewACPFileTarget(root, "read", []permissionLocation{{Path: target}}, target); allow {
 			t.Fatalf("external/symlink file was allowed %q %q", target, value)
 		}
 	}
-	if _, allowed := reviewACPFileTarget(root, "edit", []permissionLocation{{Path: filepath.Join(root, "safe-new.txt")}}); allowed {
+	if _, allowed := reviewACPFileTarget(root, "edit", []permissionLocation{{Path: filepath.Join(root, "safe-new.txt")}}, filepath.Join(root, "safe-new.txt")); allowed {
 		t.Fatal("edit without a reviewed diff/executor was allowed")
 	}
-	if _, allowed := reviewACPFileTarget(root, "read", []permissionLocation{{Path: inside}, {Path: outside}}); allowed {
+	if _, allowed := reviewACPFileTarget(root, "read", []permissionLocation{{Path: inside}, {Path: outside}}, inside); allowed {
 		t.Fatal("compound target list was misrepresented as one safe file")
+	}
+}
+func TestACPReadPreviewRequiresMatchingRawInputAndReportedLocation(t *testing.T) {
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := filepath.Join(root, "first.txt")
+	second := filepath.Join(root, "second.txt")
+	for _, p := range []string{first, second} {
+		if err := os.WriteFile(p, []byte("fixture"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// The Agent-reported display location cannot disagree with its own
+	// argument payload and still produce a local owner Allow once button.
+	for _, item := range []struct{ reported, input string }{
+		{first, second}, {second, first}, {first, ""}, {first, filepath.Join(t.TempDir(), "private")},
+	} {
+		if value, ok := reviewACPFileTarget(root, "read", []permissionLocation{{Path: item.reported}}, item.input); ok {
+			t.Fatalf("inconsistent ACP input/display was approved: %q", value)
+		}
+	}
+	short := filepath.Join(root, "short.txt")
+	if err := os.Symlink(first, short); err != nil {
+		t.Fatal(err)
+	}
+	if value, ok := reviewACPFileTarget(root, "read", []permissionLocation{{Path: short}}, short); !ok || value != "short.txt" {
+		t.Fatalf("relative symlink preview not retained for revalidation: %q %t", value, ok)
+	}
+}
+func TestACPRejectsExcessivePermissionRequestsPerTask(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	called := false
+	wire := &stream{stdin: &bytes.Buffer{}, permissionSession: "fixture-1",
+		permissionRoot: t.TempDir(), permissionErrors: make(chan error, 2),
+		seenRequests: map[string]struct{}{},
+		permissionRequester: func(context.Context, agentapplication.PermissionRequest) (agentapplication.PermissionDecision, error) {
+			called = true
+			return agentapplication.PermissionDecision{}, nil
+		},
+	}
+	for i := 0; i < 2*maxPermissionRequestsPerTask; i++ {
+		wire.seenRequests[fmt.Sprintf("existing-%d", i)] = struct{}{}
+	}
+	raw := []byte(`{"sessionId":"fixture-1","toolCall":{"toolCallId":"new-tool","kind":"edit"},"options":[{"optionId":"yes","kind":"allow_once"},{"optionId":"no","kind":"reject_once"}]}`)
+	message := rpcMessage{JSONRPC: "2.0", ID: json.RawMessage("111"), Method: "session/request_permission", Params: raw}
+	if err := wire.dispatchPermission(ctx, message); !errors.Is(err, errClientPermissionDenied) {
+		t.Fatalf("task-scoped cap not enforced: %v", err)
+	}
+	if called {
+		t.Fatal("bounded request limit launched a callback")
 	}
 }

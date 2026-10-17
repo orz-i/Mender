@@ -129,6 +129,7 @@ export async function deployDesktopSkill(
 
 export function createDesktopMenderClient(): MenderClient {
   return {
+    supportsLocalAgentApprovals:true,
     async getSystemStatus() {
       return systemStatus(await Service.GetSystemStatus());
     },

@@ -13,7 +13,10 @@ import (
 	agentdomain "github.com/orz-i/Mender/backend/internal/agent/domain"
 )
 
-const maxPendingPermissions = 2
+const (
+	maxPendingPermissions        = 2
+	maxPermissionRequestsPerTask = 64
+)
 
 type permissionLocation struct {
 	Path string `json:"path"`
@@ -25,6 +28,9 @@ type wirePermissionRequest struct {
 		ToolCallID string               `json:"toolCallId"`
 		Kind       string               `json:"kind"`
 		Locations  []permissionLocation `json:"locations"`
+		RawInput   struct {
+			Path string `json:"path"`
+		} `json:"rawInput"`
 	} `json:"toolCall"`
 	Options []struct {
 		OptionID string `json:"optionId"`
@@ -45,7 +51,7 @@ func parseACPApproval(raw json.RawMessage, sessionID, workspaceRoot string) (age
 	result := agentapplication.PermissionRequest{
 		SessionID: value.SessionID, ToolCallID: value.ToolCall.ToolCallID, Kind: value.ToolCall.Kind,
 	}
-	result.Target, result.CanAllow = reviewACPFileTarget(workspaceRoot, value.ToolCall.Kind, value.ToolCall.Locations)
+	result.Target, result.CanAllow = reviewACPFileTarget(workspaceRoot, value.ToolCall.Kind, value.ToolCall.Locations, value.ToolCall.RawInput.Path)
 	seen := map[string]bool{}
 	for _, option := range value.Options {
 		if option.OptionID == "" || len(option.OptionID) > 128 ||
@@ -94,7 +100,8 @@ func (s *stream) dispatchPermission(ctx context.Context, msg rpcMessage) error {
 	if _, exists := s.seenRequests["tool:"+req.ToolCallID]; exists {
 		return errClientPermissionDenied
 	}
-	if s.pendingPermissions.Load() >= maxPendingPermissions {
+	if s.pendingPermissions.Load() >= maxPendingPermissions ||
+		len(s.seenRequests) >= 2*maxPermissionRequestsPerTask {
 		return errClientPermissionDenied
 	}
 	s.seenRequests["rpc:"+requestID] = struct{}{}
@@ -142,57 +149,60 @@ func (s *stream) dispatchPermission(ctx context.Context, msg rpcMessage) error {
 // reviewACPFileTarget is a bounded, conservative preview for a cooperative
 // ACP decision. A reported location is NOT a trustworthy execution parameter:
 // strong enforcement still requires an actual sandbox or Mender Tool route.
-func reviewACPFileTarget(root, kind string, locations []permissionLocation) (string, bool) {
-	// The first acceptance gate only permits a previewable read. Editing requires
-	// a bounded, reviewable patch diff AND enforced execution placement later.
-	if kind != "read" || len(locations) != 1 || !filepath.IsAbs(root) {
+func reviewACPFileTarget(root, kind string, locations []permissionLocation, inputPath string) (string, bool) {
+	// Only an explicitly reviewable single-file read may be approved. Edits
+	// need an independently reviewed diff and an enforceable executor.
+	// Agent-provided locations and rawInput are both UNTRUSTED; requiring
+	// them to agree prevents an obvious contradictory preview. This is
+	// cooperative host approval, NOT a mandatory execution sandbox.
+	if kind != "read" || len(locations) != 1 || !filepath.IsAbs(root) ||
+		inputPath == "" || len(inputPath) > 4096 || strings.ContainsAny(inputPath, "\r\n\x00") {
 		return "", false
 	}
 	canonicalRoot, err := filepath.EvalSymlinks(root)
 	if err != nil || canonicalRoot != root {
 		return "", false
 	}
-	proposed := locations[0].Path
-	if proposed == "" || len(proposed) > 4096 || strings.ContainsAny(proposed, "\r\n\x00") {
-		return "", false
-	}
-	if !filepath.IsAbs(proposed) {
-		proposed = filepath.Join(root, proposed)
-	}
-	proposed, err = filepath.Abs(proposed)
-	if err != nil {
-		return "", false
-	}
-	if kind == "read" {
-		proposed, err = filepath.EvalSymlinks(proposed)
-		if err != nil {
-			return "", false
+	resolve := func(raw string) (string, string, bool) {
+		if raw == "" || len(raw) > 4096 || strings.ContainsAny(raw, "\r\n\x00") {
+			return "", "", false
 		}
-		info, err := os.Stat(proposed)
+		if !filepath.IsAbs(raw) {
+			raw = filepath.Join(root, raw)
+		}
+		raw = filepath.Clean(raw)
+		relative, err := filepath.Rel(root, raw)
+		// Do not stat a lexically external file just to draw a review preview.
+		if err != nil || relative == "." || relative == ".." ||
+			strings.HasPrefix(relative, ".."+string(filepath.Separator)) ||
+			filepath.IsAbs(relative) || len(relative) > 240 {
+			return "", "", false
+		}
+		canonical, err := filepath.EvalSymlinks(raw)
+		if err != nil {
+			return "", "", false
+		}
+		within, err := filepath.Rel(root, canonical)
+		if err != nil || within == "." || within == ".." ||
+			strings.HasPrefix(within, ".."+string(filepath.Separator)) ||
+			filepath.IsAbs(within) {
+			return "", "", false
+		}
+		info, err := os.Stat(canonical)
 		if err != nil || !info.Mode().IsRegular() {
-			return "", false
+			return "", "", false
 		}
-	} else {
-		parent, err := filepath.EvalSymlinks(filepath.Dir(proposed))
-		if err != nil {
-			return "", false
-		}
-		proposed = filepath.Join(parent, filepath.Base(proposed))
-		if _, err := os.Lstat(proposed); err == nil {
-			proposed, err = filepath.EvalSymlinks(proposed)
-			if err != nil {
-				return "", false
-			}
-		} else if !os.IsNotExist(err) {
-			return "", false
-		}
+		return relative, canonical, true
 	}
-	relative, err := filepath.Rel(root, proposed)
-	if err != nil || relative == "." || relative == ".." ||
-		strings.HasPrefix(relative, ".."+string(filepath.Separator)) ||
-		filepath.IsAbs(relative) || len(relative) > 240 ||
-		strings.ContainsAny(relative, "\r\n\x00") {
+	relative, canonical, ok := resolve(inputPath)
+	if !ok {
 		return "", false
 	}
+	_, reported, ok := resolve(locations[0].Path)
+	if !ok || reported != canonical {
+		return "", false
+	}
+	// Persist the lexical path: at decision time Mender revalidates this
+	// exact target, including any symlinks that may have changed since ask.
 	return relative, true
 }

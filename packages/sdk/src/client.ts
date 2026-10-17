@@ -127,6 +127,8 @@ export interface SearchToolsInput {
 }
 
 export interface MenderClient {
+  /** Only the local Wails owner can decide ACP permission requests. */
+  readonly supportsLocalAgentApprovals?: boolean;
   getSystemStatus(): Promise<SystemStatus>;
   listPluginCatalogue(): Promise<{plugins: PluginCatalogueEntry[]}>;
   enablePluginInstallation(installationId:string):Promise<{installation:ProviderPluginInstallation}>;

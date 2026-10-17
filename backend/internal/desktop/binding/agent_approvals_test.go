@@ -2,6 +2,7 @@ package binding
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -40,7 +41,11 @@ func TestWailsOwnerApprovalIsTaskBoundAndNotProfileDelegation(t *testing.T) {
 	}
 	defer func() { _ = runtime.Close() }()
 	desktop := NewService(ctx, runtime)
-	created, err := desktop.CreateAgent(CreateAgentInput{Name: "Wails ACP", Backend: "grok", WorkspaceRoot: t.TempDir(), Isolation: "host"})
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "fixture.txt"), []byte("wails review fixture"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	created, err := desktop.CreateAgent(CreateAgentInput{Name: "Wails ACP", Backend: "grok", WorkspaceRoot: root, Isolation: "host"})
 	if err != nil {
 		t.Fatal(err)
 	}

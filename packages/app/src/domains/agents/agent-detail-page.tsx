@@ -352,7 +352,7 @@ export function AgentDetailPage({client,chooseLocalDirectory}:{client:MenderClie
           {viewTask.reasoningEffort?<div><dt className="text-xs text-muted-foreground">{t("Reasoning effort")}</dt><dd>{viewTask.reasoningEffort}</dd></div>:null}
           {viewTask.workspace?<div><dt className="text-xs text-muted-foreground">{t("Workspace")}</dt><dd>{viewTask.workspace}</dd></div>:null}
         </dl>:null}
-        {viewTask&&(viewTask.status==="running"||viewTask.status==="queued")?
+        {client.supportsLocalAgentApprovals===true&&viewTask&&(viewTask.status==="running"||viewTask.status==="queued")?
           <AgentTaskApprovals client={client} task={viewTask} onTaskUpdated={updateViewedTask}/>:null}
         {viewTask?.result?<pre className="max-h-[45vh] overflow-auto whitespace-pre-wrap break-words rounded-lg bg-muted p-4 text-xs">{viewTask.result}</pre>:
           <p className="text-sm text-muted-foreground">{viewTask?.diagnostic||t("No result available.")}</p>}

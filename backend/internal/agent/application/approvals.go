@@ -3,6 +3,9 @@ package application
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	agentdomain "github.com/orz-i/Mender/backend/internal/agent/domain"
@@ -142,21 +145,30 @@ func (s *Service) DecideApproval(ctx context.Context, id agentdomain.ApprovalID,
 	if !active || waiter == nil {
 		return agentdomain.Approval{}, agentdomain.ErrConflict
 	}
-	if choice == agentdomain.ApprovalAllowOnce && !approval.CanAllow {
-		return agentdomain.Approval{}, agentdomain.ErrForbidden
+	if choice == agentdomain.ApprovalAllowOnce {
+		if !approval.CanAllow || approval.Kind != "read" {
+			return agentdomain.Approval{}, agentdomain.ErrForbidden
+		}
+		// Recheck the originally previewed lexical path. A workspace or
+		// symlink changed since the ACP request must not be approved.
+		if err := revalidateReadPreview(task.WorkspaceRoot, approval.Target); err != nil {
+			return agentdomain.Approval{}, err
+		}
+		// An allow-once must satisfy the ORIGINAL submitting principal's
+		// current grants and Policy; the owner is only the approver.
+		original, err := approvalCaller(task)
+		if err != nil {
+			return agentdomain.Approval{}, err
+		}
+		if err := s.allowedForApproval(ctx, agent, original); err != nil {
+			return agentdomain.Approval{}, err
+		}
+		if err := s.admit(ctx, original, agent, gov.ActionAgentTaskSubmit); err != nil {
+			return agentdomain.Approval{}, err
+		}
 	}
-	// Re-evaluate current restrictive policy using the ORIGINAL submitting
-	// caller, never the local owner's more privileged Principal as a substitute.
-	original, err := approvalCaller(task)
-	if err != nil {
-		return agentdomain.Approval{}, err
-	}
-	if err := s.allowedForApproval(ctx, agent, original); err != nil {
-		return agentdomain.Approval{}, err
-	}
-	if err := s.admit(ctx, original, agent, gov.ActionAgentTaskSubmit); err != nil {
-		return agentdomain.Approval{}, err
-	}
+	// Reject is always an owner action and cannot grant new authority.
+	// It remains available after Profile/workspace grants are revoked.
 	status := agentdomain.ApprovalRejected
 	if choice == agentdomain.ApprovalAllowOnce {
 		status = agentdomain.ApprovalAllowedOnce
@@ -194,6 +206,36 @@ func (s *Service) allowedForApproval(ctx context.Context, agent agentdomain.Agen
 	_, err := s.allowed(ctx, agent, caller)
 	if err != nil {
 		return err
+	}
+	return nil
+}
+
+// revalidateReadPreview is a last-moment cooperative boundary check, not
+// filesystem isolation. OpenCode still executes its own native read and
+// could deviate from reported ACP metadata in host mode.
+func revalidateReadPreview(root, relative string) error {
+	if relative == "" || filepath.IsAbs(relative) || filepath.Clean(relative) != relative ||
+		relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) ||
+		strings.ContainsAny(relative, "\r\n\x00") {
+		return agentdomain.ErrForbidden
+	}
+	canonicalRoot, err := filepath.EvalSymlinks(root)
+	if err != nil || canonicalRoot != root {
+		return agentdomain.ErrForbidden
+	}
+	canonicalTarget, err := filepath.EvalSymlinks(filepath.Join(root, relative))
+	if err != nil {
+		return agentdomain.ErrForbidden
+	}
+	inside, err := filepath.Rel(root, canonicalTarget)
+	if err != nil || inside == "." || inside == ".." ||
+		strings.HasPrefix(inside, ".."+string(filepath.Separator)) ||
+		filepath.IsAbs(inside) {
+		return agentdomain.ErrForbidden
+	}
+	info, err := os.Stat(canonicalTarget)
+	if err != nil || !info.Mode().IsRegular() {
+		return agentdomain.ErrForbidden
 	}
 	return nil
 }
