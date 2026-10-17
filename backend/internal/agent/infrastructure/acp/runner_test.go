@@ -75,7 +75,7 @@ func TestACPFixtureProcess(t *testing.T) {
 			if mode == "approve-once" || mode == "reject-once" || mode == "approved-client-file" {
 				send(map[string]any{"jsonrpc": "2.0", "id": 197, "method": "session/request_permission",
 					"params": map[string]any{"sessionId": "fixture-1",
-						"toolCall": map[string]any{"toolCallId": "fixture-tool", "kind": "edit", "title": "Do not persist"},
+						"toolCall": map[string]any{"toolCallId": "fixture-tool", "kind": "read", "title": "Do not persist", "locations": []any{map[string]string{"path": os.Getenv("ACP_FIXTURE_TARGET_PATH")}}},
 						"options": []any{
 							map[string]string{"optionId": "offered-once", "kind": "allow_once"},
 							map[string]string{"optionId": "offered-always", "kind": "allow_always"},
@@ -158,23 +158,30 @@ func fixtureAgent(t *testing.T) agentdomain.Agent {
 	if err != nil {
 		t.Fatal(err)
 	}
+	canonicalRoot, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
 	a, err := agentdomain.NewAgent(agentdomain.Spec{ID: id, Name: "Fixture", Backend: agentdomain.BackendGrok,
-		PluginID: agentdomain.BackendGrok.PluginID(), ExtensionID: "main", WorkspaceRoot: filepath.Clean(t.TempDir()),
+		PluginID: agentdomain.BackendGrok.PluginID(), ExtensionID: "main", WorkspaceRoot: canonicalRoot,
 		Isolation: "restricted_host", OwnerKind: "local_user", OwnerRef: "os:501", CreatedAt: time.Now()})
 	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(a.Spec().WorkspaceRoot, "fixture.txt"), []byte("synthetic local fixture"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	return a
 }
 func fixtureRunner(mode string) Runner {
-	return Runner{NewCommand: func(ctx context.Context, _ agentdomain.Agent) (*exec.Cmd, error) {
+	return Runner{NewCommand: func(ctx context.Context, a agentdomain.Agent) (*exec.Cmd, error) {
 		binary, err := os.Executable()
 		if err != nil {
 			return nil, err
 		}
 		cmd := exec.CommandContext( // #nosec G204 -- trusted current test executable and fixed test-only arguments.
 			ctx, binary, "-test.run=^TestACPFixtureProcess$")
-		cmd.Env = append(os.Environ(), "MENDER_ACP_TEST_HELPER=1", "ACP_FIXTURE_MODE="+mode)
+		cmd.Env = append(os.Environ(), "MENDER_ACP_TEST_HELPER=1", "ACP_FIXTURE_MODE="+mode, "ACP_FIXTURE_TARGET_PATH="+filepath.Join(a.Spec().WorkspaceRoot, "fixture.txt"))
 		return cmd, nil
 	}}
 }

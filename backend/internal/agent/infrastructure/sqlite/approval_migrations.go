@@ -35,6 +35,8 @@ func migrateApprovalsV10(ctx context.Context, db *sql.DB) error {
    session_id TEXT NOT NULL,
    tool_call_id TEXT NOT NULL,
    action_kind TEXT NOT NULL CHECK(action_kind IN ('read','edit','execute','other')),
+   target_path TEXT NOT NULL DEFAULT '',
+   can_allow INTEGER NOT NULL CHECK(can_allow IN (0,1)),
    allow_option_id TEXT NOT NULL, reject_option_id TEXT NOT NULL,
    status TEXT NOT NULL CHECK(status IN ('pending','allowed_once','rejected','expired')),
    created_at TEXT NOT NULL,

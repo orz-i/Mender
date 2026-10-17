@@ -13,8 +13,9 @@ import (
 )
 
 type approvalExecutorFixture struct {
-	decision chan agentdomain.ApprovalChoice
-	ready    chan struct{}
+	decision     chan agentdomain.ApprovalChoice
+	ready        chan struct{}
+	unreviewable bool
 }
 
 func (x *approvalExecutorFixture) ExecuteConfigured(ctx context.Context, _ agentdomain.Agent, _ string, config RunConfig) (string, error) {
@@ -22,8 +23,17 @@ func (x *approvalExecutorFixture) ExecuteConfigured(ctx context.Context, _ agent
 		return "", errors.New("missing host approval boundary")
 	}
 	close(x.ready)
+	kind := "read"
+	target := "fixture.txt"
+	canAllow := true
+	if x.unreviewable {
+		kind = "execute"
+		target = ""
+		canAllow = false
+	}
 	result, err := config.PermissionRequester(ctx, PermissionRequest{
-		SessionID: "fixture-session", ToolCallID: "fixture-call", Kind: "edit",
+		SessionID: "fixture-session", ToolCallID: "fixture-call", Kind: kind,
+		Target: target, CanAllow: canAllow,
 		AllowOptionID: "permit-once", RejectOptionID: "deny-once",
 	})
 	if err != nil {
@@ -79,7 +89,7 @@ func TestExplicitOwnerApprovalAllowsOnceWithoutProfileImpersonation(t *testing.T
 	}
 	<-exec.ready
 	approval := waitPendingApproval(t, service, task.ID, ownerCtx)
-	if approval.Kind != "edit" || approval.Status != agentdomain.ApprovalPending || approval.SessionID != "fixture-session" {
+	if approval.Kind != "read" || !approval.CanAllow || approval.Target != "fixture.txt" || approval.Status != agentdomain.ApprovalPending || approval.SessionID != "fixture-session" {
 		t.Fatalf("wrong approval: %+v", approval)
 	}
 	if _, err := service.ListApprovals(ctx, task.ID, caller); !errors.Is(err, agentdomain.ErrForbidden) {
@@ -161,4 +171,38 @@ func newApprovalFixture(t *testing.T) (*Service, gov.Context, *approvalExecutorF
 	}
 	t.Cleanup(func() { _ = service.Close() })
 	return service, o, executor
+}
+func TestOwnerCannotAllowUnreviewableNativeShellOperation(t *testing.T) {
+	ctx := context.Background()
+	service, ownerCtx, runner := newApprovalFixture(t)
+	runner.unreviewable = true
+	agent, err := service.Create(ctx, CreateRequest{Name: "No implicit shell approval", Backend: agentdomain.BackendOpenCode,
+		WorkspaceRoot: t.TempDir()}, ownerCtx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	task, err := service.Submit(ctx, agent.ID(), "synthetic request", ownerCtx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	<-runner.ready
+	approval := waitPendingApproval(t, service, task.ID, ownerCtx)
+	if approval.CanAllow || approval.Target != "" || approval.Kind != "execute" {
+		t.Fatalf("unreviewable operation was presented as approvable: %+v", approval)
+	}
+	if _, err := service.DecideApproval(ctx, approval.ID, agentdomain.ApprovalAllowOnce, ownerCtx); !errors.Is(err, agentdomain.ErrForbidden) {
+		t.Fatalf("owner bypassed reviewability gate: %v", err)
+	}
+	if _, err := service.DecideApproval(ctx, approval.ID, agentdomain.ApprovalReject, ownerCtx); err != nil {
+		t.Fatalf("unable to reject unreviewable operation: %v", err)
+	}
+	select {
+	case decision := <-runner.decision:
+		if decision != agentdomain.ApprovalReject {
+			t.Fatalf("wrong decision reached runner: %s", decision)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("reject never reached waiting Agent")
+	}
+	_ = waitTask(t, service, task.ID, ownerCtx, agentdomain.TaskCompleted)
 }

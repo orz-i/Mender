@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	agentapplication "github.com/orz-i/Mender/backend/internal/agent/application"
@@ -13,11 +15,16 @@ import (
 
 const maxPendingPermissions = 2
 
+type permissionLocation struct {
+	Path string `json:"path"`
+}
+
 type wirePermissionRequest struct {
 	SessionID string `json:"sessionId"`
 	ToolCall  struct {
-		ToolCallID string `json:"toolCallId"`
-		Kind       string `json:"kind"`
+		ToolCallID string               `json:"toolCallId"`
+		Kind       string               `json:"kind"`
+		Locations  []permissionLocation `json:"locations"`
 	} `json:"toolCall"`
 	Options []struct {
 		OptionID string `json:"optionId"`
@@ -25,7 +32,7 @@ type wirePermissionRequest struct {
 	} `json:"options"`
 }
 
-func parseACPApproval(raw json.RawMessage, sessionID string) (agentapplication.PermissionRequest, error) {
+func parseACPApproval(raw json.RawMessage, sessionID, workspaceRoot string) (agentapplication.PermissionRequest, error) {
 	var value wirePermissionRequest
 	if len(raw) == 0 || len(raw) > 32*1024 || json.Unmarshal(raw, &value) != nil {
 		return agentapplication.PermissionRequest{}, agentdomain.ErrInvalid
@@ -38,6 +45,7 @@ func parseACPApproval(raw json.RawMessage, sessionID string) (agentapplication.P
 	result := agentapplication.PermissionRequest{
 		SessionID: value.SessionID, ToolCallID: value.ToolCall.ToolCallID, Kind: value.ToolCall.Kind,
 	}
+	result.Target, result.CanAllow = reviewACPFileTarget(workspaceRoot, value.ToolCall.Kind, value.ToolCall.Locations)
 	seen := map[string]bool{}
 	for _, option := range value.Options {
 		if option.OptionID == "" || len(option.OptionID) > 128 ||
@@ -72,7 +80,7 @@ func (s *stream) dispatchPermission(ctx context.Context, msg rpcMessage) error {
 	if s.permissionRequester == nil {
 		return errClientPermissionDenied
 	}
-	req, err := parseACPApproval(msg.Params, s.permissionSession)
+	req, err := parseACPApproval(msg.Params, s.permissionSession, s.permissionRoot)
 	if err != nil {
 		return fmt.Errorf("%w: invalid ACP approval request", errClientPermissionDenied)
 	}
@@ -103,6 +111,10 @@ func (s *stream) dispatchPermission(ctx context.Context, msg rpcMessage) error {
 			optionID := ""
 			switch decision.Choice {
 			case agentdomain.ApprovalAllowOnce:
+				if !req.CanAllow {
+					err = agentdomain.ErrForbidden
+					break
+				}
 				optionID = req.AllowOptionID
 			case agentdomain.ApprovalReject:
 				optionID = req.RejectOptionID
@@ -125,4 +137,62 @@ func (s *stream) dispatchPermission(ctx context.Context, msg rpcMessage) error {
 		}
 	}()
 	return nil
+}
+
+// reviewACPFileTarget is a bounded, conservative preview for a cooperative
+// ACP decision. A reported location is NOT a trustworthy execution parameter:
+// strong enforcement still requires an actual sandbox or Mender Tool route.
+func reviewACPFileTarget(root, kind string, locations []permissionLocation) (string, bool) {
+	// The first acceptance gate only permits a previewable read. Editing requires
+	// a bounded, reviewable patch diff AND enforced execution placement later.
+	if kind != "read" || len(locations) != 1 || !filepath.IsAbs(root) {
+		return "", false
+	}
+	canonicalRoot, err := filepath.EvalSymlinks(root)
+	if err != nil || canonicalRoot != root {
+		return "", false
+	}
+	proposed := locations[0].Path
+	if proposed == "" || len(proposed) > 4096 || strings.ContainsAny(proposed, "\r\n\x00") {
+		return "", false
+	}
+	if !filepath.IsAbs(proposed) {
+		proposed = filepath.Join(root, proposed)
+	}
+	proposed, err = filepath.Abs(proposed)
+	if err != nil {
+		return "", false
+	}
+	if kind == "read" {
+		proposed, err = filepath.EvalSymlinks(proposed)
+		if err != nil {
+			return "", false
+		}
+		info, err := os.Stat(proposed)
+		if err != nil || !info.Mode().IsRegular() {
+			return "", false
+		}
+	} else {
+		parent, err := filepath.EvalSymlinks(filepath.Dir(proposed))
+		if err != nil {
+			return "", false
+		}
+		proposed = filepath.Join(parent, filepath.Base(proposed))
+		if _, err := os.Lstat(proposed); err == nil {
+			proposed, err = filepath.EvalSymlinks(proposed)
+			if err != nil {
+				return "", false
+			}
+		} else if !os.IsNotExist(err) {
+			return "", false
+		}
+	}
+	relative, err := filepath.Rel(root, proposed)
+	if err != nil || relative == "." || relative == ".." ||
+		strings.HasPrefix(relative, ".."+string(filepath.Separator)) ||
+		filepath.IsAbs(relative) || len(relative) > 240 ||
+		strings.ContainsAny(relative, "\r\n\x00") {
+		return "", false
+	}
+	return relative, true
 }

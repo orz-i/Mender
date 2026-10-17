@@ -37,6 +37,8 @@ export interface AgentApproval {
     "taskId": string;
     "agentId": string;
     "kind": string;
+    "target"?: string;
+    "canAllow": boolean;
     "status": string;
     "createdAt": string;
     "expiresAt": string;

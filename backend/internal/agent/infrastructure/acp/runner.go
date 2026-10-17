@@ -53,6 +53,7 @@ type stream struct {
 	// Only configured for the live session/prompt; initialize, session/new,
 	// model inspection and all unrelated ACP client calls stay fail-closed.
 	permissionSession   string
+	permissionRoot      string
 	permissionRequester agentapplication.PermissionRequester
 	permissionErrors    chan error
 	seenRequests        map[string]struct{} // raw RPC and ToolCallID replay guard
@@ -164,6 +165,7 @@ func (r Runner) ExecuteConfigured(ctx context.Context, agent agentdomain.Agent, 
 		// is awaited asynchronously while the reader keeps processing
 		// cancellation and unrelated notifications.
 		wire.permissionSession = sessionID
+		wire.permissionRoot = config.WorkspaceRoot
 		wire.permissionRequester = config.PermissionRequester
 		wire.permissionErrors = make(chan error, 2)
 		wire.seenRequests = map[string]struct{}{}

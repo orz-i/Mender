@@ -45,10 +45,12 @@ export function AgentTaskApprovals({
    {first?<div className="space-y-2">
      <p className="text-sm">{t("Awaiting owner approval")} ({pending.length})</p>
      <p className="text-sm">{t("Requested tool category")}: <strong>{t(first.kind==="read"?"Read":first.kind==="edit"?"Edit":first.kind==="execute"?"Execute":"Other")}</strong></p>
+     {first.target?<p className="break-all text-sm">{t("Proposed file")}: <span className="font-mono text-xs">{first.target}</span></p>:null}
      <p className="text-xs text-muted-foreground">{t("This is a cooperative OpenCode permission request, not proof that all native tools are sandboxed or governed by Mender.")}</p>
+     {!first.canAllow?<p className="text-xs text-destructive">{t("The operation lacks a reviewable in-workspace single-file target; only Reject is available.")}</p>:null}
      <p className="text-xs text-muted-foreground">{t("Expires at")}: {new Date(first.expiresAt).toLocaleString()}</p>
      <div className="flex flex-wrap gap-2">
-      <Button size="sm" disabled={busy} onClick={()=>void decide(first,"allow_once")}>{t("Allow once")}</Button>
+      {first.canAllow?<Button size="sm" disabled={busy} onClick={()=>void decide(first,"allow_once")}>{t("Allow once")}</Button>:null}
       <Button size="sm" variant="outline" disabled={busy} onClick={()=>void decide(first,"reject")}>{t("Reject")}</Button>
      </div>
    </div>:null}

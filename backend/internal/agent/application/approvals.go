@@ -17,6 +17,8 @@ type PermissionRequest struct {
 	SessionID      string
 	ToolCallID     string
 	Kind           string // read, edit, execute or other; for owner display ONLY
+	Target         string // bounded, sanitized relative path for owner review
+	CanAllow       bool   // only explicitly reviewable read/edit targets
 	AllowOptionID  string
 	RejectOptionID string
 }
@@ -57,6 +59,7 @@ func (s *Service) requestPermission(ctx context.Context, task agentdomain.Task, 
 	}
 	a := agentdomain.Approval{ID: approvalID, TaskID: task.ID, AgentID: task.AgentID, Generation: task.Generation,
 		SessionID: req.SessionID, ToolCallID: req.ToolCallID, Kind: kind,
+		Target: req.Target, CanAllow: req.CanAllow,
 		AllowOptionID: req.AllowOptionID, RejectOptionID: req.RejectOptionID,
 		Status: agentdomain.ApprovalPending, CreatedAt: time.Now().UTC(), ExpiresAt: limit.UTC()}
 	waiter := &pendingApproval{decision: make(chan agentdomain.ApprovalChoice, 1)}
@@ -138,6 +141,9 @@ func (s *Service) DecideApproval(ctx context.Context, id agentdomain.ApprovalID,
 	s.mu.Unlock()
 	if !active || waiter == nil {
 		return agentdomain.Approval{}, agentdomain.ErrConflict
+	}
+	if choice == agentdomain.ApprovalAllowOnce && !approval.CanAllow {
+		return agentdomain.Approval{}, agentdomain.ErrForbidden
 	}
 	// Re-evaluate current restrictive policy using the ORIGINAL submitting
 	// caller, never the local owner's more privileged Principal as a substitute.

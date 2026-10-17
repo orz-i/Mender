@@ -51,7 +51,7 @@ func newFixtureApproval(t *testing.T, a agentdomain.Agent, task agentdomain.Task
 	}
 	now := time.Now().UTC()
 	return agentdomain.Approval{ID: id, TaskID: task.ID, AgentID: a.ID(), Generation: task.Generation,
-		SessionID: "synthetic-session", ToolCallID: call, Kind: "read", AllowOptionID: "yes-once", RejectOptionID: "no",
+		SessionID: "synthetic-session", ToolCallID: call, Kind: "read", Target: "fixture.txt", CanAllow: true, AllowOptionID: "yes-once", RejectOptionID: "no",
 		Status: agentdomain.ApprovalPending, CreatedAt: now, ExpiresAt: now.Add(time.Minute)}
 }
 func TestApprovalStoreV10OneShotCASAndImmutableHistory(t *testing.T) {
@@ -142,5 +142,31 @@ func TestApprovalStoreStartupInvalidatesInterruptedACPDecision(t *testing.T) {
 	}
 	if got, err := restarted.GetTask(ctx, task.ID); err != nil || got.Status != agentdomain.TaskRunning {
 		t.Fatalf("Task lifecycle was secretly rewritten by approval recovery: %+v %v", got, err)
+	}
+}
+func TestApprovalStoreRejectsUnreviewableNativeActionAtSQLiteCAS(t *testing.T) {
+	ctx := context.Background()
+	s, err := Open(ctx, filepath.Join(t.TempDir(), "approval-reviewability.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = s.Close() }()
+	agent, task := fixtureActiveApprovalTask(t, s)
+	approval := newFixtureApproval(t, agent, task, "native-shell")
+	approval.Kind = "execute"
+	approval.Target = ""
+	approval.CanAllow = false
+	if err := s.CreateApproval(ctx, approval); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ResolveApproval(ctx, approval.ID, agentdomain.ApprovalAllowedOnce); !errors.Is(err, agentdomain.ErrConflict) {
+		t.Fatalf("SQLite allowed an unreviewable operation: %v", err)
+	}
+	pending, err := s.GetApproval(ctx, approval.ID)
+	if err != nil || pending.Status != agentdomain.ApprovalPending {
+		t.Fatalf("denied write mutated request state: %+v %v", pending, err)
+	}
+	if err := s.ResolveApproval(ctx, approval.ID, agentdomain.ApprovalRejected); err != nil {
+		t.Fatalf("rejection of unsafe operation failed: %v", err)
 	}
 }

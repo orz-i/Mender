@@ -11,6 +11,8 @@ type AgentApproval struct {
 	TaskID     string `json:"taskId"`
 	AgentID    string `json:"agentId"`
 	Kind       string `json:"kind"`
+	Target     string `json:"target,omitempty"`
+	CanAllow   bool   `json:"canAllow"`
 	Status     string `json:"status"`
 	CreatedAt  string `json:"createdAt"`
 	ExpiresAt  string `json:"expiresAt"`
@@ -23,7 +25,7 @@ type AgentApprovalList struct {
 func projectAgentApproval(value agentdomain.Approval) AgentApproval {
 	record := AgentApproval{
 		ApprovalID: string(value.ID), TaskID: string(value.TaskID), AgentID: string(value.AgentID),
-		Kind: value.Kind, Status: string(value.Status),
+		Kind: value.Kind, Target: value.Target, CanAllow: value.CanAllow, Status: string(value.Status),
 		CreatedAt: value.CreatedAt.UTC().Format(time.RFC3339Nano),
 		ExpiresAt: value.ExpiresAt.UTC().Format(time.RFC3339Nano),
 	}

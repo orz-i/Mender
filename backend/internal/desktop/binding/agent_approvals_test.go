@@ -18,6 +18,7 @@ func (f desktopApprovalFixture) ExecuteConfigured(ctx context.Context, _ agentdo
 	close(f.started)
 	result, err := cfg.PermissionRequester(ctx, agentapp.PermissionRequest{
 		SessionID: "wails-fixture", ToolCallID: "wails-operation", Kind: "read",
+		Target: "fixture.txt", CanAllow: true,
 		AllowOptionID: "once", RejectOptionID: "reject",
 	})
 	if err != nil {
@@ -73,7 +74,7 @@ func TestWailsOwnerApprovalIsTaskBoundAndNotProfileDelegation(t *testing.T) {
 		case <-time.After(20 * time.Millisecond):
 		}
 	}
-	if approval.Status != "pending" || approval.Kind != "read" || approval.TaskID != string(task.ID) {
+	if approval.Status != "pending" || approval.Kind != "read" || approval.Target != "fixture.txt" || !approval.CanAllow || approval.TaskID != string(task.ID) {
 		t.Fatalf("wrong scoped approval: %+v", approval)
 	}
 	// The Wails projection must not expose raw ACP SessionID, option IDs, file

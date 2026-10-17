@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -37,7 +39,7 @@ func TestACPExplicitOwnerApprovalAndRejection(t *testing.T) {
 			}
 			select {
 			case req := <-observed:
-				if req.SessionID != "fixture-1" || req.ToolCallID != "fixture-tool" || req.Kind != "edit" ||
+				if req.SessionID != "fixture-1" || req.ToolCallID != "fixture-tool" || req.Kind != "read" || req.Target != "fixture.txt" || !req.CanAllow ||
 					req.AllowOptionID != "offered-once" || req.RejectOptionID != "offered-reject" {
 					t.Fatalf("incorrect bounded permission projection: %+v", req)
 				}
@@ -69,7 +71,7 @@ func TestACPRejectsMalformedPermissionEnvelopeAndUnadvertisedChoices(t *testing.
 		`{"sessionId":"fixture-1","options":[{"optionId":"approve","kind":"allow_once"},{"optionId":"reject","kind":"reject_once"}]}`,
 	}
 	for _, raw := range cases {
-		if _, err := parseACPApproval(json.RawMessage(raw), "fixture-1"); err == nil {
+		if _, err := parseACPApproval(json.RawMessage(raw), "fixture-1", t.TempDir()); err == nil {
 			t.Fatalf("unsafe ACP approval accepted: %s", raw)
 		}
 	}
@@ -112,5 +114,41 @@ func TestACPRejectsDuplicateIncomingPermissionRequestsWithoutOwnerAction(t *test
 	}
 	if strings.Contains(wire.stdin.(*bytes.Buffer).String(), "selected") {
 		t.Fatal("cancellation generated an unauthorized affirmative selection")
+	}
+}
+func TestACPReviewTargetRequiresSingleCanonicalWorkspaceFile(t *testing.T) {
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	inside := filepath.Join(root, "visible.txt")
+	if err := os.WriteFile(inside, []byte("safe fixture"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	relative, allowed := reviewACPFileTarget(root, "read", []permissionLocation{{Path: inside}})
+	if !allowed || relative != "visible.txt" {
+		t.Fatalf("expected in-root read: %q %v", relative, allowed)
+	}
+	_, allowShell := reviewACPFileTarget(root, "execute", []permissionLocation{{Path: inside}})
+	if allowShell {
+		t.Fatal("shell approval based on a file hint")
+	}
+	outside := filepath.Join(t.TempDir(), "private.txt")
+	if err := os.WriteFile(outside, []byte("private"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(root, "escape")); err != nil {
+		t.Fatal(err)
+	}
+	for _, target := range []string{outside, filepath.Join(root, "escape"), "../private.txt"} {
+		if value, allow := reviewACPFileTarget(root, "read", []permissionLocation{{Path: target}}); allow {
+			t.Fatalf("external/symlink file was allowed %q %q", target, value)
+		}
+	}
+	if _, allowed := reviewACPFileTarget(root, "edit", []permissionLocation{{Path: filepath.Join(root, "safe-new.txt")}}); allowed {
+		t.Fatal("edit without a reviewed diff/executor was allowed")
+	}
+	if _, allowed := reviewACPFileTarget(root, "read", []permissionLocation{{Path: inside}, {Path: outside}}); allowed {
+		t.Fatal("compound target list was misrepresented as one safe file")
 	}
 }

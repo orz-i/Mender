@@ -1,6 +1,8 @@
 export const zhCNMessages: Readonly<Record<string, string>> = {
   "Read": "读取",
   "Execute": "执行",
+  "Proposed file": "请求的文件",
+  "The operation lacks a reviewable in-workspace single-file target; only Reject is available.": "请求未提供可核对的工作区内单文件目标，只允许拒绝。",
   "ACP tool approvals": "ACP 工具审批",
   "Awaiting owner approval": "等待本地所有者审批",
   "Requested tool category": "请求的工具类别",

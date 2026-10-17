@@ -33,6 +33,8 @@ export type AgentApproval = {
   taskId:string;
   agentId:string;
   kind:"read"|"edit"|"execute"|"other";
+  target?:string;
+  canAllow:boolean;
   status:"pending"|"allowed_once"|"rejected"|"expired";
   createdAt:string;
   expiresAt:string;

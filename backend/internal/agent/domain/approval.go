@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -58,6 +59,8 @@ type Approval struct {
 	SessionID      string         `json:"-"`
 	ToolCallID     string         `json:"-"`
 	Kind           string         `json:"kind"`
+	Target         string         `json:"target,omitempty"`
+	CanAllow       bool           `json:"canAllow"`
 	AllowOptionID  string         `json:"-"`
 	RejectOptionID string         `json:"-"`
 	Status         ApprovalStatus `json:"status"`
@@ -86,6 +89,14 @@ func (a Approval) Validate() error {
 	case "read", "edit", "execute", "other":
 	default:
 		return fmt.Errorf("%w: unsupported approval kind", ErrInvalid)
+	}
+	if len(a.Target) > 240 || strings.ContainsAny(a.Target, "\r\n\x00") ||
+		filepath.IsAbs(a.Target) || strings.HasPrefix(a.Target, "../") ||
+		a.Target == ".." || (a.Target != "" && filepath.Clean(a.Target) != a.Target) {
+		return fmt.Errorf("%w: unsafe review target", ErrInvalid)
+	}
+	if a.CanAllow && (a.Target == "" || a.Kind != "read") {
+		return fmt.Errorf("%w: unreviewable native action cannot be approved", ErrInvalid)
 	}
 	if a.Status != ApprovalPending {
 		return fmt.Errorf("%w: approval must start pending", ErrInvalid)

@@ -13,7 +13,7 @@ const task:AgentTask={
 const approval:AgentApproval={
  approvalId:"aapr_00000000000000000000000000000789",
  taskId:task.taskId,agentId:task.agentId,
- kind:"edit",status:"pending",
+ kind:"read",target:"fixture.txt",canAllow:true,status:"pending",
  createdAt:"2026-10-17T09:00:00Z",expiresAt:"2099-01-01T00:00:00Z",
 };
 beforeEach(()=>{resetLocaleForTesting();setLocale("en");});
@@ -29,7 +29,8 @@ describe("ACP task approval owner view",()=>{
   } as unknown as MenderClient;
   render(<AgentTaskApprovals client={client} task={task}/>);
   expect(await screen.findByText(/Awaiting owner approval/)).toBeTruthy();
-  expect(screen.getByText("Edit")).toBeTruthy();
+  expect(screen.getByText("Read")).toBeTruthy();
+  expect(screen.getByText("fixture.txt")).toBeTruthy();
   expect(screen.getByText(/cooperative OpenCode permission request/)).toBeTruthy();
   expect(screen.getByRole("button",{name:"Allow once"})).toBeTruthy();
   expect(screen.getByRole("button",{name:"Reject"})).toBeTruthy();
@@ -61,4 +62,20 @@ describe("ACP task approval owner view",()=>{
   expect(screen.queryByRole("button",{name:"Allow once"})).toBeNull();
   expect(decide).not.toHaveBeenCalled();
  });
+ it("hides owner Allow once for unreviewable native edits and Shell requests",async()=>{
+  const blocked={...approval,kind:"execute" as const,canAllow:false,target:undefined};
+  const decide=vi.fn().mockResolvedValue({...blocked,status:"rejected"});
+  const client={
+    listAgentApprovals:vi.fn().mockResolvedValue({approvals:[blocked]}),
+    getAgentTask:vi.fn().mockResolvedValue(task),
+    decideAgentApproval:decide,
+  } as unknown as MenderClient;
+  render(<AgentTaskApprovals client={client} task={task}/>);
+  expect(await screen.findByText(/Awaiting owner approval/)).toBeTruthy();
+  expect(screen.getByText(/lacks a reviewable in-workspace/)).toBeTruthy();
+  expect(screen.queryByRole("button",{name:"Allow once"})).toBeNull();
+  fireEvent.click(screen.getByRole("button",{name:"Reject"}));
+  await waitFor(()=>expect(decide).toHaveBeenCalledWith(approval.approvalId,"reject"));
+ });
+
 });
