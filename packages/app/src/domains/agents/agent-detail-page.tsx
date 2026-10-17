@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 
 import type { Agent, AgentTools, AgentTask, AgentAdmissionEvent, AgentModelChoices, MenderClient, Profile } from "@mender/sdk";
@@ -19,6 +19,7 @@ import { EmptyPanelState } from "../../shared/workbench";
 import { Input } from "@mender/ui/components/input";
 import { AgentWorkspaceSettings } from "./agent-workspaces";
 import { agentBackendLabel } from "./agent-backends";
+import { AgentTaskApprovals } from "./agent-approvals";
 
 function taskStatusText(value:AgentTask["status"]):string{
   switch(value){
@@ -51,6 +52,11 @@ export function AgentDetailPage({client,chooseLocalDirectory}:{client:MenderClie
   const [selectedProfile,setSelectedProfile]=useState("");
   const [confirm,setConfirm]=useState<ConfirmAction>(null);
   const [viewTask,setViewTask]=useState<AgentTask|null>(null);
+  const updateViewedTask=useCallback((current:AgentTask)=>{
+    setViewTask(previous=>previous?.taskId===current.taskId&&
+      (previous.status!==current.status||previous.result!==current.result||
+       previous.diagnostic!==current.diagnostic)?current:previous);
+  },[]);
   const [settingsOpen,setSettingsOpen]=useState(false);
   const [modelDraft,setModelDraft]=useState("");
   const [effortDraft,setEffortDraft]=useState("");
@@ -346,6 +352,8 @@ export function AgentDetailPage({client,chooseLocalDirectory}:{client:MenderClie
           {viewTask.reasoningEffort?<div><dt className="text-xs text-muted-foreground">{t("Reasoning effort")}</dt><dd>{viewTask.reasoningEffort}</dd></div>:null}
           {viewTask.workspace?<div><dt className="text-xs text-muted-foreground">{t("Workspace")}</dt><dd>{viewTask.workspace}</dd></div>:null}
         </dl>:null}
+        {viewTask&&(viewTask.status==="running"||viewTask.status==="queued")?
+          <AgentTaskApprovals client={client} task={viewTask} onTaskUpdated={updateViewedTask}/>:null}
         {viewTask?.result?<pre className="max-h-[45vh] overflow-auto whitespace-pre-wrap break-words rounded-lg bg-muted p-4 text-xs">{viewTask.result}</pre>:
           <p className="text-sm text-muted-foreground">{viewTask?.diagnostic||t("No result available.")}</p>}
         <DialogFooter><Button variant="outline" onClick={()=>setViewTask(null)}>{t("Close")}</Button></DialogFooter>

@@ -41,6 +41,7 @@ import type {
   AgentModelChoices,
   WorkspaceToolTarget,
   AgentTask,
+  AgentApproval,
   AgentAdmissionEvent,
   SandboxActivity,
   SandboxActivityEvent,
@@ -88,6 +89,7 @@ import {
   type AgentModelChoices as BindingAgentModelChoices,
   type WorkspaceToolTarget as BindingWorkspaceToolTarget,
   type AgentTask as BindingAgentTask,
+  type AgentApproval as BindingAgentApproval,
   type AgentAdmissionEvent as BindingAgentAdmissionEvent,
   type Sandbox as BindingSandbox,
   type SandboxToolSuite as BindingSandboxToolSuite,
@@ -388,6 +390,9 @@ export function createDesktopMenderClient(): MenderClient {
       return {events:(result.events??[]).map(agentAdmissionEvent)};
     },
     async getAgentTask(taskId){return agentTask(await Service.GetAgentTask(taskId));},
+    async listAgentApprovals(taskId){const data=await Service.ListAgentApprovals(taskId);
+      return {approvals:(data.approvals??[]).map(agentApproval)};},
+    async decideAgentApproval(approvalId,choice){return agentApproval(await Service.DecideAgentApproval(approvalId,choice));},
     async cancelAgentTask(taskId){return Service.CancelAgentTask(taskId);},
     async listAgentGrants(agentId){
       const result=await Service.ListAgentGrants(agentId);
@@ -959,6 +964,17 @@ function agentAdmissionEvent(value:BindingAgentAdmissionEvent):AgentAdmissionEve
   }
   return {...value,action:value.action,principalKind:value.principalKind,origin:value.origin,
     scopeKind:value.scopeKind,policyKind:value.policyKind,status:value.status};
+}
+function agentApproval(value:BindingAgentApproval):AgentApproval {
+  switch(value.status){
+    case "pending":case "allowed_once":case "rejected":case "expired":break;
+    default:throw new MenderClientInvariantError("Unknown Agent approval status: "+value.status);
+  }
+  switch(value.kind){
+    case "read":case "edit":case "execute":case "other":break;
+    default:throw new MenderClientInvariantError("Unknown Agent approval kind: "+value.kind);
+  }
+  return {...value,kind:value.kind,status:value.status};
 }
 function agentTask(value:BindingAgentTask):AgentTask {
   switch(value.status){

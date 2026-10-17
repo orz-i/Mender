@@ -10,6 +10,8 @@ export type {
     Agent,
     AgentAdmissionEvent,
     AgentAdmissionList,
+    AgentApproval,
+    AgentApprovalList,
     AgentCancelReceipt,
     AgentList,
     AgentModelChoice,

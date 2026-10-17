@@ -1,4 +1,13 @@
 export const zhCNMessages: Readonly<Record<string, string>> = {
+  "Read": "读取",
+  "Execute": "执行",
+  "ACP tool approvals": "ACP 工具审批",
+  "Awaiting owner approval": "等待本地所有者审批",
+  "Requested tool category": "请求的工具类别",
+  "This is a cooperative OpenCode permission request, not proof that all native tools are sandboxed or governed by Mender.": "这是对 OpenCode 原生工具的协作式审批，不表示所有原生工具都受到 Mender 强制隔离或治理。",
+  "Expires at": "审批截止时间",
+  "Allow once": "允许一次",
+  "Reject": "拒绝",
   "This directory is already the Agent's default workspace.": "此目录已经是智能体的默认工作区，无需重复添加。",
   "This workspace alias already exists.": "此工作区别名已存在，请更换别名。",
   "This directory is already registered as workspace {{key}}.": "此目录已登记为工作区 {{key}}，无需重复添加。",

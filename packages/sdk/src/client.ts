@@ -26,6 +26,18 @@ export type AgentWorkspace = components["schemas"]["AgentWorkspace"];
 export type AgentModelChoices = components["schemas"]["AgentModelChoices"];
 export type WorkspaceToolTarget = components["schemas"]["WorkspaceToolTarget"];
 export type AgentTask = components["schemas"]["AgentTask"];
+// Local-owner approval contract. Deliberately NOT part of Profile MCP tools or
+// the unauthenticated management HTTP control surface.
+export type AgentApproval = {
+  approvalId:string;
+  taskId:string;
+  agentId:string;
+  kind:"read"|"edit"|"execute"|"other";
+  status:"pending"|"allowed_once"|"rejected"|"expired";
+  createdAt:string;
+  expiresAt:string;
+  resolvedAt?:string;
+};
 export type AgentAdmissionEvent = components["schemas"]["AgentAdmissionEvent"];
 export type AgentGrants = components["schemas"]["AgentGrants"];
 export type AgentCancelReceipt = components["schemas"]["AgentCancelReceipt"];
@@ -195,6 +207,8 @@ export interface MenderClient {
   listAgentTasks(agentId:string): Promise<{tasks:AgentTask[]}>;
   listAgentAdmissions(agentId:string):Promise<{events:AgentAdmissionEvent[]}>;
   getAgentTask(taskId:string): Promise<AgentTask>;
+  listAgentApprovals(taskId:string):Promise<{approvals:AgentApproval[]}>;
+  decideAgentApproval(approvalId:string,choice:"allow_once"|"reject"):Promise<AgentApproval>;
   cancelAgentTask(taskId:string): Promise<AgentCancelReceipt>;
   listAgentGrants(agentId:string): Promise<AgentGrants>;
   grantAgentProfile(agentId:string,profileId:string): Promise<void>;
@@ -577,6 +591,8 @@ export function createMenderClient(
     async listAgentTasks(agentId){return requireData(await client.GET("/agents/{agentId}/tasks",{params:{path:{agentId}}}));},
     async listAgentAdmissions(agentId){return requireData(await client.GET("/agents/{agentId}/admissions",{params:{path:{agentId}}}));},
     async getAgentTask(taskId){return requireData(await client.GET("/agent-tasks/{taskId}",{params:{path:{taskId}}}));},
+    listAgentApprovals(){return Promise.reject(new Error("ACP approval requires the locally authenticated Mender desktop owner"));},
+    decideAgentApproval(){return Promise.reject(new Error("ACP approval requires the locally authenticated Mender desktop owner"));},
     async cancelAgentTask(taskId){return requireData(await client.POST("/agent-tasks/{taskId}/cancel",{params:{path:{taskId}}}));},
     async listAgentGrants(agentId){return requireData(await client.GET("/agents/{agentId}/profile-grants",{params:{path:{agentId}}}));},
     async grantAgentProfile(agentId,profileId){

@@ -92,6 +92,10 @@ export function CreateSSHRemoteSandbox(input: $models.CreateSSHRemoteSandboxInpu
     return $Call.ByID(2154512183, input);
 }
 
+export function DecideAgentApproval(approvalID: string, choice: string): $CancellablePromise<$models.AgentApproval> {
+    return $Call.ByID(2111120830, approvalID, choice);
+}
+
 export function DeleteAgent(id: string): $CancellablePromise<void> {
     return $Call.ByID(1091263108, id);
 }
@@ -291,6 +295,14 @@ export function InstallSkill(sourcePath: string): $CancellablePromise<$models.Sk
 
 export function ListAgentAdmissions(id: string): $CancellablePromise<$models.AgentAdmissionList> {
     return $Call.ByID(184228319, id);
+}
+
+/**
+ * Task approval methods are intentionally exposed ONLY through the owner
+ * desktop binding. A delegated Profile/MCP Tool cannot call these methods.
+ */
+export function ListAgentApprovals(taskID: string): $CancellablePromise<$models.AgentApprovalList> {
+    return $Call.ByID(2405886175, taskID);
 }
 
 export function ListAgentGrants(id: string): $CancellablePromise<$models.AgentProfileGrants> {

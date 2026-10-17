@@ -32,6 +32,21 @@ export interface AgentAdmissionList {
     "events": AgentAdmissionEvent[] | null;
 }
 
+export interface AgentApproval {
+    "approvalId": string;
+    "taskId": string;
+    "agentId": string;
+    "kind": string;
+    "status": string;
+    "createdAt": string;
+    "expiresAt": string;
+    "resolvedAt"?: string;
+}
+
+export interface AgentApprovalList {
+    "approvals": AgentApproval[] | null;
+}
+
 export interface AgentCancelReceipt {
     "taskId": string;
     "cancelRequested": boolean;
