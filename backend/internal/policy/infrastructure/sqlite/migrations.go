@@ -29,7 +29,7 @@ func migrate(ctx context.Context, db *sql.DB) error {
 	).Scan(&recordedVersion); err != nil {
 		return fmt.Errorf("check policy schema version: %w", err)
 	}
-	const latestSupportedVersion = 2
+	const latestSupportedVersion = 3
 	if recordedVersion.Valid && recordedVersion.Int64 > latestSupportedVersion {
 		return fmt.Errorf(
 			"policy schema version %d is newer than supported version %d",
@@ -151,6 +151,9 @@ func migrate(ctx context.Context, db *sql.DB) error {
 		}
 	}
 
+	if err := migrateRevisionV3(ctx, tx); err != nil {
+		return err
+	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit policy migrations: %w", err)
 	}

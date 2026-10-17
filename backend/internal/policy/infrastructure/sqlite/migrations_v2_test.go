@@ -80,8 +80,8 @@ func TestOpenMigratesV1RulesToToolInvokeAction(t *testing.T) {
 	).Scan(&version); err != nil {
 		t.Fatal(err)
 	}
-	if version != 2 {
-		t.Fatalf("schema version = %d, want 2", version)
+	if version != 3 {
+		t.Fatalf("schema version = %d, want current v3", version)
 	}
 
 	policy, err := store.GetPolicySet(context.Background())
