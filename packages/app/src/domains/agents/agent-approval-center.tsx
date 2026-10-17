@@ -68,7 +68,7 @@ export function AgentApprovalCenter({client}:{client:MenderClient}){
     ...(workspaces.workspaces??[]).map((item:AgentWorkspace)=>({key:item.key,root:item.workspaceRoot}))];
    const workspaceKey=choices.some(x=>x.key===initialKey)?initialKey:"";
    const current=configured.policies.find(p=>p.workspaceKey===workspaceKey);
-   const mode=current?.expiresAt&&Date.parse(current.expiresAt)<=Date.now()?"manual":current?.mode??"manual";
+   const mode=current?.mode??"manual";
    setTrustConfirmed(false);
    setEditor({agent,workspaces:choices,policies:configured.policies,workspaceKey,mode});
   }catch(reason){setError(errorMessage(reason));}finally{setBusy(false);}
@@ -77,7 +77,7 @@ export function AgentApprovalCenter({client}:{client:MenderClient}){
   setEditor(old=>{
    if(!old)return old;
    const p=old.policies.find(item=>item.workspaceKey===key);
-   const mode=p?.expiresAt&&Date.parse(p.expiresAt)<=Date.now()?"manual":p?.mode??"manual";
+   const mode=p?.mode??"manual";
    return {...old,workspaceKey:key,mode};
   });
   setTrustConfirmed(false);

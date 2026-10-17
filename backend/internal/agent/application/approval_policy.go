@@ -89,7 +89,17 @@ func (s *Service) ListApprovalPolicies(ctx context.Context, id agentdomain.ID, o
 	if _, err := s.Get(ctx, id, owner); err != nil {
 		return nil, err
 	}
-	return s.store.ListApprovalPolicies(ctx, id)
+	policies, err := s.store.ListApprovalPolicies(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	now := time.Now().UTC()
+	for i := range policies {
+		if !policies[i].ExpiresAt.IsZero() && !now.Before(policies[i].ExpiresAt) {
+			policies[i].Mode = agentdomain.ApprovalManual
+		}
+	}
+	return policies, nil
 }
 
 // Each ACP request is still a separate allow-once decision and a separate
