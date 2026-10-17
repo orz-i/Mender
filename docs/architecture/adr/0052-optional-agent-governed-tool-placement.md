@@ -1,0 +1,33 @@
+# ADR-0052 — Optional per-workspace governed tool execution for Agents
+
+- Status: Accepted for Phase 46 (2026-10-17).
+- Builds on ADR-0051. Mender governs resources and their tool execution; Grok, OpenCode, Codex and future backends continue to own Agent reasoning, planning and their own loops.
+
+## Decision
+
+An owner may optionally configure **one governed Tool placement per Agent workspace** (including the implicit default workspace). A placement is an owner-authored tuple of immutable AgentID, exact workspace alias and canonical root, a pre-existing ready `restricted_host` local Workspace SandboxID, and a sorted unique allowlist of **existing** `workspace.read/search/edit` ToolIDs (maximum three). Only Wails/local owner can manage the placement. Nothing is created automatically; Agent workspace aliases remain independent of Sandbox registration. The UI presents *workspaces, execution environment and permitted tools*, not Provider/ACP internals.
+
+A missing placement is **off**, not an error and never a compatibility bridge. A configured placement that is no longer usable is a **hard failure for that Task** (never silently revert to Host execution or skip the tool gateway). The Agent itself must use `restricted_host` isolation; selecting a restricted Sandbox does NOT automatically change a Host Agent's process isolation. This is a deliberate eligibility guard and existing Host Agents are not rewritten.
+
+The SQLite Agent store receives a forward-only v11 `agent_tool_placements` table; all existing settings, Agent/Provider/Tool IDs, Task history, Profile/Sandbox/Policy grants and v10 approvals survive intact. This is a current owner configuration, not a model-provided Task argument. Changes are owner-only and atomically tied to the exact registered root. The current placement is sampled at Task launch after its durable Task admission; the short-lived gateway pins the exact selected ToolIDs and checks the live placement on **every** invocation, so disabling/repointing the placement revokes earlier capabilities. No new global Tool inventory.
+
+## Task lifecycle and enforcement
+
+- Use a backend-neutral `ToolSupplyResolver` port in Agent application service, wired exactly once by Runtime bootstrap. Only a running, locally-owned Task can receive a temporary `ToolSupply` from its owner's placement. Runtime rechecks original Profile principal, AgentGrant, registered workspace/root, matching ready restricted local Sandbox, exact pinned Workspace suite and selected ToolIDs, and current Profile ToolBindings before issuing an ephemeral HTTP MCP credential. No general model-facing control is allowed to mint it.
+- The supply token and per-Task loopback listener are in memory only and torn down on Task termination, cancellation, expiry and Runtime shutdown. Changing/removing the owner's placement also makes in-flight Tool calls fail before reaching `InvokeTool`; no automatic replay. A policy or grant revoked concurrently with an already executing Tool has the canonical Invocation lifecycle/unknown-outcome semantics; it is not a guaranteed rollback.
+- Each actual Tool operation goes through the existing Profile ToolBinding, Policy, Runtime Budget, Sandbox Router/lease and Audit. `workspace.shell` and Agent delegation/approval/credential management are not eligible at this stage.
+- ACP v1 adapter negotiates HTTP MCP from `initialize` per Agent session. A backend without the advertised transport is unavailable for this placement: no brand-derived assumption and no Host fallback. Do not mutate model-selected Task cwd or inject broad credentials to make real Agent tests pass.
+- Phase 45's `RootWritable:false` macOS Seatbelt restriction is a verified **protected project root** denial, not universal filesystem/network confinement. Only advertise specifically proven guarantees; real Grok/OpenCode/Codex login/config/plugin/sandbox interactions remain separate acceptance gates.
+
+## Owner UX
+
+Agent detail **Tool execution** tab presents a compact configuration preview per registered workspace. `Configure` opens a focused modal. It lists only existing Sandboxes matching the Agent workspace's canonical root and owner and with ready `restricted_host` local backend; then lists existing eligible, prepared Workspace Tools from that Sandbox. Owner selects at least one Tool, saves atomically or explicitly disables. No main-page inline edit forms, no implicit grants, no silent installation, no CRUD of providers.
+
+A Host Agent shows the unavailable eligibility reason rather than a misleading enabled selection. Other Agent-facing delegated Tool IDs remain the same four tools. The web/remote Profile SDK cannot mutate or query owner-only placement controls.
+
+## Acceptance
+
+- v10→v11 migration **on an isolated live-database copy** retains all protected row fingerprints and grants. No production migration until the owner chooses a controlled Wails restart.
+- Owner save, list, disable and alias rebind conflicts are tested; zero active Agent configuration remains unchanged by default.
+- A disposable restricted Agent/Task with explicit Profile Workspace ToolBinding exercises the approved read/edit through Mender; negative Host-mode selection, wrong Sandbox root/owner, nonready Sandbox, wrong ToolID, revoked Profile/AgentGrant/workspace permission, Policy denial, config disable/repointing, unsupported Agent MCP HTTP, cancelled Task and expired credentials fail closed.
+- No Agent Loop added, no additional Provider/ToolID, no automatic Sandbox registration; `pnpm check`, full Go Race Detector, TypeScript/i18n/Wails/SDK parity.
