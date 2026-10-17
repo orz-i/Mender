@@ -81,6 +81,7 @@ func TestAgentV11ToV12ApprovalModeMigrationPreservesHistoryAndDefaultsOff(t *tes
 		"DELETE FROM agent_schema_migrations WHERE version=12",
 		"DROP TRIGGER agent_workspace_approval_policy_unbind",
 		"DROP TABLE agent_approval_policies",
+		"DROP TABLE agent_approval_policy_events",
 		"ALTER TABLE agent_task_approvals DROP COLUMN decision_source",
 	} {
 		if _, err := raw.ExecContext(ctx, statement); err != nil {
@@ -114,6 +115,9 @@ func TestAgentV11ToV12ApprovalModeMigrationPreservesHistoryAndDefaultsOff(t *tes
 	var count int
 	if err := migrated.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM agent_approval_policies").Scan(&count); err != nil || count != 0 {
 		t.Fatalf("v12 granted implicit unattended mode: %d %v", count, err)
+	}
+	if err := migrated.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM agent_approval_policy_events").Scan(&count); err != nil || count != 0 {
+		t.Fatalf("v12 introduced a fictitious permission change event: %d %v", count, err)
 	}
 	if _, err := migrated.ApprovalPolicy(ctx, id, ""); !errors.Is(err, agentdomain.ErrNotFound) {
 		t.Fatalf("default manual not represented by absence: %v", err)

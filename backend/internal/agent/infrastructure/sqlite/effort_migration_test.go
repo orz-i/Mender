@@ -67,6 +67,7 @@ func TestAgentV6ToV7ReasoningEffortMigrationPreservesIdentity(t *testing.T) {
 		"DELETE FROM agent_schema_migrations WHERE version=12",
 		"DROP TRIGGER IF EXISTS agent_workspace_approval_policy_unbind",
 		"DROP TABLE agent_approval_policies",
+		"DROP TABLE agent_approval_policy_events",
 		"DELETE FROM agent_schema_migrations WHERE version=11",
 		"DROP TRIGGER IF EXISTS agent_placement_registered_workspace_delete_guard",
 		"DROP TABLE agent_tool_placements",
