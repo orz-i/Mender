@@ -9,16 +9,16 @@ Phase 33 adds `agent.backend` alongside Provider, Sandbox and Tunnel extension k
 - Local ACP v1 stdio client: `initialize`, `session/new`, optional advertised model selection through `session/set_config_option`, `session/prompt` and bounded text updates. No automatic approvals or arbitrary client filesystem/terminal requests. Requesting unavailable client authority fails closed and ends the task.
 - Durable TaskID and task status/result/cancel with a 10-minute hard deadline, 64 KiB bounded result, two concurrent tasks per Agent/Principal and eight global tasks. A cancellation request is separate from confirmed cancellation; uncertain shutdown/timeout/restart is `unknown`.
 - Exact ProfileID–AgentID grants alongside canonical ToolBinding, Principal, Policy and Audit. Agent admission records include **no prompts, credentials, client raw arguments, reasoning or result contents**.
-- Profile-scoped canonical Tool facade in built-in `io.mender.provider.agent-delegation`: `delegate`, `status`, `result`, `cancel`. Phase 34 provisions/adopts one host-managed facade for each Agent without assigning any Profile.
+- Profile-scoped canonical Tool facade in built-in `io.mender.provider.agent-delegation`: `delegate`, `status`, `result`, `cancel`. Each Agent receives exactly one pinned host-managed facade, without assigning any Profile.
 - Agent management in HTTP/OpenAPI, TypeScript SDK, Go CLI, Wails Desktop, React UI. The UI keeps list previews, a dedicated Create flow, and separate Overview, Workspaces, Tools, Tasks, Access and Activity views.
 
-An Agent resource is not itself a Provider. The canonical Provider remains an **internal, managed Tool facade**, created with a new Agent or explicitly adopted/repaired for an existing Agent. Do not create a second Provider manually or put arbitrary executable paths, environment variables or shell flags into model-controlled Tool arguments. An existing unique manually configured Provider is adopted without changing its ProviderID, ToolIDs, namespace or external tool names; multiple such Providers are reported as a conflict rather than silently merged.
+An Agent resource is not itself a Provider. The canonical Provider remains an **internal, managed Tool facade**, created for a new Agent and pinned by AgentID. Do not create a second Provider manually or put arbitrary executable paths, environment variables or shell flags into model-controlled Tool arguments. An unpinned Provider targeting an Agent, even if unique, is a **conflict**: Mender never claims/rebinds it implicitly. An existing pinned Provider may be explicitly refreshed without changing its ProviderID, ToolIDs, namespace or external tool names.
 
 ## Getting started in the desktop UI
 
 1. Open **Agents** (Runtime group), select **Add agent**, choose Codex, Grok or OpenCode, then configure the local directory and execution isolation. Review before saving. Creation prepares an internal governed four-Tool facade but **does not start an Agent CLI or grant any Profile**.
 2. In the new Agent detail, verify binary detection under Overview. **Detected** means only that the executable/adapter is present, **not** that protocol, login, model, network or tool permissions are verified.
-3. Open the Agent **Tools** tab to inspect the four canonical Tools and their stable identity. If the Agent predates Phase 34 or a prior tool setup failed, use **Prepare Agent tools** to explicitly adopt/repair the binding. A conflict directs you to Advanced internal Provider management; reads alone never repair data.
+3. Open the Agent **Tools** tab to inspect the four canonical Tools and their stable identity. If a prior tool setup failed, use **Prepare Agent tools** to create the missing managed facade or repair an existing pinned suite. A conflicting or unpinned tool source must be resolved explicitly in Tools; no owner action silently adopts it and reads never repair data.
 4. Open **Profiles** and bind only the Agent tools the Profile needs. Separately, open the Agent's **Access** tab and grant that ProfileID. Both ToolBinding and AgentGrant are required. Existing Policy must allow `tool.invoke` and `agent.activate` / `agent.task.submit`; a second `agent.task.cancel` decision governs cancellation.
 5. Connect the upstream MCP client to an already-configured Mender Profile through the supported local or tunneled MCP transport. Submit `delegate` with bounded `prompt` and optional `model` / registered `workspace` alias, receive `taskId`, then call `status` / `result` (or `cancel`) using that opaque ID.
 
@@ -44,7 +44,7 @@ mender agent revoke agent_0123456789abcdef0123456789abcdef prof_0123456789abcdef
 mender agent remove agent_0123456789abcdef0123456789abcdef --confirm
 ```
 
-The `--output json` flag is a root persistent flag; scripts can pass it before `agent` (for example `mender --output json agent list`). Identifiers above are illustrative and must be replaced with real IDs. Remove is blocked while Task history, Profile/Policy ToolBindings or conflicting/legacy Provider references still need resolution. For a managed, unused tool facade, explicit Agent removal retires it after reference checks; deleting the same Provider through generic Provider CRUD is blocked.
+The `--output json` flag is a root persistent flag; scripts can pass it before `agent` (for example `mender --output json agent list`). Identifiers above are illustrative and must be replaced with real IDs. Remove is blocked while Task history, Profile/Policy ToolBindings or conflicting/unpinned Provider references still need resolution. For a managed, unused tool facade, explicit Agent removal retires it after reference checks; deleting the same Provider through generic Provider CRUD is blocked.
 
 ## Execution and security boundaries
 

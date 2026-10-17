@@ -67,7 +67,7 @@ func TestAgentManagedToolsCreateDistinctAndIdempotent(t *testing.T) {
 	}
 }
 
-func TestAgentToolFacadeAdoptsLegacyWithoutRebinding(t *testing.T) {
+func TestAgentToolFacadeUnpinnedProviderFailsClosedWithoutRebinding(t *testing.T) {
 	ctx := context.Background()
 	r, err := NewRuntime(ctx, RuntimeOptions{DatabasePath: filepath.Join(t.TempDir(), "mender.sqlite"), AgentExecutor: fixtureAgentExecutor{}})
 	if err != nil {
@@ -75,13 +75,13 @@ func TestAgentToolFacadeAdoptsLegacyWithoutRebinding(t *testing.T) {
 	}
 	defer func() { _ = r.Close() }()
 	owner := agentOwnerContext(t, r)
-	agent, err := r.Agents.Create(ctx, agentapp.CreateRequest{Name: "Legacy Grok", Backend: agentdomain.BackendGrok, WorkspaceRoot: t.TempDir()}, owner)
+	agent, err := r.Agents.Create(ctx, agentapp.CreateRequest{Name: "Unpinned Grok", Backend: agentdomain.BackendGrok, WorkspaceRoot: t.TempDir()}, owner)
 	if err != nil {
 		t.Fatal(err)
 	}
 	raw, _ := json.Marshal(map[string]string{"agentId": string(agent.ID())})
 	provider, err := registerConfiguredProviderTest(t, r, ctx, catalogapp.RegisterProviderRequest{
-		Namespace: "grok-legacy", DisplayName: "Existing Grok Provider",
+		Namespace: "grok-unpinned", DisplayName: "Existing Unpinned Provider",
 	}, delegation.ID, raw)
 	if err != nil {
 		t.Fatal(err)
@@ -89,28 +89,49 @@ func TestAgentToolFacadeAdoptsLegacyWithoutRebinding(t *testing.T) {
 	if _, err = r.syncConfiguredProviderForOwner(ctx, provider.ID(), owner, true); err != nil {
 		t.Fatal(err)
 	}
+	original, err := r.Catalog.store.ListProviderTools(ctx, provider.ID())
+	if err != nil || len(original) != 4 {
+		t.Fatalf("expected four existing tools: %d %v", len(original), err)
+	}
 	before, err := r.AgentTools(ctx, agent.ID(), owner)
-	if err != nil || before.Status != "legacy" || len(before.Tools) != 4 {
-		t.Fatalf("legacy before=%+v err=%v", before, err)
+	if err != nil || before.Status != "conflict" || before.ProviderID != "" {
+		t.Fatalf("unpinned Provider was treated as adoptable: %+v err=%v", before, err)
 	}
-	claimed, err := r.EnsureAgentTools(ctx, agent.ID(), owner)
-	if err != nil || claimed.Status != "ready" || claimed.ProviderID != provider.ID().String() {
-		t.Fatalf("adoption=%+v err=%v", claimed, err)
+	if _, err = r.EnsureAgentTools(ctx, agent.ID(), owner); !errors.Is(err, agentdomain.ErrConflict) {
+		t.Fatalf("unpinned Provider was silently claimed: %v", err)
 	}
-	if claimed.ProviderName != "Existing Grok Provider" {
-		t.Fatal("display name was rewritten")
+	if err = r.DeleteAgentWithTools(ctx, agent.ID(), owner); !errors.Is(err, agentdomain.ErrConflict) {
+		t.Fatalf("Agent referencing unpinned Provider was deleted: %v", err)
 	}
-	for i, tool := range before.Tools {
-		if claimed.Tools[i].ToolID != tool.ToolID {
-			t.Fatal("existing ToolID was changed")
+	pinned, err := r.agentStore.GetToolFacade(ctx, agent.ID())
+	if err != nil || pinned != "" {
+		t.Fatalf("Provider was unexpectedly pinned: %q %v", pinned, err)
+	}
+	current, err := r.Catalog.store.ListProviderTools(ctx, provider.ID())
+	if err != nil || len(current) != len(original) {
+		t.Fatalf("Tool inventory altered: %d %v", len(current), err)
+	}
+	for i, tool := range original {
+		if current[i].ID() != tool.ID() {
+			t.Fatal("preexisting ToolID rotated")
 		}
 	}
-	if err := r.agentStore.ClaimToolFacade(ctx, agent.ID(), provider.ID().String()); err != nil {
+	configs, err := r.providerConfigs.List(ctx)
+	if err != nil {
 		t.Fatal(err)
+	}
+	matches := 0
+	for _, config := range configs {
+		if config.ProviderID == provider.ID() {
+			matches++
+		}
+	}
+	if matches != 1 {
+		t.Fatalf("original Provider removed or duplicated: %d", matches)
 	}
 }
 
-func TestAgentToolFacadeConflictingLegacyProvidersFailClosed(t *testing.T) {
+func TestAgentToolFacadeMultipleUnpinnedProvidersFailClosed(t *testing.T) {
 	ctx := context.Background()
 	r, err := NewRuntime(ctx, RuntimeOptions{DatabasePath: filepath.Join(t.TempDir(), "mender.sqlite"), AgentExecutor: fixtureAgentExecutor{}})
 	if err != nil {

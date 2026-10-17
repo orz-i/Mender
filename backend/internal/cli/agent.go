@@ -159,7 +159,7 @@ func (a *app) newAgentToolsCommand() *cobra.Command {
 			})
 		},
 	}
-	command.Flags().BoolVar(&prepare, "prepare", false, "owner-authorized create/adopt and sync; does not grant Profile access")
+	command.Flags().BoolVar(&prepare, "prepare", false, "owner-authorized create or refresh of managed tools; unpinned sources conflict, no Profile grants")
 	return command
 }
 func (a *app) newAgentRemoveCommand() *cobra.Command {

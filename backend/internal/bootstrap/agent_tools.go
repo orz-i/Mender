@@ -27,7 +27,7 @@ type AgentTool struct {
 // AgentTools is a side-effect-free description of one Agent's tool suite.
 type AgentTools struct {
 	SuiteID      string      `json:"suiteId"`
-	Status       string      `json:"status"` // missing, ready, incomplete, legacy, conflict
+	Status       string      `json:"status"` // missing, ready, incomplete, conflict
 	ProviderID   string      `json:"providerId,omitempty"`
 	ProviderName string      `json:"providerName,omitempty"`
 	Tools        []AgentTool `json:"tools"`
@@ -61,7 +61,11 @@ func (r *Runtime) AgentTools(ctx context.Context, id agentdomain.ID, caller gov.
 	if err != nil {
 		return result, err
 	}
-	if len(matches) > 1 || (pinned != "" && (len(matches) == 0 || pinned != matches[0].String())) {
+	// A matching Provider without an Agent-owned pin is an unmanaged
+	// reference, not an adoptable resource. Refuse both implicit adoption
+	// and creation of a second facade under an existing Provider.
+	if len(matches) > 1 || (pinned == "" && len(matches) != 0) ||
+		(pinned != "" && (len(matches) == 0 || pinned != matches[0].String())) {
 		result.Status = "conflict"
 		return result, nil
 	}
@@ -86,15 +90,11 @@ func (r *Runtime) AgentTools(ctx context.Context, id agentdomain.ID, caller gov.
 			SourceKey: tool.SourceKey(), Name: tool.Name(), Title: tool.Title()})
 		found[tool.SourceKey()] = true
 	}
-	if pinned == "" {
-		result.Status = "legacy"
-	} else {
-		result.Status = "ready"
-		for _, source := range []string{"agent.delegate", "agent.status", "agent.result", "agent.cancel"} {
-			if !found[source] {
-				result.Status = "incomplete"
-				break
-			}
+	result.Status = "ready"
+	for _, source := range []string{"agent.delegate", "agent.status", "agent.result", "agent.cancel"} {
+		if !found[source] {
+			result.Status = "incomplete"
+			break
 		}
 	}
 	return result, nil
@@ -124,7 +124,7 @@ func agentFacadeNamespace(name string, id agentdomain.ID) string {
 	return "agent-" + prefix + "-" + hex[len(hex)-16:]
 }
 
-// EnsureAgentTools explicitly creates or adopts one resource-owned facade.
+// EnsureAgentTools explicitly creates or refreshes one resource-owned facade.
 // No Profile membership, AgentGrant or Policy rule is mutated.
 func (r *Runtime) EnsureAgentTools(ctx context.Context, id agentdomain.ID, caller gov.Context) (AgentTools, error) {
 	agent, err := r.Agents.Get(ctx, id, caller)
@@ -136,7 +136,7 @@ func (r *Runtime) EnsureAgentTools(ctx context.Context, id agentdomain.ID, calle
 		return AgentTools{}, err
 	}
 	if state.Status == "conflict" {
-		return state, fmt.Errorf("%w: Agent has multiple or mismatched delegation Providers", agentdomain.ErrConflict)
+		return state, fmt.Errorf("%w: Agent delegation Providers are unpinned, duplicated or mismatched", agentdomain.ErrConflict)
 	}
 	if state.Status == "ready" {
 		// Explicit owner action also refreshes schema of an already-ready suite.
@@ -211,7 +211,7 @@ func (r *Runtime) DeleteAgentWithTools(ctx context.Context, id agentdomain.ID, c
 	if err != nil {
 		return err
 	}
-	if state.Status == "conflict" || state.Status == "legacy" {
+	if state.Status == "conflict" {
 		return fmt.Errorf("%w: Agent tool associations need explicit resolution", agentdomain.ErrConflict)
 	}
 	tasks, err := r.Agents.Tasks(ctx, id, caller)

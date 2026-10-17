@@ -208,8 +208,7 @@ export function AgentDetailPage({client,chooseLocalDirectory}:{client:MenderClie
         <div className="min-w-0 space-y-1">
           <p className="font-medium">{t("Agent Delegation")}</p>
           <p className="text-xs text-muted-foreground">{tools?.status==="ready"?t("Tools prepared; Profile bindings and Agent grants are still required."):
-            tools?.status==="legacy"?t("Existing Agent tools can be adopted without changing their identities."):
-            tools?.status==="conflict"?t("Multiple or mismatched Agent Providers require explicit resolution in advanced Provider management."):
+            tools?.status==="conflict"?t("Agent tool sources conflict; review them in Tools before proceeding."):
             t("Agent tools are not ready; review and repair the binding.")}</p>
         </div>
         {tools?.status==="conflict"?
