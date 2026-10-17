@@ -218,89 +218,74 @@ func TestStoreMissingAndStatusValidation(t *testing.T) {
 	}
 }
 
-func TestOpenHardCutsLegacyInstallationSchema(t *testing.T) {
+func TestOpenFreshGenericInstallationSchemaIsCurrentAndIdempotent(t *testing.T) {
 	t.Parallel()
-
 	ctx := context.Background()
-	databasePath := filepath.Join(t.TempDir(), "mender.db")
-	db, err := sql.Open("sqlite", databasePath)
+	path := filepath.Join(t.TempDir(), "mender.db")
+	store, err := Open(ctx, path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	statements := []string{
-		`CREATE TABLE provider_plugin_installation_schema_migrations (
-			version INTEGER PRIMARY KEY,
-			applied_at TEXT NOT NULL
-		)`,
-		`CREATE TABLE provider_plugin_installations (
-			installation_id TEXT PRIMARY KEY,
-			plugin_id TEXT NOT NULL,
-			package_version TEXT NOT NULL,
-			source_kind TEXT NOT NULL,
-			source_reference TEXT NOT NULL,
-			digest TEXT NOT NULL UNIQUE,
-			manifest_json TEXT NOT NULL,
-			status TEXT NOT NULL,
-			installed_at TEXT NOT NULL
-		)`,
+	var version int
+	if err := store.db.QueryRowContext(ctx, "SELECT MAX(version) FROM plugin_installation_schema_migrations").Scan(&version); err != nil || version != latestSchemaVersion {
+		t.Fatalf("unexpected current installation schema v%d: %v", version, err)
 	}
-	for _, statement := range statements {
-		if _, err := db.ExecContext(ctx, statement); err != nil {
-			_ = db.Close()
-			t.Fatal(err)
-		}
-	}
-	if _, err := db.ExecContext(
-		ctx,
-		"INSERT INTO provider_plugin_installation_schema_migrations(version, applied_at) VALUES (1, ?)",
-		time.Now().UTC().Format(time.RFC3339Nano),
-	); err != nil {
-		_ = db.Close()
-		t.Fatal(err)
-	}
-	if err := db.Close(); err != nil {
-		t.Fatal(err)
-	}
-
-	store, err := Open(ctx, databasePath)
-	if err != nil {
-		t.Fatalf("Open(v1) error = %v", err)
-	}
-	defer func() { _ = store.Close() }()
 	rows, err := store.db.QueryContext(ctx, "PRAGMA table_info(plugin_installations)")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = rows.Close() }()
-	found := false
+	descriptorColumn := false
 	for rows.Next() {
-		var cid int
-		var name, columnType string
-		var notNull, primaryKey int
+		var cid, notnull, pk int
+		var name, typ string
 		var defaultValue any
-		if err := rows.Scan(&cid, &name, &columnType, &notNull, &defaultValue, &primaryKey); err != nil {
+		if err := rows.Scan(&cid, &name, &typ, &notnull, &defaultValue, &pk); err != nil {
+			_ = rows.Close()
 			t.Fatal(err)
 		}
 		if name == "verified_descriptor_json" {
-			found = true
+			descriptorColumn = true
 		}
 	}
 	if err := rows.Err(); err != nil {
+		_ = rows.Close()
 		t.Fatal(err)
 	}
-	if !found {
-		t.Fatal("generic plugin inventory is missing verified descriptor column")
-	}
-	var legacyTables int
-	if err := store.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='provider_plugin_installations'").Scan(&legacyTables); err != nil {
+	if err := rows.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if legacyTables != 0 {
-		t.Fatal("old provider installation inventory still exists")
+	if !descriptorColumn {
+		t.Fatal("fresh generic inventory lacks verified descriptor column")
 	}
-	snapshots, err := filepath.Glob(filepath.Join(filepath.Dir(databasePath), ".mender-phase27-backup-*.db"))
-	if err != nil || len(snapshots) == 0 {
-		t.Fatalf("preupgrade backup missing: %v %v", snapshots, err)
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := Open(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = reopened.Close() }()
+	var rowsCount, receiptCount, oldTables int
+	if err := reopened.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM plugin_installations").Scan(&rowsCount); err != nil {
+		t.Fatal(err)
+	}
+	if err := reopened.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM plugin_installation_schema_migrations").Scan(&receiptCount); err != nil {
+		t.Fatal(err)
+	}
+	if err := reopened.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM sqlite_master WHERE type='table'
+ AND name IN ('provider_plugin_installations','provider_plugin_installation_schema_migrations')`).Scan(&oldTables); err != nil {
+		t.Fatal(err)
+	}
+	if rowsCount != 0 || receiptCount != 1 || oldTables != 0 {
+		t.Fatalf("fresh/reopened installation inventory corrupted modern=%d version_receipts=%d retired=%d", rowsCount, receiptCount, oldTables)
+	}
+	backups, err := filepath.Glob(filepath.Join(filepath.Dir(path), ".mender-phase27-backup-*.db"))
+	if err != nil || len(backups) != 0 {
+		t.Fatalf("fresh Open created obsolete legacy backup: %v", backups)
+	}
+	var result string
+	if err := reopened.db.QueryRowContext(ctx, "PRAGMA quick_check").Scan(&result); err != nil || result != "ok" {
+		t.Fatalf("fresh inventory SQLite integrity: %q %v", result, err)
 	}
 }
 

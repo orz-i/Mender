@@ -50,10 +50,6 @@ func Open(ctx context.Context, path string) (*Store, error) {
 		_ = db.Close()
 		return nil, fmt.Errorf("open plugin installation sqlite: ping: %w", err)
 	}
-	if err := backupLegacy(ctx, db, absolute); err != nil {
-		_ = db.Close()
-		return nil, fmt.Errorf("open plugin installation sqlite: pre-upgrade backup: %w", err)
-	}
 	if err := migrate(ctx, db); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("open plugin installation sqlite: migrate: %w", err)
