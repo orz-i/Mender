@@ -40,6 +40,10 @@ export function CancelAgentTask(id: string): $CancellablePromise<$models.AgentCa
     return $Call.ByID(2485846690, id);
 }
 
+export function ConfigureAgentToolPlacement(agentID: string, workspaceKey: string, sandboxID: string, toolIDs: string[] | null): $CancellablePromise<$models.AgentToolPlacement> {
+    return $Call.ByID(3023164410, agentID, workspaceKey, sandboxID, toolIDs);
+}
+
 export function CreateAgent(input: $models.CreateAgentInput): $CancellablePromise<$models.Agent> {
     return $Call.ByID(3419625921, input);
 }
@@ -134,6 +138,10 @@ export function DeploySkill(installationID: string, targetValue: string, project
 
 export function DestroySandbox(sandboxID: string): $CancellablePromise<$models.Sandbox> {
     return $Call.ByID(220259473, sandboxID);
+}
+
+export function DisableAgentToolPlacement(agentID: string, workspaceKey: string): $CancellablePromise<void> {
+    return $Call.ByID(1673839002, agentID, workspaceKey);
 }
 
 export function DisablePluginInstallation(id: string): $CancellablePromise<$models.ProviderPluginInstallation> {
@@ -311,6 +319,10 @@ export function ListAgentGrants(id: string): $CancellablePromise<$models.AgentPr
 
 export function ListAgentTasks(id: string): $CancellablePromise<$models.AgentTaskList> {
     return $Call.ByID(1671235357, id);
+}
+
+export function ListAgentToolPlacements(agentID: string): $CancellablePromise<$models.AgentToolPlacementList> {
+    return $Call.ByID(465215887, agentID);
 }
 
 export function ListAgentWorkspaces(id: string): $CancellablePromise<$models.AgentWorkspaceList> {

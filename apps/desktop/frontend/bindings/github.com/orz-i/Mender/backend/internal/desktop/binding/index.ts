@@ -21,6 +21,8 @@ export type {
     AgentTask,
     AgentTaskList,
     AgentTool,
+    AgentToolPlacement,
+    AgentToolPlacementList,
     AgentTools,
     AgentWorkspace,
     AgentWorkspaceList,

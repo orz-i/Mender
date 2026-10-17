@@ -42,6 +42,7 @@ import type {
   WorkspaceToolTarget,
   AgentTask,
   AgentApproval,
+  AgentToolPlacement,
   AgentAdmissionEvent,
   SandboxActivity,
   SandboxActivityEvent,
@@ -90,6 +91,7 @@ import {
   type WorkspaceToolTarget as BindingWorkspaceToolTarget,
   type AgentTask as BindingAgentTask,
   type AgentApproval as BindingAgentApproval,
+  type AgentToolPlacement as BindingAgentToolPlacement,
   type AgentAdmissionEvent as BindingAgentAdmissionEvent,
   type Sandbox as BindingSandbox,
   type SandboxToolSuite as BindingSandboxToolSuite,
@@ -130,6 +132,7 @@ export async function deployDesktopSkill(
 export function createDesktopMenderClient(): MenderClient {
   return {
     supportsLocalAgentApprovals:true,
+    supportsLocalAgentToolPlacements:true,
     async getSystemStatus() {
       return systemStatus(await Service.GetSystemStatus());
     },
@@ -377,6 +380,12 @@ export function createDesktopMenderClient(): MenderClient {
     async updateAgentSettings(agentId,defaultModel,defaultReasoningEffort){return agent(await Service.UpdateAgentSettings(agentId,defaultModel,defaultReasoningEffort));},
     async inspectAgentModels(agentId){return agentModelChoices(await Service.InspectAgentModels(agentId));},
     async listAgentWorkspaces(agentId){const r=await Service.ListAgentWorkspaces(agentId);return {workspaces:(r.workspaces??[]).map(agentWorkspace)};},
+    async listAgentToolPlacements(agentId){const r=await Service.ListAgentToolPlacements(agentId);
+      return {placements:(r.placements??[]).map(agentToolPlacement)};},
+    async configureAgentToolPlacement(agentId,key,sandboxId,toolIds){
+      return agentToolPlacement(await Service.ConfigureAgentToolPlacement(agentId,key,sandboxId,toolIds));
+    },
+    async disableAgentToolPlacement(agentId,key){await Service.DisableAgentToolPlacement(agentId,key);},
     async bindAgentWorkspace(agentId,key,workspaceRoot){await Service.BindAgentWorkspace(agentId,key,workspaceRoot);},
     async unbindAgentWorkspace(agentId,key){await Service.UnbindAgentWorkspace(agentId,key);},
     async grantAgentWorkspace(agentId,key,profileId){await Service.GrantAgentWorkspace(agentId,key,profileId);},
@@ -923,6 +932,9 @@ function agentModelChoices(value:BindingAgentModelChoices):AgentModelChoices {
     ...(value.reasoningEffort?{reasoningEffort:{current:value.reasoningEffort.current,
       choices:(value.reasoningEffort.choices??[]).map(m=>({id:m.id,name:m.name}))}}:{}),
   };
+}
+function agentToolPlacement(value:BindingAgentToolPlacement):AgentToolPlacement {
+ return {...value,toolIds:value.toolIds??[]};
 }
 function agentWorkspace(value:BindingAgentWorkspace):AgentWorkspace {
   return {key:value.key,workspaceRoot:value.workspaceRoot,profileIds:value.profileIds??[]};

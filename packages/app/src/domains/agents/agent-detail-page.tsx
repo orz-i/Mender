@@ -20,6 +20,7 @@ import { Input } from "@mender/ui/components/input";
 import { AgentWorkspaceSettings } from "./agent-workspaces";
 import { agentBackendLabel } from "./agent-backends";
 import { AgentTaskApprovals } from "./agent-approvals";
+import { AgentToolExecutionSettings } from "./agent-tool-execution";
 
 function taskStatusText(value:AgentTask["status"]):string{
   switch(value){
@@ -31,7 +32,7 @@ function taskStatusText(value:AgentTask["status"]):string{
     case "unknown":return t("Unknown");
   }
 }
-type Topic = "overview" | "workspaces" | "tools" | "tasks" | "access" | "activity";
+type Topic = "overview" | "workspaces" | "execution" | "tools" | "tasks" | "access" | "activity";
 type ConfirmAction = {kind:"cancel"|"revoke"|"delete";id:string} | null;
 
 export function AgentDetailPage({client,chooseLocalDirectory}:{client:MenderClient;chooseLocalDirectory?:()=>Promise<string|null>}){
@@ -167,6 +168,7 @@ export function AgentDetailPage({client,chooseLocalDirectory}:{client:MenderClie
       tabs={agent?<PageTabs label="Agent details">
         <PageTab label="Overview" active={topic==="overview"} onClick={()=>setTopic("overview")}/>
         <PageTab label="Workspaces" active={topic==="workspaces"} onClick={()=>setTopic("workspaces")}/>
+        {client.supportsLocalAgentToolPlacements===true?<PageTab label="Governed tools" active={topic==="execution"} onClick={()=>setTopic("execution")}/>:null}
         <PageTab label="Tools" count={tools?.tools.length??0} active={topic==="tools"} onClick={()=>setTopic("tools")}/>
         <PageTab label="Tasks" count={tasks.length} active={topic==="tasks"} onClick={()=>setTopic("tasks")}/>
         <PageTab label="Access" count={grants.length} active={topic==="access"} onClick={()=>setTopic("access")}/>
@@ -209,6 +211,7 @@ export function AgentDetailPage({client,chooseLocalDirectory}:{client:MenderClie
     </ResultPanel>:
     topic==="workspaces"?<AgentWorkspaceSettings client={client} agent={agent}
       {...(chooseLocalDirectory===undefined?{}:{chooseLocalDirectory})}/>:
+    topic==="execution"?<AgentToolExecutionSettings client={client} agent={agent}/>:
     topic==="tools"?<ResultPanel title="Agent tools">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4">
         <div className="min-w-0 space-y-1">

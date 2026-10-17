@@ -103,6 +103,19 @@ export interface AgentTool {
     "title": string;
 }
 
+export interface AgentToolPlacement {
+    "agentId": string;
+    "workspaceKey": string;
+    "workspaceRoot": string;
+    "sandboxId": string;
+    "toolIds": string[] | null;
+    "updatedAt": string;
+}
+
+export interface AgentToolPlacementList {
+    "placements": AgentToolPlacement[] | null;
+}
+
 export interface AgentTools {
     "suiteId": string;
     "status": string;

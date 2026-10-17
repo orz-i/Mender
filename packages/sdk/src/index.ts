@@ -58,6 +58,7 @@ export type {
   WorkspaceToolTarget,
   AgentTask,
   AgentApproval,
+  AgentToolPlacement,
   AgentAdmissionEvent,
   AgentGrants,
   AgentCancelReceipt,

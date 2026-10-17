@@ -23,6 +23,15 @@ export type Tunnel = components["schemas"]["Tunnel"];
 export type Agent = components["schemas"]["Agent"];
 export type AgentTools = components["schemas"]["AgentTools"];
 export type AgentWorkspace = components["schemas"]["AgentWorkspace"];
+// Owner-only Wails configuration, never an upstream Profile/MCP capability.
+export type AgentToolPlacement = {
+ agentId:string;
+ workspaceKey:string;
+ workspaceRoot:string;
+ sandboxId:string;
+ toolIds:string[];
+ updatedAt:string;
+};
 export type AgentModelChoices = components["schemas"]["AgentModelChoices"];
 export type WorkspaceToolTarget = components["schemas"]["WorkspaceToolTarget"];
 export type AgentTask = components["schemas"]["AgentTask"];
@@ -129,6 +138,7 @@ export interface SearchToolsInput {
 export interface MenderClient {
   /** Only the local Wails owner can decide ACP permission requests. */
   readonly supportsLocalAgentApprovals?: boolean;
+  readonly supportsLocalAgentToolPlacements?: boolean;
   getSystemStatus(): Promise<SystemStatus>;
   listPluginCatalogue(): Promise<{plugins: PluginCatalogueEntry[]}>;
   enablePluginInstallation(installationId:string):Promise<{installation:ProviderPluginInstallation}>;
@@ -203,6 +213,9 @@ export interface MenderClient {
   updateAgentSettings(agentId:string,defaultModel:string,defaultReasoningEffort:string):Promise<Agent>;
   inspectAgentModels(agentId:string):Promise<AgentModelChoices>;
   listAgentWorkspaces(agentId:string):Promise<{workspaces:AgentWorkspace[]}>;
+  listAgentToolPlacements(agentId:string):Promise<{placements:AgentToolPlacement[]}>;
+  configureAgentToolPlacement(agentId:string,workspaceKey:string,sandboxId:string,toolIds:string[]):Promise<AgentToolPlacement>;
+  disableAgentToolPlacement(agentId:string,workspaceKey:string):Promise<void>;
   bindAgentWorkspace(agentId:string,key:string,workspaceRoot:string):Promise<void>;
   unbindAgentWorkspace(agentId:string,key:string):Promise<void>;
   grantAgentWorkspace(agentId:string,key:string,profileId:string):Promise<void>;
@@ -584,6 +597,9 @@ export function createMenderClient(
     async updateAgentSettings(agentId,defaultModel,defaultReasoningEffort){return requireData(await client.PATCH("/agents/{agentId}/settings",{params:{path:{agentId}},body:{defaultModel,defaultReasoningEffort}}));},
     async inspectAgentModels(agentId){return requireData(await client.POST("/agents/{agentId}/models/inspect",{params:{path:{agentId}}}));},
     async listAgentWorkspaces(agentId){return requireData(await client.GET("/agents/{agentId}/workspaces",{params:{path:{agentId}}}));},
+    listAgentToolPlacements(){return Promise.reject(new Error("Agent governed tools require the local Mender desktop owner"));},
+    configureAgentToolPlacement(){return Promise.reject(new Error("Agent governed tools require the local Mender desktop owner"));},
+    disableAgentToolPlacement(){return Promise.reject(new Error("Agent governed tools require the local Mender desktop owner"));},
     async bindAgentWorkspace(agentId,workspaceKey,workspaceRoot){const r=await client.PUT("/agents/{agentId}/workspaces/{workspaceKey}",{params:{path:{agentId,workspaceKey}},body:{workspaceRoot}});if(!r.response.ok)throwApiError(r.error,r.response);},
     async unbindAgentWorkspace(agentId,workspaceKey){const r=await client.DELETE("/agents/{agentId}/workspaces/{workspaceKey}",{params:{path:{agentId,workspaceKey}}});if(!r.response.ok)throwApiError(r.error,r.response);},
     async grantAgentWorkspace(agentId,workspaceKey,profileId){const r=await client.PUT("/agents/{agentId}/workspaces/{workspaceKey}/profile-grants/{profileId}",{params:{path:{agentId,workspaceKey,profileId}}});if(!r.response.ok)throwApiError(r.error,r.response);},
