@@ -204,8 +204,11 @@ func (r Runner) withSession(ctx context.Context, agent agentdomain.Agent, config
 	// when the prompt ends so the owned process group and scanner are drained.
 	runCtx, stop := context.WithCancel(ctx)
 	defer stop()
+	// Every task and no-prompt inspector provides an explicit admitted root.
+	// Never silently substitute the Agent default when a caller loses the
+	// immutable workspace snapshot; that would execute in the wrong project.
 	if config.WorkspaceRoot == "" {
-		config.WorkspaceRoot = agent.Spec().WorkspaceRoot
+		return "", fmt.Errorf("%w: ACP execution requires an admitted workspace root", agentdomain.ErrInvalid)
 	}
 	var cmd *exec.Cmd
 	var err error

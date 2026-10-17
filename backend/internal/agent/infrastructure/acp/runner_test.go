@@ -137,12 +137,31 @@ func fixtureRunner(mode string) Runner {
 		return cmd, nil
 	}}
 }
+
+// Synthetic ACP fixtures use the same explicitly admitted root contract
+// as production Agent task snapshots; no runtime compatibility fallback.
+func executeFixture(ctx context.Context, mode string, a agentdomain.Agent, prompt string) (string, error) {
+	return fixtureRunner(mode).ExecuteConfigured(ctx, a, prompt,
+		agentapplication.RunConfig{WorkspaceRoot: a.Spec().WorkspaceRoot})
+}
+func TestACPRejectsMissingAdmittedRootBeforeStartingProcess(t *testing.T) {
+	launched := false
+	r := Runner{NewCommand: func(context.Context, agentdomain.Agent) (*exec.Cmd, error) {
+		launched = true
+		return nil, errors.New("should not be invoked")
+	}}
+	_, err := r.ExecuteConfigured(context.Background(), fixtureAgent(t), "safe task",
+		agentapplication.RunConfig{})
+	if !errors.Is(err, agentdomain.ErrInvalid) || launched {
+		t.Fatalf("unreviewed default-root fallback accepted: launched=%t err=%v", launched, err)
+	}
+}
 func TestACPStableHandshakeAndNoApproval(t *testing.T) {
 	for _, mode := range []string{"completed"} {
 		t.Run(mode, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 			defer cancel()
-			got, err := fixtureRunner(mode).ExecuteConfigured(ctx, fixtureAgent(t), "task", agentapplication.RunConfig{})
+			got, err := executeFixture(ctx, mode, fixtureAgent(t), "task")
 			if err != nil || got != "fixture completed" {
 				t.Fatalf("result %q error %v", got, err)
 			}
@@ -154,7 +173,7 @@ func TestACPFailClosedOnClientPermissionAndFilesystemRequests(t *testing.T) {
 		t.Run(mode, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 			defer cancel()
-			result, err := fixtureRunner(mode).ExecuteConfigured(ctx, fixtureAgent(t), "task", agentapplication.RunConfig{})
+			result, err := executeFixture(ctx, mode, fixtureAgent(t), "task")
 			if !errors.Is(err, errClientPermissionDenied) || result != "" {
 				t.Fatalf("ACP %s did not fail closed, result %q, error %v", mode, result, err)
 			}
@@ -167,7 +186,7 @@ func TestACPRejectsInvalidProtocolAndUnboundedOrForeignOutput(t *testing.T) {
 		t.Run(mode, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 			defer cancel()
-			result, err := fixtureRunner(mode).ExecuteConfigured(ctx, fixtureAgent(t), "task", agentapplication.RunConfig{})
+			result, err := executeFixture(ctx, mode, fixtureAgent(t), "task")
 			if err == nil || result != "" {
 				t.Fatalf("untrusted ACP %s accepted with result %q, error %v", mode, result, err)
 			}
@@ -177,7 +196,7 @@ func TestACPRejectsInvalidProtocolAndUnboundedOrForeignOutput(t *testing.T) {
 func TestACPCancellationKillsProcess(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
 	defer cancel()
-	_, err := fixtureRunner("hang").ExecuteConfigured(ctx, fixtureAgent(t), "task", agentapplication.RunConfig{})
+	_, err := executeFixture(ctx, "hang", fixtureAgent(t), "task")
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("want cancellation, got %v", err)
 	}
@@ -186,7 +205,7 @@ func TestACPRejectsBadPrompts(t *testing.T) {
 	ctx := context.Background()
 	a := fixtureAgent(t)
 	for _, input := range []string{"", strings.Repeat("X", agentdomain.MaxPromptBytes+1)} {
-		if _, err := fixtureRunner("completed").ExecuteConfigured(ctx, a, input, agentapplication.RunConfig{}); !errors.Is(err, agentdomain.ErrInvalid) {
+		if _, err := executeFixture(ctx, "completed", a, input); !errors.Is(err, agentdomain.ErrInvalid) {
 			t.Fatal("accepted unsafe prompt", err)
 		}
 	}
