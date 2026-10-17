@@ -7,6 +7,8 @@
 
 ## 1. Verified evidence
 
+*Historical pre-implementation baseline.* The findings immediately below describe the Mender runtime before Phase 44 code changes. For the implemented cooperative single-file read checkpoint and outstanding authoritative execution gate, see [Phase 44 acceptance](../../planning/phase-44-acp-approval-governed-agent-tools.md).
+
 Repository:
 
 1. The production Agent adapter (backend/internal/agent/infrastructure/acp/runner.go) implements ACP v1 over stdio and launches one new process/session per Task. The initialize clientCapabilities are empty, session/new.mcpServers is an empty list. The current message pump discards tool-call updates and retains only bounded agent text.

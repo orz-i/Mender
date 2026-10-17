@@ -122,3 +122,13 @@ The owner can adjust its default model and thought level under **Agent → Overv
 This has been accepted through no-prompt local ACP protocol tests and deterministic delegated-task fixtures. Live OpenCode inference/entitlement or paid model success **has not been tested**.
 
 [ADR-0048](../architecture/adr/0048-opencode-native-acp-agent-backend.md) · [Phase 41](../planning/phase-41-opencode-native-agent-backend.md)
+
+## Owner-only ACP permission approvals (Phase 44 checkpoint)
+
+The optional native ACP approval coordinator does **not** add a fifth Agent Delegation Tool. An upstream Profile still receives only `delegate`, `status`, `result`, `cancel`; it cannot approve its own Agent. The owner reviews incoming requests at **Agents → Agent → Tasks → Task detail** in Wails only, with `Allow once` / `Reject` and a sanitized, relative file target. Shell, edits, unknown or mismatched file targets are reject-only. No permanent approval option is supported.
+
+OpenCode v2 receives a fixed, host-owned `OPENCODE_CONFIG_CONTENT` review overlay asking before native read/edit/shell, while rejecting external directory, subagent and general execute permissions. An individual approved read is a **cooperative Agent-native permission**, not a Mender Workspace Tool invocation. `host` isolation still permits the OpenCode process its operating-system user's native filesystem access and project config/plugin effects may bypass ACP ask notifications. **Do not use this mode to promise that every read or write is governed.** Client-side ACP `fs/*` and `terminal/*` remain unadvertised and rejected.
+
+The v10 approval ledger persists Task/generation/session/toolCall ID and short target metadata. Only active Task requests can be approved. Approval waits at most two minutes and respects the ten-minute Task deadline; cancellation/restart revokes pending records with no automatic replay. Profile AgentGrant/workspace grant and Policy are rechecked before allow-once. A local owner can still reject a pending request after the Profile grant was revoked. No source file is modified merely by saving or rejecting an approval.
+
+For stronger read/write/shell enforcement, separately verify an isolation placement that prevents native OpenCode bypass, or route the actual operation through Mender-governed Workspace Tools. Neither strong mode nor automatic real-project writes is enabled by Phase 44's current cooperative checkpoint.

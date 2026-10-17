@@ -1,6 +1,6 @@
 # Phase 44 research — ACP approvals and governed OpenCode tools
 
-- Status: **implementation authorized, Phase B in progress** (owner approved 2026-10-17, Mac local).
+- Status: **B and C implemented; D cooperative read/denial acceptance passed, authoritative write/shell gate remains blocked** (2026-10-17, Mac local).
 - Authority: [ADR-0050 — ACP approval mediation](../architecture/adr/0050-acp-agent-tool-approval-governance.md), Accepted.
 - Product identity: Mender serves and governs tools/resources. OpenCode owns the model, plans, native tools and Agent Loop.
 
@@ -52,3 +52,19 @@ ACP: https://agentclientprotocol.com/protocol/v1/tool-calls ; https://agentclien
 OpenCode v2: https://dev.opencode.ai/v2/docs/cli/acp/ ; https://dev.opencode.ai/v2/docs/permissions/ ; https://dev.opencode.ai/v2/docs/config/ ; https://dev.opencode.ai/v2/docs/policies/
 
 **Implementation gates:** Stage B must keep all client-file/terminal requests rejected; only an actual ACP permission event can create a pending review. Never enable the OpenCode native host read/write claim by merely adding UI. No production data modifications until a tested forward migration and a controlled operator restart.
+
+## Implementation checkpoint (2026-10-17)
+
+**Implemented, tested, but not deployed to the running user's Wails backend:** cooperative, local-owner one-shot approval of a *single reviewable in-workspace native OpenCode read*. This is **not** a guarantee of all read/edit/shell operations being intercepted.
+
+- `fcb51db` approved the documents, `1bc60f6` implemented forward-only Agent schema v10 approval ledger and bounded ACP callback handling, `1631944` added Wails-owner-only approval controls, `629ad81` injected the fixed OpenCode v2 permission overlay, `7f7a922` limited allow-once to reviewable in-workspace reads, `f67d42b` added strict ACP `rawInput.path` / `locations` agreement, task request budgets, current grant rechecks and owner rejection after Profile revocation.
+- The SQLite v10 ledger is keyed to TaskID, AgentID, generation, ACP SessionID and toolCallId; no prompt, diff, command, rawInput, file contents or full reasoning is written to it. Approvals only transition pending→allowed_once/rejected/expired; resolved records are immutable; all old pending rows expire on restart. Limit: two concurrently pending requests, 64 sequential requests per Task, two-minute approval wait, bounded by the existing ten-minute Task timeout.
+- Wails Task detail presents the sanitized action class, only a relative local target, expiration and **Allow once / Reject**. It never enables `allow_always`. The Web/HTTP SDK does not offer operational approval authority, and no Profile-visible MCP approval Tool was added.
+- The backend allows an affirmative decision only for a regular file within the already-admitted, canonical workspace, with matching ACP rawInput.path and locations path. It rechecks the lexical path before deciding. Unknown, external, changed-symlink, missing, compound, edit and shell actions remain reject-only. These consistency checks are conservative previews of **untrusted Agent metadata**, not forced interceptors of native filesystem operations.
+- Explicit AgentGrant, Profile workspace grant, Task generation, active state and current Policy are rechecked before allowing. The owner can still *reject* after revocation (which never restores permissions). Cancellation, timeout, Task termination, wrong SessionID/ToolCallID, malformed options, duplicates and session restart fail closed.
+- The real installed **OpenCode v2.0.30** was exercised on a disposable file through ACP v1 and the fixed overlay; it emitted a `read` permission request offering `allow_once / allow_always / reject_once`. The reported `rawInput.path` and `locations` matched the same disposable file, the test client returned **cancelled**, the Task stopped and the file remained unchanged. No real file operation was approved, no user workspace was accessed.
+- Offline production snapshot: the actual live v9 Agent SQLite was backed up **read-only** and upgraded using the newly built CLI to v10. Fingerprints across **10 resource/relationship tables** matched the original database; zero FK/integrity errors; new approval table initially empty. The user's live DB is still v9. No user resources or secrets were modified.
+
+**Unfinished D gate — explicitly NOT enabled:** reviewable edit diffs, safe shell and Mender-authoritative native tool confinement. OpenCode Host mode is still ordinary user access, OpenCode project/agent/plugin configuration and saved permissions may affect its effective policy, and the ACP metadata is not trusted execution input. An approved single-file read does not demonstrate a mandatory filesystem boundary. In particular, runtime approval still does not independently recheck every upstream Profile ToolBinding mutation once a Task was admitted; this must be decided/fenced before advertising a stronger cross-resource governance guarantee. True source write/shell requires a vetted Sandbox placement and/or execution through Mender's canonical governed Workspace Tools with no bypass. Do not switch to host fallback, autoapprove or add allow-always.
+
+**Rollout:** Wails native app and the user's MCP Tunnel are intentionally left running. The new native Agent v10 migration, command environment overlay and owner approval endpoints will only run after a controlled Wails restart and separate owner acceptance. The independent local binary/fixture tests must not be represented as live production enablement.
