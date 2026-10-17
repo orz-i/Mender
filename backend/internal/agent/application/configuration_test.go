@@ -224,8 +224,17 @@ func TestLocalAgentWorkspaceApprovalRejectsPathRedirectionWithoutLaunching(t *te
 	if err := service.BindWorkspace(ctx, agent.ID(), "project-b", alias, profile(t, goodProfileID)); !errors.Is(err, agentdomain.ErrForbidden) {
 		t.Fatalf("Profile could register arbitrary host cwd: %v", err)
 	}
+	if err := service.BindWorkspace(ctx, agent.ID(), "mender", defaultRoot, caller); !errors.Is(err, agentdomain.ErrWorkspaceDefaultDirectory) {
+		t.Fatalf("duplicate Agent default root accepted: %v", err)
+	}
 	if err := service.BindWorkspace(ctx, agent.ID(), "project-b", alias, caller); err != nil {
 		t.Fatal(err)
+	}
+	if err := service.BindWorkspace(ctx, agent.ID(), "also-project", approved, caller); !errors.Is(err, agentdomain.ErrWorkspaceDirectoryExists) {
+		t.Fatalf("canonical symlink duplicate not distinguished: %v", err)
+	}
+	if err := service.BindWorkspace(ctx, agent.ID(), "project-b", t.TempDir(), caller); !errors.Is(err, agentdomain.ErrWorkspaceAliasExists) {
+		t.Fatalf("duplicate workspace alias not distinguished: %v", err)
 	}
 	bindings, err := service.Workspaces(ctx, agent.ID(), caller)
 	if err != nil || len(bindings) != 1 || bindings[0].WorkspaceRoot != approved {

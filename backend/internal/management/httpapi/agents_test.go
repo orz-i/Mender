@@ -91,6 +91,19 @@ func TestAgentHTTPManagementAndGrantLifecycle(t *testing.T) {
 	workspacePath := api + "/agents/" + id + "/workspaces/other-project"
 	requestJSON(t, server.Client(), http.MethodPut, workspacePath, map[string]any{"workspaceRoot": filepath.Join(wsRoot, "nonexistent")}, http.StatusBadRequest)
 	requestJSON(t, server.Client(), http.MethodPut, workspacePath, map[string]any{"workspaceRoot": wsRoot}, http.StatusNoContent)
+	// API callers get stable 409 reasons, including the user's screenshot:
+	// the existing Agent default directory is not another workspace.
+	for _, item := range []struct{ path, root, code string }{
+		{api + "/agents/" + id + "/workspaces/mender", agent["workspaceRoot"].(string), "agent_workspace_default_directory"},
+		{workspacePath, t.TempDir(), "agent_workspace_alias_exists"},
+		{api + "/agents/" + id + "/workspaces/another-project", wsRoot + string(filepath.Separator), "agent_workspace_directory_exists"},
+	} {
+		response := requestJSON(t, server.Client(), http.MethodPut, item.path,
+			map[string]any{"workspaceRoot": item.root}, http.StatusConflict)
+		if response["code"] != item.code {
+			t.Fatalf("wrong Agent workspace conflict: expected %s received %+v", item.code, response)
+		}
+	}
 	requestJSON(t, server.Client(), http.MethodPut, workspacePath+"/profile-grants/"+profileID, nil, http.StatusNoContent)
 	workspaces := requestJSON(t, server.Client(), http.MethodGet, api+"/agents/"+id+"/workspaces", nil, http.StatusOK)
 	if len(workspaces["workspaces"].([]any)) != 1 || workspaces["workspaces"].([]any)[0].(map[string]any)["workspaceRoot"] != wsRoot {

@@ -37,12 +37,39 @@ func (s *Store) BindWorkspace(ctx context.Context, id agentdomain.ID, key, root 
 	if err := agentdomain.ValidateWorkspaceKey(key); err != nil {
 		return err
 	}
-	_, err := s.db.ExecContext(ctx, `INSERT INTO agent_workspaces(agent_id,workspace_key,workspace_root,created_at)
- VALUES(?,?,?,?)`, id, key, root, time.Now().UTC().Format(time.RFC3339Nano))
+	// SQLite serializes the write. A losing concurrent registration must
+	// never overwrite a workspace or its Profile grants.
+	result, err := s.db.ExecContext(ctx, `INSERT INTO agent_workspaces(agent_id,workspace_key,workspace_root,created_at)
+ VALUES(?,?,?,?) ON CONFLICT DO NOTHING`, id, key, root, time.Now().UTC().Format(time.RFC3339Nano))
 	if err != nil {
-		return fmt.Errorf("%w: workspace binding: %w", agentdomain.ErrConflict, err)
+		return fmt.Errorf("register Agent workspace: %w", err)
 	}
-	return nil
+	count, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if count == 1 {
+		return nil
+	}
+	if count != 0 {
+		return agentdomain.ErrConflict
+	}
+	// Resolve the precise conflict only after the rejected atomic INSERT.
+	// Alias takes precedence if both the key and directory are duplicates.
+	var existingKey string
+	err = s.db.QueryRowContext(ctx, `SELECT workspace_key FROM agent_workspaces
+	 WHERE agent_id=? AND (workspace_key=? OR workspace_root=?)
+	 ORDER BY CASE WHEN workspace_key=? THEN 0 ELSE 1 END LIMIT 1`, id, key, root, key).Scan(&existingKey)
+	if errors.Is(err, sql.ErrNoRows) {
+		return agentdomain.ErrConflict
+	}
+	if err != nil {
+		return err
+	}
+	if existingKey == key {
+		return fmt.Errorf("%w: %w", agentdomain.ErrConflict, agentdomain.ErrWorkspaceAliasExists)
+	}
+	return fmt.Errorf("%w: %w", agentdomain.ErrConflict, agentdomain.ErrWorkspaceDirectoryExists)
 }
 func (s *Store) Workspace(ctx context.Context, id agentdomain.ID, key string) (string, error) {
 	if err := agentdomain.ValidateWorkspaceKey(key); err != nil {

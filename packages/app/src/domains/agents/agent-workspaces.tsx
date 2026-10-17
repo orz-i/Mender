@@ -1,4 +1,5 @@
 import {useEffect,useState} from "react";
+import {MenderApiError} from "@mender/sdk";
 import type {Agent,AgentWorkspace,MenderClient,Profile} from "@mender/sdk";
 import {Button} from "@mender/ui/components/button";
 import {Input} from "@mender/ui/components/input";
@@ -10,6 +11,28 @@ import {ResultPanel} from "../../shared/page-toolbar";
 import {EmptyPanelState} from "../../shared/workbench";
 
 type Action={kind:"add"}|{kind:"grant";key:string}|{kind:"remove";key:string}|{kind:"revoke";key:string;profileId:string}|null;
+
+// Client-side comparison is only for immediate feedback. The owner service
+// resolves symlinks/canonical paths and SQLite rejects races authoritatively.
+function comparablePath(value:string):string{
+ return value.trim().replace(/\/+$/u,"")||"/";
+}
+function registrationErrorMessage(reason:unknown):string{
+ const code=reason instanceof MenderApiError?reason.code:
+  reason instanceof Error?reason.message:
+  typeof reason==="string"?reason:
+  reason!==null&&typeof reason==="object"&&"message" in reason&&typeof reason.message==="string"?reason.message:"";
+ if(code.includes("agent_workspace_default_directory"))
+  return t("This directory is already the Agent's default workspace.");
+ if(code.includes("agent_workspace_alias_exists"))
+  return t("This workspace alias already exists.");
+ if(code.includes("agent_workspace_directory_exists"))
+  return t("This directory is already registered for this Agent. Refresh the workspace list.");
+ if((reason instanceof MenderApiError&&reason.status===409)||
+    code.includes("agent resource conflict"))
+  return t("Workspace registration conflicts with existing data. Refresh the workspace list.");
+ return errorMessage(reason);
+}
 
 export function AgentWorkspaceSettings({
  client,agent,chooseLocalDirectory,
@@ -33,7 +56,7 @@ export function AgentWorkspaceSettings({
  },[client,agent.agentId,revision]);
 
  async function submit(){
-  if(!action||busy)return;
+  if(!action||busy||!valid)return;
   setBusy(true);setError("");
   try{
    switch(action.kind){
@@ -43,7 +66,7 @@ export function AgentWorkspaceSettings({
     case "revoke":await client.revokeAgentWorkspace(agent.agentId,action.key,action.profileId);break;
    }
    setAction(null);setRevision(v=>v+1);
-  }catch(e){setError(errorMessage(e));}finally{setBusy(false);}
+  }catch(e){setError(action.kind==="add"?registrationErrorMessage(e):errorMessage(e));}finally{setBusy(false);}
  }
  function openAdd(){setError("");setKey("");setRoot("");setAction({kind:"add"});}
  function openGrant(key:string,granted:string[]){
@@ -54,12 +77,16 @@ export function AgentWorkspaceSettings({
   if(!chooseLocalDirectory)return;
   try{
    const selected=await chooseLocalDirectory();
-   if(selected)setRoot(selected);
+   if(selected){setRoot(selected);setError("");}
   }catch(e){setError(errorMessage(e));}
  }
  const validAlias=/^[a-z0-9_-]{1,64}$/.test(key)&&key!=="default";
  const validRoot=root.trim().startsWith("/")&&root.trim().length>1;
- const valid=action?.kind==="add"?validAlias&&validRoot:
+ const aliasDuplicate=validAlias&&items.some(w=>w.key===key);
+ const comparableRoot=comparablePath(root);
+ const defaultDuplicate=validRoot&&comparableRoot===comparablePath(agent.workspaceRoot);
+ const registeredDirectory=validRoot?items.find(w=>comparablePath(w.workspaceRoot)===comparableRoot):undefined;
+ const valid=action?.kind==="add"?validAlias&&validRoot&&!aliasDuplicate&&!defaultDuplicate&&!registeredDirectory:
   action?.kind==="grant"?!!profile:true;
  return <>
   {error?<ErrorNotice message={error}/>:null}
@@ -100,16 +127,19 @@ export function AgentWorkspaceSettings({
     {action?.kind==="add"?<>
      <label className="text-sm font-medium" htmlFor="agent-workspace-key">{t("Workspace key")}</label>
      <Input id="agent-workspace-key" value={key} maxLength={64}
-      onChange={e=>setKey(e.target.value.toLowerCase())} placeholder="my-project"/>
+      onChange={e=>{setKey(e.target.value.toLowerCase());setError("");}} placeholder="my-project"/>
      <p className="text-xs text-muted-foreground">{t("Use a-z, 0-9, - or _. Uppercase letters are converted to lowercase.")}</p>
      {key&&!validAlias?<p role="alert" className="text-xs text-destructive">{t("Enter a valid workspace alias.")}</p>:null}
+     {aliasDuplicate?<p role="alert" className="text-xs text-destructive">{t("This workspace alias already exists.")}</p>:null}
      <label className="text-sm font-medium" htmlFor="agent-workspace-root">{t("Workspace directory")}</label>
      <div className="flex gap-2">
       <Input id="agent-workspace-root" className="min-w-0 flex-1" value={root}
-       onChange={e=>setRoot(e.target.value)} placeholder="/Users/example/project"/>
+       onChange={e=>{setRoot(e.target.value);setError("");}} placeholder="/Users/example/project"/>
       {chooseLocalDirectory?<Button variant="outline" onClick={()=>void choose()}>{t("Choose local directory")}</Button>:null}
      </div>
      {root&&!validRoot?<p role="alert" className="text-xs text-destructive">{t("Select an existing absolute local directory.")}</p>:null}
+     {defaultDuplicate?<p role="alert" className="text-xs text-destructive">{t("This directory is already the Agent's default workspace.")}</p>:null}
+     {registeredDirectory?<p role="alert" className="text-xs text-destructive">{t("This directory is already registered as workspace {{key}}.",{key:registeredDirectory.key})}</p>:null}
     </>:action?.kind==="grant"?<>
      <label className="text-sm font-medium" htmlFor="workspace-grant-profile">{t("Profile")}</label>
      <select id="workspace-grant-profile" value={profile} onChange={e=>setProfile(e.target.value)}

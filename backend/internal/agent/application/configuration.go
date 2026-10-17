@@ -136,7 +136,7 @@ func (s *Service) BindWorkspace(ctx context.Context, id agentdomain.ID, key, wor
 		return err
 	}
 	if canonical == a.Spec().WorkspaceRoot {
-		return fmt.Errorf("%w: directory already used by Agent default workspace", agentdomain.ErrConflict)
+		return fmt.Errorf("%w: %w", agentdomain.ErrConflict, agentdomain.ErrWorkspaceDefaultDirectory)
 	}
 	return s.store.BindWorkspace(ctx, id, key, canonical)
 }

@@ -18,6 +18,12 @@ func (h *Handler) agentError(w http.ResponseWriter, err error) {
 		writeAPIError(w, http.StatusForbidden, "policy_denied", err)
 	case errors.Is(err, agentdomain.ErrNotFound):
 		writeAPIError(w, http.StatusNotFound, "not_found", err)
+	case errors.Is(err, agentdomain.ErrWorkspaceDefaultDirectory):
+		writeAPIError(w, http.StatusConflict, "agent_workspace_default_directory", err)
+	case errors.Is(err, agentdomain.ErrWorkspaceAliasExists):
+		writeAPIError(w, http.StatusConflict, "agent_workspace_alias_exists", err)
+	case errors.Is(err, agentdomain.ErrWorkspaceDirectoryExists):
+		writeAPIError(w, http.StatusConflict, "agent_workspace_directory_exists", err)
 	case errors.Is(err, agentdomain.ErrConflict):
 		writeAPIError(w, http.StatusConflict, "conflict", err)
 	case errors.Is(err, agentdomain.ErrInvalid):

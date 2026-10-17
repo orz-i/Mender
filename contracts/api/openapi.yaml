@@ -856,7 +856,14 @@ paths:
       responses:
         '204': { description: Existing canonical local directory bound without a Sandbox, Agent or Tool resource }
         '400': { $ref: '#/components/responses/BadRequest' }
-        '409': { $ref: '#/components/responses/Conflict' }
+        '409':
+          description: >-
+            Duplicate workspace alias (agent_workspace_alias_exists), registered
+            directory (agent_workspace_directory_exists), or the Agent default
+            directory (agent_workspace_default_directory). No write occurs.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
     delete:
       operationId: unbindAgentWorkspace
       responses:

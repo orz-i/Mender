@@ -1,4 +1,9 @@
 export const zhCNMessages: Readonly<Record<string, string>> = {
+  "This directory is already the Agent's default workspace.": "此目录已经是智能体的默认工作区，无需重复添加。",
+  "This workspace alias already exists.": "此工作区别名已存在，请更换别名。",
+  "This directory is already registered as workspace {{key}}.": "此目录已登记为工作区 {{key}}，无需重复添加。",
+  "This directory is already registered for this Agent. Refresh the workspace list.": "此目录已登记到当前智能体，请刷新工作区列表。",
+  "Workspace registration conflicts with existing data. Refresh the workspace list.": "工作区登记与已有数据冲突，请刷新列表后重试。",
   "An Agent can use additional owner-approved local directories without creating Sandboxes.": "智能体可以直接添加所有者批准的本地目录，无需创建沙盒。",
   "Register another local directory to reuse this Agent.": "添加已有的本地目录，即可复用当前智能体。",
   "Use a-z, 0-9, - or _. Uppercase letters are converted to lowercase.": "别名允许小写字母、数字、- 和 _；输入大写字母会自动转换为小写。",

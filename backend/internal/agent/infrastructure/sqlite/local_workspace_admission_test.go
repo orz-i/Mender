@@ -81,3 +81,57 @@ func TestAgentWorkspaceAdmissionFencesExactApprovedDirectoryAgainstRebind(t *tes
 		t.Fatalf("Task snapshot mismatched: %+v %v", persisted, err)
 	}
 }
+
+func TestAgentWorkspaceDuplicateReturnsTypedConflictWithoutChangingGrants(t *testing.T) {
+	ctx := context.Background()
+	store, err := Open(ctx, filepath.Join(t.TempDir(), "duplicates.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = store.Close() }()
+	root := t.TempDir()
+	other := t.TempDir()
+	third := t.TempDir()
+	id, err := agentdomain.NewID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	agent, err := agentdomain.NewAgent(agentdomain.Spec{ID: id, Name: "Workspace fixture", Backend: agentdomain.BackendOpenCode,
+		PluginID: agentdomain.BackendOpenCode.PluginID(), ExtensionID: "main",
+		WorkspaceRoot: root, Isolation: "host", OwnerKind: "local_user", OwnerRef: "os:501", CreatedAt: time.Now().UTC()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.CreateAgent(ctx, agent); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.BindWorkspace(ctx, id, "gaoge", other); err != nil {
+		t.Fatal(err)
+	}
+	profileID := "prof_0123456789abcdef0123456789abcdef"
+	if err := store.GrantWorkspace(ctx, id, "gaoge", profileID); err != nil {
+		t.Fatal(err)
+	}
+	tests := []struct {
+		key, root string
+		reason    error
+	}{
+		{"gaoge", third, agentdomain.ErrWorkspaceAliasExists},
+		{"different", other, agentdomain.ErrWorkspaceDirectoryExists},
+		{"gaoge", other, agentdomain.ErrWorkspaceAliasExists},
+	}
+	for _, tt := range tests {
+		err := store.BindWorkspace(ctx, id, tt.key, tt.root)
+		if !errors.Is(err, agentdomain.ErrConflict) || !errors.Is(err, tt.reason) {
+			t.Fatalf("duplicate %s returned wrong conflict: %v", tt.key, err)
+		}
+	}
+	bindings, err := store.ListWorkspaces(ctx, id)
+	if err != nil || len(bindings) != 1 || bindings[0].Key != "gaoge" || bindings[0].WorkspaceRoot != other ||
+		len(bindings[0].ProfileIDs) != 1 || bindings[0].ProfileIDs[0] != profileID {
+		t.Fatalf("duplicate changed workspace or grant: %+v %v", bindings, err)
+	}
+	if err := store.BindWorkspace(ctx, id, "second", third); err != nil {
+		t.Fatalf("valid new workspace rejected: %v", err)
+	}
+}

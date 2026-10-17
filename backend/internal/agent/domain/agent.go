@@ -20,6 +20,10 @@ var (
 	ErrForbidden   = errors.New("agent operation not authorized")
 	ErrUnavailable = errors.New("agent backend unavailable")
 	ErrInvalid     = errors.New("invalid agent resource")
+	// Typed workspace conflicts survive Wails error transport and HTTP 409.
+	ErrWorkspaceDefaultDirectory = errors.New("agent_workspace_default_directory")
+	ErrWorkspaceAliasExists      = errors.New("agent_workspace_alias_exists")
+	ErrWorkspaceDirectoryExists  = errors.New("agent_workspace_directory_exists")
 )
 
 const (

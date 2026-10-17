@@ -3861,7 +3861,15 @@ export interface operations {
                 content?: never;
             };
             400: components["responses"]["BadRequest"];
-            409: components["responses"]["Conflict"];
+            /** @description Duplicate workspace alias (agent_workspace_alias_exists), registered directory (agent_workspace_directory_exists), or the Agent default directory (agent_workspace_default_directory). No write occurs. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
     unbindAgentWorkspace: {
