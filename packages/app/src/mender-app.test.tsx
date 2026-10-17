@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import type { MenderClient } from "@mender/sdk";
 import { MemoryRouter } from "react-router";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { resetLocaleForTesting, setLocale } from "./i18n/i18n";
 import { MenderApp } from "./mender-app";
@@ -19,6 +19,30 @@ afterEach(() => {
 });
 
 describe("MenderApp", () => {
+  it("shows owner-only pending badge and opens the global approval inbox directly", async () => {
+    const approvalId="aapr_0123456789abcdef0123456789abcdef";
+    const taskId="atask_0123456789abcdef0123456789abcdef";
+    const agentId="agent_0123456789abcdef0123456789abcdef";
+    const request={
+      agentName:"Owner review Agent",workspaceKey:"",
+      approval:{approvalId,taskId,agentId,kind:"read" as const,target:"review.txt",
+        canAllow:true,status:"pending" as const,
+        createdAt:"2026-10-17T00:00:00Z",expiresAt:"2099-01-01T00:00:00Z"},
+    };
+    const client={...overviewClient(),supportsLocalAgentApprovals:true,
+      listPendingAgentApprovals:vi.fn().mockResolvedValue({approvals:[request]}),
+      decideAgentApproval:vi.fn().mockResolvedValue({...request.approval,status:"allowed_once"}),
+    } as MenderClient;
+    render(<MemoryRouter><MenderApp client={client}/></MemoryRouter>);
+    expect(screen.getByRole("link",{name:"Approvals"})).toBeTruthy();
+    const topbar=within(screen.getByRole("banner"));
+    expect(await topbar.findByLabelText("Pending approvals: 1")).toBeTruthy();
+    fireEvent.click(topbar.getByRole("button",{name:"Pending approvals"}));
+    expect(await screen.findByText("review.txt")).toBeTruthy();
+    expect(screen.getByRole("heading",{name:"Approvals"})).toBeTruthy();
+    expect(screen.getByRole("button",{name:"Allow once"})).toBeTruthy();
+  });
+
   it("renders the management navigation and overview", () => {
     render(
       <MemoryRouter>
