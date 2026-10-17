@@ -160,6 +160,13 @@ func TestPhase46OptInRealRestrictedAgentGovernedTools(t *testing.T) {
 		"Then create controlled-edit.txt containing exactly 'phase46 governed real edit' using mender_edit. " +
 		"Do not use native shell, native file edits, plugins, or any other file or network operation. " +
 		"State briefly whether the two Mender tool calls succeeded."
+	if backend == agentdomain.BackendOpenCode {
+		// OpenCode v2 exposes ACP-provided MCP tools through its Code Mode.
+		prompt = "Use the execute Code Mode tool to call only the mender_task_tools namespace. " +
+			"Invoke mender_read for review.txt, then mender_edit to create controlled-edit.txt " +
+			"containing exactly phase46 governed real edit. Do not use fetch or other tools. " +
+			"Confirm only after both calls succeed."
+	}
 	task, err := r.Agents.Submit(ctx, agent.ID(), prompt, taskServicePrincipal(t, profile.ID().String()))
 	if err != nil {
 		t.Fatalf("real Task admission failed: %v", err)

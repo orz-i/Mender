@@ -49,7 +49,11 @@ func TestPhase46OptInRealRestrictedACPInitialize(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	timeout := 8 * time.Second
+	if os.Getenv("MENDER_PHASE46_REAL_ACP_SESSION_PROBE") == "1" {
+		timeout = 23 * time.Second
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	mode := "governed_read_only_root"
 	var command *exec.Cmd
@@ -74,6 +78,17 @@ func TestPhase46OptInRealRestrictedACPInitialize(t *testing.T) {
 	if control != "host" && command.Path != "/usr/bin/sandbox-exec" {
 		t.Fatal("restricted real ACP probe lacks Seatbelt confinement")
 	}
+	// No secrets or real HOME reads: this test-only variant changes the
+	// process's HOME variable to a brand new empty directory in the existing
+	// Seatbelt-permitted temporary area; actual isolation stays unchanged.
+	if os.Getenv("MENDER_PHASE46_REAL_ACP_EMPTY_HOME") == "1" {
+		fakeHome := t.TempDir()
+		for i, item := range command.Env {
+			if strings.HasPrefix(item, "HOME=") {
+				command.Env[i] = "HOME=" + fakeHome
+			}
+		}
+	}
 	stdin, err := command.StdinPipe()
 	if err != nil {
 		t.Fatal(err)
@@ -87,12 +102,18 @@ func TestPhase46OptInRealRestrictedACPInitialize(t *testing.T) {
 	if err := command.Start(); err != nil {
 		t.Fatalf("Seatbelt child process could not start (%s)", classifyRestrictedProcessError(err.Error()))
 	}
-	line := make(chan []byte, 1)
+	line := make(chan []byte, 8)
 	go func() {
 		scan := bufio.NewScanner(stdout)
 		scan.Buffer(make([]byte, 4096), 65536)
-		if scan.Scan() {
-			line <- append([]byte(nil), scan.Bytes()...)
+		for scan.Scan() {
+			frame := append([]byte(nil), scan.Bytes()...)
+			select {
+			case line <- frame:
+			case <-ctx.Done():
+				close(line)
+				return
+			}
 		}
 		close(line)
 	}()
@@ -125,6 +146,40 @@ func TestPhase46OptInRealRestrictedACPInitialize(t *testing.T) {
 	case <-ctx.Done():
 		stage = "initialize_timeout"
 	}
+	if stage == "acp_v1_http_advertised" && os.Getenv("MENDER_PHASE46_REAL_ACP_SESSION_PROBE") == "1" {
+		// A no-prompt session/new only: no model inference or Tool bearer.
+		_, _ = fmt.Fprintf(stdin, "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"session/new\",\"params\":{\"cwd\":%q,\"mcpServers\":[]}}\n", spec.WorkspaceRoot)
+		stage = "session_new_unanswered"
+		for stage == "session_new_unanswered" {
+			select {
+			case raw, ok := <-line:
+				if !ok {
+					stage = "session_new_closed"
+					break
+				}
+				var response struct {
+					ID     json.RawMessage `json:"id"`
+					Result struct {
+						SessionID string `json:"sessionId"`
+					} `json:"result"`
+					Error *struct {
+						Code int `json:"code"`
+					} `json:"error"`
+				}
+				if json.Unmarshal(raw, &response) == nil && string(response.ID) == "2" {
+					if response.Error != nil {
+						stage = "session_new_acp_rejected"
+					} else if response.Result.SessionID != "" {
+						stage = "session_new_completed"
+					} else {
+						stage = "session_new_malformed"
+					}
+				}
+			case <-ctx.Done():
+				stage = "session_new_timeout"
+			}
+		}
+	}
 	cancel()
 	_ = stdin.Close()
 	if command.Process != nil {
@@ -147,8 +202,12 @@ func TestPhase46OptInRealRestrictedACPInitialize(t *testing.T) {
 	}
 	t.Logf("real_backend=%s, plan=%s, mode=%s, stage=%s, stderr_category=%s, exit_category=%s, stderr_bytes=%d, stderr_markers=%s",
 		backend, plan, mode, stage, classifyRestrictedProcessError(privateStderr.String()), exitCategory, privateStderr.Len(), restrictedErrorMarkers(privateStderr.String()))
-	if stage != "acp_v1_http_advertised" {
-		t.Fatalf("restricted real ACP did not advertise HTTP; no permission broadening or host fallback")
+	expected := "acp_v1_http_advertised"
+	if os.Getenv("MENDER_PHASE46_REAL_ACP_SESSION_PROBE") == "1" {
+		expected = "session_new_completed"
+	}
+	if stage != expected {
+		t.Fatalf("real ACP readiness stage incomplete; no permission broadening or host fallback")
 	}
 }
 

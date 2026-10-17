@@ -31,6 +31,24 @@ const opencodeACPReviewConfig = `{"permissions":[
  {"action":"execute","resource":"*","effect":"deny"}
 ]}`
 
+// OpenCode v2 places ACP-injected MCP servers behind Code Mode by default.
+// This governed-only overlay exposes execute as the Agent's own bounded
+// orchestration tool. Supplied Mender Read/Search/Edit still pass the Task MCP
+// capability and canonical Invocation; native edits and shell are denied.
+// The interpreter permits fetch/network, so this is NOT universal process
+// confinement; the fixed restricted Seatbelt project root remains read-only.
+const opencodeACPGovernedConfig = `{"permissions":[
+ {"action":"read","resource":"*","effect":"ask"},
+ {"action":"edit","resource":"*","effect":"deny"},
+ {"action":"shell","resource":"*","effect":"deny"},
+ {"action":"external_directory","resource":"*","effect":"deny"},
+ {"action":"subagent","resource":"*","effect":"deny"},
+ {"action":"execute","resource":"*","effect":"allow"},
+ {"action":"mender_task_tools_mender_read","resource":"*","effect":"allow"},
+ {"action":"mender_task_tools_mender_search","resource":"*","effect":"allow"},
+ {"action":"mender_task_tools_mender_edit","resource":"*","effect":"allow"}
+]}`
+
 type LocalFactory struct{ launcher *processisolation.Launcher }
 
 func NewLocalFactory(launcher *processisolation.Launcher) (*LocalFactory, error) {
@@ -146,9 +164,18 @@ func (f *LocalFactory) commandInWorkspace(ctx context.Context, a agentdomain.Age
 		arguments = []string{"agent", "stdio"}
 	case agentdomain.BackendOpenCode:
 		arguments = []string{"acp"}
-		// Owner-mediated ACP review is always attempted for native actions.
-		// Strong filesystem boundaries require separately verified isolation.
-		environment = append(environment, "OPENCODE_CONFIG_CONTENT="+opencodeACPReviewConfig)
+		if !rootWritable {
+			// Only an explicitly configured governed ToolSupply may enter this
+			// branch. Project config/plugins cannot add native bypasses, and
+			// the short-lived Task MCP still authorizes every Mender tool call.
+			environment = append(environment,
+				"OPENCODE_CONFIG_CONTENT="+opencodeACPGovernedConfig,
+				"OPENCODE_DISABLE_PROJECT_CONFIG=1")
+		} else {
+			// Ordinary Host/restricted tasks keep the prior cooperative
+			// review overlay: no Code Mode execute permission is added.
+			environment = append(environment, "OPENCODE_CONFIG_CONTENT="+opencodeACPReviewConfig)
+		}
 	case agentdomain.BackendCodex:
 		codex, err := trustedBinary("codex")
 		if err != nil {

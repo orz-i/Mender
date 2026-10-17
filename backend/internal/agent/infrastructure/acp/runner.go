@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -241,7 +242,7 @@ func (r Runner) ExecuteConfigured(ctx context.Context, agent agentdomain.Agent, 
 // Inspection never sends a prompt; execution is bounded by the caller's context.
 func (r Runner) withSession(ctx context.Context, agent agentdomain.Agent, config agentapplication.RunConfig,
 	visit func(*stream, string, json.RawMessage, <-chan error) (string, error),
-) (string, error) {
+) (result string, err error) {
 	if r.NewCommand == nil {
 		return "", errors.New("ACP process launcher unavailable")
 	}
@@ -259,7 +260,6 @@ func (r Runner) withSession(ctx context.Context, agent agentdomain.Agent, config
 		return "", fmt.Errorf("%w: ACP execution requires an admitted workspace root", agentdomain.ErrInvalid)
 	}
 	var cmd *exec.Cmd
-	var err error
 	if !config.ToolSupply.IsZero() {
 		if agent.Spec().Isolation != "restricted_host" || r.NewCommandWithConfig == nil {
 			return "", fmt.Errorf("%w: task Tool supply requires a verified restricted Agent process plan", agentdomain.ErrUnavailable)
@@ -277,6 +277,20 @@ func (r Runner) withSession(ctx context.Context, agent agentdomain.Agent, config
 	}
 	if cmd == nil {
 		return "", errors.New("ACP launcher returned no command")
+	}
+	// For a governed macOS task, HOME is an empty private per-process scratch
+	// directory under the existing temporary area, not the Runtime user HOME.
+	// Register cleanup before process cleanup so it runs after cmd.Wait().
+	if !config.ToolSupply.IsZero() && runtime.GOOS == "darwin" {
+		release, prepareErr := scopeGovernedAgentHome(cmd)
+		if prepareErr != nil {
+			return "", prepareErr
+		}
+		defer func() {
+			if releaseErr := release(); releaseErr != nil {
+				err = errors.Join(err, fmt.Errorf("remove private governed Agent HOME: %w", releaseErr))
+			}
+		}()
 	}
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
