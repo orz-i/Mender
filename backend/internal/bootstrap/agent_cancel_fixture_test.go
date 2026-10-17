@@ -19,7 +19,7 @@ import (
 
 type waitingAgentExecutor struct{ started chan struct{} }
 
-func (e waitingAgentExecutor) Execute(ctx context.Context, _ agentdomain.Agent, _ string) (string, error) {
+func (e waitingAgentExecutor) ExecuteConfigured(ctx context.Context, _ agentdomain.Agent, _ string, _ agentapplication.RunConfig) (string, error) {
 	close(e.started)
 	<-ctx.Done()
 	return "", ctx.Err()

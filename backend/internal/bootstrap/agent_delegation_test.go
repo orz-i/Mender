@@ -23,7 +23,7 @@ import (
 
 type fixtureAgentExecutor struct{}
 
-func (fixtureAgentExecutor) Execute(_ context.Context, _ agentdomain.Agent, prompt string) (string, error) {
+func (fixtureAgentExecutor) ExecuteConfigured(_ context.Context, _ agentdomain.Agent, prompt string, _ agentapplication.RunConfig) (string, error) {
 	return "fixture: " + prompt, nil
 }
 func agentOwnerContext(t *testing.T, r *Runtime) gov.Context {

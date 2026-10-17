@@ -48,13 +48,10 @@ type Repository interface {
 	RevokeWorkspace(context.Context, agentdomain.ID, string, string) error
 }
 
-// Executor is supplied by the ACP Backend adapter, not by the upstream Tool.
+// Executor receives only one immutable, admitted task configuration.
+// There is no legacy unconfigured execution path; even default tasks get
+// the reviewed canonical working directory and model/effort snapshot.
 type Executor interface {
-	Execute(context.Context, agentdomain.Agent, string) (string, error)
-}
-
-// ConfiguredExecutor runs one admitted immutable selection without changing Agent identity.
-type ConfiguredExecutor interface {
 	ExecuteConfigured(context.Context, agentdomain.Agent, string, RunConfig) (string, error)
 }
 type RunConfig struct {
@@ -327,14 +324,6 @@ func (s *Service) SubmitWithOptions(ctx context.Context, id agentdomain.ID, prom
 		}
 		root = registeredRoot
 	}
-	if (model != "" || effort != "" || options.Workspace != "") && s.runner == nil {
-		return agentdomain.Task{}, agentdomain.ErrUnavailable
-	}
-	if model != "" || effort != "" || options.Workspace != "" {
-		if _, ok := s.runner.(ConfiguredExecutor); !ok {
-			return agentdomain.Task{}, agentdomain.ErrUnavailable
-		}
-	}
 	// Admission is before process, CLI/account, workspace and credential access.
 	for _, action := range []gov.Action{gov.ActionAgentActivate, gov.ActionAgentTaskSubmit} {
 		if err := s.admit(ctx, caller, agent, action); err != nil {
@@ -385,13 +374,8 @@ func (s *Service) run(ctx context.Context, cancel context.CancelFunc, agent agen
 		_ = s.store.Transition(context.WithoutCancel(ctx), task.ID, task.Generation, agentdomain.TaskQueued, agentdomain.TaskCancelled, "", "")
 		return
 	}
-	var result string
-	var err error
-	if runner, ok := s.runner.(ConfiguredExecutor); ok {
-		result, err = runner.ExecuteConfigured(ctx, agent, prompt, RunConfig{WorkspaceRoot: task.WorkspaceRoot, Model: task.Model, ReasoningEffort: task.ReasoningEffort})
-	} else {
-		result, err = s.runner.Execute(ctx, agent, prompt)
-	}
+	result, err := s.runner.ExecuteConfigured(ctx, agent, prompt,
+		RunConfig{WorkspaceRoot: task.WorkspaceRoot, Model: task.Model, ReasoningEffort: task.ReasoningEffort})
 	// A runner that reports success after cancellation cannot prove it
 	// stopped executing side effects. Preserve the uncertainty instead.
 	if ctx.Err() != nil && err == nil {

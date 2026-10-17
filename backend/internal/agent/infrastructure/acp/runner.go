@@ -128,12 +128,9 @@ func (s *stream) respondToAgent(msg rpcMessage) error {
 	}
 }
 
-// Execute returns only the final agent_message_chunk text; reasoning and
-// tool execution details are not retained. Context cancellation interrupts
-// the entire process, not just the in-memory Task status.
-func (r Runner) Execute(ctx context.Context, agent agentdomain.Agent, prompt string) (string, error) {
-	return r.ExecuteConfigured(ctx, agent, prompt, agentapplication.RunConfig{WorkspaceRoot: agent.Spec().WorkspaceRoot})
-}
+// ExecuteConfigured returns only the final agent_message_chunk text;
+// reasoning and tool execution details are not retained. Cancellation
+// interrupts the complete process group, not just the Task state.
 func (r Runner) ExecuteConfigured(ctx context.Context, agent agentdomain.Agent, prompt string, config agentapplication.RunConfig) (string, error) {
 	if len(prompt) == 0 || len(prompt) > agentdomain.MaxPromptBytes || strings.TrimSpace(prompt) == "" {
 		return "", fmt.Errorf("%w: invalid Task prompt", agentdomain.ErrInvalid)
@@ -274,14 +271,9 @@ func (r Runner) withSession(ctx context.Context, agent agentdomain.Agent, config
 		}
 	}()
 	wire := stream{stdin: stdin, updates: messages}
-	noUpdates := func(msg rpcMessage) error {
-		// Agents may send updates during initialize; no one is authorized
-		// to handle them until a session has been created.
-		if msg.Method == "session/update" {
-			return nil
-		}
-		return nil
-	}
+	// Pre-session notifications are not retained; client requests continue
+	// to be rejected by the shared stream's fail-closed handler.
+	noUpdates := func(rpcMessage) error { return nil }
 	init, err := wire.call(ctx, 1, "initialize", map[string]any{
 		"protocolVersion": 1, "clientCapabilities": map[string]any{},
 		"clientInfo": map[string]string{"name": "mender", "title": "Mender", "version": "dev"},

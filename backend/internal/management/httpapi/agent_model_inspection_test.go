@@ -15,7 +15,7 @@ import (
 
 type modelInspectionFixture struct{ calls atomic.Int32 }
 
-func (*modelInspectionFixture) Execute(context.Context, agentdomain.Agent, string) (string, error) {
+func (*modelInspectionFixture) ExecuteConfigured(context.Context, agentdomain.Agent, string, agentapp.RunConfig) (string, error) {
 	return "", nil
 }
 func (x *modelInspectionFixture) InspectModels(_ context.Context, _ agentdomain.Agent) (agentapp.ModelChoices, error) {

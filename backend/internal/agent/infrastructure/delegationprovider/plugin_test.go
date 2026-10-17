@@ -17,7 +17,7 @@ import (
 
 type inertRunner struct{}
 
-func (inertRunner) Execute(context.Context, agentdomain.Agent, string) (string, error) {
+func (inertRunner) ExecuteConfigured(context.Context, agentdomain.Agent, string, agentapplication.RunConfig) (string, error) {
 	return "ok", nil
 }
 func TestPluginConfigAndBoundToolDiscovery(t *testing.T) {

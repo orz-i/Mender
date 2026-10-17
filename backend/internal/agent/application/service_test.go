@@ -17,7 +17,7 @@ type fakeExecutor struct {
 	release chan struct{}
 }
 
-func (x fakeExecutor) Execute(ctx context.Context, _ agentdomain.Agent, _ string) (string, error) {
+func (x fakeExecutor) ExecuteConfigured(ctx context.Context, _ agentdomain.Agent, _ string, _ RunConfig) (string, error) {
 	close(x.started)
 	select {
 	case <-x.release:

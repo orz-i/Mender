@@ -15,7 +15,7 @@ import (
 
 type inspectingFake struct{ probes int }
 
-func (f *inspectingFake) Execute(context.Context, agentdomain.Agent, string) (string, error) {
+func (f *inspectingFake) ExecuteConfigured(context.Context, agentdomain.Agent, string, RunConfig) (string, error) {
 	return "", nil
 }
 func (f *inspectingFake) InspectModels(context.Context, agentdomain.Agent) (ModelChoices, error) {
@@ -56,9 +56,6 @@ func TestAgentModelInspectionRequiresOwnerAndNoTask(t *testing.T) {
 
 type selectionRunner struct{ calls chan RunConfig }
 
-func (r selectionRunner) Execute(context.Context, agentdomain.Agent, string) (string, error) {
-	return "", errors.New("unconfigured execution is forbidden")
-}
 func (r selectionRunner) ExecuteConfigured(ctx context.Context, _ agentdomain.Agent, _ string, config RunConfig) (string, error) {
 	select {
 	case r.calls <- config:
@@ -280,5 +277,37 @@ func TestLocalAgentWorkspaceApprovalRejectsPathRedirectionWithoutLaunching(t *te
 	case got := <-runner.calls:
 		t.Fatalf("unapproved workspace launched: %+v", got)
 	default:
+	}
+}
+
+func TestDefaultAgentTaskUsesImmutableConfiguredExecutor(t *testing.T) {
+	ctx := context.Background()
+	runner := selectionRunner{calls: make(chan RunConfig, 1)}
+	service, caller := newFixtureService(t, runner)
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	agent, err := service.Create(ctx, CreateRequest{Name: "Default-only", Backend: agentdomain.BackendOpenCode,
+		WorkspaceRoot: root, Isolation: "host"}, caller)
+	if err != nil {
+		t.Fatal(err)
+	}
+	task, err := service.Submit(ctx, agent.ID(), "default task", caller)
+	if err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case config := <-runner.calls:
+		if config.WorkspaceRoot != root || config.Model != "" || config.ReasoningEffort != "" {
+			t.Fatalf("default task did not use configured snapshot: %+v", config)
+		}
+	case <-time.After(4 * time.Second):
+		t.Fatal("default task never reached unified configured executor")
+	}
+	completed := waitTask(t, service, task.ID, caller, agentdomain.TaskCompleted)
+	if completed.WorkspaceRoot != root || completed.WorkspaceKey != "" || completed.Model != "" ||
+		completed.ReasoningEffort != "" || completed.Result != "ok" {
+		t.Fatalf("default Task snapshot mismatches executor: %+v", completed)
 	}
 }

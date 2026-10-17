@@ -32,20 +32,20 @@ func TestModelChoicesRejectUnreviewedOrUnboundedOptions(t *testing.T) {
 		}
 	}
 }
-func TestSelectModelUsesAdvertisedACPv1Options(t *testing.T) {
+func TestACPApplyModelChoiceUsesAdvertisedV1Options(t *testing.T) {
 	session := json.RawMessage(`{"configOptions":[{"id":"model","category":"model","type":"select","currentValue":"default","options":[{"value":"default","name":"Default"},{"value":"test-model","name":"Test"}]}]}`)
 	updates := make(chan rpcMessage, 1)
 	updates <- rpcMessage{JSONRPC: "2.0", ID: json.RawMessage("4"), Result: json.RawMessage(`{"configOptions":[{"id":"model","category":"model","type":"select","currentValue":"test-model","options":[{"value":"test-model","name":"Test"}]}]}`)}
 	var sent bytes.Buffer
 	wire := stream{stdin: &sent, updates: updates}
-	if err := selectModel(context.Background(), &wire, "session-id", session, "test-model"); err != nil {
+	if err := applySessionChoices(context.Background(), &wire, "session-id", session, "test-model", ""); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(sent.String(), `"method":"session/set_config_option"`) || !strings.Contains(sent.String(), `"value":"test-model"`) {
 		t.Fatalf("unexpected ACP config RPC: %s", sent.String())
 	}
 }
-func TestSelectModelRejectsUnadvertisedAndUnconfirmed(t *testing.T) {
+func TestACPApplyModelChoiceRejectsUnadvertisedAndUnconfirmed(t *testing.T) {
 	cases := []struct {
 		name    string
 		session string
@@ -63,7 +63,7 @@ func TestSelectModelRejectsUnadvertisedAndUnconfirmed(t *testing.T) {
 				updates <- rpcMessage{JSONRPC: "2.0", ID: json.RawMessage("4"), Result: json.RawMessage(tc.result)}
 			}
 			wire := stream{stdin: &sent, updates: updates}
-			if err := selectModel(context.Background(), &wire, "sess", json.RawMessage(tc.session), "test-model"); err == nil {
+			if err := applySessionChoices(context.Background(), &wire, "sess", json.RawMessage(tc.session), "test-model", ""); err == nil {
 				t.Fatal("unadvertised/unconfirmed model accepted")
 			}
 			if tc.result == "" && sent.Len() != 0 {

@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	agentapplication "github.com/orz-i/Mender/backend/internal/agent/application"
 	agentdomain "github.com/orz-i/Mender/backend/internal/agent/domain"
 )
 
@@ -141,7 +142,7 @@ func TestACPStableHandshakeAndNoApproval(t *testing.T) {
 		t.Run(mode, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 			defer cancel()
-			got, err := fixtureRunner(mode).Execute(ctx, fixtureAgent(t), "task")
+			got, err := fixtureRunner(mode).ExecuteConfigured(ctx, fixtureAgent(t), "task", agentapplication.RunConfig{})
 			if err != nil || got != "fixture completed" {
 				t.Fatalf("result %q error %v", got, err)
 			}
@@ -153,7 +154,7 @@ func TestACPFailClosedOnClientPermissionAndFilesystemRequests(t *testing.T) {
 		t.Run(mode, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 			defer cancel()
-			result, err := fixtureRunner(mode).Execute(ctx, fixtureAgent(t), "task")
+			result, err := fixtureRunner(mode).ExecuteConfigured(ctx, fixtureAgent(t), "task", agentapplication.RunConfig{})
 			if !errors.Is(err, errClientPermissionDenied) || result != "" {
 				t.Fatalf("ACP %s did not fail closed, result %q, error %v", mode, result, err)
 			}
@@ -166,7 +167,7 @@ func TestACPRejectsInvalidProtocolAndUnboundedOrForeignOutput(t *testing.T) {
 		t.Run(mode, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 			defer cancel()
-			result, err := fixtureRunner(mode).Execute(ctx, fixtureAgent(t), "task")
+			result, err := fixtureRunner(mode).ExecuteConfigured(ctx, fixtureAgent(t), "task", agentapplication.RunConfig{})
 			if err == nil || result != "" {
 				t.Fatalf("untrusted ACP %s accepted with result %q, error %v", mode, result, err)
 			}
@@ -176,7 +177,7 @@ func TestACPRejectsInvalidProtocolAndUnboundedOrForeignOutput(t *testing.T) {
 func TestACPCancellationKillsProcess(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
 	defer cancel()
-	_, err := fixtureRunner("hang").Execute(ctx, fixtureAgent(t), "task")
+	_, err := fixtureRunner("hang").ExecuteConfigured(ctx, fixtureAgent(t), "task", agentapplication.RunConfig{})
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("want cancellation, got %v", err)
 	}
@@ -185,7 +186,7 @@ func TestACPRejectsBadPrompts(t *testing.T) {
 	ctx := context.Background()
 	a := fixtureAgent(t)
 	for _, input := range []string{"", strings.Repeat("X", agentdomain.MaxPromptBytes+1)} {
-		if _, err := fixtureRunner("completed").Execute(ctx, a, input); !errors.Is(err, agentdomain.ErrInvalid) {
+		if _, err := fixtureRunner("completed").ExecuteConfigured(ctx, a, input, agentapplication.RunConfig{}); !errors.Is(err, agentdomain.ErrInvalid) {
 			t.Fatal("accepted unsafe prompt", err)
 		}
 	}

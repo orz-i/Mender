@@ -199,11 +199,6 @@ func setACPChoice(ctx context.Context, wire *stream, sessionID string, raw json.
 	return nil, errors.New("ACP Agent did not confirm selected " + kind)
 }
 
-// selectModel remains the single-option selection used by its focused tests.
-func selectModel(ctx context.Context, wire *stream, sessionID string, session json.RawMessage, model string) error {
-	_, err := setACPChoice(ctx, wire, sessionID, session, "model", model, 4)
-	return err
-}
 func applySessionChoices(ctx context.Context, wire *stream, sessionID string, session json.RawMessage, model, effort string) error {
 	var err error
 	if model != "" {
