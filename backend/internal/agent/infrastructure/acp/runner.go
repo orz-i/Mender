@@ -175,14 +175,15 @@ func (r Runner) ExecuteConfigured(ctx context.Context, agent agentdomain.Agent, 
 			if msg.Method != "session/update" {
 				return nil
 			}
+			// ACP updates have heterogeneous content shapes. In particular,
+			// OpenCode emits tool_call/tool_call_update content arrays after
+			// approval. Do not try to decode those arrays as text chunks,
+			// and never retain raw native Tool metadata or file contents.
 			var params struct {
 				SessionID string `json:"sessionId"`
 				Update    struct {
-					SessionUpdate string `json:"sessionUpdate"`
-					Content       struct {
-						Type string `json:"type"`
-						Text string `json:"text"`
-					} `json:"content"`
+					SessionUpdate string          `json:"sessionUpdate"`
+					Content       json.RawMessage `json:"content"`
 				} `json:"update"`
 			}
 			if err := json.Unmarshal(msg.Params, &params); err != nil {
@@ -191,12 +192,23 @@ func (r Runner) ExecuteConfigured(ctx context.Context, agent agentdomain.Agent, 
 			if params.SessionID != sessionID {
 				return errors.New("ACP update from unexpected SessionID")
 			}
-			if params.Update.SessionUpdate == "agent_message_chunk" && params.Update.Content.Type == "text" {
-				if len(params.Update.Content.Text) > agentdomain.MaxResultBytes-result.Len() {
+			if params.Update.SessionUpdate != "agent_message_chunk" {
+				return nil
+			}
+			var chunk struct {
+				Type string `json:"type"`
+				Text string `json:"text"`
+			}
+			if len(params.Update.Content) == 0 ||
+				json.Unmarshal(params.Update.Content, &chunk) != nil {
+				return errors.New("ACP malformed Agent text chunk")
+			}
+			if chunk.Type == "text" {
+				if len(chunk.Text) > agentdomain.MaxResultBytes-result.Len() {
 					outputOverflow = true
 					return errors.New("ACP Agent result exceeds limit")
 				}
-				_, _ = result.WriteString(params.Update.Content.Text)
+				_, _ = result.WriteString(chunk.Text)
 			}
 			return nil
 		}

@@ -133,6 +133,26 @@ func TestACPFixtureProcess(t *testing.T) {
 					os.Exit(83)
 				}
 			}
+			if mode == "approve-once" {
+				// Real ACP tool results are not Agent text. OpenCode v2 emits
+				// non-text tool_call/tool_call_update content arrays here.
+				for _, category := range []string{"tool_call", "tool_call_update"} {
+					send(map[string]any{"jsonrpc": "2.0", "method": "session/update", "params": map[string]any{
+						"sessionId": "fixture-1", "update": map[string]any{
+							"sessionUpdate": category, "toolCallId": "fixture-tool",
+							"content": []any{map[string]string{"type": "text", "text": "UNTRUSTED_TOOL_BODY_MUST_NOT_BE_RESULT"}},
+						},
+					}})
+				}
+			}
+			if mode == "bad-text-chunk" {
+				send(map[string]any{"jsonrpc": "2.0", "method": "session/update", "params": map[string]any{
+					"sessionId": "fixture-1", "update": map[string]any{
+						"sessionUpdate": "agent_message_chunk",
+						"content":       []any{map[string]string{"type": "text", "text": "not a single content object"}},
+					},
+				}})
+			}
 			sessionID := "fixture-1"
 			if mode == "foreign-session" {
 				sessionID = "other-session"
@@ -230,7 +250,7 @@ func TestACPFailClosedOnClientPermissionAndFilesystemRequests(t *testing.T) {
 }
 
 func TestACPRejectsInvalidProtocolAndUnboundedOrForeignOutput(t *testing.T) {
-	for _, mode := range []string{"version2", "invalid-json", "foreign-session", "oversized"} {
+	for _, mode := range []string{"version2", "invalid-json", "foreign-session", "oversized", "bad-text-chunk"} {
 		t.Run(mode, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 			defer cancel()
