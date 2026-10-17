@@ -364,3 +364,23 @@ func TestACPRejectsInvalidToolSupplyBeforeLaunchingAnyAgent(t *testing.T) {
 		t.Fatalf("unsafe Task MCP endpoint permitted: launched=%t err=%v", launched, err)
 	}
 }
+
+func TestACPTaskSupplyNeverFallsBackToUnrestrictedCommand(t *testing.T) {
+	agent := fixtureAgent(t)
+	launched := false
+	runner := Runner{NewCommand: func(context.Context, agentdomain.Agent) (*exec.Cmd, error) {
+		launched = true
+		return nil, errors.New("unrestricted launcher must not be invoked")
+	}}
+	_, err := runner.ExecuteConfigured(context.Background(), agent, "governed task",
+		agentapplication.RunConfig{WorkspaceRoot: agent.Spec().WorkspaceRoot,
+			ToolSupply: agentapplication.ToolSupply{
+				Delivery:    agentapplication.ToolDeliveryMCPHTTP,
+				Endpoint:    "http://127.0.0.1:12345/mcp",
+				BearerToken: strings.Repeat("a", 64),
+			},
+		})
+	if !errors.Is(err, agentdomain.ErrUnavailable) || launched {
+		t.Fatalf("unsafe host fallback when configured command is unavailable: launched=%t err=%v", launched, err)
+	}
+}

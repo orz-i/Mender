@@ -6,11 +6,14 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	agentapplication "github.com/orz-i/Mender/backend/internal/agent/application"
 	agentdomain "github.com/orz-i/Mender/backend/internal/agent/domain"
 	processisolation "github.com/orz-i/Mender/backend/internal/runtimegovernance/infrastructure/processisolation"
 )
@@ -104,5 +107,77 @@ func TestOpenCodeLocalLaunchUsesPinnedExecutableAndACPStdioOnly(t *testing.T) {
 		if got[action] != "deny" {
 			t.Fatalf("OpenCode %s not denied: %+v", action, got)
 		}
+	}
+}
+
+func TestAllAgentBackendsRejectHostGovernedToolSupply(t *testing.T) {
+	factory, err := NewLocalFactory(processisolation.New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	supply := agentapplication.ToolSupply{
+		Delivery:    agentapplication.ToolDeliveryMCPHTTP,
+		Endpoint:    "http://127.0.0.1:12345/mcp",
+		BearerToken: strings.Repeat("a", 64),
+	}
+	for _, backend := range []agentdomain.Backend{agentdomain.BackendGrok, agentdomain.BackendOpenCode, agentdomain.BackendCodex} {
+		t.Run(string(backend), func(t *testing.T) {
+			spec := fixtureAgent(t).Spec()
+			spec.Backend = backend
+			spec.PluginID = backend.PluginID()
+			spec.Isolation = "host"
+			agent, err := agentdomain.NewAgent(spec)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := factory.CommandWithConfig(context.Background(), agent,
+				agentapplication.RunConfig{WorkspaceRoot: spec.WorkspaceRoot, ToolSupply: supply}); !errors.Is(err, agentdomain.ErrUnavailable) {
+				t.Fatalf("host backend %s received governed Tool credentials: %v", backend, err)
+			}
+		})
+	}
+}
+func TestRestrictedAgentCommandPlansReadOnlyProjectForTaskTools(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("macOS Seatbelt plan acceptance")
+	}
+	factory, err := NewLocalFactory(processisolation.New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !processisolation.New().Info().RestrictedHostAvailable {
+		t.Skip("no restricted-host execution boundary available")
+	}
+	for _, backend := range []agentdomain.Backend{agentdomain.BackendOpenCode, agentdomain.BackendGrok} {
+		t.Run(string(backend), func(t *testing.T) {
+			if _, err := factory.Availability(backend); errors.Is(err, agentdomain.ErrUnavailable) {
+				t.Skip("Agent CLI not installed in trusted locations")
+			} else if err != nil {
+				t.Fatal(err)
+			}
+			spec := fixtureAgent(t).Spec()
+			spec.Backend = backend
+			spec.PluginID = backend.PluginID()
+			spec.Isolation = "restricted_host"
+			agent, err := agentdomain.NewAgent(spec)
+			if err != nil {
+				t.Fatal(err)
+			}
+			supply := agentapplication.ToolSupply{Delivery: agentapplication.ToolDeliveryMCPHTTP,
+				Endpoint: "http://127.0.0.1:12345/mcp", BearerToken: strings.Repeat("a", 64)}
+			cmd, err := factory.CommandWithConfig(context.Background(), agent,
+				agentapplication.RunConfig{WorkspaceRoot: spec.WorkspaceRoot, ToolSupply: supply})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if cmd.Path != "/usr/bin/sandbox-exec" || len(cmd.Args) < 4 || cmd.Args[1] != "-p" {
+				t.Fatalf("unconfined native Agent command plan: %+v", cmd.Args)
+			}
+			policy := cmd.Args[2]
+			if !strings.Contains(policy, "(deny default)") ||
+				strings.Contains(policy, "(allow file-write* (literal "+strconv.Quote(spec.WorkspaceRoot)+")") {
+				t.Fatalf("governed Tool supply permitted native project writes: %s", policy)
+			}
+		})
 	}
 }
