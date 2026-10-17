@@ -20,6 +20,15 @@ Remove provably dead code, obsolete runtime compatibility branches, redundant im
 
 Document each removal with: symbol/path, old purpose, modern owner, all references, migration/test dependency, expected behavior change and rollback/test evidence. Perform targeted, small code edits, do not add adapters or retain two paths. Scope any data deletion to explicit confirmed invalid rows and backup/foreign-key validation. No silent retirement of legitimate historical Tasks.
 
+### Evidence-backed B1: retire Provider-v1 plugin installation importer
+
+- Native, read-only inspection of **both active Mender SQLite locations** (`~/Library/Application Support/Mender/mender.db` and `~/.mender/mender.db`) found modern `plugin_installations` (0 rows each), **no** `provider_plugin_installations` and **no** `provider_plugin_installation_schema_migrations`, and `PRAGMA quick_check=ok`. This does not authorize deleting archived backups. Production also has 0 foreign-key violations.
+- Consistent private snapshot: `/tmp/mender-phase47-audit/production-readonly-20261017.db`, mode 0600; 58 user tables counted and SHA-256 fingerprints saved in a private `protected-ledger.json`; do not copy this DB or its credential metadata into the repository.
+- Proven old runtime-only paths: `sqlite/store.go::Open → backupLegacy`; `sqlite/migrations.go::backupLegacy/transferLegacyProviderInstallations`; `sqlite/legacy_descriptor.go::decodeLegacyProviderDescriptor`; `sqlite/legacy/manifest.go::Parse`. Only the one-time Provider v1→generic conversion uses these decoders. Modern plugin installation store and Sandbox/Tunnel pin triggers remain.
+- **Decision:** remove the legacy import/backup/decoder and its positive migration tests. If *either* old Provider installation table **or** its old migration marker exists, `Open` must reject that SQLite file with a stable incompatible-schema explanation, **without** deleting/migrating rows, creating snapshots or touching the modern inventory. The modern new DB and already-migrated v1 generic inventory continue to open idempotently, retaining exact installation identities and Sandbox/Tunnel pin guards.
+- Actual Grok delegation: `atask_6ad7d4457ab4130dd6625dfdea0684d9` **completed** a bounded technical review of the supplied real source facts and approved this fail-closed hard cut under strict no-data-loss tests. Its earlier direct-source read request `atask_5aaecc77c288e45b5b1352450465d14b` **failed**. The no-tool Grok health Task `atask_f5e908e6c08d8457c9b04adf8e2b8e4a` **completed**. Do not claim Grok examined local files directly.
+- Explicitly retained: Agent schema v1–11 migration code (legitimate forward upgrades), history and grants; provider-config v4 hard-cut checks; current external plugin integrity/extension verification and plugin management; all modern Sandbox/Tunnel installation references.
+
 ## C — Acceptance
 
 - Stable Tool/Provider/Agent/Profile identities; 4 delegated Agent facade Tools per Agent; no new global tools from cleanup.
