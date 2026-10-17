@@ -54,6 +54,9 @@ func downgradeAgentsToV7Fixture(t *testing.T, path string, sandboxID ...string) 
     AND (json_valid(p.config_json)=0 OR json_extract(p.config_json,'$.agentId')=OLD.agent_id))
     BEGIN SELECT RAISE(ABORT,'Agent is referenced by a Provider'); END`,
 		`DELETE FROM agent_schema_migrations WHERE version=8`,
+		`DELETE FROM agent_schema_migrations WHERE version=12`,
+		`DROP TRIGGER IF EXISTS agent_workspace_approval_policy_unbind`,
+		`DROP TABLE agent_approval_policies`,
 		`DELETE FROM agent_schema_migrations WHERE version=11`,
 		`DROP TRIGGER IF EXISTS agent_placement_registered_workspace_delete_guard`,
 		`DROP TABLE agent_tool_placements`,
@@ -196,7 +199,7 @@ func TestOpenCodeAgentV7ToV8PreservesAllLiveRelationships(t *testing.T) {
 		t.Fatalf("lost Profile ToolBinding %d %v", profileToolBindings, err)
 	}
 	var version int
-	if err := raw.QueryRowContext(ctx, "SELECT MAX(version) FROM agent_schema_migrations").Scan(&version); err != nil || version != 11 {
+	if err := raw.QueryRowContext(ctx, "SELECT MAX(version) FROM agent_schema_migrations").Scan(&version); err != nil || version != 12 {
 		t.Fatalf("expected v11 got %d %v", version, err)
 	}
 	checkRows, err := raw.QueryContext(ctx, "PRAGMA foreign_key_check")

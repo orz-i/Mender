@@ -109,7 +109,7 @@ func TestApprovalStoreV10OneShotCASAndImmutableHistory(t *testing.T) {
 		t.Fatalf("bounded ledger query %+v %v", records, err)
 	}
 	var version int
-	if err := s.db.QueryRowContext(ctx, "SELECT MAX(version) FROM agent_schema_migrations").Scan(&version); err != nil || version != 11 {
+	if err := s.db.QueryRowContext(ctx, "SELECT MAX(version) FROM agent_schema_migrations").Scan(&version); err != nil || version != 12 {
 		t.Fatalf("missing forward schema v10: %d %v", version, err)
 	}
 }

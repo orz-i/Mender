@@ -51,6 +51,13 @@ type Repository interface {
 	ListTaskApprovals(context.Context, agentdomain.TaskID) ([]agentdomain.Approval, error)
 	ResolveApproval(context.Context, agentdomain.ApprovalID, agentdomain.ApprovalStatus) error
 	InvalidateApproval(context.Context, agentdomain.ApprovalID) error
+	ApprovalPolicy(context.Context, agentdomain.ID, string) (agentdomain.ApprovalPolicy, error)
+	ListApprovalPolicies(context.Context, agentdomain.ID) ([]agentdomain.ApprovalPolicy, error)
+	SetApprovalPolicy(context.Context, agentdomain.ApprovalPolicy) error
+	ClearApprovalPolicy(context.Context, agentdomain.ID, string) error
+	RecordAutomaticApproval(context.Context, agentdomain.Approval, agentdomain.ApprovalMode) error
+	ResolveApprovalByPolicy(context.Context, agentdomain.ApprovalID, agentdomain.ApprovalMode) error
+	ListPendingApprovals(context.Context, int) ([]agentdomain.PendingApproval, error)
 }
 
 // Executor receives only one immutable, admitted task configuration.

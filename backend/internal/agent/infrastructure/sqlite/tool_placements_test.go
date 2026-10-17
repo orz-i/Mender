@@ -86,8 +86,8 @@ func TestOptionalToolPlacementV11ExactRootAndDisable(t *testing.T) {
 		t.Fatalf("placement inventory still present %+v %v", got, err)
 	}
 	var version int
-	if err := s.db.QueryRowContext(ctx, "SELECT MAX(version) FROM agent_schema_migrations").Scan(&version); err != nil || version != 11 {
-		t.Fatalf("expected Agent v11: %d %v", version, err)
+	if err := s.db.QueryRowContext(ctx, "SELECT MAX(version) FROM agent_schema_migrations").Scan(&version); err != nil || version != 12 {
+		t.Fatalf("expected current Agent v12: %d %v", version, err)
 	}
 }
 func TestToolPlacementRejectsInvalidToolIDsAndAliases(t *testing.T) {

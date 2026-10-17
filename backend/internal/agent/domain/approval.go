@@ -64,6 +64,7 @@ type Approval struct {
 	AllowOptionID  string         `json:"-"`
 	RejectOptionID string         `json:"-"`
 	Status         ApprovalStatus `json:"status"`
+	DecisionSource string         `json:"decisionSource,omitempty"` // owner or automatic policy
 	CreatedAt      time.Time      `json:"createdAt"`
 	ExpiresAt      time.Time      `json:"expiresAt"`
 	ResolvedAt     time.Time      `json:"resolvedAt,omitempty"`

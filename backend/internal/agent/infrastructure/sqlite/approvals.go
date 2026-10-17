@@ -11,21 +11,22 @@ import (
 )
 
 const approvalColumns = `approval_id,task_id,agent_id,generation,session_id,tool_call_id,
- action_kind,target_path,can_allow,allow_option_id,reject_option_id,status,created_at,expires_unix_ms,resolved_at`
+ action_kind,target_path,can_allow,allow_option_id,reject_option_id,status,created_at,expires_unix_ms,resolved_at,decision_source`
 
 func scanApproval(scan interface{ Scan(...any) error }) (agentdomain.Approval, error) {
 	var a agentdomain.Approval
 	var created, resolved string
 	var expires int64
-	var status string
+	var status, source string
 	var canAllow int
 	err := scan.Scan(&a.ID, &a.TaskID, &a.AgentID, &a.Generation, &a.SessionID, &a.ToolCallID,
-		&a.Kind, &a.Target, &canAllow, &a.AllowOptionID, &a.RejectOptionID, &status, &created, &expires, &resolved)
+		&a.Kind, &a.Target, &canAllow, &a.AllowOptionID, &a.RejectOptionID, &status, &created, &expires, &resolved, &source)
 	if err != nil {
 		return a, err
 	}
 	a.CanAllow = canAllow == 1
 	a.Status = agentdomain.ApprovalStatus(status)
+	a.DecisionSource = source
 	if a.CreatedAt, err = time.Parse(time.RFC3339Nano, created); err != nil {
 		return a, err
 	}
@@ -46,7 +47,7 @@ func (s *Store) CreateApproval(ctx context.Context, a agentdomain.Approval) erro
 	}
 	const maxPendingPerTask = 2
 	res, err := s.db.ExecContext(ctx, `INSERT INTO agent_task_approvals(`+approvalColumns+`)
- SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?
+ SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?
  WHERE EXISTS (SELECT 1 FROM agent_tasks t
     WHERE t.task_id=? AND t.agent_id=? AND t.generation=?
      AND t.status='running' AND t.cancel_requested=0)
@@ -54,7 +55,7 @@ func (s *Store) CreateApproval(ctx context.Context, a agentdomain.Approval) erro
     WHERE task_id=? AND status='pending') < ?`,
 		string(a.ID), string(a.TaskID), string(a.AgentID), a.Generation, a.SessionID, a.ToolCallID,
 		a.Kind, a.Target, a.CanAllow, a.AllowOptionID, a.RejectOptionID, string(a.Status),
-		a.CreatedAt.UTC().Format(time.RFC3339Nano), a.ExpiresAt.UnixMilli(), "",
+		a.CreatedAt.UTC().Format(time.RFC3339Nano), a.ExpiresAt.UnixMilli(), "", "owner",
 		string(a.TaskID), string(a.AgentID), a.Generation, string(a.TaskID), maxPendingPerTask)
 	if err != nil {
 		return fmt.Errorf("%w: record bounded Agent approval: %w", agentdomain.ErrConflict, err)

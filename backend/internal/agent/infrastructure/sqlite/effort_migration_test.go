@@ -64,6 +64,9 @@ func TestAgentV6ToV7ReasoningEffortMigrationPreservesIdentity(t *testing.T) {
 		"ALTER TABLE agent_tasks DROP COLUMN reasoning_effort",
 		"DELETE FROM agent_schema_migrations WHERE version=7",
 		"DELETE FROM agent_schema_migrations WHERE version=8",
+		"DELETE FROM agent_schema_migrations WHERE version=12",
+		"DROP TRIGGER IF EXISTS agent_workspace_approval_policy_unbind",
+		"DROP TABLE agent_approval_policies",
 		"DELETE FROM agent_schema_migrations WHERE version=11",
 		"DROP TRIGGER IF EXISTS agent_placement_registered_workspace_delete_guard",
 		"DROP TABLE agent_tool_placements",
@@ -98,7 +101,7 @@ func TestAgentV6ToV7ReasoningEffortMigrationPreservesIdentity(t *testing.T) {
 		t.Fatalf("Profile AgentGrant removed: %v", err)
 	}
 	var version int
-	if err := updated.db.QueryRowContext(ctx, "SELECT MAX(version) FROM agent_schema_migrations").Scan(&version); err != nil || version != 11 {
+	if err := updated.db.QueryRowContext(ctx, "SELECT MAX(version) FROM agent_schema_migrations").Scan(&version); err != nil || version != 12 {
 		t.Fatalf("migration not applied: v%d %v", version, err)
 	}
 }

@@ -118,7 +118,7 @@ func (s *stream) dispatchPermission(ctx context.Context, msg rpcMessage) error {
 			optionID := ""
 			switch decision.Choice {
 			case agentdomain.ApprovalAllowOnce:
-				if !req.CanAllow {
+				if !req.CanAllow && !decision.AuthorizedByPolicy {
 					err = agentdomain.ErrForbidden
 					break
 				}

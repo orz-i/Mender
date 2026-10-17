@@ -25,10 +25,15 @@ type PermissionRequest struct {
 	AllowOptionID  string
 	RejectOptionID string
 }
-type PermissionDecision struct{ Choice agentdomain.ApprovalChoice }
+type PermissionDecision struct {
+	Choice agentdomain.ApprovalChoice
+	// Only the trusted application service may set this after a current,
+	// owner-authored, atomic approval-policy decision (never ACP metadata).
+	AuthorizedByPolicy bool
+}
 type PermissionRequester func(context.Context, PermissionRequest) (PermissionDecision, error)
 type pendingApproval struct {
-	decision chan agentdomain.ApprovalChoice
+	decision chan PermissionDecision
 }
 
 // requestPermission starts one bounded owner decision wait, without blocking
@@ -65,7 +70,10 @@ func (s *Service) requestPermission(ctx context.Context, task agentdomain.Task, 
 		Target: req.Target, CanAllow: req.CanAllow,
 		AllowOptionID: req.AllowOptionID, RejectOptionID: req.RejectOptionID,
 		Status: agentdomain.ApprovalPending, CreatedAt: time.Now().UTC(), ExpiresAt: limit.UTC()}
-	waiter := &pendingApproval{decision: make(chan agentdomain.ApprovalChoice, 1)}
+	if decision, accepted, err := s.tryAutomaticApproval(ctx, task, a); err != nil || accepted {
+		return decision, err
+	}
+	waiter := &pendingApproval{decision: make(chan PermissionDecision, 1)}
 	s.mu.Lock()
 	if s.closed || s.active[task.ID] == nil {
 		s.mu.Unlock()
@@ -91,11 +99,11 @@ func (s *Service) requestPermission(ctx context.Context, task agentdomain.Task, 
 		return none, ctx.Err()
 	case <-timer.C:
 		return none, agentdomain.ErrUnavailable
-	case choice := <-waiter.decision:
+	case decision := <-waiter.decision:
 		if ctx.Err() != nil {
 			return none, ctx.Err()
 		}
-		return PermissionDecision{Choice: choice}, nil
+		return decision, nil
 	}
 }
 
@@ -179,7 +187,7 @@ func (s *Service) DecideApproval(ctx context.Context, id agentdomain.ApprovalID,
 	// A buffered channel is deliberately nonblocking: expiry, cancellation
 	// or shutdown may have detached the waiter concurrently with owner action.
 	select {
-	case waiter.decision <- choice:
+	case waiter.decision <- PermissionDecision{Choice: choice}:
 	default:
 	}
 	approval.Status = status
