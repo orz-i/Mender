@@ -12,10 +12,11 @@ import (
 	agentdomain "github.com/orz-i/Mender/backend/internal/agent/domain"
 )
 
-// A committed approval may complete inside Mender as its Task is cancelled.
-// Even if the application reports a selected option, the ACP transport must
-// not send a late permission to the now-cancelled Agent subprocess.
-func TestACPCancelledTaskNeverSendsLateCommittedPermission(t *testing.T) {
+// A committed approval may complete inside Mender while its Task cancels.
+// When cancellation is already visible before the callback returns, ACP
+// must not send the late one-shot option. This test does NOT prove an atomic
+// check-and-write gate for cancellation concurrent with the final send.
+func TestACPPreCancelledTaskDoesNotSendCommittedPermission(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	started := make(chan struct{})
