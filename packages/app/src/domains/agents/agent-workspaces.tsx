@@ -28,6 +28,8 @@ function registrationErrorMessage(reason:unknown):string{
   return t("This workspace alias already exists.");
  if(code.includes("agent_workspace_directory_exists"))
   return t("This directory is already registered for this Agent. Refresh the workspace list.");
+ if(code.includes("agent_workspace_governed_tools_enabled"))
+  return t("Disable governed tools before removing this workspace.");
  if((reason instanceof MenderApiError&&reason.status===409)||
     code.includes("agent resource conflict"))
   return t("Workspace registration conflicts with existing data. Refresh the workspace list.");
@@ -66,7 +68,7 @@ export function AgentWorkspaceSettings({
     case "revoke":await client.revokeAgentWorkspace(agent.agentId,action.key,action.profileId);break;
    }
    setAction(null);setRevision(v=>v+1);
-  }catch(e){setError(action.kind==="add"?registrationErrorMessage(e):errorMessage(e));}finally{setBusy(false);}
+  }catch(e){setError(action.kind==="add"||action.kind==="remove"?registrationErrorMessage(e):errorMessage(e));}finally{setBusy(false);}
  }
  function openAdd(){setError("");setKey("");setRoot("");setAction({kind:"add"});}
  function openGrant(key:string,granted:string[]){

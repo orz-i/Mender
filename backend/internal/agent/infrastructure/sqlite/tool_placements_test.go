@@ -64,8 +64,8 @@ func TestOptionalToolPlacementV11ExactRootAndDisable(t *testing.T) {
 	if err := s.PutToolPlacement(ctx, stale); !errors.Is(err, agentdomain.ErrConflict) {
 		t.Fatalf("stale workspace path accepted: %v", err)
 	}
-	if err := s.UnbindWorkspace(ctx, id, "project"); err == nil {
-		t.Fatal("workspace removed while active placement still references it")
+	if err := s.UnbindWorkspace(ctx, id, "project"); !errors.Is(err, agentdomain.ErrConflict) || !errors.Is(err, agentdomain.ErrWorkspaceGovernedToolsEnabled) {
+		t.Fatalf("workspace with active placement was not rejected with typed reason: %v", err)
 	}
 	if err := s.DeleteToolPlacement(ctx, id, "project"); err != nil {
 		t.Fatal(err)

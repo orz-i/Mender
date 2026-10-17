@@ -1,4 +1,5 @@
 export const zhCNMessages: Readonly<Record<string, string>> = {
+  "Disable governed tools before removing this workspace.": "请先关闭该工作区的受治理工具配置，再删除工作区。",
   "Governed tools": "受治理工具",
   "Governed tool execution": "受治理工具执行",
   "Governed tools are optional per workspace. Normal Agent tasks do not require a Sandbox.": "每个工作区可以独立配置受治理工具，普通智能体任务不需要绑定沙盒。",

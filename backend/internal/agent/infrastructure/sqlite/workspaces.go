@@ -112,15 +112,32 @@ func (s *Store) UnbindWorkspace(ctx context.Context, id agentdomain.ID, key stri
 	}
 	// Historical tasks preserve their effective canonical cwd; they do not
 	// retain authority to run again. Active tasks keep their accepted snapshot.
-	res, err := s.db.ExecContext(ctx, "DELETE FROM agent_workspaces WHERE agent_id=? AND workspace_key=?", id, key)
+	res, err := s.db.ExecContext(ctx, `DELETE FROM agent_workspaces
+  WHERE agent_id=? AND workspace_key=?
+   AND NOT EXISTS(SELECT 1 FROM agent_tool_placements p
+      WHERE p.agent_id=agent_workspaces.agent_id AND p.workspace_key=agent_workspaces.workspace_key)`, id, key)
 	if err != nil {
 		return err
 	}
-	n, _ := res.RowsAffected()
-	if n == 0 {
-		return agentdomain.ErrNotFound
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
 	}
-	return nil
+	if n == 1 {
+		return nil
+	}
+	if n != 0 {
+		return agentdomain.ErrConflict
+	}
+	var linked bool
+	if err := s.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM agent_tool_placements
+    WHERE agent_id=? AND workspace_key=?)`, id, key).Scan(&linked); err != nil {
+		return err
+	}
+	if linked {
+		return fmt.Errorf("%w: %w", agentdomain.ErrConflict, agentdomain.ErrWorkspaceGovernedToolsEnabled)
+	}
+	return agentdomain.ErrNotFound
 }
 func (s *Store) HasWorkspaceGrant(ctx context.Context, id agentdomain.ID, key, profileID string) (bool, error) {
 	if err := agentdomain.ValidateWorkspaceKey(key); err != nil {

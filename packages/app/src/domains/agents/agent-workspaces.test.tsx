@@ -167,4 +167,21 @@ describe("Agent owner-approved local workspace editor",()=>{
   await waitFor(()=>expect(screen.getByRole("dialog").textContent).toContain("此目录已登记到当前智能体"));
  });
 
+
+ it("maps governed placement deletion conflict to an actionable Chinese owner instruction",async()=>{
+  setLocale("zh-CN");
+  const unbind=vi.fn().mockRejectedValue(new Error("agent resource conflict: agent_workspace_governed_tools_enabled"));
+  const client={
+   listAgentWorkspaces:vi.fn().mockResolvedValue({workspaces:[{key:"gaoge",workspaceRoot:localRoot,profileIds:[]}]}),
+   listProfiles:vi.fn().mockResolvedValue({profiles:[]}),unbindAgentWorkspace:unbind,
+  } as unknown as MenderClient;
+  render(<MemoryRouter><AgentWorkspaceSettings client={client} agent={agent}/></MemoryRouter>);
+  expect(await screen.findByText(localRoot)).toBeTruthy();
+  fireEvent.click(screen.getByRole("button",{name:"移除"}));
+  fireEvent.click(screen.getByRole("button",{name:"确认"}));
+  await waitFor(()=>expect(screen.getByRole("dialog").textContent).toContain("请先关闭该工作区的受治理工具配置"));
+  expect(screen.getByRole("dialog").textContent).not.toContain("发生意外错误");
+  expect(unbind).toHaveBeenCalledWith(agent.agentId,"gaoge");
+ });
+
 });
