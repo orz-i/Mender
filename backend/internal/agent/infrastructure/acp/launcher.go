@@ -13,6 +13,23 @@ import (
 	processisolation "github.com/orz-i/Mender/backend/internal/runtimegovernance/infrastructure/processisolation"
 )
 
+// opencodeACPReviewConfig is a host-selected, task-scoped OpenCode v2
+// inline overlay. It is deliberately fixed and NEVER derived from model Tool
+// arguments. It makes routine native file and shell operations *ask* for a
+// cooperative ACP owner decision. This DOES NOT confine a host-mode process;
+// project-defined Agents/plugins or runtime-user authority can still bypass
+// protocol-level review, so the UI must not advertise strong enforcement.
+//
+// This uses the V2 "permissions" ordered rules, not V1 "permission/bash/task".
+const opencodeACPReviewConfig = `{"permissions":[
+ {"action":"read","resource":"*","effect":"ask"},
+ {"action":"edit","resource":"*","effect":"ask"},
+ {"action":"shell","resource":"*","effect":"ask"},
+ {"action":"external_directory","resource":"*","effect":"deny"},
+ {"action":"subagent","resource":"*","effect":"deny"},
+ {"action":"execute","resource":"*","effect":"deny"}
+]}`
+
 type LocalFactory struct{ launcher *processisolation.Launcher }
 
 func NewLocalFactory(launcher *processisolation.Launcher) (*LocalFactory, error) {
@@ -107,6 +124,9 @@ func (f *LocalFactory) CommandInWorkspace(ctx context.Context, a agentdomain.Age
 		arguments = []string{"agent", "stdio"}
 	case agentdomain.BackendOpenCode:
 		arguments = []string{"acp"}
+		// Owner-mediated ACP review is always attempted for native actions.
+		// Strong filesystem boundaries require separately verified isolation.
+		environment = append(environment, "OPENCODE_CONFIG_CONTENT="+opencodeACPReviewConfig)
 	case agentdomain.BackendCodex:
 		codex, err := trustedBinary("codex")
 		if err != nil {

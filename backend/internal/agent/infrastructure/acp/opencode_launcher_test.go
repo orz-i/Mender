@@ -2,10 +2,12 @@ package acp
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -61,12 +63,46 @@ func TestOpenCodeLocalLaunchUsesPinnedExecutableAndACPStdioOnly(t *testing.T) {
 		cmd.Dir != a.Spec().WorkspaceRoot {
 		t.Fatalf("unreviewed OpenCode invocation: path=%q args=%q cwd=%q", cmd.Path, cmd.Args, cmd.Dir)
 	}
+	var suppliedPolicy string
 	for _, v := range cmd.Env {
+		if strings.HasPrefix(v, "OPENCODE_CONFIG_CONTENT=") {
+			suppliedPolicy = strings.TrimPrefix(v, "OPENCODE_CONFIG_CONTENT=")
+		}
 		if v == "CI=1" || v == "NO_BROWSER=1" {
 			continue
 		}
 		if len(v) >= 13 && v[:13] == "OPENCODE_API_" {
 			t.Fatalf("inherited sensitive environment name: %q", v[:13])
+		}
+	}
+	if suppliedPolicy == "" {
+		t.Fatal("OpenCode was started without owner-mediated V2 review rules")
+	}
+	var cfg struct {
+		Permissions []struct {
+			Action   string `json:"action"`
+			Resource string `json:"resource"`
+			Effect   string `json:"effect"`
+		} `json:"permissions"`
+	}
+	if err := json.Unmarshal([]byte(suppliedPolicy), &cfg); err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]string{}
+	for _, rule := range cfg.Permissions {
+		if rule.Resource != "*" {
+			t.Fatalf("non-universal review rule: %+v", rule)
+		}
+		got[rule.Action] = rule.Effect
+	}
+	for _, action := range []string{"read", "edit", "shell"} {
+		if got[action] != "ask" {
+			t.Fatalf("OpenCode native %s not reviewed: %+v", action, got)
+		}
+	}
+	for _, action := range []string{"external_directory", "subagent", "execute"} {
+		if got[action] != "deny" {
+			t.Fatalf("OpenCode %s not denied: %+v", action, got)
 		}
 	}
 }
