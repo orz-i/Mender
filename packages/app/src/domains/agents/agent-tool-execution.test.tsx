@@ -78,6 +78,38 @@ describe("optional Agent governed tool execution",()=>{
   expect(list).not.toHaveBeenCalled();
   expect(save).not.toHaveBeenCalled();
  });
+ it("shows a safe empty candidate state without provisioning Sandboxes or tools",async()=>{
+  const ensure=vi.fn();const save=vi.fn();
+  const client={...base,listSandboxes:vi.fn().mockResolvedValue({sandboxes:sandboxes.slice(1)}),
+   ensureSandboxTools:ensure,configureAgentToolPlacement:save} as unknown as MenderClient;
+  render(<AgentToolExecutionSettings client={client} agent={agent}/>);
+  expect(await screen.findByText(root)).toBeTruthy();
+  fireEvent.click(screen.getByRole("button",{name:"Configure"}));
+  const dialog=screen.getByRole("dialog");
+  expect(await within(dialog).findByText(/No matching ready restricted Sandbox/)).toBeTruthy();
+  expect(within(dialog).getByRole<HTMLButtonElement>("button",{name:"Save"}).disabled).toBe(true);
+  expect(within(dialog).queryByRole("option",{name:"Host sandbox"})).toBeNull();
+  expect(ensure).not.toHaveBeenCalled();
+  expect(save).not.toHaveBeenCalled();
+ });
+ it("keeps owner editor open and reports configuration errors without clearing selection",async()=>{
+  const configure=vi.fn().mockRejectedValue(new Error("Placement is no longer eligible"));
+  const client={...base,configureAgentToolPlacement:configure} as unknown as MenderClient;
+  render(<AgentToolExecutionSettings client={client} agent={agent}/>);
+  expect(await screen.findByText(root)).toBeTruthy();
+  fireEvent.click(screen.getByRole("button",{name:"Configure"}));
+  const dialog=screen.getByRole("dialog");
+  expect(await within(dialog).findByRole("option",{name:"Approved local root"})).toBeTruthy();
+  fireEvent.change(within(dialog).getByRole("combobox",{name:"Execution environment"}),{
+   target:{value:sandboxes[0]!.sandboxId},
+  });
+  fireEvent.click(await within(dialog).findByRole("checkbox",{name:"Read"}));
+  fireEvent.click(within(dialog).getByRole("button",{name:"Save"}));
+  expect(await within(dialog).findByRole("alert")).toBeTruthy();
+  expect(within(dialog).getByRole("alert").textContent).toContain("Placement is no longer eligible");
+  expect(within(dialog).getByRole<HTMLInputElement>("checkbox",{name:"Read"}).checked).toBe(true);
+  expect(configure).toHaveBeenCalledOnce();
+ });
  it("explicitly disables an existing placement instead of deleting a workspace",async()=>{
   const placement:AgentToolPlacement={
    agentId:agent.agentId,workspaceKey:"",workspaceRoot:root,

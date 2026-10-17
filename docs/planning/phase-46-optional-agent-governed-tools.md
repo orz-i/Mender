@@ -41,6 +41,13 @@ The initial implementation left the then-running Wails process and MCP Tunnel un
 
 The remaining positive production acceptance is an owner-created restricted Agent with an actually compatible installed CLI/auth environment, explicit matching ready Sandbox and ToolIDs bound to the chosen Profile. HTTP MCP is negotiated per session and may not be supported; a backend failing that or its own authentication will fail closed, not downgrade Host. Native plugin/config/read/network bypass and filesystem/network isolation need separate verification before advertising universal confinement.
 
+### Native GUI acceptance follow-up — 2026-10-17
+
+- Running Wails native process and window observed; the production database is at Agent schema v11 with no governed placements. No production Agent was modified. All three production Agents are `host`, so the real owner UI must show the restricted-only warning instead of enabling the configuration on these Agents.
+- Native accessibility automation currently only exposes the top-level window chrome, not the embedded WKWebView controls. Attempts to enumerate and navigate the actual Agent detail / governed-tools page could not produce reliable UI evidence. **Do not mark live GUI acceptance as passed.** This is an automation visibility blocker, not proof that the UI is broken.
+- Added isolated React tests for (a) no matching Sandbox: save disabled, no automatic Sandbox/tool creation, and (b) configuration failure: error remains visible inside the editor, selection preserved. Targeted Vitest **5/5 passed**, shared app TypeScript check passed. Existing tests cover matching Sandbox and tool filtering, Host disabled state and explicit removal of placement without unbinding workspace; Wails owner service has configuration/disable tests.
+- Remaining **Phase 46 D GUI gate**: in native Wails, select any Host Agent, verify governed tools tab and unavailable warning; then use an independently created disposable restricted Agent / matching Sandbox to check eligible options, save, reload, disable, and failure messaging. Avoid production Host mutation or test writes. The separate Servers-view generic error is not evidence for or against this Agent UI.
+
 ### Final quality and deployment receipt
 
 - **Final canonical `pnpm check`: exit code 0**; receipt `/tmp/mender-phase46-final-check.exit`, full log `/tmp/mender-phase46-final-check.log`. Includes full Go tests **and backend Race Detector**, SDK/plugin/protocol checks, Wails generated-binding and desktop architecture parity, Go lint, strict TypeScript, ESLint, i18n **1281/1281**, Vitest **45 test files / 257 tests**, plus Web/Desktop production bundles. The large Vite output chunks are a non-blocking advisory.
