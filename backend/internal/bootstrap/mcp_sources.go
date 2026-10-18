@@ -123,3 +123,21 @@ func (r *Runtime) mcpSandboxSourceUnavailable(
 		return true, nil
 	}
 }
+
+// ListProfileSelectableToolSources reports Catalog source eligibility without
+// reading Profile grants or activating any backend. This is the same verified
+// source/availability projection that MCP discovery consumes. The caller
+// chooses whether a configured source with zero Tools is worth showing.
+func (r *Runtime) ListProfileSelectableToolSources(
+	ctx context.Context, providerIDs []catalogdomain.ProviderID,
+) (map[catalogdomain.ProviderID]bool, error) {
+	sources, err := r.resolveMCPToolSources(ctx, providerIDs)
+	if err != nil {
+		return nil, err
+	}
+	selectable := make(map[catalogdomain.ProviderID]bool, len(providerIDs))
+	for _, id := range providerIDs {
+		selectable[id] = sources[id].Discoverable()
+	}
+	return selectable, nil
+}

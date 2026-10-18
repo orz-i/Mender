@@ -454,12 +454,12 @@ func (a *Adapter) searchHandler(ctx context.Context, request *mcp.CallToolReques
 	// source-wide unavailable Providers never become selectable search hits.
 	visiblePIDs := make([]catalogdomain.ProviderID, 0, len(pidsToResolve))
 	for _, pid := range pidsToResolve {
-		if sourceDiscoverable(sources[pid]) {
+		if sources[pid].Discoverable() {
 			visiblePIDs = append(visiblePIDs, pid)
 		}
 	}
 	pidsToResolve = visiblePIDs
-	if input.SourceID != "" && !sourceDiscoverable(sources[targetPID]) {
+	if input.SourceID != "" && !sources[targetPID].Discoverable() {
 		if view == "sources" {
 			return structuredResult(map[string]any{"sources": []SourceHeader{}, "nextCursor": ""})
 		}
@@ -805,7 +805,7 @@ func (a *Adapter) describeHandler(ctx context.Context, request *mcp.CallToolRequ
 	if err != nil {
 		return nil, fmt.Errorf("mender describe tool: resolve source: %w", err)
 	}
-	if !sourceDiscoverable(sources[tool.ProviderID()]) {
+	if !sources[tool.ProviderID()].Discoverable() {
 		return nil, ErrToolOutsideProfile
 	}
 

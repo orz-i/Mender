@@ -1920,6 +1920,8 @@ export interface components {
             toolSourceId?: string;
             /** @description Verified resource display name; not a runtime-health claim */
             toolSourceName?: string;
+            /** @description Current verified attribution and known source-wide availability for Profile candidate selection; not execution authorization */
+            toolSourceSelectable?: boolean;
             pluginId?: string;
             installationId?: string;
             pluginVersion?: string;

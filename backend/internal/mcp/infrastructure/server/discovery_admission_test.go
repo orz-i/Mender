@@ -182,7 +182,7 @@ func TestSourceDiscoverableRequiresExactResourceIdentity(t *testing.T) {
 		{ToolSource{Kind: "agent", Name: "OpenCode", ResourceID: "agent_verified", Unavailable: true}, false},
 		{ToolSource{Kind: "unclaimed", Name: "Neutral"}, false},
 	} {
-		if got := sourceDiscoverable(tc.source); got != tc.want {
+		if got := tc.source.Discoverable(); got != tc.want {
 			t.Fatalf("source %+v discoverable=%v, want %v", tc.source, got, tc.want)
 		}
 	}

@@ -121,9 +121,9 @@ func (a *Adapter) MCPServer() *mcp.Server {
 	return a.server
 }
 
-// sourceDiscoverable limits all MCP discovery surfaces to a verified,
-// supplied source that is not known to be unavailable.
-func sourceDiscoverable(source ToolSource) bool {
+// Discoverable is the read-only Host attribution/availability gate shared by
+// MCP discovery and management source selection. It never grants execution.
+func (source ToolSource) Discoverable() bool {
 	if source.Unavailable || strings.TrimSpace(source.Name) == "" {
 		return false
 	}
@@ -199,7 +199,7 @@ func (a *Adapter) addDirectTools(ctx context.Context) error {
 			return fmt.Errorf("build MCP server: direct Tool %s missing from profile projection", selectedID)
 		}
 		source := sources[tool.ProviderID()]
-		if !sourceDiscoverable(source) {
+		if !source.Discoverable() {
 			// Never export an orphaned or known-unavailable Tool as a
 			// selectable direct MCP Tool, even if its Profile binding remains.
 			continue

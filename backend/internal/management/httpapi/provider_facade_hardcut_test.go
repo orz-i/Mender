@@ -91,8 +91,24 @@ func TestManagedProviderSyncIsOnlyAllowedFromSandboxToolSuiteOwner(t *testing.T)
 	if !ok || item["providerId"] != suite.ProviderID ||
 		item["toolSourceKind"] != "sandbox" ||
 		item["toolSourceId"] != sandbox.ID().String() ||
-		item["toolSourceName"] != "HTTP facade test" {
+		item["toolSourceName"] != "HTTP facade test" ||
+		item["toolSourceSelectable"] != true {
 		t.Fatalf("Tool source attribution did not use resource ownership binding: %#v", item)
+	}
+	if _, err := runtime.Sandboxes.ChangeLocalLifecycle(ctx, sandbox.ID(), governancedomain.ActionSandboxStop, caller); err != nil {
+		t.Fatal(err)
+	}
+	stopped := requestJSON(t, server.Client(), http.MethodGet, server.URL+"/api/v1/providers", nil, http.StatusOK)
+	stoppedSources := stopped["providers"].([]any)
+	if stoppedSources[0].(map[string]any)["toolSourceSelectable"] != false {
+		t.Fatalf("Stopped source was offered for Profile selection: %#v", stoppedSources[0])
+	}
+	if _, err := runtime.Sandboxes.ChangeLocalLifecycle(ctx, sandbox.ID(), governancedomain.ActionSandboxStart, caller); err != nil {
+		t.Fatal(err)
+	}
+	ready := requestJSON(t, server.Client(), http.MethodGet, server.URL+"/api/v1/providers", nil, http.StatusOK)
+	if ready["providers"].([]any)[0].(map[string]any)["toolSourceSelectable"] != true {
+		t.Fatalf("Restarted source not selectable: %#v", ready)
 	}
 	requestJSON(t, server.Client(), http.MethodPost,
 		server.URL+"/api/v1/providers/"+suite.ProviderID+"/sync", nil, http.StatusConflict)

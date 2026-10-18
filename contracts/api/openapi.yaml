@@ -2374,6 +2374,7 @@ components:
         toolSourceKind: { type: string, enum: [provider, agent, sandbox, unclaimed] }
         toolSourceId: { type: string, description: Verified resource ID or ProviderID for direct sources }
         toolSourceName: { type: string, description: Verified resource display name; not a runtime-health claim }
+        toolSourceSelectable: { type: boolean, description: Current verified attribution and known source-wide availability for Profile candidate selection; not execution authorization }
         pluginId: { type: string }
         installationId: { type: string }
         pluginVersion: { type: string }

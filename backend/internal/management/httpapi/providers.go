@@ -77,6 +77,15 @@ func (h *Handler) listProviders(w http.ResponseWriter, r *http.Request) {
 		writeKnownError(w, err)
 		return
 	}
+	providerIDs := make([]catalogdomain.ProviderID, 0, len(providers))
+	for _, provider := range providers {
+		providerIDs = append(providerIDs, provider.ID())
+	}
+	selectable, err := h.runtime.ListProfileSelectableToolSources(r.Context(), providerIDs)
+	if err != nil {
+		writeKnownError(w, err)
+		return
+	}
 
 	configByProvider := make(
 		map[catalogdomain.ProviderID]providerplugin.Configuration,
@@ -102,6 +111,7 @@ func (h *Handler) listProviders(w http.ResponseWriter, r *http.Request) {
 		item := providerProjection(provider, configPtr, descriptorPtr, toolCounts[provider.ID()])
 		owner := bootstrap.ToolSourceForProvider(provider, configPtr, owners)
 		item["toolSourceKind"] = owner.Kind
+		item["toolSourceSelectable"] = selectable[provider.ID()]
 		if owner.ResourceID != "" {
 			item["toolSourceId"] = owner.ResourceID
 		}
