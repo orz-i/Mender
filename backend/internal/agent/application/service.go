@@ -457,7 +457,7 @@ func (s *Service) run(ctx context.Context, cancel context.CancelFunc, agent agen
 	diagnostic := ""
 	if err != nil {
 		next = agentdomain.TaskFailed
-		diagnostic = "Agent execution failed"
+		diagnostic = agentFailureDiagnostic(err)
 		if supplyFailed {
 			diagnostic = "Governed tool execution unavailable"
 		}
