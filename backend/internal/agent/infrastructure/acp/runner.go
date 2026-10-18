@@ -65,8 +65,25 @@ type stream struct {
 }
 
 func (s *stream) send(message any) error {
+	return s.sendLocked(context.Background(), message)
+}
+
+// sendPermission rechecks Task cancellation while holding the same write
+// mutex used by every ACP frame. In particular, a permission queued behind
+// a slow/blocked frame must not send a late allow_once after cancellation.
+// This is NOT atomic with an asynchronous cancellation that occurs after the
+// check but while the OS pipe write is already in progress, nor proof the
+// external Agent received or executed the permission.
+func (s *stream) sendPermission(ctx context.Context, message any) error {
+	return s.sendLocked(ctx, message)
+}
+
+func (s *stream) sendLocked(ctx context.Context, message any) error {
 	s.sendMu.Lock()
 	defer s.sendMu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	b, err := json.Marshal(message)
 	if err != nil {
 		return err

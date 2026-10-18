@@ -132,8 +132,14 @@ func (s *stream) dispatchPermission(ctx context.Context, msg rpcMessage) error {
 				outcome = map[string]any{"outcome": "selected", "optionId": optionID}
 			}
 		}
-		if writeErr := s.send(map[string]any{"jsonrpc": "2.0", "id": msg.ID,
+		if writeErr := s.sendPermission(ctx, map[string]any{"jsonrpc": "2.0", "id": msg.ID,
 			"result": map[string]any{"outcome": outcome}}); writeErr != nil {
+			// Cancellation while waiting for the ACP write lock is handled
+			// by the Task context; don't turn it into an unrelated
+			// client-permission failure after the Task was cancelled.
+			if ctx.Err() != nil {
+				return
+			}
 			err = errors.Join(err, fmt.Errorf("write ACP approval result: %w", writeErr))
 		}
 		if err != nil {
