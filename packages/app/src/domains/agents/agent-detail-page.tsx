@@ -32,6 +32,29 @@ function taskStatusText(value:AgentTask["status"]):string{
     case "unknown":return t("Unknown");
   }
 }
+function taskDiagnosticText(value:string):string{
+  // Task diagnostics are a closed vocabulary from the local Agent service.
+  // Older or extension-specific codes retain their exact original content.
+  switch(value){
+    case "Agent process could not start": return t("Agent process could not start");
+    case "ACP initialization failed": return t("ACP initialization failed");
+    case "ACP session creation failed": return t("ACP session creation failed");
+    case "Agent model or reasoning configuration failed": return t("Agent model or reasoning configuration failed");
+    case "Agent permission request was rejected": return t("Agent permission request was rejected");
+    case "Agent rejected the ACP prompt": return t("Agent rejected the ACP prompt");
+    case "ACP prompt transport failed": return t("ACP prompt transport failed");
+    case "ACP protocol validation failed": return t("ACP protocol validation failed");
+    case "Agent returned an invalid completion": return t("Agent returned an invalid completion");
+    case "Agent execution failed": return t("Agent execution failed");
+    case "Governed tool execution unavailable": return t("Governed tool execution unavailable");
+    case "Task cancelled": return t("Task cancelled");
+    case "Agent outcome unknown after runtime shutdown": return t("Agent outcome unknown after runtime shutdown");
+    case "Agent outcome unknown after timeout": return t("Agent outcome unknown after timeout");
+    case "Agent output exceeded the permitted limit": return t("Agent output exceeded the permitted limit");
+    case "Agent outcome unknown after cancellation": return t("Agent outcome unknown after cancellation");
+    default: return value;
+  }
+}
 type Topic = "overview" | "workspaces" | "execution" | "tools" | "tasks" | "access" | "activity";
 type ConfirmAction = {kind:"cancel"|"revoke"|"delete";id:string} | null;
 
@@ -358,7 +381,7 @@ export function AgentDetailPage({client,chooseLocalDirectory}:{client:MenderClie
         {client.supportsLocalAgentApprovals===true&&viewTask&&(viewTask.status==="running"||viewTask.status==="queued")?
           <AgentTaskApprovals client={client} task={viewTask} onTaskUpdated={updateViewedTask}/>:null}
         {viewTask?.result?<pre className="max-h-[45vh] overflow-auto whitespace-pre-wrap break-words rounded-lg bg-muted p-4 text-xs">{viewTask.result}</pre>:
-          <p className="text-sm text-muted-foreground">{viewTask?.diagnostic||t("No result available.")}</p>}
+          <p className="text-sm text-muted-foreground">{viewTask?.diagnostic?taskDiagnosticText(viewTask.diagnostic):t("No result available.")}</p>}
         <DialogFooter><Button variant="outline" onClick={()=>setViewTask(null)}>{t("Close")}</Button></DialogFooter>
       </DialogContent>
     </Dialog>

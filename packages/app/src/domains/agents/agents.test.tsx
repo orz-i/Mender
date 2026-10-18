@@ -249,4 +249,19 @@ describe("Agents focused management",()=>{
     fireEvent.click(screen.getByRole("button",{name:"Activity"}));
     expect(await screen.findByText("agent.task.submit")).toBeTruthy();
   });
+  it("localizes safe Agent failure stages in the owner Task result dialog",async()=>{
+    setLocale("zh-CN");
+    const failedTask:AgentTask={
+      ...task,status:"failed",result:"",diagnostic:"ACP session creation failed",
+    };
+    show("/agents/"+agent.agentId,{
+      listAgentTasks:vi.fn().mockResolvedValue({tasks:[failedTask]}),
+      getAgentTask:vi.fn().mockResolvedValue(failedTask),
+    });
+    expect(await screen.findByText("Code Reviewer")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button",{name:/^任务/}));
+    fireEvent.click(await screen.findByRole("button",{name:"查看"}));
+    expect(await screen.findByText("ACP 会话创建失败")).toBeTruthy();
+    expect(screen.queryByText("ACP session creation failed")).toBeNull();
+  });
 });
