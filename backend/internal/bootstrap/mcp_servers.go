@@ -90,6 +90,31 @@ func (r *Runtime) StartMCPHTTPServer(
 	if err != nil {
 		return MCPServerInstance{}, fmt.Errorf("start MCP server: adapter: %w", err)
 	}
+	// A managed HTTP endpoint must follow committed Profile ToolBinding
+	// revisions, including mutations from a second Runtime/CLI process.
+	// Keep the listener and tunnel stable while swapping stateless SDK
+	// projections atomically on the next HTTP request.
+	liveProfile, err := newManagedProfileMCPHTTPHandler(
+		profile, adapter.StreamableHTTPHandler(),
+		r.Profiles.GetRevision.Execute, r.Profiles.GetByID.Execute,
+		func(reqCtx context.Context, updated profiledomain.Profile) (http.Handler, error) {
+			activationContext, activationErr := profileActivationContext(controlContext, updated)
+			if activationErr != nil {
+				return nil, activationErr
+			}
+			if activationErr = r.ActivateProfileProviders(reqCtx, updated, activationContext); activationErr != nil {
+				return nil, activationErr
+			}
+			fresh, buildErr := r.NewMCPServer(reqCtx, updated)
+			if buildErr != nil {
+				return nil, buildErr
+			}
+			return fresh.StreamableHTTPHandler(), nil
+		},
+	)
+	if err != nil {
+		return MCPServerInstance{}, fmt.Errorf("start MCP server: Profile refresh: %w", err)
+	}
 
 	listener, err := net.Listen("tcp", address)
 	if err != nil {
@@ -107,7 +132,7 @@ func (r *Runtime) StartMCPHTTPServer(
 	mux := http.NewServeMux()
 	mux.Handle(
 		"/mcp",
-		localMCPRequestGuard(adapter.StreamableHTTPHandler()),
+		localMCPRequestGuard(liveProfile),
 	)
 	httpServer := &http.Server{
 		Handler:           mux,
