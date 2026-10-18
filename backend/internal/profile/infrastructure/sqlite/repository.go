@@ -45,6 +45,20 @@ func (s *Store) CreateProfile(ctx context.Context, profile profiledomain.Profile
 	return nil
 }
 
+// GetProfileRevision performs a single read-only committed revision lookup.
+// A full aggregate is only hydrated by consumers when this version changes.
+func (s *Store) GetProfileRevision(ctx context.Context, id profiledomain.ProfileID) (uint64, error) {
+	var revision uint64
+	err := s.db.QueryRowContext(ctx, `SELECT revision FROM profiles WHERE id=?`, id.String()).Scan(&revision)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, profileapplication.ErrProfileNotFound
+	}
+	if err != nil {
+		return 0, fmt.Errorf("get profile revision: %w", err)
+	}
+	return revision, nil
+}
+
 func (s *Store) GetProfileByID(
 	ctx context.Context,
 	id profiledomain.ProfileID,

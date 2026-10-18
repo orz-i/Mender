@@ -7,6 +7,26 @@ import (
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 )
 
+// ProfileRevisionReader exposes only the durable committed aggregate revision.
+// Hot HTTP requests never load Tool bindings until a revision changes.
+type ProfileRevisionReader interface {
+	GetProfileRevision(context.Context, profiledomain.ProfileID) (uint64, error)
+}
+
+type GetProfileRevision struct{ repository ProfileRevisionReader }
+
+func NewGetProfileRevision(repository ProfileRevisionReader) GetProfileRevision {
+	return GetProfileRevision{repository: repository}
+}
+
+func (uc GetProfileRevision) Execute(ctx context.Context, id profiledomain.ProfileID) (uint64, error) {
+	revision, err := uc.repository.GetProfileRevision(ctx, id)
+	if err != nil {
+		return 0, fmt.Errorf("get profile revision: %w", err)
+	}
+	return revision, nil
+}
+
 type GetProfileByID struct {
 	repository Repository
 }

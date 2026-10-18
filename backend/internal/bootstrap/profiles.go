@@ -14,6 +14,7 @@ type Profiles struct {
 	Create       profileapplication.CreateProfile
 	Get          profileapplication.GetProfile
 	GetByID      profileapplication.GetProfileByID
+	GetRevision  profileapplication.GetProfileRevision
 	List         profileapplication.ListProfiles
 	AddTool      profileapplication.AddTool
 	ReplaceTools profileapplication.ReplaceTools
@@ -40,6 +41,7 @@ func NewProfilesWithTunnelLookup(
 		Create:       profileapplication.NewCreateProfile(store, ids),
 		Get:          profileapplication.NewGetProfile(store),
 		GetByID:      profileapplication.NewGetProfileByID(store),
+		GetRevision:  profileapplication.NewGetProfileRevision(store),
 		List:         profileapplication.NewListProfiles(store),
 		AddTool:      profileapplication.NewAddTool(store, tools, credentials),
 		ReplaceTools: profileapplication.NewReplaceTools(store, tools, credentials),
