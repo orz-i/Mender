@@ -19,6 +19,14 @@ func agentFailureDiagnostic(err error) string {
 	// Strict allowlist: even a malformed runner (or unexpected future
 	// backend) cannot turn an arbitrary stage into leaked task content.
 	switch staged.SafeAgentFailureStage() {
+	case "headless_tool_supply":
+		return "Antigravity CLI cannot receive governed Task tools"
+	case "headless_permission":
+		return "Antigravity CLI requires native tool permission"
+	case "headless_protocol":
+		return "Antigravity CLI response was invalid"
+	case "headless_rejected":
+		return "Antigravity CLI did not complete the task"
 	case "process_launch":
 		return "Agent process could not start"
 	case "initialize":

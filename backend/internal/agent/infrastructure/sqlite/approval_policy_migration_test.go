@@ -78,6 +78,7 @@ func TestAgentV11ToV12ApprovalModeMigrationPreservesHistoryAndDefaultsOff(t *tes
 		t.Fatal(err)
 	}
 	for _, statement := range []string{
+		"DELETE FROM agent_schema_migrations WHERE version=13",
 		"DELETE FROM agent_schema_migrations WHERE version=12",
 		"DROP TRIGGER agent_workspace_approval_policy_unbind",
 		"DROP TABLE agent_approval_policies",
@@ -97,8 +98,8 @@ func TestAgentV11ToV12ApprovalModeMigrationPreservesHistoryAndDefaultsOff(t *tes
 	}
 	defer func() { _ = migrated.Close() }()
 	var version int
-	if err := migrated.db.QueryRowContext(ctx, "SELECT MAX(version) FROM agent_schema_migrations").Scan(&version); err != nil || version != 12 {
-		t.Fatalf("agent migration did not reach v12: %d %v", version, err)
+	if err := migrated.db.QueryRowContext(ctx, "SELECT MAX(version) FROM agent_schema_migrations").Scan(&version); err != nil || version != 13 {
+		t.Fatalf("agent migration did not reach v13: %d %v", version, err)
 	}
 	found, err := migrated.GetAgent(ctx, id)
 	if err != nil || found.Spec().Name != "Existing host unchanged" || found.Spec().Isolation != "host" {

@@ -109,7 +109,7 @@ func reviewedMarketplaceAction(descriptor platformplugin.Descriptor, installed b
 		if descriptor.Extension.Kind == platformplugin.SandboxBackend {
 			return MarketplaceCreateSandbox
 		}
-	case "io.mender.agent.codex", "io.mender.agent.grok", "io.mender.agent.opencode":
+	case "io.mender.agent.codex", "io.mender.agent.grok", "io.mender.agent.opencode", "io.mender.agent.antigravity":
 		if descriptor.Extension.Kind == platformplugin.AgentBackend {
 			return MarketplaceCreateAgent
 		}
@@ -119,6 +119,13 @@ func reviewedMarketplaceAction(descriptor platformplugin.Descriptor, installed b
 		}
 	}
 	return MarketplaceNone
+}
+
+func agentBackendCapabilities(backend agentdomain.Backend) []string {
+	if backend == agentdomain.BackendAntigravity {
+		return []string{"headless.stream-json", "tasks", "local_workspace"}
+	}
+	return []string{"acp.v1", "tasks", "local_workspace"}
 }
 
 func (r *Runtime) ListPluginCatalogue(ctx context.Context) ([]PluginCatalogueEntry, error) {
@@ -252,12 +259,13 @@ func (r *Runtime) ListPluginCatalogue(ctx context.Context) ([]PluginCatalogueEnt
 		{agentdomain.BackendCodex, "Codex Agent", "Codex CLI through the separately installed codex-acp adapter"},
 		{agentdomain.BackendGrok, "Grok Agent", "Grok CLI through its native ACP stdio protocol"},
 		{agentdomain.BackendOpenCode, "OpenCode Agent", "OpenCode CLI through its native ACP v1 stdio protocol"},
+		{agentdomain.BackendAntigravity, "Antigravity Agent", "Google Antigravity CLI through its official headless JSON stream (not ACP)"},
 	} {
 		descriptor := platformplugin.Descriptor{
 			PluginID: backend.kind.PluginID(), PackageVersion: "1.0.0",
 			Extension:   platformplugin.Extension{ID: "main", Kind: platformplugin.AgentBackend, ProtocolVersion: 1},
 			DisplayName: backend.name, Description: backend.description, ConfigVersion: 1,
-			Capabilities: []string{"acp.v1", "tasks", "local_workspace"},
+			Capabilities: agentBackendCapabilities(backend.kind),
 		}
 		if err := descriptor.Validate(); err != nil {
 			return nil, err

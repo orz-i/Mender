@@ -9,6 +9,7 @@ import (
 	agentapplication "github.com/orz-i/Mender/backend/internal/agent/application"
 	agentdomain "github.com/orz-i/Mender/backend/internal/agent/domain"
 	agentacp "github.com/orz-i/Mender/backend/internal/agent/infrastructure/acp"
+	agentagy "github.com/orz-i/Mender/backend/internal/agent/infrastructure/antigravity"
 	agentsqlite "github.com/orz-i/Mender/backend/internal/agent/infrastructure/sqlite"
 	gov "github.com/orz-i/Mender/backend/internal/governance/domain"
 	policyapplication "github.com/orz-i/Mender/backend/internal/policy/application"
@@ -103,7 +104,10 @@ func newAgents(ctx context.Context, dbPath string, owner gov.Principal,
 	}
 	runner := fixtureRunner
 	if runner == nil {
-		runner = agentacp.Runner{NewCommand: launcher.Command, NewCommandInWorkspace: launcher.CommandInWorkspace, NewCommandWithConfig: launcher.CommandWithConfig}
+		runner = agentExecutionRouter{
+			acp:         agentacp.Runner{NewCommand: launcher.Command, NewCommandInWorkspace: launcher.CommandInWorkspace, NewCommandWithConfig: launcher.CommandWithConfig},
+			antigravity: agentagy.Runner{NewCommand: launcher.AntigravityCommand},
+		}
 	}
 	service, err := agentapplication.NewService(store, runner, admit, owner, profileExists)
 	if err != nil {

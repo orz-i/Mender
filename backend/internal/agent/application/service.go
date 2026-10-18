@@ -74,6 +74,7 @@ type RunConfig struct {
 	ReasoningEffort     string
 	PermissionRequester PermissionRequester
 	ToolSupply          ToolSupply // optional backend-neutral, Task-scoped tool delivery
+	AllowNativeYOLO     bool       // owner-approved, unexpired Antigravity trusted workspace only
 }
 
 type Admission func(context.Context, gov.Context, agentdomain.Agent, gov.Action) error
@@ -429,8 +430,22 @@ func (s *Service) run(ctx context.Context, cancel context.CancelFunc, agent agen
 		}}
 	var result string
 	var err error
+	// Antigravity has no ACP permission callback. The existing per-Agent,
+	// per-workspace 24h trusted grant is the ONLY authority for headless YOLO.
+	// Decide at task launch: revoking a grant affects future processes, not
+	// already-running native actions. No Profile or model may set this flag.
+	if agent.Spec().Backend == agentdomain.BackendAntigravity {
+		policy, policyErr := s.store.ApprovalPolicy(ctx, task.AgentID, task.WorkspaceKey)
+		if policyErr == nil {
+			config.AllowNativeYOLO = policy.Mode == agentdomain.ApprovalTrusted &&
+				policy.WorkspaceRoot == task.WorkspaceRoot &&
+				!policy.ExpiresAt.IsZero() && time.Now().Before(policy.ExpiresAt)
+		} else if !errors.Is(policyErr, agentdomain.ErrNotFound) {
+			err = policyErr // fail closed instead of losing policy evidence
+		}
+	}
 	supplyFailed := false
-	if s.toolSupplyResolver != nil {
+	if err == nil && s.toolSupplyResolver != nil {
 		var supply ToolSupply
 		var release func()
 		supply, release, err = s.toolSupplyResolver(ctx, task)

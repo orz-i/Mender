@@ -46,6 +46,7 @@ func TestAgentWorkspaceV9MigrationRefusesOrphanedLegacyBinding(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, statement := range []string{
+		"DELETE FROM agent_schema_migrations WHERE version=13",
 		"DELETE FROM agent_schema_migrations WHERE version=12",
 		"DROP TRIGGER IF EXISTS agent_workspace_approval_policy_unbind",
 		"DROP TABLE agent_approval_policies",

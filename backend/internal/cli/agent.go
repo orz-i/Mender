@@ -105,11 +105,11 @@ func (a *app) newAgentAddCommand() *cobra.Command {
 		},
 	}
 	command.Flags().StringVar(&name, "name", "", "Agent display name")
-	command.Flags().StringVar(&backend, "backend", "", "codex, grok or opencode")
+	command.Flags().StringVar(&backend, "backend", "", "codex, grok, opencode or antigravity")
 	command.Flags().StringVar(&root, "root", "", "absolute existing local workspace directory")
 	command.Flags().StringVar(&isolation, "isolation", "restricted_host", "restricted_host or explicit unisolated host")
-	command.Flags().StringVar(&defaultModel, "default-model", "", "optional ACP model selection; requires protocol advertisement when run")
-	command.Flags().StringVar(&defaultReasoningEffort, "default-reasoning-effort", "", "optional ACP thought level; requires protocol advertisement when run")
+	command.Flags().StringVar(&defaultModel, "default-model", "", "optional backend model selection")
+	command.Flags().StringVar(&defaultReasoningEffort, "default-reasoning-effort", "", "optional backend reasoning effort")
 	return command
 }
 func (a *app) newAgentShowCommand() *cobra.Command {

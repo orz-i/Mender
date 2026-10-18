@@ -148,7 +148,7 @@ func TestAgentFacadeV9PreservesStrictConfigGuard(t *testing.T) {
 	}
 	defer func() { _ = verify.Close() }()
 	var version int
-	if err := verify.QueryRowContext(ctx, "SELECT MAX(version) FROM agent_schema_migrations").Scan(&version); err != nil || version != 12 {
+	if err := verify.QueryRowContext(ctx, "SELECT MAX(version) FROM agent_schema_migrations").Scan(&version); err != nil || version != 13 {
 		t.Fatalf("migrated version=%d err=%v", version, err)
 	}
 	_, err = verify.ExecContext(ctx, "UPDATE provider_configs SET config_version=2 WHERE provider_id=?", state.ProviderID)

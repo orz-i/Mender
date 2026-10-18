@@ -30,6 +30,11 @@ func (r *Runtime) ConfigureAgentToolPlacement(ctx context.Context, agentID agent
 	if err != nil {
 		return agentdomain.ToolPlacement{}, err
 	}
+	if agent.Spec().Backend == agentdomain.BackendAntigravity {
+		// The official AGY headless protocol cannot accept short-lived MCP
+		// capabilities. Refuse at configuration time, not only at execution.
+		return agentdomain.ToolPlacement{}, fmt.Errorf("%w: Antigravity does not support governed Task tools", agentdomain.ErrUnavailable)
+	}
 	if agent.Spec().Isolation != "restricted_host" {
 		return agentdomain.ToolPlacement{}, fmt.Errorf("%w: governed tools require an Agent with restricted_host isolation", agentdomain.ErrUnavailable)
 	}

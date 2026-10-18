@@ -54,9 +54,15 @@ func (s *Service) GetApprovalPolicy(ctx context.Context, id agentdomain.ID, key 
 	return policy, nil
 }
 func (s *Service) SetApprovalPolicy(ctx context.Context, id agentdomain.ID, key string, mode agentdomain.ApprovalMode, owner gov.Context) (agentdomain.ApprovalPolicy, error) {
-	_, root, err := s.approvalWorkspace(ctx, id, key, owner)
+	a, root, err := s.approvalWorkspace(ctx, id, key, owner)
 	if err != nil {
 		return agentdomain.ApprovalPolicy{}, err
+	}
+	// Antigravity headless has no ACP permission callback. Only the owner's
+	// explicit 24h trusted mode can enable the CLI's native YOLO switch;
+	// workspace_read cannot map to a safe, reviewable headless permission.
+	if a.Spec().Backend == agentdomain.BackendAntigravity && mode == agentdomain.ApprovalWorkspaceRead {
+		return agentdomain.ApprovalPolicy{}, agentdomain.ErrUnavailable
 	}
 	if !mode.Valid() {
 		return agentdomain.ApprovalPolicy{}, agentdomain.ErrInvalid

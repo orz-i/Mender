@@ -72,6 +72,8 @@ func (f *LocalFactory) Availability(backend agentdomain.Backend) (string, error)
 		return trustedBinary("grok")
 	case agentdomain.BackendOpenCode:
 		return trustedBinary("opencode")
+	case agentdomain.BackendAntigravity:
+		return trustedBinary("agy")
 	case agentdomain.BackendCodex:
 		if _, err := trustedBinary("codex"); err != nil {
 			return "", fmt.Errorf("%w: Codex CLI is missing: %w", agentdomain.ErrUnavailable, err)
@@ -131,13 +133,65 @@ func (f *LocalFactory) CommandWithConfig(ctx context.Context, a agentdomain.Agen
 	if cfg.ToolSupply.IsZero() {
 		return f.CommandInWorkspace(ctx, a, cfg.WorkspaceRoot)
 	}
+	if a.Spec().Backend == agentdomain.BackendAntigravity {
+		return nil, agentdomain.ErrUnavailable
+	}
 	if a.Spec().Isolation != "restricted_host" {
 		return nil, fmt.Errorf("%w: governed Tool supply requires restricted_host", agentdomain.ErrUnavailable)
 	}
 	return f.commandInWorkspace(ctx, a, cfg.WorkspaceRoot, false)
 }
 
-func (f *LocalFactory) commandInWorkspace(ctx context.Context, a agentdomain.Agent, workspaceRoot string, rootWritable bool) (*exec.Cmd, error) {
+// AntigravityCommand creates an admitted, literal-argv native headless plan.
+// Only the first-party caller may select inspection, model and effort; no
+// Task prompt, external executable path or arbitrary CLI flags are accepted.
+func (f *LocalFactory) AntigravityCommand(ctx context.Context, a agentdomain.Agent,
+	root, model, effort string, inspect, nativeYOLO bool) (*exec.Cmd, error) {
+	if a.Spec().Backend != agentdomain.BackendAntigravity {
+		return nil, agentdomain.ErrUnavailable
+	}
+	if err := agentdomain.ValidateModel(model); err != nil {
+		return nil, err
+	}
+	// Model IDs are user/options selected, not new CLI flags. In particular,
+	// a leading dash must not masquerade as a second flag argument.
+	if model != "" {
+		for i, c := range model {
+			if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') ||
+				(i > 0 && (c == '-' || c == '_' || c == '.' || c == '/')) {
+				continue
+			}
+			return nil, fmt.Errorf("%w: invalid Antigravity model slug", agentdomain.ErrInvalid)
+		}
+	}
+	if err := agentdomain.ValidateReasoningEffort(effort); err != nil {
+		return nil, err
+	}
+	switch effort {
+	case "", "low", "medium", "high", "xhigh", "max":
+	default:
+		return nil, fmt.Errorf("%w: unsupported Antigravity reasoning effort", agentdomain.ErrInvalid)
+	}
+	args := []string{"--input-format", "stream-json", "--output-format", "stream-json", "--disable-slash-commands", "--sandbox"}
+	if inspect {
+		// Even when a workspace is trusted, a read-only inspection must never
+		// inherit the global permission bypass.
+		args = []string{"models"}
+	} else {
+		if nativeYOLO {
+			args = append(args, "--dangerously-skip-permissions")
+		}
+		if model != "" {
+			args = append(args, "--model", model)
+		}
+		if effort != "" {
+			args = append(args, "--effort", effort)
+		}
+	}
+	return f.commandInWorkspace(ctx, a, root, true, args...)
+}
+
+func (f *LocalFactory) commandInWorkspace(ctx context.Context, a agentdomain.Agent, workspaceRoot string, rootWritable bool, agyArgs ...string) (*exec.Cmd, error) {
 	spec := a.Spec()
 	executable, err := f.Availability(spec.Backend)
 	if err != nil {
@@ -163,6 +217,14 @@ func (f *LocalFactory) commandInWorkspace(ctx context.Context, a agentdomain.Age
 	environment := []string{"PATH=/usr/bin:/bin:/opt/homebrew/bin", "HOME=" + home,
 		"TMPDIR=" + os.TempDir(), "NO_BROWSER=1", "CI=1"}
 	switch spec.Backend {
+	case agentdomain.BackendAntigravity:
+		// Antigravity exposes a native headless stream, not ACP. Its dedicated
+		// executor owns NDJSON parsing; this factory only selects a trusted
+		// binary, admitted cwd, and isolated process plan.
+		arguments = []string{"--input-format", "stream-json", "--output-format", "stream-json", "--disable-slash-commands", "--sandbox"}
+		if agyArgs != nil {
+			arguments = agyArgs
+		}
 	case agentdomain.BackendGrok:
 		arguments = []string{"agent", "stdio"}
 	case agentdomain.BackendOpenCode:

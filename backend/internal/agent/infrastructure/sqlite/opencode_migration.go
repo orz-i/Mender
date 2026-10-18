@@ -13,7 +13,19 @@ import (
 // Agent table on a pinned single connection with FK enforcement temporarily
 // disabled, validate references BEFORE COMMIT, and restore FK enforcement
 // before this connection returns to its pool. No user/Tool identity changes.
-func migrateAgentBackendV8(ctx context.Context, db *sql.DB) (retErr error) {
+func migrateAgentBackendV8(ctx context.Context, db *sql.DB) error {
+	return rebuildAgentBackendConstraint(ctx, db, 7, 8, "'codex','grok','opencode'")
+}
+
+// migrateAgentBackendV13 adds the official Antigravity headless CLI without
+// modifying any installed Agent, managed Provider, grant, Task or history.
+func migrateAgentBackendV13(ctx context.Context, db *sql.DB) error {
+	return rebuildAgentBackendConstraint(ctx, db, 12, 13, "'codex','grok','opencode','antigravity'")
+}
+
+// Both revisions rebuild exactly the same Agent table. Known static literals
+// are supplied only by the two migration functions above, never user inputs.
+func rebuildAgentBackendConstraint(ctx context.Context, db *sql.DB, previous, target int, allowed string) (retErr error) {
 	conn, err := db.Conn(ctx)
 	if err != nil {
 		return err
@@ -23,11 +35,11 @@ func migrateAgentBackendV8(ctx context.Context, db *sql.DB) (retErr error) {
 	if err := conn.QueryRowContext(ctx, "SELECT MAX(version) FROM agent_schema_migrations").Scan(&version); err != nil {
 		return err
 	}
-	if version >= 8 {
+	if version >= target {
 		return nil
 	}
-	if version != 7 {
-		return fmt.Errorf("agent v8 migration requires v7, found %d", version)
+	if version != previous {
+		return fmt.Errorf("agent v%d migration requires v%d, found %d", target, previous, version)
 	}
 
 	// A future migration must explicitly review any new Agent-table triggers
@@ -45,7 +57,7 @@ func migrateAgentBackendV8(ctx context.Context, db *sql.DB) (retErr error) {
 		}
 		if kind != "trigger" || name != "agent_bound_provider_delete_guard" {
 			_ = rows.Close()
-			return fmt.Errorf("agent v8 refuses unexpected %s on agents: %s", kind, name)
+			return fmt.Errorf("agent v%d refuses unexpected %s on agents: %s", target, kind, name)
 		}
 	}
 	if err := rows.Err(); err != nil {
@@ -57,14 +69,14 @@ func migrateAgentBackendV8(ctx context.Context, db *sql.DB) (retErr error) {
 	}
 
 	if err := assertAgentForeignKeys(ctx, conn); err != nil {
-		return fmt.Errorf("agent v8 preflight: %w", err)
+		return fmt.Errorf("agent v%d preflight: %w", target, err)
 	}
 	var enabled int
 	if err := conn.QueryRowContext(ctx, "PRAGMA foreign_keys").Scan(&enabled); err != nil {
 		return err
 	}
 	if enabled != 1 {
-		return fmt.Errorf("agent v8 requires foreign key enforcement before migration")
+		return fmt.Errorf("agent migration requires foreign key enforcement before migration")
 	}
 
 	// Changing PRAGMA foreign_keys inside a transaction is silently ignored,
@@ -90,36 +102,36 @@ func migrateAgentBackendV8(ctx context.Context, db *sql.DB) (retErr error) {
 		return fmt.Errorf("read Agent FK state for rebuild: %w", err)
 	}
 	if enabled != 0 {
-		return fmt.Errorf("agent v8 cannot disable FK during table rebuild")
+		return fmt.Errorf("agent migration cannot disable FK during table rebuild")
 	}
 	tx, err := conn.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
-	// The canonical table structure is otherwise identical to v7.
+	// The canonical columns are identical across v7, v8 and v12.
 	// Use explicit fields and preserve original defaults and IDs verbatim.
 	for _, sqlText := range []string{
-		`CREATE TABLE agents_v8 (
+		fmt.Sprintf(`CREATE TABLE agents_rebuild (
     agent_id TEXT PRIMARY KEY, name TEXT NOT NULL, backend TEXT NOT NULL,
     plugin_id TEXT NOT NULL, extension_id TEXT NOT NULL,
     workspace_root TEXT NOT NULL, isolation TEXT NOT NULL,
     owner_kind TEXT NOT NULL, owner_ref TEXT NOT NULL, created_at TEXT NOT NULL,
     default_model TEXT NOT NULL DEFAULT '',
     default_reasoning_effort TEXT NOT NULL DEFAULT '',
-    CHECK(backend IN ('codex','grok','opencode')),
+    CHECK(backend IN (%s)),
     CHECK(isolation IN ('host','restricted_host'))
-   )`,
-		`INSERT INTO agents_v8(agent_id,name,backend,plugin_id,extension_id,workspace_root,
+   )`, allowed),
+		`INSERT INTO agents_rebuild(agent_id,name,backend,plugin_id,extension_id,workspace_root,
     isolation,owner_kind,owner_ref,created_at,default_model,default_reasoning_effort)
    SELECT agent_id,name,backend,plugin_id,extension_id,workspace_root,
     isolation,owner_kind,owner_ref,created_at,default_model,default_reasoning_effort
    FROM agents`,
 		`DROP TABLE agents`,
-		`ALTER TABLE agents_v8 RENAME TO agents`,
+		`ALTER TABLE agents_rebuild RENAME TO agents`,
 	} {
 		if _, err := tx.ExecContext(ctx, sqlText); err != nil {
-			return fmt.Errorf("agent v8 rebuild: %w", err)
+			return fmt.Errorf("agent backend rebuild: %w", err)
 		}
 	}
 	var providerTable int
@@ -136,18 +148,18 @@ func migrateAgentBackendV8(ctx context.Context, db *sql.DB) (retErr error) {
       AND (json_valid(p.config_json)=0 OR json_extract(p.config_json,'$.agentId')=OLD.agent_id)
    )
    BEGIN SELECT RAISE(ABORT,'Agent is referenced by a Provider'); END`); err != nil {
-			return fmt.Errorf("agent v8 restore Provider deletion guard: %w", err)
+			return fmt.Errorf("agent backend restore Provider deletion guard: %w", err)
 		}
 	}
 	if err := assertAgentForeignKeys(ctx, tx); err != nil {
-		return fmt.Errorf("agent v8 post-copy FK integrity: %w", err)
+		return fmt.Errorf("agent backend post-copy FK integrity: %w", err)
 	}
 	if _, err := tx.ExecContext(ctx, `INSERT INTO agent_schema_migrations VALUES(?,?)`,
-		8, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
+		target, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
 		return err
 	}
 	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("commit agent v8 backend constraint: %w", err)
+		return fmt.Errorf("commit agent backend constraint: %w", err)
 	}
 	return nil
 }
