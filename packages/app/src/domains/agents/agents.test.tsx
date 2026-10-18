@@ -294,6 +294,23 @@ describe("Agents focused management",()=>{
     expect(await screen.findByText("ACP 会话创建失败")).toBeTruthy();
     expect(screen.queryByText("ACP session creation failed")).toBeNull();
   });
+  for (const {diagnostic,localized} of [
+    {diagnostic:"ACP permission request is invalid",localized:"ACP 权限请求格式不符合要求"},
+    {diagnostic:"Agent requested an unsupported ACP client capability",localized:"智能体请求了 Mender 未提供的 ACP 客户端能力"},
+  ]) {
+    it(`localizes safe permission diagnostic ${diagnostic}`,async()=>{
+      setLocale("zh-CN");
+      const failedTask:AgentTask={...task,status:"failed",result:"",diagnostic};
+      show("/agents/"+agent.agentId,{
+        listAgentTasks:vi.fn().mockResolvedValue({tasks:[failedTask]}),
+        getAgentTask:vi.fn().mockResolvedValue(failedTask),
+      });
+      fireEvent.click(await screen.findByRole("button",{name:/^任务/}));
+      fireEvent.click(await screen.findByRole("button",{name:"查看"}));
+      expect(await screen.findByText(localized)).toBeTruthy();
+      expect(screen.queryByText(diagnostic)).toBeNull();
+    });
+  }
   for (const status of ["completed","failed"] as const) {
     it(`discloses missing native audit coverage for a ${status} Host task`,async()=>{
       const host={...agent,isolation:"host" as const};

@@ -88,7 +88,9 @@ func (s *stream) dispatchPermission(ctx context.Context, msg rpcMessage) error {
 	}
 	req, err := parseACPApproval(msg.Params, s.permissionSession, s.permissionRoot)
 	if err != nil {
-		return fmt.Errorf("%w: invalid ACP approval request", errClientPermissionDenied)
+		// This request was rejected before an owner decision or durable
+		// approval row could exist. Never report its untrusted payload.
+		return fmt.Errorf("%w: %w", errClientPermissionDenied, errACPInvalidPermissionRequest)
 	}
 	if len(msg.ID) > 64 || len(msg.ID) == 0 {
 		return errClientPermissionDenied

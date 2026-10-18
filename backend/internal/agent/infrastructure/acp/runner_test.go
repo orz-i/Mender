@@ -257,7 +257,7 @@ func TestACPFixtureProcess(t *testing.T) {
 					}
 				}
 			}
-			if mode == "permission" {
+			if mode == "permission" || mode == "invalid-permission" {
 				send(map[string]any{"jsonrpc": "2.0", "id": 97, "method": "session/request_permission", "params": map[string]any{
 					"sessionId": "fixture-1", "options": []any{map[string]string{"optionId": "allow_once", "name": "Allow", "kind": "allow_once"}},
 				}})

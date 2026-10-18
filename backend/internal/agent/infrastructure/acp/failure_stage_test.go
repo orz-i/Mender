@@ -115,6 +115,8 @@ func TestSafeACPPromptSubStagePrecedence(t *testing.T) {
 		{"canceled wins over sentinel", fmt.Errorf("wrap: %w", fmt.Errorf("and: %w", errors.Join(context.Canceled, errACPStreamClosed))), "", false},
 		{"deadline wins over sentinel", fmt.Errorf("wrap: %w", context.DeadlineExceeded), "", false},
 		{"permission wins over sentinel", fmt.Errorf("wrap: %w", fmt.Errorf("and: %w", errors.Join(errClientPermissionDenied, errACPReadFailed))), stagePermission, true},
+		{"invalid permission has fixed cause", errors.Join(errClientPermissionDenied, errACPInvalidPermissionRequest, errors.New(secretFixture)), stagePermissionRequestInvalid, true},
+		{"unsupported client has fixed cause", errors.Join(errClientPermissionDenied, errACPUnsupportedClientCapability, errors.New(secretFixture)), stagePermissionClientUnavailable, true},
 		{"rejection keeps its stage", fmt.Errorf("wrap: %w", &rpcRejectedError{method: "session/prompt"}), stagePromptRejected, true},
 		{"malformed result keeps its stage", fmt.Errorf("wrap: %w", &malformedOutcomeError{method: "session/prompt"}), stageResult, true},
 		{"already staged error untouched", stagePromptError(errACPInvalidFrame), stagePromptMalformedFrame, true},
@@ -263,6 +265,8 @@ func TestSafeACPFailureCancellation(t *testing.T) {
 		}{
 			{"explicit rpc rejection", &rpcRejectedError{method: "session/prompt"}, stagePromptRejected},
 			{"permission denied", errClientPermissionDenied, stagePermission},
+			{"invalid permission", errors.Join(errClientPermissionDenied, errACPInvalidPermissionRequest), stagePermissionRequestInvalid},
+			{"unsupported client", errors.Join(errClientPermissionDenied, errACPUnsupportedClientCapability), stagePermissionClientUnavailable},
 			{"arbitrary transport error", errors.New(secretFixture), stagePromptTransport},
 			{"malformed outcome", &malformedOutcomeError{method: "session/prompt"}, stageResult},
 		}

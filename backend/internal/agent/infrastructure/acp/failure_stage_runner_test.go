@@ -15,18 +15,21 @@ import (
 func TestACPFailureStageRunnerReportsOnlyTrustedStages(t *testing.T) {
 	const fakeSecret = "FAKE_PRIVATE_BEARER_42 /Users/private/.ssh/id_test"
 	cases := []struct {
-		name   string
-		mode   string
-		model  string
-		stage  string
-		launch bool
+		name                    string
+		mode                    string
+		model                   string
+		stage                   string
+		launch                  bool
+		withPermissionRequester bool
 	}{
 		{name: "launcher", stage: stageProcessLaunch, launch: true},
 		{name: "initialize rejected", mode: "reject-initialize", stage: stageInitialize},
 		{name: "new session rejected", mode: "reject-session-new", stage: stageSessionCreate},
 		{name: "protocol mismatch", mode: "version2", stage: stageProtocol},
 		{name: "model unavailable", mode: "models", model: "fixture-unadvertised", stage: stageConfigModelUnavailable},
-		{name: "permission rejected", mode: "permission", stage: stagePermission},
+		{name: "permission rejected without owner request", mode: "permission", stage: stagePermission},
+		{name: "invalid permission request", mode: "invalid-permission", stage: stagePermissionRequestInvalid, withPermissionRequester: true},
+		{name: "unsupported client method", mode: "client-file", stage: stagePermissionClientUnavailable},
 		{name: "prompt explicitly rejected", mode: "reject-prompt", stage: stagePromptRejected},
 		{name: "prompt transport malformed", mode: "invalid-json", stage: stagePromptMalformedFrame},
 		{name: "invalid completion update", mode: "foreign-session", stage: stageResult},
@@ -42,8 +45,13 @@ func TestACPFailureStageRunnerReportsOnlyTrustedStages(t *testing.T) {
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 			defer cancel()
-			result, err := runner.ExecuteConfigured(ctx, agent, "bounded private test",
-				agentapplication.RunConfig{WorkspaceRoot: agent.Spec().WorkspaceRoot, Model: test.model})
+			cfg := agentapplication.RunConfig{WorkspaceRoot: agent.Spec().WorkspaceRoot, Model: test.model}
+			if test.withPermissionRequester {
+				cfg.PermissionRequester = func(context.Context, agentapplication.PermissionRequest) (agentapplication.PermissionDecision, error) {
+					return agentapplication.PermissionDecision{}, errors.New("invalid permission request unexpectedly reached owner")
+				}
+			}
+			result, err := runner.ExecuteConfigured(ctx, agent, "bounded private test", cfg)
 			if err == nil || result != "" {
 				t.Fatalf("failed ACP fixture unexpectedly passed: result=%q err=%v", result, err)
 			}

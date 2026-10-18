@@ -45,6 +45,8 @@ function taskDiagnosticText(value:string):string{
     case "ACP configuration change not confirmed": return t("ACP configuration change not confirmed");
     case "ACP configuration request failed": return t("ACP configuration request failed");
     case "Agent permission request was rejected": return t("Agent permission request was rejected");
+    case "ACP permission request is invalid": return t("ACP permission request is invalid");
+    case "Agent requested an unsupported ACP client capability": return t("Agent requested an unsupported ACP client capability");
     case "Agent rejected the ACP prompt": return t("Agent rejected the ACP prompt");
     case "ACP prompt transport failed": return t("ACP prompt transport failed");
     case "ACP prompt stream closed before completion": return t("ACP prompt stream closed before completion");

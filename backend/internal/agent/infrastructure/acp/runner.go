@@ -172,7 +172,7 @@ func (s *stream) respondToAgent(msg rpcMessage) error {
 			"error": map[string]any{"code": -32601, "message": "client capability not authorized"}}); err != nil {
 			return err
 		}
-		return errClientPermissionDenied
+		return fmt.Errorf("%w: %w", errClientPermissionDenied, errACPUnsupportedClientCapability)
 	}
 }
 

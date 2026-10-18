@@ -74,6 +74,8 @@ export const zhCNMessages: Readonly<Record<string, string>> = {
   "Proposed file": "请求的文件",
   "The operation lacks a reviewable in-workspace single-file target; only Reject is available.": "请求未提供可核对的工作区内单文件目标，只允许拒绝。",
   "ACP tool approvals": "ACP 工具审批",
+  "ACP permission request is invalid": "ACP 权限请求格式不符合要求",
+  "Agent requested an unsupported ACP client capability": "智能体请求了 Mender 未提供的 ACP 客户端能力",
   "Awaiting owner approval": "等待本地所有者审批",
   "Requested tool category": "请求的工具类别",
   "This is a cooperative OpenCode permission request, not proof that all native tools are sandboxed or governed by Mender.": "这是对 OpenCode 原生工具的协作式审批，不表示所有原生工具都受到 Mender 强制隔离或治理。",

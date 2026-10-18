@@ -10,17 +10,19 @@ import (
 // maps exactly these codes to owner-facing diagnostics and treats every other
 // error (including free-form injected labels) as a generic failure.
 const (
-	stageProcessLaunch              = "process_launch"
-	stageInitialize                 = "initialize"
-	stageSessionCreate              = "session_create"
-	stageConfiguration              = "configuration"
-	stageConfigModelUnavailable     = "configuration_model_unavailable"
-	stageConfigReasoningUnavailable = "configuration_reasoning_unavailable"
-	stageConfigConfirmationFailed   = "configuration_confirmation_failed"
-	stageConfigRequestFailed        = "configuration_request_failed"
-	stagePermission                 = "permission"
-	stagePromptRejected             = "prompt_rejected"
-	stagePromptTransport            = "prompt_transport"
+	stageProcessLaunch               = "process_launch"
+	stageInitialize                  = "initialize"
+	stageSessionCreate               = "session_create"
+	stageConfiguration               = "configuration"
+	stageConfigModelUnavailable      = "configuration_model_unavailable"
+	stageConfigReasoningUnavailable  = "configuration_reasoning_unavailable"
+	stageConfigConfirmationFailed    = "configuration_confirmation_failed"
+	stageConfigRequestFailed         = "configuration_request_failed"
+	stagePermission                  = "permission"
+	stagePermissionRequestInvalid    = "permission_request_invalid"
+	stagePermissionClientUnavailable = "permission_client_capability_unavailable"
+	stagePromptRejected              = "prompt_rejected"
+	stagePromptTransport             = "prompt_transport"
 	// Fixed, non-sensitive prompt transport sub-stages. They are bounded to
 	// the observed Mender ACP boundary and never identify which model,
 	// plugin, process or tool produced the failure.
@@ -35,23 +37,25 @@ const (
 // recognizedFailureStages is the closed set accepted by tagFailure.
 // Anything else fails closed and stays untagged (generic application stage).
 var recognizedFailureStages = map[string]struct{}{
-	stageProcessLaunch:              {},
-	stageInitialize:                 {},
-	stageSessionCreate:              {},
-	stageConfiguration:              {},
-	stageConfigModelUnavailable:     {},
-	stageConfigReasoningUnavailable: {},
-	stageConfigConfirmationFailed:   {},
-	stageConfigRequestFailed:        {},
-	stagePermission:                 {},
-	stagePromptRejected:             {},
-	stagePromptTransport:            {},
-	stagePromptStreamClosed:         {},
-	stagePromptMalformedFrame:       {},
-	stagePromptReadFailed:           {},
-	stagePromptWriteFailed:          {},
-	stageProtocol:                   {},
-	stageResult:                     {},
+	stageProcessLaunch:               {},
+	stageInitialize:                  {},
+	stageSessionCreate:               {},
+	stageConfiguration:               {},
+	stageConfigModelUnavailable:      {},
+	stageConfigReasoningUnavailable:  {},
+	stageConfigConfirmationFailed:    {},
+	stageConfigRequestFailed:         {},
+	stagePermission:                  {},
+	stagePermissionRequestInvalid:    {},
+	stagePermissionClientUnavailable: {},
+	stagePromptRejected:              {},
+	stagePromptTransport:             {},
+	stagePromptStreamClosed:          {},
+	stagePromptMalformedFrame:        {},
+	stagePromptReadFailed:            {},
+	stagePromptWriteFailed:           {},
+	stageProtocol:                    {},
+	stageResult:                      {},
 }
 
 type stagedAgentError struct {
@@ -110,15 +114,34 @@ func tagUnlessCancelled(stage string, err error) error {
 	return tagFailure(stage, err)
 }
 
+// These fixed local sentinels distinguish failures at Mender's ACP boundary,
+// not the Agent's untrusted method, payload, or alleged intent. In particular,
+// an invalid request never creates an approvable owner record.
+var (
+	errACPInvalidPermissionRequest    = errors.New("ACP permission request invalid")
+	errACPUnsupportedClientCapability = errors.New("ACP client capability unavailable")
+)
+
+func tagPermissionFailure(err error) error {
+	switch {
+	case errors.Is(err, errACPInvalidPermissionRequest):
+		return tagFailure(stagePermissionRequestInvalid, err)
+	case errors.Is(err, errACPUnsupportedClientCapability):
+		return tagFailure(stagePermissionClientUnavailable, err)
+	default:
+		return tagFailure(stagePermission, err)
+	}
+}
+
 // tagSessionTransport tags setup/initialization/session-creation transport
-// failures of wire.call. An unresolved client-permission sentinel keeps the
-// dedicated permission stage; caller cancellation always wins unchanged.
+// failures of wire.call. Permission failures retain their exact safe local
+// cause; caller cancellation/deadline remain unchanged.
 func tagSessionTransport(stage string, err error) error {
 	if err == nil {
 		return nil
 	}
 	if errors.Is(err, errClientPermissionDenied) {
-		return tagFailure(stagePermission, err)
+		return tagPermissionFailure(err)
 	}
 	return tagUnlessCancelled(stage, err)
 }
@@ -172,7 +195,7 @@ func stagePromptError(err error) error {
 		return nil
 	}
 	if errors.Is(err, errClientPermissionDenied) {
-		return tagFailure(stagePermission, err)
+		return tagPermissionFailure(err)
 	}
 	if isCancellation(err) {
 		return err

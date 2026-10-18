@@ -37,6 +37,10 @@ func agentFailureDiagnostic(err error) string {
 		return "ACP configuration request failed"
 	case "permission":
 		return "Agent permission request was rejected"
+	case "permission_request_invalid":
+		return "ACP permission request is invalid"
+	case "permission_client_capability_unavailable":
+		return "Agent requested an unsupported ACP client capability"
 	case "prompt_rejected":
 		return "Agent rejected the ACP prompt"
 	case "prompt_transport":
