@@ -106,18 +106,24 @@ func tagSessionTransport(stage string, err error) error {
 
 // rpcRejectedError marks an explicit JSON-RPC error object returned by the
 // remote Agent for one of our requests. The remote error text is never
-// retained; only the locally fixed method name appears in the message.
+// retained. The user-visible message is a fixed phrase independent of the
+// trusted internal method name; method is kept only for type classification.
 type rpcRejectedError struct{ method string }
 
-func (e *rpcRejectedError) Error() string { return "ACP " + e.method + " request rejected by Agent" }
+// Fixed, method-independent message constants. The trusted method name keeps
+// existing call sites working, but user-visible text never interpolates it.
+const (
+	rpcRejectedErrorMessage      = "ACP request rejected by Agent"
+	malformedOutcomeErrorMessage = "ACP returned a malformed result"
+)
+
+func (e *rpcRejectedError) Error() string { return rpcRejectedErrorMessage }
 
 // malformedOutcomeError marks a response that is not the bounded shape the
 // protocol requires. The remote payload is never echoed.
 type malformedOutcomeError struct{ method string }
 
-func (e *malformedOutcomeError) Error() string {
-	return "ACP " + e.method + " returned a malformed result"
-}
+func (e *malformedOutcomeError) Error() string { return malformedOutcomeErrorMessage }
 
 // stagePromptError classifies a failed session/prompt interaction without
 // ever exposing remote text:

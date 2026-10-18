@@ -54,6 +54,63 @@ func TestSafeACPFailureStages(t *testing.T) {
 	}
 }
 
+// TestSafeACPFailureMessagesHidePrivateMethod injects a fake private method
+// name containing a path and token and verifies neither the typed Error()
+// strings nor the stage wrapping exposes it, while errors.As still
+// distinguishes prompt_rejected from result classification.
+func TestSafeACPFailureMessagesHidePrivateMethod(t *testing.T) {
+	privateMethod := "/private/acp/internal/session.prompt?token=" + secretFixture
+
+	rejected := &rpcRejectedError{method: privateMethod}
+	if got := rejected.Error(); got != "ACP request rejected by Agent" {
+		t.Fatalf("rpcRejectedError.Error() = %q, want fixed phrase", got)
+	}
+	malformed := &malformedOutcomeError{method: privateMethod}
+	if got := malformed.Error(); got != "ACP returned a malformed result" {
+		t.Fatalf("malformedOutcomeError.Error() = %q, want fixed phrase", got)
+	}
+
+	for _, tc := range []struct {
+		name  string
+		cause error
+		stage string
+	}{
+		{"rpc rejected", rejected, stagePromptRejected},
+		{"malformed outcome", malformed, stageResult},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			wrapped := fmt.Errorf("wrap: %w", tc.cause)
+			err := stagePromptError(wrapped)
+			var staged interface{ SafeAgentFailureStage() string }
+			if !errors.As(err, &staged) {
+				t.Fatalf("stagePromptError(%T) not tagged: %v", tc.cause, err)
+			}
+			if got := staged.SafeAgentFailureStage(); got != tc.stage {
+				t.Fatalf("stage = %q, want %q", got, tc.stage)
+			}
+			if !errors.Is(err, tc.cause) {
+				t.Fatal("staged error must unwrap to the original cause")
+			}
+			if strings.Contains(err.Error(), privateMethod) ||
+				strings.Contains(err.Error(), secretFixture) ||
+				strings.Contains(err.Error(), "token") ||
+				strings.Contains(err.Error(), "private") {
+				t.Fatalf("Error() leaks the injected private method: %q", err.Error())
+			}
+		})
+	}
+
+	// The two causes must remain separately classifiable by type.
+	var rej *rpcRejectedError
+	if !errors.As(stagePromptError(rejected), &rej) {
+		t.Fatal("errors.As must still classify rpcRejectedError")
+	}
+	var mal *malformedOutcomeError
+	if !errors.As(stagePromptError(malformed), &mal) {
+		t.Fatal("errors.As must still classify malformedOutcomeError")
+	}
+}
+
 // TestSafeACPFailureCancellation verifies the fail-closed tagging rules and
 // the cancellation-retention semantics of tagUnlessCancelled, plus the
 // explicit classification paths of stagePromptError.
