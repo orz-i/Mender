@@ -81,3 +81,10 @@ Scope: **Agent execution evidence and safe observation only**. Native resume, in
 - Migration tests that intentionally construct v7–v13 fixtures now remove the v14-only synthetic tables *inside test fixtures* before downgrading. No compatibility branch was added to production migration code; new v14 DDL fails on ambiguous existing objects rather than using `IF NOT EXISTS`.
 
 Acceptance to report separately: targeted Go/SQLite/ACP/Antigravity/Bootstrap tests, full `pnpm check` including race, Wails and SDK generation, and no changes to the owner's production SQLite. The work requires a later explicit owner rebuild/deploy to activate in Wails. The four existing Agent facade ToolIDs remain unchanged; existing management and MCP discovery semantics remain intact.
+
+### B/C code quality gate — complete (2026-10-19)
+
+- Git implementation: `8ef7bb4`; architecture checkpoint: `bf1ee18`.
+- Complete `pnpm check`: **exit 0**, log `/tmp/mender-agent-lifecycle-check-20261019.log` (local Mac mini). Includes all backend Go tests and full `go test -race ./backend/...` (Bootstrap race package 298.473 s), 0 golangci-lint issues, SDK and plugin contracts, OpenAPI generated types, generated Wails desktop binding check, desktop architecture, TypeScript, ESLint, 1394 i18n messages, 47 Vitest files / 286 tests, and Web/Desktop production builds. Vite emitted its existing non-fatal bundle-size warning.
+- Real fault-injection tests include missing native Session persistence before ACP prompt, post-send durable evidence loss, Antigravity `init.conversation_id`, pre-prompt ACP fresh-process retry, bounded/unforgeable SQLite event fence and historical unknown preservation. Real inference and cross-process `resume` were **not exercised**.
+- Repository staging respected `.agents/`, `.pi/`, `.intent-loop/`, `.commandcode/`; these remain untracked and untouched. Production Wails/Tunnel process, Agent grants, Profile ToolBindings, policy and production Task/Session database were not modified or restarted by this implementation. **Deployment and real native-session recovery are separate acceptance gates.**
