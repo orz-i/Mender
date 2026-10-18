@@ -110,6 +110,71 @@ func TestOpenCodeLocalLaunchUsesPinnedExecutableAndACPStdioOnly(t *testing.T) {
 	}
 }
 
+func TestOpenCodeRestrictedWithoutToolSupplyStillRequiresOwnerExecuteApproval(t *testing.T) {
+	factory, err := NewLocalFactory(processisolation.New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := factory.Availability(agentdomain.BackendOpenCode); errors.Is(err, agentdomain.ErrUnavailable) {
+		t.Skip("OpenCode not installed in trusted locations on this host")
+	} else if err != nil {
+		t.Fatal(err)
+	}
+	spec := fixtureAgent(t).Spec()
+	spec.Backend = agentdomain.BackendOpenCode
+	spec.PluginID = agentdomain.BackendOpenCode.PluginID()
+	spec.Isolation = "restricted_host"
+	agent, err := agentdomain.NewAgent(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Ungoverned restricted execution: no ToolSupply, ordinary review rules
+	// still apply and project config disabling must NOT be injected.
+	cmd, err := factory.CommandInWorkspace(context.Background(), agent, spec.WorkspaceRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var suppliedPolicy string
+	for _, v := range cmd.Env {
+		if strings.HasPrefix(v, "OPENCODE_CONFIG_CONTENT=") {
+			suppliedPolicy = strings.TrimPrefix(v, "OPENCODE_CONFIG_CONTENT=")
+		}
+		if v == "OPENCODE_DISABLE_PROJECT_CONFIG=1" {
+			t.Fatal("ungoverned restricted command must not disable project config")
+		}
+	}
+	if suppliedPolicy == "" {
+		t.Fatal("restricted command started without owner review rules")
+	}
+	var cfg struct {
+		Permissions []struct {
+			Action   string `json:"action"`
+			Resource string `json:"resource"`
+			Effect   string `json:"effect"`
+		} `json:"permissions"`
+	}
+	if err := json.Unmarshal([]byte(suppliedPolicy), &cfg); err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]string{}
+	for _, rule := range cfg.Permissions {
+		if rule.Resource != "*" {
+			t.Fatalf("non-universal review rule: %+v", rule)
+		}
+		got[rule.Action] = rule.Effect
+	}
+	for _, action := range []string{"read", "edit", "shell", "execute"} {
+		if got[action] != "ask" {
+			t.Fatalf("OpenCode native %s not requiring owner approval: %+v", action, got)
+		}
+	}
+	for _, action := range []string{"external_directory", "subagent"} {
+		if got[action] != "deny" {
+			t.Fatalf("OpenCode %s not denied: %+v", action, got)
+		}
+	}
+}
+
 func TestAllAgentBackendsRejectHostGovernedToolSupply(t *testing.T) {
 	factory, err := NewLocalFactory(processisolation.New())
 	if err != nil {
