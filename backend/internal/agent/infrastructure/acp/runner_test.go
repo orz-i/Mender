@@ -31,6 +31,12 @@ func TestACPFixtureProcess(t *testing.T) {
 		}
 		switch msg.Method {
 		case "initialize":
+			if os.Getenv("ACP_FIXTURE_MODE") == "reject-initialize" {
+				send(map[string]any{"jsonrpc": "2.0", "id": msg.ID,
+					"error": map[string]any{"code": -32001,
+						"message": "FAKE_PRIVATE_BEARER_42 /Users/private/.ssh/id_test"}})
+				continue
+			}
 			version := 1
 			if os.Getenv("ACP_FIXTURE_MODE") == "version2" {
 				version = 2
@@ -41,6 +47,12 @@ func TestACPFixtureProcess(t *testing.T) {
 			}
 			send(map[string]any{"jsonrpc": "2.0", "id": msg.ID, "result": hello})
 		case "session/new":
+			if os.Getenv("ACP_FIXTURE_MODE") == "reject-session-new" {
+				send(map[string]any{"jsonrpc": "2.0", "id": msg.ID,
+					"error": map[string]any{"code": -32002,
+						"message": "FAKE_PRIVATE_BEARER_42 /Users/private/.ssh/id_test"}})
+				continue
+			}
 			if os.Getenv("ACP_FIXTURE_MODE") == "mcp-http" {
 				var supply struct {
 					MCPServers []struct {
@@ -75,6 +87,12 @@ func TestACPFixtureProcess(t *testing.T) {
 			send(map[string]any{"jsonrpc": "2.0", "id": msg.ID, "result": result})
 		case "session/prompt":
 			mode := os.Getenv("ACP_FIXTURE_MODE")
+			if mode == "reject-prompt" {
+				send(map[string]any{"jsonrpc": "2.0", "id": msg.ID,
+					"error": map[string]any{"code": -32003,
+						"message": "FAKE_PRIVATE_BEARER_42 /Users/private/.ssh/id_test"}})
+				continue
+			}
 			if mode == "models" {
 				os.Exit(92)
 			} // inspection must not send a prompt

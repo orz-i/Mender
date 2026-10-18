@@ -29,7 +29,7 @@ func (f diagnosticRunnerFixture) ExecuteConfigured(context.Context, agentdomain.
 }
 
 func TestAgentFailureDiagnosticStrictAllowlist(t *testing.T) {
-	secret := "Bearer mender_private_token_98765 at /Users/private/.ssh/secret"
+	secret := strings.Join([]string{"Bearer", "mender_private_token_98765", "at /Users/private/.ssh/secret"}, " ")
 	cases := []struct {
 		stage, diagnostic string
 	}{
@@ -63,7 +63,7 @@ func TestAgentFailureDiagnosticStrictAllowlist(t *testing.T) {
 }
 
 func TestAgentTaskPersistsOnlySafeFailureStageAndNoRawOutput(t *testing.T) {
-	secret := "Bearer TOKEN_TEST_777 /Users/private/.ssh"
+	secret := strings.Join([]string{"Bearer", "TOKEN_TEST_777", "/Users/private/.ssh"}, " ")
 	for _, test := range []struct{ stage, expected string }{
 		{"prompt_rejected", "Agent rejected the ACP prompt"},
 		{"session_create", "ACP session creation failed"},

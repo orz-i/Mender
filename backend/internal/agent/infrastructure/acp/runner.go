@@ -136,10 +136,13 @@ func (s *stream) call(ctx context.Context, id int, method string, params any, no
 				return nil, errors.New("ACP response ID mismatch")
 			}
 			if msg.Error != nil {
-				return nil, fmt.Errorf("ACP %s failed (%d)", method, msg.Error.Code)
+				// The remote message is untrusted and may contain credentials or
+				// prompts. A fixed local method label is sufficient to classify
+				// an explicit Agent-side RPC rejection.
+				return nil, &rpcRejectedError{method: method}
 			}
 			if len(msg.Result) == 0 {
-				return nil, fmt.Errorf("ACP %s: missing result", method)
+				return nil, &malformedOutcomeError{method: method}
 			}
 			if s.pendingPermissions.Load() != 0 {
 				return nil, errors.New("ACP returned while a permission request is unresolved")
@@ -179,7 +182,7 @@ func (r Runner) ExecuteConfigured(ctx context.Context, agent agentdomain.Agent, 
 	}
 	return r.withSession(ctx, agent, config, func(wire *stream, sessionID string, session json.RawMessage, readErrors <-chan error) (string, error) {
 		if err := applySessionChoices(ctx, wire, sessionID, session, config.Model, config.ReasoningEffort); err != nil {
-			return "", err
+			return "", tagUnlessCancelled(stageConfiguration, err)
 		}
 		// This callback is installed only for this admitted Task's ACP
 		// session. It never approves a request itself; the owner decision
@@ -208,10 +211,10 @@ func (r Runner) ExecuteConfigured(ctx context.Context, agent agentdomain.Agent, 
 				} `json:"update"`
 			}
 			if err := json.Unmarshal(msg.Params, &params); err != nil {
-				return errors.New("ACP malformed session update")
+				return tagFailure(stageResult, errors.New("ACP malformed session update"))
 			}
 			if params.SessionID != sessionID {
-				return errors.New("ACP update from unexpected SessionID")
+				return tagFailure(stageResult, errors.New("ACP update from unexpected SessionID"))
 			}
 			if params.Update.SessionUpdate != "agent_message_chunk" {
 				return nil
@@ -222,12 +225,12 @@ func (r Runner) ExecuteConfigured(ctx context.Context, agent agentdomain.Agent, 
 			}
 			if len(params.Update.Content) == 0 ||
 				json.Unmarshal(params.Update.Content, &chunk) != nil {
-				return errors.New("ACP malformed Agent text chunk")
+				return tagFailure(stageResult, errors.New("ACP malformed Agent text chunk"))
 			}
 			if chunk.Type == "text" {
 				if len(chunk.Text) > agentdomain.MaxResultBytes-result.Len() {
 					outputOverflow = true
-					return errors.New("ACP Agent result exceeds limit")
+					return tagFailure(stageResult, errors.New("ACP Agent result exceeds limit"))
 				}
 				_, _ = result.WriteString(chunk.Text)
 			}
@@ -238,18 +241,19 @@ func (r Runner) ExecuteConfigured(ctx context.Context, agent agentdomain.Agent, 
 		}, onUpdate)
 		if err != nil {
 			if outputOverflow {
-				return "", errors.New("ACP Agent result exceeds limit")
+				return "", tagFailure(stageResult, errors.New("ACP Agent result exceeds limit"))
 			}
-			return "", annotateRead(err, readErrors)
+			return "", stagePromptError(annotateRead(err, readErrors))
 		}
 		var completed struct {
 			StopReason string `json:"stopReason"`
 		}
 		if err := json.Unmarshal(outcome, &completed); err != nil {
-			return "", errors.New("ACP invalid prompt outcome")
+			return "", tagFailure(stageResult, errors.New("ACP invalid prompt outcome"))
 		}
 		if completed.StopReason != "end_turn" {
-			return "", fmt.Errorf("ACP Agent did not complete task (stop reason %q)", completed.StopReason)
+			// Never put the model-supplied stop reason into stored Task output.
+			return "", tagFailure(stageResult, errors.New("ACP Agent did not complete task"))
 		}
 		return result.String(), nil
 	})
@@ -261,10 +265,10 @@ func (r Runner) withSession(ctx context.Context, agent agentdomain.Agent, config
 	visit func(*stream, string, json.RawMessage, <-chan error) (string, error),
 ) (result string, err error) {
 	if r.NewCommand == nil {
-		return "", errors.New("ACP process launcher unavailable")
+		return "", tagFailure(stageProcessLaunch, errors.New("ACP process launcher unavailable"))
 	}
 	if err := config.ToolSupply.Validate(); err != nil {
-		return "", fmt.Errorf("invalid Agent tool supply: %w", err)
+		return "", tagUnlessCancelled(stageConfiguration, fmt.Errorf("invalid Agent tool supply: %w", err))
 	}
 	// The per-task command has no persistent Agent session. Cancel its context
 	// when the prompt ends so the owned process group and scanner are drained.
@@ -274,12 +278,14 @@ func (r Runner) withSession(ctx context.Context, agent agentdomain.Agent, config
 	// Never silently substitute the Agent default when a caller loses the
 	// immutable workspace snapshot; that would execute in the wrong project.
 	if config.WorkspaceRoot == "" {
-		return "", fmt.Errorf("%w: ACP execution requires an admitted workspace root", agentdomain.ErrInvalid)
+		return "", tagFailure(stageConfiguration,
+			fmt.Errorf("%w: ACP execution requires an admitted workspace root", agentdomain.ErrInvalid))
 	}
 	var cmd *exec.Cmd
 	if !config.ToolSupply.IsZero() {
 		if agent.Spec().Isolation != "restricted_host" || r.NewCommandWithConfig == nil {
-			return "", fmt.Errorf("%w: task Tool supply requires a verified restricted Agent process plan", agentdomain.ErrUnavailable)
+			return "", tagFailure(stageProcessLaunch,
+				fmt.Errorf("%w: task Tool supply requires a verified restricted Agent process plan", agentdomain.ErrUnavailable))
 		}
 		cmd, err = r.NewCommandWithConfig(runCtx, agent, config)
 	} else if config.WorkspaceRoot == agent.Spec().WorkspaceRoot {
@@ -287,13 +293,13 @@ func (r Runner) withSession(ctx context.Context, agent agentdomain.Agent, config
 	} else if r.NewCommandInWorkspace != nil {
 		cmd, err = r.NewCommandInWorkspace(runCtx, agent, config.WorkspaceRoot)
 	} else {
-		return "", agentdomain.ErrUnavailable
+		return "", tagFailure(stageProcessLaunch, agentdomain.ErrUnavailable)
 	}
 	if err != nil {
-		return "", err
+		return "", tagUnlessCancelled(stageProcessLaunch, err)
 	}
 	if cmd == nil {
-		return "", errors.New("ACP launcher returned no command")
+		return "", tagFailure(stageProcessLaunch, errors.New("ACP launcher returned no command"))
 	}
 	// For a governed macOS task, HOME is an empty private per-process scratch
 	// directory under the existing temporary area, not the Runtime user HOME.
@@ -301,7 +307,7 @@ func (r Runner) withSession(ctx context.Context, agent agentdomain.Agent, config
 	if !config.ToolSupply.IsZero() && runtime.GOOS == "darwin" {
 		release, prepareErr := scopeGovernedAgentHome(cmd)
 		if prepareErr != nil {
-			return "", prepareErr
+			return "", tagUnlessCancelled(stageProcessLaunch, prepareErr)
 		}
 		defer func() {
 			if releaseErr := release(); releaseErr != nil {
@@ -311,17 +317,17 @@ func (r Runner) withSession(ctx context.Context, agent agentdomain.Agent, config
 	}
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
-		return "", err
+		return "", tagUnlessCancelled(stageProcessLaunch, err)
 	}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return "", err
+		return "", tagUnlessCancelled(stageProcessLaunch, err)
 	}
 	// Stderr is intentionally not copied to task results (may contain
 	// prompts, auth metadata, local paths or other private information).
 	cmd.Stderr = io.Discard
 	if err := cmd.Start(); err != nil {
-		return "", fmt.Errorf("start ACP Agent: %w", err)
+		return "", tagUnlessCancelled(stageProcessLaunch, fmt.Errorf("start ACP Agent: %w", err))
 	}
 	defer func() {
 		// CommandContext uses the Runtime process-isolation Cancel hook:
@@ -366,7 +372,7 @@ func (r Runner) withSession(ctx context.Context, agent agentdomain.Agent, config
 		"clientInfo": map[string]string{"name": "mender", "title": "Mender", "version": "dev"},
 	}, noUpdates)
 	if err != nil {
-		return "", annotateRead(err, readErrors)
+		return "", tagSessionTransport(stageInitialize, annotateRead(err, readErrors))
 	}
 	var hello struct {
 		ProtocolVersion   int `json:"protocolVersion"`
@@ -377,14 +383,15 @@ func (r Runner) withSession(ctx context.Context, agent agentdomain.Agent, config
 		} `json:"agentCapabilities"`
 	}
 	if err := json.Unmarshal(init, &hello); err != nil || hello.ProtocolVersion != 1 {
-		return "", errors.New("ACP Agent does not support stable protocol v1")
+		return "", tagFailure(stageProtocol, errors.New("ACP Agent does not support stable protocol v1"))
 	}
 	servers := []any{}
 	if !config.ToolSupply.IsZero() {
 		// ACP v1 only. HTTP is OPTIONAL for every backend; no assumption
 		// based on a Grok/OpenCode/Codex name and no host-side fallback.
 		if !hello.AgentCapabilities.MCPCapabilities.HTTP {
-			return "", fmt.Errorf("%w: Agent does not advertise ACP v1 HTTP MCP support", agentdomain.ErrUnavailable)
+			return "", tagFailure(stageProtocol,
+				fmt.Errorf("%w: Agent does not advertise ACP v1 HTTP MCP support", agentdomain.ErrUnavailable))
 		}
 		servers = append(servers, map[string]any{
 			"type": "http", "name": "mender-task-tools", "url": config.ToolSupply.Endpoint,
@@ -395,13 +402,13 @@ func (r Runner) withSession(ctx context.Context, agent agentdomain.Agent, config
 		"cwd": config.WorkspaceRoot, "mcpServers": servers,
 	}, noUpdates)
 	if err != nil {
-		return "", annotateRead(err, readErrors)
+		return "", tagSessionTransport(stageSessionCreate, annotateRead(err, readErrors))
 	}
 	var created struct {
 		SessionID string `json:"sessionId"`
 	}
 	if err := json.Unmarshal(session, &created); err != nil || created.SessionID == "" || len(created.SessionID) > 512 {
-		return "", errors.New("ACP Agent returned invalid SessionID")
+		return "", tagFailure(stageProtocol, errors.New("ACP Agent returned invalid SessionID"))
 	}
 	return visit(&wire, created.SessionID, session, readErrors)
 }
