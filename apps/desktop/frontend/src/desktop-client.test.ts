@@ -738,6 +738,7 @@ describe("desktop Mender client", () => {
           toolSourceKind: "agent",
           toolSourceId: "agent_grok",
           toolSourceName: "Grok - executor",
+          toolSourceSelectable: true,
           pluginId: "io.mender.provider.agent-delegation",
         },
         {
@@ -745,6 +746,7 @@ describe("desktop Mender client", () => {
           toolSourceKind: "sandbox",
           toolSourceId: "sbx_rocky",
           toolSourceName: "Rocky",
+          toolSourceSelectable: false,
           pluginId: "io.mender.provider.workspace",
         },
         {
@@ -752,12 +754,14 @@ describe("desktop Mender client", () => {
           toolSourceKind: "provider",
           toolSourceId: "prov_anysearch",
           toolSourceName: "AnySearch",
+          toolSourceSelectable: true,
           displayName: "AnySearch",
           pluginId: "io.mender.provider.mcp",
         },
         {
           ...common, providerId: "prov_legacy",
           toolSourceKind: "unclaimed",
+          toolSourceSelectable: false,
           pluginId: "io.mender.provider.workspace",
         },
       ],
@@ -772,6 +776,7 @@ describe("desktop Mender client", () => {
       { toolSourceKind: "provider", toolSourceId: "prov_anysearch", toolSourceName: "AnySearch" },
       { toolSourceKind: "unclaimed", toolSourceId: undefined, toolSourceName: undefined },
     ]);
+    expect(providers.map((item) => item.toolSourceSelectable)).toEqual([true, false, true, false]);
     expect(providers[0]?.displayName).toBe("Internal facade");
     expect(providers[2]?.displayName).toBe("AnySearch");
   });

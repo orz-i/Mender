@@ -56,27 +56,57 @@ func (r *Runtime) resolveMCPToolSources(
 			value := config
 			configPtr = &value
 		}
-		owner := ToolSourceForProvider(provider, configPtr, owners)
-		source := mcpserver.ToolSource{Kind: owner.Kind}
-		if owner.Kind != "unclaimed" && strings.TrimSpace(owner.Name) != "" {
-			source.Name = owner.Name
-			source.ResourceID = owner.ResourceID
-			if owner.Kind != "provider" && provider.DisplayName() != owner.Name {
-				source.ProviderName = provider.DisplayName()
-			}
-			if owner.Kind == "sandbox" && configPtr != nil {
-				source.Unavailable, err = r.mcpSandboxSourceUnavailable(ctx, owner.ResourceID, configPtr.PluginID)
-				if err != nil {
-					return nil, fmt.Errorf("resolve MCP tool source %s: sandbox readiness: %w", id, err)
-				}
-			}
-		} else {
-			source.Kind = "unclaimed"
-			source.Name = "Unclaimed source"
+		source, err := r.profileToolSource(ctx, provider, configPtr, owners)
+		if err != nil {
+			return nil, fmt.Errorf("resolve MCP tool source %s: %w", id, err)
 		}
 		sources[id] = source
 	}
 	return sources, nil
+}
+
+// profileToolSource is the shared, Host-owned read-only source projection. Both
+// MCP and Profile management consume it without extra Provider lookups.
+func (r *Runtime) profileToolSource(
+	ctx context.Context, provider catalogdomain.Provider,
+	config *providerplugin.Configuration,
+	owners map[catalogdomain.ProviderID]ToolSourceOwner,
+) (mcpserver.ToolSource, error) {
+	owner := ToolSourceForProvider(provider, config, owners)
+	source := mcpserver.ToolSource{Kind: owner.Kind}
+	if owner.Kind == "unclaimed" || strings.TrimSpace(owner.Name) == "" {
+		source.Kind = "unclaimed"
+		source.Name = "Unclaimed source"
+		return source, nil
+	}
+	source.Name = owner.Name
+	source.ResourceID = owner.ResourceID
+	if owner.Kind != "provider" && provider.DisplayName() != owner.Name {
+		source.ProviderName = provider.DisplayName()
+	}
+	if owner.Kind == "sandbox" && config != nil {
+		var err error
+		source.Unavailable, err = r.mcpSandboxSourceUnavailable(ctx, owner.ResourceID, config.PluginID)
+		if err != nil {
+			return mcpserver.ToolSource{}, fmt.Errorf("sandbox readiness: %w", err)
+		}
+	}
+	return source, nil
+}
+
+// ProfileToolSourceSelectable projects known Catalog eligibility for one
+// already-loaded Provider. Callers reuse their own Provider/config/owner rows
+// rather than performing N additional catalog lookups.
+func (r *Runtime) ProfileToolSourceSelectable(
+	ctx context.Context, provider catalogdomain.Provider,
+	config *providerplugin.Configuration,
+	owners map[catalogdomain.ProviderID]ToolSourceOwner,
+) (bool, error) {
+	source, err := r.profileToolSource(ctx, provider, config, owners)
+	if err != nil {
+		return false, err
+	}
+	return source.Discoverable(), nil
 }
 
 // mcpSandboxSourceUnavailable reuses inert, Host-reviewed capability and
@@ -122,22 +152,4 @@ func (r *Runtime) mcpSandboxSourceUnavailable(
 		// than silently borrowing Workspace or Jobs readiness semantics.
 		return true, nil
 	}
-}
-
-// ListProfileSelectableToolSources reports Catalog source eligibility without
-// reading Profile grants or activating any backend. This is the same verified
-// source/availability projection that MCP discovery consumes. The caller
-// chooses whether a configured source with zero Tools is worth showing.
-func (r *Runtime) ListProfileSelectableToolSources(
-	ctx context.Context, providerIDs []catalogdomain.ProviderID,
-) (map[catalogdomain.ProviderID]bool, error) {
-	sources, err := r.resolveMCPToolSources(ctx, providerIDs)
-	if err != nil {
-		return nil, err
-	}
-	selectable := make(map[catalogdomain.ProviderID]bool, len(providerIDs))
-	for _, id := range providerIDs {
-		selectable[id] = sources[id].Discoverable()
-	}
-	return selectable, nil
 }

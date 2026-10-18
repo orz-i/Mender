@@ -383,6 +383,7 @@ type Provider struct {
 	ToolSourceKind        string                  `json:"toolSourceKind,omitempty"`
 	ToolSourceID          string                  `json:"toolSourceId,omitempty"`
 	ToolSourceName        string                  `json:"toolSourceName,omitempty"`
+	ToolSourceSelectable  *bool                   `json:"toolSourceSelectable,omitempty"`
 	Namespace             string                  `json:"namespace"`
 	DisplayName           string                  `json:"displayName"`
 	Description           string                  `json:"description"`

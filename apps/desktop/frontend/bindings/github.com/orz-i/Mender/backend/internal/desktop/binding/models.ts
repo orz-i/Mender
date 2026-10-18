@@ -460,6 +460,7 @@ export interface Provider {
     "toolSourceKind"?: string;
     "toolSourceId"?: string;
     "toolSourceName"?: string;
+    "toolSourceSelectable"?: boolean | null;
     "namespace": string;
     "displayName": string;
     "description": string;

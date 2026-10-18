@@ -936,6 +936,7 @@ func (s *Service) ListProviders() (ProviderList, error) {
 	if err != nil {
 		return ProviderList{}, err
 	}
+
 	items := make([]Provider, 0, len(providers))
 	for _, provider := range providers {
 		config, configured := configByProvider[provider.ID()]
@@ -955,6 +956,11 @@ func (s *Service) ListProviders() (ProviderList, error) {
 		item.ToolSourceKind = owner.Kind
 		item.ToolSourceID = owner.ResourceID
 		item.ToolSourceName = owner.Name
+		canSelect, err := s.runtime.ProfileToolSourceSelectable(s.ctx, provider, configPtr, owners)
+		if err != nil {
+			return ProviderList{}, err
+		}
+		item.ToolSourceSelectable = &canSelect
 		items = append(items, item)
 	}
 	return ProviderList{Providers: items}, nil

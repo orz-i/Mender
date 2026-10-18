@@ -1344,6 +1344,7 @@ function provider(value: BindingProvider): Provider {
     ...(sourceKind ? { toolSourceKind: sourceKind as NonNullable<Provider["toolSourceKind"]> } : {}),
     ...(value.toolSourceId ? { toolSourceId: value.toolSourceId } : {}),
     ...(value.toolSourceName ? { toolSourceName: value.toolSourceName } : {}),
+    ...(typeof value.toolSourceSelectable === "boolean" ? { toolSourceSelectable: value.toolSourceSelectable } : {}),
     namespace: value.namespace,
     displayName: value.displayName,
     description: value.description,

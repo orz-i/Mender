@@ -108,7 +108,9 @@ func TestServiceEndToEndUsesSharedRuntime(t *testing.T) {
 	if err != nil || len(sourceList.Providers) != 1 ||
 		sourceList.Providers[0].ToolSourceKind != "provider" ||
 		sourceList.Providers[0].ToolSourceID != created.Provider.ProviderID ||
-		sourceList.Providers[0].ToolSourceName != "Upstream" {
+		sourceList.Providers[0].ToolSourceName != "Upstream" ||
+		sourceList.Providers[0].ToolSourceSelectable == nil ||
+		!*sourceList.Providers[0].ToolSourceSelectable {
 		t.Fatalf("Wails direct Tool source projection = %+v, %v", sourceList, err)
 	}
 
