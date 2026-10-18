@@ -2,6 +2,7 @@ package sqlite
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -9,7 +10,25 @@ import (
 	"github.com/orz-i/Mender/backend/internal/catalog/domain"
 )
 
-const searchToolsQuery = `SELECT
+// Name/title/tag priority must precede BM25: a spammy external description
+// repeating one term hundreds of times can otherwise outrank an exact Tool
+// name even with large BM25 field weights. All inputs remain SQL parameters.
+// Within each lexical tier, FTS5 BM25 and canonical ToolID break ties.
+const ftsRankOrder = `ORDER BY CASE
+ WHEN lower(t.name) = ? THEN 0
+ WHEN instr(lower(t.name), ?) > 0 THEN 1
+ WHEN lower(t.title) = ? THEN 2
+ WHEN instr(lower(t.title), ?) > 0 THEN 3
+ WHEN instr(lower(t.tags_json), ?) > 0 THEN 4
+ ELSE 5 END,
+ bm25(tools_fts, 0.0, 0.0, 12.0, 8.0, 1.0, 6.0), t.id`
+
+func ftsRankingArgs(query string) []any {
+	term := strings.ToLower(strings.TrimSpace(query))
+	return []any{term, term, term, term, term}
+}
+
+const searchToolsStatement = `SELECT
 	t.id,
 	t.provider_id,
 	t.source_key,
@@ -23,39 +42,7 @@ const searchToolsQuery = `SELECT
 	t.updated_at
 FROM tools_fts
 JOIN tools AS t ON t.id = tools_fts.tool_id
-WHERE tools_fts MATCH ?
-ORDER BY bm25(tools_fts), t.id
-LIMIT ? OFFSET ?`
-
-const searchProviderToolsQuery = `SELECT
-	t.id,
-	t.provider_id,
-	t.source_key,
-	t.name,
-	t.title,
-	t.description,
-	t.input_schema,
-	t.output_schema,
-	t.tags_json,
-	t.created_at,
-	t.updated_at
-FROM tools_fts
-JOIN tools AS t ON t.id = tools_fts.tool_id
-WHERE tools_fts MATCH ?
-	AND tools_fts.provider_id = ?
-ORDER BY bm25(tools_fts), t.id
-LIMIT ? OFFSET ?`
-
-const searchToolIDsUnboundedQuery = `SELECT tool_id
-FROM tools_fts
-WHERE tools_fts MATCH ?
-ORDER BY bm25(tools_fts), tool_id`
-
-const searchProviderToolIDsUnboundedQuery = `SELECT tool_id
-FROM tools_fts
-WHERE tools_fts MATCH ?
-	AND provider_id = ?
-ORDER BY bm25(tools_fts), tool_id`
+WHERE tools_fts MATCH ?`
 
 // SearchTools performs FTS5/BM25 lexical discovery.
 func (s *Store) SearchTools(
@@ -72,17 +59,14 @@ func (s *Store) pagedSearchToolDomain(
 	scope application.ToolSearchScope, offset int,
 ) ([]domain.Tool, error) {
 	match := ftsQuery(query)
-	if match == "" {
+	if match == "" || (scope.AllowedToolIDs != nil && len(scope.AllowedToolIDs) == 0) {
 		return []domain.Tool{}, nil
 	}
-	if scope.AllowedToolIDs != nil {
-		if len(scope.AllowedToolIDs) == 0 {
-			return []domain.Tool{}, nil
-		}
-		return s.searchAllowedToolsPage(ctx, match, limit, scope, offset)
-	}
 
-	statement, args := searchStatement(match, limit, scope, offset)
+	statement, args, err := searchStatement(match, query, limit, offset, scope)
+	if err != nil {
+		return nil, fmt.Errorf("search tools: %w", err)
+	}
 	rows, err := s.db.QueryContext(ctx, statement, args...)
 	if err != nil {
 		return nil, fmt.Errorf("search tools: %w", err)
@@ -109,76 +93,48 @@ func (s *Store) pagedSearchToolDomain(
 	return tools, nil
 }
 
-func (s *Store) searchAllowedToolsPage(
-	ctx context.Context,
-	match string,
-	limit int,
-	scope application.ToolSearchScope,
-	offset int,
-) ([]domain.Tool, error) {
-	statement := searchToolIDsUnboundedQuery
+// searchStatement builds one parameterized search query. Any Profile
+// allowance is restricted with a JSON1 IN predicate, evaluated together with
+// the provider filter before ranking, LIMIT and OFFSET, so pagination can
+// never bypass the scope.
+func searchStatement(
+	match string, query string, limit int, offset int, scope application.ToolSearchScope,
+) (string, []any, error) {
+	statement := searchToolsStatement
 	args := []any{match}
 	if scope.ProviderID != nil {
-		statement = searchProviderToolIDsUnboundedQuery
+		statement += `
+	AND tools_fts.provider_id = ?`
 		args = append(args, scope.ProviderID.String())
 	}
-
-	rows, err := s.db.QueryContext(ctx, statement, args...)
-	if err != nil {
-		return nil, fmt.Errorf("search allowed tools: %w", err)
-	}
-	defer func() { _ = rows.Close() }()
-
-	allowed := make(map[string]domain.ToolID, len(scope.AllowedToolIDs))
-	for _, id := range scope.AllowedToolIDs {
-		allowed[id.String()] = id
-	}
-
-	matched := make([]domain.ToolID, 0, limit)
-	skipped := 0
-	for rows.Next() {
-		var rawID string
-		if err := rows.Scan(&rawID); err != nil {
-			return nil, fmt.Errorf("search allowed tools: scan id: %w", err)
-		}
-		id, visible := allowed[rawID]
-		if !visible {
-			continue
-		}
-		if skipped < offset {
-			skipped++
-			continue
-		}
-		matched = append(matched, id)
-		if len(matched) == limit {
-			break
-		}
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("search allowed tools: rows: %w", err)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, fmt.Errorf("search allowed tools: close rows: %w", err)
-	}
-
-	tools := make([]domain.Tool, 0, len(matched))
-	for _, id := range matched {
-		tool, err := s.GetTool(ctx, id)
+	if scope.AllowedToolIDs != nil {
+		allowed, err := encodeAllowedToolIDs(scope.AllowedToolIDs)
 		if err != nil {
-			return nil, fmt.Errorf("search allowed tools: load %s: %w", id, err)
+			return "", nil, fmt.Errorf("allowed IDs: %w", err)
 		}
-		tools = append(tools, tool)
+		statement += `
+	AND t.id IN (SELECT value FROM json_each(?))`
+		args = append(args, allowed)
 	}
-	return tools, nil
+	statement += "\n" + ftsRankOrder + `
+LIMIT ? OFFSET ?`
+	args = append(args, ftsRankingArgs(query)...)
+	args = append(args, limit, offset)
+	return statement, args, nil
 }
 
-func searchStatement(
-	match string, limit int, scope application.ToolSearchScope, offset int,
-) (string, []any) {
-	if scope.ProviderID != nil {
-		return searchProviderToolsQuery, []any{match, scope.ProviderID.String(), limit, offset}
+// encodeAllowedToolIDs renders Profile allowances as one JSON array parameter
+// so ToolIDs are bound, not interpolated into SQL.
+func encodeAllowedToolIDs(allowed []domain.ToolID) (string, error) {
+	encoded := make([]string, 0, len(allowed))
+	for _, id := range allowed {
+		encoded = append(encoded, id.String())
 	}
-	return searchToolsQuery, []any{match, limit, offset}
+	payload, err := json.Marshal(encoded)
+	if err != nil {
+		return "", fmt.Errorf("encode allowed tool ids: %w", err)
+	}
+	return string(payload), nil
 }
 
 func ftsQuery(query string) string {

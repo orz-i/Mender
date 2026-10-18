@@ -2,7 +2,6 @@ package sqlite
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	"github.com/orz-i/Mender/backend/internal/catalog/application"
@@ -19,29 +18,26 @@ func (s *Store) PagedSearchTools(
 	if match == "" || (scope.AllowedToolIDs != nil && len(scope.AllowedToolIDs) == 0) {
 		return []application.ToolListItem{}, nil
 	}
-	sqlQuery := `SELECT t.id,t.provider_id,t.name,t.title,t.description
+	statement := `SELECT t.id,t.provider_id,t.name,t.title,t.description
   FROM tools_fts JOIN tools t ON t.id=tools_fts.tool_id
   WHERE tools_fts MATCH ?`
 	args := []any{match}
 	if scope.ProviderID != nil {
-		sqlQuery += " AND tools_fts.provider_id=?"
+		statement += " AND tools_fts.provider_id=?"
 		args = append(args, scope.ProviderID.String())
 	}
 	if scope.AllowedToolIDs != nil {
-		allowed := make([]string, 0, len(scope.AllowedToolIDs))
-		for _, id := range scope.AllowedToolIDs {
-			allowed = append(allowed, id.String())
-		}
-		encoded, err := json.Marshal(allowed)
+		encoded, err := encodeAllowedToolIDs(scope.AllowedToolIDs)
 		if err != nil {
 			return nil, fmt.Errorf("paged tool search: allowed IDs: %w", err)
 		}
-		sqlQuery += " AND t.id IN (SELECT value FROM json_each(?))"
-		args = append(args, string(encoded))
+		statement += " AND t.id IN (SELECT value FROM json_each(?))"
+		args = append(args, encoded)
 	}
-	sqlQuery += " ORDER BY bm25(tools_fts),t.id LIMIT ? OFFSET ?"
+	statement += "\n" + ftsRankOrder + "\nLIMIT ? OFFSET ?"
+	args = append(args, ftsRankingArgs(query)...)
 	args = append(args, limit, offset)
-	rows, err := s.db.QueryContext(ctx, sqlQuery, args...)
+	rows, err := s.db.QueryContext(ctx, statement, args...)
 	if err != nil {
 		return nil, fmt.Errorf("paged tool search: query: %w", err)
 	}
