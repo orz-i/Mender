@@ -36,6 +36,10 @@ function taskDiagnosticText(value:string):string{
   // Task diagnostics are a closed vocabulary from the local Agent service.
   // Older or extension-specific codes retain their exact original content.
   switch(value){
+    case "Antigravity CLI cannot receive governed Task tools": return t("Antigravity CLI cannot receive governed Task tools");
+    case "Antigravity CLI requires native tool permission": return t("Antigravity CLI requires native tool permission");
+    case "Antigravity CLI response was invalid": return t("Antigravity CLI response was invalid");
+    case "Antigravity CLI did not complete the task": return t("Antigravity CLI did not complete the task");
     case "Agent process could not start": return t("Agent process could not start");
     case "ACP initialization failed": return t("ACP initialization failed");
     case "ACP session creation failed": return t("ACP session creation failed");
@@ -201,7 +205,7 @@ export function AgentDetailPage({client,chooseLocalDirectory}:{client:MenderClie
       tabs={agent?<PageTabs label="Agent details">
         <PageTab label="Overview" active={topic==="overview"} onClick={()=>setTopic("overview")}/>
         <PageTab label="Workspaces" active={topic==="workspaces"} onClick={()=>setTopic("workspaces")}/>
-        {client.supportsLocalAgentToolPlacements===true?<PageTab label="Governed tools" active={topic==="execution"} onClick={()=>setTopic("execution")}/>:null}
+        {client.supportsLocalAgentToolPlacements===true&&agent.backend!=="antigravity"?<PageTab label="Governed tools" active={topic==="execution"} onClick={()=>setTopic("execution")}/>:null}
         <PageTab label="Tools" count={tools?.tools.length??0} active={topic==="tools"} onClick={()=>setTopic("tools")}/>
         <PageTab label="Tasks" count={tasks.length} active={topic==="tasks"} onClick={()=>setTopic("tasks")}/>
         <PageTab label="Access" count={grants.length} active={topic==="access"} onClick={()=>setTopic("access")}/>
@@ -229,6 +233,7 @@ export function AgentDetailPage({client,chooseLocalDirectory}:{client:MenderClie
           <dd className="mt-1 text-sm">{agent.defaultReasoningEffort||t("Use Agent default")}</dd></div>
         <div className="sm:col-span-2"><dt className="text-xs text-muted-foreground">{t("Workspace directory")}</dt>
           <dd className="mt-1 break-all font-mono text-xs">{agent.workspaceRoot}</dd></div>
+        {agent.backend==="antigravity"?<div className="sm:col-span-2 text-xs text-muted-foreground">{t("Antigravity uses its native tool permissions. Configure workspace authorization after creation to enable 24-hour YOLO; it is off by default.")}</div>:null}
         <div><dt className="text-xs text-muted-foreground">{t("Created at")}</dt><dd className="mt-1 text-sm">{formatDateTime(agent.createdAt)}</dd></div>
         {agent.issue?<div className="sm:col-span-2 text-sm text-destructive">{agent.issue}</div>:null}
       </dl>
@@ -317,7 +322,7 @@ export function AgentDetailPage({client,chooseLocalDirectory}:{client:MenderClie
 
     <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
       <DialogContent><DialogHeader><DialogTitle>{t("Edit runtime defaults")}</DialogTitle>
-        <DialogDescription>{t("Model choices come from this Agent's authenticated ACP session; no prompt is sent.")}</DialogDescription>
+        <DialogDescription>{t(agent?.backend==="antigravity"?"Model choices come from the local Antigravity CLI; no prompt is sent.":"Model choices come from this Agent's authenticated ACP session; no prompt is sent.")}</DialogDescription>
       </DialogHeader>
       <div className="space-y-3">
         {modelLoading?<p className="text-sm text-muted-foreground">{t("Inspecting available models…")}</p>:null}
@@ -388,10 +393,10 @@ export function AgentDetailPage({client,chooseLocalDirectory}:{client:MenderClie
           {viewTask.reasoningEffort?<div><dt className="text-xs text-muted-foreground">{t("Reasoning effort")}</dt><dd>{viewTask.reasoningEffort}</dd></div>:null}
           {viewTask.workspace?<div><dt className="text-xs text-muted-foreground">{t("Workspace")}</dt><dd>{viewTask.workspace}</dd></div>:null}
         </dl>:null}
-        {client.supportsLocalAgentApprovals===true&&viewTask&&(viewTask.status==="running"||viewTask.status==="queued")?
+        {client.supportsLocalAgentApprovals===true&&agent?.backend!=="antigravity"&&viewTask&&(viewTask.status==="running"||viewTask.status==="queued")?
           <AgentTaskApprovals client={client} task={viewTask} onTaskUpdated={updateViewedTask}/>:null}
         {viewTask&&agent?.isolation==="host"?<p role="note" className="text-xs leading-5 text-muted-foreground">
-          {t("ACP approvals show only requests sent to Mender; zero approvals does not prove the Host Agent performed no native file or command actions.")}
+          {t(agent.backend==="antigravity"?"Antigravity native permissions are not Mender ACP approvals; no ACP approval receipt can prove its native tool activity.":"ACP approvals show only requests sent to Mender; zero approvals does not prove the Host Agent performed no native file or command actions.")}
         </p>:null}
         {viewTask?.result?<pre className="max-h-[45vh] overflow-auto whitespace-pre-wrap break-words rounded-lg bg-muted p-4 text-xs">{viewTask.result}</pre>:
           <p className="text-sm text-muted-foreground">{viewTask?.diagnostic?taskDiagnosticText(viewTask.diagnostic):t("No result available.")}</p>}

@@ -112,6 +112,10 @@ function AgentCreateForm({
               <option value="host">{t("Host (not isolated)")}</option>
             </select>
             <p className="text-xs text-muted-foreground">{t("Host mode can access files and credentials with the Runtime user's permissions.")}</p>
+            {backend==="antigravity"?
+              <p className="text-xs text-muted-foreground">{t("Antigravity uses its native tool permissions. Configure workspace authorization after creation to enable 24-hour YOLO; it is off by default.")}</p>:null}
+            {backend==="antigravity"&&isolation==="restricted_host"?
+              <p className="text-xs text-muted-foreground">{t("Antigravity may need local account and keychain access that Restricted host prevents. Choose Host explicitly only if you accept its filesystem and credential access.")}</p>:null}
             {backend==="opencode"&&isolation==="restricted_host"?
               <p className="text-xs text-muted-foreground">{t("OpenCode may need local account and config access that Restricted host prevents. Choose Host explicitly only if you accept its filesystem and credential access.")}</p>:null}
           </div>

@@ -2224,12 +2224,12 @@ export interface components {
         CreateAgentRequest: {
             name: string;
             /** @enum {string} */
-            backend: "codex" | "grok" | "opencode";
+            backend: "codex" | "grok" | "opencode" | "antigravity";
             /** @description Explicit trusted local absolute workspace directory */
             workspaceRoot: string;
-            /** @description Optional ACP-advertised model ID; empty uses Agent backend default */
+            /** @description Optional backend model ID; empty uses Agent backend default */
             defaultModel?: string;
-            /** @description Optional ACP thought-level ID; empty uses Backend default */
+            /** @description Optional backend reasoning effort; empty uses Backend default */
             defaultReasoningEffort?: string;
             /**
              * @default restricted_host
@@ -2241,7 +2241,7 @@ export interface components {
             agentId: string;
             name: string;
             /** @enum {string} */
-            backend: "codex" | "grok" | "opencode";
+            backend: "codex" | "grok" | "opencode" | "antigravity";
             pluginId: string;
             extensionId: string;
             workspaceRoot: string;

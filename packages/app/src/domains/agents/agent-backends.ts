@@ -18,6 +18,10 @@ export const agentBackendDetails = {
     name: "OpenCode",
     pluginId: "io.mender.agent.opencode",
   },
+  antigravity: {
+    name: "Antigravity",
+    pluginId: "io.mender.agent.antigravity",
+  },
 } as const satisfies Record<AgentBackend, {
   name: string;
   pluginId: string;
@@ -34,6 +38,7 @@ export function agentBackendDescription(backend:AgentBackend):string {
     case "codex": return t("Codex CLI requires the separately installed codex-acp adapter.");
     case "grok": return t("Grok CLI uses its built-in ACP stdio transport.");
     case "opencode": return t("OpenCode CLI uses its native ACP stdio transport.");
+    case "antigravity": return t("Antigravity CLI uses its authenticated headless JSON stream; native permissions are not Mender ACP approvals.");
     default: {
       const exhaustive:never=backend;
       return exhaustive;

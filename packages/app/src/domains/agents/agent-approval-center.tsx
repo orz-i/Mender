@@ -141,7 +141,7 @@ export function AgentApprovalCenter({client}:{client:MenderClient}){
   <Dialog open={editor!==null} onOpenChange={open=>{if(!open&&!busy){setEditor(null);setError("");}}}>
    <DialogContent className="max-h-[85vh] overflow-y-auto">
     <DialogHeader><DialogTitle>{t("Configure Agent authorization")}</DialogTitle>
-     <DialogDescription>{t("Choose how this Agent handles native ACP permission requests for a specific workspace.")}</DialogDescription>
+     <DialogDescription>{t(editor?.agent.backend==="antigravity"?"Choose how this workspace handles Antigravity native tool permissions. The trusted mode uses the CLI YOLO flag.":"Choose how this Agent handles native ACP permission requests for a specific workspace.")}</DialogDescription>
     </DialogHeader>
     <div className="space-y-4">
      <div className="text-sm font-medium">{editor?.agent.name}</div>
@@ -154,22 +154,22 @@ export function AgentApprovalCenter({client}:{client:MenderClient}){
      {activeWorkspace?<p className="break-all font-mono text-xs text-muted-foreground">{activeWorkspace.root}</p>:null}
      <fieldset className="space-y-2">
       <legend className="text-sm font-medium">{t("Authorization mode")}</legend>
-      {(["manual","workspace_read","trusted"] as const).map(mode=>
+      {(editor?.agent.backend==="antigravity"?(["manual","trusted"] as const):(["manual","workspace_read","trusted"] as const)).map(mode=>
        <label key={mode} className="flex items-start gap-3 rounded-lg border border-border px-3 py-3 text-sm">
         <input type="radio" name="agent-approval-mode" className="mt-1" checked={editor?.mode===mode}
          onChange={()=>{setEditor(prev=>prev?{...prev,mode}:prev);setTrustConfirmed(false);}} disabled={busy}/>
-        <span>{modeLabel(mode)}</span>
+        <span>{editor?.agent.backend==="antigravity"?(mode==="trusted"?t("YOLO: auto-approve all Antigravity tools (24 hours)"):t("Follow Antigravity native permissions (default)")):modeLabel(mode)}</span>
        </label>)}
      </fieldset>
      {editor?.mode==="workspace_read"?<p className="text-xs text-muted-foreground">{t("Only verified single-file reads inside this workspace are automatically allowed. All other requests still need review.")}</p>:null}
      {editor?.mode==="trusted"?<div className="space-y-3">
-      <p role="alert" className="text-xs text-destructive">{t("Trusted mode permits this Agent's native ACP read, edit, and execute requests for up to 24 hours. In Host mode the process has your OS user's authority, may affect files outside this workspace, and is NOT sandboxed by Mender.")}</p>
+      <p role="alert" className="text-xs text-destructive">{t(editor.agent.backend==="antigravity"?"YOLO passes --dangerously-skip-permissions to each new Antigravity Task while this 24-hour grant is active. ALL native file writes and commands are approved without Mender prompts. Host mode is not isolated by Mender. Revoking applies to new processes only.":"Trusted mode permits this Agent's native ACP read, edit, and execute requests for up to 24 hours. In Host mode the process has your OS user's authority, may affect files outside this workspace, and is NOT sandboxed by Mender.")}</p>
       <label className="flex items-start gap-2 text-sm">
        <input type="checkbox" className="mt-1" checked={trustConfirmed} disabled={busy} onChange={e=>setTrustConfirmed(e.target.checked)}/>
        <span>{t("I understand the Host-mode risk and authorize unattended native operations for 24 hours.")}</span>
       </label>
      </div>:null}
-     <p className="text-xs text-muted-foreground">{t("Changing this mode applies to subsequent requests; pending matching requests can be released automatically after saving.")}</p>
+     <p className="text-xs text-muted-foreground">{t(editor?.agent.backend==="antigravity"?"Default mode follows Antigravity CLI's own permission rules; no Mender ACP approvals are available. Unreviewed native commands may be denied. YOLO is an explicit 24-hour opt-in.":"Changing this mode applies to subsequent requests; pending matching requests can be released automatically after saving.")}</p>
      {error?<p role="alert" className="text-xs text-destructive">{error}</p>:null}
     </div>
     <DialogFooter>

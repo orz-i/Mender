@@ -2792,10 +2792,10 @@ components:
       additionalProperties: false
       properties:
         name: { type: string, minLength: 1, maxLength: 120 }
-        backend: { type: string, enum: [codex, grok, opencode] }
+        backend: { type: string, enum: [codex, grok, opencode, antigravity] }
         workspaceRoot: { type: string, description: Explicit trusted local absolute workspace directory }
-        defaultModel: { type: string, maxLength: 128, description: Optional ACP-advertised model ID; empty uses Agent backend default }
-        defaultReasoningEffort: { type: string, maxLength: 64, pattern: '^[a-z0-9_-]*$', description: Optional ACP thought-level ID; empty uses Backend default }
+        defaultModel: { type: string, maxLength: 128, description: Optional backend model ID; empty uses Agent backend default }
+        defaultReasoningEffort: { type: string, maxLength: 64, pattern: '^[a-z0-9_-]*$', description: Optional backend reasoning effort; empty uses Backend default }
         isolation: { type: string, enum: [host, restricted_host], default: restricted_host }
     Agent:
       type: object
@@ -2804,7 +2804,7 @@ components:
       properties:
         agentId: { type: string }
         name: { type: string }
-        backend: { type: string, enum: [codex, grok, opencode] }
+        backend: { type: string, enum: [codex, grok, opencode, antigravity] }
         pluginId: { type: string }
         extensionId: { type: string }
         workspaceRoot: { type: string }

@@ -114,6 +114,30 @@ describe("owner Agent approval center",()=>{
   fireEvent.click(save);
   await waitFor(()=>expect(set).toHaveBeenCalledWith(agent.agentId,"","trusted"));
  });
+ it("offers Antigravity's 24-hour YOLO instead of claiming ACP approvals",async()=>{
+  const agy:Agent={...agent,name:"Antigravity Local",backend:"antigravity",pluginId:"io.mender.agent.antigravity"};
+  const set=vi.fn().mockResolvedValue({...defaultPolicy,mode:"trusted"});
+  const client=makeClient({
+   listPendingAgentApprovals:vi.fn().mockResolvedValue({approvals:[]}),
+   listAgents:vi.fn().mockResolvedValue({agents:[agy]}),
+   getAgent:vi.fn().mockResolvedValue(agy),setAgentApprovalPolicy:set,
+  });
+  render(<AgentApprovalCenter client={client}/>);
+  fireEvent.click(screen.getByRole("button",{name:"Unattended authorization"}));
+  expect(await screen.findByText("Antigravity Local")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button",{name:"Configure authorization"}));
+  const dialog=await screen.findByRole("dialog");
+  expect(within(dialog).getByText(/trusted mode uses the CLI YOLO flag/)).toBeTruthy();
+  expect(within(dialog).queryByRole("radio",{name:"Allow workspace reads"})).toBeNull();
+  expect(within(dialog).getByRole("radio",{name:"Follow Antigravity native permissions (default)"})).toBeTruthy();
+  fireEvent.click(within(dialog).getByRole("radio",{name:"YOLO: auto-approve all Antigravity tools (24 hours)"}));
+  expect(within(dialog).getByText(/--dangerously-skip-permissions/)).toBeTruthy();
+  const save=within(dialog).getByRole<HTMLButtonElement>("button",{name:"Save"});
+  expect(save.disabled).toBe(true);
+  fireEvent.click(within(dialog).getByRole("checkbox",{name:/I understand the Host-mode risk/}));
+  fireEvent.click(save);
+  await waitFor(()=>expect(set).toHaveBeenCalledWith(agy.agentId,"","trusted"));
+ });
  it("restricts the inbox to the native owner",()=>{
   render(<AgentApprovalCenter client={makeClient({supportsLocalAgentApprovals:false})}/>);
   expect(screen.getByText("Local approval access required")).toBeTruthy();

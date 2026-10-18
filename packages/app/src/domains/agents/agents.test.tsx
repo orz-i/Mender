@@ -188,6 +188,20 @@ describe("Agents focused management",()=>{
       isolation:"restricted_host",defaultModel:"",
     }));
   });
+  it("opens Antigravity-specific creation from the built-in marketplace with native YOLO off by default",async()=>{
+    const client=show("/agents/new?pluginId=io.mender.agent.antigravity");
+    expect(screen.getByRole("textbox",{name:"Agent name"})).toBeTruthy();
+    expect(screen.getByText(/Configure workspace authorization after creation to enable 24-hour YOLO/)).toBeTruthy();
+    fireEvent.change(screen.getByRole("textbox",{name:"Agent name"}),{target:{value:"Antigravity Local"}});
+    fireEvent.change(screen.getByRole("textbox",{name:"Workspace directory"}),{target:{value:"/tmp/agy-fixture"}});
+    fireEvent.click(screen.getByRole("button",{name:"Review"}));
+    expect(screen.getByText("Antigravity")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button",{name:"Create agent"}));
+    await waitFor(()=>expect(client.createAgent).toHaveBeenCalledWith({
+      name:"Antigravity Local",backend:"antigravity",workspaceRoot:"/tmp/agy-fixture",
+      isolation:"restricted_host",defaultModel:"",
+    }));
+  });
   it("selects ACP model and reasoning effort together without duplicating Agent",async()=>{
     const inspectAgentModels=vi.fn().mockResolvedValue({current:"fixture-one",
       models:[{id:"fixture-one",name:"Fixture One"},{id:"fixture-two",name:"Fixture Two"}],

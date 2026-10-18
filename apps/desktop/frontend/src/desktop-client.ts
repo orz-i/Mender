@@ -927,7 +927,7 @@ function integrationOffering(value:BindingIntegrationOffering):IntegrationOfferi
     transport:"streamable-http",authentication:"optional-bearer"};
 }
 function agent(value:BindingAgent):Agent {
-  if(value.backend!=="codex"&&value.backend!=="grok"&&value.backend!=="opencode"){
+  if(value.backend!=="codex"&&value.backend!=="grok"&&value.backend!=="opencode"&&value.backend!=="antigravity"){
     throw new MenderClientInvariantError("Unknown Agent Backend: "+value.backend);
   }
   if(value.isolation!=="host"&&value.isolation!=="restricted_host"){

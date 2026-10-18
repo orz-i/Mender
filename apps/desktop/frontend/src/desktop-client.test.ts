@@ -243,11 +243,14 @@ describe("desktop Mender client", () => {
     const opencode=builtin("io.mender.agent.opencode","agent.backend",{
       capabilities:["acp.v1","tasks","local_workspace"],
     });
+    const antigravity=builtin("io.mender.agent.antigravity","agent.backend",{
+      capabilities:["headless.stream-json","tasks","local_workspace"],
+    });
     const entries=[
       builtin("io.mender.provider.mcp","provider.tools"),
       builtin("io.mender.sandbox.local-workspace","sandbox.backend"),
       builtin("io.mender.tunnel.openai","tunnel.transport"),
-      codex,grok,opencode,
+      codex,grok,opencode,antigravity,
     ];
     vi.mocked(Service.ListPluginCatalogue).mockResolvedValue({plugins:entries});
     const result=await createDesktopMenderClient().listPluginCatalogue();
@@ -263,6 +266,10 @@ describe("desktop Mender client", () => {
     });
     expect(result.plugins.find(p=>p.pluginId==="io.mender.agent.opencode")).toMatchObject({
       kind:"agent.backend",sourceKind:"builtin",status:"enabled",enabled:true,
+    });
+    expect(result.plugins.find(p=>p.pluginId==="io.mender.agent.antigravity")).toMatchObject({
+      kind:"agent.backend",sourceKind:"builtin",status:"enabled",enabled:true,
+      capabilities:["headless.stream-json","tasks","local_workspace"],
     });
     expect(Service.ListPluginCatalogue).toHaveBeenCalledOnce();
   });
