@@ -45,6 +45,7 @@ func TestAgentWorkspaceV9MigrationRefusesOrphanedLegacyBinding(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	stripExecutionEvidenceV14Fixture(t, raw)
 	for _, statement := range []string{
 		"DELETE FROM agent_schema_migrations WHERE version=13",
 		"DELETE FROM agent_schema_migrations WHERE version=12",

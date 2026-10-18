@@ -2899,6 +2899,19 @@ components:
         cancelRequested: { type: boolean }
         result: { type: string, maxLength: 65536 }
         diagnostic: { type: string, maxLength: 1024 }
+        observation: { $ref: '#/components/schemas/AgentTaskObservation' }
+    AgentTaskObservation:
+      type: object
+      additionalProperties: false
+      required: [phase, activity, lastObservedAt, sessionRecorded, sessionRecoverability]
+      properties:
+        phase: { type: string, enum: [reserved, process_started, session_ready, prompt_sent, progress, terminal_seen, leader_reaped] }
+        activity: { type: string, enum: [local_active, uncertain] }
+        lastObservedAt: { type: string, format: date-time }
+        lastWorkerHeartbeatAt: { type: string, format: date-time, description: Local Mender worker heartbeat; not native Agent progress }
+        sessionRecorded: { type: boolean }
+        sessionRecoverability: { type: string, enum: [unavailable, unverified] }
+        leaderReaped: { type: boolean }
     AgentAdmissionEvent:
       type: object
       required: [agentId, action, principalKind, origin, scopeKind, policyKind, policyReason, status, occurredAt]

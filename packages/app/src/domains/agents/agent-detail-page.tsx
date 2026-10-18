@@ -66,7 +66,21 @@ function taskDiagnosticText(value:string):string{
     case "Agent outcome unknown after timeout": return t("Agent outcome unknown after timeout");
     case "Agent output exceeded the permitted limit": return t("Agent output exceeded the permitted limit");
     case "Agent outcome unknown after cancellation": return t("Agent outcome unknown after cancellation");
+    case "Agent outcome unknown after execution evidence loss": return t("Agent outcome unknown after execution evidence loss");
+    case "Agent execution evidence unavailable": return t("Agent execution evidence unavailable");
     default: return value;
+  }
+}
+function taskExecutionPhaseText(value:string):string{
+  switch(value){
+    case "reserved":return t("Execution reserved");
+    case "process_started":return t("Agent process started");
+    case "session_ready":return t("Native session recorded");
+    case "prompt_sent":return t("Prompt dispatched");
+    case "progress":return t("Agent progress observed");
+    case "terminal_seen":return t("Agent terminal result observed");
+    case "leader_reaped":return t("Process leader reaped");
+    default:return t("Execution activity uncertain");
   }
 }
 type Topic = "overview" | "workspaces" | "execution" | "tools" | "tasks" | "access" | "activity";
@@ -393,6 +407,19 @@ export function AgentDetailPage({client,chooseLocalDirectory}:{client:MenderClie
           {viewTask.reasoningEffort?<div><dt className="text-xs text-muted-foreground">{t("Reasoning effort")}</dt><dd>{viewTask.reasoningEffort}</dd></div>:null}
           {viewTask.workspace?<div><dt className="text-xs text-muted-foreground">{t("Workspace")}</dt><dd>{viewTask.workspace}</dd></div>:null}
         </dl>:null}
+        {viewTask?.observation?<section className="space-y-2 rounded-lg border border-border p-3">
+          <p className="text-sm font-medium">{t("Execution evidence")}</p>
+          <dl className="grid grid-cols-2 gap-3 text-sm">
+            <div><dt className="text-xs text-muted-foreground">{t("Execution phase")}</dt><dd>{taskExecutionPhaseText(viewTask.observation.phase)}</dd></div>
+            <div><dt className="text-xs text-muted-foreground">{t("Execution activity")}</dt><dd>{viewTask.observation.activity==="local_active"?t("Local execution observed"):t("Execution activity uncertain")}</dd></div>
+            <div><dt className="text-xs text-muted-foreground">{t("Last observed")}</dt><dd>{formatDateTime(viewTask.observation.lastObservedAt)}</dd></div>
+            {viewTask.observation.lastWorkerHeartbeatAt?<div><dt className="text-xs text-muted-foreground">{t("Mender worker heartbeat")}</dt><dd>{formatDateTime(viewTask.observation.lastWorkerHeartbeatAt)}</dd></div>:null}
+            <div><dt className="text-xs text-muted-foreground">{t("Native session")}</dt><dd>{viewTask.observation.sessionRecorded?t("Native session recorded"):t("No native session recorded")}</dd></div>
+            <div><dt className="text-xs text-muted-foreground">{t("Recovery")}</dt><dd>{viewTask.observation.sessionRecoverability==="unverified"?t("Session recovery not verified"):t("Session recovery unavailable")}</dd></div>
+            <div><dt className="text-xs text-muted-foreground">{t("Process")}</dt><dd>{viewTask.observation.leaderReaped?t("Process leader reaped"):t("Process exit not confirmed")}</dd></div>
+          </dl>
+          <p className="text-xs text-muted-foreground">{t("Observations do not prove task completion or authorize session resume.")}</p>
+        </section>:viewTask?.status==="unknown"?<p className="text-xs text-muted-foreground">{t("No execution evidence recorded for this task.")}</p>:null}
         {client.supportsLocalAgentApprovals===true&&agent?.backend!=="antigravity"&&viewTask&&(viewTask.status==="running"||viewTask.status==="queued")?
           <AgentTaskApprovals client={client} task={viewTask} onTaskUpdated={updateViewedTask}/>:null}
         {viewTask&&agent?.isolation==="host"?<p role="note" className="text-xs leading-5 text-muted-foreground">
@@ -400,7 +427,10 @@ export function AgentDetailPage({client,chooseLocalDirectory}:{client:MenderClie
         </p>:null}
         {viewTask?.result?<pre className="max-h-[45vh] overflow-auto whitespace-pre-wrap break-words rounded-lg bg-muted p-4 text-xs">{viewTask.result}</pre>:
           <p className="text-sm text-muted-foreground">{viewTask?.diagnostic?taskDiagnosticText(viewTask.diagnostic):t("No result available.")}</p>}
-        <DialogFooter><Button variant="outline" onClick={()=>setViewTask(null)}>{t("Close")}</Button></DialogFooter>
+        <DialogFooter>
+          {viewTask?<Button variant="outline" onClick={()=>void openTask(viewTask.taskId)}>{t("Refresh status")}</Button>:null}
+          <Button variant="outline" onClick={()=>setViewTask(null)}>{t("Close")}</Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   </>;

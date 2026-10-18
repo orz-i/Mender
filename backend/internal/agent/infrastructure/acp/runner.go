@@ -15,6 +15,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	agentapplication "github.com/orz-i/Mender/backend/internal/agent/application"
 	agentdomain "github.com/orz-i/Mender/backend/internal/agent/domain"
@@ -62,6 +63,7 @@ type stream struct {
 	permissionErrors    chan error
 	seenRequests        map[string]struct{} // raw RPC and ToolCallID replay guard
 	pendingPermissions  atomic.Int32
+	afterPromptSent     func() error // only set on an admitted execution, not inspectors
 }
 
 func (s *stream) send(message any) error {
@@ -97,8 +99,15 @@ func (s *stream) sendLocked(ctx context.Context, message any) error {
 	return nil
 }
 func (s *stream) call(ctx context.Context, id int, method string, params any, notify func(rpcMessage) error) (json.RawMessage, error) {
-	if err := s.send(map[string]any{"jsonrpc": "2.0", "id": id, "method": method, "params": params}); err != nil {
+	if err := s.sendLocked(ctx, map[string]any{"jsonrpc": "2.0", "id": id, "method": method, "params": params}); err != nil {
 		return nil, err
+	}
+	if method == "session/prompt" && s.afterPromptSent != nil {
+		if err := s.afterPromptSent(); err != nil {
+			// Bytes were already written to the Agent. The outcome is
+			// uncertain even though the durable evidence write failed.
+			return nil, fmt.Errorf("%w: %w", agentdomain.ErrOutcomeUncertain, err)
+		}
 	}
 	for {
 		select {
@@ -212,6 +221,12 @@ func (r Runner) executeConfiguredOnce(ctx context.Context, agent agentdomain.Age
 		wire.permissionRequester = config.PermissionRequester
 		wire.permissionErrors = make(chan error, 2)
 		wire.seenRequests = map[string]struct{}{}
+		if config.Observe != nil {
+			wire.afterPromptSent = func() error {
+				return config.Observe(agentdomain.ExecutionEvent{Kind: agentdomain.EventPromptSent})
+			}
+		}
+		lastProgress := time.Time{}
 		var result strings.Builder
 		var outputOverflow bool
 		onUpdate := func(msg rpcMessage) error {
@@ -234,6 +249,12 @@ func (r Runner) executeConfiguredOnce(ctx context.Context, agent agentdomain.Age
 			}
 			if params.SessionID != sessionID {
 				return tagFailure(stageResult, errors.New("ACP update from unexpected SessionID"))
+			}
+			if config.Observe != nil && time.Since(lastProgress) >= 5*time.Second {
+				if err := config.Observe(agentdomain.ExecutionEvent{Kind: agentdomain.EventProgress}); err != nil {
+					return fmt.Errorf("%w: progress evidence unavailable", agentdomain.ErrOutcomeUncertain)
+				}
+				lastProgress = time.Now()
 			}
 			if params.Update.SessionUpdate != "agent_message_chunk" {
 				return nil
@@ -273,6 +294,11 @@ func (r Runner) executeConfiguredOnce(ctx context.Context, agent agentdomain.Age
 		if completed.StopReason != "end_turn" {
 			// Never put the model-supplied stop reason into stored Task output.
 			return "", tagFailure(stageResult, errors.New("ACP Agent did not complete task"))
+		}
+		if config.Observe != nil {
+			if err := config.Observe(agentdomain.ExecutionEvent{Kind: agentdomain.EventTerminalSeen}); err != nil {
+				return "", fmt.Errorf("%w: terminal evidence unavailable", agentdomain.ErrOutcomeUncertain)
+			}
 		}
 		return result.String(), nil
 	})
@@ -348,6 +374,7 @@ func (r Runner) withSession(ctx context.Context, agent agentdomain.Agent, config
 	if err := cmd.Start(); err != nil {
 		return "", tagUnlessCancelled(stageProcessLaunch, fmt.Errorf("start ACP Agent: %w", err))
 	}
+	registeredProcess := false
 	defer func() {
 		// CommandContext uses the Runtime process-isolation Cancel hook:
 		// on Unix this kills the whole process group, not only the leader.
@@ -359,7 +386,20 @@ func (r Runner) withSession(ctx context.Context, agent agentdomain.Agent, config
 			_ = cmd.Process.Kill()
 		}
 		_ = cmd.Wait()
+		if registeredProcess && config.Observe != nil {
+			if observeErr := config.Observe(agentdomain.ExecutionEvent{Kind: agentdomain.EventLeaderReaped}); observeErr != nil {
+				err = errors.Join(err, fmt.Errorf("%w: process exit evidence unavailable", agentdomain.ErrOutcomeUncertain))
+			}
+		}
 	}()
+	if config.Observe != nil {
+		if err := config.Observe(agentdomain.ExecutionEvent{
+			Kind: agentdomain.EventProcessStarted, ProcessPID: cmd.Process.Pid,
+		}); err != nil {
+			return "", tagFailure(stageProcessLaunch, err)
+		}
+		registeredProcess = true
+	}
 	messages := make(chan rpcMessage, 32)
 	readErrors := make(chan error, 1)
 	go func() {
@@ -399,6 +439,10 @@ func (r Runner) withSession(ctx context.Context, agent agentdomain.Agent, config
 	var hello struct {
 		ProtocolVersion   int `json:"protocolVersion"`
 		AgentCapabilities struct {
+			LoadSession         bool `json:"loadSession"`
+			SessionCapabilities struct {
+				Resume json.RawMessage `json:"resume"`
+			} `json:"sessionCapabilities"`
 			MCPCapabilities struct {
 				HTTP bool `json:"http"`
 			} `json:"mcpCapabilities"`
@@ -459,6 +503,16 @@ func (r Runner) withSession(ctx context.Context, agent agentdomain.Agent, config
 		}
 		if choiceErr != nil {
 			return "", tagChoiceConfigurationError(choiceErr)
+		}
+	}
+	if config.Observe != nil {
+		if err := config.Observe(agentdomain.ExecutionEvent{
+			Kind: agentdomain.EventSessionReady, NativeSession: created.SessionID,
+			CanLoad: hello.AgentCapabilities.LoadSession,
+			CanResume: len(hello.AgentCapabilities.SessionCapabilities.Resume) != 0 &&
+				string(hello.AgentCapabilities.SessionCapabilities.Resume) != "null",
+		}); err != nil {
+			return "", tagFailure(stageSessionCreate, err)
 		}
 	}
 	return visit(&wire, created.SessionID, session, readErrors)

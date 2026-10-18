@@ -41,18 +41,28 @@ type AgentTools struct {
 	ProviderName string      `json:"providerName,omitempty"`
 	Tools        []AgentTool `json:"tools"`
 }
+type AgentTaskObservation struct {
+	Phase                 string `json:"phase"`
+	Activity              string `json:"activity"`
+	LastObservedAt        string `json:"lastObservedAt"`
+	LastWorkerHeartbeatAt string `json:"lastWorkerHeartbeatAt,omitempty"`
+	SessionRecorded       bool   `json:"sessionRecorded"`
+	SessionRecoverability string `json:"sessionRecoverability"`
+	LeaderReaped          bool   `json:"leaderReaped"`
+}
 type AgentTask struct {
-	TaskID          string `json:"taskId"`
-	AgentID         string `json:"agentId"`
-	Status          string `json:"status"`
-	Model           string `json:"model,omitempty"`
-	ReasoningEffort string `json:"reasoningEffort,omitempty"`
-	Workspace       string `json:"workspace,omitempty"`
-	Result          string `json:"result,omitempty"`
-	Diagnostic      string `json:"diagnostic,omitempty"`
-	CreatedAt       string `json:"createdAt"`
-	UpdatedAt       string `json:"updatedAt"`
-	CancelRequested bool   `json:"cancelRequested"`
+	TaskID          string                `json:"taskId"`
+	AgentID         string                `json:"agentId"`
+	Status          string                `json:"status"`
+	Model           string                `json:"model,omitempty"`
+	ReasoningEffort string                `json:"reasoningEffort,omitempty"`
+	Workspace       string                `json:"workspace,omitempty"`
+	Result          string                `json:"result,omitempty"`
+	Diagnostic      string                `json:"diagnostic,omitempty"`
+	CreatedAt       string                `json:"createdAt"`
+	UpdatedAt       string                `json:"updatedAt"`
+	CancelRequested bool                  `json:"cancelRequested"`
+	Observation     *AgentTaskObservation `json:"observation,omitempty"`
 }
 type AgentTaskList struct {
 	Tasks []AgentTask `json:"tasks"`
@@ -108,9 +118,20 @@ func (s *Service) projectAgent(a agentdomain.Agent) Agent {
 	return out
 }
 func projectTask(t agentdomain.Task) AgentTask {
-	return AgentTask{TaskID: string(t.ID), AgentID: string(t.AgentID), Status: string(t.Status), Model: t.Model, ReasoningEffort: t.ReasoningEffort, Workspace: t.WorkspaceKey,
+	out := AgentTask{TaskID: string(t.ID), AgentID: string(t.AgentID), Status: string(t.Status), Model: t.Model, ReasoningEffort: t.ReasoningEffort, Workspace: t.WorkspaceKey,
 		Result: t.Result, Diagnostic: t.Diagnostic, CreatedAt: t.CreatedAt.UTC().Format(time.RFC3339Nano),
 		UpdatedAt: t.UpdatedAt.UTC().Format(time.RFC3339Nano), CancelRequested: t.CancelRequested}
+	if o := t.Observation; o != nil {
+		out.Observation = &AgentTaskObservation{
+			Phase: o.Phase, Activity: o.Activity, LastObservedAt: o.LastObservedAt.UTC().Format(time.RFC3339Nano),
+			SessionRecorded: o.SessionRecorded, SessionRecoverability: o.SessionRecoverability,
+			LeaderReaped: o.LeaderReaped,
+		}
+		if o.LastWorkerHeartbeatAt != nil {
+			out.Observation.LastWorkerHeartbeatAt = o.LastWorkerHeartbeatAt.UTC().Format(time.RFC3339Nano)
+		}
+	}
+	return out
 }
 func (s *Service) ListAgents() (AgentList, error) {
 	caller, err := s.agentOwnerContext()

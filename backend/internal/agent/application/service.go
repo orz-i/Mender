@@ -31,6 +31,9 @@ type Repository interface {
 	GetTask(context.Context, agentdomain.TaskID) (agentdomain.Task, error)
 	ListTasks(context.Context, agentdomain.ID) ([]agentdomain.Task, error)
 	CreateAdmittedTask(context.Context, agentdomain.Task, int, string) error
+	BeginAttempt(context.Context, agentdomain.Task, string) error
+	RecordExecution(context.Context, agentdomain.Task, string, agentdomain.ExecutionEvent) error
+	TaskObservation(context.Context, agentdomain.TaskID) (*agentdomain.TaskObservation, error)
 	Transition(context.Context, agentdomain.TaskID, uint64, agentdomain.TaskStatus, agentdomain.TaskStatus, string, string) error
 	RequestCancel(context.Context, agentdomain.TaskID, uint64) error
 	HasProfileGrant(context.Context, agentdomain.ID, string) (bool, error)
@@ -73,8 +76,9 @@ type RunConfig struct {
 	Model               string
 	ReasoningEffort     string
 	PermissionRequester PermissionRequester
-	ToolSupply          ToolSupply // optional backend-neutral, Task-scoped tool delivery
-	AllowNativeYOLO     bool       // owner-approved, unexpired Antigravity trusted workspace only
+	ToolSupply          ToolSupply                             // optional backend-neutral, Task-scoped tool delivery
+	AllowNativeYOLO     bool                                   // owner-approved, unexpired Antigravity trusted workspace only
+	Observe             func(agentdomain.ExecutionEvent) error // trusted, Task-scoped evidence sink
 }
 
 type Admission func(context.Context, gov.Context, agentdomain.Agent, gov.Action) error
@@ -91,6 +95,7 @@ type Service struct {
 	profileExists      ProfileExists
 	toolSupplyResolver ToolSupplyResolver
 	owner              gov.Principal
+	runtimeInstance    string
 	rootContext        context.Context
 	rootCancel         context.CancelFunc
 	mu                 sync.Mutex
@@ -105,9 +110,14 @@ func NewService(store Repository, runner Executor, admit Admission, owner gov.Pr
 		owner.Kind() != gov.PrincipalLocalUser {
 		return nil, errors.New("agent service: missing trusted dependencies")
 	}
+	runtimeID, err := agentdomain.NewID()
+	if err != nil {
+		return nil, err
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Service{store: store, runner: runner, admit: admit, owner: owner,
-		profileExists: profileExists, rootContext: ctx, rootCancel: cancel,
+		runtimeInstance: "arun_" + strings.TrimPrefix(string(runtimeID), "agent_"),
+		profileExists:   profileExists, rootContext: ctx, rootCancel: cancel,
 		active:  map[agentdomain.TaskID]context.CancelFunc{},
 		pending: map[agentdomain.ApprovalID]*pendingApproval{}}, nil
 }
@@ -424,10 +434,49 @@ func (s *Service) run(ctx context.Context, cancel context.CancelFunc, agent agen
 		_ = s.store.Transition(context.WithoutCancel(ctx), task.ID, task.Generation, agentdomain.TaskQueued, agentdomain.TaskCancelled, "", "")
 		return
 	}
+	// Reservation is durable before resolving capabilities or starting a CLI.
+	// Failure to record provenance fails closed, without launching the Agent.
+	if err := s.store.BeginAttempt(context.WithoutCancel(ctx), task, s.runtimeInstance); err != nil {
+		// A caller can cancel after queued→running but before the durable
+		// reservation. No process was started, so preserve cancellation.
+		next, diagnostic := agentdomain.TaskFailed, "Agent execution evidence unavailable"
+		if observed, readErr := s.store.GetTask(context.WithoutCancel(ctx), task.ID); readErr == nil && observed.CancelRequested {
+			next, diagnostic = agentdomain.TaskCancelled, "Task cancelled"
+		}
+		_ = s.store.Transition(context.WithoutCancel(ctx), task.ID, task.Generation,
+			agentdomain.TaskRunning, next, "", diagnostic)
+		return
+	}
 	config := RunConfig{WorkspaceRoot: task.WorkspaceRoot, Model: task.Model, ReasoningEffort: task.ReasoningEffort,
+		Observe: func(event agentdomain.ExecutionEvent) error {
+			writeCtx, done := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
+			defer done()
+			return s.store.RecordExecution(writeCtx, task, s.runtimeInstance, event)
+		},
 		PermissionRequester: func(ctx context.Context, req PermissionRequest) (PermissionDecision, error) {
 			return s.requestPermission(ctx, task, caller, req)
 		}}
+	// Runtime heartbeat reports only that this task's local supervisory worker
+	// remains alive. It is separate from native Agent progress or completion
+	// evidence; a stale/failed heartbeat never authorizes replay or recovery.
+	heartbeatStop := make(chan struct{})
+	heartbeatDone := make(chan struct{})
+	go func() {
+		defer close(heartbeatDone)
+		ticker := time.NewTicker(15 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-heartbeatStop:
+				return
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				_ = config.Observe(agentdomain.ExecutionEvent{Kind: agentdomain.EventWorkerHeartbeat})
+			}
+		}
+	}()
+	defer func() { close(heartbeatStop); <-heartbeatDone }()
 	var result string
 	var err error
 	// Antigravity has no ACP permission callback. The existing per-Agent,
@@ -493,6 +542,10 @@ func (s *Service) run(ctx context.Context, cancel context.CancelFunc, agent agen
 			next = agentdomain.TaskUnknown
 			diagnostic = "Agent outcome unknown after timeout"
 		}
+		if errors.Is(err, agentdomain.ErrOutcomeUncertain) {
+			next = agentdomain.TaskUnknown
+			diagnostic = "Agent outcome unknown after execution evidence loss"
+		}
 		result = ""
 	}
 	if len(result) > agentdomain.MaxResultBytes {
@@ -526,7 +579,23 @@ func (s *Service) authorizedTask(ctx context.Context, id agentdomain.TaskID, cal
 }
 func (s *Service) Task(ctx context.Context, id agentdomain.TaskID, caller gov.Context) (agentdomain.Task, error) {
 	task, _, err := s.authorizedTask(ctx, id, caller)
-	return task, err
+	if err != nil {
+		return task, err
+	}
+	return s.attachObservation(ctx, task)
+}
+
+func (s *Service) attachObservation(ctx context.Context, task agentdomain.Task) (agentdomain.Task, error) {
+	obs, err := s.store.TaskObservation(ctx, task.ID)
+	if err != nil {
+		return task, err
+	}
+	if obs != nil && task.Status == agentdomain.TaskRunning && s.TaskLocallyActive(task.ID) &&
+		obs.Phase != "reserved" && !obs.LeaderReaped {
+		obs.Activity = "local_active"
+	}
+	task.Observation = obs
+	return task, nil
 }
 func (s *Service) Tasks(ctx context.Context, id agentdomain.ID, caller gov.Context) ([]agentdomain.Task, error) {
 	if err := s.requireOwner(caller); err != nil {
@@ -535,7 +604,16 @@ func (s *Service) Tasks(ctx context.Context, id agentdomain.ID, caller gov.Conte
 	if _, err := s.store.GetAgent(ctx, id); err != nil {
 		return nil, err
 	}
-	return s.store.ListTasks(ctx, id)
+	tasks, err := s.store.ListTasks(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	for i := range tasks {
+		if tasks[i], err = s.attachObservation(ctx, tasks[i]); err != nil {
+			return nil, err
+		}
+	}
+	return tasks, nil
 }
 func (s *Service) Cancel(ctx context.Context, id agentdomain.TaskID, caller gov.Context) error {
 	task, agent, err := s.authorizedTask(ctx, id, caller)

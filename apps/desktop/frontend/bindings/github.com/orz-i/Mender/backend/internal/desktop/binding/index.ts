@@ -25,6 +25,7 @@ export type {
     AgentSelectChoices,
     AgentTask,
     AgentTaskList,
+    AgentTaskObservation,
     AgentTool,
     AgentToolPlacement,
     AgentToolPlacementList,

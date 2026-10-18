@@ -2314,6 +2314,24 @@ export interface components {
             cancelRequested: boolean;
             result?: string;
             diagnostic?: string;
+            observation?: components["schemas"]["AgentTaskObservation"];
+        };
+        AgentTaskObservation: {
+            /** @enum {string} */
+            phase: "reserved" | "process_started" | "session_ready" | "prompt_sent" | "progress" | "terminal_seen" | "leader_reaped";
+            /** @enum {string} */
+            activity: "local_active" | "uncertain";
+            /** Format: date-time */
+            lastObservedAt: string;
+            /**
+             * Format: date-time
+             * @description Local Mender worker heartbeat; not native Agent progress
+             */
+            lastWorkerHeartbeatAt?: string;
+            sessionRecorded: boolean;
+            /** @enum {string} */
+            sessionRecoverability: "unavailable" | "unverified";
+            leaderReaped?: boolean;
         };
         AgentAdmissionEvent: {
             agentId: string;

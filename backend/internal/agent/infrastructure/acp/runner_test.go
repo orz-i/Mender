@@ -74,6 +74,12 @@ func TestACPFixtureProcess(t *testing.T) {
 				version = 2
 			}
 			hello := map[string]any{"protocolVersion": version}
+			if os.Getenv("ACP_FIXTURE_MODE") == "session-capabilities" {
+				hello["agentCapabilities"] = map[string]any{
+					"loadSession":         true,
+					"sessionCapabilities": map[string]any{"resume": map[string]any{}},
+				}
+			}
 			if mode := os.Getenv("ACP_FIXTURE_MODE"); mode == "mcp-http" || mode == "choice-always-model-missing-mcp-http" {
 				hello["agentCapabilities"] = map[string]any{"mcpCapabilities": map[string]any{"http": true}}
 			}

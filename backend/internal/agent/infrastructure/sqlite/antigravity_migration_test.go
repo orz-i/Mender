@@ -24,6 +24,7 @@ func downgradeAntigravityFixtureToV12(t *testing.T, path string) {
 	if _, err = db.ExecContext(ctx, "PRAGMA foreign_keys=OFF"); err != nil {
 		t.Fatal(err)
 	}
+	stripExecutionEvidenceV14Fixture(t, db)
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -122,7 +123,7 @@ func TestAntigravityV12ToV13PreservesHistoricalAgentTaskGrantsAndPolicy(t *testi
 	}
 	defer func() { _ = s.Close() }()
 	var version int
-	if err = s.db.QueryRowContext(ctx, "SELECT MAX(version) FROM agent_schema_migrations").Scan(&version); err != nil || version != 13 {
+	if err = s.db.QueryRowContext(ctx, "SELECT MAX(version) FROM agent_schema_migrations").Scan(&version); err != nil || version != latestSchemaVersion {
 		t.Fatalf("version=%d err=%v", version, err)
 	}
 	got, err := s.GetAgent(ctx, id)

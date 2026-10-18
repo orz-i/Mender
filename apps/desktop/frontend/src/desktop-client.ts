@@ -1015,12 +1015,30 @@ function pendingAgentApproval(value:BindingAgentPendingApproval):PendingAgentApp
   return {...value,approval:agentApproval(value.approval)};
 }
 function agentTask(value:BindingAgentTask):AgentTask {
+  const {observation,...task}=value;
+  if(observation){
+    const {phase,activity,sessionRecoverability}=observation;
+    if(phase!=="reserved"&&phase!=="process_started"&&phase!=="session_ready"&&
+      phase!=="prompt_sent"&&phase!=="progress"&&phase!=="terminal_seen"&&phase!=="leader_reaped"){
+      throw new MenderClientInvariantError("Unknown Agent execution phase: "+phase);
+    }
+    if(activity!=="local_active"&&activity!=="uncertain"){
+      throw new MenderClientInvariantError("Unknown Agent activity state: "+activity);
+    }
+    if(sessionRecoverability!=="unavailable"&&sessionRecoverability!=="unverified"){
+      throw new MenderClientInvariantError("Unknown Agent session recoverability: "+sessionRecoverability);
+    }
+    switch(value.status){
+      case "queued":case "running":case "completed":case "failed":
+      case "cancelled":case "unknown":
+        return {...task,status:value.status,observation:{...observation,phase,activity,sessionRecoverability}};
+      default:throw new MenderClientInvariantError("Unknown Agent Task status: "+value.status);
+    }
+  }
   switch(value.status){
     case "queued":case "running":case "completed":case "failed":
-    case "cancelled":case "unknown":
-      return {...value,status:value.status};
-    default:
-      throw new MenderClientInvariantError("Unknown Agent Task status: "+value.status);
+    case "cancelled":case "unknown":return {...task,status:value.status};
+    default:throw new MenderClientInvariantError("Unknown Agent Task status: "+value.status);
   }
 }
 

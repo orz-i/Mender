@@ -13,6 +13,7 @@ import (
 	"io"
 	"os/exec"
 	"strings"
+	"time"
 
 	agentapplication "github.com/orz-i/Mender/backend/internal/agent/application"
 	agentdomain "github.com/orz-i/Mender/backend/internal/agent/domain"
@@ -34,7 +35,7 @@ func (e stageError) SafeAgentFailureStage() string { return string(e) }
 
 // ExecuteConfigured sends the prompt ONLY on stdin. No prompt, credential,
 // tool arguments or native tool output are ever persisted in diagnostics.
-func (r Runner) ExecuteConfigured(ctx context.Context, agent agentdomain.Agent, prompt string, cfg agentapplication.RunConfig) (string, error) {
+func (r Runner) ExecuteConfigured(ctx context.Context, agent agentdomain.Agent, prompt string, cfg agentapplication.RunConfig) (result string, runErr error) {
 	if agent.Spec().Backend != agentdomain.BackendAntigravity || r.NewCommand == nil {
 		return "", stageError("process_launch")
 	}
@@ -69,6 +70,7 @@ func (r Runner) ExecuteConfigured(ctx context.Context, agent agentdomain.Agent, 
 		return "", stageError("process_launch")
 	}
 	waited := false
+	registeredProcess := false
 	defer func() {
 		_ = stdin.Close()
 		if !waited {
@@ -79,7 +81,19 @@ func (r Runner) ExecuteConfigured(ctx context.Context, agent agentdomain.Agent, 
 			}
 			_ = cmd.Wait()
 		}
+		if registeredProcess && cfg.Observe != nil {
+			if err := cfg.Observe(agentdomain.ExecutionEvent{Kind: agentdomain.EventLeaderReaped}); err != nil {
+				runErr = errors.Join(runErr, fmt.Errorf("%w: process exit evidence unavailable", agentdomain.ErrOutcomeUncertain))
+			}
+		}
 	}()
+	if cfg.Observe != nil {
+		if err := cfg.Observe(agentdomain.ExecutionEvent{Kind: agentdomain.EventProcessStarted,
+			ProcessPID: cmd.Process.Pid}); err != nil {
+			return "", stageError("process_launch")
+		}
+		registeredProcess = true
+	}
 	// --input-format stream-json accepts one user message per NDJSON line.
 	if err := json.NewEncoder(stdin).Encode(map[string]any{
 		"event": "user", "message": map[string]any{"content": prompt},
@@ -89,8 +103,13 @@ func (r Runner) ExecuteConfigured(ctx context.Context, agent agentdomain.Agent, 
 	if err := stdin.Close(); err != nil {
 		return "", stageError("prompt_transport")
 	}
+	if cfg.Observe != nil {
+		if err := cfg.Observe(agentdomain.ExecutionEvent{Kind: agentdomain.EventPromptSent}); err != nil {
+			return "", fmt.Errorf("%w: prompt dispatch evidence unavailable", agentdomain.ErrOutcomeUncertain)
+		}
+	}
 
-	response, err := parseStream(stdout)
+	response, err := parseStreamObserved(stdout, cfg.Observe)
 	if ctx.Err() != nil {
 		return "", ctx.Err()
 	}
@@ -109,15 +128,21 @@ func (r Runner) ExecuteConfigured(ctx context.Context, agent agentdomain.Agent, 
 }
 
 func parseStream(reader io.Reader) (string, error) {
+	return parseStreamObserved(reader, nil)
+}
+
+func parseStreamObserved(reader io.Reader, observe func(agentdomain.ExecutionEvent) error) (string, error) {
 	scanner := bufio.NewScanner(reader)
 	scanner.Buffer(make([]byte, 16<<10), maxEventBytes)
 	var result string
 	gotResult := false
 	gotInit := false
+	lastProgress := time.Time{}
 	for scanner.Scan() {
 		var frame struct {
-			Event  string          `json:"event"`
-			Result json.RawMessage `json:"result"`
+			Event          string          `json:"event"`
+			ConversationID string          `json:"conversation_id"`
+			Result         json.RawMessage `json:"result"`
 		}
 		if err := json.Unmarshal(scanner.Bytes(), &frame); err != nil {
 			return "", stageError("headless_protocol")
@@ -128,9 +153,21 @@ func parseStream(reader io.Reader) (string, error) {
 				return "", stageError("headless_protocol")
 			}
 			gotInit = true
+			if frame.ConversationID != "" && observe != nil {
+				if err := observe(agentdomain.ExecutionEvent{Kind: agentdomain.EventSessionReady,
+					NativeSession: frame.ConversationID}); err != nil {
+					return "", fmt.Errorf("%w: native session evidence unavailable", agentdomain.ErrOutcomeUncertain)
+				}
+			}
 		case "step_update":
 			if !gotInit || gotResult {
 				return "", stageError("headless_protocol")
+			}
+			if observe != nil && time.Since(lastProgress) >= 5*time.Second {
+				if err := observe(agentdomain.ExecutionEvent{Kind: agentdomain.EventProgress}); err != nil {
+					return "", fmt.Errorf("%w: native progress evidence unavailable", agentdomain.ErrOutcomeUncertain)
+				}
+				lastProgress = time.Now()
 			}
 		case "result":
 			if !gotInit || gotResult || len(frame.Result) == 0 {
@@ -150,6 +187,11 @@ func parseStream(reader io.Reader) (string, error) {
 					return "", stageError("result")
 				}
 				result = terminal.Response
+				if observe != nil {
+					if err := observe(agentdomain.ExecutionEvent{Kind: agentdomain.EventTerminalSeen}); err != nil {
+						return "", fmt.Errorf("%w: native terminal evidence unavailable", agentdomain.ErrOutcomeUncertain)
+					}
+				}
 			case "WAITING":
 				return "", stageError("headless_permission")
 			default:

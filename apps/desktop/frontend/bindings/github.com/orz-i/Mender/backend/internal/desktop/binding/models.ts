@@ -117,10 +117,21 @@ export interface AgentTask {
     "createdAt": string;
     "updatedAt": string;
     "cancelRequested": boolean;
+    "observation"?: AgentTaskObservation | null;
 }
 
 export interface AgentTaskList {
     "tasks": AgentTask[] | null;
+}
+
+export interface AgentTaskObservation {
+    "phase": string;
+    "activity": string;
+    "lastObservedAt": string;
+    "lastWorkerHeartbeatAt"?: string;
+    "sessionRecorded": boolean;
+    "sessionRecoverability": string;
+    "leaderReaped": boolean;
 }
 
 export interface AgentTool {

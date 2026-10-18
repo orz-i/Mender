@@ -20,6 +20,9 @@ var (
 	ErrForbidden   = errors.New("agent operation not authorized")
 	ErrUnavailable = errors.New("agent backend unavailable")
 	ErrInvalid     = errors.New("invalid agent resource")
+	// ErrOutcomeUncertain means a prompt may have been dispatched and its
+	// result cannot be proven; callers must never report ordinary failure.
+	ErrOutcomeUncertain = errors.New("agent execution outcome uncertain")
 	// Typed workspace conflicts survive Wails error transport and HTTP 409.
 	ErrWorkspaceDefaultDirectory     = errors.New("agent_workspace_default_directory")
 	ErrWorkspaceAliasExists          = errors.New("agent_workspace_alias_exists")

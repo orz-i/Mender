@@ -128,7 +128,11 @@ var submitOutput = []byte(`{"type":"object","additionalProperties":false,"requir
 	"properties":{"taskId":{"type":"string"},"status":{"type":"string"}}}`)
 var taskOutput = []byte(`{"type":"object","additionalProperties":false,"required":["taskId","status","cancelRequested"],
 	"properties":{"taskId":{"type":"string"},"status":{"type":"string"},"cancelRequested":{"type":"boolean"},
-	"result":{"type":"string"},"diagnostic":{"type":"string"}}}`)
+	"result":{"type":"string"},"diagnostic":{"type":"string"},
+	"observation":{"type":"object","additionalProperties":false,
+	"properties":{"phase":{"type":"string"},"activity":{"type":"string"},
+	"lastObservedAt":{"type":"string"},"lastWorkerHeartbeatAt":{"type":"string"},"sessionRecorded":{"type":"boolean"},
+	"sessionRecoverability":{"type":"string"},"leaderReaped":{"type":"boolean"}}}}}`)
 var cancelOutput = []byte(`{"type":"object","additionalProperties":false,"required":["taskId","cancelRequested"],
 	"properties":{"taskId":{"type":"string"},"cancelRequested":{"type":"boolean"}}}`)
 
@@ -213,6 +217,9 @@ func (i *Instance) Execute(ctx context.Context, req invocationapplication.Execut
 			return complete(map[string]any{"taskId": id, "cancelRequested": true})
 		}
 		data := map[string]any{"taskId": id, "status": task.Status, "cancelRequested": task.CancelRequested}
+		if task.Observation != nil {
+			data["observation"] = task.Observation
+		}
 		if req.Tool.SourceKey() == sourceResult {
 			if task.Result != "" {
 				data["result"] = task.Result
