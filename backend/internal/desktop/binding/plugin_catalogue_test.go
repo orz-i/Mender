@@ -54,12 +54,12 @@ func TestWailsPluginCatalogueExposesAllFourExtensionKinds(t *testing.T) {
 			t.Fatalf("Wails catalogue omitted %s: %+v", kind, result.Plugins)
 		}
 	}
-	for _, id := range []string{"io.mender.agent.codex", "io.mender.agent.grok", "io.mender.agent.opencode"} {
+	for _, id := range []string{"io.mender.agent.codex", "io.mender.agent.grok", "io.mender.agent.opencode", "io.mender.agent.antigravity"} {
 		if !agents[id] {
 			t.Fatalf("Wails catalogue omitted built-in Agent %s", id)
 		}
 	}
-	if len(agents) != 3 {
+	if len(agents) != 4 {
 		t.Fatalf("unexpected Agent Backend inventory: %+v", agents)
 	}
 }
