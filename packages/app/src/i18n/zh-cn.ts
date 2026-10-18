@@ -77,6 +77,7 @@ export const zhCNMessages: Readonly<Record<string, string>> = {
   "Awaiting owner approval": "等待本地所有者审批",
   "Requested tool category": "请求的工具类别",
   "This is a cooperative OpenCode permission request, not proof that all native tools are sandboxed or governed by Mender.": "这是对 OpenCode 原生工具的协作式审批，不表示所有原生工具都受到 Mender 强制隔离或治理。",
+  "ACP approvals show only requests sent to Mender; zero approvals does not prove the Host Agent performed no native file or command actions.": "ACP 审批仅记录发送给 Mender 的请求；没有审批记录，不代表 Host 智能体没有执行原生文件或命令操作。",
   "Expires at": "审批截止时间",
   "Allow once": "允许一次",
   "Reject": "拒绝",

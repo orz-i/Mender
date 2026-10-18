@@ -388,6 +388,9 @@ export function AgentDetailPage({client,chooseLocalDirectory}:{client:MenderClie
         </dl>:null}
         {client.supportsLocalAgentApprovals===true&&viewTask&&(viewTask.status==="running"||viewTask.status==="queued")?
           <AgentTaskApprovals client={client} task={viewTask} onTaskUpdated={updateViewedTask}/>:null}
+        {viewTask&&agent?.isolation==="host"?<p role="note" className="text-xs leading-5 text-muted-foreground">
+          {t("ACP approvals show only requests sent to Mender; zero approvals does not prove the Host Agent performed no native file or command actions.")}
+        </p>:null}
         {viewTask?.result?<pre className="max-h-[45vh] overflow-auto whitespace-pre-wrap break-words rounded-lg bg-muted p-4 text-xs">{viewTask.result}</pre>:
           <p className="text-sm text-muted-foreground">{viewTask?.diagnostic?taskDiagnosticText(viewTask.diagnostic):t("No result available.")}</p>}
         <DialogFooter><Button variant="outline" onClick={()=>setViewTask(null)}>{t("Close")}</Button></DialogFooter>

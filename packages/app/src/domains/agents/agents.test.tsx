@@ -294,4 +294,38 @@ describe("Agents focused management",()=>{
     expect(await screen.findByText("ACP 会话创建失败")).toBeTruthy();
     expect(screen.queryByText("ACP session creation failed")).toBeNull();
   });
+  for (const status of ["completed","failed"] as const) {
+    it(`discloses missing native audit coverage for a ${status} Host task`,async()=>{
+      const host={...agent,isolation:"host" as const};
+      const hostTask:AgentTask={...task,status,
+        result:status==="completed"?"task completed":"",
+        ...(status==="failed"?{diagnostic:"Agent execution failed"}:{}),
+      };
+      show("/agents/"+agent.agentId,{
+        getAgent:vi.fn().mockResolvedValue(host),
+        listAgentTasks:vi.fn().mockResolvedValue({tasks:[hostTask]}),
+        getAgentTask:vi.fn().mockResolvedValue(hostTask),
+      });
+      fireEvent.click(await screen.findByRole("button",{name:/^Tasks/}));
+      fireEvent.click(await screen.findByRole("button",{name:"View"}));
+      const note=await screen.findByRole("note");
+      expect(note.textContent).toContain("ACP approvals show only requests sent to Mender");
+      expect(note.textContent).toContain("zero approvals does not prove");
+    });
+  }
+  it("omits the Host-only audit coverage notice for restricted Agent tasks",async()=>{
+    show("/agents/"+agent.agentId);
+    fireEvent.click(await screen.findByRole("button",{name:/^Tasks/}));
+    fireEvent.click(await screen.findByRole("button",{name:"View"}));
+    expect(screen.queryByRole("note")).toBeNull();
+  });
+  it("localizes the Host audit coverage notice without showing raw native activity",async()=>{
+    setLocale("zh-CN");
+    show("/agents/"+agent.agentId,{
+      getAgent:vi.fn().mockResolvedValue({...agent,isolation:"host" as const}),
+    });
+    fireEvent.click(await screen.findByRole("button",{name:/^任务/}));
+    fireEvent.click(await screen.findByRole("button",{name:"查看"}));
+    expect((await screen.findByRole("note")).textContent).toContain("没有审批记录，不代表 Host 智能体没有执行原生文件或命令操作");
+  });
 });
