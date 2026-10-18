@@ -89,7 +89,10 @@ func (s *stream) sendLocked(ctx context.Context, message any) error {
 		return err
 	}
 	if _, err = s.stdin.Write(append(b, '\n')); err != nil {
-		return fmt.Errorf("write ACP request: %w", err)
+		// Keep the IO cause available to errors.Is, but never expose
+		// it in a persisted Task diagnostic: the failure-stage mapping
+		// selects one fixed, trusted category.
+		return fmt.Errorf("%w: %w", errACPWriteFailed, err)
 	}
 	return nil
 }
@@ -105,7 +108,7 @@ func (s *stream) call(ctx context.Context, id int, method string, params any, no
 			return nil, err
 		case msg, ok := <-s.updates:
 			if !ok {
-				return nil, errors.New("ACP server closed before response")
+				return nil, errACPStreamClosed
 			}
 			if msg.JSONRPC != "2.0" {
 				return nil, errors.New("unsupported ACP JSON-RPC version")
@@ -350,7 +353,8 @@ func (r Runner) withSession(ctx context.Context, agent agentdomain.Agent, config
 		for scan.Scan() {
 			var message rpcMessage
 			if err := json.Unmarshal(scan.Bytes(), &message); err != nil {
-				readErrors <- errors.New("ACP server sent invalid JSON")
+				// Do not copy malformed stdout bytes into diagnostics or logs.
+				readErrors <- errACPInvalidFrame
 				return
 			}
 			select {
@@ -360,7 +364,9 @@ func (r Runner) withSession(ctx context.Context, agent agentdomain.Agent, config
 			}
 		}
 		if err := scan.Err(); err != nil {
-			readErrors <- fmt.Errorf("ACP stream terminated: %w", err)
+			// Scanner failures include oversized frames and I/O errors.
+			// The error detail is untrusted; only a safe stage is persisted.
+			readErrors <- fmt.Errorf("%w: %w", errACPReadFailed, err)
 		}
 	}()
 	wire := stream{stdin: stdin, updates: messages}

@@ -101,6 +101,16 @@ func TestACPFixtureProcess(t *testing.T) {
 				_ = writer.Flush()
 				os.Exit(85)
 			}
+			if mode == "close-prompt-early" {
+				// The subprocess closes stdout without answering session/prompt.
+				os.Exit(86)
+			}
+			if mode == "oversized-acp-frame" {
+				// Exceed the scanner frame bound without retaining any frame data.
+				_, _ = fmt.Fprintln(writer, strings.Repeat("x", maxFrameBytes+1))
+				_ = writer.Flush()
+				os.Exit(87)
+			}
 			if mode == "hang" {
 				// Cancellation test: block until process is killed by caller.
 				for {

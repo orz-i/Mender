@@ -28,7 +28,7 @@ func TestACPFailureStageRunnerReportsOnlyTrustedStages(t *testing.T) {
 		{name: "model unavailable", mode: "models", model: "fixture-unadvertised", stage: stageConfiguration},
 		{name: "permission rejected", mode: "permission", stage: stagePermission},
 		{name: "prompt explicitly rejected", mode: "reject-prompt", stage: stagePromptRejected},
-		{name: "prompt transport malformed", mode: "invalid-json", stage: stagePromptTransport},
+		{name: "prompt transport malformed", mode: "invalid-json", stage: stagePromptMalformedFrame},
 		{name: "invalid completion update", mode: "foreign-session", stage: stageResult},
 	}
 	for _, test := range cases {
