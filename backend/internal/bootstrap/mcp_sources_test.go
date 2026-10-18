@@ -10,6 +10,7 @@ import (
 	agentdomain "github.com/orz-i/Mender/backend/internal/agent/domain"
 	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
+	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 )
 
 func TestResolveMCPToolSourcesUsesVerifiedOwnerAndRequestScope(t *testing.T) {
@@ -71,8 +72,29 @@ func TestResolveMCPToolSourcesUsesVerifiedOwnerAndRequestScope(t *testing.T) {
 		t.Fatalf("agent attribution = %+v", got)
 	}
 	if got := sources[sandboxID]; got.Kind != "sandbox" || got.Name != "Rocky Workspace" ||
+		got.ResourceID != sandbox.ID().String() || got.Unavailable {
+		t.Fatalf("ready sandbox attribution = %+v", got)
+	}
+	if _, err := r.Sandboxes.ChangeLocalLifecycle(ctx, sandbox.ID(), governancedomain.ActionSandboxStop, caller); err != nil {
+		t.Fatalf("stop fixture sandbox: %v", err)
+	}
+	stoppedSources, err := r.resolveMCPToolSources(ctx, []catalogdomain.ProviderID{sandboxID, agentID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := stoppedSources[sandboxID]; !got.Unavailable || got.Kind != "sandbox" ||
 		got.ResourceID != sandbox.ID().String() {
-		t.Fatalf("sandbox attribution = %+v", got)
+		t.Fatalf("stopped workspace must be unavailable without losing identity: %+v", got)
+	}
+	if got := stoppedSources[agentID]; got.Unavailable {
+		t.Fatalf("stopping sandbox affected unrelated agent: %+v", got)
+	}
+	if _, err := r.Sandboxes.ChangeLocalLifecycle(ctx, sandbox.ID(), governancedomain.ActionSandboxStart, caller); err != nil {
+		t.Fatalf("restart fixture sandbox: %v", err)
+	}
+	restoredSources, err := r.resolveMCPToolSources(ctx, []catalogdomain.ProviderID{sandboxID})
+	if err != nil || restoredSources[sandboxID].Unavailable {
+		t.Fatalf("ready workspace did not become discoverable: %+v / %v", restoredSources, err)
 	}
 
 	orphan, err := r.resolveMCPToolSources(ctx, []catalogdomain.ProviderID{unconfigured.ID()})

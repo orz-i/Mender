@@ -195,6 +195,10 @@ func (a *Adapter) calculateFingerprint(ctx context.Context, sources map[catalogd
 		hasher.Write([]byte("|"))
 		hasher.Write([]byte(src.ProviderName))
 		hasher.Write([]byte("|"))
+		if src.Unavailable {
+			hasher.Write([]byte("unavailable"))
+		}
+		hasher.Write([]byte("|"))
 	}
 
 	return hex.EncodeToString(hasher.Sum(nil)), nil
@@ -443,6 +447,23 @@ func (a *Adapter) searchHandler(ctx context.Context, request *mcp.CallToolReques
 
 	if input.Cursor != "" && cursor.Fingerprint != fingerprint {
 		return nil, fmt.Errorf("mender search tools: stale cursor")
+	}
+
+	// Filtering follows the Profile allowlist and verified Host attribution.
+	// Historical Profile ToolBindings remain untouched, but unclaimed or
+	// source-wide unavailable Providers never become selectable search hits.
+	visiblePIDs := make([]catalogdomain.ProviderID, 0, len(pidsToResolve))
+	for _, pid := range pidsToResolve {
+		if sourceDiscoverable(sources[pid]) {
+			visiblePIDs = append(visiblePIDs, pid)
+		}
+	}
+	pidsToResolve = visiblePIDs
+	if input.SourceID != "" && !sourceDiscoverable(sources[targetPID]) {
+		if view == "sources" {
+			return structuredResult(map[string]any{"sources": []SourceHeader{}, "nextCursor": ""})
+		}
+		return structuredResult(map[string]any{"tools": []ToolItem{}, "nextCursor": ""})
 	}
 
 	if view == "sources" {

@@ -36,6 +36,9 @@ type ToolSource struct {
 	Name         string
 	ResourceID   string
 	ProviderName string
+	// Unavailable is an inert Host-observed source-wide capability gate.
+	// It never reflects a speculative network probe or execution authority.
+	Unavailable bool
 }
 
 // Dependencies are protocol-independent operations consumed by the MCP server adapter.
@@ -118,6 +121,22 @@ func (a *Adapter) MCPServer() *mcp.Server {
 	return a.server
 }
 
+// sourceDiscoverable limits all MCP discovery surfaces to a verified,
+// supplied source that is not known to be unavailable.
+func sourceDiscoverable(source ToolSource) bool {
+	if source.Unavailable || strings.TrimSpace(source.Name) == "" {
+		return false
+	}
+	switch source.Kind {
+	case "provider":
+		return true
+	case "agent", "sandbox":
+		return source.ResourceID != ""
+	default:
+		return false
+	}
+}
+
 func sourceDisplayName(source ToolSource) string {
 	name := source.Name
 	if name == "" {
@@ -179,6 +198,12 @@ func (a *Adapter) addDirectTools(ctx context.Context) error {
 		if !ok {
 			return fmt.Errorf("build MCP server: direct Tool %s missing from profile projection", selectedID)
 		}
+		source := sources[tool.ProviderID()]
+		if !sourceDiscoverable(source) {
+			// Never export an orphaned or known-unavailable Tool as a
+			// selectable direct MCP Tool, even if its Profile binding remains.
+			continue
+		}
 		provider, err := a.deps.GetProvider(ctx, tool.ProviderID())
 		if err != nil {
 			return fmt.Errorf("build MCP server: get provider %s: %w", tool.ProviderID(), err)
@@ -195,7 +220,6 @@ func (a *Adapter) addDirectTools(ctx context.Context) error {
 		}
 		seenNames[name] = tool.ID()
 
-		source := sources[tool.ProviderID()]
 		sourceLabel := sourceDisplayName(source)
 		if sourceLabel != "" {
 			if presentation.title != "" {
