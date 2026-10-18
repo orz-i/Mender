@@ -8,6 +8,7 @@ import (
 	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
+	mcpplugin "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/plugin"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
 )
@@ -61,6 +62,33 @@ func registerConfiguredProviderTest(
 		return runtime.registerConfiguredProvider(ctx, request, pluginID, rawConfig, caller, true)
 	}
 	return runtime.RegisterConfiguredProvider(ctx, request, pluginID, rawConfig, caller)
+}
+
+// configureAttachedMCPProviderTest records a valid, verified standalone
+// Provider identity for an already attached in-memory upstream MCP fixture.
+// It never dials the placeholder endpoint or starts a provider process.
+func configureAttachedMCPProviderTest(
+	t *testing.T, runtime *Runtime, ctx context.Context, providerID catalogdomain.ProviderID,
+) {
+	t.Helper()
+	raw, err := json.Marshal(mcpplugin.Config{
+		Transport: mcpplugin.TransportConfig{
+			Kind: mcpplugin.TransportStreamableHTTP, Endpoint: "http://127.0.0.1:1/mcp",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := mcpplugin.New().ValidateConfig(ctx, raw); err != nil {
+		t.Fatalf("fixture MCP config: %v", err)
+	}
+	config, err := providerplugin.NewConfiguration(providerID, mcpplugin.ID, mcpplugin.ConfigVersion, raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := runtime.providerConfigs.Save(ctx, config); err != nil {
+		t.Fatalf("store verified fixture Provider configuration: %v", err)
+	}
 }
 
 func registerInstalledProviderTest(

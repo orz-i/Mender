@@ -47,6 +47,9 @@ func TestMCPProfileSandboxDelegationReadAndRevoke(t *testing.T) {
 	if _, err = syncConfiguredProviderTest(t, r, ctx, provider.ID()); err != nil {
 		t.Fatal(err)
 	}
+	if err := r.Sandboxes.store.ClaimWorkspaceSuite(ctx, sandbox.ID(), provider.ID().String()); err != nil {
+		t.Fatalf("fixture Sandbox must own its Workspace facade: %v", err)
+	}
 	tools, err := r.Catalog.store.ListProviderTools(ctx, provider.ID())
 	if err != nil {
 		t.Fatal(err)

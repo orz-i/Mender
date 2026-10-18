@@ -479,6 +479,7 @@ func TestMCPToolFailureRoundTripsThroughMender(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	configureAttachedMCPProviderTest(t, runtime, ctx, provider.ID())
 
 	var upstreamCalls atomic.Int32
 	upstream := mcp.NewServer(

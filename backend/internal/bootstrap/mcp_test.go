@@ -44,6 +44,7 @@ func TestMCPProviderAndServerShareRuntimePipeline(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RegisterProvider.Execute() error = %v", err)
 	}
+	configureAttachedMCPProviderTest(t, runtime, ctx, provider.ID())
 
 	var upstreamCalls atomic.Int32
 	upstream := mcp.NewServer(

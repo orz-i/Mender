@@ -296,6 +296,11 @@ func TestMCPDirectProjectionRejectsNormalizedNameCollision(t *testing.T) {
 		GetProvider: func(context.Context, catalogdomain.ProviderID) (catalogdomain.Provider, error) {
 			return fixture.provider, nil
 		},
+		ResolveSources: func(context.Context, []catalogdomain.ProviderID) (map[catalogdomain.ProviderID]ToolSource, error) {
+			return map[catalogdomain.ProviderID]ToolSource{
+				fixture.provider.ID(): {Kind: "provider", Name: fixture.provider.DisplayName(), ResourceID: fixture.provider.ID().String()},
+			}, nil
+		},
 		InvokeTool: func(context.Context, invocationapplication.InvokeToolRequest) (invocationapplication.InvokeToolResponse, error) {
 			return invocationapplication.InvokeToolResponse{}, nil
 		},

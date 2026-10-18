@@ -50,6 +50,9 @@ func TestAgentDelegationThroughMCPClientSession(t *testing.T) {
 	if _, err = r.syncConfiguredProviderForOwner(ctx, provider.ID(), owner, true); err != nil {
 		t.Fatal(err)
 	}
+	if err := r.agentStore.ClaimToolFacade(ctx, agent.ID(), provider.ID().String()); err != nil {
+		t.Fatalf("fixture Agent must own its delegate facade: %v", err)
+	}
 	tools, err := r.Catalog.store.ListProviderTools(ctx, provider.ID())
 	if err != nil {
 		t.Fatal(err)
