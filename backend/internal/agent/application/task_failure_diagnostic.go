@@ -27,6 +27,14 @@ func agentFailureDiagnostic(err error) string {
 		return "ACP session creation failed"
 	case "configuration":
 		return "Agent model or reasoning configuration failed"
+	case "configuration_model_unavailable":
+		return "Configured Agent model not advertised by ACP session"
+	case "configuration_reasoning_unavailable":
+		return "Configured Agent reasoning effort not advertised by ACP session"
+	case "configuration_confirmation_failed":
+		return "ACP configuration change not confirmed"
+	case "configuration_request_failed":
+		return "ACP configuration request failed"
 	case "permission":
 		return "Agent permission request was rejected"
 	case "prompt_rejected":
