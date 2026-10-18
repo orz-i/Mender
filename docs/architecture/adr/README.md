@@ -78,3 +78,8 @@ Minor implementation choices that remain inside an accepted architectural bounda
 - [ADR-0050: ACP approval mediation and governed Agent tool execution](0050-acp-agent-tool-approval-governance.md) — Accepted
 - [ADR-0051: Task-bound governed Agent tool execution](0051-task-bound-governed-agent-tool-execution.md) — Accepted
 - [ADR-0052: Optional governed Tool placement per Agent workspace](0052-optional-agent-governed-tool-placement.md) — Accepted
+- [ADR-0053: Agent approval inbox and scoped trust](0053-agent-approval-inbox-and-scoped-trust.md) — Accepted
+- [ADR-0054: ACP approval revision and delivery](0054-acp-approval-revision-and-delivery.md) — Implemented
+- [ADR-0055: Managed MCP Profile hot refresh](0055-managed-mcp-profile-hot-refresh.md) — Accepted
+- [ADR-0056: Profile-scoped source-first MCP Tool discovery](0056-source-first-mcp-tool-discovery.md) — Accepted
+- [ADR-0057: Evidence-bound Agent lifecycle and native session continuation](0057-agent-session-lifecycle-recovery.md) — Proposed

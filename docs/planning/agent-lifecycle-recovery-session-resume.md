@@ -1,0 +1,70 @@
+# Agent 生命周期恢复与 Session Resume：实施计划
+
+- 日期：2026-10-18
+- 状态：调研完成，ADR-0057 为 Proposed；运行时代码、生产 DB、授权及原生 Session 尚未修改。
+- 工作边界：Mender 是工具/资源治理供应平台，不实现 Agent Loop。文档先行，分段验收提交，不增加兼容桥。
+- 技术合同：[ADR-0057](../architecture/adr/0057-agent-session-lifecycle-recovery.md)
+
+## 真实问题与源码证据
+
+生产数据库只读检查：OpenCode 与 Antigravity 在 2026-10-18 各存在一条确切 unknown Task，均在创建 10 分钟后写入 `Agent outcome unknown after timeout`。现有证据不能证明原任务成功、失败或还有脱离主进程的副作用；不重放、不猜测修复。
+
+- `backend/internal/agent/application/service.go`：固定 10m context deadline；goroutine 和 active map 不可重启恢复。
+- `backend/internal/agent/domain/task.go`、`infrastructure/sqlite/store.go`：没有 SessionID、执行归属或进度，unknown 为 SQL 强制不可变终态；重启后 `ReconcileExpired` 无进程/会话探测。
+- `infrastructure/acp/runner.go`：收到原生 `session/new.sessionId` 但未持久化，进程销毁即失联。
+- `infrastructure/antigravity/runner.go`：尚未读取 `init.conversation_id`；NDJSON step_update 仅消费不形成持久活动证据。
+- `runtimegovernance/infrastructure/processisolation/command_unix.go`：context 终止整个已知进程组，但这不证明原任务的业务结果。
+- `infrastructure/acp/task_home.go`：Restricted Host governed ToolSupply 会使用并删除每次空临时 HOME；必须检验原生 Session 数据是否能在下一次进程存活。
+- 本机只读版本/帮助核验：OpenCode v2.0.30，agy v1.4.2，Grok v1.0.62。
+
+## 设计要点
+
+| 能力 | 约束 |
+| --- | --- |
+| AgentSession | 持久化后台 opaque native SessionID、AgentID、Workspace、授权身份、实际协商的恢复能力和存储范围；TaskID 不等于 SessionID |
+| AgentExecutionAttempt | Task generation、runtime owner、可信进程组身份/启动时间、终态原生证据、最后活动与审计摘要 |
+| Observation | outcome/activity/session recoverability/recovery evidence 独立；失去网络或时间到期不等于失败或成功 |
+| Resume | 新 canonical `agent.resume` Tool，参数仅 `taskId`、`prompt`；查绑定的原 Session，经过授权与静止证明，新任务、新 TaskID、同一原生上下文 |
+| Read-only reconcile | 尽量通过现有 status/result 展示检查信息；owner 的主动 reconcile 不重新提交旧 Prompt |
+| Timeout | 不以延长 10 分钟作为唯一解决方案；先捕捉 last observed/event/proof，再设计有上限的可配置任务预算 |
+| Security | 不以 SessionID 作授权凭证；原 ACP Approvals/MCP Task bearer 不继承；原 Workspace/Isolation/Policy 必须重新验证 |
+
+## 分段实施与完成条件
+
+### A — 冻结合同（本轮文档）
+记录用户反馈的 Resume 工具、跨后端持久化差异、生产真实复现和硬性安全边界。不改生产任务、数据库、Agent/Profiles/Trust 或运行时代码。ADR-0057 处于 Proposed 状态，待实现与验收后更新。
+
+### B — Session/Attempt 证据基础
+Forward-only SQLite schema 引入 AgentSession、ExecutionAttempt、bounded evidence/last activity。ACP 必须在新 SessionID 入库成功后才写 `session/prompt`；Antigravity 在可见首个 `init` 中 ASAP 写入 conversation_id。强制 generation/owner/identity fencing；在进程启动、写 DB、prompt 发送、ACK、terminal/result 持久化每个边界做 crash 注入。隐私禁止保存 raw prompt/token/reasoning/全部 diff。
+
+**完成条件**：可将 Task 精确关联到会话及进程尝试；早期失败不假装 completed；无 stale writer 覆写；所有普通老 Task 可读，历史 unknown 原样保留。
+
+### C — 活动观测与证据核对
+持久化有边界的进度摘要、lastObservedAt 和 OS 启动身份，区分 active、quiescent_proved、uncertain；只读状态查询绝不启动 CLI、执行 prompt 或绕过权限。Owner 显式 reconcile 可请求纯观测能力，但结果必须是原执行的权威证据才可提供 resolved outcome。无 SessionID 的两条生产 unknown 必须显示无法验证，禁止隐式扫描本机全部会话寻找“最像的一条”。
+
+**完成条件**：SIGKILL、断开管道、Runtime 重启、PID 重用、任务结果持久化边界、安全取消的故障注入通过。
+
+### D — Native Session Resume 和新 Tool
+ACP v1 运行时协商 loadSession/resume/list；OpenCode 先在 disposable workspace 演示同 Session 跨进程继续。Antigravity 仅指定精确 `--conversation <id>`，禁止 `-c` 最近会话缓存。Grok 仅在当前 ACP session 能力实证后启用；CLI `--resume` 不是可自动替换 Mender ACP 执行器的理由。新工具在原 Agent managed facade 上新增独立 `resume` SourceKey，旧 4 个 ToolID 不动；Profile 不自动获得第五项。新 Prompt 作为新任务，包含 continuedFromTaskId，禁止自动重发原 Prompt、并发重复执行、未静止强行继续、跨 Profile/Agent 访问。
+
+**完成条件**：3 种 backend 分别给出可恢复或受控不支持的证据。尤其受治理 OpenCode 的 private HOME 被删除以后如何可安全恢复须实机证明；若不可满足，不能标记为支持，也不能放开原用户 HOME/Seatbelt、拷贝凭据或复用旧临时 Tool bearer。
+
+### E — UI/API 与生产验收
+Agent → Tasks 保持紧凑列表；Task detail 才显示 last activity、执行证据、原生 Session 关联及明确的“核对状态 / 继续会话”操作。旧 ToolID/Source-first Profile 选择/原 AgentGrant 保持不变；只有显式选择第五个 resume ToolID 才能通过 MCP 调用。UI/HTTP/OpenAPI/SDK/CLI/Wails 一致，不能生成自动授权。完整测试通过后，单独由用户重建 Wails 与 MCP 刷新，再做真实 OpenCode/Antigravity/Grok Resume 小型验收。
+
+**完成条件**：零兼容桥、独立正/负向集成测试、跨 Agent/Profile 拒绝、拒绝旧审批/令牌继承、错误 Session 不会自动新建、正确保留历史 unknown；`pnpm check`（Go race、lint、TypeScript、SDK、UI）通过。
+
+## 非目标和实际风险
+
+ACP v1 `session/resume` 只恢复上下文，不能证明原 in-flight prompt 持续运行；resume 不等于 retry 或原任务成功。不要引入 Temporal、统一 RemoteTask 或新 Agent Loop。MCP Tasks（2026-07-28 扩展草案）以后可映射到同一内部持久化记录，不能取代本轮生命周期治理。Grok CLI 不同版本存在 `--session-id` “创建会话”语义；OpenCode run 会在缺少 ID 时可能创建新会话；agy -c 可能回退到新会话；这些都不可用于无声恢复。
+
+## 来源
+
+- https://dev.opencode.ai/v2/docs/cli/acp/
+- https://antigravity.google/docs/cli/headless/
+- https://antigravity.google/docs/cli/commands/resume
+- https://docs.x.ai/build/cli/headless-scripting
+- https://github.com/agentclientprotocol/agent-client-protocol/blob/main/docs/protocol/v1/session-setup.mdx
+- https://github.com/agentclientprotocol/agent-client-protocol/blob/main/docs/protocol/v2/migration.mdx
+- https://tasks.extensions.modelcontextprotocol.io/specification/2026-07-28/tasks
+- https://docs.temporal.io/design-patterns

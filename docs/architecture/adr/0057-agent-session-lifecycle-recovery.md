@@ -1,0 +1,69 @@
+# ADR-0057 — Evidence-bound Agent lifecycle and native session continuation
+
+- Status: Proposed (2026-10-18); research and design only, no runtime rollout
+- Extends [ADR-0038](0038-governed-agent-delegation.md), [ADR-0052](0052-optional-agent-governed-tool-placement.md), [ADR-0053](0053-agent-approval-inbox-and-scoped-trust.md) and [ADR-0041](0041-ssh-jobs-lifecycle-recovery.md)
+- Scope: governed AgentTask execution/observation, native AgentSession persistence, explicit continuation and evidence-bound reconciliation. Not an Agent reasoning loop.
+
+## Problem and verified evidence
+
+In the deployed macOS runtime, two real delegated tasks (OpenCode and Antigravity, 2026-10-18) reached `unknown` with `Agent outcome unknown after timeout` exactly ten minutes after creation. Source edits persisted in the workspace, but their outcome is not independently established. Read-only production SQL review confirmed one unknown Task per backend. Existing status/result tools correctly preserve the unknown verdict.
+
+Current `Service.SubmitWithOptions` starts an in-memory goroutine with `context.WithTimeout(..., 10 minutes)`. The ACP and Antigravity runners own a short-lived child process. The immutable `AgentTask` SQLite row has no persisted native SessionID/conversation_id, process identity or progress/activity record. `ReconcileExpired` on boot fences aged queued/running records to terminal unknown using `updated_at`; it does not inspect live native sessions, process identity or evidence. A terminated process, timeout, lost wire acknowledgement and completed side effects are different facts. No read-only reconciliation or explicit continuation operation currently exists.
+
+The launcher already attempts to kill the whole owned Unix process group on context cancellation. This is a safety mechanism, not proof that every detached descendant stopped or that the last native operation was committed. PID-only presence/absence is not reliable identity or terminal-result evidence.
+
+## Decision: three distinct durable identities
+
+1. **AgentTask:** one externally delegated request and immutable trusted caller origin/Principal/Scope/AgentID/workspace/grant snapshot; retains existing stable TaskID and terminal history. Original `unknown` records are never rewritten into success solely because the native session can be loaded. Tasks may have `continuedFromTaskId` lineage, but resuming creates a **new TaskID** for a new turn.
+2. **AgentSession:** one backend-native conversation identity, separate from TaskID and process. Persist `AgentID`, backend/plugin protocol identity, opaque native session reference, admitted canonical workspace, owning Principal/scope, isolation and storage scope, observed capabilities (from actual negotiation), creation/last-seen timestamps, and generation/version. Multiple Tasks may reference one Session; SessionID alone is neither permission nor proof of a running Task. Never expose raw native IDs or arbitrary session selectors to Profile-supplied tools.
+3. **AgentExecutionAttempt:** one process/connection attempt for one Task, with monotonic generation/lease, Runtime owner identity, process group identity plus OS-start/boot discriminator where available, native Session reference, started/last observed/exit times, execution phase, terminal evidence class, bounded event digest and cancellation observation. Identity must not rely on reusable PID alone. Append evidence before terminal projection; do not store raw prompts, reasoning, credentials, native raw tool args or full transcripts in global audit.
+
+Represent **task outcome**, **execution activity** (active / quiescent_proved / uncertain), **session recoverability** (supported / unavailable / unverified) and **cancellation intent** separately. No process check or heartbeat by itself turns unknown into completed or cancelled. Unknown may remain an immutable original terminal state; later proof is an appended, immutable evidence-bound resolution record, projected distinctly from the original history. An authoritative matching native terminal result and provenance may support a verified resolution; session history or filesystem diffs alone cannot.
+
+## Backend contracts, capability gates
+
+Use backend-owned adapters, not generic CLI flags or a single large supervisor service.
+
+- **ACP v1 (OpenCode, Grok, optional Codex adapter):** read `initialize.agentCapabilities.loadSession` and `sessionCapabilities.resume/list` at runtime; v1 load/resume are optional. Persist `session/new.sessionId` after validation and before sending `session/prompt`. When recovery is supported, use original admitted `cwd` and fresh authorization to execute `session/load` (history replay) or `session/resume` (context only). OpenCode v2.0.30 documents these capabilities, but other agents must prove support per process, not by brand. Mender does not yet implement ACP v2; its different required `session/resume` semantics need a separately versioned adaptation.
+- **Antigravity headless:** persist `conversation_id` from the first `init` NDJSON event as soon as received; capture the terminal `result` with its status. The trusted backend adapter may use `agy --conversation <exact-id>` on a new process. Never use `agy -c` / `--continue` for targeted restoration: its workspace cache may select a different conversation or start a new one when unavailable. There is no ACP capability contract for this backend.
+- **Grok:** its official CLI supports `--resume <exact-id>` and stores native sessions, but Mender currently integrates `grok agent stdio`, so first negotiate/probe the actual ACP v1 capability. Switching to an unrelated headless command merely to claim resume is not an implicit fallback. `--session-id` is not a resume operation on the installed CLI.
+- **Unknown/unavailable backend or protocol:** return `resume_unavailable` with a safe reason; do not create a replacement session, silently send a new prompt or infer support from a Marketplace card.
+
+**Critical storage gate:** governed macOS ACP tasks currently use a private empty HOME per process, deleted after task end to protect the user's HOME. A saved SessionID may therefore be **non-resumable** if the backend stored conversation data only there. Require disposable, real-backend proof of cross-process persistence inside the exact same isolation, without copying owner HOME/credentials, widening Seatbelt, weakening ToolSupply or retaining task bearer tokens. If there is no safe durable session store, offer unavailable rather than false resume. A later per-Agent isolated persistent store requires separate owner controls, scoped access, retention and deletion.
+
+## Distinguish inspect, reattach and continue
+
+- **Status / inspect:** must remain non-mutating to Agent execution, and report durable observed evidence and last progress/heartbeat times. A targeted, owner-admitted reconcile may perform a backend-native read-only inspection; it may never re-send the original prompt, generate filesystem side effects or activate a new conversation silently. Existing Profile-facing status/result remain available without adding a sixth user-facing lifecycle facade for inspect.
+- **Reattach:** if the exact originally owned running execution is provably alive and the backend supports reconnecting to its in-progress stream, reattach observation; do not issue a second `session/prompt`. ACP `session/resume` alone is not proof that an interrupted prompt still runs or its result can be recovered.
+- **Continue via new Tool:** expose one new canonical `agent.resume` facade whose caller supplies `{taskId, prompt}` (bounded new instruction, no native sessionId/OS PID/executable/cwd/flags). It must resolve the exact prior Task and AgentSession server-side, revalidate current Profile ToolBinding, original task caller ownership, AgentGrant, Policy (`tool.invoke`, `agent.activate`, `agent.task.submit` and explicit `agent.task.resume`), workspace and isolation/ToolSupply placement; atomically reserve concurrency and lease. Before any new turn, prove no conflicting active invocation owns that Session and verify native resume support and effective storage. Resume creates a **new** TaskID linked to prior Task/Session, never resurrects an old terminated Task or auto-replays its prompt. Declined/unavailable recoveries have no new Agent-side mutations.
+- The four current delegate/status/result/cancel ToolIDs and Profile grants remain intact. Add `resume` as a fifth tool only to its already managed Agent Tool Suite, not to every Profile automatically; a Profile must explicitly select and authorize it through source-first tool selection. The TaskID remains the sole model-facing selection handle. Owner-only UI can surface a named Session and linked Task history; it should not expose a model-writable native ID.
+- Existing authorization is always re-evaluated. Expired one-shot/trusted ACP approvals and Task-only MCP bearer capabilities are **not transferred** to the continuation. Generate a new Task-scoped grant/token, recheck every call, revoke old ones; every ACP permission request must bind to the new Task/generation/session. Never restore prior code snapshots or replay side effects as part of conversation resume.
+
+## Observation, deadlines, fencing and restart
+
+- Separate submission acknowledgment, runner wall-time hard budget, backend/protocol idle progress, owner approval wait, shutdown/reconnect grace and read-only status polling. An expired upstream MCP request does not kill the already durably admitted Task. Do not solve the reported incident solely by increasing ten minutes; allow reviewed bounded Agent-level budgets after lifecycle tracking exists.
+- Persist bounded step/event category and last observed time from ACP `session/update` / Antigravity `step_update`. A live process heartbeat indicates observation only; lack of progress does not prove death. Use bounded periodic durable progress updates and small event rings; avoid raw content/commands/private paths.
+- On startup, use an explicit lease/generation fence, exact process identity (not bare PID), backend-native evidence and capability to classify active vs quiescent_proved vs uncertain. Reconcile stale task metadata conservatively. Only the owner of an active execution may send cancellation/terminate; if identity is uncertain, do not kill arbitrary PIDs or release a destructive-resource lifecycle obligation. A late worker cannot overwrite a newer attempt/resolution.
+- Cancellation is an intent. The runner must observe agent protocol cancellation/process reap/terminal native outcome before asserting `cancelled`. A kill or network timeout without final evidence stays uncertain. No automatic replay of file-affecting work after crash or timeout.
+- Historical unknown Tasks without persisted SessionID/attempt evidence must remain unknown. No scan-and-guess association with the user's global CLI conversation history, no changes to production Agent/Policy/Profile/approval/session data.
+
+## UI and verification
+
+Keep one information class per viewport. Agent → Tasks shows concise outcome, activity proof, last update, recovery availability and actions. Task detail shows evidence timeline and linked Session, separate **Inspect/reconcile** (no new prompt) and **Continue session** (explicit new prompt/new TaskID). Warn when prior side effects or activity are uncertain; never label a new turn as recovery of original result.
+
+Gates: fault injection before/after create task, process start, native SessionID persistence, prompt write/ACK, native terminal result and SQLite commit; crash/restart, SIGKILL/group descendants, PID reuse, inactive/stale lease, disconnected ACP pipe, native list/load/resume unavailable or returning mismatched cwd, process group confirmed exit, expired approvals, Profile revoke, cross-Agent TaskID, revoked ToolBinding, concurrent resume, idempotency, bounded budget and tool bearer rollover. Verify OpenCode, Antigravity and Grok independently in disposable workspaces; never use production unknown Tasks for replay.
+
+## Non-goals
+
+Not a generic Workflow/Agent Loop engine, Temporal adoption, process daemon managing arbitrary child agents, silent CLI protocol fallback, MCP Tasks support declaration without conformance, automatic resubmit, session history export, native files/credentials import, or a new compatibility bridge.
+
+## Current references
+
+- ACP v1 session setup: https://github.com/agentclientprotocol/agent-client-protocol/blob/main/docs/protocol/v1/session-setup.mdx
+- ACP v2 migration (future, not current Mender): https://github.com/agentclientprotocol/agent-client-protocol/blob/main/docs/protocol/v2/migration.mdx
+- OpenCode ACP v1 capabilities: https://dev.opencode.ai/v2/docs/cli/acp/
+- Antigravity headless and conversation ID: https://antigravity.google/docs/cli/headless/
+- Antigravity targeted resume: https://antigravity.google/docs/cli/commands/resume
+- Grok Build headless and sessions: https://docs.x.ai/build/cli/headless-scripting
+- MCP Tasks extension draft 2026-07-28: https://tasks.extensions.modelcontextprotocol.io/specification/2026-07-28/tasks
+- Temporal durable Activity patterns: https://docs.temporal.io/design-patterns
