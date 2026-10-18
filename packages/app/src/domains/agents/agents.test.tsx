@@ -249,6 +249,21 @@ describe("Agents focused management",()=>{
     fireEvent.click(screen.getByRole("button",{name:"Activity"}));
     expect(await screen.findByText("agent.task.submit")).toBeTruthy();
   });
+  it("localizes bounded ACP prompt stream failures in the owner Task result dialog",async()=>{
+    setLocale("zh-CN");
+    const failedTask:AgentTask={
+      ...task,status:"failed",result:"",diagnostic:"ACP prompt stream closed before completion",
+    };
+    show("/agents/"+agent.agentId,{
+      listAgentTasks:vi.fn().mockResolvedValue({tasks:[failedTask]}),
+      getAgentTask:vi.fn().mockResolvedValue(failedTask),
+    });
+    expect(await screen.findByText("Code Reviewer")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button",{name:/^任务/}));
+    fireEvent.click(await screen.findByRole("button",{name:"查看"}));
+    expect(await screen.findByText("ACP 任务完成前，输出流已关闭")).toBeTruthy();
+    expect(screen.queryByText("ACP prompt stream closed before completion")).toBeNull();
+  });
   it("localizes safe Agent failure stages in the owner Task result dialog",async()=>{
     setLocale("zh-CN");
     const failedTask:AgentTask={

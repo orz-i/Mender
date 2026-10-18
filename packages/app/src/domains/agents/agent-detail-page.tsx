@@ -43,6 +43,10 @@ function taskDiagnosticText(value:string):string{
     case "Agent permission request was rejected": return t("Agent permission request was rejected");
     case "Agent rejected the ACP prompt": return t("Agent rejected the ACP prompt");
     case "ACP prompt transport failed": return t("ACP prompt transport failed");
+    case "ACP prompt stream closed before completion": return t("ACP prompt stream closed before completion");
+    case "ACP prompt frame was malformed": return t("ACP prompt frame was malformed");
+    case "ACP prompt stream read failed": return t("ACP prompt stream read failed");
+    case "ACP prompt request write failed": return t("ACP prompt request write failed");
     case "ACP protocol validation failed": return t("ACP protocol validation failed");
     case "Agent returned an invalid completion": return t("Agent returned an invalid completion");
     case "Agent execution failed": return t("Agent execution failed");
