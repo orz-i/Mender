@@ -1907,7 +1907,7 @@ describe("management pages", () => {
     });
   });
 
-  it("manages Profile membership through a Tool picker without ToolID input", async () => {
+  it("manages Profile membership through a source-first Tool picker without ToolID input", async () => {
     const profile = {
       profileId: "prof_1",
       slug: "default",
@@ -1966,6 +1966,10 @@ describe("management pages", () => {
             createdAt: "2026-09-26T00:00:00Z",
             updatedAt: "2026-09-26T00:00:00Z",
             transport: "http",
+            toolSourceKind: "provider",
+            toolSourceId: "prov_1",
+            toolSourceName: "AnySearch",
+            toolSourceSelectable: true,
             toolCount: 2,
             endpoint: "https://api.anysearch.com/mcp",
           },
@@ -1999,11 +2003,18 @@ describe("management pages", () => {
     expect(screen.queryByPlaceholderText("tool_...")).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Manage Default" }));
-    expect(await screen.findByText("Search")).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Manage source AnySearch" })).toBeTruthy();
+    expect(screen.queryByText("Search")).toBeNull();
     expect(screen.queryByText("tool_1")).toBeNull();
     expect(screen.getAllByRole("dialog")).toHaveLength(1);
 
-    fireEvent.click(screen.getByRole("button", { name: "Choose tools" }));
+    fireEvent.click(screen.getByRole("button", { name: "Manage source AnySearch" }));
+    expect(screen.getByText("Search")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Choose tool sources" }));
+    expect(await screen.findByRole("button", { name: "Open source AnySearch" })).toBeTruthy();
+    expect(screen.queryByText("Extract")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Open source AnySearch" }));
     expect(await screen.findByText("Extract")).toBeTruthy();
     expect(screen.getAllByRole("dialog")).toHaveLength(1);
     expect(screen.getByText("Extract content").classList.contains("line-clamp-2")).toBe(
@@ -2015,10 +2026,11 @@ describe("management pages", () => {
     ).toBe(false);
 
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-    expect(await screen.findByRole("button", { name: "Choose tools" })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Choose tool sources" })).toBeTruthy();
     expect(screen.getAllByRole("dialog")).toHaveLength(1);
 
-    fireEvent.click(screen.getByRole("button", { name: "Choose tools" }));
+    fireEvent.click(screen.getByRole("button", { name: "Choose tool sources" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Open source AnySearch" }));
     expect(await screen.findByText("Extract")).toBeTruthy();
     fireEvent.click(screen.getByRole("checkbox", { name: "Select Extract" }));
     fireEvent.click(screen.getByRole("button", { name: "Save selection" }));
@@ -2050,7 +2062,7 @@ describe("management pages", () => {
     );
     expect(await screen.findByText("Tool presentation")).toBeTruthy();
     expect(screen.getAllByRole("dialog")).toHaveLength(1);
-    expect(screen.queryByRole("button", { name: "Choose tools" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Choose tool sources" })).toBeNull();
 
     fireEvent.change(screen.getByLabelText("Tool binding alias"), {
       target: { value: "Search Release" },
@@ -2074,7 +2086,7 @@ describe("management pages", () => {
     expect(await screen.findByText("Release Search")).toBeTruthy();
     expect(screen.getByText("Alias: Search.Release_2")).toBeTruthy();
     expect(screen.getByText(/Search release documentation/).classList).toContain(
-      "truncate",
+      "line-clamp-2",
     );
 
     fireEvent.click(
