@@ -40,6 +40,10 @@ function taskDiagnosticText(value:string):string{
     case "ACP initialization failed": return t("ACP initialization failed");
     case "ACP session creation failed": return t("ACP session creation failed");
     case "Agent model or reasoning configuration failed": return t("Agent model or reasoning configuration failed");
+    case "Configured Agent model not advertised by ACP session": return t("Configured Agent model not advertised by ACP session");
+    case "Configured Agent reasoning effort not advertised by ACP session": return t("Configured Agent reasoning effort not advertised by ACP session");
+    case "ACP configuration change not confirmed": return t("ACP configuration change not confirmed");
+    case "ACP configuration request failed": return t("ACP configuration request failed");
     case "Agent permission request was rejected": return t("Agent permission request was rejected");
     case "Agent rejected the ACP prompt": return t("Agent rejected the ACP prompt");
     case "ACP prompt transport failed": return t("ACP prompt transport failed");

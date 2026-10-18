@@ -264,6 +264,21 @@ describe("Agents focused management",()=>{
     expect(await screen.findByText("ACP 任务完成前，输出流已关闭")).toBeTruthy();
     expect(screen.queryByText("ACP prompt stream closed before completion")).toBeNull();
   });
+  it("localizes unadvertised configured ACP models without exposing model identifiers",async()=>{
+    setLocale("zh-CN");
+    const failedTask:AgentTask={
+      ...task,status:"failed",result:"",diagnostic:"Configured Agent model not advertised by ACP session",
+    };
+    show("/agents/"+agent.agentId,{
+      listAgentTasks:vi.fn().mockResolvedValue({tasks:[failedTask]}),
+      getAgentTask:vi.fn().mockResolvedValue(failedTask),
+    });
+    expect(await screen.findByText("Code Reviewer")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button",{name:/^任务/}));
+    fireEvent.click(await screen.findByRole("button",{name:"查看"}));
+    expect(await screen.findByText("当前 ACP 会话未提供所配置的智能体模型")).toBeTruthy();
+    expect(screen.queryByText("Configured Agent model not advertised by ACP session")).toBeNull();
+  });
   it("localizes safe Agent failure stages in the owner Task result dialog",async()=>{
     setLocale("zh-CN");
     const failedTask:AgentTask={
