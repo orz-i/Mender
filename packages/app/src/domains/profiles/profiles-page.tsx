@@ -1,5 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  ChevronLeftIcon,
+  ChevronRightIcon,
   KeyRoundIcon,
   PresentationIcon,
   Settings2Icon,
@@ -37,7 +39,8 @@ import {
 } from "@mender/ui/components/table";
 
 import { errorMessage } from "../../shared/errors";
-import { toolSourceLabel } from "../tools/tool-source-label";
+import { ProfileToolSourcePicker } from "./profile-tool-source-picker";
+import { profileSourceLabels } from "./profile-source-label";
 import { canonicalizeOwnedIdentifier, isCanonicalOwnedSlug, ownedIdentifierCreateError } from "../../shared/form-identifiers";
 import { IconButton } from "../../shared/icon-button";
 import { EmptyState, ErrorNotice } from "../../shared/page";
@@ -74,8 +77,6 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
   const [credentials, setCredentials] = useState<Credential[]>([]);
   const [tunnels, setTunnels] = useState<Tunnel[]>([]);
   const [catalogTools, setCatalogTools] = useState<ToolSummary[]>([]);
-  const [initialBrowseTools,setInitialBrowseTools] = useState<ToolSummary[]>([]);
-  const [catalogNextCursor,setCatalogNextCursor] = useState<string|null>(null);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -88,14 +89,17 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
   const [manageSlug, setManageSlug] = useState("");
   const [manageView, setManageView] = useState<"overview" | "tools">("tools");
   const [manageQuery, setManageQuery] = useState("");
+  const [manageSourceId, setManageSourceId] = useState("");
   const [manageExposure, setManageExposure] = useState<"all" | "direct" | "dynamic">("all");
   const [pickerSlug, setPickerSlug] = useState("");
   const [pickerQuery, setPickerQuery] = useState("");
+  const [pickerSourceQuery, setPickerSourceQuery] = useState("");
   const [pickerProvider, setPickerProvider] = useState("");
   const [pickerTools, setPickerTools] = useState<ToolSummary[]>([]);
   const [pickerNextCursor,setPickerNextCursor] = useState<string|null>(null);
   const [pickerAppliedQuery,setPickerAppliedQuery] = useState("");
-  const [pickerAppliedProvider,setPickerAppliedProvider] = useState("");
+  const pickerRequestRef = useRef(0);
+  const attemptedToolDetails = useRef(new Set<string>());
   const [pickerSelected, setPickerSelected] = useState<Set<string>>(new Set());
   const [pickerDirect, setPickerDirect] = useState<Record<string, boolean>>({});
 
@@ -154,8 +158,6 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
           setCredentials(credentialResult.credentials);
           setTunnels(tunnelResult.tunnels);
           setCatalogTools(toolResult.tools);
-          setInitialBrowseTools(toolResult.tools);
-          setCatalogNextCursor(toolResult.nextCursor??null);
           setError("");
           setLoaded(true);
         }
@@ -226,26 +228,102 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
     () => new Map(providers.map((provider) => [provider.providerId, provider])),
     [providers],
   );
+  const sourceLabels = useMemo(() => profileSourceLabels(providers), [providers]);
+
+  // Profile ToolBindings persist only canonical ToolIDs. Hydrate missing
+  // selected Tool metadata by exact ID so a second+ Catalog page cannot
+  // silently hide or misgroup existing grants. Failed reads stay manageable.
+  useEffect(() => {
+    if (managedProfile === null) return;
+    const missing = managedProfile.tools.map((binding) => binding.toolId)
+      .filter((id) => !knownTools.has(id) && !attemptedToolDetails.current.has(id));
+    if (!missing.length) return;
+    for (const id of missing) attemptedToolDetails.current.add(id);
+    void (async () => {
+      const loaded: ToolSummary[] = [];
+      for (let index = 0; index < missing.length; index += 8) {
+        const chunk = await Promise.allSettled(
+          missing.slice(index, index + 8).map((id) => client.getTool(id)),
+        );
+        for (const result of chunk) {
+          if (result.status === "fulfilled") {
+            loaded.push({ rank: 0, toolId: result.value.toolId,
+              providerId: result.value.providerId, name: result.value.name,
+              title: result.value.title, description: result.value.description });
+          }
+        }
+      }
+      if (loaded.length) setCatalogTools((current) => mergeTools(current, loaded));
+    })();
+  }, [client, managedProfile, knownTools]);
+
+  // Source IDs are exact ProviderIDs; a missing Tool remains in the
+  // management-only Unknown source bucket, never in the Add chooser.
+  const managedSourceGroups = useMemo(() => {
+    if (managedProfile === null) return [];
+    const counts = new Map<string, number>();
+    for (const binding of managedProfile.tools) {
+      const id = knownTools.get(binding.toolId)?.providerId ?? "__unknown__";
+      counts.set(id, (counts.get(id) ?? 0) + 1);
+    }
+    return [...counts].map(([id, count]) => {
+      const provider = providerById.get(id);
+      return { id, count, provider, label: provider
+        ? sourceLabels.get(id) ?? t("Unknown source")
+        : t("Unknown source") };
+    }).sort((a, b) => a.label.localeCompare(b.label) || a.id.localeCompare(b.id));
+  }, [managedProfile, knownTools, providerById, sourceLabels]);
+
+  const visibleManagedSources = useMemo(() => {
+    const needle = manageQuery.trim().toLocaleLowerCase();
+    return needle
+      ? managedSourceGroups.filter((group) => group.label.toLocaleLowerCase().includes(needle))
+      : managedSourceGroups;
+  }, [managedSourceGroups, manageQuery]);
+  const managedSourcePagination = usePagination(visibleManagedSources);
 
   const visibleManagedTools = useMemo(() => {
-    if (managedProfile === null) return [];
+    if (managedProfile === null || !manageSourceId) return [];
     const needle = manageQuery.trim().toLocaleLowerCase();
     return managedProfile.tools.filter((selection) => {
+      if ((knownTools.get(selection.toolId)?.providerId ?? "__unknown__") !== manageSourceId) {
+        return false;
+      }
       if (manageExposure !== "all" &&
         (selection.direct ? "direct" : "dynamic") !== manageExposure) {
         return false;
       }
       if (!needle) return true;
       const tool = knownTools.get(selection.toolId);
-      const provider = tool ? providerById.get(tool.providerId) : undefined;
       return [
         selection.alias, selection.titleOverride, selection.descriptionOverride,
         tool?.title, tool?.name, tool?.description,
-        provider?.displayName, provider?.namespace,
       ].some((value) => value?.toLocaleLowerCase().includes(needle));
     });
-  }, [managedProfile, manageQuery, manageExposure, knownTools, providerById]);
+  }, [managedProfile, manageSourceId, manageQuery, manageExposure, knownTools]);
   const managedToolPagination = usePagination(visibleManagedTools);
+
+  const pickerSelectedCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const id of pickerSelected) {
+      const providerId = knownTools.get(id)?.providerId;
+      if (providerId) counts.set(providerId, (counts.get(providerId) ?? 0) + 1);
+    }
+    return counts;
+  }, [pickerSelected, knownTools]);
+
+  // A no-op Save would unnecessarily revise Profile and refresh managed MCP.
+  const pickerDirty = useMemo(() => {
+    if (!pickerProfile) return false;
+    if (pickerSelected.size !== pickerProfile.tools.length) return true;
+    for (const binding of pickerProfile.tools) {
+      if (!pickerSelected.has(binding.toolId)) return true;
+      const direct = pickerProfile.mode === "direct" ? true :
+        pickerProfile.mode === "dynamic" ? false : (pickerDirect[binding.toolId] ?? false);
+      if (direct !== binding.direct) return true;
+    }
+    return false;
+  }, [pickerProfile, pickerSelected, pickerDirect]);
 
   const visibleProfiles = useMemo(() => {
     const needle = inventoryQuery.trim().toLocaleLowerCase();
@@ -275,6 +353,8 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
       setCreateOpen(false);
       setCreateForm(emptyCreateForm);
       await refreshProfiles();
+      setManageSourceId("");
+      setManageQuery("");
       setManageSlug(profile.slug);
     } catch (reason) {
       setCreateError(ownedIdentifierCreateError(reason, "profile"));
@@ -284,73 +364,109 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
   }
 
   function openToolPicker() {
-    if (managedProfile === null) {
-      return;
-    }
+    if (managedProfile === null) return;
     const slug = managedProfile.slug;
+    pickerRequestRef.current += 1;
+    setPickerSourceQuery("");
     setPickerQuery("");
     setPickerProvider("");
-    setPickerSelected(
-      new Set(managedProfile.tools.map((selection) => selection.toolId)),
-    );
-    setPickerDirect(
-      Object.fromEntries(
-        managedProfile.tools.map((selection) => [
-          selection.toolId,
-          selection.direct,
-        ]),
-      ),
-    );
-    setPickerTools(initialBrowseTools);
-    setPickerNextCursor(catalogNextCursor);
+    setPickerTools([]);
+    setPickerNextCursor(null);
     setPickerAppliedQuery("");
-    setPickerAppliedProvider("");
+    setPickerSelected(new Set(managedProfile.tools.map((selection) => selection.toolId)));
+    setPickerDirect(Object.fromEntries(managedProfile.tools.map((selection) =>
+      [selection.toolId, selection.direct],
+    )));
+    // Refresh only source metadata; the chooser starts at sources, not a
+    // preloaded flat Catalog Tool list.
+    void client.listProviders().then((response) => setProviders(response.providers))
+      .catch((reason: unknown) => setError(errorMessage(reason)));
 
-    // Base UI modal dialogs must never overlap here. Close Manage first,
-    // then open the independent Tool Picker on the next task after focus/inert
-    // cleanup has completed in the WebView.
+    // Base UI modal dialogs must never overlap in the Wails WebView.
     setManageSlug("");
     window.setTimeout(() => setPickerSlug(slug), 0);
   }
 
-  async function searchPicker() {
+  async function openPickerSource(providerId: string) {
+    if (busy) return;
+    const requestId = ++pickerRequestRef.current;
+    setPickerProvider(providerId);
+    setPickerQuery("");
+    setPickerAppliedQuery("");
+    setPickerTools([]);
+    setPickerNextCursor(null);
     setBusy(true);
     setError("");
     try {
-      const query=pickerQuery.trim();
-      const providerId=pickerProvider;
-      const response=query
-        ? await client.searchTools({query,limit:100,...(providerId?{providerId}:{})})
-        : await client.browseTools({limit:100,...(providerId?{providerId}:{})});
+      const response = await client.browseTools({ providerId, limit: 100 });
+      if (requestId !== pickerRequestRef.current) return;
       setPickerTools(response.tools);
-      setPickerNextCursor(response.nextCursor??null);
-      setPickerAppliedQuery(query);
-      setPickerAppliedProvider(providerId);
-      setCatalogTools(current=>mergeTools(current,response.tools));
+      setPickerNextCursor(response.nextCursor ?? null);
+      setCatalogTools((current) => mergeTools(current, response.tools));
     } catch (reason) {
-      setError(errorMessage(reason));
+      if (requestId === pickerRequestRef.current) setError(errorMessage(reason));
     } finally {
-      setBusy(false);
+      if (requestId === pickerRequestRef.current) setBusy(false);
+    }
+  }
+
+  function backToPickerSources() {
+    pickerRequestRef.current += 1;
+    setPickerProvider("");
+    setPickerQuery("");
+    setPickerAppliedQuery("");
+    setPickerTools([]);
+    setPickerNextCursor(null);
+    setBusy(false);
+  }
+
+  async function searchPicker() {
+    if (!pickerProvider || busy) return;
+    const requestId = ++pickerRequestRef.current;
+    const query = pickerQuery.trim();
+    const providerId = pickerProvider;
+    setBusy(true);
+    setError("");
+    setPickerNextCursor(null);
+    try {
+      const response = query
+        ? await client.searchTools({ query, limit: 100, providerId })
+        : await client.browseTools({ limit: 100, providerId });
+      if (requestId !== pickerRequestRef.current) return;
+      setPickerTools(response.tools);
+      setPickerNextCursor(response.nextCursor ?? null);
+      setPickerAppliedQuery(query);
+      setCatalogTools((current) => mergeTools(current, response.tools));
+    } catch (reason) {
+      if (requestId === pickerRequestRef.current) setError(errorMessage(reason));
+    } finally {
+      if (requestId === pickerRequestRef.current) setBusy(false);
     }
   }
 
   async function loadMorePicker() {
-    if (!pickerNextCursor || busy) return;
+    if (!pickerProvider || !pickerNextCursor || busy) return;
+    const requestId = ++pickerRequestRef.current;
+    const providerId = pickerProvider;
+    const cursor = pickerNextCursor;
     setBusy(true);
     setError("");
     try {
-      const response=pickerAppliedQuery
-        ? await client.searchTools({query:pickerAppliedQuery,limit:100,cursor:pickerNextCursor,
-            ...(pickerAppliedProvider?{providerId:pickerAppliedProvider}:{})})
-        : await client.browseTools({limit:100,cursor:pickerNextCursor,
-            ...(pickerAppliedProvider?{providerId:pickerAppliedProvider}:{})});
-      setPickerTools(current=>mergeTools(current,response.tools));
-      setCatalogTools(current=>mergeTools(current,response.tools));
-      setPickerNextCursor(response.nextCursor??null);
-    } catch(reason) {
-      setPickerNextCursor(null);
-      setError(errorMessage(reason));
-    } finally {setBusy(false);}
+      const response = pickerAppliedQuery
+        ? await client.searchTools({ query: pickerAppliedQuery, limit: 100, cursor, providerId })
+        : await client.browseTools({ limit: 100, cursor, providerId });
+      if (requestId !== pickerRequestRef.current) return;
+      setPickerTools((current) => mergeTools(current, response.tools));
+      setCatalogTools((current) => mergeTools(current, response.tools));
+      setPickerNextCursor(response.nextCursor ?? null);
+    } catch (reason) {
+      if (requestId === pickerRequestRef.current) {
+        setPickerNextCursor(null);
+        setError(errorMessage(reason));
+      }
+    } finally {
+      if (requestId === pickerRequestRef.current) setBusy(false);
+    }
   }
 
   async function saveToolSelection() {
@@ -396,9 +512,14 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
   }
 
   function returnToManage(slug: string) {
+    pickerRequestRef.current += 1;
+    setBusy(false);
     setPickerSlug("");
+    setPickerSourceQuery("");
     setPickerQuery("");
     setPickerProvider("");
+    setPickerTools([]);
+    setPickerNextCursor(null);
     if (slug) {
       window.setTimeout(() => setManageSlug(slug), 0);
     }
@@ -684,7 +805,7 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
                         label={t("Manage {{profile}}", {
                           profile: profile.displayName || profile.slug,
                         })}
-                        onClick={() => { setManageView("tools"); setManageQuery(""); setManageExposure("all"); managedToolPagination.reset(); setManageSlug(profile.slug); }}
+                        onClick={() => { setManageView("tools"); setManageSourceId(""); setManageQuery(""); setManageExposure("all"); managedSourcePagination.reset(); managedToolPagination.reset(); setManageSlug(profile.slug); }}
                       >
                         <Settings2Icon />
                       </IconButton>
@@ -822,7 +943,7 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
                 {managedProfile?.displayName ?? t("Manage profile")}
               </DialogTitle>
               <DialogDescription>
-                {t("Choose which Catalog Tools this Profile may expose.")}
+                {t("Select sources first, then manage each source's ToolBindings.")}
               </DialogDescription>
             </DialogHeader>
             <PageTabs label="Manage Profile sections">
@@ -872,52 +993,66 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
               ) : (
                 <>
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <div className="font-medium">{t("Selected Tools")}</div>
+                <div className="min-w-0">
+                  {manageSourceId ? (
+                    <Button variant="ghost" size="sm" className="mb-1 w-fit gap-1.5"
+                      onClick={() => { setManageSourceId(""); setManageQuery(""); managedSourcePagination.reset(); }}>
+                      <ChevronLeftIcon className="size-4" />
+                      {t("Back to sources")}
+                    </Button>
+                  ) : null}
+                  <div className="font-medium">
+                    {manageSourceId
+                      ? managedSourceGroups.find((group) => group.id === manageSourceId)?.label ?? t("Unknown source")
+                      : t("Selected sources")}
+                  </div>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    {t("Tool identity is managed internally; select by name and source.")}
+                    {manageSourceId
+                      ? t("Manage individual ToolBindings without changing other sources.")
+                      : t("Choose a source to inspect its selected Tools.")}
                   </p>
                 </div>
-                <Button
-                  disabled={busy}
-                  onClick={openToolPicker}
-                >
-                  {t("Choose tools")}
+                <Button disabled={busy} onClick={openToolPicker}>
+                  {t("Choose tool sources")}
                 </Button>
               </div>
 
-              <div className="grid shrink-0 gap-2 sm:grid-cols-[minmax(0,1fr)_180px]">
+              {manageSourceId ? (
+                <div className="grid shrink-0 gap-2 sm:grid-cols-[minmax(0,1fr)_180px]">
+                  <Input
+                    aria-label={t("Search selected tools")}
+                    placeholder={t("Search selected tools…")}
+                    value={manageQuery}
+                    onChange={(event) => { setManageQuery(event.target.value); managedToolPagination.reset(); }}
+                  />
+                  <select
+                    aria-label={t("Exposure filter")}
+                    value={manageExposure}
+                    onChange={(event) => {
+                      setManageExposure(event.target.value as typeof manageExposure);
+                      managedToolPagination.reset();
+                    }}
+                    className="h-9 min-w-0 rounded-lg border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
+                  >
+                    <option value="all">{t("All exposures")}</option>
+                    <option value="direct">{t("Direct")}</option>
+                    <option value="dynamic">{t("Dynamic")}</option>
+                  </select>
+                </div>
+              ) : (
                 <Input
-                  aria-label={t("Search selected tools")}
-                  placeholder={t("Search selected tools…")}
+                  aria-label={t("Search selected sources")}
+                  placeholder={t("Search sources")}
                   value={manageQuery}
-                  onChange={(event) => {
-                    setManageQuery(event.target.value);
-                    managedToolPagination.reset();
-                  }}
+                  onChange={(event) => { setManageQuery(event.target.value); managedSourcePagination.reset(); }}
                 />
-                <select
-                  aria-label={t("Exposure filter")}
-                  value={manageExposure}
-                  onChange={(event) => {
-                    setManageExposure(event.target.value as typeof manageExposure);
-                    managedToolPagination.reset();
-                  }}
-                  className="h-9 min-w-0 rounded-lg border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
-                >
-                  <option value="all">{t("All exposures")}</option>
-                  <option value="direct">{t("Direct")}</option>
-                  <option value="dynamic">{t("Dynamic")}</option>
-                </select>
-              </div>
+              )}
+              {manageSourceId ? (
+                <>
               {visibleManagedTools.length ? (
                 <div data-slot="profile-selected-tools-list" className="min-h-0 flex-1 divide-y divide-border overflow-y-auto overscroll-contain rounded-lg border border-border">
                   {managedToolPagination.items.map((selection) => {
                     const tool = knownTools.get(selection.toolId);
-                    const provider =
-                      tool === undefined
-                        ? undefined
-                        : providerById.get(tool.providerId);
                     const title =
                       selection.titleOverride ||
                       tool?.title ||
@@ -932,12 +1067,9 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
                       >
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-medium">{title}</p>
-                          <p className="mt-1 truncate text-xs text-muted-foreground">
-                            {provider?.displayName ||
-                              provider?.namespace ||
-                              t("Unknown Provider")}
-                            {description ? " · " + description : ""}
-                          </p>
+                          {description ? (
+                            <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{description}</p>
+                          ) : null}
                           <div className="mt-2 flex flex-wrap gap-1.5">
                             <Badge variant="outline">
                               {t(selection.direct ? "Direct" : "Dynamic")}
@@ -1026,6 +1158,41 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
               <div className="shrink-0">
                 <TablePagination label="Selected Tools" pagination={managedToolPagination} />
               </div>
+                </>
+              ) : (
+                <>
+                  <div data-slot="profile-selected-sources-list" className="min-h-0 flex-1 divide-y divide-border overflow-y-auto overscroll-contain rounded-lg border border-border">
+                    {managedSourcePagination.items.length ? managedSourcePagination.items.map((group) => (
+                      <button
+                        key={group.id}
+                        type="button"
+                        aria-label={t("Manage source {{source}}", { source: group.label })}
+                        className="flex w-full items-center gap-3 px-4 py-4 text-left hover:bg-muted/40 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring"
+                        onClick={() => { setManageSourceId(group.id); setManageQuery(""); setManageExposure("all"); managedToolPagination.reset(); }}
+                      >
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-medium">{group.label}</span>
+                          <span className="mt-1 block text-xs text-muted-foreground">
+                            {tCount(group.count, "{{count}} selected Tool", "{{count}} selected Tools")}
+                            {group.provider ? " / " + tCount(group.provider.toolCount, "{{count}} available Tool", "{{count}} available Tools") : null}
+                          </span>
+                        </span>
+                        {group.provider?.toolSourceSelectable === false || !group.provider ? (
+                          <Badge variant="outline">{t("Unavailable")}</Badge>
+                        ) : null}
+                        <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground" />
+                      </button>
+                    )) : managedProfile.tools.length ? (
+                      <EmptyState title="No matching sources" description="Try another source name." />
+                    ) : (
+                      <EmptyState title="No tools selected" description="Choose sources, then select their individual tools." />
+                    )}
+                  </div>
+                  <div className="shrink-0">
+                    <TablePagination label="Selected sources" pagination={managedSourcePagination} />
+                  </div>
+                </>
+              )}
                 </>
               )}
             </div>
@@ -1292,20 +1459,25 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
         </DialogContent>
       </Dialog>
 
-      <ToolPickerDialog
+      <ProfileToolSourcePicker
         open={pickerProfile !== null}
         profile={pickerProfile}
         providers={providers}
         tools={pickerTools}
-        hasMore={pickerNextCursor!==null && pickerAppliedQuery===pickerQuery.trim() && pickerAppliedProvider===pickerProvider}
+        hasMore={pickerNextCursor !== null && pickerAppliedQuery === pickerQuery.trim()}
         onLoadMore={() => void loadMorePicker()}
         query={pickerQuery}
-        providerId={pickerProvider}
+        sourceQuery={pickerSourceQuery}
+        sourceId={pickerProvider}
         selected={pickerSelected}
+        selectedCounts={pickerSelectedCounts}
+        dirty={pickerDirty}
         direct={pickerDirect}
         busy={busy}
+        onSourceQueryChange={setPickerSourceQuery}
+        onOpenSource={(sourceId) => void openPickerSource(sourceId)}
+        onBackToSources={backToPickerSources}
         onQueryChange={setPickerQuery}
-        onProviderChange={setPickerProvider}
         onSelectedChange={setPickerSelected}
         onDirectChange={setPickerDirect}
         onApply={() => void searchPicker()}
@@ -1313,196 +1485,6 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
         onClose={closeToolPicker}
       />
     </>
-  );
-}
-
-function ToolPickerDialog({
-  open,
-  profile,
-  providers,
-  tools,
-  hasMore,
-  onLoadMore,
-  query,
-  providerId,
-  selected,
-  direct,
-  busy,
-  onQueryChange,
-  onProviderChange,
-  onSelectedChange,
-  onDirectChange,
-  onApply,
-  onSave,
-  onClose,
-}: {
-  open: boolean;
-  profile: Profile | null;
-  providers: Provider[];
-  tools: ToolSummary[];
-  hasMore: boolean;
-  onLoadMore: () => void;
-  query: string;
-  providerId: string;
-  selected: Set<string>;
-  direct: Record<string, boolean>;
-  busy: boolean;
-  onQueryChange: (value: string) => void;
-  onProviderChange: (value: string) => void;
-  onSelectedChange: (value: Set<string>) => void;
-  onDirectChange: (value: Record<string, boolean>) => void;
-  onApply: () => void;
-  onSave: () => void;
-  onClose: () => void;
-}) {
-  const providerById = new Map(
-    providers.map((provider) => [provider.providerId, provider]),
-  );
-  const pickerPagination = usePagination(tools);
-
-  return (
-    <Dialog
-      open={open}
-      onOpenChange={(nextOpen) => {
-        if (!nextOpen) {
-          onClose();
-        }
-      }}
-    >
-      <DialogContent className="h-[min(760px,calc(100dvh-2rem))] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden sm:max-w-4xl">
-        <DialogHeader>
-          <DialogTitle>{t("Choose tools")}</DialogTitle>
-          <DialogDescription>
-            {t("Browse or search the Catalog, then select the Tools this Profile may expose.")}
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="min-h-0 flex flex-col gap-3">
-        <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,210px)_auto] sm:items-center">
-          <Input
-            aria-label={t("Profile tool search")}
-            placeholder={t("Search tools")}
-            value={query}
-            onChange={(event) => {
-              onQueryChange(event.target.value);
-              pickerPagination.reset();
-            }}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                onApply();
-              }
-            }}
-          />
-          <select
-            aria-label={t("Service filter")}
-            value={providerId}
-            onChange={(event) => {
-              onProviderChange(event.target.value);
-              pickerPagination.reset();
-            }}
-            className="h-8 rounded-lg border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
-          >
-            <option value="">{t("All services")}</option>
-            {providers.map((provider) => (
-              <option key={provider.providerId} value={provider.providerId}>
-                {toolSourceLabel(provider)}
-              </option>
-            ))}
-          </select>
-          <Button variant="outline" disabled={busy} onClick={onApply}>
-            {t(busy ? "Loading…" : "Apply")}
-          </Button>
-        </div>
-
-        <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <span>
-            {tCount(tools.length, "{{count}} visible Tool", "{{count}} visible Tools")}
-          </span>
-          <span>{tCount(selected.size, "{{count}} selected", "{{count}} selected")}</span>
-        </div>
-
-        <div data-slot="profile-tool-picker-list" className="min-h-0 flex-1 divide-y divide-border overflow-y-auto overscroll-contain rounded-lg border border-border">
-          {tools.length ? (
-            pickerPagination.items.map((tool) => {
-              const isSelected = selected.has(tool.toolId);
-              const provider = providerById.get(tool.providerId);
-              return (
-                <div
-                  key={tool.toolId}
-                  className="flex items-start gap-3 px-4 py-3"
-                >
-                  <input
-                    aria-label={t("Select {{tool}}", { tool: tool.title || tool.name })}
-                    type="checkbox"
-                    className="mt-1"
-                    checked={isSelected}
-                    onChange={(event) => {
-                      const next = new Set(selected);
-                      if (event.target.checked) {
-                        next.add(tool.toolId);
-                      } else {
-                        next.delete(tool.toolId);
-                      }
-                      onSelectedChange(next);
-                    }}
-                  />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">
-                      {tool.title || tool.name}
-                    </p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {toolSourceLabel(provider)}
-                    </p>
-                    {tool.description ? (
-                      <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">
-                        {tool.description}
-                      </p>
-                    ) : null}
-                  </div>
-                  {profile?.mode === "hybrid" && isSelected ? (
-                    <label className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
-                      <input
-                        type="checkbox"
-                        checked={direct[tool.toolId] ?? false}
-                        onChange={(event) =>
-                          onDirectChange({
-                            ...direct,
-                            [tool.toolId]: event.target.checked,
-                          })
-                        }
-                      />
-                      {t("Direct export")}
-                    </label>
-                  ) : null}
-                </div>
-              );
-            })
-          ) : (
-            <div className="p-8 text-center text-sm text-muted-foreground">
-              {t("No matching Tools.")}
-            </div>
-          )}
-        </div>
-
-        <div className="shrink-0">
-          <TablePagination label="Catalog Tools" pagination={pickerPagination} />
-          {hasMore?<div className="flex justify-center py-2">
-            <Button type="button" size="sm" variant="outline" disabled={busy} onClick={onLoadMore}>
-              {t("Load more tools")}
-            </Button>
-          </div>:null}
-        </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
-            {t("Cancel")}
-          </Button>
-          <Button disabled={busy} onClick={onSave}>
-            {t(busy ? "Saving…" : "Save selection")}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   );
 }
 
