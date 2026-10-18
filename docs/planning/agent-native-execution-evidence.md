@@ -24,6 +24,24 @@ Status: scope approved for implementation (2026-10-18); baseline source and prod
 - Untracked `.agents/`, `.pi/`, `.intent-loop/` and `.commandcode/` remain untouched. No branch push.
 - No claim of complete native filesystem/shell audit from either ACP approvals or a successful Agent response. This is a UX evidence-boundary correction, not a security sandbox implementation.
 
-## Acceptance and real delegation receipt
+## Actual OpenCode delivery and coordinator boundary (2026-10-18)
 
-Pending real OpenCode delivery, independent tests and documentation of the observed terminal Task outcome.
+- Submitted a **real code-writing** OpenCode Mender Task `atask_f9ead25cd8d85be36b63f63f806afb52` through Profile `agent.delegate`. It was explicitly scoped to three React/i18n source files, direct edits and focused Vitest/typecheck, not a read-only review. The Task terminal state was **failed**, persisted safe diagnostic **`Agent permission request was rejected`**, with 3 `read / allowed_once` approval records and **zero tracked source edits or passing Agent-authored tests**. It is NOT an Agent-delivered code contribution; no repeat delegation or approval broadening was attempted.
+- The coordinator then independently implemented exactly the scoped UI/i18n/test change, ran canonical root Vitest (**19 passing tests**), strict `@mender/app` typecheck, Chinese i18n coverage (**1334/1334**) and `git diff --check`; source commit `4246c85`. The Task detail modal now discloses native audit coverage only for Host Agents (completed/failed), not as an always-visible overview description. Four focused new assertions cover Host completed/failed, restricted_host omission and Chinese output. Owner's runtime and persistent configuration were not changed.
+
+## Bounded permission failure classification amendment (docs before code)
+
+The live failed task above exposed a diagnostic blind spot: the existing `permission` stage covers several **different Mender boundary outcomes**. Current ACP parsing either rejects an invalid/missing permission request before it is saved, rejects an unsupported Agent→Client method, or refuses an otherwise well-formed request through current owner/Policy authority. A failed Task with no new approval row is not enough to infer which happened. Do NOT treat an absent row as evidence that a native operation occurred or did not occur.
+
+A limited diagnostic-only amendment may distinguish two **trusted local code-path causes** from the existing general `permission` result:
+
+1. Invalid/incomplete `session/request_permission` payload rejected by `parseACPApproval` ⇒ fixed `permission_request_invalid`, result text `ACP permission request is invalid`. Do not store raw params, suspicious option IDs or tool descriptions.
+2. Any other unadvertised Agent→Client request handled by fail-closed `respondToAgent` (such as `fs/read_text_file`) ⇒ fixed `permission_client_capability_unavailable`, result text `Agent requested an unsupported ACP client capability`. Do not interpolate method name or payload.
+3. Existing admitted but rejected/expired/policy-denied approvals, replay/budget limits and a no-requester state ⇒ unchanged `permission`, result text `Agent permission request was rejected`. No new allowed option, retry or auto-grant.
+
+Both new codes must come from local typed sentinels, not Agent-supplied diagnostic strings. Tag only terminal prompt/setup errors, preserve `errors.Is` for the existing denied sentinel, prefer caller cancellation/deadline, and keep the diagnostic allowlist strict in the Application. Add synthetic ACP subprocess fixtures covering both real invalid/unsupported Client call paths, fixed-result tests and redaction tests, bilingual owner translations and React diagnostic rendering. Never persist raw RPC, stderr, paths, prompts or credentials. This is a **classification aid**, not an assertion of the upstream OpenCode's exact failure cause; real runtime testing needs an owner-controlled rebuild.
+
+## Acceptance and rollback
+
+- Unit/integration, Go Race Detector, lint, i18n/React/type checks and full `pnpm check` must pass. Original failure class remains stable for normal owner rejection. Source changes are independently reviewed/committed in a separate code commit after this doc amendment. No database/schema or Tool API changes.
+- Task history, live Host trust, Sandbox, Agent default settings, source directories and native process stay unchanged. Do not rerun failing real development repeatedly until evidence can distinguish the boundary; existing `atask_f9ead25cd8d85be36b63f63f806afb52` is immutable history, not retroactively reclassified.
