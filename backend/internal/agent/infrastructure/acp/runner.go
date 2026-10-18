@@ -183,6 +183,23 @@ func (r Runner) ExecuteConfigured(ctx context.Context, agent agentdomain.Agent, 
 	if len(prompt) == 0 || len(prompt) > agentdomain.MaxPromptBytes || strings.TrimSpace(prompt) == "" {
 		return "", fmt.Errorf("%w: invalid Task prompt", agentdomain.ErrInvalid)
 	}
+	result, err := r.executeConfiguredOnce(ctx, agent, prompt, config)
+	if err == nil || result != "" || isCancellation(err) || ctx.Err() != nil ||
+		!config.ToolSupply.IsZero() || !isACPChoiceUnadvertised(err) {
+		return result, err
+	}
+	// Real Grok ACP processes can omit a configured model consistently
+	// across two session/new responses, while a fresh process advertises it.
+	// Permit one fresh owned process BEFORE any prompt, with the unchanged
+	// Task, sandbox mode and owner admission. Governed ToolSupply is excluded
+	// so the short-lived MCP capability cannot be issued to another process.
+	// This is bounded protocol setup recovery, not an Agent reasoning loop.
+	return r.executeConfiguredOnce(ctx, agent, prompt, config)
+}
+
+// executeConfiguredOnce owns exactly one ACP child process and can send at
+// most one session/prompt after the original model/effort are confirmed.
+func (r Runner) executeConfiguredOnce(ctx context.Context, agent agentdomain.Agent, prompt string, config agentapplication.RunConfig) (string, error) {
 	return r.withSession(ctx, agent, config, func(wire *stream, sessionID string, session json.RawMessage, readErrors <-chan error) (string, error) {
 		// withSession already validated and confirmed the exact configured
 		// model/effort before this single prompt can reach the Agent.

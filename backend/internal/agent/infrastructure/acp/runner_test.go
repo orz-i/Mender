@@ -36,7 +36,7 @@ func TestACPFixtureProcess(t *testing.T) {
 		switch mode {
 		case "choice-first-model-missing", "choice-refresh-rejected", "choice-invalid-refreshed-session":
 			modelAvailable = createdSessions > 1
-		case "choice-always-model-missing":
+		case "choice-always-model-missing", "choice-always-model-missing-mcp-http":
 			modelAvailable = false
 		case "choice-first-effort-missing":
 			effortAvailable = createdSessions > 1
@@ -74,7 +74,7 @@ func TestACPFixtureProcess(t *testing.T) {
 				version = 2
 			}
 			hello := map[string]any{"protocolVersion": version}
-			if os.Getenv("ACP_FIXTURE_MODE") == "mcp-http" {
+			if mode := os.Getenv("ACP_FIXTURE_MODE"); mode == "mcp-http" || mode == "choice-always-model-missing-mcp-http" {
 				hello["agentCapabilities"] = map[string]any{"mcpCapabilities": map[string]any{"http": true}}
 			}
 			send(map[string]any{"jsonrpc": "2.0", "id": msg.ID, "result": hello})
@@ -87,7 +87,7 @@ func TestACPFixtureProcess(t *testing.T) {
 						"message": "FAKE_PRIVATE_BEARER_42 /Users/private/.ssh/id_test"}})
 				continue
 			}
-			if os.Getenv("ACP_FIXTURE_MODE") == "mcp-http" {
+			if mode := os.Getenv("ACP_FIXTURE_MODE"); mode == "mcp-http" || mode == "choice-always-model-missing-mcp-http" {
 				var supply struct {
 					MCPServers []struct {
 						Type    string `json:"type"`
@@ -170,7 +170,7 @@ func TestACPFixtureProcess(t *testing.T) {
 			send(map[string]any{"jsonrpc": "2.0", "id": msg.ID, "result": map[string]any{"configOptions": options}})
 		case "session/prompt":
 			mode := os.Getenv("ACP_FIXTURE_MODE")
-			if mode == "choice-always-model-missing" || mode == "choice-always-effort-missing" ||
+			if mode == "choice-always-model-missing" || mode == "choice-always-model-missing-mcp-http" || mode == "choice-always-effort-missing" ||
 				mode == "choice-unconfirmed" || mode == "choice-refresh-rejected" ||
 				mode == "choice-invalid-refreshed-session" {
 				// Missing, rejected or unconfirmed owner choices cannot prompt.
