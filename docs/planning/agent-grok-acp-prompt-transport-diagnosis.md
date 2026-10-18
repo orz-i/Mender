@@ -1,6 +1,6 @@
 # Grok ACP prompt transport failure: bounded diagnosis
 
-Status: **bounded four-stage ACP prompt transport diagnosis accepted with full Go Race Detector, canonical quality gate and isolated real Grok QA** (2026-10-18); original Grok coding transport failure remains unexplained and latest code awaits owner-controlled Wails deployment. Boundary: Mender aggregates, governs and supplies Agent tools/resources; it does not own Agent Loop or the model's retry strategy.
+Status: **four bounded transport diagnostics deployed in the owner-rebuilt Wails; synthetic/focused Race Detector acceptance passed, but live Grok prompt-path acceptance remains blocked at model configuration** (2026-10-18). Original Grok coding transport failure remains unexplained. Boundary: Mender aggregates, governs and supplies Agent tools/resources; it does not own Agent Loop or the model's retry strategy.
 
 ## Baseline and problem
 
@@ -68,6 +68,27 @@ The original live Grok coding task `atask_c29481d4c161bcacf0ccbee352233693` rema
 - Final **production SQLite read-only** snapshot: Agent schema **v12**, Policy schema **v3**, **3 Agents**, **43 historical Tasks**, **184 historical ACP approvals**, **3 existing unexpired `trusted` owner modes** for Codex/Grok/OpenCode, **0 governed Tool placements**, `PRAGMA quick_check=ok`, foreign key violations zero. Historical Task/approval rows were not rewritten, scopes/grants/default models unmodified and four existing skill directories preserved.
 - The production Wails process and Mender tunnel predate these new transport-substage commits; neither was restarted or reconfigured by the coordinator. **These new subcategories are accepted in disposable/test Runtime, not yet verified in the live production Wails binary.** The owner's next normal rebuild/reconnect is required. Existing Grok failures stay under their original broad `prompt_transport` diagnostic forever; retroactive reclassification is prohibited.
 - **Disposition:** bounded diagnostic enhancement and genuine OpenCode development accepted. **Not resolved:** precise upstream cause of intermittent Grok native coding failure, dynamic ACP model option visibility, and absence of native ACP permission receipts for successfully observed Grok file reads in Host mode. Never treat a new stage code as proof of model API outage or client-side confinement. For mandatory file access controls use actual process isolation and governed Workspace Tools, not voluntary ACP Host approvals.
+
+## Owner rebuild acceptance — 2026-10-18
+
+**Deployed application baseline:** the native Wails dev binary/process restarted at **2026-10-18 11:04:42 +08:00** (PID observed `76157`), after the final transport-diagnosis source/documentation commit `32e04a7` at **11:00:38 +08:00**. The Mender Tunnel was online and the external Grok delegate/status/result tools were callable. No production Wails restart, owner policy change, external tool enablement, source edit or new schema migration was executed by the coordinating assistant during this acceptance.
+
+**Two real production Mender no-tool probes** checked the newly deployed error-to-Task-diagnostic integration:
+
+| TaskID | Configuration | Immutable Task result | ACP approval count |
+| --- | --- | --- | --- |
+| `atask_d5bfe0efe8ea3d5bd6a2bf9e7bdaa271` | Explicit `grok-4.7 / high`, no tool calls requested | **failed** — `Agent model or reasoning configuration failed` | 0 |
+| `atask_1bf98e920992aaa0592abda088498339` | Existing production defaults `grok-4.7 / xhigh`, no tool calls requested | **failed** — `Agent model or reasoning configuration failed` | 0 |
+
+Both returned the exact fixed, nonsecret configuration diagnostic from live Mender. **Neither reached `session/prompt`**. Consequently no live prompt transport subcategory was exercised, and no result can prove that the original `ACP prompt transport failed` is now reproducibly categorized. These are **expectedly incomplete end-to-end Grok acceptance**, not successful model tasks.
+
+**Independent, no-prompt Grok ACP capability checks** on two disposable roots were also performed using the installed Grok ACP CLI: both sessions completed ACP v1 `initialize` and `session/new`, advertised `grok-4.7` as the current model and advertised `high` / `xhigh`. Two further independent temporary sessions confirmed Mender's exact `session/set_config_option` response contract for `grok-4.7` and then `high` / `xhigh` respectively. No prompts, native read/edit/execute, raw stderr, model output or private session identifiers were recorded. These successes demonstrate **intermittent/different circumstances**, not the root cause of the production configuration failure. An ACP option advertised in one session is not evidence another session must advertise or accept the same option; differences in admitted project root, active runtime state or CLI model availability remain hypotheses.
+
+**Deterministic backend evidence after rebuild:** `go test -race ./backend/internal/agent/infrastructure/acp` focused on `TestACPPromptTransportTerminalReasonsFromRealSubprocess`, `TestACPPromptWriteFailurePreservesSafeCategory`, `TestACPPromptTransportFailureDoesNotOverrideCancelledContext` and `TestACPFailureStageRunnerReportsOnlyTrustedStages` passed. The tests exercise the actual Go ACP subprocess and scanner/writer error paths for all four fixed subcategories, without depending on a hostile live model. The previous full `pnpm check` exit receipt remained **0**, with 270 Vitest tests and i18n 1329/1329. **This proves build/test coverage, not that all four errors occurred inside production Grok.**
+
+Final production SQLite read-only recheck: Agent schema v12, Policy schema v3, **3 Agents, 45 historical Tasks**, **184 approval records**, **3 existing active Host trusted modes**, 0 governed Tool placements, `PRAGMA quick_check=ok`, 0 foreign-key violations. The two new acceptance Tasks are the only intended production Task-history additions in this turn; neither has any ACP approval records. Existing grants, Task outcomes, Plugin/Tool/Workspace configuration and Skill directories remain unchanged.
+
+**Acceptance verdict:** successful updated Wails/Tunnel deployment, fixed safe Task diagnostics, and four-category synthetic ACP regression validation; **partial / blocked Grok live prompt-path acceptance** due to earlier `configuration` failure. The next bounded engineering task, **if requested**, is to distinguish per-session Grok `model` availability/selection and `reasoning_effort` confirmation in a fixed owner-only diagnostic without capturing raw RPC/model content. Do not widen Host authorization, silently rewrite Grok's user defaults, or repeatedly submit development jobs to guess the cause. Also retain the separate Host Grok native-file governance gap: successful Grok file reads have previously produced zero ACP permission receipts; a strict file-access guarantee requires real isolation plus governed Workspace Tools.
 
 ## Non-goals
 
