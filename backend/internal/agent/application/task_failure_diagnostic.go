@@ -33,6 +33,14 @@ func agentFailureDiagnostic(err error) string {
 		return "Agent rejected the ACP prompt"
 	case "prompt_transport":
 		return "ACP prompt transport failed"
+	case "prompt_stream_closed":
+		return "ACP prompt stream closed before completion"
+	case "prompt_malformed_frame":
+		return "ACP prompt frame was malformed"
+	case "prompt_read_failed":
+		return "ACP prompt stream read failed"
+	case "prompt_write_failed":
+		return "ACP prompt request write failed"
 	case "protocol":
 		return "ACP protocol validation failed"
 	case "result":

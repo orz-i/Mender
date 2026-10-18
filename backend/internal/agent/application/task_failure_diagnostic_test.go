@@ -40,6 +40,10 @@ func TestAgentFailureDiagnosticStrictAllowlist(t *testing.T) {
 		{"permission", "Agent permission request was rejected"},
 		{"prompt_rejected", "Agent rejected the ACP prompt"},
 		{"prompt_transport", "ACP prompt transport failed"},
+		{"prompt_stream_closed", "ACP prompt stream closed before completion"},
+		{"prompt_malformed_frame", "ACP prompt frame was malformed"},
+		{"prompt_read_failed", "ACP prompt stream read failed"},
+		{"prompt_write_failed", "ACP prompt request write failed"},
 		{"protocol", "ACP protocol validation failed"},
 		{"result", "Agent returned an invalid completion"},
 		{"../../" + secret, "Agent execution failed"},
@@ -68,6 +72,10 @@ func TestAgentTaskPersistsOnlySafeFailureStageAndNoRawOutput(t *testing.T) {
 		{"prompt_rejected", "Agent rejected the ACP prompt"},
 		{"session_create", "ACP session creation failed"},
 		{"permission", "Agent permission request was rejected"},
+		{"prompt_stream_closed", "ACP prompt stream closed before completion"},
+		{"prompt_malformed_frame", "ACP prompt frame was malformed"},
+		{"prompt_read_failed", "ACP prompt stream read failed"},
+		{"prompt_write_failed", "ACP prompt request write failed"},
 		{"exploit\n" + secret, "Agent execution failed"},
 	} {
 		t.Run(test.expected+"-"+test.stage[:min(6, len(test.stage))], func(t *testing.T) {
