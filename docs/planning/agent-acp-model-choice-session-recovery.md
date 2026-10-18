@@ -1,6 +1,6 @@
 # ACP 会话模型选项波动：配置栅栏与单次受限恢复
 
-Status: bounded implementation in progress (2026-10-18). Authority: existing Agent lifecycle and ADR-0054. Mender remains a tool/resource/permission supplier, not an Agent Loop.
+Status: scoped ACP model-choice session recovery implemented, independently accepted with the full canonical gate and native Wails build (2026-10-18); live Grok production prompt acceptance awaits owner-controlled rebuild. Authority: existing Agent lifecycle and ADR-0054. Mender remains a tool/resource/permission supplier, not an Agent Loop.
 
 ## Confirmed discrepancy
 
@@ -28,3 +28,26 @@ Status: bounded implementation in progress (2026-10-18). Authority: existing Age
 - Normal options: ONE session only. No change to restricted-host ToolSupply and original ACP permission tests; contexts retain errors.Is cancellation/deadline.
 - Go full Agent/bootstrap tests, Go Race Detector, lint, pnpm check, native Wails compile, production SQLite read-only check, and real Agent Task receipts. No forced production Wails restart.
 - Do not claim Grok live success until owner rebuilds and the newly delegated Grok Task actually completes. Previously stored failures remain immutable.
+
+## Implementation, provenance and repeatable tests
+
+- 15d815a: planning document committed before implementation.
+- f5c6f0d: bounded ACP model/effort non-advertisement detection, one extra no-prompt session/new only when necessary, exact choice confirmation and zero silent fallbacks. The source owns only model/runner ACP lifecycle; there is no new Agent Loop, database migration or permission mechanism.
+- 6ab267a: closed Application diagnostics for model unavailable, reasoning unavailable, configuration not confirmed and configuration request failure. All Task-facing messages are literal, without untrusted model names, RPC payloads or private user paths.
+- 4b4c443: Chinese owner Task result translations and a React navigation regression.
+
+**Real Agent delegation provenance:** the actual Mender OpenCode coding Task atask_d74b13efd49b5aae3aa1588d6da183bf returned FAILED with the prior running version's fixed diagnostic "Agent rejected the ACP prompt"; no owned code edits or successful tests resulted. This MUST NOT be called a successful Agent code delivery. The coordinator completed the source and tests, reviewed all diffs and committed them separately. No new user Agent grants or defaults were installed.
+
+**Deterministic full-path ACP tests:** a real synthetic ACP child runner covers nine combinations: valid first-session choices (exactly one session), model or effort missing then present (exactly two), model/effort missing twice, model set_config_option confirmation mismatch, retry session RPC rejection, invalid refreshed SessionID and no configured choice (one session). The invalid branches fail closed *without emitting any prompt*. Unit checks separately prove agentdomain.ErrUnavailable preservation, original offered option confirmation and safe RPC error redaction. Eight repeated targeted Go Race Detector rounds passed. Go lint reported zero issues; targeted React tests passed 15/15 and i18n coverage 1333/1333.
+
+**Real Grok no-prompt verification:** the installed macOS Grok CLI was launched using Mender's allowlisted command and process isolation in THREE independent, temporary workspaces. All 3 accepted exact grok-4.7/xhigh, and the first additionally completed a second session/new plus fresh exact model/effort confirmations in the same owned process. Receipt: /tmp/mender-acp-model-choice-20261018/real-grok-refreshed.log, exit zero. The opt-in test is always SKIPPED by default unless MENDER_REAL_GROK_CHOICE_RECOVERY=1. No session/prompt, native tool, production Task or persistent model default change occurred. This verifies ACP double-session capability but does NOT establish that a future first-session intermittent model omission always recovers on the next try.
+
+**User production boundary:** the coordinating chat did not restart the running Wails or Tunnel, modify Policy/owner Host approval modes, edit existing Task history, remove retained Skill directories or write the user's production SQLite. The two older Grok configuration failures cannot be retrospectively reclassified. A new normal user build/reconnect is required for real production Agent Task acceptance of this change.
+
+## Final quality gate and rollout evidence
+
+- Full canonical pnpm check exit **0**, evidence in /tmp/mender-acp-choice-closure-20261018/check.exit and check.log: Go full tests and Race Detector, go lint 0 issues, SDK/protocol and Wails bindings/architecture, TypeScript and ESLint, **46 Vitest files / 271 passing tests**, i18n **1333/1333**, Web and Desktop production builds. Existing chunk-size warnings are nonblocking.
+- A separate native macOS Wails Go executable compiled successfully from HEAD, was inspected and then deleted from the temporary QA directory. No Wails executable was installed or restarted by this chat.
+- Last production SQLite read-only check: Agent schema v12, Policy schema v3, **3 existing Agents**, **46 historical Tasks**, **184 historical ACP approvals**, **3 original active Host trusted policies** for Codex/Grok/OpenCode, **0 governed Tool placements**, quick_check=ok, no FK errors. The one newly submitted failed OpenCode development Task is an ordinary immutable historical event. Grok defaults grok-4.7/xhigh were unchanged.
+- The live Wails process on the owner's machine still predates f5c6f0d / 6ab267a / 4b4c443 and cannot be treated as serving the new retry and diagnostic behavior. The next owner rebuild/reconnect is the actual deployment acceptance gate. No production Grok prompt or native-tool execution was used to claim success from the no-prompt real-client tests.
+- Residual limits: an Agent not advertising the configured model twice will still fail closed; the upstream reason for Grok model-option volatility is undetermined. Voluntary Host ACP approvals remain insufficient to confine Grok native file reads; use restricted-host plus governed tools for mandatory access control.
