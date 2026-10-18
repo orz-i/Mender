@@ -67,3 +67,7 @@ Not a generic Workflow/Agent Loop engine, Temporal adoption, process daemon mana
 - Grok Build headless and sessions: https://docs.x.ai/build/cli/headless-scripting
 - MCP Tasks extension draft 2026-07-28: https://tasks.extensions.modelcontextprotocol.io/specification/2026-07-28/tasks
 - Temporal durable Activity patterns: https://docs.temporal.io/design-patterns
+
+## Implementation note (2026-10-19)
+
+B/C implementation is limited to durable Session/Attempt observation, immutable bounded event digests and owner-safe Task projections. Local Runtime heartbeat and native protocol progress are independent fields; neither establishes completion or licenses replay. Backend-specific Session persistence across process termination, secure storage under restricted HOME, native load/resume, in-flight attach and evidence-backed unknown resolution are not accepted. Until those gates pass, `SessionRecoverability` is at most `unverified`, not `supported`, and `agent.resume` is deliberately not exported.
