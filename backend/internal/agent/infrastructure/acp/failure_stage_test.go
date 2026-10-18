@@ -54,6 +54,97 @@ func TestSafeACPFailureStages(t *testing.T) {
 	}
 }
 
+// TestSafeACPPromptTransportSubStages verifies the four fixed prompt transport
+// sentinels classify to their exact stages through arbitrarily deep wrapping,
+// that unknown causes keep the generic prompt_transport fallback, and that no
+// sensitive payload from the underlying chain ever reaches Error().
+func TestSafeACPPromptTransportSubStages(t *testing.T) {
+	sensitive := "stdout:" + secretFixture + " rpc-message:boom stderr:trace path:/Users/private/key cmd:rm"
+	cases := []struct {
+		name     string
+		sentinel error
+		stage    string
+	}{
+		{"stream closed", errACPStreamClosed, stagePromptStreamClosed},
+		{"malformed frame", errACPInvalidFrame, stagePromptMalformedFrame},
+		{"read failed", errACPReadFailed, stagePromptReadFailed},
+		{"write failed", errACPWriteFailed, stagePromptWriteFailed},
+		{"unknown fallback", errors.New(sensitive), stagePromptTransport},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Wrap deeply so errors.Is has to traverse several layers.
+			wrapped := fmt.Errorf("outer wrap: %w", fmt.Errorf("inner wrap: %w", tc.sentinel))
+			err := stagePromptError(wrapped)
+			var staged interface{ SafeAgentFailureStage() string }
+			if !errors.As(err, &staged) {
+				t.Fatalf("stagePromptError(%T) not tagged: %v", tc.sentinel, err)
+			}
+			if got := staged.SafeAgentFailureStage(); got != tc.stage {
+				t.Fatalf("stage = %q, want exactly %q", got, tc.stage)
+			}
+			if !errors.Is(err, tc.sentinel) {
+				t.Fatalf("errors.Is must classify the wrapped sentinel %T", tc.sentinel)
+			}
+			want := "Agent task failed at stage " + tc.stage
+			if got := err.Error(); got != want {
+				t.Fatalf("Error() = %q, want %q", got, want)
+			}
+			if strings.Contains(err.Error(), secretFixture) ||
+				strings.Contains(err.Error(), "stdout") ||
+				strings.Contains(err.Error(), "rpc-message") ||
+				strings.Contains(err.Error(), "stderr") ||
+				strings.Contains(err.Error(), "/Users/private/key") {
+				t.Fatalf("Error() leaks the sensitive chain: %q", err.Error())
+			}
+		})
+	}
+}
+
+// TestSafeACPPromptSubStagePrecedence verifies that caller cancellation and
+// deadline keep precedence over the new prompt transport sentinels, and that
+// explicit permission, rejection and malformed-result classification remain
+// intact even when the chain also carries a transport sentinel.
+func TestSafeACPPromptSubStagePrecedence(t *testing.T) {
+	cases := []struct {
+		name   string
+		cause  error
+		stage  string
+		tagged bool
+	}{
+		{"canceled wins over sentinel", fmt.Errorf("wrap: %w", fmt.Errorf("and: %w", errors.Join(context.Canceled, errACPStreamClosed))), "", false},
+		{"deadline wins over sentinel", fmt.Errorf("wrap: %w", context.DeadlineExceeded), "", false},
+		{"permission wins over sentinel", fmt.Errorf("wrap: %w", fmt.Errorf("and: %w", errors.Join(errClientPermissionDenied, errACPReadFailed))), stagePermission, true},
+		{"rejection keeps its stage", fmt.Errorf("wrap: %w", &rpcRejectedError{method: "session/prompt"}), stagePromptRejected, true},
+		{"malformed result keeps its stage", fmt.Errorf("wrap: %w", &malformedOutcomeError{method: "session/prompt"}), stageResult, true},
+		{"already staged error untouched", stagePromptError(errACPInvalidFrame), stagePromptMalformedFrame, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := stagePromptError(tc.cause)
+			var staged interface{ SafeAgentFailureStage() string }
+			if tc.tagged {
+				if !errors.As(err, &staged) {
+					t.Fatalf("stagePromptError(%T) not tagged: %v", tc.cause, err)
+				}
+				if got := staged.SafeAgentFailureStage(); got != tc.stage {
+					t.Fatalf("stage = %q, want exactly %q", got, tc.stage)
+				}
+			} else {
+				if errors.As(err, &staged) {
+					t.Fatalf("cancellation must not be tagged, got stage %q", staged.SafeAgentFailureStage())
+				}
+				if !errors.Is(err, tc.cause) {
+					t.Fatal("unchained cancellation must preserve the original error")
+				}
+			}
+			if strings.Contains(err.Error(), secretFixture) {
+				t.Fatalf("Error() leaks payload: %q", err.Error())
+			}
+		})
+	}
+}
+
 // TestSafeACPFailureMessagesHidePrivateMethod injects a fake private method
 // name containing a path and token and verifies neither the typed Error()
 // strings nor the stage wrapping exposes it, while errors.As still

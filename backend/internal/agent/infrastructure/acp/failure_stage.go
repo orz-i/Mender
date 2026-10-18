@@ -17,22 +17,33 @@ const (
 	stagePermission      = "permission"
 	stagePromptRejected  = "prompt_rejected"
 	stagePromptTransport = "prompt_transport"
-	stageProtocol        = "protocol"
-	stageResult          = "result"
+	// Fixed, non-sensitive prompt transport sub-stages. They are bounded to
+	// the observed Mender ACP boundary and never identify which model,
+	// plugin, process or tool produced the failure.
+	stagePromptStreamClosed   = "prompt_stream_closed"
+	stagePromptMalformedFrame = "prompt_malformed_frame"
+	stagePromptReadFailed     = "prompt_read_failed"
+	stagePromptWriteFailed    = "prompt_write_failed"
+	stageProtocol             = "protocol"
+	stageResult               = "result"
 )
 
 // recognizedFailureStages is the closed set accepted by tagFailure.
 // Anything else fails closed and stays untagged (generic application stage).
 var recognizedFailureStages = map[string]struct{}{
-	stageProcessLaunch:   {},
-	stageInitialize:      {},
-	stageSessionCreate:   {},
-	stageConfiguration:   {},
-	stagePermission:      {},
-	stagePromptRejected:  {},
-	stagePromptTransport: {},
-	stageProtocol:        {},
-	stageResult:          {},
+	stageProcessLaunch:        {},
+	stageInitialize:           {},
+	stageSessionCreate:        {},
+	stageConfiguration:        {},
+	stagePermission:           {},
+	stagePromptRejected:       {},
+	stagePromptTransport:      {},
+	stagePromptStreamClosed:   {},
+	stagePromptMalformedFrame: {},
+	stagePromptReadFailed:     {},
+	stagePromptWriteFailed:    {},
+	stageProtocol:             {},
+	stageResult:               {},
 }
 
 type stagedAgentError struct {
@@ -125,13 +136,29 @@ type malformedOutcomeError struct{ method string }
 
 func (e *malformedOutcomeError) Error() string { return malformedOutcomeErrorMessage }
 
+// Fixed, backend-neutral prompt transport sentinels. Their names classify the
+// failure shape only; messages are literal constants with no interpolation of
+// remote RPC text, stdout contents, stderr, bearer tokens, paths or commands.
+var (
+	// errACPStreamClosed marks an ACP stdout stream that closed before a
+	// matching session/prompt response arrived.
+	errACPStreamClosed = errors.New("acp prompt stream closed before completion")
+	// errACPInvalidFrame marks a frame that is not valid JSON.
+	errACPInvalidFrame = errors.New("acp prompt frame was malformed")
+	// errACPReadFailed marks a scanner I/O or frame-size read failure.
+	errACPReadFailed = errors.New("acp prompt stream read failed")
+	// errACPWriteFailed marks a failure writing the outbound request frame.
+	errACPWriteFailed = errors.New("acp prompt request write failed")
+)
+
 // stagePromptError classifies a failed session/prompt interaction without
 // ever exposing remote text:
 //   - unresolved/rejected permission  -> permission
 //   - explicit remote RPC rejection   -> prompt_rejected
 //   - malformed final outcome         -> result
 //   - caller cancellation/deadline    -> unchanged (established semantics)
-//   - EOF, teardown, read or other transport failure -> prompt_transport
+//   - malformed stdout JSON, scanner IO, pipe write, premature EOF -> fixed
+//     prompt transport sub-stages; other causes -> prompt_transport
 func stagePromptError(err error) error {
 	if err == nil {
 		return nil
@@ -154,6 +181,23 @@ func stagePromptError(err error) error {
 	var malformed *malformedOutcomeError
 	if errors.As(err, &malformed) {
 		return tagFailure(stageResult, err)
+	}
+	// Bounded transport sub-classification. errors.Is matches through any
+	// number of wrapped layers; stagePromptError already returned for
+	// cancellation, permission, existing precise stages and typed outcomes,
+	// so only unclassified transport errors reach this switch.
+	// A scanner failure closes the same channel observed by wire.call.
+	// The combined error therefore carries both the specific scanner cause
+	// and the generic EOF. Prefer the original defect, never the secondary EOF.
+	switch {
+	case errors.Is(err, errACPInvalidFrame):
+		return tagFailure(stagePromptMalformedFrame, err)
+	case errors.Is(err, errACPReadFailed):
+		return tagFailure(stagePromptReadFailed, err)
+	case errors.Is(err, errACPWriteFailed):
+		return tagFailure(stagePromptWriteFailed, err)
+	case errors.Is(err, errACPStreamClosed):
+		return tagFailure(stagePromptStreamClosed, err)
 	}
 	return tagFailure(stagePromptTransport, err)
 }
