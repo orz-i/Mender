@@ -569,6 +569,26 @@ func (a *Adapter) searchHandler(ctx context.Context, request *mcp.CallToolReques
 			}
 		}
 
+		// Avoid description-only noise when a tool name, title, tag or
+		// source already matches. Without stronger hits, descriptive
+		// search remains available to the caller.
+		hasStrongMatch := false
+		for _, match := range matched {
+			if match.score > 100 {
+				hasStrongMatch = true
+				break
+			}
+		}
+		if hasStrongMatch {
+			filtered := matched[:0]
+			for _, match := range matched {
+				if match.score > 100 {
+					filtered = append(filtered, match)
+				}
+			}
+			matched = filtered
+		}
+
 		sort.Slice(matched, func(i, j int) bool {
 			if matched[i].score != matched[j].score {
 				return matched[i].score > matched[j].score
@@ -660,6 +680,26 @@ func (a *Adapter) searchHandler(ctx context.Context, request *mcp.CallToolReques
 				},
 			})
 		}
+	}
+
+	// Suppress weak, description-only hits only if there are actual
+	// named matches somewhere in the Profile. A descriptive-only query
+	// still works when no stronger match exists.
+	hasStrongMatch := false
+	for _, match := range allMatched {
+		if match.toolScore > 100 {
+			hasStrongMatch = true
+			break
+		}
+	}
+	if hasStrongMatch {
+		filtered := allMatched[:0]
+		for _, match := range allMatched {
+			if match.toolScore > 100 {
+				filtered = append(filtered, match)
+			}
+		}
+		allMatched = filtered
 	}
 
 	sort.Slice(allMatched, func(i, j int) bool {
@@ -757,6 +797,16 @@ func (a *Adapter) describeHandler(ctx context.Context, request *mcp.CallToolRequ
 		if err != nil {
 			return nil, err
 		}
+	}
+	// Describe is discovery, not execution authority. A bound Tool whose
+	// source is unclaimed or known unavailable must not expose a schema merely
+	// because a caller retained its historical ToolID.
+	sources, err := a.resolveSources(ctx, []catalogdomain.ProviderID{tool.ProviderID()})
+	if err != nil {
+		return nil, fmt.Errorf("mender describe tool: resolve source: %w", err)
+	}
+	if !sourceDiscoverable(sources[tool.ProviderID()]) {
+		return nil, ErrToolOutsideProfile
 	}
 
 	var inputSchema any

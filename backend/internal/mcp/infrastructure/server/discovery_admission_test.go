@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
@@ -63,6 +64,22 @@ func TestSourceFirstAdmissionHidesUnclaimedAndUnavailableProviders(t *testing.T)
 			t.Fatalf("hidden source %s disclosed tools: %#v", hidden, result)
 		}
 	}
+	// Describe is part of discovery. Even if a historical bound ToolID is
+	// known, orphaned/offline sources must not expose their tool schemas.
+	for _, hidden := range []catalogdomain.Tool{f.tools[1], f.tools[2], f.tools[3]} {
+		result, err := client.CallTool(context.Background(), &mcp.CallToolParams{
+			Name: metaDescribeName, Arguments: map[string]any{"toolId": hidden.ID().String()},
+		})
+		if err == nil && (result == nil || !result.IsError) {
+			t.Fatalf("hidden ToolID %s unexpectedly described: %+v", hidden.ID(), result)
+		}
+	}
+	described, err := client.CallTool(context.Background(), &mcp.CallToolParams{
+		Name: metaDescribeName, Arguments: map[string]any{"toolId": f.tools[0].ID().String()},
+	})
+	if err != nil || described.IsError {
+		t.Fatalf("available supplied ToolID not describable: %+v / %v", described, err)
+	}
 	// The Profile binding for hidden tools is retained, not silently revoked.
 	for _, id := range []catalogdomain.ToolID{f.tools[1].ID(), f.tools[2].ID()} {
 		if !profile.Contains(id) {
@@ -72,6 +89,12 @@ func TestSourceFirstAdmissionHidesUnclaimedAndUnavailableProviders(t *testing.T)
 	// The source-wide known unavailability is fingerprinted: changes invalidate
 	// an already-issued cursor, even though Catalog/Profile revisions are stable.
 	offline = false
+	described, err = client.CallTool(context.Background(), &mcp.CallToolParams{
+		Name: metaDescribeName, Arguments: map[string]any{"toolId": f.tools[2].ID().String()},
+	})
+	if err != nil || described.IsError {
+		t.Fatalf("restored source did not restore description: %+v / %v", described, err)
+	}
 	page := callSourceSearch(t, client, map[string]any{"view": "sources", "limit": 1})
 	cursor, ok := page["nextCursor"].(string)
 	if !ok || cursor == "" {
