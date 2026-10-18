@@ -29,6 +29,15 @@ type selectEntry struct {
 	} `json:"options"`
 }
 
+// Local, finite option-failure sentinels; no remote model IDs, account
+// metadata or ACP RPC text ever enter the owner Task diagnostic.
+var (
+	errACPModelNotAdvertised     = errors.New("configured ACP model not advertised")
+	errACPReasoningNotAdvertised = errors.New("configured ACP reasoning effort not advertised")
+	errACPChoiceNotConfirmed     = errors.New("ACP choice was not confirmed")
+	errACPChoiceRequestFailed    = errors.New("ACP choice request failed")
+)
+
 func selectCategory(o sessionOption, kind string) bool {
 	if o.Type != "select" {
 		return false
@@ -180,23 +189,26 @@ func setACPChoice(ctx context.Context, wire *stream, sessionID string, raw json.
 		}
 	}
 	if id == "" {
-		return nil, fmt.Errorf("%w: selected %s not advertised", agentdomain.ErrUnavailable, kind)
+		if kind == "model" {
+			return nil, errors.Join(agentdomain.ErrUnavailable, errACPModelNotAdvertised)
+		}
+		return nil, errors.Join(agentdomain.ErrUnavailable, errACPReasoningNotAdvertised)
 	}
 	result, err := wire.call(ctx, rpcID, "session/set_config_option",
 		map[string]any{"sessionId": sessionID, "configId": id, "value": value}, func(rpcMessage) error { return nil })
 	if err != nil {
-		return nil, err
+		return nil, errors.Join(errACPChoiceRequestFailed, err)
 	}
 	var confirmed sessionOptions
 	if err := json.Unmarshal(result, &confirmed); err != nil {
-		return nil, fmt.Errorf("%w: invalid ACP confirmation", agentdomain.ErrUnavailable)
+		return nil, errors.Join(agentdomain.ErrUnavailable, errACPChoiceNotConfirmed)
 	}
 	for _, option := range confirmed.ConfigOptions {
 		if option.ID == id && option.Type == "select" && option.CurrentValue == value {
 			return result, nil
 		}
 	}
-	return nil, errors.New("ACP Agent did not confirm selected " + kind)
+	return nil, errors.Join(agentdomain.ErrUnavailable, errACPChoiceNotConfirmed)
 }
 
 func applySessionChoices(ctx context.Context, wire *stream, sessionID string, session json.RawMessage, model, effort string) error {

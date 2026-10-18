@@ -184,9 +184,8 @@ func (r Runner) ExecuteConfigured(ctx context.Context, agent agentdomain.Agent, 
 		return "", fmt.Errorf("%w: invalid Task prompt", agentdomain.ErrInvalid)
 	}
 	return r.withSession(ctx, agent, config, func(wire *stream, sessionID string, session json.RawMessage, readErrors <-chan error) (string, error) {
-		if err := applySessionChoices(ctx, wire, sessionID, session, config.Model, config.ReasoningEffort); err != nil {
-			return "", tagUnlessCancelled(stageConfiguration, err)
-		}
+		// withSession already validated and confirmed the exact configured
+		// model/effort before this single prompt can reach the Agent.
 		// This callback is installed only for this admitted Task's ACP
 		// session. It never approves a request itself; the owner decision
 		// is awaited asynchronously while the reader keeps processing
@@ -416,7 +415,62 @@ func (r Runner) withSession(ctx context.Context, agent agentdomain.Agent, config
 	if err := json.Unmarshal(session, &created); err != nil || created.SessionID == "" || len(created.SessionID) > 512 {
 		return "", tagFailure(stageProtocol, errors.New("ACP Agent returned invalid SessionID"))
 	}
+	if config.Model != "" || config.ReasoningEffort != "" {
+		// Configured choices are an explicit owner/Task contract. A temporarily
+		// unadvertised choice can be rechecked in ONE further no-prompt
+		// session on this same owned process, root and MCP ToolSupply.
+		// Do not retry any prompt, failed config RPC or unconfirmed value.
+		choiceErr := applySessionChoices(ctx, &wire, created.SessionID, session, config.Model, config.ReasoningEffort)
+		if isACPChoiceUnadvertised(choiceErr) {
+			// This is only a second session/new. It cannot increase Task
+			// authorization, change the Agent's configured model or execute a
+			// tool; a second mismatch fails closed.
+			fresh, freshErr := wire.call(ctx, 6, "session/new", map[string]any{
+				"cwd": config.WorkspaceRoot, "mcpServers": servers,
+			}, noUpdates)
+			if freshErr != nil {
+				return "", tagChoiceConfigurationError(errors.Join(
+					errACPChoiceRequestFailed, annotateRead(freshErr, readErrors)))
+			}
+			if err := json.Unmarshal(fresh, &created); err != nil || created.SessionID == "" || len(created.SessionID) > 512 {
+				return "", tagFailure(stageProtocol, errors.New("ACP Agent returned invalid refreshed SessionID"))
+			}
+			choiceErr = applySessionChoices(ctx, &wire, created.SessionID, fresh, config.Model, config.ReasoningEffort)
+			if choiceErr == nil {
+				session = fresh
+			}
+		}
+		if choiceErr != nil {
+			return "", tagChoiceConfigurationError(choiceErr)
+		}
+	}
 	return visit(&wire, created.SessionID, session, readErrors)
+}
+
+func isACPChoiceUnadvertised(err error) bool {
+	return errors.Is(err, errACPModelNotAdvertised) ||
+		errors.Is(err, errACPReasoningNotAdvertised)
+}
+
+// Configuration failures have a closed, literal owner-facing vocabulary.
+// No Agent-provided model identifier, RPC body or private command appears in
+// Error() or in the durable Task diagnostic.
+func tagChoiceConfigurationError(err error) error {
+	if err == nil || isCancellation(err) {
+		return err
+	}
+	switch {
+	case errors.Is(err, errACPModelNotAdvertised):
+		return tagFailure(stageConfigModelUnavailable, err)
+	case errors.Is(err, errACPReasoningNotAdvertised):
+		return tagFailure(stageConfigReasoningUnavailable, err)
+	case errors.Is(err, errACPChoiceNotConfirmed):
+		return tagFailure(stageConfigConfirmationFailed, err)
+	case errors.Is(err, errACPChoiceRequestFailed):
+		return tagFailure(stageConfigRequestFailed, err)
+	default:
+		return tagFailure(stageConfiguration, err)
+	}
 }
 
 func annotateRead(err error, streamErrors <-chan error) error {

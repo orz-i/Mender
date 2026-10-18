@@ -10,13 +10,17 @@ import (
 // maps exactly these codes to owner-facing diagnostics and treats every other
 // error (including free-form injected labels) as a generic failure.
 const (
-	stageProcessLaunch   = "process_launch"
-	stageInitialize      = "initialize"
-	stageSessionCreate   = "session_create"
-	stageConfiguration   = "configuration"
-	stagePermission      = "permission"
-	stagePromptRejected  = "prompt_rejected"
-	stagePromptTransport = "prompt_transport"
+	stageProcessLaunch              = "process_launch"
+	stageInitialize                 = "initialize"
+	stageSessionCreate              = "session_create"
+	stageConfiguration              = "configuration"
+	stageConfigModelUnavailable     = "configuration_model_unavailable"
+	stageConfigReasoningUnavailable = "configuration_reasoning_unavailable"
+	stageConfigConfirmationFailed   = "configuration_confirmation_failed"
+	stageConfigRequestFailed        = "configuration_request_failed"
+	stagePermission                 = "permission"
+	stagePromptRejected             = "prompt_rejected"
+	stagePromptTransport            = "prompt_transport"
 	// Fixed, non-sensitive prompt transport sub-stages. They are bounded to
 	// the observed Mender ACP boundary and never identify which model,
 	// plugin, process or tool produced the failure.
@@ -31,19 +35,23 @@ const (
 // recognizedFailureStages is the closed set accepted by tagFailure.
 // Anything else fails closed and stays untagged (generic application stage).
 var recognizedFailureStages = map[string]struct{}{
-	stageProcessLaunch:        {},
-	stageInitialize:           {},
-	stageSessionCreate:        {},
-	stageConfiguration:        {},
-	stagePermission:           {},
-	stagePromptRejected:       {},
-	stagePromptTransport:      {},
-	stagePromptStreamClosed:   {},
-	stagePromptMalformedFrame: {},
-	stagePromptReadFailed:     {},
-	stagePromptWriteFailed:    {},
-	stageProtocol:             {},
-	stageResult:               {},
+	stageProcessLaunch:              {},
+	stageInitialize:                 {},
+	stageSessionCreate:              {},
+	stageConfiguration:              {},
+	stageConfigModelUnavailable:     {},
+	stageConfigReasoningUnavailable: {},
+	stageConfigConfirmationFailed:   {},
+	stageConfigRequestFailed:        {},
+	stagePermission:                 {},
+	stagePromptRejected:             {},
+	stagePromptTransport:            {},
+	stagePromptStreamClosed:         {},
+	stagePromptMalformedFrame:       {},
+	stagePromptReadFailed:           {},
+	stagePromptWriteFailed:          {},
+	stageProtocol:                   {},
+	stageResult:                     {},
 }
 
 type stagedAgentError struct {

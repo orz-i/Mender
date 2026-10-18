@@ -24,6 +24,38 @@ func TestACPFixtureProcess(t *testing.T) {
 	scan := bufio.NewScanner(os.Stdin)
 	writer := bufio.NewWriter(os.Stdout)
 	send := func(msg any) { b, _ := json.Marshal(msg); _, _ = fmt.Fprintln(writer, string(b)); _ = writer.Flush() }
+	var createdSessions int
+	currentSessionID := "fixture-1"
+	chosenModel := "fixture-one"
+	chosenEffort := "high"
+	// Deterministic ACP option fixtures: the first session may hide a
+	// configured choice and the second may advertise it, but no prompt
+	// is ever allowed while a configured choice remains unconfirmed.
+	choiceOptions := func(mode string) []any {
+		modelAvailable, effortAvailable := true, true
+		switch mode {
+		case "choice-first-model-missing", "choice-refresh-rejected", "choice-invalid-refreshed-session":
+			modelAvailable = createdSessions > 1
+		case "choice-always-model-missing":
+			modelAvailable = false
+		case "choice-first-effort-missing":
+			effortAvailable = createdSessions > 1
+		case "choice-always-effort-missing":
+			effortAvailable = false
+		}
+		models := []map[string]string{{"value": "fixture-one", "name": "Fixture One"}}
+		if modelAvailable {
+			models = append(models, map[string]string{"value": "fixture-two", "name": "Fixture Two"})
+		}
+		efforts := []map[string]string{{"value": "high", "name": "High"}}
+		if effortAvailable {
+			efforts = append(efforts, map[string]string{"value": "xhigh", "name": "Extra High"})
+		}
+		return []any{
+			map[string]any{"id": "model", "category": "model", "type": "select", "currentValue": chosenModel, "options": models},
+			map[string]any{"id": "reasoning_effort", "category": "thought_level", "type": "select", "currentValue": chosenEffort, "options": efforts},
+		}
+	}
 	for scan.Scan() {
 		var msg rpcMessage
 		if err := json.Unmarshal(scan.Bytes(), &msg); err != nil {
@@ -47,6 +79,8 @@ func TestACPFixtureProcess(t *testing.T) {
 			}
 			send(map[string]any{"jsonrpc": "2.0", "id": msg.ID, "result": hello})
 		case "session/new":
+			createdSessions++
+			currentSessionID = fmt.Sprintf("fixture-%d", createdSessions)
 			if os.Getenv("ACP_FIXTURE_MODE") == "reject-session-new" {
 				send(map[string]any{"jsonrpc": "2.0", "id": msg.ID,
 					"error": map[string]any{"code": -32002,
@@ -76,17 +110,72 @@ func TestACPFixtureProcess(t *testing.T) {
 					os.Exit(161)
 				}
 			}
-			result := map[string]any{"sessionId": "fixture-1"}
-			if os.Getenv("ACP_FIXTURE_MODE") == "models" {
+			mode := os.Getenv("ACP_FIXTURE_MODE")
+			if mode == "choice-refresh-rejected" && createdSessions > 1 {
+				send(map[string]any{"jsonrpc": "2.0", "id": msg.ID,
+					"error": map[string]any{"code": -32001, "message": "REDACTED_UNTRUSTED_SESSION_ERROR"}})
+				continue
+			}
+			if (mode == "choice-once" || mode == "choice-unconfirmed") && createdSessions > 1 {
+				// A healthy/unconfirmed option must not create another session.
+				os.Exit(130)
+			}
+			result := map[string]any{"sessionId": currentSessionID}
+			if mode == "choice-invalid-refreshed-session" && createdSessions > 1 {
+				result["sessionId"] = ""
+			}
+			if mode == "models" {
 				result["configOptions"] = []any{map[string]any{
 					"id": "model", "category": "model", "type": "select", "currentValue": "fixture-one",
 					"options": []any{map[string]string{"value": "fixture-one", "name": "Fixture One"}, map[string]string{"value": "fixture-two", "name": "Fixture Two"}},
 				}, map[string]any{"id": "reasoning_effort", "category": "thought_level", "type": "select", "currentValue": "high",
 					"options": []any{map[string]string{"value": "high", "name": "High"}, map[string]string{"value": "xhigh", "name": "Extra high"}}}}
 			}
+			if strings.HasPrefix(mode, "choice-") {
+				result["configOptions"] = choiceOptions(mode)
+			}
 			send(map[string]any{"jsonrpc": "2.0", "id": msg.ID, "result": result})
+		case "session/set_config_option":
+			mode := os.Getenv("ACP_FIXTURE_MODE")
+			if !strings.HasPrefix(mode, "choice-") {
+				os.Exit(131)
+			}
+			var params struct {
+				SessionID string `json:"sessionId"`
+				ConfigID  string `json:"configId"`
+				Value     string `json:"value"`
+			}
+			if json.Unmarshal(msg.Params, &params) != nil || params.SessionID != currentSessionID {
+				os.Exit(132)
+			}
+			switch params.ConfigID {
+			case "model":
+				if params.Value != "fixture-two" {
+					os.Exit(133)
+				}
+				chosenModel = params.Value
+			case "reasoning_effort":
+				if params.Value != "high" && params.Value != "xhigh" {
+					os.Exit(134)
+				}
+				chosenEffort = params.Value
+			default:
+				os.Exit(135)
+			}
+			options := choiceOptions(mode)
+			if mode == "choice-unconfirmed" {
+				// Incorrect currentValue must fail closed, never retry a prompt.
+				options = []any{map[string]string{"id": params.ConfigID, "type": "select", "currentValue": "fixture-one"}}
+			}
+			send(map[string]any{"jsonrpc": "2.0", "id": msg.ID, "result": map[string]any{"configOptions": options}})
 		case "session/prompt":
 			mode := os.Getenv("ACP_FIXTURE_MODE")
+			if mode == "choice-always-model-missing" || mode == "choice-always-effort-missing" ||
+				mode == "choice-unconfirmed" || mode == "choice-refresh-rejected" ||
+				mode == "choice-invalid-refreshed-session" {
+				// Missing, rejected or unconfirmed owner choices cannot prompt.
+				os.Exit(136)
+			}
 			if mode == "reject-prompt" {
 				send(map[string]any{"jsonrpc": "2.0", "id": msg.ID,
 					"error": map[string]any{"code": -32003,
@@ -209,10 +298,16 @@ func TestACPFixtureProcess(t *testing.T) {
 				}})
 			}
 			sessionID := "fixture-1"
+			if strings.HasPrefix(mode, "choice-") {
+				sessionID = currentSessionID
+			}
 			if mode == "foreign-session" {
 				sessionID = "other-session"
 			}
 			text := "fixture completed"
+			if strings.HasPrefix(mode, "choice-") {
+				text = fmt.Sprintf("fixture completed after %d ACP sessions", createdSessions)
+			}
 			if mode == "oversized" {
 				text = strings.Repeat("X", agentdomain.MaxResultBytes+1)
 			}

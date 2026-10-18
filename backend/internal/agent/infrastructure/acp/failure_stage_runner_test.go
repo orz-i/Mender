@@ -25,7 +25,7 @@ func TestACPFailureStageRunnerReportsOnlyTrustedStages(t *testing.T) {
 		{name: "initialize rejected", mode: "reject-initialize", stage: stageInitialize},
 		{name: "new session rejected", mode: "reject-session-new", stage: stageSessionCreate},
 		{name: "protocol mismatch", mode: "version2", stage: stageProtocol},
-		{name: "model unavailable", mode: "models", model: "fixture-unadvertised", stage: stageConfiguration},
+		{name: "model unavailable", mode: "models", model: "fixture-unadvertised", stage: stageConfigModelUnavailable},
 		{name: "permission rejected", mode: "permission", stage: stagePermission},
 		{name: "prompt explicitly rejected", mode: "reject-prompt", stage: stagePromptRejected},
 		{name: "prompt transport malformed", mode: "invalid-json", stage: stagePromptMalformedFrame},
