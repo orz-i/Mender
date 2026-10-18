@@ -82,7 +82,7 @@ func TestDynamicProfileExposesMetaToolsAndEnforcesMembership(t *testing.T) {
 
 	searchResult, err := client.CallTool(context.Background(), &mcp.CallToolParams{
 		Name:      metaSearchName,
-		Arguments: json.RawMessage(`{"query":"issue","limit":10}`),
+		Arguments: json.RawMessage(`{"view":"tools","query":"issue","limit":10}`),
 	})
 	if err != nil {
 		t.Fatalf("search CallTool() error = %v", err)
@@ -91,13 +91,13 @@ func TestDynamicProfileExposesMetaToolsAndEnforcesMembership(t *testing.T) {
 	if !ok {
 		t.Fatalf("search StructuredContent = %T", searchResult.StructuredContent)
 	}
-	listed, ok := searchMap["tools"].([]any)
-	if !ok || len(listed) != 1 {
-		t.Fatalf("search tools = %#v", searchMap["tools"])
+	groups, ok := searchMap["groups"].([]any)
+	if !ok || len(groups) != 1 {
+		t.Fatalf("search groups = %#v", searchMap)
 	}
-	lastScope := fixture.lastSearchAllowed()
-	if len(lastScope) != 1 || lastScope[0] != fixture.tools[0].ID() {
-		t.Fatalf("search allowed ToolIDs = %v", lastScope)
+	listed, ok := groups[0].(map[string]any)["tools"].([]any)
+	if !ok || len(listed) != 1 || listed[0].(map[string]any)["toolId"] != fixture.tools[0].ID().String() {
+		t.Fatalf("search tools = %#v", groups)
 	}
 
 	_, err = client.CallTool(context.Background(), &mcp.CallToolParams{
@@ -174,8 +174,8 @@ func TestProfileBindingPresentationOverridesMCPProjection(t *testing.T) {
 	if direct == nil {
 		t.Fatalf("direct tools = %#v", listed.Tools)
 	}
-	if direct.Title != "Open production issue" ||
-		direct.Description != "Open an issue in the production tracker." {
+	if direct.Title != "[GitHub] Open production issue" ||
+		direct.Description != "[GitHub] Open an issue in the production tracker." {
 		t.Fatalf(
 			"direct presentation = title %q description %q",
 			direct.Title,
@@ -196,7 +196,7 @@ func TestProfileBindingPresentationOverridesMCPProjection(t *testing.T) {
 
 	searchResult, err := client.CallTool(context.Background(), &mcp.CallToolParams{
 		Name:      metaSearchName,
-		Arguments: json.RawMessage(`{"query":"issue","limit":10}`),
+		Arguments: json.RawMessage(`{"view":"tools","query":"issue","limit":10}`),
 	})
 	if err != nil {
 		t.Fatalf("search CallTool() error = %v", err)
@@ -205,17 +205,20 @@ func TestProfileBindingPresentationOverridesMCPProjection(t *testing.T) {
 	if !ok {
 		t.Fatalf("search StructuredContent = %T", searchResult.StructuredContent)
 	}
-	items, ok := searchMap["tools"].([]any)
+	groups, ok := searchMap["groups"].([]any)
+	if !ok || len(groups) != 1 {
+		t.Fatalf("search groups = %#v", searchMap)
+	}
+	items, ok := groups[0].(map[string]any)["tools"].([]any)
 	if !ok || len(items) != 1 {
-		t.Fatalf("search tools = %#v", searchMap["tools"])
+		t.Fatalf("search tools = %#v", groups)
 	}
 	item, ok := items[0].(map[string]any)
 	if !ok {
 		t.Fatalf("search item = %#v", items[0])
 	}
 	if item["name"] != "open_prod_issue" ||
-		item["title"] != "Open production issue" ||
-		item["description"] != "Open an issue in the production tracker." {
+		item["title"] != "Open production issue" || item["toolId"] != fixture.tools[0].ID().String() {
 		t.Fatalf("search presentation = %#v", item)
 	}
 
@@ -292,9 +295,6 @@ func TestMCPDirectProjectionRejectsNormalizedNameCollision(t *testing.T) {
 		},
 		GetProvider: func(context.Context, catalogdomain.ProviderID) (catalogdomain.Provider, error) {
 			return fixture.provider, nil
-		},
-		SearchTools: func(context.Context, catalogapplication.SearchToolsRequest) ([]catalogapplication.ToolSearchResult, error) {
-			return nil, nil
 		},
 		InvokeTool: func(context.Context, invocationapplication.InvokeToolRequest) (invocationapplication.InvokeToolResponse, error) {
 			return invocationapplication.InvokeToolResponse{}, nil
@@ -406,7 +406,6 @@ type serverFixture struct {
 	mu                 sync.Mutex
 	invoked            []catalogdomain.ToolID
 	invocationContexts []governancedomain.Context
-	searchAllowed      []catalogdomain.ToolID
 }
 
 func newServerFixture(t *testing.T) *serverFixture {
@@ -491,37 +490,14 @@ func (f *serverFixture) adapter(t *testing.T, profile profiledomain.Profile) *Ad
 			}
 			return f.provider, nil
 		},
-		SearchTools: func(_ context.Context, request catalogapplication.SearchToolsRequest) ([]catalogapplication.ToolSearchResult, error) {
-			f.mu.Lock()
-			f.searchAllowed = append([]catalogdomain.ToolID(nil), request.AllowedToolIDs...)
-			f.mu.Unlock()
-
-			allowed := make(map[catalogdomain.ToolID]struct{}, len(request.AllowedToolIDs))
-			for _, id := range request.AllowedToolIDs {
-				allowed[id] = struct{}{}
-			}
-			results := make([]catalogapplication.ToolSearchResult, 0)
-			for _, tool := range f.tools {
-				if _, ok := allowed[tool.ID()]; !ok {
-					continue
-				}
-				haystack := strings.ToLower(tool.Name() + " " + tool.Title() + " " + tool.Description())
-				if !strings.Contains(haystack, strings.ToLower(request.Query)) {
-					continue
-				}
-				results = append(results, catalogapplication.ToolSearchResult{
-					Rank:        len(results) + 1,
-					ToolID:      tool.ID(),
-					ProviderID:  tool.ProviderID(),
-					Name:        tool.Name(),
-					Title:       tool.Title(),
-					Description: tool.Description(),
-				})
-				if len(results) == request.Limit {
-					break
+		ResolveSources: func(_ context.Context, ids []catalogdomain.ProviderID) (map[catalogdomain.ProviderID]ToolSource, error) {
+			sources := make(map[catalogdomain.ProviderID]ToolSource)
+			for _, id := range ids {
+				if id == f.provider.ID() {
+					sources[id] = ToolSource{Kind: "provider", Name: f.provider.DisplayName(), ResourceID: id.String()}
 				}
 			}
-			return results, nil
+			return sources, nil
 		},
 		InvokeTool: func(_ context.Context, request invocationapplication.InvokeToolRequest) (invocationapplication.InvokeToolResponse, error) {
 			f.mu.Lock()
@@ -570,12 +546,6 @@ func (f *serverFixture) lastInvocationContext(t *testing.T) governancedomain.Con
 		t.Fatal("no invocation contexts")
 	}
 	return f.invocationContexts[len(f.invocationContexts)-1]
-}
-
-func (f *serverFixture) lastSearchAllowed() []catalogdomain.ToolID {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return append([]catalogdomain.ToolID(nil), f.searchAllowed...)
 }
 
 func connectClient(t *testing.T, adapter *Adapter) *mcp.ClientSession {

@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
@@ -31,12 +30,21 @@ var (
 	ErrTaskUnsupported          = errors.New("MCP Tasks extension is not supported yet")
 )
 
+// ToolSource describes the verified source attribution for a provider.
+type ToolSource struct {
+	Kind         string
+	Name         string
+	ResourceID   string
+	ProviderName string
+}
+
 // Dependencies are protocol-independent operations consumed by the MCP server adapter.
 type Dependencies struct {
-	DescribeTool func(context.Context, catalogdomain.ToolID) (catalogdomain.Tool, error)
-	GetProvider  func(context.Context, catalogdomain.ProviderID) (catalogdomain.Provider, error)
-	SearchTools  func(context.Context, catalogapplication.SearchToolsRequest) ([]catalogapplication.ToolSearchResult, error)
-	InvokeTool   func(context.Context, invocationapplication.InvokeToolRequest) (invocationapplication.InvokeToolResponse, error)
+	DescribeTool    func(context.Context, catalogdomain.ToolID) (catalogdomain.Tool, error)
+	GetProvider     func(context.Context, catalogdomain.ProviderID) (catalogdomain.Provider, error)
+	InvokeTool      func(context.Context, invocationapplication.InvokeToolRequest) (invocationapplication.InvokeToolResponse, error)
+	ResolveSources  func(context.Context, []catalogdomain.ProviderID) (map[catalogdomain.ProviderID]ToolSource, error)
+	CatalogRevision func(context.Context) (int64, error)
 }
 
 // Adapter projects one Profile as an MCP server.
@@ -50,7 +58,7 @@ type Adapter struct {
 
 // New constructs a Profile-scoped MCP server.
 func New(ctx context.Context, profile profiledomain.Profile, deps Dependencies) (*Adapter, error) {
-	if deps.DescribeTool == nil || deps.GetProvider == nil || deps.SearchTools == nil || deps.InvokeTool == nil {
+	if deps.DescribeTool == nil || deps.GetProvider == nil || deps.InvokeTool == nil {
 		return nil, fmt.Errorf("build MCP server: all dependencies are required")
 	}
 
@@ -110,8 +118,62 @@ func (a *Adapter) MCPServer() *mcp.Server {
 	return a.server
 }
 
+func sourceDisplayName(source ToolSource) string {
+	name := source.Name
+	if name == "" {
+		name = "Unclaimed source"
+	}
+	if source.ProviderName != "" && source.ProviderName != name {
+		return name + " (" + source.ProviderName + ")"
+	}
+	return name
+}
+
+func (a *Adapter) resolveSources(ctx context.Context, pids []catalogdomain.ProviderID) (map[catalogdomain.ProviderID]ToolSource, error) {
+	if len(pids) == 0 {
+		return make(map[catalogdomain.ProviderID]ToolSource), nil
+	}
+	var resolved map[catalogdomain.ProviderID]ToolSource
+	if a.deps.ResolveSources != nil {
+		var err error
+		resolved, err = a.deps.ResolveSources(ctx, pids)
+		if err != nil {
+			// Owner-join conflicts and missing catalog data are authoritative
+			// read failures, not a reason to guess another source identity.
+			return nil, fmt.Errorf("resolve MCP sources: %w", err)
+		}
+	}
+	out := make(map[catalogdomain.ProviderID]ToolSource, len(pids))
+	for _, pid := range pids {
+		src, ok := resolved[pid]
+		if !ok || src.Kind == "" || src.Kind == "unclaimed" || strings.TrimSpace(src.Name) == "" {
+			out[pid] = ToolSource{Kind: "unclaimed", Name: "Unclaimed source"}
+			continue
+		}
+		if src.Kind != "agent" && src.Kind != "sandbox" && src.Kind != "provider" {
+			out[pid] = ToolSource{Kind: "unclaimed", Name: "Unclaimed source"}
+			continue
+		}
+		out[pid] = src
+	}
+	return out, nil
+}
+
 func (a *Adapter) addDirectTools(ctx context.Context) error {
 	seenNames := make(map[string]catalogdomain.ToolID)
+	directPIDs := make([]catalogdomain.ProviderID, 0, len(a.profile.DirectToolIDs()))
+	for _, selectedID := range a.profile.DirectToolIDs() {
+		tool, ok := a.tools[selectedID]
+		if !ok {
+			return fmt.Errorf("build MCP server: direct Tool %s missing from profile projection", selectedID)
+		}
+		directPIDs = append(directPIDs, tool.ProviderID())
+	}
+	sources, err := a.resolveSources(ctx, directPIDs)
+	if err != nil {
+		return fmt.Errorf("build MCP server: resolve direct tool sources: %w", err)
+	}
+
 	for _, selectedID := range a.profile.DirectToolIDs() {
 		tool, ok := a.tools[selectedID]
 		if !ok {
@@ -132,6 +194,25 @@ func (a *Adapter) addDirectTools(ctx context.Context) error {
 			return fmt.Errorf("build MCP server: exported tool name collision %q", name)
 		}
 		seenNames[name] = tool.ID()
+
+		source := sources[tool.ProviderID()]
+		sourceLabel := sourceDisplayName(source)
+		if sourceLabel != "" {
+			if presentation.title != "" {
+				if !strings.HasPrefix(presentation.title, "["+sourceLabel+"]") {
+					presentation.title = "[" + sourceLabel + "] " + presentation.title
+				}
+			} else {
+				presentation.title = "[" + sourceLabel + "] " + presentation.name
+			}
+			if presentation.description != "" {
+				if !strings.HasPrefix(presentation.description, "["+sourceLabel+"]") {
+					presentation.description = "[" + sourceLabel + "] " + presentation.description
+				}
+			} else {
+				presentation.description = "Source: " + sourceLabel
+			}
+		}
 
 		mcpTool, err := exportedTool(name, presentation, tool)
 		if err != nil {

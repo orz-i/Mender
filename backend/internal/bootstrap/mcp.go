@@ -14,9 +14,10 @@ func (r *Runtime) NewMCPServer(
 	profile profiledomain.Profile,
 ) (*mcpserver.Adapter, error) {
 	return mcpserver.New(ctx, profile, mcpserver.Dependencies{
-		DescribeTool: r.Catalog.DescribeTool.Execute,
-		GetProvider:  r.Catalog.GetProvider.Execute,
-		SearchTools:  r.Catalog.SearchTools.Execute,
-		InvokeTool:   r.invokeToolWithSSHTimeout,
+		DescribeTool:    r.Catalog.DescribeTool.Execute,
+		GetProvider:     r.Catalog.GetProvider.Execute,
+		InvokeTool:      r.invokeToolWithSSHTimeout,
+		ResolveSources:  r.resolveMCPToolSources,
+		CatalogRevision: r.Catalog.store.CatalogRevision,
 	})
 }

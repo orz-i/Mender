@@ -149,7 +149,7 @@ func (f *liveMCPFixture) toolNames(t *testing.T) []string {
 }
 func (f *liveMCPFixture) searchNames(t *testing.T) []string {
 	t.Helper()
-	result, err := f.session.CallTool(context.Background(), &mcp.CallToolParams{Name: "mender_search_tools", Arguments: json.RawMessage(`{"query":"echo","limit":20}`)})
+	result, err := f.session.CallTool(context.Background(), &mcp.CallToolParams{Name: "mender_search_tools", Arguments: json.RawMessage(`{"view":"tools","query":"echo","limit":20}`)})
 	if err != nil || result.IsError {
 		t.Fatalf("mender_search_tools result=%+v err=%v", result, err)
 	}
@@ -157,21 +157,31 @@ func (f *liveMCPFixture) searchNames(t *testing.T) []string {
 	if !ok {
 		t.Fatalf("unexpected search result %T", result.StructuredContent)
 	}
-	items, ok := body["tools"].([]any)
+	groups, ok := body["groups"].([]any)
 	if !ok {
-		t.Fatalf("missing search items: %#v", body)
+		t.Fatalf("missing source groups: %#v", body)
 	}
-	names := make([]string, 0, len(items))
-	for _, item := range items {
-		tool, ok := item.(map[string]any)
+	names := make([]string, 0)
+	for _, group := range groups {
+		item, ok := group.(map[string]any)
 		if !ok {
-			t.Fatalf("malformed search item=%#v", item)
+			t.Fatalf("malformed source group=%#v", group)
 		}
-		name, ok := tool["name"].(string)
+		tools, ok := item["tools"].([]any)
 		if !ok {
-			t.Fatal("missing search name")
+			t.Fatalf("missing grouped tools: %#v", item)
 		}
-		names = append(names, name)
+		for _, value := range tools {
+			tool, ok := value.(map[string]any)
+			if !ok {
+				t.Fatalf("malformed search tool=%#v", value)
+			}
+			name, ok := tool["name"].(string)
+			if !ok {
+				t.Fatal("missing search tool name")
+			}
+			names = append(names, name)
+		}
 	}
 	sort.Strings(names)
 	return names
