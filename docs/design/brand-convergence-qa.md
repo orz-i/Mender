@@ -64,6 +64,18 @@ For visual coverage only, a separate CDP request interception supplied two schem
 - The running Wails application was **not rebuilt/restarted** automatically. The Wails **frontend production build** passed, but live desktop appearance and platform-specific behavior require the user to rebuild/restart and supply a screenshot/allow live inspection.
 - Browser QA found no horizontal page overflow or JS exceptions, but this does not assert exhaustive accessibility compliance or UX completeness for every dialog state.
 
+## Native Wails real-data QA checkpoint — 2026-10-19, after owner rebuild
+
+The **owner has rebuilt and restarted** the Wails dev client after the branding changes. Native app PID 23817 launched 2026-10-19 13:12 local time, desktop binary timestamp 13:12:07, after commit `cd2bdd7`. It serves its frontend on 127.0.0.1:9245 and runs the real owner database; this supersedes the earlier “Wails not rebuilt” limitation **for visual smoke testing**.
+
+Without changing providers, tasks, policy, credentials or stored data, the coordinator used macOS WindowServer `screencapture -l 17986` and **native Accessibility AXLink/AXButton/AXCheckBox clicks** to inspect the real Wails window. Images remain on the Mac in `/tmp/mender-wails-real-qa/` (not repository assets). Verified live screenshots for **Overview, Plugin Marketplace, Tools, Skills, Agents, Sandboxes, Profiles, Runtime, Tunnels, Servers, Policy, Credentials, Audit and Approvals**. This is **14 distinct primary page surfaces including the Overview and Servers captures**, not just the earlier Vite mock. Real data were visible in Tool sources, Agents, Sandboxes, Profiles, Skills, Tunnel/Server inventories and Audit; controls did not require a frontend-only mock or migration of the isolated test DB. `PRAGMA quick_check=ok` on the live DB was read-only.
+
+Opened **Antigravity Agent → read-only Overview → Tasks**, preserving the original historical `unknown` row without retry, recovery or reassignment. The Task result modal shows the non-authoritative/no-evidence warning correctly, but its header currently prints the raw English `unknown` status code; the Task list shows a translated caution badge. **UI-only discrepancy identified**: localize and apply the same semantic StatusBadge in modal header, improve long detail scrolling. Do not change Agent state, outcome, diagnosis, approvals, session recovery or backend inference.
+
+Native Accessibility navigation subsequently became temporarily unavailable (AXWindow count 0) while the process and on-screen WindowServer image remained available. Do not infer a crash, restart the live app, or force foreground clicks based on that alone. Full dialog and resize matrix remains a separate acceptance item when native AX access resumes.
+
+The following section is an implementation/acceptance addendum, not a claim of comprehensive workflow signoff.
+
 ## Verdict
 
 **Source UI convergence:** implemented for shared foundations and representative domain-specific surfaces, with all main routes smoke-checked. **Automated build/tests: PASSED. Browser shell/responsive QA: PASSED. Populated operational data and live Wails QA: PARTIALLY VERIFIED / needs full running environment.** Do not claim an exhaustive feature-by-feature sign-off until those blockers are resolved. Avoid altering database schema, production credentials or Agent lifecycle as part of visual remediation.
