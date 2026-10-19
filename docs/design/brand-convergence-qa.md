@@ -76,6 +76,14 @@ Native Accessibility navigation subsequently became temporarily unavailable (AXW
 
 The following section is an implementation/acceptance addendum, not a claim of comprehensive workflow signoff.
 
+### Native Wails read-only Task detail UI fix — completed
+
+- Source commit `9533b21` changes only the Agent task **presentation and focused test**, without modifying the task state machine or native session recovery.
+- Before: historical `unknown` was presented as a raw English code in `Agent task result` despite the correct localized caution badge in the list. After: task identifier and `状态未知` semantic badge are separate and clearly readable; the result dialog has a bounded scrolling body and persistent footer. The underlying no-evidence warning and diagnostic remain unchanged.
+- Actual Wails window screenshots: `/tmp/mender-wails-real-qa/15-agent-unknown-detail.png` before and `/tmp/mender-wails-real-qa/16-agent-unknown-after-hmr.png` after. The latter **visibly shows** localized `状态未知` in the unchanged live Wails process; frontend Vite hot-reload sufficed, and no Agent task / database row was modified.
+- Typecheck + ESLint + i18n **1395 / 1395**, focused Agent tests **23 passed**, complete Vitest **48 files / 289 tests passed**, Web and Wails frontend production builds passed. Existing nonfatal Vite bundle size warning persists.
+- **QA limits remain:** the native Accessibility window disappeared from the AX tree during inspection, although WindowServer still returned the same on-screen Wails window and native process remained alive. This is an **automation inspection blocker**, not evidence of a Wails process crash. The isolated mock DB from prior QA remains unsuitable for real populated workflows; the current live Wails primary route images are authoritative for those visuals.
+
 ## Verdict
 
-**Source UI convergence:** implemented for shared foundations and representative domain-specific surfaces, with all main routes smoke-checked. **Automated build/tests: PASSED. Browser shell/responsive QA: PASSED. Populated operational data and live Wails QA: PARTIALLY VERIFIED / needs full running environment.** Do not claim an exhaustive feature-by-feature sign-off until those blockers are resolved. Avoid altering database schema, production credentials or Agent lifecycle as part of visual remediation.
+**Source UI convergence:** implemented for shared foundations and major domain-specific screens. **Automated build/tests: PASSED (289/289). Browser shell/responsive QA: PASSED for tested routes. Real-data Wails native primary navigation and visible task-modal HMR: PASSED for inspected screens.** Full Wails dialog/create/edit journey coverage, keyboard and narrow-window platform testing remain **PARTIALLY VERIFIED** because native AX inspection became unavailable. Do not claim exhaustive feature-by-feature sign-off until those gates are run; do not change live database schema, credentials or Agent lifecycle merely to complete visual remediation.
