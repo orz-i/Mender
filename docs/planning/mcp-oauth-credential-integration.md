@@ -64,3 +64,38 @@ First login discovery -> PKCE -> localhost callback -> OS keyring -> MCP bearer 
 - No external OAuth provider/account was exercised. Local fake IdP tests verify protocol behavior without authentic real provider scopes or client registration policies. Real provider OAuth consent and reconnect/expiry acceptance remain outstanding.
 - Local disconnect invalidates token/connection on next HTTP request; it does **not** currently call remote RFC 7009 revocation, even if a remote server advertises it. That optional remote revocation remains explicit follow-up, not a claimed supported feature.
 - No automatic redirect to a browser from Agent Tool invocation; browser consent is initiated only by an explicit Credential-management action. No Agent-loop changes or compatibility bridges were added.
+
+## Rebuilt-client field acceptance and corrective commits — 2026-10-19
+
+### Live host (read-only verification)
+
+- Operator restarted the Wails development client and reconnected the MCP tunnel before this acceptance.
+- Running Wails desktop exposes MCP at `127.0.0.1:8765/mcp`; real `initialize` POST returned **HTTP 200**, server `mender`, MCP version `2025-11-25`.
+- Tunnel's own loopback health endpoint reported `live=true, ready=true`; ChatGPT's connected Mender tool search returned OpenCode, Antigravity and Grok Agent sources (non-OAuth Providers unaffected).
+- Production SQLite was accessed read-only: credential schema migration v2 applied, 3 native credentials present, 0 OAuth credentials. No production Credential or Profile was created, modified or deleted by these tests.
+
+### Isolated native-keychain/management/MCP integration
+
+Using a **separate compiled `menderd` process**, randomly named temporary SQLite database, a loopback-only synthetic OAuth authorization server and a genuine macOS native Keychain disposable reference:
+
+- Public pre-registered OAuth client: challenge discovery -> RFC8414 metadata -> PKCE S256 -> loopback browser callback -> safe Credential inventory -> Provider create/sync -> MCP `initialize`, `tools/list`, `tools/call` -> automatic refresh and rotated token -> disconnect fail-closed -> delete and verified Keychain cleanup.
+- Automatic dynamic client registration: same live sequence, additionally verified registration metadata persists and, after disconnect, **DCR registration repeats** for the newly bound callback before Provider resynchronizes.
+- Least privilege: when authorization server advertises additional `write` and `admin` scopes, an operator starting without explicit Scope does **not** request those extra grants.
+- Invalid/insecure MCP endpoints and illegal Authorization headers reject without storing or exposing token material. Every test reference and native Keychain entry was deleted; production DB remained unchanged throughout.
+
+### Regressions discovered and fixed during field acceptance
+
+- `e127957`: Invalid Provider OAuth/header configurations had been correctly refused but reported as HTTP 500. Classified user-supplied Provider config validation distinctly from runtime errors; now responds `400 validation_error`, without orphaned Provider rows. Includes native management API regression tests.
+- `2884e71`: Persist nonsecret `registrationMode` on OAuth inventory metadata so a dynamic client re-registers instead of treating its old DCR ID as a pre-registered ID; do not request all server-advertised OAuth scopes implicitly. Includes native OAuth metadata, Go tests, REST/OpenAPI and Wails binding types.
+- `aa59682`: Reauthorization preloads previously granted Scopes, repeats DCR when indicated, and exposes optional requested Scopes in the compact OAuth management dialog (no raw Token input). Includes Web/UI and i18n regression coverage.
+
+### Final quality gate after corrective commits
+
+- **Full `pnpm check` passed, exit code 0** on the current corrected HEAD, log `/tmp/mender-oauth-acceptance-1019/final-check.log`. This includes protocol and plugin SDK checks, OpenAPI/Wails bindings, Go tests and full Go race tests, `golangci-lint` with 0 issues, ESLint, TypeScript, 1,422 covered zh-CN translations, **49 Vitest files / 302 tests passing**, and successful Web and Desktop production bundles. Existing Vite bundle-size messages are nonfatal warnings.
+- Isolated real-HTTP acceptance reports are retained under `/tmp/mender-oauth-acceptance-1019/` (`acceptance-dcr-reconnect.json`, `acceptance-least-scope.json`), each with `result: PASS`. Test Keychain references have been cleared. These reports document a newly compiled isolated daemon, not an untouched running Wails process.
+
+### Release boundary
+
+- The **already running Wails Desktop process predates these corrective commits**. To verify the fixes in that exact native process, the operator must rebuild/restart and refresh the tunnel/ChatGPT connection once more. The isolated daemon tests above are real HTTP + native Keychain integration, but not an external identity-provider account or an interactive Wails WebView screenshot acceptance.
+- No OAuth account at a real external provider was supplied. External consent, account-specific Scopes, permissions, token expiry and reconnection have not been signed off against a third-party IdP. RFC7009 remote token revocation remains unsupported; local disconnect removes the Keychain token and fails closed.
+- No live Tunnel/desktop restart and no production DB mutation were performed by this field-acceptance session.
