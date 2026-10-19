@@ -58,7 +58,7 @@ func TestAgentHTTPManagementAndGrantLifecycle(t *testing.T) {
 	toolPath := api + "/agents/" + id + "/tools"
 	firstTools := requestJSON(t, server.Client(), http.MethodGet, toolPath, nil, http.StatusOK)
 	if firstTools["status"] != "ready" || firstTools["suiteId"] != "agent.delegation" ||
-		len(firstTools["tools"].([]any)) != 4 || firstTools["providerName"] != "Code Reviewer" {
+		len(firstTools["tools"].([]any)) != 5 || firstTools["providerName"] != "Code Reviewer" {
 		t.Fatalf("new Agent should have its own tools without grants: %v", firstTools)
 	}
 	secondTools := requestJSON(t, server.Client(), http.MethodPost, toolPath, nil, http.StatusOK)

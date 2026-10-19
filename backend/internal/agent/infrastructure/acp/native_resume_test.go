@@ -111,3 +111,23 @@ func TestACPNativeResumeNeverBypassesRestrictedHostOrToolSupply(t *testing.T) {
 		t.Fatalf("restricted resume launched=%t result=%s err=%v", started, result, err)
 	}
 }
+
+// A partial ACP JSON-RPC write is not proof that the Agent never received
+// an executable prompt. It must not make a failed continuation retryable.
+type partialACPWriter struct{}
+
+func (partialACPWriter) Write(b []byte) (int, error) {
+	return len(b) / 2, errors.New("partial pipe write")
+}
+func TestACPNativeResumePartialPromptWriteRemainsUncertain(t *testing.T) {
+	wire := &stream{stdin: partialACPWriter{}}
+	result, err := wire.call(context.Background(), 3, "session/prompt", map[string]any{
+		"sessionId": "fixture-1", "prompt": []any{map[string]string{"type": "text", "text": "fresh request"}},
+	}, nil)
+	if result != nil || !errors.Is(err, agentdomain.ErrOutcomeUncertain) {
+		t.Fatalf("partial prompt write mistaken for safe-to-retry setup failure: result=%s err=%v", result, err)
+	}
+	if strings.Contains(err.Error(), "partial pipe write") {
+		t.Fatal("untrusted transport error leaked")
+	}
+}

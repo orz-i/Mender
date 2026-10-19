@@ -106,10 +106,12 @@ func (r Runner) ExecuteConfigured(ctx context.Context, agent agentdomain.Agent, 
 	if err := json.NewEncoder(stdin).Encode(map[string]any{
 		"event": "user", "message": map[string]any{"content": prompt},
 	}); err != nil {
-		return "", stageError("prompt_transport")
+		// A partial stdin write may already have delivered an actionable
+		// user turn; this cannot be treated as a safe pre-prompt failure.
+		return "", fmt.Errorf("%w: Antigravity prompt transport uncertain", agentdomain.ErrOutcomeUncertain)
 	}
 	if err := stdin.Close(); err != nil {
-		return "", stageError("prompt_transport")
+		return "", fmt.Errorf("%w: Antigravity prompt close outcome uncertain", agentdomain.ErrOutcomeUncertain)
 	}
 	if cfg.Observe != nil {
 		if err := cfg.Observe(agentdomain.ExecutionEvent{Kind: agentdomain.EventPromptSent}); err != nil {

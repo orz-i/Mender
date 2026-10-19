@@ -55,7 +55,7 @@ func TestAgentCLIResourceAndProfileGrantLifecycle(t *testing.T) {
 		t.Fatal("show Agent identity mismatch")
 	}
 	toolState := runAgentJSON(t, db, "agent", "tools", id)["suite"].(map[string]any)
-	if toolState["status"] != "ready" || len(toolState["tools"].([]any)) != 4 {
+	if toolState["status"] != "ready" || len(toolState["tools"].([]any)) != 5 {
 		t.Fatalf("CLI Agent tools missing: %v", toolState)
 	}
 	prepared := runAgentJSON(t, db, "agent", "tools", id, "--prepare")["suite"].(map[string]any)

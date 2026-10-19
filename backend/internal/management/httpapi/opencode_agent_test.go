@@ -47,7 +47,7 @@ func TestOpenCodeBuiltinMarketplaceToGovernedAgentCreation(t *testing.T) {
 	}
 	toolsPath := base + "/agents/" + id + "/tools"
 	first := requestJSON(t, server.Client(), http.MethodGet, toolsPath, nil, http.StatusOK)
-	if first["status"] != "ready" || len(first["tools"].([]any)) != 4 {
+	if first["status"] != "ready" || len(first["tools"].([]any)) != 5 {
 		t.Fatalf("OpenCode missing governed Agent Delegation Tools: %+v", first)
 	}
 	second := requestJSON(t, server.Client(), http.MethodPost, toolsPath, nil, http.StatusOK)

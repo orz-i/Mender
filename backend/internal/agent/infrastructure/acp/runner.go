@@ -100,6 +100,12 @@ func (s *stream) sendLocked(ctx context.Context, message any) error {
 }
 func (s *stream) call(ctx context.Context, id int, method string, params any, notify func(rpcMessage) error) (json.RawMessage, error) {
 	if err := s.sendLocked(ctx, map[string]any{"jsonrpc": "2.0", "id": id, "method": method, "params": params}); err != nil {
+		if method == "session/prompt" && errors.Is(err, errACPWriteFailed) {
+			// A short write or broken pipe does not prove that the Agent
+			// received zero bytes; the prompt might already be executing.
+			// Never classify this as a safe-to-retry pre-prompt failure.
+			return nil, fmt.Errorf("%w: %w", agentdomain.ErrOutcomeUncertain, errACPWriteFailed)
+		}
 		return nil, err
 	}
 	if method == "session/prompt" && s.afterPromptSent != nil {

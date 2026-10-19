@@ -166,3 +166,34 @@ func TestServiceNativeResumeFailsClosedForRestrictedAndUnknownHistory(t *testing
 		t.Fatalf("nonexistent TaskIDs guessed: %v", err)
 	}
 }
+
+func TestServiceAntigravityResumeNotAdmittedWithoutPrePromptProof(t *testing.T) {
+	ctx := context.Background()
+	executor := &nativeResumeFixtureExecutor{}
+	svc, owner := newFixtureService(t, executor)
+	agent, err := svc.Create(ctx, CreateRequest{
+		Name: "Antigravity host needs exact native proof", Backend: agentdomain.BackendAntigravity,
+		WorkspaceRoot: t.TempDir(), Isolation: "host",
+	}, owner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	original, err := svc.Submit(ctx, agent.ID(), "original synthetic prompt", owner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitTask(t, svc, original.ID, owner, agentdomain.TaskCompleted)
+	if _, err := svc.Resume(ctx, original.ID, "must never start CLI", agent.ID(), owner); !errors.Is(err, agentdomain.ErrResumeUnavailable) {
+		t.Fatalf("unverifiable Antigravity headless session became resumable: %v", err)
+	}
+	executor.mu.Lock()
+	calls := append([]string(nil), executor.newPrompts...)
+	executor.mu.Unlock()
+	if len(calls) != 1 || calls[0] != "original synthetic prompt" {
+		t.Fatalf("unverified resume dispatched a new prompt: %+v", calls)
+	}
+	got, err := svc.Tasks(ctx, agent.ID(), owner)
+	if err != nil || len(got) != 1 {
+		t.Fatalf("unverified resume reserved an Agent Task %+v %v", got, err)
+	}
+}
