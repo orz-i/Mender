@@ -71,8 +71,8 @@ export function AgentsPage({ client }: { client: MenderClient }) {
     {error && !hasSnapshot ? null : <ResultPanel title="Agent inventory">
       {!loaded?<div className="p-8 text-sm text-muted-foreground">{t("Loading agents…")}</div>:
       filtered.length?<>
-        <Table>
-          <TableHeader><TableRow>
+        <Table aria-label={t("Agent inventory")} className="max-md:block max-md:w-full">
+          <TableHeader className="max-md:sr-only"><TableRow>
             <TableHead>{t("Name")}</TableHead>
             <TableHead>{t("Backend")}</TableHead>
             <TableHead>{t("Isolation")}</TableHead>
@@ -80,14 +80,35 @@ export function AgentsPage({ client }: { client: MenderClient }) {
             <TableHead>{t("Workspace")}</TableHead>
             <TableHead className="text-right">{t("Actions")}</TableHead>
           </TableRow></TableHeader>
-          <TableBody>{pagination.items.map(a=><TableRow key={a.agentId}>
-            <TableCell className="max-w-[200px] truncate font-medium">{a.name}</TableCell>
-            <TableCell>{agentBackendLabel(a.backend)}</TableCell>
-            <TableCell>{a.isolation==="host"?t("Host (not isolated)"):t("Restricted host")}</TableCell>
-            <TableCell><StatusBadge status={a.backendAvailable ? "ready" : "unavailable"}>{a.backendAvailable ? t("CLI detected") : t("CLI missing")}</StatusBadge></TableCell>
-            <TableCell className="max-w-[280px] truncate font-mono text-xs text-muted-foreground" title={a.workspaceRoot}>{a.workspaceRoot}</TableCell>
-            <TableCell className="text-right"><Button size="sm" variant="outline"
-              onClick={()=>void navigate("/agents/"+a.agentId)}>{t("View")}</Button></TableCell>
+          <TableBody className="max-md:block">{pagination.items.map(a=><TableRow
+            key={a.agentId}
+            className="md:[&>td]:py-3 max-md:grid max-md:grid-cols-[minmax(0,1fr)_auto] max-md:items-start max-md:gap-x-3 max-md:gap-y-1.5 max-md:px-4 max-md:py-3.5 max-md:border-b max-md:last:border-b-0"
+          >
+            <TableCell className="font-medium max-md:col-start-1 max-md:row-start-1 max-md:block max-md:min-w-0 max-md:p-0 md:max-w-[200px] md:truncate">
+              <span className="block truncate font-medium text-sm text-foreground" title={a.name}>{a.name}</span>
+            </TableCell>
+            <TableCell className="max-md:col-start-1 max-md:row-start-2 max-md:block max-md:min-w-0 max-md:p-0">
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <span>{agentBackendLabel(a.backend)}</span>
+                <span className="text-muted-foreground/50 md:hidden">·</span>
+                <span className="md:hidden">{a.isolation === "host" ? t("Host (not isolated)") : t("Restricted host")}</span>
+              </div>
+            </TableCell>
+            <TableCell className="max-md:hidden">
+              {a.isolation === "host" ? t("Host (not isolated)") : t("Restricted host")}
+            </TableCell>
+            <TableCell className="max-md:col-start-2 max-md:row-start-1 max-md:block max-md:p-0 max-md:justify-self-end">
+              <StatusBadge status={a.backendAvailable ? "ready" : "unavailable"} className="max-md:px-2 max-md:py-0.5">
+                {a.backendAvailable ? t("CLI detected") : t("CLI missing")}
+              </StatusBadge>
+            </TableCell>
+            <TableCell className="max-w-[280px] truncate font-mono text-xs text-muted-foreground max-md:col-start-1 max-md:row-start-3 max-md:block max-md:min-w-0 max-md:p-0" title={a.workspaceRoot}>
+              <span className="block truncate font-mono text-xs text-muted-foreground" title={a.workspaceRoot}>{a.workspaceRoot}</span>
+            </TableCell>
+            <TableCell className="text-right max-md:col-start-2 max-md:row-start-2 max-md:row-span-2 max-md:block max-md:self-center max-md:p-0 max-md:justify-self-end">
+              <Button size="sm" variant="outline" className="max-md:h-8 max-md:px-3 max-md:text-xs"
+                onClick={()=>void navigate("/agents/"+a.agentId)}>{t("View")}</Button>
+            </TableCell>
           </TableRow>)}</TableBody>
         </Table>
       </>:<EmptyPanelState><EmptyState

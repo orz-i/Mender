@@ -382,4 +382,84 @@ describe("Agents focused management",()=>{
     fireEvent.click(await screen.findByRole("button",{name:"查看"}));
     expect((await screen.findByRole("note")).textContent).toContain("没有审批记录，不代表 Host 智能体没有执行原生文件或命令操作");
   });
+  it("renders mobile-card-ready inventory layout and navigates to agent detail", async () => {
+    const readyAgent: Agent = {
+      ...agent,
+      agentId: "agent_00000000000000000000000000000102",
+      name: "Autonomous Coder",
+      backend: "antigravity",
+      backendAvailable: true,
+      workspaceRoot: "/tmp/autonomous-coder-workspace",
+      isolation: "host",
+    };
+    const getAgent = vi.fn().mockImplementation((id: string) =>
+      Promise.resolve(id === readyAgent.agentId ? readyAgent : agent)
+    );
+    show("/agents", {
+      listAgents: vi.fn().mockResolvedValue({ agents: [agent, readyAgent] }),
+      getAgent,
+    });
+
+    const table = await screen.findByRole("table", { name: "Agent inventory" });
+    expect(table).toBeTruthy();
+    expect(table.className).toContain("max-md:block");
+
+    const thead = table.querySelector("thead");
+    expect(thead?.className).toContain("max-md:sr-only");
+
+    const tbody = table.querySelector("tbody");
+    expect(tbody?.className).toContain("max-md:block");
+
+    const rows = table.querySelectorAll("tbody tr");
+    expect(rows.length).toBe(2);
+    expect(rows[0]?.className).toContain("max-md:grid");
+    expect(rows[1]?.className).toContain("max-md:grid");
+
+    // Both agents show name and prominent availability status
+    expect(within(table).getByText("Code Reviewer")).toBeTruthy();
+    expect(within(table).getByText("CLI missing")).toBeTruthy();
+    expect(within(table).getByText("Autonomous Coder")).toBeTruthy();
+    expect(within(table).getByText("CLI detected")).toBeTruthy();
+
+    // Backend, isolation summaries and workspace are rendered
+    expect(within(table).getByText("Codex")).toBeTruthy();
+    expect(within(table).getByText("Antigravity")).toBeTruthy();
+    expect(within(table).getAllByText("Restricted host").length).toBeGreaterThanOrEqual(1);
+    expect(within(table).getAllByText("Host (not isolated)").length).toBeGreaterThanOrEqual(1);
+    expect(within(table).getByText("/tmp/mender-agent-fixture")).toBeTruthy();
+    expect(within(table).getByText("/tmp/autonomous-coder-workspace")).toBeTruthy();
+
+    // Details navigation entrypoint is accessible and functional
+    const viewButtons = within(table).getAllByRole("button", { name: "View" });
+    expect(viewButtons.length).toBe(2);
+    fireEvent.click(viewButtons[1]!);
+    expect(await screen.findByText("Autonomous Coder")).toBeTruthy();
+    expect(getAgent).toHaveBeenCalledWith(readyAgent.agentId);
+  });
+  it("filters agents by availability tab in responsive inventory", async () => {
+    const readyAgent: Agent = {
+      ...agent,
+      agentId: "agent_00000000000000000000000000000102",
+      name: "Available Agent",
+      backend: "antigravity",
+      backendAvailable: true,
+      workspaceRoot: "/tmp/available",
+      isolation: "host",
+    };
+    show("/agents", {
+      listAgents: vi.fn().mockResolvedValue({ agents: [agent, readyAgent] }),
+    });
+
+    const table = await screen.findByRole("table", { name: "Agent inventory" });
+    expect(within(table).getByText("Code Reviewer")).toBeTruthy();
+    expect(within(table).getByText("Available Agent")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /Available agents/ }));
+    expect(within(table).getByText("Available Agent")).toBeTruthy();
+    expect(within(table).queryByText("Code Reviewer")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /Unavailable agents/ }));
+    expect(within(table).getByText("Code Reviewer")).toBeTruthy();
+    expect(within(table).queryByText("Available Agent")).toBeNull();
+  });
 });
