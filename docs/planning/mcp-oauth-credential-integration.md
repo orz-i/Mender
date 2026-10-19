@@ -29,3 +29,38 @@
 ## Required tests
 
 First login discovery -> PKCE -> localhost callback -> OS keyring -> MCP bearer call; refresh rotation after restart; concurrent refresh; invalid state/issuer/resource, cancelled/timeout, unsafe redirect/metadata, invalid_grant; OAuth/static collision; delete usage guard and Profile gate; stdio/static compatibility; no raw secrets anywhere outside secure runtime storage. Fake IdP tests acceptable for automatic evidence; external IdP acceptance must be separately reported if no account.
+
+## Implementation acceptance — 2026-10-19
+
+### Implemented and committed
+
+- `d272662`: architecture/credential-security contract.
+- `cbd70b4`: built-in MCP HTTP `oauthCredentialRef` persistence validation, stdio rejection, static/bound Authorization-header exclusivity and Credential Ref dependency projection.
+- `b0535a9`: `source=oauth`, non-secret SQLite v2 metadata, native OS Keychain-backed OAuth token storage and local disconnection, with native/environment/SSH preserving their existing paths.
+- `3465c1e`, `c237868`: REST/Wails/SDK OAuth credential projections and local disconnect.
+- `07d342d`: Profile-scoped non-secret OAuth Credential authorization proof; no OAuth Token exposed through ordinary `CredentialResolver.Resolve`.
+- `ac96532`: OAuth login manager (SDK AuthorizationCodeHandler, PKCE S256, state, issuer, challenge/well-known discovery, bounded loopback callback, DCR), plus inventory and Provider authentication UI. The original shared staging race inadvertently put Flow Go files and frontend in this one commit; tests and follow-up changes independently reviewed and verified it. Do not repeat or reset the commit based solely on prior Agent `unknown` state.
+- `26bb205`: explicit operator-only Start/Status/Cancel authorization APIs on local REST and Wails/SDK, with non-secret status projection.
+- `7d163a9`: HTTP MCP bearer-token transport restricted to the exact configured endpoint, host-owned OAuth Manager, serialized token refresh and rotated refresh-token persistence, credential-aware disconnect, RFC8707 `resource` on authorization/token requests, root-audience-vs-endpoint mapping, safe metadata/SSRF/DNS and redirect gates. Static header/stdio and Profile execution proof remain unchanged.
+- `10bb942`: native system-browser launch or explicit authorization link, OAuth Credential creation, pending/terminal status polling, cancellation, reauthorization, disconnect/delete management modal, required endpoint/client configuration and localized compact UI.
+
+### API surface
+
+- `POST /api/v1/credentials/oauth/flows` starts a local interactive OAuth browser flow. The request accepts `namespace`, `name`, `displayName`, `mcpEndpoint`, optional `clientId`, `clientIdMetadataUrl`, `scopes`; absence of registration details attempts advertised DCR, otherwise fails closed.
+- `GET /api/v1/credentials/oauth/flows/{flowId}` reads only safe flow state, optionally safe Credential metadata; `DELETE` cancels pending flows.
+- `POST /api/v1/credentials/{namespace}/{name}/disconnect` clears local authorization state and native token without deleting a bound Credential Reference. Native Wails methods and typed Web SDK correspond to these operations.
+- Provider `transport.oauthCredentialRef` is configuration metadata; it never stores OAuth secret material. Active MCP HTTP requests resolve/refresh only for their endpoint, and OAuth Credential access is checked against Profile grants independently of token delivery.
+
+### Verified evidence
+
+- Go targeted `go test -race` passed for `credential/...`, `mcp/infrastructure/...`, `invocation/application`, including fake OAuth authorization server (PKCE, 401 challenge, issuer, dynamic native client registration, callback tampering and cancellation), Keychain-backed token storage through fakes, concurrent single refresh and rotated refresh token across Manager restart, `invalid_grant` requiring reauthorization, OAuth credential/method conflict, wrong resource, redirect and cross-origin/path rejection.
+- `golangci-lint run ./backend/...` reported **0 issues**.
+- `pnpm lint`, `pnpm typecheck`, `pnpm i18n:check` passed (1,420 localized message keys). All generated Wails bindings and OpenAPI SDK schema are committed; generated-file checks were successful.
+- Full pipeline `pnpm check` got through Protocol/SDK/plugin modules, generated check, all Go tests and Go Race tests, frontend lint/typecheck, then encountered **one intermittent unrelated Docker 5-second polling-timer assertion** in the shared 300-test Vitest run. That exact test passed alone and all **37** tests in its source file passed together; follow-up `pnpm test` passed **49 files / 300 tests**, and `pnpm build` passed for Web and Desktop. First pipeline exit is recorded as failed; do not report a full green `pnpm check` until a completely successful rerun exists. Existing non-fatal Vite chunk-size warnings remain.
+
+### Deliberately pending / truthful production boundary
+
+- **No production deployment** was performed: the operator's running Wails desktop, Tunnel, live SQLite, Profile grants and OAuth accounts were not restarted or altered. Owner must rebuild/reconnect after this set of commits before live product acceptance.
+- No external OAuth provider/account was exercised. Local fake IdP tests verify protocol behavior without authentic real provider scopes or client registration policies. Real provider OAuth consent and reconnect/expiry acceptance remain outstanding.
+- Local disconnect invalidates token/connection on next HTTP request; it does **not** currently call remote RFC 7009 revocation, even if a remote server advertises it. That optional remote revocation remains explicit follow-up, not a claimed supported feature.
+- No automatic redirect to a browser from Agent Tool invocation; browser consent is initiated only by an explicit Credential-management action. No Agent-loop changes or compatibility bridges were added.
