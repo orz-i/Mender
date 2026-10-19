@@ -461,22 +461,6 @@ export function RestartMCPServer(serverID: string): $CancellablePromise<$models.
     return $Call.ByID(2194966826, serverID);
 }
 
-/**
- * ResumeAgentTask is an explicit new owner-origin turn. Historical unknown
- * and Profile-origin Tasks cannot be executed through this owner facade.
- */
-export function ResumeAgentTask(id: string, prompt: string): $CancellablePromise<$models.AgentTask> {
-    return $Call.ByID(3035853017, id, prompt);
-}
-
-/**
- * ReviewUnknownAgentTask only changes owner-reviewed disposition evidence.
- * It never re-executes an Agent or changes the original unknown outcome.
- */
-export function ReviewUnknownAgentTask(id: string, handling: string): $CancellablePromise<$models.AgentTask> {
-    return $Call.ByID(2074206878, id, handling);
-}
-
 export function RevokeAgentProfile(agentID: string, profileID: string): $CancellablePromise<void> {
     return $Call.ByID(151299120, agentID, profileID);
 }

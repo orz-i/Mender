@@ -100,11 +100,6 @@ export interface AgentProfileGrants {
     "profileIds": string[] | null;
 }
 
-export interface AgentResumeAvailability {
-    "eligible": boolean;
-    "reason": string;
-}
-
 export interface AgentSelectChoices {
     "current": string;
     "choices": AgentModelChoice[] | null;
@@ -124,8 +119,6 @@ export interface AgentTask {
     "cancelRequested": boolean;
     "observation"?: AgentTaskObservation | null;
     "continuedFromTaskId"?: string;
-    "disposition"?: AgentUnknownDisposition | null;
-    "resumeAvailability"?: AgentResumeAvailability | null;
 }
 
 export interface AgentTaskList {
@@ -168,11 +161,6 @@ export interface AgentTools {
     "providerId"?: string;
     "providerName"?: string;
     "tools": AgentTool[] | null;
-}
-
-export interface AgentUnknownDisposition {
-    "handling": string;
-    "recordedAt": string;
 }
 
 export interface AgentWorkspace {

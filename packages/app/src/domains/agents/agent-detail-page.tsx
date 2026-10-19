@@ -20,7 +20,6 @@ import { Input } from "@mender/ui/components/input";
 import { AgentWorkspaceSettings } from "./agent-workspaces";
 import { agentBackendLabel } from "./agent-backends";
 import { AgentTaskApprovals } from "./agent-approvals";
-import { AgentTaskLifecycleActions } from "./agent-task-lifecycle-actions";
 import { AgentToolExecutionSettings } from "./agent-tool-execution";
 
 function taskStatusText(value:AgentTask["status"]):string{
@@ -282,10 +281,7 @@ export function AgentDetailPage({client,chooseLocalDirectory}:{client:MenderClie
         <TableHead>{t("Tool")}</TableHead><TableHead>{t("Source key")}</TableHead>
       </TableRow></TableHeader><TableBody>{tools.tools.map(tool=><TableRow key={tool.toolId}>
         <TableCell className="font-medium" title={tool.toolId}>{agent.name} · {tool.title}</TableCell>
-        <TableCell className="font-mono text-xs">{tool.sourceKey}
-          {tool.sourceKey==="agent.resume"?<p className="mt-1 font-sans text-xs text-muted-foreground">{agent.isolation!=="host"||agent.backend==="antigravity"?
-            t("Native Resume is unavailable for this Agent configuration."):
-            t("Native Resume requires a proven completed session and explicit authorization.")}</p>:null}</TableCell>
+        <TableCell className="font-mono text-xs">{tool.sourceKey}</TableCell>
       </TableRow>)}</TableBody></Table>:
       <EmptyPanelState><EmptyState title="No Agent tools" description="Prepare Agent tools to make them available for explicit Profile selection."/></EmptyPanelState>}
     </ResultPanel>:
@@ -295,8 +291,7 @@ export function AgentDetailPage({client,chooseLocalDirectory}:{client:MenderClie
         <TableHead>{t("Created at")}</TableHead><TableHead className="text-right">{t("Actions")}</TableHead>
       </TableRow></TableHeader><TableBody>{pagination.items.map(task=><TableRow key={task.taskId}>
         <TableCell className="max-w-[230px] truncate font-mono text-xs" title={task.taskId}>{task.taskId}</TableCell>
-        <TableCell><Badge variant="outline">{taskStatusText(task.status)}</Badge>
-          {task.status==="unknown"&&task.disposition?.handling==="handled_elsewhere"?<span className="ml-2 text-xs text-muted-foreground">{t("Handled elsewhere (owner-reported)")}</span>:null}</TableCell>
+        <TableCell><Badge variant="outline">{taskStatusText(task.status)}</Badge></TableCell>
         <TableCell className="text-xs">{formatDateTime(task.createdAt)}</TableCell>
         <TableCell className="space-x-2 text-right">
           <Button size="sm" variant="outline" onClick={()=>void openTask(task.taskId)}>{t("View")}</Button>
@@ -427,9 +422,6 @@ export function AgentDetailPage({client,chooseLocalDirectory}:{client:MenderClie
           </dl>
           <p className="text-xs text-muted-foreground">{t("Observations do not prove task completion or authorize session resume.")}</p>
         </section>:viewTask?.status==="unknown"?<p className="text-xs text-muted-foreground">{t("No execution evidence recorded for this task.")}</p>:null}
-        {viewTask?<AgentTaskLifecycleActions key={viewTask.taskId} client={client} task={viewTask}
-          onTaskUpdated={updated=>{setViewTask(updated);setTasks(previous=>previous.map(item=>item.taskId===updated.taskId?updated:item));}}
-          onTaskCreated={created=>{setViewTask(created);setRevision(current=>current+1);}}/>:null}
         {client.supportsLocalAgentApprovals===true&&agent?.backend!=="antigravity"&&viewTask&&(viewTask.status==="running"||viewTask.status==="queued")?
           <AgentTaskApprovals client={client} task={viewTask} onTaskUpdated={updateViewedTask}/>:null}
         {viewTask&&agent?.isolation==="host"?<p role="note" className="text-xs leading-5 text-muted-foreground">

@@ -992,44 +992,6 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/AgentTask' }
         '404': { $ref: '#/components/responses/NotFound' }
-  /agent-tasks/{taskId}/disposition:
-    put:
-      operationId: reviewUnknownAgentTask
-      description: Owner-only audited handling annotation for an unknown Task; never changes its outcome or executes an Agent
-      parameters: [{ name: taskId, in: path, required: true, schema: { type: string } }]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/AgentUnknownDispositionRequest' }
-      responses:
-        '200':
-          description: Original immutable Task outcome with separately recorded owner disposition
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/AgentTask' }
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '409': { $ref: '#/components/responses/Conflict' }
-  /agent-tasks/{taskId}/resume:
-    post:
-      operationId: resumeAgentTask
-      description: Explicit new owner-origin Task continuing a proven-complete native Session, never an unknown Task
-      parameters: [{ name: taskId, in: path, required: true, schema: { type: string } }]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/AgentResumeRequest' }
-      responses:
-        '202':
-          description: New bounded Task admitted; source Task outcome remains unchanged
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/AgentTask' }
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '409': { $ref: '#/components/responses/Conflict' }
   /agent-tasks/{taskId}/cancel:
     post:
       operationId: cancelAgentTask
@@ -2939,34 +2901,6 @@ components:
         diagnostic: { type: string, maxLength: 1024 }
         observation: { $ref: '#/components/schemas/AgentTaskObservation' }
         continuedFromTaskId: { type: string, description: Immutable lineage to prior AgentTask; not its native SessionID }
-        disposition: { $ref: '#/components/schemas/AgentUnknownDisposition' }
-        resumeAvailability: { $ref: '#/components/schemas/AgentResumeAvailability' }
-    AgentUnknownDisposition:
-      type: object
-      additionalProperties: false
-      required: [handling, recordedAt]
-      properties:
-        handling: { type: string, enum: [handled_elsewhere, needs_review] }
-        recordedAt: { type: string, format: date-time }
-    AgentUnknownDispositionRequest:
-      type: object
-      additionalProperties: false
-      required: [handling]
-      properties:
-        handling: { type: string, enum: [handled_elsewhere, needs_review] }
-    AgentResumeAvailability:
-      type: object
-      additionalProperties: false
-      required: [eligible, reason]
-      properties:
-        eligible: { type: boolean, description: Owner-only read-only preview; not an execution authorization }
-        reason: { type: string, enum: [candidate, unknown_outcome, not_completed, original_profile_required, backend_unavailable, restricted_session, workspace_changed, native_session_unavailable] }
-    AgentResumeRequest:
-      type: object
-      additionalProperties: false
-      required: [prompt]
-      properties:
-        prompt: { type: string, minLength: 1, maxLength: 65536 }
     AgentTaskObservation:
       type: object
       additionalProperties: false

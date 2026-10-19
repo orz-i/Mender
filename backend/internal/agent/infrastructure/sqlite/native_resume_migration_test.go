@@ -88,7 +88,7 @@ func TestAgentNativeResumeV14MigrationPreservesHistoricalAuditAndUnknownTask(t *
 		t.Fatal("audit data became mutable after v15")
 	}
 	var version int
-	if err := s.db.QueryRowContext(ctx, "SELECT MAX(version) FROM agent_schema_migrations").Scan(&version); err != nil || version != 16 {
+	if err := s.db.QueryRowContext(ctx, "SELECT MAX(version) FROM agent_schema_migrations").Scan(&version); err != nil || version != 17 {
 		t.Fatalf("incorrect migrated version %d %v", version, err)
 	}
 	var healthy string
@@ -106,10 +106,6 @@ func downgradeNativeResumeFixtureToV14(t *testing.T, path string) {
 		t.Fatal(err)
 	}
 	for _, stmt := range []string{
-		"DROP TRIGGER IF EXISTS agent_unknown_disposition_no_update",
-		"DROP TRIGGER IF EXISTS agent_unknown_disposition_no_delete",
-		"DROP TABLE IF EXISTS agent_unknown_dispositions",
-		"DELETE FROM agent_schema_migrations WHERE version=16",
 		"DROP TRIGGER agent_continuation_no_update",
 		"DROP TRIGGER agent_continuation_no_delete",
 		"DROP TABLE agent_task_continuations",
@@ -132,6 +128,7 @@ func downgradeNativeResumeFixtureToV14(t *testing.T, path string) {
     BEGIN SELECT RAISE(ABORT,'Agent admission audit immutable'); END`,
 		`CREATE TRIGGER agent_admission_no_delete BEFORE DELETE ON agent_admissions
     BEGIN SELECT RAISE(ABORT,'Agent admission audit immutable'); END`,
+		"DELETE FROM agent_schema_migrations WHERE version=17",
 		"DELETE FROM agent_schema_migrations WHERE version=15",
 	} {
 		if _, err := raw.ExecContext(ctx, stmt); err != nil {

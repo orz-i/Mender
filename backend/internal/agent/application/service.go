@@ -34,8 +34,6 @@ type Repository interface {
 	ResumePlan(context.Context, agentdomain.TaskID) (agentdomain.SessionContinuation, error)
 	CreateResumedTask(context.Context, agentdomain.Task, agentdomain.SessionContinuation, int, string) error
 	TaskParent(context.Context, agentdomain.TaskID) (agentdomain.TaskID, error)
-	TaskDisposition(context.Context, agentdomain.TaskID) (*agentdomain.UnknownTaskDisposition, error)
-	RecordUnknownDisposition(context.Context, agentdomain.TaskID, string) error
 	BeginAttempt(context.Context, agentdomain.Task, string) error
 	RecordExecution(context.Context, agentdomain.Task, string, agentdomain.ExecutionEvent) error
 	TaskObservation(context.Context, agentdomain.TaskID) (*agentdomain.TaskObservation, error)
@@ -585,18 +583,11 @@ func (s *Service) authorizedTask(ctx context.Context, id agentdomain.TaskID, cal
 	return task, agent, nil
 }
 func (s *Service) Task(ctx context.Context, id agentdomain.TaskID, caller gov.Context) (agentdomain.Task, error) {
-	task, agent, err := s.authorizedTask(ctx, id, caller)
+	task, _, err := s.authorizedTask(ctx, id, caller)
 	if err != nil {
 		return task, err
 	}
-	task, err = s.attachObservation(ctx, task)
-	if err != nil {
-		return task, err
-	}
-	if s.isOwner(caller) {
-		task.ResumeAvailability = s.resumeAvailability(ctx, task, agent, caller)
-	}
-	return task, nil
+	return s.attachObservation(ctx, task)
 }
 
 func (s *Service) attachObservation(ctx context.Context, task agentdomain.Task) (agentdomain.Task, error) {
@@ -614,11 +605,6 @@ func (s *Service) attachObservation(ctx context.Context, task agentdomain.Task) 
 		return task, err
 	}
 	task.ContinuedFromTaskID = parent
-	disposition, err := s.store.TaskDisposition(ctx, task.ID)
-	if err != nil {
-		return task, err
-	}
-	task.Disposition = disposition
 	return task, nil
 }
 func (s *Service) Tasks(ctx context.Context, id agentdomain.ID, caller gov.Context) ([]agentdomain.Task, error) {

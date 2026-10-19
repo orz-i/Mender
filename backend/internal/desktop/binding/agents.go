@@ -50,30 +50,20 @@ type AgentTaskObservation struct {
 	SessionRecoverability string `json:"sessionRecoverability"`
 	LeaderReaped          bool   `json:"leaderReaped"`
 }
-type AgentUnknownDisposition struct {
-	Handling   string `json:"handling"`
-	RecordedAt string `json:"recordedAt"`
-}
-type AgentResumeAvailability struct {
-	Eligible bool   `json:"eligible"`
-	Reason   string `json:"reason"`
-}
 type AgentTask struct {
-	TaskID              string                   `json:"taskId"`
-	AgentID             string                   `json:"agentId"`
-	Status              string                   `json:"status"`
-	Model               string                   `json:"model,omitempty"`
-	ReasoningEffort     string                   `json:"reasoningEffort,omitempty"`
-	Workspace           string                   `json:"workspace,omitempty"`
-	Result              string                   `json:"result,omitempty"`
-	Diagnostic          string                   `json:"diagnostic,omitempty"`
-	CreatedAt           string                   `json:"createdAt"`
-	UpdatedAt           string                   `json:"updatedAt"`
-	CancelRequested     bool                     `json:"cancelRequested"`
-	Observation         *AgentTaskObservation    `json:"observation,omitempty"`
-	ContinuedFromTaskID string                   `json:"continuedFromTaskId,omitempty"`
-	Disposition         *AgentUnknownDisposition `json:"disposition,omitempty"`
-	ResumeAvailability  *AgentResumeAvailability `json:"resumeAvailability,omitempty"`
+	TaskID              string                `json:"taskId"`
+	AgentID             string                `json:"agentId"`
+	Status              string                `json:"status"`
+	Model               string                `json:"model,omitempty"`
+	ReasoningEffort     string                `json:"reasoningEffort,omitempty"`
+	Workspace           string                `json:"workspace,omitempty"`
+	Result              string                `json:"result,omitempty"`
+	Diagnostic          string                `json:"diagnostic,omitempty"`
+	CreatedAt           string                `json:"createdAt"`
+	UpdatedAt           string                `json:"updatedAt"`
+	CancelRequested     bool                  `json:"cancelRequested"`
+	Observation         *AgentTaskObservation `json:"observation,omitempty"`
+	ContinuedFromTaskID string                `json:"continuedFromTaskId,omitempty"`
 }
 type AgentTaskList struct {
 	Tasks []AgentTask `json:"tasks"`
@@ -134,12 +124,6 @@ func projectTask(t agentdomain.Task) AgentTask {
 		UpdatedAt: t.UpdatedAt.UTC().Format(time.RFC3339Nano), CancelRequested: t.CancelRequested}
 	if t.ContinuedFromTaskID != "" {
 		out.ContinuedFromTaskID = string(t.ContinuedFromTaskID)
-	}
-	if t.Disposition != nil {
-		out.Disposition = &AgentUnknownDisposition{Handling: t.Disposition.Handling, RecordedAt: t.Disposition.RecordedAt.UTC().Format(time.RFC3339Nano)}
-	}
-	if t.ResumeAvailability != nil {
-		out.ResumeAvailability = &AgentResumeAvailability{Eligible: t.ResumeAvailability.Eligible, Reason: t.ResumeAvailability.Reason}
 	}
 	if o := t.Observation; o != nil {
 		out.Observation = &AgentTaskObservation{

@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-const latestSchemaVersion = 16
+const latestSchemaVersion = 17
 
 // migrate owns Agent state exclusively, and never changes the existing
 // Providers/Sandboxes/Tunnels/Plugin inventory.
@@ -269,5 +269,5 @@ func migrate(ctx context.Context, db *sql.DB) error {
 	if err := migrateNativeResumeV15(ctx, db); err != nil {
 		return err
 	}
-	return migrateTaskDispositionV16(ctx, db)
+	return migrateRetireUnknownDispositionV17(ctx, db)
 }
