@@ -1,5 +1,4 @@
 import type { AuditRecord, ProviderActivationAuditRecord } from "@mender/sdk";
-import { Badge } from "@mender/ui/components/badge";
 import { Button } from "@mender/ui/components/button";
 import {
   Dialog,
@@ -13,6 +12,7 @@ import {
 
 import { formatDateTime, t } from "../../i18n/i18n";
 import { FocusSwitch } from "../../shared/focus-switch";
+import { StatusBadge } from "../../shared/status-badge";
 
 export type AuditSelection =
   | { kind: "invocations"; record: AuditRecord }
@@ -27,22 +27,7 @@ export function AuditStatusBadge({ status }: { status: string }) {
     normalized === "failed" ? t("Failed") :
     normalized === "denied" ? t("Denied") : status;
 
-  return (
-    <Badge
-      variant="secondary"
-      className={
-        normalized === "completed"
-          ? "border-0 bg-accent text-accent-foreground"
-          : normalized === "failed"
-            ? "border-0 bg-destructive/10 text-destructive"
-            : normalized === "denied"
-              ? "border-0 bg-sunlight/35 text-foreground"
-              : "border border-border/80 bg-secondary text-secondary-foreground"
-      }
-    >
-      {label}
-    </Badge>
-  );
+  return <StatusBadge status={status}>{label}</StatusBadge>;
 }
 
 function AuditField({

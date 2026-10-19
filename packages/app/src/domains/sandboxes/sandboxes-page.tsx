@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 
 import type { MenderClient, Sandbox } from "@mender/sdk";
-import { Badge } from "@mender/ui/components/badge";
 import { Button } from "@mender/ui/components/button";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -14,6 +13,7 @@ import { EmptyState, ErrorNotice } from "../../shared/page";
 import { PageTab, PageTabs, PageToolbar, ResultPanel } from "../../shared/page-toolbar";
 import { usePagination } from "../../shared/pagination";
 import { TablePagination } from "../../shared/table-pagination";
+import { StatusBadge } from "../../shared/status-badge";
 import { EmptyPanelState, SearchField } from "../../shared/workbench";
 import { isolationLabel, sandboxBackend, sandboxStateLabel } from "./sandbox-display";
 
@@ -121,14 +121,14 @@ export function SandboxesPage({ client }: { client: MenderClient }) {
                       {isolationLabel(item.isolation)}
                     </TableCell>
                     <TableCell className="max-md:col-start-2 max-md:row-start-1 max-md:block max-md:p-0 max-md:justify-self-end">
-                      <Badge variant="outline" className="max-md:text-[11px] max-md:px-2 max-md:py-0.5">
+                      <StatusBadge status={item.state === "destroyed" || item.backendAvailable ? item.state : "unavailable"} className="max-md:px-2 max-md:py-0.5">
                         {item.state === "destroyed" || item.backendAvailable
                           ? sandboxStateLabel(item.state)
                           : t("Backend unavailable")}
-                      </Badge>
+                      </StatusBadge>
                     </TableCell>
                     <TableCell className="max-w-[240px] truncate font-mono text-xs text-muted-foreground max-md:col-start-1 max-md:row-start-3 max-md:block max-md:min-w-0 max-md:p-0">
-                      <span className="block truncate font-mono text-[11px] text-muted-foreground/80" title={item.localRoot}>
+                      <span className="block truncate font-mono text-xs text-muted-foreground" title={item.localRoot}>
                         {item.localRoot || "—"}
                       </span>
                     </TableCell>
@@ -136,7 +136,7 @@ export function SandboxesPage({ client }: { client: MenderClient }) {
                       <Button
                         size="sm"
                         variant="outline"
-                        className="max-md:h-7 max-md:px-2.5 max-md:text-xs"
+                        className="max-md:h-9 max-md:px-3 max-md:text-xs"
                         onClick={() => {
                           void navigate(`/sandboxes/${item.sandboxId}`);
                         }}

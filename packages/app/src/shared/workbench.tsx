@@ -70,13 +70,10 @@ export function MetricStrip({
   className?: string;
 }) {
   return (
-    <div
-      className={cn(
-        "mb-5 grid overflow-hidden rounded-[22px] border border-border/40 bg-card shadow-[var(--card-elevation)] sm:grid-cols-2 xl:grid-cols-4",
-        className,
-      )}
-    >
-      {children}
+    <div data-slot="metric-strip" className={cn("@container/metrics mb-5 min-w-0", className)}>
+      <div className="grid grid-cols-1 gap-px overflow-hidden rounded-[22px] border border-border/50 bg-border/70 shadow-[var(--card-elevation)] @min-[490px]/metrics:grid-cols-2 @min-[820px]/metrics:grid-cols-4">
+        {children}
+      </div>
     </div>
   );
 }
@@ -95,20 +92,20 @@ export function MetricTile({
   action?: ReactNode;
 }) {
   return (
-    <div className="flex min-h-[100px] min-w-0 items-center gap-3 border-b border-border/70 px-5 py-4 last:border-b-0 sm:odd:border-r sm:[&:nth-child(-n+2)]:border-b xl:border-r xl:border-b-0 xl:last:border-r-0 xl:[&:nth-child(-n+2)]:border-b-0">
-      <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-foreground text-background dark:bg-muted dark:text-foreground">
-        <Icon className="size-[19px]" aria-hidden="true" />
+    <div data-slot="metric-tile" className="flex min-h-[108px] min-w-0 items-center gap-3 bg-card px-4 py-4 @min-[820px]/metrics:px-4">
+      <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-foreground text-background dark:bg-muted dark:text-foreground">
+        <Icon className="size-[18px]" aria-hidden="true" />
       </span>
       <div className="min-w-0 flex-1">
         <p className="truncate text-xs font-medium text-muted-foreground">{t(label)}</p>
         <div className="mt-1 flex min-w-0 items-center justify-between gap-2">
-          <p className="min-w-0 truncate text-[26px] leading-none font-semibold tracking-[-0.05em] text-foreground tabular-nums">
+          <p className="min-w-0 truncate text-[24px] leading-none font-semibold tracking-[-0.045em] text-foreground tabular-nums">
             {typeof value === "number" ? formatNumber(value) : value}
           </p>
           {action ? <div className="shrink-0">{action}</div> : null}
         </div>
         {description ? (
-          <p className="mt-1.5 truncate text-[11px] leading-4 text-muted-foreground">
+          <p className="mt-1.5 truncate text-xs leading-4 text-muted-foreground">
             {t(description)}
           </p>
         ) : null}
@@ -137,18 +134,18 @@ export function DataPanel({
   const Icon = icon ?? panelIcons[title] ?? Layers3Icon;
   return (
     <Card className={["gap-0 py-0", className].join(" ")}>
-      <CardHeader className="min-h-[78px] px-5 pt-4 pb-3">
+      <CardHeader className="min-h-[74px] px-5 pt-4 pb-3">
         <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-3">
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-foreground text-background dark:bg-muted dark:text-foreground">
-              <Icon className="size-[19px]" aria-hidden="true" />
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-foreground text-background dark:bg-muted dark:text-foreground">
+              <Icon className="size-[18px]" aria-hidden="true" />
             </span>
             <div className="min-w-0">
-              <CardTitle className="text-[15px] font-semibold tracking-[-0.015em]">
+              <CardTitle className="text-base font-semibold tracking-[-0.015em]">
                 {t(title)}
               </CardTitle>
               {description ? (
-                <CardDescription className="mt-0.5 text-xs leading-5">
+                <CardDescription className="mt-0.5 text-[13px] leading-5">
                   {typeof description === "string" ? t(description) : description}
                 </CardDescription>
               ) : null}

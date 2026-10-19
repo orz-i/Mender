@@ -29,6 +29,7 @@ import {
 } from "@mender/ui/components/table";
 
 import { formatDateTime, formatNumber, t } from "../../i18n/i18n";
+import { StatusBadge } from "../../shared/status-badge";
 import { errorMessage } from "../../shared/errors";
 import { ErrorNotice, InsightBanner } from "../../shared/page";
 import { FocusSwitch } from "../../shared/focus-switch";
@@ -222,7 +223,7 @@ export function OverviewPage({ client }: { client: MenderClient }) {
                       <TableCell className="max-w-[220px] truncate" title={record.principalKind + ":" + record.principalRef}>
                         {record.principalKind + ":" + record.principalRef}
                       </TableCell>
-                      <TableCell><Badge variant="outline">{record.status}</Badge></TableCell>
+                      <TableCell><StatusBadge status={record.status} /></TableCell>
                       <TableCell className="text-right text-xs text-muted-foreground">
                         {formatDateTime(record.finishedAt)}
                       </TableCell>

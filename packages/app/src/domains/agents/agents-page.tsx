@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 
 import type { Agent, MenderClient } from "@mender/sdk";
-import { Badge } from "@mender/ui/components/badge";
 import { Button } from "@mender/ui/components/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@mender/ui/components/table";
 
@@ -12,6 +11,7 @@ import { EmptyState, ErrorNotice } from "../../shared/page";
 import { PageToolbar, PageTab, PageTabs, ResultPanel } from "../../shared/page-toolbar";
 import { usePagination } from "../../shared/pagination";
 import { TablePagination } from "../../shared/table-pagination";
+import { StatusBadge } from "../../shared/status-badge";
 import { agentBackendLabel } from "./agent-backends";
 import { EmptyPanelState, SearchField } from "../../shared/workbench";
 
@@ -82,7 +82,7 @@ export function AgentsPage({ client }: { client: MenderClient }) {
             <TableCell className="max-w-[200px] truncate font-medium">{a.name}</TableCell>
             <TableCell>{agentBackendLabel(a.backend)}</TableCell>
             <TableCell>{a.isolation==="host"?t("Host (not isolated)"):t("Restricted host")}</TableCell>
-            <TableCell><Badge variant="outline">{a.backendAvailable?t("CLI detected"):t("CLI missing")}</Badge></TableCell>
+            <TableCell><StatusBadge status={a.backendAvailable ? "ready" : "unavailable"}>{a.backendAvailable ? t("CLI detected") : t("CLI missing")}</StatusBadge></TableCell>
             <TableCell className="max-w-[280px] truncate font-mono text-xs text-muted-foreground" title={a.workspaceRoot}>{a.workspaceRoot}</TableCell>
             <TableCell className="text-right"><Button size="sm" variant="outline"
               onClick={()=>void navigate("/agents/"+a.agentId)}>{t("View")}</Button></TableCell>

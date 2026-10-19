@@ -302,7 +302,7 @@ export function AuditPage({ client }: { client: MenderClient }) {
                 {activePagination.items.map((row) => (
                   <TableRow key={row.key} className="md:[&>td]:py-3 max-md:grid max-md:grid-cols-[minmax(0,1fr)_auto] max-md:items-start max-md:gap-x-3 max-md:gap-y-1 max-md:px-4 max-md:py-3">
                     <TableCell className="max-md:col-start-1 max-md:row-start-3 max-md:block max-md:p-0">
-                      <time dateTime={row.finishedAt} className="whitespace-nowrap text-xs tabular-nums text-muted-foreground max-md:text-[11px]">
+                      <time dateTime={row.finishedAt} className="whitespace-nowrap text-xs tabular-nums text-muted-foreground">
                         {formatDateTime(row.finishedAt)}
                       </time>
                     </TableCell>
@@ -316,7 +316,7 @@ export function AuditPage({ client }: { client: MenderClient }) {
                       <div className="flex flex-col items-start gap-1 max-md:items-end">
                         <AuditStatusBadge status={row.status} />
                         {row.status !== "completed" && row.errorClass ? (
-                          <span className="max-w-32 truncate text-[11px] text-muted-foreground" title={row.errorClass}>
+                          <span className="max-w-32 truncate text-xs text-muted-foreground" title={row.errorClass}>
                             {row.errorClass}
                           </span>
                         ) : null}

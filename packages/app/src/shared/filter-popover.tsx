@@ -39,7 +39,7 @@ export function FilterPopover({
             size="sm"
             aria-label={labelText}
             className={cn(
-              "h-9 gap-1.5 rounded-xl border-input bg-card px-3 text-xs font-medium text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring",
+              "h-9 gap-1.5 rounded-xl border-input bg-card px-3 text-sm font-medium text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring",
               activeCount > 0 && "border-primary/40 bg-accent text-accent-foreground font-semibold",
               className,
             )}
@@ -48,7 +48,7 @@ export function FilterPopover({
       >
         <span>{labelText}</span>
         {activeCount > 0 ? (
-          <span className="flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
+          <span className="flex min-w-5 items-center justify-center rounded-full bg-primary px-1 text-xs font-bold text-primary-foreground">
             {activeCount}
           </span>
         ) : null}
@@ -97,13 +97,13 @@ export function FilterSelectField({
   className?: string;
 }) {
   return (
-    <label className={cn("grid gap-1.5 text-xs font-medium text-muted-foreground", className)}>
+    <label className={cn("grid gap-1.5 text-sm font-medium text-muted-foreground", className)}>
       <span className="text-foreground">{t(label)}</span>
       <select
         aria-label={t(label)}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="h-8.5 w-full rounded-xl border border-input bg-card px-2.5 text-xs text-foreground outline-none transition-colors focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
+        className="h-9 w-full rounded-xl border border-input bg-card px-2.5 text-sm text-foreground outline-none transition-colors focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
       >
         {options.map((option) => (
           <option key={option.value} value={option.value}>

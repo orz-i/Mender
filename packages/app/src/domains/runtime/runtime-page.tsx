@@ -246,7 +246,7 @@ function IsolationField({
           <SelectItem value="restricted_host" disabled={!restrictedAvailable}>{t("Restricted host")}</SelectItem>
         </SelectContent>
       </Select>
-      <p className="text-[11px] text-muted-foreground">
+      <p className="text-xs leading-5 text-muted-foreground">
         {value === "host"
           ? t("Host mode uses the unrestricted local process authority of the Runtime user.")
           : t("Restricted host confines host filesystem access but is not VM/container isolation.")}

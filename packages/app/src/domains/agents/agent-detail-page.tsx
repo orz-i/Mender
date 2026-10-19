@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 
 import type { Agent, AgentTools, AgentTask, AgentAdmissionEvent, AgentModelChoices, MenderClient, Profile } from "@mender/sdk";
-import { Badge } from "@mender/ui/components/badge";
 import { Button } from "@mender/ui/components/button";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
@@ -15,6 +14,7 @@ import { ErrorNotice, EmptyState } from "../../shared/page";
 import { PageTab, PageTabs, PageToolbar, ResultPanel } from "../../shared/page-toolbar";
 import { usePagination } from "../../shared/pagination";
 import { TablePagination } from "../../shared/table-pagination";
+import { StatusBadge } from "../../shared/status-badge";
 import { EmptyPanelState } from "../../shared/workbench";
 import { Input } from "@mender/ui/components/input";
 import { AgentWorkspaceSettings } from "./agent-workspaces";
@@ -239,7 +239,7 @@ export function AgentDetailPage({client,chooseLocalDirectory}:{client:MenderClie
         <div><dt className="text-xs text-muted-foreground">{t("Name")}</dt><dd className="mt-1 font-medium">{agent.name}</dd></div>
         <div><dt className="text-xs text-muted-foreground">{t("Backend")}</dt><dd className="mt-1">{agentBackendLabel(agent.backend)}</dd></div>
         <div><dt className="text-xs text-muted-foreground">{t("Status")}</dt>
-          <dd className="mt-1"><Badge variant="outline">{agent.backendAvailable?t("CLI detected"):t("CLI missing")}</Badge></dd></div>
+          <dd className="mt-1"><StatusBadge status={agent.backendAvailable ? "ready" : "unavailable"}>{agent.backendAvailable?t("CLI detected"):t("CLI missing")}</StatusBadge></dd></div>
         <div><dt className="text-xs text-muted-foreground">{t("Isolation")}</dt>
           <dd className="mt-1">{agent.isolation==="host"?t("Host (not isolated)"):t("Restricted host")}</dd></div>
         <div><dt className="text-xs text-muted-foreground">{t("Default model (optional)")}</dt>
@@ -291,7 +291,7 @@ export function AgentDetailPage({client,chooseLocalDirectory}:{client:MenderClie
         <TableHead>{t("Created at")}</TableHead><TableHead className="text-right">{t("Actions")}</TableHead>
       </TableRow></TableHeader><TableBody>{pagination.items.map(task=><TableRow key={task.taskId}>
         <TableCell className="max-w-[230px] truncate font-mono text-xs" title={task.taskId}>{task.taskId}</TableCell>
-        <TableCell><Badge variant="outline">{taskStatusText(task.status)}</Badge></TableCell>
+        <TableCell><StatusBadge status={task.status}>{taskStatusText(task.status)}</StatusBadge></TableCell>
         <TableCell className="text-xs">{formatDateTime(task.createdAt)}</TableCell>
         <TableCell className="space-x-2 text-right">
           <Button size="sm" variant="outline" onClick={()=>void openTask(task.taskId)}>{t("View")}</Button>
@@ -316,7 +316,7 @@ export function AgentDetailPage({client,chooseLocalDirectory}:{client:MenderClie
           <TableCell className="font-mono text-xs">{ev.action}</TableCell>
           <TableCell className="text-xs">{ev.origin}</TableCell>
           <TableCell className="text-xs">{ev.policyKind}</TableCell>
-          <TableCell><Badge variant="outline">{ev.status}</Badge></TableCell>
+          <TableCell><StatusBadge status={ev.status} /></TableCell>
         </TableRow>
       )}</TableBody></Table>:
       <EmptyPanelState><EmptyState title="No Agent activity"

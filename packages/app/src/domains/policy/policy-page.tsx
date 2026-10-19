@@ -362,7 +362,7 @@ export function PolicyPage({ client }: { client: MenderClient }) {
                       <DecisionBadge decision={rule.decision} />
                     </TableCell>
                     <TableCell>
-                      <Badge variant={rule.enabled ? "outline" : "secondary"}>
+                      <Badge variant={rule.enabled ? "positive" : "secondary"}>
                         {t(rule.enabled ? "Enabled" : "Disabled")}
                       </Badge>
                     </TableCell>
@@ -1163,11 +1163,9 @@ function DecisionBadge({ decision }: { decision: PolicyDecision }) {
   return (
     <Badge
       variant={
-        decision === "deny"
-          ? "destructive"
-          : decision === "require_approval"
-            ? "secondary"
-            : "outline"
+        decision === "deny" || decision === "require_approval"
+          ? "caution"
+          : "positive"
       }
     >
       {t(decision === "require_approval" ? "Require approval" : decision)}
@@ -1177,7 +1175,7 @@ function DecisionBadge({ decision }: { decision: PolicyDecision }) {
 
 function ApprovalWarning() {
   return (
-    <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs leading-5 text-muted-foreground">
+    <div className="rounded-xl border border-sunlight/55 bg-sunlight/10 px-3 py-2 text-sm leading-6 text-foreground">
       {t("The current Approval adapter is fail-closed. Governed actions requiring approval are rejected until an interactive Approval workflow exists.")}
     </div>
   );

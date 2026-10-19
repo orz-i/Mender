@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 
 import type { MenderClient, SandboxActivityEvent } from "@mender/sdk";
-import { Badge } from "@mender/ui/components/badge";
 import { Button } from "@mender/ui/components/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@mender/ui/components/table";
 
@@ -13,6 +12,7 @@ import { PageToolbar, ResultPanel } from "../../shared/page-toolbar";
 import { usePagination } from "../../shared/pagination";
 import { EmptyPanelState } from "../../shared/workbench";
 import { TablePagination } from "../../shared/table-pagination";
+import { StatusBadge } from "../../shared/status-badge";
 
 type ActivityFilter = "all" | "admission" | "lifecycle";
 
@@ -90,9 +90,9 @@ export function SandboxActivityPage({ client }: { client: MenderClient }) {
                     <span className="font-semibold text-foreground">{event.action}</span>
                   </TableCell>
                   <TableCell className="max-md:col-start-2 max-md:row-start-1 max-md:block max-md:p-0 max-md:justify-self-end">
-                    <Badge variant="outline" className="max-md:text-[11px] max-md:px-2 max-md:py-0.5">
+                    <StatusBadge status={event.status} className="max-md:px-2 max-md:py-0.5">
                       {activityStatus(event.status)}
-                    </Badge>
+                    </StatusBadge>
                   </TableCell>
                   <TableCell className="max-md:col-start-1 max-md:row-start-2 max-md:block max-md:min-w-0 max-md:p-0">
                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -101,13 +101,13 @@ export function SandboxActivityPage({ client }: { client: MenderClient }) {
                       <span>{event.origin}</span>
                     </div>
                   </TableCell>
-                  <TableCell className="whitespace-nowrap text-xs text-muted-foreground max-md:col-start-2 max-md:row-start-2 max-md:block max-md:p-0 max-md:justify-self-end max-md:text-[11px]" title={event.occurredAt}>
+                  <TableCell className="whitespace-nowrap text-xs text-muted-foreground max-md:col-start-2 max-md:row-start-2 max-md:block max-md:p-0 max-md:justify-self-end" title={event.occurredAt}>
                     {new Date(event.occurredAt).toLocaleString()}
                   </TableCell>
                   <TableCell className="max-md:hidden">
                     {event.origin}
                   </TableCell>
-                  <TableCell className="max-w-[220px] truncate text-xs text-muted-foreground max-md:col-span-2 max-md:row-start-3 max-md:block max-md:min-w-0 max-md:p-0 max-md:pt-1 text-muted-foreground/80 max-md:text-[11px]" title={activityDetail(event)}>
+                  <TableCell className="max-w-[220px] truncate text-xs text-muted-foreground max-md:col-span-2 max-md:row-start-3 max-md:block max-md:min-w-0 max-md:p-0 max-md:pt-1" title={activityDetail(event)}>
                     {activityDetail(event)}
                   </TableCell>
                 </TableRow>

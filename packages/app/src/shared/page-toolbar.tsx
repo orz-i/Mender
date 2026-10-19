@@ -50,20 +50,20 @@ export function PageToolbar({
   return (
     <div
       data-slot="page-toolbar"
-      className={["mb-5 flex min-w-0 flex-col gap-3 xl:flex-row xl:flex-wrap xl:items-center xl:justify-between", className].join(" ")}
+      className={["mb-5 flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-3", className].join(" ")}
     >
-      {tabs ? <div data-slot="page-toolbar-tabs" className="flex w-full min-w-0 max-w-full flex-wrap items-center gap-2 xl:w-auto xl:shrink-0">{tabs}</div> : null}
+      {tabs ? <div data-slot="page-toolbar-tabs" className="flex min-w-0 max-w-full flex-wrap items-center gap-2">{tabs}</div> : null}
       {filters || actions ? (
         <div
           data-slot="page-toolbar-controls"
-          className="flex w-full min-w-0 flex-wrap items-center justify-end gap-2 xl:ml-auto xl:w-auto xl:flex-1"
+          className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2"
         >
           {filters ? (
-            <div data-slot="page-toolbar-filters" className="flex w-full min-w-0 flex-wrap items-center justify-start gap-2 sm:flex-1 xl:w-auto xl:justify-end">
+            <div data-slot="page-toolbar-filters" className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2">
               {filters}
             </div>
           ) : null}
-          {actions ? <div data-slot="page-toolbar-actions" className="flex shrink-0 flex-wrap items-center justify-end gap-2">{actions}</div> : null}
+          {actions ? <div data-slot="page-toolbar-actions" className="flex min-w-0 shrink-0 flex-wrap items-center justify-end gap-2">{actions}</div> : null}
         </div>
       ) : null}
     </div>
@@ -139,14 +139,14 @@ export function PageTab({
       aria-pressed={active}
       onClick={onClick}
       className={[
-        "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-xl px-3 text-xs font-medium whitespace-nowrap",
+        "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-xl px-3 text-sm font-medium whitespace-nowrap",
         "transition-[background-color,color,box-shadow] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
         active ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:bg-card/65 hover:text-foreground",
       ].join(" ")}
     >
       {t(label)}
       {count !== undefined ? (
-        <span className={["rounded-md px-1.5 py-0.5 text-[10px] tabular-nums", active ? "bg-muted text-foreground" : "bg-muted/80 text-muted-foreground"].join(" ")}>
+        <span className={["rounded-md px-1.5 py-0.5 text-xs tabular-nums", active ? "bg-muted text-foreground" : "bg-muted/80 text-muted-foreground"].join(" ")}>
           {formatNumber(count)}
         </span>
       ) : null}

@@ -52,17 +52,20 @@ function tunnelStatusLabel(status: NonNullable<MCPServerInstance["tunnelStatus"]
     case "running": return t("Running");
   }
 }
-function tunnelStatusVariant(status: NonNullable<MCPServerInstance["tunnelStatus"]>): "outline" | "secondary" | "destructive" {
+function tunnelStatusVariant(status: NonNullable<MCPServerInstance["tunnelStatus"]>): "positive" | "information" | "caution" | "outline" | "secondary" | "destructive" {
   switch (status) {
     case "ready":
+      return "positive";
     case "running":
-      return "secondary";
+      return "information";
     case "starting":
       return "outline";
     case "degraded":
+      return "caution";
     case "failed":
-    case "exited":
       return "destructive";
+    case "exited":
+      return "secondary";
   }
 }
 
@@ -287,7 +290,7 @@ export function ServersPage({
                       {server.profile}
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline">{t("Server running")}</Badge>
+                      <Badge variant="information">{t("Server running")}</Badge>
                     </TableCell>
                     <TableCell>
                       {server.tunnelId ? (
