@@ -6,8 +6,6 @@ import {
   BookOpenIcon,
   Layers3Icon,
   PlugIcon,
-  CheckCircle2Icon,
-  Clock3Icon,
 } from "lucide-react";
 
 import type {
@@ -20,6 +18,7 @@ import type {
   ToolSummary,
 } from "@mender/sdk";
 import { Badge } from "@mender/ui/components/badge";
+import { MendyFigure } from "../../brand/mendy-figure";
 import {
   Table,
   TableBody,
@@ -233,17 +232,10 @@ export function OverviewPage({ client }: { client: MenderClient }) {
               </Table>
             </>
           ) : (
-            <div className="px-5 pb-5">
-              <div className="grid grid-cols-3 divide-x divide-border rounded-2xl border border-border/65 bg-background/65 py-4">
-                <div className="px-4"><CheckCircle2Icon className="mb-2 size-4 text-primary-ink" /><p className="text-2xl font-semibold tabular-nums">0</p><p className="text-xs text-muted-foreground">{t("Completed")}</p></div>
-                <div className="px-4"><ActivityIcon className="mb-2 size-4 text-muted-foreground" /><p className="text-2xl font-semibold tabular-nums">0</p><p className="text-xs text-muted-foreground">{t("Invocations")}</p></div>
-                <div className="px-4"><Clock3Icon className="mb-2 size-4 text-muted-foreground" /><p className="text-2xl font-semibold tabular-nums">0</p><p className="text-xs text-muted-foreground">{t("Failed")}</p></div>
-              </div>
-              <div className="flex min-h-36 flex-col items-center justify-center gap-2 text-center">
-                <ActivityIcon className="size-6 text-muted-foreground/60" aria-hidden="true" />
-                <p className="text-sm font-medium">{t("No invocation records yet.")}</p>
-                <p className="text-xs text-muted-foreground">{t("Latest tool execution activity across the local control plane.")}</p>
-              </div>
+            <div className="flex min-h-[310px] flex-col items-center justify-center gap-2 px-5 py-7 text-center">
+              <MendyFigure expression="empty" className="mb-1 h-[150px] w-[104px]" aria-hidden="true" />
+              <p className="text-base font-semibold">{t("No invocation records yet.")}</p>
+              <p className="max-w-md text-sm leading-6 text-muted-foreground">{t("Latest tool execution activity across the local control plane.")}</p>
             </div>
           )}
         </DataPanel>

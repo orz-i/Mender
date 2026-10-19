@@ -38,6 +38,7 @@ import {
   TooltipTrigger,
 } from "@mender/ui/components/tooltip";
 
+import { BrandMark } from "../brand/brand-mark";
 import { setLocale, t, useLocale } from "../i18n/i18n";
 
 const SIDEBAR_STORAGE_KEY = "mender.sidebar.collapsed";
@@ -186,12 +187,9 @@ export function ManagementShell({ client }: { client: MenderClient }) {
           {collapsed ? (
             <div
               data-slot="sidebar-brand-logo"
-              className="group/brand relative flex size-9 shrink-0 items-center justify-center rounded-xl bg-foreground text-background"
+              className="group/brand relative flex size-10 shrink-0 items-center justify-center rounded-xl border border-border/70 bg-white"
             >
-              <BlocksIcon
-                className="size-[19px] transition-opacity duration-150 group-hover/brand:opacity-0"
-                aria-hidden="true"
-              />
+              <BrandMark className="size-8 transition-opacity duration-150 group-hover/brand:opacity-0" aria-hidden="true" />
               <Tooltip>
                 <TooltipTrigger
                   render={
@@ -201,7 +199,7 @@ export function ManagementShell({ client }: { client: MenderClient }) {
                       size="icon"
                       aria-label={t("Expand sidebar")}
                       onClick={() => setCollapsed(false)}
-                      className="absolute inset-0 size-9 rounded-xl text-background opacity-0 transition-opacity duration-150 hover:bg-foreground/80 hover:text-background focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-ring group-hover/brand:opacity-100"
+                      className="absolute inset-0 size-10 rounded-xl text-foreground opacity-0 transition-opacity duration-150 hover:bg-muted focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-ring group-hover/brand:opacity-100"
                     />
                   }
                 >
@@ -214,11 +212,11 @@ export function ManagementShell({ client }: { client: MenderClient }) {
             </div>
           ) : (
             <>
-              <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-foreground text-background">
-                <BlocksIcon className="size-[19px]" aria-hidden="true" />
+              <div className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-border/70 bg-white">
+                <BrandMark className="size-8" aria-hidden="true" />
               </div>
               <div className="hidden min-w-0 flex-1 lg:block">
-                <p className="truncate text-[23px] leading-6 font-semibold tracking-[-0.045em]">Mender</p>
+                <p className="brand-wordmark truncate text-[31px] leading-[1.05] text-foreground">Mender</p>
               </div>
               <Tooltip>
                 <TooltipTrigger
@@ -299,9 +297,9 @@ export function ManagementShell({ client }: { client: MenderClient }) {
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-20 flex min-h-[88px] items-center justify-between gap-3 bg-background/95 px-4 backdrop-blur-xl sm:px-6 xl:px-8">
+        <header className="sticky top-0 z-20 flex min-h-[88px] items-center justify-between gap-3 border-b border-border/45 bg-background/95 px-4 backdrop-blur-xl sm:px-6 xl:px-8">
           <div className="min-w-0 py-4">
-            <h1 className="truncate text-[23px] leading-[1.15] font-semibold tracking-[-0.045em] sm:text-[27px]">
+            <h1 className="brand-display truncate text-[29px] leading-[1.12] sm:text-[33px]">
               {t(activeItem.label)}
             </h1>
           </div>
