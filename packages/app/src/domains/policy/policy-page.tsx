@@ -124,6 +124,7 @@ export function PolicyPage({ client }: { client: MenderClient }) {
   const [providers, setProviders] = useState<Provider[]>([]);
   const [tools, setTools] = useState<ToolSummary[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [hasSnapshot, setHasSnapshot] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
 
@@ -145,6 +146,7 @@ export function PolicyPage({ client }: { client: MenderClient }) {
       setProfiles(profileResult.profiles);
       setProviders(providerResult.providers);
       setTools(toolResult.tools);
+      setHasSnapshot(true);
       setError("");
     } catch (reason) {
       setError(errorMessage(reason));
@@ -167,6 +169,7 @@ export function PolicyPage({ client }: { client: MenderClient }) {
           setProfiles(profileResult.profiles);
           setProviders(providerResult.providers);
           setTools(toolResult.tools);
+          setHasSnapshot(true);
           setError("");
           setLoaded(true);
         }
@@ -312,6 +315,14 @@ export function PolicyPage({ client }: { client: MenderClient }) {
 
   const rules = policy?.rules ?? [];
   const rulePagination = usePagination(rules);
+
+  if (!hasSnapshot) {
+    return <div className="pt-4">
+      {error
+        ? <ErrorNotice message={error} onRetry={() => {setError("");void refresh();}} />
+        : <p role="status" className="py-10 text-center text-sm text-muted-foreground">{t("Loading Policy…")}</p>}
+    </div>;
+  }
 
   return (
     <>

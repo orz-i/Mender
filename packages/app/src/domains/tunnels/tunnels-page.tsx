@@ -48,6 +48,7 @@ export function TunnelsPage({ client }: { client: MenderClient }) {
   const [selectionOpen,setSelectionOpen]=useState(false);
   const [credentials, setCredentials] = useState<Credential[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [hasSnapshot, setHasSnapshot] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
   const [removeTarget,setRemoveTarget]=useState<Tunnel|null>(null);
@@ -68,6 +69,7 @@ export function TunnelsPage({ client }: { client: MenderClient }) {
       setAvailablePlugins(catalogue.plugins.filter((item)=>item.kind==="tunnel.transport"));
       setTunnels(tunnelResult.tunnels);
       setCredentials(credentialResult.credentials);
+      setHasSnapshot(true);
       setError("");
     } catch (reason) {
       setError(errorMessage(reason));
@@ -84,6 +86,7 @@ export function TunnelsPage({ client }: { client: MenderClient }) {
           setTunnels(tunnelResult.tunnels);
           setCredentials(credentialResult.credentials);
           setAvailablePlugins(catalogue.plugins.filter((item)=>item.kind==="tunnel.transport"));
+          setHasSnapshot(true);
           if(deepLink.create){
             const selected=catalogue.plugins.find(item=>item.kind==="tunnel.transport" &&
               item.pluginId===deepLink.pluginId &&
@@ -183,12 +186,16 @@ export function TunnelsPage({ client }: { client: MenderClient }) {
     }
   }
 
+  if (error && !hasSnapshot) {
+    return <div className="pt-4"><ErrorNotice message={error} onRetry={() => {setError("");void refresh();}} /></div>;
+  }
+
   return (
     <>
       <PageToolbar
         tabs={
           <span className="text-sm text-muted-foreground">
-            {tCount(tunnels.length, "{{count}} Tunnel configured", "{{count}} Tunnels configured")}
+            {hasSnapshot ? tCount(tunnels.length, "{{count}} Tunnel configured", "{{count}} Tunnels configured") : t("Loading Tunnels…")}
           </span>
         }
         filters={

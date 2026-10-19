@@ -112,6 +112,7 @@ export function AuditPage({ client }: { client: MenderClient }) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [hasSnapshot, setHasSnapshot] = useState(false);
 
   const refresh = useCallback(async () => {
     setBusy(true);
@@ -124,6 +125,7 @@ export function AuditPage({ client }: { client: MenderClient }) {
       setRecords(invocations.records);
       setActivationRecords(activations.records);
       if (tools !== null) setToolsById(indexTools(tools.tools));
+      setHasSnapshot(true);
       setError("");
     } catch (reason) {
       setError(errorMessage(reason));
@@ -145,6 +147,7 @@ export function AuditPage({ client }: { client: MenderClient }) {
         setRecords(invocations.records);
         setActivationRecords(activations.records);
         if (tools !== null) setToolsById(indexTools(tools.tools));
+        setHasSnapshot(true);
         setError("");
       })
       .catch((reason: unknown) => {
@@ -220,6 +223,10 @@ export function AuditPage({ client }: { client: MenderClient }) {
   function openDetails(selection: AuditSelection) {
     setSelected(selection);
     setDetailSection(selection.record.status === "completed" ? "overview" : "diagnostics");
+  }
+
+  if (error && !hasSnapshot) {
+    return <div className="pt-4"><ErrorNotice message={error} onRetry={() => {setError("");void refresh();}} /></div>;
   }
 
   return (

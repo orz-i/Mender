@@ -73,6 +73,7 @@ export function ServersPage({
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [servers, setServers] = useState<MCPServerInstance[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [hasSnapshot, setHasSnapshot] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
   const [inventoryQuery, setInventoryQuery] = useState("");
@@ -95,6 +96,7 @@ export function ServersPage({
       ]);
       setProfiles(profileResult.profiles);
       setServers(serverResult.servers);
+      setHasSnapshot(true);
       setError("");
     } catch (reason) {
       setError(errorMessage(reason));
@@ -112,6 +114,7 @@ export function ServersPage({
         if (active) {
           setProfiles(profileResult.profiles);
           setServers(serverResult.servers);
+          setHasSnapshot(true);
           setError("");
           setLoaded(true);
         }
@@ -241,6 +244,10 @@ export function ServersPage({
     } catch (reason) {
       setError(errorMessage(reason));
     }
+  }
+
+  if (error && !hasSnapshot) {
+    return <div className="pt-4"><ErrorNotice message={error} onRetry={() => {setError("");void refresh();}} /></div>;
   }
 
   return (

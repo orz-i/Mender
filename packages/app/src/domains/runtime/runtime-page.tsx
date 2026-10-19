@@ -67,6 +67,7 @@ export function RuntimePage({ client }: { client: MenderClient }) {
   const [budget, setBudget] = useState<RuntimeBudget | null>(null);
   const [isolation, setIsolation] = useState<RuntimeIsolation | null>(null);
   const [error, setError] = useState("");
+  const [reloadVersion, setReloadVersion] = useState(0);
   const [busy, setBusy] = useState("");
   const [editor, setEditor] = useState<"budget" | "isolation" | null>(null);
   const [focus, setFocus] = useState<"status" | "budget" | "isolation">("status");
@@ -89,7 +90,7 @@ export function RuntimePage({ client }: { client: MenderClient }) {
     return () => {
       active = false;
     };
-  }, [client]);
+  }, [client, reloadVersion]);
 
   async function saveBudget() {
     if (budget === null) return;
@@ -128,6 +129,14 @@ export function RuntimePage({ client }: { client: MenderClient }) {
 
   const externalHostEscalation = status?.isolation.externalProvider === "restricted_host" && isolation?.externalProvider === "host";
   const restrictedAvailable = status?.backend.restrictedHostAvailable ?? false;
+
+  if (status === null) {
+    return <div className="pt-4">
+      {error
+        ? <ErrorNotice message={error} onRetry={() => {setError("");setReloadVersion(version=>version+1);}} />
+        : <p role="status" className="py-10 text-center text-sm text-muted-foreground">{t("Loading…")}</p>}
+    </div>;
+  }
 
   return (
     <div className="space-y-4">

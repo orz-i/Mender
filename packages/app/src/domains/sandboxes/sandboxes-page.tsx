@@ -24,6 +24,8 @@ export function SandboxesPage({ client }: { client: MenderClient }) {
   const navigate = useNavigate();
   const [items, setItems] = useState<Sandbox[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [hasSnapshot, setHasSnapshot] = useState(false);
+  const [reloadVersion, setReloadVersion] = useState(0);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
   const [backend, setBackend] = useState("all");
@@ -33,12 +35,12 @@ export function SandboxesPage({ client }: { client: MenderClient }) {
     let active = true;
     void client.listSandboxes().then(({sandboxes}) => {
       if (!active) return;
-      setItems(sandboxes);setError("");setLoaded(true);
+      setItems(sandboxes);setHasSnapshot(true);setError("");setLoaded(true);
     }).catch((reason: unknown) => {
       if (active) {setError(errorMessage(reason));setLoaded(true);}
     });
     return () => {active=false;};
-  }, [client]);
+  }, [client, reloadVersion]);
 
   const filtered = useMemo(() => items.filter((item) =>
     (backend === "all" || item.backend === backend) &&
@@ -49,15 +51,19 @@ export function SandboxesPage({ client }: { client: MenderClient }) {
   ),[items,backend,category,query]);
   const pagination = usePagination(filtered);
 
+  if (error && !hasSnapshot) {
+    return <div className="pt-4"><ErrorNotice message={error} onRetry={() => {setError("");setReloadVersion(version=>version+1);}} /></div>;
+  }
+
   return <>
     <PageToolbar
-      tabs={
+      tabs={hasSnapshot ?
         <PageTabs label="Sandboxes">
           <PageTab label="Sandboxes" count={items.length} active={category === "all"} onClick={() => setCategory("all")} />
           <PageTab label="Ready sandboxes" count={items.filter((item) => item.state === "ready").length} active={category === "ready"} onClick={() => setCategory("ready")} />
           <PageTab label="Local workspaces" count={items.filter((item) => item.backend === "local_workspace").length} active={category === "local"} onClick={() => setCategory("local")} />
           <PageTab label="Unavailable sandboxes" count={items.filter((item) => item.state !== "ready").length} active={category === "unavailable"} onClick={() => setCategory("unavailable")} />
-        </PageTabs>
+        </PageTabs> : <span className="text-xs text-muted-foreground">{t("Loading Sandboxes…")}</span>
       }
       filters={
         <>
