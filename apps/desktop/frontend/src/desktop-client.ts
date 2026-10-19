@@ -1104,6 +1104,7 @@ function credential(value: BindingCredential): Credential {
           ...(value.oauth.mcpEndpoint ? { mcpEndpoint: value.oauth.mcpEndpoint } : {}),
           issuer: value.oauth.issuer,
           clientId: value.oauth.clientId,
+          ...(value.oauth.registrationMode ? { registrationMode: oauthRegistrationMode(value.oauth.registrationMode) } : {}),
           tokenEndpoint: value.oauth.tokenEndpoint,
           scopes: value.oauth.scopes ?? [],
           ...(value.oauth.expiresAt ? { expiresAt: value.oauth.expiresAt } : {}),
@@ -1131,6 +1132,13 @@ function oauthFlow(value: BindingOAuthFlow): OAuthFlow {
     ...(value.message ? { message: value.message } : {}),
     ...(value.credential ? { credential: credential(value.credential) } : {}),
   };
+}
+
+function oauthRegistrationMode(value: string): "pre_registered" | "client_id_metadata" | "dynamic" {
+  switch (value) {
+    case "pre_registered": case "client_id_metadata": case "dynamic": return value;
+    default: throw new MenderClientInvariantError(`Unsupported OAuth client registration mode: ${value}`);
+  }
 }
 
 function oauthStatus(value: string): "connected" | "authorization_required" | "expired" {

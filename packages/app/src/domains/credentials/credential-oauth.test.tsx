@@ -82,6 +82,53 @@ describe("Interactive MCP OAuth authorization", () => {
   });
 });
 
+describe("OAuth reauthorization identity", () => {
+  it("re-registers dynamic clients and preserves the previously granted scope selection", async () => {
+    const dynamic: Credential = {
+      ...connected,
+      oauth: { ...connected.oauth!, clientId: "qa-dcr-client", registrationMode: "dynamic", scopes: ["search:read"] },
+    };
+    const startOAuthCredential = vi.fn().mockResolvedValue({
+      flowId: "mfo_reregister", authorizationUrl: "https://accounts.example.test/authorize?state=fixture",
+    });
+    const client = {
+      listCredentials: vi.fn().mockResolvedValue({ credentials: [dynamic] }),
+      startOAuthCredential,
+      getOAuthFlow: vi.fn().mockResolvedValue({
+        flowId: "mfo_reregister", status: "pending",
+        createdAt: "2026-10-19T00:00:00Z", expiresAt: "2026-10-19T00:10:00Z",
+      }),
+      cancelOAuthFlow: vi.fn().mockResolvedValue(undefined),
+    } as unknown as MenderClient;
+    render(<TooltipProvider><CredentialsPage client={client} /></TooltipProvider>);
+    expect(await screen.findByText("OAuth Work")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Manage OAuth" }));
+    fireEvent.click(screen.getByRole("button", { name: "Authorize again" }));
+    expect(screen.getByRole<HTMLInputElement>("textbox", { name: "OAuth client ID (optional)" }).value).toBe("");
+    expect(screen.getByRole<HTMLInputElement>("textbox", { name: "OAuth scopes (optional)" }).value).toBe("search:read");
+    fireEvent.click(screen.getByRole("button", { name: "Connect OAuth" }));
+    await waitFor(() => expect(startOAuthCredential).toHaveBeenCalledWith({
+      namespace: "oauth", name: "work", displayName: "OAuth Work",
+      mcpEndpoint: "https://mcp.example.test/mcp", scopes: ["search:read"],
+    }));
+  });
+
+  it("preserves a pre-registered client ID for the next interactive authorization", async () => {
+    const prior: Credential = {
+      ...connected,
+      oauth: { ...connected.oauth!, registrationMode: "pre_registered" },
+    };
+    const client = {
+      listCredentials: vi.fn().mockResolvedValue({ credentials: [prior] }),
+    } as unknown as MenderClient;
+    render(<TooltipProvider><CredentialsPage client={client} /></TooltipProvider>);
+    expect(await screen.findByText("OAuth Work")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Manage OAuth" }));
+    fireEvent.click(screen.getByRole("button", { name: "Authorize again" }));
+    expect(screen.getByRole<HTMLInputElement>("textbox", { name: "OAuth client ID (optional)" }).value).toBe("mender-public");
+  });
+});
+
 describe("OAuth Credential inventory", () => {
   it("displays account and status without treating OAuth as a native secret", async () => {
     const client = {

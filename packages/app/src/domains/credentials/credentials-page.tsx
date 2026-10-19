@@ -66,6 +66,7 @@ const emptyCreateForm = {
   environmentVariable: "",
   mcpEndpoint: "",
   oauthClientId: "",
+  oauthScopes: "",
 };
 
 export function CredentialsPage({ client }: { client: MenderClient }) {
@@ -171,8 +172,10 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
   const environmentVariableValid = ENVIRONMENT_VARIABLE_PATTERN.test(createForm.environmentVariable.trim());
   const sshKeyMode = createForm.source === "ssh-key";
   const oauthEndpointValid = validOAuthEndpoint(createForm.mcpEndpoint);
+  const requestedScopes = createForm.oauthScopes.trim().split(/\s+/).filter(Boolean);
+  const oauthScopesValid = requestedScopes.length <= 64 && requestedScopes.every((scope) => scope.length <= 256);
   const createValid = canonicalReference !== null && displayNameValid && (
-    createForm.source === "oauth" ? oauthEndpointValid :
+    createForm.source === "oauth" ? oauthEndpointValid && oauthScopesValid :
     createForm.source !== "environment" ? secretValid : environmentVariableValid
   ) && (!sshKeyMode || (namespace === "ssh" && createForm.secret.includes("PRIVATE KEY")));
 
@@ -194,6 +197,7 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
           displayName: createForm.displayName.trim(),
           mcpEndpoint: createForm.mcpEndpoint.trim(),
           ...(clientID.startsWith("https://") ? { clientIdMetadataUrl: clientID } : clientID ? { clientId: clientID } : {}),
+          ...(requestedScopes.length ? { scopes: requestedScopes } : {}),
         });
         if (!validOAuthEndpoint(started.authorizationUrl)) {
           await client.cancelOAuthFlow(started.flowId);
@@ -272,7 +276,8 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
       ...emptyCreateForm, source: "oauth", namespace: item.namespace, name: item.name,
       displayName: item.displayName,
       mcpEndpoint: item.oauth?.mcpEndpoint || item.oauth?.resource || "",
-      oauthClientId: item.oauth?.clientId ?? "",
+      oauthClientId: item.oauth?.registrationMode === "dynamic" ? "" : item.oauth?.clientId ?? "",
+      oauthScopes: item.oauth?.scopes?.join(" ") ?? "",
     });
     setCreateError("");
     setCreateOpen(true);
@@ -537,6 +542,7 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
                   environmentVariable: "",
                   mcpEndpoint: "",
                   oauthClientId: "",
+                  oauthScopes: "",
                 })}
                 className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
               >
@@ -638,6 +644,15 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
                   />
                 </Field>
                 <p className="text-xs text-muted-foreground">{t("Leave blank for supported automatic registration, or enter a registered client ID or HTTPS client metadata URL.")}</p>
+                <Field label="OAuth scopes (optional)">
+                  <Input
+                    aria-label={t("OAuth scopes (optional)")}
+                    placeholder={t("search:read profile")}
+                    value={createForm.oauthScopes}
+                    aria-invalid={!oauthScopesValid}
+                    onChange={(event) => updateCreateForm({ oauthScopes: event.target.value })}
+                  />
+                </Field>
               </div>
             ) : createForm.source !== "environment" ? (
               sshKeyMode ? (

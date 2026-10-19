@@ -1137,6 +1137,8 @@ export const zhCNMessages: Readonly<Record<string, string>> = {
   "OAuth MCP endpoint": "OAuth MCP 端点",
   "Enter a valid HTTPS MCP endpoint (HTTP is allowed only on loopback).": "请输入有效的 HTTPS MCP 端点（仅本机回环允许 HTTP）。",
   "OAuth client ID (optional)": "OAuth 客户端 ID（可选）",
+  "OAuth scopes (optional)": "OAuth 权限范围（可选）",
+  "search:read profile": "search:read profile",
   "Leave blank for automatic registration": "留空以自动注册",
   "Leave blank for supported automatic registration, or enter a registered client ID or HTTPS client metadata URL.": "支持自动注册时可留空，也可输入已注册的客户端 ID 或 HTTPS 客户端元数据 URL。",
   "Connecting…": "连接中…",
