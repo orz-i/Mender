@@ -226,7 +226,7 @@ export function CatalogPage({ client, providerId }: { client: MenderClient; prov
         </Button>}
         filters={
           <>
-            <div className="w-full min-w-0 sm:w-60 sm:shrink-0">
+            <div className="w-full min-w-0 sm:w-56 md:w-64 sm:shrink-0">
               <SearchField
                 label="Catalog search"
                 placeholder="Search intent, e.g. create issue"
@@ -252,7 +252,7 @@ export function CatalogPage({ client, providerId }: { client: MenderClient; prov
       <ResultPanel title={toolSourceLabel(providers.find(provider=>provider.providerId===providerId))}>
           {results.length ? (
             <>
-              <Table className="table-fixed">
+              <Table className="min-w-[560px] table-fixed">
               <colgroup>
                 <col className="w-[34%]" />
                 <col />
@@ -271,12 +271,12 @@ export function CatalogPage({ client, providerId }: { client: MenderClient; prov
                 {catalogPagination.items.map((tool) => (
                   <TableRow key={tool.toolId}>
                     <TableCell className="min-w-0">
-                      <div className="truncate font-medium">
+                      <div className="truncate font-medium text-foreground" title={tool.title || tool.name}>
                         {tool.title || tool.name}
                       </div>
                     </TableCell>
                     <TableCell className="min-w-0">
-                      <div className="truncate text-sm text-muted-foreground">
+                      <div className="truncate text-sm text-muted-foreground" title={tool.description || t("No description")}>
                         {tool.description || t("No description")}
                       </div>
                     </TableCell>
@@ -286,6 +286,7 @@ export function CatalogPage({ client, providerId }: { client: MenderClient; prov
                     <TableCell className="w-20 text-right">
                       <IconButton
                         variant="outline"
+                        size="icon-lg"
                         label={t(
                           loadingToolId === tool.toolId
                             ? "Loading…"

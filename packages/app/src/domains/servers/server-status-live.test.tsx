@@ -76,7 +76,8 @@ it("reconciles Tunnel starting -> ready -> degraded from Mender without manual R
     expect(screen.getByText("Ready").className).not.toContain("text-destructive");
     await polling.tick();
     expect(await screen.findByText("Degraded")).toBeTruthy();
-    expect(screen.getByText("Degraded").className).toContain("text-destructive");
+    // Degraded remains visibly actionable without being conflated with a terminal failure.
+    expect(screen.getByText("Degraded").className).toContain("bg-sunlight/20");
     expect(listProfiles).toHaveBeenCalledTimes(1);
     expect(listMCPServers).toHaveBeenCalledTimes(3);
 

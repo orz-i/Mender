@@ -619,7 +619,7 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
     <>
       <PageToolbar
         filters={
-          <div className="w-full min-w-0 sm:w-64 sm:shrink-0">
+          <div className="w-full min-w-0 sm:w-56 md:w-64 sm:shrink-0">
             <SearchField label="Search services" placeholder="Search services…" value={inventoryQuery} onChange={setInventoryQuery} />
           </div>
         }
@@ -651,7 +651,7 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
             {t("Loading services…")}
           </div>
         ) : visibleProviders.length ? (
-          <div className="grid gap-4 p-4 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid min-w-0 gap-3 p-4 sm:grid-cols-2 2xl:grid-cols-3">
             {providerPagination.items.map(provider => {
               const name=toolSourceLabel(provider);
               const managed=provider.toolSourceKind==="agent" || provider.toolSourceKind==="sandbox" ||
@@ -661,13 +661,13 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
                 : provider.toolSourceKind==="sandbox" && provider.toolSourceId
                   ? "/sandboxes/"+encodeURIComponent(provider.toolSourceId)
                   : null;
-              return <Card key={provider.providerId} size="sm">
-                <CardHeader>
-                  <CardTitle>
-                    <Link className="hover:underline focus-visible:rounded focus-visible:outline-2 focus-visible:outline-ring"
-                      to={"/tools/"+encodeURIComponent(provider.providerId)}>{name}</Link>
+              return <Card key={provider.providerId} size="sm" className="h-full min-w-0 border-border/60 transition-[border-color,box-shadow] hover:border-primary/35 hover:shadow-sm">
+                <CardHeader className="min-w-0">
+                  <CardTitle className="min-w-0">
+                    <Link className="block truncate hover:text-primary-ink hover:underline focus-visible:rounded focus-visible:outline-2 focus-visible:outline-ring"
+                      title={name} to={"/tools/"+encodeURIComponent(provider.providerId)}>{name}</Link>
                   </CardTitle>
-                  <CardDescription className="line-clamp-2">
+                  <CardDescription className="line-clamp-2 min-h-10">
                     {provider.description || t("Explore the tools provided by this service.")}
                   </CardDescription>
                   <CardAction>
@@ -676,7 +676,7 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
                     </Badge>
                   </CardAction>
                 </CardHeader>
-                <CardContent className="flex flex-wrap items-center gap-2">
+                <CardContent className="flex min-w-0 flex-wrap items-center gap-2 border-t border-border/55 pt-3">
                   <Button size="sm" onClick={() => void navigate("/tools/"+encodeURIComponent(provider.providerId))}>
                     {t("View tools")} <ArrowRightIcon data-icon="inline-end" />
                   </Button>
