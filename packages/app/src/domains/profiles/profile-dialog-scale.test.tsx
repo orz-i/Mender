@@ -102,6 +102,13 @@ async function openSource(name: string) {
   return picker;
 }
 
+it("labels Catalog tool counts without implying their Agent backend is executable", async () => {
+  show();
+  const picker = await chooseSources();
+  expect(within(picker).getAllByText("25 tools")).toHaveLength(3);
+  expect(within(picker).queryByText("25 available Tools")).toBeNull();
+});
+
 it("shows selected sources before Tools and preserves per-source management pagination", async () => {
   show();
   const dialog = await manage();

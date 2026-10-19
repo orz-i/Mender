@@ -373,7 +373,7 @@ export function SkillsPage({
         }
         filters={
           <>
-            <div className="w-full min-w-0 sm:w-56 md:w-64 sm:shrink-0">
+            <div className="w-full min-w-0 sm:w-40 lg:w-44 2xl:w-56 sm:shrink-0">
               <SearchField value={query} onChange={setQuery} placeholder="Search Skills…" label="Search Skills" />
             </div>
             <FilterPopover

@@ -1392,8 +1392,6 @@ export const zhCNMessages: Readonly<Record<string, string>> = {
   "Sources": "来源",
   "Try another source name.": "请尝试其他来源名称。",
   "Unknown source": "未知来源",
-  "{{count}} available Tool": "{{count}} 个可用工具",
-  "{{count}} available Tools": "{{count}} 个可用工具",
   "{{count}} loaded Tool": "已加载 {{count}} 个工具",
   "{{count}} loaded Tools": "已加载 {{count}} 个工具",
   "{{count}} selected Tool": "已选 {{count}} 个工具",

@@ -222,7 +222,7 @@ export function ProfileToolSourcePicker({
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-medium">{sourceLabels.get(provider.providerId)}</span>
                     <span className="mt-1 block text-xs text-muted-foreground">
-                      {tCount(provider.toolCount, "{{count}} available Tool", "{{count}} available Tools")}
+                      {tCount(provider.toolCount, "{{count}} tool", "{{count}} tools")}
                     </span>
                   </span>
                   <span className="text-xs text-muted-foreground">

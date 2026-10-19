@@ -1185,7 +1185,7 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
                           <span className="block truncate text-sm font-medium">{group.label}</span>
                           <span className="mt-1 block text-xs text-muted-foreground">
                             {tCount(group.count, "{{count}} selected Tool", "{{count}} selected Tools")}
-                            {group.provider ? " / " + tCount(group.provider.toolCount, "{{count}} available Tool", "{{count}} available Tools") : null}
+                            {group.provider ? " / " + tCount(group.provider.toolCount, "{{count}} tool", "{{count}} tools") : null}
                           </span>
                         </span>
                         {group.provider?.toolSourceSelectable === false || !group.provider ? (
