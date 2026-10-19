@@ -62,23 +62,18 @@ function showServer(
 it.each([
   { provider: "openai" as const, label: "OpenAI" },
   { provider: "external" as const, label: "External plugin" },
-])("shows $provider beneath the Tunnel name, and the live status as the only Tunnel badge", async ({ provider, label }) => {
+])("shows only the Tunnel name for a healthy $provider Tunnel", async ({ provider, label }) => {
   showServer(vi.fn().mockResolvedValue({
     servers: [{ ...fixture, tunnelDisplayName: "Mender", tunnelProvider: provider, tunnelStatus: "ready" }],
   }));
 
   const row = await screen.findByRole("row", { name: /default/ });
-  const tunnelName = within(row).getByText("Mender");
-  const providerLabel = within(row).getByText(label);
-  const status = within(row).getByText("Ready");
-
-  expect(tunnelName.getAttribute("title")).toBe("Mender");
-  expect(providerLabel.closest('[data-slot="badge"]')).toBeNull();
-  expect(status.closest('[data-slot="badge"]')?.className).toContain("bg-accent");
-  expect(row.querySelectorAll('[data-slot="badge"]')).toHaveLength(2); // Server running and Tunnel ready
-  if (provider === "external") {
-    expect(within(row).queryByText("OpenAI")).toBeNull();
-  }
+  const tunnelCell = within(row).getAllByRole("cell")[2]!;
+  const tunnelName = within(tunnelCell).getByText("Mender");
+  expect(tunnelCell.textContent).toBe("Mender");
+  expect(tunnelName.getAttribute("title")).toBe("Mender · " + label + " · Ready");
+  expect(tunnelCell.querySelector('[data-slot="badge"]')).toBeNull();
+  expect(row.querySelectorAll('[data-slot="badge"]')).toHaveLength(1); // Server running only
 });
 
 it("does not assume an OpenAI Tunnel provider when provider metadata is absent", async () => {
@@ -88,8 +83,26 @@ it("does not assume an OpenAI Tunnel provider when provider metadata is absent",
     servers: [{ ...withoutProvider, tunnelDisplayName: "Mender", tunnelStatus: "ready" }],
   }));
   const row = await screen.findByRole("row", { name: /default/ });
-  expect(within(row).getByText("Mender")).toBeTruthy();
+  const tunnelCell = within(row).getAllByRole("cell")[2]!;
+  expect(tunnelCell.textContent).toBe("Mender");
+  expect(within(tunnelCell).getByText("Mender").getAttribute("title")).toBe("Mender · Ready");
   expect(within(row).queryByText("OpenAI")).toBeNull();
+});
+
+it.each([
+  { status: "degraded" as const, variant: "bg-sunlight/20" },
+  { status: "failed" as const, variant: "bg-destructive/10" },
+  { status: "exited" as const, variant: "bg-sunlight/20" },
+])("surfaces the $status Tunnel exception next to its name", async ({ status, variant }) => {
+  showServer(vi.fn().mockResolvedValue({
+    servers: [{ ...fixture, tunnelDisplayName: "Mender", tunnelStatus: status }],
+  }));
+  const row = await screen.findByRole("row", { name: /default/ });
+  const tunnelCell = within(row).getAllByRole("cell")[2]!;
+  expect(within(tunnelCell).getByText("Mender")).toBeTruthy();
+  const warning = tunnelCell.querySelector('[data-slot="badge"]');
+  expect(warning?.className).toContain(variant);
+  expect(warning?.textContent).toBe(status === "degraded" ? "Degraded" : status === "failed" ? "Failed" : "Exited");
 });
 
 it("reconciles Tunnel starting -> ready -> degraded from Mender without manual Refresh", async () => {
@@ -100,13 +113,14 @@ it("reconciles Tunnel starting -> ready -> degraded from Mender without manual R
       .mockResolvedValueOnce({ servers: [{ ...fixture, tunnelStatus: "ready" }] })
       .mockResolvedValueOnce({ servers: [{ ...fixture, tunnelStatus: "degraded" }] });
     const { listProfiles, unmount } = showServer(listMCPServers);
-    expect(await screen.findByText("Starting")).toBeTruthy();
+    const tunnel = await screen.findByText("OpenAI Test Tunnel");
+    expect(tunnel.getAttribute("title")).toContain("Starting");
+    expect(screen.queryByText("Starting")).toBeNull();
     await waitFor(() => expect(polling.installed()).toBe(true));
-    expect(screen.getByText("Starting").className).not.toContain("text-destructive");
 
     await polling.tick();
-    expect(await screen.findByText("Ready")).toBeTruthy();
-    expect(screen.getByText("Ready").className).not.toContain("text-destructive");
+    await waitFor(() => expect(tunnel.getAttribute("title")).toContain("Ready"));
+    expect(screen.queryByText("Ready")).toBeNull();
     await polling.tick();
     expect(await screen.findByText("Degraded")).toBeTruthy();
     // Degraded remains visibly actionable without being conflated with a terminal failure.
@@ -127,7 +141,7 @@ it("does not resurrect a stopped Tunnel server from an in-flight stale status re
     const listMCPServers = vi.fn().mockResolvedValueOnce({ servers: [fixture] }).mockReturnValueOnce(stale);
     const stopMCPServer = vi.fn().mockResolvedValue(undefined);
     showServer(listMCPServers, { stopMCPServer });
-    expect(await screen.findByText("Starting")).toBeTruthy();
+    expect(await screen.findByText("OpenAI Test Tunnel")).toBeTruthy();
     await waitFor(() => expect(polling.installed()).toBe(true));
 
     await polling.tick();
@@ -167,21 +181,22 @@ it("retains last known status on transient polling errors without issuing overla
       .mockRejectedValueOnce(new Error("transient Wails bridge unavailable"))
       .mockResolvedValueOnce({ servers: [{ ...fixture, tunnelStatus: "ready" }] });
     showServer(listMCPServers);
-    expect(await screen.findByText("Starting")).toBeTruthy();
+    const tunnel = await screen.findByText("OpenAI Test Tunnel");
+    expect(tunnel.getAttribute("title")).toContain("Starting");
     await waitFor(() => expect(polling.installed()).toBe(true));
 
     await polling.tick();
     await polling.tick();
     expect(listMCPServers).toHaveBeenCalledTimes(2);
-    expect(screen.getByText("Starting")).toBeTruthy();
+    expect(tunnel.getAttribute("title")).toContain("Starting");
 
     await act(async () => { finishRequest?.({ servers: [fixture] }); await Promise.resolve(); });
     await polling.tick();
-    expect(screen.getByText("Starting")).toBeTruthy();
+    expect(tunnel.getAttribute("title")).toContain("Starting");
     expect(screen.queryByText("No running MCP servers")).toBeNull();
 
     await polling.tick();
-    expect(await screen.findByText("Ready")).toBeTruthy();
+    await waitFor(() => expect(tunnel.getAttribute("title")).toContain("Ready"));
     expect(listMCPServers).toHaveBeenCalledTimes(4);
   } finally { polling.restore(); }
 });
@@ -190,6 +205,8 @@ it("renders user-facing Tunnel phases in Chinese rather than raw English enum st
   setLocale("zh-CN");
   const listMCPServers = vi.fn().mockResolvedValue({ servers: [{ ...fixture, tunnelStatus: "ready" }] });
   showServer(listMCPServers);
-  expect(await screen.findByText("就绪")).toBeTruthy();
+  const tunnel = await screen.findByText("OpenAI Test Tunnel");
+  expect(tunnel.getAttribute("title")).toContain("就绪");
+  expect(screen.queryByText("就绪")).toBeNull();
   expect(screen.queryByText("ready")).toBeNull();
 });

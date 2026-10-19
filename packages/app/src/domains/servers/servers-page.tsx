@@ -52,21 +52,15 @@ function tunnelStatusLabel(status: NonNullable<MCPServerInstance["tunnelStatus"]
     case "running": return t("Running");
   }
 }
-function tunnelStatusVariant(status: NonNullable<MCPServerInstance["tunnelStatus"]>): "positive" | "information" | "caution" | "outline" | "secondary" | "destructive" {
-  switch (status) {
-    case "ready":
-      return "positive";
-    case "running":
-      return "information";
-    case "starting":
-      return "outline";
-    case "degraded":
-      return "caution";
-    case "failed":
-      return "destructive";
-    case "exited":
-      return "secondary";
-  }
+function tunnelHint(server: MCPServerInstance): string {
+  const provider = server.tunnelProvider === "external"
+    ? t("External plugin")
+    : server.tunnelProvider === "openai" ? t("OpenAI") : "";
+  return [
+    server.tunnelDisplayName || t("Tunnel"),
+    provider,
+    server.tunnelStatus ? tunnelStatusLabel(server.tunnelStatus) : "",
+  ].filter(Boolean).join(" · ");
 }
 
 export function ServersPage({
@@ -294,28 +288,20 @@ export function ServersPage({
                     </TableCell>
                     <TableCell>
                       {server.tunnelId ? (
-                        <div className="flex min-w-0 max-w-[220px] flex-col gap-1">
-                          <div className="flex min-w-0 items-center gap-2">
-                            <span
-                              className="min-w-0 truncate text-sm font-medium"
-                              title={server.tunnelDisplayName || t("Tunnel")}
+                        <div className="flex min-w-0 max-w-[220px] items-center gap-2">
+                          <span className="min-w-0 truncate text-sm font-medium" title={tunnelHint(server)}>
+                            {server.tunnelDisplayName || t("Tunnel")}
+                          </span>
+                          {server.tunnelStatus === "degraded" ||
+                          server.tunnelStatus === "failed" ||
+                          server.tunnelStatus === "exited" ? (
+                            <Badge
+                              variant={server.tunnelStatus === "failed" ? "destructive" : "caution"}
+                              className="shrink-0"
+                              aria-live="polite"
                             >
-                              {server.tunnelDisplayName || t("Tunnel")}
-                            </span>
-                            {server.tunnelStatus ? (
-                              <Badge
-                                variant={tunnelStatusVariant(server.tunnelStatus)}
-                                className="shrink-0"
-                                aria-live="polite"
-                              >
-                                {tunnelStatusLabel(server.tunnelStatus)}
-                              </Badge>
-                            ) : null}
-                          </div>
-                          {server.tunnelProvider ? (
-                            <span className="truncate text-xs text-muted-foreground">
-                              {server.tunnelProvider === "external" ? t("External plugin") : t("OpenAI")}
-                            </span>
+                              {tunnelStatusLabel(server.tunnelStatus)}
+                            </Badge>
                           ) : null}
                         </div>
                       ) : (
