@@ -1,6 +1,6 @@
 # MCP Provider OAuth + Credential inventory — implementation contract
 
-- Date: 2026-10-19; status: implementation
+- Date: 2026-10-19; status: implemented and code-validated; live deployment and external IdP acceptance pending
 - Scope: upstream HTTP MCP OAuth authorization, token lifecycle, Credential inventory and shared UI.
 - References: MCP Authorization 2026-07-28; RFC 9728, 8414, 9207, 8707; OAuth 2.1 PKCE S256; Go MCP SDK v1.8.0 auth.AuthorizationCodeHandler.
 - Invariants: ADR-0021 Provider-wide connection identity + Profile ToolBinding credential proof, Mender not Agent Loop.
@@ -10,10 +10,10 @@
 1. Add Credential `source: "oauth"` with only safe metadata: canonical MCP resource endpoint, issuer, scopes, expiry, status (`connected|authorization_required|expired`). Persist OAuth access/refresh tokens, confidential client credentials and dynamically registered secret **only in existing native OS keyring**. Never store secret or authorization code/state/verifier in SQLite, logs/audit, Provider config, frontend storage or API responses. Generic `CredentialResolver.Resolve` must reject OAuth so it cannot be misused as a static API Key.
 2. MCP HTTP plugin supports `transport.oauthCredentialRef: "credential://namespace/name"`, mutually exclusive with static and credential-backed Authorization headers. stdio rejects OAuth fields. Include OAuth ref in `RequiredCredentialRefs` and `ConfigMetadata`, preserving Profile scope, Credential deletion usage and exact Provider identity. Two OAuth accounts = two Providers, never switch identities on a shared connection.
 3. Backend OAuth APIs on management REST and Wails desktop with equivalent semantics:
-   - `startOAuthCredential({namespace,name,displayName,mcpEndpoint,clientId?,clientSecretRef?,scopes?})` → `{flowId,authorizationUrl}`, reusing same OAuth reference on reauth, rejecting unrelated collisions.
-   - `getOAuthFlow(flowId)` → `{status:"pending"|"connected"|"failed"|"expired"|"cancelled",credential?:Credential,error?:string}`.
+   - `startOAuthCredential({namespace,name,displayName,mcpEndpoint,clientId?,clientIdMetadataUrl?,scopes?})` → `{flowId,authorizationUrl}`, reusing the same OAuth reference for reauthorization and rejecting unrelated collisions. With neither client field, advertised DCR is attempted.
+   - `getOAuthFlow(flowId)` → `{status:"pending"|"connected"|"failed"|"expired"|"cancelled",credential?:Credential,message?:string}`.
    - `cancelOAuthFlow(flowId)` cancels matching pending transaction.
-   - `disconnectOAuthCredential(namespace,name)` clears local token, best-effort remote revocation if advertised; retains inventory ref with authorization_required state.
+   - `disconnectOAuthCredential(namespace,name)` clears the local token; retains the inventory Reference with authorization_required state. Remote revocation is intentionally deferred and cannot be claimed.
    - Existing list/get/delete project safe OAuth metadata; rotateNative rejects OAuth. Deletion remains usage-guarded.
 4. Browser flow: bind localhost `127.0.0.1:0` before returning auth URL; in-memory bounded TTL transaction with cryptographic state + PKCE S256, loopback callback validates state/issuer, exchanges code server-side, emits safe finish page (no tokens/codes). Frontend opens system browser and polls flow; no automatic browser challenge on Tool calls.
 5. Use MCP-protected-resource discovery `WWW-Authenticate: resource_metadata`, well-known path fallback, auth-server metadata (RFC8414/OIDC); send resource parameter on auth/token, validate RFC9207 issuer, scope selection + server errors; prefer Go SDK auth. Support pre-registered client (including manually hosted HTTPS client-ID metadata document) and advertised DCR fallback; do not pretend native desktop hosts a public CIMD. No insecure network metadata/redirect following, SSRF and cross-origin token protections, bounded timeouts, safe nonsecret errors.
@@ -56,7 +56,7 @@ First login discovery -> PKCE -> localhost callback -> OS keyring -> MCP bearer 
 - Go targeted `go test -race` passed for `credential/...`, `mcp/infrastructure/...`, `invocation/application`, including fake OAuth authorization server (PKCE, 401 challenge, issuer, dynamic native client registration, callback tampering and cancellation), Keychain-backed token storage through fakes, concurrent single refresh and rotated refresh token across Manager restart, `invalid_grant` requiring reauthorization, OAuth credential/method conflict, wrong resource, redirect and cross-origin/path rejection.
 - `golangci-lint run ./backend/...` reported **0 issues**.
 - `pnpm lint`, `pnpm typecheck`, `pnpm i18n:check` passed (1,420 localized message keys). All generated Wails bindings and OpenAPI SDK schema are committed; generated-file checks were successful.
-- Full pipeline `pnpm check` got through Protocol/SDK/plugin modules, generated check, all Go tests and Go Race tests, frontend lint/typecheck, then encountered **one intermittent unrelated Docker 5-second polling-timer assertion** in the shared 300-test Vitest run. That exact test passed alone and all **37** tests in its source file passed together; follow-up `pnpm test` passed **49 files / 300 tests**, and `pnpm build` passed for Web and Desktop. First pipeline exit is recorded as failed; do not report a full green `pnpm check` until a completely successful rerun exists. Existing non-fatal Vite chunk-size warnings remain.
+- First full `pnpm check` reached the shared Vitest suite and encountered **one intermittent unrelated Docker 5-second polling-timer assertion**. That exact test passed in isolation, all **37** tests in the same file passed, and follow-up `pnpm test` passed **49 files / 300 tests**; `pnpm build` passed Web and Desktop. **Second complete `pnpm check` rerun passed, exit code 0**, log `/tmp/mender-oauth-full-check-rerun.log`. It includes Protocol/SDK checks, generated OpenAPI/Wails bindings, Go unit and Go Race tests, lint, typecheck, i18n (1,420 keys), all 300 Vitest cases and both production builds. Only existing non-fatal Vite chunk-size warnings remain.
 
 ### Deliberately pending / truthful production boundary
 
