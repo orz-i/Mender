@@ -169,7 +169,7 @@ export function PluginsPage({
         />}
         filters={
           <>
-            <div className="w-full min-w-0 sm:w-48 sm:shrink-0">
+            <div className="w-full min-w-0 sm:w-56 md:w-64 sm:shrink-0">
               <SearchField
                 value={query}
                 onChange={(value) => { setQuery(value); setCursorHistory([null]); }}
@@ -355,6 +355,7 @@ export function PluginDetailPage({ client }: { client: MenderClient }) {
             <Button
               type="button"
               variant="outline"
+              size="sm"
               onClick={() => void navigate(backPath)}
             >
               <ArrowLeftIcon data-icon="inline-start" />
@@ -363,6 +364,7 @@ export function PluginDetailPage({ client }: { client: MenderClient }) {
             {createAction !== undefined ? (
               <Button
                 type="button"
+                size="sm"
                 disabled={busy !== ""}
                 onClick={() => void navigate(createAction.href)}
               >
@@ -374,6 +376,7 @@ export function PluginDetailPage({ client }: { client: MenderClient }) {
               <IconButton
                 type="button"
                 variant="outline"
+                size="icon-sm"
                 label={t("Disable {{plugin}}", {
                   plugin: plugin.displayName,
                 })}
@@ -386,6 +389,7 @@ export function PluginDetailPage({ client }: { client: MenderClient }) {
               <IconButton
                 type="button"
                 variant="outline"
+                size="icon-sm"
                 label={t("Enable {{plugin}}", {
                   plugin: plugin.displayName,
                 })}
@@ -399,6 +403,7 @@ export function PluginDetailPage({ client }: { client: MenderClient }) {
               <IconButton
                 type="button"
                 variant="destructive"
+                size="icon-sm"
                 label={t("Remove {{plugin}}", {
                   plugin: plugin.displayName,
                 })}
@@ -608,9 +613,9 @@ function PluginCard({ plugin,view }: { plugin: MarketplacePlugin; view:"discover
       aria-label={t("View {{plugin}}", {
         plugin: plugin.displayName,
       })}
-      className="group block rounded-[22px] outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="group block rounded-[22px] outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
     >
-      <Card className="h-full transition-[transform,box-shadow] duration-200 group-hover:-translate-y-0.5 group-hover:shadow-[0_16px_32px_-16px_rgb(18_18_18/0.24)]">
+      <Card className="h-full border-border/60 transition-[transform,box-shadow,border-color] duration-200 group-hover:-translate-y-0.5 group-hover:border-border group-hover:shadow-[0_12px_28px_-12px_rgb(18_18_18/0.15)] dark:group-hover:shadow-[0_12px_28px_-12px_rgb(0_0_0/0.4)]">
         <CardHeader className="gap-3">
           <div className="flex min-w-0 items-start gap-3">
             <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-foreground text-background dark:bg-muted dark:text-foreground">
@@ -622,7 +627,7 @@ function PluginCard({ plugin,view }: { plugin: MarketplacePlugin; view:"discover
               </CardTitle>
               <p className="mt-1 text-xs text-muted-foreground">{pluginKindLabel(plugin)}</p>
             </div>
-            <Badge variant={plugin.status === "enabled" ? "default" : "secondary"}>
+            <Badge variant={pluginStatusVariant(plugin.status)}>
               {pluginStatusLabel(plugin)}
             </Badge>
           </div>
@@ -639,7 +644,7 @@ function PluginCard({ plugin,view }: { plugin: MarketplacePlugin; view:"discover
           {plugin.capabilities.length ? (
             <div className="flex min-h-6 flex-wrap items-center gap-1.5">
               {plugin.capabilities.slice(0, 3).map((capability) => (
-                <Badge key={capability} variant="ghost">
+                <Badge key={capability} variant="outline">
                   {capability}
                 </Badge>
               ))}
@@ -660,7 +665,7 @@ function PluginCard({ plugin,view }: { plugin: MarketplacePlugin; view:"discover
           <span className="text-xs text-muted-foreground">
             {t("Version")}
           </span>
-          <span className="truncate font-mono text-xs">
+          <span className="truncate font-mono text-xs text-foreground/80">
             {pluginVersionLabel(plugin)}
           </span>
         </CardFooter>
@@ -698,6 +703,7 @@ function MarketplaceCursorPagination({
         <IconButton
           type="button"
           variant="outline"
+          size="icon-sm"
           label={t("{{label}} previous page", {
             label: t("Plugin Marketplace"),
           })}
@@ -709,6 +715,7 @@ function MarketplaceCursorPagination({
         <IconButton
           type="button"
           variant="outline"
+          size="icon-sm"
           label={t("{{label}} next page", {
             label: t("Plugin Marketplace"),
           })}
@@ -732,13 +739,13 @@ function DetailField({
   mono?: boolean;
 }) {
   return (
-    <div className="rounded-xl border border-border/70 bg-background/80 p-3">
+    <div className="rounded-xl border border-border/70 bg-muted/20 p-3">
       <p className="text-xs font-medium text-muted-foreground">
         {t(label)}
       </p>
       <p
         className={[
-          "mt-1 break-all text-sm",
+          "mt-1 break-all text-sm text-foreground",
           mono ? "font-mono text-xs" : "",
         ].join(" ")}
       >
@@ -765,6 +772,26 @@ function pluginSourceLabel(plugin:MarketplacePlugin){
     case "builtin":return t("Built-in");
     case "local":return t("Local package");
     default:return t(plugin.sourceLabel);
+  }
+}
+
+function pluginStatusVariant(
+  status: MarketplacePluginStatus,
+): "default" | "secondary" | "destructive" | "outline" | "caution" {
+  switch (status) {
+    case "enabled":
+      return "default";
+    case "available":
+      return "outline";
+    case "disabled":
+      return "secondary";
+    case "invalid":
+      return "destructive";
+    case "degraded":
+    case "unavailable":
+      return "caution";
+    default:
+      return "secondary";
   }
 }
 

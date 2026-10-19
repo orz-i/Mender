@@ -368,7 +368,7 @@ export function SkillsPage({
         }
         filters={
           <>
-            <div className="w-full min-w-0 sm:w-48 sm:shrink-0">
+            <div className="w-full min-w-0 sm:w-56 md:w-64 sm:shrink-0">
               <SearchField value={query} onChange={setQuery} placeholder="Search Skills…" label="Search Skills" />
             </div>
             <FilterPopover
@@ -451,67 +451,71 @@ export function SkillsPage({
                   {skillPagination.items.map((item) => (
                       <div
                         key={item.installationId}
-                        className="group flex min-h-[96px] items-center gap-3 rounded-xl border border-border/75 bg-background p-3.5 transition-all hover:border-primary/25 hover:bg-muted/20"
+                        className="group flex min-h-[88px] min-w-0 flex-col items-stretch gap-3 rounded-xl border border-border/70 bg-card p-3.5 transition-[border-color,box-shadow] hover:border-border hover:shadow-xs lg:flex-row lg:items-center dark:hover:border-border/80"
                       >
                         <button
                           type="button"
                           onClick={() => openSkill(item)}
-                          className="flex min-w-0 flex-1 items-center gap-3 text-left outline-none"
+                          className="flex w-full min-w-0 flex-1 items-start gap-3 rounded-lg text-left outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card lg:items-center"
                         >
                           <span
                             className={[
-                              "flex size-12 shrink-0 items-center justify-center rounded-xl",
+                              "flex size-11 shrink-0 items-center justify-center rounded-xl",
                               item.builtIn
                                 ? "bg-foreground text-background dark:bg-muted dark:text-foreground"
                                 : "bg-muted text-muted-foreground",
                             ].join(" ")}
                           >
                             {item.builtIn ? (
-                              <BookOpenIcon className="size-[22px]" />
+                              <BookOpenIcon className="size-5" />
                             ) : (
-                              <FileCode2Icon className="size-[22px]" />
+                              <FileCode2Icon className="size-5" />
                             )}
                           </span>
 
                           <span className="min-w-0 flex-1">
-                            <span className="flex min-w-0 items-center gap-2">
-                              <span className="truncate text-sm font-semibold tracking-tight">
+                            <span className="flex min-w-0 flex-wrap items-center gap-1.5">
+                              <span className="truncate text-sm font-semibold tracking-tight text-foreground">
                                 {item.name}
                               </span>
                               <Badge
-                                variant="outline"
-                                className={[
-                                  "shrink-0 rounded-full px-2 py-0 text-[10px] font-medium",
-                                  item.builtIn
-                                    ? "border-accent bg-accent text-accent-foreground"
-                                    : "bg-muted/60 text-muted-foreground",
-                                ].join(" ")}
+                                variant={item.builtIn ? "default" : "outline"}
+                                className="shrink-0"
                               >
                                 {item.builtIn ? t("Built-in") : t("Local")}
                               </Badge>
+                              <span className="sm:hidden">
+                                <Badge
+                                  variant={item.enabled ? "default" : "secondary"}
+                                  className="shrink-0"
+                                >
+                                  {item.enabled ? t("Enabled") : t("Disabled")}
+                                </Badge>
+                              </span>
                             </span>
-                            <span className="mt-1 line-clamp-2 block max-w-2xl text-xs leading-5 text-muted-foreground">
+                            <span className="mt-1 block max-h-[3.75rem] max-w-2xl overflow-hidden text-sm leading-5 text-muted-foreground" title={item.description}>
                               {item.description}
                             </span>
                           </span>
 
-                          <span className="hidden w-24 shrink-0 text-right sm:block">
-                            <span className="block text-xs text-muted-foreground">
+                          <span className="hidden w-28 shrink-0 text-right sm:block">
+                            <span className="block font-mono text-xs text-muted-foreground">
                               {item.versionHint || t("Unversioned")}
                             </span>
                             <Badge
-                              variant={item.enabled ? "outline" : "secondary"}
-                              className="mt-1 rounded-full px-2 py-0 text-[10px]"
+                              variant={item.enabled ? "default" : "secondary"}
+                              className="mt-1 shrink-0"
                             >
                               {item.enabled ? t("Enabled") : t("Disabled")}
                             </Badge>
                           </span>
                         </button>
 
-                        <div className="flex shrink-0 items-center gap-0.5">
+                        <div className="flex w-full shrink-0 items-center justify-end gap-1 border-t border-border/65 pt-2 lg:w-auto lg:border-t-0 lg:pt-0">
                           <IconButton
                             type="button"
                             variant="ghost"
+                            size="icon-lg"
                             label={t("View {{skill}}", {
                               skill: item.name,
                             })}
@@ -524,6 +528,7 @@ export function SkillsPage({
                             <IconButton
                               type="button"
                               variant="ghost"
+                              size="icon-lg"
                               label={t("Deploy {{skill}}", {
                                 skill: item.name,
                               })}
@@ -538,6 +543,7 @@ export function SkillsPage({
                               <IconButton
                                 type="button"
                                 variant="ghost"
+                                size="icon-lg"
                                 label={
                                   item.trusted
                                     ? t("Untrust {{skill}}", {
@@ -559,6 +565,7 @@ export function SkillsPage({
                               <IconButton
                                 type="button"
                                 variant="ghost"
+                                size="icon-lg"
                                 label={
                                   item.enabled
                                     ? t("Disable {{skill}}", {
@@ -580,6 +587,7 @@ export function SkillsPage({
                               <IconButton
                                 type="button"
                                 variant="ghost"
+                                size="icon-lg"
                                 label={t("Delete {{skill}}", {
                                   skill: item.name,
                                 })}
@@ -632,7 +640,7 @@ export function SkillsPage({
           <DialogBody>
           {selected !== null && skillView === "overview" ? (
             <div className="space-y-5">
-              <div className="flex items-start gap-3 rounded-xl border border-border/70 bg-muted/15 p-4">
+              <div className="flex items-start gap-3 rounded-xl border border-border/70 bg-muted/20 p-4">
                 <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-foreground text-background dark:bg-muted dark:text-foreground">
                   {selected.builtIn ? (
                     <BookOpenIcon className="size-5" />
@@ -642,24 +650,13 @@ export function SkillsPage({
                 </span>
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <p className="text-base font-semibold tracking-tight">
+                    <p className="text-base font-semibold tracking-tight text-foreground">
                       {selected.name}
                     </p>
-                    <Badge
-                      variant="outline"
-                      className="rounded-full px-2 py-0 text-[10px]"
-                    >
+                    <Badge variant={selected.builtIn ? "default" : "outline"}>
                       {selected.builtIn ? t("Built-in") : t("Local")}
                     </Badge>
-                    <Badge
-                      variant="outline"
-                      className={[
-                        "rounded-full px-2 py-0 text-[10px]",
-                        selected.enabled
-                          ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                          : "bg-muted text-muted-foreground",
-                      ].join(" ")}
-                    >
+                    <Badge variant={selected.enabled ? "default" : "secondary"}>
                       {selected.enabled ? t("Enabled") : t("Disabled")}
                     </Badge>
                   </div>
@@ -784,7 +781,7 @@ export function SkillsPage({
                       {resource.executable ? (
                         <Badge
                           variant="outline"
-                          className="shrink-0 rounded-full px-2 py-0 text-[10px]"
+                          className="shrink-0"
                         >
                           {t("Executable")}
                         </Badge>
@@ -816,13 +813,13 @@ export function SkillsPage({
                             {deploymentTargetLabel(item.target)}
                           </p>
                           <Badge
-                            variant="outline"
-                            className={[
-                              "rounded-full px-2 py-0 text-[10px]",
+                            variant={
                               item.drift === "current"
-                                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                                : "bg-muted text-muted-foreground",
-                            ].join(" ")}
+                                ? "default"
+                                : item.drift === "missing"
+                                  ? "destructive"
+                                  : "secondary"
+                            }
                           >
                             {deploymentDriftLabel(item.drift)}
                           </Badge>
@@ -840,6 +837,7 @@ export function SkillsPage({
                       <IconButton
                         type="button"
                         variant="ghost"
+                        size="icon-sm"
                         label={t("Undeploy {{skill}}", {
                           skill: selected.name,
                         })}
@@ -971,7 +969,7 @@ function SkillMeta({
       <p className="text-xs font-medium text-muted-foreground">{t(label)}</p>
       <p
         className={[
-          "mt-1 break-all text-sm",
+          "mt-1 break-all text-sm text-foreground",
           mono ? "font-mono text-xs" : "",
         ].join(" ")}
       >

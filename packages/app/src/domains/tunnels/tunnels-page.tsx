@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Trash2Icon } from "lucide-react";
+import { PlusIcon, Trash2Icon } from "lucide-react";
 import { useSearchParams } from "react-router";
 
 import type { Credential, MenderClient, Tunnel, PluginCatalogueEntry } from "@mender/sdk";
@@ -187,13 +187,18 @@ export function TunnelsPage({ client }: { client: MenderClient }) {
     <>
       <PageToolbar
         tabs={
-          <span className="text-xs text-muted-foreground">
+          <span className="text-sm text-muted-foreground">
             {tCount(tunnels.length, "{{count}} Tunnel configured", "{{count}} Tunnels configured")}
           </span>
         }
         filters={
-          <div className="w-full min-w-0 sm:w-56 sm:shrink-0">
-            <SearchField label="Search tunnels" placeholder="Search tunnels…" value={inventoryQuery} onChange={setInventoryQuery} />
+          <div className="w-full min-w-0 sm:w-56 md:w-64 sm:shrink-0">
+            <SearchField
+              label="Search tunnels"
+              placeholder="Search tunnels…"
+              value={inventoryQuery}
+              onChange={setInventoryQuery}
+            />
           </div>
         }
         actions={
@@ -205,6 +210,7 @@ export function TunnelsPage({ client }: { client: MenderClient }) {
               setSelectionOpen(true);
             }}
           >
+            <PlusIcon data-icon="inline-start" />
             {t("Add tunnel")}
           </Button>
         }
@@ -220,31 +226,43 @@ export function TunnelsPage({ client }: { client: MenderClient }) {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>{t("Tunnel")}</TableHead>
-                  <TableHead>{t("Provider")}</TableHead>
-                  <TableHead>{t("External Tunnel ID")}</TableHead>
-                  <TableHead>{t("Runtime credential")}</TableHead>
-                  <TableHead className="text-right">{t("Actions")}</TableHead>
+                  <TableHead className="w-[28%] min-w-[140px]">{t("Tunnel")}</TableHead>
+                  <TableHead className="w-[18%] min-w-[110px]">{t("Provider")}</TableHead>
+                  <TableHead className="w-[27%] min-w-[160px]">{t("External Tunnel ID")}</TableHead>
+                  <TableHead className="w-[27%] min-w-[160px]">{t("Runtime credential")}</TableHead>
+                  <TableHead className="w-16 text-right">{t("Actions")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {pagination.items.map((item) => (
                   <TableRow key={item.tunnelId}>
-                    <TableCell className="font-medium">
-                      {item.displayName}
+                    <TableCell className="font-medium text-foreground">
+                      <span className="block truncate font-medium text-foreground" title={item.displayName}>
+                        {item.displayName}
+                      </span>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline">{item.provider==="external"?t("External plugin"):t("OpenAI")}</Badge>
+                      <Badge
+                        variant={item.provider === "external" ? "secondary" : "default"}
+                        className="shrink-0"
+                      >
+                        {item.provider === "external" ? t("External plugin") : t("OpenAI")}
+                      </Badge>
                     </TableCell>
-                    <TableCell className="max-w-[240px] truncate font-mono text-xs">
-                      {item.externalTunnelId}
+                    <TableCell className="max-w-[200px] truncate font-mono text-xs text-muted-foreground sm:max-w-[240px]">
+                      <span className="block truncate font-mono text-xs text-muted-foreground" title={item.externalTunnelId}>
+                        {item.externalTunnelId}
+                      </span>
                     </TableCell>
-                    <TableCell className="max-w-[260px] truncate font-mono text-xs text-muted-foreground">
-                      {item.runtimeCredentialRef}
+                    <TableCell className="max-w-[220px] truncate font-mono text-xs text-muted-foreground sm:max-w-[260px]">
+                      <span className="block truncate font-mono text-xs text-muted-foreground" title={item.runtimeCredentialRef}>
+                        {item.runtimeCredentialRef}
+                      </span>
                     </TableCell>
                     <TableCell className="text-right">
                       <IconButton
-                        variant="outline"
+                        variant="ghost"
+                        size="icon-sm"
                         label={t("Delete {{name}}", { name: item.displayName })}
                         disabled={busy !== ""}
                         onClick={() => setRemoveTarget(item)}
@@ -274,14 +292,16 @@ export function TunnelsPage({ client }: { client: MenderClient }) {
       }}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>{t("Confirm Tunnel removal")}</DialogTitle>
-            <DialogDescription>
+            <DialogTitle className="text-lg font-semibold tracking-tight text-foreground">
+              {t("Confirm Tunnel removal")}
+            </DialogTitle>
+            <DialogDescription className="text-xs leading-5 text-muted-foreground">
               {removeTarget?t('Delete Tunnel "{{name}}"? Profiles that reference it will block deletion.',{
                 name:removeTarget.displayName,
               }):""}
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter>
+          <DialogFooter className="gap-2 sm:gap-2">
             <Button type="button" variant="outline" disabled={busy!==""}
               onClick={()=>setRemoveTarget(null)}>{t("Cancel")}</Button>
             <Button type="button" variant="destructive" disabled={busy!=="" || !removeTarget}
@@ -293,19 +313,31 @@ export function TunnelsPage({ client }: { client: MenderClient }) {
       <Dialog open={selectionOpen} onOpenChange={setSelectionOpen}>
         <DialogContent className="sm:max-w-xl">
           <DialogHeader>
-            <DialogTitle>{t("Choose Tunnel transport")}</DialogTitle>
-            <DialogDescription>{t("Select one installed or built-in Tunnel transport.")}</DialogDescription>
+            <DialogTitle className="text-lg font-semibold tracking-tight text-foreground">
+              {t("Choose Tunnel transport")}
+            </DialogTitle>
+            <DialogDescription className="text-xs leading-5 text-muted-foreground">
+              {t("Select one installed or built-in Tunnel transport.")}
+            </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-2">
+          <div className="grid gap-2.5">
             {enabledPlugins.map((plugin)=>(
-              <button key={plugin.key} type="button"
-                className="rounded-xl border border-border p-4 text-left transition-colors hover:bg-accent"
-                onClick={()=>choosePlugin(plugin)}>
-                <span className="block font-medium">{plugin.displayName}</span>
-                <span className="mt-1 block text-xs text-muted-foreground">{plugin.description}</span>
+              <button
+                key={plugin.key}
+                type="button"
+                className="group flex flex-col items-start rounded-xl border border-border/80 bg-card p-4 text-left transition-all hover:border-primary/40 hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-offset-1"
+                onClick={()=>choosePlugin(plugin)}
+              >
+                <span className="flex items-center gap-2 font-medium text-foreground">
+                  {plugin.displayName}
+                  <Badge variant={plugin.installationId ? "secondary" : "default"} className="shrink-0 text-xs">
+                    {plugin.installationId ? t("External plugin") : t("Built-in")}
+                  </Badge>
+                </span>
+                <span className="mt-1.5 text-xs leading-5 text-muted-foreground">{plugin.description}</span>
               </button>
             ))}
-            {enabledPlugins.length===0?<p className="text-sm text-muted-foreground">{t("No available Tunnel transport plugins.")}</p>:null}
+            {enabledPlugins.length===0?<p className="py-6 text-center text-xs text-muted-foreground">{t("No available Tunnel transport plugins.")}</p>:null}
           </div>
         </DialogContent>
       </Dialog>
@@ -321,8 +353,10 @@ export function TunnelsPage({ client }: { client: MenderClient }) {
       >
         <DialogContent className="grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden sm:max-w-xl">
           <DialogHeader>
-            <DialogTitle>{t("Create Tunnel")}</DialogTitle>
-            <DialogDescription>
+            <DialogTitle className="text-lg font-semibold tracking-tight text-foreground">
+              {t("Create Tunnel")}
+            </DialogTitle>
+            <DialogDescription className="text-xs leading-5 text-muted-foreground">
               {t(
                 "Mender stores only a Credential Reference and resolves the secret when connecting the selected transport.",
               )}
@@ -332,7 +366,7 @@ export function TunnelsPage({ client }: { client: MenderClient }) {
           <DialogBody className="space-y-4">
             <ReadOnlyField label="Provider" value={selectedPlugin?.displayName??t("Unavailable")} />
 
-            <Field label="Display name">
+            <Field label="Tunnel display name">
               <Input
                 aria-label={t("Tunnel display name")}
                 placeholder={t("OpenAI Work")}
@@ -349,7 +383,7 @@ export function TunnelsPage({ client }: { client: MenderClient }) {
             <Field label="External Tunnel ID">
               <Input
                 aria-label={t("External Tunnel ID")}
-                className="font-mono"
+                className="font-mono text-xs"
                 placeholder={t("External Tunnel ID")}
                 value={createForm.externalTunnelId}
                 onChange={(event) =>
@@ -371,7 +405,7 @@ export function TunnelsPage({ client }: { client: MenderClient }) {
                     runtimeCredentialRef: event.target.value,
                   }))
                 }
-                className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
+                className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground outline-none transition-colors focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
               >
                 <option value="">{t("Choose a Credential")}</option>
                 {credentials.map((credential) => (
@@ -380,7 +414,7 @@ export function TunnelsPage({ client }: { client: MenderClient }) {
                   </option>
                 ))}
               </select>
-              <p className="mt-1 text-xs leading-5 text-muted-foreground">
+              <p className="mt-1.5 text-xs leading-5 text-muted-foreground">
                 {credentials.length
                   ? t(
                       "Use an inventory Credential authorized for the selected Tunnel transport.",
@@ -392,7 +426,7 @@ export function TunnelsPage({ client }: { client: MenderClient }) {
             </Field>
           </DialogBody>
 
-          <DialogFooter>
+          <DialogFooter className="gap-2 sm:gap-2">
             <DialogClose render={<Button variant="outline" />}>
               {t("Cancel")}
             </DialogClose>
@@ -418,7 +452,7 @@ function Field({
 }) {
   return (
     <label className="block space-y-1.5">
-      <span className="text-sm font-medium">{t(label)}</span>
+      <span className="text-sm font-medium text-foreground">{t(label)}</span>
       {children}
     </label>
   );
@@ -426,9 +460,9 @@ function Field({
 
 function ReadOnlyField({ label, value }: { label: string; value: string }) {
   return (
-    <div>
+    <div className="rounded-xl border border-border/70 bg-muted/20 p-3.5">
       <p className="text-xs font-medium text-muted-foreground">{t(label)}</p>
-      <p className="mt-1 text-sm">{value}</p>
+      <p className="mt-1 text-sm font-medium text-foreground">{value}</p>
     </div>
   );
 }
