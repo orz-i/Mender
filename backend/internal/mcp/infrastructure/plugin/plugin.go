@@ -93,6 +93,11 @@ func (p *Plugin) openHTTP(
 	request providerplugin.OpenRequest,
 	config Config,
 ) (providerplugin.Instance, error) {
+	// The non-secret binding is accepted for persistence, but OAuth credentials
+	// must never be silently downgraded to an unauthenticated MCP connection.
+	if config.Transport.OAuthCredentialRef != "" {
+		return nil, fmt.Errorf("open MCP HTTP: OAuth credential is not yet connected to an OAuth token source")
+	}
 	lookupEnv := p.lookupEnv
 	if lookupEnv == nil {
 		lookupEnv = os.LookupEnv

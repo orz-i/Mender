@@ -44,9 +44,10 @@ type Config struct {
 type TransportConfig struct {
 	Kind TransportKind `json:"kind"`
 
-	Endpoint          string             `json:"endpoint,omitempty"`
-	Headers           map[string]string  `json:"headers,omitempty"`
-	CredentialHeaders []CredentialHeader `json:"credentialHeaders,omitempty"`
+	Endpoint           string                     `json:"endpoint,omitempty"`
+	Headers            map[string]string          `json:"headers,omitempty"`
+	CredentialHeaders  []CredentialHeader         `json:"credentialHeaders,omitempty"`
+	OAuthCredentialRef credentialdomain.Reference `json:"oauthCredentialRef,omitempty"`
 
 	Executable            string                  `json:"executable,omitempty"`
 	Args                  []string                `json:"args,omitempty"`
@@ -111,6 +112,21 @@ func (c Config) Validate() error {
 		); err != nil {
 			return fmt.Errorf("MCP plugin config: %w", err)
 		}
+		if c.Transport.OAuthCredentialRef != "" {
+			if _, err := credentialdomain.ParseReference(c.Transport.OAuthCredentialRef.String()); err != nil {
+				return fmt.Errorf("MCP plugin config: OAuth credential: %w", err)
+			}
+			for name := range c.Transport.Headers {
+				if strings.EqualFold(name, "Authorization") {
+					return fmt.Errorf("MCP plugin config: OAuth cannot share an Authorization header")
+				}
+			}
+			for _, header := range c.Transport.CredentialHeaders {
+				if strings.EqualFold(header.Name, "Authorization") {
+					return fmt.Errorf("MCP plugin config: OAuth cannot share an Authorization credential header")
+				}
+			}
+		}
 		if c.Transport.Executable != "" ||
 			len(c.Transport.Args) != 0 ||
 			c.Transport.Directory != "" ||
@@ -126,7 +142,8 @@ func (c Config) Validate() error {
 		}
 		if c.Transport.Endpoint != "" ||
 			len(c.Transport.Headers) != 0 ||
-			len(c.Transport.CredentialHeaders) != 0 {
+			len(c.Transport.CredentialHeaders) != 0 ||
+			c.Transport.OAuthCredentialRef != "" {
 			return fmt.Errorf(
 				"MCP plugin config: stdio transport must not contain HTTP fields",
 			)
@@ -150,9 +167,13 @@ func (c Config) RequiredCredentialRefs() []credentialdomain.Reference {
 	refs := make(
 		[]credentialdomain.Reference,
 		0,
-		len(c.Transport.CredentialHeaders)+len(c.Transport.CredentialEnvironment),
+		len(c.Transport.CredentialHeaders)+len(c.Transport.CredentialEnvironment)+1,
 	)
 	seen := make(map[credentialdomain.Reference]struct{}, cap(refs))
+	if c.Transport.OAuthCredentialRef != "" {
+		refs = append(refs, c.Transport.OAuthCredentialRef)
+		seen[c.Transport.OAuthCredentialRef] = struct{}{}
+	}
 	for _, binding := range c.Transport.CredentialHeaders {
 		if _, ok := seen[binding.Reference]; ok {
 			continue
