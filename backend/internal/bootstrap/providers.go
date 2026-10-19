@@ -408,7 +408,8 @@ func (r *Runtime) registerConfiguredProvider(
 				cloneRawJSON(rawConfig),
 			); err != nil {
 				return fmt.Errorf(
-					"register configured provider: validate config: %w",
+					"register configured provider: validate config: %w: %w",
+					providerplugin.ErrInvalidConfiguration,
 					err,
 				)
 			}
@@ -521,7 +522,8 @@ func (r *Runtime) RegisterInstalledProvider(
 				cloneRawJSON(rawConfig),
 			); err != nil {
 				return fmt.Errorf(
-					"register installed provider: validate config: %w",
+					"register installed provider: validate config: %w: %w",
+					providerplugin.ErrInvalidConfiguration,
 					err,
 				)
 			}
@@ -639,7 +641,8 @@ func (r *Runtime) UpdateConfiguredProvider(
 				cloneRawJSON(rawConfig),
 			); err != nil {
 				return fmt.Errorf(
-					"update configured provider: validate config: %w",
+					"update configured provider: validate config: %w: %w",
+					providerplugin.ErrInvalidConfiguration,
 					err,
 				)
 			}
@@ -753,7 +756,8 @@ func (r *Runtime) rebindProviderInstallation(
 	}
 	if err := resolved.Plugin.ValidateConfig(ctx, cloneRawJSON(rawConfig)); err != nil {
 		return catalogapplication.SyncProviderToolsResult{}, fmt.Errorf(
-			"rebind provider installation: validate config: %w",
+			"rebind provider installation: validate config: %w: %w",
+			providerplugin.ErrInvalidConfiguration,
 			err,
 		)
 	}

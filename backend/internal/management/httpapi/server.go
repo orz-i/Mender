@@ -318,6 +318,7 @@ func writeKnownError(w http.ResponseWriter, err error) {
 		errors.Is(err, profileapplication.ErrInvalidBinding),
 		errors.Is(err, providerplugin.ErrNotFound),
 		errors.Is(err, providerplugin.ErrUnsupportedConfigVersion),
+		errors.Is(err, providerplugin.ErrInvalidConfiguration),
 		errors.Is(err, skillapplication.ErrInvalidAgentPluginPackage),
 		errors.Is(err, bootstrap.ErrInvalidMCPServerAddress):
 		writeAPIError(w, http.StatusBadRequest, "validation_error", err)

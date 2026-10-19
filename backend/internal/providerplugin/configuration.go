@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -14,6 +15,10 @@ const (
 	maxConfigBytes    = 4 * 1024 * 1024
 	maxRevisionLength = 256
 )
+
+// ErrInvalidConfiguration classifies operator-supplied Provider configuration
+// errors without conflating them with internal or runtime execution failures.
+var ErrInvalidConfiguration = errors.New("invalid provider configuration")
 
 // Configuration binds one canonical Provider to a Provider plugin and an
 // opaque plugin-owned configuration revision.
@@ -69,7 +74,7 @@ func newConfiguration(
 		Config:         config,
 	}
 	if err := result.ValidateForPersistence(); err != nil {
-		return Configuration{}, err
+		return Configuration{}, fmt.Errorf("%w: %w", ErrInvalidConfiguration, err)
 	}
 	return result, nil
 }
