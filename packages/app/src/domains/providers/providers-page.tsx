@@ -38,7 +38,6 @@ import { Textarea } from "@mender/ui/components/textarea";
 
 import { errorMessage } from "../../shared/errors";
 import { canonicalizeOwnedIdentifier, isCanonicalOwnedSlug, ownedIdentifierCreateError } from "../../shared/form-identifiers";
-import { IconButton } from "../../shared/icon-button";
 import { EmptyState, ErrorNotice, InsightBanner } from "../../shared/page";
 import { PageToolbar, ResultPanel } from "../../shared/page-toolbar";
 import { usePagination } from "../../shared/pagination";
@@ -651,13 +650,13 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
           }
         />
       ) : null}
-      {error && !hasSnapshot ? null : <ResultPanel title="Tool services">
+      {error && !hasSnapshot ? null : <ResultPanel title="Tool services" variant="plain" empty={visibleProviders.length === 0} className="w-full">
         {!loaded ? (
           <div className="px-4 py-12 text-center text-sm text-muted-foreground">
             {t("Loading services…")}
           </div>
         ) : visibleProviders.length ? (
-          <div className="grid min-w-0 gap-3 p-4 sm:grid-cols-2 2xl:grid-cols-3">
+          <div className="grid w-full min-w-0 gap-3 sm:grid-cols-2 2xl:grid-cols-3">
             {providerPagination.items.map(provider => {
               const name=toolSourceLabel(provider);
               const managed=provider.toolSourceKind==="agent" || provider.toolSourceKind==="sandbox" ||

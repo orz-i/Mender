@@ -22,9 +22,7 @@ import {
 import { Button } from "@mender/ui/components/button";
 import {
   Card,
-  CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "@mender/ui/components/card";
@@ -246,13 +244,13 @@ export function PluginsPage({
 
       {error ? <ErrorNotice message={error} onRetry={!hasSnapshot ? () => { void refresh(); } : undefined} /> : null}
 
-      {error && !hasSnapshot ? null : <ResultPanel title={view==="discover"?"Plugin catalog":"Installed plugins"}>
+      {error && !hasSnapshot ? null : <ResultPanel title={view==="discover"?"Plugin catalog":"Installed plugins"} variant="plain" empty={visiblePlugins.length === 0} className="w-full">
         {!loaded ? (
           <div className="px-4 py-12 text-center text-sm text-muted-foreground">
             {t("Loading plugins…")}
           </div>
         ) : visiblePlugins.length ? (
-          <div className="p-4">
+          <div className="w-full">
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {page.items.map((plugin) => (
                 <PluginCard key={plugin.key} plugin={plugin} view={view} />
@@ -269,7 +267,7 @@ export function PluginsPage({
         )}
       </ResultPanel>}
 
-      {hasSnapshot && visiblePlugins.length ? (
+      {hasSnapshot && (cursorHistory.length > 1 || page.nextCursor !== null) ? (
         <MarketplaceCursorPagination
           page={page}
           canGoPrevious={cursorHistory.length > 1}
@@ -635,44 +633,10 @@ function PluginCard({ plugin,view }: { plugin: MarketplacePlugin; view:"discover
               {pluginStatusLabel(plugin)}
             </Badge>
           </div>
-          <CardDescription className="min-h-[3.75rem] line-clamp-3">
+          <CardDescription className="min-h-10 line-clamp-2">
             {pluginDescription(plugin) || t("No plugin description.")}
           </CardDescription>
         </CardHeader>
-
-        <CardContent className="flex flex-col gap-3">
-          <div className="flex flex-wrap gap-2">
-            <Badge variant="secondary">{pluginKindLabel(plugin)}</Badge>
-            <Badge variant="outline">{pluginSourceLabel(plugin)}</Badge>
-          </div>
-          {plugin.capabilities.length ? (
-            <div className="flex min-h-6 flex-wrap items-center gap-1.5">
-              {plugin.capabilities.slice(0, 3).map((capability) => (
-                <Badge key={capability} variant="outline">
-                  {capability}
-                </Badge>
-              ))}
-              {plugin.capabilities.length > 3 ? (
-                <span className="text-xs text-muted-foreground">
-                  +{formatNumber(plugin.capabilities.length - 3)}
-                </span>
-              ) : null}
-            </div>
-          ) : (
-            <div className="min-h-6 text-xs text-muted-foreground">
-              {t("No declared capabilities.")}
-            </div>
-          )}
-        </CardContent>
-
-        <CardFooter className="justify-between gap-3">
-          <span className="text-xs text-muted-foreground">
-            {t("Version")}
-          </span>
-          <span className="truncate font-mono text-xs text-foreground/80">
-            {pluginVersionLabel(plugin)}
-          </span>
-        </CardFooter>
       </Card>
     </Link>
   );

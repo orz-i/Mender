@@ -73,6 +73,21 @@ describe("page-level toolbar and results surface", () => {
     expect(within(region).getByText("Create a local sandbox first.")).toBeTruthy();
   });
 
+  it("renders populated plain grids without a nested card or viewport centering", () => {
+    render(
+      <ResultPanel title="Installed sources" variant="plain" empty={false}>
+        <article data-slot="card">Source A</article>
+      </ResultPanel>,
+    );
+
+    const region = screen.getByRole("region", { name: "Installed sources" });
+    const plain = region.querySelector('[data-slot="result-panel-plain"]');
+    expect(plain).not.toBeNull();
+    expect(plain?.className).not.toContain("justify-center");
+    expect(region.className).not.toContain("flex-1");
+    expect(within(region).getByText("Source A")).toBeTruthy();
+  });
+
   it("preserves an accessible selected category and count when switching tabs", () => {
     render(<ToolbarHarness />);
     const all = screen.getByRole("button", { name: /All Skills/ });

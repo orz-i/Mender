@@ -70,6 +70,7 @@ describe("Tool services responsive cards", () => {
     expect(within(card!).getByText("5 tools")).toBeTruthy();
     expect(within(card!).queryByText("Model Context Protocol")).toBeNull();
     expect(screen.getByRole("button",{name:"View tools"})).toBeTruthy();
+    expect(screen.queryByRole("navigation", { name: "Tool services pagination" })).toBeNull();
     expect(within(card!).queryByRole("button",{name:"View Echo Service"})).toBeNull();
     fireEvent.click(within(card!).getByRole("button",{name:"Actions: Echo Service"}));
     expect(await screen.findByRole("button",{name:"View Echo Service"})).toBeTruthy();

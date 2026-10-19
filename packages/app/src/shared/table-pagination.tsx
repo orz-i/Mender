@@ -14,7 +14,10 @@ export function TablePagination<T>({
   pagination: PaginationState<T>;
   className?: string;
 }) {
-  if (pagination.total === 0) {
+  // A one-page inventory needs neither page navigation nor a page-size selector.
+  // Keep the selector after increasing page size so users can still switch back.
+  const smallestPageSize = pagination.pageSizeOptions[0] ?? pagination.pageSize;
+  if (pagination.total <= smallestPageSize) {
     return null;
   }
 

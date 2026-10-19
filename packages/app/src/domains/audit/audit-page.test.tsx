@@ -117,7 +117,7 @@ describe("Audit workbench", () => {
     fireEvent.click(screen.getByRole("button", { name: "Audit next page" }));
     expect(screen.getByText("Page 2 of 2")).toBeTruthy();
     fireEvent.change(screen.getByRole("textbox", { name: "Search audit records" }), { target: { value: "special" } });
-    expect(screen.getByText("Page 1 of 1")).toBeTruthy();
+    expect(screen.queryByRole("navigation", { name: "Audit pagination" })).toBeNull();
     expect(within(screen.getByRole("table")).getByText("Failed")).toBeTruthy();
     expect(within(screen.getByRole("table")).queryByText("Completed")).toBeNull();
 
