@@ -48,6 +48,7 @@ func TestOAuthCredentialMetadataValidationAndIsolation(t *testing.T) {
 		//nolint:gosec // Deliberate insecure test fixture, no real credentials.
 		{Resource: meta.Resource, Issuer: meta.Issuer, TokenEndpoint: "http://evil.test/token", ClientID: meta.ClientID, Status: OAuthConnected},
 		{Resource: meta.Resource, Issuer: meta.Issuer, TokenEndpoint: meta.TokenEndpoint, ClientID: meta.ClientID, Status: "unknown"},
+		{Resource: meta.Resource, Issuer: meta.Issuer, TokenEndpoint: meta.TokenEndpoint, ClientID: meta.ClientID, Status: OAuthConnected, RegistrationMode: "unsupported"},
 	} {
 		if _, err := cred.WithOAuthMetadata(raw); err == nil {
 			t.Fatalf("accepted insecure OAuth metadata %+v", raw)

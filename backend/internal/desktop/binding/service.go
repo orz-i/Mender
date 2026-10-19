@@ -1734,8 +1734,9 @@ func credentialProjection(item credentialdomain.Credential) Credential {
 	if oauth := item.OAuthMetadata(); oauth != nil {
 		metadata := &OAuthCredentialMetadata{
 			Resource: oauth.Resource, MCPEndpoint: oauth.MCPEndpoint, Issuer: oauth.Issuer, ClientID: oauth.ClientID,
-			TokenEndpoint: oauth.TokenEndpoint,
-			Scopes:        append([]string{}, oauth.Scopes...), Status: string(oauth.Status),
+			RegistrationMode: string(oauth.RegistrationMode),
+			TokenEndpoint:    oauth.TokenEndpoint,
+			Scopes:           append([]string{}, oauth.Scopes...), Status: string(oauth.Status),
 		}
 		if !oauth.ExpiresAt.IsZero() {
 			metadata.ExpiresAt = oauth.ExpiresAt.Format(timeFormat)

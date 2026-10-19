@@ -2243,6 +2243,7 @@ components:
         mcpEndpoint: { type: string, format: uri, description: Bound MCP HTTP endpoint; OAuth audience may identify its origin }
         issuer: { type: string, format: uri }
         clientId: { type: string }
+        registrationMode: { type: string, enum: [pre_registered, client_id_metadata, dynamic], description: OAuth client registration method retained for correct reauthorization }
         tokenEndpoint: { type: string, format: uri }
         scopes:
           type: array

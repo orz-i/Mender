@@ -10,6 +10,17 @@ import (
 
 type OAuthStatus string
 
+// OAuthRegistrationMode records how the authorization server accepted the
+// public client. It is non-secret and allows a later browser reauthorization
+// to repeat dynamic registration instead of reusing a redirect-bound client ID.
+type OAuthRegistrationMode string
+
+const (
+	OAuthRegistrationPreregistered    OAuthRegistrationMode = "pre_registered"
+	OAuthRegistrationMetadataDocument OAuthRegistrationMode = "client_id_metadata"
+	OAuthRegistrationDynamic          OAuthRegistrationMode = "dynamic"
+)
+
 const (
 	OAuthConnected             OAuthStatus = "connected"
 	OAuthAuthorizationRequired OAuthStatus = "authorization_required"
@@ -22,13 +33,14 @@ type OAuthMetadata struct {
 	Resource string `json:"resource"`
 	// MCPEndpoint is the single configured HTTP MCP URL that receives tokens.
 	// Resource may be its origin when RFC9728 metadata is hosted at the root.
-	MCPEndpoint   string      `json:"mcpEndpoint,omitempty"`
-	Issuer        string      `json:"issuer"`
-	ClientID      string      `json:"clientId"`
-	TokenEndpoint string      `json:"tokenEndpoint"`
-	Scopes        []string    `json:"scopes,omitempty"`
-	ExpiresAt     time.Time   `json:"expiresAt,omitempty"`
-	Status        OAuthStatus `json:"status"`
+	MCPEndpoint      string                `json:"mcpEndpoint,omitempty"`
+	Issuer           string                `json:"issuer"`
+	ClientID         string                `json:"clientId"`
+	RegistrationMode OAuthRegistrationMode `json:"registrationMode,omitempty"`
+	TokenEndpoint    string                `json:"tokenEndpoint"`
+	Scopes           []string              `json:"scopes,omitempty"`
+	ExpiresAt        time.Time             `json:"expiresAt,omitempty"`
+	Status           OAuthStatus           `json:"status"`
 }
 
 func (m OAuthMetadata) Validate() error {
@@ -48,6 +60,11 @@ func (m OAuthMetadata) Validate() error {
 	}
 	if m.ClientID == "" || len(m.ClientID) > 2048 {
 		return fmt.Errorf("OAuth client ID must be 1–2048 characters")
+	}
+	switch m.RegistrationMode {
+	case "", OAuthRegistrationPreregistered, OAuthRegistrationMetadataDocument, OAuthRegistrationDynamic:
+	default:
+		return fmt.Errorf("invalid OAuth client registration mode")
 	}
 	switch m.Status {
 	case OAuthConnected, OAuthAuthorizationRequired, OAuthExpired:

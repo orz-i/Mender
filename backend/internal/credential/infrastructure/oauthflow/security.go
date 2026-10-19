@@ -190,14 +190,14 @@ func truncateMessage(message string, limit int) string {
 	return string(runes[:limit]) + "…"
 }
 
-// scopeFilterFor narrows server-advertised scopes to the caller's request:
-// server metadata can never widen what the client asks for, and an empty
-// request keeps discovery as-is.
+// scopeFilterFor narrows server-advertised scopes to what the operator
+// explicitly requested. An empty request MUST NOT automatically request all
+// scopes a server supports; the server may select a minimal default.
 func scopeFilterFor(requested []string) func(discovered []string) []string {
 	wanted := append([]string(nil), requested...)
 	return func(discovered []string) []string {
 		if len(wanted) == 0 {
-			return append([]string(nil), discovered...)
+			return nil
 		}
 		if len(discovered) == 0 {
 			return append([]string(nil), wanted...)

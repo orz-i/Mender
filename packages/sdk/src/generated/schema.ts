@@ -1833,6 +1833,11 @@ export interface components {
             /** Format: uri */
             issuer: string;
             clientId: string;
+            /**
+             * @description OAuth client registration method retained for correct reauthorization
+             * @enum {string}
+             */
+            registrationMode?: "pre_registered" | "client_id_metadata" | "dynamic";
             /** Format: uri */
             tokenEndpoint: string;
             scopes: string[];

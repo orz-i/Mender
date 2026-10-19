@@ -252,8 +252,9 @@ func TestOAuthFlowAuthorizationCodePKCEAndSecretIsolation(t *testing.T) {
 	}
 	ref, _ := credentialdomain.NewReference("oauth", "work")
 	credential, err := repo.Get(context.Background(), ref)
-	if err != nil || credential.OAuthMetadata() == nil || credential.OAuthMetadata().Issuer != fixture.url {
-		t.Fatalf("OAuth metadata not saved: %+v %v", credential.OAuthMetadata(), err)
+	if err != nil || credential.OAuthMetadata() == nil || credential.OAuthMetadata().Issuer != fixture.url ||
+		credential.OAuthMetadata().RegistrationMode != credentialdomain.OAuthRegistrationPreregistered {
+		t.Fatalf("OAuth preregistered metadata not saved: %+v %v", credential.OAuthMetadata(), err)
 	}
 	stored, err := secrets.Get(context.Background(), ref)
 	if err != nil {
@@ -374,8 +375,9 @@ func TestOAuthDynamicClientRegistrationWithNativeRedirect(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if credential.OAuthMetadata().ClientID != "mender-dcr-client" {
-		t.Fatal("DCR client identity was not persisted")
+	if credential.OAuthMetadata().ClientID != "mender-dcr-client" ||
+		credential.OAuthMetadata().RegistrationMode != credentialdomain.OAuthRegistrationDynamic {
+		t.Fatal("DCR client identity and registration method were not persisted")
 	}
 	secret, err := secrets.Get(context.Background(), ref)
 	if err != nil {

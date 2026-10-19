@@ -234,14 +234,15 @@ type Credential struct {
 
 // OAuthCredentialMetadata contains only safe account and connection metadata.
 type OAuthCredentialMetadata struct {
-	Resource      string   `json:"resource"`
-	MCPEndpoint   string   `json:"mcpEndpoint,omitempty"`
-	Issuer        string   `json:"issuer"`
-	ClientID      string   `json:"clientId"`
-	TokenEndpoint string   `json:"tokenEndpoint"`
-	Scopes        []string `json:"scopes"`
-	ExpiresAt     string   `json:"expiresAt,omitempty"`
-	Status        string   `json:"status"`
+	Resource         string   `json:"resource"`
+	MCPEndpoint      string   `json:"mcpEndpoint,omitempty"`
+	Issuer           string   `json:"issuer"`
+	ClientID         string   `json:"clientId"`
+	RegistrationMode string   `json:"registrationMode,omitempty"`
+	TokenEndpoint    string   `json:"tokenEndpoint"`
+	Scopes           []string `json:"scopes"`
+	ExpiresAt        string   `json:"expiresAt,omitempty"`
+	Status           string   `json:"status"`
 }
 
 type CredentialList struct {

@@ -371,6 +371,7 @@ export interface OAuthCredentialMetadata {
     "mcpEndpoint"?: string;
     "issuer": string;
     "clientId": string;
+    "registrationMode"?: string;
     "tokenEndpoint": string;
     "scopes": string[] | null;
     "expiresAt"?: string;

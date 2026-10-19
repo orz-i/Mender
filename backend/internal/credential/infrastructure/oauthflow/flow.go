@@ -634,6 +634,13 @@ func (f *flow) buildTokenBundle(
 	if clientID == "" {
 		return nil, credentialdomain.OAuthMetadata{}, errors.New("OAuth client registration yielded no client identifier")
 	}
+	registrationMode := credentialdomain.OAuthRegistrationDynamic
+	switch {
+	case f.request.ClientID != "":
+		registrationMode = credentialdomain.OAuthRegistrationPreregistered
+	case f.request.ClientIDMetadataURL != "":
+		registrationMode = credentialdomain.OAuthRegistrationMetadataDocument
+	}
 	bundle := tokenBundle{
 		TokenType:      token.TokenType,
 		AccessToken:    token.AccessToken,
@@ -655,14 +662,15 @@ func (f *flow) buildTokenBundle(
 		return nil, credentialdomain.OAuthMetadata{}, errors.New("the token bundle could not be encoded")
 	}
 	payload := credentialdomain.OAuthMetadata{
-		Resource:      resource,
-		MCPEndpoint:   f.request.MCPEndpoint,
-		Issuer:        issuer,
-		ClientID:      bundle.ClientID,
-		TokenEndpoint: tokenEndpoint,
-		Scopes:        bundle.Scopes,
-		ExpiresAt:     token.Expiry,
-		Status:        credentialdomain.OAuthConnected,
+		Resource:         resource,
+		MCPEndpoint:      f.request.MCPEndpoint,
+		Issuer:           issuer,
+		ClientID:         bundle.ClientID,
+		RegistrationMode: registrationMode,
+		TokenEndpoint:    tokenEndpoint,
+		Scopes:           bundle.Scopes,
+		ExpiresAt:        token.Expiry,
+		Status:           credentialdomain.OAuthConnected,
 	}
 	return blob, payload, nil
 }
