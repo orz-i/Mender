@@ -274,6 +274,7 @@ export interface Credential {
     "displayName": string;
     "source": string;
     "environmentVariable": string;
+    "oauth"?: OAuthCredentialMetadata | null;
     "createdAt": string;
     "updatedAt": string;
 }
@@ -360,6 +361,19 @@ export interface MCPStatus {
     "stdio": boolean;
     "streamableHttp": boolean;
     "exposureModes": string[] | null;
+}
+
+/**
+ * OAuthCredentialMetadata contains only safe account and connection metadata.
+ */
+export interface OAuthCredentialMetadata {
+    "resource": string;
+    "issuer": string;
+    "clientId": string;
+    "tokenEndpoint": string;
+    "scopes": string[] | null;
+    "expiresAt"?: string;
+    "status": string;
 }
 
 /**
@@ -493,6 +507,7 @@ export interface Provider {
     "args"?: string[] | null;
     "directory"?: string;
     "credentialHeaders"?: CredentialHeader[] | null;
+    "oauthCredentialRef"?: string;
     "credentialEnvironment"?: CredentialEnvironment[] | null;
 }
 

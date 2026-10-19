@@ -1061,7 +1061,7 @@ function credentialStatus(value: BindingCredentialStatus): CredentialStatus {
 }
 
 function credential(value: BindingCredential): Credential {
-  if (value.source !== "native" && value.source !== "environment") {
+  if (value.source !== "native" && value.source !== "environment" && value.source !== "oauth") {
     throw new MenderClientInvariantError(`Unsupported desktop Credential source: ${value.source}`);
   }
   return {
@@ -1071,9 +1071,27 @@ function credential(value: BindingCredential): Credential {
     displayName: value.displayName,
     source: value.source,
     environmentVariable: value.environmentVariable,
+    ...(value.oauth === undefined || value.oauth === null
+      ? {}
+      : { oauth: {
+          resource: value.oauth.resource,
+          issuer: value.oauth.issuer,
+          clientId: value.oauth.clientId,
+          tokenEndpoint: value.oauth.tokenEndpoint,
+          scopes: value.oauth.scopes ?? [],
+          ...(value.oauth.expiresAt ? { expiresAt: value.oauth.expiresAt } : {}),
+          status: oauthStatus(value.oauth.status),
+        } }),
     createdAt: value.createdAt,
     updatedAt: value.updatedAt,
   };
+}
+
+function oauthStatus(value: string): "connected" | "authorization_required" | "expired" {
+  switch (value) {
+    case "connected": case "authorization_required": case "expired": return value;
+    default: throw new MenderClientInvariantError(`Unsupported OAuth Credential status: ${value}`);
+  }
 }
 
 function providerPlugin(value: BindingProviderPlugin): ProviderPlugin {
@@ -1409,6 +1427,7 @@ function provider(value: BindingProvider): Provider {
     ...(value.credentialHeaders === undefined || value.credentialHeaders === null
       ? {}
       : { credentialHeaders: value.credentialHeaders }),
+    ...(value.oauthCredentialRef ? { oauthCredentialRef: value.oauthCredentialRef } : {}),
     ...(value.credentialEnvironment === undefined ||
     value.credentialEnvironment === null
       ? {}

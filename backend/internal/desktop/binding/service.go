@@ -1668,7 +1668,7 @@ func credentialStatus(status bootstrap.RuntimeStatus) CredentialStatus {
 }
 
 func credentialProjection(item credentialdomain.Credential) Credential {
-	return Credential{
+	result := Credential{
 		Reference:           item.Reference().String(),
 		Namespace:           item.Reference().Namespace(),
 		Name:                item.Reference().Name(),
@@ -1678,6 +1678,18 @@ func credentialProjection(item credentialdomain.Credential) Credential {
 		CreatedAt:           item.CreatedAt().Format(timeFormat),
 		UpdatedAt:           item.UpdatedAt().Format(timeFormat),
 	}
+	if oauth := item.OAuthMetadata(); oauth != nil {
+		metadata := &OAuthCredentialMetadata{
+			Resource: oauth.Resource, Issuer: oauth.Issuer, ClientID: oauth.ClientID,
+			TokenEndpoint: oauth.TokenEndpoint,
+			Scopes:        append([]string{}, oauth.Scopes...), Status: string(oauth.Status),
+		}
+		if !oauth.ExpiresAt.IsZero() {
+			metadata.ExpiresAt = oauth.ExpiresAt.Format(timeFormat)
+		}
+		result.OAuth = metadata
+	}
+	return result
 }
 
 func availableProviderPluginProjection(
@@ -1878,6 +1890,7 @@ func providerProjection(
 		result.Transport = "http"
 		result.Endpoint = mcpConfig.Transport.Endpoint
 		result.Headers = cloneHeaders(mcpConfig.Transport.Headers)
+		result.OAuthCredentialRef = mcpConfig.Transport.OAuthCredentialRef.String()
 		result.CredentialHeaders = make(
 			[]CredentialHeader,
 			0,

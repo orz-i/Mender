@@ -1733,12 +1733,27 @@ export interface components {
             name: string;
             displayName: string;
             /** @enum {string} */
-            source: "native" | "environment";
+            source: "native" | "environment" | "oauth";
             environmentVariable: string;
+            oauth?: components["schemas"]["OAuthCredentialMetadata"];
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
+        };
+        OAuthCredentialMetadata: {
+            /** Format: uri */
+            resource: string;
+            /** Format: uri */
+            issuer: string;
+            clientId: string;
+            /** Format: uri */
+            tokenEndpoint: string;
+            scopes: string[];
+            /** Format: date-time */
+            expiresAt?: string;
+            /** @enum {string} */
+            status: "connected" | "authorization_required" | "expired";
         };
         CreateNativeCredentialRequest: {
             namespace: string;
@@ -1940,6 +1955,8 @@ export interface components {
             endpoint?: string;
             headers?: components["schemas"]["HeaderTemplates"];
             credentialHeaders?: components["schemas"]["CredentialHeaderBinding"][];
+            /** @description Credential Reference for OAuth authentication of a built-in HTTP MCP Provider, never bearer material */
+            oauthCredentialRef?: string;
             executable?: string;
             args?: string[];
             directory?: string;

@@ -144,7 +144,7 @@ func credentialReferenceFromRequest(r *http.Request) (credentialdomain.Reference
 }
 
 func credentialProjection(credential credentialdomain.Credential) map[string]any {
-	return map[string]any{
+	result := map[string]any{
 		"reference":           credential.Reference().String(),
 		"namespace":           credential.Reference().Namespace(),
 		"name":                credential.Reference().Name(),
@@ -154,4 +154,8 @@ func credentialProjection(credential credentialdomain.Credential) map[string]any
 		"createdAt":           credential.CreatedAt(),
 		"updatedAt":           credential.UpdatedAt(),
 	}
+	if metadata := credential.OAuthMetadata(); metadata != nil {
+		result["oauth"] = metadata
+	}
+	return result
 }

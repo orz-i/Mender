@@ -383,6 +383,9 @@ func providerProjection(
 		result["transport"] = "http"
 		result["endpoint"] = mcpConfig.Transport.Endpoint
 		result["headers"] = cloneHeaders(mcpConfig.Transport.Headers)
+		if mcpConfig.Transport.OAuthCredentialRef != "" {
+			result["oauthCredentialRef"] = mcpConfig.Transport.OAuthCredentialRef.String()
+		}
 		result["credentialHeaders"] = mcpCredentialHeadersProjection(
 			mcpConfig.Transport.CredentialHeaders,
 		)

@@ -54,6 +54,7 @@ export type {
     MCPServerInstance,
     MCPServerList,
     MCPStatus,
+    OAuthCredentialMetadata,
     PluginCatalogueEntry,
     PluginCatalogueList,
     Policy,

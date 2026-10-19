@@ -2149,10 +2149,25 @@ components:
         namespace: { type: string }
         name: { type: string }
         displayName: { type: string }
-        source: { type: string, enum: [native, environment] }
+        source: { type: string, enum: [native, environment, oauth] }
         environmentVariable: { type: string }
+        oauth: { $ref: '#/components/schemas/OAuthCredentialMetadata' }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
+    OAuthCredentialMetadata:
+      type: object
+      required: [resource, issuer, clientId, tokenEndpoint, scopes, status]
+      properties:
+        resource: { type: string, format: uri }
+        issuer: { type: string, format: uri }
+        clientId: { type: string }
+        tokenEndpoint: { type: string, format: uri }
+        scopes:
+          type: array
+          items: { type: string }
+        expiresAt: { type: string, format: date-time }
+        status: { type: string, enum: [connected, authorization_required, expired] }
+      additionalProperties: false
     CreateNativeCredentialRequest:
       type: object
       required: [namespace, name, displayName, secret]
@@ -2395,6 +2410,9 @@ components:
         credentialHeaders:
           type: array
           items: { $ref: '#/components/schemas/CredentialHeaderBinding' }
+        oauthCredentialRef:
+          type: string
+          description: Credential Reference for OAuth authentication of a built-in HTTP MCP Provider, never bearer material
         executable: { type: string }
         args:
           type: array

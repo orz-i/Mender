@@ -221,14 +221,26 @@ type CredentialStatus struct {
 }
 
 type Credential struct {
-	Reference           string `json:"reference"`
-	Namespace           string `json:"namespace"`
-	Name                string `json:"name"`
-	DisplayName         string `json:"displayName"`
-	Source              string `json:"source"`
-	EnvironmentVariable string `json:"environmentVariable"`
-	CreatedAt           string `json:"createdAt"`
-	UpdatedAt           string `json:"updatedAt"`
+	Reference           string                   `json:"reference"`
+	Namespace           string                   `json:"namespace"`
+	Name                string                   `json:"name"`
+	DisplayName         string                   `json:"displayName"`
+	Source              string                   `json:"source"`
+	EnvironmentVariable string                   `json:"environmentVariable"`
+	OAuth               *OAuthCredentialMetadata `json:"oauth,omitempty"`
+	CreatedAt           string                   `json:"createdAt"`
+	UpdatedAt           string                   `json:"updatedAt"`
+}
+
+// OAuthCredentialMetadata contains only safe account and connection metadata.
+type OAuthCredentialMetadata struct {
+	Resource      string   `json:"resource"`
+	Issuer        string   `json:"issuer"`
+	ClientID      string   `json:"clientId"`
+	TokenEndpoint string   `json:"tokenEndpoint"`
+	Scopes        []string `json:"scopes"`
+	ExpiresAt     string   `json:"expiresAt,omitempty"`
+	Status        string   `json:"status"`
 }
 
 type CredentialList struct {
@@ -404,6 +416,7 @@ type Provider struct {
 	Args                  []string                `json:"args,omitempty"`
 	Directory             string                  `json:"directory,omitempty"`
 	CredentialHeaders     []CredentialHeader      `json:"credentialHeaders,omitempty"`
+	OAuthCredentialRef    string                  `json:"oauthCredentialRef,omitempty"`
 	CredentialEnvironment []CredentialEnvironment `json:"credentialEnvironment,omitempty"`
 }
 
