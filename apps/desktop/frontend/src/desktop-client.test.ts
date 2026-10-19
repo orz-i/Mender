@@ -27,6 +27,8 @@ vi.mock(
       GetSkillInstallation: vi.fn(),
       GetPolicyStatus: vi.fn(),
       GetSystemStatus: vi.fn(),
+      GetAgentTask: vi.fn(),
+      ListAgentTasks: vi.fn(),
       InstallProviderPlugin: vi.fn(),
       InstallLocalPlugin: vi.fn(),
       ListPluginCatalogue: vi.fn(),
@@ -80,6 +82,35 @@ import {
 describe("desktop Mender client", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it("validates Wails Task budget and preserves independent native progress", async () => {
+    const raw = {
+      taskId: "atask_00000000000000000000000000000001",
+      agentId: "agent_00000000000000000000000000000001",
+      status: "unknown",
+      timeoutSeconds: 1800,
+      createdAt: "2026-10-20T00:00:00Z",
+      updatedAt: "2026-10-20T00:30:00Z",
+      cancelRequested: false,
+      observation: {
+        phase: "leader_reaped", activity: "uncertain",
+        lastObservedAt: "2026-10-20T00:30:00Z",
+        lastNativeProgressAt: "2026-10-20T00:29:48Z",
+        lastWorkerHeartbeatAt: "2026-10-20T00:29:55Z",
+        sessionRecorded: true, sessionRecoverability: "unavailable",
+        leaderReaped: true,
+      },
+    };
+    const client = createDesktopMenderClient();
+    vi.mocked(Service.GetAgentTask).mockResolvedValue(raw);
+    const output = await client.getAgentTask(raw.taskId);
+    expect(output.timeoutSeconds).toBe(1800);
+    expect(output.observation?.lastNativeProgressAt).toBe("2026-10-20T00:29:48Z");
+    expect(output.observation?.lastWorkerHeartbeatAt).toBe("2026-10-20T00:29:55Z");
+
+    vi.mocked(Service.GetAgentTask).mockResolvedValue({ ...raw, timeoutSeconds: 777 });
+    await expect(client.getAgentTask(raw.taskId)).rejects.toBeInstanceOf(MenderClientInvariantError);
   });
 
   it("forwards SSH key import-only passphrases through Wails without persisting them in returned metadata", async () => {

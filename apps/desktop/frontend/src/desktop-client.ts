@@ -1041,7 +1041,12 @@ function pendingAgentApproval(value:BindingAgentPendingApproval):PendingAgentApp
   return {...value,approval:agentApproval(value.approval)};
 }
 function agentTask(value:BindingAgentTask):AgentTask {
-  const {observation,...task}=value;
+  const {observation,timeoutSeconds,...task}=value;
+  // Wails Go emits number; validate its exact finite Domain enum before
+  // projecting into the stricter OpenAPI AgentTask contract.
+  if(timeoutSeconds!==600&&timeoutSeconds!==1200&&timeoutSeconds!==1800){
+    throw new MenderClientInvariantError("Invalid Agent Task execution budget");
+  }
   if(observation){
     const {phase,activity,sessionRecoverability}=observation;
     if(phase!=="reserved"&&phase!=="process_started"&&phase!=="session_ready"&&
@@ -1057,13 +1062,13 @@ function agentTask(value:BindingAgentTask):AgentTask {
     switch(value.status){
       case "queued":case "running":case "completed":case "failed":
       case "cancelled":case "unknown":
-        return {...task,status:value.status,observation:{...observation,phase,activity,sessionRecoverability}};
+        return {...task,timeoutSeconds,status:value.status,observation:{...observation,phase,activity,sessionRecoverability}};
       default:throw new MenderClientInvariantError("Unknown Agent Task status: "+value.status);
     }
   }
   switch(value.status){
     case "queued":case "running":case "completed":case "failed":
-    case "cancelled":case "unknown":return {...task,status:value.status};
+    case "cancelled":case "unknown":return {...task,timeoutSeconds,status:value.status};
     default:throw new MenderClientInvariantError("Unknown Agent Task status: "+value.status);
   }
 }
