@@ -111,6 +111,7 @@ export interface AgentTask {
     "status": string;
     "model"?: string;
     "reasoningEffort"?: string;
+    "timeoutSeconds": number;
     "workspace"?: string;
     "result"?: string;
     "diagnostic"?: string;

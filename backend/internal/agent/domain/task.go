@@ -66,6 +66,7 @@ type Task struct {
 	Status              TaskStatus       `json:"status"`
 	Model               string           `json:"model,omitempty"`
 	ReasoningEffort     string           `json:"reasoningEffort,omitempty"`
+	TimeoutSeconds      int              `json:"timeoutSeconds,omitempty"` // immutable per-Task admitted execution budget
 	WorkspaceKey        string           `json:"workspace,omitempty"`
 	WorkspaceRoot       string           `json:"-"` // admitted immutable local cwd; never disclose via MCP
 	Origin              string           `json:"-"`
@@ -85,8 +86,26 @@ type Task struct {
 
 const MaxResultBytes = 64 << 10
 const MaxPromptBytes = 64 << 10
+const DefaultTimeoutSeconds = 600
+const MaxTimeoutSeconds = 1800
+
+// ExecutionTimeout resolves legacy synthetic Task fixtures to the original
+// ten-minute limit. Persisted new Tasks always carry an explicit value.
+func (t Task) ExecutionTimeout() time.Duration {
+	if t.TimeoutSeconds == 0 {
+		return DefaultTimeoutSeconds * time.Second
+	}
+	return time.Duration(t.TimeoutSeconds) * time.Second
+}
+
+func ValidTimeoutSeconds(seconds int) bool {
+	return seconds == 0 || seconds == 600 || seconds == 1200 || seconds == 1800
+}
 
 func (t Task) Validate() error {
+	if !ValidTimeoutSeconds(t.TimeoutSeconds) {
+		return fmt.Errorf("%w: unsupported Agent Task execution budget", ErrInvalid)
+	}
 	if _, err := ParseTaskID(string(t.ID)); err != nil {
 		return err
 	}

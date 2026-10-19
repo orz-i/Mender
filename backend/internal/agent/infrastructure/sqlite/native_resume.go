@@ -93,8 +93,8 @@ func (s *Store) CreateResumedTask(ctx context.Context, child agentdomain.Task,
 	res, err := tx.ExecContext(ctx, `INSERT INTO agent_tasks(
         task_id,agent_id,status,origin,principal_kind,principal_ref,scope_kind,scope_ref,
         generation,result_text,diagnostic,cancel_requested,created_at,updated_at,
-        model,workspace_key,workspace_root,reasoning_effort)
-      SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?
+        model,workspace_key,workspace_root,reasoning_effort,timeout_seconds)
+      SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?
       WHERE EXISTS(
         SELECT 1 FROM agent_tasks p
         JOIN agent_execution_attempts a ON a.task_id=p.task_id AND a.generation=p.generation
@@ -138,7 +138,7 @@ func (s *Store) CreateResumedTask(ctx context.Context, child agentdomain.Task,
 		child.PrincipalKind, child.PrincipalRef, child.ScopeKind, child.ScopeRef,
 		child.Generation, child.Result, child.Diagnostic, 0,
 		child.CreatedAt.UTC().Format(time.RFC3339Nano), child.UpdatedAt.UTC().Format(time.RFC3339Nano),
-		child.Model, child.WorkspaceKey, child.WorkspaceRoot, child.ReasoningEffort,
+		child.Model, child.WorkspaceKey, child.WorkspaceRoot, child.ReasoningEffort, int(child.ExecutionTimeout()/time.Second),
 		string(plan.SourceTaskID), string(plan.AgentID),
 		child.PrincipalKind, child.PrincipalRef, child.ScopeKind, child.ScopeRef,
 		child.WorkspaceRoot, child.WorkspaceKey,

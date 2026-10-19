@@ -2,7 +2,10 @@ package delegationprovider
 
 import (
 	"context"
+	"encoding/json"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 
 	agentapplication "github.com/orz-i/Mender/backend/internal/agent/application"
@@ -40,7 +43,7 @@ func TestPluginConfigAndBoundToolDiscovery(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = svc.Close() }()
-	a, err := svc.Create(ctx, agentapplication.CreateRequest{Name: "Codex Test", Backend: agentdomain.BackendCodex, WorkspaceRoot: t.TempDir()}, c)
+	a, err := svc.Create(ctx, agentapplication.CreateRequest{Name: "Codex Test", Backend: agentdomain.BackendCodex, WorkspaceRoot: t.TempDir(), Isolation: "host"}, c)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,4 +73,38 @@ func TestPluginConfigAndBoundToolDiscovery(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = invocationapplication.ExecutionRequest{Arguments: value}
+	var delegate struct {
+		Properties map[string]json.RawMessage `json:"properties"`
+	}
+	if err := json.Unmarshal(submitInput, &delegate); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(delegate.Properties["timeoutMinutes"]), "[10,20,30]") {
+		t.Fatal("missing explicit finite Agent execution budgets")
+	}
+	if !strings.Contains(string(taskOutput), "lastNativeProgressAt") ||
+		!strings.Contains(string(taskOutput), "timeoutSeconds") {
+		t.Fatal("Task result schema lost native progress/budget")
+	}
+	antigravity, err := svc.Create(ctx, agentapplication.CreateRequest{
+		Name: "Agy Test", Backend: agentdomain.BackendAntigravity, WorkspaceRoot: t.TempDir(),
+	}, c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	agyConfig := []byte(`{"agentId":"` + string(antigravity.ID()) + `"}`)
+	agyInstance, err := p.Open(ctx, providerplugin.OpenRequest{ConfigVersion: ConfigVersion, Config: agyConfig})
+	if err != nil {
+		t.Fatal(err)
+	}
+	agyTools, err := agyInstance.DiscoverTools(ctx, catalogdomain.Provider{})
+	if err != nil || len(agyTools) != 5 || agyTools[4].SourceKey != sourceResume ||
+		!strings.Contains(agyTools[4].Description, "Unavailable") ||
+		!slices.Contains(agyTools[4].Tags, "unavailable") {
+		t.Fatalf("Agy resume capability misrepresented: %+v %v", agyTools, err)
+	}
+	if items[4].SourceKey != agyTools[4].SourceKey || items[4].Name != agyTools[4].Name ||
+		strings.Contains(items[4].Description, "Unavailable") {
+		t.Fatal("canonical ToolID or supported ACP metadata drifted")
+	}
 }

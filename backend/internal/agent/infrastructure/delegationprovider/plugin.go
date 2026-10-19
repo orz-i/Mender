@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"slices"
+	"time"
 
 	agentapplication "github.com/orz-i/Mender/backend/internal/agent/application"
 	agentdomain "github.com/orz-i/Mender/backend/internal/agent/domain"
@@ -110,19 +111,32 @@ func (p *Plugin) Open(ctx context.Context, req providerplugin.OpenRequest) (prov
 		return nil, err
 	}
 	c, _ := decodeConfig(req.Config)
-	return &Instance{service: p.service, agentID: agentdomain.ID(c.AgentID)}, nil
+	owner, err := p.ownerContext()
+	if err != nil {
+		return nil, err
+	}
+	a, err := p.service.Get(ctx, agentdomain.ID(c.AgentID), owner)
+	if err != nil {
+		return nil, err
+	}
+	// Retain the existing canonical resume ToolID even for unsupported native
+	// placements: a legacy Profile may refer to it. Its discovered metadata
+	// must explain the real supported contract instead of promising recovery.
+	unsupported := a.Spec().Backend == agentdomain.BackendAntigravity || a.Spec().Isolation != "host"
+	return &Instance{service: p.service, agentID: agentdomain.ID(c.AgentID), resumeUnsupported: unsupported}, nil
 }
 
 type Instance struct {
-	service *agentapplication.Service
-	agentID agentdomain.ID
+	service           *agentapplication.Service
+	agentID           agentdomain.ID
+	resumeUnsupported bool // truthful metadata, never an authorization decision
 }
 
 func (*Instance) Close() error { return nil }
 
 var submitInput = []byte(`{"type":"object","additionalProperties":false,"required":["prompt"],
 	"properties":{"prompt":{"type":"string","minLength":1,"maxLength":65536},
-	"model":{"type":"string","maxLength":128},"reasoningEffort":{"type":"string","maxLength":64,"pattern":"^[a-z0-9_-]*$"},"workspace":{"type":"string","minLength":1,"maxLength":64,"pattern":"^[a-z0-9_-]+$"}}}`)
+	"model":{"type":"string","maxLength":128},"reasoningEffort":{"type":"string","maxLength":64,"pattern":"^[a-z0-9_-]*$"},"workspace":{"type":"string","minLength":1,"maxLength":64,"pattern":"^[a-z0-9_-]+$"},"timeoutMinutes":{"type":"integer","enum":[10,20,30]}}}`)
 var resumeInput = []byte(`{"type":"object","additionalProperties":false,"required":["taskId","prompt"],
 	"properties":{"taskId":{"type":"string","pattern":"^atask_[0-9a-f]{32}$"},
 	"prompt":{"type":"string","minLength":1,"maxLength":65536}}}`)
@@ -133,14 +147,14 @@ var resumeOutput = []byte(`{"type":"object","additionalProperties":false,
 var taskInput = []byte(`{"type":"object","additionalProperties":false,"required":["taskId"],
 	"properties":{"taskId":{"type":"string","pattern":"^atask_[0-9a-f]{32}$"}}}`)
 var submitOutput = []byte(`{"type":"object","additionalProperties":false,"required":["taskId","status"],
-	"properties":{"taskId":{"type":"string"},"status":{"type":"string"}}}`)
+	"properties":{"taskId":{"type":"string"},"status":{"type":"string"},"timeoutSeconds":{"type":"integer"}}}`)
 var taskOutput = []byte(`{"type":"object","additionalProperties":false,"required":["taskId","status","cancelRequested"],
 	"properties":{"taskId":{"type":"string"},"status":{"type":"string"},"cancelRequested":{"type":"boolean"},
-	"result":{"type":"string"},"diagnostic":{"type":"string"},
+	"result":{"type":"string"},"diagnostic":{"type":"string"},"timeoutSeconds":{"type":"integer","enum":[600,1200,1800]},
 	"continuedFromTaskId":{"type":"string"},
 	"observation":{"type":"object","additionalProperties":false,
 	"properties":{"phase":{"type":"string"},"activity":{"type":"string"},
-	"lastObservedAt":{"type":"string"},"lastWorkerHeartbeatAt":{"type":"string"},"sessionRecorded":{"type":"boolean"},
+	"lastObservedAt":{"type":"string"},"lastNativeProgressAt":{"type":"string"},"lastWorkerHeartbeatAt":{"type":"string"},"sessionRecorded":{"type":"boolean"},
 	"sessionRecoverability":{"type":"string"},"leaderReaped":{"type":"boolean"}}}}}`)
 var cancelOutput = []byte(`{"type":"object","additionalProperties":false,"required":["taskId","cancelRequested"],
 	"properties":{"taskId":{"type":"string"},"cancelRequested":{"type":"boolean"}}}`)
@@ -149,9 +163,17 @@ func (i *Instance) DiscoverTools(_ context.Context, _ catalogdomain.Provider) ([
 	if i == nil {
 		return nil, agentdomain.ErrUnavailable
 	}
+	resumeTitle := "Continue proven-complete ACP session"
+	resumeDescription := "Only when the prior Task completed with native terminal proof and the ACP backend advertised a verified session-load/resume capability. Never retries unknown Tasks."
+	resumeTags := []string{"agent", "session"}
+	if i.resumeUnsupported {
+		resumeTitle = "Session continuation unavailable"
+		resumeDescription = "Unavailable for this Agent backend/isolation. No safe native session restoration; never retries unknown Tasks."
+		resumeTags = append(resumeTags, "unavailable")
+	}
 	return []catalogapplication.DiscoveredTool{
 		{SourceKey: sourceDelegate, Name: "delegate", Title: "Delegate to Agent",
-			Description: "Submit a bounded task to this preconfigured Agent, returning a TaskID immediately.",
+			Description: "Submit a bounded task to this configured Agent. Optional timeoutMinutes: 10 (default), 20 or 30. Returns TaskID; no automatic retry.",
 			InputSchema: slices.Clone(submitInput), OutputSchema: slices.Clone(submitOutput), Tags: []string{"agent", "task"}},
 		{SourceKey: sourceStatus, Name: "status", Title: "Check Agent task",
 			Description: "Query one delegated task without reading its result.",
@@ -162,9 +184,9 @@ func (i *Instance) DiscoverTools(_ context.Context, _ catalogdomain.Provider) ([
 		{SourceKey: sourceCancel, Name: "cancel", Title: "Cancel Agent task",
 			Description: "Request cancellation of an in-flight task; cancellation confirmation is asynchronous.",
 			InputSchema: slices.Clone(taskInput), OutputSchema: slices.Clone(cancelOutput), Tags: []string{"agent", "task"}},
-		{SourceKey: sourceResume, Name: "resume", Title: "Continue Agent session",
-			Description: "Submit a NEW bounded prompt to the exact prior proven-complete native Agent session; returns a new TaskID. Never retries an unknown task.",
-			InputSchema: slices.Clone(resumeInput), OutputSchema: slices.Clone(resumeOutput), Tags: []string{"agent", "session"}},
+		{SourceKey: sourceResume, Name: "resume", Title: resumeTitle,
+			Description: resumeDescription,
+			InputSchema: slices.Clone(resumeInput), OutputSchema: slices.Clone(resumeOutput), Tags: resumeTags},
 	}, nil
 }
 func complete(value any) (invocationdomain.Outcome, error) {
@@ -193,15 +215,16 @@ func (i *Instance) Execute(ctx context.Context, req invocationapplication.Execut
 			Model           string `json:"model"`
 			ReasoningEffort string `json:"reasoningEffort"`
 			Workspace       string `json:"workspace"`
+			TimeoutMinutes  int    `json:"timeoutMinutes"`
 		}
 		if err := strictDecode(req.Arguments.Bytes(), &args); err != nil {
 			return invocationdomain.Outcome{}, err
 		}
-		task, err := i.service.SubmitWithOptions(ctx, i.agentID, args.Prompt, agentapplication.SubmitOptions{Model: args.Model, ReasoningEffort: args.ReasoningEffort, Workspace: args.Workspace}, req.Context)
+		task, err := i.service.SubmitWithOptions(ctx, i.agentID, args.Prompt, agentapplication.SubmitOptions{Model: args.Model, ReasoningEffort: args.ReasoningEffort, Workspace: args.Workspace, TimeoutMinutes: args.TimeoutMinutes}, req.Context)
 		if err != nil {
 			return invocationdomain.Outcome{}, err
 		}
-		return complete(map[string]any{"taskId": task.ID, "status": task.Status})
+		return complete(map[string]any{"taskId": task.ID, "status": task.Status, "timeoutSeconds": int(task.ExecutionTimeout() / time.Second)})
 	case sourceResume:
 		var args struct {
 			TaskID string `json:"taskId"`
@@ -245,7 +268,7 @@ func (i *Instance) Execute(ctx context.Context, req invocationapplication.Execut
 			}
 			return complete(map[string]any{"taskId": id, "cancelRequested": true})
 		}
-		data := map[string]any{"taskId": id, "status": task.Status, "cancelRequested": task.CancelRequested}
+		data := map[string]any{"taskId": id, "status": task.Status, "cancelRequested": task.CancelRequested, "timeoutSeconds": int(task.ExecutionTimeout() / time.Second)}
 		if task.ContinuedFromTaskID != "" {
 			data["continuedFromTaskId"] = task.ContinuedFromTaskID
 		}

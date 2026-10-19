@@ -2994,6 +2994,7 @@ components:
         status: { type: string, enum: [queued, running, completed, failed, cancelled, unknown] }
         model: { type: string }
         reasoningEffort: { type: string }
+        timeoutSeconds: { type: integer, enum: [600, 1200, 1800], description: Immutable admitted execution budget in seconds }
         workspace: { type: string, description: Approved workspace key, not a host path }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }

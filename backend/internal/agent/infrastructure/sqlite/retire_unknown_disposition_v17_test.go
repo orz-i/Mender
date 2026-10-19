@@ -72,6 +72,7 @@ func prepareSyntheticV16(t *testing.T, path string, taskID agentdomain.TaskID) {
 	defer func() { _ = db.Close() }()
 	ctx := context.Background()
 	// Reconstruct only the short-lived v16 schema in a private fixture.
+	stripTaskBudgetV18Fixture(t, db)
 	for _, stmt := range []string{
 		"DELETE FROM agent_schema_migrations WHERE version=17",
 		"INSERT INTO agent_schema_migrations(version,applied_at) VALUES(16,'2026-10-18T00:00:00Z')",
@@ -101,7 +102,7 @@ func assertRetiredDisposition(t *testing.T, s *Store, taskID agentdomain.TaskID)
 	t.Helper()
 	ctx := context.Background()
 	var version, v16Rows, schemaObjects int
-	if err := s.db.QueryRowContext(ctx, "SELECT MAX(version) FROM agent_schema_migrations").Scan(&version); err != nil || version != 17 {
+	if err := s.db.QueryRowContext(ctx, "SELECT MAX(version) FROM agent_schema_migrations").Scan(&version); err != nil || version != latestSchemaVersion {
 		t.Fatalf("schema version=%d err=%v", version, err)
 	}
 	if err := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM agent_schema_migrations WHERE version=16").Scan(&v16Rows); err != nil || v16Rows != 0 {
@@ -142,6 +143,7 @@ func TestRetireUnknownDispositionV17DirectlyFromV15(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	stripTaskBudgetV18Fixture(t, db)
 	if _, err := db.Exec("DELETE FROM agent_schema_migrations WHERE version=17"); err != nil {
 		t.Fatal(err)
 	}

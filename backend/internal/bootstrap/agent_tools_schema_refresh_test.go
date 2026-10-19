@@ -89,7 +89,8 @@ func TestRefreshReadyAgentToolsUpdatesSchemaWithoutIdentityChange(t *testing.T) 
 	var updated bool
 	for _, tool := range tools {
 		if tool.SourceKey() == "agent.delegate" {
-			updated = bytes.Contains(tool.InputSchema().Bytes(), []byte("reasoningEffort"))
+			updated = bytes.Contains(tool.InputSchema().Bytes(), []byte("reasoningEffort")) &&
+				bytes.Contains(tool.InputSchema().Bytes(), []byte("timeoutMinutes"))
 		}
 	}
 	if !updated {

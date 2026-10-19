@@ -2413,6 +2413,11 @@ export interface components {
             status: "queued" | "running" | "completed" | "failed" | "cancelled" | "unknown";
             model?: string;
             reasoningEffort?: string;
+            /**
+             * @description Immutable admitted execution budget in seconds
+             * @enum {integer}
+             */
+            timeoutSeconds?: 600 | 1200 | 1800;
             /** @description Approved workspace key */
             workspace?: string;
             /** Format: date-time */

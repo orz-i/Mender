@@ -57,6 +57,7 @@ type AgentTask struct {
 	Status              string                `json:"status"`
 	Model               string                `json:"model,omitempty"`
 	ReasoningEffort     string                `json:"reasoningEffort,omitempty"`
+	TimeoutSeconds      int                   `json:"timeoutSeconds"`
 	Workspace           string                `json:"workspace,omitempty"`
 	Result              string                `json:"result,omitempty"`
 	Diagnostic          string                `json:"diagnostic,omitempty"`
@@ -120,7 +121,7 @@ func (s *Service) projectAgent(a agentdomain.Agent) Agent {
 	return out
 }
 func projectTask(t agentdomain.Task) AgentTask {
-	out := AgentTask{TaskID: string(t.ID), AgentID: string(t.AgentID), Status: string(t.Status), Model: t.Model, ReasoningEffort: t.ReasoningEffort, Workspace: t.WorkspaceKey,
+	out := AgentTask{TaskID: string(t.ID), AgentID: string(t.AgentID), Status: string(t.Status), Model: t.Model, ReasoningEffort: t.ReasoningEffort, TimeoutSeconds: int(t.ExecutionTimeout() / time.Second), Workspace: t.WorkspaceKey,
 		Result: t.Result, Diagnostic: t.Diagnostic, CreatedAt: t.CreatedAt.UTC().Format(time.RFC3339Nano),
 		UpdatedAt: t.UpdatedAt.UTC().Format(time.RFC3339Nano), CancelRequested: t.CancelRequested}
 	if t.ContinuedFromTaskID != "" {

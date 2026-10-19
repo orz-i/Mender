@@ -19,7 +19,7 @@ import (
 
 const (
 	maxActivePerAgent = 2
-	TaskTimeout       = 10 * time.Minute
+	TaskTimeout       = agentdomain.DefaultTimeoutSeconds * time.Second
 )
 
 // Repository is the Agent consuming-side storage port.
@@ -303,6 +303,7 @@ type SubmitOptions struct {
 	Model           string `json:"model,omitempty"`
 	ReasoningEffort string `json:"reasoningEffort,omitempty"`
 	Workspace       string `json:"workspace,omitempty"`
+	TimeoutMinutes  int    `json:"timeoutMinutes,omitempty"` // optional 10/20/30, only future Tasks
 }
 
 func (s *Service) Submit(ctx context.Context, id agentdomain.ID, prompt string, caller gov.Context) (agentdomain.Task, error) {
@@ -322,6 +323,14 @@ func (s *Service) SubmitWithOptions(ctx context.Context, id agentdomain.ID, prom
 	profileID, err := s.allowed(ctx, agent, caller)
 	if err != nil {
 		return agentdomain.Task{}, err
+	}
+	if options.TimeoutMinutes != 0 && options.TimeoutMinutes != 10 &&
+		options.TimeoutMinutes != 20 && options.TimeoutMinutes != 30 {
+		return agentdomain.Task{}, agentdomain.ErrInvalid
+	}
+	seconds := options.TimeoutMinutes * 60
+	if seconds == 0 {
+		seconds = agentdomain.DefaultTimeoutSeconds
 	}
 	if err := agentdomain.ValidateModel(options.Model); err != nil {
 		return agentdomain.Task{}, err
@@ -374,7 +383,7 @@ func (s *Service) SubmitWithOptions(ctx context.Context, id agentdomain.ID, prom
 	}
 	now := time.Now().UTC()
 	task := agentdomain.Task{ID: taskID, AgentID: id, Status: agentdomain.TaskQueued,
-		Model: model, ReasoningEffort: effort, WorkspaceKey: options.Workspace, WorkspaceRoot: root,
+		Model: model, ReasoningEffort: effort, TimeoutSeconds: seconds, WorkspaceKey: options.Workspace, WorkspaceRoot: root,
 		Origin: string(caller.Origin()), PrincipalKind: string(caller.Principal().Kind()),
 		PrincipalRef: caller.Principal().Reference(), ScopeKind: string(caller.Scope().Kind()),
 		ScopeRef: caller.Scope().Reference(), Generation: 1, CreatedAt: now, UpdatedAt: now}
@@ -387,7 +396,7 @@ func (s *Service) SubmitWithOptions(ctx context.Context, id agentdomain.ID, prom
 		s.mu.Unlock()
 		return agentdomain.Task{}, err
 	}
-	runCtx, cancel := context.WithTimeout(s.rootContext, TaskTimeout)
+	runCtx, cancel := context.WithTimeout(s.rootContext, task.ExecutionTimeout())
 	s.active[taskID] = cancel
 	s.wg.Add(1)
 	s.mu.Unlock()

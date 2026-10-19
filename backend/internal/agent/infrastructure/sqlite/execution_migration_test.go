@@ -6,11 +6,26 @@ import (
 	"testing"
 )
 
+// This helper is test-only: synthetic downgrade fixtures must remove the
+// v18 Task column and marker before reopening as an older schema.
+func stripTaskBudgetV18Fixture(t *testing.T, db *sql.DB) {
+	t.Helper()
+	for _, statement := range []string{
+		"ALTER TABLE agent_tasks DROP COLUMN timeout_seconds",
+		"DELETE FROM agent_schema_migrations WHERE version=18",
+	} {
+		if _, err := db.ExecContext(context.Background(), statement); err != nil {
+			t.Fatalf("strip synthetic v18 Task budget %q: %v", statement, err)
+		}
+	}
+}
+
 // Legacy migration fixtures intentionally emulate a database before v14.
 // Remove the newly created evidence-only objects before downgrading their
 // older agent tables; never do this to a production database.
 func stripExecutionEvidenceV14Fixture(t *testing.T, db *sql.DB) {
 	t.Helper()
+	stripTaskBudgetV18Fixture(t, db)
 	for _, statement := range []string{
 		"DROP TRIGGER IF EXISTS agent_continuation_no_update",
 		"DROP TRIGGER IF EXISTS agent_continuation_no_delete",

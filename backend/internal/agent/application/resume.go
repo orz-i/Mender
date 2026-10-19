@@ -98,7 +98,7 @@ func (s *Service) Resume(ctx context.Context, id agentdomain.TaskID, prompt stri
 	now := time.Now().UTC()
 	task := agentdomain.Task{
 		ID: taskID, AgentID: agentID, Status: agentdomain.TaskQueued,
-		Model: parent.Model, ReasoningEffort: parent.ReasoningEffort,
+		Model: parent.Model, ReasoningEffort: parent.ReasoningEffort, TimeoutSeconds: parent.TimeoutSeconds,
 		WorkspaceKey: parent.WorkspaceKey, WorkspaceRoot: parent.WorkspaceRoot,
 		Origin: string(caller.Origin()), PrincipalKind: string(caller.Principal().Kind()),
 		PrincipalRef: caller.Principal().Reference(),
@@ -117,7 +117,7 @@ func (s *Service) Resume(ctx context.Context, id agentdomain.TaskID, prompt stri
 		}
 		return agentdomain.Task{}, err
 	}
-	runCtx, cancel := context.WithTimeout(s.rootContext, TaskTimeout)
+	runCtx, cancel := context.WithTimeout(s.rootContext, task.ExecutionTimeout())
 	s.active[taskID] = cancel
 	s.wg.Add(1)
 	s.mu.Unlock()

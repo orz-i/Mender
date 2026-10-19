@@ -126,7 +126,7 @@ func (s *Store) DeleteAgent(ctx context.Context, id agentdomain.ID) error {
 	return nil
 }
 
-const taskColumns = `task_id,agent_id,status,origin,principal_kind,principal_ref,scope_kind,scope_ref,generation,result_text,diagnostic,cancel_requested,created_at,updated_at,model,workspace_key,workspace_root,reasoning_effort`
+const taskColumns = `task_id,agent_id,status,origin,principal_kind,principal_ref,scope_kind,scope_ref,generation,result_text,diagnostic,cancel_requested,created_at,updated_at,model,workspace_key,workspace_root,reasoning_effort,timeout_seconds`
 
 func scanTask(scanner interface{ Scan(...any) error }) (agentdomain.Task, error) {
 	var t agentdomain.Task
@@ -134,7 +134,7 @@ func scanTask(scanner interface{ Scan(...any) error }) (agentdomain.Task, error)
 	var cancel int
 	if err := scanner.Scan(&id, &agentID, &state, &t.Origin, &t.PrincipalKind, &t.PrincipalRef,
 		&t.ScopeKind, &t.ScopeRef, &t.Generation, &t.Result, &t.Diagnostic, &cancel, &created, &updated,
-		&t.Model, &t.WorkspaceKey, &t.WorkspaceRoot, &t.ReasoningEffort); err != nil {
+		&t.Model, &t.WorkspaceKey, &t.WorkspaceRoot, &t.ReasoningEffort, &t.TimeoutSeconds); err != nil {
 		return t, err
 	}
 	t.ID = agentdomain.TaskID(id)
@@ -157,11 +157,11 @@ func (s *Store) CreateTask(ctx context.Context, t agentdomain.Task) error {
 	if t.Status != agentdomain.TaskQueued || t.CancelRequested {
 		return fmt.Errorf("%w: new Task must be queued", agentdomain.ErrInvalid)
 	}
-	_, err := s.db.ExecContext(ctx, `INSERT INTO agent_tasks(`+taskColumns+`) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+	_, err := s.db.ExecContext(ctx, `INSERT INTO agent_tasks(`+taskColumns+`) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		string(t.ID), string(t.AgentID), string(t.Status), t.Origin, t.PrincipalKind, t.PrincipalRef,
 		t.ScopeKind, t.ScopeRef, t.Generation, t.Result, t.Diagnostic, 0,
 		t.CreatedAt.UTC().Format(time.RFC3339Nano), t.UpdatedAt.UTC().Format(time.RFC3339Nano),
-		t.Model, t.WorkspaceKey, t.WorkspaceRoot, t.ReasoningEffort)
+		t.Model, t.WorkspaceKey, t.WorkspaceRoot, t.ReasoningEffort, int(t.ExecutionTimeout()/time.Second))
 	return err
 }
 
@@ -180,7 +180,7 @@ func (s *Store) CreateAdmittedTask(ctx context.Context, t agentdomain.Task, maxA
 	const globalTaskLimit = 8
 	const principalTaskLimit = 2
 	result, err := s.db.ExecContext(ctx, `INSERT INTO agent_tasks(`+taskColumns+`)
-	SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?
+	SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?
 	WHERE (SELECT COUNT(*) FROM agent_tasks WHERE agent_id=? AND status IN ('queued','running')) < ?
 	  AND (SELECT COUNT(*) FROM agent_tasks WHERE status IN ('queued','running')) < ?
 	  AND (SELECT COUNT(*) FROM agent_tasks WHERE principal_kind=? AND principal_ref=?
@@ -191,7 +191,7 @@ func (s *Store) CreateAdmittedTask(ctx context.Context, t agentdomain.Task, maxA
 		string(t.ID), string(t.AgentID), string(t.Status), t.Origin, t.PrincipalKind, t.PrincipalRef,
 		t.ScopeKind, t.ScopeRef, t.Generation, t.Result, t.Diagnostic, 0,
 		t.CreatedAt.UTC().Format(time.RFC3339Nano), t.UpdatedAt.UTC().Format(time.RFC3339Nano),
-		t.Model, t.WorkspaceKey, t.WorkspaceRoot, t.ReasoningEffort,
+		t.Model, t.WorkspaceKey, t.WorkspaceRoot, t.ReasoningEffort, int(t.ExecutionTimeout()/time.Second),
 		string(t.AgentID), maxActive, globalTaskLimit,
 		t.PrincipalKind, t.PrincipalRef, principalTaskLimit,
 		profileID, string(t.AgentID), profileID,
@@ -277,7 +277,8 @@ func (s *Store) ReconcileExpired(ctx context.Context, cutoff time.Time) (int64, 
 		status='unknown',generation=generation+1,result_text='',
 		diagnostic='Agent outcome unknown after execution deadline',
 		updated_at=?
-		WHERE status IN ('queued','running') AND updated_at < ?`,
+		WHERE status IN ('queued','running') AND
+			julianday(updated_at) + (timeout_seconds - 600.0)/86400.0 < julianday(?)`,
 		time.Now().UTC().Format(time.RFC3339Nano),
 		cutoff.UTC().Format(time.RFC3339Nano))
 	if err != nil {
