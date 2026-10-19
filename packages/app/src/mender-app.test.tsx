@@ -34,6 +34,7 @@ describe("MenderApp", () => {
       decideAgentApproval:vi.fn().mockResolvedValue({...request.approval,status:"allowed_once"}),
     } as MenderClient;
     render(<MemoryRouter><MenderApp client={client}/></MemoryRouter>);
+    fireEvent.click(screen.getByRole("button", { name: "Advanced" }));
     expect(screen.getByRole("link",{name:"Approvals"})).toBeTruthy();
     const topbar=within(screen.getByRole("banner"));
     expect(await topbar.findByLabelText("Pending approvals: 1")).toBeTruthy();
@@ -52,20 +53,33 @@ describe("MenderApp", () => {
 
     expect(screen.getByRole("heading", { name: "Overview" })).toBeTruthy();
 
-    for (const name of [
-      "Overview",
-      "Plugin Marketplace",
-      "Tools",
-      "Skills",
-      "Profiles",
-      "Agents",
-      "Servers",
-      "Policy",
-      "Credentials",
-      "Audit",
-    ]) {
+    for (const name of ["Overview", "Plugin Marketplace", "Tools", "Skills", "Agents", "Sandboxes"]) {
       expect(screen.getByRole("link", { name })).toBeTruthy();
     }
+    expect(screen.queryByRole("link", { name: "Profiles" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Connections" }));
+    for (const name of ["Profiles", "Servers", "Tunnels"]) {
+      expect(screen.getByRole("link", { name })).toBeTruthy();
+    }
+    fireEvent.click(screen.getByRole("button", { name: "Advanced" }));
+    for (const name of ["Runtime", "Policy", "Credentials", "Audit"]) {
+      expect(screen.getByRole("link", { name })).toBeTruthy();
+    }
+  });
+
+  it("opens a textual mobile menu and closes it when a destination is selected", async () => {
+    const client = {
+      ...overviewClient(),
+      listPluginCatalogue: vi.fn().mockResolvedValue({ plugins: [] }),
+      listIntegrationOfferings: vi.fn().mockResolvedValue({ integrations: [] }),
+    } as MenderClient;
+    render(<MemoryRouter><MenderApp client={client} /></MemoryRouter>);
+    fireEvent.click(screen.getByRole("button", { name: "Open navigation" }));
+    const menu = screen.getByRole("dialog", { name: "Mender" });
+    expect(within(menu).getByRole("link", { name: "Profiles" })).toBeTruthy();
+    fireEvent.click(within(menu).getByRole("link", { name: "Plugin Marketplace" }));
+    expect(screen.queryByRole("dialog", { name: "Mender" })).toBeNull();
+    expect(screen.getByRole("heading", { name: "Plugin Marketplace" })).toBeTruthy();
   });
 
   it("shows only the brand and route title without redundant descriptions", () => {
