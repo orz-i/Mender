@@ -22,6 +22,8 @@ type Credentials struct {
 	Get               credentialapplication.GetCredential
 	List              credentialapplication.ListCredentials
 	RotateNative      credentialapplication.RotateNativeSecret
+	SaveOAuth         credentialapplication.SaveOAuth
+	DisconnectOAuth   credentialapplication.DisconnectOAuth
 	Delete            credentialapplication.DeleteCredential
 	Resolver          invocationapplication.CredentialResolver
 
@@ -47,6 +49,8 @@ func NewCredentials(
 		Get:               credentialapplication.NewGetCredential(store),
 		List:              credentialapplication.NewListCredentials(store),
 		RotateNative:      credentialapplication.NewRotateNativeSecret(store, secrets, clock),
+		SaveOAuth:         credentialapplication.NewSaveOAuth(store, secrets, clock),
+		DisconnectOAuth:   credentialapplication.NewDisconnectOAuth(store, secrets, clock),
 		Resolver:          resolver,
 		store:             store,
 		secrets:           secrets,

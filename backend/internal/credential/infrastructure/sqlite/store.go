@@ -3,6 +3,7 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
@@ -61,7 +62,11 @@ func (s *Store) Create(
 	ctx context.Context,
 	credential credentialdomain.Credential,
 ) error {
-	_, err := s.db.ExecContext(
+	oauthMetadata, err := encodeOAuthMetadata(credential)
+	if err != nil {
+		return err
+	}
+	_, err = s.db.ExecContext(
 		ctx,
 		`INSERT INTO credentials(
 			reference,
@@ -69,14 +74,16 @@ func (s *Store) Create(
 			source,
 			environment_variable,
 			created_at,
-			updated_at
-		) VALUES (?, ?, ?, ?, ?, ?)`,
+			updated_at,
+			oauth_metadata
+		) VALUES (?, ?, ?, ?, ?, ?, ?)`,
 		credential.Reference().String(),
 		credential.DisplayName(),
 		string(credential.Source()),
 		credential.EnvironmentVariable(),
 		credential.CreatedAt().Format(time.RFC3339Nano),
 		credential.UpdatedAt().Format(time.RFC3339Nano),
+		oauthMetadata,
 	)
 	if err != nil {
 		if strings.Contains(strings.ToLower(err.Error()), "unique") ||
@@ -92,6 +99,10 @@ func (s *Store) Save(
 	ctx context.Context,
 	credential credentialdomain.Credential,
 ) error {
+	oauthMetadata, err := encodeOAuthMetadata(credential)
+	if err != nil {
+		return err
+	}
 	result, err := s.db.ExecContext(
 		ctx,
 		`UPDATE credentials
@@ -99,13 +110,15 @@ func (s *Store) Save(
 			source = ?,
 			environment_variable = ?,
 			created_at = ?,
-			updated_at = ?
+			updated_at = ?,
+			oauth_metadata = ?
 		WHERE reference = ?`,
 		credential.DisplayName(),
 		string(credential.Source()),
 		credential.EnvironmentVariable(),
 		credential.CreatedAt().Format(time.RFC3339Nano),
 		credential.UpdatedAt().Format(time.RFC3339Nano),
+		oauthMetadata,
 		credential.Reference().String(),
 	)
 	if err != nil {
@@ -127,7 +140,7 @@ func (s *Store) Get(
 ) (credentialdomain.Credential, error) {
 	row := s.db.QueryRowContext(
 		ctx,
-		`SELECT reference, display_name, source, environment_variable, created_at, updated_at
+		`SELECT reference, display_name, source, environment_variable, created_at, updated_at, oauth_metadata
 		FROM credentials
 		WHERE reference = ?`,
 		ref.String(),
@@ -147,7 +160,7 @@ func (s *Store) List(
 ) ([]credentialdomain.Credential, error) {
 	rows, err := s.db.QueryContext(
 		ctx,
-		`SELECT reference, display_name, source, environment_variable, created_at, updated_at
+		`SELECT reference, display_name, source, environment_variable, created_at, updated_at, oauth_metadata
 		FROM credentials
 		ORDER BY reference`,
 	)
@@ -198,7 +211,7 @@ type rowScanner interface {
 
 func scanCredential(scanner rowScanner) (credentialdomain.Credential, error) {
 	var rawReference, displayName, rawSource, environmentVariable string
-	var rawCreatedAt, rawUpdatedAt string
+	var rawCreatedAt, rawUpdatedAt, rawOAuth string
 	if err := scanner.Scan(
 		&rawReference,
 		&displayName,
@@ -206,6 +219,7 @@ func scanCredential(scanner rowScanner) (credentialdomain.Credential, error) {
 		&environmentVariable,
 		&rawCreatedAt,
 		&rawUpdatedAt,
+		&rawOAuth,
 	); err != nil {
 		return credentialdomain.Credential{}, err
 	}
@@ -221,12 +235,34 @@ func scanCredential(scanner rowScanner) (credentialdomain.Credential, error) {
 	if err != nil {
 		return credentialdomain.Credential{}, fmt.Errorf("parse credential updated_at: %w", err)
 	}
-	return credentialdomain.RestoreCredential(
-		ref,
-		displayName,
-		credentialdomain.Source(rawSource),
-		environmentVariable,
-		createdAt,
-		updatedAt,
-	)
+	credential, err := credentialdomain.RestoreCredential(ref, displayName, credentialdomain.Source(rawSource), environmentVariable, createdAt, updatedAt)
+	if err != nil {
+		return credentialdomain.Credential{}, err
+	}
+	if credential.Source() == credentialdomain.SourceOAuth {
+		var metadata credentialdomain.OAuthMetadata
+		if err := json.Unmarshal([]byte(rawOAuth), &metadata); err != nil {
+			return credentialdomain.Credential{}, fmt.Errorf("decode OAuth credential metadata: %w", err)
+		}
+		return credential.WithOAuthMetadata(metadata)
+	}
+	return credential, nil
+}
+
+func encodeOAuthMetadata(credential credentialdomain.Credential) (string, error) {
+	metadata := credential.OAuthMetadata()
+	if credential.Source() != credentialdomain.SourceOAuth {
+		if metadata != nil {
+			return "", fmt.Errorf("non-OAuth credential has OAuth metadata")
+		}
+		return "", nil
+	}
+	if metadata == nil {
+		return "", fmt.Errorf("OAuth credential metadata is required")
+	}
+	blob, err := json.Marshal(metadata)
+	if err != nil {
+		return "", fmt.Errorf("encode OAuth credential metadata: %w", err)
+	}
+	return string(blob), nil
 }

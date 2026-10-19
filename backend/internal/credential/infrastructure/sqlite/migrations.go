@@ -28,7 +28,7 @@ func migrate(ctx context.Context, db *sql.DB) error {
 	).Scan(&recordedVersion); err != nil {
 		return fmt.Errorf("check credential schema version: %w", err)
 	}
-	const latestSupportedVersion = 1
+	const latestSupportedVersion = 2
 	if recordedVersion.Valid && recordedVersion.Int64 > latestSupportedVersion {
 		return fmt.Errorf(
 			"credential schema version %d is newer than supported version %d",
@@ -61,6 +61,19 @@ func migrate(ctx context.Context, db *sql.DB) error {
 			time.Now().UTC().Format(time.RFC3339Nano),
 		); err != nil {
 			return fmt.Errorf("record credential migration 1: %w", err)
+		}
+	}
+
+	var appliedV2 int
+	if err := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM credential_schema_migrations WHERE version = 2").Scan(&appliedV2); err != nil {
+		return fmt.Errorf("check credential migration 2: %w", err)
+	}
+	if appliedV2 == 0 {
+		if _, err := tx.ExecContext(ctx, "ALTER TABLE credentials ADD COLUMN oauth_metadata TEXT NOT NULL DEFAULT ''"); err != nil {
+			return fmt.Errorf("apply credential migration 2: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx, "INSERT INTO credential_schema_migrations(version, applied_at) VALUES (2, ?)", time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
+			return fmt.Errorf("record credential migration 2: %w", err)
 		}
 	}
 

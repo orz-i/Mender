@@ -17,6 +17,7 @@ type Source string
 const (
 	SourceNative      Source = "native"
 	SourceEnvironment Source = "environment"
+	SourceOAuth       Source = "oauth"
 )
 
 // Credential is persistent non-secret metadata for one secret Reference.
@@ -25,6 +26,7 @@ type Credential struct {
 	displayName         string
 	source              Source
 	environmentVariable string
+	oauth               *OAuthMetadata
 	createdAt           time.Time
 	updatedAt           time.Time
 }
@@ -90,6 +92,10 @@ func restoreCredential(
 				"credential environment_variable: must be empty for native source",
 			)
 		}
+	case SourceOAuth:
+		if environmentVariable != "" {
+			return Credential{}, fmt.Errorf("credential environment_variable: must be empty for OAuth source")
+		}
 	case SourceEnvironment:
 		if !environmentVariablePattern.MatchString(environmentVariable) {
 			return Credential{}, fmt.Errorf(
@@ -119,7 +125,7 @@ func restoreCredential(
 }
 
 func (c Credential) Touch(now time.Time) (Credential, error) {
-	return RestoreCredential(
+	updated, err := RestoreCredential(
 		c.reference,
 		c.displayName,
 		c.source,
@@ -127,6 +133,13 @@ func (c Credential) Touch(now time.Time) (Credential, error) {
 		c.createdAt,
 		now,
 	)
+	if err != nil {
+		return Credential{}, err
+	}
+	if c.oauth != nil {
+		return updated.WithOAuthMetadata(*c.oauth)
+	}
+	return updated, nil
 }
 
 func (c Credential) Reference() Reference {
@@ -143,6 +156,29 @@ func (c Credential) Source() Source {
 
 func (c Credential) EnvironmentVariable() string {
 	return c.environmentVariable
+}
+
+// OAuthMetadata returns only public connection state; never OAuth bearer or refresh tokens.
+func (c Credential) OAuthMetadata() *OAuthMetadata {
+	if c.oauth == nil {
+		return nil
+	}
+	clone := *c.oauth
+	clone.Scopes = append([]string(nil), clone.Scopes...)
+	return &clone
+}
+
+func (c Credential) WithOAuthMetadata(meta OAuthMetadata) (Credential, error) {
+	if c.source != SourceOAuth {
+		return Credential{}, fmt.Errorf("OAuth metadata requires an OAuth credential")
+	}
+	if err := meta.Validate(); err != nil {
+		return Credential{}, err
+	}
+	copy := meta
+	copy.Scopes = append([]string(nil), meta.Scopes...)
+	c.oauth = &copy
+	return c, nil
 }
 
 func (c Credential) CreatedAt() time.Time {

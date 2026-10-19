@@ -269,7 +269,7 @@ func (uc DeleteCredential) Execute(
 			return fmt.Errorf("%w: %s", ErrCredentialInUse, usages[0].Description)
 		}
 	}
-	if credential.Source() == credentialdomain.SourceNative {
+	if credential.Source() == credentialdomain.SourceNative || credential.Source() == credentialdomain.SourceOAuth {
 		if err := uc.secrets.Delete(ctx, ref); err != nil &&
 			!errors.Is(err, ErrSecretNotFound) {
 			return fmt.Errorf("delete credential: delete secret: %w", err)
