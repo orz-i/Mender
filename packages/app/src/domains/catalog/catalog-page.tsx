@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router";
-import { EyeIcon } from "lucide-react";
+import { Link, useNavigate } from "react-router";
+import { ArrowUpRightIcon, EyeIcon } from "lucide-react";
 
 import type {
   InvocationResult,
@@ -61,6 +61,8 @@ export function CatalogPage({ client, providerId }: { client: MenderClient; prov
   const [invocation, setInvocation] = useState<InvocationResult | null>(null);
 
   const [error, setError] = useState("");
+  const [hasSnapshot, setHasSnapshot] = useState(false);
+  const [retryVersion, setRetryVersion] = useState(0);
   const [busy, setBusy] = useState("");
   const [loadingToolId, setLoadingToolId] = useState("");
 
@@ -79,6 +81,7 @@ export function CatalogPage({ client, providerId }: { client: MenderClient; prov
           setNextCursor(toolResult.nextCursor ?? null);
           setActiveQuery("");
           setSearched(false);
+          setHasSnapshot(true);
         }
       })
       .catch((reason: unknown) => {
@@ -89,7 +92,7 @@ export function CatalogPage({ client, providerId }: { client: MenderClient; prov
     return () => {
       active = false;
     };
-  }, [client,providerId]);
+  }, [client, providerId, retryVersion]);
 
   async function browseAll() {
     setBusy("browse");
@@ -218,13 +221,13 @@ export function CatalogPage({ client, providerId }: { client: MenderClient; prov
 
   return (
     <>
-      {error ? <ErrorNotice message={error} /> : null}
+      {error ? <ErrorNotice message={error} onRetry={!hasSnapshot ? () => { setError(""); setHasSnapshot(false); setRetryVersion(version => version + 1); } : undefined} /> : null}
 
       <PageToolbar
         tabs={<Button size="sm" variant="outline" onClick={() => void navigate("/tools")}>
           {t("Back to services")}
         </Button>}
-        filters={
+        filters={hasSnapshot ?
           <>
             <div className="w-full min-w-0 sm:w-56 md:w-64 sm:shrink-0">
               <SearchField
@@ -235,9 +238,9 @@ export function CatalogPage({ client, providerId }: { client: MenderClient; prov
                 onKeyDown={(event) => { if (event.key === "Enter") void search(); }}
               />
             </div>
-          </>
+          </> : undefined
         }
-        actions={
+        actions={hasSnapshot ?
           <>
             <Button size="sm" onClick={() => void search()} disabled={busy !== "" || !query.trim()}>
               {t(busy === "search" ? "Searching…" : "Search")}
@@ -246,11 +249,13 @@ export function CatalogPage({ client, providerId }: { client: MenderClient; prov
             <Button size="sm" variant="outline" onClick={() => void browseAll()} disabled={busy !== ""}>
               {t(busy === "browse" ? "Loading…" : "Browse")}
             </Button>
-          </>
+          </> : undefined
         }
       />
-      <ResultPanel title={toolSourceLabel(providers.find(provider=>provider.providerId===providerId))}>
-          {results.length ? (
+      {error && !hasSnapshot ? null : <ResultPanel title={toolSourceLabel(providers.find(provider=>provider.providerId===providerId))}>
+          {!hasSnapshot ? (
+            <p role="status" className="px-4 py-12 text-center text-sm text-muted-foreground">{t("Loading…")}</p>
+          ) : results.length ? (
             <>
               <Table className="min-w-[560px] table-fixed">
               <colgroup>
@@ -318,17 +323,30 @@ export function CatalogPage({ client, providerId }: { client: MenderClient; prov
               />
             </EmptyPanelState>
           )}
-      </ResultPanel>
+      </ResultPanel>}
 
-      <TablePagination
+      {hasSnapshot ? <TablePagination
         label="Service tools"
         pagination={catalogPagination}
-      />
-      {nextCursor ? <div className="flex justify-center py-3">
+      /> : null}
+      {hasSnapshot && nextCursor ? <div className="flex justify-center py-3">
         <Button size="sm" variant="outline" disabled={busy!==""} onClick={()=>void loadMore()}>
           {t(busy==="more"?"Loading…":"Load more tools")}
         </Button>
       </div> : null}
+
+      {hasSnapshot && results.length > 0 ? (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 px-1 text-sm text-muted-foreground">
+          <p>{t("To make these tools available to clients, select this tool source in a Profile.")}</p>
+          <Link
+            to="/profiles"
+            className="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-lg px-2 font-medium text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"
+          >
+            {t("Open Profiles")}
+            <ArrowUpRightIcon className="size-3.5" aria-hidden="true" />
+          </Link>
+        </div>
+      ) : null}
 
       <Dialog
         open={selected !== null}

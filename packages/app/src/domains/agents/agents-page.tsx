@@ -21,6 +21,7 @@ export function AgentsPage({ client }: { client: MenderClient }) {
   const navigate = useNavigate();
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [hasSnapshot, setHasSnapshot] = useState(false);
   const [error, setError] = useState("");
   const [reload, setReload] = useState(0);
   const [query, setQuery] = useState("");
@@ -31,6 +32,7 @@ export function AgentsPage({ client }: { client: MenderClient }) {
     void client.listAgents().then((result) => {
       if (!active) return;
       setAgents(result.agents);
+      setHasSnapshot(true);
       setError("");
       setLoaded(true);
     }).catch((reason:unknown) => {
@@ -49,7 +51,7 @@ export function AgentsPage({ client }: { client: MenderClient }) {
   const pagination = usePagination(filtered);
 
   return <>
-    <PageToolbar
+    {hasSnapshot ? <PageToolbar
       tabs={<PageTabs label="Agents">
         <PageTab label="All agents" active={filter==="all"} count={agents.length} onClick={()=>setFilter("all")}/>
         <PageTab label="Available agents" active={filter==="available"} count={agents.filter(a=>a.backendAvailable).length} onClick={()=>setFilter("available")}/>
@@ -61,12 +63,12 @@ export function AgentsPage({ client }: { client: MenderClient }) {
         </div>
       }
       actions={<>
-        <Button size="sm" variant="outline" onClick={()=>setReload(n=>n+1)}>{t("Refresh")}</Button>
+        <Button size="sm" variant="outline" onClick={()=>{setLoaded(false);setError("");setReload(n=>n+1);}}>{t("Refresh")}</Button>
         <Button size="sm" onClick={()=>void navigate("/agents/new")}>{t("Add agent")}</Button>
       </>}
-    />
-    {error?<ErrorNotice message={error}/>:null}
-    <ResultPanel title="Agent inventory">
+    /> : null}
+    {error ? <ErrorNotice message={error} onRetry={!hasSnapshot ? () => {setLoaded(false);setError("");setReload(n => n + 1);} : undefined} /> : null}
+    {error && !hasSnapshot ? null : <ResultPanel title="Agent inventory">
       {!loaded?<div className="p-8 text-sm text-muted-foreground">{t("Loading agents…")}</div>:
       filtered.length?<>
         <Table>
@@ -92,7 +94,7 @@ export function AgentsPage({ client }: { client: MenderClient }) {
         title={agents.length?t("No matching agents"):t("No agents")}
         description={agents.length?t("Try a different search or filter."):t("Add an Agent to delegate tasks through a Profile.")}/>
       </EmptyPanelState>}
-    </ResultPanel>
-    {pagination.total > 0 ? <TablePagination label="Agents" pagination={pagination} /> : null}
+    </ResultPanel>}
+    {hasSnapshot && pagination.total > 0 ? <TablePagination label="Agents" pagination={pagination} /> : null}
   </>;
 }

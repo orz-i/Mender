@@ -78,6 +78,8 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
   const [tunnels, setTunnels] = useState<Tunnel[]>([]);
   const [catalogTools, setCatalogTools] = useState<ToolSummary[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [hasSnapshot, setHasSnapshot] = useState(false);
+  const [retryVersion, setRetryVersion] = useState(0);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [inventoryQuery, setInventoryQuery] = useState("");
@@ -158,6 +160,7 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
           setCredentials(credentialResult.credentials);
           setTunnels(tunnelResult.tunnels);
           setCatalogTools(toolResult.tools);
+          setHasSnapshot(true);
           setError("");
           setLoaded(true);
         }
@@ -172,7 +175,7 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
     return () => {
       active = false;
     };
-  }, [client]);
+  }, [client, retryVersion]);
 
   const managedProfile = useMemo(
     () => profiles.find((profile) => profile.slug === manageSlug) ?? null,
@@ -738,12 +741,20 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
   }
 
 
+  function reloadAll() {
+    setLoaded(false);
+    setError("");
+    setRetryVersion((version) => version + 1);
+  }
+
   return (
     <>
-      <PageToolbar
+      {hasSnapshot || !loaded ? <PageToolbar
         tabs={
           <span className="text-xs text-muted-foreground">
-            {tCount(profiles.length, "{{count}} profile configured", "{{count}} profiles configured")}
+            {hasSnapshot
+              ? tCount(profiles.length, "{{count}} profile configured", "{{count}} profiles configured")
+              : t("Loading profiles…")}
           </span>
         }
         filters={
@@ -753,13 +764,13 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
         }
         actions={
           <>
-            <Button variant="outline" size="sm" disabled={busy} onClick={() => void refreshProfiles()}>{t("Refresh")}</Button>
+            <Button variant="outline" size="sm" disabled={busy} onClick={reloadAll}>{t("Refresh")}</Button>
             <Button size="sm" onClick={() => { setCreateError(""); setCreateOpen(true); }}>{t("Create profile")}</Button>
           </>
         }
-      />
-      {error ? <ErrorNotice message={error} /> : null}
-      <ResultPanel title="Profile inventory">
+      /> : null}
+      {error ? <ErrorNotice message={error} onRetry={!hasSnapshot ? reloadAll : undefined} /> : null}
+      {error && !hasSnapshot ? null : <ResultPanel title="Profile inventory">
           {!loaded ? (
             <div className="px-4 py-12 text-center text-sm text-muted-foreground">
               {t("Loading profiles…")}
@@ -823,12 +834,12 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
               />
             </EmptyPanelState>
           )}
-      </ResultPanel>
+      </ResultPanel>}
 
-      <TablePagination
+      {hasSnapshot ? <TablePagination
         label="Profiles"
         pagination={profilePagination}
-      />
+      /> : null}
 
       <Dialog
         open={createOpen}

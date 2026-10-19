@@ -85,6 +85,7 @@ export function SkillsPage({
   const [installations, setInstallations] = useState<SkillInstallation[]>([]);
   const [deployments, setDeployments] = useState<SkillDeployment[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [hasSnapshot, setHasSnapshot] = useState(false);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
 
@@ -103,6 +104,8 @@ export function SkillsPage({
     useState<SkillDeployment["target"]>("agents-project");
 
   const refresh = useCallback(async () => {
+    setLoaded(false);
+    setError("");
     try {
       const [skillResult, deploymentResult] = await Promise.all([
         client.listSkills(),
@@ -110,6 +113,7 @@ export function SkillsPage({
       ]);
       setInstallations(skillResult.installations);
       setDeployments(deploymentResult.deployments);
+      setHasSnapshot(true);
       setSelected((current) => {
         if (current === null) {
           return null;
@@ -140,6 +144,7 @@ export function SkillsPage({
         }
         setInstallations(skillResult.installations);
         setDeployments(deploymentResult.deployments);
+        setHasSnapshot(true);
         setError("");
       })
       .catch((reason: unknown) => {
@@ -357,7 +362,7 @@ export function SkillsPage({
 
   return (
     <>
-      <PageToolbar
+      {hasSnapshot ? <PageToolbar
         tabs={
           <PageTabs label="Skill Library">
             <PageTab label="All Skills" count={installations.length} active={filter === "all"} onClick={() => setFilter("all")} />
@@ -429,11 +434,11 @@ export function SkillsPage({
             ) : null}
           </>
         }
-      />
+      /> : null}
 
-      {error ? <ErrorNotice message={error} /> : null}
+      {error ? <ErrorNotice message={error} onRetry={!hasSnapshot ? () => { void refresh(); } : undefined} /> : null}
 
-      <ResultPanel title="Skill Library">
+      {error && !hasSnapshot ? null : <ResultPanel title="Skill Library">
         {!loaded ? (
           <p className="px-3 py-10 text-center text-sm text-muted-foreground">
             {t("Loading…")}
@@ -604,9 +609,9 @@ export function SkillsPage({
                 </div>
               </div>
             )}
-      </ResultPanel>
+      </ResultPanel>}
 
-      {visibleInstallations.length ? (
+      {hasSnapshot && visibleInstallations.length ? (
         <TablePagination label="Skills" pagination={skillPagination} />
       ) : null}
 

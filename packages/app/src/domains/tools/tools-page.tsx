@@ -12,5 +12,5 @@ export function ToolsPage({ client }: { client: MenderClient }) {
 export function ToolServicePage({ client }: { client: MenderClient }) {
   const { providerId } = useParams();
   if (!providerId) return null;
-  return <CatalogPage client={client} providerId={providerId} />;
+  return <CatalogPage key={providerId} client={client} providerId={providerId} />;
 }

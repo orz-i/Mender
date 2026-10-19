@@ -91,8 +91,6 @@ export function OverviewPage({ client }: { client: MenderClient }) {
 
   useEffect(() => {
     let active = true;
-    setData(null);
-    setError("");
     void Promise.all([
       client.getSystemStatus(),
       client.listProviders(),
@@ -125,7 +123,7 @@ export function OverviewPage({ client }: { client: MenderClient }) {
   });
 
   if (error) {
-    return <div className="pt-4"><ErrorNotice message={error} onRetry={() => setReloadVersion((version) => version + 1)} /></div>;
+    return <div className="pt-4"><ErrorNotice message={error} onRetry={() => { setData(null); setError(""); setReloadVersion((version) => version + 1); }} /></div>;
   }
 
   if (data === null) {

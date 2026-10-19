@@ -169,6 +169,8 @@ export const zhCNMessages: Readonly<Record<string, string>> = {
   "Service tools": "服务工具",
   "Service unavailable": "服务不可用",
   "Tool services": "工具服务",
+  "To make these tools available to clients, select this tool source in a Profile.": "要让客户端使用这些工具，请先在配置档中选择这个工具来源。",
+  "Open Profiles": "前往配置档",
   "View tool services": "查看工具服务",
   "View tools": "查看工具",
   "Marketplace view": "插件市场视图",
