@@ -153,6 +153,8 @@ export const zhCNMessages: Readonly<Record<string, string>> = {
   "Add tool service": "添加服务",
   "Back to services": "返回服务列表",
   "Details": "详情",
+  "Rebind": "重新绑定",
+  "Sync": "同步",
   "Explore the tools provided by this service.": "查看这个服务提供的工具。",
   "Jobs": "任务工具",
   "Loading services…": "正在加载服务…",

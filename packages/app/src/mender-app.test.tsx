@@ -99,7 +99,8 @@ describe("MenderApp", () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByText("No invocation records yet.")).toBeTruthy();
+    expect(await screen.findByText("Get started with tool providers")).toBeTruthy();
+    expect(screen.queryByText("No invocation records yet.")).toBeNull();
     expect(screen.queryByText("No providers")).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Providers / Profiles" }));

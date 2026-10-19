@@ -384,6 +384,7 @@ describe("management pages", () => {
     expect(screen.queryByText("External Echo · 1.2.3")).toBeNull();
     expect(screen.queryByText("External Echo · production")).toBeNull();
 
+    fireEvent.click(screen.getByRole("button", { name: "Actions: External Echo Provider" }));
     fireEvent.click(
       screen.getByRole("button", { name: "Rebind External Echo Provider" }),
     );
@@ -411,6 +412,7 @@ describe("management pages", () => {
       });
     });
 
+    fireEvent.click(screen.getByRole("button", { name: "Actions: External Echo Provider" }));
     fireEvent.click(
       screen.getByRole("button", { name: "View External Echo Provider" }),
     );
@@ -422,6 +424,7 @@ describe("management pages", () => {
     fireEvent.click(
       details.getAllByRole("button", { name: "Close" })[0]!,
     );
+    fireEvent.click(screen.getByRole("button", { name: "Actions: External Echo Provider" }));
     fireEvent.click(
       screen.getByRole("button", { name: "Edit External Echo Provider" }),
     );
@@ -1521,6 +1524,7 @@ describe("management pages", () => {
     expect(await screen.findByText("AnySearch")).toBeTruthy();
     expect(screen.queryByText("prov_1")).toBeNull();
 
+    fireEvent.click(screen.getByRole("button", { name: "Actions: AnySearch" }));
     fireEvent.click(screen.getByRole("button", { name: "View AnySearch" }));
     expect(await screen.findByText("Provider details")).toBeTruthy();
     expectAnchoredDialog("Provider details");
@@ -1532,6 +1536,7 @@ describe("management pages", () => {
     const closeButtons = screen.getAllByRole("button", { name: "Close" });
     fireEvent.click(closeButtons[0]!);
 
+    fireEvent.click(screen.getByRole("button", { name: "Actions: AnySearch" }));
     fireEvent.click(screen.getByRole("button", { name: "Edit AnySearch" }));
     expect(await screen.findByText("Edit provider")).toBeTruthy();
     expect(screen.getByText("search")).toBeTruthy();
@@ -1610,6 +1615,7 @@ describe("management pages", () => {
     });
 
     expect(await screen.findByText("Search")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Actions: Search" }));
     fireEvent.click(
       screen.getByRole("button", { name: "Authentication Search" }),
     );

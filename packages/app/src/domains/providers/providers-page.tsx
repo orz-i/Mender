@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import {
   ArrowRightIcon,
+  EllipsisIcon,
   EyeIcon,
   KeyRoundIcon,
   Link2Icon,
@@ -21,6 +22,7 @@ import type {
 import { Badge } from "@mender/ui/components/badge";
 import { Card, CardHeader, CardTitle, CardDescription, CardAction, CardContent } from "@mender/ui/components/card";
 import { Button } from "@mender/ui/components/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@mender/ui/components/popover";
 import {
   Dialog,
   DialogClose,
@@ -223,9 +225,11 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
   >([]);
   const [credentials, setCredentials] = useState<Credential[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [hasSnapshot, setHasSnapshot] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
   const [inventoryQuery, setInventoryQuery] = useState("");
+  const [openActionsProviderId, setOpenActionsProviderId] = useState<string | null>(null);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [createForm, setCreateForm] =
@@ -267,6 +271,7 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
     try {
       const result = await client.listProviders();
       setProviders(result.providers);
+      setHasSnapshot(true);
       setError("");
       return result.providers;
     } catch (reason) {
@@ -291,6 +296,7 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
           setProviderPlugins(pluginResult.plugins);
           setProviderPluginIssues(pluginResult.issues);
           setProviders(providerResult.providers);
+          setHasSnapshot(true);
           setCredentials(credentialResult.credentials);
 
           if (createRequest.requested && !createHandledRef.current && createRequest.offeringId) {
@@ -630,8 +636,8 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
           </>
         }
       />
-      {error ? <ErrorNotice message={error} /> : null}
-      {providerPluginIssues.length ? (
+      {error ? <ErrorNotice message={error} onRetry={!hasSnapshot ? () => { void refresh(); } : undefined} /> : null}
+      {hasSnapshot && providerPluginIssues.length ? (
         <InsightBanner
           title="Some Provider plugins need attention. Review Plugin Marketplace for installation details."
           actions={
@@ -645,7 +651,7 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
           }
         />
       ) : null}
-      <ResultPanel title="Tool services">
+      {error && !hasSnapshot ? null : <ResultPanel title="Tool services">
         {!loaded ? (
           <div className="px-4 py-12 text-center text-sm text-muted-foreground">
             {t("Loading services…")}
@@ -689,26 +695,51 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
                       {t("Details")}
                     </Button>
                   ) : (
-                    <>
-                      <IconButton variant="ghost" label={t("View {{provider}}", {provider:name})}
-                        onClick={() => setViewProvider(provider)}><EyeIcon /></IconButton>
-                      <IconButton variant="ghost" label={t("Edit {{provider}}", {provider:name})}
-                        disabled={busy!=="" || !provider.pluginId}
-                        onClick={() => beginEdit(provider)}><PencilIcon /></IconButton>
-                      {providerSupportsFirstPartyAuthentication(provider) ? (
-                        <IconButton variant="outline" label={t("Authentication {{provider}}", {provider:name})}
-                          disabled={busy!==""}
-                          onClick={() => openProviderAuthentication(provider)}><KeyRoundIcon /></IconButton>
-                      ) : null}
-                      {providerRebindCandidates(providerPlugins,provider).length ? (
-                        <IconButton variant="outline" label={t("Rebind {{provider}}", {provider:name})}
-                          disabled={busy!==""} onClick={() => beginRebind(provider)}><Link2Icon /></IconButton>
-                      ) : null}
-                      <IconButton variant="outline" label={t("Sync {{provider}}", {provider:name})}
-                        disabled={busy!==""} onClick={() => void syncProvider(provider)}><RefreshCwIcon /></IconButton>
-                      <IconButton variant="destructive" label={t("Delete {{provider}}", {provider:name})}
-                        disabled={busy!==""} onClick={() => void deleteProvider(provider)}><Trash2Icon /></IconButton>
-                    </>
+                    <Popover open={openActionsProviderId === provider.providerId}
+                      onOpenChange={(open) => setOpenActionsProviderId(open ? provider.providerId : null)}>
+                      <PopoverTrigger render={<Button size="sm" variant="outline" type="button" aria-label={t("Actions") + ": " + name} />}>
+                        <EllipsisIcon className="size-4" aria-hidden="true" />
+                        {t("Actions")}
+                      </PopoverTrigger>
+                      <PopoverContent align="end" className="w-56 p-2">
+                        <div className="grid gap-1" aria-label={t("Actions")}>
+                          <Button size="sm" variant="ghost" className="justify-start" aria-label={t("View {{provider}}", {provider:name})}
+                            onClick={() => { setOpenActionsProviderId(null); setViewProvider(provider); }}>
+                            <EyeIcon data-icon="inline-start" />{t("Details")}
+                          </Button>
+                          <Button size="sm" variant="ghost" className="justify-start" aria-label={t("Edit {{provider}}", {provider:name})}
+                            disabled={busy!=="" || !provider.pluginId}
+                            onClick={() => { setOpenActionsProviderId(null); beginEdit(provider); }}>
+                            <PencilIcon data-icon="inline-start" />{t("Edit")}
+                          </Button>
+                          {providerSupportsFirstPartyAuthentication(provider) ? (
+                            <Button size="sm" variant="ghost" className="justify-start" aria-label={t("Authentication {{provider}}", {provider:name})}
+                              disabled={busy!==""}
+                              onClick={() => { setOpenActionsProviderId(null); openProviderAuthentication(provider); }}>
+                              <KeyRoundIcon data-icon="inline-start" />{t("Authentication")}
+                            </Button>
+                          ) : null}
+                          {providerRebindCandidates(providerPlugins,provider).length ? (
+                            <Button size="sm" variant="ghost" className="justify-start" aria-label={t("Rebind {{provider}}", {provider:name})}
+                              disabled={busy!==""}
+                              onClick={() => { setOpenActionsProviderId(null); beginRebind(provider); }}>
+                              <Link2Icon data-icon="inline-start" />{t("Rebind")}
+                            </Button>
+                          ) : null}
+                          <Button size="sm" variant="ghost" className="justify-start" aria-label={t("Sync {{provider}}", {provider:name})}
+                            disabled={busy!==""}
+                            onClick={() => { setOpenActionsProviderId(null); void syncProvider(provider); }}>
+                            <RefreshCwIcon data-icon="inline-start" />{t("Sync")}
+                          </Button>
+                          <Button size="sm" variant="ghost" className="justify-start text-destructive hover:text-destructive"
+                            aria-label={t("Delete {{provider}}", {provider:name})}
+                            disabled={busy!==""}
+                            onClick={() => { setOpenActionsProviderId(null); void deleteProvider(provider); }}>
+                            <Trash2Icon data-icon="inline-start" />{t("Delete")}
+                          </Button>
+                        </div>
+                      </PopoverContent>
+                    </Popover>
                   )}
                 </CardContent>
               </Card>;
@@ -720,8 +751,8 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
               description={providers.length?t("Try a different search or filter."):t("Add a service from Plugin Marketplace to discover its tools.")}/>
           </EmptyPanelState>
         )}
-      </ResultPanel>
-      <TablePagination label="Tool services" pagination={providerPagination} />
+      </ResultPanel>}
+      {hasSnapshot ? <TablePagination label="Tool services" pagination={providerPagination} /> : null}
 
       {connectionOffering!==null?(
         <Dialog open onOpenChange={open=>{

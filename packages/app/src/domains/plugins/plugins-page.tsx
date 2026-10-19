@@ -65,7 +65,7 @@ export function PluginsPage({
   client: MenderClient;
   installers?: MarketplaceInstaller[];
 }) {
-  const { plugins, loaded, error, setError, refresh } =
+  const { plugins, loaded, hasSnapshot, error, setError, refresh } =
     useMarketplacePlugins(client);
   const [searchParams] = useSearchParams();
   const [view,setView] = useState<"discover"|"installed">(
@@ -244,9 +244,9 @@ export function PluginsPage({
         }
       />
 
-      {error ? <ErrorNotice message={error} /> : null}
+      {error ? <ErrorNotice message={error} onRetry={!hasSnapshot ? () => { void refresh(); } : undefined} /> : null}
 
-      <ResultPanel title={view==="discover"?"Plugin catalog":"Installed plugins"}>
+      {error && !hasSnapshot ? null : <ResultPanel title={view==="discover"?"Plugin catalog":"Installed plugins"}>
         {!loaded ? (
           <div className="px-4 py-12 text-center text-sm text-muted-foreground">
             {t("Loading plugins…")}
@@ -267,9 +267,9 @@ export function PluginsPage({
             />
           </EmptyPanelState>
         )}
-      </ResultPanel>
+      </ResultPanel>}
 
-      {visiblePlugins.length ? (
+      {hasSnapshot && visiblePlugins.length ? (
         <MarketplaceCursorPagination
           page={page}
           canGoPrevious={cursorHistory.length > 1}
@@ -297,7 +297,7 @@ export function PluginDetailPage({ client }: { client: MenderClient }) {
   const [searchParams] = useSearchParams();
   const backPath=searchParams.get("view")==="installed"?"/plugins?view=installed":"/plugins";
   const { pluginKey = "" } = useParams();
-  const { plugins, loaded, error, setError, refresh } =
+  const { plugins, loaded, hasSnapshot, error, setError, refresh } =
     useMarketplacePlugins(client);
   const [busy, setBusy] = useState("");
   const [removeTarget,setRemoveTarget]=useState<MarketplacePlugin|null>(null);
@@ -441,9 +441,9 @@ export function PluginDetailPage({ client }: { client: MenderClient }) {
         </DialogContent>
       </Dialog>
 
-      {error ? <ErrorNotice message={error} /> : null}
+      {error ? <ErrorNotice message={error} onRetry={!hasSnapshot ? () => { void refresh(); } : undefined} /> : null}
 
-      {!loaded ? (
+      {error && !hasSnapshot ? null : !loaded ? (
         <DataPanel title="Plugin details" description="Plugin package">
           <div className="px-4 py-12 text-center text-sm text-muted-foreground">
             {t("Loading plugins…")}
@@ -542,12 +542,14 @@ export function PluginDetailPage({ client }: { client: MenderClient }) {
 function useMarketplacePlugins(client: MenderClient) {
   const [plugins, setPlugins] = useState<MarketplacePlugin[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [hasSnapshot, setHasSnapshot] = useState(false);
   const [error, setError] = useState("");
 
   const refresh = useCallback(async () => {
     try {
       const marketplace = await loadMarketplacePlugins(client);
       setPlugins(marketplace);
+      setHasSnapshot(true);
       setError("");
       return marketplace;
     } catch (reason) {
@@ -566,6 +568,7 @@ function useMarketplacePlugins(client: MenderClient) {
           return;
         }
         setPlugins(marketplace);
+        setHasSnapshot(true);
         setError("");
         setLoaded(true);
       })
@@ -600,6 +603,7 @@ function useMarketplacePlugins(client: MenderClient) {
   return {
     plugins,
     loaded,
+    hasSnapshot,
     error,
     setError,
     refresh,

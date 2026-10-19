@@ -87,9 +87,12 @@ export function OverviewPage({ client }: { client: MenderClient }) {
   const [error, setError] = useState("");
   const [view, setView] = useState<"activity" | "resources">("activity");
   const [dismissedInsight, setDismissedInsight] = useState(false);
+  const [reloadVersion, setReloadVersion] = useState(0);
 
   useEffect(() => {
     let active = true;
+    setData(null);
+    setError("");
     void Promise.all([
       client.getSystemStatus(),
       client.listProviders(),
@@ -114,17 +117,23 @@ export function OverviewPage({ client }: { client: MenderClient }) {
         if (active) setError(errorMessage(reason));
       });
     return () => { active = false; };
-  }, [client]);
+  }, [client, reloadVersion]);
 
   const invocationPagination = usePagination(data?.records ?? [], {
     initialPageSize: 5,
     pageSizeOptions: [5, 10, 25],
   });
 
+  if (error) {
+    return <div className="pt-4"><ErrorNotice message={error} onRetry={() => setReloadVersion((version) => version + 1)} /></div>;
+  }
+
+  if (data === null) {
+    return <div role="status" className="py-12 text-center text-sm text-muted-foreground">{t("Loading")}</div>;
+  }
+
   return (
     <>
-      {error ? <ErrorNotice message={error} /> : null}
-
       <PageToolbar
         tabs={
           <FocusSwitch
@@ -169,6 +178,19 @@ export function OverviewPage({ client }: { client: MenderClient }) {
         />
       ) : null}
 
+      {view === "activity" ? (
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border/70 bg-card px-4 py-3 text-sm">
+          <p className="flex items-center gap-2">
+            <span className="text-muted-foreground">{t("Runtime")}</span>
+            <span className="font-semibold">{t(data.status.ready ? "Ready" : "Unavailable")}</span>
+          </p>
+          <p className="text-muted-foreground">
+            {t("Providers")}: <span className="font-medium text-foreground tabular-nums">{formatNumber(data.providers.length)}</span>
+            <span className="px-2 text-border">·</span>
+            {t("Profiles")}: <span className="font-medium text-foreground tabular-nums">{formatNumber(data.profiles.length)}</span>
+          </p>
+        </div>
+      ) : (
       <MetricStrip>
         <MetricTile
           icon={ActivityIcon}
@@ -195,10 +217,11 @@ export function OverviewPage({ client }: { client: MenderClient }) {
           description="MCP exposure boundaries"
         />
       </MetricStrip>
+      )}
 
       {view === "activity" ? (
         <div className="min-w-0">
-        <DataPanel
+        {data.providers.length === 0 && data.records.length === 0 ? null : <DataPanel
           title="Recent invocations"
           description="Latest tool execution activity across the local control plane."
           actions={<PanelLink to="/audit" label="Audit" />}
@@ -239,7 +262,7 @@ export function OverviewPage({ client }: { client: MenderClient }) {
               <p className="max-w-md text-sm leading-6 text-muted-foreground">{t("Latest tool execution activity across the local control plane.")}</p>
             </div>
           )}
-        </DataPanel>
+        </DataPanel>}
         {data?.records.length ? (
           <TablePagination label="Recent invocations" pagination={invocationPagination} />
         ) : null}

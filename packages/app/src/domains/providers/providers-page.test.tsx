@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { MenderClient, Provider, ProviderPlugin } from "@mender/sdk";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -70,8 +70,36 @@ describe("Tool services responsive cards", () => {
     expect(within(card!).getByText("5 tools")).toBeTruthy();
     expect(within(card!).queryByText("Model Context Protocol")).toBeNull();
     expect(screen.getByRole("button",{name:"View tools"})).toBeTruthy();
-    expect(screen.getByRole("button",{name:"View Echo Service"})).toBeTruthy();
+    expect(within(card!).queryByRole("button",{name:"View Echo Service"})).toBeNull();
+    fireEvent.click(within(card!).getByRole("button",{name:"Actions: Echo Service"}));
+    expect(await screen.findByRole("button",{name:"View Echo Service"})).toBeTruthy();
+    expect(screen.getByRole("button",{name:"Edit Echo Service"})).toBeTruthy();
+    expect(screen.getByRole("button",{name:"Sync Echo Service"})).toBeTruthy();
+    expect(screen.getByRole("button",{name:"Delete Echo Service"})).toBeTruthy();
     expect(screen.queryByRole("button",{name:"Show internal providers"})).toBeNull();
+  });
+});
+
+describe("Tool service error state", () => {
+  it("shows a failed request and retry without falsely claiming there are no services", async () => {
+    const listProviders = vi.fn()
+      .mockRejectedValueOnce(new Error("Provider list unavailable"))
+      .mockResolvedValue({ providers: [] });
+    const client = {
+      listProviders,
+      listProviderPlugins: vi.fn().mockResolvedValue({ plugins: [], issues: [] }),
+      listCredentials: vi.fn().mockResolvedValue({ credentials: [] }),
+    } as unknown as MenderClient;
+
+    render(<MemoryRouter><ProvidersPage client={client} /></MemoryRouter>);
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toContain("Provider list unavailable");
+    expect(screen.queryByText("No tool services")).toBeNull();
+    fireEvent.click(within(alert).getByRole("button", { name: "Refresh" }));
+    await screen.findByText("No tool services");
+    await waitFor(() => expect(listProviders).toHaveBeenCalledTimes(2));
+    expect(screen.queryByRole("alert")).toBeNull();
   });
 });
 

@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { Button } from "@mender/ui/components/button";
 import { cn } from "@mender/ui/lib/utils";
 
 import { t } from "../i18n/i18n";
@@ -20,10 +21,15 @@ export function PageHeader({
   );
 }
 
-export function ErrorNotice({ message }: { message: string }) {
+export function ErrorNotice({ message, onRetry }: { message: string; onRetry?: (() => void) | undefined }) {
   return (
-    <div className="mb-5 rounded-2xl border border-destructive/20 bg-destructive/10 px-5 py-4 text-sm text-destructive">
-      {message}
+    <div role="alert" className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-destructive/20 bg-destructive/10 px-5 py-4 text-sm text-destructive">
+      <p className="min-w-0 flex-1 break-words">{message}</p>
+      {onRetry ? (
+        <Button type="button" size="sm" variant="outline" onClick={onRetry}>
+          {t("Refresh")}
+        </Button>
+      ) : null}
     </div>
   );
 }
