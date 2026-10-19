@@ -4,13 +4,26 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	agentdomain "github.com/orz-i/Mender/backend/internal/agent/domain"
 )
 
+type boundedDeadlineRunner struct{ remaining chan time.Duration }
+
+func (r *boundedDeadlineRunner) ExecuteConfigured(ctx context.Context, _ agentdomain.Agent, _ string, _ RunConfig) (string, error) {
+    deadline, ok := ctx.Deadline()
+    if !ok {
+        return "", errors.New("unbounded Agent Task context")
+    }
+    r.remaining <- time.Until(deadline)
+    return "ok", nil
+}
+
 func TestSubmittedTaskBudgetIsBoundedAndImmutable(t *testing.T) {
-	ctx := context.Background()
-	s, owner := newFixtureService(t, &inspectingFake{})
+    ctx := context.Background()
+    runner := &boundedDeadlineRunner{remaining: make(chan time.Duration, 4)}
+    s, owner := newFixtureService(t, runner)
 	agent, err := s.Create(ctx, CreateRequest{
 		Name: "Budgeted Agent", Backend: agentdomain.BackendGrok, WorkspaceRoot: t.TempDir(),
 	}, owner)
@@ -42,8 +55,16 @@ func TestSubmittedTaskBudgetIsBoundedAndImmutable(t *testing.T) {
 		if task.TimeoutSeconds != tc.wantSeconds || task.ExecutionTimeout().Seconds() != float64(tc.wantSeconds) {
 			t.Fatalf("Task budget not snapshotted: %+v", task)
 		}
-		stored := waitTask(t, s, task.ID, owner, agentdomain.TaskCompleted)
-		if stored.TimeoutSeconds != tc.wantSeconds {
+        select {
+        case left := <-runner.remaining:
+            if left <= time.Duration(tc.wantSeconds-3)*time.Second || left > time.Duration(tc.wantSeconds)*time.Second {
+                t.Fatalf("runner deadline %s does not match admitted %d seconds", left, tc.wantSeconds)
+            }
+        case <-time.After(3 * time.Second):
+            t.Fatal("runner did not receive admitted task")
+        }
+        stored := waitTask(t, s, task.ID, owner, agentdomain.TaskCompleted)
+        if stored.TimeoutSeconds != tc.wantSeconds {
 			t.Fatalf("Task budget lost on reload: %v", stored.TimeoutSeconds)
 		}
 		if stored.Result != "" && stored.Result != "ok" {
