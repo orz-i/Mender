@@ -4,7 +4,7 @@ import { useNavigate, useParams } from "react-router";
 import type { Agent, AgentTools, AgentTask, AgentAdmissionEvent, AgentModelChoices, MenderClient, Profile } from "@mender/sdk";
 import { Button } from "@mender/ui/components/button";
 import {
-  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+  Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@mender/ui/components/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@mender/ui/components/table";
 
@@ -399,19 +399,24 @@ export function AgentDetailPage({client,chooseLocalDirectory}:{client:MenderClie
     </Dialog>
 
     <Dialog open={viewTask!==null} onOpenChange={open=>{if(!open)setViewTask(null)}}>
-      <DialogContent className="max-h-[85vh] overflow-y-auto">
-        <DialogHeader><DialogTitle>{t("Agent task result")}</DialogTitle>
-          <DialogDescription>{viewTask?.taskId} · {viewTask?.status}</DialogDescription>
+      <DialogContent className="grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden sm:max-w-xl">
+        <DialogHeader>
+          <DialogTitle>{t("Agent task result")}</DialogTitle>
+          <DialogDescription className="flex min-w-0 flex-wrap items-center gap-2">
+            <span className="min-w-0 max-w-full break-all font-mono text-xs">{viewTask?.taskId}</span>
+            {viewTask ? <StatusBadge status={viewTask.status}>{taskStatusText(viewTask.status)}</StatusBadge> : null}
+          </DialogDescription>
         </DialogHeader>
+        <DialogBody className="flex flex-col gap-4">
         {viewTask?.continuedFromTaskId?<dl className="text-sm"><dt className="text-xs text-muted-foreground">{t("Continued from task")}</dt><dd className="break-all font-mono text-xs">{viewTask.continuedFromTaskId}</dd></dl>:null}
-        {viewTask?.model||viewTask?.reasoningEffort||viewTask?.workspace?<dl className="grid grid-cols-2 gap-3 text-sm">
+        {viewTask?.model||viewTask?.reasoningEffort||viewTask?.workspace?<dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
           {viewTask.model?<div><dt className="text-xs text-muted-foreground">{t("Agent model")}</dt><dd>{viewTask.model}</dd></div>:null}
           {viewTask.reasoningEffort?<div><dt className="text-xs text-muted-foreground">{t("Reasoning effort")}</dt><dd>{viewTask.reasoningEffort}</dd></div>:null}
           {viewTask.workspace?<div><dt className="text-xs text-muted-foreground">{t("Workspace")}</dt><dd>{viewTask.workspace}</dd></div>:null}
         </dl>:null}
-        {viewTask?.observation?<section className="space-y-2 rounded-lg border border-border p-3">
+        {viewTask?.observation?<section className="space-y-3 rounded-xl border border-border/70 bg-muted/20 p-4">
           <p className="text-sm font-medium">{t("Execution evidence")}</p>
-          <dl className="grid grid-cols-2 gap-3 text-sm">
+          <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
             <div><dt className="text-xs text-muted-foreground">{t("Execution phase")}</dt><dd>{taskExecutionPhaseText(viewTask.observation.phase)}</dd></div>
             <div><dt className="text-xs text-muted-foreground">{t("Execution activity")}</dt><dd>{viewTask.observation.activity==="local_active"?t("Local execution observed"):t("Execution activity uncertain")}</dd></div>
             <div><dt className="text-xs text-muted-foreground">{t("Last observed")}</dt><dd>{formatDateTime(viewTask.observation.lastObservedAt)}</dd></div>
@@ -421,14 +426,15 @@ export function AgentDetailPage({client,chooseLocalDirectory}:{client:MenderClie
             <div><dt className="text-xs text-muted-foreground">{t("Process")}</dt><dd>{viewTask.observation.leaderReaped?t("Process leader reaped"):t("Process exit not confirmed")}</dd></div>
           </dl>
           <p className="text-xs text-muted-foreground">{t("Observations do not prove task completion or authorize session resume.")}</p>
-        </section>:viewTask?.status==="unknown"?<p className="text-xs text-muted-foreground">{t("No execution evidence recorded for this task.")}</p>:null}
+        </section>:viewTask?.status==="unknown"?<p className="text-sm leading-6 text-muted-foreground">{t("No execution evidence recorded for this task.")}</p>:null}
         {client.supportsLocalAgentApprovals===true&&agent?.backend!=="antigravity"&&viewTask&&(viewTask.status==="running"||viewTask.status==="queued")?
           <AgentTaskApprovals client={client} task={viewTask} onTaskUpdated={updateViewedTask}/>:null}
         {viewTask&&agent?.isolation==="host"?<p role="note" className="text-xs leading-5 text-muted-foreground">
           {t(agent.backend==="antigravity"?"Antigravity native permissions are not Mender ACP approvals; no ACP approval receipt can prove its native tool activity.":"ACP approvals show only requests sent to Mender; zero approvals does not prove the Host Agent performed no native file or command actions.")}
         </p>:null}
-        {viewTask?.result?<pre className="max-h-[45vh] overflow-auto whitespace-pre-wrap break-words rounded-lg bg-muted p-4 text-xs">{viewTask.result}</pre>:
-          <p className="text-sm text-muted-foreground">{viewTask?.diagnostic?taskDiagnosticText(viewTask.diagnostic):t("No result available.")}</p>}
+        {viewTask?.result?<pre className="max-h-[38vh] overflow-auto whitespace-pre-wrap break-words rounded-xl bg-muted p-4 text-xs leading-5">{viewTask.result}</pre>:
+          <p className="text-sm leading-6 text-muted-foreground">{viewTask?.diagnostic?taskDiagnosticText(viewTask.diagnostic):t("No result available.")}</p>}
+        </DialogBody>
         <DialogFooter>
           {viewTask?<Button variant="outline" onClick={()=>void openTask(viewTask.taskId)}>{t("Refresh status")}</Button>:null}
           <Button variant="outline" onClick={()=>setViewTask(null)}>{t("Close")}</Button>

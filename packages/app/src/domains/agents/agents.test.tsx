@@ -263,6 +263,29 @@ describe("Agents focused management",()=>{
     fireEvent.click(screen.getByRole("button",{name:"Activity"}));
     expect(await screen.findByText("agent.task.submit")).toBeTruthy();
   });
+  it("shows an unknown outcome as a localized caution in a scroll-safe read-only task dialog",async()=>{
+    setLocale("zh-CN");
+    const unknownTask:AgentTask={
+      ...task,status:"unknown",result:"",diagnostic:"Agent outcome unknown after timeout",
+    };
+    const client=show("/agents/"+agent.agentId,{
+      listAgentTasks:vi.fn().mockResolvedValue({tasks:[unknownTask]}),
+      getAgentTask:vi.fn().mockResolvedValue(unknownTask),
+    });
+    fireEvent.click(await screen.findByRole("button",{name:/^任务/}));
+    fireEvent.click(await screen.findByRole("button",{name:"查看"}));
+    const dialog=await screen.findByRole("dialog",{name:"智能体任务结果"});
+    const badge=within(dialog).getByText("状态未知").closest('[data-slot="badge"]');
+    expect(badge?.className).toContain("bg-sunlight/20");
+    expect(within(dialog).queryByText("unknown")).toBeNull();
+    expect(within(dialog).getByText("该任务没有可核对的执行证据。")).toBeTruthy();
+    expect(within(dialog).getByText("任务超时后无法确认智能体执行结果")).toBeTruthy();
+    expect(within(dialog).getByRole("button",{name:"刷新状态"})).toBeTruthy();
+    expect(dialog.className).toContain("grid-rows-[auto_minmax(0,1fr)_auto]");
+    expect(dialog.querySelector('[data-slot="dialog-body"]')?.className).toContain("overflow-y-auto");
+    expect(client.getAgentTask).toHaveBeenCalledWith(unknownTask.taskId);
+  });
+
   it("localizes bounded ACP prompt stream failures in the owner Task result dialog",async()=>{
     setLocale("zh-CN");
     const failedTask:AgentTask={
