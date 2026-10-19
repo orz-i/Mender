@@ -55,7 +55,7 @@ func TestServiceTaskObservationContainsNoNativeIdentifiers(t *testing.T) {
 	got := waitTask(t, s, task.ID, o, agentdomain.TaskCompleted)
 	if got.Observation == nil || got.Observation.Phase != "leader_reaped" ||
 		!got.Observation.SessionRecorded || !got.Observation.LeaderReaped ||
-		got.Observation.SessionRecoverability != "unverified" || got.Observation.LastObservedAt.IsZero() {
+		got.Observation.SessionRecoverability != "unverified" || got.Observation.LastNativeProgressAt == nil || got.Observation.LastObservedAt.IsZero() {
 		t.Fatalf("missing safe observation %+v", got)
 	}
 	b, err := json.Marshal(got)

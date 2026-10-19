@@ -257,14 +257,14 @@ func (s *Store) TaskObservation(ctx context.Context, id agentdomain.TaskID) (*ag
 	if _, err := agentdomain.ParseTaskID(string(id)); err != nil {
 		return nil, err
 	}
-	var phase, last, heartbeat, reaped string
+	var phase, last, nativeProgress, heartbeat, reaped string
 	var session sql.NullString
 	var backend sql.NullString
 	var canLoad, canResume sql.NullInt64
-	err := s.db.QueryRowContext(ctx, `SELECT a.phase,a.last_observed_at,a.last_worker_heartbeat_at,
+	err := s.db.QueryRowContext(ctx, `SELECT a.phase,a.last_observed_at,a.last_progress_at,a.last_worker_heartbeat_at,
 		a.leader_reaped_at,a.session_ref,s.backend,s.load_supported,s.resume_supported
 		FROM agent_execution_attempts a LEFT JOIN agent_native_sessions s ON s.session_ref=a.session_ref
-		WHERE a.task_id=?`, string(id)).Scan(&phase, &last, &heartbeat, &reaped, &session,
+		WHERE a.task_id=?`, string(id)).Scan(&phase, &last, &nativeProgress, &heartbeat, &reaped, &session,
 		&backend, &canLoad, &canResume)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
@@ -285,6 +285,13 @@ func (s *Store) TaskObservation(ctx context.Context, id agentdomain.TaskID) (*ag
 		Phase: phase, Activity: "uncertain", LastObservedAt: at,
 		SessionRecorded:       session.Valid && session.String != "",
 		SessionRecoverability: recoverability, LeaderReaped: reaped != "",
+	}
+	if nativeProgress != "" {
+		parsed, parseErr := time.Parse(time.RFC3339Nano, nativeProgress)
+		if parseErr != nil {
+			return nil, fmt.Errorf("invalid persisted native Agent progress timestamp: %w", parseErr)
+		}
+		obs.LastNativeProgressAt = &parsed
 	}
 	if heartbeat != "" {
 		parsed, parseErr := time.Parse(time.RFC3339Nano, heartbeat)

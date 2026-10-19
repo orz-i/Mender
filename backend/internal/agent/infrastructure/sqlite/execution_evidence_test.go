@@ -87,7 +87,7 @@ func TestExecutionEvidencePersistsNativeSessionPrivatelyAndRejectsStaleWriter(t 
 	got, err := s.TaskObservation(ctx, task.ID)
 	if err != nil || got == nil || !got.SessionRecorded || !got.LeaderReaped ||
 		got.Phase != "leader_reaped" || got.SessionRecoverability != "unverified" ||
-		got.LastObservedAt.IsZero() || got.Activity != "uncertain" {
+		got.LastObservedAt.IsZero() || got.LastNativeProgressAt == nil || got.LastNativeProgressAt.IsZero() || got.Activity != "uncertain" {
 		t.Fatalf("safe read projection %+v %v", got, err)
 	}
 	payload, err := json.Marshal(got)
@@ -143,7 +143,7 @@ func TestExecutionWorkerHeartbeatDoesNotClaimAgentProgress(t *testing.T) {
 	}
 	after, err := s.TaskObservation(ctx, task.ID)
 	if err != nil || after == nil || after.Phase != before.Phase ||
-		!after.LastObservedAt.Equal(before.LastObservedAt) || after.LastWorkerHeartbeatAt == nil ||
+		!after.LastObservedAt.Equal(before.LastObservedAt) || after.LastNativeProgressAt != nil || after.LastWorkerHeartbeatAt == nil ||
 		after.LastWorkerHeartbeatAt.IsZero() || after.Activity != "uncertain" {
 		t.Fatalf("heartbeat incorrectly claimed Agent activity: %+v %v", after, err)
 	}

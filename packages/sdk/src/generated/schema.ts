@@ -2435,6 +2435,11 @@ export interface components {
             lastObservedAt: string;
             /**
              * Format: date-time
+             * @description Last trusted native Agent progress event; never a Mender worker heartbeat
+             */
+            lastNativeProgressAt?: string;
+            /**
+             * Format: date-time
              * @description Local Mender worker heartbeat; not native Agent progress
              */
             lastWorkerHeartbeatAt?: string;

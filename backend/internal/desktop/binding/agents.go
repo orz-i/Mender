@@ -45,6 +45,7 @@ type AgentTaskObservation struct {
 	Phase                 string `json:"phase"`
 	Activity              string `json:"activity"`
 	LastObservedAt        string `json:"lastObservedAt"`
+	LastNativeProgressAt  string `json:"lastNativeProgressAt,omitempty"`
 	LastWorkerHeartbeatAt string `json:"lastWorkerHeartbeatAt,omitempty"`
 	SessionRecorded       bool   `json:"sessionRecorded"`
 	SessionRecoverability string `json:"sessionRecoverability"`
@@ -130,6 +131,9 @@ func projectTask(t agentdomain.Task) AgentTask {
 			Phase: o.Phase, Activity: o.Activity, LastObservedAt: o.LastObservedAt.UTC().Format(time.RFC3339Nano),
 			SessionRecorded: o.SessionRecorded, SessionRecoverability: o.SessionRecoverability,
 			LeaderReaped: o.LeaderReaped,
+		}
+		if o.LastNativeProgressAt != nil {
+			out.Observation.LastNativeProgressAt = o.LastNativeProgressAt.UTC().Format(time.RFC3339Nano)
 		}
 		if o.LastWorkerHeartbeatAt != nil {
 			out.Observation.LastWorkerHeartbeatAt = o.LastWorkerHeartbeatAt.UTC().Format(time.RFC3339Nano)

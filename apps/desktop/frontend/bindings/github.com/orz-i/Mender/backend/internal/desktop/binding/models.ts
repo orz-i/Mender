@@ -129,6 +129,7 @@ export interface AgentTaskObservation {
     "phase": string;
     "activity": string;
     "lastObservedAt": string;
+    "lastNativeProgressAt"?: string;
     "lastWorkerHeartbeatAt"?: string;
     "sessionRecorded": boolean;
     "sessionRecoverability": string;

@@ -3010,6 +3010,7 @@ components:
         phase: { type: string, enum: [reserved, process_started, session_ready, prompt_sent, progress, terminal_seen, leader_reaped] }
         activity: { type: string, enum: [local_active, uncertain] }
         lastObservedAt: { type: string, format: date-time }
+        lastNativeProgressAt: { type: string, format: date-time, description: Last trusted native Agent progress event; never a Mender worker heartbeat }
         lastWorkerHeartbeatAt: { type: string, format: date-time, description: Local Mender worker heartbeat; not native Agent progress }
         sessionRecorded: { type: boolean }
         sessionRecoverability: { type: string, enum: [unavailable, unverified] }
