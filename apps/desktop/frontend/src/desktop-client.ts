@@ -4,6 +4,7 @@ import type {
   ProviderActivationAuditRecord,
   Credential,
   CredentialStatus,
+  OAuthFlow,
   InvocationResult,
   MCPServerInstance,
   MenderClient,
@@ -59,6 +60,7 @@ import {
   type ProviderActivationAuditRecord as BindingProviderActivationAuditRecord,
   type Credential as BindingCredential,
   type CredentialStatus as BindingCredentialStatus,
+  type OAuthFlow as BindingOAuthFlow,
   type InvocationResult as BindingInvocationResult,
   type MCPServerInstance as BindingMCPServerInstance,
   type Policy as BindingPolicy,
@@ -660,6 +662,22 @@ export function createDesktopMenderClient(): MenderClient {
       );
     },
 
+    async startOAuthCredential(body) {
+      const result = await Service.StartOAuthCredential(
+        body.namespace, body.name, body.displayName, body.mcpEndpoint,
+        body.clientId ?? "", body.clientIdMetadataUrl ?? "", body.scopes ?? [],
+      );
+      return { flowId: result.flowId, authorizationUrl: result.authorizationUrl };
+    },
+
+    async getOAuthFlow(flowId) {
+      return oauthFlow(await Service.GetOAuthFlow(flowId));
+    },
+
+    async cancelOAuthFlow(flowId) {
+      await Service.CancelOAuthFlow(flowId);
+    },
+
     async rotateCredential(namespace, name, body) {
       return credential(
         await Service.RotateNativeCredential(namespace, name, body.secret, body.sshKeyPassphrase ?? ""),
@@ -1088,6 +1106,25 @@ function credential(value: BindingCredential): Credential {
         } }),
     createdAt: value.createdAt,
     updatedAt: value.updatedAt,
+  };
+}
+
+function oauthFlow(value: BindingOAuthFlow): OAuthFlow {
+  let status: OAuthFlow["status"];
+  switch (value.status) {
+    case "pending": case "connected": case "failed": case "expired": case "cancelled":
+      status = value.status;
+      break;
+    default:
+      throw new MenderClientInvariantError(`Unsupported OAuth flow state: ${value.status}`);
+  }
+  return {
+    flowId: value.flowId,
+    status,
+    createdAt: value.createdAt,
+    expiresAt: value.expiresAt,
+    ...(value.message ? { message: value.message } : {}),
+    ...(value.credential ? { credential: credential(value.credential) } : {}),
   };
 }
 

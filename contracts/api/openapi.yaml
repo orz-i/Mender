@@ -1855,6 +1855,42 @@ paths:
               schema: { $ref: '#/components/schemas/Credential' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '409': { $ref: '#/components/responses/Conflict' }
+  /credentials/oauth/flows:
+    post:
+      operationId: startOAuthCredential
+      description: Start an explicit local-browser OAuth authorization for one HTTP MCP resource; does not expose OAuth token material.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/StartOAuthCredentialRequest' }
+      responses:
+        '201':
+          description: Authorization URL ready
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OAuthFlowStart' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+  /credentials/oauth/flows/{flowId}:
+    get:
+      operationId: getOAuthFlow
+      parameters:
+        - { name: flowId, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Non-secret OAuth flow state
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OAuthFlow' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      operationId: cancelOAuthFlow
+      parameters:
+        - { name: flowId, in: path, required: true, schema: { type: string } }
+      responses:
+        '204': { description: Pending OAuth flow cancelled }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
   /credentials/{namespace}/{name}:
     get:
       operationId: getCredential
@@ -2169,6 +2205,36 @@ components:
         oauth: { $ref: '#/components/schemas/OAuthCredentialMetadata' }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
+    StartOAuthCredentialRequest:
+      type: object
+      required: [namespace, name, displayName, mcpEndpoint]
+      properties:
+        namespace: { type: string }
+        name: { type: string }
+        displayName: { type: string }
+        mcpEndpoint: { type: string, format: uri }
+        clientId: { type: string, description: Registered public OAuth client ID }
+        clientIdMetadataUrl: { type: string, format: uri, description: Alternative HTTPS client ID metadata document URL }
+        scopes:
+          type: array
+          items: { type: string }
+      additionalProperties: false
+    OAuthFlowStart:
+      type: object
+      required: [flowId, authorizationUrl]
+      properties:
+        flowId: { type: string }
+        authorizationUrl: { type: string, format: uri }
+    OAuthFlow:
+      type: object
+      required: [flowId, status, createdAt, expiresAt]
+      properties:
+        flowId: { type: string }
+        status: { type: string, enum: [pending, connected, failed, expired, cancelled] }
+        createdAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
+        message: { type: string }
+        credential: { $ref: '#/components/schemas/Credential' }
     OAuthCredentialMetadata:
       type: object
       required: [resource, issuer, clientId, tokenEndpoint, scopes, status]

@@ -40,6 +40,10 @@ export function CancelAgentTask(id: string): $CancellablePromise<$models.AgentCa
     return $Call.ByID(2485846690, id);
 }
 
+export function CancelOAuthFlow(flowID: string): $CancellablePromise<void> {
+    return $Call.ByID(3643265493, flowID);
+}
+
 export function ConfigureAgentToolPlacement(agentID: string, workspaceKey: string, sandboxID: string, toolIDs: string[] | null): $CancellablePromise<$models.AgentToolPlacement> {
     return $Call.ByID(3023164410, agentID, workspaceKey, sandboxID, toolIDs);
 }
@@ -206,6 +210,10 @@ export function GetCredential($namespace: string, name: string): $CancellablePro
 
 export function GetCredentialStatus(): $CancellablePromise<$models.CredentialStatus> {
     return $Call.ByID(1672808003);
+}
+
+export function GetOAuthFlow(flowID: string): $CancellablePromise<$models.OAuthFlow> {
+    return $Call.ByID(660637123, flowID);
 }
 
 export function GetPolicy(): $CancellablePromise<$models.Policy> {
@@ -507,6 +515,13 @@ export function SetSSHJobAdmission(raw: string, paused: boolean): $CancellablePr
 
 export function StartMCPServer(profile: string, address: string): $CancellablePromise<$models.MCPServerInstance> {
     return $Call.ByID(1278287583, profile, address);
+}
+
+/**
+ * StartOAuthCredential starts an explicit system-browser OAuth connection.
+ */
+export function StartOAuthCredential($namespace: string, name: string, displayName: string, mcpEndpoint: string, clientID: string, clientIDMetadataURL: string, scopes: string[] | null): $CancellablePromise<$models.OAuthFlowStart> {
+    return $Call.ByID(2060657334, $namespace, name, displayName, mcpEndpoint, clientID, clientIDMetadataURL, scopes);
 }
 
 export function StartSandbox(sandboxID: string): $CancellablePromise<$models.Sandbox> {

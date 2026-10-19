@@ -9,6 +9,7 @@ import (
 	credentialapplication "github.com/orz-i/Mender/backend/internal/credential/application"
 	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
 	credentialkeyring "github.com/orz-i/Mender/backend/internal/credential/infrastructure/nativekeyring"
+	credentialoauthflow "github.com/orz-i/Mender/backend/internal/credential/infrastructure/oauthflow"
 	credentialresolver "github.com/orz-i/Mender/backend/internal/credential/infrastructure/resolver"
 	credentialsqlite "github.com/orz-i/Mender/backend/internal/credential/infrastructure/sqlite"
 	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
@@ -24,6 +25,7 @@ type Credentials struct {
 	RotateNative      credentialapplication.RotateNativeSecret
 	SaveOAuth         credentialapplication.SaveOAuth
 	DisconnectOAuth   credentialapplication.DisconnectOAuth
+	OAuthFlow         *credentialoauthflow.Manager
 	Delete            credentialapplication.DeleteCredential
 	Resolver          invocationapplication.CredentialResolver
 
@@ -51,6 +53,7 @@ func NewCredentials(
 		RotateNative:      credentialapplication.NewRotateNativeSecret(store, secrets, clock),
 		SaveOAuth:         credentialapplication.NewSaveOAuth(store, secrets, clock),
 		DisconnectOAuth:   credentialapplication.NewDisconnectOAuth(store, secrets, clock),
+		OAuthFlow:         credentialoauthflow.NewManager(store, secrets, clock, credentialoauthflow.Options{}),
 		Resolver:          resolver,
 		store:             store,
 		secrets:           secrets,
@@ -60,6 +63,9 @@ func NewCredentials(
 func (c *Credentials) Close() error {
 	if c == nil || c.store == nil {
 		return nil
+	}
+	if c.OAuthFlow != nil {
+		_ = c.OAuthFlow.Close()
 	}
 	return c.store.Close()
 }

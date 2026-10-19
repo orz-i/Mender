@@ -247,6 +247,21 @@ type CredentialList struct {
 	Credentials []Credential `json:"credentials"`
 }
 
+// OAuthFlowStart is a browser URL for an explicit operator-driven login.
+type OAuthFlowStart struct {
+	FlowID           string `json:"flowId"`
+	AuthorizationURL string `json:"authorizationUrl"`
+}
+
+type OAuthFlow struct {
+	FlowID     string      `json:"flowId"`
+	Status     string      `json:"status"`
+	Message    string      `json:"message,omitempty"`
+	CreatedAt  string      `json:"createdAt"`
+	ExpiresAt  string      `json:"expiresAt"`
+	Credential *Credential `json:"credential,omitempty"`
+}
+
 type CredentialHeader struct {
 	Name          string `json:"name"`
 	Scheme        string `json:"scheme"`

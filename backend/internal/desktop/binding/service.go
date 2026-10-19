@@ -16,6 +16,7 @@ import (
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	credentialapplication "github.com/orz-i/Mender/backend/internal/credential/application"
 	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
+	credentialoauthflow "github.com/orz-i/Mender/backend/internal/credential/infrastructure/oauthflow"
 	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	mcpplugin "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/plugin"
@@ -560,6 +561,46 @@ func (s *Service) RotateNativeCredential(
 		return Credential{}, err
 	}
 	return credentialProjection(item), nil
+}
+
+// StartOAuthCredential starts an explicit system-browser OAuth connection.
+func (s *Service) StartOAuthCredential(namespace, name, displayName, mcpEndpoint, clientID, clientIDMetadataURL string, scopes []string) (OAuthFlowStart, error) {
+	result, err := s.runtime.Credentials.OAuthFlow.Start(s.ctx, credentialoauthflow.StartRequest{
+		Namespace: namespace, Name: name, DisplayName: displayName, MCPEndpoint: mcpEndpoint,
+		ClientID: clientID, ClientIDMetadataURL: clientIDMetadataURL, Scopes: scopes,
+	})
+	if err != nil {
+		return OAuthFlowStart{}, err
+	}
+	return OAuthFlowStart{FlowID: result.FlowID, AuthorizationURL: result.AuthorizationURL}, nil
+}
+
+func (s *Service) GetOAuthFlow(flowID string) (OAuthFlow, error) {
+	view, err := s.runtime.Credentials.OAuthFlow.Status(s.ctx, flowID)
+	if err != nil {
+		return OAuthFlow{}, err
+	}
+	result := OAuthFlow{
+		FlowID: view.FlowID, Status: string(view.Status), Message: view.Message,
+		CreatedAt: view.CreatedAt.Format(timeFormat), ExpiresAt: view.ExpiresAt.Format(timeFormat),
+	}
+	if view.Credential != nil {
+		ref, err := credentialdomain.ParseReference(view.Credential.Reference)
+		if err != nil {
+			return OAuthFlow{}, err
+		}
+		item, err := s.runtime.Credentials.Get.Execute(s.ctx, ref)
+		if err != nil {
+			return OAuthFlow{}, err
+		}
+		credential := credentialProjection(item)
+		result.Credential = &credential
+	}
+	return result, nil
+}
+
+func (s *Service) CancelOAuthFlow(flowID string) error {
+	return s.runtime.Credentials.OAuthFlow.Cancel(s.ctx, flowID)
 }
 
 func (s *Service) DisconnectOAuthCredential(namespace string, name string) (Credential, error) {

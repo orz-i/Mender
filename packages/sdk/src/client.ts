@@ -105,6 +105,9 @@ export type PolicyDefaultRequest =
   components["schemas"]["PolicyDefaultRequest"];
 export type CredentialStatus = components["schemas"]["CredentialStatus"];
 export type Credential = components["schemas"]["Credential"];
+export type StartOAuthCredentialRequest = components["schemas"]["StartOAuthCredentialRequest"];
+export type OAuthFlowStart = components["schemas"]["OAuthFlowStart"];
+export type OAuthFlow = components["schemas"]["OAuthFlow"];
 export type CreateNativeCredentialRequest =
   components["schemas"]["CreateNativeCredentialRequest"];
 export type CreateEnvironmentCredentialRequest =
@@ -304,6 +307,9 @@ export interface MenderClient {
   createEnvironmentCredential(
     body: CreateEnvironmentCredentialRequest,
   ): Promise<Credential>;
+  startOAuthCredential(body: StartOAuthCredentialRequest): Promise<OAuthFlowStart>;
+  getOAuthFlow(flowId: string): Promise<OAuthFlow>;
+  cancelOAuthFlow(flowId: string): Promise<void>;
   rotateCredential(
     namespace: string,
     name: string,
@@ -895,6 +901,25 @@ export function createMenderClient(
     async createEnvironmentCredential(body: CreateEnvironmentCredentialRequest) {
       const result = await client.POST("/credentials/environment", { body });
       return requireData(result);
+    },
+
+    async startOAuthCredential(body: StartOAuthCredentialRequest) {
+      const result = await client.POST("/credentials/oauth/flows", { body });
+      return requireData(result);
+    },
+
+    async getOAuthFlow(flowId: string) {
+      const result = await client.GET("/credentials/oauth/flows/{flowId}", {
+        params: { path: { flowId } },
+      });
+      return requireData(result);
+    },
+
+    async cancelOAuthFlow(flowId: string) {
+      const result = await client.DELETE("/credentials/oauth/flows/{flowId}", {
+        params: { path: { flowId } },
+      });
+      if (!result.response.ok) throwApiError(result.error, result.response);
     },
 
     async rotateCredential(

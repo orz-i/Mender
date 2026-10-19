@@ -1579,6 +1579,39 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/credentials/oauth/flows": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Start an explicit local-browser OAuth authorization for one HTTP MCP resource; does not expose OAuth token material. */
+        post: operations["startOAuthCredential"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/credentials/oauth/flows/{flowId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getOAuthFlow"];
+        put?: never;
+        post?: never;
+        delete: operations["cancelOAuthFlow"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/credentials/{namespace}/{name}": {
         parameters: {
             query?: never;
@@ -1757,6 +1790,37 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
+        };
+        StartOAuthCredentialRequest: {
+            namespace: string;
+            name: string;
+            displayName: string;
+            /** Format: uri */
+            mcpEndpoint: string;
+            /** @description Registered public OAuth client ID */
+            clientId?: string;
+            /**
+             * Format: uri
+             * @description Alternative HTTPS client ID metadata document URL
+             */
+            clientIdMetadataUrl?: string;
+            scopes?: string[];
+        };
+        OAuthFlowStart: {
+            flowId: string;
+            /** Format: uri */
+            authorizationUrl: string;
+        };
+        OAuthFlow: {
+            flowId: string;
+            /** @enum {string} */
+            status: "pending" | "connected" | "failed" | "expired" | "cancelled";
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            expiresAt: string;
+            message?: string;
+            credential?: components["schemas"]["Credential"];
         };
         OAuthCredentialMetadata: {
             /** Format: uri */
@@ -5657,6 +5721,76 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    startOAuthCredential: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartOAuthCredentialRequest"];
+            };
+        };
+        responses: {
+            /** @description Authorization URL ready */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OAuthFlowStart"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+        };
+    };
+    getOAuthFlow: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                flowId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Non-secret OAuth flow state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OAuthFlow"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    cancelOAuthFlow: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                flowId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Pending OAuth flow cancelled */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
         };
     };

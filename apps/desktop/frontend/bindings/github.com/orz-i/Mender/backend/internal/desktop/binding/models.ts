@@ -376,6 +376,23 @@ export interface OAuthCredentialMetadata {
     "status": string;
 }
 
+export interface OAuthFlow {
+    "flowId": string;
+    "status": string;
+    "message"?: string;
+    "createdAt": string;
+    "expiresAt": string;
+    "credential"?: Credential | null;
+}
+
+/**
+ * OAuthFlowStart is a browser URL for an explicit operator-driven login.
+ */
+export interface OAuthFlowStart {
+    "flowId": string;
+    "authorizationUrl": string;
+}
+
 /**
  * PluginCatalogueEntry mirrors the inert all-kind management catalogue.
  */
