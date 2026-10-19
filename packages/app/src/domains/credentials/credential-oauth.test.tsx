@@ -38,6 +38,50 @@ afterEach(() => {
   window.localStorage.clear();
 });
 
+describe("Interactive MCP OAuth authorization", () => {
+  it("starts authorization without a raw secret and offers a browser link", async () => {
+    const startOAuthCredential = vi.fn().mockResolvedValue({
+      flowId: "mfo_test", authorizationUrl: "https://accounts.example.test/authorize?state=public-fixture",
+    });
+    const getOAuthFlow = vi.fn().mockResolvedValue({
+      flowId: "mfo_test", status: "pending", createdAt: "2026-10-19T00:00:00Z", expiresAt: "2026-10-19T00:10:00Z",
+    });
+    const cancelOAuthFlow = vi.fn().mockResolvedValue(undefined);
+    const listCredentials = vi.fn().mockResolvedValue({ credentials: [] });
+    const client = { listCredentials, startOAuthCredential, getOAuthFlow, cancelOAuthFlow } as unknown as MenderClient;
+    render(<TooltipProvider><CredentialsPage client={client} /></TooltipProvider>);
+    fireEvent.click(screen.getByRole("button", { name: "Add credential" }));
+    fireEvent.change(screen.getByRole("combobox", { name: "Credential source" }), { target: { value: "oauth" } });
+    expect(screen.queryByRole("textbox", { name: "Credential secret" })).toBeNull();
+    fireEvent.change(screen.getByRole("textbox", { name: "Credential namespace" }), { target: { value: "OAuth" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Credential name" }), { target: { value: "Work" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Credential display name" }), { target: { value: "Work OAuth" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "OAuth MCP endpoint" }), { target: { value: "https://mcp.example.test/mcp" } });
+    expect(screen.getByRole<HTMLButtonElement>("button", { name: "Connect OAuth" }).disabled).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "Connect OAuth" }));
+    await waitFor(() => expect(startOAuthCredential).toHaveBeenCalledWith({
+      namespace: "oauth", name: "work", displayName: "Work OAuth", mcpEndpoint: "https://mcp.example.test/mcp",
+    }));
+    const link = await screen.findByRole<HTMLAnchorElement>("link", { name: "Open authorization page" });
+    expect(link.href).toContain("https://accounts.example.test/authorize");
+    await waitFor(() => expect(getOAuthFlow).toHaveBeenCalledWith("mfo_test"));
+    fireEvent.click(screen.getByRole("button", { name: "Cancel authorization" }));
+    await waitFor(() => expect(cancelOAuthFlow).toHaveBeenCalledWith("mfo_test"));
+  });
+
+  it("does not enable OAuth connect for an insecure remote endpoint", () => {
+    const client = { listCredentials: vi.fn().mockResolvedValue({ credentials: [] }) } as unknown as MenderClient;
+    render(<TooltipProvider><CredentialsPage client={client} /></TooltipProvider>);
+    fireEvent.click(screen.getByRole("button", { name: "Add credential" }));
+    fireEvent.change(screen.getByRole("combobox", { name: "Credential source" }), { target: { value: "oauth" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Credential namespace" }), { target: { value: "oauth" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Credential name" }), { target: { value: "work" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Credential display name" }), { target: { value: "OAuth Work" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "OAuth MCP endpoint" }), { target: { value: "http://insecure.example.test/mcp" } });
+    expect(screen.getByRole<HTMLButtonElement>("button", { name: "Connect OAuth" }).disabled).toBe(true);
+  });
+});
+
 describe("OAuth Credential inventory", () => {
   it("displays account and status without treating OAuth as a native secret", async () => {
     const client = {
@@ -64,6 +108,7 @@ describe("OAuth Credential inventory", () => {
     vi.spyOn(window, "confirm").mockReturnValue(true);
     render(<TooltipProvider><CredentialsPage client={client} /></TooltipProvider>);
     expect(await screen.findByText("OAuth Work")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Manage OAuth" }));
     fireEvent.click(screen.getByRole("button", { name: "Disconnect OAuth" }));
     await waitFor(() => expect(disconnectOAuthCredential).toHaveBeenCalledWith("oauth", "work"));
     expect(await screen.findByText("OAuth · Authorization required")).toBeTruthy();

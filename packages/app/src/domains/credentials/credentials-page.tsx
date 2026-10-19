@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { RefreshCwIcon, Trash2Icon, UnplugIcon } from "lucide-react";
+import { KeyRoundIcon, RefreshCwIcon, Trash2Icon } from "lucide-react";
 
-import type { Credential, MenderClient } from "@mender/sdk";
+import type { Credential, MenderClient, OAuthFlowStart, OAuthFlow } from "@mender/sdk";
 import { Badge } from "@mender/ui/components/badge";
 import { Button } from "@mender/ui/components/button";
 import {
@@ -44,6 +44,18 @@ import { SSHKeyEditor } from "./ssh-key-editor";
 
 type CredentialSource = Credential["source"] | "ssh-key";
 
+function validOAuthEndpoint(raw: string): boolean {
+  try {
+    const url = new URL(raw.trim());
+    if (url.username || url.password || url.hash || !url.hostname) return false;
+    return url.protocol === "https:" || (
+      url.protocol === "http:" && ["127.0.0.1", "localhost", "[::1]"].includes(url.hostname)
+    );
+  } catch {
+    return false;
+  }
+}
+
 const emptyCreateForm = {
   namespace: "",
   name: "",
@@ -52,6 +64,8 @@ const emptyCreateForm = {
   secret: "",
   sshKeyPassphrase: "",
   environmentVariable: "",
+  mcpEndpoint: "",
+  oauthClientId: "",
 };
 
 export function CredentialsPage({ client }: { client: MenderClient }) {
@@ -61,9 +75,13 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
   const [busy, setBusy] = useState("");
   const [inventoryQuery, setInventoryQuery] = useState("");
 
+  const [manageOAuth, setManageOAuth] = useState<Credential | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [createForm, setCreateForm] = useState(emptyCreateForm);
   const [createError, setCreateError] = useState("");
+  const [oauthFlow, setOAuthFlow] = useState<OAuthFlowStart | null>(null);
+  const [oauthFlowStatus, setOAuthFlowStatus] = useState<OAuthFlow["status"]>("pending");
+  const [oauthFlowMessage, setOAuthFlowMessage] = useState("");
 
   const [rotateCredential, setRotateCredential] =
     useState<Credential | null>(null);
@@ -108,11 +126,35 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
   const visibleCredentials = useMemo(() => {
     const needle = inventoryQuery.trim().toLocaleLowerCase();
     return needle ? credentials.filter((item) =>
-      [item.displayName, item.namespace, item.name, item.source, item.environmentVariable ?? "", item.oauth?.resource ?? "", item.oauth?.status ?? ""]
+      [item.displayName, item.namespace, item.name, item.source, item.environmentVariable ?? "", item.oauth?.resource ?? "", item.oauth?.mcpEndpoint ?? "", item.oauth?.status ?? ""]
         .some((value) => value.toLocaleLowerCase().includes(needle))
     ) : credentials;
   }, [credentials, inventoryQuery]);
   const credentialPagination = usePagination(visibleCredentials);
+
+  useEffect(() => {
+    if (oauthFlow === null || oauthFlowStatus !== "pending") return;
+    let active = true;
+    let checking = false;
+    async function checkFlow() {
+      if (!active || checking || oauthFlow === null) return;
+      checking = true;
+      try {
+        const view = await client.getOAuthFlow(oauthFlow.flowId);
+        if (!active) return;
+        setOAuthFlowStatus(view.status);
+        setOAuthFlowMessage(view.message ?? "");
+        if (view.status === "connected") void refresh();
+      } catch (reason) {
+        if (active) setOAuthFlowMessage(errorMessage(reason));
+      } finally {
+        checking = false;
+      }
+    }
+    void checkFlow();
+    const timer = window.setInterval(() => void checkFlow(), 1500);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [client, oauthFlow, oauthFlowStatus, refresh]);
 
   const namespace = canonicalCredentialPart(createForm.namespace);
   const name = canonicalCredentialPart(createForm.name);
@@ -128,7 +170,9 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
     new TextEncoder().encode(createForm.secret).length <= MAX_NATIVE_SECRET_BYTES;
   const environmentVariableValid = ENVIRONMENT_VARIABLE_PATTERN.test(createForm.environmentVariable.trim());
   const sshKeyMode = createForm.source === "ssh-key";
+  const oauthEndpointValid = validOAuthEndpoint(createForm.mcpEndpoint);
   const createValid = canonicalReference !== null && displayNameValid && (
+    createForm.source === "oauth" ? oauthEndpointValid :
     createForm.source !== "environment" ? secretValid : environmentVariableValid
   ) && (!sshKeyMode || (namespace === "ssh" && createForm.secret.includes("PRIVATE KEY")));
 
@@ -142,6 +186,33 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
     setBusy("create");
     setCreateError("");
     try {
+      if (createForm.source === "oauth") {
+        const clientID = createForm.oauthClientId.trim();
+        const started = await client.startOAuthCredential({
+          namespace,
+          name,
+          displayName: createForm.displayName.trim(),
+          mcpEndpoint: createForm.mcpEndpoint.trim(),
+          ...(clientID.startsWith("https://") ? { clientIdMetadataUrl: clientID } : clientID ? { clientId: clientID } : {}),
+        });
+        if (!validOAuthEndpoint(started.authorizationUrl)) {
+          await client.cancelOAuthFlow(started.flowId);
+          throw new Error(t("OAuth authorization URL is unsafe."));
+        }
+        setOAuthFlow(started);
+        setOAuthFlowStatus("pending");
+        setOAuthFlowMessage("");
+        setCreateOpen(false);
+        setCreateForm(emptyCreateForm);
+        if (client.openExternalURL) {
+          try {
+            await client.openExternalURL(started.authorizationUrl);
+          } catch {
+            setOAuthFlowMessage(t("Open the authorization page using the link below."));
+          }
+        }
+        return;
+      }
       if (createForm.source !== "environment") {
         await client.createNativeCredential({
           namespace,
@@ -193,6 +264,27 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
     } finally {
       setBusy("");
     }
+  }
+
+  function reauthorizeOAuth(item: Credential) {
+    if (item.source !== "oauth" || busy !== "") return;
+    setCreateForm({
+      ...emptyCreateForm, source: "oauth", namespace: item.namespace, name: item.name,
+      displayName: item.displayName,
+      mcpEndpoint: item.oauth?.mcpEndpoint || item.oauth?.resource || "",
+      oauthClientId: item.oauth?.clientId ?? "",
+    });
+    setCreateError("");
+    setCreateOpen(true);
+  }
+
+  async function closeOAuthFlow() {
+    if (oauthFlow !== null && oauthFlowStatus === "pending") {
+      try { await client.cancelOAuthFlow(oauthFlow.flowId); }
+      catch (reason) { setError(errorMessage(reason)); }
+    }
+    setOAuthFlow(null);
+    setOAuthFlowMessage("");
   }
 
   async function disconnectOAuth(item: Credential) {
@@ -279,21 +371,21 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
                     </TableCell>
                     <TableCell className="font-mono text-xs text-muted-foreground">
                       {item.source === "oauth"
-                        ? <span className="block max-w-64 truncate" title={item.oauth?.resource}>{item.oauth?.resource || "—"}</span>
+                        ? <span className="block max-w-64 truncate" title={item.oauth?.mcpEndpoint ?? item.oauth?.resource}>{item.oauth?.mcpEndpoint || item.oauth?.resource || "—"}</span>
                         : item.source === "environment"
                           ? item.environmentVariable
                           : t("OS credential store")}
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
-                        {item.source === "oauth" && item.oauth?.status === "connected" ? (
+                        {item.source === "oauth" ? (
                           <IconButton
                             variant="outline"
-                            label={t("Disconnect OAuth")}
+                            label={t("Manage OAuth")}
                             disabled={busy !== ""}
-                            onClick={() => void disconnectOAuth(item)}
+                            onClick={() => setManageOAuth(item)}
                           >
-                            <UnplugIcon />
+                            <KeyRoundIcon />
                           </IconButton>
                         ) : null}
                         {item.source === "native" ? (
@@ -311,14 +403,16 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
                             <RefreshCwIcon />
                           </IconButton>
                         ) : null}
-                        <IconButton
-                          variant="destructive"
-                          label={t("Delete")}
-                          disabled={busy !== ""}
-                          onClick={() => void remove(item)}
-                        >
-                          <Trash2Icon />
-                        </IconButton>
+                        {item.source !== "oauth" ? (
+                          <IconButton
+                            variant="destructive"
+                            label={t("Delete")}
+                            disabled={busy !== ""}
+                            onClick={() => void remove(item)}
+                          >
+                            <Trash2Icon />
+                          </IconButton>
+                        ) : null}
                       </div>
                     </TableCell>
                   </TableRow>
@@ -340,6 +434,68 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
         label="Credentials"
         pagination={credentialPagination}
       />
+
+      <Dialog open={manageOAuth !== null} onOpenChange={(open) => { if (!open) setManageOAuth(null); }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{t("Manage OAuth")}</DialogTitle>
+            <DialogDescription>{manageOAuth?.displayName}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 text-sm">
+            <div className="space-y-1">
+              <p className="text-xs text-muted-foreground">{t("MCP endpoint")}</p>
+              <p className="break-all font-mono text-xs">{manageOAuth?.oauth?.mcpEndpoint || manageOAuth?.oauth?.resource}</p>
+            </div>
+            <p>{manageOAuth?.oauth?.status === "connected" ? t("Connected") : manageOAuth?.oauth?.status === "expired" ? t("Expired") : t("Authorization required")}</p>
+          </div>
+          <DialogFooter className="flex-wrap">
+            <Button variant="destructive" disabled={busy !== ""} onClick={() => {
+              const item = manageOAuth;
+              setManageOAuth(null);
+              if (item) void remove(item);
+            }}>{t("Delete")}</Button>
+            {manageOAuth?.oauth?.status === "connected" ? (
+              <Button variant="outline" disabled={busy !== ""} onClick={() => {
+                const item = manageOAuth;
+                setManageOAuth(null);
+                if (item) void disconnectOAuth(item);
+              }}>{t("Disconnect OAuth")}</Button>
+            ) : null}
+            <Button disabled={busy !== ""} onClick={() => {
+              const item = manageOAuth;
+              setManageOAuth(null);
+              if (item) reauthorizeOAuth(item);
+            }}>{t("Authorize again")}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={oauthFlow !== null} onOpenChange={(open) => { if (!open) void closeOAuthFlow(); }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{t("OAuth authorization")}</DialogTitle>
+            <DialogDescription>
+              {oauthFlowStatus === "pending"
+                ? t("Complete authorization in your browser. Mender will detect when the connection succeeds.")
+                : oauthFlowStatus === "connected" ? t("OAuth credential connected.") : t("OAuth authorization was not completed.")}
+            </DialogDescription>
+          </DialogHeader>
+          {oauthFlowStatus === "pending" && oauthFlow !== null ? (
+            <a
+              className="inline-flex min-h-9 items-center justify-center rounded-lg border border-input px-3 text-sm font-medium underline-offset-4 hover:underline"
+              href={oauthFlow.authorizationUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+            >{t("Open authorization page")}</a>
+          ) : null}
+          {oauthFlowMessage ? <p role="status" className="text-sm text-muted-foreground">{oauthFlowMessage}</p> : null}
+          <DialogFooter>
+            <Button onClick={() => void closeOAuthFlow()}>
+              {oauthFlowStatus === "pending" ? t("Cancel authorization") : t("Close")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={createOpen}
@@ -379,11 +535,14 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
                   secret: "",
                   sshKeyPassphrase: "",
                   environmentVariable: "",
+                  mcpEndpoint: "",
+                  oauthClientId: "",
                 })}
                 className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
               >
                 <option value="native">{t("native keyring")}</option>
                 <option value="environment">{t("environment variable")}</option>
+                <option value="oauth">{t("OAuth login")}</option>
                 <option value="ssh-key">{t("SSH private key")}</option>
               </select>
             </Field>
@@ -456,7 +615,31 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
               </>
             )}
 
-            {createForm.source !== "environment" ? (
+            {createForm.source === "oauth" ? (
+              <div className="space-y-3">
+                <Field label="MCP endpoint">
+                  <Input
+                    aria-label={t("OAuth MCP endpoint")}
+                    placeholder="https://example.com/mcp"
+                    value={createForm.mcpEndpoint}
+                    aria-invalid={createForm.mcpEndpoint !== "" && !oauthEndpointValid}
+                    onChange={(event) => updateCreateForm({ mcpEndpoint: event.target.value })}
+                  />
+                </Field>
+                {createForm.mcpEndpoint !== "" && !oauthEndpointValid ? (
+                  <p className="text-xs text-destructive">{t("Enter a valid HTTPS MCP endpoint (HTTP is allowed only on loopback).")}</p>
+                ) : null}
+                <Field label="OAuth client ID (optional)">
+                  <Input
+                    aria-label={t("OAuth client ID (optional)")}
+                    placeholder={t("Leave blank for automatic registration")}
+                    value={createForm.oauthClientId}
+                    onChange={(event) => updateCreateForm({ oauthClientId: event.target.value })}
+                  />
+                </Field>
+                <p className="text-xs text-muted-foreground">{t("Leave blank for supported automatic registration, or enter a registered client ID or HTTPS client metadata URL.")}</p>
+              </div>
+            ) : createForm.source !== "environment" ? (
               sshKeyMode ? (
                 <div className="space-y-3">
                   <div className="space-y-2">
@@ -525,7 +708,7 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
               disabled={!createValid || busy !== ""}
               onClick={() => void createCredential()}
             >
-              {t(busy === "create" ? "Creating…" : "Create credential")}
+              {createForm.source === "oauth" ? t(busy === "create" ? "Connecting…" : "Connect OAuth") : t(busy === "create" ? "Creating…" : "Create credential")}
             </Button>
           </DialogFooter>
         </DialogContent>

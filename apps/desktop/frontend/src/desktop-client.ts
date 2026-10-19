@@ -1,4 +1,5 @@
 import { MenderClientInvariantError } from "@mender/sdk";
+import { Browser } from "@wailsio/runtime";
 import type {
   AuditRecord,
   ProviderActivationAuditRecord,
@@ -139,6 +140,9 @@ export function createDesktopMenderClient(): MenderClient {
   return {
     supportsLocalAgentApprovals:true,
     supportsLocalAgentToolPlacements:true,
+    async openExternalURL(url) {
+      await Browser.OpenURL(url);
+    },
     async getSystemStatus() {
       return systemStatus(await Service.GetSystemStatus());
     },
@@ -1097,6 +1101,7 @@ function credential(value: BindingCredential): Credential {
       ? {}
       : { oauth: {
           resource: value.oauth.resource,
+          ...(value.oauth.mcpEndpoint ? { mcpEndpoint: value.oauth.mcpEndpoint } : {}),
           issuer: value.oauth.issuer,
           clientId: value.oauth.clientId,
           tokenEndpoint: value.oauth.tokenEndpoint,

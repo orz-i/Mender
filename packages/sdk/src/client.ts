@@ -147,6 +147,8 @@ export interface MenderClient {
   /** Only the local Wails owner can decide ACP permission requests. */
   readonly supportsLocalAgentApprovals?: boolean;
   readonly supportsLocalAgentToolPlacements?: boolean;
+  /** Desktop host opens the system browser after an explicit OAuth connect action. */
+  openExternalURL?(url: string): Promise<void>;
   getSystemStatus(): Promise<SystemStatus>;
   listPluginCatalogue(): Promise<{plugins: PluginCatalogueEntry[]}>;
   enablePluginInstallation(installationId:string):Promise<{installation:ProviderPluginInstallation}>;
