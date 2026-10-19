@@ -41,6 +41,25 @@ func (r allowlistCredentialResolver) Resolve(
 	return r.delegate.Resolve(ctx, ref)
 }
 
+// AuthorizeCredential preserves the same Profile allowlist for dynamically
+// managed sessions whose tokens must never be returned from Resolve.
+func (r allowlistCredentialResolver) AuthorizeCredential(
+	ctx context.Context,
+	ref credentialdomain.Reference,
+) error {
+	if _, ok := r.allowed[ref]; !ok {
+		return ErrCredentialOutsideScope
+	}
+	if r.delegate == nil {
+		return fmt.Errorf("credential resolver is unavailable")
+	}
+	authorizer, ok := r.delegate.(CredentialAuthorizer)
+	if !ok {
+		return fmt.Errorf("credential authorization capability is unavailable")
+	}
+	return authorizer.AuthorizeCredential(ctx, ref)
+}
+
 func credentialResolverForScope(
 	delegate CredentialResolver,
 	scope governancedomain.Scope,

@@ -33,6 +33,16 @@ func (c *Connection) Execute(
 				ref,
 			)
 		}
+		if ref == c.oauthCredentialRef && c.oauthCredentialRef != "" {
+			authorizer, ok := credentials.(invocationapplication.CredentialAuthorizer)
+			if !ok {
+				return invocationdomain.Outcome{}, fmt.Errorf("authorize upstream MCP OAuth credential %s: authorization capability is unavailable", ref)
+			}
+			if err := authorizer.AuthorizeCredential(ctx, ref); err != nil {
+				return invocationdomain.Outcome{}, fmt.Errorf("authorize upstream MCP OAuth credential %s: %w", ref, err)
+			}
+			continue
+		}
 		secret, err := credentials.Resolve(ctx, ref)
 		if err != nil {
 			return invocationdomain.Outcome{}, fmt.Errorf(

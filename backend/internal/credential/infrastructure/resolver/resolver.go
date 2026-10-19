@@ -33,6 +33,26 @@ func New(
 	}
 }
 
+// AuthorizeCredential proves that an OAuth reference is a connected inventory
+// entry with OS-backed secret material, without returning a bearer token.
+// OAuth token consumption remains private to the MCP OAuth transport.
+func (r Resolver) AuthorizeCredential(ctx context.Context, ref credentialdomain.Reference) error {
+	credential, err := r.repository.Get(ctx, ref)
+	if err != nil {
+		return fmt.Errorf("authorize credential: %w", err)
+	}
+	metadata := credential.OAuthMetadata()
+	if credential.Source() != credentialdomain.SourceOAuth || metadata == nil || metadata.Status != credentialdomain.OAuthConnected {
+		return credentialapplication.ErrSecretSourceUnavailable
+	}
+	secret, err := r.secrets.Get(ctx, ref)
+	if err != nil {
+		return fmt.Errorf("authorize credential: %w", err)
+	}
+	clear(secret)
+	return nil
+}
+
 func (r Resolver) Resolve(
 	ctx context.Context,
 	ref credentialdomain.Reference,

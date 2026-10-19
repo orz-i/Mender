@@ -23,6 +23,7 @@ const (
 type Connection struct {
 	session             *mcp.ClientSession
 	requiredCredentials []credentialdomain.Reference
+	oauthCredentialRef  credentialdomain.Reference
 }
 
 // ConnectTransport connects Mender to an MCP Transport.
@@ -49,6 +50,13 @@ func ConnectTransport(ctx context.Context, transport mcp.Transport) (*Connection
 
 func (c *Connection) setRequiredCredentials(refs []credentialdomain.Reference) {
 	c.requiredCredentials = slices.Clone(refs)
+}
+
+// SetOAuthCredentialRef identifies the single non-static authentication proof
+// required by this connection. The bearer token is never exposed through the
+// invocation CredentialResolver.
+func (c *Connection) SetOAuthCredentialRef(ref credentialdomain.Reference) {
+	c.oauthCredentialRef = ref
 }
 
 // Close gracefully closes the upstream MCP session.

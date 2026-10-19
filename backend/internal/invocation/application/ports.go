@@ -105,6 +105,12 @@ type CredentialResolver interface {
 	Resolve(context.Context, credentialdomain.Reference) ([]byte, error)
 }
 
+// CredentialAuthorizer checks Profile-scoped access to a non-static Credential
+// without exposing access tokens or other secret material.
+type CredentialAuthorizer interface {
+	AuthorizeCredential(context.Context, credentialdomain.Reference) error
+}
+
 // AuditRecorder persists one data-minimized terminal record.
 type AuditRecorder interface {
 	Record(context.Context, auditdomain.Record) error
