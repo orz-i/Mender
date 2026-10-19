@@ -263,6 +263,38 @@ describe("Agents focused management",()=>{
     fireEvent.click(screen.getByRole("button",{name:"Activity"}));
     expect(await screen.findByText("agent.task.submit")).toBeTruthy();
   });
+  it("separates trusted native progress, worker heartbeat and the admitted deadline", async () => {
+    const uncertainTask:AgentTask = {
+      ...task, status:"unknown", result:"", timeoutSeconds:1800,
+      diagnostic:"Agent outcome unknown after timeout",
+      observation:{
+        phase:"leader_reaped", activity:"uncertain",
+        lastObservedAt:"2026-10-11T10:30:00Z",
+        lastNativeProgressAt:"2026-10-11T10:29:45Z",
+        lastWorkerHeartbeatAt:"2026-10-11T10:29:55Z",
+        sessionRecorded:true, sessionRecoverability:"unavailable", leaderReaped:true,
+      },
+    };
+    show("/agents/"+agent.agentId,{
+      listAgentTasks:vi.fn().mockResolvedValue({tasks:[uncertainTask]}),
+      getAgentTask:vi.fn().mockResolvedValue(uncertainTask),
+    });
+    fireEvent.click(await screen.findByRole("button",{name:/^Tasks/}));
+    fireEvent.click(await screen.findByRole("button",{name:"View"}));
+    const dialog=await screen.findByRole("dialog",{name:"Agent task result"});
+    expect(within(dialog).getByText("30 minutes")).toBeTruthy();
+    expect(within(dialog).getByText("Task execution deadline")).toBeTruthy();
+    const native=within(dialog).getByText("Last native Agent progress").nextElementSibling?.textContent;
+    const worker=within(dialog).getByText("Mender worker heartbeat").nextElementSibling?.textContent;
+    const lifecycle=within(dialog).getByText("Last observed").nextElementSibling?.textContent;
+    expect(native).toBeTruthy();
+    expect(worker).toBeTruthy();
+    expect(native).not.toBe(worker);
+    expect(native).not.toBe(lifecycle);
+    expect(within(dialog).getByText(/Unknown does not mean the task succeeded or failed/)).toBeTruthy();
+    expect(within(dialog).queryByRole("button",{name:/^(Resume|Retry|Continue)$/})).toBeNull();
+  });
+
   it("shows an unknown outcome as a localized caution in a scroll-safe read-only task dialog",async()=>{
     setLocale("zh-CN");
     const unknownTask:AgentTask={

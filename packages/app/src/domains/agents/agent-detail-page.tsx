@@ -409,6 +409,10 @@ export function AgentDetailPage({client,chooseLocalDirectory}:{client:MenderClie
         </DialogHeader>
         <DialogBody className="flex flex-col gap-4">
         {viewTask?.continuedFromTaskId?<dl className="text-sm"><dt className="text-xs text-muted-foreground">{t("Continued from task")}</dt><dd className="break-all font-mono text-xs">{viewTask.continuedFromTaskId}</dd></dl>:null}
+        {viewTask?<dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+          <div><dt className="text-xs text-muted-foreground">{t("Task execution budget")}</dt><dd>{t("{{count}} minutes", { count: String((viewTask.timeoutSeconds ?? 600) / 60) })}</dd></div>
+          <div><dt className="text-xs text-muted-foreground">{t("Task execution deadline")}</dt><dd>{formatDateTime(new Date(Date.parse(viewTask.createdAt) + (viewTask.timeoutSeconds ?? 600) * 1000).toISOString())}</dd></div>
+        </dl>:null}
         {viewTask?.model||viewTask?.reasoningEffort||viewTask?.workspace?<dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
           {viewTask.model?<div><dt className="text-xs text-muted-foreground">{t("Agent model")}</dt><dd>{viewTask.model}</dd></div>:null}
           {viewTask.reasoningEffort?<div><dt className="text-xs text-muted-foreground">{t("Reasoning effort")}</dt><dd>{viewTask.reasoningEffort}</dd></div>:null}
@@ -420,6 +424,7 @@ export function AgentDetailPage({client,chooseLocalDirectory}:{client:MenderClie
             <div><dt className="text-xs text-muted-foreground">{t("Execution phase")}</dt><dd>{taskExecutionPhaseText(viewTask.observation.phase)}</dd></div>
             <div><dt className="text-xs text-muted-foreground">{t("Execution activity")}</dt><dd>{viewTask.observation.activity==="local_active"?t("Local execution observed"):t("Execution activity uncertain")}</dd></div>
             <div><dt className="text-xs text-muted-foreground">{t("Last observed")}</dt><dd>{formatDateTime(viewTask.observation.lastObservedAt)}</dd></div>
+            <div><dt className="text-xs text-muted-foreground">{t("Last native Agent progress")}</dt><dd>{viewTask.observation.lastNativeProgressAt?formatDateTime(viewTask.observation.lastNativeProgressAt):t("No native Agent progress observed")}</dd></div>
             {viewTask.observation.lastWorkerHeartbeatAt?<div><dt className="text-xs text-muted-foreground">{t("Mender worker heartbeat")}</dt><dd>{formatDateTime(viewTask.observation.lastWorkerHeartbeatAt)}</dd></div>:null}
             <div><dt className="text-xs text-muted-foreground">{t("Native session")}</dt><dd>{viewTask.observation.sessionRecorded?t("Native session recorded"):t("No native session recorded")}</dd></div>
             <div><dt className="text-xs text-muted-foreground">{t("Recovery")}</dt><dd>{viewTask.observation.sessionRecoverability==="unverified"?t("Session recovery not verified"):t("Session recovery unavailable")}</dd></div>
@@ -427,6 +432,7 @@ export function AgentDetailPage({client,chooseLocalDirectory}:{client:MenderClie
           </dl>
           <p className="text-xs text-muted-foreground">{t("Observations do not prove task completion or authorize session resume.")}</p>
         </section>:viewTask?.status==="unknown"?<p className="text-sm leading-6 text-muted-foreground">{t("No execution evidence recorded for this task.")}</p>:null}
+        {viewTask?.status==="unknown"?<p className="text-sm leading-6 text-muted-foreground">{t("Unknown does not mean the task succeeded or failed. Review actual deliverables before planning any new task; do not retry the original prompt automatically.")}</p>:null}
         {client.supportsLocalAgentApprovals===true&&agent?.backend!=="antigravity"&&viewTask&&(viewTask.status==="running"||viewTask.status==="queued")?
           <AgentTaskApprovals client={client} task={viewTask} onTaskUpdated={updateViewedTask}/>:null}
         {viewTask&&agent?.isolation==="host"?<p role="note" className="text-xs leading-5 text-muted-foreground">
