@@ -91,6 +91,8 @@ type testOAuthAS struct {
 	verifierChallenge string
 	gotResource       string
 	tokenRequests     int
+	advertiseDCR      bool
+	rootMetadata      bool
 }
 
 func newTestOAuthAS(t *testing.T) *testOAuthAS {
@@ -99,23 +101,56 @@ func newTestOAuthAS(t *testing.T) *testOAuthAS {
 	f.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/mcp":
-			w.Header().Set("WWW-Authenticate", fmt.Sprintf("Bearer resource_metadata=%q", f.url+"/prm"))
+			if !f.rootMetadata {
+				w.Header().Set("WWW-Authenticate", fmt.Sprintf("Bearer resource_metadata=%q", f.url+"/prm"))
+			}
 			http.Error(w, "authorization required", http.StatusUnauthorized)
+		case "/.well-known/oauth-protected-resource":
+			if !f.rootMetadata {
+				http.NotFound(w, r)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{"resource": f.url, "authorization_servers": []string{f.url}, "scopes_supported": []string{"read"}})
 		case "/prm":
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(map[string]any{"resource": f.url + "/mcp", "authorization_servers": []string{f.url}, "scopes_supported": []string{"read"}})
 		case "/.well-known/oauth-authorization-server":
 			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(map[string]any{
+			metadata := map[string]any{
 				"issuer": f.url, "authorization_endpoint": f.url + "/authorize", "token_endpoint": f.url + "/token",
 				"response_types_supported": []string{"code"}, "grant_types_supported": []string{"authorization_code", "refresh_token"},
 				"code_challenge_methods_supported": []string{"S256"}, "scopes_supported": []string{"read", "offline_access"},
 				"token_endpoint_auth_methods_supported":          []string{"none"},
 				"authorization_response_iss_parameter_supported": true,
+			}
+			if f.advertiseDCR {
+				metadata["registration_endpoint"] = f.url + "/register"
+			}
+			_ = json.NewEncoder(w).Encode(metadata)
+		case "/register":
+			if !f.advertiseDCR {
+				http.NotFound(w, r)
+				return
+			}
+			var request map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&request); err != nil || request["application_type"] != "native" {
+				http.Error(w, "DCR requires native application", http.StatusBadRequest)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusCreated)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"client_id": "mender-dcr-client", "token_endpoint_auth_method": "none",
+				"redirect_uris": request["redirect_uris"], "application_type": "native",
 			})
 		case "/authorize":
 			q := r.URL.Query()
-			if q.Get("code_challenge_method") != "S256" || q.Get("state") == "" || q.Get("resource") != f.url+"/mcp" {
+			audience := f.url + "/mcp"
+			if f.rootMetadata {
+				audience = f.url
+			}
+			if q.Get("code_challenge_method") != "S256" || q.Get("state") == "" || q.Get("resource") != audience {
 				http.Error(w, "bad authorization parameters", http.StatusBadRequest)
 				return
 			}
@@ -133,6 +168,7 @@ func newTestOAuthAS(t *testing.T) *testOAuthAS {
 			v.Set("state", q.Get("state"))
 			v.Set("iss", f.url)
 			redirect.RawQuery = v.Encode()
+			//nolint:gosec // Fixture IdP redirects to the loopback URI explicitly supplied by our test client.
 			http.Redirect(w, r, redirect.String(), http.StatusFound)
 		case "/token":
 			if err := r.ParseForm(); err != nil {
@@ -145,7 +181,11 @@ func newTestOAuthAS(t *testing.T) *testOAuthAS {
 			f.mu.Unlock()
 			digest := sha256.Sum256([]byte(r.PostForm.Get("code_verifier")))
 			computed := base64.RawURLEncoding.EncodeToString(digest[:])
-			if r.PostForm.Get("code") != "fake-valid-code" || r.PostForm.Get("resource") != f.url+"/mcp" || computed != challenge {
+			audience := f.url + "/mcp"
+			if f.rootMetadata {
+				audience = f.url
+			}
+			if r.PostForm.Get("code") != "fake-valid-code" || r.PostForm.Get("resource") != audience || computed != challenge {
 				http.Error(w, "invalid token request", 400)
 				return
 			}
@@ -295,5 +335,114 @@ func TestOAuthFlowCancellationClosesLoopbackAndDoesNotPersistTokens(t *testing.T
 	}
 	if err := manager.Cancel(context.Background(), result.FlowID); err == nil {
 		t.Fatal("cancel allowed on completed flow")
+	}
+}
+
+// A remote MCP server that advertises RFC 7591 registration can connect
+// without the user knowing a client ID in advance.
+func TestOAuthDynamicClientRegistrationWithNativeRedirect(t *testing.T) {
+	fixture := newTestOAuthAS(t)
+	fixture.advertiseDCR = true
+	manager, repo, secrets := newLoopbackTestManager(t)
+	start, err := manager.Start(context.Background(), StartRequest{
+		Namespace: "oauth", Name: "dcr", DisplayName: "DCR account", MCPEndpoint: fixture.url + "/mcp",
+	})
+	if err != nil {
+		t.Fatalf("DCR registration failed: %v", err)
+	}
+	parsed, err := url.Parse(start.AuthorizationURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := parsed.Query().Get("client_id"); got != "mender-dcr-client" {
+		t.Fatalf("Dynamic client registration returned client ID %q", got)
+	}
+	response, err := http.Get(start.AuthorizationURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("browser status %d", response.StatusCode)
+	}
+	view := awaitTerminalFlow(t, manager, start.FlowID)
+	if view.Status != FlowConnected || view.Credential == nil {
+		t.Fatalf("DCR connection status = %+v", view)
+	}
+	ref, _ := credentialdomain.NewReference("oauth", "dcr")
+	credential, err := repo.Get(context.Background(), ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if credential.OAuthMetadata().ClientID != "mender-dcr-client" {
+		t.Fatal("DCR client identity was not persisted")
+	}
+	secret, err := secrets.Get(context.Background(), ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var bundle tokenBundle
+	if err := json.Unmarshal(secret, &bundle); err != nil {
+		t.Fatal(err)
+	}
+	if bundle.ClientID != "mender-dcr-client" || bundle.AccessToken != "fixture-access-token" {
+		t.Fatal("DCR tokens and client credentials not stored together in native store")
+	}
+}
+
+func TestOAuthDynamicRegistrationWithoutServerSupportFailsClosed(t *testing.T) {
+	fixture := newTestOAuthAS(t)
+	manager, repo, secrets := newLoopbackTestManager(t)
+	_, err := manager.Start(context.Background(), StartRequest{
+		Namespace: "oauth", Name: "dcr", DisplayName: "DCR account", MCPEndpoint: fixture.url + "/mcp",
+	})
+	if err == nil {
+		t.Fatal("missing advertised registration mechanism was silently accepted")
+	}
+	ref, _ := credentialdomain.NewReference("oauth", "dcr")
+	if _, err := repo.Get(context.Background(), ref); err == nil {
+		t.Fatal("unsupported DCR created a credential")
+	}
+	if _, err := secrets.Get(context.Background(), ref); err == nil {
+		t.Fatal("unsupported DCR stored tokens")
+	}
+}
+
+// Root-level protected-resource metadata may legitimately identify the origin
+// as token audience even though the chosen MCP HTTP endpoint has /mcp path.
+func TestOAuthRootResourceAudienceIsBoundToExactMCPEndpoint(t *testing.T) {
+	fixture := newTestOAuthAS(t)
+	fixture.rootMetadata = true
+	manager, repo, _ := newLoopbackTestManager(t)
+	endpoint := fixture.url + "/mcp"
+	start, err := manager.Start(context.Background(), StartRequest{
+		Namespace: "oauth", Name: "root", DisplayName: "Root metadata", MCPEndpoint: endpoint, ClientID: "public-client",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	response, err := http.Get(start.AuthorizationURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = response.Body.Close()
+	result := awaitTerminalFlow(t, manager, start.FlowID)
+	if result.Status != FlowConnected {
+		t.Fatalf("root metadata OAuth flow failed: %+v", result)
+	}
+	ref, _ := credentialdomain.NewReference("oauth", "root")
+	credential, err := repo.Get(context.Background(), ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	metadata := credential.OAuthMetadata()
+	if metadata == nil || metadata.Resource != fixture.url || metadata.MCPEndpoint != endpoint {
+		t.Fatalf("audience/transport endpoint were conflated: %+v", metadata)
+	}
+	if token, err := manager.AccessToken(context.Background(), ref, endpoint); err != nil || token != "fixture-access-token" {
+		t.Fatalf("bound HTTP endpoint cannot access its token: %q %v", token, err)
+	}
+	if _, err := manager.AccessToken(context.Background(), ref, fixture.url+"/different-mcp"); err == nil {
+		t.Fatal("origin-scoped OAuth audience allowed another configured path")
 	}
 }

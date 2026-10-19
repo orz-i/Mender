@@ -22,6 +22,7 @@ import (
 	governancelocaluser "github.com/orz-i/Mender/backend/internal/governance/infrastructure/localuser"
 	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
 	invocationrouter "github.com/orz-i/Mender/backend/internal/invocation/infrastructure/router"
+	mcpplugin "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/plugin"
 	platformplugin "github.com/orz-i/Mender/backend/internal/plugin"
 	installationdomain "github.com/orz-i/Mender/backend/internal/plugin/installation/domain"
 	installationlocalfs "github.com/orz-i/Mender/backend/internal/plugin/installation/infrastructure/localfs"
@@ -253,6 +254,20 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		_ = catalog.Close()
 		return nil, fmt.Errorf("compose runtime: provider plugins: %w", err)
 	}
+	// OAuth is a host-managed Credential lifecycle, not a generic Provider
+	// secret resolver. Inject its per-request token source into the built-in
+	// MCP plugin once before any Provider activation.
+	builtinMCP, err := providerPlugins.Lookup(mcpplugin.ID)
+	if err != nil {
+		closeBootstrapStores()
+		return nil, fmt.Errorf("compose runtime: locate MCP plugin: %w", err)
+	}
+	mcpInstance, ok := builtinMCP.(*mcpplugin.Plugin)
+	if !ok {
+		closeBootstrapStores()
+		return nil, fmt.Errorf("compose runtime: unexpected built-in MCP plugin type")
+	}
+	mcpInstance.SetOAuthTokenProvider(credentials.OAuthFlow)
 	pluginInstallations, err := installationsqlite.Open(ctx, options.DatabasePath)
 	if err != nil {
 		_ = providerConfigs.Close()

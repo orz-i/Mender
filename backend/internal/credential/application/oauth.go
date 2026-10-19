@@ -60,7 +60,8 @@ func (uc SaveOAuth) Execute(ctx context.Context, request SaveOAuthRequest) (cred
 		}
 	} else {
 		old := existing.OAuthMetadata()
-		if existing.Source() != credentialdomain.SourceOAuth || old == nil || old.Resource != request.Metadata.Resource {
+		if existing.Source() != credentialdomain.SourceOAuth || old == nil || old.Resource != request.Metadata.Resource ||
+			(old.MCPEndpoint != "" && old.MCPEndpoint != request.Metadata.MCPEndpoint) {
 			return credentialdomain.Credential{}, ErrReferenceConflict
 		}
 		item, err = existing.Touch(uc.clock.Now())

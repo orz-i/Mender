@@ -53,6 +53,9 @@ var (
 func secureHTTPClient(timeout time.Duration, maxBytes int64) *http.Client {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.Proxy = nil
+	// Bind network connections to the validated DNS answer, not a second
+	// unchecked resolution that could be changed by DNS rebinding.
+	transport.DialContext = dialVerifiedOAuthAddress
 	return &http.Client{
 		Timeout: timeout,
 		Transport: &secureTransport{
@@ -93,7 +96,15 @@ type boundedBody struct {
 
 func (b *boundedBody) Read(p []byte) (int, error) {
 	if b.remaining <= 0 {
-		return 0, errBodyTooLarge
+		var extra [1]byte
+		n, err := b.reader.Read(extra[:])
+		if n > 0 {
+			return 0, errBodyTooLarge
+		}
+		return 0, err
+	}
+	if int64(len(p)) > b.remaining {
+		p = p[:int(b.remaining)]
 	}
 	n, err := b.reader.Read(p)
 	b.remaining -= int64(n)
@@ -105,8 +116,11 @@ func (b *boundedBody) Close() error {
 }
 
 func checkRequestURL(u *url.URL) error {
-	if u == nil || u.Hostname() == "" {
-		return fmt.Errorf("%w: requests target absolute host URLs", errHostDenied)
+	if u == nil || u.Hostname() == "" || u.User != nil || u.Fragment != "" {
+		return fmt.Errorf("%w: requests require absolute host URLs without userinfo or fragments", errHostDenied)
+	}
+	if ip := net.ParseIP(u.Hostname()); ip != nil && !isPermittedOAuthIP(ip, ip.IsLoopback()) {
+		return fmt.Errorf("%w: private or reserved address", errHostDenied)
 	}
 	switch u.Scheme {
 	case "https":

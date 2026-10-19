@@ -19,6 +19,7 @@ func TestOAuthCredentialMetadataRoundTripContainsNoSecrets(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	//nolint:gosec // Public OAuth client ID is a nonsecret metadata fixture.
 	metadata := credentialdomain.OAuthMetadata{Resource: "https://mcp.example.test/mcp", Issuer: "https://id.example.test", ClientID: "public-desktop", TokenEndpoint: "https://id.example.test/token", Scopes: []string{"read"}, Status: credentialdomain.OAuthConnected}
 	credential, err = credential.WithOAuthMetadata(metadata)
 	if err != nil {
@@ -69,7 +70,7 @@ func TestCredentialV1SchemaMigrationPreservesExistingNativeCredential(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 	loaded, err := store.Get(ctx, mustReference(t, "demo", "key"))
 	if err != nil || loaded.DisplayName() != "Existing key" || loaded.Source() != credentialdomain.SourceNative {
 		t.Fatalf("migration lost existing credential: %+v %v", loaded, err)

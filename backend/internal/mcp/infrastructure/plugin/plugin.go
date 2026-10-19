@@ -17,12 +17,19 @@ const pluginVersion = "1.0.0"
 
 // Plugin is Mender's built-in upstream MCP Provider plugin.
 type Plugin struct {
-	lookupEnv func(string) (string, bool)
+	lookupEnv   func(string) (string, bool)
+	oauthTokens mcpprovider.OAuthTokenSource
 }
 
 // New constructs the built-in MCP Provider plugin.
 func New() *Plugin {
 	return &Plugin{lookupEnv: os.LookupEnv}
+}
+
+// SetOAuthTokenProvider wires the host-owned token source during Runtime
+// bootstrap, before any configured Provider activation.
+func (p *Plugin) SetOAuthTokenProvider(source mcpprovider.OAuthTokenSource) {
+	p.oauthTokens = source
 }
 
 // Descriptor implements providerplugin.Plugin.
@@ -93,10 +100,9 @@ func (p *Plugin) openHTTP(
 	request providerplugin.OpenRequest,
 	config Config,
 ) (providerplugin.Instance, error) {
-	// The non-secret binding is accepted for persistence, but OAuth credentials
-	// must never be silently downgraded to an unauthenticated MCP connection.
-	if config.Transport.OAuthCredentialRef != "" {
-		return nil, fmt.Errorf("open MCP HTTP: OAuth credential is not yet connected to an OAuth token source")
+	// A configured OAuth Provider may never fall back to anonymous transport.
+	if config.Transport.OAuthCredentialRef != "" && p.oauthTokens == nil {
+		return nil, fmt.Errorf("open MCP HTTP: OAuth token source is unavailable")
 	}
 	lookupEnv := p.lookupEnv
 	if lookupEnv == nil {
@@ -134,6 +140,8 @@ func (p *Plugin) openHTTP(
 		Endpoint:            config.Transport.Endpoint,
 		Headers:             headers,
 		RequiredCredentials: config.RequiredCredentialRefs(),
+		OAuthCredentialRef:  config.Transport.OAuthCredentialRef,
+		OAuthTokens:         p.oauthTokens,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("open MCP HTTP: %w", err)

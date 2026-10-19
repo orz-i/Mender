@@ -11,6 +11,7 @@ import (
 )
 
 func testOAuthMetadata() credentialdomain.OAuthMetadata {
+	//nolint:gosec // Static client ID is a nonsecret test fixture, not a credential.
 	return credentialdomain.OAuthMetadata{
 		Resource:      "https://mcp.example.test/mcp",
 		Issuer:        "https://id.example.test",

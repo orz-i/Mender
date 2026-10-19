@@ -2240,6 +2240,7 @@ components:
       required: [resource, issuer, clientId, tokenEndpoint, scopes, status]
       properties:
         resource: { type: string, format: uri }
+        mcpEndpoint: { type: string, format: uri, description: Bound MCP HTTP endpoint; OAuth audience may identify its origin }
         issuer: { type: string, format: uri }
         clientId: { type: string }
         tokenEndpoint: { type: string, format: uri }

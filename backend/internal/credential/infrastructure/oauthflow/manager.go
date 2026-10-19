@@ -56,8 +56,9 @@ type StartRequest struct {
 	// identifier sent to the authorization server.
 	MCPEndpoint string
 
-	// Pre-registered client. ClientID is required unless
-	// ClientIDMetadataURL is provided; a public client has no secret.
+	// An explicit client ID uses pre-registration. If both client ID and
+	// ClientIDMetadataURL are absent, the SDK tries advertised dynamic client
+	// registration; when unsupported, authorization fails closed.
 	ClientID     string
 	ClientSecret string
 
@@ -82,9 +83,6 @@ func (r StartRequest) validate() error {
 	}
 	if err := checkProtectedResourceURL(r.MCPEndpoint); err != nil {
 		return err
-	}
-	if r.ClientID == "" && r.ClientIDMetadataURL == "" {
-		return errors.New("a pre-registered client ID or a client-id metadata URL is required")
 	}
 	if r.ClientID != "" && r.ClientIDMetadataURL != "" {
 		return errors.New("pre-registered client ID and client-id metadata are mutually exclusive")
@@ -200,6 +198,10 @@ type Manager struct {
 
 	mu    sync.Mutex
 	flows map[string]*flow
+
+	// tokenMu serializes refresh, token rotation and explicit disconnect.
+	// It is deliberately separate from the in-memory flow registry lock.
+	tokenMu sync.Mutex
 }
 
 func NewManager(

@@ -47,17 +47,20 @@ type flow struct {
 
 	shutdownOnce sync.Once
 
-	mu               sync.Mutex
-	status           FlowStatus
-	message          string
-	credential       *CredentialView
-	terminalStamp    time.Time
-	hasTerminalStamp bool
-	authorizationURL string
-	expectedState    string
-	token            *oauth2.Token
-	wireResource     string
-	requestedScopes  []string
+	mu                   sync.Mutex
+	status               FlowStatus
+	message              string
+	credential           *CredentialView
+	terminalStamp        time.Time
+	hasTerminalStamp     bool
+	authorizationURL     string
+	expectedState        string
+	token                *oauth2.Token
+	resolvedClientID     string
+	resolvedClientSecret string
+	resolvedAuthStyle    string
+	wireResource         string
+	requestedScopes      []string
 }
 
 type callbackResult struct {
@@ -214,18 +217,14 @@ func (f *flow) run(m *Manager) {
 		f.fail("OAuth authorization: " + err.Error())
 		return
 	}
-	credential, err := m.save.Execute(f.ctx, credentialapplication.SaveOAuthRequest{
-		Namespace:   f.request.Namespace,
-		Name:        f.request.Name,
-		DisplayName: f.request.DisplayName,
-		Metadata:    metadata,
-		Secret:      bundle,
-	})
-	if err != nil {
+	defer clear(bundle)
+	if err := f.persistCredential(m, metadata, bundle); err != nil {
+		if isFlowLifecycleError(err) {
+			return
+		}
 		f.fail("OAuth authorization: " + sanitizeAssistant(err))
 		return
 	}
-	f.succeed(credential)
 }
 
 // finish maps any leftover pending state to a terminal status, releases the
@@ -284,23 +283,32 @@ func (f *flow) cancelFlow() error {
 	return nil
 }
 
-func (f *flow) succeed(credential credentialdomain.Credential) {
-	view := CredentialView{
-		Reference:   credential.Reference().String(),
-		DisplayName: credential.DisplayName(),
+// persistCredential serializes native token rotation, local disconnect, and
+// the final pending -> connected transition. Holding the flow lock through
+// the bounded keychain operation prevents a cancelled flow from persisting a
+// usable token after reporting cancellation to the operator.
+func (f *flow) persistCredential(m *Manager, metadata credentialdomain.OAuthMetadata, bundle []byte) error {
+	m.tokenMu.Lock()
+	defer m.tokenMu.Unlock()
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.status != FlowPending || f.ctx.Err() != nil {
+		return context.Canceled
 	}
+	credential, err := m.save.Execute(f.ctx, credentialapplication.SaveOAuthRequest{
+		Namespace: f.request.Namespace, Name: f.request.Name,
+		DisplayName: f.request.DisplayName, Metadata: metadata, Secret: bundle,
+	})
+	if err != nil {
+		return err
+	}
+	view := CredentialView{Reference: credential.Reference().String(), DisplayName: credential.DisplayName()}
 	if metadata := credential.OAuthMetadata(); metadata != nil {
 		view.Metadata = *metadata
 	}
-	f.mu.Lock()
-	if f.status != FlowPending {
-		// Cancelled or timed out mid-persistence: the cancellation wins.
-		f.mu.Unlock()
-		return
-	}
 	f.credential = &view
 	f.dismissLocked(FlowConnected, "")
-	f.mu.Unlock()
+	return nil
 }
 
 // --- SDK handler construction and fetcher ---
@@ -320,10 +328,10 @@ func newSDKHandler(
 		Client:                   client,
 		NewTokenSource: func(
 			_ context.Context,
-			_ *oauth2.Config,
+			clientConfig *oauth2.Config,
 			token *oauth2.Token,
 		) (oauth2.TokenSource, error) {
-			f.captureToken(token)
+			f.captureToken(token, clientConfig)
 			return oauth2.StaticTokenSource(token), nil
 		},
 	}
@@ -332,7 +340,7 @@ func newSDKHandler(
 		config.ClientIDMetadataDocumentConfig = &auth.ClientIDMetadataDocumentConfig{
 			URL: f.request.ClientIDMetadataURL,
 		}
-	default:
+	case f.request.ClientID != "":
 		credentials := &oauthex.ClientCredentials{ClientID: f.request.ClientID, Issuer: issuer}
 		if f.request.ClientSecret != "" {
 			credentials.ClientSecretAuth = &oauthex.ClientSecretAuth{
@@ -340,6 +348,15 @@ func newSDKHandler(
 			}
 		}
 		config.PreregisteredClient = credentials
+	default:
+		config.DynamicClientRegistrationConfig = &auth.DynamicClientRegistrationConfig{
+			Metadata: &oauthex.ClientRegistrationMetadata{
+				ClientName: "Mender", RedirectURIs: []string{f.redirectURL},
+				GrantTypes:    []string{"authorization_code", "refresh_token"},
+				ResponseTypes: []string{"code"}, TokenEndpointAuthMethod: "none",
+				ApplicationType: "native",
+			},
+		}
 	}
 	handler, err := auth.NewAuthorizationCodeHandler(config)
 	if err != nil {
@@ -489,9 +506,11 @@ func (f *flow) discoverProtectedResource(
 	}
 	endpoint := f.request.MCPEndpoint
 	if challengeURL != "" {
-		if metadata, err := oauthex.GetProtectedResourceMetadata(f.ctx, challengeURL, endpoint, client); err == nil {
-			return metadata, nil
+		metadata, err := oauthex.GetProtectedResourceMetadata(f.ctx, challengeURL, endpoint, client)
+		if err != nil || metadata == nil {
+			return nil, errors.New("the MCP-provided OAuth resource metadata is invalid or unavailable")
 		}
+		return metadata, nil
 	}
 	endpointURL, err := url.Parse(endpoint)
 	if err != nil {
@@ -506,11 +525,9 @@ func (f *flow) discoverProtectedResource(
 	if metadata, err := oauthex.GetProtectedResourceMetadata(f.ctx, rootWellKnownPath(probe), probe.String(), client); err == nil {
 		return metadata, nil
 	}
-	// 2025-03-26 fallback: the MCP origin is the authorization server.
-	return &oauthex.ProtectedResourceMetadata{
-		AuthorizationServers: []string{probe.String()},
-		Resource:             endpoint,
-	}, nil
+	// MCP 2026-07-28 requires protected-resource metadata. There is no
+	// operator-supplied issuer to fall back to, so missing metadata fails closed.
+	return nil, errors.New("OAuth protected-resource metadata is unavailable")
 }
 
 func rootWellKnownPath(origin *url.URL) string {
@@ -526,8 +543,8 @@ func firstAuthorizationServer(metadata *oauthex.ProtectedResourceMetadata) strin
 	return metadata.AuthorizationServers[0]
 }
 
-// discoverAuthorizationServer uses the SDK's RFC 8414 / OIDC discovery; a
-// server without metadata falls back to the 2025-03-26 root endpoints.
+// discoverAuthorizationServer requires RFC 8414 or OIDC discovery. Guessing
+// legacy endpoints would bypass OAuth server metadata and PKCE verification.
 func discoverAuthorizationServer(ctx context.Context, client *http.Client, issuer string) (string, string, error) {
 	if issuer == "" {
 		return "", "", errors.New("no authorization server is advertised")
@@ -537,7 +554,7 @@ func discoverAuthorizationServer(ctx context.Context, client *http.Client, issue
 		return "", "", errors.New("authorization server metadata is unavailable")
 	}
 	if metadata == nil {
-		return issuer, strings.TrimSuffix(issuer, "/") + "/token", nil
+		return "", "", errors.New("authorization server metadata is required")
 	}
 	resolvedIssuer := metadata.Issuer
 	if resolvedIssuer == "" {
@@ -555,16 +572,19 @@ func discoverAuthorizationServer(ctx context.Context, client *http.Client, issue
 // tokenBundle is the opaque JSON stored in the OS secret store. It never
 // reaches SQLite, logs, flows, or API responses.
 type tokenBundle struct {
-	TokenType     string    `json:"tokenType,omitempty"`
-	AccessToken   string    `json:"accessToken"`
-	RefreshToken  string    `json:"refreshToken,omitempty"`
-	ExpiresAt     time.Time `json:"expiresAt,omitempty"`
-	Issuer        string    `json:"issuer"`
-	ClientID      string    `json:"clientId"`
-	TokenEndpoint string    `json:"tokenEndpoint,omitempty"`
-	Resource      string    `json:"resource"`
-	Scopes        []string  `json:"scopes,omitempty"`
-	CapturedAt    time.Time `json:"capturedAt"`
+	TokenType      string    `json:"tokenType,omitempty"`
+	AccessToken    string    `json:"accessToken"`
+	RefreshToken   string    `json:"refreshToken,omitempty"`
+	ExpiresAt      time.Time `json:"expiresAt,omitempty"`
+	Issuer         string    `json:"issuer"`
+	ClientID       string    `json:"clientId"`
+	MCPEndpoint    string    `json:"mcpEndpoint,omitempty"`
+	ClientSecret   string    `json:"clientSecret,omitempty"`
+	TokenAuthStyle string    `json:"tokenAuthStyle,omitempty"`
+	TokenEndpoint  string    `json:"tokenEndpoint,omitempty"`
+	Resource       string    `json:"resource"`
+	Scopes         []string  `json:"scopes,omitempty"`
+	CapturedAt     time.Time `json:"capturedAt"`
 }
 
 func (f *flow) takeCapturedToken() *oauth2.Token {
@@ -575,15 +595,23 @@ func (f *flow) takeCapturedToken() *oauth2.Token {
 	return token
 }
 
-func (f *flow) captureToken(token *oauth2.Token) {
+func (f *flow) captureToken(token *oauth2.Token, cfg *oauth2.Config) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.token = token
+	if cfg != nil {
+		f.resolvedClientID = cfg.ClientID
+		f.resolvedClientSecret = cfg.ClientSecret
+		if cfg.Endpoint.AuthStyle == oauth2.AuthStyleInHeader {
+			f.resolvedAuthStyle = "basic"
+		} else {
+			f.resolvedAuthStyle = "post"
+		}
+	}
 }
 
-// buildTokenBundle merges the previous refresh token when the authorization
-// server reuses it, then encodes the secret-store payload and the safe
-// non-secret metadata.
+// buildTokenBundle encodes the newly authorized identity into the native
+// secret store payload. A new grant must never inherit the old refresh token.
 func (f *flow) buildTokenBundle(
 	m *Manager,
 	token *oauth2.Token,
@@ -597,28 +625,38 @@ func (f *flow) buildTokenBundle(
 	if resource == "" {
 		resource = f.request.MCPEndpoint
 	}
-	requestedScopes := f.requestedScopes
-	refreshToken := token.RefreshToken
-	if refreshToken == "" {
-		refreshToken = previousRefreshToken(m.secrets, f.ctx, f.reference)
+	f.mu.Lock()
+	requestedScopes := append([]string(nil), f.requestedScopes...)
+	clientID := f.resolvedClientID
+	clientSecret := f.resolvedClientSecret
+	authStyle := f.resolvedAuthStyle
+	f.mu.Unlock()
+	if clientID == "" {
+		return nil, credentialdomain.OAuthMetadata{}, errors.New("OAuth client registration yielded no client identifier")
 	}
 	bundle := tokenBundle{
-		TokenType:     token.TokenType,
-		AccessToken:   token.AccessToken,
-		RefreshToken:  refreshToken,
-		ExpiresAt:     token.Expiry,
-		Issuer:        issuer,
-		ClientID:      clientIdentifier(f.request),
-		TokenEndpoint: tokenEndpoint,
-		Resource:      resource,
-		Scopes:        grantedScopes(token, requestedScopes),
+		TokenType:      token.TokenType,
+		AccessToken:    token.AccessToken,
+		RefreshToken:   token.RefreshToken,
+		ExpiresAt:      token.Expiry,
+		Issuer:         issuer,
+		ClientID:       clientID,
+		MCPEndpoint:    f.request.MCPEndpoint,
+		ClientSecret:   clientSecret,
+		TokenAuthStyle: authStyle,
+		TokenEndpoint:  tokenEndpoint,
+		Resource:       resource,
+		Scopes:         grantedScopes(token, requestedScopes),
+		CapturedAt:     m.clock.Now(),
 	}
+	//nolint:gosec // Secret-containing bundle is serialized exclusively for the native OS keyring.
 	blob, err := json.Marshal(bundle)
 	if err != nil {
 		return nil, credentialdomain.OAuthMetadata{}, errors.New("the token bundle could not be encoded")
 	}
 	payload := credentialdomain.OAuthMetadata{
 		Resource:      resource,
+		MCPEndpoint:   f.request.MCPEndpoint,
 		Issuer:        issuer,
 		ClientID:      bundle.ClientID,
 		TokenEndpoint: tokenEndpoint,
@@ -627,30 +665,6 @@ func (f *flow) buildTokenBundle(
 		Status:        credentialdomain.OAuthConnected,
 	}
 	return blob, payload, nil
-}
-
-func previousRefreshToken(
-	secrets credentialapplication.SecretStore,
-	ctx context.Context,
-	ref credentialdomain.Reference,
-) string {
-	previous, err := secrets.Get(ctx, ref)
-	if err != nil {
-		return ""
-	}
-	defer clear(previous)
-	var old tokenBundle
-	if json.Unmarshal(previous, &old) != nil {
-		return ""
-	}
-	return old.RefreshToken
-}
-
-func clientIdentifier(request StartRequest) string {
-	if request.ClientID != "" {
-		return request.ClientID
-	}
-	return request.ClientIDMetadataURL
 }
 
 func grantedScopes(token *oauth2.Token, requested []string) []string {

@@ -54,12 +54,13 @@ func TestOAuthBindingParticipatesInRequiredCredentialProof(t *testing.T) {
 
 func TestOAuthProviderFailsClosedWithoutTokenSource(t *testing.T) {
 	t.Parallel()
+	//nolint:gosec // Synthetic Credential Reference is a nonsecret fixture.
 	cfg := Config{Transport: TransportConfig{Kind: TransportStreamableHTTP,
 		Endpoint: "https://example.test/mcp", OAuthCredentialRef: "credential://oauth/work"}}
 	_, err := New().Open(context.Background(), providerplugin.OpenRequest{
 		ConfigVersion: ConfigVersion, Config: mustOAuthJSON(t, cfg),
 	})
-	if err == nil || !strings.Contains(err.Error(), "OAuth credential") {
+	if err == nil || !strings.Contains(err.Error(), "OAuth token source") {
 		t.Fatalf("Open() error = %v, want explicit fail-closed auth requirement", err)
 	}
 }

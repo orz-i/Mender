@@ -608,7 +608,7 @@ func (s *Service) DisconnectOAuthCredential(namespace string, name string) (Cred
 	if err != nil {
 		return Credential{}, err
 	}
-	item, err := s.runtime.Credentials.DisconnectOAuth.Execute(s.ctx, ref)
+	item, err := s.runtime.Credentials.OAuthFlow.Disconnect(s.ctx, ref)
 	if err != nil {
 		return Credential{}, err
 	}
@@ -1733,7 +1733,7 @@ func credentialProjection(item credentialdomain.Credential) Credential {
 	}
 	if oauth := item.OAuthMetadata(); oauth != nil {
 		metadata := &OAuthCredentialMetadata{
-			Resource: oauth.Resource, Issuer: oauth.Issuer, ClientID: oauth.ClientID,
+			Resource: oauth.Resource, MCPEndpoint: oauth.MCPEndpoint, Issuer: oauth.Issuer, ClientID: oauth.ClientID,
 			TokenEndpoint: oauth.TokenEndpoint,
 			Scopes:        append([]string{}, oauth.Scopes...), Status: string(oauth.Status),
 		}

@@ -12,6 +12,7 @@ import (
 
 func TestOAuthCredentialCanProveAuthorizationWithoutResolvingBearer(t *testing.T) {
 	ref, _ := credentialdomain.NewReference("oauth", "work")
+	//nolint:gosec // A public client ID in the synthetic OAuth metadata is nonsecret.
 	metadata := credentialdomain.OAuthMetadata{
 		Resource:      "https://mcp.example.test/mcp",
 		Issuer:        "https://id.example.test",

@@ -368,6 +368,7 @@ export interface MCPStatus {
  */
 export interface OAuthCredentialMetadata {
     "resource": string;
+    "mcpEndpoint"?: string;
     "issuer": string;
     "clientId": string;
     "tokenEndpoint": string;

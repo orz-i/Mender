@@ -129,7 +129,7 @@ func (h *Handler) disconnectOAuthCredential(w http.ResponseWriter, r *http.Reque
 		writeAPIError(w, http.StatusBadRequest, "validation_error", err)
 		return
 	}
-	credential, err := h.runtime.Credentials.DisconnectOAuth.Execute(r.Context(), ref)
+	credential, err := h.runtime.Credentials.OAuthFlow.Disconnect(r.Context(), ref)
 	if err != nil {
 		writeKnownError(w, err)
 		return

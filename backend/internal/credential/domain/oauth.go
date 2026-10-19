@@ -19,7 +19,10 @@ const (
 // OAuthMetadata contains only non-secret connection metadata. Tokens, client
 // secrets, authorization codes and PKCE verifiers must never be stored here.
 type OAuthMetadata struct {
-	Resource      string      `json:"resource"`
+	Resource string `json:"resource"`
+	// MCPEndpoint is the single configured HTTP MCP URL that receives tokens.
+	// Resource may be its origin when RFC9728 metadata is hosted at the root.
+	MCPEndpoint   string      `json:"mcpEndpoint,omitempty"`
 	Issuer        string      `json:"issuer"`
 	ClientID      string      `json:"clientId"`
 	TokenEndpoint string      `json:"tokenEndpoint"`
@@ -31,6 +34,11 @@ type OAuthMetadata struct {
 func (m OAuthMetadata) Validate() error {
 	if err := validateOAuthRemoteURL(m.Resource, true); err != nil {
 		return fmt.Errorf("OAuth protected resource: %w", err)
+	}
+	if m.MCPEndpoint != "" {
+		if err := validateOAuthRemoteURL(m.MCPEndpoint, true); err != nil {
+			return fmt.Errorf("OAuth MCP endpoint: %w", err)
+		}
 	}
 	if err := validateOAuthRemoteURL(m.Issuer, false); err != nil {
 		return fmt.Errorf("OAuth issuer: %w", err)

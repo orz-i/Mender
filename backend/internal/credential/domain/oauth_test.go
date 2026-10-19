@@ -14,6 +14,7 @@ func TestOAuthCredentialMetadataValidationAndIsolation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	//nolint:gosec // Public OAuth client ID in synthetic metadata is not a secret.
 	meta := OAuthMetadata{
 		Resource:      "https://mcp.example.test/mcp",
 		Issuer:        "https://accounts.example.test",
@@ -44,6 +45,7 @@ func TestOAuthCredentialMetadataValidationAndIsolation(t *testing.T) {
 	for _, raw := range []OAuthMetadata{
 		{Resource: "http://evil.test/mcp", Issuer: meta.Issuer, TokenEndpoint: meta.TokenEndpoint, ClientID: meta.ClientID, Status: OAuthConnected},
 		{Resource: meta.Resource, Issuer: "http://evil.test", TokenEndpoint: meta.TokenEndpoint, ClientID: meta.ClientID, Status: OAuthConnected},
+		//nolint:gosec // Deliberate insecure test fixture, no real credentials.
 		{Resource: meta.Resource, Issuer: meta.Issuer, TokenEndpoint: "http://evil.test/token", ClientID: meta.ClientID, Status: OAuthConnected},
 		{Resource: meta.Resource, Issuer: meta.Issuer, TokenEndpoint: meta.TokenEndpoint, ClientID: meta.ClientID, Status: "unknown"},
 	} {

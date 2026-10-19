@@ -24,11 +24,19 @@ type CommandConfig struct {
 	Stderr              io.Writer
 }
 
+// OAuthTokenSource is used exclusively by the MCP HTTP adapter; it does not
+// surface bearer tokens through invocation credentials or management APIs.
+type OAuthTokenSource interface {
+	AccessToken(context.Context, credentialdomain.Reference, string) (string, error)
+}
+
 // HTTPConfig configures a remote upstream MCP Provider over Streamable HTTP.
 type HTTPConfig struct {
 	Endpoint            string
 	Headers             map[string]string
 	RequiredCredentials []credentialdomain.Reference
+	OAuthCredentialRef  credentialdomain.Reference
+	OAuthTokens         OAuthTokenSource
 	HTTPClient          *http.Client
 	MaxRetries          int
 }
@@ -78,6 +86,12 @@ func ConnectHTTP(ctx context.Context, config HTTPConfig) (*Connection, error) {
 	if err != nil {
 		return nil, fmt.Errorf("connect MCP HTTP: %w", err)
 	}
+	if config.OAuthCredentialRef != "" {
+		httpClient, err = httpClientWithOAuth(httpClient, endpoint, config.OAuthCredentialRef, config.OAuthTokens)
+		if err != nil {
+			return nil, fmt.Errorf("connect MCP HTTP: %w", err)
+		}
+	}
 
 	transport := &mcp.StreamableClientTransport{
 		Endpoint:             endpoint,
@@ -90,5 +104,8 @@ func ConnectHTTP(ctx context.Context, config HTTPConfig) (*Connection, error) {
 		return nil, err
 	}
 	connection.setRequiredCredentials(config.RequiredCredentials)
+	if config.OAuthCredentialRef != "" {
+		connection.SetOAuthCredentialRef(config.OAuthCredentialRef)
+	}
 	return connection, nil
 }

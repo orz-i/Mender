@@ -411,7 +411,7 @@ func browserVisit(t *testing.T, authorizationURL string) (string, string) {
 	if err != nil {
 		t.Fatalf("authorization URL fetch failed: %v", err)
 	}
-	defer first.Body.Close()
+	defer func() { _ = first.Body.Close() }()
 	location := first.Header.Get("Location")
 	target := authorizationURL
 	if first.StatusCode == http.StatusFound && location != "" {
@@ -421,7 +421,7 @@ func browserVisit(t *testing.T, authorizationURL string) (string, string) {
 	if err != nil {
 		t.Fatalf("callback fetch to %s failed: %v", target, err)
 	}
-	defer second.Body.Close()
+	defer func() { _ = second.Body.Close() }()
 	var body strings.Builder
 	readBuffer := make([]byte, 4096)
 	for {

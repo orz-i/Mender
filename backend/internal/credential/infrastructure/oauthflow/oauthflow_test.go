@@ -19,7 +19,7 @@ func TestHappyPathConnectsCredentialWithoutLeaking(t *testing.T) {
 	repository := newMemoryRepository()
 	secrets := newMemorySecrets()
 	manager := newTestManager(repository, secrets, Options{})
-	defer manager.Close()
+	defer func() { _ = manager.Close() }()
 
 	started, err := manager.Start(context.Background(), baseStartRequest(fake.endpoint))
 	if err != nil {
@@ -157,7 +157,7 @@ func TestBadStateFailsTheFlowClosed(t *testing.T) {
 	repository := newMemoryRepository()
 	secrets := newMemorySecrets()
 	manager := newTestManager(repository, secrets, Options{})
-	defer manager.Close()
+	defer func() { _ = manager.Close() }()
 
 	started, err := manager.Start(context.Background(), baseStartRequest(fake.endpoint))
 	if err != nil {
@@ -193,7 +193,7 @@ func TestCancelClosesFlowAndListener(t *testing.T) {
 	repository := newMemoryRepository()
 	secrets := newMemorySecrets()
 	manager := newTestManager(repository, secrets, Options{})
-	defer manager.Close()
+	defer func() { _ = manager.Close() }()
 
 	started, err := manager.Start(context.Background(), baseStartRequest(fake.endpoint))
 	if err != nil {
@@ -229,7 +229,7 @@ func TestFlowExpiry(t *testing.T) {
 	repository := newMemoryRepository()
 	secrets := newMemorySecrets()
 	manager := newTestManager(repository, secrets, Options{FlowTTL: 400 * time.Millisecond})
-	defer manager.Close()
+	defer func() { _ = manager.Close() }()
 
 	started, err := manager.Start(context.Background(), baseStartRequest(fake.endpoint))
 	if err != nil {
@@ -252,7 +252,7 @@ func TestStartValidationIsFailClosed(t *testing.T) {
 	repository := newMemoryRepository()
 	secrets := newMemorySecrets()
 	manager := newTestManager(repository, secrets, Options{})
-	defer manager.Close()
+	defer func() { _ = manager.Close() }()
 
 	tests := []struct {
 		name     string
@@ -289,11 +289,6 @@ func TestStartValidationIsFailClosed(t *testing.T) {
 				ClientIDMetadataURL: "https://client.example.test/mcp-client.json",
 			},
 			contains: "mutually exclusive",
-		},
-		{
-			name:     "missing client registration",
-			request:  StartRequest{Namespace: "oauth", Name: "work", DisplayName: "W", MCPEndpoint: fake.endpoint},
-			contains: "client ID",
 		},
 		{
 			name: "secret without client id",
@@ -357,7 +352,7 @@ func TestInsecureMetadataEndpointsFailClosed(t *testing.T) {
 			repository := newMemoryRepository()
 			secrets := newMemorySecrets()
 			manager := newTestManager(repository, secrets, Options{})
-			defer manager.Close()
+			defer func() { _ = manager.Close() }()
 
 			_, err := manager.Start(context.Background(), baseStartRequest(fake.endpoint))
 			if err == nil {
@@ -379,7 +374,7 @@ func TestInvalidGrantSanitizesTokenValues(t *testing.T) {
 	repository := newMemoryRepository()
 	secrets := newMemorySecrets()
 	manager := newTestManager(repository, secrets, Options{})
-	defer manager.Close()
+	defer func() { _ = manager.Close() }()
 
 	started, err := manager.Start(context.Background(), baseStartRequest(fake.endpoint))
 	if err != nil {
@@ -439,7 +434,7 @@ func TestSecureHTTPClientPolicy(t *testing.T) {
 	if err != nil {
 		t.Fatalf("bounded fetch failed: %v", err)
 	}
-	defer bounded.Body.Close()
+	defer func() { _ = bounded.Body.Close() }()
 	if _, err := io.ReadAll(bounded.Body); !errors.Is(err, errBodyTooLarge) {
 		t.Fatalf("large body not rejected: %v", err)
 	}
@@ -507,7 +502,7 @@ func forgedCallbackURL(t *testing.T, authorizationURL string) string {
 	if err != nil {
 		t.Fatalf("authorization URL fetch failed: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	location := resp.Header.Get("Location")
 	parsed, err := url.Parse(location)
 	if err != nil {
@@ -526,7 +521,7 @@ func fetchPage(t *testing.T, address string) string {
 	if err != nil {
 		t.Fatalf("fetch %s: %v", address, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		t.Fatalf("read %s: %v", address, err)

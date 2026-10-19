@@ -235,6 +235,7 @@ type Credential struct {
 // OAuthCredentialMetadata contains only safe account and connection metadata.
 type OAuthCredentialMetadata struct {
 	Resource      string   `json:"resource"`
+	MCPEndpoint   string   `json:"mcpEndpoint,omitempty"`
 	Issuer        string   `json:"issuer"`
 	ClientID      string   `json:"clientId"`
 	TokenEndpoint string   `json:"tokenEndpoint"`

@@ -1825,6 +1825,11 @@ export interface components {
         OAuthCredentialMetadata: {
             /** Format: uri */
             resource: string;
+            /**
+             * Format: uri
+             * @description Bound MCP HTTP endpoint; OAuth audience may identify its origin
+             */
+            mcpEndpoint?: string;
             /** Format: uri */
             issuer: string;
             clientId: string;
