@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { MCPServerInstance, MenderClient } from "@mender/sdk";
 import { TooltipProvider } from "@mender/ui/components/tooltip";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -58,6 +58,39 @@ function showServer(
   );
   return { listProfiles, ...view };
 }
+
+it.each([
+  { provider: "openai" as const, label: "OpenAI" },
+  { provider: "external" as const, label: "External plugin" },
+])("shows $provider beneath the Tunnel name, and the live status as the only Tunnel badge", async ({ provider, label }) => {
+  showServer(vi.fn().mockResolvedValue({
+    servers: [{ ...fixture, tunnelDisplayName: "Mender", tunnelProvider: provider, tunnelStatus: "ready" }],
+  }));
+
+  const row = await screen.findByRole("row", { name: /default/ });
+  const tunnelName = within(row).getByText("Mender");
+  const providerLabel = within(row).getByText(label);
+  const status = within(row).getByText("Ready");
+
+  expect(tunnelName.getAttribute("title")).toBe("Mender");
+  expect(providerLabel.closest('[data-slot="badge"]')).toBeNull();
+  expect(status.closest('[data-slot="badge"]')?.className).toContain("bg-accent");
+  expect(row.querySelectorAll('[data-slot="badge"]')).toHaveLength(2); // Server running and Tunnel ready
+  if (provider === "external") {
+    expect(within(row).queryByText("OpenAI")).toBeNull();
+  }
+});
+
+it("does not assume an OpenAI Tunnel provider when provider metadata is absent", async () => {
+  const { tunnelProvider: _provider, ...withoutProvider } = fixture;
+  void _provider;
+  showServer(vi.fn().mockResolvedValue({
+    servers: [{ ...withoutProvider, tunnelDisplayName: "Mender", tunnelStatus: "ready" }],
+  }));
+  const row = await screen.findByRole("row", { name: /default/ });
+  expect(within(row).getByText("Mender")).toBeTruthy();
+  expect(within(row).queryByText("OpenAI")).toBeNull();
+});
 
 it("reconciles Tunnel starting -> ready -> degraded from Mender without manual Refresh", async () => {
   const polling = captureServerStatusPolling();

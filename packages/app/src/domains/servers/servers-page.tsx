@@ -294,21 +294,29 @@ export function ServersPage({
                     </TableCell>
                     <TableCell>
                       {server.tunnelId ? (
-                        <div className="flex min-w-0 flex-col gap-1">
-                          <span className="max-w-[180px] truncate text-sm font-medium">
-                            {server.tunnelDisplayName ?? t("OpenAI Tunnel")}
-                          </span>
-                          <div className="flex gap-1.5">
-                            <Badge variant="outline">{t("OpenAI")}</Badge>
+                        <div className="flex min-w-0 max-w-[220px] flex-col gap-1">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <span
+                              className="min-w-0 truncate text-sm font-medium"
+                              title={server.tunnelDisplayName || t("Tunnel")}
+                            >
+                              {server.tunnelDisplayName || t("Tunnel")}
+                            </span>
                             {server.tunnelStatus ? (
                               <Badge
                                 variant={tunnelStatusVariant(server.tunnelStatus)}
+                                className="shrink-0"
                                 aria-live="polite"
                               >
                                 {tunnelStatusLabel(server.tunnelStatus)}
                               </Badge>
                             ) : null}
                           </div>
+                          {server.tunnelProvider ? (
+                            <span className="truncate text-xs text-muted-foreground">
+                              {server.tunnelProvider === "external" ? t("External plugin") : t("OpenAI")}
+                            </span>
+                          ) : null}
                         </div>
                       ) : (
                         <span className="text-sm text-muted-foreground">

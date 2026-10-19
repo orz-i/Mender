@@ -501,7 +501,6 @@ export const zhCNMessages: Readonly<Record<string, string>> = {
   "No Tunnels": "暂无隧道",
   "Add a Tunnel to make a managed local Profile MCP server reachable from external clients.": "添加隧道，让受管理的本地配置档 MCP 服务器可被外部客户端访问。",
   "OpenAI": "OpenAI",
-  "OpenAI Tunnel": "OpenAI 隧道",
   "Runtime credential": "运行时凭据",
   "Runtime API-key Credential": "运行时 API Key 凭据",
   "Create tunnel": "创建隧道",
