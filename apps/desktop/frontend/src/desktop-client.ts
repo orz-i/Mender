@@ -666,6 +666,10 @@ export function createDesktopMenderClient(): MenderClient {
       );
     },
 
+    async disconnectOAuthCredential(namespace, name) {
+      return credential(await Service.DisconnectOAuthCredential(namespace, name));
+    },
+
     async deleteCredential(namespace, name) {
       await Service.DeleteCredential(namespace, name);
     },

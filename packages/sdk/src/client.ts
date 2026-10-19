@@ -309,6 +309,7 @@ export interface MenderClient {
     name: string,
     body: RotateCredentialRequest,
   ): Promise<Credential>;
+  disconnectOAuthCredential(namespace: string, name: string): Promise<Credential>;
   deleteCredential(namespace: string, name: string): Promise<void>;
 }
 
@@ -904,6 +905,13 @@ export function createMenderClient(
       const result = await client.POST("/credentials/{namespace}/{name}/rotate", {
         params: { path: { namespace, name } },
         body,
+      });
+      return requireData(result);
+    },
+
+    async disconnectOAuthCredential(namespace: string, name: string) {
+      const result = await client.POST("/credentials/{namespace}/{name}/disconnect", {
+        params: { path: { namespace, name } },
       });
       return requireData(result);
     },

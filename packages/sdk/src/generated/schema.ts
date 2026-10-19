@@ -1611,6 +1611,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/credentials/{namespace}/{name}/disconnect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Revoke local OAuth token and require authorization without deleting Provider/Profile references. */
+        post: operations["disconnectOAuthCredential"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -5707,6 +5724,31 @@ export interface operations {
         };
         responses: {
             /** @description Credential metadata after rotation */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Credential"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    disconnectOAuthCredential: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                namespace: components["parameters"]["CredentialNamespace"];
+                name: components["parameters"]["CredentialName"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OAuth Credential disconnected */
             200: {
                 headers: {
                     [name: string]: unknown;

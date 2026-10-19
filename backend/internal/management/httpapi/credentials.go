@@ -123,6 +123,20 @@ func (h *Handler) rotateCredential(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, credentialProjection(credential))
 }
 
+func (h *Handler) disconnectOAuthCredential(w http.ResponseWriter, r *http.Request) {
+	ref, err := credentialReferenceFromRequest(r)
+	if err != nil {
+		writeAPIError(w, http.StatusBadRequest, "validation_error", err)
+		return
+	}
+	credential, err := h.runtime.Credentials.DisconnectOAuth.Execute(r.Context(), ref)
+	if err != nil {
+		writeKnownError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, credentialProjection(credential))
+}
+
 func (h *Handler) deleteCredential(w http.ResponseWriter, r *http.Request) {
 	ref, err := credentialReferenceFromRequest(r)
 	if err != nil {

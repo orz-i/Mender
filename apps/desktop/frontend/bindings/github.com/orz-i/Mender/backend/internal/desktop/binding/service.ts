@@ -156,6 +156,10 @@ export function DisableSkillInstallation(installationID: string): $CancellablePr
     return $Call.ByID(3452175237, installationID);
 }
 
+export function DisconnectOAuthCredential($namespace: string, name: string): $CancellablePromise<$models.Credential> {
+    return $Call.ByID(1588975408, $namespace, name);
+}
+
 export function EnablePluginInstallation(id: string): $CancellablePromise<$models.ProviderPluginInstallation> {
     return $Call.ByID(3698993472, id);
 }

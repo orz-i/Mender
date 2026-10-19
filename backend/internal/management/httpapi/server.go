@@ -67,6 +67,7 @@ func (h *Handler) routes() {
 	h.mux.HandleFunc("POST /api/v1/credentials/environment", h.createEnvironmentCredential)
 	h.mux.HandleFunc("GET /api/v1/credentials/{namespace}/{name}", h.getCredential)
 	h.mux.HandleFunc("POST /api/v1/credentials/{namespace}/{name}/rotate", h.rotateCredential)
+	h.mux.HandleFunc("POST /api/v1/credentials/{namespace}/{name}/disconnect", h.disconnectOAuthCredential)
 	h.mux.HandleFunc("DELETE /api/v1/credentials/{namespace}/{name}", h.deleteCredential)
 
 	h.mux.HandleFunc("GET /api/v1/plugins", h.listPluginCatalogue)

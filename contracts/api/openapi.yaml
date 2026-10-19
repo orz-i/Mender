@@ -1896,6 +1896,21 @@ paths:
               schema: { $ref: '#/components/schemas/Credential' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '404': { $ref: '#/components/responses/NotFound' }
+  /credentials/{namespace}/{name}/disconnect:
+    post:
+      operationId: disconnectOAuthCredential
+      description: Revoke local OAuth token and require authorization without deleting Provider/Profile references.
+      parameters:
+        - $ref: '#/components/parameters/CredentialNamespace'
+        - $ref: '#/components/parameters/CredentialName'
+      responses:
+        '200':
+          description: OAuth Credential disconnected
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Credential' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
 components:
   parameters:
     SandboxId:

@@ -562,6 +562,18 @@ func (s *Service) RotateNativeCredential(
 	return credentialProjection(item), nil
 }
 
+func (s *Service) DisconnectOAuthCredential(namespace string, name string) (Credential, error) {
+	ref, err := credentialdomain.NewReference(namespace, name)
+	if err != nil {
+		return Credential{}, err
+	}
+	item, err := s.runtime.Credentials.DisconnectOAuth.Execute(s.ctx, ref)
+	if err != nil {
+		return Credential{}, err
+	}
+	return credentialProjection(item), nil
+}
+
 func (s *Service) DeleteCredential(namespace string, name string) error {
 	ref, err := credentialdomain.NewReference(namespace, name)
 	if err != nil {
