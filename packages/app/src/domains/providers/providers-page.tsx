@@ -1561,7 +1561,13 @@ function ProviderAuthenticationDialog({
   onSubmit: () => void;
   submitLabel: string;
 }) {
-  const firstCredential = credentials[0]?.reference ?? "";
+  const staticCredentials = credentials.filter((item) => item.source !== "oauth");
+  const oauthCredentials = credentials.filter((item) => item.source === "oauth");
+  const firstCredential = staticCredentials[0]?.reference ?? "";
+  const oauthAuthorizationConflict = Boolean(form.oauthCredentialRef) && (
+    form.headers.split("\n").some((line) => /^\s*authorization\s*:/i.test(line)) ||
+    form.credentialHeaders.some((binding) => binding.name.trim().toLowerCase() === "authorization")
+  );
 
   function addHTTPBinding() {
     if (!firstCredential) {
@@ -1645,7 +1651,7 @@ function ProviderAuthenticationDialog({
                     <option value="" disabled>
                       {t("Choose a Credential")}
                     </option>
-                    {credentials.map((item) => (
+                    {staticCredentials.map((item) => (
                       <option key={item.reference} value={item.reference}>
                         {item.displayName} · {item.reference}
                       </option>
@@ -1709,7 +1715,7 @@ function ProviderAuthenticationDialog({
                           }
                           className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus:ring-2 focus:ring-ring/40"
                         >
-                          {credentials.map((item) => (
+                          {staticCredentials.map((item) => (
                             <option key={item.reference} value={item.reference}>
                               {item.displayName} · {item.reference}
                             </option>
@@ -1747,6 +1753,24 @@ function ProviderAuthenticationDialog({
               </>
             ) : form.transport === "http" ? (
               <>
+                <Field label="OAuth Credential">
+                  <select
+                    aria-label={t("OAuth Credential")}
+                    value={form.oauthCredentialRef}
+                    onChange={(event) => onChange({ ...form, oauthCredentialRef: event.target.value })}
+                    className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus:ring-2 focus:ring-ring/40"
+                  >
+                    <option value="">{t("No OAuth credential")}</option>
+                    {oauthCredentials.map((item) => (
+                      <option key={item.reference} value={item.reference}>
+                        {item.displayName} · {item.oauth?.status === "connected" ? t("Connected") : item.oauth?.status === "expired" ? t("Expired") : t("Authorization required")}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                {oauthAuthorizationConflict ? (
+                  <p role="alert" className="text-xs text-destructive">{t("OAuth cannot share an Authorization header. Remove the existing Authorization binding first.")}</p>
+                ) : null}
                 {form.headers.trim() ? (
                   <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs leading-5 text-muted-foreground">
                     {t("Legacy HTTP header templates are still configured. They remain compatible but are not governed by Profile Credential scope. Prefer inventory-backed bindings below.")}
@@ -1820,7 +1844,7 @@ function ProviderAuthenticationDialog({
                           }
                           className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus:ring-2 focus:ring-ring/40"
                         >
-                          {credentials.map((item) => (
+                          {staticCredentials.map((item) => (
                             <option key={item.reference} value={item.reference}>
                               {item.displayName} · {item.reference}
                             </option>
@@ -1907,7 +1931,7 @@ function ProviderAuthenticationDialog({
                           }
                           className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus:ring-2 focus:ring-ring/40"
                         >
-                          {credentials.map((item) => (
+                          {staticCredentials.map((item) => (
                             <option key={item.reference} value={item.reference}>
                               {item.displayName} · {item.reference}
                             </option>
@@ -1958,7 +1982,7 @@ function ProviderAuthenticationDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             {t("Cancel")}
           </Button>
-          <Button disabled={busy} onClick={onSubmit}>
+          <Button disabled={busy || oauthAuthorizationConflict} onClick={onSubmit}>
             {busy ? t("Saving…") : t(submitLabel)}
           </Button>
         </DialogFooter>

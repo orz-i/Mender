@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { RefreshCwIcon, Trash2Icon } from "lucide-react";
+import { RefreshCwIcon, Trash2Icon, UnplugIcon } from "lucide-react";
 
 import type { Credential, MenderClient } from "@mender/sdk";
 import { Badge } from "@mender/ui/components/badge";
@@ -108,7 +108,7 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
   const visibleCredentials = useMemo(() => {
     const needle = inventoryQuery.trim().toLocaleLowerCase();
     return needle ? credentials.filter((item) =>
-      [item.displayName, item.namespace, item.name, item.source, item.environmentVariable ?? ""]
+      [item.displayName, item.namespace, item.name, item.source, item.environmentVariable ?? "", item.oauth?.resource ?? "", item.oauth?.status ?? ""]
         .some((value) => value.toLocaleLowerCase().includes(needle))
     ) : credentials;
   }, [credentials, inventoryQuery]);
@@ -195,6 +195,21 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
     }
   }
 
+  async function disconnectOAuth(item: Credential) {
+    if (item.source !== "oauth" || item.oauth?.status !== "connected" || busy !== "") return;
+    if (!window.confirm(t('Disconnect OAuth Credential "{{name}}"? Reauthorization will be required.', { name: item.displayName }))) return;
+    setBusy(item.reference);
+    setError("");
+    try {
+      await client.disconnectOAuthCredential(item.namespace, item.name);
+      await refresh();
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
+      setBusy("");
+    }
+  }
+
   async function remove(item: Credential) {
     if (
       !window.confirm(
@@ -256,15 +271,31 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
                       {item.displayName}
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline">{item.namespace === "ssh" ? t("SSH private key") : t(item.source)}</Badge>
+                      <Badge variant="outline">
+                        {item.source === "oauth"
+                          ? `OAuth · ${item.oauth?.status === "connected" ? t("Connected") : item.oauth?.status === "expired" ? t("Expired") : t("Authorization required")}`
+                          : item.namespace === "ssh" ? t("SSH private key") : t(item.source)}
+                      </Badge>
                     </TableCell>
                     <TableCell className="font-mono text-xs text-muted-foreground">
-                      {item.source === "environment"
-                        ? item.environmentVariable
-                        : t("OS credential store")}
+                      {item.source === "oauth"
+                        ? <span className="block max-w-64 truncate" title={item.oauth?.resource}>{item.oauth?.resource || "—"}</span>
+                        : item.source === "environment"
+                          ? item.environmentVariable
+                          : t("OS credential store")}
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
+                        {item.source === "oauth" && item.oauth?.status === "connected" ? (
+                          <IconButton
+                            variant="outline"
+                            label={t("Disconnect OAuth")}
+                            disabled={busy !== ""}
+                            onClick={() => void disconnectOAuth(item)}
+                          >
+                            <UnplugIcon />
+                          </IconButton>
+                        ) : null}
                         {item.source === "native" ? (
                           <IconButton
                             variant="outline"

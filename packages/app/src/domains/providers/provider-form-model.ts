@@ -35,6 +35,7 @@ export interface ProviderFormState {
   endpoint: string;
   headers: string;
   credentialHeaders: CredentialHeaderBinding[];
+  oauthCredentialRef: string;
   importJson: string;
   executable: string;
   args: string;
@@ -81,6 +82,7 @@ export const emptyProviderForm: ProviderFormState = {
   endpoint: "",
   headers: "",
   credentialHeaders: [],
+  oauthCredentialRef: "",
   importJson: "",
   executable: "",
   args: "",
@@ -124,6 +126,7 @@ export function formFromProvider(provider: Provider): ProviderFormState {
     endpoint: provider.endpoint ?? "",
     headers: formatHeaders(provider.headers ?? {}),
     credentialHeaders: [...(provider.credentialHeaders ?? [])],
+    oauthCredentialRef: provider.oauthCredentialRef ?? "",
     importJson: "",
     executable: provider.executable ?? "",
     args: provider.args?.join("\n") ?? "",
@@ -213,6 +216,12 @@ export function configFromForm(form: ProviderFormState): Record<string, unknown>
   }
   if (form.transport === "http") {
     const headers = parseHeaders(form.headers);
+    if (form.oauthCredentialRef && (
+      Object.keys(headers).some((name) => name.toLowerCase() === "authorization") ||
+      form.credentialHeaders.some((binding) => binding.name.trim().toLowerCase() === "authorization")
+    )) {
+      throw new Error(t("OAuth cannot share an Authorization header. Remove the existing Authorization binding first."));
+    }
     return {
       transport: {
         kind: "streamable-http",
@@ -220,6 +229,9 @@ export function configFromForm(form: ProviderFormState): Record<string, unknown>
         ...(Object.keys(headers).length ? { headers } : {}),
         ...(form.credentialHeaders.length
           ? { credentialHeaders: form.credentialHeaders }
+          : {}),
+        ...(form.oauthCredentialRef
+          ? { oauthCredentialRef: form.oauthCredentialRef }
           : {}),
       },
     };

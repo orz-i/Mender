@@ -53,6 +53,32 @@ describe("pure Provider form adapters", () => {
       .toThrow("Paste a configuration containing exactly one MCP server.");
   });
 
+  it("roundtrips an OAuth MCP Credential without mixing static Authorization headers", () => {
+    const ref = "credential://oauth/work";
+    const form = { ...emptyProviderForm, endpoint: "https://mcp.example.test/mcp", oauthCredentialRef: ref };
+    expect(configFromForm(form)).toEqual({
+      transport: { kind: "streamable-http", endpoint: form.endpoint, oauthCredentialRef: ref },
+    });
+    const existing = {
+      providerId: "prov_fixture", namespace: "work", displayName: "OAuth MCP",
+      description: "", transport: "http", pluginId: MCP_PLUGIN_ID,
+      endpoint: form.endpoint, oauthCredentialRef: ref, credentialHeaders: [],
+    } as unknown as Provider;
+    expect(formFromProvider(existing).oauthCredentialRef).toBe(ref);
+    expect(configFromForm(formFromProvider(existing))).toMatchObject({
+      transport: { oauthCredentialRef: ref },
+    });
+    expect(() => configFromForm({ ...form, headers: "Authorization: Bearer ${TOKEN}" }))
+      .toThrow("OAuth cannot share an Authorization header.");
+    expect(() => configFromForm({
+      ...form, credentialHeaders: [{ name: "authorization", scheme: "Bearer", credentialRef: "credential://demo/api" }],
+    })).toThrow("OAuth cannot share an Authorization header.");
+    expect(configFromForm({ ...form, credentialHeaders: [{ name: "X-Tenant", scheme: "", credentialRef: "credential://demo/tenant" }] }))
+      .toMatchObject({ transport: { oauthCredentialRef: ref } });
+    expect(configFromForm({ ...form, transport: "stdio", executable: "mcp-server" }))
+      .not.toHaveProperty("transport.oauthCredentialRef");
+  });
+
   it("maps OpenAPI operations and credentials explicitly, refusing duplicate Security Schemes", () => {
     const form = {
       ...emptyProviderForm, pluginId: OPENAPI_PLUGIN_ID,
