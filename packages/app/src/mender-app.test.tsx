@@ -67,7 +67,7 @@ describe("MenderApp", () => {
     }
   });
 
-  it("opens a textual mobile menu and closes it when a destination is selected", async () => {
+  it("opens a textual mobile menu and closes it when a destination is selected", () => {
     const client = {
       ...overviewClient(),
       listPluginCatalogue: vi.fn().mockResolvedValue({ plugins: [] }),

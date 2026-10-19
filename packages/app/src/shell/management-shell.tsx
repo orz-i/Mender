@@ -102,29 +102,13 @@ export function ManagementShell({ client }: { client: MenderClient }) {
   const [runtimeReady, setRuntimeReady] = useState<boolean | null>(null);
   const [commandOpen, setCommandOpen] = useState(false);
   const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
-  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(navigation.map((group, index) => [
-      group.label,
-      index === 0 || group.items.some((item) => item.to === location.pathname ||
-        (item.to !== "/" && location.pathname.startsWith(item.to + "/"))),
-    ])),
-  );
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, { pathname: string; open: boolean }>>({});
   const [query, setQuery] = useState("");
   const [pendingApprovalCount, setPendingApprovalCount] = useState(0);
 
   useEffect(() => {
     window.localStorage.setItem(SIDEBAR_STORAGE_KEY, String(collapsed));
   }, [collapsed]);
-
-  useEffect(() => {
-    const group = navigation.find((candidate) => candidate.items.some((item) =>
-      item.to === location.pathname || (item.to !== "/" && location.pathname.startsWith(item.to + "/")),
-    ));
-    if (group) {
-      setExpandedGroups((current) => current[group.label] ? current : { ...current, [group.label]: true });
-    }
-    setMobileNavigationOpen(false);
-  }, [location.pathname]);
 
   useEffect(() => {
     let active = true;
@@ -177,8 +161,17 @@ export function ManagementShell({ client }: { client: MenderClient }) {
       )
     : visibleNavigation;
 
+  function groupExpanded(group: NavigationGroup) {
+    const override = expandedGroups[group.label];
+    if (override?.pathname === location.pathname) return override.open;
+    return group.label === "Workspace" || group.items.some((item) =>
+      item.to === location.pathname || (item.to !== "/" && location.pathname.startsWith(item.to + "/")),
+    );
+  }
+
   function goTo(to: string) {
     void navigate(to);
+    setMobileNavigationOpen(false);
     setCommandOpen(false);
     setQuery("");
   }
@@ -270,21 +263,22 @@ export function ManagementShell({ client }: { client: MenderClient }) {
               {!collapsed ? (
                 <button
                   type="button"
-                  aria-expanded={!!expandedGroups[group.label]}
+                  aria-expanded={groupExpanded(group)}
                   aria-controls={`nav-group-${groupIndex}`}
                   onClick={() => setExpandedGroups((current) => ({
-                    ...current, [group.label]: !current[group.label],
+                    ...current,
+                    [group.label]: { pathname: location.pathname, open: !groupExpanded(group) },
                   }))}
                   className="mb-2 flex h-8 w-full items-center justify-between rounded-lg px-3 text-left text-xs font-medium text-muted-foreground hover:bg-muted/70 hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
                 >
                   {t(group.label)}
-                  <ChevronDownIcon className={["size-3.5 transition-transform", expandedGroups[group.label] ? "rotate-180" : ""].join(" ")} aria-hidden="true" />
+                  <ChevronDownIcon className={["size-3.5 transition-transform", groupExpanded(group) ? "rotate-180" : ""].join(" ")} aria-hidden="true" />
                 </button>
               ) : groupIndex > 0 ? (
                 <div className="mx-2 mb-3 border-t border-border/80" />
               ) : null}
               <div id={`nav-group-${groupIndex}`} className="flex flex-col gap-1">
-                {(collapsed || expandedGroups[group.label] ? group.items.filter(item=>item.to!=="/approvals"||client.supportsLocalAgentApprovals===true) : []).map((item) => {
+                {(collapsed || groupExpanded(group) ? group.items.filter(item=>item.to!=="/approvals"||client.supportsLocalAgentApprovals===true) : []).map((item) => {
                   const Icon = item.icon;
                   const link = (
                     <NavLink
