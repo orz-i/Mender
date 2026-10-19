@@ -404,6 +404,8 @@ export function createDesktopMenderClient(): MenderClient {
       return {events:(result.events??[]).map(agentAdmissionEvent)};
     },
     async getAgentTask(taskId){return agentTask(await Service.GetAgentTask(taskId));},
+    async reviewUnknownAgentTask(taskId,handling){return agentTask(await Service.ReviewUnknownAgentTask(taskId,handling));},
+    async resumeAgentTask(taskId,prompt){return agentTask(await Service.ResumeAgentTask(taskId,prompt));},
     async listAgentApprovals(taskId){const data=await Service.ListAgentApprovals(taskId);
       return {approvals:(data.approvals??[]).map(agentApproval)};},
     async decideAgentApproval(approvalId,choice){return agentApproval(await Service.DecideAgentApproval(approvalId,choice));},
@@ -1015,7 +1017,20 @@ function pendingAgentApproval(value:BindingAgentPendingApproval):PendingAgentApp
   return {...value,approval:agentApproval(value.approval)};
 }
 function agentTask(value:BindingAgentTask):AgentTask {
-  const {observation,...task}=value;
+  const {observation,disposition,resumeAvailability,...task}=value;
+  if(disposition&&disposition.handling!=="handled_elsewhere"&&disposition.handling!=="needs_review"){
+    throw new MenderClientInvariantError("Unknown Agent Task handling: "+disposition.handling);
+  }
+  const allowedReasons=["candidate","unknown_outcome","not_completed","original_profile_required",
+    "backend_unavailable","restricted_session","workspace_changed","native_session_unavailable"] as const;
+  if(resumeAvailability&&!allowedReasons.some(reason=>reason===resumeAvailability.reason)){
+    throw new MenderClientInvariantError("Unknown Agent resume availability reason: "+resumeAvailability.reason);
+  }
+  const detail={
+    ...(disposition?{disposition:{...disposition,handling:disposition.handling as NonNullable<AgentTask["disposition"]>["handling"]}}:{}),
+    ...(resumeAvailability?{resumeAvailability:{eligible:resumeAvailability.eligible,
+      reason:resumeAvailability.reason as NonNullable<AgentTask["resumeAvailability"]>["reason"]}}:{}),
+  };
   if(observation){
     const {phase,activity,sessionRecoverability}=observation;
     if(phase!=="reserved"&&phase!=="process_started"&&phase!=="session_ready"&&
@@ -1031,13 +1046,13 @@ function agentTask(value:BindingAgentTask):AgentTask {
     switch(value.status){
       case "queued":case "running":case "completed":case "failed":
       case "cancelled":case "unknown":
-        return {...task,status:value.status,observation:{...observation,phase,activity,sessionRecoverability}};
+        return {...task,...detail,status:value.status,observation:{...observation,phase,activity,sessionRecoverability}};
       default:throw new MenderClientInvariantError("Unknown Agent Task status: "+value.status);
     }
   }
   switch(value.status){
     case "queued":case "running":case "completed":case "failed":
-    case "cancelled":case "unknown":return {...task,status:value.status};
+    case "cancelled":case "unknown":return {...task,...detail,status:value.status};
     default:throw new MenderClientInvariantError("Unknown Agent Task status: "+value.status);
   }
 }

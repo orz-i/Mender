@@ -88,7 +88,7 @@ func TestAgentNativeResumeV14MigrationPreservesHistoricalAuditAndUnknownTask(t *
 		t.Fatal("audit data became mutable after v15")
 	}
 	var version int
-	if err := s.db.QueryRowContext(ctx, "SELECT MAX(version) FROM agent_schema_migrations").Scan(&version); err != nil || version != 15 {
+	if err := s.db.QueryRowContext(ctx, "SELECT MAX(version) FROM agent_schema_migrations").Scan(&version); err != nil || version != 16 {
 		t.Fatalf("incorrect migrated version %d %v", version, err)
 	}
 	var healthy string
@@ -106,6 +106,10 @@ func downgradeNativeResumeFixtureToV14(t *testing.T, path string) {
 		t.Fatal(err)
 	}
 	for _, stmt := range []string{
+		"DROP TRIGGER IF EXISTS agent_unknown_disposition_no_update",
+		"DROP TRIGGER IF EXISTS agent_unknown_disposition_no_delete",
+		"DROP TABLE IF EXISTS agent_unknown_dispositions",
+		"DELETE FROM agent_schema_migrations WHERE version=16",
 		"DROP TRIGGER agent_continuation_no_update",
 		"DROP TRIGGER agent_continuation_no_delete",
 		"DROP TABLE agent_task_continuations",

@@ -138,6 +138,8 @@ var taskOutput = []byte(`{"type":"object","additionalProperties":false,"required
 	"properties":{"taskId":{"type":"string"},"status":{"type":"string"},"cancelRequested":{"type":"boolean"},
 	"result":{"type":"string"},"diagnostic":{"type":"string"},
 	"continuedFromTaskId":{"type":"string"},
+	"disposition":{"type":"object","additionalProperties":false,
+	"required":["handling","recordedAt"],"properties":{"handling":{"type":"string","enum":["handled_elsewhere","needs_review"]},"recordedAt":{"type":"string"}}},
 	"observation":{"type":"object","additionalProperties":false,
 	"properties":{"phase":{"type":"string"},"activity":{"type":"string"},
 	"lastObservedAt":{"type":"string"},"lastWorkerHeartbeatAt":{"type":"string"},"sessionRecorded":{"type":"boolean"},
@@ -248,6 +250,9 @@ func (i *Instance) Execute(ctx context.Context, req invocationapplication.Execut
 		data := map[string]any{"taskId": id, "status": task.Status, "cancelRequested": task.CancelRequested}
 		if task.ContinuedFromTaskID != "" {
 			data["continuedFromTaskId"] = task.ContinuedFromTaskID
+		}
+		if task.Disposition != nil {
+			data["disposition"] = task.Disposition
 		}
 		if task.Observation != nil {
 			data["observation"] = task.Observation

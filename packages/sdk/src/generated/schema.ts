@@ -800,6 +800,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/agent-tasks/{taskId}/disposition": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** @description Owner-only audited handling annotation for an unknown Task; never changes its outcome or executes an Agent */
+        put: operations["reviewUnknownAgentTask"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agent-tasks/{taskId}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Explicit new owner-origin Task continuing a proven-complete native Session, never an unknown Task */
+        post: operations["resumeAgentTask"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/agent-tasks/{taskId}/cancel": {
         parameters: {
             query?: never;
@@ -2317,6 +2351,27 @@ export interface components {
             observation?: components["schemas"]["AgentTaskObservation"];
             /** @description Immutable lineage to prior AgentTask; not its native SessionID */
             continuedFromTaskId?: string;
+            disposition?: components["schemas"]["AgentUnknownDisposition"];
+            resumeAvailability?: components["schemas"]["AgentResumeAvailability"];
+        };
+        AgentUnknownDisposition: {
+            /** @enum {string} */
+            handling: "handled_elsewhere" | "needs_review";
+            /** Format: date-time */
+            recordedAt: string;
+        };
+        AgentUnknownDispositionRequest: {
+            /** @enum {string} */
+            handling: "handled_elsewhere" | "needs_review";
+        };
+        AgentResumeAvailability: {
+            /** @description Owner-only read-only preview; not an execution authorization */
+            eligible: boolean;
+            /** @enum {string} */
+            reason: "candidate" | "unknown_outcome" | "not_completed" | "original_profile_required" | "backend_unavailable" | "restricted_session" | "workspace_changed" | "native_session_unavailable";
+        };
+        AgentResumeRequest: {
+            prompt: string;
         };
         AgentTaskObservation: {
             /** @enum {string} */
@@ -4145,6 +4200,64 @@ export interface operations {
                 };
             };
             404: components["responses"]["NotFound"];
+        };
+    };
+    reviewUnknownAgentTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                taskId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentUnknownDispositionRequest"];
+            };
+        };
+        responses: {
+            /** @description Original immutable Task outcome with separately recorded owner disposition */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentTask"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    resumeAgentTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                taskId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentResumeRequest"];
+            };
+        };
+        responses: {
+            /** @description New bounded Task admitted; source Task outcome remains unchanged */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentTask"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
         };
     };
     cancelAgentTask: {

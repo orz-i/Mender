@@ -134,6 +134,8 @@ func (h *Handler) routes() {
 	h.mux.HandleFunc("DELETE /api/v1/agents/{agentId}/profile-grants/{profileId}", h.revokeAgentProfile)
 	h.mux.HandleFunc("GET /api/v1/agent-tasks/{taskId}", h.getAgentTask)
 	h.mux.HandleFunc("POST /api/v1/agent-tasks/{taskId}/cancel", h.cancelAgentTask)
+	h.mux.HandleFunc("PUT /api/v1/agent-tasks/{taskId}/disposition", h.reviewUnknownAgentTask)
+	h.mux.HandleFunc("POST /api/v1/agent-tasks/{taskId}/resume", h.resumeAgentTask)
 	h.mux.HandleFunc("GET /api/v1/sandboxes", h.listSandboxes)
 	h.mux.HandleFunc("POST /api/v1/sandboxes/local", h.createLocalSandbox)
 	h.mux.HandleFunc("GET /api/v1/sandboxes/backends", h.sandboxBackends)

@@ -229,6 +229,8 @@ export interface MenderClient {
   listAgentTasks(agentId:string): Promise<{tasks:AgentTask[]}>;
   listAgentAdmissions(agentId:string):Promise<{events:AgentAdmissionEvent[]}>;
   getAgentTask(taskId:string): Promise<AgentTask>;
+  reviewUnknownAgentTask(taskId:string,handling:"handled_elsewhere"|"needs_review"):Promise<AgentTask>;
+  resumeAgentTask(taskId:string,prompt:string):Promise<AgentTask>;
   listAgentApprovals(taskId:string):Promise<{approvals:AgentApproval[]}>;
   decideAgentApproval(approvalId:string,choice:"allow_once"|"reject"):Promise<AgentApproval>;
   listPendingAgentApprovals():Promise<{approvals:PendingAgentApproval[]}>;
@@ -621,6 +623,8 @@ export function createMenderClient(
     async listAgentTasks(agentId){return requireData(await client.GET("/agents/{agentId}/tasks",{params:{path:{agentId}}}));},
     async listAgentAdmissions(agentId){return requireData(await client.GET("/agents/{agentId}/admissions",{params:{path:{agentId}}}));},
     async getAgentTask(taskId){return requireData(await client.GET("/agent-tasks/{taskId}",{params:{path:{taskId}}}));},
+    async reviewUnknownAgentTask(taskId,handling){return requireData(await client.PUT("/agent-tasks/{taskId}/disposition",{params:{path:{taskId}},body:{handling}}));},
+    async resumeAgentTask(taskId,prompt){return requireData(await client.POST("/agent-tasks/{taskId}/resume",{params:{path:{taskId}},body:{prompt}}));},
     listAgentApprovals(){return Promise.reject(new Error("ACP approval requires the locally authenticated Mender desktop owner"));},
     decideAgentApproval(){return Promise.reject(new Error("ACP approval requires the locally authenticated Mender desktop owner"));},
     listPendingAgentApprovals(){return Promise.reject(new Error("ACP approval inbox requires the locally authenticated Mender desktop owner"));},

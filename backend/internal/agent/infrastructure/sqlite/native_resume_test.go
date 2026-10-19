@@ -257,7 +257,7 @@ func TestNativeResumeForwardMigrationPreservesAdmissionAndNoHiddenGrants(t *test
 	}
 	defer func() { _ = s.Close() }()
 	var version int
-	if err := s.db.QueryRowContext(ctx, "SELECT MAX(version) FROM agent_schema_migrations").Scan(&version); err != nil || version != 15 {
+	if err := s.db.QueryRowContext(ctx, "SELECT MAX(version) FROM agent_schema_migrations").Scan(&version); err != nil || version != 16 {
 		t.Fatalf("missing v15 %d %v", version, err)
 	}
 	// New action is permitted only to an explicit governance decision.

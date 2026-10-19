@@ -12,6 +12,10 @@ import (
 func stripExecutionEvidenceV14Fixture(t *testing.T, db *sql.DB) {
 	t.Helper()
 	for _, statement := range []string{
+		"DROP TRIGGER IF EXISTS agent_unknown_disposition_no_update",
+		"DROP TRIGGER IF EXISTS agent_unknown_disposition_no_delete",
+		"DROP TABLE IF EXISTS agent_unknown_dispositions",
+		"DELETE FROM agent_schema_migrations WHERE version=16",
 		"DROP TRIGGER IF EXISTS agent_continuation_no_update",
 		"DROP TRIGGER IF EXISTS agent_continuation_no_delete",
 		"DROP TABLE IF EXISTS agent_task_continuations",
