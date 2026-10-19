@@ -89,7 +89,7 @@ func TestGovernedCanonicalAgentDelegationToolFixture(t *testing.T) {
 	for _, tool := range tools {
 		ids[tool.SourceKey()] = tool.ID()
 	}
-	if len(ids) != 4 || ids["agent.delegate"] == "" || ids["agent.status"] == "" {
+	if len(ids) != 5 || ids["agent.delegate"] == "" || ids["agent.status"] == "" {
 		t.Fatalf("Agent facade Tools = %v", ids)
 	}
 

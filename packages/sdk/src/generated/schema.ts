@@ -2315,6 +2315,8 @@ export interface components {
             result?: string;
             diagnostic?: string;
             observation?: components["schemas"]["AgentTaskObservation"];
+            /** @description Immutable lineage to prior AgentTask; not its native SessionID */
+            continuedFromTaskId?: string;
         };
         AgentTaskObservation: {
             /** @enum {string} */
@@ -2336,7 +2338,7 @@ export interface components {
         AgentAdmissionEvent: {
             agentId: string;
             /** @enum {string} */
-            action: "agent.activate" | "agent.task.submit" | "agent.task.cancel";
+            action: "agent.activate" | "agent.task.submit" | "agent.task.resume" | "agent.task.cancel";
             /** @enum {string} */
             principalKind: "local_user" | "service";
             /** @enum {string} */

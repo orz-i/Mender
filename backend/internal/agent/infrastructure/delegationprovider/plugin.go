@@ -28,6 +28,7 @@ const (
 	sourceStatus   = "agent.status"
 	sourceResult   = "agent.result"
 	sourceCancel   = "agent.cancel"
+	sourceResume   = "agent.resume"
 )
 
 var configSchema = json.RawMessage(`{"type":"object","additionalProperties":false,
@@ -72,7 +73,7 @@ func (*Plugin) Descriptor() providerplugin.Descriptor {
 	return providerplugin.Descriptor{ID: ID, Version: "1.0.0", DisplayName: "Agent Delegation Tools",
 		Description:   "Delegate tasks to one explicitly configured Agent and retrieve governed results",
 		ConfigVersion: ConfigVersion, ConfigSchema: slices.Clone(configSchema),
-		Capabilities: []string{sourceDelegate, sourceStatus, sourceResult, sourceCancel}}
+		Capabilities: []string{sourceDelegate, sourceStatus, sourceResult, sourceCancel, sourceResume}}
 }
 func (p *Plugin) ownerContext() (gov.Context, error) {
 	return gov.NewContext(gov.OriginInternal, p.owner, gov.CatalogScope())
@@ -122,6 +123,13 @@ func (*Instance) Close() error { return nil }
 var submitInput = []byte(`{"type":"object","additionalProperties":false,"required":["prompt"],
 	"properties":{"prompt":{"type":"string","minLength":1,"maxLength":65536},
 	"model":{"type":"string","maxLength":128},"reasoningEffort":{"type":"string","maxLength":64,"pattern":"^[a-z0-9_-]*$"},"workspace":{"type":"string","minLength":1,"maxLength":64,"pattern":"^[a-z0-9_-]+$"}}}`)
+var resumeInput = []byte(`{"type":"object","additionalProperties":false,"required":["taskId","prompt"],
+	"properties":{"taskId":{"type":"string","pattern":"^atask_[0-9a-f]{32}$"},
+	"prompt":{"type":"string","minLength":1,"maxLength":65536}}}`)
+var resumeOutput = []byte(`{"type":"object","additionalProperties":false,
+	"required":["taskId","status","continuedFromTaskId"],
+	"properties":{"taskId":{"type":"string"},"status":{"type":"string"},
+	"continuedFromTaskId":{"type":"string"}}}`)
 var taskInput = []byte(`{"type":"object","additionalProperties":false,"required":["taskId"],
 	"properties":{"taskId":{"type":"string","pattern":"^atask_[0-9a-f]{32}$"}}}`)
 var submitOutput = []byte(`{"type":"object","additionalProperties":false,"required":["taskId","status"],
@@ -129,6 +137,7 @@ var submitOutput = []byte(`{"type":"object","additionalProperties":false,"requir
 var taskOutput = []byte(`{"type":"object","additionalProperties":false,"required":["taskId","status","cancelRequested"],
 	"properties":{"taskId":{"type":"string"},"status":{"type":"string"},"cancelRequested":{"type":"boolean"},
 	"result":{"type":"string"},"diagnostic":{"type":"string"},
+	"continuedFromTaskId":{"type":"string"},
 	"observation":{"type":"object","additionalProperties":false,
 	"properties":{"phase":{"type":"string"},"activity":{"type":"string"},
 	"lastObservedAt":{"type":"string"},"lastWorkerHeartbeatAt":{"type":"string"},"sessionRecorded":{"type":"boolean"},
@@ -153,6 +162,9 @@ func (i *Instance) DiscoverTools(_ context.Context, _ catalogdomain.Provider) ([
 		{SourceKey: sourceCancel, Name: "cancel", Title: "Cancel Agent task",
 			Description: "Request cancellation of an in-flight task; cancellation confirmation is asynchronous.",
 			InputSchema: slices.Clone(taskInput), OutputSchema: slices.Clone(cancelOutput), Tags: []string{"agent", "task"}},
+		{SourceKey: sourceResume, Name: "resume", Title: "Continue Agent session",
+			Description: "Submit a NEW bounded prompt to the exact prior proven-complete native Agent session; returns a new TaskID. Never retries an unknown task.",
+			InputSchema: slices.Clone(resumeInput), OutputSchema: slices.Clone(resumeOutput), Tags: []string{"agent", "session"}},
 	}, nil
 }
 func complete(value any) (invocationdomain.Outcome, error) {
@@ -190,6 +202,23 @@ func (i *Instance) Execute(ctx context.Context, req invocationapplication.Execut
 			return invocationdomain.Outcome{}, err
 		}
 		return complete(map[string]any{"taskId": task.ID, "status": task.Status})
+	case sourceResume:
+		var args struct {
+			TaskID string `json:"taskId"`
+			Prompt string `json:"prompt"`
+		}
+		if err := strictDecode(req.Arguments.Bytes(), &args); err != nil {
+			return invocationdomain.Outcome{}, err
+		}
+		id, err := agentdomain.ParseTaskID(args.TaskID)
+		if err != nil {
+			return invocationdomain.Outcome{}, err
+		}
+		task, err := i.service.Resume(ctx, id, args.Prompt, i.agentID, req.Context)
+		if err != nil {
+			return invocationdomain.Outcome{}, err
+		}
+		return complete(map[string]any{"taskId": task.ID, "status": task.Status, "continuedFromTaskId": task.ContinuedFromTaskID})
 	case sourceStatus, sourceResult, sourceCancel:
 		var args struct {
 			TaskID string `json:"taskId"`
@@ -217,6 +246,9 @@ func (i *Instance) Execute(ctx context.Context, req invocationapplication.Execut
 			return complete(map[string]any{"taskId": id, "cancelRequested": true})
 		}
 		data := map[string]any{"taskId": id, "status": task.Status, "cancelRequested": task.CancelRequested}
+		if task.ContinuedFromTaskID != "" {
+			data["continuedFromTaskId"] = task.ContinuedFromTaskID
+		}
 		if task.Observation != nil {
 			data["observation"] = task.Observation
 		}
@@ -240,7 +272,7 @@ func (p *Plugin) ExtractGovernanceFacts(_ context.Context, raw json.RawMessage, 
 		return invocationdomain.GovernanceFacts{}, err
 	}
 	switch tool.SourceKey() {
-	case sourceDelegate, sourceStatus, sourceResult, sourceCancel:
+	case sourceDelegate, sourceStatus, sourceResult, sourceCancel, sourceResume:
 	default:
 		return invocationdomain.UnknownGovernanceFacts(), nil
 	}

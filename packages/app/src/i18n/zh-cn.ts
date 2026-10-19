@@ -1374,6 +1374,8 @@ export const zhCNMessages: Readonly<Record<string, string>> = {
   "Execution reserved": "已预留执行",
   "Agent process started": "智能体进程已启动",
   "Native session recorded": "已记录原生会话",
+  "Native Agent session could not be resumed": "无法恢复原生智能体会话",
+  "Continued from task": "续接自任务",
   "Prompt dispatched": "任务指令已发送",
   "Agent progress observed": "已收到智能体进度",
   "Agent terminal result observed": "已收到智能体终止结果",

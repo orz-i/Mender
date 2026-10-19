@@ -36,6 +36,13 @@ func (e stageError) SafeAgentFailureStage() string { return string(e) }
 // ExecuteConfigured sends the prompt ONLY on stdin. No prompt, credential,
 // tool arguments or native tool output are ever persisted in diagnostics.
 func (r Runner) ExecuteConfigured(ctx context.Context, agent agentdomain.Agent, prompt string, cfg agentapplication.RunConfig) (result string, runErr error) {
+	if cfg.Resume != nil {
+		// Headless stream-json has no verified pre-prompt session handshake.
+		// The CLI does not emit init until stdin receives a prompt. We cannot
+		// prove which native conversation will receive the prompt, so fail
+		// before process start instead of silently creating a new conversation.
+		return "", agentdomain.ErrResumeUnavailable
+	}
 	if agent.Spec().Backend != agentdomain.BackendAntigravity || r.NewCommand == nil {
 		return "", stageError("process_launch")
 	}
@@ -94,6 +101,7 @@ func (r Runner) ExecuteConfigured(ctx context.Context, agent agentdomain.Agent, 
 		}
 		registeredProcess = true
 	}
+
 	// --input-format stream-json accepts one user message per NDJSON line.
 	if err := json.NewEncoder(stdin).Encode(map[string]any{
 		"event": "user", "message": map[string]any{"content": prompt},

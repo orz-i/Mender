@@ -194,7 +194,7 @@ func (r Runner) ExecuteConfigured(ctx context.Context, agent agentdomain.Agent, 
 	}
 	result, err := r.executeConfiguredOnce(ctx, agent, prompt, config)
 	if err == nil || result != "" || isCancellation(err) || ctx.Err() != nil ||
-		!config.ToolSupply.IsZero() || !isACPChoiceUnadvertised(err) {
+		config.Resume != nil || !config.ToolSupply.IsZero() || !isACPChoiceUnadvertised(err) {
 		return result, err
 	}
 	// Real Grok ACP processes can omit a configured model consistently
@@ -314,6 +314,12 @@ func (r Runner) withSession(ctx context.Context, agent agentdomain.Agent, config
 	}
 	if err := config.ToolSupply.Validate(); err != nil {
 		return "", tagUnlessCancelled(stageConfiguration, fmt.Errorf("invalid Agent tool supply: %w", err))
+	}
+	if config.Resume != nil && (!config.Resume.Valid() ||
+		config.Resume.AgentID != agent.ID() || config.Resume.Backend != agent.Spec().Backend ||
+		config.Resume.WorkspaceRoot != config.WorkspaceRoot || config.Resume.Isolation != "host" ||
+		agent.Spec().Isolation != "host" || !config.ToolSupply.IsZero()) {
+		return "", tagFailure(stageSessionResume, agentdomain.ErrResumeUnavailable)
 	}
 	// The per-task command has no persistent Agent session. Cancel its context
 	// when the prompt ends so the owned process group and scanner are drained.
@@ -464,17 +470,52 @@ func (r Runner) withSession(ctx context.Context, agent agentdomain.Agent, config
 			"headers": []map[string]string{{"name": "Authorization", "value": "Bearer " + config.ToolSupply.BearerToken}},
 		})
 	}
-	session, err := wire.call(ctx, 2, "session/new", map[string]any{
-		"cwd": config.WorkspaceRoot, "mcpServers": servers,
-	}, noUpdates)
-	if err != nil {
-		return "", tagSessionTransport(stageSessionCreate, annotateRead(err, readErrors))
-	}
+	var session json.RawMessage
 	var created struct {
 		SessionID string `json:"sessionId"`
 	}
-	if err := json.Unmarshal(session, &created); err != nil || created.SessionID == "" || len(created.SessionID) > 512 {
-		return "", tagFailure(stageProtocol, errors.New("ACP Agent returned invalid SessionID"))
+	canResume := strings.HasPrefix(strings.TrimSpace(string(hello.AgentCapabilities.SessionCapabilities.Resume)), "{")
+	if config.Resume != nil {
+		// The trusted storage reference is the ONLY authority for the ID.
+		// Both ACP v1 calls require the same admitted cwd and a fresh MCP
+		// server list; neither may silently fall back to session/new.
+		method := "session/resume"
+		if !canResume {
+			if !hello.AgentCapabilities.LoadSession {
+				return "", tagFailure(stageSessionResume, agentdomain.ErrResumeUnavailable)
+			}
+			method = "session/load"
+		}
+		var loadErr error
+		session, loadErr = wire.call(ctx, 2, method, map[string]any{
+			"sessionId": config.Resume.NativeSessionID, "cwd": config.WorkspaceRoot,
+			"mcpServers": servers,
+		}, noUpdates)
+		if loadErr != nil {
+			return "", tagUnlessCancelled(stageSessionResume, errors.Join(agentdomain.ErrResumeUnavailable,
+				annotateRead(loadErr, readErrors)))
+		}
+		// Some implementations echo a SessionID; a mismatch proves this is
+		// NOT the requested Session and must block all new prompts.
+		var optional struct {
+			SessionID string `json:"sessionId"`
+		}
+		if json.Unmarshal(session, &optional) != nil ||
+			(optional.SessionID != "" && optional.SessionID != config.Resume.NativeSessionID) {
+			return "", tagFailure(stageSessionResume, agentdomain.ErrResumeUnavailable)
+		}
+		created.SessionID = config.Resume.NativeSessionID
+	} else {
+		var newErr error
+		session, newErr = wire.call(ctx, 2, "session/new", map[string]any{
+			"cwd": config.WorkspaceRoot, "mcpServers": servers,
+		}, noUpdates)
+		if newErr != nil {
+			return "", tagSessionTransport(stageSessionCreate, annotateRead(newErr, readErrors))
+		}
+		if err := json.Unmarshal(session, &created); err != nil || created.SessionID == "" || len(created.SessionID) > 512 {
+			return "", tagFailure(stageProtocol, errors.New("ACP Agent returned invalid SessionID"))
+		}
 	}
 	if config.Model != "" || config.ReasoningEffort != "" {
 		// Configured choices are an explicit owner/Task contract. A temporarily
@@ -482,7 +523,7 @@ func (r Runner) withSession(ctx context.Context, agent agentdomain.Agent, config
 		// session on this same owned process, root and MCP ToolSupply.
 		// Do not retry any prompt, failed config RPC or unconfirmed value.
 		choiceErr := applySessionChoices(ctx, &wire, created.SessionID, session, config.Model, config.ReasoningEffort)
-		if isACPChoiceUnadvertised(choiceErr) {
+		if isACPChoiceUnadvertised(choiceErr) && config.Resume == nil {
 			// This is only a second session/new. It cannot increase Task
 			// authorization, change the Agent's configured model or execute a
 			// tool; a second mismatch fails closed.
@@ -506,12 +547,13 @@ func (r Runner) withSession(ctx context.Context, agent agentdomain.Agent, config
 		}
 	}
 	if config.Observe != nil {
-		if err := config.Observe(agentdomain.ExecutionEvent{
-			Kind: agentdomain.EventSessionReady, NativeSession: created.SessionID,
-			CanLoad: hello.AgentCapabilities.LoadSession,
-			CanResume: len(hello.AgentCapabilities.SessionCapabilities.Resume) != 0 &&
-				string(hello.AgentCapabilities.SessionCapabilities.Resume) != "null",
-		}); err != nil {
+		event := agentdomain.ExecutionEvent{Kind: agentdomain.EventSessionReady,
+			NativeSession: created.SessionID, CanLoad: hello.AgentCapabilities.LoadSession,
+			CanResume: canResume}
+		if config.Resume != nil {
+			event.ExistingSessionRef = config.Resume.SessionRef
+		}
+		if err := config.Observe(event); err != nil {
 			return "", tagFailure(stageSessionCreate, err)
 		}
 	}

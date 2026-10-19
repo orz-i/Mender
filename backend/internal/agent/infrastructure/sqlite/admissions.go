@@ -18,7 +18,7 @@ func (s *Store) RecordAdmission(ctx context.Context, event AdmissionEvent) error
 		return err
 	}
 	switch event.Action {
-	case "agent.activate", "agent.task.submit", "agent.task.cancel":
+	case "agent.activate", "agent.task.submit", "agent.task.resume", "agent.task.cancel":
 	default:
 		return agentdomain.ErrInvalid
 	}

@@ -16,9 +16,10 @@ const (
 )
 
 type ExecutionEvent struct {
-	Kind          ExecutionEventKind
-	ProcessPID    int
-	NativeSession string
-	CanLoad       bool
-	CanResume     bool
+	Kind               ExecutionEventKind
+	ProcessPID         int
+	NativeSession      string
+	ExistingSessionRef string // exact SessionRef when continuing, only used by trusted runner
+	CanLoad            bool
+	CanResume          bool
 }

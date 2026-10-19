@@ -118,6 +118,7 @@ export interface AgentTask {
     "updatedAt": string;
     "cancelRequested": boolean;
     "observation"?: AgentTaskObservation | null;
+    "continuedFromTaskId"?: string;
 }
 
 export interface AgentTaskList {

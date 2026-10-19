@@ -31,7 +31,7 @@ func TestAgentManagedToolsCreateDistinctAndIdempotent(t *testing.T) {
 			t.Fatal(err)
 		}
 		state, err := r.AgentTools(ctx, agent.ID(), owner)
-		if err != nil || state.Status != "ready" || len(state.Tools) != 4 || state.ProviderName != name {
+		if err != nil || state.Status != "ready" || len(state.Tools) != 5 || state.ProviderName != name {
 			t.Fatalf("managed Agent facade=%+v err=%v", state, err)
 		}
 		if identities[state.ProviderID] {
@@ -49,7 +49,7 @@ func TestAgentManagedToolsCreateDistinctAndIdempotent(t *testing.T) {
 			t.Fatalf("managed suite deleted through Provider CRUD: %v", err)
 		}
 		next, err := r.EnsureAgentTools(ctx, agent.ID(), owner)
-		if err != nil || next.ProviderID != state.ProviderID || len(next.Tools) != 4 {
+		if err != nil || next.ProviderID != state.ProviderID || len(next.Tools) != 5 {
 			t.Fatalf("ensure not idempotent: %+v %v", next, err)
 		}
 		for i, tool := range state.Tools {
@@ -90,7 +90,7 @@ func TestAgentToolFacadeUnpinnedProviderFailsClosedWithoutRebinding(t *testing.T
 		t.Fatal(err)
 	}
 	original, err := r.Catalog.store.ListProviderTools(ctx, provider.ID())
-	if err != nil || len(original) != 4 {
+	if err != nil || len(original) != 5 {
 		t.Fatalf("expected four existing tools: %d %v", len(original), err)
 	}
 	before, err := r.AgentTools(ctx, agent.ID(), owner)

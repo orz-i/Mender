@@ -27,12 +27,16 @@ func agentFailureDiagnostic(err error) string {
 		return "Antigravity CLI response was invalid"
 	case "headless_rejected":
 		return "Antigravity CLI did not complete the task"
+	case "headless_resume":
+		return "Native Agent session could not be resumed"
 	case "process_launch":
 		return "Agent process could not start"
 	case "initialize":
 		return "ACP initialization failed"
 	case "session_create":
 		return "ACP session creation failed"
+	case "session_resume":
+		return "Native Agent session could not be resumed"
 	case "configuration":
 		return "Agent model or reasoning configuration failed"
 	case "configuration_model_unavailable":

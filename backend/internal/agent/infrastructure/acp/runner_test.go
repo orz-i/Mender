@@ -74,17 +74,24 @@ func TestACPFixtureProcess(t *testing.T) {
 				version = 2
 			}
 			hello := map[string]any{"protocolVersion": version}
-			if os.Getenv("ACP_FIXTURE_MODE") == "session-capabilities" {
+			mode := os.Getenv("ACP_FIXTURE_MODE")
+			if mode == "session-capabilities" || mode == "acp-resume" || mode == "acp-mismatch" || mode == "acp-resume-rejected" {
 				hello["agentCapabilities"] = map[string]any{
 					"loadSession":         true,
 					"sessionCapabilities": map[string]any{"resume": map[string]any{}},
 				}
+			}
+			if mode == "acp-load" {
+				hello["agentCapabilities"] = map[string]any{"loadSession": true}
 			}
 			if mode := os.Getenv("ACP_FIXTURE_MODE"); mode == "mcp-http" || mode == "choice-always-model-missing-mcp-http" {
 				hello["agentCapabilities"] = map[string]any{"mcpCapabilities": map[string]any{"http": true}}
 			}
 			send(map[string]any{"jsonrpc": "2.0", "id": msg.ID, "result": hello})
 		case "session/new":
+			if strings.HasPrefix(os.Getenv("ACP_FIXTURE_MODE"), "acp-") {
+				os.Exit(179)
+			}
 			createdSessions++
 			currentSessionID = fmt.Sprintf("fixture-%d", createdSessions)
 			if os.Getenv("ACP_FIXTURE_MODE") == "reject-session-new" {
@@ -141,6 +148,33 @@ func TestACPFixtureProcess(t *testing.T) {
 				result["configOptions"] = choiceOptions(mode)
 			}
 			send(map[string]any{"jsonrpc": "2.0", "id": msg.ID, "result": result})
+		case "session/resume", "session/load":
+			mode := os.Getenv("ACP_FIXTURE_MODE")
+			if mode != "acp-resume" && mode != "acp-load" && mode != "acp-mismatch" && mode != "acp-resume-rejected" {
+				os.Exit(181)
+			}
+			if (mode == "acp-load" && msg.Method != "session/load") ||
+				(mode != "acp-load" && msg.Method != "session/resume") {
+				os.Exit(182)
+			}
+			var req struct {
+				SessionID  string `json:"sessionId"`
+				Cwd        string `json:"cwd"`
+				MCPServers []any  `json:"mcpServers"`
+			}
+			if json.Unmarshal(msg.Params, &req) != nil || req.SessionID != "fixture-1" || req.Cwd == "" || len(req.MCPServers) != 0 {
+				os.Exit(183)
+			}
+			if mode == "acp-resume-rejected" {
+				send(map[string]any{"jsonrpc": "2.0", "id": msg.ID, "error": map[string]any{"code": -32001, "message": "SECRET_IN_UNTRUSTED_REPLY"}})
+				continue
+			}
+			currentSessionID = "fixture-1"
+			reply := map[string]any{}
+			if mode == "acp-mismatch" {
+				reply["sessionId"] = "wrong-session"
+			}
+			send(map[string]any{"jsonrpc": "2.0", "id": msg.ID, "result": reply})
 		case "session/set_config_option":
 			mode := os.Getenv("ACP_FIXTURE_MODE")
 			if !strings.HasPrefix(mode, "choice-") {

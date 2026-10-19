@@ -91,7 +91,7 @@ func (r *Runtime) AgentTools(ctx context.Context, id agentdomain.ID, caller gov.
 		found[tool.SourceKey()] = true
 	}
 	result.Status = "ready"
-	for _, source := range []string{"agent.delegate", "agent.status", "agent.result", "agent.cancel"} {
+	for _, source := range []string{"agent.delegate", "agent.status", "agent.result", "agent.cancel", "agent.resume"} {
 		if !found[source] {
 			result.Status = "incomplete"
 			break

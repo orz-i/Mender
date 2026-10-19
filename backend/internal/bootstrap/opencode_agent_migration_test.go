@@ -37,6 +37,10 @@ func downgradeAgentsToV7Fixture(t *testing.T, path string, sandboxID ...string) 
 	}
 	defer func() { _ = tx.Rollback() }()
 	for _, sqlText := range []string{
+		`DROP TRIGGER IF EXISTS agent_continuation_no_update`,
+		`DROP TRIGGER IF EXISTS agent_continuation_no_delete`,
+		`DROP TABLE IF EXISTS agent_task_continuations`,
+		`DELETE FROM agent_schema_migrations WHERE version=15`,
 		`DROP TRIGGER IF EXISTS agent_execution_event_no_delete`,
 		`DROP TRIGGER IF EXISTS agent_execution_event_no_update`,
 		`DROP TRIGGER IF EXISTS agent_native_session_no_delete`,
@@ -111,7 +115,7 @@ func TestOpenCodeAgentV7ToV8PreservesAllLiveRelationships(t *testing.T) {
 		t.Fatal(err)
 	}
 	tools, err := r.AgentTools(ctx, agent.ID(), owner)
-	if err != nil || tools.ProviderID == "" || len(tools.Tools) != 4 {
+	if err != nil || tools.ProviderID == "" || len(tools.Tools) != 5 {
 		t.Fatalf("facade not ready %+v %v", tools, err)
 	}
 	var delegateID string
@@ -210,7 +214,7 @@ func TestOpenCodeAgentV7ToV8PreservesAllLiveRelationships(t *testing.T) {
 		t.Fatalf("lost Profile ToolBinding %d %v", profileToolBindings, err)
 	}
 	var version int
-	if err := raw.QueryRowContext(ctx, "SELECT MAX(version) FROM agent_schema_migrations").Scan(&version); err != nil || version != 14 {
+	if err := raw.QueryRowContext(ctx, "SELECT MAX(version) FROM agent_schema_migrations").Scan(&version); err != nil || version != 15 {
 		t.Fatalf("expected latest Agent v13 got %d %v", version, err)
 	}
 	checkRows, err := raw.QueryContext(ctx, "PRAGMA foreign_key_check")
@@ -238,7 +242,7 @@ func TestOpenCodeAgentV7ToV8PreservesAllLiveRelationships(t *testing.T) {
 		t.Fatalf("wrong plugin %+v", created.Spec())
 	}
 	opencodeTools, err := r.AgentTools(ctx, created.ID(), owner)
-	if err != nil || len(opencodeTools.Tools) != 4 || opencodeTools.ProviderID == tools.ProviderID {
+	if err != nil || len(opencodeTools.Tools) != 5 || opencodeTools.ProviderID == tools.ProviderID {
 		t.Fatalf("OpenCode suite not independent of existing identity %+v %v", opencodeTools, err)
 	}
 }

@@ -85,7 +85,7 @@ func TestManagedAgentProviderCannotBeEditedThroughGenericProviderAPI(t *testing.
 		t.Fatal(err)
 	}
 	tools, err := r.AgentTools(ctx, agent.ID(), owner)
-	if err != nil || tools.Status != "ready" || len(tools.Tools) != 4 {
+	if err != nil || tools.Status != "ready" || len(tools.Tools) != 5 {
 		t.Fatalf("owned tools missing: %+v %v", tools, err)
 	}
 	providerID, err := catalogdomain.ParseProviderID(tools.ProviderID)

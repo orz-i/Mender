@@ -43,6 +43,7 @@ function taskDiagnosticText(value:string):string{
     case "Agent process could not start": return t("Agent process could not start");
     case "ACP initialization failed": return t("ACP initialization failed");
     case "ACP session creation failed": return t("ACP session creation failed");
+    case "Native Agent session could not be resumed": return t("Native Agent session could not be resumed");
     case "Agent model or reasoning configuration failed": return t("Agent model or reasoning configuration failed");
     case "Configured Agent model not advertised by ACP session": return t("Configured Agent model not advertised by ACP session");
     case "Configured Agent reasoning effort not advertised by ACP session": return t("Configured Agent reasoning effort not advertised by ACP session");
@@ -402,6 +403,7 @@ export function AgentDetailPage({client,chooseLocalDirectory}:{client:MenderClie
         <DialogHeader><DialogTitle>{t("Agent task result")}</DialogTitle>
           <DialogDescription>{viewTask?.taskId} · {viewTask?.status}</DialogDescription>
         </DialogHeader>
+        {viewTask?.continuedFromTaskId?<dl className="text-sm"><dt className="text-xs text-muted-foreground">{t("Continued from task")}</dt><dd className="break-all font-mono text-xs">{viewTask.continuedFromTaskId}</dd></dl>:null}
         {viewTask?.model||viewTask?.reasoningEffort||viewTask?.workspace?<dl className="grid grid-cols-2 gap-3 text-sm">
           {viewTask.model?<div><dt className="text-xs text-muted-foreground">{t("Agent model")}</dt><dd>{viewTask.model}</dd></div>:null}
           {viewTask.reasoningEffort?<div><dt className="text-xs text-muted-foreground">{t("Reasoning effort")}</dt><dd>{viewTask.reasoningEffort}</dd></div>:null}

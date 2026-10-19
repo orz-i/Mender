@@ -57,7 +57,7 @@ func TestPluginConfigAndBoundToolDiscovery(t *testing.T) {
 		t.Fatal(err)
 	}
 	items, err := instance.DiscoverTools(ctx, catalogdomain.Provider{})
-	if err != nil || len(items) != 4 {
+	if err != nil || len(items) != 5 {
 		t.Fatalf("tools=%d err=%v", len(items), err)
 	}
 	for _, item := range items {

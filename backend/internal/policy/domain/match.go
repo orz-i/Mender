@@ -398,7 +398,7 @@ func (i EvaluationInput) Validate() error {
 		if !sandboxID {
 			return fmt.Errorf("evaluation: sandbox action requires sandbox_id fact")
 		}
-	case governancedomain.ActionAgentActivate, governancedomain.ActionAgentTaskSubmit, governancedomain.ActionAgentTaskCancel:
+	case governancedomain.ActionAgentActivate, governancedomain.ActionAgentTaskSubmit, governancedomain.ActionAgentTaskResume, governancedomain.ActionAgentTaskCancel:
 		if i.ProviderID != "" || i.ToolID != "" || i.FactKnowledge != FactKnown {
 			return fmt.Errorf("evaluation: Agent action must use reviewed resource facts without Provider/Tool selectors")
 		}
@@ -527,7 +527,7 @@ func isSandboxAction(a governancedomain.Action) bool {
 
 func isAgentAction(a governancedomain.Action) bool {
 	switch a {
-	case governancedomain.ActionAgentActivate, governancedomain.ActionAgentTaskSubmit, governancedomain.ActionAgentTaskCancel:
+	case governancedomain.ActionAgentActivate, governancedomain.ActionAgentTaskSubmit, governancedomain.ActionAgentTaskResume, governancedomain.ActionAgentTaskCancel:
 		return true
 	default:
 		return false

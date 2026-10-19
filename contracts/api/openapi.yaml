@@ -2900,6 +2900,7 @@ components:
         result: { type: string, maxLength: 65536 }
         diagnostic: { type: string, maxLength: 1024 }
         observation: { $ref: '#/components/schemas/AgentTaskObservation' }
+        continuedFromTaskId: { type: string, description: Immutable lineage to prior AgentTask; not its native SessionID }
     AgentTaskObservation:
       type: object
       additionalProperties: false
@@ -2918,7 +2919,7 @@ components:
       additionalProperties: false
       properties:
         agentId: { type: string }
-        action: { type: string, enum: [agent.activate, agent.task.submit, agent.task.cancel] }
+        action: { type: string, enum: [agent.activate, agent.task.submit, agent.task.resume, agent.task.cancel] }
         principalKind: { type: string, enum: [local_user, service] }
         origin: { type: string, enum: [cli, mcp, management_http, desktop, internal] }
         scopeKind: { type: string, enum: [catalog, profile] }

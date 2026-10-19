@@ -31,6 +31,9 @@ type Repository interface {
 	GetTask(context.Context, agentdomain.TaskID) (agentdomain.Task, error)
 	ListTasks(context.Context, agentdomain.ID) ([]agentdomain.Task, error)
 	CreateAdmittedTask(context.Context, agentdomain.Task, int, string) error
+	ResumePlan(context.Context, agentdomain.TaskID) (agentdomain.SessionContinuation, error)
+	CreateResumedTask(context.Context, agentdomain.Task, agentdomain.SessionContinuation, int, string) error
+	TaskParent(context.Context, agentdomain.TaskID) (agentdomain.TaskID, error)
 	BeginAttempt(context.Context, agentdomain.Task, string) error
 	RecordExecution(context.Context, agentdomain.Task, string, agentdomain.ExecutionEvent) error
 	TaskObservation(context.Context, agentdomain.TaskID) (*agentdomain.TaskObservation, error)
@@ -78,6 +81,7 @@ type RunConfig struct {
 	PermissionRequester PermissionRequester
 	ToolSupply          ToolSupply                             // optional backend-neutral, Task-scoped tool delivery
 	AllowNativeYOLO     bool                                   // owner-approved, unexpired Antigravity trusted workspace only
+	Resume              *agentdomain.SessionContinuation       // host-resolved, never from Tool arguments
 	Observe             func(agentdomain.ExecutionEvent) error // trusted, Task-scoped evidence sink
 }
 
@@ -387,7 +391,7 @@ func (s *Service) SubmitWithOptions(ctx context.Context, id agentdomain.ID, prom
 	s.active[taskID] = cancel
 	s.wg.Add(1)
 	s.mu.Unlock()
-	go s.run(runCtx, cancel, agent, task, prompt, caller)
+	go s.run(runCtx, cancel, agent, task, prompt, caller, nil)
 	return task, nil
 }
 
@@ -417,7 +421,7 @@ func (s *Service) TaskLocallyActive(id agentdomain.TaskID) bool {
 	return !s.closed && s.active[id] != nil
 }
 
-func (s *Service) run(ctx context.Context, cancel context.CancelFunc, agent agentdomain.Agent, task agentdomain.Task, prompt string, caller gov.Context) {
+func (s *Service) run(ctx context.Context, cancel context.CancelFunc, agent agentdomain.Agent, task agentdomain.Task, prompt string, caller gov.Context, continuation *agentdomain.SessionContinuation) {
 	defer s.wg.Done()
 	defer func() {
 		cancel()
@@ -448,6 +452,7 @@ func (s *Service) run(ctx context.Context, cancel context.CancelFunc, agent agen
 		return
 	}
 	config := RunConfig{WorkspaceRoot: task.WorkspaceRoot, Model: task.Model, ReasoningEffort: task.ReasoningEffort,
+		Resume: continuation,
 		Observe: func(event agentdomain.ExecutionEvent) error {
 			writeCtx, done := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
 			defer done()
@@ -595,6 +600,11 @@ func (s *Service) attachObservation(ctx context.Context, task agentdomain.Task) 
 		obs.Activity = "local_active"
 	}
 	task.Observation = obs
+	parent, err := s.store.TaskParent(ctx, task.ID)
+	if err != nil {
+		return task, err
+	}
+	task.ContinuedFromTaskID = parent
 	return task, nil
 }
 func (s *Service) Tasks(ctx context.Context, id agentdomain.ID, caller gov.Context) ([]agentdomain.Task, error) {

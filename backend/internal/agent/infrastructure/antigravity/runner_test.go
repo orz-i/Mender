@@ -126,3 +126,28 @@ func TestNativeHeadlessModelInspectionBoundedAndValidated(t *testing.T) {
 		}
 	}
 }
+
+func TestNativeHeadlessResumeFailsBeforeProcessOrPromptWithoutVerifiableHandshake(t *testing.T) {
+	agent := agyFixture(t)
+	taskID, err := agentdomain.NewTaskID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan := &agentdomain.SessionContinuation{
+		SourceTaskID: taskID, SessionRef: "asess_" + strings.Repeat("a", 32),
+		NativeSessionID: "055a398f-db14-4c5f-abbb-1bf03f8120a7",
+		AgentID:         agent.ID(), Backend: agentdomain.BackendAntigravity,
+		WorkspaceRoot: agent.Spec().WorkspaceRoot, Isolation: "host",
+		PrincipalKind: "local_user", PrincipalRef: "os:test", ScopeKind: "catalog",
+	}
+	starts := 0
+	runner := Runner{NewCommand: func(context.Context, agentdomain.Agent, string, string, string, bool, bool) (*exec.Cmd, error) {
+		starts++
+		return nil, errors.New("should never launch for unverified native resume")
+	}}
+	result, err := runner.ExecuteConfigured(context.Background(), agent, "must not run",
+		agentapp.RunConfig{WorkspaceRoot: agent.Spec().WorkspaceRoot, Resume: plan})
+	if result != "" || !errors.Is(err, agentdomain.ErrResumeUnavailable) || starts != 0 {
+		t.Fatalf("unverifiable Antigravity continuation launched: result=%q err=%v starts=%d", result, err, starts)
+	}
+}

@@ -71,13 +71,17 @@ func (s *Store) RecordExecution(ctx context.Context, t agentdomain.Task, instanc
 			return agentdomain.ErrInvalid
 		}
 	case agentdomain.EventSessionReady:
+		if event.ExistingSessionRef != "" && (len(event.ExistingSessionRef) != 38 ||
+			t.ContinuedFromTaskID == "") {
+			return agentdomain.ErrInvalid
+		}
 		if event.NativeSession == "" || len(event.NativeSession) > 512 ||
 			!utf8.ValidString(event.NativeSession) ||
 			strings.ContainsAny(event.NativeSession, "\r\n\x00") {
 			return agentdomain.ErrInvalid
 		}
 	case agentdomain.EventPromptSent, agentdomain.EventProgress, agentdomain.EventTerminalSeen, agentdomain.EventLeaderReaped, agentdomain.EventWorkerHeartbeat:
-		if event.NativeSession != "" || event.ProcessPID != 0 {
+		if event.NativeSession != "" || event.ProcessPID != 0 || event.ExistingSessionRef != "" {
 			return agentdomain.ErrInvalid
 		}
 	default:
@@ -164,7 +168,34 @@ func (s *Store) RecordExecution(ctx context.Context, t agentdomain.Task, instanc
 			return agentdomain.ErrConflict
 		}
 	}
-	if event.Kind == agentdomain.EventSessionReady {
+	if event.Kind == agentdomain.EventSessionReady && event.ExistingSessionRef != "" {
+		// A continuation must be the exact atomically admitted child of this
+		// immutable original Session. A backend that creates a different
+		// native Session is never silently accepted as resuming the old one.
+		var valid int
+		if err := tx.QueryRowContext(ctx, `SELECT EXISTS(
+			SELECT 1 FROM agent_task_continuations c
+			JOIN agent_native_sessions n ON n.session_ref=c.session_ref
+			WHERE c.child_task_id=? AND c.parent_task_id=? AND c.session_ref=?
+			AND n.native_session_id=? AND n.agent_id=? AND n.workspace_root=?
+			AND n.principal_kind=? AND n.principal_ref=? AND n.scope_kind=? AND n.scope_ref=?)`,
+			string(t.ID), string(t.ContinuedFromTaskID), event.ExistingSessionRef, event.NativeSession,
+			string(t.AgentID), t.WorkspaceRoot, t.PrincipalKind, t.PrincipalRef, t.ScopeKind, t.ScopeRef).Scan(&valid); err != nil {
+			return err
+		}
+		if valid != 1 {
+			return agentdomain.ErrConflict
+		}
+		if _, err := tx.ExecContext(ctx, `UPDATE agent_execution_attempts SET session_ref=?
+			WHERE task_id=? AND generation=? AND runtime_instance=?`,
+			event.ExistingSessionRef, string(t.ID), t.Generation, instance); err != nil {
+			return err
+		}
+	}
+	if event.Kind == agentdomain.EventSessionReady && event.ExistingSessionRef == "" {
+		if t.ContinuedFromTaskID != "" {
+			return agentdomain.ErrConflict
+		}
 		ref, err := newSessionRef()
 		if err != nil {
 			return err
@@ -247,7 +278,7 @@ func (s *Store) TaskObservation(ctx context.Context, id agentdomain.TaskID) (*ag
 	}
 	recoverability := "unavailable"
 	if session.Valid && session.String != "" &&
-		(backend.String == "antigravity" || canLoad.Int64 != 0 || canResume.Int64 != 0) {
+		(canLoad.Int64 != 0 || canResume.Int64 != 0) {
 		recoverability = "unverified" // capability advertisement is not storage proof
 	}
 	obs := &agentdomain.TaskObservation{

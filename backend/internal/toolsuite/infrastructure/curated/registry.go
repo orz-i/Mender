@@ -19,7 +19,7 @@ var definitions = []domain.Definition{
 		Description:  "Submit and inspect governed tasks of one explicitly selected Agent",
 		ResourceKind: domain.AgentResource, RequiredCapabilities: []domain.Capability{domain.AgentTask},
 		RequiredContracts: []platformplugin.CapabilityContract{{ID: domain.AgentTask, Version: platformplugin.CapabilityVersion{Major: 1}, Mode: platformplugin.ExecutionDetached}},
-		ToolSourceKeys:    []string{"agent.delegate", "agent.status", "agent.result", "agent.cancel"}, Status: "builtin"},
+		ToolSourceKeys:    []string{"agent.delegate", "agent.status", "agent.result", "agent.cancel", "agent.resume"}, Status: "builtin"},
 	{SuiteID: domain.SandboxWorkspace, DisplayName: "Sandbox Workspace Tools",
 		Description:          "Read, search, edit and execute within one governed Workspace Sandbox",
 		ResourceKind:         domain.SandboxResource,

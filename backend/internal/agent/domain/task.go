@@ -61,25 +61,26 @@ func (s TaskStatus) Valid() bool {
 // Task intentionally does not contain the input prompt; prompts stay in short-lived
 // runner memory and are not copied into global Audit or task persistence.
 type Task struct {
-	ID              TaskID           `json:"taskId"`
-	AgentID         ID               `json:"agentId"`
-	Status          TaskStatus       `json:"status"`
-	Model           string           `json:"model,omitempty"`
-	ReasoningEffort string           `json:"reasoningEffort,omitempty"`
-	WorkspaceKey    string           `json:"workspace,omitempty"`
-	WorkspaceRoot   string           `json:"-"` // admitted immutable local cwd; never disclose via MCP
-	Origin          string           `json:"-"`
-	PrincipalKind   string           `json:"-"`
-	PrincipalRef    string           `json:"-"`
-	ScopeKind       string           `json:"-"`
-	ScopeRef        string           `json:"-"`
-	Generation      uint64           `json:"-"`
-	Result          string           `json:"result,omitempty"`
-	Diagnostic      string           `json:"diagnostic,omitempty"`
-	CreatedAt       time.Time        `json:"createdAt"`
-	UpdatedAt       time.Time        `json:"updatedAt"`
-	CancelRequested bool             `json:"cancelRequested"`
-	Observation     *TaskObservation `json:"observation,omitempty"`
+	ID                  TaskID           `json:"taskId"`
+	AgentID             ID               `json:"agentId"`
+	Status              TaskStatus       `json:"status"`
+	Model               string           `json:"model,omitempty"`
+	ReasoningEffort     string           `json:"reasoningEffort,omitempty"`
+	WorkspaceKey        string           `json:"workspace,omitempty"`
+	WorkspaceRoot       string           `json:"-"` // admitted immutable local cwd; never disclose via MCP
+	Origin              string           `json:"-"`
+	PrincipalKind       string           `json:"-"`
+	PrincipalRef        string           `json:"-"`
+	ScopeKind           string           `json:"-"`
+	ScopeRef            string           `json:"-"`
+	Generation          uint64           `json:"-"`
+	Result              string           `json:"result,omitempty"`
+	Diagnostic          string           `json:"diagnostic,omitempty"`
+	CreatedAt           time.Time        `json:"createdAt"`
+	UpdatedAt           time.Time        `json:"updatedAt"`
+	CancelRequested     bool             `json:"cancelRequested"`
+	Observation         *TaskObservation `json:"observation,omitempty"`
+	ContinuedFromTaskID TaskID           `json:"continuedFromTaskId,omitempty"`
 }
 
 const MaxResultBytes = 64 << 10
@@ -91,6 +92,14 @@ func (t Task) Validate() error {
 	}
 	if _, err := ParseID(string(t.AgentID)); err != nil {
 		return err
+	}
+	if t.ContinuedFromTaskID != "" {
+		if _, err := ParseTaskID(string(t.ContinuedFromTaskID)); err != nil {
+			return err
+		}
+		if t.ContinuedFromTaskID == t.ID {
+			return fmt.Errorf("%w: Task cannot continue itself", ErrInvalid)
+		}
 	}
 	if !t.Status.Valid() || t.Generation == 0 || t.CreatedAt.IsZero() || t.UpdatedAt.IsZero() {
 		return fmt.Errorf("%w: incomplete Task lifecycle", ErrInvalid)

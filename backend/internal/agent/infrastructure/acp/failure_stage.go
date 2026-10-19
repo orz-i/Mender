@@ -13,6 +13,7 @@ const (
 	stageProcessLaunch               = "process_launch"
 	stageInitialize                  = "initialize"
 	stageSessionCreate               = "session_create"
+	stageSessionResume               = "session_resume"
 	stageConfiguration               = "configuration"
 	stageConfigModelUnavailable      = "configuration_model_unavailable"
 	stageConfigReasoningUnavailable  = "configuration_reasoning_unavailable"
@@ -40,6 +41,7 @@ var recognizedFailureStages = map[string]struct{}{
 	stageProcessLaunch:               {},
 	stageInitialize:                  {},
 	stageSessionCreate:               {},
+	stageSessionResume:               {},
 	stageConfiguration:               {},
 	stageConfigModelUnavailable:      {},
 	stageConfigReasoningUnavailable:  {},
