@@ -62,3 +62,22 @@ D. 接通真实 API，至少验证每条完整路径的非空数据、空数据�
 1. 本轮 Web Vite 默认将 `/api` 代理到 `127.0.0.1:8080`，但当前可检测到的独立 `menderd` 在 `127.0.0.1:18080`，部分新插件相关路由仍不匹配。因此 **尚未**完成具有真实存量数据的全链路操作验收，也不应把模拟 Fixture 成功当作实机完成。需要确认目标运行实例、适配 API 和用户重新构建连接后的环境再复核。
 2. Agent 委派给 Antigravity 的导航任务 `atask_8e91f2b4778149dfc7a11d96705bfa5e` 最终状态 `unknown`、`leader_reaped` 且无可恢复 native session；未发现其独立提交。遵守未知任务不盲目重试原则，导航改动已在上述直接代码提交完成，不再次派发。
 3. 进一步的 Phase D 应关注真实插件安装、工具搜索、Profile 精确授权、服务器/隧道状态、Agent 审批与异常恢复，并补充键盘焦点、读屏、200%/400% 缩放与高对比度检查。不要在缺乏证据时宣称 WCAG 完全达标。
+
+
+## 用户重建后的 Wails Desktop 实机验收（2026-10-19）
+
+前述「仍需真实环境验收」是**重建前**状态；以下为本次实际运行后补充证据，不覆盖历史限制说明。
+
+- **运行实例**：`apps/desktop/bin/mender-desktop.dev.app` PID 22259，在 Mac 本地 2026-10-19 22:58 重新生成并启动，独立原生 Wails 运行时与 `apps/desktop/frontend` 开发服务（Vite `:9245`），Tunnel 客户端 PID 24637。MCP 实机端点 `http://127.0.0.1:8765/mcp` 对应正在运行的 `default` Profile。机器上其他旧 Vite（`:5174`）与旧独立 `menderd`（`:18080`）不能代表此 Desktop 的后端链路。
+- **实际存量数据**：只读打开 Desktop 正在使用的 SQLite 库：12 个 Provider，44 个 Canonical Tool，1 个 Profile / 31 个 ToolBinding，4 个 Agent，7 个 Sandbox，1 个 Tunnel，3 个 Credential。UI 的实际列表和统计互相印证：Agent 3 个 CLI 可用 / 1 个未检测到 CLI；Sandbox 3 个就绪；1 个内置技能；审计中有近期调用；审批中心无待审批。Policy UI 显示已有的默认 Allow 与 0 条规则，本轮没有改变该配置。
+- **真实窗口导航与信息密度**：在 Wails Mac 原生窗口依次访问概览、插件、工具、技能、Agent、Sandbox、配置档、服务器、隧道、运行时、策略、凭据、审计、审批。均有实际内容或明确空状态，没有出现 Web Fixture 假数据。配置档管理及来源优先选择器实际打开成功，已选择 31 个 Tool 的草稿未被修改；使用「取消」关闭后，持久化 Profile 仍为 revision 9 / 31 ToolBinding。
+- **对外工具供应验收**：本对话真实 Mender 连接的 Source-first 发现可列 OpenCode / Grok / Antigravity、AnySearch、Rocky Workspace、Rocky Jobs；对上述六个来源中各一个已授权 ToolID 执行 `mender_describe_tool` 均成功，严格返回原 ProviderID；对未绑定 Codex、另一组未绑定 AnySearch、已绑定但不可发现的 Mender 来源做描述请求均被拒绝为 `MCP tool is outside profile`。现有存储绑定 31 项不等于 31 项均可实时发现，4 项 Mender 来源仍被不可用门禁隐藏，绝不自动删除或放开。
+- **发现并即时修正的两项纯前端 UX 问题**：Desktop 默认约 1240px 时技能页「筛选」换到第二行；缩小其搜索框的响应式占位后，在当前 Wails Vite HMR 页面截图中已重回同一行。来源选择器的「可用工具」计数仅反映可配置的 Catalog 定义、并不证明 Agent CLI 可执行，已改为中性「工具」数并增加回归测试，避免将 Codex 「未检测到 CLI」误读成实际可运行。未改变任何 Agent 调用或 Profile 授权判定。
+- **安全边界**：全部实机操作限于导航、展开详情、读取状态、只读发现及取消草稿；未安装/删除插件、未启动/重启/停止服务器与沙盒、未审批、未委派或恢复 Agent 任务、未更改凭据/策略/Profile/数据库。Mac 端 Window 截图和系统辅助功能用以验证原生 WKWebView，不能将普通浏览器访问 `:9245` 视为具备本机原生 Go 绑定能力。
+
+### 尚未覆盖
+
+1. 不在现有生产 Profile 上强行做写操作 E2E。后续若需验证「安装插件→建立来源→Profile 授权→客户端发现→撤销」，应在隔离测试资源和授权范围内运行，避免污染现有 31 项绑定。
+2. 已配置但 CLI 不可用的 Codex 仍会在**管理端**显示候选工具定义；其 ToolID 对 ChatGPT 未授权。生产现有的 4 项 Mender 来源旧绑定虽被正确隐藏，是否清理须另行核对，不因 UX 审计主动删除。
+3. 原生桌面 MinWidth 为 960px，本轮约 1240px 的 Mac 原生图形界面已检查；390px / 1440px 的响应式检查仍基于此前 Web Browser + Fixture 测试，不冒充原生 390px Wails 屏幕。
+4. 还需单独开展键盘全流程、缩放/读屏/焦点循环专项验收；本轮不宣称达到完整 WCAG AA 合规。
