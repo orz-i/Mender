@@ -79,6 +79,18 @@ func (r *Runtime) StartMCPHTTPServer(
 	if err != nil {
 		return MCPServerInstance{}, fmt.Errorf("start MCP server: profile: %w", err)
 	}
+	catalog := managedMCPToolCatalog{
+		revision:    r.Catalog.store.CatalogRevision,
+		fingerprint: r.profileToolMetadataFingerprint,
+	}
+	catalog.initialRevision, err = catalog.revision(ctx)
+	if err != nil {
+		return MCPServerInstance{}, fmt.Errorf("start MCP server: catalog revision: %w", err)
+	}
+	catalog.initialFingerprint, err = catalog.fingerprint(ctx, profile)
+	if err != nil {
+		return MCPServerInstance{}, fmt.Errorf("start MCP server: catalog fingerprint: %w", err)
+	}
 	activationContext, err := profileActivationContext(controlContext, profile)
 	if err != nil {
 		return MCPServerInstance{}, fmt.Errorf("start MCP server: governance context: %w", err)
@@ -90,8 +102,19 @@ func (r *Runtime) StartMCPHTTPServer(
 	if err != nil {
 		return MCPServerInstance{}, fmt.Errorf("start MCP server: adapter: %w", err)
 	}
+	confirmedProfileRevision, err := r.Profiles.GetRevision.Execute(ctx, profile.ID())
+	if err != nil {
+		return MCPServerInstance{}, fmt.Errorf("start MCP server: confirm Profile revision: %w", err)
+	}
+	confirmedCatalogRevision, err := catalog.revision(ctx)
+	if err != nil {
+		return MCPServerInstance{}, fmt.Errorf("start MCP server: confirm Catalog revision: %w", err)
+	}
+	if confirmedProfileRevision != profile.Revision() || confirmedCatalogRevision != catalog.initialRevision {
+		return MCPServerInstance{}, errors.New("start MCP server: Profile or Catalog changed while constructing initial MCP projection")
+	}
 	// A managed HTTP endpoint must follow committed Profile ToolBinding
-	// revisions, including mutations from a second Runtime/CLI process.
+	// AND canonical Tool metadata revisions, including mutations from a second Runtime/CLI process.
 	// Keep the listener and tunnel stable while swapping stateless SDK
 	// projections atomically on the next HTTP request.
 	liveProfile, err := newManagedProfileMCPHTTPHandler(
@@ -111,6 +134,7 @@ func (r *Runtime) StartMCPHTTPServer(
 			}
 			return fresh.StreamableHTTPHandler(), nil
 		},
+		catalog,
 	)
 	if err != nil {
 		return MCPServerInstance{}, fmt.Errorf("start MCP server: Profile refresh: %w", err)

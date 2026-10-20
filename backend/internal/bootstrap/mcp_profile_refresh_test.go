@@ -35,13 +35,26 @@ func responseBody(t *testing.T, h http.Handler) (int, string) {
 	return rec.Code, rec.Body.String()
 }
 
+// The original tests vary only Profile revisions; the Catalog is unchanged.
+func newTestProfileHandler(profile profiledomain.Profile, initial http.Handler,
+	revision func(context.Context, profiledomain.ProfileID) (uint64, error),
+	load func(context.Context, profiledomain.ProfileID) (profiledomain.Profile, error),
+	build func(context.Context, profiledomain.Profile) (http.Handler, error),
+) (*managedProfileMCPHTTPHandler, error) {
+	return newManagedProfileMCPHTTPHandler(profile, initial, revision, load, build, managedMCPToolCatalog{
+		revision:        func(context.Context) (int64, error) { return 0, nil },
+		fingerprint:     func(context.Context, profiledomain.Profile) (string, error) { return "fixture", nil },
+		initialRevision: 0, initialFingerprint: "fixture",
+	})
+}
+
 func TestManagedProfileHotRefreshFailsClosedAndRetries(t *testing.T) {
 	p := freshProjectionProfile(t)
 	var rev atomic.Uint64
 	var unavailable atomic.Bool
 	var rebuilding atomic.Bool
 	var builds atomic.Int64
-	h, err := newManagedProfileMCPHTTPHandler(p, projectionText("v0"),
+	h, err := newTestProfileHandler(p, projectionText("v0"),
 		func(context.Context, profiledomain.ProfileID) (uint64, error) {
 			if unavailable.Load() {
 				return 0, errors.New("secret profile storage error")
@@ -92,7 +105,7 @@ func TestManagedProfileHotRefreshPublishesMonotonicallyAcrossConcurrentRequests(
 	p := freshProjectionProfile(t)
 	var currentRevision atomic.Uint64
 	var publishes atomic.Int64
-	h, err := newManagedProfileMCPHTTPHandler(p, projectionText("v0"),
+	h, err := newTestProfileHandler(p, projectionText("v0"),
 		func(context.Context, profiledomain.ProfileID) (uint64, error) { return currentRevision.Load(), nil },
 		func(context.Context, profiledomain.ProfileID) (profiledomain.Profile, error) {
 			return p.WithRevision(currentRevision.Load()), nil
@@ -140,7 +153,7 @@ func TestManagedProfileRefreshRejectsIdentityChangeAndRollback(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	h, err := newManagedProfileMCPHTTPHandler(p.WithRevision(2), projectionText("v2"),
+	h, err := newTestProfileHandler(p.WithRevision(2), projectionText("v2"),
 		func(context.Context, profiledomain.ProfileID) (uint64, error) { return 3, nil },
 		func(context.Context, profiledomain.ProfileID) (profiledomain.Profile, error) {
 			return different.WithRevision(3), nil
@@ -168,7 +181,7 @@ func TestManagedProfileRefreshRejectsConcurrentCommitAcrossLoadAndBuild(t *testi
 	var revision atomic.Uint64
 	revision.Store(1)
 	var updateAtBuild atomic.Bool
-	h, err := newManagedProfileMCPHTTPHandler(p, projectionText("v0"),
+	h, err := newTestProfileHandler(p, projectionText("v0"),
 		func(context.Context, profiledomain.ProfileID) (uint64, error) { return revision.Load(), nil },
 		func(context.Context, profiledomain.ProfileID) (profiledomain.Profile, error) {
 			return p.WithRevision(revision.Load()), nil
