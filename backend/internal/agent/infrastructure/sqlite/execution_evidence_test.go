@@ -14,6 +14,11 @@ import (
 
 func executionEvidenceFixture(t *testing.T) (*Store, agentdomain.Task, string) {
 	t.Helper()
+	return executionEvidenceFixtureWithIsolation(t, "restricted_host")
+}
+
+func executionEvidenceFixtureWithIsolation(t *testing.T, isolation string) (*Store, agentdomain.Task, string) {
+	t.Helper()
 	ctx := context.Background()
 	s, err := Open(ctx, filepath.Join(t.TempDir(), "execution-evidence.sqlite"))
 	if err != nil {
@@ -28,7 +33,7 @@ func executionEvidenceFixture(t *testing.T) (*Store, agentdomain.Task, string) {
 	a, err := agentdomain.NewAgent(agentdomain.Spec{
 		ID: aid, Name: "Evidence test", Backend: agentdomain.BackendOpenCode,
 		PluginID: agentdomain.BackendOpenCode.PluginID(), ExtensionID: "main",
-		WorkspaceRoot: root, Isolation: "restricted_host",
+		WorkspaceRoot: root, Isolation: isolation,
 		OwnerKind: "local_user", OwnerRef: "os:501", CreatedAt: time.Now().UTC(),
 	})
 	if err != nil {
@@ -86,7 +91,7 @@ func TestExecutionEvidencePersistsNativeSessionPrivatelyAndRejectsStaleWriter(t 
 	}
 	got, err := s.TaskObservation(ctx, task.ID)
 	if err != nil || got == nil || !got.SessionRecorded || !got.LeaderReaped ||
-		got.Phase != "leader_reaped" || got.SessionRecoverability != "unverified" ||
+		got.Phase != "leader_reaped" || got.SessionRecoverability != "unavailable" ||
 		got.LastObservedAt.IsZero() || got.LastNativeProgressAt == nil || got.LastNativeProgressAt.IsZero() || got.Activity != "uncertain" {
 		t.Fatalf("safe read projection %+v %v", got, err)
 	}
@@ -124,6 +129,37 @@ func TestExecutionEvidencePersistsNativeSessionPrivatelyAndRejectsStaleWriter(t 
 	var n int
 	if err := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM agent_execution_events WHERE task_id=?", string(task.ID)).Scan(&n); err != nil || n != 6 {
 		t.Fatalf("event audit n=%d err=%v", n, err)
+	}
+}
+
+// Context continuation remains unverified on Host even when the Agent
+// advertises load/resume. Restricted private HOME has no such continuity.
+func TestTaskObservationACPHostVersusRestrictedSession(t *testing.T) {
+	for _, isolation := range []string{"host", "restricted_host"} {
+		t.Run(isolation, func(t *testing.T) {
+			s, task, instance := executionEvidenceFixtureWithIsolation(t, isolation)
+			ctx := context.Background()
+			if err := s.BeginAttempt(ctx, task, instance); err != nil {
+				t.Fatal(err)
+			}
+			for _, event := range []agentdomain.ExecutionEvent{
+				{Kind: agentdomain.EventProcessStarted, ProcessPID: 18001},
+				{Kind: agentdomain.EventSessionReady, NativeSession: "private-session", CanLoad: true, CanResume: true},
+			} {
+				if err := s.RecordExecution(ctx, task, instance, event); err != nil {
+					t.Fatal(err)
+				}
+			}
+			observation, err := s.TaskObservation(ctx, task.ID)
+			want := "unavailable"
+			if isolation == "host" {
+				want = "unverified"
+			}
+			if err != nil || observation == nil || !observation.SessionRecorded ||
+				observation.SessionRecoverability != want {
+				t.Fatalf("isolation %s incorrectly represented session continuation: %+v, %v", isolation, observation, err)
+			}
+		})
 	}
 }
 
@@ -226,7 +262,7 @@ func TestExecutionEvidenceUnknownReconciliationDoesNotReplayOrRewrite(t *testing
 	}
 	observation, err := s.TaskObservation(ctx, task.ID)
 	if err != nil || observation == nil || observation.Phase != "prompt_sent" ||
-		observation.Activity != "uncertain" || observation.SessionRecoverability != "unverified" {
+		observation.Activity != "uncertain" || observation.SessionRecoverability != "unavailable" {
 		t.Fatalf("lost honest last evidence: %+v %v", observation, err)
 	}
 	if err := s.Transition(ctx, task.ID, 2, agentdomain.TaskUnknown, agentdomain.TaskCompleted, "", ""); err == nil {

@@ -278,12 +278,13 @@ func (s *Store) TaskObservation(ctx context.Context, id agentdomain.TaskID) (*ag
 		return nil, fmt.Errorf("invalid persisted Agent activity timestamp: %w", err)
 	}
 	recoverability := "unavailable"
-	if session.Valid && session.String != "" &&
+	if session.Valid && session.String != "" && isolation.String == "host" &&
 		(canLoad.Int64 != 0 || canResume.Int64 != 0 ||
-			(backend.String == string(agentdomain.BackendAntigravity) && isolation.String == "host" &&
+			(backend.String == string(agentdomain.BackendAntigravity) &&
 				agentdomain.ValidAntigravityConversationID(nativeSession.String))) {
-		// The CLI identity still has to be checked pre-prompt. A stored ID
-		// or claimed capability is not proof of a restored conversation.
+		// Restricted Agent HOME is deliberately ephemeral: advertised ACP
+		// capabilities do not make its native context recoverable. Even on
+		// host, the CLI identity and Task continuation admission remain unproven.
 		recoverability = "unverified"
 	}
 	obs := &agentdomain.TaskObservation{
