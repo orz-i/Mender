@@ -105,7 +105,9 @@ func TestPluginConfigAndBoundToolDiscovery(t *testing.T) {
 		t.Fatalf("Agy host conversation continuation capability misrepresented: %+v %v", agyTools, err)
 	}
 	if items[4].SourceKey != agyTools[4].SourceKey || items[4].Name != agyTools[4].Name ||
-		strings.Contains(items[4].Description, "Unavailable") {
+		strings.Contains(items[4].Description, "Unavailable") ||
+		strings.Contains(items[4].Description, "Agy") ||
+		!strings.Contains(items[4].Description, "ACP") {
 		t.Fatal("canonical ToolID or supported ACP metadata drifted")
 	}
 	restricted, err := svc.Create(ctx, agentapplication.CreateRequest{

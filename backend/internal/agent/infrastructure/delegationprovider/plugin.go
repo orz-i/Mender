@@ -124,12 +124,13 @@ func (p *Plugin) Open(ctx context.Context, req providerplugin.OpenRequest) (prov
 	// placements: a legacy Profile may refer to it. Its discovered metadata
 	// must explain the real supported contract instead of promising recovery.
 	unsupported := a.Spec().Isolation != "host"
-	return &Instance{service: p.service, agentID: agentdomain.ID(c.AgentID), resumeUnsupported: unsupported}, nil
+	return &Instance{service: p.service, agentID: agentdomain.ID(c.AgentID), backend: a.Spec().Backend, resumeUnsupported: unsupported}, nil
 }
 
 type Instance struct {
 	service           *agentapplication.Service
 	agentID           agentdomain.ID
+	backend           agentdomain.Backend
 	resumeUnsupported bool // truthful metadata, never an authorization decision
 }
 
@@ -164,9 +165,13 @@ func (i *Instance) DiscoverTools(_ context.Context, _ catalogdomain.Provider) ([
 	if i == nil {
 		return nil, agentdomain.ErrUnavailable
 	}
-	resumeTitle := "Continue proven-complete native session"
-	resumeDescription := "Continue from an owned, proven-complete native Agent session. Antigravity validates the exact conversation ID before sending a new prompt. Never replays unknown Tasks."
+	resumeTitle := "Continue proven-complete ACP session"
+	resumeDescription := "Continue only from an owned, completed ACP session with verified native capability and terminal evidence. Never replays unknown Tasks."
 	resumeTags := []string{"agent", "session"}
+	if !i.resumeUnsupported && i.backend == agentdomain.BackendAntigravity {
+		resumeTitle = "Continue verified Agy conversation"
+		resumeDescription = "Continue an owned, proven-complete Agy conversation. Its exact conversation ID must match the native init before a new prompt is sent; never retries an unknown Task."
+	}
 	if i.resumeUnsupported {
 		resumeTitle = "Session continuation unavailable"
 		resumeDescription = "Unavailable for this Agent backend/isolation. No safe native session restoration; never retries unknown Tasks."
@@ -246,7 +251,7 @@ func (i *Instance) Execute(ctx context.Context, req invocationapplication.Execut
 			// fixed, safe message and never starts a replacement task.
 			return invocationdomain.Failed(invocationdomain.FailureSourceTool,
 				invocationdomain.FailureToolError,
-				"Session continuation is unavailable for this Agent. No new task was created; do not replay the previous prompt.")
+				"Session continuation is unavailable for this task or Agent. No new task was created; do not replay the previous prompt.")
 		}
 		if err != nil {
 			return invocationdomain.Outcome{}, err

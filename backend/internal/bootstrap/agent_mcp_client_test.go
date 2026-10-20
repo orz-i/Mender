@@ -162,7 +162,7 @@ func TestAgentDelegationThroughMCPClientSession(t *testing.T) {
 	}
 	failure, ok := resumeErr.StructuredContent.(map[string]any)
 	if !ok || failure["kind"] != "failed" || failure["source"] != "tool" ||
-		failure["code"] != "tool_error" || failure["message"] != "Session continuation is unavailable for this Agent. No new task was created; do not replay the previous prompt." {
+		failure["code"] != "tool_error" || failure["message"] != "Session continuation is unavailable for this task or Agent. No new task was created; do not replay the previous prompt." {
 		t.Fatalf("unsafe MCP continuation failure: %#v", resumeErr.StructuredContent)
 	}
 	afterTasks, err := r.Agents.Tasks(ctx, agent.ID(), owner)
