@@ -58,3 +58,11 @@
 1. 源码和隔离原生 CLI 测试已通过，但**当前运行中的 Wails Desktop 尚未重建为这些提交**。用户构建后须显式进入 Agent → 工具 → 刷新智能体工具，验证已存在的 ToolID 不旋转，运行中的 MCP Server 由既有 Catalog 版本热刷新获取新说明，无须重启。
 2. 仅选用一个**隔离且已完成**的 Agy Task，新授权 Profile 显式绑定 `resume` 后，执行新的无工具 Prompt，再验证 Parent/Child、Native Session 身份以及 MCP 状态与 Result；不要把这个验收和生产旧 `unknown` 的自动恢复混为一谈。
 3. 本轮**未实现**对在途中断原 Prompt 的继续执行、Mender Agent Loop、原生 ACP 审批、自动重派或结果猜测。未知终态继续保留 `unknown` 和人可审核的执行证据。
+
+## 2026-10-20 重建后的真实 Mender MCP 验收
+
+- 运行：重建的 Wails Desktop 和 default MCP Server（本轮发现 PID 61306、Tunnel PID 62144），Agent DB v18。初始 Catalog 仍有旧 Agy resume 标记；经 **Antigravity → 查看智能体工具 → 刷新智能体工具** 同步后，不重启 MCP Server，ChatGPT `mender_describe_tool` 立即返回新标题 `Continue verified Agy conversation`，旧 ToolID `tool_3d20368095e0ae5774e12016bc77d6f8` 不变，Profile 绑定仍 31。
+- 已完成父 Task：`atask_06f1d7543b513cea4458197768f7d91f`，MCP origin、同 Profile/同 Agent/Host、1200 秒预算，已记录原生 Conversation UUID、`terminal_seen` 和 `leader_reaped`；旧版能力位 0/0，没有被改写，父 Task 未曾续接过。
+- 通过 ChatGPT 的真实 `agent.resume` 发出无工具、无文件更改的新 Prompt，创建 `atask_33ec2790c14799af55c68c4ae063912d`。新 Task 先运行、随后原生 `terminal_seen`，`leader_reaped` 后 `completed`；`agent.status` 与 `agent.result` 双重确认，结果精确为 `MENDER_AGY_RESUME_NATIVE_OK`。Child Task 的 `continuedFromTaskId` 指向父 Task，SQLite 内 Parent/Child `session_ref` 相同，关联 lineage 正确，未新造原生 Session，也未扩大工具授权。
+- 操作后只读核对：DB v18、Profile ToolBindings 31、历史 unknown 8、完整性 `quick_check=ok`、外键违规 0。父 Child 的终态都同时有 `terminal_seen`、`leader_reaped`。Git 源码工作树没有新增修改；保留现有未跟踪目录。
+- 验收结论：**Agy Headless 已完成“可信已完成会话 → 新 Task”真实部署闭环**。未声称可自动恢复运行中断的原 Task，尤其是 `unknown`；继续保留原有 Host/Principal/Profile/Session 证据及单次续接预约。无效 Conversation ID 的预提示词拦截已由前序隔离的真实 CLI 与 Fixture 单元测试证明，本轮没有在生产数据库伪造不存在的 Session。
