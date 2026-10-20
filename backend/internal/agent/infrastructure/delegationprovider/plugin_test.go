@@ -87,7 +87,8 @@ func TestPluginConfigAndBoundToolDiscovery(t *testing.T) {
 		t.Fatal("Task result schema lost native progress/budget")
 	}
 	antigravity, err := svc.Create(ctx, agentapplication.CreateRequest{
-		Name: "Agy Test", Backend: agentdomain.BackendAntigravity, WorkspaceRoot: t.TempDir(),
+		Name: "Agy Host Test", Backend: agentdomain.BackendAntigravity,
+		WorkspaceRoot: t.TempDir(), Isolation: "host",
 	}, c)
 	if err != nil {
 		t.Fatal(err)
@@ -99,12 +100,31 @@ func TestPluginConfigAndBoundToolDiscovery(t *testing.T) {
 	}
 	agyTools, err := agyInstance.DiscoverTools(ctx, catalogdomain.Provider{})
 	if err != nil || len(agyTools) != 5 || agyTools[4].SourceKey != sourceResume ||
-		!strings.Contains(agyTools[4].Description, "Unavailable") ||
-		!slices.Contains(agyTools[4].Tags, "unavailable") {
-		t.Fatalf("Agy resume capability misrepresented: %+v %v", agyTools, err)
+		!strings.Contains(agyTools[4].Description, "exact conversation ID") ||
+		slices.Contains(agyTools[4].Tags, "unavailable") {
+		t.Fatalf("Agy host conversation continuation capability misrepresented: %+v %v", agyTools, err)
 	}
 	if items[4].SourceKey != agyTools[4].SourceKey || items[4].Name != agyTools[4].Name ||
 		strings.Contains(items[4].Description, "Unavailable") {
 		t.Fatal("canonical ToolID or supported ACP metadata drifted")
+	}
+	restricted, err := svc.Create(ctx, agentapplication.CreateRequest{
+		Name: "Restricted Agy", Backend: agentdomain.BackendAntigravity,
+		WorkspaceRoot: t.TempDir(), Isolation: "restricted_host",
+	}, c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lockedConfig := []byte(`{"agentId":"` + string(restricted.ID()) + `"}`)
+	lockedInstance, err := p.Open(ctx, providerplugin.OpenRequest{
+		ConfigVersion: ConfigVersion, Config: lockedConfig,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	lockedTools, err := lockedInstance.DiscoverTools(ctx, catalogdomain.Provider{})
+	if err != nil || len(lockedTools) != 5 ||
+		!slices.Contains(lockedTools[4].Tags, "unavailable") {
+		t.Fatalf("Restricted Agy incorrectly advertised as restorable: %+v %v", lockedTools, err)
 	}
 }

@@ -72,6 +72,27 @@ func TestAntigravityTrustedLauncherOnlyPassesExplicitYOLO(t *testing.T) {
 			}
 		})
 	}
+	// Agy CLI continuation must use the exact stored UUID as one argv item.
+	// Neither a Task prompt nor arbitrary user-provided flags are accepted.
+	sessionID := "dfe3c2a6-211b-48dc-bfa8-a5d2ccf51b85"
+	resume, err := launcher.AntigravityResumeCommand(context.Background(), a, root,
+		"gemini-3.8-flash-high", "high", sessionID, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expectedResumeArgs := []string{"--input-format", "stream-json", "--output-format", "stream-json",
+		"--disable-slash-commands", "--sandbox", "--dangerously-skip-permissions",
+		"--model", "gemini-3.8-flash-high", "--effort", "high", "--conversation", sessionID}
+	if resume.Path != binary || resume.Dir != root || !slices.Equal(resume.Args[1:], expectedResumeArgs) {
+		t.Fatalf("unsafe AGY resume command: path=%q cwd=%q args=%q", resume.Path, resume.Dir, resume.Args)
+	}
+	for _, invalid := range []string{"", "--dangerously-skip-permissions", "a b", "a\n",
+		"00000000-0000-4000-8000-00000000000\n"} {
+		if _, err := launcher.AntigravityResumeCommand(context.Background(), a, root,
+			"", "", invalid, false); !errors.Is(err, agentdomain.ErrInvalid) {
+			t.Errorf("unsafe native ConversationID accepted: %q, err=%v", invalid, err)
+		}
+	}
 	for _, slug := range []string{"--dangerously-skip-permissions", "a b", "a\n"} {
 		if _, err := launcher.AntigravityCommand(context.Background(), a, root, slug, "", false, false); !errors.Is(err, agentdomain.ErrInvalid) {
 			t.Errorf("unsafe model accepted: %q err=%v", slug, err)
