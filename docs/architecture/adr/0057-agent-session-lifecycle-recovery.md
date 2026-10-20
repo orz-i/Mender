@@ -1,10 +1,12 @@
 # ADR-0057 — Evidence-bound Agent lifecycle and native session continuation
 
-- Status: Proposed (2026-10-18); research and design only, no runtime rollout
+- Status: Partially implemented as of 2026-10-20. Native Session evidence, explicit Host-only continuation, Task observation and fixed Task budgets are implemented; in-flight reattachment and historical unknown resolution remain proposed and are not enabled.
 - Extends [ADR-0038](0038-governed-agent-delegation.md), [ADR-0052](0052-optional-agent-governed-tool-placement.md), [ADR-0053](0053-agent-approval-inbox-and-scoped-trust.md) and [ADR-0041](0041-ssh-jobs-lifecycle-recovery.md)
 - Scope: governed AgentTask execution/observation, native AgentSession persistence, explicit continuation and evidence-bound reconciliation. Not an Agent reasoning loop.
 
 ## Problem and verified evidence
+
+> Historical baseline (2026-10-18): the following paragraph describes behavior **before** schema v14–v18 and the October 19–20 implementation. It is not a statement of current Runtime capabilities.
 
 In the deployed macOS runtime, two real delegated tasks (OpenCode and Antigravity, 2026-10-18) reached `unknown` with `Agent outcome unknown after timeout` exactly ten minutes after creation. Source edits persisted in the workspace, but their outcome is not independently established. Read-only production SQL review confirmed one unknown Task per backend. Existing status/result tools correctly preserve the unknown verdict.
 
@@ -75,3 +77,11 @@ B/C implementation is limited to durable Session/Attempt observation, immutable 
 ## D implementation boundary (2026-10-19)
 
 The fifth `agent.resume` Tool is implemented as **new prompt + new TaskID** linked to one exact prior native Session. It is not automatic retry, in-progress Task reattach, historical unknown resolution, or generic backend command execution. Stage D currently admits only proven-complete, leader-reaped, noncancelled, same-principal **host-isolation** parent Tasks; restricted-host ephemeral-home tasks remain unavailable. A failed pre-prompt continuation can be explicitly retried only after durable no-dispatch evidence, never after an unconfirmed send. The previously verified B/C `unknown` history is never rewritten. ACP v1 runtime capabilities govern load/resume; Antigravity exact `--conversation` is **not enabled** because no pre-prompt identity verification is proven, and `agent.resume` fails before Task reservation or native process launch. Full real-agent completion, secure restricted-home persistence, owner-only unknown reconciliation and UI authoring remain separate acceptance gates.
+
+## Amendment — Session/Task boundaries (2026-10-20)
+
+The preceding Antigravity unsupported assessment was an **earlier implementation checkpoint**, superseded by verified Agy v1.4.2 native Headless continuation and real ChatGPT → Mender → Agy Parent/Child delivery (details in `../../planning/agy-headless-native-session-continuation-2026-10-20.md`). Agy may reuse an **already proven-complete Host conversation** using the stored exact `--conversation <UUID>` argument, but only after its *first pre-prompt* `init.conversation_id` matches and the original `SessionRef` is durably bound to the new Task. A missing/mismatched identity, timeout or failed evidence write rejects the new prompt. ACP still uses **only v1**, actual negotiated `loadSession`/`sessionCapabilities.resume`, and current task admission; ACP v2 remains deferred until a separate stable-protocol decision. No v2 schema, bridge, dual-stack or speculative fields are authorized.
+
+**Session manages reusable context**, its identity, ownership and capability; **Task manages an independent bounded execution**, its new TaskID, permissions, terminal proof and result. A Session can be associated with sequential authorized Tasks, but Session presence, context recovery, process exit, a Git commit, or heartbeats never establish original Task completion. Existing `agent_native_sessions`, `agent_execution_attempts`, `agent_execution_events` and `agent_task_continuations` are sufficient; no parallel Session state machine, scheduler or protocol adapter is warranted. A proven-complete new turn is not reopening an in-flight/`unknown` Task; the original `unknown` remains unchanged and must not be replayed.
+
+The implementation contract in `../../planning/agent-session-task-lifecycle-boundary-2026-10-20.md` tightens **Task completion**: the same-generation native `terminal_seen` plus `leader_reaped` are required atomically when persisting `completed`, independent of whether a Session ID exists. An executor reporting success without durable proof is not sufficient and is conservatively recorded as `unknown`. Session recoverability is at most `unverified` for valid Host placement; restricted-host ephemeral HOME always projects `unavailable`. These changes require no schema migration, history rewrite, new Profile bindings, UI workflow or Agent Loop.

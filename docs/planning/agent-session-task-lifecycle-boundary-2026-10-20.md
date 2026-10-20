@@ -1,6 +1,6 @@
 # Session / Task 生命周期职责分离：实施契约（2026-10-20）
 
-状态：阶段 A 审计完成；阶段 B/C 等待本轮代码与测试验收。协议基线严格保持 ACP v1；Agy 走现有 Native Headless。Mender 仅治理工具、授权、执行边界与证据，不运行 Agent Loop。
+状态：阶段 A/B/C 已实施并分段提交；阶段 D 完整质量门禁和收尾验收另记于文末。协议基线严格保持 ACP v1；Agy 走现有 Native Headless。Mender 仅治理工具、授权、执行边界与证据，不运行 Agent Loop。
 
 ## 当前基线（只读核验）
 
@@ -45,3 +45,25 @@
 
 - ACP v2、v1/v2 双栈、前瞻性兼容桥、自动原 Prompt replay、`unknown` 转成功、外部 SessionID 透传、Agent 内部 Loop/推理调度。
 - 不改生产 SQLite、运行中的用户任务、权限配置、Profile ToolBinding、现有 Agent ToolID；不因修正 Session 投影引入新 UI 表单或额外操作流程。
+
+## 分段实施记录（2026-10-20）
+
+| 阶段 | Commit | 交付 |
+| --- | --- | --- |
+| A | `6527182` | 首先提交本实施契约、既有职责矩阵与证据差距审计 |
+| B | `4596792` | `TaskObservation` 不把 restricted-host 临时 HOME 误判成可续接；随后于阶段 C 补上 Agy 非法 ID 优先拒绝的细化 |
+| C | `397c6c4` | `Store.Transition` 对 `completed` 原子要求同代 `terminal_seen` + `leader_reaped`，`Service.run` 对不被持久化接纳的假成功归为 `unknown`；原 Task 独立于 Session ID，执行夹具和迁移测试提供可信证据 |
+
+**专项回归已经通过**：Agent Application、Agent SQLite、ACP v1、Agy Native Headless、Delegation Provider、Bootstrap MCP 和 Wails Binding。新增反例覆盖“只有 Session”“仅见进程退出”“只有原生终态但未回收”“Runner 无证据返回 nil”、Agy 无效 UUID 即使声称支持续接、受限 Host 不得投影为可恢复。子 Task 需要重新授权且未知原 Task 不允许续接，保留原有行为。
+
+测试只用临时 SQLite 和假进程/协议夹具；未执行历史 `unknown` Prompt、未重建真实运行实例。真实 Agy Parent/Child 验收沿用 2026-10-20 已记录的上一轮事实，并非声称本次再次发出了真实 Prompt。
+
+## 阶段 D：完整验收结论（2026-10-20）
+
+- **全部通过：** `pnpm check` 完整退出码 **0**；包含 `pnpm go:lint`（`golangci-lint run ./backend/...`）、`go test ./backend/...`、`go test -race ./backend/...`、ACP v1 / Agy / SQLite / Bootstrap / Wails Binding 的 Go 测试、SDK schema 生成一致性、桌面 Bindings 与架构检查、ESLint、TypeScript、i18n、Vitest（**53 文件、325 测试通过**）、Web 与 Wails 前端 Build。
+- 构建只有已有的 Web/Desktop JS 分块超过 500 kB 的性能提示，没有门禁失败；本轮未改前端功能，不为此另启 UI 重构。
+- **生产 SQLite 仅只读复核**：Agent Schema v18；`completed=30`、`failed=28`、`unknown=8`；Native Session 8、Continuation 1、unknown 父 Task 的 Continuation 为 **0**；`PRAGMA quick_check=ok`，外键错误 **0**。上述值是此刻快照，不作持续断言。
+- 历史 Task、Profile Binding、权限策略、原生 Session 与 ToolID **未写入、未重置、未自动迁移**。协议严格保持 ACP v1 + Agy Native Headless，无 ACP v2 双栈；无新表、额外状态机、Agent Loop 或面向用户的新配置表单。
+- **部署边界**：此次仅修改并验证仓库源码/测试，没有重建或重启已运行的 Wails/Tunnel；源码成功不等同于新版已运行。本轮不重复此前真实 Agy Parent/Child 的 MCP 验收，后续新版运行实例的实机回归需在重新构建并重新连接后进行。
+
+结论：Session 归属/上下文与 Task 单次执行/结果的边界得到持久化级的强制验证；不可证明结果继续保持 `unknown`。没有证据表明需要新的 Session 表、协议桥接或额外业务复杂度。
