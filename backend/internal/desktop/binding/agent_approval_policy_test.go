@@ -28,6 +28,9 @@ func (f desktopNativeTrustFixture) ExecuteConfigured(ctx context.Context, _ agen
 		return "", err
 	}
 	f.decision <- result.Choice
+	if err := observeDesktopFixtureCompletion(cfg); err != nil {
+		return "", err
+	}
 	return "Wails trustee approval observed", nil
 }
 func TestWailsOwnerCentralInboxAndScopedPendingRelease(t *testing.T) {

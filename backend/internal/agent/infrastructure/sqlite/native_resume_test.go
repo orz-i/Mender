@@ -180,8 +180,10 @@ func TestNativeResumeUnknownAndUnreapedCannotBeContinued(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := s.Transition(ctx, task.ID, 1, agentdomain.TaskRunning, agentdomain.TaskCompleted, "result", ""); err != nil {
-		t.Fatal(err)
+	// A terminal frame without reaping is no longer allowed to claim
+	// completion; a Session identity cannot substitute for process evidence.
+	if err := s.Transition(ctx, task.ID, 1, agentdomain.TaskRunning, agentdomain.TaskCompleted, "result", ""); !errors.Is(err, agentdomain.ErrConflict) {
+		t.Fatalf("unreaped Task marked completed: %v", err)
 	}
 	if _, err := s.ResumePlan(ctx, task.ID); !errors.Is(err, agentdomain.ErrResumeUnavailable) {
 		t.Fatalf("unreaped parent resumed %v", err)

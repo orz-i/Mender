@@ -41,6 +41,9 @@ func (x *approvalExecutorFixture) ExecuteConfigured(ctx context.Context, _ agent
 		return "", err
 	}
 	x.decision <- result.Choice
+	if err := observeFixtureTerminal(config); err != nil {
+		return "", err
+	}
 	return "fixture decision observed", nil
 }
 func waitPendingApproval(t *testing.T, s *Service, taskID agentdomain.TaskID, ownerCtx gov.Context) agentdomain.Approval {

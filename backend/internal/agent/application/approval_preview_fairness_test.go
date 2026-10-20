@@ -47,6 +47,9 @@ func (runner *twoConcurrentReadApprovals) ExecuteConfigured(ctx context.Context,
 			return "", ctx.Err()
 		}
 	}
+	if err := observeFixtureTerminal(cfg); err != nil {
+		return "", err
+	}
 	return "both approvals accounted for", nil
 }
 

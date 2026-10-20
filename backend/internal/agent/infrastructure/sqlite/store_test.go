@@ -10,6 +10,34 @@ import (
 	agentdomain "github.com/orz-i/Mender/backend/internal/agent/domain"
 )
 
+// Test-only proof fixture. A Task can complete without a Session ID,
+// but not without exact-generation native terminal and leader-reap evidence.
+func completeTaskWithEvidence(t *testing.T, s *Store, id agentdomain.TaskID, result string) {
+	t.Helper()
+	ctx := context.Background()
+	task, err := s.GetTask(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const instance = "arun_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	if err := s.BeginAttempt(ctx, task, instance); err != nil {
+		t.Fatal(err)
+	}
+	for _, event := range []agentdomain.ExecutionEvent{
+		{Kind: agentdomain.EventProcessStarted, ProcessPID: 70111},
+		{Kind: agentdomain.EventPromptSent},
+		{Kind: agentdomain.EventTerminalSeen},
+		{Kind: agentdomain.EventLeaderReaped},
+	} {
+		if err := s.RecordExecution(ctx, task, instance, event); err != nil {
+			t.Fatalf("event %s: %v", event.Kind, err)
+		}
+	}
+	if err := s.Transition(ctx, id, task.Generation, agentdomain.TaskRunning, agentdomain.TaskCompleted, result, ""); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestAgentTaskPersistenceFencingAndGrants(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "mender.sqlite")
@@ -67,9 +95,7 @@ func TestAgentTaskPersistenceFencingAndGrants(t *testing.T) {
 	if err := s.Transition(ctx, taskID, 1, agentdomain.TaskQueued, agentdomain.TaskRunning, "", ""); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Transition(ctx, taskID, 1, agentdomain.TaskRunning, agentdomain.TaskCompleted, "finished", ""); err != nil {
-		t.Fatal(err)
-	}
+	completeTaskWithEvidence(t, s, taskID, "finished")
 	if err := s.Transition(ctx, taskID, 1, agentdomain.TaskRunning, agentdomain.TaskFailed, "", "bad"); !errors.Is(err, agentdomain.ErrConflict) {
 		t.Fatal("terminal task mutated", err)
 	}
@@ -258,9 +284,7 @@ func TestAgentTaskBudgetIsAtomicAcrossAgentsAndPrincipals(t *testing.T) {
 	if err := s.Transition(ctx, first.ID, 1, agentdomain.TaskQueued, agentdomain.TaskRunning, "", ""); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Transition(ctx, first.ID, 1, agentdomain.TaskRunning, agentdomain.TaskCompleted, "ok", ""); err != nil {
-		t.Fatal(err)
-	}
+	completeTaskWithEvidence(t, s, first.ID, "ok")
 	if err := s.CreateAdmittedTask(ctx, third, 2, ""); err != nil {
 		t.Fatalf("budget not returned by terminal transition: %v", err)
 	}

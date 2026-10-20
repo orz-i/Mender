@@ -279,9 +279,10 @@ func (s *Store) TaskObservation(ctx context.Context, id agentdomain.TaskID) (*ag
 	}
 	recoverability := "unavailable"
 	if session.Valid && session.String != "" && isolation.String == "host" &&
-		(canLoad.Int64 != 0 || canResume.Int64 != 0 ||
-			(backend.String == string(agentdomain.BackendAntigravity) &&
-				agentdomain.ValidAntigravityConversationID(nativeSession.String))) {
+		((backend.String == string(agentdomain.BackendAntigravity) &&
+			agentdomain.ValidAntigravityConversationID(nativeSession.String)) ||
+			(backend.String != string(agentdomain.BackendAntigravity) &&
+				(canLoad.Int64 != 0 || canResume.Int64 != 0))) {
 		// Restricted Agent HOME is deliberately ephemeral: advertised ACP
 		// capabilities do not make its native context recoverable. Even on
 		// host, the CLI identity and Task continuation admission remain unproven.

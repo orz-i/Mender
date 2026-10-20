@@ -23,7 +23,19 @@ import (
 
 type fixtureAgentExecutor struct{}
 
-func (fixtureAgentExecutor) ExecuteConfigured(_ context.Context, _ agentdomain.Agent, prompt string, _ agentapplication.RunConfig) (string, error) {
+func (fixtureAgentExecutor) ExecuteConfigured(_ context.Context, _ agentdomain.Agent, prompt string, cfg agentapplication.RunConfig) (string, error) {
+	// A fixture must provide the native terminal and process-reap proof
+	// that the real Runner supplies; nil error alone is not Task success.
+	for _, e := range []agentdomain.ExecutionEvent{
+		{Kind: agentdomain.EventProcessStarted, ProcessPID: 70221},
+		{Kind: agentdomain.EventPromptSent},
+		{Kind: agentdomain.EventTerminalSeen},
+		{Kind: agentdomain.EventLeaderReaped},
+	} {
+		if err := cfg.Observe(e); err != nil {
+			return "", err
+		}
+	}
 	return "fixture: " + prompt, nil
 }
 func agentOwnerContext(t *testing.T, r *Runtime) gov.Context {

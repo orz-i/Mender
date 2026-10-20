@@ -240,7 +240,9 @@ func (s *Store) ListTasks(ctx context.Context, agentID agentdomain.ID) ([]agentd
 }
 
 // Transition is fenced on the TaskID, generation, old status, and cancellation
-// state in a single SQLite update. Never overwrite a completed task.
+// state in a single SQLite update. Completion additionally requires native
+// terminal proof and leader reap for this exact execution generation, not a
+// session ID or a runner's unverified success. Never overwrite a terminal task.
 func (s *Store) Transition(ctx context.Context, id agentdomain.TaskID, generation uint64, from, to agentdomain.TaskStatus, result, diagnostic string) error {
 	if err := agentdomain.NextStatus(from, to); err != nil {
 		return err
@@ -249,8 +251,16 @@ func (s *Store) Transition(ctx context.Context, id agentdomain.TaskID, generatio
 		return agentdomain.ErrInvalid
 	}
 	res, err := s.db.ExecContext(ctx, `UPDATE agent_tasks SET status=?,result_text=?,diagnostic=?,updated_at=?
-		WHERE task_id=? AND generation=? AND status=? AND (cancel_requested=0 OR ?!='running')`,
-		string(to), result, diagnostic, time.Now().UTC().Format(time.RFC3339Nano), string(id), generation, string(from), string(to))
+		WHERE task_id=? AND generation=? AND status=? AND (cancel_requested=0 OR ?!='running')
+		AND (?!='completed' OR EXISTS (
+			SELECT 1 FROM agent_execution_attempts a
+			WHERE a.task_id=agent_tasks.task_id AND a.generation=agent_tasks.generation
+			  AND a.leader_reaped_at!=''
+			  AND EXISTS (SELECT 1 FROM agent_execution_events e
+			    WHERE e.task_id=a.task_id AND e.generation=a.generation AND e.event_kind='terminal_seen')
+		))`,
+		string(to), result, diagnostic, time.Now().UTC().Format(time.RFC3339Nano), string(id), generation,
+		string(from), string(to), string(to))
 	if err != nil {
 		return err
 	}

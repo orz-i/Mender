@@ -121,6 +121,9 @@ func (f *sequentialReadExecutor) ExecuteConfigured(ctx context.Context, _ agentd
 			}
 		}
 	}
+	if err := observeFixtureTerminal(cfg); err != nil {
+		return "", err
+	}
 	return "rechecked", nil
 }
 func TestPolicyRevocationStopsFutureReadRequestsAndOwnerInboxSeesNext(t *testing.T) {

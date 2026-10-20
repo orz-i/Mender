@@ -105,9 +105,7 @@ func TestAntigravityV12ToV13PreservesHistoricalAgentTaskGrantsAndPolicy(t *testi
 	if err = s.Transition(ctx, taskID, 1, agentdomain.TaskQueued, agentdomain.TaskRunning, "", ""); err != nil {
 		t.Fatal(err)
 	}
-	if err = s.Transition(ctx, taskID, 1, agentdomain.TaskRunning, agentdomain.TaskCompleted, "historic success", ""); err != nil {
-		t.Fatal(err)
-	}
+	completeTaskWithEvidence(t, s, taskID, "historic success")
 	trusted := agentdomain.ApprovalPolicy{AgentID: id, WorkspaceRoot: root, Mode: agentdomain.ApprovalTrusted,
 		UpdatedAt: now, ExpiresAt: now.Add(24 * time.Hour)}
 	if err = s.SetApprovalPolicy(ctx, trusted); err != nil {

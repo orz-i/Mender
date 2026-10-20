@@ -17,6 +17,9 @@ type nativeSnapshotRunner struct{ seen chan nativePermissionSnapshot }
 
 func (r nativeSnapshotRunner) ExecuteConfigured(_ context.Context, a agentdomain.Agent, _ string, cfg RunConfig) (string, error) {
 	r.seen <- nativePermissionSnapshot{agent: a.Spec().Backend, config: cfg}
+	if err := observeFixtureTerminal(cfg); err != nil {
+		return "", err
+	}
 	return "fixture", nil
 }
 

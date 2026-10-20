@@ -25,6 +25,9 @@ func (f desktopApprovalFixture) ExecuteConfigured(ctx context.Context, _ agentdo
 	if err != nil {
 		return "", err
 	}
+	if err := observeDesktopFixtureCompletion(cfg); err != nil {
+		return "", err
+	}
 	if result.Choice != agentdomain.ApprovalAllowOnce {
 		return "rejected", nil
 	}

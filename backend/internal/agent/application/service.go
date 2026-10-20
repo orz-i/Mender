@@ -567,7 +567,16 @@ func (s *Service) run(ctx context.Context, cancel context.CancelFunc, agent agen
 		result = ""
 		diagnostic = "Agent output exceeded the permitted limit"
 	}
-	_ = s.store.Transition(context.WithoutCancel(ctx), task.ID, task.Generation, agentdomain.TaskRunning, next, result, diagnostic)
+	// A runner's nil error is not native completion proof. The durable Task
+	// transition independently requires terminal_seen and leader_reaped for
+	// this exact generation; a rejected success must remain uncertain instead
+	// of leaving a finished worker reported as running with an asserted result.
+	writeCtx := context.WithoutCancel(ctx)
+	if transitionErr := s.store.Transition(writeCtx, task.ID, task.Generation,
+		agentdomain.TaskRunning, next, result, diagnostic); transitionErr != nil && next == agentdomain.TaskCompleted {
+		_ = s.store.Transition(writeCtx, task.ID, task.Generation, agentdomain.TaskRunning,
+			agentdomain.TaskUnknown, "", "Agent outcome unknown after execution evidence loss")
+	}
 }
 func (s *Service) authorizedTask(ctx context.Context, id agentdomain.TaskID, caller gov.Context) (agentdomain.Task, agentdomain.Agent, error) {
 	task, err := s.store.GetTask(ctx, id)

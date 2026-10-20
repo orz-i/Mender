@@ -19,6 +19,11 @@ func executionEvidenceFixture(t *testing.T) (*Store, agentdomain.Task, string) {
 
 func executionEvidenceFixtureWithIsolation(t *testing.T, isolation string) (*Store, agentdomain.Task, string) {
 	t.Helper()
+	return executionEvidenceFixtureWithBackend(t, agentdomain.BackendOpenCode, isolation)
+}
+
+func executionEvidenceFixtureWithBackend(t *testing.T, backend agentdomain.Backend, isolation string) (*Store, agentdomain.Task, string) {
+	t.Helper()
 	ctx := context.Background()
 	s, err := Open(ctx, filepath.Join(t.TempDir(), "execution-evidence.sqlite"))
 	if err != nil {
@@ -31,8 +36,8 @@ func executionEvidenceFixtureWithIsolation(t *testing.T, isolation string) (*Sto
 	}
 	root := t.TempDir()
 	a, err := agentdomain.NewAgent(agentdomain.Spec{
-		ID: aid, Name: "Evidence test", Backend: agentdomain.BackendOpenCode,
-		PluginID: agentdomain.BackendOpenCode.PluginID(), ExtensionID: "main",
+		ID: aid, Name: "Evidence test", Backend: backend,
+		PluginID: backend.PluginID(), ExtensionID: "main",
 		WorkspaceRoot: root, Isolation: isolation,
 		OwnerKind: "local_user", OwnerRef: "os:501", CreatedAt: time.Now().UTC(),
 	})
@@ -160,6 +165,93 @@ func TestTaskObservationACPHostVersusRestrictedSession(t *testing.T) {
 				t.Fatalf("isolation %s incorrectly represented session continuation: %+v, %v", isolation, observation, err)
 			}
 		})
+	}
+}
+
+func TestTaskObservationAgyIdentityOverridesAdvertisedCapability(t *testing.T) {
+	for _, tc := range []struct {
+		name, nativeID, expected string
+	}{
+		{name: "invalid ID even with capability flags", nativeID: "not-an-agy-uuid", expected: "unavailable"},
+		{name: "valid ID despite legacy zero flags", nativeID: "dfe3c2a6-211b-48dc-bfa8-a5d2ccf51b85", expected: "unverified"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, task, instance := executionEvidenceFixtureWithBackend(t, agentdomain.BackendAntigravity, "host")
+			ctx := context.Background()
+			if err := s.BeginAttempt(ctx, task, instance); err != nil {
+				t.Fatal(err)
+			}
+			for _, event := range []agentdomain.ExecutionEvent{
+				{Kind: agentdomain.EventProcessStarted, ProcessPID: 70004},
+				{Kind: agentdomain.EventSessionReady, NativeSession: tc.nativeID, CanLoad: tc.expected == "unavailable"},
+			} {
+				if err := s.RecordExecution(ctx, task, instance, event); err != nil {
+					t.Fatal(err)
+				}
+			}
+			obs, err := s.TaskObservation(ctx, task.ID)
+			if err != nil || obs == nil || obs.SessionRecoverability != tc.expected {
+				t.Fatalf("Agy invalid/legacy identity not enforced: %+v, %v", obs, err)
+			}
+		})
+	}
+}
+
+func TestTaskCompletionRequiresNativeTerminalAndLeaderReap(t *testing.T) {
+	s, task, instance := executionEvidenceFixture(t)
+	ctx := context.Background()
+	assertIncomplete := func(stage string) {
+		t.Helper()
+		if err := s.Transition(ctx, task.ID, 1, agentdomain.TaskRunning, agentdomain.TaskCompleted,
+			"unproven", ""); !errors.Is(err, agentdomain.ErrConflict) {
+			t.Fatalf("%s incorrectly completed Task: %v", stage, err)
+		}
+	}
+	assertIncomplete("no attempt")
+	if err := s.BeginAttempt(ctx, task, instance); err != nil {
+		t.Fatal(err)
+	}
+	assertIncomplete("reserved attempt")
+	for _, event := range []agentdomain.ExecutionEvent{
+		{Kind: agentdomain.EventProcessStarted, ProcessPID: 70010},
+		{Kind: agentdomain.EventSessionReady, NativeSession: "session-is-not-a-task-result", CanLoad: true},
+		{Kind: agentdomain.EventPromptSent},
+		{Kind: agentdomain.EventTerminalSeen},
+	} {
+		if err := s.RecordExecution(ctx, task, instance, event); err != nil {
+			t.Fatal(err)
+		}
+		assertIncomplete(string(event.Kind))
+	}
+	if err := s.RecordExecution(ctx, task, instance, agentdomain.ExecutionEvent{Kind: agentdomain.EventLeaderReaped}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Transition(ctx, task.ID, 1, agentdomain.TaskRunning, agentdomain.TaskCompleted, "trusted", ""); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.GetTask(ctx, task.ID)
+	if err != nil || got.Status != agentdomain.TaskCompleted || got.Result != "trusted" {
+		t.Fatalf("completed Task lost independently confirmed result: %+v, %v", got, err)
+	}
+}
+
+func TestTaskCompletionDoesNotMistakeReapedProcessForTerminal(t *testing.T) {
+	s, task, instance := executionEvidenceFixture(t)
+	ctx := context.Background()
+	if err := s.BeginAttempt(ctx, task, instance); err != nil {
+		t.Fatal(err)
+	}
+	for _, event := range []agentdomain.ExecutionEvent{
+		{Kind: agentdomain.EventProcessStarted, ProcessPID: 70020},
+		{Kind: agentdomain.EventPromptSent},
+		{Kind: agentdomain.EventLeaderReaped},
+	} {
+		if err := s.RecordExecution(ctx, task, instance, event); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := s.Transition(ctx, task.ID, 1, agentdomain.TaskRunning, agentdomain.TaskCompleted, "false", ""); !errors.Is(err, agentdomain.ErrConflict) {
+		t.Fatalf("process exit inferred task completion: %v", err)
 	}
 }
 

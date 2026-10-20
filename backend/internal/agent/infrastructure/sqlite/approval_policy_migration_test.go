@@ -55,9 +55,7 @@ func TestAgentV11ToV12ApprovalModeMigrationPreservesHistoryAndDefaultsOff(t *tes
 	if err := store.Transition(ctx, taskID, 1, agentdomain.TaskQueued, agentdomain.TaskRunning, "", ""); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.Transition(ctx, taskID, 1, agentdomain.TaskRunning, agentdomain.TaskCompleted, "existing result", ""); err != nil {
-		t.Fatal(err)
-	}
+	completeTaskWithEvidence(t, store, taskID, "existing result")
 	aid, err := agentdomain.NewApprovalID()
 	if err != nil {
 		t.Fatal(err)

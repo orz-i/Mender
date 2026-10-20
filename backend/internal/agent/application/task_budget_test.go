@@ -11,12 +11,15 @@ import (
 
 type boundedDeadlineRunner struct{ remaining chan time.Duration }
 
-func (r *boundedDeadlineRunner) ExecuteConfigured(ctx context.Context, _ agentdomain.Agent, _ string, _ RunConfig) (string, error) {
+func (r *boundedDeadlineRunner) ExecuteConfigured(ctx context.Context, _ agentdomain.Agent, _ string, cfg RunConfig) (string, error) {
 	deadline, ok := ctx.Deadline()
 	if !ok {
 		return "", errors.New("unbounded Agent Task context")
 	}
 	r.remaining <- time.Until(deadline)
+	if err := observeFixtureTerminal(cfg); err != nil {
+		return "", err
+	}
 	return "ok", nil
 }
 

@@ -59,6 +59,9 @@ type selectionRunner struct{ calls chan RunConfig }
 func (r selectionRunner) ExecuteConfigured(ctx context.Context, _ agentdomain.Agent, _ string, config RunConfig) (string, error) {
 	select {
 	case r.calls <- config:
+		if err := observeFixtureTerminal(config); err != nil {
+			return "", err
+		}
 		return "ok", nil
 	case <-ctx.Done():
 		return "", ctx.Err()

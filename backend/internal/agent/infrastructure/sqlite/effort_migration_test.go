@@ -49,9 +49,7 @@ func TestAgentV6ToV7ReasoningEffortMigrationPreservesIdentity(t *testing.T) {
 	if err := s.Transition(ctx, taskID, 1, agentdomain.TaskQueued, agentdomain.TaskRunning, "", ""); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Transition(ctx, taskID, 1, agentdomain.TaskRunning, agentdomain.TaskCompleted, "done", ""); err != nil {
-		t.Fatal(err)
-	}
+	completeTaskWithEvidence(t, s, taskID, "done")
 	if err := s.Close(); err != nil {
 		t.Fatal(err)
 	}

@@ -167,6 +167,24 @@ func TestOpenCodeAgentV7ToV8PreservesAllLiveRelationships(t *testing.T) {
 	if err := r.agentStore.Transition(ctx, taskID, 1, agentdomain.TaskQueued, agentdomain.TaskRunning, "", ""); err != nil {
 		t.Fatal(err)
 	}
+	// Build a proven-complete synthetic pre-migration Task. Its native
+	// execution evidence is discarded by the fixture downgrade to v7,
+	// while the historical immutable Task outcome must survive migration.
+	history.Status = agentdomain.TaskRunning
+	const runtime = "arun_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	if err := r.agentStore.BeginAttempt(ctx, history, runtime); err != nil {
+		t.Fatal(err)
+	}
+	for _, event := range []agentdomain.ExecutionEvent{
+		{Kind: agentdomain.EventProcessStarted, ProcessPID: 70224},
+		{Kind: agentdomain.EventPromptSent},
+		{Kind: agentdomain.EventTerminalSeen},
+		{Kind: agentdomain.EventLeaderReaped},
+	} {
+		if err := r.agentStore.RecordExecution(ctx, history, runtime, event); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if err := r.agentStore.Transition(ctx, taskID, 1, agentdomain.TaskRunning, agentdomain.TaskCompleted, "done", ""); err != nil {
 		t.Fatal(err)
 	}

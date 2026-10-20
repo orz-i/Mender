@@ -17,14 +17,37 @@ type fakeExecutor struct {
 	release chan struct{}
 }
 
-func (x fakeExecutor) ExecuteConfigured(ctx context.Context, _ agentdomain.Agent, _ string, _ RunConfig) (string, error) {
+func (x fakeExecutor) ExecuteConfigured(ctx context.Context, _ agentdomain.Agent, _ string, config RunConfig) (string, error) {
 	close(x.started)
 	select {
 	case <-x.release:
+		if err := observeFixtureTerminal(config); err != nil {
+			return "", err
+		}
 		return "fixture result", nil
 	case <-ctx.Done():
 		return "", ctx.Err()
 	}
+}
+
+// Test runners that claim a completed native turn must persist the same
+// terminal/process evidence as real backends. No Session ID is required for
+// Task completion: Session context and a single Task result are independent.
+func observeFixtureTerminal(cfg RunConfig) error {
+	if cfg.Observe == nil {
+		return nil
+	}
+	for _, event := range []agentdomain.ExecutionEvent{
+		{Kind: agentdomain.EventProcessStarted, ProcessPID: 77001},
+		{Kind: agentdomain.EventPromptSent},
+		{Kind: agentdomain.EventTerminalSeen},
+		{Kind: agentdomain.EventLeaderReaped},
+	} {
+		if err := cfg.Observe(event); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 func owner(t *testing.T) gov.Context {
 	t.Helper()
