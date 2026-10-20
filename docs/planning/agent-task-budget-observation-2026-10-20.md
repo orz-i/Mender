@@ -52,3 +52,23 @@ ACP v1 `session/load` 明确需要 `loadSession`，`session/resume` 需要 `sess
 4. Agy Native Headless 依然不能无损续接在途 Prompt，也不能通过 Mender 接管原生 ACP approvals。新版改善**执行预算与可解释证据**，**并不意味着解决所有超时后的结果回收问题**；将来确有确定后端终态查询能力时才允许新增独立证据核对操作。
 
 保留未跟踪 `.agents/`、`.pi/`、`.commandcode/`、`.intent-loop/`；不修改用户生产 Task、Profile/Policy、Credential 或已有 Agent 授权。
+
+## v18 重建与真实 MCP 委派验收（2026-10-20，Mac +08:00）
+
+### 已确认
+
+- Wails Desktop PID 19269，default MCP 服务器 127.0.0.1:8765。SQLite Agent schema v18，timeout_seconds 字段存在，64 条历史 Task 均是 600 秒，8 条历史 unknown 未改写。原有 Profile ToolBinding 31 项、Agent 4 个，quick_check 为 ok、外键错误数为 0。
+- 在 Wails 的 Antigravity → 工具 → 刷新智能体工具 后，现有五项 ToolID 原样保留，SQLite delegate schema 增加 timeoutMinutes (10/20/30)，status/result 包含 timeoutSeconds 与 lastNativeProgressAt，resume 正确标记 Session continuation unavailable。ChatGPT 连接在同步后仍是旧 Schema，单独通过 Wails 服务器页重启 default MCP 后，ChatGPT 才能读到更新的工具 Schema 和说明。这是实测发现的快照刷新缺口。
+- 从 ChatGPT 显式调用 Agy agent.delegate，使用 timeoutMinutes=20，提示词要求不调用工具、不访问网络文件、不改仓库，只输出固定标记。新 TaskID 为 atask_06f1d7543b513cea4458197768f7d91f，返回 queued 与 timeoutSeconds=1200。
+- agent.status 与 agent.result 双重验证：Task completed、预算 1200 秒、结果 MENDER_V18_TIMEOUT_20_OK。SQLite 在 2026-10-20T00:32:01.834183Z 创建，00:32:19.082615Z 完成（真实约 17.248 秒），截止 00:52:01.834183Z，独立保存 Agent native progress 00:32:09.954611Z 与 Worker heartbeat 00:32:16.840084Z。
+- 持久化事件包含 attempt_reserved、process_started、prompt_sent、session_ready、terminal_seen 和 leader_reaped，支持终态完成结论。Native Session 有记录，但 sessionRecoverability=unavailable。
+- 原生 Wails Task 详情正确显示 20 分钟预算、截止时间、两个不同的进度时间、确切结果；旧 unknown Task 仍显示 10 分钟与不要自动重派的提示，未被强制改写。
+- 故意对当前完成的 Agy Task 调用 resume，后端拒绝为泛化 provider_error，没有新建 Task；核验总 Task 65、Profile ToolBinding 仍 31，源码 Git 工作树未新增变更。
+
+### 未完成与后续改进
+
+- 本轮成功任务仅约 17 秒，尚未实测真实工作持续 20 分钟，也没有证明网络/进程断开后能取得原未知任务结果；不能据此宣称 unknown 已彻底解决。Agy 原生 Session Resume 仍不支持。
+- P1：刷新 Tool Schema 后运行中 MCP 服务的工具快照不会自动失效，需要再重启 MCP 服务。旧 ToolID 必须保留；应收敛缓存或明确提示刷新流程。
+- P1：Agy resume 虽被标为不可用，实际调用却只返回泛化 provider_error，诊断不够准确；继续要求拒绝执行且不能生成新任务。
+- P2：Wails 完成任务仍显示“执行活动：无法确认执行活动”，该值只指当前实时活动、不是完成结果未知。应优化用词或隐藏终态冗余字段，避免误解。
+- 此轮仅有文档验收更新；未改代码或重启整个 Desktop、未修改 Profile 授权、Policy、凭据、历史任务和历史绑定。唯一新增业务记录是用户本轮验收的全新独立 Task。
