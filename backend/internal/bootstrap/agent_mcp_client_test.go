@@ -148,6 +148,27 @@ func TestAgentDelegationThroughMCPClientSession(t *testing.T) {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
+	// The advertised but unsupported restricted Host continuation must be
+	// a precise, audited MCP Tool error; it must not create a replacement Task.
+	beforeTasks, err := r.Agents.Tasks(ctx, agent.ID(), owner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resumeErr, err := invoke("agent-mcp-fixture__resume", map[string]string{
+		"taskId": id, "prompt": "must not be replayed",
+	})
+	if err != nil || resumeErr == nil || !resumeErr.IsError {
+		t.Fatalf("MCP unsupported session resume was not a Tool error: result=%+v err=%v", resumeErr, err)
+	}
+	failure, ok := resumeErr.StructuredContent.(map[string]any)
+	if !ok || failure["kind"] != "failed" || failure["source"] != "tool" ||
+		failure["code"] != "tool_error" || failure["message"] != "Session continuation is unavailable for this Agent. No new task was created; do not replay the previous prompt." {
+		t.Fatalf("unsafe MCP continuation failure: %#v", resumeErr.StructuredContent)
+	}
+	afterTasks, err := r.Agents.Tasks(ctx, agent.ID(), owner)
+	if err != nil || len(afterTasks) != len(beforeTasks) {
+		t.Fatalf("unsupported resume created a Task: before=%d after=%d err=%v", len(beforeTasks), len(afterTasks), err)
+	}
 	if err := r.Agents.Revoke(ctx, agent.ID(), profile.ID().String(), owner); err != nil {
 		t.Fatal(err)
 	}
