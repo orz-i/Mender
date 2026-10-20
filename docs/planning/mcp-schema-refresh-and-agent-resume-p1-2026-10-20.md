@@ -73,3 +73,38 @@
 - MCP 2026-07-28 Tools：https://github.com/modelcontextprotocol/modelcontextprotocol/blob/main/docs/specification/2026-07-28/server/tools.mdx
 - MCP TypeScript SDK Notifications：https://github.com/modelcontextprotocol/typescript-sdk/blob/main/docs/servers/notifications.md
 - MCP SDK Error Handling：https://github.com/modelcontextprotocol/typescript-sdk/blob/main/docs/servers/errors.md
+
+## 已实施修复与测试结果（2026-10-20）
+
+### P1-B — 明确拒绝无法续接的 Agent 原生会话
+
+- 提交 \`a7f4885\`：\`backend/internal/agent/infrastructure/delegationprovider/plugin.go\` 在 \`Service.Resume\` 完成既有身份、任务归属和授权检查后，只对 \`errors.Is(err, agentdomain.ErrResumeUnavailable)\` 返回现有的 \`Failed(tool, tool_error, 固定安全消息)\`。其他失败仍由原有 Invocation 脱敏通道处理，不透出不可信的 \`err.Error()\`。
+- 新 \`resume_failure_test.go\` 验证：Agy 的不可续接返回明确 \`kind/source/code/message\`；没有创建新 Task；跨 Agent TaskID 仍被拒绝，无法探测其他会话。
+- 提交 \`2ca9bb9\`：在真实的隔离 MCP Client Session 里，使用已显式绑定的 \`agent.resume\` 检查返回 \`isError: true\`、\`failed/tool/tool_error\` 和固定消息，并核对 Task 数量不增加。保留 Host ACP 具备证据时的正常续接测试。
+
+### P1-A — Profile 不变时的 Catalog Schema 热刷新
+
+- 提交 \`02068a9\`：保留现有的 \`managedProfileMCPHTTPHandler\`、mutex 和 atomic handler publish，快路径额外核对 Catalog Revision。慢路径按当前 Profile 已绑定的 ToolID 计算**不包含时间戳**的元数据指纹（ID/来源键、输入输出 Schema、标题/描述/名称/标签）。
+- 当前 Profile 的工具元数据没变化：只推进“已核对 Catalog Revision”，保持原 MCP Handler，不重复激活 Provider；工具元数据确实变化：重建新的不可变 MCP Adapter，经 Profile + Catalog 版本前后检查一致才发布。
+- 如果 Catalog 读失败、Tool Schema 不完整或构建期间被其他 Runtime 修改：HTTP 503、保留旧快照待下一请求重试；不使用旧快照做“看似成功”的元数据回复。旧请求可以用已获取的视图完成，但 Invocation 继续强制实时检查 Profile 授权。
+- 初始 MCP Server 启动也在 Tool 投影构建前获取 Catalog Revision/指纹，构建后核对版本，阻止初始视图与版本声明不一致。保持既有 Listen 地址/Tunnel 进程/ToolID/Profile Bindings 不变。
+- 集成测试 \`mcp_catalog_hot_refresh_test.go\` 先建立真实 HTTP MCP Client Session，再经独立 SQLite Catalog Writer 修改已绑定 Tool 的输入、输出 Schema、描述、标题、标签，使用**同一个 MCP Session** 验证 Dynamic/Hybrid 的 \`mender_describe_tool\` 和 Direct/Hybrid 的 \`tools/list\` 读取新信息，不修改 Profile Revision 或重启服务。
+- 单元测试覆盖无关/重复 Catalog 写入不重复构建、32 路请求只发布一个版本、Catalog Revision/指纹失败时拒绝旧结果、加载及重建期间 Catalog 并发写入不得发布撕裂版本、Catalog Revision 回退拒绝。
+
+### 通过的校验
+
+- \`go test ./backend/...\`：全部通过。
+- \`(cd apps/desktop && go test ./...)\`：通过。
+- \`go test -race ./backend/internal/bootstrap ./backend/internal/agent/infrastructure/delegationprovider -run 'TestManagedProfile|TestManagedMCPHTTPRefreshesCatalogMetadataWithoutChangingProfile|TestAgentDelegationThroughMCPClientSession|TestUnsupportedNativeSessionContinuationReturnsSafeToolFailure' -count=1\`：通过。
+- \`pnpm go:lint\`：0 issues。
+- \`pnpm exec vitest run --maxWorkers=4 --reporter=dot\`：53 个测试文件，325 项通过。
+- \`pnpm --filter @mender/desktop typecheck\`、\`pnpm sdk:check\`、\`pnpm desktop:bindings:check\` 均通过。
+- 本轮仅更改并提交仓库源码和测试；未对用户现有生产 MCP 实例进行重启、修改 Profile、Agent 任务、Policy、Credential 或数据库迁移。
+
+### 部署后的限定验收与不变量
+
+1. 用户下次构建并重启 Desktop 后，管理端对已存在的 Agent 点击刷新工具，在 **不手动重启 MCP Server** 的情况下，重新通过 ChatGPT \`mender_describe_tool\` 核对 \`timeoutMinutes\` 等新 Schema（可以先在隔离来源上改一项无副作用的工具元数据）。
+2. \`agent.resume\` 已存在历史工具绑定的场景，确认安全的 \`isError:true\` 分类与固定消息可见。ChatGPT 产品 UI 是否完整展示消息仍可能受宿主封装影响，不能仅凭 MCP SDK 测试断言 UI 必然按原样显示。
+3. 暂未实现 MCP \`notifications/tools/list_changed\` 主动推送：**服务器端下次请求已是新 Schema**，但不主动促使那些永久缓存工具列表且不再次请求的外部客户端刷新。后续在已验证 SDK 与客户端订阅能力后再评估通知，不新增事件总线。
+4. Provider 显示名称等**不是 Catalog Tool 元数据**的字段变化，不在本次新增的触发范围；原有 Profile Revision / ToolSource 实时可用性门禁仍保持原设计。不得将该修复解释为所有外部 Provider 配置变更自动重载。
+5. 未改变 Agy 原生 Session 恢复不支持的事实，也未替换既有 \`unknown\` 生命周期逻辑。禁止自动重放旧 Prompt。
