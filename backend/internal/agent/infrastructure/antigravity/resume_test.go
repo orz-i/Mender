@@ -107,6 +107,10 @@ if IFS= read -r line; then printf sent > '%s'; fi`, tc.firstLine, flag))
 			if !errors.Is(err, agentdomain.ErrResumeUnavailable) {
 				t.Fatalf("invalid/fallback identity accepted: %v", err)
 			}
+			var staged interface{ SafeAgentFailureStage() string }
+			if !errors.As(err, &staged) || staged.SafeAgentFailureStage() != "headless_resume" {
+				t.Fatalf("pre-prompt resume rejected without safe diagnostic: %v", err)
+			}
 			for _, kind := range events {
 				if kind == agentdomain.EventPromptSent || kind == agentdomain.EventSessionReady {
 					t.Fatalf("pre-prompt mismatch dispatched or bound identity: %v", events)
@@ -116,6 +120,17 @@ if IFS= read -r line; then printf sent > '%s'; fi`, tc.firstLine, flag))
 				t.Fatalf("native fallback was sent a prompt: %v", err)
 			}
 		})
+	}
+}
+
+func TestPrePromptResumeUnavailableRetainsSentinelAndSafeStage(t *testing.T) {
+	err := unavailableResumeBeforePrompt()
+	if !errors.Is(err, agentdomain.ErrResumeUnavailable) || errors.Is(err, agentdomain.ErrOutcomeUncertain) {
+		t.Fatalf("pre-prompt resume failure must not claim executed or uncertain task: %v", err)
+	}
+	var stage interface{ SafeAgentFailureStage() string }
+	if !errors.As(err, &stage) || stage.SafeAgentFailureStage() != "headless_resume" {
+		t.Fatalf("no fixed diagnostic stage for failed native identity proof: %v", err)
 	}
 }
 

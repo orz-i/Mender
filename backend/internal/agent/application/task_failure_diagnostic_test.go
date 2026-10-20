@@ -34,6 +34,7 @@ func TestAgentFailureDiagnosticStrictAllowlist(t *testing.T) {
 		stage, diagnostic string
 	}{
 		{"process_launch", "Agent process could not start"},
+		{"headless_resume", "Native Agent session could not be resumed"},
 		{"initialize", "ACP initialization failed"},
 		{"session_create", "ACP session creation failed"},
 		{"configuration", "Agent model or reasoning configuration failed"},
@@ -84,6 +85,7 @@ func TestAgentTaskPersistsOnlySafeFailureStageAndNoRawOutput(t *testing.T) {
 		{"configuration_reasoning_unavailable", "Configured Agent reasoning effort not advertised by ACP session"},
 		{"configuration_confirmation_failed", "ACP configuration change not confirmed"},
 		{"configuration_request_failed", "ACP configuration request failed"},
+		{"headless_resume", "Native Agent session could not be resumed"},
 		{"prompt_stream_closed", "ACP prompt stream closed before completion"},
 		{"prompt_malformed_frame", "ACP prompt frame was malformed"},
 		{"prompt_read_failed", "ACP prompt stream read failed"},

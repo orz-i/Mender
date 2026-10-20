@@ -38,6 +38,14 @@ type stageError string
 func (e stageError) Error() string                 { return string(e) }
 func (e stageError) SafeAgentFailureStage() string { return string(e) }
 
+// A rejected native continuation before any Prompt is a safe, retry-eligible
+// failure, not an uncertain executed Task. Retain both the established
+// ErrResumeUnavailable sentinel and the existing fixed, nonsecret diagnostic
+// stage so owner/Task results do not collapse into a generic failure.
+func unavailableResumeBeforePrompt() error {
+	return errors.Join(agentdomain.ErrResumeUnavailable, stageError("headless_resume"))
+}
+
 // ExecuteConfigured sends the prompt ONLY on stdin. No prompt, credential,
 // tool arguments or native tool output are ever persisted in diagnostics.
 func (r Runner) ExecuteConfigured(ctx context.Context, agent agentdomain.Agent, prompt string, cfg agentapplication.RunConfig) (result string, runErr error) {
@@ -46,7 +54,7 @@ func (r Runner) ExecuteConfigured(ctx context.Context, agent agentdomain.Agent, 
 		cfg.Resume.AgentID != agent.ID() || cfg.Resume.Isolation != "host" ||
 		agent.Spec().Isolation != "host" || cfg.Resume.WorkspaceRoot != cfg.WorkspaceRoot ||
 		!agentdomain.ValidAntigravityConversationID(cfg.Resume.NativeSessionID)) {
-		return "", agentdomain.ErrResumeUnavailable
+		return "", unavailableResumeBeforePrompt()
 	}
 	if agent.Spec().Backend != agentdomain.BackendAntigravity || r.NewCommand == nil {
 		return "", stageError("process_launch")
@@ -130,7 +138,7 @@ func (r Runner) ExecuteConfigured(ctx context.Context, agent agentdomain.Agent, 
 		}
 		if json.Unmarshal(scanner.Bytes(), &initFrame) != nil || initFrame.Event != "init" ||
 			initFrame.ConversationID != cfg.Resume.NativeSessionID {
-			return "", agentdomain.ErrResumeUnavailable
+			return "", unavailableResumeBeforePrompt()
 		}
 		// Atomically bind the same native SessionRef to this new Task before
 		// sending anything actionable. Persistence failure here is pre-prompt
@@ -205,7 +213,7 @@ func scanResumeInit(ctx context.Context, cmd *exec.Cmd, scanner *bufio.Scanner) 
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
-			return agentdomain.ErrResumeUnavailable
+			return unavailableResumeBeforePrompt()
 		}
 		return nil
 	case <-ctx.Done():
@@ -216,7 +224,7 @@ func scanResumeInit(ctx context.Context, cmd *exec.Cmd, scanner *bufio.Scanner) 
 		} else if cmd.Process != nil {
 			_ = cmd.Process.Kill()
 		}
-		return agentdomain.ErrResumeUnavailable
+		return unavailableResumeBeforePrompt()
 	}
 }
 
