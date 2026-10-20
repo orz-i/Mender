@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"slices"
@@ -238,6 +239,15 @@ func (i *Instance) Execute(ctx context.Context, req invocationapplication.Execut
 			return invocationdomain.Outcome{}, err
 		}
 		task, err := i.service.Resume(ctx, id, args.Prompt, i.agentID, req.Context)
+		if errors.Is(err, agentdomain.ErrResumeUnavailable) {
+			// The Service has already checked the caller and task ownership.
+			// Do not leak arbitrary native Agent errors through the shared
+			// Invocation diagnostic channel; this known restriction has a
+			// fixed, safe message and never starts a replacement task.
+			return invocationdomain.Failed(invocationdomain.FailureSourceTool,
+				invocationdomain.FailureToolError,
+				"Session continuation is unavailable for this Agent. No new task was created; do not replay the previous prompt.")
+		}
 		if err != nil {
 			return invocationdomain.Outcome{}, err
 		}
