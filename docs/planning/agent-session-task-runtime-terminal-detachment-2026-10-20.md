@@ -36,3 +36,7 @@
 本轮独立真实 Agy Headless 在业务 Prompt 已送达后得到 `headless_protocol`。代码核查发现：首轮 `antigravity.Runner` 对某些缺失/损坏终态的协议错误仍以普通失败阶段返回，而已有 Agy Resume 对同类终态证据缺失返回 `ErrOutcomeUncertain`。由 Application 将这种普通错误持久化为 `failed`，可能错误地掩盖 Prompt 已有副作用却没有可信终态的事实。ACP v1 也需要独立检查这项不变量。
 
 这是**与终端 Session 隔离热修不同**的 Task 终态证据分类议题。本次仅立项记录，不在 OS 修复中混入新的协议失败分类、数据迁移或状态机。下一轮应先为首轮 ACP/Agy「已派发 Prompt + 原生终态丢失」写精准反例，区别明确原生拒绝和结果不确定，再独立修正及验收。
+
+## 同期 Profile 绑定变化（只读观察）
+
+本轮开始时默认 Profile 的工具绑定数为 **31**，收尾时读到 **32**；MCP 来源发现结果相应地显示 Grok Agent 可见工具从 **4** 变为 **5**（多了原已存在于 Catalog 的 `agent.resume`）。Grok 工具的 Catalog 元数据在 UTC 08:36:05 更新。现有 `profile_tools` 无单条创建时间/操作者字段，因此**不能从这些只读数据归因**这次 Profile 绑定改变是用户显式操作、其他会话更新或同步行为。本轮执行者没有调用 Profile 修改工具，也没有回滚、追加或改写此绑定。应保留此审计差异供后续权限核对，不宣称 Profile 绑定数量从始至终未变。
