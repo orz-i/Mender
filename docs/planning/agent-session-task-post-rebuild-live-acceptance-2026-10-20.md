@@ -41,3 +41,13 @@
 - Agy Headless `--conversation` 在该环境下两次连续没能在规定 45 秒内提供预提示词 `init`。需要单独的真实 CLI/认证/网络/会话持久化证据才能讨论恢复成功；不因失败而扩权、重放或启动隐式探针。
 - 先前已经记录的「首次 Prompt 发送后终态证据丢失时，部分协议错误可能进入 failed」是独立的 Task 不确定性分类问题，不混入本次 Agy **零 Prompt** 安全诊断收口。
 - 新版若再次代码修改，仍需使用者重建运行中的 Wails 后才能验收新诊断；源码测试通过不等于已部署。
+
+## 代码收口与质量门禁（最终）
+
+- **实施 Commit**：`87bf21e`。在 `antigravity/runner.go` 中通过已有 `errors.Join` 同时保留 `agentdomain.ErrResumeUnavailable` 与已定义的固定 `headless_resume` Stage；补充 `resume_test.go` 的错误标记、Prompt 前无派发和 `errors.Is/As` 测试，以及 `application/task_failure_diagnostic_test.go` 的安全映射回归。
+- 初步专项 Go 测试全部 PASS：`agent/application`、`agent/infrastructure/antigravity`、`agent/infrastructure/acp`、`agent/infrastructure/sqlite`。
+- **全量 `pnpm check` 退出码 0**：provider/sandbox/tunnel SDK 与契约、Go lint、完整 `go test ./backend/...`、完整 `go test -race ./backend/...`、SDK 生成及 Wails bindings、ESLint、TypeScript、Vitest（**53 文件、325 测试通过**）、Web/Desktop 构建均通过。只保留既有非阻断性的 Vite 大分块警告。
+- 最终只读 SQLite：Agent Schema **v18**；`cancelled=1`、`completed=33`、`failed=31`、`unknown=8`；Native Sessions **10**，Continuation **4**（历史 1 + 本次 3），Profile ToolBindings **32**，`unknown` 父 Task 续接 **0**，`quick_check=ok`、FK 错误 **0**，没有活动中排队/运行 Task。增加的成功/失败 Task 都来自本次**明确新建**测试，不是修改历史结果。
+- 保留四个既有未跟踪工具目录 `.agents/`、`.commandcode/`、`.intent-loop/`、`.pi/`；已跟踪文件无残留修改。当前 Wails/Tunnel 持续连接，本轮最后的诊断源码**尚未进入当前运行版本**。
+
+**最终验收结论**：原始 Session/Task 拆分、Task 自有终态证据和 ACP v1 原生会话续接，已通过部署实机；Unix 进程 Session/TTY 隔离亦通过。Agy **新会话任务**通过，但 Agy **已完成会话的新任务续接**仍为 Fail Closed/无法取得初始化证据，不能宣称端到端恢复已通过，也不能扩大授权或自动派发失败前的 Prompt。
