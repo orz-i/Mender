@@ -1,5 +1,7 @@
 # Mender Agent 委派阻断与 `unknown` 任务治理实机审计 — 2026-10-19
 
+> 后续更正（2026-10-20）：这里对 Agy 原生 Resume 的不可用判断只反映当时 Mender 尚未实现安全预校验。Agy CLI v1.4.2 实际支持 Headless `--conversation`，且可在发送 Prompt 前从 `init` 确认原生会话身份；新实现见 `docs/planning/agy-headless-native-session-continuation-2026-10-20.md`。但 `unknown` 原任务的最终结果仍不可自动确认或重放。
+
 ## 结论与边界
 
 本轮在 `/Users/mini/Coding/Mender` 真实 Wails Runtime + 已供应的 `Antigravity` Agent 下审计，不以 UI 模拟测试替代执行证据。Mender 的定位仍是工具与资源聚合、治理、供应平台，不接管 Agent Loop。**前序交付未兑现的不是“真实代码改动”，而是通过 Agy 委派完成并验证、恢复的端到端闭环。**

@@ -1,5 +1,7 @@
 # Mender P1 评估：运行中 MCP 工具 Schema 与 Agy Resume 诊断
 
+> 2026-10-20 后续更正：本文件关于 Agy 不能跨进程续接的陈述仅代表当时 Mender 的实现限制，不代表 Agy CLI 的真实能力。已实机验证 v1.4.2 `--conversation` 可在 Headless 模式恢复完整会话；安全续接实现和预发送身份核验见 `docs/planning/agy-headless-native-session-continuation-2026-10-20.md`。但历史 `unknown` 任务的原执行结果仍不可凭 Session ID 推断或自动重放。
+
 日期：2026-10-20（Mac 本地时间）
 性质：只读评估，尚未修改任何运行时代码、生产配置、Profile 绑定或历史任务。
 

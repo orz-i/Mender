@@ -30,3 +30,31 @@
 ## 与此前结论的差别
 
 `docs/planning/agent-task-budget-observation-2026-10-20.md`、`docs/planning/mcp-schema-refresh-and-agent-resume-p1-2026-10-20.md` 中把 Agy 标为“永远不支持原生 Resume”的描述是**旧版实现状态，不是 CLI 能力事实**。新实测证明 Headless 多轮会话支持，并提供可安全用于预提示词校验的 Native `init`。仍不支持对未知结果做可信终态恢复。
+## 实施与验证结果（2026-10-20）
+
+### 源码落地
+
+- `efc439b` — Host Agy 新增受验证的原生 `--conversation` 续接。任务准入沿用 Mender 已有 Task、Agent、Principal、Scope、Workspace、Profile/Policy 授权、Native SessionRef、原始 completed/terminal_seen/leader_reaped 证据以及单次预约约束。原有 5 个 Canonical Agent ToolID 不变，Restricted Host 仍禁止。
+- `e9ebffd` — Domain UUID 校验、Launcher 只允许字面 `--conversation <UUID>`、Runner 在**发送业务 Prompt 之前**强制比较 `init.conversation_id` 并入库确认 SessionRef。无/错 `init`、虚假新会话回退、证据写入失败和预算截止都禁止派发 Prompt；派发后未获得可信终态仍为结果未知。
+- 新产生的 UUID 格式 Agy Session 标记为可尝试续接；历史存储的 Agy Session 能力位为 0 的记录**不批量修改**，只允许合法 Host UUID 在真实 CLI 身份核验阶段尝试进入续接。旧 `unknown` 仍严格不允许 Resume。
+- 发现 Headless CLI 在某些受限环境下可能无输出停顿；新增 45 秒独立预提示词握手截止，在超时/取消时使用原有进程组终止机制，不会持续占满新任务的 10/20/30 分钟预算。没有放宽运行环境、权限或新增 Agent 调度模式。
+
+### 真实 CLI、Mender Runner 验收
+
+- 实际测试命令：`MENDER_REAL_AGY_CONTINUE_NO_TOOL=1 go test ./backend/internal/agent/infrastructure/antigravity -run '^TestRealAntigravityHeadlessContinuationWithPrePromptIdentity$' -count=1 -timeout=76s -v`。
+- **PASS (29.65s)**：独立第一个原生 Agy CLI 进程创建 Host 对话，第二个 CLI 进程通过同一个 Session ID 按 `--conversation` 续接，回答能读到上一轮 marker；新 Prompt 只在 `init` 身份严格匹配、Observation 确认后发出；不存在的合法 UUID 被拒绝，Prompt 不发出。运行完成后未发现本轮残留的 `agy --input-format` 进程。
+- 此前相同测试曾因最小化启动环境中 Agy 长时间无终态而中断，并留下两个仅属于本轮临时工作目录的进程；其身份经 cwd 和 argv 双重确认后已清理。增加有界测试/进程清理后本轮实机通过。这是一个环境相关的**间歇性风险**，不能从一次 PASS 推断所有网络条件稳定；若后续重复出现需独立诊断 CLI 认证/网络，严禁直接透传不受控的宿主环境变量。
+- Mender 的正常业务仓库、用户历史 Agent Session、任务与凭据未用于这次隔离 Prompt；真实测试使用一次性本机临时目录和明确“不调用工具、不访问文件”的短提示词。
+
+### 隔离安全覆盖
+
+- Domain：合法/非法 UUID 及参数注入约束。
+- Agy Runner：正确会话在 Prompt 前绑定 SessionRef；错误会话、新会话回退、无 init、非法帧、无进度、记录 SessionRef 失败、取消/超时没有业务 Prompt；Prompt 派发后终态身份错误转换为 `ErrOutcomeUncertain`。
+- SQLite：旧版 Agy 能力位 0、但具备合法 UUID 的已完成 Host Task 可参与受限制的前置校验；历史 Task 不被迁移或重写，重复续接被防重门禁拒绝。
+- Bootstrap/MCP：只给显式绑定 Resume 的 Profile 许可；继续创建新的 Child Task，沿用同一私有原生 SessionRef；父任务结果保留；不向 MCP 返回 Native Conversation ID；不可用的 Restricted Host 仍标注不可用。
+
+### 后续部署验收边界
+
+1. 源码和隔离原生 CLI 测试已通过，但**当前运行中的 Wails Desktop 尚未重建为这些提交**。用户构建后须显式进入 Agent → 工具 → 刷新智能体工具，验证已存在的 ToolID 不旋转，运行中的 MCP Server 由既有 Catalog 版本热刷新获取新说明，无须重启。
+2. 仅选用一个**隔离且已完成**的 Agy Task，新授权 Profile 显式绑定 `resume` 后，执行新的无工具 Prompt，再验证 Parent/Child、Native Session 身份以及 MCP 状态与 Result；不要把这个验收和生产旧 `unknown` 的自动恢复混为一谈。
+3. 本轮**未实现**对在途中断原 Prompt 的继续执行、Mender Agent Loop、原生 ACP 审批、自动重派或结果猜测。未知终态继续保留 `unknown` 和人可审核的执行证据。

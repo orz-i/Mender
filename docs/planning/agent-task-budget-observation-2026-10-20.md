@@ -1,5 +1,7 @@
 # Agent 任务期限、观测与能力真实性治理（2026-10-20）
 
+> 2026-10-20 后续更正：本文件关于 Agy 不能跨进程续接的陈述仅代表当时 Mender 的实现限制，不代表 Agy CLI 的真实能力。已实机验证 v1.4.2 `--conversation` 可在 Headless 模式恢复完整会话；安全续接实现和预发送身份核验见 `docs/planning/agy-headless-native-session-continuation-2026-10-20.md`。但历史 `unknown` 任务的原执行结果仍不可凭 Session ID 推断或自动重放。
+
 ## 意图和真实基线
 
 生产环境曾在 10 分钟恰好截止时将 Agy Task 标为 `unknown`，即使 AGY 在截止前完成 Git commit 和输出了新的原生 progress；正确的 Task 业务终态并未收到，不能伪造 `completed`、重放旧 Prompt 或猜测 Session 可安全恢复。相关只读证据见 `docs/planning/agent-delegation-blockers-2026-10-19.md`。

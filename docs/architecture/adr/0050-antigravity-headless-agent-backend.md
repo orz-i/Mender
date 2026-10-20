@@ -23,7 +23,13 @@ Because the Antigravity headless interface has no Task-scoped governed MCP Tool 
 
 ## Not implemented
 
-Native ACP approvals, live streaming UI, multi-turn conversation continuity across Tasks, credential management, background scheduling, automatic installation, or arbitrary execution args from Task prompts.
+Native ACP approvals, live streaming UI, credential management, background scheduling, automatic installation, or arbitrary execution args from Task prompts.
+
+## Amendment — verified Headless conversation continuation (2026-10-20)
+
+CLI v1.4.2 supports `--conversation <conversation-id>` together with Headless `stream-json`. A new process can restore a **completed** conversation, but an invalid ID may silently create a fresh conversation and still report `SUCCESS`. Therefore Mender's implementation uses a two-phase handshake: start the allowlisted CLI using the stored native ID, wait for its first `init.conversation_id` **before** sending any new prompt, persist the exact existing `SessionRef` only after an ID match, and fail closed on mismatch, timeout, missing evidence or changed CLI behavior. Parent Task completion with trusted `terminal_seen`/`leader_reaped`, same Agent/Principal/Profile/Workspace authorization, Host isolation and a one-time continuation reservation remain mandatory.
+
+This is **continuation of a proven-complete conversation with a new Task**, not retry of an unfinished or `unknown` Task. Agy does not implement Mender ACP permission callbacks or receive scoped Mender ToolSupply. An opt-in, disposable-workspace smoke test of the **actual Mender launcher and Runner** passed two-process Agy conversation continuation, pre-prompt identity verification, and invalid-ID rejection in 29.65 seconds; it left no CLI processes running. This proves the bounded native integration on the test host, **not** production Desktop/Profile/ChatGPT integration until the updated binary is rebuilt and deployed. See `docs/planning/agy-headless-native-session-continuation-2026-10-20.md` for evidence and test gates.
 
 ## References
 
