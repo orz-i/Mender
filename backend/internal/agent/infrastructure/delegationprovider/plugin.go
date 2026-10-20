@@ -123,7 +123,7 @@ func (p *Plugin) Open(ctx context.Context, req providerplugin.OpenRequest) (prov
 	// Retain the existing canonical resume ToolID even for unsupported native
 	// placements: a legacy Profile may refer to it. Its discovered metadata
 	// must explain the real supported contract instead of promising recovery.
-	unsupported := a.Spec().Backend == agentdomain.BackendAntigravity || a.Spec().Isolation != "host"
+	unsupported := a.Spec().Isolation != "host"
 	return &Instance{service: p.service, agentID: agentdomain.ID(c.AgentID), resumeUnsupported: unsupported}, nil
 }
 
@@ -164,8 +164,8 @@ func (i *Instance) DiscoverTools(_ context.Context, _ catalogdomain.Provider) ([
 	if i == nil {
 		return nil, agentdomain.ErrUnavailable
 	}
-	resumeTitle := "Continue proven-complete ACP session"
-	resumeDescription := "Only when the prior Task completed with native terminal proof and the ACP backend advertised a verified session-load/resume capability. Never retries unknown Tasks."
+	resumeTitle := "Continue proven-complete native session"
+	resumeDescription := "Continue from an owned, proven-complete native Agent session. Antigravity validates the exact conversation ID before sending a new prompt. Never replays unknown Tasks."
 	resumeTags := []string{"agent", "session"}
 	if i.resumeUnsupported {
 		resumeTitle = "Session continuation unavailable"

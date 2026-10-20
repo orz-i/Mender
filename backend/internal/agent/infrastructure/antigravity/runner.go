@@ -21,12 +21,17 @@ import (
 
 const maxEventBytes = 1 << 20
 const maxModelListingBytes = 64 << 10
+const resumeHandshakeTimeout = 45 * time.Second
 
 // CommandFactory is supplied by the trusted, allowlisted Mender launcher;
 // the last booleans select read-only model inspection and authorized YOLO.
 type CommandFactory func(context.Context, agentdomain.Agent, string, string, string, bool, bool) (*exec.Cmd, error)
+type ResumeCommandFactory func(context.Context, agentdomain.Agent, string, string, string, string, bool) (*exec.Cmd, error)
 
-type Runner struct{ NewCommand CommandFactory }
+type Runner struct {
+	NewCommand       CommandFactory
+	NewResumeCommand ResumeCommandFactory
+}
 
 type stageError string
 
@@ -36,11 +41,11 @@ func (e stageError) SafeAgentFailureStage() string { return string(e) }
 // ExecuteConfigured sends the prompt ONLY on stdin. No prompt, credential,
 // tool arguments or native tool output are ever persisted in diagnostics.
 func (r Runner) ExecuteConfigured(ctx context.Context, agent agentdomain.Agent, prompt string, cfg agentapplication.RunConfig) (result string, runErr error) {
-	if cfg.Resume != nil {
-		// Headless stream-json has no verified pre-prompt session handshake.
-		// The CLI does not emit init until stdin receives a prompt. We cannot
-		// prove which native conversation will receive the prompt, so fail
-		// before process start instead of silently creating a new conversation.
+	if cfg.Resume != nil && (r.NewResumeCommand == nil || !cfg.Resume.Valid() ||
+		cfg.Resume.Backend != agentdomain.BackendAntigravity ||
+		cfg.Resume.AgentID != agent.ID() || cfg.Resume.Isolation != "host" ||
+		agent.Spec().Isolation != "host" || cfg.Resume.WorkspaceRoot != cfg.WorkspaceRoot ||
+		!agentdomain.ValidAntigravityConversationID(cfg.Resume.NativeSessionID)) {
 		return "", agentdomain.ErrResumeUnavailable
 	}
 	if agent.Spec().Backend != agentdomain.BackendAntigravity || r.NewCommand == nil {
@@ -57,7 +62,14 @@ func (r Runner) ExecuteConfigured(ctx context.Context, agent agentdomain.Agent, 
 	if cfg.WorkspaceRoot == "" || strings.TrimSpace(prompt) == "" || len(prompt) > agentdomain.MaxPromptBytes {
 		return "", stageError("configuration")
 	}
-	cmd, err := r.NewCommand(ctx, agent, cfg.WorkspaceRoot, cfg.Model, cfg.ReasoningEffort, false, cfg.AllowNativeYOLO)
+	var cmd *exec.Cmd
+	var err error
+	if cfg.Resume != nil {
+		cmd, err = r.NewResumeCommand(ctx, agent, cfg.WorkspaceRoot, cfg.Model, cfg.ReasoningEffort,
+			cfg.Resume.NativeSessionID, cfg.AllowNativeYOLO)
+	} else {
+		cmd, err = r.NewCommand(ctx, agent, cfg.WorkspaceRoot, cfg.Model, cfg.ReasoningEffort, false, cfg.AllowNativeYOLO)
+	}
 	if err != nil || cmd == nil {
 		return "", stageError("process_launch")
 	}
@@ -102,6 +114,37 @@ func (r Runner) ExecuteConfigured(ctx context.Context, agent agentdomain.Agent, 
 		registeredProcess = true
 	}
 
+	// New conversations may emit init after receiving the prompt. By contrast,
+	// Agy v1.4.2 emits init BEFORE a prompt for --conversation, including when
+	// it silently falls back to a new Session for an invalid/native-missing ID.
+	// This pre-prompt identity gate is what makes explicit continuation safe.
+	scanner := newStreamScanner(stdout)
+	alreadyInitialized := false
+	if cfg.Resume != nil {
+		if err := scanResumeInit(ctx, cmd, scanner); err != nil {
+			return "", err
+		}
+		var initFrame struct {
+			Event          string `json:"event"`
+			ConversationID string `json:"conversation_id"`
+		}
+		if json.Unmarshal(scanner.Bytes(), &initFrame) != nil || initFrame.Event != "init" ||
+			initFrame.ConversationID != cfg.Resume.NativeSessionID {
+			return "", agentdomain.ErrResumeUnavailable
+		}
+		// Atomically bind the same native SessionRef to this new Task before
+		// sending anything actionable. Persistence failure here is pre-prompt
+		// and must never trigger a fallback execution in a fresh conversation.
+		if cfg.Observe != nil {
+			if err := cfg.Observe(agentdomain.ExecutionEvent{Kind: agentdomain.EventSessionReady,
+				NativeSession: initFrame.ConversationID, ExistingSessionRef: cfg.Resume.SessionRef,
+				CanLoad: true, CanResume: true}); err != nil {
+				return "", fmt.Errorf("antigravity pre-prompt session evidence: %w", err)
+			}
+		}
+		alreadyInitialized = true
+	}
+
 	// --input-format stream-json accepts one user message per NDJSON line.
 	if err := json.NewEncoder(stdin).Encode(map[string]any{
 		"event": "user", "message": map[string]any{"content": prompt},
@@ -119,7 +162,7 @@ func (r Runner) ExecuteConfigured(ctx context.Context, agent agentdomain.Agent, 
 		}
 	}
 
-	response, err := parseStreamObserved(stdout, cfg.Observe)
+	response, err := parseScannerObserved(scanner, cfg.Observe, alreadyInitialized, cfg.Resume)
 	if ctx.Err() != nil {
 		return "", ctx.Err()
 	}
@@ -141,12 +184,60 @@ func parseStream(reader io.Reader) (string, error) {
 	return parseStreamObserved(reader, nil)
 }
 
-func parseStreamObserved(reader io.Reader, observe func(agentdomain.ExecutionEvent) error) (string, error) {
+func newStreamScanner(reader io.Reader) *bufio.Scanner {
 	scanner := bufio.NewScanner(reader)
 	scanner.Buffer(make([]byte, 16<<10), maxEventBytes)
+	return scanner
+}
+
+// Resume is a two-phase protocol. The first native init must arrive within a
+// small bound, independent of the user's 10/20/30-minute execution budget.
+// CLI authentication/network stalls must not hold an unverified Session open
+// for the whole Task. Killing the process cannot send a business prompt.
+func scanResumeInit(ctx context.Context, cmd *exec.Cmd, scanner *bufio.Scanner) error {
+	received := make(chan bool, 1)
+	go func() { received <- scanner.Scan() }()
+	timer := time.NewTimer(resumeHandshakeTimeout)
+	defer timer.Stop()
+	select {
+	case ok := <-received:
+		if !ok {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			return agentdomain.ErrResumeUnavailable
+		}
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		if cmd.Cancel != nil {
+			_ = cmd.Cancel()
+		} else if cmd.Process != nil {
+			_ = cmd.Process.Kill()
+		}
+		return agentdomain.ErrResumeUnavailable
+	}
+}
+
+func parseStreamObserved(reader io.Reader, observe func(agentdomain.ExecutionEvent) error) (string, error) {
+	return parseScannerObserved(newStreamScanner(reader), observe, false, nil)
+}
+
+func resumedProtocolError(resume *agentdomain.SessionContinuation) error {
+	if resume != nil {
+		// A new prompt has already been dispatched to an exactly validated
+		// Session. Broken/missing native terminal evidence leaves the outcome
+		// uncertain even if a client process has exited.
+		return fmt.Errorf("%w: resumed native Agent protocol lost terminal proof", agentdomain.ErrOutcomeUncertain)
+	}
+	return stageError("headless_protocol")
+}
+
+func parseScannerObserved(scanner *bufio.Scanner, observe func(agentdomain.ExecutionEvent) error,
+	gotInit bool, resume *agentdomain.SessionContinuation) (string, error) {
 	var result string
 	gotResult := false
-	gotInit := false
 	lastProgress := time.Time{}
 	for scanner.Scan() {
 		var frame struct {
@@ -155,23 +246,24 @@ func parseStreamObserved(reader io.Reader, observe func(agentdomain.ExecutionEve
 			Result         json.RawMessage `json:"result"`
 		}
 		if err := json.Unmarshal(scanner.Bytes(), &frame); err != nil {
-			return "", stageError("headless_protocol")
+			return "", resumedProtocolError(resume)
 		}
 		switch frame.Event {
 		case "init":
 			if gotInit || gotResult {
-				return "", stageError("headless_protocol")
+				return "", resumedProtocolError(resume)
 			}
 			gotInit = true
 			if frame.ConversationID != "" && observe != nil {
+				validated := agentdomain.ValidAntigravityConversationID(frame.ConversationID)
 				if err := observe(agentdomain.ExecutionEvent{Kind: agentdomain.EventSessionReady,
-					NativeSession: frame.ConversationID}); err != nil {
+					NativeSession: frame.ConversationID, CanLoad: validated, CanResume: validated}); err != nil {
 					return "", fmt.Errorf("%w: native session evidence unavailable", agentdomain.ErrOutcomeUncertain)
 				}
 			}
 		case "step_update":
 			if !gotInit || gotResult {
-				return "", stageError("headless_protocol")
+				return "", resumedProtocolError(resume)
 			}
 			if observe != nil && time.Since(lastProgress) >= 5*time.Second {
 				if err := observe(agentdomain.ExecutionEvent{Kind: agentdomain.EventProgress}); err != nil {
@@ -181,7 +273,13 @@ func parseStreamObserved(reader io.Reader, observe func(agentdomain.ExecutionEve
 			}
 		case "result":
 			if !gotInit || gotResult || len(frame.Result) == 0 {
-				return "", stageError("headless_protocol")
+				return "", resumedProtocolError(resume)
+			}
+			if resume != nil && frame.ConversationID != "" &&
+				frame.ConversationID != resume.NativeSessionID {
+				// The new prompt has already reached the native conversation.
+				// A mismatched terminal result cannot prove its actual outcome.
+				return "", fmt.Errorf("%w: resumed conversation terminal identity mismatch", agentdomain.ErrOutcomeUncertain)
 			}
 			gotResult = true
 			var terminal struct {
@@ -189,7 +287,7 @@ func parseStreamObserved(reader io.Reader, observe func(agentdomain.ExecutionEve
 				Response string `json:"response"`
 			}
 			if err := json.Unmarshal(frame.Result, &terminal); err != nil {
-				return "", stageError("headless_protocol")
+				return "", resumedProtocolError(resume)
 			}
 			switch terminal.Status {
 			case "SUCCESS":
@@ -209,13 +307,19 @@ func parseStreamObserved(reader io.Reader, observe func(agentdomain.ExecutionEve
 			}
 		default:
 			// Unknown types cannot be silently interpreted as a success.
-			return "", stageError("headless_protocol")
+			return "", resumedProtocolError(resume)
 		}
 	}
 	if err := scanner.Err(); err != nil {
+		if resume != nil {
+			return "", fmt.Errorf("%w: resumed Agent output channel ended without terminal proof", agentdomain.ErrOutcomeUncertain)
+		}
 		return "", stageError("headless_protocol")
 	}
 	if !gotInit || !gotResult {
+		if resume != nil {
+			return "", fmt.Errorf("%w: resumed Agent did not provide native terminal proof", agentdomain.ErrOutcomeUncertain)
+		}
 		return "", stageError("headless_protocol")
 	}
 	return result, nil

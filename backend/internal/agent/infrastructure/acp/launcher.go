@@ -147,6 +147,22 @@ func (f *LocalFactory) CommandWithConfig(ctx context.Context, a agentdomain.Agen
 // Task prompt, external executable path or arbitrary CLI flags are accepted.
 func (f *LocalFactory) AntigravityCommand(ctx context.Context, a agentdomain.Agent,
 	root, model, effort string, inspect, nativeYOLO bool) (*exec.Cmd, error) {
+	return f.antigravityCommand(ctx, a, root, model, effort, inspect, nativeYOLO, "")
+}
+
+// AntigravityResumeCommand accepts only an exact, host-resolved native UUID.
+// The Runner must still verify the pre-prompt init ID before sending a turn;
+// the CLI itself may silently fall back to a new conversation.
+func (f *LocalFactory) AntigravityResumeCommand(ctx context.Context, a agentdomain.Agent,
+	root, model, effort, conversationID string, nativeYOLO bool) (*exec.Cmd, error) {
+	if !agentdomain.ValidAntigravityConversationID(conversationID) {
+		return nil, fmt.Errorf("%w: invalid Antigravity conversation ID", agentdomain.ErrInvalid)
+	}
+	return f.antigravityCommand(ctx, a, root, model, effort, false, nativeYOLO, conversationID)
+}
+
+func (f *LocalFactory) antigravityCommand(ctx context.Context, a agentdomain.Agent,
+	root, model, effort string, inspect, nativeYOLO bool, conversationID string) (*exec.Cmd, error) {
 	if a.Spec().Backend != agentdomain.BackendAntigravity {
 		return nil, agentdomain.ErrUnavailable
 	}
@@ -186,6 +202,9 @@ func (f *LocalFactory) AntigravityCommand(ctx context.Context, a agentdomain.Age
 		}
 		if effort != "" {
 			args = append(args, "--effort", effort)
+		}
+		if conversationID != "" {
+			args = append(args, "--conversation", conversationID)
 		}
 	}
 	return f.commandInWorkspace(ctx, a, root, true, args...)

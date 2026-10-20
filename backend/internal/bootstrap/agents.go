@@ -106,7 +106,7 @@ func newAgents(ctx context.Context, dbPath string, owner gov.Principal,
 	if runner == nil {
 		runner = agentExecutionRouter{
 			acp:         agentacp.Runner{NewCommand: launcher.Command, NewCommandInWorkspace: launcher.CommandInWorkspace, NewCommandWithConfig: launcher.CommandWithConfig},
-			antigravity: agentagy.Runner{NewCommand: launcher.AntigravityCommand},
+			antigravity: agentagy.Runner{NewCommand: launcher.AntigravityCommand, NewResumeCommand: launcher.AntigravityResumeCommand},
 		}
 	}
 	service, err := agentapplication.NewService(store, runner, admit, owner, profileExists)

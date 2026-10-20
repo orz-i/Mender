@@ -56,6 +56,20 @@ func (s *Store) ResumePlan(ctx context.Context, parent agentdomain.TaskID) (agen
 	out.Backend = agentdomain.Backend(backend)
 	out.CanLoad = load != 0
 	out.CanResume = resume != 0
+	// Agy v1.4.2 supplies a pre-prompt, exactly checkable init identity
+	// for --conversation. Historical completed Agy sessions were recorded
+	// before this behavior was verified, so their persisted capability bits
+	// remain untouched. Admit only valid native UUIDs from host isolation;
+	// the new Runner MUST prove the live init ID matches before any prompt.
+	if out.Backend == agentdomain.BackendAntigravity {
+		// Even a legacy or synthetic capability bit cannot make an invalid
+		// conversation identity eligible for Agy's strict pre-prompt gate.
+		if out.Isolation != "host" || !agentdomain.ValidAntigravityConversationID(out.NativeSessionID) {
+			return agentdomain.SessionContinuation{}, agentdomain.ErrResumeUnavailable
+		}
+		out.CanLoad = true
+		out.CanResume = true
+	}
 	if !out.Valid() {
 		return agentdomain.SessionContinuation{}, agentdomain.ErrResumeUnavailable
 	}

@@ -259,13 +259,14 @@ func (s *Store) TaskObservation(ctx context.Context, id agentdomain.TaskID) (*ag
 	}
 	var phase, last, nativeProgress, heartbeat, reaped string
 	var session sql.NullString
-	var backend sql.NullString
+	var backend, nativeSession, isolation sql.NullString
 	var canLoad, canResume sql.NullInt64
 	err := s.db.QueryRowContext(ctx, `SELECT a.phase,a.last_observed_at,a.last_progress_at,a.last_worker_heartbeat_at,
-		a.leader_reaped_at,a.session_ref,s.backend,s.load_supported,s.resume_supported
+		a.leader_reaped_at,a.session_ref,s.backend,s.native_session_id,s.isolation,
+		s.load_supported,s.resume_supported
 		FROM agent_execution_attempts a LEFT JOIN agent_native_sessions s ON s.session_ref=a.session_ref
 		WHERE a.task_id=?`, string(id)).Scan(&phase, &last, &nativeProgress, &heartbeat, &reaped, &session,
-		&backend, &canLoad, &canResume)
+		&backend, &nativeSession, &isolation, &canLoad, &canResume)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -278,8 +279,12 @@ func (s *Store) TaskObservation(ctx context.Context, id agentdomain.TaskID) (*ag
 	}
 	recoverability := "unavailable"
 	if session.Valid && session.String != "" &&
-		(canLoad.Int64 != 0 || canResume.Int64 != 0) {
-		recoverability = "unverified" // capability advertisement is not storage proof
+		(canLoad.Int64 != 0 || canResume.Int64 != 0 ||
+			(backend.String == string(agentdomain.BackendAntigravity) && isolation.String == "host" &&
+				agentdomain.ValidAntigravityConversationID(nativeSession.String))) {
+		// The CLI identity still has to be checked pre-prompt. A stored ID
+		// or claimed capability is not proof of a restored conversation.
+		recoverability = "unverified"
 	}
 	obs := &agentdomain.TaskObservation{
 		Phase: phase, Activity: "uncertain", LastObservedAt: at,

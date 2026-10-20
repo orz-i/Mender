@@ -41,7 +41,7 @@ func (s *Service) Resume(ctx context.Context, id agentdomain.TaskID, prompt stri
 	// Runtime-isolated HOME contents are intentionally ephemeral. Do not
 	// offer cross-process continuation until durable storage has been proven
 	// for the exact restricted placement without broadening Seatbelt.
-	if agent.Spec().Isolation != "host" || agent.Spec().Backend == agentdomain.BackendAntigravity || parent.Status != agentdomain.TaskCompleted ||
+	if agent.Spec().Isolation != "host" || parent.Status != agentdomain.TaskCompleted ||
 		parent.CancelRequested {
 		return agentdomain.Task{}, agentdomain.ErrResumeUnavailable
 	}
