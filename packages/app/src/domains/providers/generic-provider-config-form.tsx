@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 
 import type { Credential, ProviderPlugin } from "@mender/sdk";
 import { Input } from "@mender/ui/components/input";
@@ -29,19 +29,38 @@ import type {
 
 import { t } from "../../i18n/i18n";
 
+type ReportDraftIssue = (path: string, issue: string | null) => void;
+
+/** A JSON field can have a local invalid draft even while its last valid
+ * parent value remains schema-valid. The form reports those drafts separately. */
 export function GenericProviderConfigForm({
   schema,
   uiSchema,
   value,
   credentials,
   onChange,
+  onDraftErrorChange,
 }: {
   schema: ProviderPlugin["configSchema"];
   uiSchema: ProviderPlugin["uiSchema"];
   value: ConfigValue;
   credentials: Credential[];
   onChange: (value: ConfigValue) => void;
+  onDraftErrorChange?: (error: string | null) => void;
 }) {
+  const [draftIssues, setDraftIssues] = useState<Record<string, string>>({});
+  const reportDraftIssue = useCallback<ReportDraftIssue>((path, issue) => {
+    setDraftIssues((current) => {
+      if (current[path] === (issue ?? undefined)) return current;
+      const next = { ...current };
+      if (issue) next[path] = issue;
+      else delete next[path];
+      return next;
+    });
+  }, []);
+  const draftError = Object.values(draftIssues)[0] ?? null;
+  useEffect(() => { onDraftErrorChange?.(draftError); }, [draftError, onDraftErrorChange]);
+
   const supportError = genericSchemaSupportError(schema);
   if (supportError) {
     return <SchemaNotice>{supportError}</SchemaNotice>;
@@ -52,6 +71,8 @@ export function GenericProviderConfigForm({
       <RawObjectEditor
         label={t("Provider configuration")}
         value={value}
+        path="$"
+        reportDraftIssue={reportDraftIssue}
         onChange={onChange}
       />
     );
@@ -68,6 +89,8 @@ export function GenericProviderConfigForm({
       value={value}
       credentials={credentials}
       depth={0}
+      path="$"
+      reportDraftIssue={reportDraftIssue}
       onChange={onChange}
     />
   );
@@ -79,6 +102,8 @@ function ObjectFields({
   value,
   credentials,
   depth,
+  path,
+  reportDraftIssue,
   onChange,
 }: {
   schema: SchemaObject;
@@ -86,6 +111,8 @@ function ObjectFields({
   value: ConfigValue;
   credentials: Credential[];
   depth: number;
+  path: string;
+  reportDraftIssue: ReportDraftIssue;
   onChange: (value: ConfigValue) => void;
 }) {
   const properties = schemaProperties(schema);
@@ -105,6 +132,8 @@ function ObjectFields({
           value={value[name]}
           credentials={credentials}
           depth={depth + 1}
+          path={path + "." + name}
+          reportDraftIssue={reportDraftIssue}
           onChange={(nextValue) => {
             const next = { ...value };
             if (nextValue === undefined) {
@@ -121,6 +150,8 @@ function ObjectFields({
         <AdditionalPropertiesEditor
           value={value}
           knownNames={knownNames}
+          path={path + ".*"}
+          reportDraftIssue={reportDraftIssue}
           onChange={onChange}
         />
       ) : null}
@@ -136,6 +167,8 @@ function SchemaField({
   value,
   credentials,
   depth,
+  path,
+  reportDraftIssue,
   onChange,
 }: {
   name: string;
@@ -145,6 +178,8 @@ function SchemaField({
   value: unknown;
   credentials: Credential[];
   depth: number;
+  path: string;
+  reportDraftIssue: ReportDraftIssue;
   onChange: (value: unknown) => void;
 }) {
   if (depth > MAX_SCHEMA_DEPTH) {
@@ -168,6 +203,8 @@ function SchemaField({
         description={hint.description}
         value={value}
         required={required}
+        path={path}
+        reportDraftIssue={reportDraftIssue}
         onChange={onChange}
       />
     );
@@ -303,6 +340,8 @@ function SchemaField({
           value={objectValue}
           credentials={credentials}
           depth={depth}
+          path={path}
+          reportDraftIssue={reportDraftIssue}
           onChange={(nextValue) => onChange(nextValue)}
         />
       </div>
@@ -316,6 +355,8 @@ function SchemaField({
         description={description}
         required={required}
         value={Array.isArray(value) ? value : []}
+        path={path}
+        reportDraftIssue={reportDraftIssue}
         onChange={onChange}
       />
     );
@@ -359,51 +400,90 @@ function SchemaField({
   );
 }
 
+/** Preserve the user's exact JSON text across parent echoes of its parsed value,
+ * but load new authoritative configuration when the serialized value changes. */
+function useJSONTextDraft(serialized: string, path: string, reportDraftIssue: ReportDraftIssue) {
+  const [text, setText] = useState(serialized);
+  const [error, setError] = useState("");
+  const errorId = useId();
+  const lastPublished = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (lastPublished.current === serialized) {
+      lastPublished.current = null;
+      return;
+    }
+    lastPublished.current = null;
+    setText(serialized);
+    setError("");
+  }, [serialized]);
+
+  useEffect(() => {
+    reportDraftIssue(path, error || null);
+    return () => reportDraftIssue(path, null);
+  }, [path, error, reportDraftIssue]);
+
+  function markPublished(next: unknown) {
+    const normalized = next === undefined ? "" : JSON.stringify(next, null, 2);
+    lastPublished.current = normalized === serialized ? null : normalized;
+  }
+  return { text, setText, error, setError, errorId, markPublished };
+}
+
+function JSONDraftError({ message, id }: { message: string; id: string }) {
+  return message ? <p id={id} role="alert" className="text-xs leading-5 text-destructive">{message}</p> : null;
+}
+
 function JSONArrayEditor({
   label,
   description,
   required,
   value,
+  path,
+  reportDraftIssue,
   onChange,
 }: {
   label: string;
   description?: string | undefined;
   required: boolean;
   value: unknown[];
+  path: string;
+  reportDraftIssue: ReportDraftIssue;
   onChange: (value: unknown) => void;
 }) {
-  const serialized = JSON.stringify(value, null, 2);
-  const [text, setText] = useState(serialized);
-  const [error, setError] = useState("");
-
+  const draft = useJSONTextDraft(JSON.stringify(value, null, 2), path, reportDraftIssue);
   return (
     <FieldShell label={label} required={required} description={description}>
       <Textarea
         aria-label={label}
+        aria-invalid={Boolean(draft.error)}
+        aria-describedby={draft.error ? draft.errorId : undefined}
         className="min-h-28 font-mono text-xs"
-        value={text}
+        value={draft.text}
         onChange={(event) => {
           const nextText = event.target.value;
-          setText(nextText);
+          draft.setText(nextText);
           if (nextText.trim() === "" && !required) {
-            setError("");
+            draft.setError("");
+            draft.markPublished(undefined);
             onChange(undefined);
             return;
           }
           try {
             const parsed: unknown = JSON.parse(nextText);
             if (!Array.isArray(parsed)) {
-              setError(t("Enter a JSON array."));
+              draft.setError(t("Enter a JSON array."));
               return;
             }
-            setError("");
+            draft.setError("");
+            draft.markPublished(parsed);
             onChange(parsed);
           } catch {
-            setError(t("Enter valid JSON."));
+            draft.setError(t("Enter valid JSON."));
           }
         }}
       />
-      {error ? <p className="text-xs text-destructive">{error}</p> : null}
+      <JSONDraftError message={draft.error} id={draft.errorId} />
     </FieldShell>
   );
 }
@@ -413,42 +493,52 @@ function JSONValueEditor({
   description,
   required,
   value,
+  path,
+  reportDraftIssue,
   onChange,
 }: {
   label: string;
   description?: string | undefined;
   required: boolean;
   value: unknown;
+  path: string;
+  reportDraftIssue: ReportDraftIssue;
   onChange: (value: unknown) => void;
 }) {
-  const serialized =
-    value === undefined ? "" : JSON.stringify(value, null, 2);
-  const [text, setText] = useState(serialized);
-  const [error, setError] = useState("");
-
+  const serialized = value === undefined ? "" : JSON.stringify(value, null, 2);
+  const draft = useJSONTextDraft(serialized, path, reportDraftIssue);
   return (
     <FieldShell label={label} required={required} description={description}>
       <Textarea
         aria-label={label}
+        aria-invalid={Boolean(draft.error)}
+        aria-describedby={draft.error ? draft.errorId : undefined}
         className="min-h-24 font-mono text-xs"
-        value={text}
+        value={draft.text}
         onChange={(event) => {
           const nextText = event.target.value;
-          setText(nextText);
-          if (nextText.trim() === "" && !required) {
-            setError("");
+          draft.setText(nextText);
+          if (nextText.trim() === "") {
+            if (required) {
+              draft.setError(t("Enter valid JSON."));
+              return;
+            }
+            draft.setError("");
+            draft.markPublished(undefined);
             onChange(undefined);
             return;
           }
           try {
-            setError("");
-            onChange(JSON.parse(nextText) as unknown);
+            const parsed: unknown = JSON.parse(nextText);
+            draft.setError("");
+            draft.markPublished(parsed);
+            onChange(parsed);
           } catch {
-            setError(t("Enter valid JSON."));
+            draft.setError(t("Enter valid JSON."));
           }
         }}
       />
-      {error ? <p className="text-xs text-destructive">{error}</p> : null}
+      <JSONDraftError message={draft.error} id={draft.errorId} />
     </FieldShell>
   );
 }
@@ -456,16 +546,17 @@ function JSONValueEditor({
 function RawObjectEditor({
   label,
   value,
+  path,
+  reportDraftIssue,
   onChange,
 }: {
   label: string;
   value: ConfigValue;
+  path: string;
+  reportDraftIssue: ReportDraftIssue;
   onChange: (value: ConfigValue) => void;
 }) {
-  const serialized = JSON.stringify(value, null, 2);
-  const [text, setText] = useState(serialized);
-  const [error, setError] = useState("");
-
+  const draft = useJSONTextDraft(JSON.stringify(value, null, 2), path, reportDraftIssue);
   return (
     <FieldShell
       label={label}
@@ -474,25 +565,28 @@ function RawObjectEditor({
     >
       <Textarea
         aria-label={label}
+        aria-invalid={Boolean(draft.error)}
+        aria-describedby={draft.error ? draft.errorId : undefined}
         className="min-h-40 font-mono text-xs"
-        value={text}
+        value={draft.text}
         onChange={(event) => {
           const nextText = event.target.value;
-          setText(nextText);
+          draft.setText(nextText);
           try {
             const parsed: unknown = JSON.parse(nextText);
             if (!isRecord(parsed)) {
-              setError(t("Provider configuration must be a JSON object."));
+              draft.setError(t("Provider configuration must be a JSON object."));
               return;
             }
-            setError("");
+            draft.setError("");
+            draft.markPublished(parsed);
             onChange(parsed);
           } catch {
-            setError(t("Enter valid JSON."));
+            draft.setError(t("Enter valid JSON."));
           }
         }}
       />
-      {error ? <p className="text-xs text-destructive">{error}</p> : null}
+      <JSONDraftError message={draft.error} id={draft.errorId} />
     </FieldShell>
   );
 }
@@ -500,19 +594,20 @@ function RawObjectEditor({
 function AdditionalPropertiesEditor({
   value,
   knownNames,
+  path,
+  reportDraftIssue,
   onChange,
 }: {
   value: ConfigValue;
   knownNames: Set<string>;
+  path: string;
+  reportDraftIssue: ReportDraftIssue;
   onChange: (value: ConfigValue) => void;
 }) {
   const additional = Object.fromEntries(
     Object.entries(value).filter(([name]) => !knownNames.has(name)),
   );
-  const serialized = JSON.stringify(additional, null, 2);
-  const [text, setText] = useState(serialized);
-  const [error, setError] = useState("");
-
+  const draft = useJSONTextDraft(JSON.stringify(additional, null, 2), path, reportDraftIssue);
   return (
     <details className="rounded-lg border border-border">
       <summary className="cursor-pointer select-none px-4 py-3 text-sm font-medium">
@@ -521,28 +616,31 @@ function AdditionalPropertiesEditor({
       <div className="space-y-2 border-t border-border px-4 py-4">
         <Textarea
           aria-label={t("Additional properties")}
+          aria-invalid={Boolean(draft.error)}
+          aria-describedby={draft.error ? draft.errorId : undefined}
           className="min-h-28 font-mono text-xs"
-          value={text}
+          value={draft.text}
           onChange={(event) => {
             const nextText = event.target.value;
-            setText(nextText);
+            draft.setText(nextText);
             try {
               const parsed: unknown = JSON.parse(nextText);
               if (!isRecord(parsed)) {
-                setError(t("Additional properties must be a JSON object."));
+                draft.setError(t("Additional properties must be a JSON object."));
                 return;
               }
               const known = Object.fromEntries(
                 Object.entries(value).filter(([name]) => knownNames.has(name)),
               );
-              setError("");
+              draft.setError("");
+              draft.markPublished(parsed);
               onChange({ ...known, ...parsed });
             } catch {
-              setError(t("Enter valid JSON."));
+              draft.setError(t("Enter valid JSON."));
             }
           }}
         />
-        {error ? <p className="text-xs text-destructive">{error}</p> : null}
+        <JSONDraftError message={draft.error} id={draft.errorId} />
       </div>
     </details>
   );
