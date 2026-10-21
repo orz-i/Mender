@@ -948,10 +948,6 @@ export function SkillsPage({
                   {" · "}
                   {t(deploying.builtIn ? "Built-in" : "Local")}
                 </p>
-                <details className="mt-2 text-xs text-muted-foreground">
-                  <summary className="cursor-pointer">{t("Installation ID")}</summary>
-                  <p className="mt-1 break-all font-mono">{deploying.installationId}</p>
-                </details>
               </div>
             ) : null}
 
@@ -987,6 +983,12 @@ export function SkillsPage({
                   ? t("Project deployment: choose a project folder in the next step.")
                   : t("User deployment: this Skill will be installed for your account, not just one project.")}
               </p>
+            ) : null}
+            {deploying !== null ? (
+              <details className="text-xs text-muted-foreground">
+                <summary className="cursor-pointer">{t("Installation ID")}</summary>
+                <p className="mt-1 break-all font-mono">{deploying.installationId}</p>
+              </details>
             ) : null}
             {deploymentError ? (
               <p role="alert" className="text-xs leading-5 text-destructive">{deploymentError}</p>
