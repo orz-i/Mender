@@ -39,6 +39,7 @@ import {
 } from "@mender/ui/components/table";
 
 import { errorMessage } from "../../shared/errors";
+import { FormHeading } from "../../shared/form-info";
 import { ProfileToolSourcePicker } from "./profile-tool-source-picker";
 import { profileSourceLabels } from "./profile-source-label";
 import { canonicalizeOwnedIdentifier, isCanonicalOwnedSlug, ownedIdentifierCreateError } from "../../shared/form-identifiers";
@@ -855,7 +856,7 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
           <div className="grid gap-3">
             <DialogHeader>
               <DialogTitle>{t("Create profile")}</DialogTitle>
-              <DialogDescription>
+              <DialogDescription className="sr-only">
                 {t("Choose an exposure mode, then select Tools from the Catalog.")}
               </DialogDescription>
             </DialogHeader>
@@ -867,7 +868,7 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
           </div>
 
           <div className="min-h-0 space-y-4 overflow-y-auto pr-1">
-            <Field label="Slug">
+            <Field label="Slug" help={t("Uppercase letters and spaces become a lowercase hyphenated identifier.")}>
               <Input
                 aria-label={t("Profile slug")}
                 placeholder={t("default")}
@@ -878,9 +879,6 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
                   setCreateForm((current) => ({ ...current, slug: event.target.value }));
                 }}
               />
-              <p className="mt-1 text-xs text-muted-foreground">
-                {t("Uppercase letters and spaces become a lowercase hyphenated identifier.")}
-              </p>
               {createForm.slug.trim() !== "" ? (
                 <p className={createSlugValid ? "mt-1 break-all font-mono text-xs" : "mt-1 text-xs text-destructive"}>
                   {createSlugValid
@@ -903,7 +901,7 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
                 <p className="mt-1 text-xs text-destructive">{t("Display name is too long (maximum 160 bytes).")}</p>
               ) : null}
             </Field>
-            <Field label="Exposure mode">
+            <Field label="Exposure mode" help={t("Direct exports selected Tools. Dynamic exposes discovery meta-tools. Hybrid supports both and lets selected Tools opt into direct export.")}>
               <select
                 aria-label={t("Exposure mode")}
                 value={createForm.mode}
@@ -920,9 +918,6 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
                 <option value="hybrid">{t("hybrid")}</option>
               </select>
             </Field>
-            <p className="text-xs leading-5 text-muted-foreground">
-              {t("Direct exports selected Tools. Dynamic exposes discovery meta-tools. Hybrid supports both and lets selected Tools opt into direct export.")}
-            </p>
           </div>
 
           <DialogFooter>
@@ -953,7 +948,7 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
               <DialogTitle>
                 {managedProfile?.displayName ?? t("Manage profile")}
               </DialogTitle>
-              <DialogDescription>
+              <DialogDescription className="sr-only">
                 {t("Select sources first, then manage each source's ToolBindings.")}
               </DialogDescription>
             </DialogHeader>
@@ -975,7 +970,7 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
               </div>
 
               <div className="rounded-lg border border-border bg-muted/30 p-4">
-                <Field label="Tunnel">
+                <Field label="Tunnel" help={t("Select a Tunnel to make this Profile's managed MCP server reachable through that provider. Mender still binds the MCP server to loopback.")}>
                   <select
                     aria-label={t("Profile tunnel")}
                     value={managedProfile.tunnelId ?? ""}
@@ -992,11 +987,11 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
                       </option>
                     ))}
                   </select>
-                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                    {t(
-                      "Select a Tunnel to make this Profile's managed MCP server reachable through that provider. Mender still binds the MCP server to loopback.",
-                    )}
-                  </p>
+                  {managedProfile.tunnelId ? (
+                    <p role="note" className="mt-1 text-xs font-medium">
+                      {t("This Tunnel makes the Profile reachable from external clients.")}
+                    </p>
+                  ) : null}
                 </Field>
               </div>
 
@@ -1224,7 +1219,7 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
         <DialogContent className="sm:max-w-xl">
           <DialogHeader>
             <DialogTitle>{t("Tool presentation")}</DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="sr-only">
               {t("Configure Profile-specific model-facing presentation without changing the Catalog Tool.")}
             </DialogDescription>
           </DialogHeader>
@@ -1330,14 +1325,15 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
         <DialogContent className="sm:max-w-xl">
           <DialogHeader>
             <DialogTitle>{t("Tool governance")}</DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="sr-only">
               {t("Tighten execution behavior for this Profile binding. Binding policy can never relax the global Policy decision.")}
             </DialogDescription>
           </DialogHeader>
 
           {governanceBinding !== null ? (
             <div className="space-y-5">
-              <Field label="Policy constraint">
+              <p role="note" className="text-xs text-muted-foreground">{t("Binding settings cannot weaken global Policy.")}</p>
+              <Field label="Policy constraint" help={t("Inherit keeps normal Runtime behavior. Require approval uses the existing Approval gate and currently fails closed when no approval adapter is configured. Deny keeps the Tool selected but rejects invocation.")}>
                 <select
                   aria-label={t("Binding policy constraint")}
                   value={governanceForm.policyConstraint}
@@ -1354,10 +1350,12 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
                   <option value="deny">{t("deny")}</option>
                 </select>
               </Field>
-              <p className="text-xs leading-5 text-muted-foreground">
-                {t("Inherit keeps normal Runtime behavior. Require approval uses the existing Approval gate and currently fails closed when no approval adapter is configured. Deny keeps the Tool selected but rejects invocation.")}
-              </p>
-              <Field label="Concurrency constraint">
+              {governanceForm.policyConstraint === "require_approval" ? (
+                <p role="alert" className="text-xs text-foreground">
+                  {t("Without an approval adapter, Tool calls requiring approval will be denied.")}
+                </p>
+              ) : null}
+              <Field label="Concurrency constraint" help={t("Serial prevents overlapping calls for this Profile and Tool binding only.")}>
                 <select
                   aria-label={t("Binding concurrency constraint")}
                   value={governanceForm.concurrencyConstraint}
@@ -1373,9 +1371,6 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
                   <option value="serial">{t("serial")}</option>
                 </select>
               </Field>
-              <p className="text-xs leading-5 text-muted-foreground">
-                {t("Serial prevents overlapping calls for this Profile and Tool binding only.")}
-              </p>
             </div>
           ) : null}
 
@@ -1512,16 +1507,18 @@ function mergeTools(
 
 function Field({
   label,
+  help,
   children,
 }: {
   label: string;
+  help?: string;
   children: React.ReactNode;
 }) {
   return (
-    <label className="block space-y-1.5">
-      <span className="text-sm font-medium">{t(label)}</span>
+    <div className="flex flex-col gap-1.5">
+      <FormHeading label={t(label)} help={help} />
       {children}
-    </label>
+    </div>
   );
 }
 

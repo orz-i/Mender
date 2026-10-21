@@ -91,7 +91,9 @@ describe("SSH Remote Sandbox with automatic host identity", () => {
     const client = renderSSH({}, true);
     expect(await screen.findByRole("textbox", { name: "Sandbox name" })).toBeTruthy();
     expect(screen.queryByRole("textbox", { name: "Pinned SSH host public key" })).toBeNull();
-    expect(screen.getByText(/Mender checks your known_hosts automatically/)).toBeTruthy();
+    expect(screen.getByText("New SSH hosts require fingerprint confirmation.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Help for SSH host" }));
+    expect(await screen.findByText(/Mender checks your known_hosts automatically/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Review" }));
     expect(screen.getByText("Enter a sandbox name (up to 160 bytes).")).toBeTruthy();
     expect(screen.getByText("Choose an existing SSH private key credential.")).toBeTruthy();

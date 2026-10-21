@@ -199,7 +199,9 @@ it("displays the real rotated endpoint without asking the user to search for a f
   expect(await screen.findByText(current.endpoint)).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "Start server" }));
   const dialog = within(screen.getByRole("dialog", { name: "Start MCP server" }));
-  expect(dialog.getByText(/automatically tries the next local ports/)).toBeTruthy();
+  expect(dialog.queryByText(/automatically tries the next local ports/)).toBeNull();
+  fireEvent.click(dialog.getByRole("button", { name: "Help for Local listen address" }));
+  expect(await screen.findByText(/automatically tries the next local ports/)).toBeTruthy();
   expect(dialog.getByText("127.0.0.1:8765")).toBeTruthy();
   fireEvent.change(dialog.getByLabelText("Server profile"), { target: { value: "beta" } });
   fireEvent.click(dialog.getByRole("button", { name: "Start server" }));

@@ -15,7 +15,7 @@ import { t } from "../i18n/i18n";
 export function FormInfo({
   label,
   children,
-  side = "top",
+  side = "bottom",
 }: {
   label: string;
   children: ReactNode;

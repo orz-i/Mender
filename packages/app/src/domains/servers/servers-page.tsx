@@ -30,6 +30,7 @@ import {
 } from "@mender/ui/components/table";
 
 import { errorMessage } from "../../shared/errors";
+import { FormHeading } from "../../shared/form-info";
 import { IconButton } from "../../shared/icon-button";
 import { EmptyState, ErrorNotice } from "../../shared/page";
 import { PageToolbar, ResultPanel } from "../../shared/page-toolbar";
@@ -428,7 +429,7 @@ export function ServersPage({
         <DialogContent className="grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>{t("Start MCP server")}</DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="sr-only">
               {t("Choose which Profile to share through a local MCP server. The listener remains on this computer.")}
             </DialogDescription>
             {startError ? (
@@ -439,7 +440,7 @@ export function ServersPage({
           </DialogHeader>
 
           <DialogBody className="space-y-4">
-            <Field label="Profile">
+            <Field label="Profile" help={t("Clients with this endpoint can use the selected Profile’s tools.")}>
               <select
                 aria-label={t("Server profile")}
                 value={startProfile}
@@ -455,9 +456,6 @@ export function ServersPage({
                 ))}
               </select>
             </Field>
-            <p className="text-xs leading-5 text-muted-foreground">
-              {t("Starting this server exposes the selected Profile’s enabled tools to clients that can reach its endpoint.")}
-            </p>
 
             {selectedProfile !== null && selectedProfile.tools.length === 0 ? (
               <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-5">
@@ -466,24 +464,19 @@ export function ServersPage({
             ) : null}
 
             {selectedProfile?.tunnelId ? (
-              <div className="rounded-lg border border-border bg-muted/40 p-3 text-xs leading-5 text-muted-foreground">
-                {t(
-                  "Starting this Profile also starts its configured OpenAI Secure MCP Tunnel. The MCP server itself remains loopback-only.",
-                )}
-              </div>
+              <p role="note" className="text-xs font-medium leading-5 text-foreground">
+                {t("Also starts the linked secure Tunnel.")}
+              </p>
             ) : null}
 
-            <div className="rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-sm">
-              <p className="font-medium text-foreground">{t("Local listen address")}</p>
-              <p className="mt-1 break-all font-mono text-xs text-muted-foreground">{startAddress || t("Not set")}</p>
-              <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                {t("If the port is occupied, Mender automatically tries the next local ports. The actual endpoint is shown after the server starts.")}
-              </p>
+            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+              <FormHeading label={t("Local listen address")} help={t("If the port is occupied, Mender automatically tries the next local ports. The actual endpoint is shown after the server starts.")} />
+              <code className="break-all text-sm text-muted-foreground">{startAddress || t("Not set")}</code>
             </div>
             <details className="rounded-lg border border-border/70 px-3 py-2.5 text-sm">
               <summary className="cursor-pointer font-medium text-foreground">{t("Advanced settings")}</summary>
               <div className="mt-3 space-y-3 border-t border-border/70 pt-3">
-                <Field label="Listen address">
+                <Field label="Listen address" help={t("Use a loopback host such as 127.0.0.1 or localhost. Port 0 asks the OS to choose a free port.")}>
                   <Input
                     aria-label={t("Listen address")}
                     className="font-mono"
@@ -491,14 +484,7 @@ export function ServersPage({
                     aria-invalid={!startAddress.trim()}
                     onChange={(event) => { setStartError(""); setStartAddress(event.target.value); }}
                   />
-                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                    {t("Use a loopback host such as 127.0.0.1 or localhost. Port 0 asks the OS to choose a free port.")}
-                  </p>
                 </Field>
-                <p className="text-xs leading-5 text-muted-foreground">
-                  {t("Desktop-managed servers use Streamable HTTP. stdio remains client-launched through")}{" "}
-                  <code>mender serve mcp --profile … --stdio</code>.
-                </p>
               </div>
             </details>
           </DialogBody>
@@ -533,16 +519,18 @@ async function browserCopyText(value: string) {
 
 function Field({
   label,
+  help,
   children,
 }: {
   label: string;
+  help?: string;
   children: React.ReactNode;
 }) {
   return (
-    <label className="block space-y-1.5">
-      <span className="text-sm font-medium">{t(label)}</span>
+    <div className="flex flex-col gap-1.5">
+      <FormHeading label={t(label)} help={help} />
       {children}
-    </label>
+    </div>
   );
 }
 

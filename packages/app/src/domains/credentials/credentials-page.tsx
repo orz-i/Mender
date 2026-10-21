@@ -23,6 +23,7 @@ import {
 } from "@mender/ui/components/table";
 
 import { errorMessage } from "../../shared/errors";
+import { FormHeading } from "../../shared/form-info";
 import { IconButton } from "../../shared/icon-button";
 import { EmptyState, ErrorNotice } from "../../shared/page";
 import { PageToolbar, ResultPanel } from "../../shared/page-toolbar";
@@ -539,7 +540,7 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
           <div className="grid gap-3">
             <DialogHeader>
               <DialogTitle>{t("Add credential")}</DialogTitle>
-              <DialogDescription>
+              <DialogDescription className="sr-only">
                 {t("Inventory metadata is stored in Mender. Native secret values go directly to the OS credential store; environment-backed Credentials store only the variable name.")}
               </DialogDescription>
             </DialogHeader>
@@ -551,7 +552,7 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
           </div>
 
           <div className="min-h-0 space-y-4 overflow-y-auto pr-1">
-            <Field label="Source">
+            <Field label="Source" help={t("Native keys are stored in the OS keychain; environment references store only the variable name.")}>
               <select
                 aria-label={t("Credential source")}
                 value={createForm.source}
@@ -579,7 +580,7 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
 
             {sshKeyMode ? (
               <div className="space-y-2">
-                <Field label="Credential name">
+                <Field label="Credential name" help={t("SSH credential identifier is generated automatically.")}>
                   <Input
                     aria-label={t("SSH credential name")}
                     placeholder={t("My server")}
@@ -591,7 +592,6 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
                     })}
                   />
                 </Field>
-                <p className="text-xs text-muted-foreground">{t("SSH credential identifier is generated automatically.")}</p>
                 {nameInvalid ? <p className="text-xs text-destructive">{t("Use a name starting with a letter, up to 63 letters, digits or hyphens.")}</p> : null}
                 {createForm.displayName.trim() !== "" && !displayNameValid ? (
                   <p className="text-xs text-destructive">{t("Display name is too long (maximum 160 bytes).")}</p>
@@ -622,11 +622,8 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
                 <details ref={identitySettingsRef} className="rounded-lg border border-border/70">
                   <summary className="cursor-pointer px-3 py-2.5 text-sm font-medium">{t("Advanced settings")}</summary>
                   <div className="space-y-3 border-t border-border/70 px-3 py-3">
-                    <p className="text-xs leading-5 text-muted-foreground">
-                      {t("Mender generates a personal credential reference from the name. Change its technical identity here if another integration requires it.")}
-                    </p>
                     <div className="grid gap-4 sm:grid-cols-2">
-                      <Field label="Namespace">
+                      <Field label="Namespace" help={t("Mender generates a personal credential reference from the name. Change its technical identity here if another integration requires it.")}>
                         <Input
                           aria-label={t("Credential namespace")}
                           placeholder={t("github")}
@@ -640,7 +637,7 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
                           })}
                         />
                       </Field>
-                      <Field label="Internal name">
+                      <Field label="Internal name" help={t("Namespace and name are lowercased and spaces become hyphens. Use 1–63 letters, digits or hyphens, starting with a letter.")}>
                         <Input
                           aria-label={t("Credential name")}
                           placeholder={t("work")}
@@ -650,12 +647,9 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
                         />
                       </Field>
                     </div>
-                    <p className="text-xs leading-5 text-muted-foreground">
-                      {t("Namespace and name are lowercased and spaces become hyphens. Use 1–63 letters, digits or hyphens, starting with a letter.")}
-                      {namespaceInvalid || nameInvalid ? (
-                        <span className="block text-destructive">{t("Use valid namespace and name identifiers before creating a credential.")}</span>
-                      ) : null}
-                    </p>
+                    {namespaceInvalid || nameInvalid ? (
+                      <p className="text-xs text-destructive">{t("Use valid namespace and name identifiers before creating a credential.")}</p>
+                    ) : null}
                     <ReadOnlyField label="Reference" value={referencePreview} />
                   </div>
                 </details>
@@ -679,7 +673,7 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
                 <details ref={oauthOptionsRef} className="rounded-lg border border-border/70">
                   <summary className="cursor-pointer px-3 py-2.5 text-sm font-medium">{t("Advanced OAuth options")}</summary>
                   <div className="space-y-3 border-t border-border/70 p-3">
-                    <Field label="OAuth client ID (optional)">
+                    <Field label="OAuth client ID (optional)" help={t("Leave blank for supported automatic registration, or enter a registered client ID or HTTPS client metadata URL.")}>
                       <Input
                         aria-label={t("OAuth client ID (optional)")}
                         placeholder={t("Leave blank for automatic registration")}
@@ -687,9 +681,6 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
                         onChange={(event) => updateCreateForm({ oauthClientId: event.target.value })}
                       />
                     </Field>
-                    <p className="text-xs text-muted-foreground">
-                      {t("Leave blank for supported automatic registration, or enter a registered client ID or HTTPS client metadata URL.")}
-                    </p>
                     <Field label="OAuth scopes (optional)">
                       <Input
                         aria-label={t("OAuth scopes (optional)")}
@@ -706,7 +697,7 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
               sshKeyMode ? (
                 <div className="space-y-3">
                   <div className="space-y-2">
-                    <p className="text-sm font-medium">{t("SSH private key")}</p>
+                    <FormHeading label={t("SSH private key")} help={t("Supports Ed25519, ECDSA and RSA 2048+ private keys. Encrypted keys are decrypted once on import; the OS keychain protects the stored key.")} />
                     <SSHKeyEditor value={createForm.secret} onChange={(secret) => updateCreateForm({ secret })} />
                   </div>
                   <Field label="SSH key passphrase (optional)">
@@ -718,15 +709,12 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
                       onChange={(event) => updateCreateForm({ sshKeyPassphrase: event.target.value })}
                     />
                   </Field>
-                  <p className="text-xs leading-5 text-muted-foreground">
-                    {t("Supports Ed25519, ECDSA and RSA 2048+ private keys. Encrypted keys are decrypted once on import; the OS keychain protects the stored key.")}
-                  </p>
                   {createForm.secret !== "" && !secretValid ? (
                     <p className="text-xs text-destructive">{t("Secret exceeds the 64 KiB limit.")}</p>
                   ) : null}
                 </div>
               ) : (
-                <Field label="Secret">
+                <Field label="Secret" help={t("The value is submitted once and is never returned by Mender.")}>
                   <Input
                     type="password"
                     autoComplete="new-password"
@@ -735,9 +723,6 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
                     aria-invalid={createForm.secret !== "" && !secretValid}
                     onChange={(event) => updateCreateForm({ secret: event.target.value })}
                   />
-                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                    {t("The value is submitted once and is never returned by Mender.")}
-                  </p>
                   {createForm.secret !== "" && !secretValid ? (
                     <p className="mt-1 text-xs text-destructive">{t("Secret exceeds the 64 KiB limit.")}</p>
                   ) : null}
@@ -856,16 +841,18 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
 
 function Field({
   label,
+  help,
   children,
 }: {
   label: string;
+  help?: string;
   children: React.ReactNode;
 }) {
   return (
-    <label className="block">
-      <span className="mb-1.5 block text-sm font-medium">{t(label)}</span>
+    <div className="flex flex-col gap-1.5">
+      <FormHeading label={t(label)} help={help} />
       {children}
-    </label>
+    </div>
   );
 }
 

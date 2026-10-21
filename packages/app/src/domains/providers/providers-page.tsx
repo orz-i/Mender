@@ -37,6 +37,7 @@ import { Input } from "@mender/ui/components/input";
 import { Textarea } from "@mender/ui/components/textarea";
 
 import { errorMessage } from "../../shared/errors";
+import { FormHeading } from "../../shared/form-info";
 import { canonicalizeOwnedIdentifier, isCanonicalOwnedSlug, ownedIdentifierCreateError } from "../../shared/form-identifiers";
 import { EmptyState, ErrorNotice, InsightBanner } from "../../shared/page";
 import { PageToolbar, ResultPanel } from "../../shared/page-toolbar";
@@ -761,7 +762,7 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
             <div className="grid gap-2">
               <DialogHeader>
                 <DialogTitle>{t("Connect {{integration}}",{integration:connectionOffering.displayName})}</DialogTitle>
-                <DialogDescription>{t("Configure this reviewed Remote MCP integration. No Profile access is granted automatically.")}</DialogDescription>
+                <DialogDescription className="sr-only">{t("Configure this reviewed Remote MCP integration. No Profile access is granted automatically.")}</DialogDescription>
               </DialogHeader>
               {offeringError?<div role="alert" className="rounded-lg border border-destructive/20 p-3 text-sm text-destructive">{offeringError}</div>:null}
             </div>
@@ -770,11 +771,11 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
                 <Input aria-label={t("Integration name")} value={offeringName}
                   onChange={event=>setOfferingName(event.target.value)}/>
               </Field>
-              <div className="rounded-lg border border-border p-3">
-                <p className="mb-1 text-xs text-muted-foreground">{t("Reviewed endpoint · Streamable HTTP")}</p>
-                <p className="break-all font-mono text-xs">{connectionOffering.endpoint}</p>
-                <p className="mt-2 text-xs text-muted-foreground">{t("The endpoint and client header come from the reviewed integration definition.")}</p>
+              <div className="min-w-0">
+                <FormHeading label={t("Reviewed endpoint · Streamable HTTP")} help={t("The endpoint and client header come from the reviewed integration definition.")} />
+                <p className="break-all font-mono text-xs text-muted-foreground">{connectionOffering.endpoint}</p>
               </div>
+              <p role="note" className="text-xs text-muted-foreground">{t("Connecting does not grant Profile access.")}</p>
               <Field label="API Credential" optional>
                 <select aria-label={t("AnySearch API Credential")} value={offeringCredentialRef}
                   onChange={event=>setOfferingCredentialRef(event.target.value)}
@@ -1102,7 +1103,7 @@ function ProviderFormDialog({
                 : t("Add provider")
               : t("Edit provider")}
           </DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="sr-only">
             {creating
               ? selectedPlugin !== undefined
                 ? t(
@@ -1215,20 +1216,15 @@ function ProviderFormDialog({
               </div>
             </div>
           ) : (
-            <div className="rounded-lg border border-border bg-muted/30 p-3 text-sm text-muted-foreground">
-              <div className="font-medium text-foreground">{t("Schema-driven configuration")}</div>
-              <div className="mt-1 text-xs leading-5">
-                {t(
-                  selectedPlugin?.sourceKind === "external"
-                    ? "This Provider is pinned to an installed external plugin package."
-                    : "This plugin uses Mender's generic configuration renderer.",
-                )}
-              </div>
-            </div>
+            <FormHeading label={t("Schema-driven configuration")} help={t(
+              selectedPlugin?.sourceKind === "external"
+                ? "This Provider is pinned to an installed external plugin package."
+                : "This plugin uses Mender's generic configuration renderer.",
+            )} />
           )}
 
           {creating ? (
-            <Field label="Namespace">
+            <Field label="Namespace" help={t("Uppercase letters and spaces become a lowercase hyphenated identifier.")}>
               <Input
                 aria-label={t("Namespace")}
                 placeholder={t("namespace")}
@@ -1238,9 +1234,6 @@ function ProviderFormDialog({
                   onChange({ ...form, namespace: event.target.value })
                 }
               />
-              <p className="mt-1 text-xs text-muted-foreground">
-                {t("Uppercase letters and spaces become a lowercase hyphenated identifier.")}
-              </p>
               {form.namespace.trim() !== "" ? (
                 <p className={namespaceValid ? "mt-1 break-all font-mono text-xs" : "mt-1 text-xs text-destructive"}>
                   {namespaceValid
@@ -1312,7 +1305,7 @@ function ProviderFormDialog({
 
           {renderer === "model-tools" ? (
             <>
-              <Field label="Model">
+              <Field label="Model" help={t("Mender exposes one stable web_search Tool. The selected model must execute the provider-hosted search tool; model-only answers are rejected.")}>
                 <Input
                   aria-label={t("Model Tools model")}
                   placeholder={modelToolsModelPlaceholder(form.modelToolsEngine)}
@@ -1323,16 +1316,13 @@ function ProviderFormDialog({
                 />
               </Field>
               <ReadOnlyField label="Capability" value={t("Web search")} />
-              <p className="text-xs leading-5 text-muted-foreground">
-                {t("Mender exposes one stable web_search Tool. The selected model must execute the provider-hosted search tool; model-only answers are rejected.")}
-              </p>
             </>
           ) : null}
 
           {renderer === "mcp" ? (
             form.transport === "http" ? (
             <>
-              <Field label="Endpoint">
+              <Field label="Endpoint" help={t("Non-loopback endpoints require HTTPS.")}>
                 <Input
                   aria-label={t("Endpoint")}
                   placeholder={t("https://example.com/mcp")}
@@ -1341,9 +1331,6 @@ function ProviderFormDialog({
                     onChange({ ...form, endpoint: event.target.value })
                   }
                 />
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {t("Non-loopback endpoints require HTTPS.")}
-                </p>
               </Field>
 
               <details className="rounded-lg border border-border">
@@ -1465,7 +1452,7 @@ function ProviderFormDialog({
           {renderer === "openapi" ? (
             <>
               {form.openapiSourceKind === "url" ? (
-                <Field label="Description URL">
+                <Field label="Description URL" help={t("Non-loopback URLs require HTTPS. External $ref retrieval is disabled.")}>
                   <Input
                     aria-label={t("OpenAPI description URL")}
                     placeholder={t("https://example.com/openapi.yaml")}
@@ -1474,12 +1461,9 @@ function ProviderFormDialog({
                       onChange({ ...form, openapiSpecUrl: event.target.value })
                     }
                   />
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {t("Non-loopback URLs require HTTPS. External $ref retrieval is disabled.")}
-                  </p>
                 </Field>
               ) : (
-                <Field label="Description file">
+                <Field label="Description file" help={t("Use an absolute local path. External file references are disabled.")}>
                   <Input
                     aria-label={t("OpenAPI description file")}
                     placeholder={t("/absolute/path/to/openapi.yaml")}
@@ -1488,9 +1472,6 @@ function ProviderFormDialog({
                       onChange({ ...form, openapiSpecFile: event.target.value })
                     }
                   />
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {t("Use an absolute local path. External file references are disabled.")}
-                  </p>
                 </Field>
               )}
 
@@ -1653,7 +1634,7 @@ function ProviderAuthenticationDialog({
       <DialogContent className="grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{t("Provider authentication")}</DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="sr-only">
             {t("Bind Provider authentication to inventory Credentials. Mender stores only Credential References and resolves secret values at connection and execution boundaries.")}
           </DialogDescription>
         </DialogHeader>
@@ -1663,10 +1644,7 @@ function ProviderAuthenticationDialog({
           <div className="space-y-4">
             {form.pluginId === MODEL_TOOLS_PLUGIN_ID ? (
               <>
-                <p className="text-xs leading-5 text-muted-foreground">
-                  {t("Select the inventory Credential used to authenticate the configured model API. The secret is resolved only during governed Tool execution and remains subject to Profile Credential scope.")}
-                </p>
-                <Field label="Model API Credential">
+                <Field label="Model API Credential" help={t("Select the inventory Credential used to authenticate the configured model API. The secret is resolved only during governed Tool execution and remains subject to Profile Credential scope.")}>
                   <select
                     aria-label={t("Model Tools API credential")}
                     value={form.modelToolsCredentialRef}
@@ -1691,16 +1669,13 @@ function ProviderAuthenticationDialog({
               </>
             ) : form.pluginId === OPENAPI_PLUGIN_ID ? (
               <>
-                <p className="text-xs leading-5 text-muted-foreground">
-                  {t("Bind OpenAPI Security Scheme names to inventory Credentials. The scheme name must match the description exactly; Mender keeps the Credential Reference in Provider config and resolves the secret only at execution.")}
-                </p>
                 <div className="space-y-3">
                   {form.openapiCredentials.map((binding, index) => (
                     <div
                       key={index}
                       className="grid gap-3 rounded-lg border border-border p-3 sm:grid-cols-[1fr_1.4fr_auto]"
                     >
-                      <Field label="Security Scheme">
+                      <Field label="Security Scheme" help={t("Bind OpenAPI Security Scheme names to inventory Credentials. The scheme name must match the description exactly; Mender keeps the Credential Reference in Provider config and resolves the secret only at execution.")}>
                         <Input
                           aria-label={t("OpenAPI security scheme {{index}}", {
                             index: index + 1,
@@ -2178,24 +2153,22 @@ function ProviderDetailsDialog({
 function Field({
   label,
   optional = false,
+  help,
   children,
 }: {
   label: string;
   optional?: boolean;
+  help?: string;
   children: React.ReactNode;
 }) {
   return (
-    <label className="block space-y-1.5">
-      <span className="text-sm font-medium">
-        {t(label)}
-        {optional ? (
-          <span className="ml-1 font-normal text-muted-foreground">
-            {t("(optional)")}
-          </span>
-        ) : null}
-      </span>
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-center gap-1">
+        <FormHeading label={t(label)} help={help} />
+        {optional ? <span className="text-xs text-muted-foreground">{t("(optional)")}</span> : null}
+      </div>
       {children}
-    </label>
+    </div>
   );
 }
 

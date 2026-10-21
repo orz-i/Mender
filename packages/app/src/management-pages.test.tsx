@@ -1009,7 +1009,7 @@ describe("management pages", () => {
     fireEvent.click(await screen.findByRole("button",{name:"Create sandbox"}));
     expect(await screen.findByRole("textbox",{name:"SSH host"})).toBeTruthy();
     expect(screen.getByRole("combobox",{name:"SSH private key credential"})).toBeTruthy();
-    expect(screen.getByText(/SSH Remote is not container or VM isolation/)).toBeTruthy();
+    expect(screen.getByText("SSH is not isolated; remote account permissions apply.")).toBeTruthy();
     expect(screen.queryByLabelText("Cached Docker image")).toBeNull();
     expect(screen.queryByLabelText("Mender Credential Reference")).toBeNull();
     const review=screen.getByRole<HTMLButtonElement>("button",{name:"Review"});
@@ -2208,7 +2208,7 @@ describe("management pages", () => {
       screen.getByLabelText<HTMLSelectElement>("Server profile").value,
     ).toBe("default");
     expect(
-      screen.getByText(/Starting this Profile also starts/),
+      screen.getByText("Also starts the linked secure Tunnel."),
     ).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Start server" }));

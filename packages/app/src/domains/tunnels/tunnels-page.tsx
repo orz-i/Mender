@@ -27,6 +27,7 @@ import {
 
 import { t, tCount } from "../../i18n/i18n";
 import { errorMessage } from "../../shared/errors";
+import { FormHeading } from "../../shared/form-info";
 import { IconButton } from "../../shared/icon-button";
 import { EmptyState, ErrorNotice } from "../../shared/page";
 import { PageToolbar, ResultPanel } from "../../shared/page-toolbar";
@@ -378,7 +379,7 @@ export function TunnelsPage({ client }: { client: MenderClient }) {
             <DialogTitle className="text-lg font-semibold tracking-tight text-foreground">
               {t("Create Tunnel")}
             </DialogTitle>
-            <DialogDescription className="text-sm leading-5 text-muted-foreground">
+            <DialogDescription className="sr-only">
               {t("Enter the Tunnel details provided by your transport service. Select an existing connection credential; Mender never copies its secret into the Tunnel.")}
             </DialogDescription>
             {createError ? (
@@ -387,7 +388,10 @@ export function TunnelsPage({ client }: { client: MenderClient }) {
           </DialogHeader>
 
           <DialogBody className="space-y-4">
-            <ReadOnlyField label="Provider" value={selectedPlugin?.displayName??t("Unavailable")} />
+            <div className="flex flex-wrap items-center gap-x-2 text-sm">
+              <span className="text-muted-foreground">{t("Provider")}</span>
+              <span className="font-medium">{selectedPlugin?.displayName ?? t("Unavailable")}</span>
+            </div>
 
             <Field label="Tunnel display name">
               <Input
@@ -404,7 +408,7 @@ export function TunnelsPage({ client }: { client: MenderClient }) {
               />
             </Field>
 
-            <Field label="External Tunnel ID">
+            <Field label="External Tunnel ID" help={t("Copy this ID from your Tunnel provider. It is issued outside Mender and cannot be generated here.")}>
               <Input
                 aria-label={t("External Tunnel ID")}
                 className="font-mono text-xs"
@@ -418,12 +422,9 @@ export function TunnelsPage({ client }: { client: MenderClient }) {
                   }));
                 }}
               />
-              <p className="mt-1.5 text-xs leading-5 text-muted-foreground">
-                {t("Copy this ID from your Tunnel provider. It is issued outside Mender and cannot be generated here.")}
-              </p>
             </Field>
 
-            <Field label="Connection credential">
+            <Field label="Connection credential" help={t("Use an inventory Credential authorized for the selected Tunnel transport.")}>
               <select
                 aria-label={t("Connection credential")}
                 value={createForm.runtimeCredentialRef}
@@ -443,13 +444,11 @@ export function TunnelsPage({ client }: { client: MenderClient }) {
                   </option>
                 ))}
               </select>
-              <p className="mt-1.5 text-xs leading-5 text-muted-foreground">
-                {credentials.length
-                  ? t(
-                      "Use an inventory Credential authorized for the selected Tunnel transport.",
-                    )
-                  : t("No connection credential is available yet. Add an API-key Credential before creating this Tunnel.")}
-              </p>
+              {credentials.length === 0 ? (
+                <p role="status" className="text-xs leading-5 text-muted-foreground">
+                  {t("No connection credential is available yet. Add an API-key Credential before creating this Tunnel.")}
+                </p>
+              ) : null}
             </Field>
             {credentials.length === 0 ? (
               <Link to="/credentials" className="inline-flex min-h-9 items-center text-sm font-medium text-primary-ink underline-offset-4 hover:underline">
@@ -477,24 +476,17 @@ export function TunnelsPage({ client }: { client: MenderClient }) {
 
 function Field({
   label,
+  help,
   children,
 }: {
   label: string;
+  help?: string;
   children: React.ReactNode;
 }) {
   return (
-    <label className="block space-y-1.5">
-      <span className="text-sm font-medium text-foreground">{t(label)}</span>
+    <div className="flex flex-col gap-1.5">
+      <FormHeading label={t(label)} help={help} />
       {children}
-    </label>
-  );
-}
-
-function ReadOnlyField({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-xl border border-border/70 bg-muted/20 p-3.5">
-      <p className="text-xs font-medium text-muted-foreground">{t(label)}</p>
-      <p className="mt-1 text-sm font-medium text-foreground">{value}</p>
     </div>
   );
 }

@@ -22,6 +22,7 @@ import { Input } from "@mender/ui/components/input";
 
 import { t } from "../../i18n/i18n";
 import { errorMessage } from "../../shared/errors";
+import { FormHeading, FormInfo } from "../../shared/form-info";
 import { dockerStatusText } from "../../shared/docker-status";
 import { ErrorNotice } from "../../shared/page";
 import { IconButton } from "../../shared/icon-button";
@@ -434,10 +435,7 @@ export function CreateSandboxPage({
         <Button variant="outline" onClick={() => void navigate("/sandboxes")}>{t("Back to sandboxes")}</Button>
       } />
       {error ? <ErrorNotice message={error} /> : null}
-      <DataPanel
-        title="Create sandbox"
-        description="Choose a backend, configure isolation, then review the Sandbox authority before provisioning."
-      >
+      <DataPanel title="Create sandbox">
         <div className="mx-auto flex max-w-4xl flex-col gap-6 p-5 sm:p-7">
           <CreationProgress step={step} selected={selected} />
 
@@ -501,8 +499,8 @@ export function CreateSandboxPage({
                       ) : null}
                     </div>
                   </div>
-                  <label className="grid gap-2 text-sm">
-                    <span className="font-medium">{t("Isolation")}</span>
+                  <div className="grid gap-2 text-sm">
+                    <FormHeading label={t("Isolation")} help={t("Isolation choice is persisted per Sandbox; changing global Runtime settings will not weaken it.")} />
                     <select aria-label={t("Isolation")} value={isolation}
                       onChange={(event) => setIsolation(event.target.value as typeof isolation)}
                       className="h-10 w-full rounded-xl border border-input bg-card px-3 text-sm">
@@ -512,10 +510,7 @@ export function CreateSandboxPage({
                       </option>
                       <option value="host">{t("Host (not isolated)")}</option>
                     </select>
-                  </label>
-                  <p className="text-xs leading-5 text-muted-foreground">
-                    {t("Isolation choice is persisted per Sandbox; changing global Runtime settings will not weaken it.")}
-                  </p>
+                  </div>
                 </>
               ) : selected === "ssh_remote" ? (
                 <>
@@ -553,9 +548,10 @@ export function CreateSandboxPage({
                       {sshFieldFeedback("root", sshRoot !== "")}
                     </label>
                   </div>
-                  <p className="text-xs leading-5 text-muted-foreground">
-                    {t("Mender checks your known_hosts automatically. For a new SSH server, it will ask you to verify a SHA256 host fingerprint before creating the Sandbox. No host public key needs to be pasted.")}
-                  </p>
+                  <div className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
+                    <span>{t("New SSH hosts require fingerprint confirmation.")}</span>
+                    <FormInfo label={t("SSH host")}>{t("Mender checks your known_hosts automatically. For a new SSH server, it will ask you to verify a SHA256 host fingerprint before creating the Sandbox. No host public key needs to be pasted.")}</FormInfo>
+                  </div>
                   <label className="grid gap-2 text-sm">
                     <span className="font-medium">{t("SSH private key credential")}</span>
                     <select aria-label={t("SSH private key credential")} value={sshCredentialRef}
@@ -579,9 +575,10 @@ export function CreateSandboxPage({
                       </Link>
                     </p>
                   ) : null}
-                  <p className="text-xs leading-5 text-muted-foreground">
-                    {t("SSH Remote is not container or VM isolation. The remote shell can access everything permitted to its login account. Connect only to a trusted host; prefer a non-root account.")}
-                  </p>
+                  <div className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
+                    <span role="note">{t("SSH is not isolated; remote account permissions apply.")}</span>
+                    <FormInfo label={t("Isolation")}>{t("SSH Remote is not container or VM isolation. The remote shell can access everything permitted to its login account. Connect only to a trusted host; prefer a non-root account.")}</FormInfo>
+                  </div>
                 </>
               ) : (
                 <>
@@ -652,9 +649,7 @@ export function CreateSandboxPage({
                           placeholder={t("docker.io/library/python@sha256:…")}
                           autoComplete="off" />
                       </label>
-                      <p className="text-xs leading-5 text-muted-foreground">
-                        {t("Remote Daytona Sandbox uses a Mender credential and incurs provider charges. Provider availability is verified on creation.")}
-                      </p>
+                      <p role="note" className="text-xs font-medium">{t("Daytona provisioning may incur provider charges.")}</p>
                     </>
                   )}
                 </>

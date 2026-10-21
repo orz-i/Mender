@@ -5,6 +5,7 @@ import { Button } from "@mender/ui/components/button";
 import { Input } from "@mender/ui/components/input";
 import { t } from "../../i18n/i18n";
 import { errorMessage } from "../../shared/errors";
+import { FormHeading, FormInfo } from "../../shared/form-info";
 import { ErrorNotice } from "../../shared/page";
 import { PageToolbar } from "../../shared/page-toolbar";
 import { DataPanel } from "../../shared/workbench";
@@ -78,7 +79,7 @@ function AgentCreateForm({
       <div className="mx-auto flex max-w-2xl flex-col gap-5 p-5 sm:p-8">
         <div className="text-xs text-muted-foreground">{t(step==="select"?"Select backend":step==="configure"?"Configure agent":"Review agent")}</div>
         {step==="select"?<>
-          <p className="text-sm text-muted-foreground">{t("Choose an installed Agent CLI backend. No Agent process starts during setup.")}</p>
+          <FormHeading label={t("Select backend")} help={t("Choose an installed Agent CLI backend. No Agent process starts during setup.")} />
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{agentBackendOptions.map(choice=>
             <button key={choice} type="button" aria-pressed={backend===choice}
               onClick={()=>{if(selectedBackend!==choice)setDefaultModel("");setSelectedBackend(choice);}}
@@ -100,20 +101,25 @@ function AgentCreateForm({
             </div>
           </div>
           <div className="grid gap-2">
-            <label htmlFor="agent-default-model" className="text-sm font-medium">{t("Default model (optional)")}</label>
+            <div className="flex items-center gap-1">
+              <label htmlFor="agent-default-model" className="text-sm font-medium">{t("Default model (optional)")}</label>
+              <FormInfo label={t("Default model (optional)")}>{t("The Agent must advertise the selected model when a task runs.")}</FormInfo>
+            </div>
             <Input id="agent-default-model" maxLength={128} value={defaultModel} onChange={e=>setDefaultModel(e.target.value)} placeholder={t("Use Agent default")}/>
-            <p className="text-xs text-muted-foreground">{t("The Agent must advertise the selected model when a task runs.")}</p>
           </div>
           <div className="grid gap-2">
-            <label htmlFor="agent-isolation" className="text-sm font-medium">{t("Process isolation")}</label>
+            <div className="flex items-center gap-1">
+              <label htmlFor="agent-isolation" className="text-sm font-medium">{t("Process isolation")}</label>
+              <FormInfo label={t("Process isolation")}>{t("The isolation setting controls which host files and credentials the Agent process can access.")}</FormInfo>
+            </div>
             <select id="agent-isolation" value={isolation} onChange={e=>setIsolation(e.target.value as typeof isolation)}
               className="h-10 rounded-xl border border-input bg-background px-3 text-sm">
               <option value="restricted_host">{t("Restricted host")}</option>
               <option value="host">{t("Host (not isolated)")}</option>
             </select>
-            <p className="text-xs text-muted-foreground">{t("Host mode can access files and credentials with the Runtime user's permissions.")}</p>
+            {isolation==="host" ? <p role="note" className="text-xs font-medium">{t("Host mode can access files and credentials with the Runtime user's permissions.")}</p> : null}
             {backend==="antigravity"?
-              <p className="text-xs text-muted-foreground">{t("Antigravity uses its native tool permissions. Configure workspace authorization after creation to enable 24-hour YOLO; it is off by default.")}</p>:null}
+              <FormInfo label={t("Antigravity permissions")}>{t("Antigravity uses its native tool permissions. Configure workspace authorization after creation to enable 24-hour YOLO; it is off by default.")}</FormInfo>:null}
             {backend==="antigravity"&&isolation==="restricted_host"?
               <p className="text-xs text-muted-foreground">{t("Antigravity may need local account and keychain access that Restricted host prevents. Choose Host explicitly only if you accept its filesystem and credential access.")}</p>:null}
             {backend==="opencode"&&isolation==="restricted_host"?
@@ -131,7 +137,10 @@ function AgentCreateForm({
             <div><span className="text-muted-foreground">{t("Default model (optional)")}: </span>{defaultModel||t("Use Agent default")}</div>
             <div><span className="text-muted-foreground">{t("Isolation")}: </span>{isolation==="host"?t("Host (not isolated)"):t("Restricted host")}</div>
           </div>
-          <p className="text-xs leading-5 text-muted-foreground">{t("Creating an Agent prepares its governed tools without starting a model, approving tool requests, or granting Profile access.")}</p>
+          <div className="flex items-center gap-1 text-sm">
+            <span>{t("Creating does not grant Profile access.")}</span>
+            <FormInfo label={t("Create agent")}>{t("Creating an Agent prepares its governed tools without starting a model, approving tool requests, or granting Profile access.")}</FormInfo>
+          </div>
           <div className="flex justify-between gap-2">
             <Button variant="outline" disabled={busy} onClick={()=>setStep("configure")}>{t("Back")}</Button>
             <Button disabled={busy||!valid} onClick={()=>void create()}>{busy?t("Creating…"):t("Create agent")}</Button>

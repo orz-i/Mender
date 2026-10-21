@@ -70,6 +70,8 @@ describe("Agents focused management",()=>{
     expect(screen.getByText("CLI missing")).toBeTruthy();
     expect(screen.queryByRole("textbox",{name:"Agent name"})).toBeNull();
     fireEvent.click(screen.getByRole("button",{name:"Add agent"}));
+    expect(await screen.findByRole("button",{name:"Help for Select backend"})).toBeTruthy();
+    fireEvent.click(screen.getByRole("button",{name:"Help for Select backend"}));
     expect(await screen.findByText("Choose an installed Agent CLI backend. No Agent process starts during setup.")).toBeTruthy();
   });
   it("shows each backend's actual identity in inventory and details",async()=>{
@@ -165,7 +167,9 @@ describe("Agents focused management",()=>{
     fireEvent.change(screen.getByRole("textbox",{name:"Agent name"}),{target:{value:"Grok Reviewer"}});
     fireEvent.change(screen.getByRole("textbox",{name:"Workspace directory"}),{target:{value:"/tmp/grok-sandbox"}});
     fireEvent.click(screen.getByRole("button",{name:"Review"}));
-    expect(screen.getByText(/Creating an Agent prepares its governed tools/)).toBeTruthy();
+    expect(screen.getByText("Creating does not grant Profile access.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button",{name:"Help for Create agent"}));
+    expect(await screen.findByText(/Creating an Agent prepares its governed tools/)).toBeTruthy();
     expect(client.createAgent).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button",{name:"Create agent"}));
     await waitFor(()=>expect(client.createAgent).toHaveBeenCalledWith({
@@ -191,7 +195,8 @@ describe("Agents focused management",()=>{
   it("opens Antigravity-specific creation from the built-in marketplace with native YOLO off by default",async()=>{
     const client=show("/agents/new?pluginId=io.mender.agent.antigravity");
     expect(screen.getByRole("textbox",{name:"Agent name"})).toBeTruthy();
-    expect(screen.getByText(/Configure workspace authorization after creation to enable 24-hour YOLO/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button",{name:"Help for Antigravity permissions"}));
+    expect(await screen.findByText(/Configure workspace authorization after creation to enable 24-hour YOLO/)).toBeTruthy();
     fireEvent.change(screen.getByRole("textbox",{name:"Agent name"}),{target:{value:"Antigravity Local"}});
     fireEvent.change(screen.getByRole("textbox",{name:"Workspace directory"}),{target:{value:"/tmp/agy-fixture"}});
     fireEvent.click(screen.getByRole("button",{name:"Review"}));
