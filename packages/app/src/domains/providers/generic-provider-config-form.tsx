@@ -10,6 +10,7 @@ import {
   cloneJSONValue,
   enumIndex,
   enumLabel,
+  genericConfigFieldValidationError,
   genericSchemaSupportError,
   humanize,
   isRecord,
@@ -30,6 +31,25 @@ import type {
 import { t } from "../../i18n/i18n";
 
 type ReportDraftIssue = (path: string, issue: string | null) => void;
+
+function visibleSchemaError(error: string | null): string | null {
+  if (!error) return null;
+  if (error === "This field is required.") return t("This field is required.");
+  if (error === "must be an integer.") return t("Enter a whole number.");
+  if (error === "must be an absolute URI.") return t("Enter an absolute URI.");
+  if (error === "must be a number.") return t("Enter a valid number.");
+  const minimum = /^must be at least (-?\d+(?:\.\d+)?)\.$/.exec(error);
+  if (minimum) return t("Value must be at least {{value}}.", {value: minimum[1]!});
+  const maximum = /^must be at most (-?\d+(?:\.\d+)?)\.$/.exec(error);
+  if (maximum) return t("Value must be at most {{value}}.", {value: maximum[1]!});
+  return error;
+}
+
+function fieldDescriptionIds(id: string, description?: string, error?: string | null): string | undefined {
+  const ids = [description ? id + "-description" : null, error ? id + "-error" : null]
+    .filter((item): item is string => item !== null);
+  return ids.length ? ids.join(" ") : undefined;
+}
 
 /** A JSON field can have a local invalid draft even while its last valid
  * parent value remains schema-valid. The form reports those drafts separately. */
@@ -105,6 +125,7 @@ function ObjectFields({
   path,
   reportDraftIssue,
   onChange,
+  showRequired = true,
 }: {
   schema: SchemaObject;
   uiSchema: ProviderPlugin["uiSchema"];
@@ -114,6 +135,7 @@ function ObjectFields({
   path: string;
   reportDraftIssue: ReportDraftIssue;
   onChange: (value: ConfigValue) => void;
+  showRequired?: boolean;
 }) {
   const properties = schemaProperties(schema);
   const required = new Set(stringArray(schema.required));
@@ -128,7 +150,7 @@ function ObjectFields({
           name={name}
           schema={childSchema}
           hint={uiHint(uiSchema, name)}
-          required={required.has(name)}
+          required={showRequired && required.has(name)}
           value={value[name]}
           credentials={credentials}
           depth={depth + 1}
@@ -182,6 +204,10 @@ function SchemaField({
   reportDraftIssue: ReportDraftIssue;
   onChange: (value: unknown) => void;
 }) {
+  const fieldId = useId();
+  const validationError = visibleSchemaError(
+    genericConfigFieldValidationError(schema, value, required),
+  );
   if (depth > MAX_SCHEMA_DEPTH) {
     return (
       <SchemaNotice>
@@ -203,6 +229,7 @@ function SchemaField({
         description={hint.description}
         value={value}
         required={required}
+        schemaError={validationError}
         path={path}
         reportDraftIssue={reportDraftIssue}
         onChange={onChange}
@@ -215,12 +242,18 @@ function SchemaField({
   const control = hint.control ?? stringValue(schema["x-mender-control"]);
   const enumValues = Array.isArray(schema.enum) ? schema.enum : undefined;
   const type = schemaType(schema, value);
+  const fieldDescription = fieldDescriptionIds(fieldId, description, validationError);
 
   if (control === "credential") {
     return (
-      <FieldShell label={label} required={required} description={description}>
+      <FieldShell label={label} required={required} description={description}
+        controlId={fieldId} error={validationError}>
         <select
+          id={fieldId}
           aria-label={label}
+          aria-required={required}
+          aria-invalid={Boolean(validationError)}
+          aria-describedby={fieldDescription}
           value={typeof value === "string" ? value : ""}
           onChange={(event) =>
             onChange(event.target.value === "" ? undefined : event.target.value)
@@ -246,9 +279,14 @@ function SchemaField({
   if (enumValues !== undefined) {
     const selectedIndex = enumIndex(enumValues, value);
     return (
-      <FieldShell label={label} required={required} description={description}>
+      <FieldShell label={label} required={required} description={description}
+        controlId={fieldId} error={validationError}>
         <select
+          id={fieldId}
           aria-label={label}
+          aria-required={required}
+          aria-invalid={Boolean(validationError)}
+          aria-describedby={fieldDescription}
           value={selectedIndex}
           onChange={(event) => {
             const index = Number(event.target.value);
@@ -278,10 +316,15 @@ function SchemaField({
 
   if (type === "boolean") {
     return (
-      <FieldShell label={label} required={required} description={description}>
+      <FieldShell label={label} required={required} description={description}
+        controlId={fieldId} error={validationError}>
         <label className="flex items-center gap-2 rounded-lg border border-input px-3 py-2 text-sm">
           <input
+            id={fieldId}
             aria-label={label}
+            aria-required={required}
+            aria-invalid={Boolean(validationError)}
+            aria-describedby={fieldDescription}
             type="checkbox"
             checked={value === true}
             onChange={(event) => onChange(event.target.checked)}
@@ -294,46 +337,38 @@ function SchemaField({
 
   if (type === "number" || type === "integer") {
     return (
-      <FieldShell label={label} required={required} description={description}>
-        <Input
-          aria-label={label}
-          type="number"
-          step={type === "integer" ? 1 : "any"}
-          placeholder={hint.placeholder}
-          value={typeof value === "number" ? String(value) : ""}
-          onChange={(event) => {
-            const raw = event.target.value;
-            if (raw === "") {
-              onChange(undefined);
-              return;
-            }
-            const parsed = Number(raw);
-            onChange(Number.isFinite(parsed) ? parsed : undefined);
-          }}
-        />
-      </FieldShell>
+      <NumericSchemaEditor
+        label={label}
+        description={description}
+        required={required}
+        schema={schema}
+        value={typeof value === "number" ? value : undefined}
+        schemaError={validationError}
+        path={path}
+        reportDraftIssue={reportDraftIssue}
+        onChange={onChange}
+      />
     );
   }
 
   if (type === "object") {
     const objectValue = isRecord(value) ? value : {};
     return (
-      <div className="space-y-3 rounded-lg border border-border p-3">
-        <div>
-          <div className="text-sm font-medium">
-            {label}
-            {!required ? (
-              <span className="ml-1 font-normal text-muted-foreground">
-                {t("(optional)")}
-              </span>
-            ) : null}
-          </div>
-          {description ? (
-            <p className="mt-1 text-xs leading-5 text-muted-foreground">
-              {description}
-            </p>
+      <fieldset className="min-w-0 space-y-3 rounded-lg border border-border p-3">
+        <legend className="px-1 text-sm font-medium">
+          {label}
+          {!required ? (
+            <span className="ml-1 font-normal text-muted-foreground">
+              {t("(optional)")}
+            </span>
           ) : null}
-        </div>
+        </legend>
+        {description ? (
+          <p className="text-xs leading-5 text-muted-foreground">{description}</p>
+        ) : null}
+        {validationError && (value === undefined || !isRecord(value)) ? (
+          <p role="alert" className="text-xs leading-5 text-destructive">{validationError}</p>
+        ) : null}
         <ObjectFields
           schema={schema}
           uiSchema={undefined}
@@ -342,9 +377,10 @@ function SchemaField({
           depth={depth}
           path={path}
           reportDraftIssue={reportDraftIssue}
+          showRequired={required || value !== undefined}
           onChange={(nextValue) => onChange(nextValue)}
         />
-      </div>
+      </fieldset>
     );
   }
 
@@ -355,6 +391,7 @@ function SchemaField({
         description={description}
         required={required}
         value={Array.isArray(value) ? value : undefined}
+        schemaError={validationError}
         path={path}
         reportDraftIssue={reportDraftIssue}
         onChange={onChange}
@@ -368,10 +405,15 @@ function SchemaField({
     (maxLength !== undefined && maxLength > 160);
 
   return (
-    <FieldShell label={label} required={required} description={description}>
+    <FieldShell label={label} required={required} description={description}
+      controlId={fieldId} error={validationError}>
       {textarea ? (
         <Textarea
+          id={fieldId}
           aria-label={label}
+          aria-required={required}
+          aria-invalid={Boolean(validationError)}
+          aria-describedby={fieldDescription}
           placeholder={hint.placeholder}
           value={typeof value === "string" ? value : ""}
           onChange={(event) =>
@@ -384,7 +426,11 @@ function SchemaField({
         />
       ) : (
         <Input
+          id={fieldId}
           aria-label={label}
+          aria-required={required}
+          aria-invalid={Boolean(validationError)}
+          aria-describedby={fieldDescription}
           placeholder={hint.placeholder}
           value={typeof value === "string" ? value : ""}
           onChange={(event) =>
@@ -396,6 +442,90 @@ function SchemaField({
           }
         />
       )}
+    </FieldShell>
+  );
+}
+
+/** Use text+decimal keyboard instead of type=number: browsers normalize partial
+ * tokens such as "1e" or "-" to an empty value and would delete valid data. */
+function NumericSchemaEditor({
+  label,
+  description,
+  required,
+  schema,
+  value,
+  schemaError,
+  path,
+  reportDraftIssue,
+  onChange,
+}: {
+  label: string;
+  description?: string | undefined;
+  required: boolean;
+  schema: SchemaObject;
+  value: number | undefined;
+  schemaError: string | null;
+  path: string;
+  reportDraftIssue: ReportDraftIssue;
+  onChange: (value: unknown) => void;
+}) {
+  const draft = useJSONTextDraft(value === undefined ? "" : String(value), path, reportDraftIssue);
+  const error = draft.error || schemaError;
+  const type = schemaType(schema, value);
+  return (
+    <FieldShell label={label} required={required} description={description}
+      controlId={draft.errorId} error={error}>
+      <Input
+        id={draft.errorId}
+        aria-label={label}
+        aria-required={required}
+        aria-invalid={Boolean(error)}
+        aria-describedby={fieldDescriptionIds(draft.errorId, description, error)}
+        type="text"
+        inputMode={type === "integer" ? "numeric" : "decimal"}
+        value={draft.text}
+        onChange={(event) => {
+          const raw = event.target.value;
+          draft.setText(raw);
+          if (raw.trim() === "") {
+            if (required) {
+              draft.setError(t("This field is required."));
+              return;
+            }
+            draft.setError("");
+            draft.markPublished(undefined);
+            onChange(undefined);
+            return;
+          }
+          const normalized = raw.trim();
+          if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(normalized)) {
+            draft.setError(t("Enter a valid number."));
+            return;
+          }
+          const parsed = Number(normalized);
+          if (!Number.isFinite(parsed)) {
+            draft.setError(t("Enter a valid number."));
+            return;
+          }
+          if (type === "integer" && !Number.isSafeInteger(parsed)) {
+            draft.setError(t("Enter a whole number."));
+            return;
+          }
+          const minimum = numberValue(schema.minimum);
+          const maximum = numberValue(schema.maximum);
+          if (minimum !== undefined && parsed < minimum) {
+            draft.setError(t("Value must be at least {{value}}.", {value: minimum}));
+            return;
+          }
+          if (maximum !== undefined && parsed > maximum) {
+            draft.setError(t("Value must be at most {{value}}.", {value: maximum}));
+            return;
+          }
+          draft.setError("");
+          draft.markPublished(parsed);
+          onChange(parsed);
+        }}
+      />
     </FieldShell>
   );
 }
@@ -439,6 +569,7 @@ function JSONArrayEditor({
   description,
   required,
   value,
+  schemaError,
   path,
   reportDraftIssue,
   onChange,
@@ -447,17 +578,22 @@ function JSONArrayEditor({
   description?: string | undefined;
   required: boolean;
   value: unknown[] | undefined;
+  schemaError: string | null;
   path: string;
   reportDraftIssue: ReportDraftIssue;
   onChange: (value: unknown) => void;
 }) {
   const draft = useJSONTextDraft(value === undefined ? "" : JSON.stringify(value, null, 2), path, reportDraftIssue);
+  const error = draft.error || schemaError;
   return (
-    <FieldShell label={label} required={required} description={description}>
+    <FieldShell label={label} required={required} description={description}
+      controlId={draft.errorId} error={error}>
       <Textarea
+        id={draft.errorId}
         aria-label={label}
-        aria-invalid={Boolean(draft.error)}
-        aria-describedby={draft.error ? draft.errorId : undefined}
+        aria-required={required}
+        aria-invalid={Boolean(error)}
+        aria-describedby={fieldDescriptionIds(draft.errorId, description, error)}
         className="min-h-28 font-mono text-xs"
         value={draft.text}
         onChange={(event) => {
@@ -483,7 +619,6 @@ function JSONArrayEditor({
           }
         }}
       />
-      <JSONDraftError message={draft.error} id={draft.errorId} />
     </FieldShell>
   );
 }
@@ -493,6 +628,7 @@ function JSONValueEditor({
   description,
   required,
   value,
+  schemaError,
   path,
   reportDraftIssue,
   onChange,
@@ -501,18 +637,23 @@ function JSONValueEditor({
   description?: string | undefined;
   required: boolean;
   value: unknown;
+  schemaError: string | null;
   path: string;
   reportDraftIssue: ReportDraftIssue;
   onChange: (value: unknown) => void;
 }) {
   const serialized = value === undefined ? "" : JSON.stringify(value, null, 2);
   const draft = useJSONTextDraft(serialized, path, reportDraftIssue);
+  const error = draft.error || schemaError;
   return (
-    <FieldShell label={label} required={required} description={description}>
+    <FieldShell label={label} required={required} description={description}
+      controlId={draft.errorId} error={error}>
       <Textarea
+        id={draft.errorId}
         aria-label={label}
-        aria-invalid={Boolean(draft.error)}
-        aria-describedby={draft.error ? draft.errorId : undefined}
+        aria-required={required}
+        aria-invalid={Boolean(error)}
+        aria-describedby={fieldDescriptionIds(draft.errorId, description, error)}
         className="min-h-24 font-mono text-xs"
         value={draft.text}
         onChange={(event) => {
@@ -538,7 +679,6 @@ function JSONValueEditor({
           }
         }}
       />
-      <JSONDraftError message={draft.error} id={draft.errorId} />
     </FieldShell>
   );
 }
@@ -561,12 +701,16 @@ function RawObjectEditor({
     <FieldShell
       label={label}
       required
+      controlId={draft.errorId}
+      error={draft.error}
       description={t("This plugin does not publish a structured form schema. Enter a JSON object.")}
     >
       <Textarea
+        id={draft.errorId}
         aria-label={label}
+        aria-required
         aria-invalid={Boolean(draft.error)}
-        aria-describedby={draft.error ? draft.errorId : undefined}
+        aria-describedby={fieldDescriptionIds(draft.errorId, t("This plugin does not publish a structured form schema. Enter a JSON object."), draft.error)}
         className="min-h-40 font-mono text-xs"
         value={draft.text}
         onChange={(event) => {
@@ -586,7 +730,6 @@ function RawObjectEditor({
           }
         }}
       />
-      <JSONDraftError message={draft.error} id={draft.errorId} />
     </FieldShell>
   );
 }
@@ -650,17 +793,21 @@ function FieldShell({
   label,
   required,
   description,
+  controlId,
+  error,
   children,
 }: {
   label: string;
   required: boolean;
   description?: string | undefined;
+  controlId?: string;
+  error?: string | null;
   children: React.ReactNode;
 }) {
   return (
-    <div className="space-y-1.5">
+    <div className="min-w-0 space-y-1.5">
       <div className="text-sm font-medium">
-        {label}
+        {controlId ? <label htmlFor={controlId}>{label}</label> : label}
         {!required ? (
           <span className="ml-1 font-normal text-muted-foreground">
             {t("(optional)")}
@@ -669,7 +816,12 @@ function FieldShell({
       </div>
       {children}
       {description ? (
-        <p className="text-xs leading-5 text-muted-foreground">{description}</p>
+        <p id={controlId ? controlId + "-description" : undefined}
+          className="text-xs leading-5 text-muted-foreground">{description}</p>
+      ) : null}
+      {error ? (
+        <p id={controlId ? controlId + "-error" : undefined}
+          role="alert" className="text-xs leading-5 text-destructive">{error}</p>
       ) : null}
     </div>
   );

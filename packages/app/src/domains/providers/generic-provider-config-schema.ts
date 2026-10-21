@@ -51,6 +51,20 @@ export function genericConfigValidationError(
   return validateSchemaValue(schema, value, "$", 0);
 }
 
+/** Reuse the same validator for a rendered leaf field and the enclosing
+ * configuration. A missing required property is owned by its parent schema. */
+export function genericConfigFieldValidationError(
+  schema: ConfigSchema,
+  value: unknown,
+  required: boolean,
+): string | null {
+  if (value === undefined && required) {
+    return "This field is required.";
+  }
+  const error = validateSchemaValue(schema, value, "$", 0);
+  return error === null ? null : error.replace(/^\$/, "").trim();
+}
+
 export function genericSchemaSupportError(
   schema: ProviderPlugin["configSchema"],
 ): string | null {
