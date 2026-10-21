@@ -804,8 +804,26 @@ function FieldShell({
   error?: string | null;
   children: React.ReactNode;
 }) {
+  const errorRef = useRef<HTMLParagraphElement | null>(null);
+  const mounted = useRef(false);
+  useEffect(() => {
+    if (!mounted.current) {
+      mounted.current = true;
+      return;
+    }
+    // Keep newly created inline errors visible within a scrolling dialog,
+    // without stealing the user's focus or jumping to another invalid field.
+    if (error && controlId && document.activeElement?.id === controlId &&
+      typeof errorRef.current?.scrollIntoView === "function") {
+      errorRef.current.scrollIntoView({block: "nearest", inline: "nearest"});
+    }
+  }, [controlId, error]);
   return (
-    <div className="min-w-0 space-y-1.5">
+    <div className="min-w-0 space-y-1.5" onFocusCapture={(event) => {
+      if (typeof event.target.scrollIntoView === "function") {
+        event.target.scrollIntoView({block: "nearest", inline: "nearest"});
+      }
+    }}>
       <div className="text-sm font-medium">
         {controlId ? <label htmlFor={controlId}>{label}</label> : label}
         {!required ? (
@@ -820,7 +838,7 @@ function FieldShell({
           className="text-xs leading-5 text-muted-foreground">{description}</p>
       ) : null}
       {error ? (
-        <p id={controlId ? controlId + "-error" : undefined}
+        <p ref={errorRef} id={controlId ? controlId + "-error" : undefined}
           role="alert" className="text-xs leading-5 text-destructive">{error}</p>
       ) : null}
     </div>

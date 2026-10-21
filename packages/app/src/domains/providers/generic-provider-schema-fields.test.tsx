@@ -106,6 +106,17 @@ describe("dynamic Schema numeric drafts and contextual field validation",()=>{
   expect(screen.queryByRole("alert")).toBeNull();
   expect(screen.getByRole<HTMLButtonElement>("button",{name:"Save"}).disabled).toBe(false);
  });
+ it("shows actionable numeric field errors in Chinese as well as English",()=>{
+  setLocale("zh-CN");
+  render(<Scenario schema={schema} initial={{attempts:12}}/>);
+  const attempts=screen.getByRole<HTMLInputElement>("textbox",{name:"Attempts"});
+  expect(attempts.getAttribute("aria-invalid")).toBe("true");
+  expect(screen.getByRole("alert").textContent).toContain("数值不得大于 10");
+  fireEvent.change(attempts,{target:{value:"1e"}});
+  expect(screen.getByRole("alert").textContent).toContain("请输入有效的数字");
+  expect(screen.getByRole<HTMLButtonElement>("button",{name:"Save"}).disabled).toBe(true);
+ });
+
  it("does not mark an absent optional group as invalid before it is configured",()=>{
   render(<Scenario schema={{
    type:"object",
