@@ -322,7 +322,7 @@ function IsolationField({
       <p className="text-xs font-medium">{t(label)}</p>
       <Select value={value} onValueChange={(next) => onChange(next as RuntimeIsolation["workspaceShell"])}>
         <SelectTrigger aria-label={t(label)}>
-          <SelectValue />
+          <SelectValue>{t(value === "host" ? "Host" : "Restricted host")}</SelectValue>
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="host">{t("Host")}</SelectItem>

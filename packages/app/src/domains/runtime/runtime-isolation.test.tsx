@@ -1,10 +1,12 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { MenderClient, RuntimeGovernanceStatus } from "@mender/sdk";
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { RuntimePage } from "./runtime-page";
+import { resetLocaleForTesting, setLocale } from "../../i18n/i18n";
 
-afterEach(cleanup);
+beforeEach(() => {resetLocaleForTesting();setLocale("en");});
+afterEach(() => {cleanup();resetLocaleForTesting();});
 
 const defaultBudget = {
   maxInvocations: 32,
@@ -37,6 +39,24 @@ function showRuntime(externalProvider: "host" | "restricted_host", available: bo
   render(<RuntimePage client={client} />);
   return updateRuntimeIsolation;
 }
+
+it("shows localized isolation labels in closed selects, never raw API enums", async () => {
+  setLocale("zh-CN");
+  showRuntime("host", true);
+  fireEvent.click(await screen.findByRole("button", { name: "进程隔离" }));
+  fireEvent.click(screen.getByRole("button", { name: "编辑" }));
+
+  const shell = screen.getByRole("combobox", { name: "工作区 Shell" });
+  const provider = screen.getByRole("combobox", { name: "外部提供方" });
+  const tunnel = screen.getByRole("combobox", { name: "隧道客户端" });
+
+  expect(shell.textContent).toContain("受限主机");
+  expect(provider.textContent).toContain("主机");
+  expect(tunnel.textContent).toContain("受限主机");
+  for (const control of [shell, provider, tunnel]) {
+    expect(control.textContent).not.toMatch(/restricted_host|\\bhost\\b/);
+  }
+});
 
 it("requires an explicit trust acknowledgement before elevating native Provider plugins to Host", async () => {
   const updateIsolation = showRuntime("restricted_host", true);
