@@ -101,7 +101,8 @@ export function SkillsPage({
   const [sort, setSort] = useState<SkillSort>("name");
   const [deploying, setDeploying] = useState<SkillInstallation | null>(null);
   const [deploymentTarget, setDeploymentTarget] =
-    useState<SkillDeployment["target"]>("agents-project");
+    useState<SkillDeployment["target"] | "">("");
+  const [deploymentError, setDeploymentError] = useState("");
 
   const refresh = useCallback(async () => {
     setLoaded(false);
@@ -314,25 +315,44 @@ export function SkillsPage({
   }
 
   async function deploy() {
-    if (deploying === null || deploySkill === undefined) {
+    if (
+      deploying === null ||
+      deploySkill === undefined ||
+      !deploymentTargets.some((item) => item.value === deploymentTarget) ||
+      busy !== ""
+    ) {
       return;
     }
+    const target = deploymentTarget as SkillDeployment["target"];
     setBusy("deploy:" + deploying.installationId);
-    setError("");
+    setDeploymentError("");
     try {
-      const deployed = await deploySkill(
-        deploying.installationId,
-        deploymentTarget,
-      );
+      const deployed = await deploySkill(deploying.installationId, target);
       if (deployed !== null) {
         setDeploying(null);
+        setDeploymentTarget("");
         await refresh();
       }
+      // Canceling the native project directory picker returns null: no deployment.
     } catch (reason) {
-      setError(errorMessage(reason));
+      setDeploymentError(errorMessage(reason));
     } finally {
       setBusy("");
     }
+  }
+
+  function openDeploy(item: SkillInstallation) {
+    if (busy !== "") return;
+    setDeploymentTarget("");
+    setDeploymentError("");
+    setDeploying(item);
+  }
+
+  function closeDeploy() {
+    if (busy !== "") return;
+    setDeploying(null);
+    setDeploymentTarget("");
+    setDeploymentError("");
   }
 
   async function undeploy(item: SkillDeployment) {
@@ -538,7 +558,7 @@ export function SkillsPage({
                                 skill: item.name,
                               })}
                               disabled={mutating}
-                              onClick={() => setDeploying(item)}
+                              onClick={() => openDeploy(item)}
                             >
                               <UploadIcon />
                             </IconButton>
@@ -871,7 +891,7 @@ export function SkillsPage({
                   type="button"
                   className="w-full"
                   onClick={() => {
-                    setDeploying(selected);
+                    openDeploy(selected);
                     closeSkill();
                   }}
                   disabled={mutating}
@@ -901,15 +921,13 @@ export function SkillsPage({
       <Dialog
         open={deploying !== null}
         onOpenChange={(open) => {
-          if (!open) {
-            setDeploying(null);
-          }
+          if (!open) closeDeploy();
         }}
       >
-        <DialogContent>
+        <DialogContent className="grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>{t("Deploy Skill")}</DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="sr-only">
               {deploying === null
                 ? ""
                 : t("Deploy exact installation {{installation}} of {{skill}}.", {
@@ -919,37 +937,80 @@ export function SkillsPage({
             </DialogDescription>
           </DialogHeader>
 
-          <label className="grid gap-2">
-            <span className="text-sm font-medium">{t("Target")}</span>
-            <select
-              aria-label={t("Skill deployment target")}
-              value={deploymentTarget}
-              onChange={(event) =>
-                setDeploymentTarget(
-                  event.target.value as SkillDeployment["target"],
-                )
-              }
-              className="h-10 rounded-xl border border-input bg-background px-3 text-sm text-foreground outline-none focus:border-ring focus:ring-2 focus:ring-ring/20"
-            >
-              {deploymentTargets.map((item) => (
-                <option key={item.value} value={item.value}>
-                  {t(item.label)}
-                </option>
-              ))}
-            </select>
-          </label>
+          <DialogBody className="space-y-4">
+            {deploying !== null ? (
+              <div className="rounded-xl border border-border/70 bg-muted/20 px-3 py-2.5">
+                <p className="break-words text-sm font-medium">{deploying.name}</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {deploying.versionHint
+                    ? t("Version") + " " + deploying.versionHint
+                    : t("Unversioned")}
+                  {" · "}
+                  {t(deploying.builtIn ? "Built-in" : "Local")}
+                </p>
+                <details className="mt-2 text-xs text-muted-foreground">
+                  <summary className="cursor-pointer">{t("Installation ID")}</summary>
+                  <p className="mt-1 break-all font-mono">{deploying.installationId}</p>
+                </details>
+              </div>
+            ) : null}
 
-          <DialogFooter showCloseButton>
+            <label className="grid gap-2">
+              <span className="text-sm font-medium">{t("Target")}</span>
+              <select
+                aria-label={t("Skill deployment target")}
+                value={deploymentTarget}
+                disabled={busy !== ""}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setDeploymentTarget(
+                    deploymentTargets.some((item) => item.value === value)
+                      ? value as SkillDeployment["target"]
+                      : "",
+                  );
+                  setDeploymentError("");
+                }}
+                className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm text-foreground outline-none focus:border-ring focus:ring-2 focus:ring-ring/20"
+              >
+                <option value="">{t("Choose a deployment target")}</option>
+                {deploymentTargets.map((item) => (
+                  <option key={item.value} value={item.value}>
+                    {t(item.label)}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            {deploymentTarget ? (
+              <p className="text-xs leading-5 text-muted-foreground">
+                {deploymentTarget.endsWith("-project")
+                  ? t("Project deployment: choose a project folder in the next step.")
+                  : t("User deployment: this Skill will be installed for your account, not just one project.")}
+              </p>
+            ) : null}
+            {deploymentError ? (
+              <p role="alert" className="text-xs leading-5 text-destructive">{deploymentError}</p>
+            ) : null}
+          </DialogBody>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={busy !== ""}
+              onClick={closeDeploy}
+            >
+              {t("Cancel")}
+            </Button>
             <Button
               type="button"
               onClick={() => void deploy()}
               disabled={
                 deploying === null ||
-                busy === "deploy:" + deploying.installationId
+                !deploymentTargets.some((item) => item.value === deploymentTarget) ||
+                busy !== ""
               }
             >
-              {deploying !== null &&
-              busy === "deploy:" + deploying.installationId
+              {busy === "deploy:" + deploying?.installationId
                 ? t("Deploying…")
                 : t("Deploy")}
             </Button>

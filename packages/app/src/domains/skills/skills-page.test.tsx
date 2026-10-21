@@ -4,6 +4,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import type {
   MenderClient,
@@ -204,7 +205,19 @@ describe("SkillsPage", () => {
     expect(
       await screen.findByRole("heading", { name: "Deploy Skill" }),
     ).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Deploy" }));
+    const deployDialog = screen.getByRole("dialog", { name: "Deploy Skill" });
+    expect(deployDialog.querySelector('[data-slot="dialog-body"]')).not.toBeNull();
+    expect(within(deployDialog).getByRole("button", { name: "Cancel" })).toBeTruthy();
+    expect(within(deployDialog).queryAllByRole("button", { name: "Close" })).toHaveLength(1);
+    const targetSelect = within(deployDialog).getByRole<HTMLSelectElement>("combobox", { name: "Skill deployment target" });
+    const deployButton = within(deployDialog).getByRole<HTMLButtonElement>("button", { name: "Deploy" });
+    expect(targetSelect.value).toBe("");
+    expect(deployButton.disabled).toBe(true);
+    expect(deploySkill).not.toHaveBeenCalled();
+    fireEvent.change(targetSelect, { target: { value: "agents-project" } });
+    expect(within(deployDialog).getByText("Project deployment: choose a project folder in the next step.")).toBeTruthy();
+    expect(deployButton.disabled).toBe(false);
+    fireEvent.click(deployButton);
     await waitFor(() => {
       expect(deploySkill).toHaveBeenCalledWith(
         installation.installationId,
