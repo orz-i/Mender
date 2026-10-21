@@ -129,11 +129,15 @@ describe("dynamic Schema numeric drafts and contextual field validation",()=>{
   }} initial={{}}/>);
   expect(screen.getByRole<HTMLButtonElement>("button",{name:"Save"}).disabled).toBe(false);
   expect(screen.queryByRole("alert")).toBeNull();
+  expect(screen.queryByRole("textbox",{name:"Token"})).toBeNull();
+  fireEvent.click(screen.getByRole("button",{name:"Add Advanced"}));
   const token=screen.getByRole<HTMLInputElement>("textbox",{name:"Token"});
-  expect(token.getAttribute("aria-invalid")).toBe("false");
+  expect(token.getAttribute("aria-invalid")).toBe("true");
+  expect(screen.getByRole<HTMLButtonElement>("button",{name:"Save"}).disabled).toBe(true);
   fireEvent.change(token,{target:{value:"configured"}});
   expect(screen.getByTestId("model").textContent).toContain('{"advanced":{"token":"configured"}}');
   expect(screen.queryByRole("alert")).toBeNull();
+  expect(screen.getByRole<HTMLButtonElement>("button",{name:"Save"}).disabled).toBe(false);
  });
 
  it("identifies missing nested required fields at the control itself",()=>{

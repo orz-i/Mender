@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 
 import type { Credential, ProviderPlugin } from "@mender/sdk";
+import { Button } from "@mender/ui/components/button";
 import { Input } from "@mender/ui/components/input";
 import { Textarea } from "@mender/ui/components/textarea";
 
@@ -10,6 +11,7 @@ import {
   cloneJSONValue,
   enumIndex,
   enumLabel,
+  genericConfigDefaults,
   genericConfigFieldValidationError,
   genericSchemaSupportError,
   humanize,
@@ -352,21 +354,52 @@ function SchemaField({
   }
 
   if (type === "object") {
+    // An absent optional object is not the same configuration as an empty
+    // object. Let users opt into its fields rather than persisting {} by
+    // accident or presenting all its advanced inputs up front.
+    if (!required && value === undefined) {
+      return (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border/70 px-3 py-2.5">
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium">
+              {label}
+              <span className="ml-1 font-normal text-muted-foreground">{t("(optional)")}</span>
+            </p>
+            {description ? (
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">{description}</p>
+            ) : null}
+          </div>
+          <Button type="button" size="sm" variant="outline"
+            onClick={() => onChange(genericConfigDefaults(schema))}>
+            {t("Add {{name}}", { name: label })}
+          </Button>
+        </div>
+      );
+    }
+
     const objectValue = isRecord(value) ? value : {};
     return (
       <fieldset className="min-w-0 space-y-3 rounded-lg border border-border p-3">
         <legend className="px-1 text-sm font-medium">
           {label}
           {!required ? (
-            <span className="ml-1 font-normal text-muted-foreground">
+            <span aria-hidden="true" className="ml-1 font-normal text-muted-foreground">
               {t("(optional)")}
             </span>
           ) : null}
         </legend>
+        {!required ? (
+          <div className="flex justify-end">
+            <Button type="button" size="sm" variant="ghost"
+              onClick={() => onChange(undefined)}>
+              {t("Remove {{name}}", { name: label })}
+            </Button>
+          </div>
+        ) : null}
         {description ? (
           <p className="text-xs leading-5 text-muted-foreground">{description}</p>
         ) : null}
-        {validationError && (value === undefined || !isRecord(value)) ? (
+        {validationError && !isRecord(value) ? (
           <p role="alert" className="text-xs leading-5 text-destructive">{validationError}</p>
         ) : null}
         <ObjectFields
@@ -377,7 +410,6 @@ function SchemaField({
           depth={depth}
           path={path}
           reportDraftIssue={reportDraftIssue}
-          showRequired={required || value !== undefined}
           onChange={(nextValue) => onChange(nextValue)}
         />
       </fieldset>
