@@ -1440,7 +1440,6 @@ export const zhCNMessages: Readonly<Record<string, string>> = {
   "No connection credential is available yet. Add an API-key Credential before creating this Tunnel.": "当前没有可用的连接凭据。创建此隧道前，请先添加 API Key 凭据。",
   "Not set": "未设置",
   "Starting this server exposes the selected Profile’s enabled tools to clients that can reach its endpoint.": "启动服务器后，能连接此端点的客户端可以访问该配置档启用的工具。",
-  "This name cannot produce a valid identifier. Open Advanced settings to enter a short Latin name.": "无法从该名称生成有效标识。请展开高级设置，输入简短的英文字母名称。",
   "Resource allocation": "资源配置",
   "Customize resource limits": "自定义资源限制",
   "Advanced OAuth options": "高级 OAuth 选项",

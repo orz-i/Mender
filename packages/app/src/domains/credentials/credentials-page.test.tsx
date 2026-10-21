@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { resetLocaleForTesting, setLocale, t } from "../../i18n/i18n";
 import { CredentialsPage } from "./credentials-page";
+import { suggestedCredentialName } from "./credential-form";
 
 const credential: Credential = {
   reference: "credential://openai/tunnel-api-key",
@@ -61,6 +62,66 @@ afterEach(() => {
 });
 
 describe("Credential create validation and feedback", () => {
+  it("creates from a Chinese display name without a required ASCII identity field", async () => {
+    const { createNativeCredential } = showPage();
+    fireEvent.change(screen.getByRole("textbox", { name: "Credential display name" }), {
+      target: { value: "项目密钥" },
+    });
+    fireEvent.change(screen.getByLabelText("Credential secret"), {
+      target: { value: "fixture-only-secret" },
+    });
+    expect(screen.getByText("Advanced settings").closest("details")?.open).toBe(false);
+    const submit = screen.getByRole<HTMLButtonElement>("button", { name: "Create credential" });
+    expect(submit.disabled).toBe(false);
+    fireEvent.click(submit);
+    await waitFor(() => expect(createNativeCredential).toHaveBeenCalledWith({
+      namespace: "personal", name: suggestedCredentialName("项目密钥"),
+      displayName: "项目密钥", secret: "fixture-only-secret",
+    }));
+  });
+
+  it("chooses a free name from existing Credential inventory and preserves an explicit override", async () => {
+    const existingName = suggestedCredentialName("项目密钥");
+    const existing = { ...credential, namespace: "personal", name: existingName,
+      displayName: "Older key", reference: `credential://personal/${existingName}` };
+    const listCredentials = vi.fn().mockResolvedValue({ credentials: [existing] });
+    showPage({ listCredentials });
+    await screen.findByText("Older key");
+
+    fireEvent.change(screen.getByRole("textbox", { name: "Credential display name" }), {
+      target: { value: "项目密钥" },
+    });
+    fireEvent.click(screen.getByText("Advanced settings"));
+    const name = screen.getByRole<HTMLInputElement>("textbox", { name: "Credential name" });
+    expect(name.value).toBe(`${existingName}-2`);
+    fireEvent.change(name, { target: { value: "manually-chosen" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Credential display name" }), {
+      target: { value: "新的显示名称" },
+    });
+    expect(name.value).toBe("manually-chosen");
+    expect(screen.getByText("credential://personal/manually-chosen")).toBeTruthy();
+  });
+
+  it("derives a valid SSH key name from a non-Latin title while keeping the SSH namespace", async () => {
+    const { createNativeCredential } = showPage();
+    fireEvent.change(screen.getByRole("combobox", { name: "Credential source" }), {
+      target: { value: "ssh-key" },
+    });
+    fireEvent.change(screen.getByRole("textbox", { name: "SSH credential name" }), {
+      target: { value: "日本語 SSH 鍵" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Paste private key" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "SSH private key" }), {
+      target: { value: "-----BEGIN OPENSSH PRIVATE KEY-----\nfixture-only\n-----END OPENSSH PRIVATE KEY-----" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Create credential" }));
+    await waitFor(() => expect(createNativeCredential).toHaveBeenCalledWith({
+      namespace: "ssh", name: suggestedCredentialName("日本語 SSH 鍵"),
+      displayName: "日本語 SSH 鍵",
+      secret: "-----BEGIN OPENSSH PRIVATE KEY-----\nfixture-only\n-----END OPENSSH PRIVATE KEY-----",
+    }));
+  });
+
   it("creates a personal credential from a readable name without requiring internal IDs", async () => {
     const { createNativeCredential } = showPage();
     const advanced = screen.getByText("Advanced settings").closest("details");

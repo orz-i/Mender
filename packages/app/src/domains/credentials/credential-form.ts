@@ -15,6 +15,57 @@ export function validCredentialPart(value: string): boolean {
   return CREDENTIAL_PART_PATTERN.test(value);
 }
 
+/** A readable title is not necessarily a Go-compatible Credential identity.
+ * Preserve valid Latin slugs; otherwise append a stable, non-secret 64-bit
+ * fingerprint of the normalized title. This is an identifier, not a security
+ * digest: the server remains authoritative for duplicate references. */
+export function suggestedCredentialName(displayName: string): string {
+  const normalized = displayName.trim().normalize("NFKC");
+  if (!normalized) return "";
+  const canonical = canonicalCredentialPart(normalized);
+  if (validCredentialPart(canonical)) return canonical;
+
+  const latinStem = normalized.normalize("NFKD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  const stem = /^[a-z]/.test(latinStem) ? latinStem : "credential";
+  let fingerprint = 0xcbf29ce484222325n;
+  for (const byte of new TextEncoder().encode(normalized)) {
+    fingerprint = BigInt.asUintN(
+      64, (fingerprint ^ BigInt(byte)) * 0x100000001b3n,
+    );
+  }
+  const suffix = "-u-" + fingerprint.toString(16).padStart(16, "0");
+  return stem.slice(0, 63 - suffix.length).replace(/-+$/g, "") + suffix;
+}
+
+/** Keep existing references intact by choosing the next unused name from the
+ * currently loaded inventory. A concurrent create is still rejected by Go. */
+export function availableCredentialName(
+  displayName: string,
+  namespace: string,
+  existingReferences: readonly string[],
+): string {
+  const base = suggestedCredentialName(displayName);
+  if (!base) return "";
+  const taken = new Set(existingReferences);
+  const reference = (name: string) => credentialReferencePreview(
+    canonicalCredentialPart(namespace), name,
+  );
+  const requestedRef = reference(base);
+  if (requestedRef === null || !taken.has(requestedRef)) return base;
+  for (let ordinal = 2; ordinal <= existingReferences.length + 2; ordinal++) {
+    const suffix = "-" + ordinal;
+    const candidate = base.slice(0, 63 - suffix.length)
+      .replace(/-+$/g, "") + suffix;
+    const candidateRef = reference(candidate);
+    if (candidateRef === null || !taken.has(candidateRef)) return candidate;
+  }
+  return base; // Backend uniqueness check is authoritative if inventory is stale.
+}
+
 export function credentialReferencePreview(namespace: string, name: string): string | null {
   if (!validCredentialPart(namespace) || !validCredentialPart(name)) return null;
   return `credential://${namespace}/${name}`;

@@ -32,6 +32,7 @@ import { EmptyPanelState, SearchField } from "../../shared/workbench";
 
 import { t } from "../../i18n/i18n";
 import {
+  availableCredentialName,
   canonicalCredentialPart,
   credentialCreateError,
   credentialReferencePreview,
@@ -585,7 +586,7 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
                     value={createForm.displayName}
                     aria-invalid={nameInvalid || (createForm.displayName !== "" && !displayNameValid)}
                     onChange={(event) => updateCreateForm({
-                      name: event.target.value,
+                      name: availableCredentialName(event.target.value, "ssh", credentials.map((item) => item.reference)),
                       displayName: event.target.value,
                     })}
                   />
@@ -608,18 +609,15 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
                       const displayName = event.target.value;
                       updateCreateForm({
                         displayName,
-                        ...(createForm.nameEdited ? {} : { name: canonicalCredentialPart(displayName) }),
+                        ...(createForm.nameEdited ? {} : {
+                          name: availableCredentialName(displayName, createForm.namespace, credentials.map((item) => item.reference)),
+                        }),
                       });
                     }}
                   />
                 </Field>
                 {createForm.displayName.trim() !== "" && !displayNameValid ? (
                   <p className="text-xs text-destructive">{t("Display name is too long (maximum 160 bytes).")}</p>
-                ) : null}
-                {createForm.displayName.trim() !== "" && !createForm.nameEdited && !validCredentialPart(name) ? (
-                  <p className="text-xs text-destructive">
-                    {t("This name cannot produce a valid identifier. Open Advanced settings to enter a short Latin name.")}
-                  </p>
                 ) : null}
                 <details ref={identitySettingsRef} className="rounded-lg border border-border/70">
                   <summary className="cursor-pointer px-3 py-2.5 text-sm font-medium">{t("Advanced settings")}</summary>
@@ -634,7 +632,12 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
                           placeholder={t("github")}
                           value={createForm.namespace}
                           aria-invalid={namespaceInvalid}
-                          onChange={(event) => updateCreateForm({ namespace: event.target.value })}
+                          onChange={(event) => updateCreateForm({
+                            namespace: event.target.value,
+                            ...(createForm.nameEdited ? {} : {
+                              name: availableCredentialName(createForm.displayName, event.target.value, credentials.map((item) => item.reference)),
+                            }),
+                          })}
                         />
                       </Field>
                       <Field label="Internal name">
