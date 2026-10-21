@@ -23,4 +23,22 @@
 
 ## 实施与证据记录
 
-（完成代码、测试和部署/浏览器验证后追加。）
+### 分阶段提交
+
+- `6d50c31`：先提交本实施合同，冻结数据、权限、UI/Runtime 端口不变量。
+- `46eb33a`：`packages/app/src/domains/credentials/credential-form.ts` 的 Unicode → 合法 ASCII Name 派生；原有纯 ASCII 行为不变。新凭据优先与当前库存对比，同一 Namespace 同名可获得 `-2`/`-3` 顺延，Go 唯一性约束仍是权威。原生、SSH 创建共用派生逻辑，OAuth 重授权使用旧 namespace/name，显式修改过的高级 Name 不被覆盖。新增独立单元和完整创建表单测试；删除已不再适用的“必须手填英文名称”提示。
+- `e889343`：`backend/internal/bootstrap/mcp_server_listener.go` 新增一次性绑定过程中的顺序尝试。请求地址如 `127.0.0.1:8765` 被占用时仅监听端口移动到 `8766`、`8767` 等，至多 32 次且永不越过 65535。仅 `syscall.EADDRINUSE` 继续；不重复 `ActivateProfileProviders` / `NewMCPServer` / `Tunnel.Start`，不改变 `desiredAddress`。使用现有实际 `listener.Addr().String()` 形成 `Endpoint`；原先 `:0` 的 OS 自动端口语义保留。更新 Server 表单提示、i18n 与结果展示回归。
+
+### 定向行为证据
+
+- Go `TestManagedMCPPortAutoRotationPreservesExistingListener` 使用真实占用的 loopback socket 和隔离 `Runtime` / 空 Profile 验证：新 Server 自动绑定后续端口、原监听器不受影响、Restart 重新从原始端口请求、Stop 后原端口仍可连接。 `TestManagedMCPPortAllocationRetainsPortZeroContractAndRejectsInvalidPort` 验证 OS 分配和越界非法端口；原已有非 loopback 拒绝测试保持通过。`go test -race ./backend/internal/bootstrap -run 'TestManagedMCPPort|TestManagedMCPHTTPServerLifecycle' -count=1` 已通过；`golangci-lint run ./backend/...` 已通过。
+- React 专项 5 文件 **84/84** 通过；凭据专项 3 文件 **34/34** 通过；TypeScript 和 i18n **1450/1450** 在后续端口文案更新后通过。
+- **390×844 隔离 Web 浏览器（Mender :5174，read-only API Fixture）**：真实操作 Credential → 输入“项目密钥” → 展开高级设置，生成 `credential://personal/credential-u-029aa923621e88e6`，无需英文手填；dialog 底部 828px 在 844px 视口之内，无横向溢出，内容可滚动。Server 页面在有两个 Fixture Profile、已有 `8765` 服务时，默认不自动选择 Profile，端口顺延提示可见，表单底部操作区在视口内。截图只保存在 /tmp 下而不加入生产库，**Fixture 不能证明生产 Server 已切换端口**。
+- 用户的真实 Wails 进程仍为本阶段编译前的版本，最新 Go 端口轮换实现尚未重建/部署；没有对正在使用的 MCP Server、Tunnel 或生产 Credential 发起写操作。本次 UI 浏览器只进行打开/填写非机密草稿/取消。历史的四个 untracked Agent 工作目录始终不纳入提交。
+
+### 验收限制
+
+- 本次按“自动轮换端口”要求默认对 **所有合法的非零 loopback 监听端口**应用有界顺延；若操作者在高级设置中输入显式端口，当端口被占用时也会自动顺延，并在列表里显示成功的**实际**端口。不能保证每次 Restart 都保留同一数值端口；消费实际 Endpoint 的客户端需要使用当前返回值。
+- Tunnel 的 provider-side 凭据、控制面连接、同一 Tunnel 是否允许多个运行实例属于独立治理，**端口顺延不能消除 Tunnel 后续启动拒绝**。该行为未被改变。
+- **完整 `pnpm check` 已通过，退出码 `0`**，日志 `/tmp/mender-port-rotation-fullcheck-20261021.log`。包括 provider/sandbox/tunnel plugin SDK、proto/schema、desktop bindings/architecture、Go lint + `go test ./backend/...` + `go test -race ./backend/...`、TypeScript/ESLint、i18n 1450/1450、Vitest **54 文件 / 344 项全部通过**以及 Web/Wails 前端构建。Go bootstrap 普通测试 40.505s、全量 race 的 bootstrap 测试 283.436s；构建仅保留既有的大 bundle 非阻断告警。
+- **部署边界明确**：截至记录时 Wails 二进制时间仍为 2026-10-21 15:53:55（早于这次 Go 改动）。不能将新 Go 行为描述为已在生产运行；须由用户重新构建、重启，再对现有 8765 监听保持不动的前提下使用隔离 Profile/不带生产 Tunnel 的测试资源验证新端口分配。此次没有写入已有 Credential/Server/Tunnel/Profile，read-only SQLite 确认为凭据 3、隧道 1、Sandbox 7、Profile ToolBinding 32、revision 10、quick_check=ok。
