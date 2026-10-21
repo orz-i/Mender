@@ -78,6 +78,34 @@ describe("Provider and Sandbox JSON editor submission integrity", () => {
     await waitFor(() => expect(createProvider).toHaveBeenCalledWith(expect.objectContaining({config: {retry:3}})));
   });
 
+  it("does not create a Provider using a previous numeric value while an incomplete number is visible", async () => {
+    const { createProvider } = mountProviders(
+      [plugin({
+        type: "object",
+        properties: { attempts: { type: "integer", minimum: 1, maximum: 10, default: 3 } },
+      })], [],
+      {}, `/tools?create=1&pluginId=${pluginId}&installationId=${installationId}`,
+    );
+    const dialog = await screen.findByRole("dialog", { name: "Add Dynamic Integration · 1.0.0 provider" });
+    fireEvent.change(within(dialog).getByRole("textbox", { name: "Namespace" }), { target: { value: "number-guard" } });
+    fireEvent.change(within(dialog).getByRole("textbox", { name: "Display name" }), { target: { value: "Guard" } });
+    const attempts = within(dialog).getByRole<HTMLInputElement>("textbox", { name: "Attempts" });
+    const save = within(dialog).getByRole<HTMLButtonElement>("button", { name: "Add provider" });
+    expect(attempts.value).toBe("3");
+    expect(save.disabled).toBe(false);
+    fireEvent.change(attempts, { target: { value: "1e" } });
+    expect(attempts.value).toBe("1e");
+    expect(save.disabled).toBe(true);
+    expect(within(dialog).getByRole("alert").textContent).toContain("Enter a valid number.");
+    expect(createProvider).not.toHaveBeenCalled();
+    fireEvent.change(attempts, { target: { value: "4" } });
+    expect(save.disabled).toBe(false);
+    fireEvent.click(save);
+    await waitFor(() => expect(createProvider).toHaveBeenCalledWith(expect.objectContaining({
+      config: { attempts: 4 },
+    })));
+  });
+
   it("keeps an edit form open with an inline failure and never submits an invalid array draft", async () => {
     const updateProvider = vi.fn().mockRejectedValueOnce(new Error("Fixture provider update failed"))
       .mockResolvedValueOnce({ provider: configuredProvider, sync: { created: 0, updated: 1, removed: 0, total: 1 } });
