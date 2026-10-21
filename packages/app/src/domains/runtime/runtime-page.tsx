@@ -24,6 +24,7 @@ import { ErrorNotice } from "../../shared/page";
 import { FocusSwitch } from "../../shared/focus-switch";
 import { PageToolbar } from "../../shared/page-toolbar";
 import { DataPanel, MetricStrip, MetricTile } from "../../shared/workbench";
+import { FormInfo } from "../../shared/form-info";
 
 const budgetFields: Array<{
   key: keyof RuntimeBudget;
@@ -62,9 +63,34 @@ function budgetDescription(key: keyof RuntimeBudget): string {
   }
 }
 
+type BudgetDraft = Record<keyof RuntimeBudget, string>;
+
+function budgetToDraft(budget: RuntimeBudget): BudgetDraft {
+  const draft = {} as BudgetDraft;
+  for (const field of budgetFields) draft[field.key] = String(budget[field.key]);
+  return draft;
+}
+
+function validBudgetEntry(raw: string | undefined, field: (typeof budgetFields)[number]): boolean {
+  if (raw === undefined || !/^\d+$/.test(raw.trim())) return false;
+  const value = Number(raw);
+  return Number.isSafeInteger(value) && value >= field.min && value <= field.max;
+}
+
+function budgetFromDraft(draft: BudgetDraft | null): RuntimeBudget | null {
+  if (!draft) return null;
+  const next = {} as RuntimeBudget;
+  for (const field of budgetFields) {
+    if (!validBudgetEntry(draft[field.key], field)) return null;
+    next[field.key] = Number(draft[field.key]);
+  }
+  return next;
+}
+
 export function RuntimePage({ client }: { client: MenderClient }) {
   const [status, setStatus] = useState<RuntimeGovernanceStatus | null>(null);
   const [budget, setBudget] = useState<RuntimeBudget | null>(null);
+  const [budgetDraft, setBudgetDraft] = useState<BudgetDraft | null>(null);
   const [isolation, setIsolation] = useState<RuntimeIsolation | null>(null);
   const [error, setError] = useState("");
   const [reloadVersion, setReloadVersion] = useState(0);
@@ -93,16 +119,19 @@ export function RuntimePage({ client }: { client: MenderClient }) {
   }, [client, reloadVersion]);
 
   async function saveBudget() {
-    if (budget === null) return;
+    const candidate = budgetFromDraft(budgetDraft);
+    if (!candidate || busy) return;
     setBusy("budget");
+    setError("");
     try {
-      const next = await client.updateRuntimeBudget(budget);
+      const next = await client.updateRuntimeBudget(candidate);
       setStatus(next);
       setBudget(next.budget);
       setIsolation(next.isolation);
-      setError("");
+      setBudgetDraft(null);
       setEditor(null);
     } catch (reason) {
+      // Leave the draft and the form open so users can retry without re-entering limits.
       setError(errorMessage(reason));
     } finally {
       setBusy("");
@@ -110,8 +139,9 @@ export function RuntimePage({ client }: { client: MenderClient }) {
   }
 
   async function saveIsolation() {
-    if (isolation === null || (externalHostEscalation && !acknowledgeExternalHost)) return;
+    if (isolation === null || busy || (externalHostEscalation && !acknowledgeExternalHost)) return;
     setBusy("isolation");
+    setError("");
     try {
       const next = await client.updateRuntimeIsolation(isolation);
       setStatus(next);
@@ -129,6 +159,15 @@ export function RuntimePage({ client }: { client: MenderClient }) {
 
   const externalHostEscalation = status?.isolation.externalProvider === "restricted_host" && isolation?.externalProvider === "host";
   const restrictedAvailable = status?.backend.restrictedHostAvailable ?? false;
+  const parsedBudget = budgetFromDraft(budgetDraft);
+  function closeEditor() {
+    if (busy) return;
+    setEditor(null);
+    setBudgetDraft(null);
+    setIsolation(status?.isolation ?? null);
+    setAcknowledgeExternalHost(false);
+    setError("");
+  }
 
   if (status === null) {
     return <div className="pt-4">
@@ -140,7 +179,7 @@ export function RuntimePage({ client }: { client: MenderClient }) {
 
   return (
     <div className="space-y-4">
-      {error ? <ErrorNotice message={error} /> : null}
+      {error && !editor ? <ErrorNotice message={error} /> : null}
       <PageToolbar
         tabs={
           <FocusSwitch
@@ -156,9 +195,9 @@ export function RuntimePage({ client }: { client: MenderClient }) {
         }
         actions={
           focus === "budget" ? (
-            <Button size="sm" variant="outline" disabled={budget === null} onClick={() => setEditor("budget")}>{t("Edit")}</Button>
+            <Button size="sm" variant="outline" disabled={budget === null} onClick={() => { if (budget) { setBudgetDraft(budgetToDraft(budget)); setError(""); setEditor("budget"); } }}>{t("Edit")}</Button>
           ) : focus === "isolation" ? (
-            <Button size="sm" variant="outline" disabled={isolation === null} onClick={() => { setAcknowledgeExternalHost(false); setEditor("isolation"); }}>{t("Edit")}</Button>
+            <Button size="sm" variant="outline" disabled={isolation === null} onClick={() => { setError(""); setAcknowledgeExternalHost(false); setEditor("isolation"); }}>{t("Edit")}</Button>
           ) : null
         }
       />
@@ -197,34 +236,66 @@ export function RuntimePage({ client }: { client: MenderClient }) {
           </div>
         </DataPanel>
       )}
-      <Dialog open={editor === "budget"} onOpenChange={(open) => { if (!open && !busy) { setEditor(null); setBudget(status?.budget ?? null); } }}>
+      <Dialog open={editor === "budget"} onOpenChange={(open) => { if (!open) closeEditor(); }}>
         <DialogContent className="grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden sm:max-w-2xl">
-          <DialogHeader><DialogTitle>{t("Runtime budget")}</DialogTitle><DialogDescription>{t("Hard limits apply after governance admission. Profile constraints may only tighten them.")}</DialogDescription></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>{t("Runtime budget")}</DialogTitle>
+            <DialogDescription>{t("Hard limits apply after governance admission. Profile constraints may only tighten them.")}</DialogDescription>
+            {error ? <p role="alert" className="text-xs leading-5 text-destructive">{error}</p> : null}
+          </DialogHeader>
           <DialogBody className="grid gap-4 sm:grid-cols-2">
-            {budgetFields.map((field) => <label key={field.key} className="grid gap-1.5 text-sm">
-              <span className="font-medium">{t(field.label)}</span>
-              <Input type="number" aria-label={t(field.label)} min={field.min} max={field.max} value={budget?.[field.key] ?? ""}
-                onChange={(event) => setBudget((current) => current === null ? null : { ...current, [field.key]: Number(event.target.value) })} />
-              <span className="text-xs text-muted-foreground">{budgetDescription(field.key)}</span>
-            </label>)}
+            {budgetFields.map((field) => {
+              const id = `runtime-budget-${field.key}`;
+              const invalid = budgetDraft !== null && !validBudgetEntry(budgetDraft[field.key], field);
+              return <div key={field.key} className="grid min-w-0 content-start gap-1.5 text-sm">
+                <div className="flex items-center gap-1">
+                  <label htmlFor={id} className="font-medium">{t(field.label)}</label>
+                  <FormInfo label={t(field.label)}>{budgetDescription(field.key)}</FormInfo>
+                </div>
+                <Input id={id} type="number" inputMode="numeric" step="1" min={field.min} max={field.max}
+                  aria-invalid={invalid}
+                  aria-describedby={`${id}-range${invalid ? ` ${id}-error` : ""}`}
+                  value={budgetDraft?.[field.key] ?? ""}
+                  onChange={(event) => {
+                    setBudgetDraft((current) => current ? { ...current, [field.key]: event.target.value } : null);
+                    setError("");
+                  }} />
+                <span id={`${id}-range`} className="text-xs text-muted-foreground">
+                  {t("Allowed range: {{min}} to {{max}}", { min: field.min, max: field.max })}
+                </span>
+                {invalid ? <span id={`${id}-error`} role="alert" className="text-xs text-destructive">
+                  {t("Enter a whole number from {{min}} to {{max}}.", { min: field.min, max: field.max })}
+                </span> : null}
+              </div>;
+            })}
           </DialogBody>
-          <DialogFooter><Button variant="outline" disabled={busy !== ""} onClick={() => { setBudget(status?.budget ?? null); setEditor(null); }}>{t("Cancel")}</Button><Button disabled={busy !== ""} onClick={() => void saveBudget()}>{busy === "budget" ? t("Saving…") : t("Save budget")}</Button></DialogFooter>
+          <DialogFooter>
+            <Button variant="outline" disabled={busy !== ""} onClick={closeEditor}>{t("Cancel")}</Button>
+            <Button disabled={busy !== "" || !parsedBudget} onClick={() => void saveBudget()}>{busy === "budget" ? t("Saving…") : t("Save budget")}</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
-      <Dialog open={editor === "isolation"} onOpenChange={(open) => { if (!open && !busy) { setEditor(null); setIsolation(status?.isolation ?? null); setAcknowledgeExternalHost(false); } }}>
-        <DialogContent className="sm:max-w-xl">
-          <DialogHeader><DialogTitle>{t("Process isolation")}</DialogTitle><DialogDescription>{t("Isolation changes host filesystem authority; it does not change Policy decisions.")}</DialogDescription></DialogHeader>
-          <div className="grid gap-5">
+      <Dialog open={editor === "isolation"} onOpenChange={(open) => { if (!open) closeEditor(); }}>
+        <DialogContent className="grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>{t("Process isolation")}</DialogTitle>
+            <DialogDescription>{t("Isolation changes host filesystem authority; it does not change Policy decisions.")}</DialogDescription>
+            {error ? <p role="alert" className="text-xs leading-5 text-destructive">{error}</p> : null}
+          </DialogHeader>
+          <DialogBody className="grid gap-5">
             {(["workspaceShell", "externalProvider", "tunnelClient"] as const).map((key, i) => <IsolationField key={key}
               label={[t("Workspace shell"), t("External Providers"), t("Tunnel client")][i]!}
               value={isolation?.[key] ?? "host"} restrictedAvailable={restrictedAvailable}
-              onChange={(value) => { setAcknowledgeExternalHost(false); setIsolation((current) => current === null ? null : { ...current, [key]: value }); }} />)}
+              onChange={(value) => { setError(""); setAcknowledgeExternalHost(false); setIsolation((current) => current === null ? null : { ...current, [key]: value }); }} />)}
             {externalHostEscalation ? <label className="flex items-start gap-2 rounded-lg border border-border p-3 text-xs leading-5">
               <input type="checkbox" className="mt-1 size-4 accent-foreground" checked={acknowledgeExternalHost} onChange={(event) => setAcknowledgeExternalHost(event.target.checked)} />
               <span>{t("I trust the installed external native plugins and accept unrestricted Host process access.")}</span>
             </label> : null}
-          </div>
-          <DialogFooter><Button variant="outline" disabled={busy !== ""} onClick={() => { setIsolation(status?.isolation ?? null); setEditor(null); setAcknowledgeExternalHost(false); }}>{t("Cancel")}</Button><Button disabled={busy !== "" || (externalHostEscalation && !acknowledgeExternalHost)} onClick={() => void saveIsolation()}>{busy === "isolation" ? t("Saving…") : t("Save isolation")}</Button></DialogFooter>
+          </DialogBody>
+          <DialogFooter>
+            <Button variant="outline" disabled={busy !== ""} onClick={closeEditor}>{t("Cancel")}</Button>
+            <Button disabled={busy !== "" || (externalHostEscalation && !acknowledgeExternalHost)} onClick={() => void saveIsolation()}>{busy === "isolation" ? t("Saving…") : t("Save isolation")}</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

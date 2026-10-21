@@ -38,6 +38,7 @@ import {
 } from "@mender/ui/components/table";
 
 import { errorMessage } from "../../shared/errors";
+import { FormInfo } from "../../shared/form-info";
 import { IconButton } from "../../shared/icon-button";
 import { EmptyState, ErrorNotice } from "../../shared/page";
 import { PageToolbar, ResultPanel } from "../../shared/page-toolbar";
@@ -518,7 +519,7 @@ function RuleEditorDialog({
           <DialogTitle>
             {t(state.ruleId ? "Edit Policy rule" : "Add Policy rule")}
           </DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="sr-only">
             {t("Step {{step}} of 3 · {{section}}", {
               step: state.step + 1,
               section: t(
@@ -730,9 +731,20 @@ function ScopeStep({
         }
       />
 
-      <Field label="Principal references — one per line" optional>
+      <div className="space-y-1.5">
+        <div className="flex items-center gap-1">
+          <label htmlFor="policy-principal-references" className="text-sm font-medium">
+            {t("Principal references — one per line")}
+            <span className="ml-2 text-xs font-normal text-muted-foreground">{t("Optional")}</span>
+          </label>
+          <FormInfo label={t("Principal references — one per line")}>
+            {t("Advanced selector. Mender has no Principal directory yet; use canonical references visible in Audit when an exact subject match is required.")}
+          </FormInfo>
+        </div>
         <textarea
+          id="policy-principal-references"
           aria-label={t("Policy Principal references")}
+          aria-describedby="policy-principal-references-scope"
           className="min-h-20 w-full rounded-lg border border-input bg-background px-3 py-2 font-mono text-sm outline-none focus:ring-2 focus:ring-ring/40"
           placeholder={"os:501\nprofile:prof_..."}
           value={form.match.principalRefs.join("\n")}
@@ -746,10 +758,10 @@ function ScopeStep({
             })
           }
         />
-        <span className="mt-1 block text-xs leading-5 text-muted-foreground">
-          {t("Advanced selector. Mender has no Principal directory yet; use canonical references visible in Audit when an exact subject match is required.")}
-        </span>
-      </Field>
+        <p id="policy-principal-references-scope" className="text-xs text-muted-foreground">
+          {t("Empty means any Principal reference.")}
+        </p>
+      </div>
 
       <SelectorSection
         title="Execution scope"

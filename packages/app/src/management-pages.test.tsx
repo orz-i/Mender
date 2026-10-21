@@ -2357,6 +2357,13 @@ describe("management pages", () => {
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
     expect(screen.getByText(/Scope and targets/)).toBeTruthy();
+    const ruleDialog = screen.getByRole("dialog", { name: "Add Policy rule" });
+    expect(ruleDialog.querySelector('[data-slot="dialog-description"]')?.className).toContain("sr-only");
+    const principalField = screen.getByLabelText("Policy Principal references");
+    expect(principalField.getAttribute("aria-describedby")).toBe("policy-principal-references-scope");
+    expect(screen.getByText("Empty means any Principal reference.")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Help for Principal references — one per line" })).toBeTruthy();
+    expect(screen.queryByText(/Advanced selector. Mender has no Principal directory yet/)).toBeNull();
     fireEvent.click(screen.getByText("MCP").closest("label")!);
     fireEvent.click(screen.getByText("Profile").closest("label")!);
     fireEvent.click(screen.getByText("Default").closest("label")!);
