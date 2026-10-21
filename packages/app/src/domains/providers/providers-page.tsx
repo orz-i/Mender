@@ -235,6 +235,11 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
   const [createForm, setCreateForm] =
     useState<ProviderFormState>(emptyProviderForm);
   const [createError, setCreateError] = useState("");
+  const [createDraftError, setCreateDraftError] = useState<string | null>(null);
+  const [editDraftError, setEditDraftError] = useState<string | null>(null);
+  const [editError, setEditError] = useState("");
+  const [rebindDraftError, setRebindDraftError] = useState<string | null>(null);
+  const [rebindError, setRebindError] = useState("");
   const [connectionOffering, setConnectionOffering] = useState<IntegrationOffering|null>(null);
   const [offeringName, setOfferingName] = useState("");
   const [offeringNamespace, setOfferingNamespace] = useState("");
@@ -401,7 +406,12 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
 
   async function addProvider() {
     const namespace = canonicalizeOwnedIdentifier(createForm.namespace);
-    if (!isCanonicalOwnedSlug(namespace) || busy !== "") return;
+    const genericSchema = providerPluginForForm(providerPlugins, createForm)?.configSchema;
+    if (
+      !isCanonicalOwnedSlug(namespace) || busy !== "" ||
+      (providerRenderer(createForm) === "generic" &&
+        (createDraftError !== null || genericConfigValidationError(genericSchema, createForm.genericConfig) !== null))
+    ) return;
     setBusy("create");
     setCreateError("");
     setError("");
@@ -437,16 +447,22 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
       return;
     }
     setError("");
+    setEditError("");
+    setEditDraftError(null);
     setEditProvider(provider);
     setEditForm(formFromProvider(provider));
   }
 
   async function saveEdit() {
-    if (editProvider === null || editForm === null) {
+    if (editProvider === null || editForm === null || busy !== "") {
       return;
     }
+    const genericSchema = providerPluginForForm(providerPlugins, editForm)?.configSchema;
+    if (providerRenderer(editForm) === "generic" &&
+      (editDraftError !== null || genericConfigValidationError(genericSchema, editForm.genericConfig) !== null)) return;
 
     setBusy(editProvider.providerId);
+    setEditError("");
     setError("");
     try {
       await client.updateProvider(
@@ -459,7 +475,7 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
     } catch (reason) {
       const message = errorMessage(reason);
       await refresh();
-      setError(message);
+      setEditError(message);
     } finally {
       setBusy("");
     }
@@ -472,6 +488,8 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
     }
     const currentConfig = asRecord(provider.config);
     setError("");
+    setRebindError("");
+    setRebindDraftError(null);
     setRebindProvider(provider);
     setRebindPlugin(target);
     setRebindConfig(
@@ -485,18 +503,24 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
     setRebindProvider(null);
     setRebindPlugin(null);
     setRebindConfig({});
+    setRebindDraftError(null);
+    setRebindError("");
   }
 
   async function saveRebind() {
     if (
       rebindProvider === null ||
       rebindPlugin === null ||
-      rebindPlugin.installationId === undefined
+      rebindPlugin.installationId === undefined ||
+      rebindDraftError !== null ||
+      genericConfigValidationError(rebindPlugin.configSchema, rebindConfig) !== null ||
+      busy !== ""
     ) {
       return;
     }
 
     setBusy(rebindProvider.providerId);
+    setRebindError("");
     setError("");
     try {
       await client.rebindProvider(rebindProvider.providerId, {
@@ -507,7 +531,7 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
       await refresh();
       await refreshProviderPlugins();
     } catch (reason) {
-      setError(errorMessage(reason));
+      setRebindError(errorMessage(reason));
     } finally {
       setBusy("");
     }
@@ -614,9 +638,11 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
   }
 
   function setCreateDialogOpen(open: boolean) {
+    if (!open && busy !== "") return;
     setCreateOpen(open);
     if (!open) {
       setCreateError("");
+      setCreateDraftError(null);
       setCreateForm(emptyProviderForm);
     }
   }
@@ -815,9 +841,14 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
 
         busy={busy === "create"}
         createError={createError}
+        draftError={createDraftError}
+        onDraftErrorChange={setCreateDraftError}
         onOpenChange={setCreateDialogOpen}
         onChange={(next) => {
           setCreateError("");
+          if (providerFormSelectionKey(next) !== providerFormSelectionKey(createForm)) {
+            setCreateDraftError(null);
+          }
           setCreateForm(next);
         }}
         onAuthentication={openCreateAuthentication}
@@ -866,13 +897,18 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
           busy={
             editProvider !== null && busy === editProvider.providerId
           }
+          editError={editError}
+          draftError={editDraftError}
+          onDraftErrorChange={setEditDraftError}
           onOpenChange={(open) => {
-            if (!open) {
+            if (!open && busy === "") {
               setEditProvider(null);
               setEditForm(null);
+              setEditError("");
+              setEditDraftError(null);
             }
           }}
-          onChange={setEditForm}
+          onChange={(next) => { setEditError(""); setEditForm(next); }}
           onSubmit={() => void saveEdit()}
         />
       ) : null}
@@ -889,15 +925,20 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
           config={rebindConfig}
           credentials={credentials}
           busy={busy === rebindProvider.providerId}
+          draftError={rebindDraftError}
+          submitError={rebindError}
+          onDraftErrorChange={setRebindDraftError}
           onOpenChange={(open) => {
-            if (!open) {
+            if (!open && busy === "") {
               closeRebind();
             }
           }}
           onPluginChange={(plugin) => {
             setRebindPlugin(plugin);
+            setRebindDraftError(null);
+            setRebindError("");
           }}
-          onConfigChange={setRebindConfig}
+          onConfigChange={(next) => { setRebindConfig(next); setRebindError(""); }}
           onSubmit={() => void saveRebind()}
         />
       ) : null}
@@ -913,6 +954,9 @@ function ProviderRebindDialog({
   config,
   credentials,
   busy,
+  draftError,
+  submitError,
+  onDraftErrorChange,
   onOpenChange,
   onPluginChange,
   onConfigChange,
@@ -925,6 +969,9 @@ function ProviderRebindDialog({
   config: Record<string, unknown>;
   credentials: Credential[];
   busy: boolean;
+  draftError: string | null;
+  submitError: string;
+  onDraftErrorChange: (error: string | null) => void;
   onOpenChange: (open: boolean) => void;
   onPluginChange: (plugin: ProviderPlugin) => void;
   onConfigChange: (value: Record<string, unknown>) => void;
@@ -938,15 +985,18 @@ function ProviderRebindDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-xl">
+      <DialogContent className="grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>{t("Rebind Provider installation")}</DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="sr-only">
             {t("Move this Provider to another exact installation of the same plugin. Provider identity and SourceKey-stable Tool identities remain unchanged.")}
           </DialogDescription>
+          {submitError ? (
+            <p role="alert" className="text-xs leading-5 text-destructive">{submitError}</p>
+          ) : null}
         </DialogHeader>
 
-        <div className="space-y-4">
+        <DialogBody className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <ReadOnlyField label="Provider" value={provider.namespace} />
             <ReadOnlyField
@@ -1003,19 +1053,22 @@ function ProviderRebindDialog({
             value={config}
             credentials={credentials}
             onChange={onConfigChange}
+            onDraftErrorChange={onDraftErrorChange}
           />
           {validationError ? (
-            <p className="text-xs text-destructive">{validationError}</p>
+            <p role="alert" className="text-xs text-destructive">{validationError}</p>
           ) : null}
-        </div>
+        </DialogBody>
 
         <DialogFooter>
           <DialogClose render={<Button variant="outline" />}>
             {t("Cancel")}
           </DialogClose>
           <Button
-            disabled={busy || validationError !== null}
-            onClick={onSubmit}
+            disabled={busy || validationError !== null || draftError !== null}
+            onClick={() => {
+              if (!busy && validationError === null && draftError === null) onSubmit();
+            }}
           >
             {t(busy ? "Rebinding…" : "Rebind installation")}
           </Button>
@@ -1033,6 +1086,9 @@ function ProviderFormDialog({
   credentials,
   busy,
   createError,
+  editError,
+  draftError,
+  onDraftErrorChange,
   onOpenChange,
   onChange,
   onAuthentication,
@@ -1045,6 +1101,9 @@ function ProviderFormDialog({
   credentials: Credential[];
   busy: boolean;
   createError?: string;
+  editError?: string;
+  draftError: string | null;
+  onDraftErrorChange: (error: string | null) => void;
   onOpenChange: (open: boolean) => void;
   onChange: (value: ProviderFormState) => void;
   onAuthentication?: () => void;
@@ -1079,7 +1138,7 @@ function ProviderFormDialog({
         : renderer === "model-tools"
           ? form.modelToolsModel.trim() !== "" &&
             form.modelToolsCredentialRef.trim() !== ""
-          : selectedPlugin !== undefined && genericError === null);
+          : selectedPlugin !== undefined && genericError === null && draftError === null);
 
   return (
     <Dialog
@@ -1118,9 +1177,9 @@ function ProviderFormDialog({
                 )}
           </DialogDescription>
           </DialogHeader>
-          {creating && createError ? (
+          {(creating ? createError : editError) ? (
             <div role="alert" className="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-              {createError}
+              {creating ? createError : editError}
             </div>
           ) : null}
         </div>
@@ -1292,13 +1351,13 @@ function ProviderFormDialog({
                 uiSchema={selectedPlugin?.uiSchema}
                 value={form.genericConfig}
                 credentials={credentials}
-
+                onDraftErrorChange={onDraftErrorChange}
                 onChange={(genericConfig) =>
                   onChange({ ...form, genericConfig })
                 }
               />
               {genericError ? (
-                <p className="text-xs text-destructive">{genericError}</p>
+                <p role="alert" className="text-xs text-destructive">{genericError}</p>
               ) : null}
             </div>
           ) : null}
@@ -1536,7 +1595,9 @@ function ProviderFormDialog({
               {t("Configure authentication")}
             </Button>
           ) : null}
-          <Button disabled={busy || !valid} onClick={onSubmit}>
+          <Button disabled={busy || !valid} onClick={() => {
+            if (!busy && valid) onSubmit();
+          }}>
             {t(
               busy
                 ? creating

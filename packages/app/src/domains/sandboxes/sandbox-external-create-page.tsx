@@ -22,6 +22,7 @@ export function ExternalSandboxCreatePage({ client }: { client: MenderClient }) 
   const [loaded, setLoaded] = useState(false);
   const [name, setName] = useState("");
   const [value, setValue] = useState<Record<string, unknown>>({});
+  const [draftError, setDraftError] = useState<string | null>(null);
   const [step, setStep] = useState<"configure" | "review">("configure");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -37,6 +38,8 @@ export function ExternalSandboxCreatePage({ client }: { client: MenderClient }) 
         plugin.kind === "sandbox.backend" && plugin.enabled &&
         plugin.status === "enabled");
       setValue(genericConfigDefaults(selected?.configSchema));
+      setDraftError(null);
+      setStep("configure");
       setLoaded(true);
     }).catch((reason: unknown) => {
       if (!live) return;
@@ -54,7 +57,7 @@ export function ExternalSandboxCreatePage({ client }: { client: MenderClient }) 
   [plugin?.configSchema, value]);
 
   async function create() {
-    if (!plugin?.installationId || !name.trim() || validation || busy || step !== "review") return;
+    if (!plugin?.installationId || !name.trim() || validation || draftError || busy || step !== "review") return;
     setBusy(true);
     setError("");
     try {
@@ -103,10 +106,11 @@ export function ExternalSandboxCreatePage({ client }: { client: MenderClient }) 
               value={value}
               credentials={[]}
               onChange={setValue}
+              onDraftErrorChange={setDraftError}
             />
             {validation ? <p role="alert" className="text-xs text-destructive">{t(validation)}</p> : null}
             <div className="flex justify-end">
-              <Button disabled={!name.trim() || Boolean(validation)}
+              <Button disabled={!name.trim() || Boolean(validation) || Boolean(draftError)}
                 onClick={() => setStep("review")}>{t("Review")}</Button>
             </div>
           </> : <>
