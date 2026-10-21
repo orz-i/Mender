@@ -49,11 +49,14 @@ describe("dynamic JSON schema draft integrity", () => {
   });
 
   it("tracks invalid JSON arrays and additional JSON properties independently", () => {
-    const schema = { type: "object", properties: { records: { type: "array" } } };
-    render(<FormHarness schema={schema} initial={{ records: [1], flag: true }}/>);
+    const schema = { type: "object", properties: { records: { type: "array" }, title: {type:"string"} } };
+    render(<FormHarness schema={schema} initial={{ records: [1], flag: true, title: "Before" }}/>);
     const list = screen.getByRole<HTMLTextAreaElement>("textbox", { name: "Records" });
     const additional = screen.getByRole<HTMLTextAreaElement>("textbox", { name: "Additional properties" });
     fireEvent.change(list, { target: { value: "[1," } });
+    expect(screen.getByRole<HTMLButtonElement>("button", { name: "Save configuration" }).disabled).toBe(true);
+    fireEvent.change(screen.getByRole("textbox", { name: "Title" }), { target: { value: "After" } });
+    expect(list.value).toBe("[1,");
     expect(screen.getByRole<HTMLButtonElement>("button", { name: "Save configuration" }).disabled).toBe(true);
     fireEvent.change(additional, { target: { value: '{"flag":' } });
     expect(screen.getByRole<HTMLButtonElement>("button", { name: "Save configuration" }).disabled).toBe(true);
@@ -76,6 +79,18 @@ describe("dynamic JSON schema draft integrity", () => {
     expect(editor.value).toBe('{\n  "valid": 6\n}');
     expect(editor.getAttribute("aria-invalid")).toBe("false");
     expect(screen.getByRole<HTMLButtonElement>("button", { name: "Save configuration" }).disabled).toBe(false);
+  });
+
+  it("distinguishes a cleared optional array from a deliberate empty JSON array", () => {
+    render(<FormHarness schema={{ type:"object", properties: { records: { type:"array" } } }} initial={{ records: [1] }}/>);
+    const editor = screen.getByRole<HTMLTextAreaElement>("textbox", { name: "Records" });
+    fireEvent.change(editor, { target: { value: "" } });
+    expect(editor.value).toBe("");
+    expect(screen.getByTestId("form-value").textContent).toBe("{}");
+    expect(screen.getByRole<HTMLButtonElement>("button", { name: "Save configuration" }).disabled).toBe(false);
+    fireEvent.change(editor, { target: { value: "[]" } });
+    expect(editor.value).toBe("[]");
+    expect(screen.getByTestId("form-value").textContent).toBe('{"records":[]}');
   });
 
   it("treats non-object raw JSON as an invalid draft and allows recovery", () => {

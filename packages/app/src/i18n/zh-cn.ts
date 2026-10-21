@@ -1033,6 +1033,7 @@ export const zhCNMessages: Readonly<Record<string, string>> = {
   "Include SourceKeys": "包含 SourceKey",
   "Input schema": "输入 Schema",
   "Installation": "安装",
+  "Installation details": "安装详情",
   "Invocation ID": "调用 ID",
   "Invocation outcomes will appear here after Tools are called.": "工具被调用后，调用结果会显示在此处。",
   "Kind": "类型",

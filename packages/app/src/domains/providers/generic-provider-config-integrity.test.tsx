@@ -55,6 +55,12 @@ describe("Provider and Sandbox JSON editor submission integrity", () => {
       {}, `/tools?create=1&pluginId=${pluginId}&installationId=${installationId}`,
     );
     const dialog = await screen.findByRole("dialog", { name: "Add Dynamic Integration · 1.0.0 provider" });
+    const installationDetails = within(dialog).getByText("Installation details").closest("details")!;
+    expect(installationDetails.hasAttribute("open")).toBe(false);
+    fireEvent.click(installationDetails.querySelector("summary")!);
+    expect(installationDetails.hasAttribute("open")).toBe(true);
+    expect(within(installationDetails).getByText(installationId)).toBeTruthy();
+    fireEvent.click(installationDetails.querySelector("summary")!);
     fireEvent.change(within(dialog).getByRole("textbox", { name: "Namespace" }), { target: { value: "dynamic" } });
     fireEvent.change(within(dialog).getByRole("textbox", { name: "Display name" }), { target: { value: "Dynamic" } });
     const save = within(dialog).getByRole<HTMLButtonElement>("button", { name: "Add provider" });
@@ -105,6 +111,8 @@ describe("Provider and Sandbox JSON editor submission integrity", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Actions: Dynamic Service" }));
     fireEvent.click(await screen.findByRole("button", { name: "Rebind Dynamic Service" }));
     const dialog = await screen.findByRole("dialog", {name:"Rebind Provider installation"});
+    expect(dialog.className).toContain("grid-rows-[auto_minmax(0,1fr)_auto]");
+    expect(dialog.querySelector('[data-slot="dialog-body"]')).not.toBeNull();
     expect(within(dialog).getByRole<HTMLSelectElement>("combobox", {name:"Target Provider plugin installation"}).value).toBe(targetInstallationId);
     const records = within(dialog).getByRole<HTMLTextAreaElement>("textbox", { name: "Records" });
     const save = within(dialog).getByRole<HTMLButtonElement>("button", { name: "Rebind installation" });
@@ -122,6 +130,32 @@ describe("Provider and Sandbox JSON editor submission integrity", () => {
       installationId: targetInstallationId,
       config: { records: [2], retries: 2 },
     });
+  });
+
+  it("discards only the old installation's invalid JSON draft when Rebind target changes", async () => {
+    const schema = { type:"object", properties: { records: { type:"array" } } };
+    const nextInstallation = "pinst_22222222222222222222222222222222";
+    const rebindProvider = vi.fn();
+    mountProviders(
+      [plugin(schema), plugin(schema, targetInstallationId), plugin(schema, nextInstallation)],
+      [configuredProvider],
+      { rebindProvider },
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Actions: Dynamic Service" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Rebind Dynamic Service" }));
+    const dialog = await screen.findByRole("dialog", { name:"Rebind Provider installation" });
+    const picker = within(dialog).getByRole<HTMLSelectElement>("combobox", { name: "Target Provider plugin installation" });
+    const records = within(dialog).getByRole<HTMLTextAreaElement>("textbox", { name: "Records" });
+    const save = within(dialog).getByRole<HTMLButtonElement>("button", { name: "Rebind installation" });
+    expect(picker.value).toBe(targetInstallationId);
+    fireEvent.change(records, { target: { value: "[1," } });
+    expect(save.disabled).toBe(true);
+    fireEvent.change(picker, { target: { value: nextInstallation } });
+    expect(picker.value).toBe(nextInstallation);
+    expect(within(dialog).getByRole<HTMLTextAreaElement>("textbox", { name: "Records" }).value).toBe("[\n  1\n]");
+    expect(save.disabled).toBe(false);
+    expect(within(dialog).queryByRole("alert")).toBeNull();
+    expect(rebindProvider).not.toHaveBeenCalled();
   });
 
   it("prevents Sandbox Review from using the last valid JSON array while an invalid draft is visible", async () => {

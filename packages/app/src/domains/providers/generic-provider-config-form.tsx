@@ -354,7 +354,7 @@ function SchemaField({
         label={label}
         description={description}
         required={required}
-        value={Array.isArray(value) ? value : []}
+        value={Array.isArray(value) ? value : undefined}
         path={path}
         reportDraftIssue={reportDraftIssue}
         onChange={onChange}
@@ -446,12 +446,12 @@ function JSONArrayEditor({
   label: string;
   description?: string | undefined;
   required: boolean;
-  value: unknown[];
+  value: unknown[] | undefined;
   path: string;
   reportDraftIssue: ReportDraftIssue;
   onChange: (value: unknown) => void;
 }) {
-  const draft = useJSONTextDraft(JSON.stringify(value, null, 2), path, reportDraftIssue);
+  const draft = useJSONTextDraft(value === undefined ? "" : JSON.stringify(value, null, 2), path, reportDraftIssue);
   return (
     <FieldShell label={label} required={required} description={description}>
       <Textarea

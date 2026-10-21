@@ -101,6 +101,7 @@ export function ExternalSandboxCreatePage({ client }: { client: MenderClient }) 
                 onChange={(event) => setName(event.target.value)} />
             </label>
             <GenericProviderConfigForm
+              key={plugin.pluginId + "@" + plugin.installationId}
               schema={plugin.configSchema}
               uiSchema={undefined}
               value={value}

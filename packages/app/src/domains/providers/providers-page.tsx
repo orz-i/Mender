@@ -997,7 +997,7 @@ function ProviderRebindDialog({
         </DialogHeader>
 
         <DialogBody className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             <ReadOnlyField label="Provider" value={provider.namespace} />
             <ReadOnlyField
               label="Current installation"
@@ -1031,7 +1031,7 @@ function ProviderRebindDialog({
             </select>
           </Field>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             <ReadOnlyField label="Plugin" value={plugin.pluginId} />
             <ReadOnlyField
               label="Target package version"
@@ -1186,7 +1186,7 @@ function ProviderFormDialog({
 
         <div className="min-h-0 space-y-4 overflow-y-auto pr-1">
           {!creating ? (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid gap-3 sm:grid-cols-2">
               <ReadOnlyField label="Namespace" value={form.namespace} />
               <ReadOnlyField
                 label="Provider plugin"
@@ -1334,16 +1334,18 @@ function ProviderFormDialog({
           {renderer === "generic" ? (
             <div className="space-y-3">
               {form.installationId ? (
-                <div className="grid grid-cols-2 gap-3">
-                  <ReadOnlyField
-                    label="Installation"
-                    value={form.installationId}
-                  />
-                  <ReadOnlyField
-                    label="Package version"
-                    value={selectedPlugin?.packageVersion ?? t("Unavailable")}
-                  />
-                </div>
+                <details className="rounded-xl border border-border/70">
+                  <summary className="cursor-pointer px-3 py-2 text-sm font-medium">
+                    {t("Installation details")}
+                  </summary>
+                  <div className="grid gap-3 border-t border-border/70 p-3 sm:grid-cols-2">
+                    <ReadOnlyField label="Installation" value={form.installationId} />
+                    <ReadOnlyField
+                      label="Package version"
+                      value={selectedPlugin?.packageVersion ?? t("Unavailable")}
+                    />
+                  </div>
+                </details>
               ) : null}
               <GenericProviderConfigForm
                 key={providerFormSelectionKey(form)}
@@ -2235,9 +2237,9 @@ function Field({
 
 function ReadOnlyField({ label, value }: { label: string; value: string }) {
   return (
-    <div>
+    <div className="min-w-0">
       <div className="mb-1.5 text-sm font-medium">{t(label)}</div>
-      <div className="rounded-lg border border-border bg-muted/40 px-3 py-2 font-mono text-sm text-muted-foreground">
+      <div className="min-w-0 break-all rounded-lg border border-border bg-muted/40 px-3 py-2 font-mono text-sm text-muted-foreground">
         {value}
       </div>
     </div>
