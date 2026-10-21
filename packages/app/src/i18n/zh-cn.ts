@@ -1449,5 +1449,6 @@ export const zhCNMessages: Readonly<Record<string, string>> = {
   "Tunnel creation failed. Check the external ID and selected credential, then try again.": "无法创建隧道。请检查外部隧道 ID 和所选凭据后重试。",
   "{{cpu}} CPU · {{memory}} MiB RAM": "{{cpu}} 核 CPU · {{memory}} MiB 内存",
   "{{cpu}} CPU · {{memory}} GiB RAM · {{minutes}} min TTL": "{{cpu}} 核 CPU · {{memory}} GiB 内存 · 有效期 {{minutes}} 分钟",
+  "Help for {{field}}": "关于{{field}}的说明",
 };
 
