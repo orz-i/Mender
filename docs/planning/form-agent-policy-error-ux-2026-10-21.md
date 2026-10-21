@@ -35,3 +35,25 @@
 - Policy 更新默认决策及创建规则失败后，弹窗仍可见、草稿仍在、同一弹窗可读到 `role=alert`，重试成功后关闭；页面错误不冒充弹窗错误。
 - Agent 创建相对路径会明确提示绝对路径要求且关联输入，合法路径能正常核对；默认模型按需打开，关闭再打开不丢填写值；创建失败在 Review 操作附近可见，返回配置仍保留草稿。
 - 在当前窗口与移动宽度无操作遮挡；如原生 Wails 构建晚于本轮源码或界面无法完整核验，明确标为待重建验收。
+
+## 实施与验收记录
+
+### 提交与用户可见变化
+
+- `5fecf5f` — 本文档先行定义问题、边界与验收约束。
+- `8191936` — Policy 默认决策和规则保存失败归属当前 Dialog：保留已选决策和规则草稿、当前弹窗直接告错并允许原位重试；打开新编辑器时清除历史错误，页面加载/列表错误仍归属页面。新增 3 项失败/重试/取消测试。
+- `9bb7730` — 规则保存错误固定在弹窗 Header，并限制过长错误的高度，以免长规则配置滚动时看不到失败原因；增加 Header 所属断言。
+- `2c0a807` — Agent 创建页面以步骤序号代替重复栏目标题；低频默认模型收进可展开高级设置并跨“核对/返回”保持输入；名称空格、相对路径和仅空格目录获得字段旁文字错误和关联的无障碍状态。Review 显示与最终提交相同的修剪后名称/目录/模型，创建失败在 Review 就地显示且保留草稿。进程隔离级别、Host 风险告知、Profile 授权不自动授予等保持原有语义。
+
+### 验证证据
+
+- **完整前端门禁 PASS**：`pnpm lint && pnpm typecheck && pnpm test && pnpm build`，日志 `/tmp/mender-agent-policy-ux-fullgate-20261021.log`，退出码 0；**63 个测试文件、392 项测试通过**；i18n **1483/1483**，Web、Wails Desktop 前端均构建通过。保留已有 JS 大分块警告。规则 Header 小切片另跑定向 Vitest/ESLint，均通过。
+- **原生 Wails + Vite HMR 实际观察**：Mac `mender-desktop` 原生 WKWebView 页面展示新进度“第 2 / 3 步”，默认模型在“高级设置”内折叠，进程隔离选择与风险说明始终直接可见；真实键盘输入临时相对目录 `relative/project` 后，字段下方显示“请输入以 / 开头的工作目录绝对路径。”，不能继续核对。已通过“返回智能体列表”退出草稿并恢复原来的“审批”页面。截图 `/tmp/mender-ux-agent-config-after-hmr.png`、`/tmp/mender-ux-agent-relative-path-error-native.png`。
+- **真实持久化检查**：生产 SQLite 仅以只读模式执行 `PRAGMA quick_check`，得到 `ok`；当前 `agents=4`、`policy_rules=0`、`profiles=1`、`credentials=3`。本次没有操作任何生产创建、保存、审批、授权、委派或删除。
+- **证据边界**：Policy 后端写失败通过隔离的 React/Vitest stub 覆盖，**未**在真实生产策略上主动制造失败；Wails 验证仅为真实运行窗口的草稿与本地字段校验，不代表 Agent 实际创建成功。当前 Pi 浏览器因旧 journal 格式冲突不可用，未冒充 390px Browser / 完整 VoiceOver/键盘或 WCAG AA 验收；Wails 最终发行包仍需在后续正常打包时集成本轮前端源码。
+
+### 外部可用性依据
+
+- WCAG 2.2 3.3.1 错误识别：<https://www.w3.org/WAI/WCAG22/Understanding/error-identification.html>。
+- WCAG 2.2 3.3.3 错误修正建议：<https://www.w3.org/WAI/WCAG22/Understanding/error-suggestion.html>。
+- GOV.UK Design System 错误文本与字段关联：<https://design-system.service.gov.uk/components/error-message/>。
