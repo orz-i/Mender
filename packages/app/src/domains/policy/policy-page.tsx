@@ -127,6 +127,7 @@ export function PolicyPage({ client }: { client: MenderClient }) {
   const [loaded, setLoaded] = useState(false);
   const [hasSnapshot, setHasSnapshot] = useState(false);
   const [error, setError] = useState("");
+  const [dialogError, setDialogError] = useState("");
   const [busy, setBusy] = useState("");
 
   const [defaultOpen, setDefaultOpen] = useState(false);
@@ -204,19 +205,20 @@ export function PolicyPage({ client }: { client: MenderClient }) {
       return;
     }
     setEditor(null);
+    setDialogError("");
     setDefaultDecision(policy.defaultDecision);
     setDefaultOpen(true);
   }
 
   async function saveDefault() {
     setBusy("default");
-    setError("");
+    setDialogError("");
     try {
       await client.setPolicyDefault({ decision: defaultDecision });
       setDefaultOpen(false);
       await refresh();
     } catch (reason) {
-      setError(errorMessage(reason));
+      setDialogError(errorMessage(reason));
     } finally {
       setBusy("");
     }
@@ -224,6 +226,7 @@ export function PolicyPage({ client }: { client: MenderClient }) {
 
   function openCreateRule() {
     setDefaultOpen(false);
+    setDialogError("");
     setEditor({
       ruleId: "",
       step: 0,
@@ -233,6 +236,7 @@ export function PolicyPage({ client }: { client: MenderClient }) {
 
   function openEditRule(rule: PolicyRule) {
     setDefaultOpen(false);
+    setDialogError("");
     setEditor({
       ruleId: rule.ruleId,
       step: 0,
@@ -265,7 +269,7 @@ export function PolicyPage({ client }: { client: MenderClient }) {
     }
     const key = editor.ruleId || "new-rule";
     setBusy(key);
-    setError("");
+    setDialogError("");
     try {
       if (editor.ruleId) {
         await client.updatePolicyRule(editor.ruleId, editor.form);
@@ -275,7 +279,7 @@ export function PolicyPage({ client }: { client: MenderClient }) {
       setEditor(null);
       await refresh();
     } catch (reason) {
-      setError(errorMessage(reason));
+      setDialogError(errorMessage(reason));
     } finally {
       setBusy("");
     }
@@ -431,7 +435,7 @@ export function PolicyPage({ client }: { client: MenderClient }) {
         pagination={rulePagination}
       />
 
-      <Dialog open={defaultOpen} onOpenChange={setDefaultOpen}>
+      <Dialog open={defaultOpen} onOpenChange={(open) => { if (!open) setDialogError(""); setDefaultOpen(open); }}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>{t("Edit default decision")}</DialogTitle>
@@ -456,6 +460,7 @@ export function PolicyPage({ client }: { client: MenderClient }) {
           {defaultDecision === "require_approval" ? (
             <ApprovalWarning />
           ) : null}
+          {dialogError ? <p role="alert" className="text-sm text-destructive">{dialogError}</p> : null}
           <DialogFooter>
             <Button variant="outline" onClick={() => setDefaultOpen(false)}>
               {t("Cancel")}
@@ -474,8 +479,9 @@ export function PolicyPage({ client }: { client: MenderClient }) {
           providers={providers}
           tools={tools}
           busy={busy !== ""}
-          onChange={setEditor}
-          onClose={() => setEditor(null)}
+          error={dialogError}
+          onChange={(next) => { setDialogError(""); setEditor(next); }}
+          onClose={() => { setDialogError(""); setEditor(null); }}
           onSave={() => void saveRule()}
         />
       ) : null}
@@ -489,6 +495,7 @@ function RuleEditorDialog({
   providers,
   tools,
   busy,
+  error,
   onChange,
   onClose,
   onSave,
@@ -498,6 +505,7 @@ function RuleEditorDialog({
   providers: Provider[];
   tools: ToolSummary[];
   busy: boolean;
+  error: string;
   onChange: (value: RuleEditorState) => void;
   onClose: () => void;
   onSave: () => void;
@@ -559,6 +567,7 @@ function RuleEditorDialog({
             {t("This Rule is broad because every selector other than its explicit action set is a wildcard. It will match every valid selected action regardless of origin, Principal, scope, or target.")}
           </div>
         ) : null}
+        {error && state.step === 2 ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
         </DialogBody>
 
         <DialogFooter>
