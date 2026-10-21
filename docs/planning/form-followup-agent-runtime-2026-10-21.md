@@ -39,3 +39,29 @@ https://www.w3.org/WAI/WCAG22/Understanding/error-identification
 https://www.w3.org/WAI/WCAG22/Understanding/error-suggestion.html
 https://design-system.service.gov.uk/components/error-message/
 https://base-ui.com/react/components/tooltip
+
+## 本轮实施与可验证交付
+
+在 `74dc7e9` 基线上依次小批量提交，未修改 Go/API/持久化/运行时权限模型：
+
+- `cc80639`：本设计与安全验收约束。
+- `2372d9e`：Agent 附加工作区授权不再自动选中第一个 Profile；显示授权目标，显式选择后才允许确认；Agent 授权模式与受治理工具编辑采用固定 Header/Footer、独立可滚动 DialogBody。保留 Host/YOLO 风险、分离 Profile/Sandbox/Policy 门禁。
+- `a9718a5`：Runtime budget 使用独立字符串草稿、整数与上下限校验，非法值禁用保存；服务端失败在当前弹窗显示并保留草稿供重试；取消恢复服务端原值。Runtime isolation 保留 Host 风险确认并修复错误回显。Policy 规则向导删除重复的视觉步骤标题，把非关键的 Principal 技术说明迁移至可访问字段帮助，保留通配匹配语义。
+- `f31d89d`：Runtime 数字字段范围以紧邻标题的紧凑形式显示，读屏保留完整范围；Policy 精确主体引用改为可选展开，已有引用自动展开，收起始终显示“不限制主体”或精确匹配数量，不改变规则数据。
+
+### 自动化质量门禁
+
+`pnpm lint && pnpm typecheck && pnpm i18n:check && pnpm exec vitest run --maxWorkers=6 --reporter=dot && pnpm build` **退出码 0**，56 个 Vitest 文件、353 项测试通过，i18n 1467/1467，Web 与 Desktop frontend 构建通过。运行记录：`/tmp/mender-form-governance-final-20261021.log`。保留原有 Vite bundle >500 KB 提示，不属于本轮表单行为回归。
+
+首次未指定 worker 上限的 `pnpm test` 曾出现一次无关 Docker 5 秒轮询 timer 测试失败；该条定向测试及限制并发后的全量 353 项通过。本轮没有修改 Docker 代码或假定其定时机制已根治。
+
+### 隔离浏览器交互与截图
+
+Mac Pi 现有浏览器 Session 报 legacy journal validation error，未清理原有日志；使用现成的 Playwright + 安装的本机 Google Chrome，不安装新依赖、不变更项目配置，针对运行中的 Vite `127.0.0.1:5174` 拦截仅所需 API 并返回隔离 Fixture。所有测试均为导航、只读、空表单和模拟失败，不写入生产 Mender 数据。
+
+- **Runtime 1280×800**：配额弹窗高 507.5px，底部 footer 在视口内，文档无横向溢出；核心范围位于标签侧边，帮助按需可用。
+- **Runtime 390×844**：弹窗 y=16..828px、固定 footer 底部 y=827px；正文 `scrollHeight=672`、`clientHeight=523`，用户可滚动全部字段，操作区独立可见；根页面不横向溢出。空值保持空、`aria-invalid=true`、Save 禁用。模拟 HTTP 503 后表单内显示错误并保留原输入值 `48`。截图：`/tmp/mender-form-followup-runtime-1280.png`、`/tmp/mender-form-followup-runtime-390.png`、`/tmp/mender-form-followup-runtime-mobile-fresh-390.png`。
+- **Policy 1280×800 和 390×844**：规则 Scope/targets 弹窗固定操作区，正文独立滚动；390px `bodyScrollHeight=838` / `clientHeight=571`，footer 底部 827px，documentWidth=390。精确主体默认折叠且有可见 wildcard 提示，点击可展开并显示独立的字段级帮助（首次无帮助内容，点击后显示，Esc 可关闭），无页面脚本报错。截图：`/tmp/mender-form-followup-policy-1280.png`、`/tmp/mender-form-followup-policy-390.png`、`/tmp/mender-form-followup-policy-390-expanded.png`。
+- 突然改变 viewport 后立即截图出现过一次短暂叠影；重新等待界面稳定及以 390px 新开浏览器上下文，确认唯一 Dialog、无遮挡，丢弃瞬时截图，不把它作为已验收证据。
+
+**验收边界：** Chrome + Fixture 只证明当前 Web 源码的布局、交互和错误恢复；没有声称后端生产创建成功、真实 Agent 授权成功、完整读屏/键盘 WCAG 认证或新 Wails Desktop 原生实机验收。当前 Desktop app 二进制是在此批改动前构建；需由使用者重新构建刷新后再做原生 UI 非破坏性核对。现有 `.agents/`、`.commandcode/`、`.intent-loop/`、`.pi/` 目录未加入提交。未触碰实际 Profile、Credential、Tunnel、Agent workspace 授权、Policy 或 Runtime 生产持久化数据。
