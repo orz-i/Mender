@@ -1307,6 +1307,8 @@ export const zhCNMessages: Readonly<Record<string, string>> = {
   "Activation ID": "激活 ID",
   "Advanced selector. Mender has no Principal directory yet; use canonical references visible in Audit when an exact subject match is required.": "高级选择器。Mender 当前尚无 Principal 目录；需要精确主体匹配时，请使用审计中可见的标准引用。",
   "Empty means any Principal reference.": "留空表示不限制主体引用。",
+  "Exact Principal references (optional)": "精确主体引用（可选）",
+  "{{count}} exact references": "已限制 {{count}} 个主体引用",
   "Data-minimized capability admission metadata recorded before Provider activation side effects.": "在提供方激活副作用发生前记录的数据最小化能力准入元数据。",
   "Empty means any live Principal kind.": "留空表示任意实时 Principal 类型。",
   "Every Rule must explicitly select at least one action. New actions never inherit old Rule intent.": "每条规则必须显式选择至少一个动作。新增动作不会继承旧规则的意图。",

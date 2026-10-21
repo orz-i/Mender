@@ -693,6 +693,7 @@ function ScopeStep({
   tools: ToolSummary[];
   onChange: (value: PolicyRuleInput) => void;
 }) {
+  const [exactRefsOpen, setExactRefsOpen] = useState(form.match.principalRefs.length > 0);
   return (
     <div className="space-y-6">
       <SelectorSection
@@ -731,37 +732,43 @@ function ScopeStep({
         }
       />
 
-      <div className="space-y-1.5">
-        <div className="flex items-center gap-1">
-          <label htmlFor="policy-principal-references" className="text-sm font-medium">
-            {t("Principal references — one per line")}
-            <span className="ml-2 text-xs font-normal text-muted-foreground">{t("Optional")}</span>
-          </label>
-          <FormInfo label={t("Principal references — one per line")}>
-            {t("Advanced selector. Mender has no Principal directory yet; use canonical references visible in Audit when an exact subject match is required.")}
-          </FormInfo>
+      <details className="rounded-xl border border-border/70 px-3 py-2.5" open={exactRefsOpen} onToggle={(event) => setExactRefsOpen(event.currentTarget.open)}>
+        <summary className="cursor-pointer text-sm marker:text-muted-foreground">
+          <span className="font-medium">{t("Exact Principal references (optional)")}</span>
+          <span id="policy-principal-references-scope" className="ml-2 text-xs text-muted-foreground">
+            {form.match.principalRefs.length
+              ? t("{{count}} exact references", { count: form.match.principalRefs.length })
+              : t("Empty means any Principal reference.")}
+          </span>
+        </summary>
+        <div className="mt-3 space-y-1.5">
+          <div className="flex items-center gap-1">
+            <label htmlFor="policy-principal-references" className="text-sm font-medium">
+              {t("Principal references — one per line")}
+            </label>
+            <FormInfo label={t("Principal references — one per line")}>
+              {t("Advanced selector. Mender has no Principal directory yet; use canonical references visible in Audit when an exact subject match is required.")}
+            </FormInfo>
+          </div>
+          <textarea
+            id="policy-principal-references"
+            aria-label={t("Policy Principal references")}
+            aria-describedby="policy-principal-references-scope"
+            className="min-h-20 w-full rounded-lg border border-input bg-background px-3 py-2 font-mono text-sm outline-none focus:ring-2 focus:ring-ring/40"
+            placeholder={"os:501\nprofile:prof_..."}
+            value={form.match.principalRefs.join("\n")}
+            onChange={(event) =>
+              onChange({
+                ...form,
+                match: {
+                  ...form.match,
+                  principalRefs: lines(event.target.value),
+                },
+              })
+            }
+          />
         </div>
-        <textarea
-          id="policy-principal-references"
-          aria-label={t("Policy Principal references")}
-          aria-describedby="policy-principal-references-scope"
-          className="min-h-20 w-full rounded-lg border border-input bg-background px-3 py-2 font-mono text-sm outline-none focus:ring-2 focus:ring-ring/40"
-          placeholder={"os:501\nprofile:prof_..."}
-          value={form.match.principalRefs.join("\n")}
-          onChange={(event) =>
-            onChange({
-              ...form,
-              match: {
-                ...form.match,
-                principalRefs: lines(event.target.value),
-              },
-            })
-          }
-        />
-        <p id="policy-principal-references-scope" className="text-xs text-muted-foreground">
-          {t("Empty means any Principal reference.")}
-        </p>
-      </div>
+      </details>
 
       <SelectorSection
         title="Execution scope"

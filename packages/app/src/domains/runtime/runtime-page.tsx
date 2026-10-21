@@ -248,9 +248,15 @@ export function RuntimePage({ client }: { client: MenderClient }) {
               const id = `runtime-budget-${field.key}`;
               const invalid = budgetDraft !== null && !validBudgetEntry(budgetDraft[field.key], field);
               return <div key={field.key} className="grid min-w-0 content-start gap-1.5 text-sm">
-                <div className="flex items-center gap-1">
-                  <label htmlFor={id} className="font-medium">{t(field.label)}</label>
-                  <FormInfo label={t(field.label)}>{budgetDescription(field.key)}</FormInfo>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex min-w-0 items-center gap-1">
+                    <label htmlFor={id} className="font-medium">{t(field.label)}</label>
+                    <FormInfo label={t(field.label)}>{budgetDescription(field.key)}</FormInfo>
+                  </div>
+                  <span id={`${id}-range`} className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                    <span className="sr-only">{t("Allowed range: {{min}} to {{max}}", { min: field.min, max: field.max })}</span>
+                    <span aria-hidden="true">{field.min}–{field.max}</span>
+                  </span>
                 </div>
                 <Input id={id} type="number" inputMode="numeric" step="1" min={field.min} max={field.max}
                   aria-invalid={invalid}
@@ -260,9 +266,6 @@ export function RuntimePage({ client }: { client: MenderClient }) {
                     setBudgetDraft((current) => current ? { ...current, [field.key]: event.target.value } : null);
                     setError("");
                   }} />
-                <span id={`${id}-range`} className="text-xs text-muted-foreground">
-                  {t("Allowed range: {{min}} to {{max}}", { min: field.min, max: field.max })}
-                </span>
                 {invalid ? <span id={`${id}-error`} role="alert" className="text-xs text-destructive">
                   {t("Enter a whole number from {{min}} to {{max}}.", { min: field.min, max: field.max })}
                 </span> : null}
