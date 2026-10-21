@@ -460,7 +460,7 @@ export function PolicyPage({ client }: { client: MenderClient }) {
           {defaultDecision === "require_approval" ? (
             <ApprovalWarning />
           ) : null}
-          {dialogError ? <p role="alert" className="text-sm text-destructive">{dialogError}</p> : null}
+          {dialogError ? <p role="alert" className="max-h-24 overflow-y-auto break-words text-sm text-destructive">{dialogError}</p> : null}
           <DialogFooter>
             <Button variant="outline" onClick={() => setDefaultOpen(false)}>
               {t("Cancel")}
@@ -539,6 +539,7 @@ function RuleEditorDialog({
               ),
             })}
           </DialogDescription>
+          {error && state.step === 2 ? <p role="alert" className="max-h-24 overflow-y-auto break-words text-sm text-destructive">{error}</p> : null}
         </DialogHeader>
 
         <DialogBody className="space-y-4">
@@ -567,7 +568,6 @@ function RuleEditorDialog({
             {t("This Rule is broad because every selector other than its explicit action set is a wildcard. It will match every valid selected action regardless of origin, Principal, scope, or target.")}
           </div>
         ) : null}
-        {error && state.step === 2 ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
         </DialogBody>
 
         <DialogFooter>

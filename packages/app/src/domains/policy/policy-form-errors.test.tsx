@@ -57,7 +57,9 @@ describe("Policy modal mutation errors", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Next" }));
     fireEvent.click(within(dialog).getByRole("button", { name: "Create rule" }));
 
-    expect(await within(dialog).findByRole("alert")).toHaveProperty("textContent", "Policy rule could not be saved");
+    const errorAlert = await within(dialog).findByRole("alert");
+    expect(errorAlert).toHaveProperty("textContent", "Policy rule could not be saved");
+    expect(errorAlert.closest('[data-slot="dialog-header"]')).toBeTruthy();
     expect(screen.getAllByRole("alert")).toHaveLength(1);
 
     fireEvent.click(within(dialog).getByRole("button", { name: "Back" }));
