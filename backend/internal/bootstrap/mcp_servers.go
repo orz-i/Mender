@@ -140,9 +140,9 @@ func (r *Runtime) StartMCPHTTPServer(
 		return MCPServerInstance{}, fmt.Errorf("start MCP server: Profile refresh: %w", err)
 	}
 
-	listener, err := net.Listen("tcp", address)
+	listener, err := listenManagedMCPPort(address)
 	if err != nil {
-		return MCPServerInstance{}, fmt.Errorf("start MCP server: listen on %s: %w", address, err)
+		return MCPServerInstance{}, fmt.Errorf("start MCP server: %w", err)
 	}
 
 	actualAddress := listener.Addr().String()

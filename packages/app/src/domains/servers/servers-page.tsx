@@ -476,6 +476,9 @@ export function ServersPage({
             <div className="rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-sm">
               <p className="font-medium text-foreground">{t("Local listen address")}</p>
               <p className="mt-1 break-all font-mono text-xs text-muted-foreground">{startAddress || t("Not set")}</p>
+              <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                {t("If the port is occupied, Mender automatically tries the next local ports. The actual endpoint is shown after the server starts.")}
+              </p>
             </div>
             <details className="rounded-lg border border-border/70 px-3 py-2.5 text-sm">
               <summary className="cursor-pointer font-medium text-foreground">{t("Advanced settings")}</summary>

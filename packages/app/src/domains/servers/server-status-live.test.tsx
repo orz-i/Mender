@@ -183,6 +183,33 @@ it("requires an explicit Profile when multiple exist and preserves inputs after 
   expect(form.getByLabelText<HTMLInputElement>("Listen address").value).toBe("127.0.0.1:8765");
 });
 
+it("displays the real rotated endpoint without asking the user to search for a free port", async () => {
+  const current = { ...fixture, profile: "alpha", tunnelId: undefined, tunnelStatus: undefined,
+    tunnelDisplayName: undefined, tunnelProvider: undefined, tunnelExternalId: undefined };
+  const rotated = { ...current, serverId: "srv_rotated", profile: "beta",
+    address: "127.0.0.1:8766", endpoint: "http://127.0.0.1:8766/mcp" };
+  const startMCPServer = vi.fn().mockResolvedValue(rotated);
+  showServer(vi.fn().mockResolvedValue({ servers: [current] }), {
+    listProfiles: vi.fn().mockResolvedValue({ profiles: [
+      { profileId: "p_alpha", slug: "alpha", displayName: "Alpha", mode: "hybrid", tools: [] },
+      { profileId: "p_beta", slug: "beta", displayName: "Beta", mode: "hybrid", tools: [] },
+    ] }),
+    startMCPServer,
+  });
+  expect(await screen.findByText(current.endpoint)).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Start server" }));
+  const dialog = within(screen.getByRole("dialog", { name: "Start MCP server" }));
+  expect(dialog.getByText(/automatically tries the next local ports/)).toBeTruthy();
+  expect(dialog.getByText("127.0.0.1:8765")).toBeTruthy();
+  fireEvent.change(dialog.getByLabelText("Server profile"), { target: { value: "beta" } });
+  fireEvent.click(dialog.getByRole("button", { name: "Start server" }));
+  await waitFor(() => expect(startMCPServer).toHaveBeenCalledWith({
+    profile: "beta", address: "127.0.0.1:8765",
+  }));
+  expect(await screen.findByText(rotated.endpoint)).toBeTruthy();
+  expect(screen.getByText(current.endpoint)).toBeTruthy();
+});
+
 it("does not poll local-only MCP servers or install background network checks", async () => {
   const polling = captureServerStatusPolling();
   try {

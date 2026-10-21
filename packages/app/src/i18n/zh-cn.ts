@@ -1436,6 +1436,7 @@ export const zhCNMessages: Readonly<Record<string, string>> = {
   "Go to Credentials": "前往凭据管理",
   "Internal name": "内部名称",
   "Local listen address": "本地监听地址",
+  "If the port is occupied, Mender automatically tries the next local ports. The actual endpoint is shown after the server starts.": "端口被占用时，Mender 会自动尝试后续本地端口。启动成功后显示实际连接地址。",
   "Mender generates a personal credential reference from the name. Change its technical identity here if another integration requires it.": "Mender 根据名称生成个人凭据引用。仅当集成服务有特别要求时，才需要修改以下技术标识。",
   "No connection credential is available yet. Add an API-key Credential before creating this Tunnel.": "当前没有可用的连接凭据。创建此隧道前，请先添加 API Key 凭据。",
   "Not set": "未设置",
