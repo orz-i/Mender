@@ -83,6 +83,7 @@ export function ServersPage({
   const serverOperationEpoch = useRef(0);
 
   const [startOpen, setStartOpen] = useState(false);
+  const [startError, setStartError] = useState("");
   const [startProfile, setStartProfile] = useState("");
   const [startAddress, setStartAddress] = useState(defaultAddress);
 
@@ -162,15 +163,18 @@ export function ServersPage({
 
   function openStartDialog() {
     setError("");
-    setStartProfile(profiles[0]?.slug ?? "");
+    // A single Profile is unambiguous; with multiple Profiles, require an explicit choice.
+    setStartProfile(profiles.length === 1 ? profiles[0]?.slug ?? "" : "");
     setStartAddress(defaultAddress);
+    setStartError("");
     setStartOpen(true);
   }
 
   async function startServer() {
+    if (!startProfile.trim() || !startAddress.trim() || busy !== "") return;
     serverOperationEpoch.current += 1;
     setBusy("start");
-    setError("");
+    setStartError("");
     try {
       const instance = await client.startMCPServer({
         profile: startProfile,
@@ -178,9 +182,10 @@ export function ServersPage({
       });
       setServers((current) => [...current, instance]);
       setStartOpen(false);
+      setStartError("");
       setCopied("");
     } catch (reason) {
-      setError(errorMessage(reason));
+      setStartError(errorMessage(reason));
     } finally {
       setBusy("");
     }
@@ -416,6 +421,7 @@ export function ServersPage({
           if (!open) {
             setStartProfile("");
             setStartAddress(defaultAddress);
+            setStartError("");
           }
         }}
       >
@@ -423,8 +429,13 @@ export function ServersPage({
           <DialogHeader>
             <DialogTitle>{t("Start MCP server")}</DialogTitle>
             <DialogDescription>
-              {t("Expose one Profile over local Streamable HTTP. Remote/wildcard bind addresses are intentionally rejected.")}
+              {t("Choose which Profile to share through a local MCP server. The listener remains on this computer.")}
             </DialogDescription>
+            {startError ? (
+              <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                {startError}
+              </div>
+            ) : null}
           </DialogHeader>
 
           <DialogBody className="space-y-4">
@@ -432,9 +443,10 @@ export function ServersPage({
               <select
                 aria-label={t("Server profile")}
                 value={startProfile}
-                onChange={(event) => setStartProfile(event.target.value)}
-                className="h-8 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
+                onChange={(event) => { setStartError(""); setStartProfile(event.target.value); }}
+                className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
               >
+                <option value="">{t("Choose a Profile")}</option>
                 {profiles.map((profile) => (
                   <option key={profile.profileId} value={profile.slug}>
                     {profile.displayName} ({profile.slug}) ·{" "}
@@ -443,6 +455,9 @@ export function ServersPage({
                 ))}
               </select>
             </Field>
+            <p className="text-xs leading-5 text-muted-foreground">
+              {t("Starting this server exposes the selected Profile’s enabled tools to clients that can reach its endpoint.")}
+            </p>
 
             {selectedProfile !== null && selectedProfile.tools.length === 0 ? (
               <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-5">
@@ -458,22 +473,31 @@ export function ServersPage({
               </div>
             ) : null}
 
-            <Field label="Listen address">
-              <Input
-                aria-label={t("Listen address")}
-                className="font-mono"
-                value={startAddress}
-                onChange={(event) => setStartAddress(event.target.value)}
-              />
-              <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                {t("Use a loopback host such as 127.0.0.1 or localhost. Port 0 asks the OS to choose a free port.")}
-              </p>
-            </Field>
-
-            <div className="rounded-lg border border-border bg-muted/40 p-3 text-xs leading-5 text-muted-foreground">
-              {t("Desktop-managed servers use Streamable HTTP. stdio remains client-launched through")}{" "}
-              <code>mender serve mcp --profile … --stdio</code>.
+            <div className="rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-sm">
+              <p className="font-medium text-foreground">{t("Local listen address")}</p>
+              <p className="mt-1 break-all font-mono text-xs text-muted-foreground">{startAddress || t("Not set")}</p>
             </div>
+            <details className="rounded-lg border border-border/70 px-3 py-2.5 text-sm">
+              <summary className="cursor-pointer font-medium text-foreground">{t("Advanced settings")}</summary>
+              <div className="mt-3 space-y-3 border-t border-border/70 pt-3">
+                <Field label="Listen address">
+                  <Input
+                    aria-label={t("Listen address")}
+                    className="font-mono"
+                    value={startAddress}
+                    aria-invalid={!startAddress.trim()}
+                    onChange={(event) => { setStartError(""); setStartAddress(event.target.value); }}
+                  />
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                    {t("Use a loopback host such as 127.0.0.1 or localhost. Port 0 asks the OS to choose a free port.")}
+                  </p>
+                </Field>
+                <p className="text-xs leading-5 text-muted-foreground">
+                  {t("Desktop-managed servers use Streamable HTTP. stdio remains client-launched through")}{" "}
+                  <code>mender serve mcp --profile … --stdio</code>.
+                </p>
+              </div>
+            </details>
           </DialogBody>
 
           <DialogFooter>

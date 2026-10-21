@@ -142,6 +142,9 @@ describe("Docker Sandbox creation UX", () => {
     fireEvent.change(digestField, { target: { value: cachedImage } });
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
     expect(screen.queryByRole("textbox", { name: "Sandbox name" })).toBeNull();
+    expect(screen.getByText("Customize resource limits").closest("details")?.open).toBe(false);
+    expect(screen.getByText("1 CPU · 512 MiB RAM")).toBeTruthy();
+    fireEvent.click(screen.getByText("Customize resource limits"));
     expect(screen.getByRole("spinbutton", { name: "CPU (millicores)" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Review" }));
     expect(screen.getByText(/Workspace files are ephemeral/i)).toBeTruthy();
@@ -200,7 +203,7 @@ describe("Docker Sandbox creation UX", () => {
     expect(await screen.findByRole("option",{name:/alpine:3.22/})).toBeTruthy();
     expect(screen.queryByRole("spinbutton", { name: "Memory (MiB)" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
-
+    fireEvent.click(screen.getByText("Customize resource limits"));
     const memory = screen.getByRole<HTMLInputElement>("spinbutton", { name: "Memory (MiB)" });
     fireEvent.change(memory, { target: { value: "128" } });
     expect(screen.getByRole<HTMLButtonElement>("button", { name: "Review" }).disabled).toBe(true);
@@ -210,6 +213,8 @@ describe("Docker Sandbox creation UX", () => {
     expect(screen.queryByRole("spinbutton", { name: "Memory (MiB)" })).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(screen.getByText("1 CPU · 1024 MiB RAM")).toBeTruthy();
+    fireEvent.click(screen.getByText("Customize resource limits"));
     expect(screen.getByRole<HTMLInputElement>("spinbutton", { name: "Memory (MiB)" }).value).toBe("1024");
     fireEvent.click(screen.getByRole("button", { name: "Review" }));
     expect(screen.queryByRole("spinbutton", { name: "Memory (MiB)" })).toBeNull();

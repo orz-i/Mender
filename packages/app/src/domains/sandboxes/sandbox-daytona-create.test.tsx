@@ -39,6 +39,7 @@ describe("Daytona Sandbox creation",()=>{
   fireEvent.change(screen.getByRole("textbox",{name:"Immutable image digest"}),{target:{value:digest}});
   fireEvent.change(screen.getByRole("combobox",{name:"Mender Credential Reference"}),{target:{value:reference}});
   fireEvent.click(screen.getByRole("button",{name:"Next"}));
+  fireEvent.click(screen.getByText("Customize resource limits"));
   fireEvent.change(screen.getByRole("spinbutton",{name:"TTL (minutes)"}),{target:{value:"1"}});
   expect(screen.getByRole<HTMLButtonElement>("button",{name:"Review"}).disabled).toBe(true);
   fireEvent.change(screen.getByRole("spinbutton",{name:"TTL (minutes)"}),{target:{value:"60"}});
@@ -55,6 +56,9 @@ describe("Daytona Sandbox creation",()=>{
   fireEvent.change(screen.getByRole("combobox",{name:"Mender Credential Reference"}),{target:{value:reference}});
   expect(screen.queryByRole("spinbutton",{name:"Remote CPUs"})).toBeNull();
   fireEvent.click(screen.getByRole("button",{name:"Next"}));
+  expect(screen.getByText("Customize resource limits").closest("details")?.open).toBe(false);
+  expect(screen.getByText("1 CPU · 2 GiB RAM · 30 min TTL")).toBeTruthy();
+  fireEvent.click(screen.getByText("Customize resource limits"));
   expect(screen.getByRole("spinbutton",{name:"Remote CPUs"})).toBeTruthy();
   fireEvent.click(screen.getByRole("button",{name:"Review"}));
   expect(screen.getByText(/TTL is not a USD spending cap/)).toBeTruthy();

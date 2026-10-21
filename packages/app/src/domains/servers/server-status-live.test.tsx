@@ -156,6 +156,33 @@ it("does not resurrect a stopped Tunnel server from an in-flight stale status re
   } finally { polling.restore(); }
 });
 
+it("requires an explicit Profile when multiple exist and preserves inputs after a start error", async () => {
+  const profiles = [
+    { profileId: "prof_alpha", slug: "alpha", displayName: "Alpha", mode: "hybrid", tools: [] },
+    { profileId: "prof_beta", slug: "beta", displayName: "Beta", mode: "hybrid", tools: [] },
+  ];
+  const startMCPServer = vi.fn().mockRejectedValue(new Error("Address is already in use"));
+  showServer(vi.fn().mockResolvedValue({ servers: [] }), {
+    listProfiles: vi.fn().mockResolvedValue({ profiles }),
+    startMCPServer,
+  });
+  expect(await screen.findByText("No running MCP servers")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Start server" }));
+  const form = within(screen.getByRole("dialog", { name: "Start MCP server" }));
+  expect(form.getByLabelText<HTMLSelectElement>("Server profile").value).toBe("");
+  expect(form.getByRole<HTMLButtonElement>("button", { name: "Start server" }).disabled).toBe(true);
+  expect(form.getByText("Advanced settings").closest("details")?.open).toBe(false);
+  expect(form.getByText("127.0.0.1:8765")).toBeTruthy();
+  fireEvent.change(form.getByLabelText("Server profile"), { target: { value: "beta" } });
+  fireEvent.click(form.getByText("Advanced settings"));
+  expect(form.getByLabelText<HTMLInputElement>("Listen address").value).toBe("127.0.0.1:8765");
+  fireEvent.click(form.getByRole("button", { name: "Start server" }));
+  expect((await form.findByRole("alert")).textContent).toContain("already in use");
+  expect(startMCPServer).toHaveBeenCalledWith({ profile: "beta", address: "127.0.0.1:8765" });
+  expect(form.getByLabelText<HTMLSelectElement>("Server profile").value).toBe("beta");
+  expect(form.getByLabelText<HTMLInputElement>("Listen address").value).toBe("127.0.0.1:8765");
+});
+
 it("does not poll local-only MCP servers or install background network checks", async () => {
   const polling = captureServerStatusPolling();
   try {

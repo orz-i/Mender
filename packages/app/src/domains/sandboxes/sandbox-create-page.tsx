@@ -697,7 +697,17 @@ export function CreateSandboxPage({
 
           {step === "limits" && selected !== "local_workspace" && selected !== "ssh_remote" ? (
             <section aria-label={t("Resource limits")} className="flex max-w-2xl flex-col gap-5">
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="rounded-xl border border-border/70 bg-muted/20 p-4">
+                <p className="text-sm font-medium">{t("Resource allocation")}</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {selected === "docker"
+                    ? t("{{cpu}} CPU · {{memory}} MiB RAM", { cpu: cpuMilli / 1000, memory: memoryMiB })
+                    : t("{{cpu}} CPU · {{memory}} GiB RAM · {{minutes}} min TTL", { cpu: daytonaCPU, memory: daytonaMemory, minutes: daytonaTTL })}
+                </p>
+              </div>
+              <details className="rounded-xl border border-border/70">
+                <summary className="cursor-pointer px-4 py-3 text-sm font-medium">{t("Customize resource limits")}</summary>
+                <div className="grid gap-4 border-t border-border/70 p-4 sm:grid-cols-2">
                 {selected === "docker" ? (
                   <>
                     <ResourceField label="User ID (non-root)" value={userId} onChange={setUserId} min={1000} max={65534} />
@@ -715,7 +725,8 @@ export function CreateSandboxPage({
                     <ResourceField label="TTL (minutes)" value={daytonaTTL} onChange={setDaytonaTTL} min={15} max={120} />
                   </>
                 )}
-              </div>
+                </div>
+              </details>
               <p className="text-xs leading-5 text-muted-foreground">
                 {selected === "docker"
                   ? t("Docker execution uses read-only rootfs, non-root user, no network or host mounts. Workspace files are ephemeral across restarts.")

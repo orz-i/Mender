@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { KeyRoundIcon, RefreshCwIcon, Trash2Icon } from "lucide-react";
 
 import type { Credential, MenderClient, OAuthFlowStart, OAuthFlow } from "@mender/sdk";
@@ -57,8 +57,9 @@ function validOAuthEndpoint(raw: string): boolean {
 }
 
 const emptyCreateForm = {
-  namespace: "",
+  namespace: "personal",
   name: "",
+  nameEdited: false,
   displayName: "",
   source: "native" as CredentialSource,
   secret: "",
@@ -80,6 +81,8 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
   const [manageOAuth, setManageOAuth] = useState<Credential | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [createForm, setCreateForm] = useState(emptyCreateForm);
+  const identitySettingsRef = useRef<HTMLDetailsElement>(null);
+  const oauthOptionsRef = useRef<HTMLDetailsElement>(null);
   const [createError, setCreateError] = useState("");
   const [oauthFlow, setOAuthFlow] = useState<OAuthFlowStart | null>(null);
   const [oauthFlowStatus, setOAuthFlowStatus] = useState<OAuthFlow["status"]>("pending");
@@ -177,6 +180,12 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
   const oauthEndpointValid = validOAuthEndpoint(createForm.mcpEndpoint);
   const requestedScopes = createForm.oauthScopes.trim().split(/\s+/).filter(Boolean);
   const oauthScopesValid = requestedScopes.length <= 64 && requestedScopes.every((scope) => scope.length <= 256);
+  useEffect(() => {
+    if (createOpen && createForm.source === "oauth" && (createForm.oauthClientId || createForm.oauthScopes)) {
+      // Existing permissions and registration settings must be visible during reauthorization.
+      oauthOptionsRef.current?.setAttribute("open", "");
+    }
+  }, [createOpen, createForm.source, createForm.oauthClientId, createForm.oauthScopes]);
   const createValid = canonicalReference !== null && displayNameValid && (
     createForm.source === "oauth" ? oauthEndpointValid && oauthScopesValid :
     createForm.source !== "environment" ? secretValid : environmentVariableValid
@@ -240,7 +249,11 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
       setCreateForm(emptyCreateForm);
       await refresh();
     } catch (reason) {
-      setCreateError(credentialCreateError(reason));
+      const message = credentialCreateError(reason);
+      setCreateError(message);
+      if (message === t("A credential with this reference already exists.")) {
+        identitySettingsRef.current?.setAttribute("open", "");
+      }
     } finally {
       setBusy("");
     }
@@ -277,6 +290,7 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
     if (item.source !== "oauth" || busy !== "") return;
     setCreateForm({
       ...emptyCreateForm, source: "oauth", namespace: item.namespace, name: item.name,
+      nameEdited: true,
       displayName: item.displayName,
       mcpEndpoint: item.oauth?.mcpEndpoint || item.oauth?.resource || "",
       oauthClientId: item.oauth?.registrationMode === "dynamic" ? "" : item.oauth?.clientId ?? "",
@@ -516,6 +530,7 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
           if (!open) {
             setCreateForm(emptyCreateForm);
             setCreateError("");
+            identitySettingsRef.current?.removeAttribute("open");
           }
         }}
       >
@@ -541,8 +556,9 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
                 value={createForm.source}
                 onChange={(event) => updateCreateForm({
                   source: event.target.value as CredentialSource,
-                  namespace: event.target.value === "ssh-key" ? "ssh" : "",
+                  namespace: event.target.value === "ssh-key" ? "ssh" : "personal",
                   name: "",
+                  nameEdited: false,
                   displayName: "",
                   secret: "",
                   sshKeyPassphrase: "",
@@ -582,49 +598,64 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
               </div>
             ) : (
               <>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Namespace">
-                <Input
-                  aria-label={t("Credential namespace")}
-                  placeholder={t("github")}
-                  value={createForm.namespace}
-                  disabled={sshKeyMode}
-                  aria-invalid={namespaceInvalid}
-                  onChange={(event) => updateCreateForm({ namespace: event.target.value })}
-                />
-              </Field>
-              <Field label="Name">
-                <Input
-                  aria-label={t("Credential name")}
-                  placeholder={t("work")}
-                  value={createForm.name}
-                  aria-invalid={nameInvalid}
-                  onChange={(event) => updateCreateForm({ name: event.target.value })}
-                />
-              </Field>
-            </div>
-
-            <p className="text-xs leading-5 text-muted-foreground">
-              {t("Namespace and name are lowercased and spaces become hyphens. Use 1–63 letters, digits or hyphens, starting with a letter.")}
-              {namespaceInvalid || nameInvalid ? (
-                <span className="block text-destructive">{t("Use valid namespace and name identifiers before creating a credential.")}</span>
-              ) : null}
-            </p>
-
-            <Field label="Display name">
-              <Input
-                aria-label={t("Credential display name")}
-                placeholder={t("GitHub work")}
-                value={createForm.displayName}
-                aria-invalid={createForm.displayName.trim() !== "" && !displayNameValid}
-                onChange={(event) => updateCreateForm({ displayName: event.target.value })}
-              />
-            </Field>
-
-            {createForm.displayName.trim() !== "" && !displayNameValid ? (
-              <p className="text-xs text-destructive">{t("Display name is too long (maximum 160 bytes).")}</p>
-            ) : null}
-            <ReadOnlyField label="Reference" value={referencePreview} />
+                <Field label="Name">
+                  <Input
+                    aria-label={t("Credential display name")}
+                    placeholder={t("GitHub work")}
+                    value={createForm.displayName}
+                    aria-invalid={createForm.displayName.trim() !== "" && (!displayNameValid || (!createForm.nameEdited && !validCredentialPart(name)))}
+                    onChange={(event) => {
+                      const displayName = event.target.value;
+                      updateCreateForm({
+                        displayName,
+                        ...(createForm.nameEdited ? {} : { name: canonicalCredentialPart(displayName) }),
+                      });
+                    }}
+                  />
+                </Field>
+                {createForm.displayName.trim() !== "" && !displayNameValid ? (
+                  <p className="text-xs text-destructive">{t("Display name is too long (maximum 160 bytes).")}</p>
+                ) : null}
+                {createForm.displayName.trim() !== "" && !createForm.nameEdited && !validCredentialPart(name) ? (
+                  <p className="text-xs text-destructive">
+                    {t("This name cannot produce a valid identifier. Open Advanced settings to enter a short Latin name.")}
+                  </p>
+                ) : null}
+                <details ref={identitySettingsRef} className="rounded-lg border border-border/70">
+                  <summary className="cursor-pointer px-3 py-2.5 text-sm font-medium">{t("Advanced settings")}</summary>
+                  <div className="space-y-3 border-t border-border/70 px-3 py-3">
+                    <p className="text-xs leading-5 text-muted-foreground">
+                      {t("Mender generates a personal credential reference from the name. Change its technical identity here if another integration requires it.")}
+                    </p>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <Field label="Namespace">
+                        <Input
+                          aria-label={t("Credential namespace")}
+                          placeholder={t("github")}
+                          value={createForm.namespace}
+                          aria-invalid={namespaceInvalid}
+                          onChange={(event) => updateCreateForm({ namespace: event.target.value })}
+                        />
+                      </Field>
+                      <Field label="Internal name">
+                        <Input
+                          aria-label={t("Credential name")}
+                          placeholder={t("work")}
+                          value={createForm.name}
+                          aria-invalid={nameInvalid}
+                          onChange={(event) => updateCreateForm({ name: event.target.value, nameEdited: true })}
+                        />
+                      </Field>
+                    </div>
+                    <p className="text-xs leading-5 text-muted-foreground">
+                      {t("Namespace and name are lowercased and spaces become hyphens. Use 1–63 letters, digits or hyphens, starting with a letter.")}
+                      {namespaceInvalid || nameInvalid ? (
+                        <span className="block text-destructive">{t("Use valid namespace and name identifiers before creating a credential.")}</span>
+                      ) : null}
+                    </p>
+                    <ReadOnlyField label="Reference" value={referencePreview} />
+                  </div>
+                </details>
               </>
             )}
 
@@ -642,24 +673,31 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
                 {createForm.mcpEndpoint !== "" && !oauthEndpointValid ? (
                   <p className="text-xs text-destructive">{t("Enter a valid HTTPS MCP endpoint (HTTP is allowed only on loopback).")}</p>
                 ) : null}
-                <Field label="OAuth client ID (optional)">
-                  <Input
-                    aria-label={t("OAuth client ID (optional)")}
-                    placeholder={t("Leave blank for automatic registration")}
-                    value={createForm.oauthClientId}
-                    onChange={(event) => updateCreateForm({ oauthClientId: event.target.value })}
-                  />
-                </Field>
-                <p className="text-xs text-muted-foreground">{t("Leave blank for supported automatic registration, or enter a registered client ID or HTTPS client metadata URL.")}</p>
-                <Field label="OAuth scopes (optional)">
-                  <Input
-                    aria-label={t("OAuth scopes (optional)")}
-                    placeholder={t("search:read profile")}
-                    value={createForm.oauthScopes}
-                    aria-invalid={!oauthScopesValid}
-                    onChange={(event) => updateCreateForm({ oauthScopes: event.target.value })}
-                  />
-                </Field>
+                <details ref={oauthOptionsRef} className="rounded-lg border border-border/70">
+                  <summary className="cursor-pointer px-3 py-2.5 text-sm font-medium">{t("Advanced OAuth options")}</summary>
+                  <div className="space-y-3 border-t border-border/70 p-3">
+                    <Field label="OAuth client ID (optional)">
+                      <Input
+                        aria-label={t("OAuth client ID (optional)")}
+                        placeholder={t("Leave blank for automatic registration")}
+                        value={createForm.oauthClientId}
+                        onChange={(event) => updateCreateForm({ oauthClientId: event.target.value })}
+                      />
+                    </Field>
+                    <p className="text-xs text-muted-foreground">
+                      {t("Leave blank for supported automatic registration, or enter a registered client ID or HTTPS client metadata URL.")}
+                    </p>
+                    <Field label="OAuth scopes (optional)">
+                      <Input
+                        aria-label={t("OAuth scopes (optional)")}
+                        placeholder={t("search:read profile")}
+                        value={createForm.oauthScopes}
+                        aria-invalid={!oauthScopesValid}
+                        onChange={(event) => updateCreateForm({ oauthScopes: event.target.value })}
+                      />
+                    </Field>
+                  </div>
+                </details>
               </div>
             ) : createForm.source !== "environment" ? (
               sshKeyMode ? (

@@ -1079,7 +1079,7 @@ describe("management pages", () => {
   it("opens exactly the selected external Tunnel transport form",async()=>{
     const installationId="pinst_abcdef1234567890abcdef1234567890";
     const pluginId="dev.example.tunnel";
-    const createExternalTunnel=vi.fn().mockResolvedValue({
+    const createExternalTunnel=vi.fn().mockRejectedValueOnce(new Error("Tunnel identifier is already registered: private-fixture-token")).mockResolvedValue({
       tunnelId:"tun_11111111111111111111111111111111",
       displayName:"Fixture Tunnel",provider:"external",
       externalTunnelId:"fixture",runtimeCredentialRef:"credential://example/key",
@@ -1104,11 +1104,21 @@ describe("management pages", () => {
     expect(within(form).queryByText("OpenAI Secure MCP Tunnel")).toBeNull();
     fireEvent.change(within(form).getByLabelText("Tunnel display name"),{target:{value:"Fixture Tunnel"}});
     fireEvent.change(within(form).getByLabelText("External Tunnel ID"),{target:{value:"fixture"}});
+    expect(within(form).getByLabelText<HTMLSelectElement>("Connection credential").value).toBe("");
+    fireEvent.change(within(form).getByLabelText("Connection credential"),{target:{value:"credential://example/key"}});
     fireEvent.click(within(form).getByRole("button",{name:"Create tunnel"}));
-    await waitFor(()=>expect(createExternalTunnel).toHaveBeenCalledWith({
+    const tunnelAlert = await within(form).findByRole("alert");
+    expect(tunnelAlert.textContent).toContain("may already exist");
+    expect(tunnelAlert.textContent).not.toContain("private-fixture-token");
+    expect(within(form).getByLabelText<HTMLInputElement>("Tunnel display name").value).toBe("Fixture Tunnel");
+    expect(within(form).getByLabelText<HTMLSelectElement>("Connection credential").value).toBe("credential://example/key");
+    expect(screen.getByRole("dialog",{name:"Create Tunnel"})).toBeTruthy();
+    fireEvent.click(within(form).getByRole("button",{name:"Create tunnel"}));
+    await waitFor(()=>expect(createExternalTunnel).toHaveBeenCalledTimes(2));
+    expect(createExternalTunnel).toHaveBeenLastCalledWith({
       displayName:"Fixture Tunnel",installationId,externalTunnelId:"fixture",
       runtimeCredentialRef:"credential://example/key",
-    }));
+    });
   });
 
   it("registers a Model Tools Provider with inventory authentication", async () => {
@@ -1835,9 +1845,13 @@ describe("management pages", () => {
       target: { value: "tunnel_external_work" },
     });
     expect(
-      screen.getByLabelText<HTMLSelectElement>("Runtime API-key Credential")
+      screen.getByLabelText<HTMLSelectElement>("Connection credential")
         .value,
-    ).toBe(credential.reference);
+    ).toBe("");
+    expect(screen.getByRole<HTMLButtonElement>("button", { name: "Create tunnel" }).disabled).toBe(true);
+    fireEvent.change(screen.getByLabelText("Connection credential"), {
+      target: { value: credential.reference },
+    });
 
     fireEvent.click(screen.getByRole("button", { name: "Create tunnel" }));
 

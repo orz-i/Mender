@@ -53,6 +53,7 @@ describe("Interactive MCP OAuth authorization", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add credential" }));
     fireEvent.change(screen.getByRole("combobox", { name: "Credential source" }), { target: { value: "oauth" } });
     expect(screen.queryByRole("textbox", { name: "Credential secret" })).toBeNull();
+    fireEvent.click(screen.getByText("Advanced settings"));
     fireEvent.change(screen.getByRole("textbox", { name: "Credential namespace" }), { target: { value: "OAuth" } });
     fireEvent.change(screen.getByRole("textbox", { name: "Credential name" }), { target: { value: "Work" } });
     fireEvent.change(screen.getByRole("textbox", { name: "Credential display name" }), { target: { value: "Work OAuth" } });
@@ -74,6 +75,7 @@ describe("Interactive MCP OAuth authorization", () => {
     render(<TooltipProvider><CredentialsPage client={client} /></TooltipProvider>);
     fireEvent.click(screen.getByRole("button", { name: "Add credential" }));
     fireEvent.change(screen.getByRole("combobox", { name: "Credential source" }), { target: { value: "oauth" } });
+    fireEvent.click(screen.getByText("Advanced settings"));
     fireEvent.change(screen.getByRole("textbox", { name: "Credential namespace" }), { target: { value: "oauth" } });
     fireEvent.change(screen.getByRole("textbox", { name: "Credential name" }), { target: { value: "work" } });
     fireEvent.change(screen.getByRole("textbox", { name: "Credential display name" }), { target: { value: "OAuth Work" } });

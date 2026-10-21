@@ -33,6 +33,7 @@ function showPage(overrides: Partial<MenderClient> = {}) {
 }
 
 function fillNativeForm() {
+  fireEvent.click(screen.getByText("Advanced settings"));
   fireEvent.change(screen.getByRole("textbox", { name: "Credential namespace" }), {
     target: { value: "OpenAI" },
   });
@@ -60,6 +61,63 @@ afterEach(() => {
 });
 
 describe("Credential create validation and feedback", () => {
+  it("creates a personal credential from a readable name without requiring internal IDs", async () => {
+    const { createNativeCredential } = showPage();
+    const advanced = screen.getByText("Advanced settings").closest("details");
+    expect(advanced?.open).toBe(false);
+    fireEvent.change(screen.getByRole("textbox", { name: "Credential display name" }), {
+      target: { value: "Project GitHub" },
+    });
+    fireEvent.change(screen.getByLabelText("Credential secret"), {
+      target: { value: "fixture-secret-not-real" },
+    });
+    expect(screen.getByRole<HTMLButtonElement>("button", { name: "Create credential" }).disabled).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "Create credential" }));
+    await waitFor(() => expect(createNativeCredential).toHaveBeenCalledWith({
+      namespace: "personal", name: "project-github",
+      displayName: "Project GitHub", secret: "fixture-secret-not-real",
+    }));
+  });
+
+  it("clears confidential material when switching credential types", () => {
+    showPage();
+    fireEvent.change(screen.getByRole("textbox", { name: "Credential display name" }), {
+      target: { value: "Work Key" },
+    });
+    fireEvent.change(screen.getByLabelText("Credential secret"), {
+      target: { value: "fixture-secret-not-real" },
+    });
+    fireEvent.change(screen.getByRole("combobox", { name: "Credential source" }), {
+      target: { value: "environment" },
+    });
+    expect(screen.queryByDisplayValue("fixture-secret-not-real")).toBeNull();
+    expect(screen.getByRole<HTMLInputElement>("textbox", { name: "Credential display name" }).value).toBe("");
+    fireEvent.change(screen.getByRole("combobox", { name: "Credential source" }), {
+      target: { value: "native" },
+    });
+    expect(screen.getByLabelText<HTMLInputElement>("Credential secret").value).toBe("");
+    fireEvent.click(screen.getByText("Advanced settings"));
+    expect(screen.getByRole<HTMLInputElement>("textbox", { name: "Credential namespace" }).value).toBe("personal");
+  });
+
+  it("opens identity details on duplicate reference while preserving the entered secret", async () => {
+    const createNativeCredential = vi.fn().mockRejectedValue(
+      new Error("credential: reference already exists"),
+    );
+    showPage({ createNativeCredential });
+    fireEvent.change(screen.getByRole("textbox", { name: "Credential display name" }), {
+      target: { value: "Repeated Key" },
+    });
+    fireEvent.change(screen.getByLabelText("Credential secret"), {
+      target: { value: "fixture-secret-not-real" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Create credential" }));
+    const form = within(screen.getByRole("dialog", { name: "Add credential" }));
+    expect((await form.findByRole("alert")).textContent).toContain("already exists");
+    expect(screen.getByText("Advanced settings").closest("details")?.open).toBe(true);
+    expect(screen.getByLabelText<HTMLInputElement>("Credential secret").value).toBe("fixture-secret-not-real");
+    expect(screen.getByRole<HTMLInputElement>("textbox", { name: "Credential name" }).value).toBe("repeated-key");
+  });
   it("creates a native SSH private key credential with multiline secret and fixed SSH namespace", async()=>{
     const sshCredential:Credential={...credential,
       reference:"credential://ssh/ssh-build",namespace:"ssh",name:"ssh-build",
@@ -229,6 +287,7 @@ describe("Credential create validation and feedback", () => {
     fireEvent.change(screen.getByRole("combobox", { name: "Credential source" }), {
       target: { value: "environment" },
     });
+    fireEvent.click(screen.getByText("Advanced settings"));
     fireEvent.change(screen.getByRole("textbox", { name: "Credential namespace" }), {
       target: { value: "OpenAI" },
     });
@@ -286,6 +345,7 @@ describe("Credential create validation and feedback", () => {
       .mockRejectedValue(new Error("create native credential: store secret: credential: secret source unavailable: native keyring write failed"));
     showPage({ createNativeCredential });
     // The rendered form is localized; keep test data independent from the actual secret.
+    fireEvent.click(screen.getByText("高级设置"));
     fireEvent.change(screen.getByRole("textbox", { name: "凭据命名空间" }), { target: { value: "OpenAI" } });
     fireEvent.change(screen.getByRole("textbox", { name: "凭据名称" }), { target: { value: "Tunnel API Key" } });
     fireEvent.change(screen.getByRole("textbox", { name: "凭据显示名称" }), { target: { value: "Platform API Key" } });

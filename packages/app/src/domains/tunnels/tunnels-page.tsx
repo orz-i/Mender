@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { PlusIcon, Trash2Icon } from "lucide-react";
-import { useSearchParams } from "react-router";
+import { Link, useSearchParams } from "react-router";
 
 import type { Credential, MenderClient, Tunnel, PluginCatalogueEntry } from "@mender/sdk";
 import { Badge } from "@mender/ui/components/badge";
@@ -40,6 +40,18 @@ const emptyCreateForm = {
   runtimeCredentialRef: "",
 };
 
+function tunnelCreateError(reason: unknown): string {
+  const detail = (typeof reason === "string" ? reason : reason instanceof Error ? reason.message : "").toLowerCase();
+  // Transport plugins may return untrusted diagnostics. Do not echo credential material into a form alert.
+  if (detail.includes("already exists") || detail.includes("already registered") || detail.includes("duplicate")) {
+    return t("This Tunnel ID may already exist. Verify the external Tunnel ID before retrying.");
+  }
+  if (detail.includes("credential") || detail.includes("keyring")) {
+    return t("The selected connection credential is not available or authorized.");
+  }
+  return t("Tunnel creation failed. Check the external ID and selected credential, then try again.");
+}
+
 export function TunnelsPage({ client }: { client: MenderClient }) {
   const [searchParams]=useSearchParams();
   const [tunnels, setTunnels] = useState<Tunnel[]>([]);
@@ -59,6 +71,7 @@ export function TunnelsPage({ client }: { client: MenderClient }) {
     installationId:searchParams.get("installationId")??"",
   }));
   const [createOpen, setCreateOpen] = useState(false);
+  const [createError, setCreateError] = useState("");
   const [createForm, setCreateForm] = useState(emptyCreateForm);
 
   const refresh = useCallback(async () => {
@@ -94,7 +107,8 @@ export function TunnelsPage({ client }: { client: MenderClient }) {
               item.enabled && item.status==="enabled");
             if(selected){
               setSelectedPluginKey(selected.key);
-              setCreateForm({...emptyCreateForm,runtimeCredentialRef:credentialResult.credentials[0]?.reference??""});
+              setCreateForm(emptyCreateForm);
+              setCreateError("");
               setCreateOpen(true);
             }
           }
@@ -120,10 +134,8 @@ export function TunnelsPage({ client }: { client: MenderClient }) {
   function choosePlugin(plugin:PluginCatalogueEntry){
     if(!plugin.enabled || plugin.status!=="enabled")return;
     setSelectedPluginKey(plugin.key);
-    setCreateForm({
-      ...emptyCreateForm,
-      runtimeCredentialRef: credentials[0]?.reference ?? "",
-    });
+    setCreateForm(emptyCreateForm);
+    setCreateError("");
     setSelectionOpen(false);
     setCreateOpen(true);
     setError("");
@@ -145,13 +157,14 @@ export function TunnelsPage({ client }: { client: MenderClient }) {
     createForm.runtimeCredentialRef !== "";
 
   async function createTunnel() {
+    if (!createValid || busy !== "") return;
     setBusy("create");
-    setError("");
+    setCreateError("");
     try {
       if(!selectedPlugin)throw new Error("Selected Tunnel transport is unavailable");
       const input={
-        displayName:createForm.displayName,
-        externalTunnelId:createForm.externalTunnelId,
+        displayName:createForm.displayName.trim(),
+        externalTunnelId:createForm.externalTunnelId.trim(),
         runtimeCredentialRef:createForm.runtimeCredentialRef,
       };
       if(selectedPlugin.installationId){
@@ -163,9 +176,10 @@ export function TunnelsPage({ client }: { client: MenderClient }) {
       }
       setCreateOpen(false);
       setCreateForm(emptyCreateForm);
+      setCreateError("");
       await refresh();
     } catch (reason) {
-      setError(errorMessage(reason));
+      setCreateError(tunnelCreateError(reason));
     } finally {
       setBusy("");
     }
@@ -355,6 +369,7 @@ export function TunnelsPage({ client }: { client: MenderClient }) {
           setCreateOpen(open);
           if (!open) {
             setCreateForm(emptyCreateForm);
+            setCreateError("");
           }
         }}
       >
@@ -363,11 +378,12 @@ export function TunnelsPage({ client }: { client: MenderClient }) {
             <DialogTitle className="text-lg font-semibold tracking-tight text-foreground">
               {t("Create Tunnel")}
             </DialogTitle>
-            <DialogDescription className="text-xs leading-5 text-muted-foreground">
-              {t(
-                "Mender stores only a Credential Reference and resolves the secret when connecting the selected transport.",
-              )}
+            <DialogDescription className="text-sm leading-5 text-muted-foreground">
+              {t("Enter the Tunnel details provided by your transport service. Select an existing connection credential; Mender never copies its secret into the Tunnel.")}
             </DialogDescription>
+            {createError ? (
+              <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">{createError}</div>
+            ) : null}
           </DialogHeader>
 
           <DialogBody className="space-y-4">
@@ -378,12 +394,13 @@ export function TunnelsPage({ client }: { client: MenderClient }) {
                 aria-label={t("Tunnel display name")}
                 placeholder={t("OpenAI Work")}
                 value={createForm.displayName}
-                onChange={(event) =>
+                onChange={(event) => {
+                  setCreateError("");
                   setCreateForm((current) => ({
                     ...current,
                     displayName: event.target.value,
-                  }))
-                }
+                  }));
+                }}
               />
             </Field>
 
@@ -393,25 +410,30 @@ export function TunnelsPage({ client }: { client: MenderClient }) {
                 className="font-mono text-xs"
                 placeholder={t("External Tunnel ID")}
                 value={createForm.externalTunnelId}
-                onChange={(event) =>
+                onChange={(event) => {
+                  setCreateError("");
                   setCreateForm((current) => ({
                     ...current,
                     externalTunnelId: event.target.value,
-                  }))
-                }
+                  }));
+                }}
               />
+              <p className="mt-1.5 text-xs leading-5 text-muted-foreground">
+                {t("Copy this ID from your Tunnel provider. It is issued outside Mender and cannot be generated here.")}
+              </p>
             </Field>
 
-            <Field label="Runtime API-key Credential">
+            <Field label="Connection credential">
               <select
-                aria-label={t("Runtime API-key Credential")}
+                aria-label={t("Connection credential")}
                 value={createForm.runtimeCredentialRef}
-                onChange={(event) =>
+                onChange={(event) => {
+                  setCreateError("");
                   setCreateForm((current) => ({
                     ...current,
                     runtimeCredentialRef: event.target.value,
-                  }))
-                }
+                  }));
+                }}
                 className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground outline-none transition-colors focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
               >
                 <option value="">{t("Choose a Credential")}</option>
@@ -426,11 +448,14 @@ export function TunnelsPage({ client }: { client: MenderClient }) {
                   ? t(
                       "Use an inventory Credential authorized for the selected Tunnel transport.",
                     )
-                  : t(
-                      "Create a Credential first. Tunnel configuration stores only its reference.",
-                    )}
+                  : t("No connection credential is available yet. Add an API-key Credential before creating this Tunnel.")}
               </p>
             </Field>
+            {credentials.length === 0 ? (
+              <Link to="/credentials" className="inline-flex min-h-9 items-center text-sm font-medium text-primary-ink underline-offset-4 hover:underline">
+                {t("Go to Credentials")}
+              </Link>
+            ) : null}
           </DialogBody>
 
           <DialogFooter className="gap-2 sm:gap-2">
