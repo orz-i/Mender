@@ -906,6 +906,7 @@ export const zhCNMessages: Readonly<Record<string, string>> = {
   "Presentation for {{tool}}": "{{tool}} 的展示",
   "Provider configuration": "提供方配置",
   "Provider configuration must be a JSON object.": "提供方配置必须是 JSON 对象。",
+  "Add": "添加",
   "Add {{name}}": "添加 {{name}}",
   "Remove {{name}}": "移除 {{name}}",
   "Rebind {{provider}}": "重新绑定 {{provider}}",

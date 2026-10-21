@@ -444,8 +444,11 @@ function schemaDefaultValue(
 
   const type = schemaType(schema, undefined);
   if (type === "object") {
+    // A child default is not permission to instantiate its optional parent.
+    // Only an explicit group default (handled above), a required group, or a
+    // user-initiated Add should create this object.
+    if (!required) return undefined;
     const result: ConfigValue = {};
-    let hasValue = false;
     const requiredChildren = stringArray(schema.required);
     for (const [name, child] of Object.entries(schemaProperties(schema))) {
       const childDefault = schemaDefaultValue(
@@ -454,10 +457,9 @@ function schemaDefaultValue(
       );
       if (childDefault !== undefined) {
         result[name] = childDefault;
-        hasValue = true;
       }
     }
-    return hasValue || required ? result : undefined;
+    return result;
   }
   if (type === "array" && required) {
     return [];

@@ -5,7 +5,7 @@ import {afterEach,beforeEach,describe,expect,it} from "vitest";
 
 import {resetLocaleForTesting,setLocale} from "../../i18n/i18n";
 import {GenericProviderConfigForm} from "./generic-provider-config-form";
-import {genericConfigValidationError} from "./generic-provider-config-schema";
+import {genericConfigDefaults,genericConfigValidationError} from "./generic-provider-config-schema";
 
 const schema={
  type:"object",additionalProperties:false,
@@ -42,6 +42,21 @@ beforeEach(()=>{resetLocaleForTesting();setLocale("en");});
 afterEach(()=>{cleanup();resetLocaleForTesting();});
 
 describe("optional nested JSON Schema object lifecycle",()=>{
+ it("does not materialize an optional group just because a descendant has a default",()=>{
+  const nested={type:"object",properties:{
+   advanced:{type:"object",properties:{
+    retries:{type:"integer",default:2},
+   }},
+  }} as const;
+  expect(genericConfigDefaults(nested)).toEqual({});
+  expect(genericConfigDefaults({
+   ...nested,required:["advanced"],
+  })).toEqual({advanced:{retries:2}});
+  expect(genericConfigDefaults({type:"object",properties:{
+   advanced:{type:"object",default:{retries:3}},
+  }})).toEqual({advanced:{retries:3}});
+ });
+
  it("does not present unused child inputs until explicit add, and removes the key rather than saving {}",async()=>{
   render(<Fixture uiSchema={{properties:{advanced:{label:"Advanced options",description:"Configure only when needed"}}}}/>);
   const save=screen.getByRole<HTMLButtonElement>("button",{name:"Save configuration"});
