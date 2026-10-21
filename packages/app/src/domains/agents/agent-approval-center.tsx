@@ -2,7 +2,7 @@ import {useEffect,useState} from "react";
 import type {Agent,AgentApprovalMode,AgentApprovalPolicy,AgentWorkspace,MenderClient,PendingAgentApproval} from "@mender/sdk";
 import {Button} from "@mender/ui/components/button";
 import {Badge} from "@mender/ui/components/badge";
-import {Dialog,DialogContent,DialogDescription,DialogFooter,DialogHeader,DialogTitle} from "@mender/ui/components/dialog";
+import {Dialog,DialogBody,DialogContent,DialogDescription,DialogFooter,DialogHeader,DialogTitle} from "@mender/ui/components/dialog";
 import {Table,TableBody,TableCell,TableHead,TableHeader,TableRow} from "@mender/ui/components/table";
 import {formatDateTime,t} from "../../i18n/i18n";
 import {errorMessage} from "../../shared/errors";
@@ -139,12 +139,12 @@ export function AgentApprovalCenter({client}:{client:MenderClient}){
      <EmptyPanelState><EmptyState title="No agents" description="Add an Agent before configuring authorization."/></EmptyPanelState>}
    </ResultPanel>}
   <Dialog open={editor!==null} onOpenChange={open=>{if(!open&&!busy){setEditor(null);setError("");}}}>
-   <DialogContent className="max-h-[85vh] overflow-y-auto">
+   <DialogContent className="grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden sm:max-w-lg">
     <DialogHeader><DialogTitle>{t("Configure Agent authorization")}</DialogTitle>
-     <DialogDescription>{t(editor?.agent.backend==="antigravity"?"Choose how this workspace handles Antigravity native tool permissions. The trusted mode uses the CLI YOLO flag.":"Choose how this Agent handles native ACP permission requests for a specific workspace.")}</DialogDescription>
+     <DialogDescription className="sr-only">{t(editor?.agent.backend==="antigravity"?"Choose how this workspace handles Antigravity native tool permissions. The trusted mode uses the CLI YOLO flag.":"Choose how this Agent handles native ACP permission requests for a specific workspace.")}</DialogDescription>
     </DialogHeader>
-    <div className="space-y-4">
-     <div className="text-sm font-medium">{editor?.agent.name}</div>
+    <DialogBody className="space-y-4">
+     <p className="text-sm font-medium">{t("Agent")}: {editor?.agent.name}</p>
      <label className="block space-y-1 text-sm"><span className="font-medium">{t("Workspace")}</span>
       <select className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm" aria-label={t("Workspace")}
        value={editor?.workspaceKey??""} disabled={busy} onChange={e=>selectWorkspace(e.target.value)}>
@@ -171,7 +171,7 @@ export function AgentApprovalCenter({client}:{client:MenderClient}){
      </div>:null}
      <p className="text-xs text-muted-foreground">{t(editor?.agent.backend==="antigravity"?"Default mode follows Antigravity CLI's own permission rules; no Mender ACP approvals are available. Unreviewed native commands may be denied. YOLO is an explicit 24-hour opt-in.":"Changing this mode applies to subsequent requests; pending matching requests can be released automatically after saving.")}</p>
      {error?<p role="alert" className="text-xs text-destructive">{error}</p>:null}
-    </div>
+    </DialogBody>
     <DialogFooter>
      <Button variant="outline" size="sm" disabled={busy} onClick={()=>{setEditor(null);setError("");}}>{t("Cancel")}</Button>
      <Button size="sm" disabled={busy||!editor||(editor.mode==="trusted"&&!trustConfirmed)} onClick={()=>void save()}>{t("Save")}</Button>

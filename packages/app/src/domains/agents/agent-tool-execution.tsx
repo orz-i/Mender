@@ -2,7 +2,7 @@ import {useEffect,useMemo,useState} from "react";
 import type {Agent,AgentToolPlacement,AgentWorkspace,MenderClient,Sandbox,SandboxToolSuite} from "@mender/sdk";
 import {Badge} from "@mender/ui/components/badge";
 import {Button} from "@mender/ui/components/button";
-import {Dialog,DialogContent,DialogDescription,DialogFooter,DialogHeader,DialogTitle} from "@mender/ui/components/dialog";
+import {Dialog,DialogBody,DialogContent,DialogDescription,DialogFooter,DialogHeader,DialogTitle} from "@mender/ui/components/dialog";
 import {errorMessage} from "../../shared/errors";
 import {t} from "../../i18n/i18n";
 import {ErrorNotice} from "../../shared/page";
@@ -113,12 +113,12 @@ export function AgentToolExecutionSettings({client,agent}:{client:MenderClient;a
    })}</div>:<p className="p-4 text-sm text-muted-foreground">{t("Loading agents…")}</p>}
   </ResultPanel>
   <Dialog open={editing!==null} onOpenChange={value=>{if(!value&&!busy){setEditing(null);setError("");}}}>
-   <DialogContent className="max-h-[85vh] overflow-y-auto">
+   <DialogContent className="grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden sm:max-w-lg">
     <DialogHeader>
      <DialogTitle>{t("Configure governed tools")}</DialogTitle>
-     <DialogDescription>{t("Select an existing ready restricted local Sandbox for this exact workspace, then choose prepared Workspace Tools. Profile bindings, Sandbox grants and Policy remain required.")}</DialogDescription>
+     <DialogDescription className="sr-only">{t("Select an existing ready restricted local Sandbox for this exact workspace, then choose prepared Workspace Tools. Profile bindings, Sandbox grants and Policy remain required.")}</DialogDescription>
     </DialogHeader>
-    <div className="space-y-3">
+    <DialogBody className="space-y-3">
      <p className="text-sm font-medium">{editing?keyLabel(editing.key):""}</p>
      <p className="break-all font-mono text-xs text-muted-foreground">{editing?.root}</p>
      <label htmlFor="agent-governed-sandbox" className="text-sm font-medium">{t("Execution environment")}</label>
@@ -141,8 +141,9 @@ export function AgentToolExecutionSettings({client,agent}:{client:MenderClient;a
       </label>)}
       <p className="text-xs text-muted-foreground">{t("Shell and Agent delegation are never supplied in this mode.")}</p>
      </fieldset>:null}
+     <p className="text-xs leading-5 text-muted-foreground">{t("Profile bindings, Sandbox grants and Policy remain required.")}</p>
      {error?<p role="alert" className="text-xs text-destructive">{error}</p>:null}
-    </div>
+    </DialogBody>
     <DialogFooter>
      {current?<Button size="sm" variant="destructive" disabled={busy} onClick={()=>void disable()}>{t("Disable governed tools")}</Button>:null}
      <Button variant="outline" disabled={busy} onClick={()=>{setEditing(null);setError("");}}>{t("Cancel")}</Button>

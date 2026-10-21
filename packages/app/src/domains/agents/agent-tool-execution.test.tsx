@@ -54,6 +54,9 @@ describe("optional Agent governed tool execution",()=>{
   expect(await screen.findByText(root)).toBeTruthy();
   fireEvent.click(screen.getByRole("button",{name:"Configure"}));
   const dialog=screen.getByRole("dialog");
+  expect(dialog.className).toContain("grid-rows-[auto_minmax(0,1fr)_auto]");
+  expect(dialog.querySelector('[data-slot="dialog-body"]')).not.toBeNull();
+  expect(within(dialog).getByText("Profile bindings, Sandbox grants and Policy remain required.")).toBeTruthy();
   expect(await within(dialog).findByRole("option",{name:"Approved local root"})).toBeTruthy();
   expect(within(dialog).queryByRole("option",{name:"Other location"})).toBeNull();
   expect(within(dialog).queryByRole("option",{name:"Host sandbox"})).toBeNull();

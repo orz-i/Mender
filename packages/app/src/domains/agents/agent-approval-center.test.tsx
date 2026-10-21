@@ -55,6 +55,8 @@ describe("owner Agent approval center",()=>{
   expect(screen.getByRole("button",{name:"Reject"})).toBeTruthy();
   fireEvent.click(screen.getByRole("button",{name:"Set authorization mode"}));
   const dialog=await screen.findByRole("dialog");
+  expect(dialog.className).toContain("grid-rows-[auto_minmax(0,1fr)_auto]");
+  expect(dialog.querySelector('[data-slot="dialog-body"]')).not.toBeNull();
   expect(within(dialog).getByText("Ask every time")).toBeTruthy();
   expect(within(dialog).getByText("Allow workspace reads")).toBeTruthy();
   expect(within(dialog).getByText("Trust native Agent actions (24 hours)")).toBeTruthy();

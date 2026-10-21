@@ -3,7 +3,7 @@ import {MenderApiError} from "@mender/sdk";
 import type {Agent,AgentWorkspace,MenderClient,Profile} from "@mender/sdk";
 import {Button} from "@mender/ui/components/button";
 import {Input} from "@mender/ui/components/input";
-import {Dialog,DialogContent,DialogDescription,DialogFooter,DialogHeader,DialogTitle} from "@mender/ui/components/dialog";
+import {Dialog,DialogBody,DialogContent,DialogDescription,DialogFooter,DialogHeader,DialogTitle} from "@mender/ui/components/dialog";
 import {t} from "../../i18n/i18n";
 import {errorMessage} from "../../shared/errors";
 import {ErrorNotice,EmptyState} from "../../shared/page";
@@ -71,9 +71,12 @@ export function AgentWorkspaceSettings({
   }catch(e){setError(action.kind==="add"||action.kind==="remove"?registrationErrorMessage(e):errorMessage(e));}finally{setBusy(false);}
  }
  function openAdd(){setError("");setKey("");setRoot("");setAction({kind:"add"});}
- function openGrant(key:string,granted:string[]){
-  setError("");setProfile(profiles.find(p=>!granted.includes(p.profileId))?.profileId??"");
-  setAction({kind:"grant",key});
+ function openGrant(key:string){
+  setError("");setProfile("");setAction({kind:"grant",key});
+ }
+ function closeAction(){
+  if(busy)return;
+  setAction(null);setError("");
  }
  async function choose(){
   if(!chooseLocalDirectory)return;
@@ -88,10 +91,14 @@ export function AgentWorkspaceSettings({
  const comparableRoot=comparablePath(root);
  const defaultDuplicate=validRoot&&comparableRoot===comparablePath(agent.workspaceRoot);
  const registeredDirectory=validRoot?items.find(w=>comparablePath(w.workspaceRoot)===comparableRoot):undefined;
+ const availableProfiles=action?.kind==="grant"?profiles.filter(p=>
+  !items.find(w=>w.key===action.key)?.profileIds.includes(p.profileId)
+ ):[];
+ const actionWorkspace=action&&action.kind!=="add"?items.find(w=>w.key===action.key):undefined;
  const valid=action?.kind==="add"?validAlias&&validRoot&&!aliasDuplicate&&!defaultDuplicate&&!registeredDirectory:
-  action?.kind==="grant"?!!profile:true;
+  action?.kind==="grant"?availableProfiles.some(p=>p.profileId===profile):true;
  return <>
-  {error?<ErrorNotice message={error}/>:null}
+  {error&&!action?<ErrorNotice message={error}/>:null}
   <ResultPanel title="Agent workspaces">
    <div className="flex items-center justify-between gap-3 border-b border-border p-4">
     <p className="text-xs text-muted-foreground">{t("An Agent can use additional owner-approved local directories without creating Sandboxes.")}</p>
@@ -107,7 +114,7 @@ export function AgentWorkspaceSettings({
       <div><div className="font-medium">{w.key}</div>
        <div className="break-all text-xs text-muted-foreground">{w.workspaceRoot}</div></div>
       <div className="flex flex-wrap gap-2">
-       <Button size="sm" variant="outline" onClick={()=>openGrant(w.key,w.profileIds)}>{t("Grant Profile")}</Button>
+       <Button size="sm" variant="outline" disabled={profiles.every(p=>w.profileIds.includes(p.profileId))} onClick={()=>openGrant(w.key)}>{t("Grant Profile")}</Button>
        <Button size="sm" variant="outline" onClick={()=>setAction({kind:"remove",key:w.key})}>{t("Remove")}</Button>
       </div>
      </div>
@@ -121,38 +128,52 @@ export function AgentWorkspaceSettings({
    {!items.length?<EmptyPanelState><EmptyState title="No additional workspaces"
     description="Register another local directory to reuse this Agent."/></EmptyPanelState>:null}
   </ResultPanel>
-  <Dialog open={action!==null} onOpenChange={open=>{if(!open)setAction(null)}}>
-   <DialogContent>
+  <Dialog open={action!==null} onOpenChange={open=>{if(!open)closeAction();}}>
+   <DialogContent className="grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden sm:max-w-lg">
     <DialogHeader><DialogTitle>{t(action?.kind==="add"?"Add workspace":action?.kind==="grant"?"Grant Profile":action?.kind==="remove"?"Remove workspace":"Revoke workspace access")}</DialogTitle>
-     <DialogDescription>{t("Workspace selections are governed separately from Agent delegation grants.")}</DialogDescription>
+     <DialogDescription className={action?.kind==="grant"?"":"sr-only"}>{t("Workspace selections are governed separately from Agent delegation grants.")}</DialogDescription>
     </DialogHeader>
+    <DialogBody className="space-y-3">
+    {actionWorkspace?<div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-2 text-sm">
+      <p className="font-medium">{t("Workspace")}: {actionWorkspace.key}</p>
+      <p className="mt-1 break-all text-xs text-muted-foreground">{actionWorkspace.workspaceRoot}</p>
+      {action?.kind==="revoke"?<p className="mt-2">{t("Profile")}: {profiles.find(p=>p.profileId===action.profileId)?.displayName??action.profileId}</p>:null}
+    </div>:null}
     {action?.kind==="add"?<>
      <label className="text-sm font-medium" htmlFor="agent-workspace-key">{t("Workspace key")}</label>
      <Input id="agent-workspace-key" value={key} maxLength={64}
+      aria-invalid={!!key&&(!validAlias||aliasDuplicate)}
+      aria-describedby={key&&(!validAlias||aliasDuplicate)?"agent-workspace-key-help agent-workspace-key-error":"agent-workspace-key-help"}
       onChange={e=>{setKey(e.target.value.toLowerCase());setError("");}} placeholder="my-project"/>
-     <p className="text-xs text-muted-foreground">{t("Use a-z, 0-9, - or _. Uppercase letters are converted to lowercase.")}</p>
-     {key&&!validAlias?<p role="alert" className="text-xs text-destructive">{t("Enter a valid workspace alias.")}</p>:null}
-     {aliasDuplicate?<p role="alert" className="text-xs text-destructive">{t("This workspace alias already exists.")}</p>:null}
+     <p id="agent-workspace-key-help" className="text-xs text-muted-foreground">{t("Use a-z, 0-9, - or _. Uppercase letters are converted to lowercase.")}</p>
+     {key&&(!validAlias||aliasDuplicate)?<p id="agent-workspace-key-error" role="alert" className="text-xs text-destructive">
+      {t(!validAlias?"Enter a valid workspace alias.":"This workspace alias already exists.")}
+     </p>:null}
      <label className="text-sm font-medium" htmlFor="agent-workspace-root">{t("Workspace directory")}</label>
      <div className="flex gap-2">
       <Input id="agent-workspace-root" className="min-w-0 flex-1" value={root}
+       aria-invalid={!!root&&(!validRoot||defaultDuplicate||!!registeredDirectory)}
+       aria-describedby={root&&(!validRoot||defaultDuplicate||registeredDirectory)?"agent-workspace-root-error":undefined}
        onChange={e=>{setRoot(e.target.value);setError("");}} placeholder="/Users/example/project"/>
       {chooseLocalDirectory?<Button variant="outline" onClick={()=>void choose()}>{t("Choose local directory")}</Button>:null}
      </div>
-     {root&&!validRoot?<p role="alert" className="text-xs text-destructive">{t("Select an existing absolute local directory.")}</p>:null}
-     {defaultDuplicate?<p role="alert" className="text-xs text-destructive">{t("This directory is already the Agent's default workspace.")}</p>:null}
-     {registeredDirectory?<p role="alert" className="text-xs text-destructive">{t("This directory is already registered as workspace {{key}}.",{key:registeredDirectory.key})}</p>:null}
+     {root&&(!validRoot||defaultDuplicate||registeredDirectory)?<p id="agent-workspace-root-error" role="alert" className="text-xs text-destructive">
+      {!validRoot?t("Select an existing absolute local directory."):defaultDuplicate?t("This directory is already the Agent's default workspace."):t("This directory is already registered as workspace {{key}}.",{key:registeredDirectory!.key})}
+     </p>:null}
     </>:action?.kind==="grant"?<>
      <label className="text-sm font-medium" htmlFor="workspace-grant-profile">{t("Profile")}</label>
-     <select id="workspace-grant-profile" value={profile} onChange={e=>setProfile(e.target.value)}
-      className="h-10 rounded-lg border bg-background px-3">
-      {profiles.filter(p=>!items.find(w=>w.key===action.key)?.profileIds.includes(p.profileId))
-       .map(p=><option key={p.profileId} value={p.profileId}>{p.displayName}</option>)}
+     <select id="workspace-grant-profile" value={profile} disabled={busy||!availableProfiles.length}
+      onChange={e=>setProfile(e.target.value)}
+      className="h-10 w-full rounded-lg border bg-background px-3">
+      <option value="">{t("Choose a Profile")}</option>
+      {availableProfiles.map(p=><option key={p.profileId} value={p.profileId}>{p.displayName}</option>)}
      </select>
+     {!availableProfiles.length?<p role="status" className="text-xs text-muted-foreground">{t("All Profiles already have workspace access.")}</p>:null}
     </>:null}
     {error?<p role="alert" className="text-xs text-destructive">{error}</p>:null}
+    </DialogBody>
     <DialogFooter>
-     <Button variant="outline" disabled={busy} onClick={()=>setAction(null)}>{t("Cancel")}</Button>
+     <Button variant="outline" disabled={busy} onClick={closeAction}>{t("Cancel")}</Button>
      <Button disabled={busy||!valid} onClick={()=>void submit()}>{t("Confirm")}</Button>
     </DialogFooter>
    </DialogContent>

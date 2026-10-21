@@ -77,9 +77,47 @@ describe("Agent owner-approved local workspace editor",()=>{
   expect(screen.getByText("No Profile workspace access")).toBeTruthy();
   expect(grantAgentWorkspace).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button",{name:"Grant Profile"}));
-  expect(screen.getByRole("combobox",{name:"Profile"})).toBeTruthy();
-  fireEvent.click(screen.getByRole("button",{name:"Confirm"}));
+  const picker=screen.getByRole<HTMLSelectElement>("combobox",{name:"Profile"});
+  const confirm=screen.getByRole<HTMLButtonElement>("button",{name:"Confirm"});
+  expect(picker.value).toBe("");
+  expect(confirm.disabled).toBe(true);
+  expect(grantAgentWorkspace).not.toHaveBeenCalled();
+  fireEvent.change(picker,{target:{value:profileId}});
+  expect(confirm.disabled).toBe(false);
+  fireEvent.click(confirm);
   await waitFor(()=>expect(grantAgentWorkspace).toHaveBeenCalledWith(agent.agentId,"gar",profileId));
+ });
+ it("requires explicit Profile selection when multiple eligible Profiles exist",async()=>{
+  const otherId="prof_00000000000000000000000000000012";
+  const grantAgentWorkspace=vi.fn().mockResolvedValue(undefined);
+  const client={
+   listAgentWorkspaces:vi.fn().mockResolvedValue({workspaces:[{key:"gar",workspaceRoot:localRoot,profileIds:[]}]}),
+   listProfiles:vi.fn().mockResolvedValue({profiles:[
+    {profileId,displayName:"Default"},
+    {profileId:otherId,displayName:"Staging"},
+   ]}),
+   grantAgentWorkspace,
+  } as unknown as MenderClient;
+  render(<MemoryRouter><AgentWorkspaceSettings client={client} agent={agent}/></MemoryRouter>);
+  expect(await screen.findByText(localRoot)).toBeTruthy();
+  fireEvent.click(screen.getByRole("button",{name:"Grant Profile"}));
+  const dialog=screen.getByRole("dialog");
+  expect(dialog.querySelector('[data-slot="dialog-body"]')).not.toBeNull();
+  expect(screen.getByRole<HTMLSelectElement>("combobox",{name:"Profile"}).value).toBe("");
+  expect(screen.getByRole<HTMLButtonElement>("button",{name:"Confirm"}).disabled).toBe(true);
+  fireEvent.change(screen.getByRole("combobox",{name:"Profile"}),{target:{value:otherId}});
+  fireEvent.click(screen.getByRole("button",{name:"Confirm"}));
+  await waitFor(()=>expect(grantAgentWorkspace).toHaveBeenCalledWith(agent.agentId,"gar",otherId));
+  expect(grantAgentWorkspace).toHaveBeenCalledTimes(1);
+ });
+ it("does not offer a Grant action when all Profiles already have workspace access",async()=>{
+  const client={
+   listAgentWorkspaces:vi.fn().mockResolvedValue({workspaces:[{key:"gar",workspaceRoot:localRoot,profileIds:[profileId]}]}),
+   listProfiles:vi.fn().mockResolvedValue({profiles:[{profileId,displayName:"Default"}]}),
+  } as unknown as MenderClient;
+  render(<MemoryRouter><AgentWorkspaceSettings client={client} agent={agent}/></MemoryRouter>);
+  expect(await screen.findByText(localRoot)).toBeTruthy();
+  expect(screen.getByRole<HTMLButtonElement>("button",{name:"Grant Profile"}).disabled).toBe(true);
  });
  it("shows backend rejection inside the editing dialog instead of failing invisibly",async()=>{
   const bindAgentWorkspace=vi.fn().mockRejectedValue(new Error("local directory unavailable"));
