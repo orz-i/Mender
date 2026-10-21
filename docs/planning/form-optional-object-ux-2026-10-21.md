@@ -26,3 +26,37 @@
 - F2：Provider/Sandbox 集成回归验证最终提交配置不携带被移除的 key；新功能与既有 Schema 规则保持一致。
 - F3：质量门禁及 1280×800、390×844 的无写入浏览器 fixture 验收；原生环境仅做只读/取消。
 - F4：文档收口、单独提交及明确真实插件端到端验收的遗留边界。
+
+## 实施与验收记录（2026-10-21）
+
+### 基线证据与提交
+
+旧实现对应的可选对象生命周期测试 5 项中 4 项失败，记录在 /tmp/mender-optional-object-baseline-20261021.log。视觉 Fixture 揭示另一个问题：可选对象即使没有自己的默认值，也会因为内部子字段声明默认值而被自动创建；该场景在 /tmp/mender-optional-defaults-baseline-20261021.log 单独复现了失败。
+
+分段提交：
+- da3d307：设计及安全边界先行。
+- 56be2d3：不存在的可选对象只显示精简预览与添加动作；已存在时用 fieldset/legend 分组，允许显式移除整个 key；required 对象不提供移除。
+- a3442d5：Provider Create/Edit 与 External Sandbox Review/Create 集成测试，核验移除后真实待提交的 config 对象不携带该 key。
+- 3f88ef7：纠正 Schema 默认值传播；只有对象自己显式定义 default、为 required 或用户明确添加时才建立该组。添加时仍应用其子字段合法默认值。移动端短操作按钮保留完整 aria-label，说明独占下一行，不把长标签挤压成窄列。
+
+### 质量门禁与响应式验收
+
+pnpm lint、pnpm typecheck、pnpm i18n:check、pnpm exec vitest run --maxWorkers=6 --reporter=dot 以及 pnpm build 均通过（/tmp/mender-optional-object-final-gate-20261021.log），61 个测试文件、385/385 测试通过，1480/1480 条中文翻译覆盖。Web 与 Desktop 前端构建均成功，仅保留历史上的非阻断大分块提示。
+
+隔离 QA 脚本 /tmp/mender-optional-object-visual-qa-20261021.mjs；验收结果 /tmp/mender-optional-object-qa-result-20261021.json。本机 Chrome/Playwright 使用拦截全部本地 API 请求的 Fixture，不安装测试插件、不调用真实后端写入。1280×800 与 390×844 均验证：默认未配置时子字段不渲染、Add 后才按默认值初始化、缺必填时禁用 Save、JSON 子草稿非法时阻断、Remove 后清除错误及整个 key、再次 Add 不恢复旧 Token、嵌套 Preferences 独立添加/移除；均无 pageerror 或写入请求、无横向溢出。初次自动化读取按钮早于 React 状态稳定曾出现瞬态，等待后重测全部通过。390px 弹窗宽 358px，底部 813px，Footer 底部 812px；文档宽 390px。
+
+截图保存于 Mac：
+- /tmp/mender-optional-390-default.png
+- /tmp/mender-optional-390-added.png
+- /tmp/mender-optional-390-invalid.png
+- /tmp/mender-optional-390-removed.png
+- /tmp/mender-optional-1280-added.png
+
+### Wails 与生产安全验收边界
+
+Wails Dev 进程 PID 83099，原二进制构建于 2026-10-21 22:20:50。macOS 原生辅助功能验证「工具」只读页面正常，随后恢复用户原先的「服务器」页面。没有安装测试动态插件或改动生产配置。因此动态可选 Schema 的真实 Wails 保存/失败处理未进行端到端验收，Chrome Fixture 的 PASS 不能替代。
+
+对真实 SQLite 数据库只读 mode=ro 核查前后维持 providers=12、credentials=3、sandboxes=7、agent_tasks=75、agent_workspaces=0、policy_rules=0，PRAGMA quick_check=ok。没有生产资源配置、授权、任务或文件写入，四个已存在的未跟踪工具目录仍未入库。
+
+后续在有合适非生产插件安装时，可专项验收深层 uiSchema、原生动态表单及真实文件系统写入。此轮不新增 Schema 解释器或历史兼容桥。
+
