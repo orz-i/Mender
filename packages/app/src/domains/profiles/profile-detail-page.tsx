@@ -101,7 +101,9 @@ function ProfileDetailContent({ client, slug }: { client: MenderClient; slug: st
           items={[{ value: "overview", label: "Overview" }, { value: "tools", label: "Tools" }]} /> : undefined}
         actions={<>
           <Button variant="outline" onClick={() => void navigate("/profiles")}>{t("Back to profiles")}</Button>
-          {profile ? <Button onClick={() => void navigate("/profiles/" + encodeURIComponent(profile.slug) + "/edit")}>
+          {profile ? <Button onClick={() => void navigate("/profiles/" + encodeURIComponent(profile.slug) + "/edit", {
+            state: { initialSection: section },
+          })}>
             {t("Edit profile")}
           </Button> : null}
         </>}

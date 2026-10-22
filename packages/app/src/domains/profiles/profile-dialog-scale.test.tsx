@@ -55,7 +55,7 @@ afterEach(() => {
 
 function show(
   overrides: Partial<MenderClient> = {},
-  options: { initialProfile?: Profile; providers?: Provider[] } = {},
+  options: { initialProfile?: Profile; providers?: Provider[]; initialSection?: "overview" | "tools" } = {},
 ) {
   const initialProfile = options.initialProfile ?? profile;
   const replaceProfileTools = vi.fn().mockImplementation((_slug: string, body: { tools: Profile["tools"] }) =>
@@ -81,7 +81,10 @@ function show(
     replaceProfileTools,
     ...overrides,
   } as unknown as MenderClient;
-  render(<MemoryRouter initialEntries={["/profiles/large-profile/edit"]}>
+  render(<MemoryRouter initialEntries={[{
+    pathname: "/profiles/large-profile/edit",
+    state: { initialSection: options.initialSection },
+  }]}>
     <TooltipProvider>
       <Routes>
         <Route path="/profiles/:slug/edit" element={<ProfileEditPage client={client} />} />
@@ -99,7 +102,7 @@ async function manage() {
 }
 
 async function chooseSources() {
-  fireEvent.click(within(await manage()).getByRole("button", { name: "Choose tool sources" }));
+  fireEvent.click(within(await manage()).getByRole("button", { name: "Add tools" }));
   return screen.findByRole("region", { name: "Choose tool sources" });
 }
 
@@ -110,9 +113,88 @@ async function openSource(name: string) {
   return picker;
 }
 
+it("opens the context-selected editor section without hiding its other settings", async () => {
+  show({}, { initialSection: "tools" });
+  const editor = await screen.findByRole("region", { name: "Manage profile" });
+  expect(within(editor).getByRole("textbox", { name: "Search selected sources" })).toBeTruthy();
+  expect(within(editor).queryByLabelText("Profile tunnel")).toBeNull();
+  fireEvent.click(within(editor).getByRole("button", { name: "Overview" }));
+  expect(within(editor).getByLabelText("Profile tunnel")).toBeTruthy();
+});
+
+it("adds tools inside the current source and keeps the cross-source draft explicit", async () => {
+  const { browseTools, replaceProfileTools } = show();
+  const editor = await manage();
+  fireEvent.click(within(editor).getByRole("button", { name: "Manage source Tool source 1" }));
+  fireEvent.click(within(editor).getByRole("button", { name: "Add tools" }));
+  const picker = await screen.findByRole("region", { name: "Choose tool sources" });
+  expect(picker.className).toContain("max-h-[calc(100dvh-12rem)]");
+  expect(picker.querySelector('[data-slot="profile-tool-picker-list"]')?.className).toContain("overflow-y-auto");
+  const currentTool = await within(picker).findByRole("checkbox", { name: "Select Work tool 2" });
+  expect(within(picker).queryByRole("textbox", { name: "Search sources" })).toBeNull();
+  expect(browseTools).toHaveBeenCalledWith({ providerId: "prov_1", limit: 100 });
+  expect(within(picker).getByText("65 tools selected")).toBeTruthy();
+  fireEvent.click(currentTool);
+  expect(within(picker).getByText("64 tools selected")).toBeTruthy();
+  expect(within(picker).getByText(/Unsaved changes/)).toBeTruthy();
+
+  fireEvent.click(within(picker).getByRole("button", { name: "Back to sources" }));
+  expect(within(picker).getByRole("textbox", { name: "Search sources" })).toBeTruthy();
+  fireEvent.click(within(picker).getByRole("button", { name: "Open source Tool source 0" }));
+  expect(await within(picker).findByRole("checkbox", { name: "Select Work tool 1" })).toBeTruthy();
+  expect(within(picker).getByText("64 tools selected")).toBeTruthy();
+
+  fireEvent.click(within(picker).getByRole("button", { name: "Cancel" }));
+  expect(replaceProfileTools).not.toHaveBeenCalled();
+  const returnedEditor = await screen.findByRole("region", { name: "Manage profile" });
+  fireEvent.click(within(returnedEditor).getByRole("button", { name: "Add tools" }));
+  const reopened = await screen.findByRole("region", { name: "Choose tool sources" });
+  expect(await within(reopened).findByRole("checkbox", { name: "Select Work tool 2" })).toBeTruthy();
+  expect(within(reopened).getByText("65 tools selected")).toBeTruthy();
+  expect(within(reopened).queryByText(/Unsaved changes/)).toBeNull();
+});
+
+it("hides fixed exposure controls but retains individual governance actions", async () => {
+  const fixed = { ...profile, mode: "direct" as const, tools: profile.tools.map((binding) => ({ ...binding, direct: true })) };
+  show({}, { initialProfile: fixed });
+  const editor = await manage();
+  fireEvent.click(within(editor).getByRole("button", { name: "Manage source Tool source 0" }));
+  expect(within(editor).queryByRole("combobox", { name: "Exposure filter" })).toBeNull();
+  expect(within(editor).queryByText("Direct")).toBeNull();
+  expect(within(editor).getByRole("button", { name: "Actions for Work tool 1" })).toBeTruthy();
+  fireEvent.click(within(editor).getByRole("button", { name: "Add tools" }));
+  const picker = await screen.findByRole("region", { name: "Choose tool sources" });
+  expect(await within(picker).findByRole("checkbox", { name: "Select Work tool 1" })).toBeTruthy();
+  expect(within(picker).queryByText("Direct export")).toBeNull();
+});
+
+it("keeps source load failures inside the picker and offers a local retry", async () => {
+  let failedOnce = false;
+  const browseTools = vi.fn().mockImplementation((input?: { providerId?: string; limit?: number }) => {
+    if (input?.providerId && !failedOnce) {
+      failedOnce = true;
+      return Promise.reject(new Error("Source catalog temporarily unavailable"));
+    }
+    return Promise.resolve({ tools: input?.providerId
+      ? tools.filter((item) => item.providerId === input.providerId)
+      : tools });
+  });
+  show({ browseTools: browseTools as MenderClient["browseTools"] });
+  const editor = await manage();
+  fireEvent.click(within(editor).getByRole("button", { name: "Manage source Tool source 0" }));
+  fireEvent.click(within(editor).getByRole("button", { name: "Add tools" }));
+  const picker = await screen.findByRole("region", { name: "Choose tool sources" });
+  expect((await within(picker).findByRole("alert")).textContent).toContain("Source catalog temporarily unavailable");
+  expect(within(picker).queryByText("No matching Tools.")).toBeNull();
+  fireEvent.click(within(picker).getByRole("button", { name: "Apply" }));
+  expect(await within(picker).findByRole("checkbox", { name: "Select Work tool 1" })).toBeTruthy();
+  expect(within(picker).queryByRole("alert")).toBeNull();
+});
+
 it("labels Catalog tool counts without implying their Agent backend is executable", async () => {
   show();
   const picker = await chooseSources();
+  expect(picker.querySelector('[data-slot="profile-source-picker-list"]')?.className).toContain("overflow-y-auto");
   expect(within(picker).getAllByText("25 tools")).toHaveLength(3);
   expect(within(picker).queryByText("25 available Tools")).toBeNull();
 });
@@ -271,7 +353,7 @@ it("excludes unavailable/unclaimed sources from Add but preserves their existing
   const manageDialog = await manage();
   expect(within(manageDialog).getByRole("button", { name: "Manage source Tool source 1 · Workspace" })).toBeTruthy();
   expect(within(manageDialog).getByRole("button", { name: "Manage source Tool source 2" })).toBeTruthy();
-  fireEvent.click(within(manageDialog).getByRole("button", { name: "Choose tool sources" }));
+  fireEvent.click(within(manageDialog).getByRole("button", { name: "Add tools" }));
   const picker = await screen.findByRole("region", { name: "Choose tool sources" });
   expect(within(picker).getAllByRole("button", { name: /Open source/ })).toHaveLength(1);
   expect(within(picker).queryByRole("button", { name: "Open source Tool source 1" })).toBeNull();
@@ -292,7 +374,7 @@ it("hydrates a bound Tool beyond the first Catalog page before grouping it by ex
   });
   expect(await within(dialog).findByText("Work tool 105")).toBeTruthy();
   fireEvent.click(within(dialog).getByRole("button", { name: "Back to sources" }));
-  fireEvent.click(within(dialog).getByRole("button", { name: "Choose tool sources" }));
+  fireEvent.click(within(dialog).getByRole("button", { name: "Add tools" }));
   const picker = await screen.findByRole("region", { name: "Choose tool sources" });
   expect(within(picker).getByRole<HTMLButtonElement>("button", { name: "Save selection" }).disabled).toBe(true);
   await openSource("Tool source 0");
@@ -313,7 +395,7 @@ it("distinguishes two identically named Agent instances by their unique configur
   const dialog = await manage();
   expect(within(dialog).getByRole("button", { name: "Manage source Same Agent · agent-same-a" })).toBeTruthy();
   expect(within(dialog).getByRole("button", { name: "Manage source Same Agent · agent-same-b" })).toBeTruthy();
-  fireEvent.click(within(dialog).getByRole("button", { name: "Choose tool sources" }));
+  fireEvent.click(within(dialog).getByRole("button", { name: "Add tools" }));
   const picker = await screen.findByRole("region", { name: "Choose tool sources" });
   fireEvent.click(within(picker).getByRole("button", { name: "Open source Same Agent · agent-same-b" }));
   await within(picker).findByRole("checkbox", { name: "Select Work tool 2" });
@@ -331,10 +413,10 @@ it("cancels during source loading without persisting or leaking a stale request 
   fireEvent.click(within(picker).getByRole("button", { name: "Open source Tool source 0" }));
   fireEvent.click(within(picker).getByRole("button", { name: "Cancel" }));
   const manageDialog = await screen.findByRole("region", { name: "Manage profile" });
-  expect(within(manageDialog).getByRole("button", { name: "Choose tool sources" })).toBeTruthy();
+  expect(within(manageDialog).getByRole("button", { name: "Add tools" })).toBeTruthy();
   finish({ tools: tools.filter((tool) => tool.providerId === "prov_0") });
   await vi.waitFor(() => expect(replaceProfileTools).not.toHaveBeenCalled());
-  fireEvent.click(within(manageDialog).getByRole("button", { name: "Choose tool sources" }));
+  fireEvent.click(within(manageDialog).getByRole("button", { name: "Add tools" }));
   const reopened = await screen.findByRole("region", { name: "Choose tool sources" });
   expect(within(reopened).getByRole("textbox", { name: "Search sources" })).toBeTruthy();
   expect(within(reopened).queryByRole("checkbox", { name: /Select Work tool/ })).toBeNull();
@@ -356,7 +438,7 @@ it("retains an unreachable historical ToolID in a management-only Unknown source
   fireEvent.click(within(dialog).getByRole("button", { name: "Actions for Unavailable Tool" }));
   expect(screen.getByRole("button", { name: "Remove Unavailable Tool" })).toBeTruthy();
   fireEvent.click(within(dialog).getByRole("button", { name: "Back to sources" }));
-  fireEvent.click(within(dialog).getByRole("button", { name: "Choose tool sources" }));
+  fireEvent.click(within(dialog).getByRole("button", { name: "Add tools" }));
   const picker = await screen.findByRole("region", { name: "Choose tool sources" });
   fireEvent.click(within(picker).getByRole("button", { name: "Open source Tool source 0" }));
   fireEvent.click(await within(picker).findByRole("checkbox", { name: "Select Work tool 1" }));

@@ -2028,11 +2028,10 @@ describe("management pages", () => {
     fireEvent.click(screen.getByRole("button", { name: "Manage source AnySearch" }));
     expect(screen.getByText("Search")).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "Choose tool sources" }));
-    expect(await screen.findByRole("button", { name: "Open source AnySearch" })).toBeTruthy();
-    expect(screen.queryByText("Extract")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Open source AnySearch" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add tools" }));
     expect(await screen.findByText("Extract")).toBeTruthy();
+    // Adding from a managed source opens that source directly, without a second selection.
+    expect(screen.queryByRole("button", { name: "Open source AnySearch" })).toBeNull();
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(screen.getByText("Extract content").classList.contains("line-clamp-2")).toBe(
       true,
@@ -2043,11 +2042,10 @@ describe("management pages", () => {
     ).toBe(false);
 
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-    expect(await screen.findByRole("button", { name: "Choose tool sources" })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Add tools" })).toBeTruthy();
     expect(screen.queryByRole("dialog")).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: "Choose tool sources" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Open source AnySearch" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add tools" }));
     expect(await screen.findByText("Extract")).toBeTruthy();
     fireEvent.click(screen.getByRole("checkbox", { name: "Select Extract" }));
     fireEvent.click(screen.getByRole("button", { name: "Save selection" }));
@@ -2078,7 +2076,7 @@ describe("management pages", () => {
     fireEvent.click(screen.getByRole("button", { name: "Presentation for Search" }));
     expect(await screen.findByText("Tool presentation")).toBeTruthy();
     expect(screen.getAllByRole("dialog")).toHaveLength(1);
-    expect(screen.queryByRole("button", { name: "Choose tool sources" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Add tools" })).toBeNull();
 
     fireEvent.change(screen.getByLabelText("Tool binding alias"), {
       target: { value: "Search Release" },

@@ -34,7 +34,9 @@ export function ProfileCreatePage({ client }: { client: MenderClient }) {
         slug, displayName: form.displayName.trim(), mode: form.mode,
       });
       // A new Profile has no grants. Continue directly to tool configuration.
-      void navigate("/profiles/" + encodeURIComponent(created.slug) + "/edit");
+      void navigate("/profiles/" + encodeURIComponent(created.slug) + "/edit", {
+        state: { initialSection: "tools" },
+      });
     } catch (reason) {
       setError(ownedIdentifierCreateError(reason, "profile"));
       setBusy(false);

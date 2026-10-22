@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router";
+import { useLocation, useNavigate, useParams } from "react-router";
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -63,6 +63,7 @@ export function ProfileEditPage({ client }: { client: MenderClient }) {
 
 function ProfileEditor({ client, slug }: { client: MenderClient; slug: string | undefined }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [providers, setProviders] = useState<Provider[]>([]);
   const [credentials, setCredentials] = useState<Credential[]>([]);
@@ -78,7 +79,11 @@ function ProfileEditor({ client, slug }: { client: MenderClient; slug: string | 
   const [removeError, setRemoveError] = useState("");
 
   const [manageSlug, setManageSlug] = useState(slug ?? "");
-  const [manageView, setManageView] = useState<"overview" | "tools">("overview");
+  const [manageView, setManageView] = useState<"overview" | "tools">(() => {
+    const state: unknown = location.state;
+    return typeof state === "object" && state !== null && "initialSection" in state && state.initialSection === "tools"
+      ? "tools" : "overview";
+  });
   const [manageQuery, setManageQuery] = useState("");
   const [manageSourceId, setManageSourceId] = useState("");
   const [manageExposure, setManageExposure] = useState<"all" | "direct" | "dynamic">("all");
@@ -327,9 +332,14 @@ function ProfileEditor({ client, slug }: { client: MenderClient; slug: string | 
     void client.listProviders().then((response) => setProviders(response.providers))
       .catch((reason: unknown) => setError(errorMessage(reason)));
 
-    // Full-page source selection replaces the edit viewport, without an overlay.
+    // Full-page selection replaces the editor. When already managing an available
+    // source, continue in that source instead of making the user choose it twice.
     setManageSlug("");
     setPickerSlug(slug);
+    const currentProvider = providerById.get(manageSourceId);
+    if (currentProvider?.toolSourceSelectable && currentProvider.toolCount > 0) {
+      void openPickerSource(manageSourceId);
+    }
   }
 
   async function openPickerSource(providerId: string) {
@@ -676,9 +686,9 @@ function ProfileEditor({ client, slug }: { client: MenderClient; slug: string | 
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-base font-semibold">{managedProfile?.displayName ?? t("Manage profile")}</h2>
-              <p className="mt-1 text-xs text-muted-foreground">{manageView === "tools"
-                ? t("Select sources first, then manage each source's ToolBindings.")
-                : t("Review Profile settings and update its Tunnel binding.")}</p>
+              {manageView === "overview" ? (
+                <p className="mt-1 text-xs text-muted-foreground">{t("Review Profile settings and update its Tunnel binding.")}</p>
+              ) : null}
             </div>
             <PageTabs label="Manage Profile sections">
               <PageTab label="Overview" active={manageView === "overview"}
@@ -728,39 +738,40 @@ function ProfileEditor({ client, slug }: { client: MenderClient; slug: string | 
               ) : (
                 <>
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="min-w-0">
+                <div className="flex min-w-0 items-center gap-2">
                   {manageSourceId ? (
-                    <Button variant="ghost" size="sm" className="mb-1 w-fit gap-1.5"
-                      onClick={() => { setManageSourceId(""); setManageQuery(""); managedSourcePagination.reset(); }}>
-                      <ChevronLeftIcon className="size-4" />
-                      {t("Back to sources")}
-                    </Button>
-                  ) : null}
-                  <div className="font-medium">
-                    {manageSourceId
-                      ? managedSourceGroups.find((group) => group.id === manageSourceId)?.label ?? t("Unknown source")
-                      : t("Selected sources")}
-                  </div>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {manageSourceId
-                      ? t("Manage individual ToolBindings without changing other sources.")
-                      : t("Choose a source to inspect its selected Tools.")}
-                  </p>
+                    <>
+                      <Button variant="ghost" size="sm" className="min-w-0 gap-1.5 px-2"
+                        aria-label={t("Back to sources")}
+                        onClick={() => { setManageSourceId(""); setManageQuery(""); managedSourcePagination.reset(); }}>
+                        <ChevronLeftIcon className="size-4 shrink-0" />
+                        {t("Selected sources")}
+                      </Button>
+                      <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                      <span className="min-w-0 truncate text-sm font-medium">
+                        {managedSourceGroups.find((group) => group.id === manageSourceId)?.label ?? t("Unknown source")}
+                      </span>
+                    </>
+                  ) : (
+                    <h3 className="text-sm font-medium">{t("Selected sources")}</h3>
+                  )}
                 </div>
                 <Button disabled={busy} onClick={openToolPicker}>
-                  {t("Choose tool sources")}
+                  {t("Add tools")}
                 </Button>
               </div>
 
               {manageSourceId ? (
-                <div className="grid shrink-0 gap-2 sm:grid-cols-[minmax(0,1fr)_180px]">
+                <div className={managedProfile.mode === "hybrid"
+                  ? "grid shrink-0 gap-2 sm:grid-cols-[minmax(0,1fr)_180px]"
+                  : "shrink-0"}>
                   <Input
                     aria-label={t("Search selected tools")}
                     placeholder={t("Search selected tools…")}
                     value={manageQuery}
                     onChange={(event) => { setManageQuery(event.target.value); managedToolPagination.reset(); }}
                   />
-                  <select
+                  {managedProfile.mode === "hybrid" ? <select
                     aria-label={t("Exposure filter")}
                     value={manageExposure}
                     onChange={(event) => {
@@ -772,7 +783,7 @@ function ProfileEditor({ client, slug }: { client: MenderClient; slug: string | 
                     <option value="all">{t("All exposures")}</option>
                     <option value="direct">{t("Direct")}</option>
                     <option value="dynamic">{t("Dynamic")}</option>
-                  </select>
+                  </select> : null}
                 </div>
               ) : (
                 <Input
@@ -806,9 +817,9 @@ function ProfileEditor({ client, slug }: { client: MenderClient; slug: string | 
                             <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{description}</p>
                           ) : null}
                           <div className="mt-2 flex flex-wrap gap-1.5">
-                            <Badge variant="outline">
+                            {managedProfile.mode === "hybrid" ? <Badge variant="outline">
                               {t(selection.direct ? "Direct" : "Dynamic")}
-                            </Badge>
+                            </Badge> : null}
                             {selection.alias ? (
                               <Badge variant="secondary">
                                 {t("Alias:")} {selection.alias}
@@ -907,7 +918,6 @@ function ProfileEditor({ client, slug }: { client: MenderClient; slug: string | 
                           <span className="block truncate text-sm font-medium">{group.label}</span>
                           <span className="mt-1 block text-xs text-muted-foreground">
                             {tCount(group.count, "{{count}} selected Tool", "{{count}} selected Tools")}
-                            {group.provider ? " / " + tCount(group.provider.toolCount, "{{count}} tool", "{{count}} tools") : null}
                           </span>
                         </span>
                         {group.provider?.toolSourceSelectable === false || !group.provider ? (
@@ -933,7 +943,6 @@ function ProfileEditor({ client, slug }: { client: MenderClient; slug: string | 
 
         </section>
       ) : null}
-      {pickerProfile && error ? <ErrorNotice message={error} /> : null}
       <ProfileToolSourcePicker
         open={pickerProfile !== null}
         profile={pickerProfile}
@@ -949,6 +958,7 @@ function ProfileEditor({ client, slug }: { client: MenderClient; slug: string | 
         dirty={pickerDirty}
         direct={pickerDirect}
         busy={busy}
+        error={error}
         onSourceQueryChange={setPickerSourceQuery}
         onOpenSource={(sourceId) => void openPickerSource(sourceId)}
         onBackToSources={backToPickerSources}
