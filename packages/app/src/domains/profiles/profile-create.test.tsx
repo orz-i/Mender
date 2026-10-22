@@ -1,10 +1,11 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { MenderClient, Profile } from "@mender/sdk";
 import { TooltipProvider } from "@mender/ui/components/tooltip";
+import { MemoryRouter, Route, Routes } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { resetLocaleForTesting, setLocale } from "../../i18n/i18n";
-import { ProfilesPage } from "./profiles-page";
+import { ProfileCreatePage } from "./profile-create-page";
 
 const result: Profile = {
   profileId: "prof_0123456789abcdef0123456789abcdef",
@@ -17,19 +18,17 @@ const result: Profile = {
 
 function openCreate(overrides: Partial<MenderClient> = {}) {
   const createProfile = vi.fn().mockResolvedValue(result);
-  const listProfiles = vi.fn().mockResolvedValue({ profiles: [] });
-  const client = {
-    listProfiles,
-    listProviders: vi.fn().mockResolvedValue({ providers: [] }),
-    listCredentials: vi.fn().mockResolvedValue({ credentials: [] }),
-    listTunnels: vi.fn().mockResolvedValue({ tunnels: [] }),
-    browseTools: vi.fn().mockResolvedValue({ tools: [] }),
-    createProfile,
-    ...overrides,
-  } as unknown as MenderClient;
-  render(<TooltipProvider><ProfilesPage client={client} /></TooltipProvider>);
-  fireEvent.click(screen.getByRole("button", { name: "Create profile" }));
-  return { createProfile, listProfiles };
+  const client = { createProfile, ...overrides } as unknown as MenderClient;
+  render(<MemoryRouter initialEntries={["/profiles/new"]}>
+    <TooltipProvider>
+      <Routes>
+        <Route path="/profiles/new" element={<ProfileCreatePage client={client} />} />
+        <Route path="/profiles/:slug/edit" element={<div>Tool editor</div>} />
+        <Route path="/profiles" element={<div>Profiles inventory</div>} />
+      </Routes>
+    </TooltipProvider>
+  </MemoryRouter>);
+  return { createProfile };
 }
 
 function enterProfile(slug: string, displayName = "My Profile") {
@@ -42,96 +41,78 @@ function enterProfile(slug: string, displayName = "My Profile") {
 }
 
 beforeEach(() => {
-  window.localStorage.clear();
   resetLocaleForTesting();
   setLocale("en");
 });
 afterEach(() => {
   cleanup();
   resetLocaleForTesting();
-  window.localStorage.clear();
 });
 
-describe("Profile create identifier UX", () => {
-  it("previews and sends the canonical slug for mixed-case human input", async () => {
+describe("Profile create page", () => {
+  it("shows a complete full-page form, normalizes its slug and opens editing after creation", async () => {
     const { createProfile } = openCreate();
+    expect(screen.queryByRole("dialog")).toBeNull();
     enterProfile(" My   Profile ");
-
-    const dialog = within(screen.getByRole("dialog", { name: "Create profile" }));
-    expect(dialog.getByText("Result: my-profile")).toBeTruthy();
-    fireEvent.click(dialog.getByRole("button", { name: "Create profile" }));
-
+    expect(screen.getByText("Result: my-profile")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Create profile" }));
     await waitFor(() => expect(createProfile).toHaveBeenCalledWith({
-      slug: "my-profile",
-      displayName: "My Profile",
-      mode: "hybrid",
+      slug: "my-profile", displayName: "My Profile", mode: "hybrid",
     }));
+    expect(await screen.findByText("Tool editor")).toBeTruthy();
   });
 
   it("disables invalid slug and overlong display name with visible guidance", () => {
     const { createProfile } = openCreate();
-    const dialog = within(screen.getByRole("dialog", { name: "Create profile" }));
     enterProfile("My_Profile");
-    expect(dialog.getByRole<HTMLInputElement>("textbox", { name: "Profile slug" }).getAttribute("aria-invalid")).toBe("true");
-    expect(dialog.getByText(/Use 1–63 characters/)).toBeTruthy();
-    expect(dialog.getByRole<HTMLButtonElement>("button", { name: "Create profile" }).disabled).toBe(true);
-
+    expect(screen.getByRole<HTMLInputElement>("textbox", { name: "Profile slug" })
+      .getAttribute("aria-invalid")).toBe("true");
+    expect(screen.getByText(/Use 1–63 characters/)).toBeTruthy();
+    expect(screen.getByRole<HTMLButtonElement>("button", { name: "Create profile" }).disabled).toBe(true);
     enterProfile("My Profile", "x".repeat(161));
-    expect(dialog.getByText("Result: my-profile")).toBeTruthy();
-    expect(dialog.getByText("Display name is too long (maximum 160 bytes).")).toBeTruthy();
-    expect(dialog.getByRole<HTMLButtonElement>("button", { name: "Create profile" }).disabled).toBe(true);
+    expect(screen.getByText("Result: my-profile")).toBeTruthy();
+    expect(screen.getByText("Display name is too long (maximum 160 bytes).")).toBeTruthy();
+    expect(screen.getByRole<HTMLButtonElement>("button", { name: "Create profile" }).disabled).toBe(true);
     expect(createProfile).not.toHaveBeenCalled();
   });
 
-  it("surfaces duplicate canonical identities inside the dialog and allows retry", async () => {
+  it("surfaces duplicate canonical identities on the page and allows retry", async () => {
     const createProfile = vi.fn()
       .mockRejectedValueOnce(new Error("create profile: profile: slug already exists"))
       .mockResolvedValueOnce(result);
     openCreate({ createProfile });
     enterProfile("My Profile");
-    const dialog = within(screen.getByRole("dialog", { name: "Create profile" }));
-    fireEvent.click(dialog.getByRole("button", { name: "Create profile" }));
-
-    expect((await dialog.findByRole("alert")).textContent).toContain("This Profile slug is already in use.");
-    expect(screen.getAllByRole("alert")).toHaveLength(1);
-    expect(dialog.getByRole<HTMLInputElement>("textbox", { name: "Profile slug" }).value).toBe("My Profile");
-    fireEvent.change(dialog.getByRole("textbox", { name: "Profile slug" }), { target: { value: "My Profile 2" } });
-    expect(dialog.queryByRole("alert")).toBeNull();
-    fireEvent.click(dialog.getByRole("button", { name: "Create profile" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create profile" }));
+    expect((await screen.findByRole("alert")).textContent).toContain("This Profile slug is already in use.");
+    expect(screen.getByRole<HTMLInputElement>("textbox", { name: "Profile slug" }).value).toBe("My Profile");
+    fireEvent.change(screen.getByRole("textbox", { name: "Profile slug" }),
+      { target: { value: "My Profile 2" } });
+    expect(screen.queryByRole("alert")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Create profile" }));
     await waitFor(() => expect(createProfile).toHaveBeenLastCalledWith({
-      slug: "my-profile-2",
-      displayName: "My Profile",
-      mode: "hybrid",
+      slug: "my-profile-2", displayName: "My Profile", mode: "hybrid",
     }));
   });
 
-  it("localizes invalid-input feedback without changing display name case", () => {
-    cleanup();
+  it("localizes validation feedback without altering display name case", async () => {
     resetLocaleForTesting();
     setLocale("zh-CN");
-
-    const createProfile = vi.fn().mockResolvedValue(result);
-    const client = {
-      listProfiles: vi.fn().mockResolvedValue({ profiles: [] }),
-      listProviders: vi.fn().mockResolvedValue({ providers: [] }),
-      listCredentials: vi.fn().mockResolvedValue({ credentials: [] }),
-      listTunnels: vi.fn().mockResolvedValue({ tunnels: [] }),
-      browseTools: vi.fn().mockResolvedValue({ tools: [] }),
-      createProfile,
-    } as unknown as MenderClient;
-    render(<TooltipProvider><ProfilesPage client={client} /></TooltipProvider>);
-    fireEvent.click(screen.getByRole("button", { name: "创建配置档" }));
-    fireEvent.change(screen.getByRole("textbox", { name: "配置档 slug" }), {
-      target: { value: "My Profile" },
-    });
-    fireEvent.change(screen.getByRole("textbox", { name: "配置档显示名称" }), {
-      target: { value: "My Profile" },
-    });
+    const { createProfile } = openCreate();
+    fireEvent.change(screen.getByRole("textbox", { name: "配置档 slug" }),
+      { target: { value: "My Profile" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "配置档显示名称" }),
+      { target: { value: "My Profile" } });
     expect(screen.getByText("规范标识：my-profile")).toBeTruthy();
-    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "创建配置档" }));
-    expect(createProfile).toHaveBeenCalledWith(expect.objectContaining({
-      slug: "my-profile",
-      displayName: "My Profile",
-    }));
+    fireEvent.click(screen.getByRole("button", { name: "创建配置档" }));
+    await waitFor(() => expect(createProfile).toHaveBeenCalledWith(expect.objectContaining({
+      slug: "my-profile", displayName: "My Profile",
+    })));
+  });
+
+  it("lets users cancel without persisting", () => {
+    const { createProfile } = openCreate();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.getByText("Profiles inventory")).toBeTruthy();
+    expect(createProfile).not.toHaveBeenCalled();
   });
 });

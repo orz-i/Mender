@@ -1,10 +1,11 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import type { MenderClient, Profile, Provider, ToolSummary } from "@mender/sdk";
 import { TooltipProvider } from "@mender/ui/components/tooltip";
+import { MemoryRouter, Route, Routes } from "react-router";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { resetLocaleForTesting, setLocale } from "../../i18n/i18n";
-import { ProfilesPage } from "./profiles-page";
+import { ProfileEditPage } from "./profile-edit-page";
 
 const tools: ToolSummary[] = Array.from({ length: 65 }, (_, i) => ({
   rank: i + 1,
@@ -80,24 +81,31 @@ function show(
     replaceProfileTools,
     ...overrides,
   } as unknown as MenderClient;
-  render(<TooltipProvider><ProfilesPage client={client} /></TooltipProvider>);
+  render(<MemoryRouter initialEntries={["/profiles/large-profile/edit"]}>
+    <TooltipProvider>
+      <Routes>
+        <Route path="/profiles/:slug/edit" element={<ProfileEditPage client={client} />} />
+        <Route path="/profiles/:slug" element={<div>Profile detail</div>} />
+      </Routes>
+    </TooltipProvider>
+  </MemoryRouter>);
   return { replaceProfileTools, browseTools, getTool };
 }
 
 async function manage() {
-  fireEvent.click(await screen.findByRole("button", { name: "Manage Large Profile" }));
-  return screen.getByRole("dialog", { name: "Large Profile" });
+  const editor = await screen.findByRole("region", { name: "Manage profile" });
+  fireEvent.click(within(editor).getByRole("button", { name: /^Tools/ }));
+  return editor;
 }
 
 async function chooseSources() {
   fireEvent.click(within(await manage()).getByRole("button", { name: "Choose tool sources" }));
-  return screen.findByRole("dialog", { name: "Choose tool sources" });
+  return screen.findByRole("region", { name: "Choose tool sources" });
 }
 
 async function openSource(name: string) {
-  const picker = screen.getByRole("dialog", { name: "Choose tool sources" });
+  const picker = screen.getByRole("region", { name: "Choose tool sources" });
   fireEvent.click(within(picker).getByRole("button", { name: "Open source " + name }));
-  // New level is always scoped to exactly one chosen source.
   await within(picker).findByRole("textbox", { name: "Profile tool search" });
   return picker;
 }
@@ -112,9 +120,8 @@ it("labels Catalog tool counts without implying their Agent backend is executabl
 it("shows selected sources before Tools and preserves per-source management pagination", async () => {
   show();
   const dialog = await manage();
-  expect(dialog.className).toContain("grid-rows-[auto_minmax(0,1fr)_auto]");
-  expect(dialog.className).toContain("overflow-hidden");
-  expect(dialog.className).toContain("100dvh");
+  expect(dialog.className).toContain("rounded-xl");
+  expect(screen.queryByRole("dialog")).toBeNull();
   expect(within(dialog).getByRole("group", { name: "Manage Profile sections" })).toBeTruthy();
   expect(within(dialog).getByRole("textbox", { name: "Search selected sources" })).toBeTruthy();
   expect(within(dialog).getAllByRole("button", { name: /Manage source Tool source/ })).toHaveLength(3);
@@ -145,7 +152,7 @@ it("shows selected sources before Tools and preserves per-source management pagi
   expect(within(dialog).getByLabelText("Profile tunnel")).toBeTruthy();
   fireEvent.click(within(dialog).getByRole("button", { name: /^Tools/ }));
   expect(within(dialog).getByRole("textbox", { name: "Search selected sources" })).toBeTruthy();
-  expect(screen.getAllByRole("dialog")).toHaveLength(1);
+  expect(screen.queryByRole("dialog")).toBeNull();
 });
 
 it("switches sources while preserving pending ToolID selections and all unrelated bindings", async () => {
@@ -158,8 +165,8 @@ it("switches sources while preserving pending ToolID selections and all unrelate
   };
   const { replaceProfileTools } = show({}, { initialProfile: customised });
   let picker = await chooseSources();
-  expect(picker.className).toContain("grid-rows-[auto_minmax(0,1fr)_auto]");
-  expect(picker.className).toContain("overflow-hidden");
+  expect(picker.className).toContain("rounded-xl");
+  expect(screen.queryByRole("dialog")).toBeNull();
   expect(within(picker).getByRole("textbox", { name: "Search sources" })).toBeTruthy();
   expect(within(picker).queryByRole("checkbox", { name: /Select Work tool/ })).toBeNull();
 
@@ -182,7 +189,7 @@ it("switches sources while preserving pending ToolID selections and all unrelate
   expect(sent.tools).toHaveLength(63);
   expect(sent.tools.some((binding) => binding.toolId === "tool_0001" || binding.toolId === "tool_0002")).toBe(false);
   expect(sent.tools.find((binding) => binding.toolId === "tool_0065")).toEqual(customised.tools[64]);
-  expect(screen.getAllByRole("dialog")).toHaveLength(1);
+  expect(screen.queryByRole("dialog")).toBeNull();
 });
 
 it("paginates 105 Tools inside one source and never drops other selected sources", async () => {
@@ -265,7 +272,7 @@ it("excludes unavailable/unclaimed sources from Add but preserves their existing
   expect(within(manageDialog).getByRole("button", { name: "Manage source Tool source 1 · Workspace" })).toBeTruthy();
   expect(within(manageDialog).getByRole("button", { name: "Manage source Tool source 2" })).toBeTruthy();
   fireEvent.click(within(manageDialog).getByRole("button", { name: "Choose tool sources" }));
-  const picker = await screen.findByRole("dialog", { name: "Choose tool sources" });
+  const picker = await screen.findByRole("region", { name: "Choose tool sources" });
   expect(within(picker).getAllByRole("button", { name: /Open source/ })).toHaveLength(1);
   expect(within(picker).queryByRole("button", { name: "Open source Tool source 1" })).toBeNull();
   expect(within(picker).queryByRole("button", { name: "Open source Tool source 2" })).toBeNull();
@@ -286,7 +293,7 @@ it("hydrates a bound Tool beyond the first Catalog page before grouping it by ex
   expect(await within(dialog).findByText("Work tool 105")).toBeTruthy();
   fireEvent.click(within(dialog).getByRole("button", { name: "Back to sources" }));
   fireEvent.click(within(dialog).getByRole("button", { name: "Choose tool sources" }));
-  const picker = await screen.findByRole("dialog", { name: "Choose tool sources" });
+  const picker = await screen.findByRole("region", { name: "Choose tool sources" });
   expect(within(picker).getByRole<HTMLButtonElement>("button", { name: "Save selection" }).disabled).toBe(true);
   await openSource("Tool source 0");
   fireEvent.click(await within(picker).findByRole("checkbox", { name: "Select Work tool 1" }));
@@ -307,7 +314,7 @@ it("distinguishes two identically named Agent instances by their unique configur
   expect(within(dialog).getByRole("button", { name: "Manage source Same Agent · agent-same-a" })).toBeTruthy();
   expect(within(dialog).getByRole("button", { name: "Manage source Same Agent · agent-same-b" })).toBeTruthy();
   fireEvent.click(within(dialog).getByRole("button", { name: "Choose tool sources" }));
-  const picker = await screen.findByRole("dialog", { name: "Choose tool sources" });
+  const picker = await screen.findByRole("region", { name: "Choose tool sources" });
   fireEvent.click(within(picker).getByRole("button", { name: "Open source Same Agent · agent-same-b" }));
   await within(picker).findByRole("checkbox", { name: "Select Work tool 2" });
   expect(browseTools).toHaveBeenCalledWith({ providerId: "prov_1", limit: 100 });
@@ -320,15 +327,15 @@ it("cancels during source loading without persisting or leaking a stale request 
     args?.providerId ? delayed : { tools });
   const { replaceProfileTools } = show({ browseTools: browse as MenderClient["browseTools"] });
   await chooseSources();
-  const picker = screen.getByRole("dialog", { name: "Choose tool sources" });
+  const picker = screen.getByRole("region", { name: "Choose tool sources" });
   fireEvent.click(within(picker).getByRole("button", { name: "Open source Tool source 0" }));
   fireEvent.click(within(picker).getByRole("button", { name: "Cancel" }));
-  const manageDialog = await screen.findByRole("dialog", { name: "Large Profile" });
+  const manageDialog = await screen.findByRole("region", { name: "Manage profile" });
   expect(within(manageDialog).getByRole("button", { name: "Choose tool sources" })).toBeTruthy();
   finish({ tools: tools.filter((tool) => tool.providerId === "prov_0") });
   await vi.waitFor(() => expect(replaceProfileTools).not.toHaveBeenCalled());
   fireEvent.click(within(manageDialog).getByRole("button", { name: "Choose tool sources" }));
-  const reopened = await screen.findByRole("dialog", { name: "Choose tool sources" });
+  const reopened = await screen.findByRole("region", { name: "Choose tool sources" });
   expect(within(reopened).getByRole("textbox", { name: "Search sources" })).toBeTruthy();
   expect(within(reopened).queryByRole("checkbox", { name: /Select Work tool/ })).toBeNull();
 });
@@ -349,7 +356,7 @@ it("retains an unreachable historical ToolID in a management-only Unknown source
   expect(within(dialog).getByRole("button", { name: "Remove Unavailable Tool" })).toBeTruthy();
   fireEvent.click(within(dialog).getByRole("button", { name: "Back to sources" }));
   fireEvent.click(within(dialog).getByRole("button", { name: "Choose tool sources" }));
-  const picker = await screen.findByRole("dialog", { name: "Choose tool sources" });
+  const picker = await screen.findByRole("region", { name: "Choose tool sources" });
   fireEvent.click(within(picker).getByRole("button", { name: "Open source Tool source 0" }));
   fireEvent.click(await within(picker).findByRole("checkbox", { name: "Select Work tool 1" }));
   fireEvent.click(within(picker).getByRole("button", { name: "Save selection" }));
@@ -357,4 +364,34 @@ it("retains an unreachable historical ToolID in a management-only Unknown source
   const sent = (replaceProfileTools.mock.calls[0] as [string, { tools: Profile["tools"] }])?.[1];
   expect(sent.tools).toHaveLength(selected.tools.length - 1);
   expect(sent.tools.find((binding) => binding.toolId === historicalId)).toEqual(historicalBinding);
+});
+
+
+it("shows failed governance saves inside the focused dialog and supports retry", async () => {
+  const replaceProfileTools = vi.fn()
+    .mockRejectedValueOnce(new Error("Policy store temporarily unavailable"))
+    .mockResolvedValueOnce(profile);
+  show({ replaceProfileTools: replaceProfileTools as MenderClient["replaceProfileTools"] });
+  const editor = await manage();
+  fireEvent.click(within(editor).getByRole("button", { name: "Manage source Tool source 0" }));
+  fireEvent.click(within(editor).getByRole("button", { name: "Governance for Work tool 1" }));
+  const dialog = screen.getByRole("dialog", { name: "Tool governance" });
+  fireEvent.click(within(dialog).getByRole("button", { name: "Save governance" }));
+  expect((await within(dialog).findByRole("alert")).textContent).toContain("Policy store temporarily unavailable");
+  expect(screen.getAllByRole("dialog")).toHaveLength(1);
+  fireEvent.click(within(dialog).getByRole("button", { name: "Save governance" }));
+  await vi.waitFor(() => expect(replaceProfileTools).toHaveBeenCalledTimes(2));
+  await vi.waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+});
+
+it("shows failed credential saves inside the active dialog", async () => {
+  const replaceProfileTools = vi.fn().mockRejectedValue(new Error("Credential binding rejected"));
+  show({ replaceProfileTools: replaceProfileTools as MenderClient["replaceProfileTools"] });
+  const editor = await manage();
+  fireEvent.click(within(editor).getByRole("button", { name: "Manage source Tool source 0" }));
+  fireEvent.click(within(editor).getByRole("button", { name: "Credentials for Work tool 1" }));
+  const dialog = screen.getByRole("dialog", { name: "Tool credentials" });
+  fireEvent.click(within(dialog).getByRole("button", { name: "Save credentials" }));
+  expect((await within(dialog).findByRole("alert")).textContent).toContain("Credential binding rejected");
+  expect(screen.getAllByRole("dialog")).toHaveLength(1);
 });

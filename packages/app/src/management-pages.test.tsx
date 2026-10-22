@@ -1890,7 +1890,7 @@ describe("management pages", () => {
         ),
       );
 
-    renderApp("/profiles", {
+    renderApp("/profiles/default/edit", {
       listProfiles: vi.fn().mockResolvedValue({ profiles: [profile] }),
       listProviders: vi.fn().mockResolvedValue({ providers: [] }),
       listTunnels: vi.fn().mockResolvedValue({ tunnels: [tunnel] }),
@@ -1899,10 +1899,7 @@ describe("management pages", () => {
     });
 
     expect((await screen.findAllByText("Default")).length).toBeGreaterThan(0);
-    expect(screen.getByText("Local only")).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "Manage Default" }));
-    fireEvent.click(screen.getByRole("button", { name: "Overview" }));
     const tunnelSelect =
       await screen.findByLabelText<HTMLSelectElement>("Profile tunnel");
     expect(tunnelSelect.value).toBe("");
@@ -1973,7 +1970,7 @@ describe("management pages", () => {
         }),
     );
 
-    renderApp("/profiles", {
+    renderApp("/profiles/default/edit", {
       listProfiles: vi.fn().mockResolvedValue({ profiles: [profile] }),
       listCredentials: vi.fn().mockResolvedValue({ credentials: [credential] }),
       listProviders: vi.fn().mockResolvedValue({
@@ -2022,11 +2019,11 @@ describe("management pages", () => {
     expect(screen.queryByText("tool_1")).toBeNull();
     expect(screen.queryByPlaceholderText("tool_...")).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: "Manage Default" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Tools/ }));
     expect(await screen.findByRole("button", { name: "Manage source AnySearch" })).toBeTruthy();
     expect(screen.queryByText("Search")).toBeNull();
     expect(screen.queryByText("tool_1")).toBeNull();
-    expect(screen.getAllByRole("dialog")).toHaveLength(1);
+    expect(screen.queryByRole("dialog")).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Manage source AnySearch" }));
     expect(screen.getByText("Search")).toBeTruthy();
@@ -2036,7 +2033,7 @@ describe("management pages", () => {
     expect(screen.queryByText("Extract")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Open source AnySearch" }));
     expect(await screen.findByText("Extract")).toBeTruthy();
-    expect(screen.getAllByRole("dialog")).toHaveLength(1);
+    expect(screen.queryByRole("dialog")).toBeNull();
     expect(screen.getByText("Extract content").classList.contains("line-clamp-2")).toBe(
       true,
     );
@@ -2047,7 +2044,7 @@ describe("management pages", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(await screen.findByRole("button", { name: "Choose tool sources" })).toBeTruthy();
-    expect(screen.getAllByRole("dialog")).toHaveLength(1);
+    expect(screen.queryByRole("dialog")).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Choose tool sources" }));
     fireEvent.click(await screen.findByRole("button", { name: "Open source AnySearch" }));

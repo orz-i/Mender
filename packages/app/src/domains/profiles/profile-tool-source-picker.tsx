@@ -3,14 +3,6 @@ import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 
 import type { Profile, Provider, ToolSummary } from "@mender/sdk";
 import { Button } from "@mender/ui/components/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@mender/ui/components/dialog";
 import { Input } from "@mender/ui/components/input";
 
 import { t, tCount } from "../../i18n/i18n";
@@ -90,9 +82,10 @@ export function ProfileToolSourcePicker({
   const selectedHere = selectedCounts.get(sourceId) ?? 0;
 
   return (
-    <Dialog open={open} onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}>
-      <DialogContent className="h-[min(760px,calc(100dvh-2rem))] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden sm:max-w-4xl">
-        <DialogHeader>
+    open ? <section data-slot="profile-tool-picker" aria-label={t("Choose tool sources")}
+      className="min-w-0 rounded-xl border border-border bg-card p-5">
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-1">
           {sourceId ? (
             <>
               <Button
@@ -103,20 +96,20 @@ export function ProfileToolSourcePicker({
                 <ChevronLeftIcon className="size-4" />
                 {t("Back to sources")}
               </Button>
-              <DialogTitle>{selectedProvider ? sourceLabels.get(selectedProvider.providerId) : t("Service unavailable")}</DialogTitle>
-              <DialogDescription>
+              <h2 className="text-base font-semibold">{selectedProvider ? sourceLabels.get(selectedProvider.providerId) : t("Service unavailable")}</h2>
+              <p className="text-sm text-muted-foreground">
                 {t("Select the individual tools this Profile may expose. New tools are never granted automatically.")}
-              </DialogDescription>
+              </p>
             </>
           ) : (
             <>
-              <DialogTitle>{t("Choose tool sources")}</DialogTitle>
-              <DialogDescription>
+              <h2 className="text-base font-semibold">{t("Choose tool sources")}</h2>
+              <p className="text-sm text-muted-foreground">
                 {t("Choose a source, then select the tools it may supply to this Profile.")}
-              </DialogDescription>
+              </p>
             </>
           )}
-        </DialogHeader>
+        </div>
 
         {sourceId ? (
           <div className="flex min-h-0 flex-col gap-3">
@@ -238,13 +231,13 @@ export function ProfileToolSourcePicker({
           </div>
         )}
 
-        <DialogFooter>
+        <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-4">
           <Button variant="outline" onClick={onClose}>{t("Cancel")}</Button>
           <Button disabled={busy || !dirty} onClick={onSave}>
             {t(busy ? "Saving…" : "Save selection")}
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </div>
+      </div>
+    </section> : null
   );
 }

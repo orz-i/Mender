@@ -21,6 +21,9 @@ import {
 import { pluginInstaller } from "./domains/plugins/marketplace";
 import { PolicyPage } from "./domains/policy/policy-page";
 import { ProfilesPage } from "./domains/profiles/profiles-page";
+import { ProfileCreatePage } from "./domains/profiles/profile-create-page";
+import { ProfileDetailPage } from "./domains/profiles/profile-detail-page";
+import { ProfileEditPage } from "./domains/profiles/profile-edit-page";
 import { ToolsPage, ToolServicePage } from "./domains/tools/tools-page";
 import { ToolWorkspacePage } from "./domains/tools/tool-workspace-page";
 import { RuntimePage } from "./domains/runtime/runtime-page";
@@ -89,6 +92,9 @@ export function MenderApp({
             }
           />
           <Route path="profiles" element={<ProfilesPage client={client} />} />
+          <Route path="profiles/new" element={<ProfileCreatePage client={client} />} />
+          <Route path="profiles/:slug" element={<ProfileDetailPage client={client} />} />
+          <Route path="profiles/:slug/edit" element={<ProfileEditPage client={client} />} />
           <Route path="tunnels" element={<TunnelsPage client={client} />} />
           <Route
             path="servers"
