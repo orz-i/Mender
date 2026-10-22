@@ -2074,9 +2074,8 @@ describe("management pages", () => {
     expect(screen.getByText("Serial")).toBeTruthy();
     expect(screen.queryByPlaceholderText("tool_...")).toBeNull();
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "Presentation for Search" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Actions for Search" }));
+    fireEvent.click(screen.getByRole("button", { name: "Presentation for Search" }));
     expect(await screen.findByText("Tool presentation")).toBeTruthy();
     expect(screen.getAllByRole("dialog")).toHaveLength(1);
     expect(screen.queryByRole("button", { name: "Choose tool sources" })).toBeNull();
@@ -2106,9 +2105,8 @@ describe("management pages", () => {
       "line-clamp-2",
     );
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "Governance for Release Search" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Actions for Release Search" }));
+    fireEvent.click(screen.getByRole("button", { name: "Governance for Release Search" }));
     expect(await screen.findByText("Tool governance")).toBeTruthy();
     expect(screen.getAllByRole("dialog")).toHaveLength(1);
     fireEvent.change(screen.getByLabelText("Binding policy constraint"), {
@@ -2123,9 +2121,8 @@ describe("management pages", () => {
     expect(screen.getByText("Serial")).toBeTruthy();
     expect(screen.queryByText("tool_1")).toBeNull();
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "Credentials for Release Search" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Actions for Release Search" }));
+    fireEvent.click(screen.getByRole("button", { name: "Credentials for Release Search" }));
     expect(await screen.findByText("Tool credentials")).toBeTruthy();
     expect(screen.getAllByRole("dialog")).toHaveLength(1);
     expect(screen.queryByLabelText("Credential reference")).toBeNull();

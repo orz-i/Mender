@@ -141,11 +141,11 @@ function ProfileDetailContent({ client, slug }: { client: MenderClient; slug: st
                   <div className="divide-y divide-border rounded-lg border border-border">
                     {toolPagination.items.map((item) => {
                       const tool = toolById.get(item.toolId);
+                      const toolTitle = item.titleOverride || tool?.title || tool?.name || t("Unavailable Tool");
+                      const description = item.descriptionOverride || tool?.description;
                       return <div key={item.toolId} className="flex flex-col gap-2 px-4 py-4">
-                        <p className="text-sm font-medium">{item.titleOverride || tool?.title || tool?.name || t("Unavailable Tool")}</p>
-                        {item.descriptionOverride || tool?.description ? (
-                          <p className="text-xs leading-5 text-muted-foreground">{item.descriptionOverride || tool?.description}</p>
-                        ) : null}
+                        <p className="text-sm font-medium">{toolTitle}</p>
+                        {description ? <ProfileToolDescription description={description} toolTitle={toolTitle} /> : null}
                         <div className="flex flex-wrap gap-2">
                           <Badge variant="outline">{t(item.direct ? "Direct" : "Dynamic")}</Badge>
                           {item.alias ? <Badge variant="secondary">{t("Alias:")} {item.alias}</Badge> : null}
@@ -188,6 +188,24 @@ function ProfileDetailContent({ client, slug }: { client: MenderClient; slug: st
         </DataPanel>
       ) : null}
     </>
+  );
+}
+
+/** Long Catalog descriptions should not bury the other ToolBindings on a read-only detail page. */
+function ProfileToolDescription({ description, toolTitle }: { description: string; toolTitle: string }) {
+  if (description.length <= 160) {
+    return <p className="min-w-0 break-words text-xs leading-5 text-muted-foreground [overflow-wrap:anywhere]">{description}</p>;
+  }
+  return (
+    <details className="group min-w-0 text-xs leading-5 text-muted-foreground">
+      <summary aria-label={t("Toggle full description for {{tool}}", { tool: toolTitle })}
+        className="cursor-pointer list-none rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50 [&::-webkit-details-marker]:hidden">
+        <span className="line-clamp-2 break-words group-open:hidden [overflow-wrap:anywhere]">{description}</span>
+        <span className="mt-1 inline-block font-medium text-foreground group-open:hidden">{t("Show full description")}</span>
+        <span className="hidden font-medium text-foreground group-open:inline">{t("Hide full description")}</span>
+      </summary>
+      <p className="mt-2 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{description}</p>
+    </details>
   );
 }
 

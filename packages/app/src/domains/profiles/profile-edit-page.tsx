@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router";
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
+  EllipsisIcon,
   KeyRoundIcon,
   PresentationIcon,
   ShieldCheckIcon,
@@ -28,12 +29,12 @@ import {
   DialogTitle,
 } from "@mender/ui/components/dialog";
 import { Input } from "@mender/ui/components/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@mender/ui/components/popover";
 
 import { errorMessage } from "../../shared/errors";
 import { FormHeading } from "../../shared/form-info";
 import { ProfileToolSourcePicker } from "./profile-tool-source-picker";
 import { profileSourceLabels } from "./profile-source-label";
-import { IconButton } from "../../shared/icon-button";
 import { EmptyState, ErrorNotice } from "../../shared/page";
 import { PageTab, PageTabs, PageToolbar } from "../../shared/page-toolbar";
 import { usePagination } from "../../shared/pagination";
@@ -72,6 +73,9 @@ function ProfileEditor({ client, slug }: { client: MenderClient; slug: string | 
   const [retryVersion, setRetryVersion] = useState(0);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [toolActionsId, setToolActionsId] = useState<string | null>(null);
+  const [pendingRemoval, setPendingRemoval] = useState<{ toolId: string; title: string } | null>(null);
+  const [removeError, setRemoveError] = useState("");
 
   const [manageSlug, setManageSlug] = useState(slug ?? "");
   const [manageView, setManageView] = useState<"overview" | "tools">("overview");
@@ -637,24 +641,18 @@ function ProfileEditor({ client, slug }: { client: MenderClient; slug: string | 
     }
   }
 
-  async function removeTool(toolId: string) {
-    if (managedProfile === null) {
-      return;
-    }
-
+  async function removeTool() {
+    if (managedProfile === null || pendingRemoval === null || busy) return;
     setBusy(true);
-    setError("");
+    setRemoveError("");
     try {
       const profile = await client.replaceProfileTools(managedProfile.slug, {
-        tools: managedProfile.tools.filter(
-          (selection) => selection.toolId !== toolId,
-        ),
+        tools: managedProfile.tools.filter((binding) => binding.toolId !== pendingRemoval.toolId),
       });
-      setProfiles((current) =>
-        current.map((item) => (item.slug === profile.slug ? profile : item)),
-      );
+      setProfiles((current) => current.map((item) => item.slug === profile.slug ? profile : item));
+      setPendingRemoval(null);
     } catch (reason) {
-      setError(errorMessage(reason));
+      setRemoveError(errorMessage(reason));
     } finally {
       setBusy(false);
     }
@@ -845,40 +843,38 @@ function ProfileEditor({ client, slug }: { client: MenderClient; slug: string | 
                             ) : null}
                           </div>
                         </div>
-                        <div className="flex shrink-0 flex-wrap justify-end gap-2">
-                          <IconButton
-                            variant="outline"
-                            label={t("Presentation for {{tool}}", { tool: title })}
-                            disabled={busy}
-                            onClick={() => openPresentation(selection)}
-                          >
-                            <PresentationIcon />
-                          </IconButton>
-                          <IconButton
-                            variant="outline"
-                            label={t("Governance for {{tool}}", { tool: title })}
-                            disabled={busy}
-                            onClick={() => openGovernance(selection)}
-                          >
-                            <ShieldCheckIcon />
-                          </IconButton>
-                          <IconButton
-                            variant="outline"
-                            label={t("Credentials for {{tool}}", { tool: title })}
-                            disabled={busy}
-                            onClick={() => openCredentials(selection)}
-                          >
-                            <KeyRoundIcon />
-                          </IconButton>
-                          <IconButton
-                            variant="outline"
-                            label={t("Remove {{tool}}", { tool: title })}
-                            disabled={busy}
-                            onClick={() => void removeTool(selection.toolId)}
-                          >
-                            <Trash2Icon />
-                          </IconButton>
-                        </div>
+                        <Popover open={toolActionsId === selection.toolId}
+                          onOpenChange={(open) => setToolActionsId(open ? selection.toolId : null)}>
+                          <PopoverTrigger render={<Button size="sm" variant="outline" type="button"
+                            aria-label={t("Actions for {{tool}}", { tool: title })} disabled={busy} />}>
+                            <EllipsisIcon data-icon="inline-start" />
+                            {t("Actions")}
+                          </PopoverTrigger>
+                          <PopoverContent align="end" className="w-52 p-2">
+                            <div className="grid gap-1">
+                              <Button size="sm" variant="ghost" className="justify-start"
+                                aria-label={t("Presentation for {{tool}}", { tool: title })}
+                                onClick={() => { setToolActionsId(null); openPresentation(selection); }}>
+                                <PresentationIcon data-icon="inline-start" />{t("Tool presentation")}
+                              </Button>
+                              <Button size="sm" variant="ghost" className="justify-start"
+                                aria-label={t("Governance for {{tool}}", { tool: title })}
+                                onClick={() => { setToolActionsId(null); openGovernance(selection); }}>
+                                <ShieldCheckIcon data-icon="inline-start" />{t("Tool governance")}
+                              </Button>
+                              <Button size="sm" variant="ghost" className="justify-start"
+                                aria-label={t("Credentials for {{tool}}", { tool: title })}
+                                onClick={() => { setToolActionsId(null); openCredentials(selection); }}>
+                                <KeyRoundIcon data-icon="inline-start" />{t("Tool credentials")}
+                              </Button>
+                              <Button size="sm" variant="ghost" className="justify-start text-destructive hover:text-destructive"
+                                aria-label={t("Remove {{tool}}", { tool: title })}
+                                onClick={() => { setToolActionsId(null); setRemoveError(""); setPendingRemoval({ toolId: selection.toolId, title }); }}>
+                                <Trash2Icon data-icon="inline-start" />{t("Remove")}
+                              </Button>
+                            </div>
+                          </PopoverContent>
+                        </Popover>
                       </div>
                     );
                   })}
@@ -963,6 +959,27 @@ function ProfileEditor({ client, slug }: { client: MenderClient; slug: string | 
         onSave={() => void saveToolSelection()}
         onClose={closeToolPicker}
       />
+      <Dialog open={pendingRemoval !== null} onOpenChange={(open) => {
+        if (!open && !busy) { setPendingRemoval(null); setRemoveError(""); }
+      }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{pendingRemoval ? t("Remove {{tool}}", { tool: pendingRemoval.title }) : t("Remove tool")}</DialogTitle>
+            <DialogDescription>
+              {t("This will stop exposing the Tool through this Profile. The Tool remains in the Catalog.")}
+            </DialogDescription>
+          </DialogHeader>
+          {removeError ? <ErrorNotice message={removeError} /> : null}
+          <DialogFooter>
+            <Button variant="outline" disabled={busy} onClick={() => { setPendingRemoval(null); setRemoveError(""); }}>
+              {t("Cancel")}
+            </Button>
+            <Button variant="destructive" disabled={busy} onClick={() => void removeTool()}>
+              {t(busy ? "Saving…" : "Remove tool")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <Dialog
         open={presentationBinding !== null}
         onOpenChange={(open) => {

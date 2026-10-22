@@ -111,3 +111,23 @@ it("shows a recoverable error on unknown profile and does not offer editing", as
   fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
   await waitFor(() => expect(getProfile).toHaveBeenCalledTimes(2));
 });
+
+
+it("keeps long tool descriptions collapsed until an explicit disclosure", async () => {
+  const longDescription = "Technical instructions for a complex catalog tool, including examples and detailed options. ".repeat(15);
+  show("/profiles/my-profile", {
+    browseTools: vi.fn().mockResolvedValue({ tools: [{ ...tool, description: longDescription }] }),
+  });
+  fireEvent.click(await screen.findByRole("button", { name: "Tools" }));
+  fireEvent.click(await screen.findByRole("button", { name: /AnySearch/ }));
+  const toggle = screen.getByText("Show full description");
+  const summary = toggle.closest("summary");
+  const disclosure = toggle.closest("details");
+  expect(summary?.querySelector(".line-clamp-2")).toBeTruthy();
+  expect(disclosure?.open).toBe(false);
+  fireEvent.click(summary!);
+  expect(disclosure?.open).toBe(true);
+  expect(disclosure?.textContent).toContain(longDescription);
+  fireEvent.click(summary!);
+  expect(disclosure?.open).toBe(false);
+});

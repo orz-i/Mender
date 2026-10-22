@@ -128,7 +128,7 @@ it("shows selected sources before Tools and preserves per-source management pagi
   expect(within(dialog).queryByRole("button", { name: /Presentation for Work tool/ })).toBeNull();
 
   fireEvent.click(within(dialog).getByRole("button", { name: "Manage source Tool source 0" }));
-  expect(within(dialog).getAllByRole("button", { name: /Presentation for Work tool/ })).toHaveLength(10);
+  expect(within(dialog).getAllByRole("button", { name: /Actions for Work tool/ })).toHaveLength(10);
   expect(within(dialog).queryByText("Work tool 31")).toBeNull();
   fireEvent.click(within(dialog).getByRole("button", { name: "Selected Tools next page" }));
   expect(within(dialog).getByText("Work tool 31")).toBeTruthy();
@@ -353,7 +353,8 @@ it("retains an unreachable historical ToolID in a management-only Unknown source
   expect(within(dialog).getByRole("button", { name: "Manage source Unknown source" })).toBeTruthy();
   await vi.waitFor(() => expect(getTool).toHaveBeenCalledWith(historicalId));
   fireEvent.click(within(dialog).getByRole("button", { name: "Manage source Unknown source" }));
-  expect(within(dialog).getByRole("button", { name: "Remove Unavailable Tool" })).toBeTruthy();
+  fireEvent.click(within(dialog).getByRole("button", { name: "Actions for Unavailable Tool" }));
+  expect(screen.getByRole("button", { name: "Remove Unavailable Tool" })).toBeTruthy();
   fireEvent.click(within(dialog).getByRole("button", { name: "Back to sources" }));
   fireEvent.click(within(dialog).getByRole("button", { name: "Choose tool sources" }));
   const picker = await screen.findByRole("region", { name: "Choose tool sources" });
@@ -374,7 +375,8 @@ it("shows failed governance saves inside the focused dialog and supports retry",
   show({ replaceProfileTools: replaceProfileTools as MenderClient["replaceProfileTools"] });
   const editor = await manage();
   fireEvent.click(within(editor).getByRole("button", { name: "Manage source Tool source 0" }));
-  fireEvent.click(within(editor).getByRole("button", { name: "Governance for Work tool 1" }));
+  fireEvent.click(within(editor).getByRole("button", { name: "Actions for Work tool 1" }));
+  fireEvent.click(screen.getByRole("button", { name: "Governance for Work tool 1" }));
   const dialog = screen.getByRole("dialog", { name: "Tool governance" });
   fireEvent.click(within(dialog).getByRole("button", { name: "Save governance" }));
   expect((await within(dialog).findByRole("alert")).textContent).toContain("Policy store temporarily unavailable");
@@ -389,9 +391,39 @@ it("shows failed credential saves inside the active dialog", async () => {
   show({ replaceProfileTools: replaceProfileTools as MenderClient["replaceProfileTools"] });
   const editor = await manage();
   fireEvent.click(within(editor).getByRole("button", { name: "Manage source Tool source 0" }));
-  fireEvent.click(within(editor).getByRole("button", { name: "Credentials for Work tool 1" }));
+  fireEvent.click(within(editor).getByRole("button", { name: "Actions for Work tool 1" }));
+  fireEvent.click(screen.getByRole("button", { name: "Credentials for Work tool 1" }));
   const dialog = screen.getByRole("dialog", { name: "Tool credentials" });
   fireEvent.click(within(dialog).getByRole("button", { name: "Save credentials" }));
   expect((await within(dialog).findByRole("alert")).textContent).toContain("Credential binding rejected");
   expect(screen.getAllByRole("dialog")).toHaveLength(1);
+});
+
+it("requires explicit confirmation before removing a Profile Tool and keeps all other bindings", async () => {
+  const { replaceProfileTools } = show();
+  const editor = await manage();
+  fireEvent.click(within(editor).getByRole("button", { name: "Manage source Tool source 0" }));
+
+  function openRemoval() {
+    fireEvent.click(within(editor).getByRole("button", { name: "Actions for Work tool 1" }));
+    fireEvent.click(screen.getByRole("button", { name: "Remove Work tool 1" }));
+    return screen.getByRole("dialog", { name: "Remove Work tool 1" });
+  }
+
+  let confirmation = openRemoval();
+  expect(confirmation.textContent).toContain("The Tool remains in the Catalog");
+  expect(replaceProfileTools).not.toHaveBeenCalled();
+  fireEvent.click(within(confirmation).getByRole("button", { name: "Cancel" }));
+  expect(screen.queryByRole("dialog")).toBeNull();
+  expect(replaceProfileTools).not.toHaveBeenCalled();
+
+  confirmation = openRemoval();
+  fireEvent.click(within(confirmation).getByRole("button", { name: "Remove tool" }));
+  await vi.waitFor(() => expect(replaceProfileTools).toHaveBeenCalledOnce());
+  const [slug, body] = replaceProfileTools.mock.calls[0] as [string, { tools: Profile["tools"] }];
+  expect(slug).toBe("large-profile");
+  expect(body.tools).toHaveLength(profile.tools.length - 1);
+  expect(body.tools.some((binding) => binding.toolId === "tool_0001")).toBe(false);
+  expect(body.tools.find((binding) => binding.toolId === "tool_0065")).toEqual(profile.tools[64]);
+  await vi.waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
 });
