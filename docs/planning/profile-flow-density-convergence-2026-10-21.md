@@ -45,3 +45,31 @@
 - 实现及回归单独提交。
 - 验收记录单独补充。
 
+## 实施与真实桌面验收（Mac 本地 2026-10-22）
+
+### 交付与提交
+
+- `b6a79e1`：本轮 UX 契约和不变量。
+- `29bf200`：Profile 上下文延续、来源内直达、稀疏列表、局部错误与可见底部保存区；i18n、组件与管理页回归测试。
+
+### 实际运行环境与操作
+
+- Wails v3 开发应用 `mender-desktop`，开发前端 Vite `:9245`，共享 `packages/app` 组件；并非 `:5174` 旧 Web Fixture。
+- 真实窗口 1239×851 下打开已有 Profile 编辑页 → 工具 → AnySearch 来源；点击“添加工具”后直达 AnySearch 的 4 个工具（无重复来源选择）。
+- 现有 Profile 共 32 个 ToolID 绑定。临时取消 `extract` 选择仅改变草稿为 31，并出现“有未保存的修改”。点击“取消”后重新打开，`extract` 恢复选中、总数回到 32；未调用保存。
+- 把当前原生窗口缩至最低支持尺寸 **960×680** 后，发现原先工具列表将底部取消／保存区推到可视区域外。已通过限制选择器高度、列表局部滚动和底部操作区固定布局修正，随后原生截图和 Accessibility 树均确认底部操作区可见。
+- 全部结束后关闭工具草稿、恢复原生窗口 **1239×851**、回到配置档“概览”，没有改变用户的持久授权、Tunnel、凭据或策略，也没有重启或重配其运行中的 MCP 服务。
+- 真实截图保存在本机 `/tmp/mender-ux-convergence-evidence/`：`03-source-tools.png`（来源工具管理）、`04-source-scoped-picker.png`（当前来源直达）、`05-unsaved-draft.png`（未保存草稿）、`07-min-window-picker.png`（最小窗口旧状态）、`08-min-window-after-fix.png`（修复后同尺寸底部操作可见）。
+
+### 自动化验证
+
+- `pnpm lint`、`pnpm typecheck`、`pnpm i18n:check`、`pnpm --filter @mender/web build`、`pnpm --filter @mender/desktop build`、`pnpm desktop:architecture:check`、`git diff --check` 全部通过。
+- i18n：**1494/1494** 覆盖；全量 Vitest（`--maxWorkers=2`）：**64 个文件、405 项通过**。完整结果：`/tmp/mender-ux-final-check.log`，退出码 0。
+- 较早的 `--maxWorkers=6` 全量测试出现 Docker 自动刷新计时器偶发失败（与 Profile 修改无关）；该用例单独重跑通过，减少并行度后的全量重跑及最终检查均全部通过。未修改 Docker 业务代码或测试行为。
+- Web／桌面构建现有单一 JS chunk >500 kB 的告警仍存在，属于非阻断性能治理候选，不在本次修改范围内。
+
+### 验证限制与后续领域
+
+- 原生 Wails 验证了真实数据的导航、草稿及取消，但不在用户现有生产 Profile 上执行保存／删除；写入保全和错误分支由隔离测试验证。
+- 当前轮次是 **Profile 单领域 P1 收口**，没有冒充全部 Mender 页面已审计整改。工具目录／插件、Agent 任务审批、沙盒／凭据和审计页的跨页面信息密度，以及 390px Web 响应式、键盘/VoiceOver/缩放专项仍待逐域审查。
+
