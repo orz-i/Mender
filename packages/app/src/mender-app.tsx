@@ -1,5 +1,7 @@
 import type {
   MenderClient,
+  ExportProfilePluginInput,
+  ProfileAgentPluginExport,
   ProviderPluginInstallation,
   SkillDeployment,
   SkillInstallation,
@@ -27,6 +29,8 @@ import { ProfileEditPage } from "./domains/profiles/profile-edit-page";
 import { ProfileSkillsPage } from "./domains/profiles/profile-skills-page";
 import { ProfileMCPDeliveryPage } from "./domains/profiles/profile-mcp-delivery-page";
 import { ProfileSkillDeliveryPage } from "./domains/profiles/profile-skill-delivery-page";
+import { ProfileCLIDeliveryPage } from "./domains/profiles/profile-cli-delivery-page";
+import { ProfileAgentPluginPage } from "./domains/profiles/profile-agent-plugin-page";
 import { ToolsPage, ToolServicePage } from "./domains/tools/tools-page";
 import { ToolWorkspacePage } from "./domains/tools/tool-workspace-page";
 import { RuntimePage } from "./domains/runtime/runtime-page";
@@ -45,6 +49,7 @@ export function MenderApp({
   installPlugin,
   installSkill,
   deployProfileSkills,
+  exportProfilePlugin,
 }: {
   client: MenderClient;
   copyText?: (value: string) => Promise<void>;
@@ -52,6 +57,7 @@ export function MenderApp({
   installPlugin?: () => Promise<ProviderPluginInstallation | null>;
   installSkill?: () => Promise<SkillInstallation | null>;
   deployProfileSkills?: (slug: string, target: SkillDeployment["target"]) => Promise<SkillDeployment[] | null>;
+  exportProfilePlugin?: (slug: string, input: ExportProfilePluginInput) => Promise<ProfileAgentPluginExport | null>;
 }) {
   useLocale();
 
@@ -98,6 +104,10 @@ export function MenderApp({
             {...(copyText === undefined ? {} : { copyText })} />} />
           <Route path="profiles/:slug/deliveries/skills" element={<ProfileSkillDeliveryPage client={client}
             {...(deployProfileSkills === undefined ? {} : { deployProfileSkills })} />} />
+          <Route path="profiles/:slug/deliveries/cli" element={<ProfileCLIDeliveryPage client={client}
+            {...(copyText === undefined ? {} : { copyText })} />} />
+          <Route path="profiles/:slug/deliveries/plugin" element={<ProfileAgentPluginPage client={client}
+            {...(exportProfilePlugin === undefined ? {} : { exportProfilePlugin })} />} />
           <Route path="tunnels" element={<TunnelsPage client={client} />} />
           <Route path="servers" element={<Navigate to="/profiles" replace />} />
           <Route path="runtime" element={<RuntimePage client={client} />} />

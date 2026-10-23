@@ -154,6 +154,32 @@ Profile 已成为新建 Skill 文件交付的唯一对外产品入口：`/profil
 
 **明确限制：**这不是单个数据库事务包裹所有文件写入；跨多个 Skill 的失败会尽力逆序补偿，补偿失败显式报错，不能虚报原子成功。未添加跨主机目录安装；真实用户 HOME 路径、现有生产 Wails App、真实隧道、Agent 消费端加载尚未实机验收。本阶段没有操作真实生产数据库或正在运行的 MCP Server。
 
+## 阶段 E — Profile-local CLI 与 Agent Plugin（2026-10-24）
+
+已从同一个 Profile（其准确 ToolBinding / SkillInstallationID 选择）派生本地 CLI 使用方式和可分发的 Agent Plugins 1.0 产物，而不引入 Agent Loop、独立 CLI Tool executor、第二种 Provider 注册表或新增 MCP 常驻服务。
+
+### 本地 CLI
+
+- 正式下游入口：`mender profile tool search <slug> <query>`、`mender profile tool describe <slug> <tool-id>`、`mender profile tool call <slug> <tool-id>`。Profile 参数不可省略，空 Profile 不会触发全 Catalog 查询，跨 Profile 描述/执行被拒绝；Call 仍经过原有 Mender Policy / approval / Audit。
+- 保留 `mender tool ...` 管理员/本机 Catalog CLI 语义，不擅自修改操作员的管理访问。单独的 `mender profile cli <slug>` 产生包含 `mender --db <当前数据库>` 的命令模板和 client-launched `serve mcp --profile <slug> --stdio` 参考。
+- 桌面端 Profile → 交付 → 本地 CLI 页面展示当前 Desktop 运行时真实数据库路径与命令。HTTP 管理端无该本机敏感路径的 API；Web 只显示不可用说明，不猜测远端为本机。
+- CLI 配方是即时读取的局部配置，不是长期存储的部署/已安装 CLI，也不意味着隔离原生 Shell 命令。
+
+### 便携 Agent Plugin
+
+- 调整原自由选择 Skill 的 `skill export` 为 `mender profile export-plugin <slug>` 和 Desktop Profile → 交付 → Agent Plugin。只能从当前 Profile 的精确安装集合选出 Skills；调用者不能追加 Profile 外的安装 ID。
+- 复用既有 Agent Plugin exporter，输出规范 `plugin.json`、可选 `skills/`、可选 `mcp.json`；支持纯 Skill、纯 Streamable HTTP MCP 及混合包。所有文件先写入兄弟临时目录，经内容摘要、名称/目标校验后重命名发布；已存在目的地拒绝覆盖。
+- `mcp.json` 使用 Agent Plugins 1.0 固定 `$schema` 和 `mcpServers.mender.type=streamable-http`。仅支持显式 HTTPS URL，拒绝本机、私有 IP、内嵌用户信息、query/fragment，不输出认证 header、令牌或 DB 路径；插件客户端负责 OAuth/连接授权。
+- Desktop 需原生选择导出父目录；取消不会生成包或显示成功。Remote Management 不能写客户端本机磁盘，也不能复制桌面数据库路径。
+- 导出结果包含导出时 Profile revision，但 **没有持久化 Artifact Record** 或自动刷新已导出的文件。Profile 变更后须手动重新导出，不能声称远程客户端已有最新包。
+
+### 质量与明确遗留
+
+- `go test ./backend/...` 全量通过。新增 Profile CLI 隔离、空 Profile、调用审计、Desktop 本地路径、插件 Skills/MCP/混合包、URL 安全拒绝、精确 digest、源外 Skill ID 拒绝用例通过。
+- `pnpm exec vitest run --maxWorkers=6 --reporter=dot` 68 文件、428 项通过；`pnpm lint`、`pnpm typecheck`、`pnpm i18n:check`（1572/1572）、`pnpm build` 与 Desktop 架构检查通过；Go Lint 零问题；生成 SDK/Wails 绑定提交后再验一致性。
+- **安全边界声明**：用户手工输入的 HTTPS MCP 地址仅经过语法/显式风险验证，尚未进行实时连接、服务身份、工具集合及 ProfileID 所有权证明。生成 `mcp.json` 不会让任意外部 MCP 服务自动受 Mender Profile 治理；不可把 URL 已接受或插件文件已导出写成端到端权限验收。
+- Phase F 待办：真实 Wails 交互/目录选择器、原生 CLI 与 MCP stdio/HTTP 在真实目标的访问权、经过身份验证的远端 HTTPS、被信任 Agent Plugins 客户端加载、已有 Profile 运行时重启/数据迁移、异地 Skill 安装。生产数据、Tunnel、常驻 MCP 进程均未触碰。
+
 ## 7. 需避免的过度设计
 
 - 不引入 ACP v2、Agent Loop 或新的 Session/Task 生命周期。

@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 import { HashRouter } from "react-router";
 
 import { MenderApp, t } from "@mender/app";
-import type { SkillDeployment } from "@mender/sdk";
+import type { ExportProfilePluginInput, SkillDeployment } from "@mender/sdk";
 import { Clipboard, Dialogs } from "@wailsio/runtime";
 
 import "@mender/ui/globals.css";
@@ -11,6 +11,7 @@ import "@mender/ui/globals.css";
 import {
   createDesktopMenderClient,
   deployDesktopProfileSkills,
+  exportDesktopProfilePlugin,
   installDesktopPlugin,
   installDesktopSkill,
 } from "./desktop-client";
@@ -88,6 +89,20 @@ async function chooseAndDeployProfileSkills(
   return deployDesktopProfileSkills(slug, target, projectRoot);
 }
 
+async function chooseAndExportProfilePlugin(slug: string, input: ExportProfilePluginInput) {
+  const outputParent = await Dialogs.OpenFile({
+    AllowsMultipleSelection: false,
+    CanChooseDirectories: true,
+    CanChooseFiles: false,
+    CanCreateDirectories: false,
+    Title: t("Export Profile Agent Plugin"),
+    Message: t("Choose the parent directory for a new portable Agent Plugin package."),
+    ButtonText: t("Choose folder"),
+  });
+  if (!outputParent) return null;
+  return exportDesktopProfilePlugin(slug, input, outputParent);
+}
+
 createRoot(rootElement).render(
   <StrictMode>
     <HashRouter>
@@ -98,6 +113,7 @@ createRoot(rootElement).render(
         installPlugin={chooseAndInstallPlugin}
         installSkill={chooseAndInstallSkill}
         deployProfileSkills={chooseAndDeployProfileSkills}
+        exportProfilePlugin={chooseAndExportProfilePlugin}
       />
     </HashRouter>
   </StrictMode>,

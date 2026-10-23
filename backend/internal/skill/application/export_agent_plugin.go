@@ -32,6 +32,7 @@ type ExportAgentPluginRequest struct {
 	Description     string
 	Destination     string
 	InstallationIDs []skilldomain.InstallationID
+	MCP             *AgentPluginMCP
 }
 
 func (uc ExportAgentPlugin) Execute(
@@ -44,8 +45,8 @@ func (uc ExportAgentPlugin) Execute(
 	if strings.TrimSpace(request.Destination) == "" {
 		return fmt.Errorf("export agent plugin: destination must not be empty")
 	}
-	if len(request.InstallationIDs) == 0 {
-		return fmt.Errorf("export agent plugin: at least one Skill installation is required")
+	if len(request.InstallationIDs) == 0 && request.MCP == nil {
+		return fmt.Errorf("export agent plugin: at least one Skill or MCP server is required")
 	}
 
 	seenIDs := make(map[skilldomain.InstallationID]struct{}, len(request.InstallationIDs))
@@ -103,6 +104,7 @@ func (uc ExportAgentPlugin) Execute(
 		Description: strings.TrimSpace(request.Description),
 		Destination: request.Destination,
 		Skills:      skills,
+		MCP:         request.MCP,
 	}); err != nil {
 		return fmt.Errorf("export agent plugin: %w", err)
 	}

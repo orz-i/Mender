@@ -1,6 +1,6 @@
 # ADR-0058 — Profile as a unified capability bundle and delivery root
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-23
 - Extends: [ADR-0004](0004-runtime-modes-and-mcp.md), [ADR-0008](0008-mcp-adapter.md), [ADR-0016](0016-managed-downstream-mcp-servers.md), [ADR-0029](0029-skill-resource-management.md), [ADR-0031](0031-managed-profile-tunnels.md), [ADR-0039](0039-offerings-resource-tool-suites.md), [ADR-0055](0055-managed-mcp-profile-hot-refresh.md)
 - Design and migration: [Profile unified delivery plan](../../planning/profile-unified-delivery-2026-10-23.md)
@@ -18,7 +18,7 @@ ADR-0004 originally calls for one application core deployed locally (direct CLI 
 
 This splits an intended *Profile bundle* among three ownership surfaces; simply moving buttons would leave authorization, exact-version tracking, target lifecycle and UX inconsistent.
 
-## Proposed decision
+## Decision
 
 ### 1. Profile owns the selection, not the foreign resources or processes
 
@@ -77,9 +77,19 @@ Creation is staged: create Profile identity → add Tools/Skills → explicitly 
 
 - Positive: one clear "assemble → deliver → inspect" user journey; exact membership and authorization boundaries; reuse of current MCP/CLI/Skill infrastructure; local and remote runtime modes remain first class; transport-specific states remain truthful.
 - Costs: new Profile-Skill membership and delivery association/query contracts; an explicit migration for legacy Skill deployment records; scoped CLI descriptions/search/call; target-specific export validation; frontend route/tests reorganization; remote deployment capability gaps stay explicit.
-- This is **a proposal**, not permission to modify production Profiles, Server/Tunnel processes, Trust or Skill directories. ADR-0016's ephemeral HTTP semantics remain in force until a later, separately accepted lifecycle change.
+- This decision does **not** authorize automatic changes to production Profiles, Server/Tunnel processes, Trust, or host Skill directories. ADR-0016's ephemeral HTTP semantics remain in force until a later, separately accepted lifecycle change.
 
-## External references (checked 2026-10-23)
+## Implementation status (2026-10-24)
+
+The decision is accepted and implementation is **partial, not production-validated**:
+
+- `dc3bde5`: Profile pins exact SkillInstallation IDs with trust/enablement and DB reference guards.
+- `eedbbc3`: Profile owns host Skill materialization/undeploy; historical unowned Skill Deployments remain unclaimed, visible and removable.
+- `5c43d76`: Profile-scoped MCP HTTP control and status UI; no persistent daemon auto-start change.
+- Stage E: Profile-only CLI commands/owner-local recipes and portable Agent Plugins 1.0 package export (Skills-only, HTTPS MCP-only or combined). Local paths and host actions remain Desktop-only.
+- **Deliberate limitations:** exported package and local CLI recipe are snapshots, not persistent delivery records with fleet-wide health, automatic artifact drift/reconciliation or client-side installation. User-provided remote MCP URL is validated structurally but **not verified as a Profile-scoped MCP server**. Agent-side scripts outside Mender Tool Invocation are not fully Mender-governed. Remote HTTPS ingress/authentication, host-specific remote Skill installation, native Wails runtime and actual consumer-client loading require Phase F acceptance evidence.
+
+## External references (checked 2026-10-24)
 
 - https://agentskills.io/specification — immutable directory format and progressive disclosure.
 - https://agent-plugins.org/specification — portable manifest, skills/ and optional mcp.json.

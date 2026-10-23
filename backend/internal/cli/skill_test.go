@@ -28,7 +28,8 @@ func TestSkillCommandSurface(t *testing.T) {
 		{"profile", "undeploy-skill"},
 		{"skill", "deployments"},
 		{"skill", "undeploy"},
-		{"skill", "export"},
+		{"profile", "export-plugin"},
+		{"profile", "cli"},
 		{"skill", "remove"},
 	} {
 		command, _, err := root.Find(path)
@@ -110,6 +111,13 @@ func TestSkillCLIManagedLifecycle(t *testing.T) {
 	}
 
 	execute("profile", "create", "--slug", "delivery", "--name", "Delivery", "--mode", "hybrid")
+	localCLI := execute("profile", "cli", "delivery")
+	if localCLI["databasePath"] != dbPath || localCLI["profileSlug"] != "delivery" {
+		t.Fatalf("Profile CLI instructions = %#v", localCLI)
+	}
+	if got := jsonArray(t, localCLI["describe"]); len(got) < 6 {
+		t.Fatalf("Profile CLI must include bounded describe command: %#v", got)
+	}
 	execute("profile", "set-skills", "delivery", firstID)
 	projectRoot := filepath.Join(temp, "project")
 	if err := os.MkdirAll(projectRoot, 0o750); err != nil {
@@ -172,9 +180,9 @@ func TestSkillCLIManagedLifecycle(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(exportDirectory), 0o750); err != nil {
 		t.Fatal(err)
 	}
+	execute("profile", "set-skills", "delivery", builtInID, firstID)
 	exported := execute(
-		"skill", "export", builtInID, firstID,
-		"--format", "agent-plugin",
+		"profile", "export-plugin", "delivery",
 		"--name", "mender.skills",
 		"--version", "1.0.0",
 		"--description", "CLI export test",
@@ -195,8 +203,7 @@ func TestSkillCLIManagedLifecycle(t *testing.T) {
 	}
 	if _, err := executeSkillJSON(
 		dbPath,
-		"skill", "export", builtInID,
-		"--format", "agent-plugin",
+		"profile", "export-plugin", "delivery",
 		"--name", "Bad_Name",
 		"--output-dir", filepath.Join(temp, "exports", "invalid"),
 	); err == nil || !strings.Contains(err.Error(), "invalid Agent Plugin package") {
@@ -237,6 +244,7 @@ func TestSkillCLIManagedLifecycle(t *testing.T) {
 		t.Fatalf("exact inspect = %#v", exact)
 	}
 
+	execute("profile", "set-skills", "delivery")
 	untrusted := jsonObject(t, execute("skill", "untrust", firstID)["installation"])
 	if untrusted["trusted"] != false || untrusted["enabled"] != false {
 		t.Fatalf("untrusted installation = %#v", untrusted)

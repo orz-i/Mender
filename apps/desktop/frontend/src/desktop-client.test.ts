@@ -15,6 +15,7 @@ vi.mock(
       DeletePolicyRule: vi.fn(),
       DeleteSkillInstallation: vi.fn(),
       DeployProfileSkills: vi.fn(),
+      ExportProfileAgentPlugin: vi.fn(),
       DisableSkillInstallation: vi.fn(),
       EnableSkillInstallation: vi.fn(),
       GetCredential: vi.fn(),
@@ -25,6 +26,7 @@ vi.mock(
       RevokeSandboxProfileGrants: vi.fn(),
       GetSandboxProfileGrantEvents: vi.fn(),
       GetSkillInstallation: vi.fn(),
+      GetProfileCLIInstructions: vi.fn(),
       GetPolicyStatus: vi.fn(),
       GetSystemStatus: vi.fn(),
       GetAgentTask: vi.fn(),
@@ -77,6 +79,7 @@ import { Service } from "../bindings/github.com/orz-i/Mender/backend/internal/de
 import {
   createDesktopMenderClient,
   deployDesktopProfileSkills,
+  exportDesktopProfilePlugin,
   installDesktopProviderPlugin,
   installDesktopPlugin,
   installDesktopSkill,
@@ -1231,6 +1234,44 @@ describe("desktop Mender client", () => {
     const updated = await client.replaceProfileSkills("default", { installationIds: [id] });
     expect(Service.ReplaceProfileSkills).toHaveBeenCalledWith("default", [id]);
     expect(updated.skills).toEqual([id]);
+  });
+
+  it("shows Profile-local CLI recipes and exports portable plugins through Wails", async () => {
+    const path = "/Users/mini/Library/Application Support/Mender/mender.db";
+    vi.mocked(Service.GetProfileCLIInstructions).mockResolvedValue({
+      profileSlug: "delivery",
+      databasePath: path,
+      platform: "darwin",
+      search: ["mender", "--db", path, "profile", "tool", "search", "delivery", "<query>"],
+      describe: ["mender", "--db", path, "profile", "tool", "describe", "delivery", "<tool-id>"],
+      call: ["mender", "--db", path, "profile", "tool", "call", "delivery", "<tool-id>", "--args", "{}"],
+      mcpStdio: ["mender", "--db", path, "serve", "mcp", "--profile", "delivery", "--stdio"],
+    });
+    const client = createDesktopMenderClient();
+    const local = await client.getLocalProfileCLI?.("delivery");
+    expect(local?.profileSlug).toBe("delivery");
+    expect(local?.databasePath).toBe(path);
+    expect(local?.search).toContain("profile");
+    expect(local?.search).toContain("delivery");
+    expect(Service.GetProfileCLIInstructions).toHaveBeenCalledWith("delivery");
+
+    const output = {
+      profileSlug: "delivery",
+      profileRevision: 6,
+      name: "delivery.bundle",
+      destination: "/tmp/exports/delivery.bundle",
+      hasMCP: false,
+    };
+    vi.mocked(Service.ExportProfileAgentPlugin).mockResolvedValue(output);
+    const result = await exportDesktopProfilePlugin("delivery", {
+      name: "delivery.bundle", version: "1.0.0", description: "Offline skills",
+      remoteMCPURL: "",
+    }, "/tmp/exports");
+    expect(Service.ExportProfileAgentPlugin).toHaveBeenCalledWith(
+      "delivery", "delivery.bundle", "1.0.0", "Offline skills",
+      "/tmp/exports", "",
+    );
+    expect(result).toEqual(output);
   });
 
   it("lists and deploys Profile-owned Skill artifacts through Wails", async () => {

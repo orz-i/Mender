@@ -66,6 +66,8 @@ export type {
     PolicyRuleInput,
     PolicyStatus,
     Profile,
+    ProfileAgentPluginExport,
+    ProfileCLIInstructions,
     ProfileList,
     ProfileTool,
     Provider,

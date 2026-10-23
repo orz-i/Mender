@@ -554,6 +554,26 @@ type ProfileList struct {
 	Profiles []Profile `json:"profiles"`
 }
 
+// Local command recipes are visible only to the owner-authorized Desktop
+// binding. The remote Management API never exposes the host database path.
+type ProfileCLIInstructions struct {
+	ProfileSlug  string   `json:"profileSlug"`
+	DatabasePath string   `json:"databasePath"`
+	Platform     string   `json:"platform"`
+	Search       []string `json:"search"`
+	Describe     []string `json:"describe"`
+	Call         []string `json:"call"`
+	MCPStdio     []string `json:"mcpStdio"`
+}
+
+type ProfileAgentPluginExport struct {
+	ProfileSlug     string `json:"profileSlug"`
+	ProfileRevision uint64 `json:"profileRevision"`
+	Destination     string `json:"destination"`
+	Name            string `json:"name"`
+	HasMCP          bool   `json:"hasMCP"`
+}
+
 type AuditRecord struct {
 	InvocationID   string `json:"invocationId"`
 	ToolID         string `json:"toolId"`

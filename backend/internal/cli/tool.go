@@ -94,7 +94,8 @@ func (a *app) newToolSearchCommand() *cobra.Command {
 }
 
 func (a *app) newToolDescribeCommand() *cobra.Command {
-	return &cobra.Command{
+	var profileValue string
+	command := &cobra.Command{
 		Use:   "describe <tool-id>",
 		Short: "Describe one canonical Tool",
 		Args:  exactArgs(1),
@@ -105,6 +106,15 @@ func (a *app) newToolDescribeCommand() *cobra.Command {
 			}
 
 			return a.withRuntime(cmd.Context(), func(runtime *bootstrap.Runtime) error {
+				if profileValue != "" {
+					profile, err := resolveProfile(cmd.Context(), runtime, profileValue)
+					if err != nil {
+						return err
+					}
+					if !profile.Contains(toolID) {
+						return fmt.Errorf("tool %s is not selected in Profile %s", toolID, profile.Slug())
+					}
+				}
 				tool, err := runtime.Catalog.DescribeTool.Execute(cmd.Context(), toolID)
 				if err != nil {
 					return err
@@ -130,6 +140,8 @@ func (a *app) newToolDescribeCommand() *cobra.Command {
 			})
 		},
 	}
+	command.Flags().StringVar(&profileValue, "profile", "", "restrict description to one Profile slug or ID")
+	return command
 }
 
 func (a *app) newToolCallCommand() *cobra.Command {

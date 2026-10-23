@@ -489,6 +489,28 @@ export interface Profile {
     "revision": number;
 }
 
+export interface ProfileAgentPluginExport {
+    "profileSlug": string;
+    "profileRevision": number;
+    "destination": string;
+    "name": string;
+    "hasMCP": boolean;
+}
+
+/**
+ * Local command recipes are visible only to the owner-authorized Desktop
+ * binding. The remote Management API never exposes the host database path.
+ */
+export interface ProfileCLIInstructions {
+    "profileSlug": string;
+    "databasePath": string;
+    "platform": string;
+    "search": string[] | null;
+    "describe": string[] | null;
+    "call": string[] | null;
+    "mcpStdio": string[] | null;
+}
+
 export interface ProfileList {
     "profiles": Profile[] | null;
 }

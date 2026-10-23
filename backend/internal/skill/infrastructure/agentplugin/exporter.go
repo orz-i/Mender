@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -27,7 +29,7 @@ type Materializer interface {
 	) error
 }
 
-// Exporter writes deterministic skills-only Agent Plugins 1.0 packages.
+// Exporter writes deterministic Agent Plugins 1.0 Skill and/or HTTPS MCP packages.
 type Exporter struct {
 	materializer Materializer
 }
@@ -58,11 +60,13 @@ func (e *Exporter) ExportAgentPlugin(
 	if err := validatePluginName(pkg.Name); err != nil {
 		return err
 	}
-	if len(pkg.Skills) == 0 {
-		return fmt.Errorf(
-			"%w: at least one Skill is required",
-			skillapplication.ErrInvalidAgentPluginPackage,
-		)
+	if len(pkg.Skills) == 0 && pkg.MCP == nil {
+		return fmt.Errorf("%w: at least one Skill or MCP connection is required", skillapplication.ErrInvalidAgentPluginPackage)
+	}
+	if pkg.MCP != nil {
+		if err := validateRemoteMCPURL(pkg.MCP.URL); err != nil {
+			return err
+		}
 	}
 
 	destination := strings.TrimSpace(pkg.Destination)
@@ -123,8 +127,10 @@ func (e *Exporter) ExportAgentPlugin(
 	}
 
 	skillsRoot := filepath.Join(staging, "skills")
-	if err := os.Mkdir(skillsRoot, 0o700); err != nil {
-		return fmt.Errorf("create Agent Plugin skills directory: %w", err)
+	if len(pkg.Skills) > 0 {
+		if err := os.Mkdir(skillsRoot, 0o700); err != nil {
+			return fmt.Errorf("create Agent Plugin skills directory: %w", err)
+		}
 	}
 	seenNames := make(map[string]struct{}, len(pkg.Skills))
 	for _, skill := range pkg.Skills {
@@ -164,6 +170,25 @@ func (e *Exporter) ExportAgentPlugin(
 		}
 	}
 
+	if pkg.MCP != nil {
+		config := struct {
+			Schema     string                     `json:"$schema"`
+			MCPServers map[string]remoteMCPServer `json:"mcpServers"`
+		}{
+			Schema: "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+			MCPServers: map[string]remoteMCPServer{
+				"mender": {Type: "streamable-http", URL: pkg.MCP.URL},
+			},
+		}
+		rawMCP, err := json.MarshalIndent(config, "", "  ")
+		if err != nil {
+			return fmt.Errorf("encode Agent Plugin MCP: %w", err)
+		}
+		if err := os.WriteFile(filepath.Join(staging, "mcp.json"), append(rawMCP, byte(10)), 0o600); err != nil {
+			return fmt.Errorf("write Agent Plugin MCP: %w", err)
+		}
+	}
+
 	if _, err := os.Lstat(absolute); err == nil {
 		return fmt.Errorf(
 			"%w: %s",
@@ -177,6 +202,38 @@ func (e *Exporter) ExportAgentPlugin(
 		return fmt.Errorf("publish Agent Plugin package: %w", err)
 	}
 	published = true
+	return nil
+}
+
+type remoteMCPServer struct {
+	Type string `json:"type"`
+	URL  string `json:"url"`
+}
+
+// validateRemoteMCPURL excludes local-only URLs and credentials from portable
+// packages; authorization is always configured by the receiving client.
+func validateRemoteMCPURL(raw string) error {
+	if strings.TrimSpace(raw) != raw || len(raw) > 2048 {
+		return fmt.Errorf("%w: invalid remote MCP URL", skillapplication.ErrInvalidAgentPluginPackage)
+	}
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed == nil || !parsed.IsAbs() ||
+		parsed.Scheme != "https" || parsed.Host == "" ||
+		parsed.User != nil || parsed.RawQuery != "" || parsed.ForceQuery ||
+		parsed.Fragment != "" || parsed.RawFragment != "" {
+		return fmt.Errorf("%w: MCP URL must be a credential-free HTTPS endpoint without query or fragment",
+			skillapplication.ErrInvalidAgentPluginPackage)
+	}
+	host := strings.ToLower(parsed.Hostname())
+	if host == "" || host == "localhost" || strings.HasSuffix(host, ".localhost") ||
+		strings.HasSuffix(host, ".local") {
+		return fmt.Errorf("%w: local-only MCP endpoint is not portable", skillapplication.ErrInvalidAgentPluginPackage)
+	}
+	if ip := net.ParseIP(host); ip != nil &&
+		(!ip.IsGlobalUnicast() || ip.IsPrivate() || ip.IsLinkLocalUnicast()) {
+		return fmt.Errorf("%w: private or local-only MCP endpoint is not portable",
+			skillapplication.ErrInvalidAgentPluginPackage)
+	}
 	return nil
 }
 

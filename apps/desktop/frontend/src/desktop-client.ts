@@ -126,6 +126,34 @@ export async function installDesktopSkill(
   return skillInstallation(await Service.InstallSkill(sourcePath));
 }
 
+export async function exportDesktopProfilePlugin(
+  slug: string,
+  input: {
+    name: string;
+    version: string;
+    description: string;
+    remoteMCPURL: string;
+  },
+  outputParent: string,
+): Promise<{
+  profileSlug: string;
+  profileRevision: number;
+  destination: string;
+  name: string;
+  hasMCP: boolean;
+}> {
+  const result = await Service.ExportProfileAgentPlugin(
+    slug, input.name, input.version, input.description, outputParent, input.remoteMCPURL,
+  );
+  return {
+    profileSlug: result.profileSlug,
+    profileRevision: result.profileRevision,
+    destination: result.destination,
+    name: result.name,
+    hasMCP: result.hasMCP,
+  };
+}
+
 export async function deployDesktopProfileSkills(
   slug: string,
   target: SkillDeployment["target"],
@@ -358,6 +386,19 @@ export function createDesktopMenderClient(): MenderClient {
 
     async getProfile(slug) {
       return profile(await Service.GetProfile(slug));
+    },
+
+    async getLocalProfileCLI(slug) {
+      const recipe = await Service.GetProfileCLIInstructions(slug);
+      return {
+        profileSlug: recipe.profileSlug,
+        databasePath: recipe.databasePath,
+        platform: recipe.platform,
+        search: recipe.search ?? [],
+        describe: recipe.describe ?? [],
+        call: recipe.call ?? [],
+        mcpStdio: recipe.mcpStdio ?? [],
+      };
     },
 
     async addProfileTool(slug, body) {

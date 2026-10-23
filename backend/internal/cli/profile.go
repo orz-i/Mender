@@ -28,6 +28,9 @@ func (a *app) newProfileCommand() *cobra.Command {
 	command.AddCommand(a.newProfileDeploySkillsCommand())
 	command.AddCommand(a.newProfileSkillDeploymentsCommand())
 	command.AddCommand(a.newProfileUndeploySkillCommand())
+	command.AddCommand(a.newProfileExportPluginCommand())
+	command.AddCommand(a.newProfileCLIInstructionsCommand())
+	command.AddCommand(a.newProfileToolDeliveryCommand())
 	return command
 }
 

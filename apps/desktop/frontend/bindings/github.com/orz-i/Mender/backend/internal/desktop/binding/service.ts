@@ -192,6 +192,14 @@ export function EnsureSandboxTools(id: string): $CancellablePromise<$models.Sand
     return $Call.ByID(2389196380, id);
 }
 
+/**
+ * ExportProfileAgentPlugin writes a portable package only after the local
+ * Desktop owner explicitly chooses an existing directory through Wails.
+ */
+export function ExportProfileAgentPlugin(slug: string, name: string, version: string, description: string, outputParent: string, remoteMCPURL: string): $CancellablePromise<$models.ProfileAgentPluginExport> {
+    return $Call.ByID(2183021255, slug, name, version, description, outputParent, remoteMCPURL);
+}
+
 export function GetAgent(id: string): $CancellablePromise<$models.Agent> {
     return $Call.ByID(425014641, id);
 }
@@ -230,6 +238,14 @@ export function GetPolicyStatus(): $CancellablePromise<$models.PolicyStatus> {
 
 export function GetProfile(slug: string): $CancellablePromise<$models.Profile> {
     return $Call.ByID(3495904181, slug);
+}
+
+/**
+ * GetProfileCLIInstructions exposes only the local host's command arguments.
+ * No process is started, and the database path is not sent to remote clients.
+ */
+export function GetProfileCLIInstructions(slug: string): $CancellablePromise<$models.ProfileCLIInstructions> {
+    return $Call.ByID(3750059704, slug);
 }
 
 export function GetRuntimeGovernance(): $CancellablePromise<$models.RuntimeGovernanceStatus> {

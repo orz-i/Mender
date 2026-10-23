@@ -131,6 +131,32 @@ export type ReplaceProfileToolsRequest =
 export type ReplaceProfileSkillsRequest =
   components["schemas"]["ReplaceProfileSkillsRequest"];
 
+// Local-only Desktop delivery instructions. Remote Management API cannot
+// disclose the Desktop owner's database location or create local artifacts.
+export interface ExportProfilePluginInput {
+  name: string;
+  version: string;
+  description: string;
+  remoteMCPURL: string;
+}
+export interface ProfileAgentPluginExport {
+  profileSlug: string;
+  profileRevision: number;
+  destination: string;
+  name: string;
+  hasMCP: boolean;
+}
+
+export interface ProfileCLIInstructions {
+  profileSlug: string;
+  databasePath: string;
+  platform: string;
+  search: string[];
+  describe: string[];
+  call: string[];
+  mcpStdio: string[];
+}
+
 export interface BrowseToolsInput {
   limit?: number;
   providerId?: string;
@@ -209,6 +235,8 @@ export interface MenderClient {
   listProfiles(): Promise<{ profiles: Profile[] }>;
   createProfile(body: CreateProfileRequest): Promise<Profile>;
   getProfile(slug: string): Promise<Profile>;
+  /** Present only on a trusted local host (Desktop), never generic HTTP. */
+  getLocalProfileCLI?(slug: string): Promise<ProfileCLIInstructions>;
   addProfileTool(slug: string, body: AddProfileToolRequest): Promise<Profile>;
   replaceProfileTools(
     slug: string,

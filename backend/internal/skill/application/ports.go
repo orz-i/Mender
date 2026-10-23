@@ -124,12 +124,19 @@ type AgentPluginSkill struct {
 // AgentPluginPackage is the portable manifest metadata and exact Skill set to
 // export. Destination is a host filesystem directory that must not already
 // contain a package.
+// AgentPluginMCP describes a remote MCP dependency with no embedded secret.
+// Portable Agent Plugins 1.0 has no standalone local runtime or auth storage.
+type AgentPluginMCP struct {
+	URL string
+}
+
 type AgentPluginPackage struct {
 	Name        string
 	Version     string
 	Description string
 	Destination string
 	Skills      []AgentPluginSkill
+	MCP         *AgentPluginMCP
 }
 
 // AgentPluginExporter writes one portable Agent Plugins package.

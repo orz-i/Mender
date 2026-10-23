@@ -1401,6 +1401,57 @@ func (s *Service) GetProfile(slug string) (Profile, error) {
 	return profileProjection(profile), nil
 }
 
+// GetProfileCLIInstructions exposes only the local host's command arguments.
+// No process is started, and the database path is not sent to remote clients.
+func (s *Service) GetProfileCLIInstructions(slug string) (ProfileCLIInstructions, error) {
+	profileSlug, err := profiledomain.NewSlug(slug)
+	if err != nil {
+		return ProfileCLIInstructions{}, err
+	}
+	recipe, err := s.runtime.LocalProfileCLI(s.ctx, profileSlug)
+	if err != nil {
+		return ProfileCLIInstructions{}, err
+	}
+	return ProfileCLIInstructions{
+		ProfileSlug: recipe.ProfileSlug, DatabasePath: recipe.DatabasePath,
+		Platform: recipe.Platform,
+		Search:   recipe.Search, Describe: recipe.Describe,
+		Call: recipe.Call, MCPStdio: recipe.MCPStdio,
+	}, nil
+}
+
+// ExportProfileAgentPlugin writes a portable package only after the local
+// Desktop owner explicitly chooses an existing directory through Wails.
+func (s *Service) ExportProfileAgentPlugin(
+	slug, name, version, description, outputParent, remoteMCPURL string,
+) (ProfileAgentPluginExport, error) {
+	profileSlug, err := profiledomain.NewSlug(slug)
+	if err != nil {
+		return ProfileAgentPluginExport{}, err
+	}
+	if strings.TrimSpace(outputParent) == "" {
+		return ProfileAgentPluginExport{}, fmt.Errorf("Agent Plugin export: output parent is required")
+	}
+	destination, err := filepath.Abs(filepath.Join(outputParent, name))
+	if err != nil {
+		return ProfileAgentPluginExport{}, fmt.Errorf("Agent Plugin export: resolve destination: %w", err)
+	}
+	request := skillapplication.ExportAgentPluginRequest{
+		Name: name, Version: version, Description: description, Destination: destination,
+	}
+	if remoteMCPURL != "" {
+		request.MCP = &skillapplication.AgentPluginMCP{URL: remoteMCPURL}
+	}
+	revision, err := s.runtime.ExportProfileAgentPlugin(s.ctx, profileSlug, request)
+	if err != nil {
+		return ProfileAgentPluginExport{}, err
+	}
+	return ProfileAgentPluginExport{
+		ProfileSlug: slug, ProfileRevision: revision,
+		Destination: destination, Name: name, HasMCP: request.MCP != nil,
+	}, nil
+}
+
 func (s *Service) AddProfileTool(
 	slug string,
 	tool ProfileTool,

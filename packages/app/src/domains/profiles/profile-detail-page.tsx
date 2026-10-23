@@ -216,6 +216,30 @@ function ProfileDetailContent({ client, slug }: { client: MenderClient; slug: st
                   {t("Manage Skill delivery")}
                 </Button>
               </div>
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">{t("Local CLI")}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {t("Use this Profile's Tools directly from a local command line without starting HTTP.")}
+                  </p>
+                </div>
+                <Button size="sm" variant="outline" onClick={() =>
+                  void navigate("/profiles/" + encodeURIComponent(profile.slug) + "/deliveries/cli")}>
+                  {t("View CLI commands")}
+                </Button>
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">{t("Agent Plugin")}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {t("Export the selected Skills and an optional Profile-scoped HTTPS MCP connection.")}
+                  </p>
+                </div>
+                <Button size="sm" variant="outline" onClick={() =>
+                  void navigate("/profiles/" + encodeURIComponent(profile.slug) + "/deliveries/plugin")}>
+                  {t("Export Agent Plugin")}
+                </Button>
+              </div>
               {deliveryError ? <ErrorNotice message={deliveryError}
                 onRetry={() => { setDeliveriesLoaded(false); setVersion((v) => v + 1); }} /> : null}
               {!deliveriesLoaded ? <p className="text-sm text-muted-foreground">{t("Loading servers…")}</p> : null}

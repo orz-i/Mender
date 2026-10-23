@@ -274,6 +274,28 @@ func TestCLILocalWorkflowWithPersistedHTTPProvider(t *testing.T) {
 		t.Fatalf("restricted profile = %#v", restricted)
 	}
 
+	scopedDescribe := execute("tool", "describe", toolID, "--profile", "default")
+	if scopedDescribe["toolId"] != toolID {
+		t.Fatalf("Profile description = %#v", scopedDescribe)
+	}
+	if _, err := executeSkillJSON(dbPath, "tool", "describe", toolID, "--profile", "restricted"); err == nil {
+		t.Fatal("restricted Profile described a Tool outside its explicit selection")
+	}
+	boundSearch := execute("profile", "tool", "search", "default", "echo")
+	if results, ok := boundSearch["tools"].([]any); !ok || len(results) != 1 {
+		t.Fatalf("strict Profile CLI search = %#v", boundSearch)
+	}
+	emptySearch := execute("profile", "tool", "search", "restricted", "echo")
+	if results, ok := emptySearch["tools"].([]any); !ok || len(results) != 0 {
+		t.Fatalf("empty Profile exposed Catalog tools: %#v", emptySearch)
+	}
+	boundDescribe := execute("profile", "tool", "describe", "default", toolID)
+	if boundDescribe["toolId"] != toolID {
+		t.Fatalf("strict Profile CLI describe = %#v", boundDescribe)
+	}
+	if _, err := executeSkillJSON(dbPath, "profile", "tool", "describe", "restricted", toolID); err == nil {
+		t.Fatal("strict Profile CLI described outside Profile")
+	}
 	scoped := execute("tool", "search", "echo", "--profile", "default")
 	scopedTools, ok := scoped["tools"].([]any)
 	if !ok || len(scopedTools) != 1 {
@@ -302,6 +324,13 @@ func TestCLILocalWorkflowWithPersistedHTTPProvider(t *testing.T) {
 	)
 	if profileCalled["kind"] != "complete" {
 		t.Fatalf("profile tool call output = %#v", profileCalled)
+	}
+	boundCalled := execute("profile", "tool", "call", "default", toolID, "--args", `{"value":"delivery"}`)
+	if boundCalled["kind"] != "complete" {
+		t.Fatalf("strict Profile CLI call = %#v", boundCalled)
+	}
+	if _, err := executeSkillJSON(dbPath, "profile", "tool", "call", "restricted", toolID, "--args", "{}"); err == nil {
+		t.Fatal("strict Profile CLI called Tool outside its selected Profile")
 	}
 
 	var rejectedStdout, rejectedStderr bytes.Buffer
@@ -358,8 +387,8 @@ func TestCLILocalWorkflowWithPersistedHTTPProvider(t *testing.T) {
 		t.Fatal("serve stdio adapter was not invoked")
 	}
 
-	if got := upstreamCalls.Load(); got != 2 {
-		t.Fatalf("upstream call count = %d, want 2", got)
+	if got := upstreamCalls.Load(); got != 3 {
+		t.Fatalf("upstream call count = %d, want 3", got)
 	}
 }
 
