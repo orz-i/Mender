@@ -126,14 +126,13 @@ export async function installDesktopSkill(
   return skillInstallation(await Service.InstallSkill(sourcePath));
 }
 
-export async function deployDesktopSkill(
-  installationId: string,
+export async function deployDesktopProfileSkills(
+  slug: string,
   target: SkillDeployment["target"],
   projectRoot = "",
-): Promise<SkillDeployment> {
-  return skillDeployment(
-    await Service.DeploySkill(installationId, target, projectRoot),
-  );
+): Promise<SkillDeployment[]> {
+  const output = await Service.DeployProfileSkills(slug, target, projectRoot);
+  return (output.deployments ?? []).map(skillDeployment);
 }
 
 export function createDesktopMenderClient(): MenderClient {
@@ -250,6 +249,14 @@ export function createDesktopMenderClient(): MenderClient {
       await Service.DeleteSkillInstallation(installationId);
     },
 
+    async undeployProfileSkill(slug, deploymentId) {
+      await Service.UndeployProfileSkill(slug, deploymentId);
+    },
+
+    async listProfileSkillDeployments(slug) {
+      const result = await Service.ListProfileSkillDeployments(slug);
+      return { deployments: (result.deployments ?? []).map(skillDeployment) };
+    },
     async listSkillDeployments() {
       const result = await Service.ListSkillDeployments();
       return {
@@ -1394,6 +1401,8 @@ function skillDeployment(
     digest: value.digest,
     deployedAt: value.deployedAt,
     drift: skillDeploymentDrift(value.drift),
+    ...(value.profileId === undefined ? {} : { profileId: value.profileId }),
+    ...(value.profileId === undefined ? {} : { profileRevision: value.profileRevision }),
     ...(value.currentDigest === undefined
       ? {}
       : { currentDigest: value.currentDigest }),
@@ -1572,6 +1581,7 @@ function profile(value: BindingProfile): Profile {
     mode,
     ...(value.tunnelId === undefined ? {} : { tunnelId: value.tunnelId }),
     skills: value.skills ?? [],
+    revision: value.revision,
     tools: (value.tools ?? []).map((tool) => ({
       toolId: tool.toolId,
       direct: tool.direct,

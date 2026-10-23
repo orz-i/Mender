@@ -17,7 +17,6 @@ import {
   ShieldCheckIcon,
   ShieldOffIcon,
   Trash2Icon,
-  UploadIcon,
 } from "lucide-react";
 
 import type {
@@ -51,36 +50,18 @@ import {
   SearchField,
 } from "../../shared/workbench";
 
-type DeploySkill = (
-  installationId: string,
-  target: SkillDeployment["target"],
-) => Promise<SkillDeployment | null>;
-
 type SkillFilter = "all" | "builtin" | "installed" | "enabled";
 type SkillSourceFilter = "all" | "builtin" | "local";
 type SkillStatusFilter = "all" | "enabled" | "disabled";
 type SkillSort = "name" | "version";
 type SkillView = "overview" | "resources" | "deployments";
 
-const deploymentTargets: Array<{
-  value: SkillDeployment["target"];
-  label: string;
-}> = [
-  { value: "agents-project", label: "Agents project" },
-  { value: "github-project", label: "GitHub project" },
-  { value: "claude-project", label: "Claude project" },
-  { value: "agents-user", label: "Agents user" },
-  { value: "copilot-user", label: "Copilot user" },
-];
-
 export function SkillsPage({
   client,
   installSkill,
-  deploySkill,
 }: {
   client: MenderClient;
   installSkill?: () => Promise<SkillInstallation | null>;
-  deploySkill?: DeploySkill;
 }) {
   const [installations, setInstallations] = useState<SkillInstallation[]>([]);
   const [deployments, setDeployments] = useState<SkillDeployment[]>([]);
@@ -99,11 +80,6 @@ export function SkillsPage({
   const [statusFilter, setStatusFilter] =
     useState<SkillStatusFilter>("all");
   const [sort, setSort] = useState<SkillSort>("name");
-  const [deploying, setDeploying] = useState<SkillInstallation | null>(null);
-  const [deploymentTarget, setDeploymentTarget] =
-    useState<SkillDeployment["target"] | "">("");
-  const [deploymentError, setDeploymentError] = useState("");
-
   const refresh = useCallback(async () => {
     setLoaded(false);
     setError("");
@@ -314,47 +290,6 @@ export function SkillsPage({
     }
   }
 
-  async function deploy() {
-    if (
-      deploying === null ||
-      deploySkill === undefined ||
-      !deploymentTargets.some((item) => item.value === deploymentTarget) ||
-      busy !== ""
-    ) {
-      return;
-    }
-    const target = deploymentTarget as SkillDeployment["target"];
-    setBusy("deploy:" + deploying.installationId);
-    setDeploymentError("");
-    try {
-      const deployed = await deploySkill(deploying.installationId, target);
-      if (deployed !== null) {
-        setDeploying(null);
-        setDeploymentTarget("");
-        await refresh();
-      }
-      // Canceling the native project directory picker returns null: no deployment.
-    } catch (reason) {
-      setDeploymentError(errorMessage(reason));
-    } finally {
-      setBusy("");
-    }
-  }
-
-  function openDeploy(item: SkillInstallation) {
-    if (busy !== "") return;
-    setDeploymentTarget("");
-    setDeploymentError("");
-    setDeploying(item);
-  }
-
-  function closeDeploy() {
-    if (busy !== "") return;
-    setDeploying(null);
-    setDeploymentTarget("");
-    setDeploymentError("");
-  }
-
   async function undeploy(item: SkillDeployment) {
     setBusy("undeploy:" + item.deploymentId);
     setError("");
@@ -549,20 +484,6 @@ export function SkillsPage({
                           >
                             <EyeIcon />
                           </IconButton>
-                          {deploySkill !== undefined && item.enabled ? (
-                            <IconButton
-                              type="button"
-                              variant="ghost"
-                              size="icon-lg"
-                              label={t("Deploy {{skill}}", {
-                                skill: item.name,
-                              })}
-                              disabled={mutating}
-                              onClick={() => openDeploy(item)}
-                            >
-                              <UploadIcon />
-                            </IconButton>
-                          ) : null}
                           {!item.builtIn ? (
                             <>
                               <IconButton
@@ -858,8 +779,11 @@ export function SkillsPage({
                         <p className="mt-2 text-xs text-muted-foreground">
                           {formatDateTime(item.deployedAt)}
                         </p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {item.profileId ? t("Managed by Profile") : t("Legacy unassigned deployment")}
+                        </p>
                       </div>
-                      <IconButton
+                      {!item.profileId ? <IconButton
                         type="button"
                         variant="ghost"
                         size="icon-sm"
@@ -870,7 +794,7 @@ export function SkillsPage({
                         onClick={() => void undeploy(item)}
                       >
                         <Trash2Icon />
-                      </IconButton>
+                      </IconButton> : null}
                     </div>
                   ))
                 ) : (
@@ -886,20 +810,6 @@ export function SkillsPage({
                 )}
               </div>
 
-              {deploySkill !== undefined && selected.enabled ? (
-                <Button
-                  type="button"
-                  className="w-full"
-                  onClick={() => {
-                    openDeploy(selected);
-                    closeSkill();
-                  }}
-                  disabled={mutating}
-                >
-                  <UploadIcon data-icon="inline-start" />
-                  {t("Deploy Skill")}
-                </Button>
-              ) : null}
             </div>
           ) : null}
 
@@ -918,107 +828,6 @@ export function SkillsPage({
         </DialogContent>
       </Dialog>
 
-      <Dialog
-        open={deploying !== null}
-        onOpenChange={(open) => {
-          if (!open) closeDeploy();
-        }}
-      >
-        <DialogContent className="grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>{t("Deploy Skill")}</DialogTitle>
-            <DialogDescription className="sr-only">
-              {deploying === null
-                ? ""
-                : t("Deploy exact installation {{installation}} of {{skill}}.", {
-                    installation: deploying.installationId,
-                    skill: deploying.name,
-                  })}
-            </DialogDescription>
-          </DialogHeader>
-
-          <DialogBody className="space-y-4">
-            {deploying !== null ? (
-              <div className="rounded-xl border border-border/70 bg-muted/20 px-3 py-2.5">
-                <p className="break-words text-sm font-medium">{deploying.name}</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {deploying.versionHint
-                    ? t("Version") + " " + deploying.versionHint
-                    : t("Unversioned")}
-                  {" · "}
-                  {t(deploying.builtIn ? "Built-in" : "Local")}
-                </p>
-              </div>
-            ) : null}
-
-            <label className="grid gap-2">
-              <span className="text-sm font-medium">{t("Target")}</span>
-              <select
-                aria-label={t("Skill deployment target")}
-                value={deploymentTarget}
-                disabled={busy !== ""}
-                onChange={(event) => {
-                  const value = event.target.value;
-                  setDeploymentTarget(
-                    deploymentTargets.some((item) => item.value === value)
-                      ? value as SkillDeployment["target"]
-                      : "",
-                  );
-                  setDeploymentError("");
-                }}
-                className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm text-foreground outline-none focus:border-ring focus:ring-2 focus:ring-ring/20"
-              >
-                <option value="">{t("Choose a deployment target")}</option>
-                {deploymentTargets.map((item) => (
-                  <option key={item.value} value={item.value}>
-                    {t(item.label)}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            {deploymentTarget ? (
-              <p className="text-xs leading-5 text-muted-foreground">
-                {deploymentTarget.endsWith("-project")
-                  ? t("Project deployment: choose a project folder in the next step.")
-                  : t("User deployment: this Skill will be installed for your account, not just one project.")}
-              </p>
-            ) : null}
-            {deploying !== null ? (
-              <details className="text-xs text-muted-foreground">
-                <summary className="cursor-pointer">{t("Installation ID")}</summary>
-                <p className="mt-1 break-all font-mono">{deploying.installationId}</p>
-              </details>
-            ) : null}
-            {deploymentError ? (
-              <p role="alert" className="text-xs leading-5 text-destructive">{deploymentError}</p>
-            ) : null}
-          </DialogBody>
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={busy !== ""}
-              onClick={closeDeploy}
-            >
-              {t("Cancel")}
-            </Button>
-            <Button
-              type="button"
-              onClick={() => void deploy()}
-              disabled={
-                deploying === null ||
-                !deploymentTargets.some((item) => item.value === deploymentTarget) ||
-                busy !== ""
-              }
-            >
-              {busy === "deploy:" + deploying?.installationId
-                ? t("Deploying…")
-                : t("Deploy")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </>
   );
 }

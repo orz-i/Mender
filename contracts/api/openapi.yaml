@@ -716,6 +716,41 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
+  /profiles/{slug}/skill-deployments:
+    get:
+      operationId: listProfileSkillDeployments
+      description: Read Profile-owned materialized Skill deployments; legacy unassigned rows are excluded.
+      parameters:
+        - $ref: '#/components/parameters/ProfileSlug'
+      responses:
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '200':
+          description: Exact deployments owned by the Profile
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [deployments]
+                properties:
+                  deployments:
+                    type: array
+                    items: { $ref: '#/components/schemas/SkillDeployment' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /profiles/{slug}/skill-deployments/{deploymentId}:
+    delete:
+      operationId: undeployProfileSkill
+      description: Remove only a Skill deployment owned by this exact Profile.
+      parameters:
+        - $ref: '#/components/parameters/ProfileSlug'
+        - name: deploymentId
+          in: path
+          required: true
+          schema: { type: string, pattern: '^sdep_[0-9a-f]{32}$' }
+      responses:
+        '204': { description: Profile Skill deployment removed }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /profiles/{slug}/tools/{toolId}:
     delete:
       operationId: removeProfileTool
@@ -2481,6 +2516,8 @@ components:
           type: string
           enum: [current, drifted, missing]
         currentDigest: { type: string }
+        profileId: { type: string, description: Owning ProfileID; absent on legacy unassigned deployments }
+        profileRevision: { type: integer, minimum: 0, description: Exact Profile revision when published }
       additionalProperties: false
     Provider:
       type: object
@@ -2725,6 +2762,7 @@ components:
         skills:
           type: array
           items: { type: string, pattern: '^sinst_[0-9a-f]{32}$' }
+        revision: { type: integer, minimum: 0, description: Persisted Profile aggregate revision (read-only) }
     SetProfileTunnelRequest:
       type: object
       required: [tunnelId]

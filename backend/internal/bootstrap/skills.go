@@ -257,6 +257,25 @@ func (s *Skills) Deploy(
 	).Execute(ctx, id, target, root)
 }
 
+// deployForProfile retains the canonical Skill deployment adapter and records
+// exact ownership. Only Runtime's Profile delivery admission may call it.
+func (s *Skills) deployForProfile(
+	ctx context.Context,
+	id skilldomain.InstallationID,
+	target skilldomain.DeploymentTarget,
+	root string,
+	profileID string,
+	revision uint64,
+) (skilldomain.Deployment, error) {
+	return skillapplication.NewDeployInstallation(
+		runtimeSkillDeploymentSource{skills: s},
+		s.store,
+		s.deploymentFiles,
+		skillidentity.NewGenerator(),
+		systemClock{},
+	).ExecuteForProfile(ctx, id, target, root, profileID, revision)
+}
+
 // ExportAgentPlugin writes one deterministic skills-only Agent Plugins 1.0
 // package from exact trusted+enabled Skill installations.
 func (s *Skills) ExportAgentPlugin(
@@ -284,6 +303,34 @@ func (s *Skills) ListDeployments(
 		s.store,
 		s.deploymentFiles,
 	).Execute(ctx)
+}
+
+// listOwnedDeployments inspects only this Profile's explicit materializations.
+func (s *Skills) listOwnedDeployments(
+	ctx context.Context, profileID string,
+) ([]skillapplication.DeploymentInspection, error) {
+	items, err := s.store.ListDeploymentsByProfile(ctx, profileID)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]skillapplication.DeploymentInspection, 0, len(items))
+	for _, item := range items {
+		exists, digest, err := s.deploymentFiles.Observe(ctx, item.Destination())
+		if err != nil {
+			return nil, fmt.Errorf("observe Profile Skill deployment %s: %w", item.ID(), err)
+		}
+		drift := skilldomain.DeploymentMissing
+		if exists {
+			drift = skilldomain.DeploymentDrifted
+			if digest == item.Digest() {
+				drift = skilldomain.DeploymentCurrent
+			}
+		}
+		result = append(result, skillapplication.DeploymentInspection{
+			Deployment: item, Drift: drift, CurrentDigest: digest,
+		})
+	}
+	return result, nil
 }
 
 // InspectDeployment returns one deployment plus current drift state.

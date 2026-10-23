@@ -136,8 +136,12 @@ export function DeleteTunnel(tunnelID: string): $CancellablePromise<void> {
     return $Call.ByID(1992939505, tunnelID);
 }
 
-export function DeploySkill(installationID: string, targetValue: string, projectRoot: string): $CancellablePromise<$models.SkillDeployment> {
-    return $Call.ByID(1977911452, installationID, targetValue, projectRoot);
+/**
+ * DeployProfileSkills delivers all exact Profile Skills to an explicit local
+ * Agent target, compensating newly created deployments on failure.
+ */
+export function DeployProfileSkills(slug: string, targetValue: string, projectRoot: string): $CancellablePromise<$models.SkillDeploymentList> {
+    return $Call.ByID(1342748082, slug, targetValue, projectRoot);
 }
 
 export function DestroySandbox(sandboxID: string): $CancellablePromise<$models.Sandbox> {
@@ -381,6 +385,13 @@ export function ListPluginCatalogue(): $CancellablePromise<$models.PluginCatalog
     return $Call.ByID(1928914560);
 }
 
+/**
+ * ListProfileSkillDeployments returns only deliveries with an explicit owner.
+ */
+export function ListProfileSkillDeployments(slug: string): $CancellablePromise<$models.SkillDeploymentList> {
+    return $Call.ByID(1800599246, slug);
+}
+
 export function ListProfiles(): $CancellablePromise<$models.ProfileList> {
     return $Call.ByID(2998135054);
 }
@@ -557,6 +568,14 @@ export function UnbindAgentWorkspace(id: string, key: string): $CancellablePromi
 
 export function UnbindWorkspaceToolTarget(providerID: string, key: string): $CancellablePromise<void> {
     return $Call.ByID(2928939058, providerID, key);
+}
+
+/**
+ * UndeployProfileSkill removes only an exact deployment belonging to the
+ * supplied Profile, even if its original Skill is no longer selected.
+ */
+export function UndeployProfileSkill(slug: string, deploymentID: string): $CancellablePromise<void> {
+    return $Call.ByID(1428410338, slug, deploymentID);
 }
 
 export function UndeploySkill(deploymentID: string): $CancellablePromise<void> {

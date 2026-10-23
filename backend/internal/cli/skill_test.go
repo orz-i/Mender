@@ -23,7 +23,9 @@ func TestSkillCommandSurface(t *testing.T) {
 		{"skill", "untrust"},
 		{"skill", "enable"},
 		{"skill", "disable"},
-		{"skill", "deploy"},
+		{"profile", "deploy-skills"},
+		{"profile", "skill-deployments"},
+		{"profile", "undeploy-skill"},
 		{"skill", "deployments"},
 		{"skill", "undeploy"},
 		{"skill", "export"},
@@ -107,29 +109,27 @@ func TestSkillCLIManagedLifecycle(t *testing.T) {
 		t.Fatalf("enabled installation = %#v", enabled)
 	}
 
+	execute("profile", "create", "--slug", "delivery", "--name", "Delivery", "--mode", "hybrid")
+	execute("profile", "set-skills", "delivery", firstID)
 	projectRoot := filepath.Join(temp, "project")
 	if err := os.MkdirAll(projectRoot, 0o750); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := executeSkillJSON(
-		dbPath,
-		"skill", "deploy", "mender-tools",
-		"--target", "agents-project",
-		"--project", projectRoot,
-	); err == nil || !strings.Contains(err.Error(), "skill_installation_id") {
-		t.Fatalf("deploy by non-exact reference error = %v", err)
+	if _, err := executeSkillJSON(dbPath, "profile", "set-skills", "delivery", "mender-tools"); err == nil || !strings.Contains(err.Error(), "skill_installation_id") {
+		t.Fatalf("select non-exact reference error = %v", err)
 	}
 	deployed := jsonObject(
 		t,
-		execute(
-			"skill", "deploy", firstID,
+		jsonArray(t, execute(
+			"profile", "deploy-skills", "delivery",
 			"--target", "agents-project",
 			"--project", projectRoot,
-		)["deployment"],
+		)["deployments"])[0],
 	)
 	deploymentID := stringValue(t, deployed["deploymentId"])
 	destination := stringValue(t, deployed["destination"])
 	if deployed["installationId"] != firstID ||
+		deployed["profileId"] == "" ||
 		deployed["target"] != "agents-project" ||
 		deployed["drift"] != "current" {
 		t.Fatalf("deployment = %#v", deployed)
@@ -155,7 +155,12 @@ func TestSkillCLIManagedLifecycle(t *testing.T) {
 		!strings.Contains(err.Error(), "skill installation is in use") {
 		t.Fatalf("remove deployed installation error = %v", err)
 	}
-	execute("skill", "undeploy", deploymentID)
+	if _, err := executeSkillJSON(dbPath, "skill", "undeploy", deploymentID); err == nil ||
+		!strings.Contains(err.Error(), "belongs to a Profile") {
+		t.Fatalf("owner Skill unexpectedly removed via Library CLI: %v", err)
+	}
+	execute("profile", "undeploy-skill", "delivery", deploymentID)
+	execute("profile", "set-skills", "delivery")
 	if _, err := os.Stat(destination); !os.IsNotExist(err) {
 		t.Fatalf("undeployed destination still exists: %v", err)
 	}
@@ -217,13 +222,10 @@ func TestSkillCLIManagedLifecycle(t *testing.T) {
 	if second["versionHint"] != "1.1.0" {
 		t.Fatalf("second version = %#v", second)
 	}
-	if _, err := executeSkillJSON(
-		dbPath,
-		"skill", "deploy", secondID,
-		"--target", "github-project",
-		"--project", projectRoot,
-	); err == nil || !strings.Contains(err.Error(), "not trusted") {
-		t.Fatalf("deploy untrusted installation error = %v", err)
+	if _, err := executeSkillJSON(dbPath,
+		"profile", "set-skills", "delivery", secondID,
+	); err == nil || !strings.Contains(err.Error(), "not trusted and enabled") {
+		t.Fatalf("select untrusted installation error = %v", err)
 	}
 
 	if _, err := executeSkillJSON(dbPath, "skill", "inspect", skillID); err == nil ||

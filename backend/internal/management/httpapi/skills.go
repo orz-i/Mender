@@ -127,7 +127,7 @@ func (h *Handler) undeploySkill(w http.ResponseWriter, r *http.Request) {
 		writeAPIError(w, http.StatusBadRequest, "validation_error", err)
 		return
 	}
-	if err := h.runtime.Skills.Undeploy(r.Context(), id); err != nil {
+	if err := h.runtime.UndeployUnassignedSkill(r.Context(), id); err != nil {
 		writeKnownError(w, err)
 		return
 	}
@@ -215,6 +215,10 @@ func skillDeploymentProjection(
 	}
 	if item.CurrentDigest != "" {
 		result["currentDigest"] = item.CurrentDigest
+	}
+	if owner := deployment.OwnerProfileID(); owner != "" {
+		result["profileId"] = owner
+		result["profileRevision"] = deployment.ProfileRevision()
 	}
 	return result
 }

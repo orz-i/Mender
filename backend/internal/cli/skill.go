@@ -27,7 +27,6 @@ func (a *app) newSkillCommand() *cobra.Command {
 	command.AddCommand(a.newSkillTrustCommand(false))
 	command.AddCommand(a.newSkillEnabledCommand(true))
 	command.AddCommand(a.newSkillEnabledCommand(false))
-	command.AddCommand(a.newSkillDeployCommand())
 	command.AddCommand(a.newSkillDeploymentsCommand())
 	command.AddCommand(a.newSkillUndeployCommand())
 	command.AddCommand(a.newSkillExportCommand())
@@ -226,72 +225,6 @@ func (a *app) newSkillEnabledCommand(enabled bool) *cobra.Command {
 	}
 }
 
-func (a *app) newSkillDeployCommand() *cobra.Command {
-	var targetValue string
-	var projectRoot string
-
-	command := &cobra.Command{
-		Use:   "deploy <installation>",
-		Short: "Deploy one exact trusted and enabled Skill installation",
-		Args:  exactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			id, err := skilldomain.ParseInstallationID(args[0])
-			if err != nil {
-				return usageError{err: err}
-			}
-			target := skilldomain.DeploymentTarget(strings.TrimSpace(targetValue))
-			if err := target.Validate(); err != nil {
-				return usageError{err: err}
-			}
-			root, err := a.resolveSkillDeploymentRoot(target, projectRoot)
-			if err != nil {
-				return usageError{err: err}
-			}
-			return a.withRuntime(cmd.Context(), func(runtime *bootstrap.Runtime) error {
-				item, err := runtime.Skills.Deploy(
-					cmd.Context(),
-					id,
-					target,
-					root,
-				)
-				if err != nil {
-					return err
-				}
-				return a.writeValue(
-					fmt.Sprintf(
-						"deployed %s to %s",
-						item.ID(),
-						item.Destination(),
-					),
-					map[string]any{
-						"deployment": skillDeploymentProjection(
-							skillapplication.DeploymentInspection{
-								Deployment:    item,
-								Drift:         skilldomain.DeploymentCurrent,
-								CurrentDigest: item.Digest(),
-							},
-						),
-					},
-				)
-			})
-		},
-	}
-	command.Flags().StringVar(
-		&targetValue,
-		"target",
-		"",
-		"deployment target: agents-project|github-project|claude-project|agents-user|copilot-user",
-	)
-	command.Flags().StringVar(
-		&projectRoot,
-		"project",
-		"",
-		"project root for project-scoped deployment targets",
-	)
-	_ = command.MarkFlagRequired("target")
-	return command
-}
-
 func (a *app) newSkillDeploymentsCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "deployments",
@@ -356,7 +289,7 @@ func (a *app) newSkillUndeployCommand() *cobra.Command {
 				return usageError{err: err}
 			}
 			return a.withRuntime(cmd.Context(), func(runtime *bootstrap.Runtime) error {
-				if err := runtime.Skills.Undeploy(cmd.Context(), id); err != nil {
+				if err := runtime.UndeployUnassignedSkill(cmd.Context(), id); err != nil {
 					return err
 				}
 				return a.writeValue(
@@ -632,6 +565,10 @@ func skillDeploymentProjection(
 	}
 	if inspection.CurrentDigest != "" {
 		result["currentDigest"] = inspection.CurrentDigest
+	}
+	if owner := item.OwnerProfileID(); owner != "" {
+		result["profileId"] = owner
+		result["profileRevision"] = item.ProfileRevision()
 	}
 	return result
 }

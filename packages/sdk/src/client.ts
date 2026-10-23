@@ -216,6 +216,8 @@ export interface MenderClient {
   ): Promise<Profile>;
   removeProfileTool(slug: string, toolId: string): Promise<Profile>;
   replaceProfileSkills(slug: string, body: ReplaceProfileSkillsRequest): Promise<Profile>;
+  listProfileSkillDeployments(slug: string): Promise<{ deployments: SkillDeployment[] }>;
+  undeployProfileSkill(slug: string, deploymentId: string): Promise<void>;
   setProfileTunnel(slug: string, body: SetProfileTunnelRequest): Promise<Profile>;
   listIntegrationOfferings(): Promise<{integrations:IntegrationOffering[]}>;
   listAgents(): Promise<{agents:Agent[]}>;
@@ -591,6 +593,20 @@ export function createMenderClient(
       const result = await client.PUT("/profiles/{slug}/tools", {
         params: { path: { slug } },
         body,
+      });
+      return requireData(result);
+    },
+
+    async undeployProfileSkill(slug: string, deploymentId: string) {
+      const result = await client.DELETE("/profiles/{slug}/skill-deployments/{deploymentId}", {
+        params: { path: { slug, deploymentId } },
+      });
+      if (!result.response.ok) throwApiError(result.error, result.response);
+    },
+
+    async listProfileSkillDeployments(slug: string) {
+      const result = await client.GET("/profiles/{slug}/skill-deployments", {
+        params: { path: { slug } },
       });
       return requireData(result);
     },

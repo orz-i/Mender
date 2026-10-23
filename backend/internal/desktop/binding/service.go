@@ -909,52 +909,75 @@ func (s *Service) ListSkillDeployments() (SkillDeploymentList, error) {
 	return SkillDeploymentList{Deployments: result}, nil
 }
 
-func (s *Service) DeploySkill(
-	installationID string,
-	targetValue string,
-	projectRoot string,
-) (SkillDeployment, error) {
-	id, err := skilldomain.ParseInstallationID(installationID)
+// ListProfileSkillDeployments returns only deliveries with an explicit owner.
+func (s *Service) ListProfileSkillDeployments(slug string) (SkillDeploymentList, error) {
+	profileSlug, err := profiledomain.NewSlug(slug)
 	if err != nil {
-		return SkillDeployment{}, err
+		return SkillDeploymentList{}, err
+	}
+	items, err := s.runtime.ListProfileSkillDeployments(s.ctx, profileSlug)
+	if err != nil {
+		return SkillDeploymentList{}, err
+	}
+	result := make([]SkillDeployment, 0, len(items))
+	for _, item := range items {
+		result = append(result, skillDeploymentProjection(item))
+	}
+	return SkillDeploymentList{Deployments: result}, nil
+}
+
+// DeployProfileSkills delivers all exact Profile Skills to an explicit local
+// Agent target, compensating newly created deployments on failure.
+func (s *Service) DeployProfileSkills(slug, targetValue, projectRoot string) (SkillDeploymentList, error) {
+	profileSlug, err := profiledomain.NewSlug(slug)
+	if err != nil {
+		return SkillDeploymentList{}, err
 	}
 	target := skilldomain.DeploymentTarget(strings.TrimSpace(targetValue))
 	if err := target.Validate(); err != nil {
-		return SkillDeployment{}, err
+		return SkillDeploymentList{}, err
 	}
+	root, err := resolveSkillTargetRoot(target, projectRoot)
+	if err != nil {
+		return SkillDeploymentList{}, err
+	}
+	items, err := s.runtime.DeployProfileSkills(s.ctx, profileSlug, target, root)
+	if err != nil {
+		return SkillDeploymentList{}, err
+	}
+	result := make([]SkillDeployment, 0, len(items))
+	for _, item := range items {
+		result = append(result, skillDeploymentProjection(item))
+	}
+	return SkillDeploymentList{Deployments: result}, nil
+}
 
+func resolveSkillTargetRoot(target skilldomain.DeploymentTarget, projectRoot string) (string, error) {
 	root := strings.TrimSpace(projectRoot)
+	var err error
 	if target.ProjectScoped() {
 		if root == "" {
-			return SkillDeployment{}, fmt.Errorf("project root is required for target %s", target)
+			return "", fmt.Errorf("project root is required for target %s", target)
 		}
 		root, err = filepath.Abs(root)
 		if err != nil {
-			return SkillDeployment{}, fmt.Errorf("resolve project root: %w", err)
+			return "", fmt.Errorf("resolve project root: %w", err)
 		}
 	} else {
 		if root != "" {
-			return SkillDeployment{}, fmt.Errorf("project root is only valid for project-scoped Skill targets")
+			return "", fmt.Errorf("project root is only valid for project-scoped Skill targets")
 		}
 		root, err = os.UserHomeDir()
 		if err != nil {
-			return SkillDeployment{}, fmt.Errorf("resolve user home: %w", err)
+			return "", fmt.Errorf("resolve user home: %w", err)
 		}
 		root, err = filepath.Abs(root)
 		if err != nil {
-			return SkillDeployment{}, fmt.Errorf("resolve user home path: %w", err)
+			return "", fmt.Errorf("resolve user home path: %w", err)
 		}
 	}
 
-	item, err := s.runtime.Skills.Deploy(s.ctx, id, target, root)
-	if err != nil {
-		return SkillDeployment{}, err
-	}
-	return skillDeploymentProjection(skillapplication.DeploymentInspection{
-		Deployment:    item,
-		Drift:         skilldomain.DeploymentCurrent,
-		CurrentDigest: item.Digest(),
-	}), nil
+	return root, nil
 }
 
 func (s *Service) UndeploySkill(deploymentID string) error {
@@ -962,7 +985,21 @@ func (s *Service) UndeploySkill(deploymentID string) error {
 	if err != nil {
 		return err
 	}
-	return s.runtime.Skills.Undeploy(s.ctx, id)
+	return s.runtime.UndeployUnassignedSkill(s.ctx, id)
+}
+
+// UndeployProfileSkill removes only an exact deployment belonging to the
+// supplied Profile, even if its original Skill is no longer selected.
+func (s *Service) UndeployProfileSkill(slug, deploymentID string) error {
+	profileSlug, err := profiledomain.NewSlug(slug)
+	if err != nil {
+		return err
+	}
+	id, err := skilldomain.ParseDeploymentID(deploymentID)
+	if err != nil {
+		return err
+	}
+	return s.runtime.UndeployProfileSkill(s.ctx, profileSlug, id)
 }
 
 func (s *Service) ListProviders() (ProviderList, error) {
@@ -1905,15 +1942,17 @@ func skillDeploymentProjection(
 ) SkillDeployment {
 	deployment := item.Deployment
 	return SkillDeployment{
-		DeploymentID:   deployment.ID().String(),
-		InstallationID: deployment.InstallationID().String(),
-		Target:         string(deployment.Target()),
-		Root:           deployment.Root(),
-		Destination:    deployment.Destination(),
-		Digest:         deployment.Digest(),
-		DeployedAt:     deployment.DeployedAt().Format(timeFormat),
-		Drift:          string(item.Drift),
-		CurrentDigest:  item.CurrentDigest,
+		DeploymentID:    deployment.ID().String(),
+		InstallationID:  deployment.InstallationID().String(),
+		Target:          string(deployment.Target()),
+		Root:            deployment.Root(),
+		Destination:     deployment.Destination(),
+		Digest:          deployment.Digest(),
+		DeployedAt:      deployment.DeployedAt().Format(timeFormat),
+		Drift:           string(item.Drift),
+		CurrentDigest:   item.CurrentDigest,
+		ProfileID:       deployment.OwnerProfileID(),
+		ProfileRevision: deployment.ProfileRevision(),
 	}
 }
 
@@ -2122,6 +2161,7 @@ func profileProjection(profile profiledomain.Profile) Profile {
 		Mode:        string(profile.Mode()),
 		Tools:       tools,
 		Skills:      make([]string, 0, len(profile.Skills())),
+		Revision:    profile.Revision(),
 	}
 	for _, id := range profile.Skills() {
 		result.Skills = append(result.Skills, id.String())

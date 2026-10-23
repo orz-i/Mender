@@ -26,6 +26,7 @@ import { ProfileDetailPage } from "./domains/profiles/profile-detail-page";
 import { ProfileEditPage } from "./domains/profiles/profile-edit-page";
 import { ProfileSkillsPage } from "./domains/profiles/profile-skills-page";
 import { ProfileMCPDeliveryPage } from "./domains/profiles/profile-mcp-delivery-page";
+import { ProfileSkillDeliveryPage } from "./domains/profiles/profile-skill-delivery-page";
 import { ToolsPage, ToolServicePage } from "./domains/tools/tools-page";
 import { ToolWorkspacePage } from "./domains/tools/tool-workspace-page";
 import { RuntimePage } from "./domains/runtime/runtime-page";
@@ -43,17 +44,14 @@ export function MenderApp({
   chooseLocalDirectory,
   installPlugin,
   installSkill,
-  deploySkill,
+  deployProfileSkills,
 }: {
   client: MenderClient;
   copyText?: (value: string) => Promise<void>;
   chooseLocalDirectory?: () => Promise<string | null>;
   installPlugin?: () => Promise<ProviderPluginInstallation | null>;
   installSkill?: () => Promise<SkillInstallation | null>;
-  deploySkill?: (
-    installationId: string,
-    target: SkillDeployment["target"],
-  ) => Promise<SkillDeployment | null>;
+  deployProfileSkills?: (slug: string, target: SkillDeployment["target"]) => Promise<SkillDeployment[] | null>;
 }) {
   useLocale();
 
@@ -88,7 +86,6 @@ export function MenderApp({
               <SkillsPage
                 client={client}
                 {...(installSkill === undefined ? {} : { installSkill })}
-                {...(deploySkill === undefined ? {} : { deploySkill })}
               />
             }
           />
@@ -99,6 +96,8 @@ export function MenderApp({
           <Route path="profiles/:slug/skills" element={<ProfileSkillsPage client={client} />} />
           <Route path="profiles/:slug/deliveries/mcp" element={<ProfileMCPDeliveryPage client={client}
             {...(copyText === undefined ? {} : { copyText })} />} />
+          <Route path="profiles/:slug/deliveries/skills" element={<ProfileSkillDeliveryPage client={client}
+            {...(deployProfileSkills === undefined ? {} : { deployProfileSkills })} />} />
           <Route path="tunnels" element={<TunnelsPage client={client} />} />
           <Route path="servers" element={<Navigate to="/profiles" replace />} />
           <Route path="runtime" element={<RuntimePage client={client} />} />

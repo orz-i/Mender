@@ -144,6 +144,16 @@ Go（目标包+Race Detector）、TS strict/i18n/lint/Vitest、frontend build、
 已验证：跨 Profile 不可在 UI 启动/停止/重启他人的 MCP 实例；同一个 Profile 多实例仍可列出；独立路径可返回配置档。组件与管理集成测试覆盖；`pnpm exec vitest run --maxWorkers=6 --reporter=dot` 66 文件 414 项通过，`pnpm typecheck`/`pnpm lint`/`pnpm i18n:check`/`pnpm build` 与 Desktop 架构检查通过。既有 Docker 定时刷新测试仅加异步安装等待，解决全量并行执行偶发 race；无生产逻辑修改。
 
 **未完成/不冒充**：真实 Wails 对 Profile MCP 启停、真实 Tunnel/连接器状态、重建后 Native UI、远端 auth HTTPS、MCP stdio client config 尚需后续验收与收口。原运行中的 Wails/MCP/Tunnel 未触碰。下一步为 Profile 所属 Skill 部署语义与旧部署无归属数据处理，不可提前删除 Skill Library 旧部署记录。
+## 阶段 C — Profile-owned Agent Skills Delivery（2026-10-24）
+
+Profile 已成为新建 Skill 文件交付的唯一对外产品入口：`/profiles/:slug/deliveries/skills` 提供目标选择、原生项目目录核对、已选版本说明、部署列表、精确 drift 和升级过期标识及二次确认的卸载。远端 HTTP 只有只读的 `GET /profiles/{slug}/skill-deployments`，没有让远端请求写任意本地宿主目录。Desktop 使用 `DeployProfileSkills`，CLI 使用 `profile deploy-skills / skill-deployments / undeploy-skill`；删除原 `Skills` 页面独立 Deploy 控件与对外 CLI `skill deploy`、Desktop `DeploySkill` 方法。Skill Library 只负责资源安装/信任/启用以及历史未归属部署清理；Profile-owned 文件不可通过 Library 的通用 undeploy 删除。
+
+复用现有 Skill installation trust/enablement、文件系统路径约束、materialize/observe/remove，以及原有 `skill_deployments`。Skill schema v3 对现有记录原位增加 `owner_profile_id`（默认空）与 `profile_revision`（默认 0），不重建 DeploymentID、InstallationID、root、destination、digest；不自动认领旧安装。新的 Profile 交付使用当前 Profile 精确选定的安装列表、验证每项可用且同名不冲突、逐项 revision CAS/DB trigger 入库，失败仅补偿本次创建的材料。旧的未归属部署仍出现在 Skill 库，并能精确移除；归属不同的 Profile 无法列出或卸载彼此记录。文件型交付的 Profile revision 改变后只显示过期，不自动覆盖文件。
+
+**验证：**一次性 SQLite v2→v3、legacy 保留、owner query、同名冲突、部分成功后的补偿、Profile revision 漂移、HTTP GET/DELETE 跨 Profile 与 Legacy 拒绝、Wails 目录校验、CLI/Profile scoped workflow、React 表单取消/异常/确认均有自动测试。 `go test ./backend/...` 通过，`go test -race` 对相关 Profile/Skill/HTTP/Wails 工作流通过，`pnpm go:lint` 零问题，`pnpm lint`、`pnpm typecheck`、`pnpm i18n:check`、`pnpm build` 通过，前端 `66` 文件 `417` 项通过。生成的 OpenAPI SDK 与 Wails binding 在该阶段提交后再次检查一致性。
+
+**明确限制：**这不是单个数据库事务包裹所有文件写入；跨多个 Skill 的失败会尽力逆序补偿，补偿失败显式报错，不能虚报原子成功。未添加跨主机目录安装；真实用户 HOME 路径、现有生产 Wails App、真实隧道、Agent 消费端加载尚未实机验收。本阶段没有操作真实生产数据库或正在运行的 MCP Server。
+
 ## 7. 需避免的过度设计
 
 - 不引入 ACP v2、Agent Loop 或新的 Session/Task 生命周期。

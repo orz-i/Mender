@@ -202,6 +202,20 @@ function ProfileDetailContent({ client, slug }: { client: MenderClient; slug: st
                   {t("Manage MCP delivery")}
                 </Button>
               </div>
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">{t("Agent Skills")}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {t("Deliver the {{count}} selected Skills to an Agent project or user directory.", {
+                      count: profile.skills?.length ?? 0,
+                    })}
+                  </p>
+                </div>
+                <Button size="sm" variant="outline" onClick={() =>
+                  void navigate("/profiles/" + encodeURIComponent(profile.slug) + "/deliveries/skills")}>
+                  {t("Manage Skill delivery")}
+                </Button>
+              </div>
               {deliveryError ? <ErrorNotice message={deliveryError}
                 onRetry={() => { setDeliveriesLoaded(false); setVersion((v) => v + 1); }} /> : null}
               {!deliveriesLoaded ? <p className="text-sm text-muted-foreground">{t("Loading servers…")}</p> : null}

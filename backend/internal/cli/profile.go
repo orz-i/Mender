@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"strings"
 	"text/tabwriter"
 
 	"github.com/orz-i/Mender/backend/internal/bootstrap"
@@ -24,6 +25,9 @@ func (a *app) newProfileCommand() *cobra.Command {
 	command.AddCommand(a.newProfileAddToolCommand())
 	command.AddCommand(a.newProfileRemoveToolCommand())
 	command.AddCommand(a.newProfileSetSkillsCommand())
+	command.AddCommand(a.newProfileDeploySkillsCommand())
+	command.AddCommand(a.newProfileSkillDeploymentsCommand())
+	command.AddCommand(a.newProfileUndeploySkillCommand())
 	return command
 }
 
@@ -55,6 +59,98 @@ func (a *app) newProfileSetSkillsCommand() *cobra.Command {
 					return err
 				}
 				return a.writeValue(fmt.Sprintf("selected %d Skills in Profile %s", len(profile.Skills()), slug), profileProjection(profile))
+			})
+		},
+	}
+}
+
+// The local CLI is a first-class Profile delivery adapter: selected Skill
+// snapshots are always resolved from Profile membership rather than arbitrary
+// Library installation IDs.
+func (a *app) newProfileDeploySkillsCommand() *cobra.Command {
+	var targetValue, projectRoot string
+	command := &cobra.Command{
+		Use:   "deploy-skills <profile>",
+		Short: "Deploy exact Profile Skills into one explicit local Agent target",
+		Args:  exactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			slug, err := profiledomain.NewSlug(args[0])
+			if err != nil {
+				return usageError{err: err}
+			}
+			target := skilldomain.DeploymentTarget(strings.TrimSpace(targetValue))
+			if err := target.Validate(); err != nil {
+				return usageError{err: err}
+			}
+			root, err := a.resolveSkillDeploymentRoot(target, projectRoot)
+			if err != nil {
+				return usageError{err: err}
+			}
+			return a.withRuntime(cmd.Context(), func(runtime *bootstrap.Runtime) error {
+				items, err := runtime.DeployProfileSkills(cmd.Context(), slug, target, root)
+				if err != nil {
+					return err
+				}
+				projected := make([]map[string]any, 0, len(items))
+				for _, item := range items {
+					projected = append(projected, skillDeploymentProjection(item))
+				}
+				return a.writeValue(fmt.Sprintf("deployed %d Skills from Profile %s", len(items), slug),
+					map[string]any{"profile": slug.String(), "deployments": projected})
+			})
+		},
+	}
+	command.Flags().StringVar(&targetValue, "target", "", "agents-project|github-project|claude-project|agents-user|copilot-user")
+	command.Flags().StringVar(&projectRoot, "project", "", "project root for project-scoped targets")
+	_ = command.MarkFlagRequired("target")
+	return command
+}
+
+func (a *app) newProfileSkillDeploymentsCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "skill-deployments <profile>",
+		Short: "List one Profile's exact local Skill deployments and drift",
+		Args:  exactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			slug, err := profiledomain.NewSlug(args[0])
+			if err != nil {
+				return usageError{err: err}
+			}
+			return a.withRuntime(cmd.Context(), func(runtime *bootstrap.Runtime) error {
+				items, err := runtime.ListProfileSkillDeployments(cmd.Context(), slug)
+				if err != nil {
+					return err
+				}
+				projected := make([]map[string]any, 0, len(items))
+				for _, item := range items {
+					projected = append(projected, skillDeploymentProjection(item))
+				}
+				return a.writeValue(fmt.Sprintf("%d Profile Skill deployments", len(items)),
+					map[string]any{"profile": slug.String(), "deployments": projected})
+			})
+		},
+	}
+}
+
+func (a *app) newProfileUndeploySkillCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "undeploy-skill <profile> <deployment-id>",
+		Short: "Remove exactly one Skill deployment belonging to this Profile",
+		Args:  exactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			slug, err := profiledomain.NewSlug(args[0])
+			if err != nil {
+				return usageError{err: err}
+			}
+			id, err := skilldomain.ParseDeploymentID(args[1])
+			if err != nil {
+				return usageError{err: err}
+			}
+			return a.withRuntime(cmd.Context(), func(runtime *bootstrap.Runtime) error {
+				if err := runtime.UndeployProfileSkill(cmd.Context(), slug, id); err != nil {
+					return err
+				}
+				return a.writeValue(fmt.Sprintf("undeployed %s", id), map[string]any{"deploymentId": id.String()})
 			})
 		},
 	}
@@ -371,6 +467,7 @@ func profileProjection(profile profiledomain.Profile) map[string]any {
 	}
 	return map[string]any{
 		"skills":      selectedSkills,
+		"revision":    profile.Revision(),
 		"profileId":   profile.ID().String(),
 		"slug":        profile.Slug().String(),
 		"displayName": profile.DisplayName(),

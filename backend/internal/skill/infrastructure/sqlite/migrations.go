@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-const currentSchemaVersion = 2
+const currentSchemaVersion = 3
 
 func migrate(ctx context.Context, db *sql.DB) error {
 	tx, err := db.BeginTx(ctx, nil)
@@ -82,6 +82,24 @@ func migrate(ctx context.Context, db *sql.DB) error {
 			time.Now().UTC().Format(time.RFC3339Nano),
 		); err != nil {
 			return fmt.Errorf("record skill installation migration 2: %w", err)
+		}
+	}
+
+	if version < 3 {
+		statements := []string{
+			"ALTER TABLE skill_deployments ADD COLUMN owner_profile_id TEXT NOT NULL DEFAULT ''",
+			"ALTER TABLE skill_deployments ADD COLUMN profile_revision INTEGER NOT NULL DEFAULT 0 CHECK(profile_revision >= 0)",
+			"CREATE INDEX idx_skill_deployments_owner ON skill_deployments(owner_profile_id)",
+		}
+		for _, statement := range statements {
+			if _, err := tx.ExecContext(ctx, statement); err != nil {
+				return fmt.Errorf("apply skill installation migration 3: %w", err)
+			}
+		}
+		if _, err := tx.ExecContext(ctx,
+			"INSERT INTO skill_installation_schema_migrations(version, applied_at) VALUES (3, ?)",
+			time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
+			return fmt.Errorf("record skill installation migration 3: %w", err)
 		}
 	}
 

@@ -10,7 +10,7 @@ import "@mender/ui/globals.css";
 
 import {
   createDesktopMenderClient,
-  deployDesktopSkill,
+  deployDesktopProfileSkills,
   installDesktopPlugin,
   installDesktopSkill,
 } from "./desktop-client";
@@ -68,10 +68,10 @@ async function chooseAndInstallSkill() {
   return installDesktopSkill(sourcePath);
 }
 
-async function chooseAndDeploySkill(
-  installationId: string,
+async function chooseAndDeployProfileSkills(
+  slug: string,
   target: SkillDeployment["target"],
-) {
+): Promise<SkillDeployment[] | null> {
   let projectRoot = "";
   if (target.endsWith("-project")) {
     projectRoot = await Dialogs.OpenFile({
@@ -79,15 +79,13 @@ async function chooseAndDeploySkill(
       CanChooseDirectories: true,
       CanChooseFiles: false,
       CanCreateDirectories: false,
-      Title: t("Deploy Skill"),
-      Message: t("Choose the project root for this Skill deployment."),
+      Title: t("Deploy Profile skills"),
+      Message: t("Choose the project root for the selected Profile Skills."),
       ButtonText: t("Deploy"),
     });
-    if (!projectRoot) {
-      return null;
-    }
+    if (!projectRoot) return null;
   }
-  return deployDesktopSkill(installationId, target, projectRoot);
+  return deployDesktopProfileSkills(slug, target, projectRoot);
 }
 
 createRoot(rootElement).render(
@@ -99,7 +97,7 @@ createRoot(rootElement).render(
         chooseLocalDirectory={chooseLocalSandboxDirectory}
         installPlugin={chooseAndInstallPlugin}
         installSkill={chooseAndInstallSkill}
-        deploySkill={chooseAndDeploySkill}
+        deployProfileSkills={chooseAndDeployProfileSkills}
       />
     </HashRouter>
   </StrictMode>,

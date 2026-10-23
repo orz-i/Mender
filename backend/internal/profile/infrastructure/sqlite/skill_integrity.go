@@ -20,6 +20,16 @@ func (s *Store) EnsureSkillReferenceGuards(ctx context.Context) error {
 		WHEN (NEW.trusted = 0 OR NEW.enabled = 0)
 			AND EXISTS(SELECT 1 FROM profile_skills WHERE installation_id = OLD.installation_id)
 		BEGIN SELECT RAISE(ABORT, 'skill installation in use by Profile'); END`,
+		`CREATE TRIGGER IF NOT EXISTS profile_skill_deployment_admission
+        BEFORE INSERT ON skill_deployments
+        WHEN NEW.owner_profile_id <> '' AND NOT EXISTS(
+            SELECT 1 FROM profile_skills ps
+            JOIN profiles p ON p.id = ps.profile_id
+            WHERE ps.profile_id = NEW.owner_profile_id
+              AND ps.installation_id = NEW.installation_id
+              AND p.revision = NEW.profile_revision
+        )
+        BEGIN SELECT RAISE(ABORT, 'profile Skill deployment membership or revision invalid'); END`,
 		`CREATE TRIGGER IF NOT EXISTS profile_skill_restrict_disabled_selection
 		BEFORE INSERT ON profile_skills
 		WHEN EXISTS(SELECT 1 FROM skill_installations

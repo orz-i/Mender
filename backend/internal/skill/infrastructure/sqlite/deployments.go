@@ -12,7 +12,7 @@ import (
 	skilldomain "github.com/orz-i/Mender/backend/internal/skill/domain"
 )
 
-const deploymentColumns = "deployment_id, installation_id, target, root, destination, digest, deployed_at"
+const deploymentColumns = "deployment_id, installation_id, target, root, destination, digest, deployed_at, owner_profile_id, profile_revision"
 
 // CreateDeployment persists one exact Skill deployment.
 func (s *Store) CreateDeployment(
@@ -24,7 +24,7 @@ func (s *Store) CreateDeployment(
 	}
 	_, err := s.db.ExecContext(
 		ctx,
-		"INSERT INTO skill_deployments("+deploymentColumns+") VALUES (?, ?, ?, ?, ?, ?, ?)",
+		"INSERT INTO skill_deployments("+deploymentColumns+") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
 		deployment.ID().String(),
 		deployment.InstallationID().String(),
 		string(deployment.Target()),
@@ -32,6 +32,8 @@ func (s *Store) CreateDeployment(
 		deployment.Destination(),
 		deployment.Digest(),
 		deployment.DeployedAt().Format(time.RFC3339Nano),
+		deployment.OwnerProfileID(),
+		deployment.ProfileRevision(),
 	)
 	if err != nil {
 		if isUniqueConstraint(err) {
@@ -88,6 +90,32 @@ func (s *Store) ListDeployments(
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("list skill deployments: rows: %w", err)
+	}
+	return items, nil
+}
+
+// ListDeploymentsByProfile returns only explicitly owned deliveries.
+// Legacy records with empty owner_profile_id remain unassigned.
+func (s *Store) ListDeploymentsByProfile(
+	ctx context.Context, profileID string,
+) ([]skilldomain.Deployment, error) {
+	rows, err := s.db.QueryContext(ctx,
+		"SELECT "+deploymentColumns+" FROM skill_deployments WHERE owner_profile_id = ? ORDER BY target, destination, deployment_id",
+		profileID)
+	if err != nil {
+		return nil, fmt.Errorf("list Skill deliveries by Profile: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	items := make([]skilldomain.Deployment, 0)
+	for rows.Next() {
+		item, err := scanDeployment(rows)
+		if err != nil {
+			return nil, fmt.Errorf("list Skill deliveries by Profile: %w", err)
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("list Skill deliveries by Profile: %w", err)
 	}
 	return items, nil
 }
@@ -160,6 +188,8 @@ func scanDeployment(scanner rowScanner) (skilldomain.Deployment, error) {
 		destination       string
 		digest            string
 		rawDeployedAt     string
+		ownerProfileID    string
+		profileRevision   uint64
 	)
 	if err := scanner.Scan(
 		&rawID,
@@ -169,6 +199,8 @@ func scanDeployment(scanner rowScanner) (skilldomain.Deployment, error) {
 		&destination,
 		&digest,
 		&rawDeployedAt,
+		&ownerProfileID,
+		&profileRevision,
 	); err != nil {
 		return skilldomain.Deployment{}, err
 	}
@@ -195,6 +227,12 @@ func scanDeployment(scanner rowScanner) (skilldomain.Deployment, error) {
 	)
 	if err != nil {
 		return skilldomain.Deployment{}, err
+	}
+	if ownerProfileID != "" {
+		return item.WithProfile(ownerProfileID, profileRevision)
+	}
+	if profileRevision != 0 {
+		return skilldomain.Deployment{}, fmt.Errorf("unowned deployment has a Profile revision")
 	}
 	return item, nil
 }

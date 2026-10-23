@@ -501,6 +501,7 @@ func profileProjection(profile profiledomain.Profile) map[string]any {
 		"mode":        string(profile.Mode()),
 		"tools":       tools,
 		"skills":      profileSkillIDs(profile),
+		"revision":    profile.Revision(),
 	}
 	if tunnelID, ok := profile.TunnelID(); ok {
 		result["tunnelId"] = tunnelID.String()

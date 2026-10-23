@@ -554,6 +554,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/profiles/{slug}/skill-deployments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Read Profile-owned materialized Skill deployments; legacy unassigned rows are excluded. */
+        get: operations["listProfileSkillDeployments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/profiles/{slug}/skill-deployments/{deploymentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** @description Remove only a Skill deployment owned by this exact Profile. */
+        delete: operations["undeployProfileSkill"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/profiles/{slug}/tools/{toolId}": {
         parameters: {
             query?: never;
@@ -2027,6 +2061,10 @@ export interface components {
             /** @enum {string} */
             drift: "current" | "drifted" | "missing";
             currentDigest?: string;
+            /** @description Owning ProfileID; absent on legacy unassigned deployments */
+            profileId?: string;
+            /** @description Exact Profile revision when published */
+            profileRevision?: number;
         };
         Provider: {
             providerId: string;
@@ -2211,6 +2249,8 @@ export interface components {
             tunnelId?: string;
             tools: components["schemas"]["ProfileTool"][];
             skills?: string[];
+            /** @description Persisted Profile aggregate revision (read-only) */
+            revision?: number;
         };
         SetProfileTunnelRequest: {
             /** @description Mender Tunnel ID. Send an empty string to clear the binding. */
@@ -3795,6 +3835,56 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+        };
+    };
+    listProfileSkillDeployments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: components["parameters"]["ProfileSlug"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Exact deployments owned by the Profile */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        deployments: components["schemas"]["SkillDeployment"][];
+                    };
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    undeployProfileSkill: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: components["parameters"]["ProfileSlug"];
+                deploymentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Profile Skill deployment removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     removeProfileTool: {

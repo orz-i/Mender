@@ -14,7 +14,7 @@ vi.mock(
       DeleteCredential: vi.fn(),
       DeletePolicyRule: vi.fn(),
       DeleteSkillInstallation: vi.fn(),
-      DeploySkill: vi.fn(),
+      DeployProfileSkills: vi.fn(),
       DisableSkillInstallation: vi.fn(),
       EnableSkillInstallation: vi.fn(),
       GetCredential: vi.fn(),
@@ -48,6 +48,7 @@ vi.mock(
       ListProviderPlugins: vi.fn(),
       ListProviders: vi.fn(),
       ListSkillDeployments: vi.fn(),
+      ListProfileSkillDeployments: vi.fn(),
       ListSkills: vi.fn(),
       RebindProvider: vi.fn(),
       ReplaceProfileTools: vi.fn(),
@@ -61,6 +62,7 @@ vi.mock(
       StopMCPServer: vi.fn(),
       TrustSkillInstallation: vi.fn(),
       UndeploySkill: vi.fn(),
+      UndeployProfileSkill: vi.fn(),
       UntrustSkillInstallation: vi.fn(),
       UpdateConfiguredProvider: vi.fn(),
       UpdatePolicyRule: vi.fn(),
@@ -74,7 +76,7 @@ import { Service } from "../bindings/github.com/orz-i/Mender/backend/internal/de
 
 import {
   createDesktopMenderClient,
-  deployDesktopSkill,
+  deployDesktopProfileSkills,
   installDesktopProviderPlugin,
   installDesktopPlugin,
   installDesktopSkill,
@@ -494,7 +496,7 @@ describe("desktop Mender client", () => {
     );
   });
 
-  it("adapts Skill inventory and host-local install/deploy capabilities to Wails", async () => {
+  it("adapts Skill inventory and host-local installation to Wails", async () => {
     const installationId = "sinst_0123456789abcdef0123456789abcdef";
     const deploymentId = "sdep_0123456789abcdef0123456789abcdef";
     const installation = {
@@ -513,17 +515,6 @@ describe("desktop Mender client", () => {
     };
 
     vi.mocked(Service.InstallSkill).mockResolvedValue(installation);
-    vi.mocked(Service.DeploySkill).mockResolvedValue({
-      deploymentId,
-      installationId,
-      target: "agents-project",
-      root: "/workspace",
-      destination: "/workspace/.agents/skills/example-skill",
-      digest: installation.digest,
-      deployedAt: "2026-09-28T01:00:00Z",
-      drift: "current",
-      currentDigest: installation.digest,
-    });
     vi.mocked(Service.ListSkills).mockResolvedValue({
       installations: [installation],
     });
@@ -559,6 +550,7 @@ describe("desktop Mender client", () => {
           digest: installation.digest,
           deployedAt: "2026-09-28T01:00:00Z",
           drift: "current",
+          profileRevision: 0,
           currentDigest: installation.digest,
         },
       ],
@@ -572,23 +564,6 @@ describe("desktop Mender client", () => {
       trusted: true,
     });
     expect(Service.InstallSkill).toHaveBeenCalledWith("/tmp/example-skill");
-
-    await expect(
-      deployDesktopSkill(
-        installationId,
-        "agents-project",
-        "/workspace",
-      ),
-    ).resolves.toMatchObject({
-      deploymentId,
-      target: "agents-project",
-      drift: "current",
-    });
-    expect(Service.DeploySkill).toHaveBeenCalledWith(
-      installationId,
-      "agents-project",
-      "/workspace",
-    );
 
     const client = createDesktopMenderClient();
     await expect(client.listSkills()).resolves.toMatchObject({
@@ -1174,6 +1149,7 @@ describe("desktop Mender client", () => {
       displayName: "Default",
       mode: "hybrid",
       skills: [],
+      revision: 0,
       tools: [
         {
           toolId: "tool_1",
@@ -1249,12 +1225,36 @@ describe("desktop Mender client", () => {
     const id = "sinst_00000000000000000000000000000001";
     vi.mocked(Service.ReplaceProfileSkills).mockResolvedValue({
       profileId: "prof_1", slug: "default", displayName: "Default",
-      mode: "hybrid", tools: [], skills: [id],
+      mode: "hybrid", tools: [], skills: [id], revision: 1,
     });
     const client = createDesktopMenderClient();
     const updated = await client.replaceProfileSkills("default", { installationIds: [id] });
     expect(Service.ReplaceProfileSkills).toHaveBeenCalledWith("default", [id]);
     expect(updated.skills).toEqual([id]);
+  });
+
+  it("lists and deploys Profile-owned Skill artifacts through Wails", async () => {
+    const owned = {
+      deploymentId: "sdep_00000000000000000000000000000001",
+      installationId: "sinst_00000000000000000000000000000001",
+      target: "agents-project", root: "/workspace",
+      destination: "/workspace/.agents/skills/mender-tools",
+      digest: "sha256:" + "a".repeat(64), deployedAt: "2026-10-23T00:00:00Z",
+      drift: "current", profileId: "prof_00000000000000000000000000000001",
+      profileRevision: 3,
+    };
+    vi.mocked(Service.DeployProfileSkills).mockResolvedValue({ deployments: [owned] });
+    vi.mocked(Service.ListProfileSkillDeployments).mockResolvedValue({ deployments: [owned] });
+    const created = await deployDesktopProfileSkills("delivery", "agents-project", "/workspace");
+    expect(Service.DeployProfileSkills).toHaveBeenCalledWith("delivery", "agents-project", "/workspace");
+    expect(created).toMatchObject([{ profileId: owned.profileId, profileRevision: 3 }]);
+    const client = createDesktopMenderClient();
+    await expect(client.listProfileSkillDeployments("delivery")).resolves.toMatchObject({
+      deployments: [{ profileId: owned.profileId, installationId: owned.installationId }],
+    });
+    await client.undeployProfileSkill("delivery", owned.deploymentId);
+    expect(Service.UndeployProfileSkill).toHaveBeenCalledWith("delivery", owned.deploymentId);
+    expect(Service.UndeploySkill).not.toHaveBeenCalled();
   });
 
   it("adapts managed MCP server lifecycle to Wails", async () => {

@@ -4,7 +4,6 @@ import {
   render,
   screen,
   waitFor,
-  within,
 } from "@testing-library/react";
 import type {
   MenderClient,
@@ -93,7 +92,6 @@ describe("SkillsPage", () => {
     });
     const undeploySkill = vi.fn().mockResolvedValue(undefined);
     const installSkill = vi.fn().mockResolvedValue(installation);
-    const deploySkill = vi.fn().mockResolvedValue(deployment);
 
     const client = {
       listSkills,
@@ -112,7 +110,6 @@ describe("SkillsPage", () => {
         <MenderApp
           client={client}
           installSkill={installSkill}
-          deploySkill={deploySkill}
         />
       </MemoryRouter>,
     );
@@ -199,31 +196,7 @@ describe("SkillsPage", () => {
       screen.getAllByRole("button", { name: "Close" })[0]!,
     );
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "Deploy example-skill" }),
-    );
-    expect(
-      await screen.findByRole("heading", { name: "Deploy Skill" }),
-    ).toBeTruthy();
-    const deployDialog = screen.getByRole("dialog", { name: "Deploy Skill" });
-    expect(deployDialog.querySelector('[data-slot="dialog-body"]')).not.toBeNull();
-    expect(within(deployDialog).getByRole("button", { name: "Cancel" })).toBeTruthy();
-    expect(within(deployDialog).queryAllByRole("button", { name: "Close" })).toHaveLength(1);
-    const targetSelect = within(deployDialog).getByRole<HTMLSelectElement>("combobox", { name: "Skill deployment target" });
-    const deployButton = within(deployDialog).getByRole<HTMLButtonElement>("button", { name: "Deploy" });
-    expect(targetSelect.value).toBe("");
-    expect(deployButton.disabled).toBe(true);
-    expect(deploySkill).not.toHaveBeenCalled();
-    fireEvent.change(targetSelect, { target: { value: "agents-project" } });
-    expect(within(deployDialog).getByText("Project deployment: choose a project folder in the next step.")).toBeTruthy();
-    expect(deployButton.disabled).toBe(false);
-    fireEvent.click(deployButton);
-    await waitFor(() => {
-      expect(deploySkill).toHaveBeenCalledWith(
-        installation.installationId,
-        "agents-project",
-      );
-    });
+    expect(screen.queryByRole("button", { name: "Deploy example-skill" })).toBeNull();
 
     fireEvent.click(
       screen.getByRole("button", { name: "Untrust example-skill" }),

@@ -116,6 +116,8 @@ func (h *Handler) routes() {
 	h.mux.HandleFunc("POST /api/v1/profiles/{slug}/tools", h.addProfileTool)
 	h.mux.HandleFunc("PUT /api/v1/profiles/{slug}/tools", h.replaceProfileTools)
 	h.mux.HandleFunc("PUT /api/v1/profiles/{slug}/skills", h.replaceProfileSkills)
+	h.mux.HandleFunc("GET /api/v1/profiles/{slug}/skill-deployments", h.listProfileSkillDeployments)
+	h.mux.HandleFunc("DELETE /api/v1/profiles/{slug}/skill-deployments/{deploymentId}", h.undeployProfileSkill)
 	h.mux.HandleFunc("DELETE /api/v1/profiles/{slug}/tools/{toolId}", h.removeProfileTool)
 	h.mux.HandleFunc("PUT /api/v1/profiles/{slug}/tunnel", h.setProfileTunnel)
 
@@ -302,6 +304,7 @@ func writeKnownError(w http.ResponseWriter, err error) {
 		errors.Is(err, skillapplication.ErrDeploymentTargetExists),
 		errors.Is(err, skillapplication.ErrAgentPluginTargetExists),
 		errors.Is(err, bootstrap.ErrBuiltInSkillImmutable),
+		errors.Is(err, bootstrap.ErrSkillDeliveryOwned),
 		errors.Is(err, tunnelapplication.ErrTunnelConflict),
 		errors.Is(err, tunnelapplication.ErrTunnelInUse),
 		errors.Is(err, tunnelapplication.ErrTunnelTransportUnavailable),

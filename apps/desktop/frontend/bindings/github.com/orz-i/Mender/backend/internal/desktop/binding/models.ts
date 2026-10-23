@@ -486,6 +486,7 @@ export interface Profile {
     "tunnelId"?: string;
     "tools": ProfileTool[] | null;
     "skills": string[] | null;
+    "revision": number;
 }
 
 export interface ProfileList {
@@ -785,6 +786,8 @@ export interface SkillDeployment {
     "deployedAt": string;
     "drift": string;
     "currentDigest"?: string;
+    "profileId"?: string;
+    "profileRevision": number;
 }
 
 export interface SkillDeploymentList {

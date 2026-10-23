@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"encoding/hex"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -46,13 +47,15 @@ func (t DeploymentTarget) ProjectScoped() bool {
 
 // Deployment records one exact materialized Skill installation.
 type Deployment struct {
-	id             DeploymentID
-	installationID InstallationID
-	target         DeploymentTarget
-	root           string
-	destination    string
-	digest         string
-	deployedAt     time.Time
+	id              DeploymentID
+	installationID  InstallationID
+	target          DeploymentTarget
+	root            string
+	destination     string
+	digest          string
+	deployedAt      time.Time
+	ownerProfileID  string
+	profileRevision uint64
 }
 
 // NewDeployment constructs a validated Skill deployment record.
@@ -114,6 +117,24 @@ func NewDeployment(
 	}, nil
 }
 
+// WithProfile binds a materialization to the exact owner Profile revision.
+// Existing deployments without a Profile stay unowned until explicitly adopted.
+func (d Deployment) WithProfile(profileID string, revision uint64) (Deployment, error) {
+	if len(profileID) != len("prof_")+32 || !strings.HasPrefix(profileID, "prof_") {
+		return Deployment{}, fmt.Errorf("skill deployment: invalid ProfileID")
+	}
+	encoded := strings.TrimPrefix(profileID, "prof_")
+	if encoded != strings.ToLower(encoded) {
+		return Deployment{}, fmt.Errorf("skill deployment: ProfileID must be lowercase")
+	}
+	if _, err := hex.DecodeString(encoded); err != nil {
+		return Deployment{}, fmt.Errorf("skill deployment: invalid ProfileID: %w", err)
+	}
+	d.ownerProfileID = profileID
+	d.profileRevision = revision
+	return d, nil
+}
+
 // Validate checks persisted deployment invariants.
 func (d Deployment) Validate() error {
 	_, err := NewDeployment(
@@ -125,8 +146,19 @@ func (d Deployment) Validate() error {
 		d.digest,
 		d.deployedAt,
 	)
+	if err != nil {
+		return err
+	}
+	if d.ownerProfileID != "" {
+		_, err = d.WithProfile(d.ownerProfileID, d.profileRevision)
+	} else if d.profileRevision != 0 {
+		return fmt.Errorf("skill deployment: unowned record has Profile revision")
+	}
 	return err
 }
+
+func (d Deployment) OwnerProfileID() string  { return d.ownerProfileID }
+func (d Deployment) ProfileRevision() uint64 { return d.profileRevision }
 
 func (d Deployment) ID() DeploymentID               { return d.id }
 func (d Deployment) InstallationID() InstallationID { return d.installationID }

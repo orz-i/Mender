@@ -392,15 +392,17 @@ type SkillInspection struct {
 }
 
 type SkillDeployment struct {
-	DeploymentID   string `json:"deploymentId"`
-	InstallationID string `json:"installationId"`
-	Target         string `json:"target"`
-	Root           string `json:"root"`
-	Destination    string `json:"destination"`
-	Digest         string `json:"digest"`
-	DeployedAt     string `json:"deployedAt"`
-	Drift          string `json:"drift"`
-	CurrentDigest  string `json:"currentDigest,omitempty"`
+	DeploymentID    string `json:"deploymentId"`
+	InstallationID  string `json:"installationId"`
+	Target          string `json:"target"`
+	Root            string `json:"root"`
+	Destination     string `json:"destination"`
+	Digest          string `json:"digest"`
+	DeployedAt      string `json:"deployedAt"`
+	Drift           string `json:"drift"`
+	CurrentDigest   string `json:"currentDigest,omitempty"`
+	ProfileID       string `json:"profileId,omitempty"`
+	ProfileRevision uint64 `json:"profileRevision"`
 }
 
 type SkillDeploymentList struct {
@@ -530,6 +532,7 @@ type Profile struct {
 	TunnelID    string        `json:"tunnelId,omitempty"`
 	Tools       []ProfileTool `json:"tools"`
 	Skills      []string      `json:"skills"`
+	Revision    uint64        `json:"revision"`
 }
 
 type Tunnel struct {

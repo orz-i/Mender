@@ -40,6 +40,33 @@ func (uc DeployInstallation) Execute(
 	target skilldomain.DeploymentTarget,
 	root string,
 ) (skilldomain.Deployment, error) {
+	return uc.execute(ctx, installationID, target, root, "", 0)
+}
+
+// ExecuteForProfile materializes one exact selected Skill and records the
+// owning Profile and revision atomically with deployment metadata.
+func (uc DeployInstallation) ExecuteForProfile(
+	ctx context.Context,
+	installationID skilldomain.InstallationID,
+	target skilldomain.DeploymentTarget,
+	root string,
+	profileID string,
+	revision uint64,
+) (skilldomain.Deployment, error) {
+	if profileID == "" {
+		return skilldomain.Deployment{}, fmt.Errorf("deploy Profile skill: ProfileID required")
+	}
+	return uc.execute(ctx, installationID, target, root, profileID, revision)
+}
+
+func (uc DeployInstallation) execute(
+	ctx context.Context,
+	installationID skilldomain.InstallationID,
+	target skilldomain.DeploymentTarget,
+	root string,
+	profileID string,
+	revision uint64,
+) (skilldomain.Deployment, error) {
 	item, err := uc.source.GetDeployable(ctx, installationID)
 	if err != nil {
 		return skilldomain.Deployment{}, fmt.Errorf("deploy skill: resolve installation: %w", err)
@@ -81,6 +108,13 @@ func (uc DeployInstallation) Execute(
 			fmt.Errorf("deploy skill: metadata: %w", err),
 			wrapDeploymentCleanupError(cleanup()),
 		)
+	}
+	if err == nil && profileID != "" {
+		deployment, err = deployment.WithProfile(profileID, revision)
+	}
+	if err != nil {
+		return skilldomain.Deployment{}, errors.Join(fmt.Errorf("deploy skill: Profile metadata: %w", err),
+			wrapDeploymentCleanupError(cleanup()))
 	}
 	if err := uc.repository.CreateDeployment(ctx, deployment); err != nil {
 		return skilldomain.Deployment{}, errors.Join(

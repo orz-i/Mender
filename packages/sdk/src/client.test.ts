@@ -384,6 +384,35 @@ describe("Mender SDK", () => {
     expect(updated.skills).toEqual([id]);
   });
 
+  it("queries only Profile-owned Skill deployments through the generated contract", async () => {
+    const fetch = async (request: Request) => {
+      expect(request.method).toBe("GET");
+      expect(request.url).toContain("/api/v1/profiles/delivery/skill-deployments");
+      expect(await request.text()).toBe("");
+      return new Response(JSON.stringify({ deployments: [{
+        deploymentId: "sdep_1", installationId: "sinst_1", profileId: "prof_1",
+        profileRevision: 3, target: "agents-project", root: "/tmp",
+        destination: "/tmp/.agents/skills/example", digest: "sha256:" + "a".repeat(64),
+        deployedAt: "2026-10-23T00:00:00Z", drift: "current",
+      }] }), { status: 200, headers: { "Content-Type": "application/json" } });
+    };
+    const client = createMenderClient({ baseUrl: "http://localhost:8080/api/v1", fetch });
+    await expect(client.listProfileSkillDeployments("delivery")).resolves.toMatchObject({
+      deployments: [{ profileRevision: 3, profileId: "prof_1" }],
+    });
+  });
+
+  it("undeploys a Skill through its exact Profile path", async () => {
+    const fetch = async (request: Request) => {
+      expect(request.method).toBe("DELETE");
+      expect(request.url).toContain("/api/v1/profiles/delivery/skill-deployments/sdep_123");
+      expect(await request.text()).toBe("");
+      return new Response(null, { status: 204 });
+    };
+    const client = createMenderClient({ baseUrl: "http://localhost:8080/api/v1", fetch });
+    await expect(client.undeployProfileSkill("delivery", "sdep_123")).resolves.toBeUndefined();
+  });
+
   it("starts a managed MCP server through the generated contract", async () => {
     const fetch = async (request: Request) => {
       expect(request.method).toBe("POST");
