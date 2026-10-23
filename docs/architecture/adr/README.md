@@ -83,3 +83,4 @@ Minor implementation choices that remain inside an accepted architectural bounda
 - [ADR-0055: Managed MCP Profile hot refresh](0055-managed-mcp-profile-hot-refresh.md) — Accepted
 - [ADR-0056: Profile-scoped source-first MCP Tool discovery](0056-source-first-mcp-tool-discovery.md) — Accepted
 - [ADR-0057: Evidence-bound Agent lifecycle and native session continuation](0057-agent-session-lifecycle-recovery.md) — Proposed
+- [ADR-0058: Profile as a unified capability bundle and delivery root](0058-profile-unified-delivery-root.md) — Proposed
