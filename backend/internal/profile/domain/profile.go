@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
+	skilldomain "github.com/orz-i/Mender/backend/internal/skill/domain"
 	tunneldomain "github.com/orz-i/Mender/backend/internal/tunnel/domain"
 )
 
@@ -26,6 +27,7 @@ type Profile struct {
 	mode        ExposureMode
 	tunnelID    tunneldomain.TunnelID
 	bindings    []ToolBinding
+	skills      []skilldomain.InstallationID
 	revision    uint64
 }
 
@@ -157,6 +159,12 @@ func (p Profile) TunnelID() (tunneldomain.TunnelID, bool) {
 
 func (p Profile) Bindings() []ToolBinding {
 	return slices.Clone(p.bindings)
+}
+
+// Skills are exact installed Skill versions selected for this Profile.
+// They do not grant Tool execution or deploy files by themselves.
+func (p Profile) Skills() []skilldomain.InstallationID {
+	return slices.Clone(p.skills)
 }
 
 func (p Profile) Binding(toolID catalogdomain.ToolID) (ToolBinding, bool) {

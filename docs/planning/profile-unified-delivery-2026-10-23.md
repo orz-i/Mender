@@ -123,6 +123,20 @@ Server 不再是一个用户需要预先掌握的独立发布步骤。MCP 运行
 
 Go（目标包+Race Detector）、TS strict/i18n/lint/Vitest、frontend build、真实浏览器、Wails 最小窗口、真实 MCP stdio/HTTP 及一个受信任客户端插件加载；真实磁盘写入只用一次性测试目录。**不得把纯模拟/静态编译写成生产实机验收**。
 
+## 阶段 B 实施及测试记录（2026-10-23）
+
+已建立 Profile→确切 SkillInstallationID 的成员引用，持久化于 SQLite `profile_skills`（Profile schema v6）。保存依赖原有 Profile revision/CAS；Skill 内容与 Trust 仍属于 Skill Library。运行时在 Profile 与 Skill schema 就绪后配置跨连接 DB 保护，避免被 Profile 引用的 managed Skill 被外部 SQLite 客户端直接取消信任、停用或删除。内置 Skill 不存在于普通安装表，引用通过现有 Skill Library 精确身份解析；并未复制内置内容或引入第二种 Skill 身份。
+
+对外已接入 `PUT /profiles/{slug}/skills`（required `installationIds` exact array）、OpenAPI 生成 SDK、Wails 绑定、`mender profile set-skills` 和 Profile 详情→Skills→独立编辑页面；变更为选择操作，不创建 Skill Deployment、Agent Plugin 或 MCP Server。引用不可用的既有安装在 UI 中继续可见，只有明确删除才改变成员资格。
+
+范围和测试：
+- `go test ./backend/...` 全部通过；Profile、Skill、Runtime、HTTP、Wails、CLI 的包测试覆盖新增行为，数据库独立连接删除/停用阻断有验证。
+- `go test -race ./backend/internal/profile/... ./backend/internal/skill/infrastructure/sqlite ./backend/internal/bootstrap -run 'TestProfileSkill|TestProfileSelectsOnlyTrustedEnabledExactSkillsAndGuardsRemoval' -count=1` 通过。
+- `pnpm exec vitest run --maxWorkers=6 --reporter=dot`：65 文件，411 项通过。 `pnpm lint`、`pnpm typecheck`、`pnpm i18n:check`（1509/1509）、`pnpm build`、`pnpm desktop:architecture:check` 通过。
+- OpenAPI SDK 和 Wails 绑定生成可重现；文件与原仓库差异将在当前提交中一并纳入，提交后再运行一致性门禁。
+- 未运行真实生产数据库 schema 升级，也未重启桌面进程、MCP Server 或 Tunnel；Wails 真机视觉验收与真实 Profile 写入待业主下一次受控部署。仅在一次性测试数据库和目录验证。
+- 旧 `Skills` 页面当前 Deploy 控件、旧 SkillDeployment 不变；必须等阶段 C 新 Profile-owned 部署和存量迁移完成，再删除旧入口，防止不可管理或失联的数据。
+
 ## 7. 需避免的过度设计
 
 - 不引入 ACP v2、Agent Loop 或新的 Session/Task 生命周期。

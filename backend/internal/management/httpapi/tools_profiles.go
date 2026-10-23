@@ -13,6 +13,7 @@ import (
 	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
 	profileapplication "github.com/orz-i/Mender/backend/internal/profile/application"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
+	skilldomain "github.com/orz-i/Mender/backend/internal/skill/domain"
 )
 
 func (h *Handler) browseTools(w http.ResponseWriter, r *http.Request) {
@@ -363,6 +364,44 @@ func (h *Handler) replaceProfileTools(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, profileProjection(profile))
 }
 
+// replaceProfileSkills changes exact Skill membership only. No files are
+// deployed and no Skill scripts run during this operation.
+func (h *Handler) replaceProfileSkills(w http.ResponseWriter, r *http.Request) {
+	slug, err := profiledomain.NewSlug(r.PathValue("slug"))
+	if err != nil {
+		writeAPIError(w, http.StatusBadRequest, "validation_error", err)
+		return
+	}
+	var input struct {
+		InstallationIDs *[]string `json:"installationIds"`
+	}
+	if err := decodeJSON(r, &input); err != nil {
+		writeAPIError(w, http.StatusBadRequest, "validation_error", err)
+		return
+	}
+	if input.InstallationIDs == nil {
+		writeAPIError(w, http.StatusBadRequest, "validation_error", fmt.Errorf("installationIds must be an array"))
+		return
+	}
+	ids := make([]skilldomain.InstallationID, 0, len(*input.InstallationIDs))
+	for _, rawID := range *input.InstallationIDs {
+		id, err := skilldomain.ParseInstallationID(rawID)
+		if err != nil {
+			writeAPIError(w, http.StatusBadRequest, "validation_error", err)
+			return
+		}
+		ids = append(ids, id)
+	}
+	profile, err := h.runtime.Profiles.ReplaceSkills.Execute(r.Context(), profileapplication.ReplaceSkillsRequest{
+		ProfileSlug: slug, InstallationIDs: ids,
+	})
+	if err != nil {
+		writeKnownError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, profileProjection(profile))
+}
+
 func (h *Handler) removeProfileTool(w http.ResponseWriter, r *http.Request) {
 	slug, err := profiledomain.NewSlug(r.PathValue("slug"))
 	if err != nil {
@@ -433,6 +472,14 @@ func credentialReferenceStrings(values []credentialdomain.Reference) []string {
 	return result
 }
 
+func profileSkillIDs(profile profiledomain.Profile) []string {
+	ids := make([]string, 0, len(profile.Skills()))
+	for _, id := range profile.Skills() {
+		ids = append(ids, id.String())
+	}
+	return ids
+}
+
 func profileProjection(profile profiledomain.Profile) map[string]any {
 	tools := make([]map[string]any, 0, len(profile.Bindings()))
 	for _, binding := range profile.Bindings() {
@@ -453,6 +500,7 @@ func profileProjection(profile profiledomain.Profile) map[string]any {
 		"displayName": profile.DisplayName(),
 		"mode":        string(profile.Mode()),
 		"tools":       tools,
+		"skills":      profileSkillIDs(profile),
 	}
 	if tunnelID, ok := profile.TunnelID(); ok {
 		result["tunnelId"] = tunnelID.String()

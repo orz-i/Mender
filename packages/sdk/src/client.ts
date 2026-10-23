@@ -128,6 +128,8 @@ export type AddProfileToolRequest =
   components["schemas"]["AddProfileToolRequest"];
 export type ReplaceProfileToolsRequest =
   components["schemas"]["ReplaceProfileToolsRequest"];
+export type ReplaceProfileSkillsRequest =
+  components["schemas"]["ReplaceProfileSkillsRequest"];
 
 export interface BrowseToolsInput {
   limit?: number;
@@ -213,6 +215,7 @@ export interface MenderClient {
     body: ReplaceProfileToolsRequest,
   ): Promise<Profile>;
   removeProfileTool(slug: string, toolId: string): Promise<Profile>;
+  replaceProfileSkills(slug: string, body: ReplaceProfileSkillsRequest): Promise<Profile>;
   setProfileTunnel(slug: string, body: SetProfileTunnelRequest): Promise<Profile>;
   listIntegrationOfferings(): Promise<{integrations:IntegrationOffering[]}>;
   listAgents(): Promise<{agents:Agent[]}>;
@@ -586,6 +589,14 @@ export function createMenderClient(
       body: ReplaceProfileToolsRequest,
     ) {
       const result = await client.PUT("/profiles/{slug}/tools", {
+        params: { path: { slug } },
+        body,
+      });
+      return requireData(result);
+    },
+
+    async replaceProfileSkills(slug: string, body: ReplaceProfileSkillsRequest) {
+      const result = await client.PUT("/profiles/{slug}/skills", {
         params: { path: { slug } },
         body,
       });

@@ -12,6 +12,7 @@ import (
 	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
 	profileapplication "github.com/orz-i/Mender/backend/internal/profile/application"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
+	skilldomain "github.com/orz-i/Mender/backend/internal/skill/domain"
 	tunneldomain "github.com/orz-i/Mender/backend/internal/tunnel/domain"
 )
 
@@ -37,7 +38,7 @@ func (s *Store) CreateProfile(ctx context.Context, profile profiledomain.Profile
 	if affected == 0 {
 		return profileapplication.ErrSlugConflict
 	}
-	if len(profile.Bindings()) != 0 {
+	if len(profile.Bindings()) != 0 || len(profile.Skills()) != 0 {
 		if err := s.SaveProfile(ctx, profile); err != nil {
 			return fmt.Errorf("create profile bindings: %w", err)
 		}
@@ -249,6 +250,18 @@ func (s *Store) SaveProfile(ctx context.Context, profile profiledomain.Profile) 
 		}
 	}
 
+	if _, err := tx.ExecContext(ctx, "DELETE FROM profile_skills WHERE profile_id = ?", profile.ID().String()); err != nil {
+		return fmt.Errorf("save profile: clear skill memberships: %w", err)
+	}
+	for _, id := range profile.Skills() {
+		if _, err := tx.ExecContext(ctx, "INSERT INTO profile_skills(profile_id, installation_id) VALUES (?, ?)", profile.ID().String(), id.String()); err != nil {
+			if strings.Contains(err.Error(), "profile skill installation not deployable") {
+				return fmt.Errorf("save profile: insert skill %s: %w", id, profileapplication.ErrSkillNotDeployable)
+			}
+			return fmt.Errorf("save profile: insert skill %s: %w", id, err)
+		}
+	}
+
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("save profile: commit: %w", err)
 	}
@@ -372,7 +385,61 @@ func (s *Store) restoreProfile(
 	if err != nil {
 		return profiledomain.Profile{}, err
 	}
+	skillRows, err := s.db.QueryContext(ctx, "SELECT installation_id FROM profile_skills WHERE profile_id = ? ORDER BY installation_id", rawID)
+	if err != nil {
+		return profiledomain.Profile{}, fmt.Errorf("load profile skills: %w", err)
+	}
+	var installed []skilldomain.InstallationID
+	for skillRows.Next() {
+		var rawSkillID string
+		if err := skillRows.Scan(&rawSkillID); err != nil {
+			_ = skillRows.Close()
+			return profiledomain.Profile{}, fmt.Errorf("load profile skill: %w", err)
+		}
+		id, err := skilldomain.ParseInstallationID(rawSkillID)
+		if err != nil {
+			_ = skillRows.Close()
+			return profiledomain.Profile{}, fmt.Errorf("parse profile skill: %w", err)
+		}
+		installed = append(installed, id)
+	}
+	rowsErr := skillRows.Err()
+	closeErr := skillRows.Close()
+	if rowsErr != nil {
+		return profiledomain.Profile{}, fmt.Errorf("load profile skills: rows: %w", rowsErr)
+	}
+	if closeErr != nil {
+		return profiledomain.Profile{}, fmt.Errorf("load profile skills: close: %w", closeErr)
+	}
+	profile, err = profile.ReplaceSkills(installed)
+	if err != nil {
+		return profiledomain.Profile{}, fmt.Errorf("restore profile skills: %w", err)
+	}
 	return profile.WithRevision(revision), nil
+}
+
+// ListSkillProfiles reports explicit Profile references to an exact installation.
+// This is a usage lookup, never a content/permission grant.
+func (s *Store) ListSkillProfiles(ctx context.Context, id skilldomain.InstallationID) ([]string, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT p.slug FROM profile_skills ps
+		JOIN profiles p ON p.id = ps.profile_id
+		WHERE ps.installation_id = ? ORDER BY p.slug`, id.String())
+	if err != nil {
+		return nil, fmt.Errorf("list skill profile uses: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var result []string
+	for rows.Next() {
+		var slug string
+		if err := rows.Scan(&slug); err != nil {
+			return nil, err
+		}
+		result = append(result, slug)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 func profileTunnelID(profile profiledomain.Profile) string {

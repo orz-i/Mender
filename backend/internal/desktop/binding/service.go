@@ -1444,6 +1444,29 @@ func (s *Service) ReplaceProfileTools(
 	return profileProjection(profile), nil
 }
 
+// ReplaceProfileSkills selects exact Skill snapshots. Deployment is separate.
+func (s *Service) ReplaceProfileSkills(slug string, installationIDs []string) (Profile, error) {
+	profileSlug, err := profiledomain.NewSlug(slug)
+	if err != nil {
+		return Profile{}, err
+	}
+	ids := make([]skilldomain.InstallationID, 0, len(installationIDs))
+	for _, rawID := range installationIDs {
+		id, err := skilldomain.ParseInstallationID(rawID)
+		if err != nil {
+			return Profile{}, err
+		}
+		ids = append(ids, id)
+	}
+	profile, err := s.runtime.Profiles.ReplaceSkills.Execute(s.ctx, profileapplication.ReplaceSkillsRequest{
+		ProfileSlug: profileSlug, InstallationIDs: ids,
+	})
+	if err != nil {
+		return Profile{}, err
+	}
+	return profileProjection(profile), nil
+}
+
 func (s *Service) RemoveProfileTool(slug string, toolID string) (Profile, error) {
 	profileSlug, err := profiledomain.NewSlug(slug)
 	if err != nil {
@@ -2098,6 +2121,10 @@ func profileProjection(profile profiledomain.Profile) Profile {
 		DisplayName: profile.DisplayName(),
 		Mode:        string(profile.Mode()),
 		Tools:       tools,
+		Skills:      make([]string, 0, len(profile.Skills())),
+	}
+	for _, id := range profile.Skills() {
+		result.Skills = append(result.Skills, id.String())
 	}
 	if tunnelID, ok := profile.TunnelID(); ok {
 		result.TunnelID = tunnelID.String()

@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
-import { useNavigate, useParams } from "react-router";
+import { useLocation, useNavigate, useParams } from "react-router";
 
-import type { MenderClient, Profile, Provider, ToolSummary, Tunnel } from "@mender/sdk";
+import type { MenderClient, Profile, Provider, SkillInstallation, ToolSummary, Tunnel } from "@mender/sdk";
 import { Badge } from "@mender/ui/components/badge";
 import { Button } from "@mender/ui/components/button";
 
@@ -16,7 +16,7 @@ import { TablePagination } from "../../shared/table-pagination";
 import { DataPanel } from "../../shared/workbench";
 import { profileSourceLabels } from "./profile-source-label";
 
-type Section = "overview" | "tools";
+type Section = "overview" | "tools" | "skills";
 
 export function ProfileDetailPage({ client }: { client: MenderClient }) {
   const { slug } = useParams();
@@ -25,6 +25,7 @@ export function ProfileDetailPage({ client }: { client: MenderClient }) {
 
 function ProfileDetailContent({ client, slug }: { client: MenderClient; slug: string | undefined }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [providers, setProviders] = useState<Provider[]>([]);
   const [tunnels, setTunnels] = useState<Tunnel[]>([]);
@@ -32,7 +33,12 @@ function ProfileDetailContent({ client, slug }: { client: MenderClient; slug: st
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState("");
   const [version, setVersion] = useState(0);
-  const [section, setSection] = useState<Section>("overview");
+  const [section, setSection] = useState<Section>(
+    (location.state as { initialSection?: string } | null)?.initialSection === "skills" ? "skills" : "overview",
+  );
+  const [skillLibrary, setSkillLibrary] = useState<SkillInstallation[]>([]);
+  const [skillError, setSkillError] = useState("");
+  const [skillsLoaded, setSkillsLoaded] = useState(false);
   const [sourceId, setSourceId] = useState("");
 
   useEffect(() => {
@@ -73,6 +79,21 @@ function ProfileDetailContent({ client, slug }: { client: MenderClient; slug: st
     return () => { active = false; };
   }, [client, slug, version]);
 
+  useEffect(() => {
+    if (section !== "skills") return;
+    let active = true;
+    void client.listSkills().then((library) => {
+      if (!active) return;
+      setSkillLibrary(library.installations);
+      setSkillError("");
+    }).catch((reason: unknown) => {
+      if (active) setSkillError(errorMessage(reason));
+    }).finally(() => { if (active) setSkillsLoaded(true); });
+    return () => { active = false; };
+  }, [client, section, version]);
+
+  const skillById = useMemo(() =>
+    new Map(skillLibrary.map((item) => [item.installationId, item])), [skillLibrary]);
   const toolById = useMemo(() => new Map(tools.map((tool) => [tool.toolId, tool])), [tools]);
   const sourceLabels = useMemo(() => profileSourceLabels(providers), [providers]);
   const sourceGroups = useMemo(() => {
@@ -98,7 +119,7 @@ function ProfileDetailContent({ client, slug }: { client: MenderClient; slug: st
       <PageToolbar
         tabs={profile ? <FocusSwitch label="Profile sections" value={section}
           onChange={(next) => { setSection(next); setSourceId(""); sourcePagination.reset(); toolPagination.reset(); }}
-          items={[{ value: "overview", label: "Overview" }, { value: "tools", label: "Tools" }]} /> : undefined}
+          items={[{ value: "overview", label: "Overview" }, { value: "tools", label: "Tools" }, { value: "skills", label: "Skills" }]} /> : undefined}
         actions={<>
           <Button variant="outline" onClick={() => void navigate("/profiles")}>{t("Back to profiles")}</Button>
           {profile ? <Button onClick={() => void navigate("/profiles/" + encodeURIComponent(profile.slug) + "/edit", {
@@ -119,10 +140,37 @@ function ProfileDetailContent({ client, slug }: { client: MenderClient; slug: st
               <Metadata name={t("Display name")} value={profile.displayName} />
               <Metadata name={t("Exposure mode")} value={t(profile.mode)} />
               <Metadata name={t("Tools")} value={tCount(profile.tools.length, "{{count}} selected Tool", "{{count}} selected Tools")} />
+              <Metadata name={t("Skills")} value={String(profile.skills?.length ?? 0)} />
               <Metadata name={t("Tunnel")} value={profile.tunnelId
                 ? (tunnels.find((item) => item.tunnelId === profile.tunnelId)?.displayName ?? t("Configured"))
                 : t("Local only")} />
             </dl>
+          ) : section === "skills" ? (
+            <div className="flex flex-col gap-4 p-5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-sm text-muted-foreground">{t("Exact Skill versions selected for this Profile.")}</p>
+                <Button size="sm" variant="outline" onClick={() =>
+                  void navigate("/profiles/" + encodeURIComponent(profile.slug) + "/skills")}>
+                  {t("Manage skills")}
+                </Button>
+              </div>
+              {skillError ? <ErrorNotice message={skillError} onRetry={() => { setSkillsLoaded(false); setVersion((v) => v + 1); }} /> : null}
+              {!skillsLoaded ? <p className="text-sm text-muted-foreground">{t("Loading skills…")}</p> : null}
+              {(profile.skills?.length ?? 0) > 0 ? (
+                <div className="divide-y divide-border rounded-lg border border-border">
+                  {(profile.skills ?? []).map((id) => {
+                    const skill = skillById.get(id);
+                    return <div className="px-4 py-3" key={id}>
+                      <p className="text-sm font-medium">{skill?.name ?? t("Unavailable installation")}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {skill ? (skill.versionHint || t("Unversioned")) : id}
+                        {skill && (!skill.enabled || !skill.trusted) ? " · " + t("Unavailable for new selection") : ""}
+                      </p>
+                    </div>;
+                  })}
+                </div>
+              ) : <EmptyState title="No skills selected" description="Choose Skills for this Profile before delivering them to an Agent." />}
+            </div>
           ) : (
             <div className="flex flex-col gap-4 p-5">
               {sourceId ? (

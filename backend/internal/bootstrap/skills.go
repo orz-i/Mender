@@ -51,10 +51,11 @@ type SkillInspection struct {
 // Skills composes the built-in inventory with managed local-directory
 // installations.
 type Skills struct {
-	store           *skillsqlite.Store
-	packages        *skilllocalfs.Store
-	deploymentFiles *skilldeploymentfs.Store
-	builtins        []skillbuiltin.Entry
+	store             *skillsqlite.Store
+	packages          *skilllocalfs.Store
+	deploymentFiles   *skilldeploymentfs.Store
+	builtins          []skillbuiltin.Entry
+	profileSkillUsage func(context.Context, skilldomain.InstallationID) ([]string, error)
 }
 
 // NewSkills composes one Runtime-owned Skill Library.
@@ -181,6 +182,9 @@ func (s *Skills) SetTrust(
 		return skilldomain.Installation{}, ErrBuiltInSkillImmutable
 	}
 	if !trusted {
+		if err := s.requireNoProfileReferences(ctx, id); err != nil {
+			return skilldomain.Installation{}, err
+		}
 		if err := s.requireNoDeployments(ctx, id); err != nil {
 			return skilldomain.Installation{}, err
 		}
@@ -202,6 +206,9 @@ func (s *Skills) SetEnabled(
 		return skilldomain.Installation{}, ErrBuiltInSkillImmutable
 	}
 	if !enabled {
+		if err := s.requireNoProfileReferences(ctx, id); err != nil {
+			return skilldomain.Installation{}, err
+		}
 		if err := s.requireNoDeployments(ctx, id); err != nil {
 			return skilldomain.Installation{}, err
 		}
@@ -219,6 +226,9 @@ func (s *Skills) Remove(
 	}
 	if s.isBuiltIn(id) {
 		return ErrBuiltInSkillImmutable
+	}
+	if err := s.requireNoProfileReferences(ctx, id); err != nil {
+		return err
 	}
 	return skillapplication.NewRemoveInstallation(
 		s.store,
@@ -304,6 +314,32 @@ func (s *Skills) Undeploy(
 		s.store,
 		s.deploymentFiles,
 	).Execute(ctx, id)
+}
+
+// SkillState resolves exact metadata without running untrusted Skill content.
+func (s *Skills) SkillState(ctx context.Context, id skilldomain.InstallationID) (bool, bool, error) {
+	if s == nil {
+		return false, false, fmt.Errorf("skill library unavailable")
+	}
+	item, err := (runtimeSkillDeploymentSource{skills: s}).GetDeployable(ctx, id)
+	if err != nil {
+		return false, false, err
+	}
+	return item.Trusted, item.Enabled, nil
+}
+
+func (s *Skills) requireNoProfileReferences(ctx context.Context, id skilldomain.InstallationID) error {
+	if s.profileSkillUsage == nil {
+		return nil
+	}
+	profiles, err := s.profileSkillUsage(ctx, id)
+	if err != nil {
+		return fmt.Errorf("check skill profile references: %w", err)
+	}
+	if len(profiles) > 0 {
+		return fmt.Errorf("%w: Profile %s", skillapplication.ErrInstallationInUse, profiles[0])
+	}
+	return nil
 }
 
 func (s *Skills) requireNoDeployments(

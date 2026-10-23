@@ -7,19 +7,21 @@ import (
 	profileapplication "github.com/orz-i/Mender/backend/internal/profile/application"
 	profileidentity "github.com/orz-i/Mender/backend/internal/profile/infrastructure/identity"
 	profilesqlite "github.com/orz-i/Mender/backend/internal/profile/infrastructure/sqlite"
+	skilldomain "github.com/orz-i/Mender/backend/internal/skill/domain"
 )
 
 // Profiles composes persistent Profile use cases.
 type Profiles struct {
-	Create       profileapplication.CreateProfile
-	Get          profileapplication.GetProfile
-	GetByID      profileapplication.GetProfileByID
-	GetRevision  profileapplication.GetProfileRevision
-	List         profileapplication.ListProfiles
-	AddTool      profileapplication.AddTool
-	ReplaceTools profileapplication.ReplaceTools
-	RemoveTool   profileapplication.RemoveTool
-	SetTunnel    profileapplication.SetTunnel
+	Create        profileapplication.CreateProfile
+	Get           profileapplication.GetProfile
+	GetByID       profileapplication.GetProfileByID
+	GetRevision   profileapplication.GetProfileRevision
+	List          profileapplication.ListProfiles
+	AddTool       profileapplication.AddTool
+	ReplaceTools  profileapplication.ReplaceTools
+	ReplaceSkills profileapplication.ReplaceSkills
+	RemoveTool    profileapplication.RemoveTool
+	SetTunnel     profileapplication.SetTunnel
 
 	store *profilesqlite.Store
 }
@@ -49,6 +51,14 @@ func NewProfilesWithTunnelLookup(
 		SetTunnel:    profileapplication.NewSetTunnel(store, tunnels),
 		store:        store,
 	}, nil
+}
+
+// Bootstrap bridge: Profile validates exact Skill state without reading content
+// or owning the Skill Library's trust, files, or deployments.
+type profileSkillStatus struct{ skills *Skills }
+
+func (lookup profileSkillStatus) GetSkillState(ctx context.Context, id skilldomain.InstallationID) (bool, bool, error) {
+	return lookup.skills.SkillState(ctx, id)
 }
 
 func (p *Profiles) Close() error {

@@ -461,6 +461,13 @@ export function RemoveSandboxTools(id: string): $CancellablePromise<void> {
     return $Call.ByID(471789370, id);
 }
 
+/**
+ * ReplaceProfileSkills selects exact Skill snapshots. Deployment is separate.
+ */
+export function ReplaceProfileSkills(slug: string, installationIDs: string[] | null): $CancellablePromise<$models.Profile> {
+    return $Call.ByID(493299395, slug, installationIDs);
+}
+
 export function ReplaceProfileTools(slug: string, tools: $models.ProfileTool[] | null): $CancellablePromise<$models.Profile> {
     return $Call.ByID(1466001064, slug, tools);
 }

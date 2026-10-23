@@ -368,6 +368,10 @@ export function createDesktopMenderClient(): MenderClient {
       );
     },
 
+    async replaceProfileSkills(slug, body) {
+      return profile(await Service.ReplaceProfileSkills(slug, body.installationIds));
+    },
+
     async removeProfileTool(slug, toolId) {
       return profile(await Service.RemoveProfileTool(slug, toolId));
     },
@@ -1567,6 +1571,7 @@ function profile(value: BindingProfile): Profile {
     displayName: value.displayName,
     mode,
     ...(value.tunnelId === undefined ? {} : { tunnelId: value.tunnelId }),
+    skills: value.skills ?? [],
     tools: (value.tools ?? []).map((tool) => ({
       toolId: tool.toolId,
       direct: tool.direct,

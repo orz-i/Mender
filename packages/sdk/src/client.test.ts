@@ -368,6 +368,22 @@ describe("Mender SDK", () => {
     });
   });
 
+  it("replaces Profile Skill membership through the typed generated contract", async () => {
+    const id = "sinst_00000000000000000000000000000001";
+    const fetch = async (request: Request) => {
+      expect(request.method).toBe("PUT");
+      expect(request.url).toContain("/api/v1/profiles/default/skills");
+      await expect(request.json()).resolves.toEqual({ installationIds: [id] });
+      return new Response(JSON.stringify({
+        profileId: "prof_1", slug: "default", displayName: "Default",
+        mode: "hybrid", tools: [], skills: [id],
+      }), { status: 200, headers: { "Content-Type": "application/json" } });
+    };
+    const client = createMenderClient({ baseUrl: "http://localhost:8080/api/v1", fetch });
+    const updated = await client.replaceProfileSkills("default", { installationIds: [id] });
+    expect(updated.skills).toEqual([id]);
+  });
+
   it("starts a managed MCP server through the generated contract", async () => {
     const fetch = async (request: Request) => {
       expect(request.method).toBe("POST");

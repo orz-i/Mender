@@ -115,6 +115,7 @@ func (h *Handler) routes() {
 	h.mux.HandleFunc("GET /api/v1/profiles/{slug}", h.getProfile)
 	h.mux.HandleFunc("POST /api/v1/profiles/{slug}/tools", h.addProfileTool)
 	h.mux.HandleFunc("PUT /api/v1/profiles/{slug}/tools", h.replaceProfileTools)
+	h.mux.HandleFunc("PUT /api/v1/profiles/{slug}/skills", h.replaceProfileSkills)
 	h.mux.HandleFunc("DELETE /api/v1/profiles/{slug}/tools/{toolId}", h.removeProfileTool)
 	h.mux.HandleFunc("PUT /api/v1/profiles/{slug}/tunnel", h.setProfileTunnel)
 
@@ -288,6 +289,7 @@ func writeKnownError(w http.ResponseWriter, err error) {
 		errors.Is(err, profileapplication.ErrRevisionConflict),
 		errors.Is(err, profileapplication.ErrToolReferenceConflict),
 		errors.Is(err, profileapplication.ErrBindingNameConflict),
+		errors.Is(err, profileapplication.ErrSkillNotDeployable),
 		errors.Is(err, installationapplication.ErrInstallationConflict),
 		errors.Is(err, installationapplication.ErrPackageAlreadyInstalled),
 		errors.Is(err, installationapplication.ErrInstallationInUse),
@@ -316,6 +318,7 @@ func writeKnownError(w http.ResponseWriter, err error) {
 		errors.Is(err, credentialapplication.ErrInvalidSecret),
 		errors.Is(err, credentialapplication.ErrInvalidSource),
 		errors.Is(err, profileapplication.ErrInvalidBinding),
+		errors.Is(err, profileapplication.ErrInvalidSkillMembership),
 		errors.Is(err, providerplugin.ErrNotFound),
 		errors.Is(err, providerplugin.ErrUnsupportedConfigVersion),
 		errors.Is(err, providerplugin.ErrInvalidConfiguration),

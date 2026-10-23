@@ -537,6 +537,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/profiles/{slug}/skills": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** @description Replace exact trusted and enabled Skill installation references for one Profile without deploying files. */
+        put: operations["replaceProfileSkills"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/profiles/{slug}/tools/{toolId}": {
         parameters: {
             query?: never;
@@ -2158,6 +2175,9 @@ export interface components {
         ReplaceProfileToolsRequest: {
             tools: components["schemas"]["ProfileToolInput"][];
         };
+        ReplaceProfileSkillsRequest: {
+            installationIds: string[];
+        };
         ProfileToolInput: {
             toolId: string;
             direct?: boolean;
@@ -2190,6 +2210,7 @@ export interface components {
             mode: "direct" | "dynamic" | "hybrid";
             tunnelId?: string;
             tools: components["schemas"]["ProfileTool"][];
+            skills?: string[];
         };
         SetProfileTunnelRequest: {
             /** @description Mender Tunnel ID. Send an empty string to clear the binding. */
@@ -3732,6 +3753,36 @@ export interface operations {
         };
         responses: {
             /** @description Updated profile */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Profile"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    replaceProfileSkills: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: components["parameters"]["ProfileSlug"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReplaceProfileSkillsRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated Profile */
             200: {
                 headers: {
                     [name: string]: unknown;

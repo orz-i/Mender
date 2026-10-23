@@ -185,6 +185,9 @@ func (s *Store) SetState(
 		id.String(),
 	)
 	if err != nil {
+		if strings.Contains(err.Error(), "skill installation in use by Profile") {
+			return fmt.Errorf("set skill installation state: %w", skillapplication.ErrInstallationInUse)
+		}
 		return fmt.Errorf("set skill installation state: %w", err)
 	}
 	return requireAffected(result)
@@ -201,6 +204,9 @@ func (s *Store) Delete(
 		id.String(),
 	)
 	if err != nil {
+		if strings.Contains(err.Error(), "skill installation in use by Profile") {
+			return fmt.Errorf("delete skill installation: %w", skillapplication.ErrInstallationInUse)
+		}
 		return fmt.Errorf("delete skill installation: %w", err)
 	}
 	return requireAffected(result)

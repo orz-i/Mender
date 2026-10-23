@@ -28,6 +28,7 @@ import (
 	installationlocalfs "github.com/orz-i/Mender/backend/internal/plugin/installation/infrastructure/localfs"
 	installationsqlite "github.com/orz-i/Mender/backend/internal/plugin/installation/infrastructure/sqlite"
 	policylocal "github.com/orz-i/Mender/backend/internal/policy/infrastructure/local"
+	profileapplication "github.com/orz-i/Mender/backend/internal/profile/application"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 	provideractivationapplication "github.com/orz-i/Mender/backend/internal/provideractivation/application"
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
@@ -454,6 +455,22 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		_ = catalog.Close()
 		return nil, fmt.Errorf("compose runtime: skills: %w", err)
 	}
+
+	if err := profiles.store.EnsureSkillReferenceGuards(ctx); err != nil {
+		_ = skills.Close()
+		_ = providerInstances.CloseAll()
+		_ = externalProcesses.CloseAll()
+		_ = pluginInstallations.Close()
+		_ = providerConfigs.Close()
+		_ = policies.Close()
+		_ = profiles.Close()
+		_ = credentials.Close()
+		_ = auditStore.Close()
+		_ = catalog.Close()
+		return nil, fmt.Errorf("compose runtime: Profile Skill reference guards: %w", err)
+	}
+	profiles.ReplaceSkills = profileapplication.NewReplaceSkills(profiles.store, profileSkillStatus{skills: skills})
+	skills.profileSkillUsage = profiles.store.ListSkillProfiles
 
 	providerActivation, invokeTool := (runtimeInvocationWiring{
 		options:         options,

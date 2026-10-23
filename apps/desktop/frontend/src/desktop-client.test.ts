@@ -51,6 +51,7 @@ vi.mock(
       ListSkills: vi.fn(),
       RebindProvider: vi.fn(),
       ReplaceProfileTools: vi.fn(),
+      ReplaceProfileSkills: vi.fn(),
       RestartMCPServer: vi.fn(),
       RotateNativeCredential: vi.fn(),
       SearchTools: vi.fn(),
@@ -1172,6 +1173,7 @@ describe("desktop Mender client", () => {
       slug: "default",
       displayName: "Default",
       mode: "hybrid",
+      skills: [],
       tools: [
         {
           toolId: "tool_1",
@@ -1241,6 +1243,18 @@ describe("desktop Mender client", () => {
       policyConstraint: "deny",
       concurrencyConstraint: "serial",
     });
+  });
+
+  it("replaces exact Profile Skills through Wails without deploying files", async () => {
+    const id = "sinst_00000000000000000000000000000001";
+    vi.mocked(Service.ReplaceProfileSkills).mockResolvedValue({
+      profileId: "prof_1", slug: "default", displayName: "Default",
+      mode: "hybrid", tools: [], skills: [id],
+    });
+    const client = createDesktopMenderClient();
+    const updated = await client.replaceProfileSkills("default", { installationIds: [id] });
+    expect(Service.ReplaceProfileSkills).toHaveBeenCalledWith("default", [id]);
+    expect(updated.skills).toEqual([id]);
   });
 
   it("adapts managed MCP server lifecycle to Wails", async () => {

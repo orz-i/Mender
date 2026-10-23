@@ -9,6 +9,7 @@ import (
 	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
 	profileapplication "github.com/orz-i/Mender/backend/internal/profile/application"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
+	skilldomain "github.com/orz-i/Mender/backend/internal/skill/domain"
 	"github.com/spf13/cobra"
 )
 
@@ -22,7 +23,41 @@ func (a *app) newProfileCommand() *cobra.Command {
 	command.AddCommand(a.newProfileShowCommand())
 	command.AddCommand(a.newProfileAddToolCommand())
 	command.AddCommand(a.newProfileRemoveToolCommand())
+	command.AddCommand(a.newProfileSetSkillsCommand())
 	return command
+}
+
+// set-skills updates the exact Profile selection, not any host deployment.
+// Supplying no installation IDs explicitly clears the Profile's Skill set.
+func (a *app) newProfileSetSkillsCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "set-skills <profile> [installation-id...]",
+		Short: "Select exact installed Skills for a Profile (no deployment)",
+		Args:  cobra.MinimumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			slug, err := profiledomain.NewSlug(args[0])
+			if err != nil {
+				return usageError{err: err}
+			}
+			ids := make([]skilldomain.InstallationID, 0, len(args)-1)
+			for _, value := range args[1:] {
+				id, err := skilldomain.ParseInstallationID(value)
+				if err != nil {
+					return usageError{err: err}
+				}
+				ids = append(ids, id)
+			}
+			return a.withRuntime(cmd.Context(), func(runtime *bootstrap.Runtime) error {
+				profile, err := runtime.Profiles.ReplaceSkills.Execute(cmd.Context(), profileapplication.ReplaceSkillsRequest{
+					ProfileSlug: slug, InstallationIDs: ids,
+				})
+				if err != nil {
+					return err
+				}
+				return a.writeValue(fmt.Sprintf("selected %d Skills in Profile %s", len(profile.Skills()), slug), profileProjection(profile))
+			})
+		},
+	}
 }
 
 func (a *app) newProfileCreateCommand() *cobra.Command {
@@ -330,7 +365,12 @@ func profileProjection(profile profiledomain.Profile) map[string]any {
 			"credentialRefs":        credentialRefStrings(binding.CredentialRefs()),
 		})
 	}
+	selectedSkills := make([]string, 0, len(profile.Skills()))
+	for _, id := range profile.Skills() {
+		selectedSkills = append(selectedSkills, id.String())
+	}
 	return map[string]any{
+		"skills":      selectedSkills,
 		"profileId":   profile.ID().String(),
 		"slug":        profile.Slug().String(),
 		"displayName": profile.DisplayName(),

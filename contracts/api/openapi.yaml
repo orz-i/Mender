@@ -693,6 +693,29 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
+  /profiles/{slug}/skills:
+    put:
+      operationId: replaceProfileSkills
+      description: Replace exact trusted and enabled Skill installation references for one Profile without deploying files.
+      parameters:
+        - $ref: '#/components/parameters/ProfileSlug'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReplaceProfileSkillsRequest'
+      responses:
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '200':
+          description: Updated Profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Profile'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
   /profiles/{slug}/tools/{toolId}:
     delete:
       operationId: removeProfileTool
@@ -2649,6 +2672,15 @@ components:
           items:
             $ref: '#/components/schemas/ProfileToolInput'
       additionalProperties: false
+    ReplaceProfileSkillsRequest:
+      type: object
+      required: [installationIds]
+      properties:
+        installationIds:
+          type: array
+          uniqueItems: true
+          items: { type: string, pattern: '^sinst_[0-9a-f]{32}$' }
+      additionalProperties: false
     ProfileToolInput:
       type: object
       required: [toolId]
@@ -2690,6 +2722,9 @@ components:
         tools:
           type: array
           items: { $ref: '#/components/schemas/ProfileTool' }
+        skills:
+          type: array
+          items: { type: string, pattern: '^sinst_[0-9a-f]{32}$' }
     SetProfileTunnelRequest:
       type: object
       required: [tunnelId]

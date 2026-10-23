@@ -82,8 +82,8 @@ func TestOpenMigratesProfileV1ToToolBindingColumns(t *testing.T) {
 	).Scan(&version); err != nil {
 		t.Fatal(err)
 	}
-	if version != 5 {
-		t.Fatalf("schema version = %d, want 5", version)
+	if version != 6 {
+		t.Fatalf("schema version = %d, want 6", version)
 	}
 	var revision uint64
 	if err := store.db.QueryRowContext(context.Background(), "SELECT revision FROM profiles WHERE slug='default'").Scan(&revision); err != nil {

@@ -485,6 +485,7 @@ export interface Profile {
     "mode": string;
     "tunnelId"?: string;
     "tools": ProfileTool[] | null;
+    "skills": string[] | null;
 }
 
 export interface ProfileList {

@@ -28,7 +28,7 @@ func migrate(ctx context.Context, db *sql.DB) error {
 	).Scan(&recordedVersion); err != nil {
 		return fmt.Errorf("check profile schema version: %w", err)
 	}
-	const latestSupportedVersion = 5
+	const latestSupportedVersion = 6
 	if recordedVersion.Valid && recordedVersion.Int64 > latestSupportedVersion {
 		return fmt.Errorf(
 			"profile schema version %d is newer than supported version %d",
@@ -159,6 +159,26 @@ func migrate(ctx context.Context, db *sql.DB) error {
 		}
 		if _, err := tx.ExecContext(ctx, "INSERT INTO profile_schema_migrations(version, applied_at) VALUES (5, ?)", time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
 			return fmt.Errorf("record profile migration 5: %w", err)
+		}
+	}
+
+	applied = 0
+	if err := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM profile_schema_migrations WHERE version = 6").Scan(&applied); err != nil {
+		return fmt.Errorf("check profile migration 6: %w", err)
+	}
+	if applied == 0 {
+		if _, err := tx.ExecContext(ctx, `CREATE TABLE profile_skills (
+			profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+			installation_id TEXT NOT NULL,
+			PRIMARY KEY(profile_id, installation_id)
+		)`); err != nil {
+			return fmt.Errorf("apply profile migration 6: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx, "CREATE INDEX idx_profile_skills_installation ON profile_skills(installation_id)"); err != nil {
+			return fmt.Errorf("index profile skills: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx, "INSERT INTO profile_schema_migrations(version, applied_at) VALUES (6, ?)", time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
+			return fmt.Errorf("record profile migration 6: %w", err)
 		}
 	}
 

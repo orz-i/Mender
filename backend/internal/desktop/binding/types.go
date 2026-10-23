@@ -529,6 +529,7 @@ type Profile struct {
 	Mode        string        `json:"mode"`
 	TunnelID    string        `json:"tunnelId,omitempty"`
 	Tools       []ProfileTool `json:"tools"`
+	Skills      []string      `json:"skills"`
 }
 
 type Tunnel struct {

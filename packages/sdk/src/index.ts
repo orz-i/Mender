@@ -50,6 +50,7 @@ export type {
   ProviderPluginInstallation,
   RebindProviderRequest,
   ReplaceProfileToolsRequest,
+  ReplaceProfileSkillsRequest,
   RotateCredentialRequest,
   RuntimeBudget,
   RuntimeGovernanceStatus,
