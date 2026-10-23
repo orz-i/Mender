@@ -1,4 +1,11 @@
 export const zhCNMessages: Readonly<Record<string, string>> = {
+  "Profile MCP delivery": "配置档 MCP 交付",
+  "Manage this Profile's running loopback MCP servers and their linked Tunnels.": "管理此配置档的本地 MCP 服务及其关联隧道。",
+  "MCP delivery belongs to Profile {{name}}.": "MCP 服务将使用配置档 {{name}} 的能力配置。",
+  "Deliveries": "交付",
+  "Profile-scoped local HTTP servers and optional secure Tunnel.": "基于配置档的本地 HTTP 服务及可选安全隧道。",
+  "Manage MCP delivery": "管理 MCP 交付",
+  "No running MCP servers for this Profile.": "此配置档尚无运行中的 MCP 服务。",
   "Choose Profile skills": "选择配置档技能",
   "Choose Skills for this Profile before delivering them to an Agent.": "先为此配置档选择技能，再交付给智能体。",
   "Choose exact enabled Skill installations. This does not deploy files or grant Tool permissions.": "选择已启用的特定版本技能。此操作不会部署文件，也不会授予工具执行权限。",

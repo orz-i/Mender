@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import { useLocation, useNavigate, useParams } from "react-router";
 
-import type { MenderClient, Profile, Provider, SkillInstallation, ToolSummary, Tunnel } from "@mender/sdk";
+import type { MCPServerInstance, MenderClient, Profile, Provider, SkillInstallation, ToolSummary, Tunnel } from "@mender/sdk";
 import { Badge } from "@mender/ui/components/badge";
 import { Button } from "@mender/ui/components/button";
 
@@ -16,7 +16,7 @@ import { TablePagination } from "../../shared/table-pagination";
 import { DataPanel } from "../../shared/workbench";
 import { profileSourceLabels } from "./profile-source-label";
 
-type Section = "overview" | "tools" | "skills";
+type Section = "overview" | "tools" | "skills" | "deliveries";
 
 export function ProfileDetailPage({ client }: { client: MenderClient }) {
   const { slug } = useParams();
@@ -34,11 +34,15 @@ function ProfileDetailContent({ client, slug }: { client: MenderClient; slug: st
   const [error, setError] = useState("");
   const [version, setVersion] = useState(0);
   const [section, setSection] = useState<Section>(
-    (location.state as { initialSection?: string } | null)?.initialSection === "skills" ? "skills" : "overview",
+    (location.state as { initialSection?: string } | null)?.initialSection === "skills" ? "skills" :
+      (location.state as { initialSection?: string } | null)?.initialSection === "deliveries" ? "deliveries" : "overview",
   );
   const [skillLibrary, setSkillLibrary] = useState<SkillInstallation[]>([]);
   const [skillError, setSkillError] = useState("");
   const [skillsLoaded, setSkillsLoaded] = useState(false);
+  const [mcpInstances, setMcpInstances] = useState<MCPServerInstance[]>([]);
+  const [deliveriesLoaded, setDeliveriesLoaded] = useState(false);
+  const [deliveryError, setDeliveryError] = useState("");
   const [sourceId, setSourceId] = useState("");
 
   useEffect(() => {
@@ -92,6 +96,19 @@ function ProfileDetailContent({ client, slug }: { client: MenderClient; slug: st
     return () => { active = false; };
   }, [client, section, version]);
 
+  useEffect(() => {
+    if (section !== "deliveries") return;
+    let active = true;
+    void client.listMCPServers().then(({ servers }) => {
+      if (!active) return;
+      setMcpInstances(servers.filter((item) => item.profile === slug));
+      setDeliveryError("");
+    }).catch((reason: unknown) => {
+      if (active) setDeliveryError(errorMessage(reason));
+    }).finally(() => { if (active) setDeliveriesLoaded(true); });
+    return () => { active = false; };
+  }, [client, section, slug, version]);
+
   const skillById = useMemo(() =>
     new Map(skillLibrary.map((item) => [item.installationId, item])), [skillLibrary]);
   const toolById = useMemo(() => new Map(tools.map((tool) => [tool.toolId, tool])), [tools]);
@@ -118,8 +135,8 @@ function ProfileDetailContent({ client, slug }: { client: MenderClient; slug: st
     <>
       <PageToolbar
         tabs={profile ? <FocusSwitch label="Profile sections" value={section}
-          onChange={(next) => { setSection(next); setSourceId(""); sourcePagination.reset(); toolPagination.reset(); }}
-          items={[{ value: "overview", label: "Overview" }, { value: "tools", label: "Tools" }, { value: "skills", label: "Skills" }]} /> : undefined}
+          onChange={(next) => { setSection(next); setSourceId(""); if (next === "deliveries") setDeliveriesLoaded(false); sourcePagination.reset(); toolPagination.reset(); }}
+          items={[{ value: "overview", label: "Overview" }, { value: "tools", label: "Tools" }, { value: "skills", label: "Skills" }, { value: "deliveries", label: "Deliveries" }]}  /> : undefined}
         actions={<>
           <Button variant="outline" onClick={() => void navigate("/profiles")}>{t("Back to profiles")}</Button>
           {profile ? <Button onClick={() => void navigate("/profiles/" + encodeURIComponent(profile.slug) + "/edit", {
@@ -170,6 +187,34 @@ function ProfileDetailContent({ client, slug }: { client: MenderClient; slug: st
                   })}
                 </div>
               ) : <EmptyState title="No skills selected" description="Choose Skills for this Profile before delivering them to an Agent." />}
+            </div>
+          ) : section === "deliveries" ? (
+            <div className="flex flex-col gap-4 p-5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">{t("MCP")}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {t("Profile-scoped local HTTP servers and optional secure Tunnel.")}
+                  </p>
+                </div>
+                <Button size="sm" variant="outline" onClick={() =>
+                  void navigate("/profiles/" + encodeURIComponent(profile.slug) + "/deliveries/mcp")}>
+                  {t("Manage MCP delivery")}
+                </Button>
+              </div>
+              {deliveryError ? <ErrorNotice message={deliveryError}
+                onRetry={() => { setDeliveriesLoaded(false); setVersion((v) => v + 1); }} /> : null}
+              {!deliveriesLoaded ? <p className="text-sm text-muted-foreground">{t("Loading servers…")}</p> : null}
+              {deliveriesLoaded && !deliveryError && (mcpInstances.length ? (
+                <div className="divide-y divide-border rounded-lg border border-border">
+                  {mcpInstances.map((server) => <div key={server.serverId} className="px-4 py-3">
+                    <p className="break-all font-mono text-xs">{server.endpoint}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {t(server.status)}{server.tunnelStatus ? " · " + t(server.tunnelStatus) : ""}
+                    </p>
+                  </div>)}
+                </div>
+              ) : <p className="text-sm text-muted-foreground">{t("No running MCP servers for this Profile.")}</p>)}
             </div>
           ) : (
             <div className="flex flex-col gap-4 p-5">

@@ -17,7 +17,6 @@ import {
   PanelLeftOpenIcon,
   ScrollTextIcon,
   SearchIcon,
-  ServerCogIcon,
   ShieldCheckIcon,
   WrenchIcon,
 } from "lucide-react";
@@ -72,7 +71,6 @@ const navigation: NavigationGroup[] = [
     label: "Connections",
     items: [
       { to: "/profiles", label: "Profiles", icon: Layers3Icon },
-      { to: "/servers", label: "Servers", icon: ServerCogIcon },
       { to: "/tunnels", label: "Tunnels", icon: CableIcon },
     ],
   },

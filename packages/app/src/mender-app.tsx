@@ -5,7 +5,7 @@ import type {
   SkillInstallation,
 } from "@mender/sdk";
 import { TooltipProvider } from "@mender/ui/components/tooltip";
-import { Route, Routes } from "react-router";
+import { Navigate, Route, Routes } from "react-router";
 
 import { AgentsPage } from "./domains/agents/agents-page";
 import { AgentCreatePage } from "./domains/agents/agent-create-page";
@@ -25,13 +25,13 @@ import { ProfileCreatePage } from "./domains/profiles/profile-create-page";
 import { ProfileDetailPage } from "./domains/profiles/profile-detail-page";
 import { ProfileEditPage } from "./domains/profiles/profile-edit-page";
 import { ProfileSkillsPage } from "./domains/profiles/profile-skills-page";
+import { ProfileMCPDeliveryPage } from "./domains/profiles/profile-mcp-delivery-page";
 import { ToolsPage, ToolServicePage } from "./domains/tools/tools-page";
 import { ToolWorkspacePage } from "./domains/tools/tool-workspace-page";
 import { RuntimePage } from "./domains/runtime/runtime-page";
 import { SandboxesPage, CreateSandboxPage, SandboxDetailPage } from "./domains/sandboxes/sandboxes-page";
 import { SandboxActivityPage } from "./domains/sandboxes/sandbox-activity-page";
 import { ExternalSandboxCreatePage } from "./domains/sandboxes/sandbox-external-create-page";
-import { ServersPage } from "./domains/servers/servers-page";
 import { SkillsPage } from "./domains/skills/skills-page";
 import { TunnelsPage } from "./domains/tunnels/tunnels-page";
 import { useLocale } from "./i18n/i18n";
@@ -97,16 +97,10 @@ export function MenderApp({
           <Route path="profiles/:slug" element={<ProfileDetailPage client={client} />} />
           <Route path="profiles/:slug/edit" element={<ProfileEditPage client={client} />} />
           <Route path="profiles/:slug/skills" element={<ProfileSkillsPage client={client} />} />
+          <Route path="profiles/:slug/deliveries/mcp" element={<ProfileMCPDeliveryPage client={client}
+            {...(copyText === undefined ? {} : { copyText })} />} />
           <Route path="tunnels" element={<TunnelsPage client={client} />} />
-          <Route
-            path="servers"
-            element={
-              <ServersPage
-                client={client}
-                {...(copyText === undefined ? {} : { copyText })}
-              />
-            }
-          />
+          <Route path="servers" element={<Navigate to="/profiles" replace />} />
           <Route path="runtime" element={<RuntimePage client={client} />} />
           <Route path="agents" element={<AgentsPage client={client} />} />
           <Route path="approvals" element={<AgentApprovalCenter client={client} />} />

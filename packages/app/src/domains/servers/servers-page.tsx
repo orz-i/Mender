@@ -67,9 +67,11 @@ function tunnelHint(server: MCPServerInstance): string {
 export function ServersPage({
   client,
   copyText = browserCopyText,
+  profileSlug,
 }: {
   client: MenderClient;
   copyText?: (value: string) => Promise<void>;
+  profileSlug?: string;
 }) {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [servers, setServers] = useState<MCPServerInstance[]>([]);
@@ -165,14 +167,16 @@ export function ServersPage({
   function openStartDialog() {
     setError("");
     // A single Profile is unambiguous; with multiple Profiles, require an explicit choice.
-    setStartProfile(profiles.length === 1 ? profiles[0]?.slug ?? "" : "");
+    setStartProfile(profileSlug ?? (profiles.length === 1 ? profiles[0]?.slug ?? "" : ""));
     setStartAddress(defaultAddress);
     setStartError("");
     setStartOpen(true);
   }
 
   async function startServer() {
-    if (!startProfile.trim() || !startAddress.trim() || busy !== "") return;
+    if (!startProfile.trim() || !startAddress.trim() || busy !== "" ||
+        (profileSlug !== undefined && startProfile !== profileSlug) ||
+        !profiles.some((profile) => profile.slug === startProfile)) return;
     serverOperationEpoch.current += 1;
     setBusy("start");
     setStartError("");
@@ -194,11 +198,12 @@ export function ServersPage({
 
   const visibleServers = useMemo(() => {
     const needle = inventoryQuery.trim().toLocaleLowerCase();
-    return needle ? servers.filter((server) =>
-      [server.profile, server.endpoint, server.status, server.tunnelDisplayName ?? ""]
-        .some((value) => value.toLocaleLowerCase().includes(needle))
-    ) : servers;
-  }, [servers, inventoryQuery]);
+    return servers.filter((server) =>
+      (profileSlug === undefined || server.profile === profileSlug) &&
+      (!needle || [server.profile, server.endpoint, server.status, server.tunnelDisplayName ?? ""]
+        .some((value) => value.toLocaleLowerCase().includes(needle)))
+    );
+  }, [servers, inventoryQuery, profileSlug]);
   const serverPagination = usePagination(visibleServers);
 
   async function restartServer(server: MCPServerInstance) {
@@ -267,7 +272,7 @@ export function ServersPage({
         actions={
           <>
             <Button size="sm" variant="outline" disabled={busy !== ""} onClick={() => void refresh()}>{t("Refresh")}</Button>
-            <Button size="sm" disabled={profiles.length === 0 || busy !== ""} onClick={openStartDialog}>{t("Start server")}</Button>
+            <Button size="sm" disabled={(profileSlug ? !profiles.some((p) => p.slug === profileSlug) : profiles.length === 0) || busy !== ""} onClick={openStartDialog}>{t("Start server")}</Button>
           </>
         }
       />
@@ -282,7 +287,7 @@ export function ServersPage({
               <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>{t("Profile")}</TableHead>
+                  {profileSlug === undefined ? <TableHead>{t("Profile")}</TableHead> : null}
                   <TableHead>{t("Status")}</TableHead>
                   <TableHead>{t("Tunnel")}</TableHead>
                   <TableHead>{t("Endpoint")}</TableHead>
@@ -293,9 +298,7 @@ export function ServersPage({
               <TableBody>
                 {serverPagination.items.map((server) => (
                   <TableRow key={server.serverId}>
-                    <TableCell className="font-medium">
-                      {server.profile}
-                    </TableCell>
+                    {profileSlug === undefined ? <TableCell className="font-medium">{server.profile}</TableCell> : null}
                     <TableCell>
                       <Badge variant="information">{t("Server running")}</Badge>
                     </TableCell>
@@ -440,7 +443,9 @@ export function ServersPage({
           </DialogHeader>
 
           <DialogBody className="space-y-4">
-            <Field label="Profile" help={t("Clients with this endpoint can use the selected Profile’s tools.")}>
+            {profileSlug ? <p className="text-sm text-muted-foreground">
+              {t("MCP delivery belongs to Profile {{name}}.", { name: selectedProfile?.displayName ?? profileSlug })}
+            </p> : <Field label="Profile" help={t("Clients with this endpoint can use the selected Profile’s tools.")}>
               <select
                 aria-label={t("Server profile")}
                 value={startProfile}
@@ -455,7 +460,7 @@ export function ServersPage({
                   </option>
                 ))}
               </select>
-            </Field>
+            </Field>}
 
             {selectedProfile !== null && selectedProfile.tools.length === 0 ? (
               <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-5">

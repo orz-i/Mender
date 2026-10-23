@@ -2183,7 +2183,7 @@ describe("management pages", () => {
     const restartMCPServer = vi.fn().mockResolvedValue(restarted);
     const stopMCPServer = vi.fn().mockResolvedValue(undefined);
 
-    renderApp("/servers", {
+    renderApp("/profiles/default/deliveries/mcp", {
       listProfiles: vi.fn().mockResolvedValue({ profiles: [profile] }),
       listMCPServers: vi.fn().mockResolvedValue({ servers: [] }),
       startMCPServer,
@@ -2196,9 +2196,8 @@ describe("management pages", () => {
     fireEvent.click(screen.getByRole("button", { name: "Start server" }));
     expect(await screen.findByText("Start MCP server")).toBeTruthy();
     expectAnchoredDialog("Start MCP server");
-    expect(
-      screen.getByLabelText<HTMLSelectElement>("Server profile").value,
-    ).toBe("default");
+    expect(screen.getByText("MCP delivery belongs to Profile Default.")).toBeTruthy();
+    expect(screen.queryByLabelText("Server profile")).toBeNull();
     expect(
       screen.getByText("Also starts the linked secure Tunnel."),
     ).toBeTruthy();
@@ -2654,7 +2653,7 @@ function captureDockerPolling(){
   });
   return {
     async tick(){
-      if(!refresh)throw new Error("Docker auto-refresh timer missing");
+      await waitFor(()=>{if(!refresh)throw new Error("Docker auto-refresh timer missing");});
       await act(async()=>{refresh?.();await Promise.resolve();});
     },
     restore(){spy.mockRestore();},

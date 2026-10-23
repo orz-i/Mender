@@ -137,6 +137,13 @@ Go（目标包+Race Detector）、TS strict/i18n/lint/Vitest、frontend build、
 - 未运行真实生产数据库 schema 升级，也未重启桌面进程、MCP Server 或 Tunnel；Wails 真机视觉验收与真实 Profile 写入待业主下一次受控部署。仅在一次性测试数据库和目录验证。
 - 旧 `Skills` 页面当前 Deploy 控件、旧 SkillDeployment 不变；必须等阶段 C 新 Profile-owned 部署和存量迁移完成，再删除旧入口，防止不可管理或失联的数据。
 
+## 阶段 D1 — Profile-scoped MCP delivery UI（2026-10-23）
+
+在仍使用 Runtime 管理的 ephemeral MCP HTTP Server（ADR-0016）的前提下，交付管理入口移入 Profile：详情「交付」分区列出当前 Profile 的 MCP 端点及状态，`/profiles/:slug/deliveries/mcp` 承担启动、停止、重启、复制 Endpoint/连接配置及 Tunnel 当前状态。复用既有 `ServersPage` 的管理逻辑，并以 `profileSlug` 显式约束候选 Profile、列表及启动请求；不新增 Server 数据表、Profile 服务进程或替代 Runtime。顶层侧栏 Servers 已移除；原 `/servers` 路由仅转到 Profile 清单，避免遗留并行发布入口。
+
+已验证：跨 Profile 不可在 UI 启动/停止/重启他人的 MCP 实例；同一个 Profile 多实例仍可列出；独立路径可返回配置档。组件与管理集成测试覆盖；`pnpm exec vitest run --maxWorkers=6 --reporter=dot` 66 文件 414 项通过，`pnpm typecheck`/`pnpm lint`/`pnpm i18n:check`/`pnpm build` 与 Desktop 架构检查通过。既有 Docker 定时刷新测试仅加异步安装等待，解决全量并行执行偶发 race；无生产逻辑修改。
+
+**未完成/不冒充**：真实 Wails 对 Profile MCP 启停、真实 Tunnel/连接器状态、重建后 Native UI、远端 auth HTTPS、MCP stdio client config 尚需后续验收与收口。原运行中的 Wails/MCP/Tunnel 未触碰。下一步为 Profile 所属 Skill 部署语义与旧部署无归属数据处理，不可提前删除 Skill Library 旧部署记录。
 ## 7. 需避免的过度设计
 
 - 不引入 ACP v2、Agent Loop 或新的 Session/Task 生命周期。

@@ -58,9 +58,10 @@ describe("MenderApp", () => {
     }
     expect(screen.queryByRole("link", { name: "Profiles" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Connections" }));
-    for (const name of ["Profiles", "Servers", "Tunnels"]) {
+    for (const name of ["Profiles", "Tunnels"]) {
       expect(screen.getByRole("link", { name })).toBeTruthy();
     }
+    expect(screen.queryByRole("link", { name: "Servers" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Advanced" }));
     for (const name of ["Runtime", "Policy", "Credentials", "Audit"]) {
       expect(screen.getByRole("link", { name })).toBeTruthy();
