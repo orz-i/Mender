@@ -17,6 +17,14 @@ import { EmptyPanelState, SearchField } from "../../shared/workbench";
 
 type Filter = "all" | "available" | "unavailable";
 
+// Keep the full path available in the Agent detail, accessible label and search.
+// Inventory previews only need enough context to distinguish workspaces.
+function workspacePreview(path: string): string {
+  const parts = path.split(/[/\\]+/).filter(Boolean);
+  if (parts.length <= 2) return path || "—";
+  return "…/" + parts.slice(-2).join("/");
+}
+
 export function AgentsPage({ client }: { client: MenderClient }) {
   const navigate = useNavigate();
   const [agents, setAgents] = useState<Agent[]>([]);
@@ -102,8 +110,11 @@ export function AgentsPage({ client }: { client: MenderClient }) {
                 {a.backendAvailable ? t("CLI detected") : t("CLI missing")}
               </StatusBadge>
             </TableCell>
-            <TableCell className="max-w-[280px] truncate font-mono text-xs text-muted-foreground max-md:col-start-1 max-md:row-start-3 max-md:block max-md:min-w-0 max-md:p-0" title={a.workspaceRoot}>
-              <span className="block truncate font-mono text-xs text-muted-foreground" title={a.workspaceRoot}>{a.workspaceRoot}</span>
+            <TableCell className="max-w-[280px] truncate font-mono text-xs text-muted-foreground max-md:col-start-1 max-md:row-start-3 max-md:block max-md:min-w-0 max-md:p-0"
+              title={a.workspaceRoot} aria-label={t("Workspace") + ": " + a.workspaceRoot}>
+              <span className="block truncate font-mono text-xs text-muted-foreground">
+                {workspacePreview(a.workspaceRoot)}
+              </span>
             </TableCell>
             <TableCell className="text-right max-md:col-start-2 max-md:row-start-2 max-md:row-span-2 max-md:block max-md:self-center max-md:p-0 max-md:justify-self-end">
               <Button size="sm" variant="outline" className="max-md:h-8 max-md:px-3 max-md:text-xs"

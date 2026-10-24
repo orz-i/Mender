@@ -693,34 +693,47 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
                 : provider.toolSourceKind==="sandbox" && provider.toolSourceId
                   ? "/sandboxes/"+encodeURIComponent(provider.toolSourceId)
                   : null;
+              const hasTools=provider.toolCount>0;
+              const description=provider.description.trim() ||
+                (!hasTools ? t("No tools have been discovered for this service yet.") : "");
               return <Card key={provider.providerId} size="sm" className="h-full min-w-0 border-border/60 transition-[border-color,box-shadow] hover:border-primary/35 hover:shadow-sm">
                 <CardHeader className="min-w-0">
                   <CardTitle className="min-w-0">
                     <Link className="block truncate hover:text-primary-ink hover:underline focus-visible:rounded focus-visible:outline-2 focus-visible:outline-ring"
                       title={name} to={"/tools/"+encodeURIComponent(provider.providerId)}>{name}</Link>
                   </CardTitle>
-                  <CardDescription className="line-clamp-2 min-h-10">
-                    {provider.description || t("Explore the tools provided by this service.")}
-                  </CardDescription>
+                  {description ? <CardDescription className="line-clamp-2">
+                    {description}
+                  </CardDescription> : null}
                   <CardAction>
                     <Badge variant="secondary">
                       {tCount(provider.toolCount,"{{count}} tool","{{count}} tools")}
                     </Badge>
                   </CardAction>
                 </CardHeader>
-                <CardContent className="flex min-w-0 flex-wrap items-center gap-2 border-t border-border/55 pt-3">
-                  <Button size="sm" onClick={() => void navigate("/tools/"+encodeURIComponent(provider.providerId))}>
-                    {t("View tools")} <ArrowRightIcon data-icon="inline-end" />
-                  </Button>
-                  {ownerPath ? (
+                <CardContent className="mt-auto flex min-w-0 flex-wrap items-center gap-2 border-t border-border/55 pt-3">
+                  {hasTools ? (
+                    <Button size="sm" onClick={() => void navigate("/tools/"+encodeURIComponent(provider.providerId))}>
+                      {t("View tools")} <ArrowRightIcon data-icon="inline-end" />
+                    </Button>
+                  ) : ownerPath ? (
+                    <Button size="sm" onClick={() => void navigate(ownerPath)}>
+                      {t("Manage")}
+                    </Button>
+                  ) : (
+                    <Button size="sm" onClick={() => setViewProvider(provider)}>
+                      {t("Details")}
+                    </Button>
+                  )}
+                  {hasTools && ownerPath ? (
                     <Button size="sm" variant="outline" onClick={() => void navigate(ownerPath)}>
                       {t("Manage")}
                     </Button>
-                  ) : managed ? (
+                  ) : hasTools && managed ? (
                     <Button size="sm" variant="outline" onClick={() => setViewProvider(provider)}>
                       {t("Details")}
                     </Button>
-                  ) : (
+                  ) : !managed ? (
                     <Popover open={openActionsProviderId === provider.providerId}
                       onOpenChange={(open) => setOpenActionsProviderId(open ? provider.providerId : null)}>
                       <PopoverTrigger render={<Button size="sm" variant="outline" type="button" aria-label={t("Actions") + ": " + name} />}>
@@ -729,10 +742,12 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
                       </PopoverTrigger>
                       <PopoverContent align="end" className="w-56 p-2">
                         <div className="grid gap-1" aria-label={t("Actions")}>
-                          <Button size="sm" variant="ghost" className="justify-start" aria-label={t("View {{provider}}", {provider:name})}
-                            onClick={() => { setOpenActionsProviderId(null); setViewProvider(provider); }}>
-                            <EyeIcon data-icon="inline-start" />{t("Details")}
-                          </Button>
+                          {hasTools ? (
+                            <Button size="sm" variant="ghost" className="justify-start" aria-label={t("View {{provider}}", {provider:name})}
+                              onClick={() => { setOpenActionsProviderId(null); setViewProvider(provider); }}>
+                              <EyeIcon data-icon="inline-start" />{t("Details")}
+                            </Button>
+                          ) : null}
                           <Button size="sm" variant="ghost" className="justify-start" aria-label={t("Edit {{provider}}", {provider:name})}
                             disabled={busy!=="" || !provider.pluginId}
                             onClick={() => { setOpenActionsProviderId(null); beginEdit(provider); }}>
@@ -766,7 +781,7 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
                         </div>
                       </PopoverContent>
                     </Popover>
-                  )}
+                  ) : null}
                 </CardContent>
               </Card>;
             })}
@@ -2207,7 +2222,9 @@ function ProviderDetailsDialog({
         ) : null}
         </DialogBody>
 
-        <DialogFooter showCloseButton />
+        <DialogFooter>
+          <DialogClose render={<Button variant="outline" />}>{t("Close")}</DialogClose>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

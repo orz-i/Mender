@@ -81,6 +81,55 @@ describe("Tool services responsive cards", () => {
   });
 });
 
+describe("Tool service low-noise empty and active states", () => {
+  it("does not repeat generic filler for described-by-name sources with discovered tools", async () => {
+    mount([{ ...sampleProvider, description: "" }]);
+    const card = (await screen.findByRole("link", { name: "Echo Service" }))
+      .closest<HTMLElement>('[data-slot="card"]');
+    expect(card).toBeTruthy();
+    expect(card!.querySelector('[data-slot="card-description"]')).toBeNull();
+    expect(within(card!).getByText("5 tools")).toBeTruthy();
+    expect(within(card!).getByRole("button", { name: "View tools" })).toBeTruthy();
+    expect(within(card!).getByRole("button", { name: "Actions: Echo Service" })).toBeTruthy();
+  });
+
+  it("routes zero-tool services to details, while retaining explicit sync and edit", async () => {
+    mount([{ ...sampleProvider, description: "", toolCount: 0 }]);
+    const card = (await screen.findByRole("link", { name: "Echo Service" }))
+      .closest<HTMLElement>('[data-slot="card"]');
+    expect(card).toBeTruthy();
+    expect(within(card!).getByText("0 tools")).toBeTruthy();
+    expect(within(card!).getByText("No tools have been discovered for this service yet.")).toBeTruthy();
+    expect(within(card!).queryByRole("button", { name: "View tools" })).toBeNull();
+    fireEvent.click(within(card!).getByRole("button", { name: "Actions: Echo Service" }));
+    expect(await screen.findByRole("button", { name: "Sync Echo Service" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Edit Echo Service" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Delete Echo Service" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "View Echo Service" })).toBeNull();
+    fireEvent.click(within(card!).getByRole("button", { name: "Details" }));
+    expect(await screen.findByRole("dialog", { name: "Provider details" })).toBeTruthy();
+  });
+
+  it("keeps the zero-tool detail exit translated in Chinese", async () => {
+    setLocale("zh-CN");
+    mount([{ ...sampleProvider, description: "", toolCount: 0 }]);
+    expect(await screen.findByRole("link", { name: "Echo Service" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "详情" }));
+    const dialog = await screen.findByRole("dialog", { name: "提供方详情" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "关闭" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "提供方详情" })).toBeNull());
+  });
+
+  it("does not replace user-provided source descriptions with a generated sentence", async () => {
+    mount([{ ...sampleProvider, description: "Document lookup service", toolCount: 0 }]);
+    const card = (await screen.findByRole("link", { name: "Echo Service" }))
+      .closest<HTMLElement>('[data-slot="card"]');
+    expect(card).toBeTruthy();
+    expect(within(card!).getByText("Document lookup service")).toBeTruthy();
+    expect(within(card!).queryByText("No tools have been discovered for this service yet.")).toBeNull();
+  });
+});
+
 describe("Tool service error state", () => {
   it("shows a failed request and retry without falsely claiming there are no services", async () => {
     const listProviders = vi.fn()
@@ -105,6 +154,37 @@ describe("Tool service error state", () => {
 });
 
 describe("resource-owned Tool service navigation", () => {
+  it("uses Manage for an Agent-owned zero-tool source without exposing generic mutation actions", async () => {
+    const source: Provider = {
+      ...sampleProvider,
+      providerId: "prov_empty_agent",
+      description: "",
+      toolCount: 0,
+      toolSourceKind: "agent",
+      toolSourceId: "agent_grok",
+      toolSourceName: "Grok - executor",
+      pluginId: "io.mender.provider.agent-delegation",
+    };
+    const client = {
+      listProviders: vi.fn().mockResolvedValue({ providers: [source] }),
+      listProviderPlugins: vi.fn().mockResolvedValue({ plugins: [], issues: [] }),
+      listCredentials: vi.fn().mockResolvedValue({ credentials: [] }),
+    } as unknown as MenderClient;
+    render(<MemoryRouter initialEntries={["/tools"]}><Routes>
+      <Route path="/tools" element={<ProvidersPage client={client} />} />
+      <Route path="/agents/:agentId" element={<div>Agent owner details</div>} />
+    </Routes></MemoryRouter>);
+    const card = (await screen.findByRole("link", { name: "Grok - executor" }))
+      .closest<HTMLElement>('[data-slot="card"]');
+    expect(card).toBeTruthy();
+    expect(within(card!).getByText("No tools have been discovered for this service yet.")).toBeTruthy();
+    expect(within(card!).queryByRole("button", { name: "View tools" })).toBeNull();
+    expect(within(card!).queryByRole("button", { name: /Actions/ })).toBeNull();
+    expect(within(card!).getByRole("link", { name: "Grok - executor" }).getAttribute("href"))
+      .toBe("/tools/prov_empty_agent");
+    fireEvent.click(within(card!).getByRole("button", { name: "Manage" }));
+    expect(await screen.findByText("Agent owner details")).toBeTruthy();
+  });
   it.each([
     {
       kind: "agent" as const,

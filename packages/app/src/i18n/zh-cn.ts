@@ -249,7 +249,6 @@ export const zhCNMessages: Readonly<Record<string, string>> = {
   "Connections": "连接与供应",
   "Advanced": "高级管理",
   "Open navigation": "打开导航",
-  "Explore the tools provided by this service.": "查看这个服务提供的工具。",
   "Jobs": "任务工具",
   "Loading services…": "正在加载服务…",
   "Manage": "管理",

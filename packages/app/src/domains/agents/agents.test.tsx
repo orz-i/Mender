@@ -64,6 +64,47 @@ function show(path:string,overrides:Partial<MenderClient>={}){
   return client;
 }
 describe("Agents focused management",()=>{
+  it("shortens repeated workspace paths in the inventory without losing full paths or search", async () => {
+    const mac = { ...agent, agentId: "agent_mac", name: "Mac Agent",
+      workspaceRoot: "/Users/mini/Coding/Mender", backendAvailable: true };
+    const win = { ...agent, agentId: "agent_win", name: "Windows Agent",
+      workspaceRoot: "C:\\Users\\mini\\Projects\\Mender", backendAvailable: true };
+    show("/agents", {
+      listAgents: vi.fn().mockResolvedValue({ agents: [mac, win] }),
+      getAgent: vi.fn().mockImplementation((id: string) =>
+        Promise.resolve([mac, win].find((item) => item.agentId === id))),
+    });
+    const macRow = await screen.findByRole("row", { name: /Mac Agent/ });
+    const macCell = within(macRow).getByRole("cell", { name: "Workspace: /Users/mini/Coding/Mender" });
+    expect(within(macCell).getByText("…/Coding/Mender")).toBeTruthy();
+    expect(macCell.getAttribute("title")).toBe("/Users/mini/Coding/Mender");
+    expect(within(macRow).queryByText("/Users/mini/Coding/Mender")).toBeNull();
+
+    const winRow = screen.getByRole("row", { name: /Windows Agent/ });
+    const winCell = within(winRow).getByRole("cell", { name: /Workspace: C:/ });
+    expect(within(winCell).getByText("…/Projects/Mender")).toBeTruthy();
+    expect(winCell.getAttribute("title")).toBe(win.workspaceRoot);
+    fireEvent.change(screen.getByRole("textbox", { name: "Search agents" }), {
+      target: { value: "/Users/mini/Coding/Mender" },
+    });
+    expect(screen.getByRole("row", { name: /Mac Agent/ })).toBeTruthy();
+    expect(screen.queryByRole("row", { name: /Windows Agent/ })).toBeNull();
+
+    fireEvent.click(within(screen.getByRole("row", { name: /Mac Agent/ }))
+      .getByRole("button", { name: "View" }));
+    expect(await screen.findByText("/Users/mini/Coding/Mender")).toBeTruthy();
+  });
+
+  it("does not manufacture path parents for root or short workspace values", async () => {
+    const root = { ...agent, agentId: "agent_root", name: "Root Agent", workspaceRoot: "/" };
+    const short = { ...agent, agentId: "agent_short", name: "Short Agent", workspaceRoot: "src" };
+    show("/agents", { listAgents: vi.fn().mockResolvedValue({ agents: [root, short] }) });
+    expect(await screen.findByRole("row", { name: /Root Agent/ })).toBeTruthy();
+    expect(within(screen.getByRole("row", { name: /Root Agent/ }))
+      .getByRole("cell", { name: "Workspace: /" }).textContent).toContain("/");
+    expect(within(screen.getByRole("row", { name: /Short Agent/ }))
+      .getByRole("cell", { name: "Workspace: src" }).textContent).toContain("src");
+  });
   it("lists previews and does not show create forms on the inventory",async()=>{
     show("/agents");
     expect(await screen.findByText("Code Reviewer")).toBeTruthy();
