@@ -177,8 +177,8 @@ github.com/stretchr/objx v0.5.3/go.mod h1:rDQraq+vQZU7Fde9LOZLr8Tax6zZvy4kuNKF+Q
 github.com/stretchr/testify v1.7.2/go.mod h1:R6va5+xMeoiuVRoj+gSkQ7d3FALtqAAGI1FQKckRals=
 github.com/stretchr/testify v1.12.1 h1:EuwCh5fleGS7H32xRwO3wRGT7DxrDhLAT6FF8MpWDWE=
 github.com/stretchr/testify v1.12.1/go.mod h1:MDEgiDPPsNp5cuIrHPPCyornHKgEVbtFUmoNlxoYthg=
-github.com/wailsapp/wails/v3 v3.0.0-beta.26 h1:Cs7E3wSD6kouJGDzbbvqeFBIbNOzuUMjf0kto3/a7Oc=
-github.com/wailsapp/wails/v3 v3.0.0-beta.26/go.mod h1:5DR/EG5FHU8+BNV7tQYQ/rJMjoFsVlYpM+0gp1+gcTI=
+github.com/wailsapp/wails/v3 v3.0.0-beta.30 h1:uMf8QlaESexqKKQISwXowS4/RiYeXDfB8Ttzb1UC1tQ=
+github.com/wailsapp/wails/v3 v3.0.0-beta.30/go.mod h1:5DR/EG5FHU8+BNV7tQYQ/rJMjoFsVlYpM+0gp1+gcTI=
 github.com/yosida95/uritemplate/v3 v3.0.2 h1:Ed3Oyj9yrmi9087+NczuL5BwkIc4wvTb5zIM+UJPGz4=
 github.com/yosida95/uritemplate/v3 v3.0.2/go.mod h1:ILOh0sOhIJR3+L/8afwt/kE++YT040gmv5BQTMR2HP4=
 github.com/zalando/go-keyring v0.2.8 h1:6sD/Ucpl7jNq10rM2pgqTs0sZ9V3qMrqfIIy5YPccHs=
