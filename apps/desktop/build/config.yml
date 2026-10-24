@@ -37,5 +37,9 @@ dev_mode:
     - cmd: wails3 task run
       type: primary
       exit_policy: shutdown
+      # Refresh defaults to SIGKILL without a timeout, skipping Wails
+      # OnShutdown and leaving separately sessioned Tunnel clients orphaned.
+      # Let Wails handle SIGTERM and close Runtime; force-kill after the bound.
+      shutdown_timeout: 10s
 
 fileAssociations: []

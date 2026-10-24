@@ -68,7 +68,14 @@
 
 安全与保真：10 秒只为已运行的实例提供清理时间；超时 Refresh 依然强制杀死原**主进程组**，不能保证 OS crash、kill -9、断电或系统崩溃时清理任意 detached child；不声明此情况完全解决。不创建 PID 数据、守护服务、自动启动设置或兼容桥。修复只会在下一次**正常启动的 Wails dev watcher**读取配置时生效，不能声称修改 YAML 立即改变正在运行的 watcher 行为。
 
-验收：使用独立于正式 PID/DB/Tunnel 的临时 ProcessManager harness 验证零超时时可复现父进程 SIGKILL 遗留独立会话，配置正超时后主进程收到 SIGTERM 并执行清理；确认前后生产端口、Tunnel 亲缘与数据库只读完整性。
+验收结果：临时目录 `/tmp/mender-refresh-lifecycle-qa-20261024` 下，以**真实 Refresh v1.1.4 ProcessManager** 驱动测试 shell 主进程和 `os.setsid()` 的独立会话子进程。使用与产品无关的 dummy 子进程，没有启动生产 Tunnel 或发送生产 PID 信号。结果精确为：
+
+- `0s`：Refresh 发出即时 SIGKILL，清理标记不存在，独立会话子进程依然存活（测试随后显式杀死该 dummy，防止泄漏）。
+- `10s`：Refresh 先发送 SIGTERM，清理标记已写入，独立会话子进程已退出；Refresh 不需升级为强杀。
+- Wails 的 `App.Quit()` 和默认 SIGTERM 处理器复用其原生实现，没有增加重复信号拦截。Go 桌面配置结构测试通过；`pnpm go:modules:check`、`go test ./apps/desktop/...`、`go test ./backend/...`、Desktop Go Lint（0 issues）和 `pnpm desktop:architecture:check` 全通过。
+- 正式 Wails PID 94124、Tunnel PID 94593（PPID 94124）及 MCP 监听 127.0.0.1:8765 前后稳定。此验证不是直接触发生产 `wails3 dev` 重新构建；配置需 watcher **下次重新启动**才能生效，且 SIGKILL/断电情况下仍不能清理所有独立子进程。
+
+
 
 ## 续验：真实 MCP 客户端与 Agent Plugin 标准验证（2026-10-24）
 
