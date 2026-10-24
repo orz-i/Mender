@@ -31,3 +31,39 @@ UX 依据：简短、直接的界面文案优于靠大段说明解释操作（ht
 - 优先原生实机浏览；如果 macOS 辅助功能无法操控已运行窗口，必须明确说明截图 / 点击的证据限制，不能把 jsdom 视作实机。
 
 不涉及对真实运行来源做同步/重置/删除、启动 Agent 任务或变更 Profile 绑定。
+
+## 执行与实机验收结果（2026-10-24）
+
+### 版本
+
+- `de74d7f`：本轮意图与行为契约（文档先行）。
+- `f1dccd4`：工具服务卡片、Agent 路径预览及其回归测试。
+- 本段验收记录作为独立文档提交。
+
+### 原生 Wails 验证
+
+使用已运行的 Desktop 实例（Wails Dev Frontend HMR，`9245`），通过 macOS 系统辅助功能的真实 `AXLink` / `AXButton` 导航，未以静态 HTML 或空数据 Web Fixture 冒充真实管理页。截图仅在本机临时路径 `/tmp/mender-ux-20261024-r2/`，不加入仓库。
+
+| 步骤 | 画面/行为及结论 | 截图 |
+| --- | --- | --- |
+| 1. 工具目录 | 真实 Agent、AnySearch、Keling、Rocky 等来源渲染正常。有工具项主要入口仍为“查看工具”。Keling 明确显示 0 工具、未发现工具提示，主入口变为“详情”，原有“操作”仍在。 | `05-tools-native-current.png` |
+| 2. 零工具来源详情 | 在 Keling 点“详情”，查看名称、Provider ID、连接、0 个同步工具、日期等；与零工具状态一致，原始配置未被更改。中文底部关闭按钮显示“关闭”，退出正常。 | `07-zero-tools-details.png` / `08-details-localized.png` |
+| 3. Agent 列表 | 四项 Agent 的 CLI 探测状态仍正常；列表只展示 `…/Coding/Mender`，保留清楚的名称、后端和查看入口。 | `06-agents-native-current.png` |
+| 4. Agent 详情 | 点“查看”后“工作目录”仍展示完整 `/Users/mini/Coding/Mender`；没有改变 Agent 存储数据。 | `09-agent-detail-full-path.png` |
+| 5. 960px 窄桌面窗口 | 改为有文字的导航抽屉，进入 Agent 列表与工具来源页面。列表与卡片均正常排布；测试后窗口恢复原尺寸和位置。 | `13-mobile-nav.png` / `14-agents-narrow-list.png` / `15-tools-narrow-list.png` |
+
+### 自动验证
+
+- `pnpm exec vitest run --maxWorkers=6 --reporter=dot`：**68 个文件、439 项通过**。
+- `pnpm i18n:check`：1577 项必需文案与中文映射覆盖通过；删除了已经不使用的重复通用描述翻译。
+- `pnpm lint`、`pnpm --filter @mender/app typecheck`、`pnpm --filter @mender/web build`、`git diff --check` 通过。
+- 测试保留并新增了 0 / 非 0 工具数量、来源描述、Owner 管理链接、同步/编辑菜单、Agent POSIX 和 Windows 路径、原路径搜索、详情、中文按钮等行为验证。
+- 构建仍提示大于 500KB 的分包优化建议；Vitest 的历史模拟路由与旧 Audit 重复 key 测试中仍有已知警告，但无失败。
+
+### 已知边界
+
+1. **没有** 对真实 MCP Provider 执行同步/删除，没有开始 Agent Task，也没有更改工作区、权限、数据或业务生命周期。
+2. Wails 原生桌面设定的最小宽度为约 960px，故 **390px 真实存量数据设备级验证仍未进行**；这不能据 960px 的截图视作已经验证手机屏幕。
+3. 真实 Provider 返回的英文 `description` 如“Managed Agent Delegation tools for ...”仍直接显示，不擅自伪造中文。后续可调查多语言元数据契约或仅在内置来源引入可信本地化。
+4. 本轮只收敛两个列表与零工具详情退出，未覆盖所有管理页面的读屏/键盘焦点/缩放，也不宣称整体 WCAG 2.2 AA 合规。
+5. 本次改动只在桌面 Wails DEV 环境即时验证，发布版需要重新构建和重新启动后才包含新前端。
