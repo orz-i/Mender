@@ -49,6 +49,27 @@
 - Mender Desktop 原生生产构建和首次启动/重连后数据迁移验收。目前运行 `wails3 dev` 重构建的可用进程，但本轮没有重新构建重启。
 - Accessibility 语义基本可用，未做完整 VoiceOver/WCAG 认证。
 
+## Phase F 补充：Wails 开发重建的 Tunnel 子进程收口（2026-10-24）
+
+### 生产状态与问题范围
+
+本次开始时，用户已在新 Wails 实例 PID 94124 恢复 Profile MCP 监听 `127.0.0.1:8765`，Tunnel 客户端 PID 94593 的 PPID 为 94124，原先「MCP 断开、Tunnel PPID=1」状况**已不再存在**。本轮不得再主动重启、停止或写入此实例以制造复现；SQLite 完整性 `quick_check=ok`，生产 Profile=1、Skill 部署=0。历史孤儿现象只对应早前 Wails dev 自动重建，不能泛化成所有生产异常退出。
+
+### 根因复核（源码级）
+
+1. Mender 的 Desktop 使用 Wails v3.0.0-beta.26，保留内置 SIGINT/SIGTERM handler (`application/signal_handler_desktop.go`)，处理信号后调用 `App.Quit()`，进而执行 `OnShutdown`。
+2. `apps/desktop/main.go` 的 `OnShutdown` 已通过一次性 Closer 调用 `Runtime.Close()`。Runtime 关闭所有内存态 MCP HTTP 实例，并调用每个受托 Tunnel `Process.Stop`。Tunnel 客户端本身位于独立会话 / 进程组（`runtimegovernance/processisolation.command_unix.go` 的 Setsid），因此只杀死 Wails 父进程组不会终止 Tunnel；必须执行宿主关闭路径。
+3. Mender 的 `apps/desktop/build/config.yml` 以 `wails3 task run` 作为 Wails dev 的 `primary`。Wails 依赖的 `github.com/atterpac/refresh@v1.1.4` 在 `primary` 重新加载时调用 `stopProcessTree`，`shutdown_timeout` 未配置（0）时会直接对**开发主进程组**发 SIGKILL：Wails 无法执行任何 Go defer 或 OnShutdown，独立 Tunnel 遗留为孤儿。该 Refresh 库在明确配置非零优雅退出超时时，会先向主进程组发送 SIGTERM，超时后才 SIGKILL。
+4. 这不是缺失 Wails 信号处理器；为 Wails 自行重复注册 signal handler 不是必要修复。也不是要求重启时自动恢复 MCP/Tunnel；ADR-0016 和 ADR-0058 仍坚持 Runtime 管理的 HTTP 实例是短暂进程状态。
+
+### 最小修复与防回归合同
+
+只在 Wails dev `primary` 执行项设置 `shutdown_timeout: 10s`，其余 blocking/frontend Task 不变；生产编译不受影响。给桌面构建配置增加结构化回归断言，核对有效正时长、单个 primary，以及不存在会跳过 Wails Signal+OnShutdown 的即刻 SIGKILL 默认值。
+
+安全与保真：10 秒只为已运行的实例提供清理时间；超时 Refresh 依然强制杀死原**主进程组**，不能保证 OS crash、kill -9、断电或系统崩溃时清理任意 detached child；不声明此情况完全解决。不创建 PID 数据、守护服务、自动启动设置或兼容桥。修复只会在下一次**正常启动的 Wails dev watcher**读取配置时生效，不能声称修改 YAML 立即改变正在运行的 watcher 行为。
+
+验收：使用独立于正式 PID/DB/Tunnel 的临时 ProcessManager harness 验证零超时时可复现父进程 SIGKILL 遗留独立会话，配置正超时后主进程收到 SIGTERM 并执行清理；确认前后生产端口、Tunnel 亲缘与数据库只读完整性。
+
 ## 续验：真实 MCP 客户端与 Agent Plugin 标准验证（2026-10-24）
 
 ### 编译后的 CLI、真实 MCP Go SDK 客户端（PASS）
