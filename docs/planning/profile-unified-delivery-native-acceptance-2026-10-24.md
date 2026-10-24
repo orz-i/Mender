@@ -160,3 +160,30 @@ Mac mini 上已安装的 **Codex CLI 0.159.0**，使用仅位于 `/tmp/mender-na
 - `git diff --check` 通过。
 
 **阶段结论：** 实际 Codex CLI 消费端的三种格式安装、多个 Profile MCP 配置共存已通过；远端 HTTPS 服务身份/auth、真实可调用工具、解锁后的原生 Wails 导出/部署 GUI，以及开发 Runtime 重建后 MCP/Tunnel 的恢复仍未闭环。
+
+## 补验：独立 Wails 原生文件交付与真实 Codex 消费端（2026-10-24）
+
+本节**更新上方原生 GUI「BLOCKED」的历史状态**。本次通过 Mac mini 实际 WKWebView、系统目录选择器及真实文件系统完成全链路，不是浏览器模拟或 Vitest。
+
+**QA 隔离边界：** 独立应用 `/tmp/mender-native-profile-qa.5tYE04/native-qa/Mender-QA.app` 使用单独 Bundle ID `io.github.orz-i.mender.phasef.qa` 及可执行名 `mender-phasefqa`，原生 PID 2164；启动时 `MENDER_DB=/tmp/mender-native-profile-qa.5tYE04/runtime/mender.db` 与 `lsof` 所见 SQLite 文件句柄一致。原生 Profile 列表显示 `qa-local`、0 个 Tool、1 个 `mender-tools` Skill、无 Tunnel，区别于生产 `default`、32 个 Tool 和 Tunnel。
+
+### Agent Plugin：目录取消、真实导出与 Codex 安装（PASS）
+
+1. 原生 `qa-local` → 交付 → Agent Plugin 页面显示已选 Skill=1、Tool=0。点击“选择目录并导出”打开 macOS 原生 Finder 文件夹选择器；第一次点击取消后无成功提示且临时目录未写文件。
+2. 再次打开系统选择器，使用 Go to Folder 选择 `/tmp/mender-native-profile-qa.5tYE04/native-gui-output` 并确认。实际创建 `qa-local/plugin.json`、`qa-local/skills/mender-tools/SKILL.md`；原生页面显示“已导出插件包”、精确目录及 Profile 修订号 1。隔离 Profile revision 未变化，Skill Deployment 仍为 0。
+3. 将**原生窗口刚刚导出的包**交由真实 Codex CLI 0.159.0，通过完全独立的 `CODEX_HOME`、HOME 和本地 Marketplace 运行 `codex plugin add qa-local@mender-phasef-native-gui`。Codex 报告已安装且启用，插件缓存保留 `SKILL.md`，`codex mcp list --json` 返回空列表（Skills-only 正确不含 MCP）。
+
+### Skill 交付：系统目录选择、取消部署、写入、取消卸载、确认卸载（PASS）
+
+1. 原生 Profile Skill 页面显示已选 `mender-tools`；明确选择 **Agents 项目**，通过文件选择器首次取消：`native-gui-project` 未生成文件，QA 数据库 `skill_deployments=0`。
+2. 再次选择真实临时项目根 `/tmp/mender-native-profile-qa.5tYE04/native-gui-project` 并确认。磁盘上实际出现 `.agents/skills/mender-tools/SKILL.md`；QA SQLite 新增一条归属 `qa-local` 的部署记录，`owner_profile_id=prof_8cd9069fd2b50765d5d5fb17249eaf21`、`profile_revision=1`、root/destination 均处在测试目录。原生 UI 显示“已部署 1 个技能”、`current` 状态及“移除部署”按钮。
+3. 点击“移除部署”弹出显示完整精确目标路径的二次确认；首次取消后文件及 1 条部署记录保持。重新进入确认框、再次核对路径属于 QA 根，按“移除部署”后实际删除 Skill 文件，QA `skill_deployments=0`、Profile revision=1、`PRAGMA quick_check=ok`。
+
+### 收尾、生产状态和保留边界
+
+- 结束时按绝对可执行路径及 `MENDER_DB` 双重核验，仅向 QA PID **2164** 发送 `SIGTERM`，该进程正常退出。没有向生产 Wails/Tunnel 发送信号。
+- 原生测试后生产 Wails PID **94124**、Tunnel PID **94593**（PPID=94124）及 `127.0.0.1:8765` 监听保持，生产库只读核查 profiles=1、profile_skills=0、skill_deployments=0、agent_tasks=75、tunnels=1、`quick_check=ok`。
+- 截图证据位于本机 `/tmp/mender-phasef-qa-{plugin-page,export-dialog,export-post-choose,export-result,skill-delivery,skill-target-open,skill-project-picked,skill-deployed,skill-undeploy-dialog,skill-undeployed}-20261024.png`；实际测试 DB、导出包及独立 Codex 消费端均位于 `/tmp/mender-native-profile-qa.5tYE04/`。
+- **仍未验收：** 真正可认证的外网 HTTPS MCP 入口及实际远程 Tool scope；`wails3 dev` 新配置下的正式 watcher 重启/真实 reload；跨主机的可信 target-side Skill/CLI 安装。这些不能以隔离本地 GUI 或示例 HTTPS URL 冒充。
+
+**最新判定：** Profile 的 Agent Plugin 原生导出、Profile Skill 原生文件部署/撤销和由原生导出产物至真实 Codex 客户端的安装链路全部完成隔离实机验收。未修改生产 Profile、Tunnel、Skill 或用户项目目录。
