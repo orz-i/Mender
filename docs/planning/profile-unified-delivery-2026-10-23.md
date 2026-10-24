@@ -169,7 +169,7 @@ Profile 已成为新建 Skill 文件交付的唯一对外产品入口：`/profil
 
 - 调整原自由选择 Skill 的 `skill export` 为 `mender profile export-plugin <slug>` 和 Desktop Profile → 交付 → Agent Plugin。只能从当前 Profile 的精确安装集合选出 Skills；调用者不能追加 Profile 外的安装 ID。
 - 复用既有 Agent Plugin exporter，输出规范 `plugin.json`、可选 `skills/`、可选 `mcp.json`；支持纯 Skill、纯 Streamable HTTP MCP 及混合包。所有文件先写入兄弟临时目录，经内容摘要、名称/目标校验后重命名发布；已存在目的地拒绝覆盖。
-- `mcp.json` 使用 Agent Plugins 1.0 固定 `$schema` 和 `mcpServers.mender.type=streamable-http`。仅支持显式 HTTPS URL，拒绝本机、私有 IP、内嵌用户信息、query/fragment，不输出认证 header、令牌或 DB 路径；插件客户端负责 OAuth/连接授权。
+- `mcp.json` 使用 Agent Plugins 1.0 固定 `$schema`，每个包以已校验的插件名称作为 `mcpServers` 唯一键，其 `type=streamable-http`。仅支持显式 HTTPS URL，拒绝本机、私有 IP、内嵌用户信息、query/fragment，不输出认证 header、令牌或 DB 路径；插件客户端负责 OAuth/连接授权。
 - Desktop 需原生选择导出父目录；取消不会生成包或显示成功。Remote Management 不能写客户端本机磁盘，也不能复制桌面数据库路径。
 - 导出结果包含导出时 Profile revision，但 **没有持久化 Artifact Record** 或自动刷新已导出的文件。Profile 变更后须手动重新导出，不能声称远程客户端已有最新包。
 
@@ -188,7 +188,7 @@ Profile 已成为新建 Skill 文件交付的唯一对外产品入口：`/profil
 
 **修复边界：** `mcpServers` 的单一映射键改为**经过既有名称校验的 Agent Plugin 包名**（`pkg.Name`），使不同包在同一消费者中拥有不同的 MCP 服务身份；不能保留静态 `mender` 名。包名来自用户显式选择的导出名称，不从另一个 Profile 自动引入工具，也不新增配置字段、兼容桥、数据库迁移或运行期进程。Agent Plugins 1.0 的 MCP Server 字典键允许此形式；Codex 已以临时测试包验证了点号包名 `qa.profile` 可作为 MCP server 键。
 
-**可复验判据：** 实际消费端用两个不同包名及不同 HTTPS 示例 URL 安装后，`codex mcp list --json` 必须同时列出两条**不同**名称及其对应 URL；现有 skills-only 不应生成 MCP。Go exporter 单测须固定该键和格式；已有包是落盘快照，须用户明确重新导出/重新安装才会使用新名称，**不静默改动用户已部署的客户端配置**。远端 HTTPS auth/Profile Tool boundary 与 Wails 原生目录选择仍是独立的未完成验收。
+**实施及复验通过：** 导出器使用 `pkg.Name` 作唯一 MCP server key，Go exporter/Bootstrap 回归断言、Go 全量测试、Lint、相关 Race Detector 均通过。实际重新编译的 CLI 从临时 Profile 导出两个不同名称的包（`qa.alpha`→`https://scope-a.example.com/mcp`，`qa.beta`→`https://scope-b.example.com/mcp`）；Codex CLI 0.159.0 在全新的独立 `CODEX_HOME`、临时 Marketplace 中安装后，`codex mcp list --json` **同时**列出了 `qa.alpha` 与 `qa.beta` 两个启用的 MCP 连接，且 URL 分别保持正确；点号名称得到消费端验证。Skills-only 仍不生成 MCP。已有包是落盘快照，须用户明确重新导出/重新安装才使用新名称，**不静默改动用户已部署的客户端配置**。远端 HTTPS auth/Profile Tool boundary 与 Wails 原生目录选择仍是独立的未完成验收。
 
 ## 7. 需避免的过度设计
 

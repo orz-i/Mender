@@ -95,8 +95,8 @@ func TestExportProfileAgentPluginPinsExactSkillsAndOnlyExplicitHTTPSMCP(t *testi
 		t.Fatal(err)
 	}
 	if mcp.Schema != "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json" ||
-		mcp.Servers["mender"]["type"] != "streamable-http" ||
-		mcp.Servers["mender"]["url"] != "https://mcp.example.com/mcp" {
+		mcp.Servers["profile.bundle"]["type"] != "streamable-http" ||
+		mcp.Servers["profile.bundle"]["url"] != "https://mcp.example.com/mcp" {
 		t.Fatalf("portable MCP configuration = %+v", mcp)
 	}
 

@@ -92,3 +92,43 @@ Mac mini 上没有重启的既有 Wails 原生 PID `27766`，127.0.0.1:8765 原�
 - 缺项仍为：**解锁后的原生 Wails UI 完整交付流程**、支持 Agent Plugins 的真实消费端加载、具备真实身份验证的远程 HTTPS 端点，以及生产安装后的重建/重启验收。
 
 **最终判定：本轮补齐了生产 Wails MCP 的安全只读握手、CLI 的真实 stdio/HTTP Tool 发现/调用/越权拒绝，以及三类导出包官方 Schema 合规验证；Phase F 的 GUI、远端真实认证、最终消费端安装仍未全部收口，不能标记完全通过。**
+
+## 续验：真实 Codex CLI 插件安装、多 Profile MCP 消费端冲突修复（2026-10-24）
+
+本节属于后续阶段，更新上文曾写的「真实消费端尚未安装」状态；前面各次验收所记录的历史进程 PID、端口状态只代表当时观测，不代表当前的运行状态。
+
+### 三类 Agent Plugins 的真实消费者验收（PASS）
+
+Mac mini 上已安装的 **Codex CLI 0.159.0**，使用仅位于 `/tmp/mender-native-profile-qa.5tYE04/` 的独立 `CODEX_HOME`、独立 `HOME` 和局部 `codex plugin marketplace add` 注册流程，实际对 Mender CLI 导出的三类包执行 `codex plugin add`：
+
+- Skills-only：`qa.profile` 安装为 `installed=true`、`enabled=true`，在 Codex 插件缓存中有真实的 `skills/mender-tools/SKILL.md`。
+- MCP-only：`mcp-only` 安装成功，在缓存中有 `plugin.json` 和 `mcp.json`。
+- Mixed：`mixed` 安装成功，MCP + Skill 文件都真实存在；`codex mcp list` 能读取插件的 HTTPS MCP 配置，但并未尝试与示例远端建立连接。
+
+### 真实多插件 MCP 名称冲突（已修复，消费端 PASS）
+
+**复现：** 不同插件分别使用 `https://scope-a.example.com/mcp`、`https://scope-b.example.com/mcp`，但都拥有固定的 `mcpServers.mender`。两个插件在真实 Codex 中均安装成功且启用，`codex mcp list --json` 却只列出一个名为 `mender` 的服务（只保留 A 地址）。
+
+**最小修复：** exporter 在 `mcp.json` 中使用已有名称校验的 `pkg.Name` 作为 MCP server 键，不新增数据库字段、兼容桥、导出参数或运行状态；更新 Bootstrap/exporter 回归断言，新增两包服务名称独立用例。
+
+**修复后真实复验：** 重新编译 Mender CLI，从测试 Profile 真实导出 `qa.alpha` 和 `qa.beta` 两个版本为 `1.0.1` 的 Skills+MCP 包，再使用全新隔离 Codex Marketplace 安装。真实 `codex mcp list --json` 同时返回：
+- `qa.alpha` → `https://scope-a.example.com/mcp`
+- `qa.beta` → `https://scope-b.example.com/mcp`
+
+两个映射均处于 `enabled=true`，没有相互覆盖。两个导出的 `plugin.json`、`mcp.json` 重新通过 2026-10-24 下载的 **Agent Plugins 1.0 正式 JSON Schema** 验证。这只证明端点配置已被消费端加载，示例 HTTPS 地址不是可认证生产入口，`auth_status=unknown`，**不得声称远程权限和业务工具调用通过**。
+
+### 原生 Wails、运行环境及生产保护
+
+- 使用 `MENDER_DB=/tmp/mender-native-profile-qa.5tYE04/runtime/mender.db` 实际启动过隔离 Wails 进程，文件句柄确认只打开测试 SQLite，且只对测试实例尝试 UI 浏览。原生 Accessibility 在多个同名进程并存时对窗口身份的识别存在歧义，后改为临时独立的包标识及可执行文件名；因 macOS 会话再次显示 `CGSSessionScreenIsLocked=Yes`，**没有执行任何原生 Agent Plugin 导出、Skill 目录选择/部署/取消的 GUI 写入**，不得虚报通过。临时 QA Wails 实例已关闭，临时编译源码已清理。
+- 本机同时有 `wails3 dev` 热构建监听。复核过程中观察到原 Wails 开发实例的 PID 发生变化（`66941`→`83109`）；临时 QA 源码曾位于被 watcher 监视的 `apps/desktop`，可能触发热重建，**不可声称原生运行实例始终未重启**。本轮没有直接对生产实例执行管理 API 的 Start/Stop/Restart，也没有修改生产 Profile 或 Tunnel。
+- **最新诊断：** 原 MCP 地址 `127.0.0.1:8765` 已无法 TCP 连接；原 Tunnel 客户端仍在运行并指向 `http://127.0.0.1:8765/mcp`。这与 MCP HTTP 实例只存于旧 Runtime 内存、不随进程重建自动恢复的设计相符。恢复真实 MCP 交付需要在原生 Profile→MCP 页面重新启动，不能由验收脚本偷偷操作生产 Tunnel 或授权。**这是当前真实使用可用性问题，优先级高于继续 UI 自动化。**
+- 生产数据库全程只读核查：profiles=1、profile_skills=0、skill_deployments=0、agent_tasks=75、tunnels=1、`PRAGMA quick_check=ok`。仓库中的既存四个未跟踪目录未触碰。
+
+### 质量门禁
+
+- `go test ./backend/...` 全量通过；
+- `pnpm go:lint`：0 issues；
+- `go test -race ./backend/internal/skill/infrastructure/agentplugin ./backend/internal/bootstrap -run 'TestAgentPluginExporter|TestExportProfileAgentPluginPinsExactSkillsAndOnlyExplicitHTTPSMCP' -count=1` 通过；
+- `git diff --check` 通过。
+
+**阶段结论：** 实际 Codex CLI 消费端的三种格式安装、多个 Profile MCP 配置共存已通过；远端 HTTPS 服务身份/auth、真实可调用工具、解锁后的原生 Wails 导出/部署 GUI，以及开发 Runtime 重建后 MCP/Tunnel 的恢复仍未闭环。

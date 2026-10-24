@@ -176,8 +176,11 @@ func (e *Exporter) ExportAgentPlugin(
 			MCPServers map[string]remoteMCPServer `json:"mcpServers"`
 		}{
 			Schema: "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+			// Use the validated package identity: consumers may merge MCP
+			// servers from several installed plugins into one namespace.
+			// A fixed "mender" key silently hides another Profile delivery.
 			MCPServers: map[string]remoteMCPServer{
-				"mender": {Type: "streamable-http", URL: pkg.MCP.URL},
+				pkg.Name: {Type: "streamable-http", URL: pkg.MCP.URL},
 			},
 		}
 		rawMCP, err := json.MarshalIndent(config, "", "  ")

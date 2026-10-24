@@ -69,8 +69,8 @@ func TestAgentPluginExporterSupportsExactSkillsAndRemoteHTTPSMCP(t *testing.T) {
 				}
 				if mcp.Schema != "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json" ||
 					len(mcp.Servers) != 1 ||
-					mcp.Servers["mender"].Type != "streamable-http" ||
-					mcp.Servers["mender"].URL != "https://mcp.example.com/mcp" {
+					mcp.Servers["mender.work"].Type != "streamable-http" ||
+					mcp.Servers["mender.work"].URL != "https://mcp.example.com/mcp" {
 					t.Fatalf("unexpected MCP schema: %+v", mcp)
 				}
 				if strings.Contains(string(rawMCP), "Authorization") ||
@@ -86,6 +86,42 @@ func TestAgentPluginExporterSupportsExactSkillsAndRemoteHTTPSMCP(t *testing.T) {
 			}
 			if !tc.hasSkill && !errors.Is(skillsErr, os.ErrNotExist) {
 				t.Fatalf("MCP-only package included skills: %v", skillsErr)
+			}
+		})
+	}
+}
+
+// Consumers can flatten MCP server IDs across installed plugins. Every
+// exported package therefore needs its own stable identity, not a fixed
+// "mender" entry that masks another package's Profile endpoint.
+func TestAgentPluginExporterUsesPackageNameAsMCPServerID(t *testing.T) {
+	t.Parallel()
+	exporter := New(fixtureMaterializer{})
+	for _, tc := range []struct {
+		name, endpoint string
+	}{
+		{"qa.profile", "https://alpha.example.com/mcp"},
+		{"qa-other", "https://beta.example.com/mcp"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			destination := filepath.Join(t.TempDir(), "plugin")
+			err := exporter.ExportAgentPlugin(context.Background(), skillapplication.AgentPluginPackage{
+				Name: tc.name, Destination: destination,
+				MCP: &skillapplication.AgentPluginMCP{URL: tc.endpoint},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			var result struct {
+				Servers map[string]remoteMCPServer `json:"mcpServers"`
+			}
+			if err := json.Unmarshal(readRootFile(t, destination, "mcp.json"), &result); err != nil {
+				t.Fatal(err)
+			}
+			if len(result.Servers) != 1 ||
+				result.Servers[tc.name].Type != "streamable-http" ||
+				result.Servers[tc.name].URL != tc.endpoint {
+				t.Fatalf("plugin %s MCP servers = %+v", tc.name, result.Servers)
 			}
 		})
 	}
