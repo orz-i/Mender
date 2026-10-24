@@ -78,8 +78,9 @@ import {
   genericConfigValidationError,
 } from "./generic-provider-config-schema";
 
-import { formatDateTime, formatNumber, t, tCount } from "../../i18n/i18n";
+import { formatDateTime, formatNumber, t, tCount, useLocale } from "../../i18n/i18n";
 import { toolSourceLabel } from "../tools/tool-source-label";
+import { toolServiceDescription } from "./tool-service-description";
 
 function providerPluginSelectionKey(plugin: ProviderPlugin) {
   return plugin.installationId
@@ -202,6 +203,7 @@ function formForProviderPlugin(
 
 export function ProvidersPage({ client }: { client: MenderClient }) {
   const navigate = useNavigate();
+  const locale = useLocale();
   const [searchParams, setSearchParams] = useSearchParams();
   const createHandledRef = useRef(false);
   const [createRequest] = useState(() => {
@@ -365,10 +367,11 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
     const needle = inventoryQuery.trim().toLocaleLowerCase();
     return providers.filter(provider =>
       !needle || [toolSourceLabel(provider), provider.description,
+        locale === "zh-CN" ? toolServiceDescription(provider) : provider.description,
         provider.displayName, provider.namespace, provider.toolSourceName ?? ""]
         .some(value => value.toLocaleLowerCase().includes(needle))
     );
-  }, [inventoryQuery, providers]);
+  }, [inventoryQuery, locale, providers]);
   const providerPagination = usePagination(visibleProviders);
 
 
@@ -694,7 +697,7 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
                   ? "/sandboxes/"+encodeURIComponent(provider.toolSourceId)
                   : null;
               const hasTools=provider.toolCount>0;
-              const description=provider.description.trim() ||
+              const description=toolServiceDescription(provider).trim() ||
                 (!hasTools ? t("No tools have been discovered for this service yet.") : "");
               return <Card key={provider.providerId} size="sm" className="h-full min-w-0 border-border/60 transition-[border-color,box-shadow] hover:border-primary/35 hover:shadow-sm">
                 <CardHeader className="min-w-0">

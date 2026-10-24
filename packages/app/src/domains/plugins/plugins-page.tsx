@@ -27,7 +27,7 @@ import {
   CardTitle,
 } from "@mender/ui/components/card";
 
-import { formatDateTime, formatNumber, t } from "../../i18n/i18n";
+import { formatDateTime, formatNumber, t, useLocale } from "../../i18n/i18n";
 import { errorMessage } from "../../shared/errors";
 import { dockerStatusText } from "../../shared/docker-status";
 import { IconButton } from "../../shared/icon-button";
@@ -40,6 +40,7 @@ import {
   EmptyPanelState,
   SearchField,
 } from "../../shared/workbench";
+import { marketplaceDescription } from "./marketplace-description";
 import {
   type MarketplaceInstaller,
   type MarketplacePlugin,
@@ -66,6 +67,7 @@ export function PluginsPage({
   const { plugins, loaded, hasSnapshot, error, setError, refresh } =
     useMarketplacePlugins(client);
   const [searchParams] = useSearchParams();
+  const locale = useLocale();
   const [view,setView] = useState<"discover"|"installed">(
     ()=>searchParams.get("view")==="installed"?"installed":"discover"
   );
@@ -113,7 +115,9 @@ export function PluginsPage({
       const matchesQuery =
         normalized === "" ||
         plugin.displayName.toLocaleLowerCase().includes(normalized) ||
-        plugin.description.toLocaleLowerCase().includes(normalized);
+        plugin.description.toLocaleLowerCase().includes(normalized) ||
+        (locale === "zh-CN" &&
+          marketplaceDescription(plugin).toLocaleLowerCase().includes(normalized));
       const matchesKind =
         kindFilter === "all" || plugin.kind === kindFilter;
       const matchesSource =
@@ -122,7 +126,7 @@ export function PluginsPage({
         statusFilter === "all" || plugin.status === statusFilter;
       return matchesQuery && matchesKind && matchesSource && matchesStatus;
     });
-  }, [kindFilter, scopedPlugins, query, sourceFilter, statusFilter]);
+  }, [kindFilter, locale, scopedPlugins, query, sourceFilter, statusFilter]);
 
   const cursor = cursorHistory.at(-1) ?? null;
   const page = useMemo(
@@ -291,6 +295,7 @@ export function PluginsPage({
 }
 
 export function PluginDetailPage({ client }: { client: MenderClient }) {
+  useLocale();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const backPath=searchParams.get("view")==="installed"?"/plugins?view=installed":"/plugins";
@@ -470,7 +475,7 @@ export function PluginDetailPage({ client }: { client: MenderClient }) {
           {section === "overview" ? (
           <DataPanel
             title={plugin.displayName}
-            description={pluginDescription(plugin) || t("No plugin description.")}
+            description={marketplaceDescription(plugin) || t("No plugin description.")}
           >
             <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-4">
               <DetailField
@@ -634,7 +639,7 @@ function PluginCard({ plugin,view }: { plugin: MarketplacePlugin; view:"discover
             </Badge>
           </div>
           <CardDescription className="min-h-10 line-clamp-2">
-            {pluginDescription(plugin) || t("No plugin description.")}
+            {marketplaceDescription(plugin) || t("No plugin description.")}
           </CardDescription>
         </CardHeader>
       </Card>
@@ -782,8 +787,4 @@ function pluginStatusLabel(plugin: MarketplacePlugin) {
 
 function pluginVersionLabel(plugin: MarketplacePlugin) {
   return plugin.version === "Reviewed preset" ? t("Reviewed preset") : plugin.version;
-}
-
-function pluginDescription(plugin: MarketplacePlugin) {
-  return plugin.description;
 }

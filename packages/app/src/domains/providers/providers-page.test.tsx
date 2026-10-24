@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { MenderClient, Provider, ProviderPlugin } from "@mender/sdk";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -127,6 +127,55 @@ describe("Tool service low-noise empty and active states", () => {
     expect(card).toBeTruthy();
     expect(within(card!).getByText("Document lookup service")).toBeTruthy();
     expect(within(card!).queryByText("No tools have been discovered for this service yet.")).toBeNull();
+  });
+});
+
+describe("Owned Tool service localized summary", () => {
+  it("shows accurate host-generated text and searches both Chinese and original English", async () => {
+    const raw = "Managed Agent Delegation tools for Grok";
+    const owned: Provider = {
+      ...sampleProvider,
+      providerId: "prov_agent_grok",
+      displayName: "Grok service",
+      description: raw,
+      toolCount: 4,
+      pluginId: "io.mender.provider.agent-delegation",
+      toolSourceKind: "agent",
+      toolSourceId: "agent_grok",
+      toolSourceName: "Grok",
+    };
+    mount([owned], []);
+    const card = (await screen.findByRole("link", { name: "Grok" }))
+      .closest<HTMLElement>('[data-slot="card"]');
+    expect(card).toBeTruthy();
+    expect(within(card!).getByText(raw)).toBeTruthy();
+
+    act(() => setLocale("zh-CN"));
+    expect(within(card!).getByText("Agent「Grok」的受管委派工具")).toBeTruthy();
+    const search = screen.getByRole("textbox", { name: "搜索服务" });
+    fireEvent.change(search, { target: { value: "受管委派工具" } });
+    expect(screen.getByRole("link", { name: "Grok" })).toBeTruthy();
+    fireEvent.change(search, { target: { value: raw } });
+    expect(screen.getByRole("link", { name: "Grok" })).toBeTruthy();
+
+    act(() => setLocale("en"));
+    expect(within(card!).getByText(raw)).toBeTruthy();
+    expect(owned.description).toBe(raw);
+  });
+
+  it("keeps arbitrary Provider descriptions unchanged, even with matching English templates", async () => {
+    const original = "Managed Agent Delegation tools for Grok";
+    const external: Provider = {
+      ...sampleProvider, providerId: "prov_external", description: original,
+      toolSourceName: "Grok", toolSourceKind: "provider",
+    };
+    setLocale("zh-CN");
+    mount([external]);
+    const card = (await screen.findByRole("link", { name: "Grok" }))
+      .closest<HTMLElement>('[data-slot="card"]');
+    expect(card).toBeTruthy();
+    expect(within(card!).getByText(original)).toBeTruthy();
+    expect(within(card!).queryByText("Agent「Grok」的受管委派工具")).toBeNull();
   });
 });
 
