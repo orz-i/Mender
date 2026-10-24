@@ -69,6 +69,31 @@ function toolLabel(toolsById: Record<string, ToolSummary>, toolId: string) {
   return tool?.title || tool?.name || t("Unknown Tool");
 }
 
+function referenceHint(reference: string) {
+  const tail = reference.split(":").at(-1) ?? reference;
+  return tail.length > 10 ? "…" + tail.slice(-8) : tail || "—";
+}
+
+function callerLabel(record: AuditRecord, profiles: Profile[]) {
+  if (record.principalKind === "service" && record.principalRef.startsWith("profile:")) {
+    const profileId = record.principalRef.slice("profile:".length);
+    const profile = profiles.find((item) => item.profileId === profileId);
+    return t("Profile") + " · " + (profile?.displayName || profile?.slug || referenceHint(profileId));
+  }
+  const kind = record.principalKind === "local_user" ? t("Local user") :
+    record.principalKind === "service" ? t("Service") : record.principalKind;
+  return kind + (record.principalRef ? " · " + referenceHint(record.principalRef) : "");
+}
+
+function invocationStatusLabel(status: string) {
+  switch (status.toLowerCase()) {
+    case "completed": return t("Completed");
+    case "failed": return t("Failed");
+    case "denied": return t("Denied");
+    default: return status;
+  }
+}
+
 function PanelLink({ to, label, destination = label }: { to: string; label: string; destination?: string }) {
   return (
     <Link
@@ -230,7 +255,7 @@ export function OverviewPage({ client }: { client: MenderClient }) {
                 <TableHeader>
                   <TableRow>
                     <TableHead>{t("Tool")}</TableHead>
-                    <TableHead>{t("Principal")}</TableHead>
+                    <TableHead>{t("Caller")}</TableHead>
                     <TableHead>{t("Status")}</TableHead>
                     <TableHead className="text-right">{t("Finished")}</TableHead>
                   </TableRow>
@@ -242,9 +267,11 @@ export function OverviewPage({ client }: { client: MenderClient }) {
                         {toolLabel(data.toolsById, record.toolId)}
                       </TableCell>
                       <TableCell className="max-w-[220px] truncate" title={record.principalKind + ":" + record.principalRef}>
-                        {record.principalKind + ":" + record.principalRef}
+                        {callerLabel(record, data.profiles)}
                       </TableCell>
-                      <TableCell><StatusBadge status={record.status} /></TableCell>
+                      <TableCell>
+                        <StatusBadge status={record.status}>{invocationStatusLabel(record.status)}</StatusBadge>
+                      </TableCell>
                       <TableCell className="text-right text-xs text-muted-foreground">
                         {formatDateTime(record.finishedAt)}
                       </TableCell>

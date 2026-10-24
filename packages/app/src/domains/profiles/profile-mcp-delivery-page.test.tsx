@@ -64,11 +64,29 @@ it("shows only its Profile endpoints and never offers cross-Profile selection", 
 it("only exposes stop/restart actions for instances in that Profile", async () => {
   const { restartMCPServer, stopMCPServer } = mount([alphaServer, betaServer]);
   expect(await screen.findByText(alphaServer.endpoint)).toBeTruthy();
-  expect(screen.getAllByRole("button", { name: "Restart" })).toHaveLength(1);
-  fireEvent.click(screen.getByRole("button", { name: "Restart" }));
+  expect(screen.getAllByRole("button", { name: "Copy endpoint" })).toHaveLength(1);
+  expect(screen.getAllByRole("button", { name: /More server actions:/ })).toHaveLength(1);
+  fireEvent.click(screen.getByRole("button", { name: /More server actions:/ }));
+  const menu = within(await screen.findByRole("group", { name: "Server actions" }));
+  expect(menu.getByRole("button", { name: "Copy config" })).toBeTruthy();
+  fireEvent.click(menu.getByRole("button", { name: "Restart" }));
   await waitFor(() => expect(restartMCPServer).toHaveBeenCalledWith("srv_alpha"));
   expect(restartMCPServer).not.toHaveBeenCalledWith("srv_beta");
-  fireEvent.click(screen.getByRole("button", { name: "Stop" }));
+
+  fireEvent.click(screen.getByRole("button", { name: /More server actions:/ }));
+  fireEvent.click(within(await screen.findByRole("group", { name: "Server actions" }))
+    .getByRole("button", { name: "Stop server" }));
+  const confirmation = within(await screen.findByRole("dialog", { name: "Stop MCP server?" }));
+  expect(confirmation.getByText("http://127.0.0.1:8765/mcp")).toBeTruthy();
+  expect(stopMCPServer).not.toHaveBeenCalled();
+  fireEvent.click(confirmation.getByRole("button", { name: "Cancel" }));
+  expect(stopMCPServer).not.toHaveBeenCalled();
+
+  fireEvent.click(screen.getByRole("button", { name: /More server actions:/ }));
+  fireEvent.click(within(await screen.findByRole("group", { name: "Server actions" }))
+    .getByRole("button", { name: "Stop server" }));
+  fireEvent.click(within(await screen.findByRole("dialog", { name: "Stop MCP server?" }))
+    .getByRole("button", { name: "Stop server" }));
   await waitFor(() => expect(stopMCPServer).toHaveBeenCalledWith("srv_restarted"));
   expect(stopMCPServer).not.toHaveBeenCalledWith("srv_beta");
 });

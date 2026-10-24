@@ -2213,13 +2213,21 @@ describe("management pages", () => {
     expect(await screen.findByText(started.endpoint)).toBeTruthy();
     expect(screen.getByText("OpenAI Work")).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "Restart" }));
+    fireEvent.click(screen.getByRole("button", { name: /More server actions:/ }));
+    fireEvent.click(within(await screen.findByRole("group", { name: "Server actions" }))
+      .getByRole("button", { name: "Restart" }));
     await waitFor(() => {
       expect(restartMCPServer).toHaveBeenCalledWith("srv_1");
     });
     expect(await screen.findByText(restarted.endpoint)).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "Stop" }));
+    fireEvent.click(screen.getByRole("button", { name: /More server actions:/ }));
+    fireEvent.click(within(await screen.findByRole("group", { name: "Server actions" }))
+      .getByRole("button", { name: "Stop server" }));
+    const stopDialog = within(await screen.findByRole("dialog", { name: "Stop MCP server?" }));
+    expect(stopMCPServer).not.toHaveBeenCalled();
+    expect(stopDialog.getByText(restarted.endpoint)).toBeTruthy();
+    fireEvent.click(stopDialog.getByRole("button", { name: "Stop server" }));
     await waitFor(() => {
       expect(stopMCPServer).toHaveBeenCalledWith("srv_2");
     });

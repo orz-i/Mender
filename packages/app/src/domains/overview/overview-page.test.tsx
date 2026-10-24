@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import type { MenderClient } from "@mender/sdk";
+import type { AuditRecord, MenderClient } from "@mender/sdk";
 import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -45,5 +45,87 @@ describe("OverviewPage load states", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Providers / Profiles" }));
     expect(document.querySelector('[data-slot="metric-strip"]')).not.toBeNull();
+  });
+});
+
+const testProfile = {
+  profileId: "prof_00000000000000000000000000000042",
+  slug: "work",
+  displayName: "Work Tools",
+  mode: "hybrid" as const,
+  tools: [],
+};
+const overviewAuditRecord: AuditRecord = {
+  invocationId: "inv_overview_1",
+  toolId: "tool_read",
+  providerId: "prov_test",
+  principalKind: "service",
+  principalRef: "profile:" + testProfile.profileId,
+  startedAt: "2026-10-24T10:00:00Z",
+  finishedAt: "2026-10-24T10:00:02Z",
+  policyKind: "allow",
+  policyReason: "",
+  approval: "not_required",
+  status: "completed",
+  resultKind: "complete",
+  errorClass: "",
+  errorSummary: "",
+  origin: "mcp",
+  scopeKind: "profile",
+  scopeReference: testProfile.profileId,
+  outcomeKind: "complete",
+  rejectionCode: "",
+  failureSource: "",
+  failureCode: "",
+};
+
+function mountOverviewWithRecords(records: AuditRecord[]) {
+  const client = {
+    getSystemStatus: vi.fn().mockResolvedValue({ ready: true }),
+    listProviders: vi.fn().mockResolvedValue({ providers: [{ providerId: "prov_test" }] }),
+    listProfiles: vi.fn().mockResolvedValue({ profiles: [testProfile] }),
+    listSkills: vi.fn().mockResolvedValue({ installations: [] }),
+    listAudit: vi.fn().mockResolvedValue({ records }),
+    browseTools: vi.fn().mockResolvedValue({ tools: [{
+      toolId: "tool_read", title: "Read Agent task result", name: "read_task_result",
+    }] }),
+  } as unknown as MenderClient;
+  render(<MemoryRouter><OverviewPage client={client} /></MemoryRouter>);
+  return client;
+}
+
+describe("Overview readable invocation preview", () => {
+  it("shows known Profile names and translated outcomes without losing exact audit identity", async () => {
+    setLocale("zh-CN");
+    mountOverviewWithRecords([overviewAuditRecord]);
+    expect(await screen.findByText("配置档 · Work Tools")).toBeTruthy();
+    expect(screen.getByRole("columnheader", { name: "调用方" })).toBeTruthy();
+    const caller = screen.getByText("配置档 · Work Tools");
+    expect(caller.getAttribute("title")).toBe("service:profile:" + testProfile.profileId);
+    expect(screen.getByText("已完成")).toBeTruthy();
+    expect(screen.queryByText("completed")).toBeNull();
+    expect(screen.queryByText("service:profile:" + testProfile.profileId)).toBeNull();
+  });
+
+  it("does not guess unknown identities and keeps distinct short hints and original values", async () => {
+    setLocale("en");
+    mountOverviewWithRecords([
+      { ...overviewAuditRecord, invocationId: "old", toolId: "unknown_a",
+        principalRef: "profile:prof_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", status: "failed" },
+      { ...overviewAuditRecord, invocationId: "local", toolId: "unknown_b",
+        principalKind: "local_user", principalRef: "os:501", status: "denied" },
+      { ...overviewAuditRecord, invocationId: "service", toolId: "unknown_c",
+        principalKind: "service", principalRef: "service:external-connection-1", status: "queued" },
+    ]);
+    const unknown = await screen.findByText("Profile · …aaaaaaaa");
+    expect(unknown.getAttribute("title")).toBe("service:profile:prof_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+    const local = screen.getByText("Local user · 501");
+    expect(local.getAttribute("title")).toBe("local_user:os:501");
+    const external = screen.getByText(/^Service · …/);
+    expect(external.getAttribute("title")).toBe("service:service:external-connection-1");
+    expect(screen.getByText("Failed")).toBeTruthy();
+    expect(screen.getByText("Denied")).toBeTruthy();
+    expect(screen.getByText("queued")).toBeTruthy();
+    expect(screen.getByRole("columnheader", { name: "Caller" })).toBeTruthy();
   });
 });

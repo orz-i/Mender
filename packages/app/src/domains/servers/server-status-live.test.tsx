@@ -145,7 +145,13 @@ it("does not resurrect a stopped Tunnel server from an in-flight stale status re
     await waitFor(() => expect(polling.installed()).toBe(true));
 
     await polling.tick();
-    fireEvent.click(screen.getByRole("button", { name: "Stop" }));
+    fireEvent.click(screen.getByRole("button", { name: /More server actions:/ }));
+    fireEvent.click(within(await screen.findByRole("group", { name: "Server actions" }))
+      .getByRole("button", { name: "Stop server" }));
+    const confirmation = within(await screen.findByRole("dialog", { name: "Stop MCP server?" }));
+    expect(confirmation.getByText("Stopping this server also stops its linked Tunnel.")).toBeTruthy();
+    expect(stopMCPServer).not.toHaveBeenCalled();
+    fireEvent.click(confirmation.getByRole("button", { name: "Stop server" }));
     await waitFor(() => { expect(stopMCPServer).toHaveBeenCalledWith(fixture.serverId); });
     expect(await screen.findByText("No running MCP servers")).toBeTruthy();
 
@@ -210,6 +216,52 @@ it("displays the real rotated endpoint without asking the user to search for a f
   }));
   expect(await screen.findByText(rotated.endpoint)).toBeTruthy();
   expect(screen.getByText(current.endpoint)).toBeTruthy();
+});
+
+it("keeps the single-server view focused and retains all commands in explicit actions", async () => {
+  const copyText = vi.fn().mockResolvedValue(undefined);
+  const stopMCPServer = vi.fn();
+  const local = { ...fixture, tunnelId: undefined, tunnelStatus: undefined };
+  const client = {
+    listProfiles: vi.fn().mockResolvedValue({ profiles: [{
+      profileId: "prof_default", slug: "default", displayName: "Default", mode: "hybrid", tools: [],
+    }] }),
+    listMCPServers: vi.fn().mockResolvedValue({ servers: [local] }),
+    restartMCPServer: vi.fn(), stopMCPServer,
+  } as unknown as MenderClient;
+  render(<TooltipProvider><ServersPage client={client} copyText={copyText} /></TooltipProvider>);
+  const row = await screen.findByRole("row", { name: /default/ });
+  expect(within(row).getByRole("button", { name: "Copy endpoint" })).toBeTruthy();
+  expect(screen.queryByRole("textbox", { name: "Search servers" })).toBeNull();
+  expect(screen.queryByRole("columnheader", { name: "Started" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Stop server" })).toBeNull();
+
+  fireEvent.click(within(row).getByRole("button", { name: "Copy endpoint" }));
+  await waitFor(() => expect(copyText).toHaveBeenCalledWith(fixture.endpoint));
+  expect(within(row).getByRole("button", { name: "Copied" })).toBeTruthy();
+
+  fireEvent.click(within(row).getByRole("button", { name: /More server actions:/ }));
+  const actions = within(await screen.findByRole("group", { name: "Server actions" }));
+  expect(screen.getByText(/Started:/)).toBeTruthy();
+  fireEvent.click(actions.getByRole("button", { name: "Copy config" }));
+  await waitFor(() => expect(copyText).toHaveBeenCalledWith(
+    expect.stringContaining(fixture.endpoint),
+  ));
+  expect(stopMCPServer).not.toHaveBeenCalled();
+});
+
+it("shows search when the scoped inventory grows beyond five servers", async () => {
+  showServer(vi.fn().mockResolvedValue({ servers: Array.from({ length: 6 }, (_, index) => ({
+    ...fixture,
+    serverId: `srv_${index}`, profile: "default",
+    endpoint: `http://127.0.0.1:${8765 + index}/mcp`,
+  })) }));
+  expect(await screen.findByRole("textbox", { name: "Search servers" })).toBeTruthy();
+  fireEvent.change(screen.getByRole("textbox", { name: "Search servers" }), {
+    target: { value: "8770" },
+  });
+  expect(await screen.findByText("http://127.0.0.1:8770/mcp")).toBeTruthy();
+  expect(screen.queryByText("http://127.0.0.1:8765/mcp")).toBeNull();
 });
 
 it("does not poll local-only MCP servers or install background network checks", async () => {

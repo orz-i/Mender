@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   CheckIcon,
   CopyIcon,
+  EllipsisIcon,
   RefreshCwIcon,
   SquareIcon,
 } from "lucide-react";
@@ -20,6 +21,7 @@ import {
   DialogTitle,
 } from "@mender/ui/components/dialog";
 import { Input } from "@mender/ui/components/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@mender/ui/components/popover";
 import {
   Table,
   TableBody,
@@ -31,7 +33,6 @@ import {
 
 import { errorMessage } from "../../shared/errors";
 import { FormHeading } from "../../shared/form-info";
-import { IconButton } from "../../shared/icon-button";
 import { EmptyState, ErrorNotice } from "../../shared/page";
 import { PageToolbar, ResultPanel } from "../../shared/page-toolbar";
 import { usePagination } from "../../shared/pagination";
@@ -81,6 +82,8 @@ export function ServersPage({
   const [busy, setBusy] = useState("");
   const [inventoryQuery, setInventoryQuery] = useState("");
   const [copied, setCopied] = useState("");
+  const [openActionsServerId, setOpenActionsServerId] = useState<string | null>(null);
+  const [stopTarget, setStopTarget] = useState<MCPServerInstance | null>(null);
   // Fences a background inventory read that began before a management
   // operation. An old response must never resurrect a stopped server.
   const serverOperationEpoch = useRef(0);
@@ -205,6 +208,9 @@ export function ServersPage({
     );
   }, [servers, inventoryQuery, profileSlug]);
   const serverPagination = usePagination(visibleServers);
+  const scopedServerCount = servers.filter((server) =>
+    profileSlug === undefined || server.profile === profileSlug).length;
+  const showSearch = scopedServerCount > 5 || inventoryQuery.trim() !== "";
 
   async function restartServer(server: MCPServerInstance) {
     serverOperationEpoch.current += 1;
@@ -264,11 +270,11 @@ export function ServersPage({
   return (
     <>
       <PageToolbar
-        filters={
+        filters={showSearch ? (
           <div className="w-full min-w-0 sm:w-56 sm:shrink-0">
             <SearchField label="Search servers" placeholder="Search servers…" value={inventoryQuery} onChange={setInventoryQuery} />
           </div>
-        }
+        ) : undefined}
         actions={
           <>
             <Button size="sm" variant="outline" disabled={busy !== ""} onClick={() => void refresh()}>{t("Refresh")}</Button>
@@ -291,7 +297,6 @@ export function ServersPage({
                   <TableHead>{t("Status")}</TableHead>
                   <TableHead>{t("Tunnel")}</TableHead>
                   <TableHead>{t("Endpoint")}</TableHead>
-                  <TableHead>{t("Started")}</TableHead>
                   <TableHead className="text-right">{t("Actions")}</TableHead>
                 </TableRow>
               </TableHeader>
@@ -329,69 +334,61 @@ export function ServersPage({
                     <TableCell className="max-w-[360px] truncate font-mono text-xs">
                       {server.endpoint}
                     </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {formatTimestamp(server.startedAt)}
-                    </TableCell>
                     <TableCell className="text-right">
-                      <div className="flex justify-end gap-1">
-                        <IconButton
-                          variant="ghost"
-                          label={t(
-                            copied === server.serverId + ":endpoint"
-                              ? "Copied"
-                              : "Copy endpoint",
-                          )}
-                          onClick={() =>
-                            void copy(
-                              server.endpoint,
-                              server.serverId + ":endpoint",
-                            )
-                          }
-                        >
-                          {copied === server.serverId + ":endpoint" ? (
-                            <CheckIcon />
-                          ) : (
-                            <CopyIcon />
-                          )}
-                        </IconButton>
-                        <IconButton
-                          variant="ghost"
-                          label={t(
-                            copied === server.serverId + ":config"
-                              ? "Copied"
-                              : "Copy config",
-                          )}
-                          onClick={() =>
-                            void copy(
-                              clientConfig(server),
-                              server.serverId + ":config",
-                            )
-                          }
-                        >
-                          {copied === server.serverId + ":config" ? (
-                            <CheckIcon />
-                          ) : (
-                            <CopyIcon />
-                          )}
-                        </IconButton>
-                        <IconButton
+                      <div className="flex items-center justify-end gap-1.5">
+                        <Button
+                          type="button"
+                          size="sm"
                           variant="outline"
-                          label={t(
-                            busy === server.serverId ? "Working…" : "Restart",
-                          )}
-                          disabled={busy !== ""}
-                          onClick={() => void restartServer(server)}
+                          aria-live="polite"
+                          onClick={() => void copy(server.endpoint, server.serverId + ":endpoint")}
                         >
-                          <RefreshCwIcon />
-                        </IconButton>
-                        <IconButton
-                          variant="destructive"
-                          label={t("Stop")}
-                          disabled={busy !== ""}
-                          onClick={() => void stopServer(server)}
+                          {copied === server.serverId + ":endpoint"
+                            ? <CheckIcon data-icon="inline-start" />
+                            : <CopyIcon data-icon="inline-start" />}
+                          {t(copied === server.serverId + ":endpoint" ? "Copied" : "Copy endpoint")}
+                        </Button>
+                        <Popover
+                          open={openActionsServerId === server.serverId}
+                          onOpenChange={(open) => setOpenActionsServerId(open ? server.serverId : null)}
                         >
-                          <SquareIcon />
-                        </IconButton>
+                          <PopoverTrigger render={
+                            <Button type="button" variant="ghost" size="sm"
+                              aria-label={t("More server actions") + ": " + server.endpoint} disabled={busy !== ""} />
+                          }>
+                            <EllipsisIcon data-icon="inline-start" aria-hidden="true" />
+                            {t("More")}
+                          </PopoverTrigger>
+                          <PopoverContent align="end" className="w-60 p-2">
+                            <div role="group" aria-label={t("Server actions")} className="grid gap-1">
+                              <Button type="button" size="sm" variant="ghost"
+                                className="justify-start"
+                                onClick={() => {
+                                  setOpenActionsServerId(null);
+                                  void copy(clientConfig(server), server.serverId + ":config");
+                                }}>
+                                <CopyIcon data-icon="inline-start" />
+                                {t(copied === server.serverId + ":config" ? "Copied" : "Copy config")}
+                              </Button>
+                              <Button type="button" size="sm" variant="ghost"
+                                className="justify-start" disabled={busy !== ""}
+                                onClick={() => { setOpenActionsServerId(null); void restartServer(server); }}>
+                                <RefreshCwIcon data-icon="inline-start" />
+                                {t("Restart")}
+                              </Button>
+                              <Button type="button" size="sm" variant="ghost"
+                                className="justify-start text-destructive hover:text-destructive"
+                                disabled={busy !== ""}
+                                onClick={() => { setOpenActionsServerId(null); setStopTarget(server); }}>
+                                <SquareIcon data-icon="inline-start" />
+                                {t("Stop server")}
+                              </Button>
+                            </div>
+                            <div className="mt-2 border-t border-border/70 px-2 pt-2 text-xs text-muted-foreground">
+                              {t("Started")}: {formatTimestamp(server.startedAt)}
+                            </div>
+                          </PopoverContent>
+                        </Popover>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -417,6 +414,43 @@ export function ServersPage({
         label="Servers"
         pagination={serverPagination}
       />
+
+      <Dialog open={stopTarget !== null}
+        onOpenChange={(open) => { if (!open && busy === "") setStopTarget(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t("Stop MCP server?")}</DialogTitle>
+            <DialogDescription>
+              {t("Clients using this endpoint will disconnect. You can start the server again later.")}
+            </DialogDescription>
+          </DialogHeader>
+          {stopTarget ? (
+            <div className="min-w-0 rounded-xl border border-border bg-muted/40 p-3">
+              <p className="mb-1 text-xs text-muted-foreground">{t("Endpoint")}</p>
+              <code className="block break-all text-xs">{stopTarget.endpoint}</code>
+              {stopTarget.tunnelId ? (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  {t("Stopping this server also stops its linked Tunnel.")}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+          <DialogFooter>
+            <DialogClose render={<Button type="button" variant="outline" />}>
+              {t("Cancel")}
+            </DialogClose>
+            <Button type="button" variant="destructive" disabled={busy !== ""}
+              onClick={() => {
+                if (!stopTarget) return;
+                const server = stopTarget;
+                setStopTarget(null);
+                void stopServer(server);
+              }}>
+              {t("Stop server")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={startOpen}
