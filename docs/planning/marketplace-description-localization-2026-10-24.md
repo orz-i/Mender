@@ -28,3 +28,36 @@
 - Agent、Sandbox Workspace、SSH Jobs 模板：中文可读，原始名称不变；自定义描述与第三方来源不被重写。
 - 卡片与详情一致，中文/英文搜索均可找到目标；业务操作按钮和权限不变。
 - Vitest 相关和全量、ESLint、TypeScript、i18n、Web build；尽可能桌面窗口验收；若窗口未恢复如实记录。
+
+## 实施与验收记录（2026-10-24）
+
+### 分段提交
+
+- `7e99cb2`：文档先行，定义来源与原文精确匹配的本地化边界。
+- `c4ce5a9`：插件市场、已审查集成与三类受管工具来源展示翻译，以及原文/译文搜索、页面切换和专用回归测试。
+
+### 实机验证——原生 Wails DEV
+
+运行实例：Mac mini 的 `mender-desktop.dev.app`，真实 Wails 桌面服务、`127.0.0.1:9245` Vite HMR，中文界面，真实工具来源和插件目录。原生窗口约 1239×851；原生窄屏验收到应用允许的 960×744 后已恢复 1239×851 / (340,85)。只进行访问与语言切换，没有创建、启动、同步、停止、删除任何资源。
+
+第三轮开始时 macOS 的 AX 曾暂时报告零窗口，故最初几次整个桌面的 `screencapture` 拍到了无关窗口，**已否决，不作为 UI 证据**。后来窗口恢复，使用精确 Wails Window ID 的 `screencapture -x -l` 留下可辨认、无无关应用遮挡的截图，均保存在机器的 `/tmp/mender-ux-20261024-r3/`，未提交仓库。
+
+| 步骤 | 实机行为与结果 | 已核对截图 |
+| --- | --- | --- |
+| 1. 插件市场（中文） | 直接查看内置 Agent / Docker / MCP / Model Tools / OpenAPI / SSH / Tunnel 的中文描述；AnySearch 受审查集成也显示中文描述；状态和入口不变。 | `11-marketplace-window.png` |
+| 2. 插件详情 | MCP 卡片进入详情后保持相同中文描述；点击语言切换为 English，完整恢复 `Model Context Protocol provider`，切回中文恢复译文。没有调用后端配置变更。 | `12-mcp-detail-window.png`；语言切换经 AX DOM 明确验证 |
+| 3. 工具目录 | Agent「Antigravity」「OpenCode」受管委派、沙盒「Rocky」工作区、SSH 持久任务等描述均为中文，0 工具来源仍提示未发现工具。 | `10-tools-window.png` |
+| 4. 960px 桌面窄窗口 | 插件卡片排列、中文长句折行和菜单抽屉未出现明显裁切、重叠或横向溢出。 | `13-marketplace-narrow-960.png` |
+
+### 自动回归
+
+- Vitest **70 个测试文件、460 项通过**；新增对精确受控来源、13 条宿主/审查文案、三类受管来源、伪装来源、原文变更回退、中文/英文页面切换及双语搜索的验证。
+- `pnpm i18n:check`：**1593/1593** 中文覆盖；`pnpm lint` / `pnpm --filter @mender/app typecheck` / `pnpm --filter @mender/web build` / `git diff --check` 均通过。
+- 保留既有测试中的 Agent Router 日志警告、Audit fixture 重复 key 警告，Web build 大 chunk 警告；本轮无测试失败。
+
+### 不变量与未覆盖
+
+- 没有修改原有后端插件描述、数据库、服务 API、Catalog/Provider 状态、权限、Profile、Tunnel、Agent Task 生命周期。
+- 插件安装包提供的英文及用户自定义说明保留原文，不擅自翻译或加不可信的语言标记。精确宿主原文变动后显示原文，不展示已失效的中文解释。
+- 960px 只表示原生 Wails 桌面最窄已测视图，不代替 390px 的 Web 浏览器或手机验证；完整键盘焦点与读屏兼容性仍需专项覆盖，不能宣称整体达到 WCAG 2.2 AA。
+- 代码已在 Wails DEV HMR 真实数据界面生效；正式发行包需要另行重新构建后使用。
