@@ -180,6 +180,16 @@ Profile 已成为新建 Skill 文件交付的唯一对外产品入口：`/profil
 - **安全边界声明**：用户手工输入的 HTTPS MCP 地址仅经过语法/显式风险验证，尚未进行实时连接、服务身份、工具集合及 ProfileID 所有权证明。生成 `mcp.json` 不会让任意外部 MCP 服务自动受 Mender Profile 治理；不可把 URL 已接受或插件文件已导出写成端到端权限验收。
 - Phase F 待办：真实 Wails 交互/目录选择器、原生 CLI 与 MCP stdio/HTTP 在真实目标的访问权、经过身份验证的远端 HTTPS、被信任 Agent Plugins 客户端加载、已有 Profile 运行时重启/数据迁移、异地 Skill 安装。生产数据、Tunnel、常驻 MCP 进程均未触碰。
 
+## 阶段 F — Agent Plugin 实际消费端：MCP 服务名冲突治理（2026-10-24）
+
+**先复现、再修改。** Mac mini 上 Codex CLI 0.159.0 通过完全独立的 `CODEX_HOME`、临时 HOME 和本地 Marketplace，已实际识别、安装和启用 Mender 导出的 Skills-only、MCP-only 与混合型 Agent Plugins 1.0 包。插件真实安装目录下存在规范的 `plugin.json`、`skills/` 和 `mcp.json`；Codex `mcp list` 可读取其 MCP 描述，但对示例 HTTPS URL 尚未建立身份认证或实际工具连接。
+
+**P1 复现：** 当前 `mcp.json` 对每个包都写死 `mcpServers.mender`。在两个隔离安装的插件中分别使用 `https://scope-a.example.com/mcp`、`https://scope-b.example.com/mcp` 后，Codex `plugin list` 显示二者都已安装和启用，但 `mcp list` 只出现一个 `mender` 服务，另一个 Profile 的交付在消费端不可发现。两个 URL 仅为不同的示例地址，不代表真实连通或授权。
+
+**修复边界：** `mcpServers` 的单一映射键改为**经过既有名称校验的 Agent Plugin 包名**（`pkg.Name`），使不同包在同一消费者中拥有不同的 MCP 服务身份；不能保留静态 `mender` 名。包名来自用户显式选择的导出名称，不从另一个 Profile 自动引入工具，也不新增配置字段、兼容桥、数据库迁移或运行期进程。Agent Plugins 1.0 的 MCP Server 字典键允许此形式；Codex 已以临时测试包验证了点号包名 `qa.profile` 可作为 MCP server 键。
+
+**可复验判据：** 实际消费端用两个不同包名及不同 HTTPS 示例 URL 安装后，`codex mcp list --json` 必须同时列出两条**不同**名称及其对应 URL；现有 skills-only 不应生成 MCP。Go exporter 单测须固定该键和格式；已有包是落盘快照，须用户明确重新导出/重新安装才会使用新名称，**不静默改动用户已部署的客户端配置**。远端 HTTPS auth/Profile Tool boundary 与 Wails 原生目录选择仍是独立的未完成验收。
+
 ## 7. 需避免的过度设计
 
 - 不引入 ACP v2、Agent Loop 或新的 Session/Task 生命周期。
