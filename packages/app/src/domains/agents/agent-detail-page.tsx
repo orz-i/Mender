@@ -296,13 +296,13 @@ export function AgentDetailPage({client,chooseLocalDirectory}:{client:MenderClie
         <TableHead>{t("Task")}</TableHead><TableHead>{t("Status")}</TableHead>
         <TableHead>{t("Created at")}</TableHead><TableHead className="text-right">{t("Actions")}</TableHead>
       </TableRow></TableHeader><TableBody>{pagination.items.map(task=><TableRow key={task.taskId}>
-        <TableCell className="max-w-[300px] min-w-0" title={task.taskId}>
+        <TableCell className="max-w-[300px] min-w-0 py-2" title={task.taskId}>
           <p className="truncate text-sm font-medium">{taskDisplayName(task)}</p>
           {task.title ? <p className="truncate font-mono text-xs text-muted-foreground">#{task.taskId.slice(-8)}</p> : null}
         </TableCell>
-        <TableCell><StatusBadge status={task.status}>{taskStatusText(task.status)}</StatusBadge></TableCell>
-        <TableCell className="text-xs">{formatDateTime(task.createdAt)}</TableCell>
-        <TableCell className="space-x-2 text-right">
+        <TableCell className="py-2"><StatusBadge status={task.status}>{taskStatusText(task.status)}</StatusBadge></TableCell>
+        <TableCell className="py-2 text-xs">{formatDateTime(task.createdAt)}</TableCell>
+        <TableCell className="space-x-2 py-2 text-right">
           <Button size="sm" variant="outline" aria-label={`${t("View")} ${taskDisplayName(task)}`}
             onClick={()=>void openTask(task.taskId)}>{t("View")}</Button>
           {task.status==="queued"||task.status==="running"?
