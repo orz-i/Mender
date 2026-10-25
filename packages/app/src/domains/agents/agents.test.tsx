@@ -328,6 +328,13 @@ describe("Agents focused management",()=>{
     fireEvent.click(await screen.findByRole("button",{name:/^Tasks/}));
     fireEvent.click(await screen.findByRole("button",{name:"View"}));
     const dialog=await screen.findByRole("dialog",{name:"Agent task result"});
+    const technicalDetails=within(dialog).getByText("Execution details").closest("details");
+    expect(technicalDetails).toBeTruthy();
+    expect(technicalDetails!.open).toBe(false);
+    const unknownWarning=within(dialog).getByText(/Unknown does not mean the task succeeded or failed/);
+    expect(Boolean(unknownWarning.compareDocumentPosition(technicalDetails!) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+    fireEvent.click(within(dialog).getByText("Execution details"));
+    expect(technicalDetails!.open).toBe(true);
     expect(within(dialog).getByText("30 minutes")).toBeTruthy();
     expect(within(dialog).getByText("Task execution deadline")).toBeTruthy();
     const native=within(dialog).getByText("Last native Agent progress").nextElementSibling?.textContent;
@@ -358,6 +365,11 @@ describe("Agents focused management",()=>{
     expect(within(dialog).queryByText("unknown")).toBeNull();
     expect(within(dialog).getByText("该任务没有可核对的执行证据。")).toBeTruthy();
     expect(within(dialog).getByText("任务超时后无法确认智能体执行结果")).toBeTruthy();
+    const details=within(dialog).getByText("执行详情").closest("details");
+    expect(details?.open).toBe(false);
+    fireEvent.click(within(dialog).getByText("执行详情"));
+    expect(details?.open).toBe(true);
+    expect(within(dialog).getByText("该任务没有可核对的执行证据。")).toBeTruthy();
     expect(within(dialog).getByRole("button",{name:"刷新状态"})).toBeTruthy();
     expect(dialog.className).toContain("grid-rows-[auto_minmax(0,1fr)_auto]");
     expect(dialog.querySelector('[data-slot="dialog-body"]')?.className).toContain("overflow-y-auto");

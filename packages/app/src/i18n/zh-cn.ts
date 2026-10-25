@@ -1512,6 +1512,7 @@ export const zhCNMessages: Readonly<Record<string, string>> = {
   "Agent outcome unknown after execution evidence loss": "执行证据丢失后无法确认智能体任务结果",
   "Agent execution evidence unavailable": "无法记录智能体执行证据",
   "Execution evidence": "执行证据",
+  "Execution details": "执行详情",
   "Task execution budget": "任务执行预算",
   "Task execution deadline": "任务截止时间",
   "{{count}} minutes": "{{count}} 分钟",

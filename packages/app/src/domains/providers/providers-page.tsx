@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router";
 import {
   ArrowRightIcon,
   EllipsisIcon,
@@ -203,6 +203,7 @@ function formForProviderPlugin(
 
 export function ProvidersPage({ client }: { client: MenderClient }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const locale = useLocale();
   const [searchParams, setSearchParams] = useSearchParams();
   const createHandledRef = useRef(false);
@@ -212,14 +213,21 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
     remainingSearchParams.delete("pluginId");
     remainingSearchParams.delete("installationId");
     remainingSearchParams.delete("offeringId");
+    const requested = searchParams.get("create") === "1";
+    const origin = (location.state as { marketplaceReturnTo?: unknown } | null)?.marketplaceReturnTo;
+    // Restore only an in-app plugin detail route, never a caller-supplied URL.
+    const marketplaceReturnTo = requested && typeof origin === "string" &&
+      /^\/plugins\/[^/?#]+(?:\?view=(?:discover|installed))?$/.test(origin) ? origin : null;
     return {
-      requested: searchParams.get("create") === "1",
+      requested,
+      marketplaceReturnTo,
       pluginId: searchParams.get("pluginId"),
       installationId: searchParams.get("installationId") ?? "",
       offeringId: searchParams.get("offeringId") ?? "",
       remainingSearchParams,
     };
   });
+  const [marketplaceReturnTo, setMarketplaceReturnTo] = useState(createRequest.marketplaceReturnTo);
   const [providers, setProviders] = useState<Provider[]>([]);
   const [providerPlugins, setProviderPlugins] = useState<ProviderPlugin[]>([]);
   const [providerPluginIssues, setProviderPluginIssues] = useState<
@@ -398,6 +406,7 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
         }},
       });
       setConnectionOffering(null);
+      setMarketplaceReturnTo(null);
       await refresh();
     }catch(reason){
       setOfferingError(ownedIdentifierCreateError(reason,"provider"));
@@ -434,6 +443,7 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
 
       setCreateOpen(false);
       setCreateForm(emptyProviderForm);
+      setMarketplaceReturnTo(null);
       await refresh();
     } catch (reason) {
       // The inventory may contain an identically named provider created in
@@ -640,6 +650,12 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
     }
   }
 
+  function returnToMarketplaceOnCancel() {
+    const returnTo = marketplaceReturnTo;
+    setMarketplaceReturnTo(null);
+    if (returnTo) void navigate(returnTo, { replace: true });
+  }
+
   function setCreateDialogOpen(open: boolean) {
     if (!open && busy !== "") return;
     setCreateOpen(open);
@@ -647,7 +663,14 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
       setCreateError("");
       setCreateDraftError(null);
       setCreateForm(emptyProviderForm);
+      returnToMarketplaceOnCancel();
     }
+  }
+
+  function dismissConnectionOffering() {
+    setConnectionOffering(null);
+    setOfferingError("");
+    returnToMarketplaceOnCancel();
   }
 
   return (
@@ -800,7 +823,7 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
 
       {connectionOffering!==null?(
         <Dialog open onOpenChange={open=>{
-          if(!open&&busy!=="integration"){setConnectionOffering(null);setOfferingError("");}
+          if(!open&&busy!=="integration")dismissConnectionOffering();
         }}>
           <DialogContent className="max-h-[calc(100dvh-2rem)] grid-rows-[auto_minmax(0,1fr)_auto] sm:max-w-xl">
             <div className="grid gap-2">
@@ -841,7 +864,7 @@ export function ProvidersPage({ client }: { client: MenderClient }) {
               </details>
             </div>
             <DialogFooter>
-              <Button variant="outline" disabled={busy==="integration"} onClick={()=>setConnectionOffering(null)}>{t("Cancel")}</Button>
+              <Button variant="outline" disabled={busy==="integration"} onClick={dismissConnectionOffering}>{t("Cancel")}</Button>
               <Button disabled={busy!=="" || !isCanonicalOwnedSlug(canonicalizeOwnedIdentifier(offeringNamespace)) ||
                 !offeringName.trim() || new TextEncoder().encode(offeringName.trim()).length>160}
                 onClick={()=>void connectOffering()}>{t("Connect")}</Button>

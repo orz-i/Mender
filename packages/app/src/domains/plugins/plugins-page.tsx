@@ -11,7 +11,7 @@ import {
   PowerOffIcon,
   Trash2Icon,
 } from "lucide-react";
-import { Link, useNavigate, useParams, useSearchParams } from "react-router";
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router";
 
 import type { MenderClient } from "@mender/sdk";
 import { Badge } from "@mender/ui/components/badge";
@@ -297,6 +297,7 @@ export function PluginsPage({
 export function PluginDetailPage({ client }: { client: MenderClient }) {
   useLocale();
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const backPath=searchParams.get("view")==="installed"?"/plugins?view=installed":"/plugins";
   const { pluginKey = "" } = useParams();
@@ -369,7 +370,9 @@ export function PluginDetailPage({ client }: { client: MenderClient }) {
                 type="button"
                 size="sm"
                 disabled={busy !== ""}
-                onClick={() => void navigate(createAction.href)}
+                onClick={() => void navigate(createAction.href, {
+                  state: { marketplaceReturnTo: location.pathname + location.search },
+                })}
               >
                 <PlusIcon data-icon="inline-start" />
                 {t(createAction.label)}

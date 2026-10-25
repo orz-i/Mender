@@ -408,6 +408,12 @@ export function AgentDetailPage({client,chooseLocalDirectory}:{client:MenderClie
           </DialogDescription>
         </DialogHeader>
         <DialogBody className="flex flex-col gap-4">
+        {viewTask?.status==="unknown"?<p className="text-sm leading-6 text-muted-foreground">{t("Unknown does not mean the task succeeded or failed. Review actual deliverables before planning any new task; do not retry the original prompt automatically.")}</p>:null}
+        {viewTask?.result?<pre className="max-h-[38vh] overflow-auto whitespace-pre-wrap break-words rounded-xl bg-muted p-4 text-xs leading-5">{viewTask.result}</pre>:
+          <p className="text-sm leading-6 text-muted-foreground">{viewTask?.diagnostic?taskDiagnosticText(viewTask.diagnostic):t("No result available.")}</p>}
+        <details className="rounded-xl border border-border/70">
+          <summary className="cursor-pointer px-4 py-3 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{t("Execution details")}</summary>
+          <div className="space-y-4 border-t border-border/70 p-4">
         {viewTask?.continuedFromTaskId?<dl className="text-sm"><dt className="text-xs text-muted-foreground">{t("Continued from task")}</dt><dd className="break-all font-mono text-xs">{viewTask.continuedFromTaskId}</dd></dl>:null}
         {viewTask?<dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
           <div><dt className="text-xs text-muted-foreground">{t("Task execution budget")}</dt><dd>{t("{{count}} minutes", { count: String((viewTask.timeoutSeconds ?? 600) / 60) })}</dd></div>
@@ -432,14 +438,13 @@ export function AgentDetailPage({client,chooseLocalDirectory}:{client:MenderClie
           </dl>
           <p className="text-xs text-muted-foreground">{t("Observations do not prove task completion or authorize session resume.")}</p>
         </section>:viewTask?.status==="unknown"?<p className="text-sm leading-6 text-muted-foreground">{t("No execution evidence recorded for this task.")}</p>:null}
-        {viewTask?.status==="unknown"?<p className="text-sm leading-6 text-muted-foreground">{t("Unknown does not mean the task succeeded or failed. Review actual deliverables before planning any new task; do not retry the original prompt automatically.")}</p>:null}
+          </div>
+        </details>
         {client.supportsLocalAgentApprovals===true&&agent?.backend!=="antigravity"&&viewTask&&(viewTask.status==="running"||viewTask.status==="queued")?
           <AgentTaskApprovals client={client} task={viewTask} onTaskUpdated={updateViewedTask}/>:null}
         {viewTask&&agent?.isolation==="host"?<p role="note" className="text-xs leading-5 text-muted-foreground">
           {t(agent.backend==="antigravity"?"Antigravity native permissions are not Mender ACP approvals; no ACP approval receipt can prove its native tool activity.":"ACP approvals show only requests sent to Mender; zero approvals does not prove the Host Agent performed no native file or command actions.")}
         </p>:null}
-        {viewTask?.result?<pre className="max-h-[38vh] overflow-auto whitespace-pre-wrap break-words rounded-xl bg-muted p-4 text-xs leading-5">{viewTask.result}</pre>:
-          <p className="text-sm leading-6 text-muted-foreground">{viewTask?.diagnostic?taskDiagnosticText(viewTask.diagnostic):t("No result available.")}</p>}
         </DialogBody>
         <DialogFooter>
           {viewTask?<Button variant="outline" onClick={()=>void openTask(viewTask.taskId)}>{t("Refresh status")}</Button>:null}
