@@ -335,6 +335,23 @@ describe("Agents focused management",()=>{
     await waitFor(()=>expect(getAgentTask).toHaveBeenCalledWith(namedTask.taskId));
   });
 
+  it("keeps cancel confirmation targeted to the original full TaskID for a named queued Task", async () => {
+    setLocale("zh-CN");
+    const queuedTask:AgentTask={...task,status:"queued",title:"核对配置档供应",result:""};
+    const cancelAgentTask=vi.fn().mockResolvedValue({taskId:queuedTask.taskId,cancelRequested:true});
+    show("/agents/"+agent.agentId,{
+      listAgentTasks:vi.fn().mockResolvedValue({tasks:[queuedTask]}),
+      cancelAgentTask,
+    });
+    fireEvent.click(await screen.findByRole("button",{name:/^任务/}));
+    const row=await screen.findByRole("row",{name:/核对配置档供应/});
+    fireEvent.click(within(row).getByRole("button",{name:"取消任务 核对配置档供应"}));
+    const dialog=await screen.findByRole("dialog",{name:"取消智能体任务"});
+    expect(cancelAgentTask).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole("button",{name:"确认"}));
+    await waitFor(()=>expect(cancelAgentTask).toHaveBeenCalledWith(queuedTask.taskId));
+  });
+
   it("separates trusted native progress, worker heartbeat and the admitted deadline", async () => {
     const uncertainTask:AgentTask = {
       ...task, status:"unknown", result:"", timeoutSeconds:1800,
