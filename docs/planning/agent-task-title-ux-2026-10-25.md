@@ -26,3 +26,35 @@
 - 历史任务不含可信 title，前端只显示短 ID；本轮不尝试反向推断历史任务的内容。
 - 只有未来通过已更新且重新发现/同步的 delegate 工具调用并明确提供 `title` 的 Task 才会出现人类可读的名称；未更新的工具 schema 不应被假定支持此字段。
 - 实机桌面验收并不等于 390px 移动浏览器或屏幕阅读器完整合规验收。
+
+## 实施记录与验收（2026-10-25）
+
+### 分阶段提交
+
+- `3e5215f`：文档先行；Task 标题单一可信来源、不持久化 Prompt、历史无名称不回填。
+- `948cf13`：Agent 领域与 Submit admission、委派工具、SQLite v19、OpenAPI SDK 及隔离回归测试。
+- `8d564d2`：更新只用于测试的历史 schema downgrade fixture，确保升级到 v19 后不绕过 v7/v18 安全迁移验证。
+- `01750ff`：前端 Agent Task 名称/回退编号/全 ID 追踪与有名称的结果详情。
+- `e4b5796`：仅对 Agent Task 表格行收紧垂直间距，不影响全局表格和操作按钮尺寸。
+- 后续补充取消 TaskID 精确路由断言与本文验收记录，分别提交。
+
+### 验收结果
+
+| 验证对象 | 结果与证据 |
+| --- | --- |
+| Backend 全量测试 | `go test ./backend/...` 通过，95 个 test-bearing 包均为 `ok`，含跨模块 bootstrap 和 SQLite v18→v19 老数据迁移安全测试。 |
+| 标题领域验证 | 省略 title 不改变历史和现有调用；限 80 个 Unicode code points；非打印字符、换行、前后空白及超长名称在 admission 前拒绝。 |
+| 工具入口隔离测试 | 使用临时数据库与惯性/模拟 Agent 执行器从 `delegate` 提交显式 title，Owner Task 清单可读取；Task JSON 不包含执行 Prompt。 |
+| 全量 Vitest | **71 文件、467 项通过**（含有名称/旧 Task 混合列表、精准查看、确认后按完整 TaskID 取消的 mock 行为）。 |
+| 前端与契约检查 | `pnpm lint`、`pnpm --filter @mender/app typecheck`、`pnpm i18n:check`（**1594/1594**）、Web 和 Desktop 前端 build、`pnpm sdk:check`、`git diff --check` 均通过。保留既有的大分包警告。 |
+| 原生 Wails 1239×851 | 使用当前运行的数据，OpenCode Agent 任务列表有 38 条历史任务，每页 10 条；名称未知的项目呈现 `任务 #xxxxxxx` 而不是长随机 ID；行距缩减后首屏可完整看到表格和分页。截图 `/tmp/mender-task-title-native/02-tasks-compact-1239.png`。 |
+| 原生 Wails 960×744 | 列表列宽与按钮无横向裁切或重叠；分页位于正常纵向滚动区域，不能宣称无需滚动。验收后窗口恢复 1239×851、(340,85)。截图 `/tmp/mender-task-title-native/03-tasks-compact-960.png`。 |
+| 旧任务结果 | 在列表点「查看 任务 #bef73535」实际打开发起对象的完整 `atask_61edd839a48cf66f47961e24bef73535`，状态、失败诊断及执行详情仍正确。截图 `/tmp/mender-task-title-native/04-task-detail-trace.png`。 |
+| 明确 title 的未来任务 | 页面使用注入 `MenderClient` 的隔离 Vitest 证实 title 正确展示、完整 ID 留存、查看/取消路径准确；没有向真实 Agent 提交测试 Prompt。 |
+
+### 发布与运行限制
+
+- 本轮只在 Wails DEV 当前**前端 HMR** 中实际展示历史 Task UI。它使用的桌面后端进程未按本轮代码变更重新构建重启，不把此情况表述为原生后端已加载 `v19` 或能接受新增 `title`。
+- 新 Task title 的后端持久化经独立 Go/SQLite/委派工具测试覆盖；在目标环境需要重新构建后端并启动以执行 v19 的 forward-only 迁移，再显式同步受管 `Agent` 工具来源以使用新输入 schema。**不要**将测试当作已经执行了真实库迁移或真实 Agent 委派。
+- 历史 `unknown`、会话、审批、Profile 授权、原始结果及已知不可恢复结论保持不变。Wails 960px 测试不等于 390px 手机，也不是屏幕阅读器无障碍完整验收。
+- Screenshots 保存在本机临时目录 `/tmp/mender-task-title-native/`，不是仓库文件、也没有写入历史数据。
