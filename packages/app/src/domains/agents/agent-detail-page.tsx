@@ -84,6 +84,12 @@ function taskExecutionPhaseText(value:string):string{
     default:return t("Execution activity uncertain");
   }
 }
+// A display title must come from the explicit Task field, not the input prompt or result.
+// Historical Tasks have no title and remain identifiable by a short ID reference.
+function taskDisplayName(task: AgentTask): string {
+  return task.title || `${t("Task")} #${task.taskId.slice(-8)}`;
+}
+
 type Topic = "overview" | "workspaces" | "execution" | "tools" | "tasks" | "access" | "activity";
 type ConfirmAction = {kind:"cancel"|"revoke"|"delete";id:string} | null;
 
@@ -290,13 +296,18 @@ export function AgentDetailPage({client,chooseLocalDirectory}:{client:MenderClie
         <TableHead>{t("Task")}</TableHead><TableHead>{t("Status")}</TableHead>
         <TableHead>{t("Created at")}</TableHead><TableHead className="text-right">{t("Actions")}</TableHead>
       </TableRow></TableHeader><TableBody>{pagination.items.map(task=><TableRow key={task.taskId}>
-        <TableCell className="max-w-[230px] truncate font-mono text-xs" title={task.taskId}>{task.taskId}</TableCell>
+        <TableCell className="max-w-[300px] min-w-0" title={task.taskId}>
+          <p className="truncate text-sm font-medium">{taskDisplayName(task)}</p>
+          {task.title ? <p className="truncate font-mono text-xs text-muted-foreground">#{task.taskId.slice(-8)}</p> : null}
+        </TableCell>
         <TableCell><StatusBadge status={task.status}>{taskStatusText(task.status)}</StatusBadge></TableCell>
         <TableCell className="text-xs">{formatDateTime(task.createdAt)}</TableCell>
         <TableCell className="space-x-2 text-right">
-          <Button size="sm" variant="outline" onClick={()=>void openTask(task.taskId)}>{t("View")}</Button>
+          <Button size="sm" variant="outline" aria-label={`${t("View")} ${taskDisplayName(task)}`}
+            onClick={()=>void openTask(task.taskId)}>{t("View")}</Button>
           {task.status==="queued"||task.status==="running"?
             <Button size="sm" variant="outline" disabled={task.cancelRequested}
+              aria-label={`${t("Cancel task")} ${taskDisplayName(task)}`}
               onClick={()=>setConfirm({kind:"cancel",id:task.taskId})}>{t("Cancel task")}</Button>:null}
         </TableCell>
       </TableRow>)}</TableBody></Table></>
@@ -403,6 +414,7 @@ export function AgentDetailPage({client,chooseLocalDirectory}:{client:MenderClie
         <DialogHeader>
           <DialogTitle>{t("Agent task result")}</DialogTitle>
           <DialogDescription className="flex min-w-0 flex-wrap items-center gap-2">
+            {viewTask?.title ? <span className="w-full min-w-0 text-sm font-medium text-foreground">{viewTask.title}</span> : null}
             <span className="min-w-0 max-w-full break-all font-mono text-xs">{viewTask?.taskId}</span>
             {viewTask ? <StatusBadge status={viewTask.status}>{taskStatusText(viewTask.status)}</StatusBadge> : null}
           </DialogDescription>

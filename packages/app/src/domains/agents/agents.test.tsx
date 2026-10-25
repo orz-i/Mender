@@ -303,12 +303,38 @@ describe("Agents focused management",()=>{
     fireEvent.click(screen.getByRole("button",{name:"Grant"}));
     await waitFor(()=>expect(client.grantAgentProfile).toHaveBeenCalledWith(agent.agentId,profile.profileId));
     fireEvent.click(screen.getByRole("button",{name:/^Tasks/}));
-    fireEvent.click(await screen.findByRole("button",{name:"View"}));
+    fireEvent.click(await screen.findByRole("button",{name:/^View Task #/}));
     expect(await screen.findByText("fixture reviewed")).toBeTruthy();
     fireEvent.click(screen.getAllByRole("button",{name:"Close"})[0]!);
     fireEvent.click(screen.getByRole("button",{name:"Activity"}));
     expect(await screen.findByText("agent.task.submit")).toBeTruthy();
   });
+  it("shows explicit Task names while retaining an honest legacy ID fallback and scoped actions", async () => {
+    setLocale("zh-CN");
+    const namedTask: AgentTask = {...task, title:"复核 MCP OAuth 连接"};
+    const legacyTask: AgentTask = {...task, taskId:"atask_00000000000000000000000000000203",
+      status:"unknown",result:"",createdAt:"2026-10-11T09:00:00Z"};
+    const getAgentTask = vi.fn().mockImplementation((id:string) =>
+      Promise.resolve(id===namedTask.taskId ? namedTask : legacyTask));
+    show("/agents/"+agent.agentId, {
+      listAgentTasks:vi.fn().mockResolvedValue({tasks:[namedTask,legacyTask]}),
+      getAgentTask,
+    });
+    fireEvent.click(await screen.findByRole("button",{name:/^任务/}));
+    const namedRow=await screen.findByRole("row",{name:/复核 MCP OAuth 连接/});
+    expect(within(namedRow).getByText("复核 MCP OAuth 连接")).toBeTruthy();
+    expect(within(namedRow).getByText("#00000202")).toBeTruthy();
+    expect(within(namedRow).getByRole("cell",{name:/复核 MCP OAuth 连接/}).getAttribute("title")).toBe(namedTask.taskId);
+    const oldRow=screen.getByRole("row",{name:/任务 #00000203/});
+    expect(within(oldRow).getByRole("cell",{name:/任务 #00000203/}).getAttribute("title")).toBe(legacyTask.taskId);
+    expect(within(oldRow).queryByText("复核 MCP OAuth 连接")).toBeNull();
+    fireEvent.click(within(namedRow).getByRole("button",{name:"查看 复核 MCP OAuth 连接"}));
+    const dialog=await screen.findByRole("dialog",{name:"智能体任务结果"});
+    expect(within(dialog).getByText("复核 MCP OAuth 连接")).toBeTruthy();
+    expect(within(dialog).getByText(namedTask.taskId)).toBeTruthy();
+    await waitFor(()=>expect(getAgentTask).toHaveBeenCalledWith(namedTask.taskId));
+  });
+
   it("separates trusted native progress, worker heartbeat and the admitted deadline", async () => {
     const uncertainTask:AgentTask = {
       ...task, status:"unknown", result:"", timeoutSeconds:1800,
@@ -326,7 +352,7 @@ describe("Agents focused management",()=>{
       getAgentTask:vi.fn().mockResolvedValue(uncertainTask),
     });
     fireEvent.click(await screen.findByRole("button",{name:/^Tasks/}));
-    fireEvent.click(await screen.findByRole("button",{name:"View"}));
+    fireEvent.click(await screen.findByRole("button",{name:/^View Task #/}));
     const dialog=await screen.findByRole("dialog",{name:"Agent task result"});
     const technicalDetails=within(dialog).getByText("Execution details").closest("details");
     expect(technicalDetails).toBeTruthy();
@@ -358,7 +384,7 @@ describe("Agents focused management",()=>{
       getAgentTask:vi.fn().mockResolvedValue(unknownTask),
     });
     fireEvent.click(await screen.findByRole("button",{name:/^任务/}));
-    fireEvent.click(await screen.findByRole("button",{name:"查看"}));
+    fireEvent.click(await screen.findByRole("button",{name:/^查看 任务 #/}));
     const dialog=await screen.findByRole("dialog",{name:"智能体任务结果"});
     const badge=within(dialog).getByText("状态未知").closest('[data-slot="badge"]');
     expect(badge?.className).toContain("bg-sunlight/20");
@@ -387,7 +413,7 @@ describe("Agents focused management",()=>{
     });
     expect(await screen.findByText("Code Reviewer")).toBeTruthy();
     fireEvent.click(screen.getByRole("button",{name:/^任务/}));
-    fireEvent.click(await screen.findByRole("button",{name:"查看"}));
+    fireEvent.click(await screen.findByRole("button",{name:/^查看 任务 #/}));
     expect(await screen.findByText("ACP 任务完成前，输出流已关闭")).toBeTruthy();
     expect(screen.queryByText("ACP prompt stream closed before completion")).toBeNull();
   });
@@ -402,7 +428,7 @@ describe("Agents focused management",()=>{
     });
     expect(await screen.findByText("Code Reviewer")).toBeTruthy();
     fireEvent.click(screen.getByRole("button",{name:/^任务/}));
-    fireEvent.click(await screen.findByRole("button",{name:"查看"}));
+    fireEvent.click(await screen.findByRole("button",{name:/^查看 任务 #/}));
     expect(await screen.findByText("当前 ACP 会话未提供所配置的智能体模型")).toBeTruthy();
     expect(screen.queryByText("Configured Agent model not advertised by ACP session")).toBeNull();
   });
@@ -417,7 +443,7 @@ describe("Agents focused management",()=>{
     });
     expect(await screen.findByText("Code Reviewer")).toBeTruthy();
     fireEvent.click(screen.getByRole("button",{name:/^任务/}));
-    fireEvent.click(await screen.findByRole("button",{name:"查看"}));
+    fireEvent.click(await screen.findByRole("button",{name:/^查看 任务 #/}));
     expect(await screen.findByText("ACP 会话创建失败")).toBeTruthy();
     expect(screen.queryByText("ACP session creation failed")).toBeNull();
   });
@@ -433,7 +459,7 @@ describe("Agents focused management",()=>{
         getAgentTask:vi.fn().mockResolvedValue(failedTask),
       });
       fireEvent.click(await screen.findByRole("button",{name:/^任务/}));
-      fireEvent.click(await screen.findByRole("button",{name:"查看"}));
+      fireEvent.click(await screen.findByRole("button",{name:/^查看 任务 #/}));
       expect(await screen.findByText(localized)).toBeTruthy();
       expect(screen.queryByText(diagnostic)).toBeNull();
     });
@@ -451,7 +477,7 @@ describe("Agents focused management",()=>{
         getAgentTask:vi.fn().mockResolvedValue(hostTask),
       });
       fireEvent.click(await screen.findByRole("button",{name:/^Tasks/}));
-      fireEvent.click(await screen.findByRole("button",{name:"View"}));
+      fireEvent.click(await screen.findByRole("button",{name:/^View Task #/}));
       const note=await screen.findByRole("note");
       expect(note.textContent).toContain("ACP approvals show only requests sent to Mender");
       expect(note.textContent).toContain("zero approvals does not prove");
@@ -460,7 +486,7 @@ describe("Agents focused management",()=>{
   it("omits the Host-only audit coverage notice for restricted Agent tasks",async()=>{
     show("/agents/"+agent.agentId);
     fireEvent.click(await screen.findByRole("button",{name:/^Tasks/}));
-    fireEvent.click(await screen.findByRole("button",{name:"View"}));
+    fireEvent.click(await screen.findByRole("button",{name:/^View Task #/}));
     expect(screen.queryByRole("note")).toBeNull();
   });
   it("localizes the Host audit coverage notice without showing raw native activity",async()=>{
@@ -469,7 +495,7 @@ describe("Agents focused management",()=>{
       getAgent:vi.fn().mockResolvedValue({...agent,isolation:"host" as const}),
     });
     fireEvent.click(await screen.findByRole("button",{name:/^任务/}));
-    fireEvent.click(await screen.findByRole("button",{name:"查看"}));
+    fireEvent.click(await screen.findByRole("button",{name:/^查看 任务 #/}));
     expect((await screen.findByRole("note")).textContent).toContain("没有审批记录，不代表 Host 智能体没有执行原生文件或命令操作");
   });
   it("renders mobile-card-ready inventory layout and navigates to agent detail", async () => {
