@@ -3065,6 +3065,7 @@ components:
         taskId: { type: string }
         agentId: { type: string }
         status: { type: string, enum: [queued, running, completed, failed, cancelled, unknown] }
+        title: { type: string, maxLength: 80, description: Optional explicitly submitted non-sensitive Task display label, not an execution prompt }
         model: { type: string }
         reasoningEffort: { type: string }
         timeoutSeconds: { type: integer, enum: [600, 1200, 1800], description: Immutable admitted execution budget in seconds }

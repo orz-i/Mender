@@ -2472,6 +2472,8 @@ export interface components {
             agentId: string;
             /** @enum {string} */
             status: "queued" | "running" | "completed" | "failed" | "cancelled" | "unknown";
+            /** @description Optional explicitly submitted non-sensitive Task display label */
+            title?: string;
             model?: string;
             reasoningEffort?: string;
             /**

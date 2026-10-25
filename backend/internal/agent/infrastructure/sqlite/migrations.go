@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-const latestSchemaVersion = 18
+const latestSchemaVersion = 19
 
 // migrate owns Agent state exclusively, and never changes the existing
 // Providers/Sandboxes/Tunnels/Plugin inventory.
@@ -272,5 +272,8 @@ func migrate(ctx context.Context, db *sql.DB) error {
 	if err := migrateRetireUnknownDispositionV17(ctx, db); err != nil {
 		return err
 	}
-	return migrateAgentTaskBudgetV18(ctx, db)
+	if err := migrateAgentTaskBudgetV18(ctx, db); err != nil {
+		return err
+	}
+	return migrateAgentTaskTitleV19(ctx, db)
 }

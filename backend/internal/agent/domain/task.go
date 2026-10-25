@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 )
 
 type TaskID string
@@ -60,10 +62,12 @@ func (s TaskStatus) Valid() bool {
 
 // Task intentionally does not contain the input prompt; prompts stay in short-lived
 // runner memory and are not copied into global Audit or task persistence.
+// Title is an optional, explicitly supplied display label, never derived from the prompt.
 type Task struct {
 	ID                  TaskID           `json:"taskId"`
 	AgentID             ID               `json:"agentId"`
 	Status              TaskStatus       `json:"status"`
+	Title               string           `json:"title,omitempty"`
 	Model               string           `json:"model,omitempty"`
 	ReasoningEffort     string           `json:"reasoningEffort,omitempty"`
 	TimeoutSeconds      int              `json:"timeoutSeconds,omitempty"` // immutable per-Task admitted execution budget
@@ -82,6 +86,25 @@ type Task struct {
 	CancelRequested     bool             `json:"cancelRequested"`
 	Observation         *TaskObservation `json:"observation,omitempty"`
 	ContinuedFromTaskID TaskID           `json:"continuedFromTaskId,omitempty"`
+}
+
+const MaxTaskTitleRunes = 80
+
+// ValidateTaskTitle accepts only an explicit, short, single-line public label.
+// An empty title means an older or unlabeled Task; Mender never infers one.
+func ValidateTaskTitle(title string) error {
+	if title == "" {
+		return nil
+	}
+	if title != strings.TrimSpace(title) || !utf8.ValidString(title) || utf8.RuneCountInString(title) > MaxTaskTitleRunes {
+		return fmt.Errorf("%w: Agent Task title must be a short, single-line label", ErrInvalid)
+	}
+	for _, r := range title {
+		if !unicode.IsPrint(r) {
+			return fmt.Errorf("%w: Agent Task title contains non-printable characters", ErrInvalid)
+		}
+	}
+	return nil
 }
 
 const MaxResultBytes = 64 << 10
@@ -126,6 +149,9 @@ func (t Task) Validate() error {
 	if t.PrincipalKind == "" || t.PrincipalRef == "" || t.ScopeKind == "" || t.Origin == "" ||
 		len(t.PrincipalRef) > 255 || len(t.ScopeRef) > 255 {
 		return fmt.Errorf("%w: incomplete Task caller identity", ErrInvalid)
+	}
+	if err := ValidateTaskTitle(t.Title); err != nil {
+		return err
 	}
 	if err := ValidateModel(t.Model); err != nil {
 		return err

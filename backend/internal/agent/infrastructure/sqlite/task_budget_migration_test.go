@@ -72,7 +72,7 @@ func TestTaskBudgetV18ForwardMigrationPreservesHistoricalUnknown(t *testing.T) {
 		t.Fatalf("v18 mutated immutable historic unknown: %+v err=%v", stored, err)
 	}
 	var v, n int
-	if err := reopened.db.QueryRowContext(ctx, "SELECT MAX(version) FROM agent_schema_migrations").Scan(&v); err != nil || v != 18 {
+	if err := reopened.db.QueryRowContext(ctx, "SELECT MAX(version) FROM agent_schema_migrations").Scan(&v); err != nil || v != latestSchemaVersion {
 		t.Fatalf("migrated version=%d err=%v", v, err)
 	}
 	if err := reopened.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM agent_tasks WHERE timeout_seconds=600").Scan(&n); err != nil || n != 1 {

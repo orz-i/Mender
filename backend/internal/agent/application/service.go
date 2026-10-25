@@ -300,6 +300,7 @@ func (s *Service) Admissions(ctx context.Context, id agentdomain.ID, caller gov.
 }
 
 type SubmitOptions struct {
+	Title           string `json:"title,omitempty"`
 	Model           string `json:"model,omitempty"`
 	ReasoningEffort string `json:"reasoningEffort,omitempty"`
 	Workspace       string `json:"workspace,omitempty"`
@@ -315,6 +316,9 @@ func (s *Service) SubmitWithOptions(ctx context.Context, id agentdomain.ID, prom
 	}
 	if len(prompt) > agentdomain.MaxPromptBytes || strings.TrimSpace(prompt) == "" {
 		return agentdomain.Task{}, agentdomain.ErrInvalid
+	}
+	if err := agentdomain.ValidateTaskTitle(options.Title); err != nil {
+		return agentdomain.Task{}, err
 	}
 	agent, err := s.store.GetAgent(ctx, id)
 	if err != nil {
@@ -383,7 +387,7 @@ func (s *Service) SubmitWithOptions(ctx context.Context, id agentdomain.ID, prom
 	}
 	now := time.Now().UTC()
 	task := agentdomain.Task{ID: taskID, AgentID: id, Status: agentdomain.TaskQueued,
-		Model: model, ReasoningEffort: effort, TimeoutSeconds: seconds, WorkspaceKey: options.Workspace, WorkspaceRoot: root,
+		Title: options.Title, Model: model, ReasoningEffort: effort, TimeoutSeconds: seconds, WorkspaceKey: options.Workspace, WorkspaceRoot: root,
 		Origin: string(caller.Origin()), PrincipalKind: string(caller.Principal().Kind()),
 		PrincipalRef: caller.Principal().Reference(), ScopeKind: string(caller.Scope().Kind()),
 		ScopeRef: caller.Scope().Reference(), Generation: 1, CreatedAt: now, UpdatedAt: now}

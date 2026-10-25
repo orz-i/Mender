@@ -138,6 +138,7 @@ func (*Instance) Close() error { return nil }
 
 var submitInput = []byte(`{"type":"object","additionalProperties":false,"required":["prompt"],
 	"properties":{"prompt":{"type":"string","minLength":1,"maxLength":65536},
+	"title":{"type":"string","minLength":1,"maxLength":80,"description":"Optional short, non-sensitive display name for this Task; persisted as metadata. Never copy private prompt text, credentials or secrets."},
 	"model":{"type":"string","maxLength":128},"reasoningEffort":{"type":"string","maxLength":64,"pattern":"^[a-z0-9_-]*$"},"workspace":{"type":"string","minLength":1,"maxLength":64,"pattern":"^[a-z0-9_-]+$"},"timeoutMinutes":{"type":"integer","enum":[10,20,30]}}}`)
 var resumeInput = []byte(`{"type":"object","additionalProperties":false,"required":["taskId","prompt"],
 	"properties":{"taskId":{"type":"string","pattern":"^atask_[0-9a-f]{32}$"},
@@ -149,9 +150,9 @@ var resumeOutput = []byte(`{"type":"object","additionalProperties":false,
 var taskInput = []byte(`{"type":"object","additionalProperties":false,"required":["taskId"],
 	"properties":{"taskId":{"type":"string","pattern":"^atask_[0-9a-f]{32}$"}}}`)
 var submitOutput = []byte(`{"type":"object","additionalProperties":false,"required":["taskId","status"],
-	"properties":{"taskId":{"type":"string"},"status":{"type":"string"},"timeoutSeconds":{"type":"integer"}}}`)
+	"properties":{"taskId":{"type":"string"},"status":{"type":"string"},"title":{"type":"string"},"timeoutSeconds":{"type":"integer"}}}`)
 var taskOutput = []byte(`{"type":"object","additionalProperties":false,"required":["taskId","status","cancelRequested"],
-	"properties":{"taskId":{"type":"string"},"status":{"type":"string"},"cancelRequested":{"type":"boolean"},
+	"properties":{"taskId":{"type":"string"},"status":{"type":"string"},"title":{"type":"string"},"cancelRequested":{"type":"boolean"},
 	"result":{"type":"string"},"diagnostic":{"type":"string"},"timeoutSeconds":{"type":"integer","enum":[600,1200,1800]},
 	"continuedFromTaskId":{"type":"string"},
 	"observation":{"type":"object","additionalProperties":false,
@@ -179,7 +180,7 @@ func (i *Instance) DiscoverTools(_ context.Context, _ catalogdomain.Provider) ([
 	}
 	return []catalogapplication.DiscoveredTool{
 		{SourceKey: sourceDelegate, Name: "delegate", Title: "Delegate to Agent",
-			Description: "Submit a bounded task to this configured Agent. Optional timeoutMinutes: 10 (default), 20 or 30. Returns TaskID; no automatic retry.",
+			Description: "Submit a bounded task to this Agent. Optional title is a non-sensitive Task name shown in history; do not include prompt contents. timeoutMinutes: 10 (default), 20 or 30. Returns TaskID; no automatic retry.",
 			InputSchema: slices.Clone(submitInput), OutputSchema: slices.Clone(submitOutput), Tags: []string{"agent", "task"}},
 		{SourceKey: sourceStatus, Name: "status", Title: "Check Agent task",
 			Description: "Query one delegated task without reading its result.",
@@ -218,6 +219,7 @@ func (i *Instance) Execute(ctx context.Context, req invocationapplication.Execut
 	case sourceDelegate:
 		var args struct {
 			Prompt          string `json:"prompt"`
+			Title           string `json:"title"`
 			Model           string `json:"model"`
 			ReasoningEffort string `json:"reasoningEffort"`
 			Workspace       string `json:"workspace"`
@@ -226,11 +228,15 @@ func (i *Instance) Execute(ctx context.Context, req invocationapplication.Execut
 		if err := strictDecode(req.Arguments.Bytes(), &args); err != nil {
 			return invocationdomain.Outcome{}, err
 		}
-		task, err := i.service.SubmitWithOptions(ctx, i.agentID, args.Prompt, agentapplication.SubmitOptions{Model: args.Model, ReasoningEffort: args.ReasoningEffort, Workspace: args.Workspace, TimeoutMinutes: args.TimeoutMinutes}, req.Context)
+		task, err := i.service.SubmitWithOptions(ctx, i.agentID, args.Prompt, agentapplication.SubmitOptions{Title: args.Title, Model: args.Model, ReasoningEffort: args.ReasoningEffort, Workspace: args.Workspace, TimeoutMinutes: args.TimeoutMinutes}, req.Context)
 		if err != nil {
 			return invocationdomain.Outcome{}, err
 		}
-		return complete(map[string]any{"taskId": task.ID, "status": task.Status, "timeoutSeconds": int(task.ExecutionTimeout() / time.Second)})
+		data := map[string]any{"taskId": task.ID, "status": task.Status, "timeoutSeconds": int(task.ExecutionTimeout() / time.Second)}
+		if task.Title != "" {
+			data["title"] = task.Title
+		}
+		return complete(data)
 	case sourceResume:
 		var args struct {
 			TaskID string `json:"taskId"`
@@ -284,6 +290,9 @@ func (i *Instance) Execute(ctx context.Context, req invocationapplication.Execut
 			return complete(map[string]any{"taskId": id, "cancelRequested": true})
 		}
 		data := map[string]any{"taskId": id, "status": task.Status, "cancelRequested": task.CancelRequested, "timeoutSeconds": int(task.ExecutionTimeout() / time.Second)}
+		if task.Title != "" {
+			data["title"] = task.Title
+		}
 		if task.ContinuedFromTaskID != "" {
 			data["continuedFromTaskId"] = task.ContinuedFromTaskID
 		}

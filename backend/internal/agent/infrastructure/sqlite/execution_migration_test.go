@@ -7,10 +7,12 @@ import (
 )
 
 // This helper is test-only: synthetic downgrade fixtures must remove the
-// v18 Task column and marker before reopening as an older schema.
+// v19 title and v18 budget before reopening as an older schema.
 func stripTaskBudgetV18Fixture(t *testing.T, db *sql.DB) {
 	t.Helper()
 	for _, statement := range []string{
+		"ALTER TABLE agent_tasks DROP COLUMN title",
+		"DELETE FROM agent_schema_migrations WHERE version=19",
 		"ALTER TABLE agent_tasks DROP COLUMN timeout_seconds",
 		"DELETE FROM agent_schema_migrations WHERE version=18",
 	} {

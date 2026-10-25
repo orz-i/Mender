@@ -82,6 +82,13 @@ func TestPluginConfigAndBoundToolDiscovery(t *testing.T) {
 	if !strings.Contains(string(delegate.Properties["timeoutMinutes"]), "[10,20,30]") {
 		t.Fatal("missing explicit finite Agent execution budgets")
 	}
+	if !strings.Contains(string(delegate.Properties["title"]), `"maxLength":80`) ||
+		!strings.Contains(string(delegate.Properties["title"]), "non-sensitive") {
+		t.Fatal("explicit Task title must be capped and described as non-sensitive metadata")
+	}
+	if !strings.Contains(string(taskOutput), `"title"`) || !strings.Contains(string(submitOutput), `"title"`) {
+		t.Fatal("Task status/result or delegate output lost optional title")
+	}
 	if !strings.Contains(string(taskOutput), "lastNativeProgressAt") ||
 		!strings.Contains(string(taskOutput), "timeoutSeconds") {
 		t.Fatal("Task result schema lost native progress/budget")
