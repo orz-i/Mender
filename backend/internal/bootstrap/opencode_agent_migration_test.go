@@ -37,6 +37,8 @@ func downgradeAgentsToV7Fixture(t *testing.T, path string, sandboxID ...string) 
 	}
 	defer func() { _ = tx.Rollback() }()
 	for _, sqlText := range []string{
+		`ALTER TABLE agent_tasks DROP COLUMN title`,
+		`DELETE FROM agent_schema_migrations WHERE version=19`,
 		`ALTER TABLE agent_tasks DROP COLUMN timeout_seconds`,
 		`DELETE FROM agent_schema_migrations WHERE version=18`,
 		`DROP TRIGGER IF EXISTS agent_continuation_no_update`,
@@ -235,8 +237,8 @@ func TestOpenCodeAgentV7ToV8PreservesAllLiveRelationships(t *testing.T) {
 		t.Fatalf("lost Profile ToolBinding %d %v", profileToolBindings, err)
 	}
 	var version int
-	if err := raw.QueryRowContext(ctx, "SELECT MAX(version) FROM agent_schema_migrations").Scan(&version); err != nil || version != 18 {
-		t.Fatalf("expected latest Agent v13 got %d %v", version, err)
+	if err := raw.QueryRowContext(ctx, "SELECT MAX(version) FROM agent_schema_migrations").Scan(&version); err != nil || version != 19 {
+		t.Fatalf("expected latest Agent v19 got %d %v", version, err)
 	}
 	checkRows, err := raw.QueryContext(ctx, "PRAGMA foreign_key_check")
 	if err != nil {
