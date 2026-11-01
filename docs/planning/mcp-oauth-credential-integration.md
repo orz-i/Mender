@@ -99,3 +99,51 @@ Using a **separate compiled `menderd` process**, randomly named temporary SQLite
 - The **already running Wails Desktop process predates these corrective commits**. To verify the fixes in that exact native process, the operator must rebuild/restart and refresh the tunnel/ChatGPT connection once more. The isolated daemon tests above are real HTTP + native Keychain integration, but not an external identity-provider account or an interactive Wails WebView screenshot acceptance.
 - No OAuth account at a real external provider was supplied. External consent, account-specific Scopes, permissions, token expiry and reconnection have not been signed off against a third-party IdP. RFC7009 remote token revocation remains unsupported; local disconnect removes the Keychain token and fails closed.
 - No live Tunnel/desktop restart and no production DB mutation were performed by this field-acceptance session.
+
+## TypeScript adapter signatures — verified at HEAD `e0f8330` (2026-11-01)
+
+Recorded so the required TS adaptation is documented in a commit, matching the generated artifacts exactly.
+
+### REST paths and OpenAPI operation IDs (`contracts/api/openapi.yaml`; typed Web SDK renders these)
+
+| Path | Method | operationId |
+| --- | --- | --- |
+| `/credentials/oauth/flows` | POST | `startOAuthCredential` → 201 `OAuthFlowStart` |
+| `/credentials/oauth/flows/{flowId}` | GET | `getOAuthFlow` → 200 `OAuthFlow`, 404 |
+| `/credentials/oauth/flows/{flowId}` | DELETE | `cancelOAuthFlow` → 204, 404, 409 |
+| `/credentials/{namespace}/{name}/disconnect` | POST | `disconnectOAuthCredential` → 200 `Credential` |
+
+### `packages/sdk/src/client.ts` (Antigravity-owned; already mapped — no change required)
+
+```ts
+startOAuthCredential(body: StartOAuthCredentialRequest): Promise<OAuthFlowStart>; // POST /credentials/oauth/flows
+getOAuthFlow(flowId: string): Promise<OAuthFlow>;                                 // GET /credentials/oauth/flows/{flowId}
+cancelOAuthFlow(flowId: string): Promise<void>;                                   // DELETE /credentials/oauth/flows/{flowId}
+disconnectOAuthCredential(namespace: string, name: string): Promise<Credential>;  // POST /credentials/{namespace}/{name}/disconnect
+```
+
+Types: `StartOAuthCredentialRequest`, `OAuthFlowStart`, `OAuthFlow`, `Credential`, `OAuthCredentialMetadata` (all from `components["schemas"]` of the generated schema).
+
+### Wails generated bindings (`apps/desktop/frontend/bindings/github.com/orz-i/Mender/backend/internal/desktop/binding/service.ts`)
+
+```ts
+StartOAuthCredential($namespace: string, name: string, displayName: string, mcpEndpoint: string,
+  clientID: string, clientIDMetadataURL: string, scopes: string[] | null): $CancellablePromise<$models.OAuthFlowStart>;
+GetOAuthFlow(flowID: string): $CancellablePromise<$models.OAuthFlow>;
+CancelOAuthFlow(flowID: string): $CancellablePromise<void>;
+DisconnectOAuthCredential($namespace: string, name: string): $CancellablePromise<$models.Credential>;
+```
+
+### Non-secret payload shapes (`binding/models.ts`, mirrors openapi components)
+
+- `StartOAuthCredentialRequest`: `{ namespace, name, displayName, mcpEndpoint, clientId?, clientIdMetadataUrl?, scopes? }` — `namespace/name/displayName/mcpEndpoint` required, `additionalProperties: false`.
+- `OAuthFlowStart`: `{ flowId, authorizationUrl }`.
+- `OAuthFlow`: `{ flowId, status: "pending"|"connected"|"failed"|"expired"|"cancelled", message?, createdAt, expiresAt, credential? }`.
+- `OAuthCredentialMetadata` (inside `Credential.oauth`): `{ resource, mcpEndpoint?, issuer, clientId, registrationMode?: "pre_registered"|"client_id_metadata"|"dynamic", tokenEndpoint, scopes, expiresAt?, status: "connected"|"authorization_required"|"expired" }` — no token material, `additionalProperties: false`.
+- Provider surface: `MCPServerInstance.oauthCredentialRef?: string` (config metadata only, never bearer material); mutually exclusive with static and credential-backed Authorization headers.
+
+### 2026-11-01 re-verification at HEAD (no new code required)
+
+- `go test -race` pass: `credential/{application,domain,nativekeyring,oauthflow,resolver,sqlite}`, `mcp/infrastructure/{headertemplate,plugin,provider,server}`, `invocation/application`.
+- `golangci-lint run ./backend/...`: **0 issues**.
+- Remaining boundary unchanged: no external-IdP acceptance, no RFC 7009 remote revocation, no production deployment performed.
