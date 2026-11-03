@@ -4,7 +4,7 @@ go 1.27.2
 
 require (
 	github.com/orz-i/Mender/backend v0.0.0
-	github.com/wailsapp/wails/v3 v3.0.0-beta.26
+	github.com/wailsapp/wails/v3 v3.1.0-nightly.20261028
 	gopkg.in/yaml.v3 v3.0.1
 )
 
