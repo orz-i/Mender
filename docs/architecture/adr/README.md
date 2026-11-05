@@ -88,3 +88,4 @@ Minor implementation choices that remain inside an accepted architectural bounda
 - [ADR-0060: Separate Agent use cases and Invocation stages in R3](0060-r3-agent-invocation-boundaries.md) — Accepted for R3
 - [ADR-0061: Type the Workspace execution boundary in R4](0061-r4-typed-workspace-boundary.md) — Accepted for R4
 - [ADR-0062: Separate Profile selection and delivery configuration in R5](0062-r5-profile-delivery-schema-boundaries.md) — Accepted for R5
+- [ADR-0063: Separate client capabilities and consolidate Tools ownership in R6](0063-r6-client-capabilities-tools-ownership.md) — Accepted for R6
