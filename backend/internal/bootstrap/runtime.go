@@ -29,6 +29,7 @@ import (
 	installationsqlite "github.com/orz-i/Mender/backend/internal/plugin/installation/infrastructure/sqlite"
 	policylocal "github.com/orz-i/Mender/backend/internal/policy/infrastructure/local"
 	profileapplication "github.com/orz-i/Mender/backend/internal/profile/application"
+	profiledelivery "github.com/orz-i/Mender/backend/internal/profile/application/delivery"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 	provideractivationapplication "github.com/orz-i/Mender/backend/internal/provideractivation/application"
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
@@ -85,6 +86,7 @@ type Runtime struct {
 	providerInstances    *providerplugin.Manager
 	providerDatabasePath string
 	providerActivation   provideractivationapplication.Admit
+	profileDelivery      *profiledelivery.Service
 	ownerPrincipal       governancedomain.Principal
 	agentStore           *agentsqlite.Store
 	agentLauncher        *agentacp.LocalFactory
@@ -538,6 +540,7 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		providerInstances:           providerInstances,
 		providerDatabasePath:        options.DatabasePath,
 		providerActivation:          providerActivation,
+		profileDelivery:             newProfileDelivery(profiles, skills, options.DatabasePath),
 		ownerPrincipal:              ownerPrincipal,
 		agentStore:                  agentStore,
 		agentLauncher:               agentLauncher,
