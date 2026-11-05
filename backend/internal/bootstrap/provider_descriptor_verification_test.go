@@ -48,6 +48,14 @@ func TestDescriptorVerificationCannotCloseRuntimeOwnedPluginProcess(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Installed packages are deliberately read-only. Restore their writable
+	// permissions through the store before t.TempDir removes the fixture.
+	// This cleanup runs after the deferred Runtime.Close stops the process.
+	t.Cleanup(func() {
+		if err := runtime.pluginPackages.Remove(context.Background(), item.ID()); err != nil {
+			t.Errorf("remove managed plugin test fixture: %v", err)
+		}
+	})
 	process, err := runtime.externalProcesses.Ensure(ctx, item)
 	if err != nil {
 		t.Fatal(err)
