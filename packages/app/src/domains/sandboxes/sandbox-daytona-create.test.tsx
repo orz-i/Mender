@@ -1,5 +1,5 @@
 import {cleanup,fireEvent,render,screen,waitFor} from "@testing-library/react";
-import type {MenderClient,Sandbox} from "@mender/sdk";
+import type {ManagementClient,Sandbox} from "@mender/sdk";
 import {MemoryRouter,Routes,Route} from "react-router";
 import {afterEach,describe,expect,it,vi} from "vitest";
 import {CreateSandboxPage} from "./sandboxes-page";
@@ -8,14 +8,14 @@ afterEach(cleanup);
 const digest=`docker.io/library/python@sha256:${"a".repeat(64)}`;
 const reference="credential://daytona/api-key";
 const sample:Sandbox={sandboxId:"sbx_0123456789abcdef0123456789abcdef",name:"Remote Sandbox",backend:"daytona",isolation:"remote",state:"unknown",localRoot:"",ownerKind:"local_user",ownerRef:"owner",activeLeases:0,backendAvailable:true};
-function renderDaytona(client:Partial<MenderClient>,configured=true){
- const provided:Partial<MenderClient>={
+function renderDaytona(client:Partial<ManagementClient>,configured=true){
+ const provided:Partial<ManagementClient>={
   getRuntimeGovernance:vi.fn().mockResolvedValue({backend:{restrictedHostAvailable:false}}),
   getSandboxBackends:vi.fn().mockResolvedValue({dockerAvailable:false,dockerStatus:"disabled",daytonaConfigured:configured,daytonaStatus:configured?"Experimental Daytona enabled by operator; credential and live provider validation required; may incur charges":"Experimental Daytona disabled; local operator must set MENDER_DAYTONA_EXPERIMENTAL=enabled before Runtime startup"}),
   listCredentials:vi.fn().mockResolvedValue({credentials:[]}),
   ...client,
  };
- render(<MemoryRouter initialEntries={["/sandboxes/new"]}><Routes><Route path="/sandboxes/new" element={<CreateSandboxPage client={provided as MenderClient}/>}/><Route path="/sandboxes/:sandboxId" element={<div>Daytona detail</div>}/></Routes></MemoryRouter>);
+ render(<MemoryRouter initialEntries={["/sandboxes/new"]}><Routes><Route path="/sandboxes/new" element={<CreateSandboxPage client={provided as ManagementClient}/>}/><Route path="/sandboxes/:sandboxId" element={<div>Daytona detail</div>}/></Routes></MemoryRouter>);
 }
 describe("Daytona Sandbox creation",()=>{
  it("does not offer remote provisioning when adapter is disabled",async()=>{

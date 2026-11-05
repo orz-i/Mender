@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { KeyRoundIcon } from "lucide-react";
 
 import type {
-  MenderClient,
+  ManagementClient,
   Profile,
   Sandbox,
   SandboxProfileCapability,
@@ -39,7 +39,7 @@ type Pending = {
   reviewing: boolean;
 };
 
-export function SandboxAccessPanel({ client, sandbox }: { client: MenderClient; sandbox: Sandbox }) {
+export function SandboxAccessPanel({ client, sandbox }: { client: ManagementClient; sandbox: Sandbox }) {
   const [grants, setGrants] = useState<SandboxProfileGrant[]>([]);
   const [events, setEvents] = useState<SandboxProfileGrantEvent[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 
-import type { MenderClient, Profile } from "@mender/sdk";
+import type { ManagementClient, Profile } from "@mender/sdk";
 import { Button } from "@mender/ui/components/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@mender/ui/components/table";
 
@@ -13,7 +13,7 @@ import { usePagination } from "../../shared/pagination";
 import { TablePagination } from "../../shared/table-pagination";
 import { EmptyPanelState, SearchField } from "../../shared/workbench";
 
-export function ProfilesPage({ client }: { client: MenderClient }) {
+export function ProfilesPage({ client }: { client: ManagementClient }) {
   const navigate = useNavigate();
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [loaded, setLoaded] = useState(false);

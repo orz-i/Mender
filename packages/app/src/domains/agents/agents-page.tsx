@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 
-import type { Agent, MenderClient } from "@mender/sdk";
+import type { Agent, ManagementClient } from "@mender/sdk";
 import { Button } from "@mender/ui/components/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@mender/ui/components/table";
 
@@ -25,7 +25,7 @@ function workspacePreview(path: string): string {
   return "…/" + parts.slice(-2).join("/");
 }
 
-export function AgentsPage({ client }: { client: MenderClient }) {
+export function AgentsPage({ client }: { client: ManagementClient }) {
   const navigate = useNavigate();
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loaded, setLoaded] = useState(false);

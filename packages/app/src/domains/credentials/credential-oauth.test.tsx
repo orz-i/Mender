@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Credential, MenderClient } from "@mender/sdk";
+import type { Credential, ManagementClient } from "@mender/sdk";
 import { TooltipProvider } from "@mender/ui/components/tooltip";
 
 import { resetLocaleForTesting, setLocale } from "../../i18n/i18n";
@@ -48,7 +48,7 @@ describe("Interactive MCP OAuth authorization", () => {
     });
     const cancelOAuthFlow = vi.fn().mockResolvedValue(undefined);
     const listCredentials = vi.fn().mockResolvedValue({ credentials: [] });
-    const client = { listCredentials, startOAuthCredential, getOAuthFlow, cancelOAuthFlow } as unknown as MenderClient;
+    const client = { listCredentials, startOAuthCredential, getOAuthFlow, cancelOAuthFlow } as unknown as ManagementClient;
     const openExternalURL = host === "Desktop" ? vi.fn().mockRejectedValue(new Error("Browser unavailable")) : undefined;
     render(<TooltipProvider><CredentialsPage client={client} openExternalURL={openExternalURL} /></TooltipProvider>);
     fireEvent.click(screen.getByRole("button", { name: "Add credential" }));
@@ -75,7 +75,7 @@ describe("Interactive MCP OAuth authorization", () => {
   });
 
   it("does not enable OAuth connect for an insecure remote endpoint", () => {
-    const client = { listCredentials: vi.fn().mockResolvedValue({ credentials: [] }) } as unknown as MenderClient;
+    const client = { listCredentials: vi.fn().mockResolvedValue({ credentials: [] }) } as unknown as ManagementClient;
     render(<TooltipProvider><CredentialsPage client={client} /></TooltipProvider>);
     fireEvent.click(screen.getByRole("button", { name: "Add credential" }));
     fireEvent.change(screen.getByRole("combobox", { name: "Credential source" }), { target: { value: "oauth" } });
@@ -105,7 +105,7 @@ describe("OAuth reauthorization identity", () => {
         createdAt: "2026-10-19T00:00:00Z", expiresAt: "2026-10-19T00:10:00Z",
       }),
       cancelOAuthFlow: vi.fn().mockResolvedValue(undefined),
-    } as unknown as MenderClient;
+    } as unknown as ManagementClient;
     render(<TooltipProvider><CredentialsPage client={client} /></TooltipProvider>);
     expect(await screen.findByText("OAuth Work")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Manage OAuth" }));
@@ -126,7 +126,7 @@ describe("OAuth reauthorization identity", () => {
     };
     const client = {
       listCredentials: vi.fn().mockResolvedValue({ credentials: [prior] }),
-    } as unknown as MenderClient;
+    } as unknown as ManagementClient;
     render(<TooltipProvider><CredentialsPage client={client} /></TooltipProvider>);
     expect(await screen.findByText("OAuth Work")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Manage OAuth" }));
@@ -139,7 +139,7 @@ describe("OAuth Credential inventory", () => {
   it("displays account and status without treating OAuth as a native secret", async () => {
     const client = {
       listCredentials: vi.fn().mockResolvedValue({ credentials: [connected] }),
-    } as unknown as MenderClient;
+    } as unknown as ManagementClient;
     render(<TooltipProvider><CredentialsPage client={client} /></TooltipProvider>);
     expect(await screen.findByText("OAuth Work")).toBeTruthy();
     expect(screen.getByText("OAuth · Connected")).toBeTruthy();
@@ -157,7 +157,7 @@ describe("OAuth Credential inventory", () => {
       .mockResolvedValueOnce({ credentials: [connected] })
       .mockResolvedValue({ credentials: [disconnected] });
     const disconnectOAuthCredential = vi.fn().mockResolvedValue(disconnected);
-    const client = { listCredentials, disconnectOAuthCredential } as unknown as MenderClient;
+    const client = { listCredentials, disconnectOAuthCredential } as unknown as ManagementClient;
     vi.spyOn(window, "confirm").mockReturnValue(true);
     render(<TooltipProvider><CredentialsPage client={client} /></TooltipProvider>);
     expect(await screen.findByText("OAuth Work")).toBeTruthy();

@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import type { MenderClient } from "@mender/sdk";
+import type { ManagementClient } from "@mender/sdk";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resetLocaleForTesting, setLocale } from "../../i18n/i18n";
@@ -10,7 +10,7 @@ afterEach(() => { cleanup(); resetLocaleForTesting(); });
 
 function show(path = "/agents/new?pluginId=io.mender.agent.opencode",
   createAgent = vi.fn().mockResolvedValue({ agentId: "agent_00000000000000000000000000000001" })) {
-  const client = { createAgent } as unknown as MenderClient;
+  const client = { createAgent } as unknown as ManagementClient;
   render(<MemoryRouter initialEntries={[path]}><Routes>
     <Route path="/agents/new" element={<AgentCreatePage client={client} />} />
     <Route path="/agents/:agentId" element={<p>Created Agent</p>} />

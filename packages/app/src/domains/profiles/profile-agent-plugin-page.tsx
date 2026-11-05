@@ -3,7 +3,7 @@ import { ChevronLeftIcon } from "lucide-react";
 import { useNavigate, useParams } from "react-router";
 
 import type {
-  ExportProfilePluginInput, MenderClient, Profile, ProfileAgentPluginExport,
+  ExportProfilePluginInput, ManagementClient, Profile, ProfileAgentPluginExport,
 } from "@mender/sdk";
 import { Button } from "@mender/ui/components/button";
 
@@ -20,7 +20,7 @@ export type ExportProfilePlugin = (
 export function ProfileAgentPluginPage({
   client, exportProfilePlugin,
 }: {
-  client: MenderClient;
+  client: ManagementClient;
   exportProfilePlugin?: ExportProfilePlugin;
 }) {
   const { slug } = useParams();
@@ -31,7 +31,7 @@ export function ProfileAgentPluginPage({
 function ProfileAgentPluginContent({
   client, slug, exportProfilePlugin,
 }: {
-  client: MenderClient;
+  client: ManagementClient;
   slug: string | undefined;
   exportProfilePlugin?: ExportProfilePlugin;
 }) {

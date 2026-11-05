@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import type { MenderClient, Profile, SkillDeployment, SkillInstallation } from "@mender/sdk";
+import type { ManagementClient, Profile, SkillDeployment, SkillInstallation } from "@mender/sdk";
 import { TooltipProvider } from "@mender/ui/components/tooltip";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -44,7 +44,7 @@ function show({
     listSkills: vi.fn().mockResolvedValue({ installations: [skill] }),
     listProfileSkillDeployments,
     undeployProfileSkill,
-  } as unknown as MenderClient;
+  } as unknown as ManagementClient;
   render(<MemoryRouter initialEntries={["/profiles/delivery/deliveries/skills"]}>
     <TooltipProvider>
       <Routes>

@@ -1,6 +1,6 @@
 import {useEffect,useState} from "react";
 import {MenderApiError} from "@mender/sdk";
-import type {Agent,AgentWorkspace,MenderClient,Profile} from "@mender/sdk";
+import type {Agent,AgentWorkspace,ManagementClient,Profile} from "@mender/sdk";
 import {Button} from "@mender/ui/components/button";
 import {Input} from "@mender/ui/components/input";
 import {Dialog,DialogBody,DialogContent,DialogDescription,DialogFooter,DialogHeader,DialogTitle} from "@mender/ui/components/dialog";
@@ -38,7 +38,7 @@ function registrationErrorMessage(reason:unknown):string{
 
 export function AgentWorkspaceSettings({
  client,agent,chooseLocalDirectory,
-}:{client:MenderClient;agent:Agent;chooseLocalDirectory?:()=>Promise<string|null>}){
+}:{client:ManagementClient;agent:Agent;chooseLocalDirectory?:()=>Promise<string|null>}){
  const [items,setItems]=useState<AgentWorkspace[]>([]);
  const [profiles,setProfiles]=useState<Profile[]>([]);
  const [action,setAction]=useState<Action>(null);

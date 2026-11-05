@@ -1,6 +1,6 @@
 import {cleanup,fireEvent,render,screen,waitFor} from "@testing-library/react";
 import {MenderApiError} from "@mender/sdk";
-import type {Agent,MenderClient} from "@mender/sdk";
+import type {Agent,ManagementClient} from "@mender/sdk";
 import {MemoryRouter} from "react-router";
 import {afterEach,beforeEach,describe,expect,it,vi} from "vitest";
 import {resetLocaleForTesting,setLocale} from "../../i18n/i18n";
@@ -30,7 +30,7 @@ describe("Agent owner-approved local workspace editor",()=>{
    listAgentWorkspaces:vi.fn().mockImplementation(()=>Promise.resolve({workspaces:[...registered]})),
    listProfiles:vi.fn().mockResolvedValue({profiles:[]}),
    listSandboxes, bindAgentWorkspace,
-  } as unknown as MenderClient;
+  } as unknown as ManagementClient;
   render(<MemoryRouter><AgentWorkspaceSettings client={client} agent={agent}
     chooseLocalDirectory={chooseLocalDirectory}/></MemoryRouter>);
   expect(await screen.findByText("No additional workspaces")).toBeTruthy();
@@ -52,7 +52,7 @@ describe("Agent owner-approved local workspace editor",()=>{
   const client={
    listAgentWorkspaces:vi.fn().mockResolvedValue({workspaces:[]}),
    listProfiles:vi.fn().mockResolvedValue({profiles:[]}),bindAgentWorkspace,
-  } as unknown as MenderClient;
+  } as unknown as ManagementClient;
   render(<MemoryRouter><AgentWorkspaceSettings client={client} agent={agent}/></MemoryRouter>);
   fireEvent.click(screen.getByRole("button",{name:"Add workspace"}));
   fireEvent.change(screen.getByRole("textbox",{name:"Workspace key"}),{target:{value:"GAR/../"}});
@@ -71,7 +71,7 @@ describe("Agent owner-approved local workspace editor",()=>{
    listAgentWorkspaces:vi.fn().mockResolvedValue({workspaces:[{key:"gar",workspaceRoot:localRoot,profileIds:[]}]}),
    listProfiles:vi.fn().mockResolvedValue({profiles:[{profileId,displayName:"Default"}]}),
    grantAgentWorkspace,
-  } as unknown as MenderClient;
+  } as unknown as ManagementClient;
   render(<MemoryRouter><AgentWorkspaceSettings client={client} agent={agent}/></MemoryRouter>);
   expect(await screen.findByText(localRoot)).toBeTruthy();
   expect(screen.getByText("No Profile workspace access")).toBeTruthy();
@@ -97,7 +97,7 @@ describe("Agent owner-approved local workspace editor",()=>{
     {profileId:otherId,displayName:"Staging"},
    ]}),
    grantAgentWorkspace,
-  } as unknown as MenderClient;
+  } as unknown as ManagementClient;
   render(<MemoryRouter><AgentWorkspaceSettings client={client} agent={agent}/></MemoryRouter>);
   expect(await screen.findByText(localRoot)).toBeTruthy();
   fireEvent.click(screen.getByRole("button",{name:"Grant Profile"}));
@@ -114,7 +114,7 @@ describe("Agent owner-approved local workspace editor",()=>{
   const client={
    listAgentWorkspaces:vi.fn().mockResolvedValue({workspaces:[{key:"gar",workspaceRoot:localRoot,profileIds:[profileId]}]}),
    listProfiles:vi.fn().mockResolvedValue({profiles:[{profileId,displayName:"Default"}]}),
-  } as unknown as MenderClient;
+  } as unknown as ManagementClient;
   render(<MemoryRouter><AgentWorkspaceSettings client={client} agent={agent}/></MemoryRouter>);
   expect(await screen.findByText(localRoot)).toBeTruthy();
   expect(screen.getByRole<HTMLButtonElement>("button",{name:"Grant Profile"}).disabled).toBe(true);
@@ -124,7 +124,7 @@ describe("Agent owner-approved local workspace editor",()=>{
   const client={
    listAgentWorkspaces:vi.fn().mockResolvedValue({workspaces:[]}),
    listProfiles:vi.fn().mockResolvedValue({profiles:[]}),bindAgentWorkspace,
-  } as unknown as MenderClient;
+  } as unknown as ManagementClient;
   render(<MemoryRouter><AgentWorkspaceSettings client={client} agent={agent}/></MemoryRouter>);
   expect(await screen.findByText("No additional workspaces")).toBeTruthy();
   fireEvent.click(screen.getByRole("button",{name:"Add workspace"}));
@@ -142,7 +142,7 @@ describe("Agent owner-approved local workspace editor",()=>{
   const client={
    listAgentWorkspaces:vi.fn().mockResolvedValue({workspaces:[]}),
    listProfiles:vi.fn().mockResolvedValue({profiles:[]}),bindAgentWorkspace,
-  } as unknown as MenderClient;
+  } as unknown as ManagementClient;
   render(<MemoryRouter><AgentWorkspaceSettings client={client} agent={agent}/></MemoryRouter>);
   expect(await screen.findByText("没有附加工作区")).toBeTruthy();
   fireEvent.click(screen.getByRole("button",{name:"添加工作区"}));
@@ -157,7 +157,7 @@ describe("Agent owner-approved local workspace editor",()=>{
   const client={
    listAgentWorkspaces:vi.fn().mockResolvedValue({workspaces:[{key:"gaoge",workspaceRoot:localRoot,profileIds:[]}]}),
    listProfiles:vi.fn().mockResolvedValue({profiles:[]}),bindAgentWorkspace,
-  } as unknown as MenderClient;
+  } as unknown as ManagementClient;
   render(<MemoryRouter><AgentWorkspaceSettings client={client} agent={agent}/></MemoryRouter>);
   expect(await screen.findByText(localRoot)).toBeTruthy();
   fireEvent.click(screen.getByRole("button",{name:"Add workspace"}));
@@ -177,7 +177,7 @@ describe("Agent owner-approved local workspace editor",()=>{
   const client={
    listAgentWorkspaces:vi.fn().mockResolvedValue({workspaces:[]}),
    listProfiles:vi.fn().mockResolvedValue({profiles:[]}),bindAgentWorkspace,
-  } as unknown as MenderClient;
+  } as unknown as ManagementClient;
   render(<MemoryRouter><AgentWorkspaceSettings client={client} agent={agent}/></MemoryRouter>);
   expect(await screen.findByText("没有附加工作区")).toBeTruthy();
   fireEvent.click(screen.getByRole("button",{name:"添加工作区"}));
@@ -195,7 +195,7 @@ describe("Agent owner-approved local workspace editor",()=>{
   const client={
    listAgentWorkspaces:vi.fn().mockResolvedValue({workspaces:[]}),
    listProfiles:vi.fn().mockResolvedValue({profiles:[]}),bindAgentWorkspace,
-  } as unknown as MenderClient;
+  } as unknown as ManagementClient;
   render(<MemoryRouter><AgentWorkspaceSettings client={client} agent={agent}/></MemoryRouter>);
   expect(await screen.findByText("没有附加工作区")).toBeTruthy();
   fireEvent.click(screen.getByRole("button",{name:"添加工作区"}));
@@ -212,7 +212,7 @@ describe("Agent owner-approved local workspace editor",()=>{
   const client={
    listAgentWorkspaces:vi.fn().mockResolvedValue({workspaces:[{key:"gaoge",workspaceRoot:localRoot,profileIds:[]}]}),
    listProfiles:vi.fn().mockResolvedValue({profiles:[]}),unbindAgentWorkspace:unbind,
-  } as unknown as MenderClient;
+  } as unknown as ManagementClient;
   render(<MemoryRouter><AgentWorkspaceSettings client={client} agent={agent}/></MemoryRouter>);
   expect(await screen.findByText(localRoot)).toBeTruthy();
   fireEvent.click(screen.getByRole("button",{name:"移除"}));

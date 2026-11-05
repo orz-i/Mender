@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 
-import type { MenderClient, Profile, SkillInstallation } from "@mender/sdk";
+import type { ManagementClient, Profile, SkillInstallation } from "@mender/sdk";
 import { Button } from "@mender/ui/components/button";
 
 import { t } from "../../i18n/i18n";
@@ -15,12 +15,12 @@ function equalSelections(a: readonly string[], b: ReadonlySet<string>): boolean 
 }
 
 /** Explicit, Profile-scoped resource selection; never materializes Skill files. */
-export function ProfileSkillsPage({ client }: { client: MenderClient }) {
+export function ProfileSkillsPage({ client }: { client: ManagementClient }) {
   const { slug } = useParams();
   return <ProfileSkillsEditor key={slug} client={client} slug={slug} />;
 }
 
-function ProfileSkillsEditor({ client, slug }: { client: MenderClient; slug: string | undefined }) {
+function ProfileSkillsEditor({ client, slug }: { client: ManagementClient; slug: string | undefined }) {
   const navigate = useNavigate();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [installations, setInstallations] = useState<SkillInstallation[]>([]);

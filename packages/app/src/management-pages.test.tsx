@@ -8,7 +8,7 @@ import {
   within,
 } from "@testing-library/react";
 import type {
-  MenderClient,
+  ManagementClient,
   PolicyRuleInput,
   ProviderPluginInstallation,
 } from "@mender/sdk";
@@ -2564,10 +2564,10 @@ describe("management pages", () => {
       usage: { invocations: 1, activations: 0 },
     };
     const updateRuntimeBudget = vi
-      .fn<MenderClient["updateRuntimeBudget"]>()
+      .fn<ManagementClient["updateRuntimeBudget"]>()
       .mockImplementation((budget) => Promise.resolve({ ...status, budget }));
     const updateRuntimeIsolation = vi
-      .fn<MenderClient["updateRuntimeIsolation"]>()
+      .fn<ManagementClient["updateRuntimeIsolation"]>()
       .mockImplementation((isolation) => Promise.resolve({ ...status, isolation }));
 
     renderApp("/runtime", {
@@ -2745,7 +2745,7 @@ const anySearchOffering = {
 
 function renderApp(
   path: string,
-  client: Partial<MenderClient>,
+  client: Partial<ManagementClient>,
   options: {
     installPlugin?: () => Promise<ProviderPluginInstallation | null>;
   } = {},
@@ -2816,7 +2816,7 @@ function renderApp(
     createDockerSandbox: vi.fn(),
     reconcileDockerSandbox: vi.fn(),
     ...client,
-  } as MenderClient;
+  } as ManagementClient;
   return render(
     <MemoryRouter initialEntries={[path]}>
       <MenderApp

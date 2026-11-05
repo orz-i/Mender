@@ -1,7 +1,7 @@
 import { cleanup,fireEvent,render,screen,waitFor,within } from "@testing-library/react";
 import { MemoryRouter,Route,Routes } from "react-router";
 import { afterEach,expect,it,vi } from "vitest";
-import type { MenderClient,Sandbox,SandboxToolSuite } from "@mender/sdk";
+import type { ManagementClient,Sandbox,SandboxToolSuite } from "@mender/sdk";
 import { resetLocaleForTesting,setLocale } from "../../i18n/i18n";
 import { SandboxToolsPanel } from "./sandbox-tools-panel";
 import { SandboxDetailPage } from "./sandbox-detail-page";
@@ -24,13 +24,13 @@ const ready:SandboxToolSuite={
   name,title:name,
  })),
 };
-function show(client:Partial<MenderClient>,fullPage=false){
+function show(client:Partial<ManagementClient>,fullPage=false){
  resetLocaleForTesting();setLocale("en");
- const props={client:client as MenderClient,sandbox};
+ const props={client:client as ManagementClient,sandbox};
  render(<MemoryRouter initialEntries={[fullPage?"/sandboxes/"+sandbox.sandboxId:"/"]}>
   <Routes>
    <Route path="/" element={<SandboxToolsPanel {...props}/>}/>
-   <Route path="/sandboxes/:sandboxId" element={<SandboxDetailPage client={client as MenderClient}/>}/>
+   <Route path="/sandboxes/:sandboxId" element={<SandboxDetailPage client={client as ManagementClient}/>}/>
    <Route path="/tools" element={<div>Internal provider management</div>}/>
   </Routes>
  </MemoryRouter>);

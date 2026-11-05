@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ChevronLeftIcon } from "lucide-react";
 import { useNavigate, useParams } from "react-router";
 
-import type { MenderClient, Profile, SkillDeployment, SkillInstallation } from "@mender/sdk";
+import type { ManagementClient, Profile, SkillDeployment, SkillInstallation } from "@mender/sdk";
 import { Button } from "@mender/ui/components/button";
 import {
   Dialog, DialogBody, DialogContent, DialogDescription,
@@ -29,7 +29,7 @@ type DeployProfileSkills = (slug: string, target: Target) => Promise<SkillDeploy
 export function ProfileSkillDeliveryPage({
   client, deployProfileSkills,
 }: {
-  client: MenderClient;
+  client: ManagementClient;
   deployProfileSkills?: DeployProfileSkills;
 }) {
   const { slug } = useParams();
@@ -41,7 +41,7 @@ function ProfileSkillDeliveryContent({
   slug, client, deployProfileSkills,
 }: {
   slug: string | undefined;
-  client: MenderClient;
+  client: ManagementClient;
   deployProfileSkills?: DeployProfileSkills;
 }) {
   const navigate = useNavigate();

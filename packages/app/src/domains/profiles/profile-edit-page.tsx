@@ -12,7 +12,7 @@ import {
 
 import type {
   Credential,
-  MenderClient,
+  ManagementClient,
   Profile,
   Provider,
   ToolSummary,
@@ -55,12 +55,12 @@ type GovernanceForm = Pick<
   "policyConstraint" | "concurrencyConstraint"
 >;
 
-export function ProfileEditPage({ client }: { client: MenderClient }) {
+export function ProfileEditPage({ client }: { client: ManagementClient }) {
   const { slug } = useParams();
   return <ProfileEditor key={slug} client={client} slug={slug} />;
 }
 
-function ProfileEditor({ client, slug }: { client: MenderClient; slug: string | undefined }) {
+function ProfileEditor({ client, slug }: { client: ManagementClient; slug: string | undefined }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [profiles, setProfiles] = useState<Profile[]>([]);

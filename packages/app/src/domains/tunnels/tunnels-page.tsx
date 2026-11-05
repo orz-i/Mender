@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { PlusIcon, Trash2Icon } from "lucide-react";
 import { Link, useSearchParams } from "react-router";
 
-import type { Credential, MenderClient, Tunnel, PluginCatalogueEntry } from "@mender/sdk";
+import type { Credential, ManagementClient, Tunnel, PluginCatalogueEntry } from "@mender/sdk";
 import { Badge } from "@mender/ui/components/badge";
 import { Button } from "@mender/ui/components/button";
 import {
@@ -53,7 +53,7 @@ function tunnelCreateError(reason: unknown): string {
   return t("Tunnel creation failed. Check the external ID and selected credential, then try again.");
 }
 
-export function TunnelsPage({ client }: { client: MenderClient }) {
+export function TunnelsPage({ client }: { client: ManagementClient }) {
   const [searchParams]=useSearchParams();
   const [tunnels, setTunnels] = useState<Tunnel[]>([]);
   const [availablePlugins,setAvailablePlugins]=useState<PluginCatalogueEntry[]>([]);

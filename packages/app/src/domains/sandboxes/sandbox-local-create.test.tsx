@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import type { MenderClient, Sandbox } from "@mender/sdk";
+import type { ManagementClient, Sandbox } from "@mender/sdk";
 import { TooltipProvider } from "@mender/ui/components/tooltip";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -27,7 +27,7 @@ function renderLocal(chooseLocalDirectory?: () => Promise<string | null>) {
     getSandboxBackends: vi.fn().mockResolvedValue({ dockerAvailable: false, daytonaConfigured: false }),
     listCredentials: vi.fn().mockResolvedValue({ credentials: [] }),
     createLocalSandbox,
-  } as unknown as MenderClient;
+  } as unknown as ManagementClient;
 
   render(
     <TooltipProvider>

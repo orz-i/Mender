@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import type { Credential, MenderClient } from "@mender/sdk";
+import type { Credential, ManagementClient } from "@mender/sdk";
 import { TooltipProvider } from "@mender/ui/components/tooltip";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -18,7 +18,7 @@ const credential: Credential = {
   updatedAt: "2026-10-10T00:00:00Z",
 };
 
-function showPage(overrides: Partial<MenderClient> = {}) {
+function showPage(overrides: Partial<ManagementClient> = {}) {
   const listCredentials = vi.fn().mockResolvedValue({ credentials: [] });
   const createNativeCredential = vi.fn().mockResolvedValue(credential);
   const createEnvironmentCredential = vi.fn().mockResolvedValue({ ...credential, source: "environment" });
@@ -27,7 +27,7 @@ function showPage(overrides: Partial<MenderClient> = {}) {
     createNativeCredential,
     createEnvironmentCredential,
     ...overrides,
-  } as MenderClient;
+  } as ManagementClient;
   render(<TooltipProvider><CredentialsPage client={client} /></TooltipProvider>);
   fireEvent.click(screen.getByRole("button", { name: t("Add credential") }));
   return { listCredentials, createNativeCredential, createEnvironmentCredential };

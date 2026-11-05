@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
-import type { LocalOwnerCapabilities, MenderClient } from "@mender/sdk";
+import type { LocalOwnerCapabilities, ManagementClient } from "@mender/sdk";
 import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -82,7 +82,7 @@ describe("MenderApp", () => {
       ...overviewClient(),
       listPluginCatalogue: vi.fn().mockResolvedValue({ plugins: [] }),
       listIntegrationOfferings: vi.fn().mockResolvedValue({ integrations: [] }),
-    } as MenderClient;
+    } as ManagementClient;
     render(<MemoryRouter><MenderApp client={client} /></MemoryRouter>);
     fireEvent.click(screen.getByRole("button", { name: "Open navigation" }));
     const menu = screen.getByRole("dialog", { name: "Mender" });
@@ -212,7 +212,7 @@ describe("MenderApp", () => {
   });
 });
 
-function overviewClient(): MenderClient {
+function overviewClient(): ManagementClient {
   return {
     getSystemStatus: () => Promise.resolve({
       ready: true,
@@ -239,5 +239,5 @@ function overviewClient(): MenderClient {
     listProfiles: () => Promise.resolve({ profiles: [] }),
     listSkills: () => Promise.resolve({ installations: [] }),
     listAudit: () => Promise.resolve({ records: [] }),
-  } as unknown as MenderClient;
+  } as unknown as ManagementClient;
 }

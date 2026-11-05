@@ -1,5 +1,5 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import type { MCPServerInstance, MenderClient } from "@mender/sdk";
+import type { MCPServerInstance, ManagementClient } from "@mender/sdk";
 import { TooltipProvider } from "@mender/ui/components/tooltip";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
@@ -47,12 +47,12 @@ function captureServerStatusPolling() {
 }
 function showServer(
   listMCPServers: ReturnType<typeof vi.fn>,
-  overrides: Partial<MenderClient> = {},
+  overrides: Partial<ManagementClient> = {},
 ) {
   const listProfiles = vi.fn().mockResolvedValue({
     profiles: [{ profileId: "prof_00000000000000000000000000000001", slug: "default", displayName: "Default", mode: "hybrid", tools: [] }],
   });
-  const client = { listProfiles, listMCPServers, ...overrides } as unknown as MenderClient;
+  const client = { listProfiles, listMCPServers, ...overrides } as unknown as ManagementClient;
   const view = render(
     <TooltipProvider><ServersPage client={client} /></TooltipProvider>,
   );
@@ -228,7 +228,7 @@ it("keeps the single-server view focused and retains all commands in explicit ac
     }] }),
     listMCPServers: vi.fn().mockResolvedValue({ servers: [local] }),
     restartMCPServer: vi.fn(), stopMCPServer,
-  } as unknown as MenderClient;
+  } as unknown as ManagementClient;
   render(<TooltipProvider><ServersPage client={client} copyText={copyText} /></TooltipProvider>);
   const row = await screen.findByRole("row", { name: /default/ });
   expect(within(row).getByRole("button", { name: "Copy endpoint" })).toBeTruthy();

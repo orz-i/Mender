@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
 
-import type { MenderClient } from "@mender/sdk";
+import type { ManagementClient } from "@mender/sdk";
 import { Button } from "@mender/ui/components/button";
 import { Input } from "@mender/ui/components/input";
 
@@ -11,7 +11,7 @@ import { PageToolbar } from "../../shared/page-toolbar";
 import { DataPanel } from "../../shared/workbench";
 import { canonicalizeOwnedIdentifier, isCanonicalOwnedSlug, ownedIdentifierCreateError } from "../../shared/form-identifiers";
 
-export function ProfileCreatePage({ client }: { client: MenderClient }) {
+export function ProfileCreatePage({ client }: { client: ManagementClient }) {
   const navigate = useNavigate();
   const [form, setForm] = useState({
     slug: "", displayName: "",

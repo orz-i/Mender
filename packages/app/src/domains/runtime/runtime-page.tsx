@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { ActivityIcon, BoxesIcon, ShieldCheckIcon, WorkflowIcon } from "lucide-react";
 
 import type {
-  MenderClient,
+  ManagementClient,
   RuntimeBudget,
   RuntimeGovernanceStatus,
   RuntimeIsolation,
@@ -87,7 +87,7 @@ function budgetFromDraft(draft: BudgetDraft | null): RuntimeBudget | null {
   return next;
 }
 
-export function RuntimePage({ client }: { client: MenderClient }) {
+export function RuntimePage({ client }: { client: ManagementClient }) {
   const [status, setStatus] = useState<RuntimeGovernanceStatus | null>(null);
   const [budget, setBudget] = useState<RuntimeBudget | null>(null);
   const [budgetDraft, setBudgetDraft] = useState<BudgetDraft | null>(null);

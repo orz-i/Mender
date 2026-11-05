@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
-import type { MenderClient } from "@mender/sdk";
+import type { ManagementClient } from "@mender/sdk";
 import { Button } from "@mender/ui/components/button";
 import { Input } from "@mender/ui/components/input";
 import { t } from "../../i18n/i18n";
@@ -19,7 +19,7 @@ type Step = "select" | "configure" | "review";
 export function AgentCreatePage({
   client, chooseLocalDirectory,
 }:{
-  client:MenderClient;
+  client:ManagementClient;
   chooseLocalDirectory?:()=>Promise<string|null>;
 }){
   const [params]=useSearchParams();
@@ -41,7 +41,7 @@ export function AgentCreatePage({
 function AgentCreateForm({
   client, chooseLocalDirectory, pinnedBackend,
 }:{
-  client:MenderClient;
+  client:ManagementClient;
   chooseLocalDirectory?:()=>Promise<string|null>;
   pinnedBackend:AgentBackend|null;
 }){

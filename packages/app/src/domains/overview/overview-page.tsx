@@ -10,7 +10,7 @@ import {
 
 import type {
   AuditRecord,
-  MenderClient,
+  ManagementClient,
   Profile,
   Provider,
   SkillInstallation,
@@ -52,8 +52,8 @@ type OverviewState = {
   toolsById: Record<string, ToolSummary>;
 };
 
-function browseOverviewTools(client: MenderClient) {
-  const browseTools = (client as Partial<MenderClient>).browseTools;
+function browseOverviewTools(client: ManagementClient) {
+  const browseTools = (client as Partial<ManagementClient>).browseTools;
   if (typeof browseTools !== "function") {
     return Promise.resolve(null);
   }
@@ -107,7 +107,7 @@ function PanelLink({ to, label, destination = label }: { to: string; label: stri
   );
 }
 
-export function OverviewPage({ client }: { client: MenderClient }) {
+export function OverviewPage({ client }: { client: ManagementClient }) {
   const [data, setData] = useState<OverviewState | null>(null);
   const [error, setError] = useState("");
   const [view, setView] = useState<"activity" | "resources">("activity");

@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import type { MenderClient } from "@mender/sdk";
+import type { ManagementClient } from "@mender/sdk";
 import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -29,7 +29,7 @@ describe("Initial request failures remain separate from real empty inventories",
     const listAgents = vi.fn()
       .mockRejectedValueOnce(new Error("Agent registry offline"))
       .mockResolvedValue({ agents: [] });
-    const client = { listAgents } as unknown as MenderClient;
+    const client = { listAgents } as unknown as ManagementClient;
 
     render(<MemoryRouter><AgentsPage client={client} /></MemoryRouter>);
 
@@ -49,7 +49,7 @@ describe("Initial request failures remain separate from real empty inventories",
     const client = {
       listProviders: vi.fn().mockResolvedValue({ providers: [] }),
       browseTools,
-    } as unknown as MenderClient;
+    } as unknown as ManagementClient;
 
     render(<MemoryRouter><CatalogPage client={client} providerId="prov_example" /></MemoryRouter>);
 
@@ -76,7 +76,7 @@ describe("Initial request failures remain separate from real empty inventories",
         }],
         nextCursor: null,
       }),
-    } as unknown as MenderClient;
+    } as unknown as ManagementClient;
 
     render(<MemoryRouter><CatalogPage client={client} providerId="prov_example" /></MemoryRouter>);
 
@@ -92,7 +92,7 @@ describe("Initial request failures remain separate from real empty inventories",
     const client = {
       listSkills,
       listSkillDeployments: vi.fn().mockResolvedValue({ deployments: [] }),
-    } as unknown as MenderClient;
+    } as unknown as ManagementClient;
 
     render(<MemoryRouter><SkillsPage client={client} /></MemoryRouter>);
 
@@ -114,7 +114,7 @@ describe("Initial request failures remain separate from real empty inventories",
       listProviders: vi.fn().mockResolvedValue({ providers: [] }),
       listTunnels,
       browseTools: vi.fn().mockResolvedValue({ tools: [] }),
-    } as unknown as MenderClient;
+    } as unknown as ManagementClient;
 
     render(<MemoryRouter><ProfilesPage client={client} /></MemoryRouter>);
 

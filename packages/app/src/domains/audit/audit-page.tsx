@@ -3,7 +3,7 @@ import { EyeIcon, RefreshCwIcon } from "lucide-react";
 
 import type {
   AuditRecord,
-  MenderClient,
+  ManagementClient,
   ProviderActivationAuditRecord,
   ToolSummary,
 } from "@mender/sdk";
@@ -52,8 +52,8 @@ type AuditPreview = {
   selection: AuditSelection;
 };
 
-function browseAuditTools(client: MenderClient) {
-  const browseTools = (client as Partial<MenderClient>).browseTools;
+function browseAuditTools(client: ManagementClient) {
+  const browseTools = (client as Partial<ManagementClient>).browseTools;
   if (typeof browseTools !== "function") return Promise.resolve(null);
   return browseTools.call(client, { limit: 100 }).catch(() => null);
 }
@@ -100,7 +100,7 @@ function matchesPreview(row: AuditPreview, search: string, status: StatusFilter)
   ].some((value) => value.toLocaleLowerCase().includes(search));
 }
 
-export function AuditPage({ client }: { client: MenderClient }) {
+export function AuditPage({ client }: { client: ManagementClient }) {
   const [records, setRecords] = useState<AuditRecord[]>([]);
   const [activationRecords, setActivationRecords] = useState<ProviderActivationAuditRecord[]>([]);
   const [toolsById, setToolsById] = useState<Record<string, ToolSummary>>({});

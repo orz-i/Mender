@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import type { MenderClient, Sandbox, SSHJobAdmissionState, SSHJobRecoveryView } from "@mender/sdk";
+import type { ManagementClient, Sandbox, SSHJobAdmissionState, SSHJobRecoveryView } from "@mender/sdk";
 import { resetLocaleForTesting, setLocale } from "../../i18n/i18n";
 import { SandboxJobRecoveryPanel } from "./sandbox-job-recovery-panel";
 
@@ -26,7 +26,7 @@ it("does not inspect SSH or change admissions until explicit owner actions", asy
   const getSSHJobAdmission = vi.fn().mockResolvedValue(admission);
   const getSSHJobRecovery = vi.fn().mockResolvedValue(recovery);
   const setSSHJobAdmission = vi.fn().mockResolvedValue({ ...admission, paused: true });
-  render(<SandboxJobRecoveryPanel client={{ getSSHJobAdmission, getSSHJobRecovery, setSSHJobAdmission } as unknown as MenderClient} sandbox={sandbox} />);
+  render(<SandboxJobRecoveryPanel client={{ getSSHJobAdmission, getSSHJobRecovery, setSSHJobAdmission } as unknown as ManagementClient} sandbox={sandbox} />);
   expect(await screen.findByText("Accepting")).toBeTruthy();
   expect(getSSHJobRecovery).not.toHaveBeenCalled();
   expect(setSSHJobAdmission).not.toHaveBeenCalled();
@@ -68,7 +68,7 @@ it("requires paused admissions and an explicit reviewed reason before v2 resolut
   render(<SandboxJobRecoveryPanel client={{
     getSSHJobAdmission: vi.fn().mockResolvedValue({ sandboxId: sandbox.sandboxId, generation: 5, paused: true }),
     getSSHJobRecovery, resolveSSHJobRecovery,
-  } as unknown as MenderClient} sandbox={sandbox} />);
+  } as unknown as ManagementClient} sandbox={sandbox} />);
   expect(await screen.findByText("Paused")).toBeTruthy();
   expect(resolveSSHJobRecovery).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "Inspect remote evidence" }));

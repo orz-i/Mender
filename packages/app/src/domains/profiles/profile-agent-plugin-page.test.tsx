@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type {
-  ExportProfilePluginInput, MenderClient, Profile, ProfileAgentPluginExport,
+  ExportProfilePluginInput, ManagementClient, Profile, ProfileAgentPluginExport,
 } from "@mender/sdk";
 import { TooltipProvider } from "@mender/ui/components/tooltip";
 import { MemoryRouter, Route, Routes } from "react-router";
@@ -30,7 +30,7 @@ function show(input: {
   exporter?: (slug: string, input: ExportProfilePluginInput) => Promise<ProfileAgentPluginExport | null>;
 } = {}) {
   const getProfile = vi.fn().mockResolvedValue(input.chosen ?? profile);
-  const client = { getProfile } as unknown as MenderClient;
+  const client = { getProfile } as unknown as ManagementClient;
   render(<MemoryRouter initialEntries={["/profiles/delivery/deliveries/plugin"]}>
     <TooltipProvider><Routes>
       <Route path="/profiles/:slug/deliveries/plugin" element={<ProfileAgentPluginPage

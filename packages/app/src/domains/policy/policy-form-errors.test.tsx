@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import type { MenderClient } from "@mender/sdk";
+import type { ManagementClient } from "@mender/sdk";
 import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resetLocaleForTesting, setLocale } from "../../i18n/i18n";
@@ -8,14 +8,14 @@ import { PolicyPage } from "./policy-page";
 beforeEach(() => { resetLocaleForTesting(); setLocale("en"); });
 afterEach(() => { cleanup(); resetLocaleForTesting(); });
 
-function renderPolicy(overrides: Partial<MenderClient> = {}) {
+function renderPolicy(overrides: Partial<ManagementClient> = {}) {
   const client = {
     getPolicy: vi.fn().mockResolvedValue({ defaultDecision: "allow", rules: [] }),
     listProfiles: vi.fn().mockResolvedValue({ profiles: [] }),
     listProviders: vi.fn().mockResolvedValue({ providers: [] }),
     browseTools: vi.fn().mockResolvedValue({ tools: [] }),
     ...overrides,
-  } as unknown as MenderClient;
+  } as unknown as ManagementClient;
   render(<MemoryRouter><PolicyPage client={client} /></MemoryRouter>);
   return client;
 }

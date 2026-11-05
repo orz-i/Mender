@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { MenderApiError, type MCPServerInstance, type MenderClient, type Profile, type ProfileMCPDelivery, type ConfigureProfileMCPDeliveryRequest } from "@mender/sdk";
+import { MenderApiError, type MCPServerInstance, type ManagementClient, type Profile, type ProfileMCPDelivery, type ConfigureProfileMCPDeliveryRequest } from "@mender/sdk";
 import { TooltipProvider } from "@mender/ui/components/tooltip";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -45,7 +45,7 @@ function mount(servers: MCPServerInstance[], options:{config?:ProfileMCPDelivery
     listProfiles: vi.fn().mockResolvedValue({ profiles: [alpha, beta] }),
     listMCPServers: vi.fn().mockResolvedValue({ servers }),
     startMCPServer, restartMCPServer, stopMCPServer,
-  } as unknown as MenderClient;
+  } as unknown as ManagementClient;
   render(<MemoryRouter initialEntries={["/profiles/alpha/deliveries/mcp"]}>
     <TooltipProvider><Routes>
       <Route path="/profiles/:slug/deliveries/mcp" element={<ProfileMCPDeliveryPage client={client} copyText={vi.fn().mockResolvedValue(undefined)} />} />

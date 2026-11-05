@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import type { MenderClient, SandboxActivity } from "@mender/sdk";
+import type { ManagementClient, SandboxActivity } from "@mender/sdk";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -17,10 +17,10 @@ const activity: SandboxActivity = {
   ],
 };
 
-function mount(client: Partial<MenderClient>) {
+function mount(client: Partial<ManagementClient>) {
   render(<MemoryRouter initialEntries={[`/sandboxes/${id}/activity`]}>
     <Routes>
-      <Route path="/sandboxes/:sandboxId/activity" element={<SandboxActivityPage client={client as MenderClient} />} />
+      <Route path="/sandboxes/:sandboxId/activity" element={<SandboxActivityPage client={client as ManagementClient} />} />
       <Route path="/sandboxes/:sandboxId" element={<div>Sandbox overview reached</div>} />
     </Routes>
   </MemoryRouter>);

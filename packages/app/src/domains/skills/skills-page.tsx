@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 
 import type {
-  MenderClient,
+  ManagementClient,
   SkillDeployment,
   SkillInspection,
   SkillInstallation,
@@ -60,7 +60,7 @@ export function SkillsPage({
   client,
   installSkill,
 }: {
-  client: MenderClient;
+  client: ManagementClient;
   installSkill?: () => Promise<SkillInstallation | null>;
 }) {
   const [installations, setInstallations] = useState<SkillInstallation[]>([]);

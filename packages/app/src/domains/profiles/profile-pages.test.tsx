@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import type { MenderClient, Profile, Provider, ToolSummary } from "@mender/sdk";
+import type { ManagementClient, Profile, Provider, ToolSummary } from "@mender/sdk";
 import { TooltipProvider } from "@mender/ui/components/tooltip";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -35,7 +35,7 @@ const tool: ToolSummary = {
   rank: 1, toolId: "tool_search", providerId: "prov_source",
   name: "search", title: "Search", description: "Search the web",
 };
-function show(initial: string, overrides: Partial<MenderClient> = {}) {
+function show(initial: string, overrides: Partial<ManagementClient> = {}) {
   const client = {
     listProfiles: vi.fn().mockResolvedValue({ profiles: [profile] }),
     listProviders: vi.fn().mockResolvedValue({ providers: [provider] }),
@@ -45,7 +45,7 @@ function show(initial: string, overrides: Partial<MenderClient> = {}) {
     getTool: vi.fn().mockResolvedValue({ ...tool, inputSchema: {}, tags: [] }),
     replaceProfileTools: vi.fn(),
     ...overrides,
-  } as unknown as MenderClient;
+  } as unknown as ManagementClient;
   render(
     <MemoryRouter initialEntries={[initial]}>
       <TooltipProvider>
@@ -65,7 +65,7 @@ afterEach(() => { cleanup(); resetLocaleForTesting(); });
 
 it("opens a read-only detail from the inventory and drills down by source", async () => {
   const replaceProfileTools = vi.fn();
-  show("/profiles", { replaceProfileTools: replaceProfileTools as MenderClient["replaceProfileTools"] });
+  show("/profiles", { replaceProfileTools: replaceProfileTools as ManagementClient["replaceProfileTools"] });
   fireEvent.click(await screen.findByRole("button", { name: "My Profile" }));
   await screen.findByRole("button", { name: "Edit profile" });
   expect(screen.queryByText("search_prod")).toBeNull(); // No tool list is exposed in overview.

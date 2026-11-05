@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router";
-import type { MenderClient } from "@mender/sdk";
+import type { ManagementClient } from "@mender/sdk";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { resetLocaleForTesting, setLocale } from "../../i18n/i18n";
@@ -67,7 +67,7 @@ function setup(initial: string, includeBuiltin = false) {
     listCredentials: vi.fn().mockResolvedValue({ credentials: [] }),
     listSandboxes: vi.fn().mockResolvedValue({ sandboxes: [] }),
     createProvider,
-  } as unknown as MenderClient;
+  } as unknown as ManagementClient;
 
   render(<MemoryRouter initialEntries={[initial]}>
     <RouteProbe />

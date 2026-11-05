@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import { useLocation, useNavigate, useParams } from "react-router";
 
-import type { MCPServerInstance, MenderClient, Profile, Provider, SkillInstallation, ToolSummary } from "@mender/sdk";
+import type { MCPServerInstance, ManagementClient, Profile, Provider, SkillInstallation, ToolSummary } from "@mender/sdk";
 import { Badge } from "@mender/ui/components/badge";
 import { Button } from "@mender/ui/components/button";
 
@@ -18,12 +18,12 @@ import { profileSourceLabels } from "./profile-source-label";
 
 type Section = "overview" | "tools" | "skills" | "deliveries";
 
-export function ProfileDetailPage({ client }: { client: MenderClient }) {
+export function ProfileDetailPage({ client }: { client: ManagementClient }) {
   const { slug } = useParams();
   return <ProfileDetailContent key={slug} client={client} slug={slug} />;
 }
 
-function ProfileDetailContent({ client, slug }: { client: MenderClient; slug: string | undefined }) {
+function ProfileDetailContent({ client, slug }: { client: ManagementClient; slug: string | undefined }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [profile, setProfile] = useState<Profile | null>(null);

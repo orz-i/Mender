@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import type { MenderClient, Profile } from "@mender/sdk";
+import type { ManagementClient, Profile } from "@mender/sdk";
 import { TooltipProvider } from "@mender/ui/components/tooltip";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -16,9 +16,9 @@ const result: Profile = {
   revision: 0,
 };
 
-function openCreate(overrides: Partial<MenderClient> = {}) {
+function openCreate(overrides: Partial<ManagementClient> = {}) {
   const createProfile = vi.fn().mockResolvedValue(result);
-  const client = { createProfile, ...overrides } as unknown as MenderClient;
+  const client = { createProfile, ...overrides } as unknown as ManagementClient;
   render(<MemoryRouter initialEntries={["/profiles/new"]}>
     <TooltipProvider>
       <Routes>

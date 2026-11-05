@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { ReactElement } from "react";
-import type { MenderClient } from "@mender/sdk";
+import type { ManagementClient } from "@mender/sdk";
 import { TooltipProvider } from "@mender/ui/components/tooltip";
 import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -39,7 +39,7 @@ describe("Initial failure is not mistaken for an empty inventory", () => {
     const listSandboxes = vi.fn()
       .mockRejectedValueOnce(new Error("Sandbox inventory unavailable"))
       .mockResolvedValue({ sandboxes: [] });
-    mount(<SandboxesPage client={{ listSandboxes } as unknown as MenderClient} />);
+    mount(<SandboxesPage client={{ listSandboxes } as unknown as ManagementClient} />);
     await retryInitialFailure("Sandbox inventory unavailable", "No sandboxes");
     await screen.findByText("No sandboxes");
     expect(listSandboxes).toHaveBeenCalledTimes(2);
@@ -53,7 +53,7 @@ describe("Initial failure is not mistaken for an empty inventory", () => {
       listTunnels,
       listCredentials: vi.fn().mockResolvedValue({ credentials: [] }),
       listPluginCatalogue: vi.fn().mockResolvedValue({ plugins: [] }),
-    } as unknown as MenderClient} />);
+    } as unknown as ManagementClient} />);
     await retryInitialFailure("Tunnel inventory unavailable", "No Tunnels");
     await screen.findByText("No Tunnels");
     expect(listTunnels).toHaveBeenCalledTimes(2);
@@ -66,7 +66,7 @@ describe("Initial failure is not mistaken for an empty inventory", () => {
     mount(<ServersPage client={{
       listProfiles: vi.fn().mockResolvedValue({ profiles: [] }),
       listMCPServers,
-    } as unknown as MenderClient} />);
+    } as unknown as ManagementClient} />);
     await retryInitialFailure("Server inventory unavailable", "No running MCP servers");
     await screen.findByText("No running MCP servers");
     expect(listMCPServers).toHaveBeenCalledTimes(2);
@@ -76,7 +76,7 @@ describe("Initial failure is not mistaken for an empty inventory", () => {
     const listCredentials = vi.fn()
       .mockRejectedValueOnce(new Error("Credential inventory unavailable"))
       .mockResolvedValue({ credentials: [] });
-    mount(<CredentialsPage client={{ listCredentials } as unknown as MenderClient} />);
+    mount(<CredentialsPage client={{ listCredentials } as unknown as ManagementClient} />);
     await retryInitialFailure("Credential inventory unavailable", "No Credentials");
     await screen.findByText("No Credentials");
     expect(listCredentials).toHaveBeenCalledTimes(2);
@@ -91,7 +91,7 @@ describe("Initial failure is not mistaken for an empty inventory", () => {
       listProfiles: vi.fn().mockResolvedValue({ profiles: [] }),
       listProviders: vi.fn().mockResolvedValue({ providers: [] }),
       browseTools: vi.fn().mockResolvedValue({ tools: [] }),
-    } as unknown as MenderClient} />);
+    } as unknown as ManagementClient} />);
     await retryInitialFailure("Policy request unavailable", "No Policy Rules");
     await screen.findByText("No Policy Rules");
     expect(getPolicy).toHaveBeenCalledTimes(2);
@@ -105,7 +105,7 @@ describe("Initial failure is not mistaken for an empty inventory", () => {
     mount(<AuditPage client={{
       listAudit,
       listProviderActivationAudit: vi.fn().mockResolvedValue({ records: [] }),
-    } as unknown as MenderClient} />);
+    } as unknown as ManagementClient} />);
     await retryInitialFailure("Audit history unavailable", "No audit records");
     await screen.findByText("No audit records");
     expect(listAudit).toHaveBeenCalledTimes(2);
@@ -127,7 +127,7 @@ describe("Initial failure is not mistaken for an empty inventory", () => {
         backend: { name: "test-host", restrictedHostAvailable: true },
         usage: { invocations: 0, activations: 0 },
       });
-    mount(<RuntimePage client={{ getRuntimeGovernance } as unknown as MenderClient} />);
+    mount(<RuntimePage client={{ getRuntimeGovernance } as unknown as ManagementClient} />);
     await retryInitialFailure("Runtime status unavailable", "Restricted host");
     await waitFor(() => expect(getRuntimeGovernance).toHaveBeenCalledTimes(2));
     expect(await screen.findByText("test-host")).toBeTruthy();

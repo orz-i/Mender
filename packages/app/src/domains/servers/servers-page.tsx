@@ -7,7 +7,7 @@ import {
   SquareIcon,
 } from "lucide-react";
 
-import type { MCPServerInstance, MenderClient, Profile } from "@mender/sdk";
+import type { MCPServerInstance, ManagementClient, Profile } from "@mender/sdk";
 import { Badge } from "@mender/ui/components/badge";
 import { Button } from "@mender/ui/components/button";
 import {
@@ -70,7 +70,7 @@ export function ServersPage({
   copyText = browserCopyText,
   profileSlug,
 }: {
-  client: MenderClient;
+  client: ManagementClient;
   copyText?: (value: string) => Promise<void>;
   profileSlug?: string;
 }) {

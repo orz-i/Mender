@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import type { MenderClient, Profile, Sandbox, SandboxProfileGrants } from "@mender/sdk";
+import type { ManagementClient, Profile, Sandbox, SandboxProfileGrants } from "@mender/sdk";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { resetLocaleForTesting, setLocale } from "../../i18n/i18n";
@@ -21,7 +21,7 @@ const granted: SandboxProfileGrants = {
   grants: [{ profileId: profile.profileId, capabilities: ["file.read", "file.search"] }],
 };
 
-function mountAccess(overrides: Partial<MenderClient> = {}, sandboxValue = sandbox) {
+function mountAccess(overrides: Partial<ManagementClient> = {}, sandboxValue = sandbox) {
   const put = vi.fn().mockResolvedValue(granted);
   const revoke = vi.fn().mockResolvedValue(empty);
   const client = {
@@ -37,7 +37,7 @@ function mountAccess(overrides: Partial<MenderClient> = {}, sandboxValue = sandb
     putSandboxProfileGrants: put,
     revokeSandboxProfileGrants: revoke,
     ...overrides,
-  } as MenderClient;
+  } as ManagementClient;
   render(<SandboxAccessPanel client={client} sandbox={sandboxValue} />);
   return { put, revoke };
 }

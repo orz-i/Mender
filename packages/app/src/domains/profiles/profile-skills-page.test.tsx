@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import type { MenderClient, Profile, SkillInstallation } from "@mender/sdk";
+import type { ManagementClient, Profile, SkillInstallation } from "@mender/sdk";
 import { TooltipProvider } from "@mender/ui/components/tooltip";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -26,7 +26,7 @@ function installation(id: string, name: string, enabled: boolean): SkillInstalla
   };
 }
 
-function show(options: { replace?: MenderClient["replaceProfileSkills"]; selected?: string[] } = {}) {
+function show(options: { replace?: ManagementClient["replaceProfileSkills"]; selected?: string[] } = {}) {
   const replaceProfileSkills = options.replace ?? vi.fn().mockResolvedValue(profile);
   const listSkills = vi.fn().mockResolvedValue({
     installations: [
@@ -39,7 +39,7 @@ function show(options: { replace?: MenderClient["replaceProfileSkills"]; selecte
     getProfile: vi.fn().mockResolvedValue({ ...profile, skills: options.selected ?? [oldID] }),
     listSkills,
     replaceProfileSkills,
-  } as unknown as MenderClient;
+  } as unknown as ManagementClient;
   render(<MemoryRouter initialEntries={["/profiles/delivery/skills"]}>
     <TooltipProvider><Routes>
       <Route path="/profiles/:slug/skills" element={<ProfileSkillsPage client={client} />} />

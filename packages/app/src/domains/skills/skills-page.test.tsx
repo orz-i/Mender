@@ -6,7 +6,7 @@ import {
   waitFor,
 } from "@testing-library/react";
 import type {
-  MenderClient,
+  ManagementClient,
   SkillDeployment,
   SkillInspection,
   SkillInstallation,
@@ -103,7 +103,7 @@ describe("SkillsPage", () => {
       disableSkillInstallation: vi.fn(),
       deleteSkillInstallation: vi.fn(),
       undeploySkill,
-    } as unknown as MenderClient;
+    } as unknown as ManagementClient;
 
     render(
       <MemoryRouter initialEntries={["/skills"]}>

@@ -2,7 +2,7 @@ import { ChevronLeftIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 
-import { MenderClientInvariantError, type MenderClient, type Profile, type ProfileMCPDelivery, type Tunnel } from "@mender/sdk";
+import { MenderClientInvariantError, type ManagementClient, type Profile, type ProfileMCPDelivery, type Tunnel } from "@mender/sdk";
 import { Button } from "@mender/ui/components/button";
 import { t } from "../../i18n/i18n";
 import { ServersPage } from "../servers/servers-page";
@@ -14,7 +14,7 @@ export function ProfileMCPDeliveryPage({
   client,
   copyText,
 }: {
-  client: MenderClient;
+  client: ManagementClient;
   copyText?: (value: string) => Promise<void>;
 }) {
   const { slug } = useParams();
@@ -22,9 +22,9 @@ export function ProfileMCPDeliveryPage({
   return <MCPDeliveryEditor key={slug} slug={slug} client={client} {...(copyText===undefined?{}:{copyText})} />;
 }
 
-type Snapshot = {profile:Profile;config:ProfileMCPDelivery|null;tunnels:Tunnel[];client:MenderClient;version:number;names:Map<string,string>};
+type Snapshot = {profile:Profile;config:ProfileMCPDelivery|null;tunnels:Tunnel[];client:ManagementClient;version:number;names:Map<string,string>};
 
-function MCPDeliveryEditor({slug,client,copyText}:{slug:string;client:MenderClient;copyText?: (value:string)=>Promise<void>}){
+function MCPDeliveryEditor({slug,client,copyText}:{slug:string;client:ManagementClient;copyText?: (value:string)=>Promise<void>}){
   const navigate=useNavigate();
   const [loadedSnapshot,setSnapshot]=useState<Snapshot|null>(null);
   const [mode,setMode]=useState<ProfileMCPDelivery["mode"]>("hybrid");

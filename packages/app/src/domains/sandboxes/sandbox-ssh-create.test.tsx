@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import type { MenderClient, Sandbox, SSHHostIdentity } from "@mender/sdk";
+import type { ManagementClient, Sandbox, SSHHostIdentity } from "@mender/sdk";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -37,8 +37,8 @@ const sandbox: Sandbox = {
   activeLeases: 0,
   backendAvailable: true,
 };
-function renderSSH(overrides: Partial<MenderClient> = {}, builtin = false) {
-  const client: Partial<MenderClient> = {
+function renderSSH(overrides: Partial<ManagementClient> = {}, builtin = false) {
+  const client: Partial<ManagementClient> = {
     getRuntimeGovernance: vi.fn().mockResolvedValue({ backend: { restrictedHostAvailable: false } }),
     getSandboxBackends: vi.fn().mockResolvedValue({
       dockerAvailable: false, dockerStatus: "not detected",
@@ -57,7 +57,7 @@ function renderSSH(overrides: Partial<MenderClient> = {}, builtin = false) {
   render(
     <MemoryRouter initialEntries={[location]}>
       <Routes>
-        <Route path="/sandboxes/new" element={<CreateSandboxPage client={client as MenderClient} />} />
+        <Route path="/sandboxes/new" element={<CreateSandboxPage client={client as ManagementClient} />} />
         <Route path="/sandboxes/:sandboxId" element={<div>SSH Sandbox details</div>} />
         <Route path="/plugins/:key" element={<div>SSH plugin details</div>} />
       </Routes>

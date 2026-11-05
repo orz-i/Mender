@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { MenderClient, Sandbox, SandboxToolSuite } from "@mender/sdk";
+import type { ManagementClient, Sandbox, SandboxToolSuite } from "@mender/sdk";
 import { Badge } from "@mender/ui/components/badge";
 import { Button } from "@mender/ui/components/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@mender/ui/components/dialog";
@@ -12,7 +12,7 @@ import { DataPanel, EmptyPanelState } from "../../shared/workbench";
 // Only the reviewed, resource-scoped facade appears here. No task-submission
 // form is embedded in the Sandbox management view; Profile bindings and Policy
 // remain separate administrative steps.
-export function SandboxJobsPanel({ client, sandbox }: { client: MenderClient; sandbox: Sandbox }) {
+export function SandboxJobsPanel({ client, sandbox }: { client: ManagementClient; sandbox: Sandbox }) {
   const [suite, setSuite] = useState<SandboxToolSuite | null>(null);
   const [busy, setBusy] = useState(false);
   const [loaded, setLoaded] = useState(false);

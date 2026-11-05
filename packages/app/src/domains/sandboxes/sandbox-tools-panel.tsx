@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { SandboxJobsPanel } from "./sandbox-jobs-panel";
 import { SandboxJobRecoveryPanel } from "./sandbox-job-recovery-panel";
-import type { MenderClient, Sandbox, SandboxToolSuite } from "@mender/sdk";
+import type { ManagementClient, Sandbox, SandboxToolSuite } from "@mender/sdk";
 import { Badge } from "@mender/ui/components/badge";
 import { Button } from "@mender/ui/components/button";
 import {
@@ -18,7 +18,7 @@ import { EmptyState } from "../../shared/page";
 
 // One resource-bound category of information; GET cannot provision a
 // Provider, open a Sandbox, or expose any Tool to a Profile.
-function WorkspaceToolsPanel({client,sandbox}:{client:MenderClient;sandbox:Sandbox}){
+function WorkspaceToolsPanel({client,sandbox}:{client:ManagementClient;sandbox:Sandbox}){
   const navigate=useNavigate();
   const [suite,setSuite]=useState<SandboxToolSuite|null>(null);
   const [loaded,setLoaded]=useState(false);
@@ -113,7 +113,7 @@ function WorkspaceToolsPanel({client,sandbox}:{client:MenderClient;sandbox:Sandb
 
 // Keep one category visible at a time. Preparing Workspace does not prepare
 // Jobs, and selecting Jobs never implicitly changes Profile access.
-export function SandboxToolsPanel({client,sandbox}:{client:MenderClient;sandbox:Sandbox}){
+export function SandboxToolsPanel({client,sandbox}:{client:ManagementClient;sandbox:Sandbox}){
   const [category,setCategory]=useState<"workspace"|"jobs"|"recovery">("workspace");
   if(sandbox.backend!=="ssh_remote")return <WorkspaceToolsPanel client={client} sandbox={sandbox}/>;
   return <div className="space-y-4">

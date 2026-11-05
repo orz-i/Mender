@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router";
 
-import type { MenderClient } from "@mender/sdk";
+import type { ManagementClient } from "@mender/sdk";
 import { Badge } from "@mender/ui/components/badge";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader,
@@ -61,7 +61,7 @@ export function PluginsPage({
   client,
   installers = [],
 }: {
-  client: MenderClient;
+  client: ManagementClient;
   installers?: MarketplaceInstaller[];
 }) {
   const { plugins, loaded, hasSnapshot, error, setError, refresh } =
@@ -294,7 +294,7 @@ export function PluginsPage({
   );
 }
 
-export function PluginDetailPage({ client }: { client: MenderClient }) {
+export function PluginDetailPage({ client }: { client: ManagementClient }) {
   useLocale();
   const navigate = useNavigate();
   const location = useLocation();
@@ -545,7 +545,7 @@ export function PluginDetailPage({ client }: { client: MenderClient }) {
   );
 }
 
-function useMarketplacePlugins(client: MenderClient) {
+function useMarketplacePlugins(client: ManagementClient) {
   const [plugins, setPlugins] = useState<MarketplacePlugin[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [hasSnapshot, setHasSnapshot] = useState(false);

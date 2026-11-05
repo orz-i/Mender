@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import type { AuditRecord, MenderClient, ProviderActivationAuditRecord } from "@mender/sdk";
+import type { AuditRecord, ManagementClient, ProviderActivationAuditRecord } from "@mender/sdk";
 import { TooltipProvider } from "@mender/ui/components/tooltip";
 import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -53,11 +53,11 @@ const activation: ProviderActivationAuditRecord = {
 function mount(
   invocations: AuditRecord[] = [invocation],
   activations: ProviderActivationAuditRecord[] = [activation],
-  overrides: Partial<MenderClient> = {},
+  overrides: Partial<ManagementClient> = {},
 ) {
   const listAudit = vi.fn().mockResolvedValue({ records: invocations });
   const listProviderActivationAudit = vi.fn().mockResolvedValue({ records: activations });
-  const client = { listAudit, listProviderActivationAudit, ...overrides } as unknown as MenderClient;
+  const client = { listAudit, listProviderActivationAudit, ...overrides } as unknown as ManagementClient;
   render(
     <MemoryRouter>
       <TooltipProvider>

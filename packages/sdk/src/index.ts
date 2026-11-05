@@ -29,7 +29,6 @@ export type {
   InvocationResult,
   MCPServerInstance,
   ManagementClient,
-  ManagementClient as MenderClient,
   Policy,
   PolicyDecision,
   PolicyDefaultRequest,

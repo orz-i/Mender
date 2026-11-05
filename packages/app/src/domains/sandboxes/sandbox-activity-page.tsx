@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 
-import type { MenderClient, SandboxActivityEvent } from "@mender/sdk";
+import type { ManagementClient, SandboxActivityEvent } from "@mender/sdk";
 import { Button } from "@mender/ui/components/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@mender/ui/components/table";
 
@@ -20,7 +20,7 @@ type ActivityFilter = "all" | "admission" | "lifecycle";
  * Read-only Sandbox governance history. The server intentionally withholds
  * principal references, approval reasoning, file arguments and remote secrets.
  */
-export function SandboxActivityPage({ client }: { client: MenderClient }) {
+export function SandboxActivityPage({ client }: { client: ManagementClient }) {
   const { sandboxId } = useParams();
   const navigate = useNavigate();
   const [events, setEvents] = useState<SandboxActivityEvent[]>([]);

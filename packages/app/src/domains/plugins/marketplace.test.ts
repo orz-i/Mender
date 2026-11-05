@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { IntegrationOffering, MenderClient, PluginCatalogueEntry } from "@mender/sdk";
+import type { IntegrationOffering, ManagementClient, PluginCatalogueEntry } from "@mender/sdk";
 import {
   humanizePluginId,
   marketplaceCursorPage,
@@ -188,7 +188,7 @@ describe("Host-reviewed Marketplace projection",()=>{
     const disablePluginInstallation=vi.fn().mockResolvedValue({});
     const deletePluginInstallation=vi.fn().mockResolvedValue(undefined);
     const client={listPluginCatalogue,listIntegrationOfferings,listToolSuites,
-      disablePluginInstallation,deletePluginInstallation} as unknown as MenderClient;
+      disablePluginInstallation,deletePluginInstallation} as unknown as ManagementClient;
     const result=await loadMarketplacePlugins(client);
     expect(result).toHaveLength(2);
     expect(listPluginCatalogue).toHaveBeenCalledOnce();

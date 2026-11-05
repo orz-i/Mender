@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { ActivityIcon, ShieldCheckIcon } from "lucide-react";
 import { useNavigate, useParams } from "react-router";
 
-import { MenderApiError, type MenderClient, type Sandbox } from "@mender/sdk";
+import { MenderApiError, type ManagementClient, type Sandbox } from "@mender/sdk";
 import { Button } from "@mender/ui/components/button";
 import {
   Dialog,
@@ -28,7 +28,7 @@ import { SandboxToolsPanel } from "./sandbox-tools-panel";
 type DetailTopic = "overview" | "security" | "access" | "tools";
 type LifecycleAction = "start" | "stop" | "destroy";
 
-export function SandboxDetailPage({ client }: { client: MenderClient }) {
+export function SandboxDetailPage({ client }: { client: ManagementClient }) {
   const { sandboxId } = useParams();
   const navigate = useNavigate();
   const [item, setItem] = useState<Sandbox | null>(null);

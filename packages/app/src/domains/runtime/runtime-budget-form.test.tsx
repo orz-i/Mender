@@ -1,5 +1,5 @@
 import {cleanup,fireEvent,render,screen,waitFor,within} from "@testing-library/react";
-import type {MenderClient,RuntimeBudget,RuntimeGovernanceStatus} from "@mender/sdk";
+import type {ManagementClient,RuntimeBudget,RuntimeGovernanceStatus} from "@mender/sdk";
 import {afterEach,beforeEach,describe,expect,it,vi} from "vitest";
 
 import {resetLocaleForTesting,setLocale} from "../../i18n/i18n";
@@ -16,13 +16,13 @@ const status:RuntimeGovernanceStatus={
  backend:{name:"test-host",restrictedHostAvailable:true},
  usage:{invocations:1,activations:0},
 };
-function makeClient(overrides:Record<string,unknown>={}):MenderClient {
+function makeClient(overrides:Record<string,unknown>={}):ManagementClient {
  return {
   getRuntimeGovernance:vi.fn().mockResolvedValue(status),
   updateRuntimeBudget:vi.fn().mockImplementation((budget:RuntimeBudget)=>Promise.resolve({...status,budget})),
   updateRuntimeIsolation:vi.fn().mockImplementation((isolation:RuntimeGovernanceStatus["isolation"])=>Promise.resolve({...status,isolation})),
   ...overrides,
- } as unknown as MenderClient;
+ } as unknown as ManagementClient;
 }
 async function openBudget() {
  fireEvent.click(await screen.findByRole("button",{name:"Runtime budget"}));

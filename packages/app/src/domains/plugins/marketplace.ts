@@ -1,5 +1,5 @@
 import type {
-  MenderClient,
+  ManagementClient,
   IntegrationOffering,
   PluginCatalogueEntry,
   ProviderPluginInstallation,
@@ -167,7 +167,7 @@ export function integrationOfferingsToMarketplace(offerings:IntegrationOffering[
   });
 }
 
-export async function loadMarketplacePlugins(client:MenderClient){
+export async function loadMarketplacePlugins(client:ManagementClient){
   const [catalogue,integrations]=await Promise.all([
     client.listPluginCatalogue(),client.listIntegrationOfferings(),
   ]);
@@ -199,7 +199,7 @@ export function marketplaceCursorPage(
 }
 
 export async function setMarketplacePluginEnabled(
-  client:MenderClient,plugin:MarketplacePlugin,enabled:boolean,
+  client:ManagementClient,plugin:MarketplacePlugin,enabled:boolean,
 ){
   if(!(enabled?plugin.actions.enable:plugin.actions.disable)){
     throw new Error("Marketplace plugin does not support this state change");
@@ -210,7 +210,7 @@ export async function setMarketplacePluginEnabled(
 }
 
 export async function removeMarketplacePlugin(
-  client:MenderClient,plugin:MarketplacePlugin,
+  client:ManagementClient,plugin:MarketplacePlugin,
 ){
   if(!plugin.actions.remove){throw new Error("Marketplace plugin does not support removal");}
   await client.deletePluginInstallation(requireActionRef(plugin));

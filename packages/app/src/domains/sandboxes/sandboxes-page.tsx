@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 
-import type { MenderClient, Sandbox } from "@mender/sdk";
+import type { ManagementClient, Sandbox } from "@mender/sdk";
 import { Button } from "@mender/ui/components/button";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -20,7 +20,7 @@ import { isolationLabel, sandboxBackend, sandboxStateLabel } from "./sandbox-dis
 export { CreateSandboxPage } from "./sandbox-create-page";
 export { SandboxDetailPage } from "./sandbox-detail-page";
 
-export function SandboxesPage({ client }: { client: MenderClient }) {
+export function SandboxesPage({ client }: { client: ManagementClient }) {
   const navigate = useNavigate();
   const [items, setItems] = useState<Sandbox[]>([]);
   const [loaded, setLoaded] = useState(false);

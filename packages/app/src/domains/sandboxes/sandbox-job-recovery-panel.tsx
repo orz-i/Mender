@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { MenderClient, Sandbox, SSHJobAdmissionState, SSHJobRecoveryView, SSHJobRecoveryRecord } from "@mender/sdk";
+import type { ManagementClient, Sandbox, SSHJobAdmissionState, SSHJobRecoveryView, SSHJobRecoveryRecord } from "@mender/sdk";
 import { Badge } from "@mender/ui/components/badge";
 import { Button } from "@mender/ui/components/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@mender/ui/components/dialog";
@@ -13,7 +13,7 @@ import { DataPanel, EmptyPanelState } from "../../shared/workbench";
 // One information category at a time. Entering this view fetches *only* local
 // admission state. Contacting remote SSH is an explicit inspection action;
 // neither observation nor pause changes plugin-owned Task outcome.
-export function SandboxJobRecoveryPanel({ client, sandbox }: { client: MenderClient; sandbox: Sandbox }) {
+export function SandboxJobRecoveryPanel({ client, sandbox }: { client: ManagementClient; sandbox: Sandbox }) {
   const [admission, setAdmission] = useState<SSHJobAdmissionState | null>(null);
   const [inspection, setInspection] = useState<SSHJobRecoveryView | null>(null);
   const [busy, setBusy] = useState(false);

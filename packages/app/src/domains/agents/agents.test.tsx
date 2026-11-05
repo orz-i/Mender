@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import type { Agent, AgentTools, AgentTask, MenderClient } from "@mender/sdk";
+import type { Agent, AgentTools, AgentTask, ManagementClient } from "@mender/sdk";
 import { MemoryRouter, Route, Routes, useNavigate } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resetLocaleForTesting, setLocale } from "../../i18n/i18n";
@@ -36,8 +36,8 @@ function TestPluginRouteSwitch(){
       Switch to {backend}
     </button>)}</div>;
 }
-function show(path:string,overrides:Partial<MenderClient>={}){
-  const client:Partial<MenderClient>={
+function show(path:string,overrides:Partial<ManagementClient>={}){
+  const client:Partial<ManagementClient>={
     listAgents:vi.fn().mockResolvedValue({agents:[agent]}),
     getAgent:vi.fn().mockResolvedValue(agent),
     getAgentTools:vi.fn().mockResolvedValue(suite),
@@ -56,9 +56,9 @@ function show(path:string,overrides:Partial<MenderClient>={}){
     ...overrides,
   };
   render(<MemoryRouter initialEntries={[path]}><Routes>
-    <Route path="/agents" element={<AgentsPage client={client as MenderClient}/>}/>
-    <Route path="/agents/new" element={<AgentCreatePage client={client as MenderClient}/>}/>
-    <Route path="/agents/:agentId" element={<AgentDetailPage client={client as MenderClient}/>}/>
+    <Route path="/agents" element={<AgentsPage client={client as ManagementClient}/>}/>
+    <Route path="/agents/new" element={<AgentCreatePage client={client as ManagementClient}/>}/>
+    <Route path="/agents/:agentId" element={<AgentDetailPage client={client as ManagementClient}/>}/>
     <Route path="/tools" element={<div>Provider creation target</div>}/>
     <Route path="/plugins" element={<div>Plugin catalogue</div>}/>
   </Routes></MemoryRouter>);
@@ -165,7 +165,7 @@ describe("Agents focused management",()=>{
   });
   it("resets stale form and backend when only marketplace pluginId changes on the same mounted route",async()=>{
     const createAgent=vi.fn().mockResolvedValue(agent);
-    const client={createAgent} as unknown as MenderClient;
+    const client={createAgent} as unknown as ManagementClient;
     render(<MemoryRouter initialEntries={["/agents/new?create=1&pluginId=io.mender.agent.grok"]}>
       <TestPluginRouteSwitch/>
       <Routes>

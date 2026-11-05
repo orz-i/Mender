@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 
-import type { CachedDockerImage, Credential, MenderClient, SSHHostIdentity } from "@mender/sdk";
+import type { CachedDockerImage, Credential, ManagementClient, SSHHostIdentity } from "@mender/sdk";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
   DialogDescription, DialogFooter,
@@ -211,7 +211,7 @@ export function CreateSandboxPage({
   client,
   chooseLocalDirectory,
 }: {
-  client: MenderClient;
+  client: ManagementClient;
   chooseLocalDirectory?: () => Promise<string | null>;
 }) {
   const navigate=useNavigate();

@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import type { MenderClient, RuntimeGovernanceStatus } from "@mender/sdk";
+import type { ManagementClient, RuntimeGovernanceStatus } from "@mender/sdk";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { RuntimePage } from "./runtime-page";
@@ -30,12 +30,12 @@ function showRuntime(externalProvider: "host" | "restricted_host", available: bo
     backend: { name: "test-host", restrictedHostAvailable: available },
     usage: { invocations: 0, activations: 0 },
   };
-  const updateRuntimeIsolation = vi.fn<MenderClient["updateRuntimeIsolation"]>()
+  const updateRuntimeIsolation = vi.fn<ManagementClient["updateRuntimeIsolation"]>()
     .mockImplementation((isolation) => Promise.resolve({ ...status, isolation }));
   const client = {
     getRuntimeGovernance: () => Promise.resolve(status),
     updateRuntimeIsolation,
-  } as unknown as MenderClient;
+  } as unknown as ManagementClient;
   render(<RuntimePage client={client} />);
   return updateRuntimeIsolation;
 }

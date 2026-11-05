@@ -1,5 +1,5 @@
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
-import type { MenderClient } from "@mender/sdk";
+import type { ManagementClient } from "@mender/sdk";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -39,7 +39,7 @@ describe("PluginsPage card density", () => {
         }],
       }),
       listIntegrationOfferings: vi.fn().mockResolvedValue({ integrations: [] }),
-    } as unknown as MenderClient;
+    } as unknown as ManagementClient;
     render(
       <MemoryRouter initialEntries={["/plugins"]}>
         <Routes>
@@ -85,7 +85,7 @@ describe("Marketplace host description localization", () => {
         protocolVersion: 1,
       }] }),
       listIntegrationOfferings: vi.fn().mockResolvedValue({ integrations: [] }),
-    } as unknown as MenderClient;
+    } as unknown as ManagementClient;
     render(<MemoryRouter initialEntries={["/plugins"]}><Routes>
       <Route path="/plugins" element={<PluginsPage client={client} />} />
       <Route path="/plugins/:pluginKey" element={<PluginDetailPage client={client} />} />
@@ -121,7 +121,7 @@ describe("Marketplace host description localization", () => {
     const client = {
       listPluginCatalogue: vi.fn().mockResolvedValue({ plugins: [] }),
       listIntegrationOfferings: vi.fn().mockResolvedValue({ integrations: [offering] }),
-    } as unknown as MenderClient;
+    } as unknown as ManagementClient;
     setLocale("zh-CN");
     render(<MemoryRouter><PluginsPage client={client} /></MemoryRouter>);
     const card = await screen.findByRole("link", { name: "查看 AnySearch" });
@@ -138,7 +138,7 @@ describe("PluginsPage initial load", () => {
     const client = {
       listPluginCatalogue,
       listIntegrationOfferings: vi.fn().mockResolvedValue({ integrations: [] }),
-    } as unknown as MenderClient;
+    } as unknown as ManagementClient;
 
     render(<MemoryRouter><PluginsPage client={client} /></MemoryRouter>);
 

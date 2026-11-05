@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import type { MenderClient, Sandbox } from "@mender/sdk";
+import type { ManagementClient, Sandbox } from "@mender/sdk";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -19,11 +19,11 @@ const local: Sandbox = {
   backendAvailable: true,
 };
 
-function mount(client: Partial<MenderClient>) {
+function mount(client: Partial<ManagementClient>) {
   render(
     <MemoryRouter initialEntries={[`/sandboxes/${local.sandboxId}`]}>
       <Routes>
-        <Route path="/sandboxes/:sandboxId" element={<SandboxDetailPage client={client as MenderClient} />} />
+        <Route path="/sandboxes/:sandboxId" element={<SandboxDetailPage client={client as ManagementClient} />} />
       </Routes>
     </MemoryRouter>,
   );
@@ -235,7 +235,7 @@ describe("Sandbox lifecycle management", () => {
           listSandboxes: vi.fn().mockResolvedValue({
             sandboxes: [{ ...local, state: "destroyed", backendAvailable: false }],
           }),
-        } as unknown as MenderClient} />
+        } as unknown as ManagementClient} />
       </MemoryRouter>,
     );
     expect(await screen.findByText("已销毁")).toBeTruthy();

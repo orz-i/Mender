@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
-import type { MenderClient, Profile, Provider, ToolSummary } from "@mender/sdk";
+import type { ManagementClient, Profile, Provider, ToolSummary } from "@mender/sdk";
 import { TooltipProvider } from "@mender/ui/components/tooltip";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -54,7 +54,7 @@ afterEach(() => {
 });
 
 function show(
-  overrides: Partial<MenderClient> = {},
+  overrides: Partial<ManagementClient> = {},
   options: { initialProfile?: Profile; providers?: Provider[]; initialSection?: "overview" | "tools" } = {},
 ) {
   const initialProfile = options.initialProfile ?? profile;
@@ -80,7 +80,7 @@ function show(
     getTool,
     replaceProfileTools,
     ...overrides,
-  } as unknown as MenderClient;
+  } as unknown as ManagementClient;
   render(<MemoryRouter initialEntries={[{
     pathname: "/profiles/large-profile/edit",
     state: { initialSection: options.initialSection },
@@ -179,7 +179,7 @@ it("keeps source load failures inside the picker and offers a local retry", asyn
       ? tools.filter((item) => item.providerId === input.providerId)
       : tools });
   });
-  show({ browseTools: browseTools as MenderClient["browseTools"] });
+  show({ browseTools: browseTools as ManagementClient["browseTools"] });
   const editor = await manage();
   fireEvent.click(within(editor).getByRole("button", { name: "Manage source Tool source 0" }));
   fireEvent.click(within(editor).getByRole("button", { name: "Add tools" }));
@@ -287,7 +287,7 @@ it("paginates 105 Tools inside one source and never drops other selected sources
     if (args.cursor) return Promise.resolve({ tools: more.slice(100) });
     return Promise.resolve({ tools: more.slice(0, 100), nextCursor: "source-page-two" });
   });
-  const { replaceProfileTools } = show({ browseTools: browse as MenderClient["browseTools"] });
+  const { replaceProfileTools } = show({ browseTools: browse as ManagementClient["browseTools"] });
   await chooseSources();
   const picker = await openSource("Tool source 0");
   expect(await within(picker).findByRole("button", { name: "Load more tools" })).toBeTruthy();
@@ -312,7 +312,7 @@ it("paginates 105 Tools inside one source and never drops other selected sources
 
 it("searches Tools only inside a chosen ProviderID instead of mixing same-named sources", async () => {
   const searchTools = vi.fn().mockResolvedValue({ tools: [] });
-  show({ searchTools: searchTools as MenderClient["searchTools"] });
+  show({ searchTools: searchTools as ManagementClient["searchTools"] });
   await chooseSources();
   const picker = await openSource("Tool source 2");
   fireEvent.change(within(picker).getByRole("textbox", { name: "Profile tool search" }), {
@@ -332,7 +332,7 @@ it("selects only loaded ToolIDs; never implicitly grants later pages or future t
   const browse = vi.fn().mockImplementation((args?: { providerId?: string }) => Promise.resolve({
     tools: more.slice(0, 100), nextCursor: args?.providerId ? "not-loaded" : undefined,
   }));
-  const { replaceProfileTools } = show({ browseTools: browse as MenderClient["browseTools"] });
+  const { replaceProfileTools } = show({ browseTools: browse as ManagementClient["browseTools"] });
   await chooseSources();
   const picker = await openSource("Tool source 0");
   await within(picker).findByRole("button", { name: "Load more tools" });
@@ -367,7 +367,7 @@ it("hydrates a bound Tool beyond the first Catalog page before grouping it by ex
     name: "tool_105", title: "Work tool 105", description: "Detail for far-page Tool" };
   const chosen: Profile = { ...profile, tools: [...profile.tools, { ...profile.tools[0]!, toolId: extra.toolId }] };
   const getTool = vi.fn().mockResolvedValue({ ...extra, sourceKey: "detail", inputSchema: {}, tags: [] });
-  const { replaceProfileTools } = show({ getTool: getTool as MenderClient["getTool"] }, { initialProfile: chosen });
+  const { replaceProfileTools } = show({ getTool: getTool as ManagementClient["getTool"] }, { initialProfile: chosen });
   const dialog = await manage();
   await vi.waitFor(() => expect(getTool).toHaveBeenCalledWith("tool_0105"));
   fireEvent.click(within(dialog).getByRole("button", { name: "Manage source Tool source 1" }));
@@ -409,7 +409,7 @@ it("cancels during source loading without persisting or leaking a stale request 
   const delayed = new Promise<{ tools: ToolSummary[] }>((resolve) => { finish = resolve; });
   const browse = vi.fn().mockImplementation(async (args?: { providerId?: string }) =>
     args?.providerId ? delayed : { tools });
-  const { replaceProfileTools } = show({ browseTools: browse as MenderClient["browseTools"] });
+  const { replaceProfileTools } = show({ browseTools: browse as ManagementClient["browseTools"] });
   await chooseSources();
   const picker = screen.getByRole("region", { name: "Choose tool sources" });
   fireEvent.click(within(picker).getByRole("button", { name: "Open source Tool source 0" }));
@@ -432,7 +432,7 @@ it("retains an unreachable historical ToolID in a management-only Unknown source
   };
   const selected: Profile = { ...profile, tools: [...profile.tools, historicalBinding] };
   const getTool = vi.fn().mockRejectedValue(new Error("tool was retired"));
-  const { replaceProfileTools } = show({ getTool: getTool as MenderClient["getTool"] }, { initialProfile: selected });
+  const { replaceProfileTools } = show({ getTool: getTool as ManagementClient["getTool"] }, { initialProfile: selected });
   const dialog = await manage();
   expect(within(dialog).getByRole("button", { name: "Manage source Unknown source" })).toBeTruthy();
   await vi.waitFor(() => expect(getTool).toHaveBeenCalledWith(historicalId));
@@ -456,7 +456,7 @@ it("shows failed governance saves inside the focused dialog and supports retry",
   const replaceProfileTools = vi.fn()
     .mockRejectedValueOnce(new Error("Policy store temporarily unavailable"))
     .mockResolvedValueOnce(profile);
-  show({ replaceProfileTools: replaceProfileTools as MenderClient["replaceProfileTools"] });
+  show({ replaceProfileTools: replaceProfileTools as ManagementClient["replaceProfileTools"] });
   const editor = await manage();
   fireEvent.click(within(editor).getByRole("button", { name: "Manage source Tool source 0" }));
   fireEvent.click(within(editor).getByRole("button", { name: "Actions for Work tool 1" }));
@@ -472,7 +472,7 @@ it("shows failed governance saves inside the focused dialog and supports retry",
 
 it("shows failed credential saves inside the active dialog", async () => {
   const replaceProfileTools = vi.fn().mockRejectedValue(new Error("Credential binding rejected"));
-  show({ replaceProfileTools: replaceProfileTools as MenderClient["replaceProfileTools"] });
+  show({ replaceProfileTools: replaceProfileTools as ManagementClient["replaceProfileTools"] });
   const editor = await manage();
   fireEvent.click(within(editor).getByRole("button", { name: "Manage source Tool source 0" }));
   fireEvent.click(within(editor).getByRole("button", { name: "Actions for Work tool 1" }));

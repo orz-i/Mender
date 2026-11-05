@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import type { AuditRecord, MenderClient } from "@mender/sdk";
+import type { AuditRecord, ManagementClient } from "@mender/sdk";
 import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -28,7 +28,7 @@ describe("OverviewPage load states", () => {
       listSkills: vi.fn().mockResolvedValue({ installations: [] }),
       listAudit: vi.fn().mockResolvedValue({ records: [] }),
       browseTools: vi.fn().mockResolvedValue({ tools: [] }),
-    } as unknown as MenderClient;
+    } as unknown as ManagementClient;
 
     render(<MemoryRouter><OverviewPage client={client} /></MemoryRouter>);
 
@@ -89,7 +89,7 @@ function mountOverviewWithRecords(records: AuditRecord[]) {
     browseTools: vi.fn().mockResolvedValue({ tools: [{
       toolId: "tool_read", title: "Read Agent task result", name: "read_task_result",
     }] }),
-  } as unknown as MenderClient;
+  } as unknown as ManagementClient;
   render(<MemoryRouter><OverviewPage client={client} /></MemoryRouter>);
   return client;
 }

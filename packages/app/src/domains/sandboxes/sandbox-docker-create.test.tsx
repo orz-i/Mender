@@ -1,5 +1,5 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import type { MenderClient, Sandbox } from "@mender/sdk";
+import type { ManagementClient, Sandbox } from "@mender/sdk";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -21,8 +21,8 @@ const created: Sandbox = {
   backendAvailable: true,
 };
 
-function showCreate(client: Partial<MenderClient>) {
-  const passed: Partial<MenderClient> = {
+function showCreate(client: Partial<ManagementClient>) {
+  const passed: Partial<ManagementClient> = {
     listCredentials: vi.fn().mockResolvedValue({credentials: []}),
     listDockerImages: vi.fn().mockResolvedValue({images:[{
       imageDigest:cachedImage, displayName:"alpine:3.22",
@@ -32,7 +32,7 @@ function showCreate(client: Partial<MenderClient>) {
   render(
     <MemoryRouter initialEntries={["/sandboxes/new"]}>
       <Routes>
-        <Route path="/sandboxes/new" element={<CreateSandboxPage client={passed as MenderClient} />} />
+        <Route path="/sandboxes/new" element={<CreateSandboxPage client={passed as ManagementClient} />} />
         <Route path="/sandboxes/:sandboxId" element={<div>Sandbox detail route reached</div>} />
       </Routes>
     </MemoryRouter>,

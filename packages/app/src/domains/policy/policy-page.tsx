@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 
 import type {
-  MenderClient,
+  ManagementClient,
   Policy,
   PolicyDecision,
   PolicyRule,
@@ -119,7 +119,7 @@ function emptyRuleForm(): PolicyRuleInput {
   };
 }
 
-export function PolicyPage({ client }: { client: MenderClient }) {
+export function PolicyPage({ client }: { client: ManagementClient }) {
   const [policy, setPolicy] = useState<Policy | null>(null);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [providers, setProviders] = useState<Provider[]>([]);

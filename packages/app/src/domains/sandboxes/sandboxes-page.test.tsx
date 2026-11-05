@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
-import type { MenderClient, Sandbox } from "@mender/sdk";
+import type { ManagementClient, Sandbox } from "@mender/sdk";
 import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -35,7 +35,7 @@ const sandboxes: Sandbox[] = [
 
 function mount(items: Sandbox[] = sandboxes) {
   const listSandboxes = vi.fn().mockResolvedValue({ sandboxes: items });
-  const client = { listSandboxes } as unknown as MenderClient;
+  const client = { listSandboxes } as unknown as ManagementClient;
   render(
     <MemoryRouter>
       <SandboxesPage client={client} />
