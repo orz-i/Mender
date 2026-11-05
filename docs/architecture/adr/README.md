@@ -85,3 +85,4 @@ Minor implementation choices that remain inside an accepted architectural bounda
 - [ADR-0057: Evidence-bound Agent lifecycle and native session continuation](0057-agent-session-lifecycle-recovery.md) — Partially implemented; recovery/reattachment remains proposed
 - [ADR-0058: Profile as a unified capability bundle and delivery root](0058-profile-unified-delivery-root.md) — Accepted
 - [ADR-0059: Restore application ownership in the R0-R2 refactor](0059-r0-r2-application-boundaries.md) — Accepted for R0-R2
+- [ADR-0060: Separate Agent use cases and Invocation stages in R3](0060-r3-agent-invocation-boundaries.md) — Accepted for R3
