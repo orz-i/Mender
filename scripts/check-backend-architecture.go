@@ -108,6 +108,8 @@ func checkArchitecture(root string, exceptions []architectureException) ([]strin
 		}
 		violations = append(violations, filepathMechanismViolations(relative, file, fset)...)
 		violations = append(violations, workspaceLegacyViolations(relative, file, fset)...)
+		violations = append(violations, profileDeliveryViolations(relative, file, fset)...)
+		violations = append(violations, bootstrapManagedMCPViolations(relative, file, fset)...)
 		return nil
 	})
 	if err != nil {
@@ -165,6 +167,29 @@ func filepathMechanismViolations(path string, file *ast.File, fset *token.FileSe
 }
 
 func forbiddenDependency(file, imported string) string {
+	if strings.HasPrefix(file, "backend/internal/profile/domain/") || strings.HasPrefix(file, "backend/internal/profile/application/") {
+		if strings.HasPrefix(imported, internalPrefix+"mcp/") || strings.HasPrefix(imported, internalPrefix+"tunnel/") {
+			return "Profile selection/delivery boundary"
+		}
+	}
+	if strings.HasPrefix(file, "backend/internal/mcp/infrastructure/managed/") {
+		for _, adapter := range []string{"bootstrap", "cli", "desktop", "management"} {
+			if imported == internalPrefix+adapter || strings.HasPrefix(imported, internalPrefix+adapter+"/") {
+				return "managed MCP composition boundary"
+			}
+		}
+		parts := strings.Split(strings.TrimPrefix(imported, internalPrefix), "/")
+		if strings.HasPrefix(imported, internalPrefix) {
+			for i := 0; i+1 < len(parts); i++ {
+				if parts[i] == "infrastructure" && parts[i+1] == "sqlite" {
+					return "managed MCP persistence callback boundary"
+				}
+			}
+		}
+		if imported == "database/sql" || strings.HasPrefix(imported, "modernc.org/sqlite") {
+			return "managed MCP persistence callback boundary"
+		}
+	}
 	if strings.HasPrefix(file, "backend/internal/workspace/domain/") || strings.HasPrefix(file, "backend/internal/workspace/application/") {
 		if imported == "encoding/json" || strings.HasPrefix(imported, internalPrefix+"invocation/") || strings.HasPrefix(imported, internalPrefix+"sandbox/") {
 			return "Workspace typed boundary"
@@ -245,5 +270,165 @@ func workspaceLegacyViolations(path string, file *ast.File, fset *token.FileSet)
 		}
 		return true
 	})
+	return violations
+}
+
+// Only the Profile aggregate and its binding values are covered. A Mode method
+// on another context (or a different Profile value) is not a delivery leak.
+func profileDeliveryViolations(path string, file *ast.File, fset *token.FileSet) []string {
+	if !strings.HasPrefix(path, "backend/internal/profile/domain/") {
+		return nil
+	}
+	var violations []string
+	aggregates := map[string]string{"Profile": "Profile", "ToolBinding": "ToolBinding", "ToolBindingSpec": "ToolBindingSpec"}
+	// Resolve local aliases without depending on the host's platform/type build.
+	for changed := true; changed; {
+		changed = false
+		for _, declaration := range file.Decls {
+			general, ok := declaration.(*ast.GenDecl)
+			if !ok {
+				continue
+			}
+			for _, spec := range general.Specs {
+				typeSpec, ok := spec.(*ast.TypeSpec)
+				if !ok || aggregates[typeSpec.Name.Name] != "" {
+					continue
+				}
+				if base := aggregates[localTypeName(typeSpec.Type)]; base != "" {
+					aggregates[typeSpec.Name.Name] = base
+					changed = true
+				}
+			}
+		}
+	}
+	ast.Inspect(file, func(node ast.Node) bool {
+		switch value := node.(type) {
+		case *ast.FuncDecl:
+			if value.Recv == nil || len(value.Recv.List) != 1 || aggregates[localTypeName(value.Recv.List[0].Type)] == "" {
+				break
+			}
+			switch value.Name.Name {
+			case "Mode", "TunnelID", "SetTunnel", "ClearTunnel", "Direct", "DirectToolIDs", "withDirect":
+				violations = append(violations, fmt.Sprintf("%s:%d: legacy Profile delivery method %s", path, fset.Position(value.Pos()).Line, value.Name.Name))
+			}
+		case *ast.TypeSpec:
+			if value.Name.Name == "ExposureMode" {
+				violations = append(violations, fmt.Sprintf("%s:%d: legacy Profile MCP exposure mode", path, fset.Position(value.Pos()).Line))
+			}
+			fields, ok := value.Type.(*ast.StructType)
+			if !ok || aggregates[value.Name.Name] == "" {
+				break
+			}
+			for _, field := range fields.Fields.List {
+				for _, name := range field.Names {
+					switch strings.ToLower(name.Name) {
+					case "mode", "exposuremode", "exposure_mode", "tunnelid", "tunnel_id", "direct", "directtoolids":
+						violations = append(violations, fmt.Sprintf("%s:%d: legacy Profile delivery field %s.%s", path, fset.Position(name.Pos()).Line, value.Name.Name, name.Name))
+					}
+				}
+			}
+		}
+		return true
+	})
+	return violations
+}
+
+func localTypeName(expr ast.Expr) string {
+	switch value := expr.(type) {
+	case *ast.Ident:
+		return value.Name
+	case *ast.StarExpr:
+		return localTypeName(value.X)
+	case *ast.ParenExpr:
+		return localTypeName(value.X)
+	}
+	return ""
+}
+
+// Profile-managed listener ownership belongs to mcp/infrastructure/managed.
+// Agent Task capability proxies and local Provider identity sets are separate.
+func bootstrapManagedMCPViolations(path string, file *ast.File, fset *token.FileSet) []string {
+	if !strings.HasPrefix(path, "backend/internal/bootstrap/") {
+		return nil
+	}
+	var violations []string
+	base := filepath.Base(path)
+	managedFile := base == "mcp_servers.go" || strings.HasPrefix(base, "mcp_servers_")
+	aliases := map[string]string{}
+	if managedFile {
+		for _, imported := range file.Imports {
+			importPath, err := strconv.Unquote(imported.Path.Value)
+			if err != nil || (importPath != "net" && importPath != "net/http") {
+				continue
+			}
+			alias := filepath.Base(importPath)
+			if imported.Name != nil {
+				alias = imported.Name.Name
+			}
+			if alias == "." {
+				violations = append(violations, fmt.Sprintf("%s:%d: Profile-managed bootstrap dot-imports listener mechanism %s", path, fset.Position(imported.Pos()).Line, importPath))
+			} else {
+				aliases[alias] = importPath
+			}
+		}
+	}
+	for _, declaration := range file.Decls {
+		general, ok := declaration.(*ast.GenDecl)
+		if !ok {
+			continue
+		}
+		for _, spec := range general.Specs {
+			switch value := spec.(type) {
+			case *ast.TypeSpec:
+				if value.Name.Name == "managedMCPServer" {
+					violations = append(violations, fmt.Sprintf("%s:%d: legacy Profile-managed bootstrap server state", path, fset.Position(value.Pos()).Line))
+				}
+				fields, ok := value.Type.(*ast.StructType)
+				if !ok || value.Name.Name != "Runtime" {
+					continue
+				}
+				for _, field := range fields.Fields.List {
+					for _, name := range field.Names {
+						if name.Name == "mcpServers" || name.Name == "mcpServersMu" {
+							violations = append(violations, fmt.Sprintf("%s:%d: legacy Profile-managed Runtime registry field %s", path, fset.Position(name.Pos()).Line, name.Name))
+						}
+					}
+				}
+			case *ast.ValueSpec:
+				if !managedFile || general.Tok != token.VAR {
+					continue
+				}
+				// Package-level maps would restore shared registry ownership. The
+				// Provider activation method's local deduplication map is allowed.
+				ast.Inspect(value, func(node ast.Node) bool {
+					if _, closure := node.(*ast.FuncLit); closure {
+						return false
+					}
+					if _, registry := node.(*ast.MapType); registry {
+						violations = append(violations, fmt.Sprintf("%s:%d: Profile-managed bootstrap package map state", path, fset.Position(node.Pos()).Line))
+					}
+					return true
+				})
+			}
+		}
+	}
+	if managedFile {
+		ast.Inspect(file, func(node ast.Node) bool {
+			selector, ok := node.(*ast.SelectorExpr)
+			if !ok {
+				return true
+			}
+			qualifier, ok := selector.X.(*ast.Ident)
+			if !ok || qualifier.Obj != nil {
+				return true
+			}
+			mechanism := aliases[qualifier.Name]
+			if mechanism == "net" && slices.Contains([]string{"Listener", "Listen", "ListenConfig", "ListenTCP", "ListenUnix"}, selector.Sel.Name) ||
+				mechanism == "net/http" && slices.Contains([]string{"Server", "Serve", "ServeTLS", "ListenAndServe", "ListenAndServeTLS"}, selector.Sel.Name) {
+				violations = append(violations, fmt.Sprintf("%s:%d: Profile-managed bootstrap listener mechanism %s.%s", path, fset.Position(selector.Pos()).Line, mechanism, selector.Sel.Name))
+			}
+			return true
+		})
+	}
 	return violations
 }
