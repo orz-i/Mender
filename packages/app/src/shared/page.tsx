@@ -15,7 +15,7 @@ export function PageHeader({
   }
 
   return (
-    <div className="mb-5 flex min-w-0 justify-end">
+    <div className="mb-3 flex min-w-0 justify-end">
       <div className="min-w-0 max-w-full">{actions}</div>
     </div>
   );
@@ -23,7 +23,7 @@ export function PageHeader({
 
 export function ErrorNotice({ message, onRetry }: { message: string; onRetry?: (() => void) | undefined }) {
   return (
-    <div role="alert" className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-destructive/20 bg-destructive/10 px-5 py-4 text-sm text-destructive">
+    <div role="alert" className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-destructive/20 bg-destructive/10 px-5 py-4 text-sm text-destructive">
       <p className="min-w-0 flex-1 break-words">{message}</p>
       {onRetry ? (
         <Button type="button" size="sm" variant="outline" onClick={onRetry}>
@@ -49,7 +49,7 @@ export function EmptyState({
     <div
       data-slot="empty-state"
       className={cn(
-        "w-full max-w-xl rounded-[22px] border border-dashed border-border/80 bg-transparent px-6 py-12 text-center sm:px-10 sm:py-14",
+        "w-full max-w-xl rounded-xl border border-dashed border-border bg-card px-5 py-9 text-center sm:px-8 sm:py-10",
         className,
       )}
     >

@@ -33,16 +33,16 @@ export function InsightBanner({
       aria-label={typeof title === "string" ? t(title) : t("System recommendation")}
       data-slot="insight-banner"
       className={cn(
-        "mb-5 flex min-w-0 flex-col gap-4 rounded-[22px] border border-primary/30 bg-accent/75 p-4 text-foreground sm:flex-row sm:items-center sm:justify-between",
+        "mb-4 flex min-w-0 flex-col gap-3 rounded-xl border border-border bg-card p-3.5 text-foreground sm:flex-row sm:items-center sm:justify-between",
         className,
       )}
     >
       <div className="flex min-w-0 items-start gap-3.5 sm:items-center">
         <span
-          className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/25 text-primary-ink"
+          className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-accent text-primary-ink"
           aria-hidden="true"
         >
-          <Icon className="size-5" />
+          <Icon className="size-4" />
         </span>
         <div className="min-w-0">
           <p className="text-sm font-semibold tracking-[-0.015em] text-foreground">
@@ -64,7 +64,7 @@ export function InsightBanner({
               type="button"
               onClick={onDismiss}
               aria-label={t("Dismiss recommendation")}
-              className="inline-flex size-9 shrink-0 items-center justify-center rounded-xl text-primary-ink transition-colors hover:bg-primary/20 focus-visible:outline-2 focus-visible:outline-ring"
+              className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"
             >
               <XIcon className="size-4" aria-hidden="true" />
             </button>

@@ -71,7 +71,7 @@ export function MetricStrip({
 }) {
   return (
     <div data-slot="metric-strip" className={cn("@container/metrics mb-5 min-w-0", className)}>
-      <div className="grid grid-cols-1 gap-px overflow-hidden rounded-[22px] border border-border/50 bg-border/70 shadow-[var(--card-elevation)] @min-[490px]/metrics:grid-cols-2 @min-[820px]/metrics:grid-cols-4">
+      <div className="grid grid-cols-1 gap-px overflow-hidden rounded-xl border border-border bg-border/75 @min-[490px]/metrics:grid-cols-2 @min-[820px]/metrics:grid-cols-4">
         {children}
       </div>
     </div>
@@ -92,20 +92,20 @@ export function MetricTile({
   action?: ReactNode;
 }) {
   return (
-    <div data-slot="metric-tile" className="flex min-h-[108px] min-w-0 items-center gap-3 bg-card px-4 py-4 @min-[820px]/metrics:px-4">
-      <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-foreground text-background dark:bg-muted dark:text-foreground">
-        <Icon className="size-[18px]" aria-hidden="true" />
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-xs font-medium text-muted-foreground">{t(label)}</p>
-        <div className="mt-1 flex min-w-0 items-center justify-between gap-2">
-          <p className="min-w-0 truncate text-[24px] leading-none font-semibold tracking-[-0.045em] text-foreground tabular-nums">
+    <div data-slot="metric-tile" className="flex min-h-[78px] min-w-0 flex-col justify-center bg-card px-4 py-3">
+      <div className="min-w-0 w-full">
+        <p className="flex items-center gap-1.5 truncate text-[11px] font-medium text-muted-foreground">
+          <Icon className="size-3.5 shrink-0" aria-hidden="true" />
+          {t(label)}
+        </p>
+        <div className="mt-1.5 flex min-w-0 items-center justify-between gap-2">
+          <p className="min-w-0 truncate text-[22px] leading-none font-semibold tracking-[-0.035em] text-foreground tabular-nums">
             {typeof value === "number" ? formatNumber(value) : value}
           </p>
           {action ? <div className="shrink-0">{action}</div> : null}
         </div>
         {description ? (
-          <p className="mt-1.5 truncate text-xs leading-4 text-muted-foreground">
+          <p className="mt-1 truncate text-[11px] leading-4 text-muted-foreground">
             {t(description)}
           </p>
         ) : null}
@@ -134,18 +134,16 @@ export function DataPanel({
   const Icon = icon ?? panelIcons[title] ?? Layers3Icon;
   return (
     <Card className={["gap-0 py-0", className].join(" ")}>
-      <CardHeader className="min-h-[74px] px-5 pt-4 pb-3">
+      <CardHeader className="min-h-[56px] px-4 py-3">
         <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-3">
-            <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-foreground text-background dark:bg-muted dark:text-foreground">
-              <Icon className="size-[18px]" aria-hidden="true" />
-            </span>
+          <div className="flex min-w-0 items-center gap-2">
+            <Icon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
             <div className="min-w-0">
-              <CardTitle className="text-base font-semibold tracking-[-0.015em]">
+              <CardTitle className="text-[13px] font-semibold tracking-[-0.01em]">
                 {t(title)}
               </CardTitle>
               {description ? (
-                <CardDescription className="mt-0.5 text-[13px] leading-5">
+                <CardDescription className="mt-0.5 text-xs leading-4">
                   {typeof description === "string" ? t(description) : description}
                 </CardDescription>
               ) : null}
@@ -155,7 +153,7 @@ export function DataPanel({
         </div>
       </CardHeader>
       {toolbar ? (
-        <div className="border-b border-border/65 px-5 pt-1 pb-4">
+        <div className="border-b border-border px-4 py-2.5">
           {toolbar}
         </div>
       ) : null}
@@ -199,7 +197,7 @@ export function SearchField({
         onChange={(event) => onChange(event.target.value)}
         onKeyDown={onKeyDown}
         placeholder={t(placeholder)}
-        className="h-9 bg-background pl-9"
+        className="h-9 bg-card pl-9"
       />
     </div>
   );
@@ -252,7 +250,7 @@ export function EmptyPanelState({
     <div
       data-slot="empty-panel-state"
       className={cn(
-        "flex min-h-[46vh] w-full flex-1 flex-col items-center justify-center py-10 px-4 text-center sm:px-6",
+        "flex min-h-[220px] w-full flex-1 flex-col items-center justify-center py-8 px-4 text-center sm:px-6",
         className,
       )}
     >
