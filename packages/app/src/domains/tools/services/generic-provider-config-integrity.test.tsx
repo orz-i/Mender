@@ -1,11 +1,10 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import type { MenderClient, Provider, ProviderPlugin } from "@mender/sdk";
+import type { ManagementClient, Provider, ProviderPlugin } from "@mender/sdk";
 import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { resetLocaleForTesting, setLocale } from "../../i18n/i18n";
-import { ProvidersPage } from "./providers-page";
-import { ExternalSandboxCreatePage } from "../sandboxes/sandbox-external-create-page";
+import { resetLocaleForTesting, setLocale } from "../../../i18n/i18n";
+import { ToolsPage } from "./tool-services-page";
 
 const pluginId = "dev.example.dynamic";
 const installationId = "pinst_0123456789abcdef0123456789abcdef";
@@ -40,15 +39,15 @@ function mountProviders(plugins: ProviderPlugin[], providers: Provider[], overri
     listCredentials: vi.fn().mockResolvedValue({ credentials: [] }),
     createProvider, updateProvider, rebindProvider,
     ...overrides,
-  } as unknown as MenderClient;
-  render(<MemoryRouter initialEntries={[url]}><ProvidersPage client={client}/></MemoryRouter>);
+  } as unknown as ManagementClient;
+  render(<MemoryRouter initialEntries={[url]}><ToolsPage client={client}/></MemoryRouter>);
   return { createProvider, updateProvider, rebindProvider };
 }
 
 beforeEach(() => { resetLocaleForTesting(); setLocale("en"); });
 afterEach(() => { cleanup(); resetLocaleForTesting(); });
 
-describe("Provider and Sandbox JSON editor submission integrity", () => {
+describe("Provider JSON editor submission integrity", () => {
   it("submits an omitted optional group after adding then removing it from Provider creation", async () => {
     const optionalSchema = { type:"object", additionalProperties:false, properties:{
       advanced:{ type:"object", required:["token"], additionalProperties:false,
@@ -229,73 +228,5 @@ describe("Provider and Sandbox JSON editor submission integrity", () => {
     expect(save.disabled).toBe(false);
     expect(within(dialog).queryByRole("alert")).toBeNull();
     expect(rebindProvider).not.toHaveBeenCalled();
-  });
-
-  it("uses only remaining configuration when reviewing and creating an external Sandbox", async () => {
-    const sandboxId="sbx_0123456789abcdef0123456789abcdef";
-    const createExternalSandbox=vi.fn().mockResolvedValue({sandboxId});
-    const client={
-      listPluginCatalogue:vi.fn().mockResolvedValue({plugins:[{
-        key:pluginId+"@"+installationId,pluginId,installationId,
-        extensionId:"main",kind:"sandbox.backend",marketplaceAction:"create.sandbox",
-        displayName:"Optional Sandbox",description:"Fixture",packageVersion:"1.0.0",
-        sourceKind:"local",status:"enabled",enabled:true,capabilities:[],
-        usageCount:0,configSchema:{type:"object",properties:{
-          region:{type:"string",default:"local"},
-          options:{type:"object",required:["token"],properties:{token:{type:"string"}}},
-        }},
-      }]}),
-      createExternalSandbox,
-    } as unknown as MenderClient;
-    render(<MemoryRouter initialEntries={[`/sandboxes/new/external?pluginId=${pluginId}&installationId=${installationId}`]}>
-      <ExternalSandboxCreatePage client={client}/>
-    </MemoryRouter>);
-    fireEvent.change(await screen.findByRole("textbox",{name:"Sandbox name"}),{target:{value:"QA Sandbox"}});
-    const review=screen.getByRole<HTMLButtonElement>("button",{name:"Review"});
-    expect(review.disabled).toBe(false);
-    fireEvent.click(screen.getByRole("button",{name:"Add Options"}));
-    expect(review.disabled).toBe(true);
-    fireEvent.change(screen.getByRole("textbox",{name:"Token"}),{target:{value:"fixture"}});
-    expect(review.disabled).toBe(false);
-    fireEvent.click(screen.getByRole("button",{name:"Remove Options"}));
-    expect(review.disabled).toBe(false);
-    expect(createExternalSandbox).not.toHaveBeenCalled();
-    fireEvent.click(review);
-    expect(await screen.findByText(installationId)).toBeTruthy();
-    fireEvent.click(screen.getByRole("button",{name:"Create sandbox"}));
-    await waitFor(()=>expect(createExternalSandbox).toHaveBeenCalledWith({
-      name:"QA Sandbox",installationId,config:{region:"local"},
-    }));
-  });
-
-  it("prevents Sandbox Review from using the last valid JSON array while an invalid draft is visible", async () => {
-    const sandboxId = "sbx_0123456789abcdef0123456789abcdef";
-    const createExternalSandbox = vi.fn().mockResolvedValue({ sandboxId });
-    const client = {
-      listPluginCatalogue: vi.fn().mockResolvedValue({ plugins: [{
-        key: pluginId+"@"+installationId, pluginId, installationId,
-        extensionId: "main", kind: "sandbox.backend", marketplaceAction: "create.sandbox",
-        displayName: "Dynamic Sandbox", description: "Fixture", packageVersion: "1.0.0",
-        sourceKind: "local", status: "enabled", enabled: true, capabilities: ["file.read"],
-        usageCount: 0, configSchema: {type:"object",properties: {records: {type:"array",default:[1]}}}
-      }] }),
-      createExternalSandbox,
-    } as unknown as MenderClient;
-    render(<MemoryRouter initialEntries={[`/sandboxes/new/external?pluginId=${pluginId}&installationId=${installationId}`]}>
-      <ExternalSandboxCreatePage client={client} />
-    </MemoryRouter>);
-    const name = await screen.findByRole("textbox", { name: "Sandbox name" });
-    fireEvent.change(name, { target: { value: "Fixture Sandbox" } });
-    const records = screen.getByRole<HTMLTextAreaElement>("textbox", { name: "Records" });
-    const review = screen.getByRole<HTMLButtonElement>("button", { name: "Review" });
-    expect(review.disabled).toBe(false);
-    fireEvent.change(records, { target: { value: "[1," } });
-    expect(review.disabled).toBe(true);
-    expect(createExternalSandbox).not.toHaveBeenCalled();
-    fireEvent.change(records, { target: { value: "[1,2]" } });
-    expect(review.disabled).toBe(false);
-    fireEvent.click(review);
-    expect(await screen.findByText(installationId)).toBeTruthy();
-    expect(createExternalSandbox).not.toHaveBeenCalled();
   });
 });

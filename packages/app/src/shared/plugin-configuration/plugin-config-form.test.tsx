@@ -1,19 +1,19 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import type { ProviderPlugin } from "@mender/sdk";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { useState } from "react";
 import { resetLocaleForTesting, setLocale } from "../../i18n/i18n";
-import { GenericProviderConfigForm } from "./generic-provider-config-form";
+import { PluginConfigForm } from "./index";
+import type { ConfigSchema } from "./schema";
 
 function FormHarness({ schema, initial }: {
-  schema: ProviderPlugin["configSchema"];
+  schema: ConfigSchema | undefined;
   initial: Record<string, unknown>;
 }) {
   const [value, setValue] = useState(initial);
   const [draftError, setDraftError] = useState<string | null>(null);
   return (
     <div>
-      <GenericProviderConfigForm
+      <PluginConfigForm
         schema={schema}
         uiSchema={undefined}
         value={value}
@@ -34,7 +34,7 @@ afterEach(() => { cleanup(); resetLocaleForTesting(); });
 describe("dynamic JSON schema draft integrity", () => {
   it("retains invalid raw JSON locally, blocks Save, and never submits its previous valid object", () => {
     render(<FormHarness schema={undefined} initial={{ endpoint: "https://a.example" }}/>);
-    const editor = screen.getByRole<HTMLTextAreaElement>("textbox", { name: "Provider configuration" });
+    const editor = screen.getByRole<HTMLTextAreaElement>("textbox", { name: "Configuration" });
     expect(screen.getByRole<HTMLButtonElement>("button", { name: "Save configuration" }).disabled).toBe(false);
     fireEvent.change(editor, { target: { value: '{"endpoint":' } });
     expect(editor.value).toBe('{"endpoint":');
@@ -95,9 +95,9 @@ describe("dynamic JSON schema draft integrity", () => {
 
   it("treats non-object raw JSON as an invalid draft and allows recovery", () => {
     render(<FormHarness schema={true} initial={{ restored: true }}/>);
-    const editor = screen.getByRole<HTMLTextAreaElement>("textbox", { name: "Provider configuration" });
+    const editor = screen.getByRole<HTMLTextAreaElement>("textbox", { name: "Configuration" });
     fireEvent.change(editor, { target: { value: "[1,2]" } });
-    expect(screen.getByRole("alert").textContent).toContain("Provider configuration must be a JSON object.");
+    expect(screen.getByRole("alert").textContent).toContain("Configuration must be a JSON object.");
     expect(screen.getByRole<HTMLButtonElement>("button", { name: "Save configuration" }).disabled).toBe(true);
     fireEvent.change(editor, { target: { value: '{"restored":true}' } });
     expect(screen.queryByRole("alert")).toBeNull();

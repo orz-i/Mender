@@ -1,14 +1,14 @@
 import {useEffect,useState} from "react";
-import type {MenderClient,Provider} from "@mender/sdk";
+import type {ManagementClient,Provider} from "@mender/sdk";
 import {useNavigate,useParams} from "react-router";
 import {Button} from "@mender/ui/components/button";
-import {ErrorNotice} from "../../shared/page";
-import {PageToolbar,ResultPanel} from "../../shared/page-toolbar";
-import {t} from "../../i18n/i18n";
-import {errorMessage} from "../../shared/errors";
+import {ErrorNotice} from "../../../shared/page";
+import {PageToolbar,ResultPanel} from "../../../shared/page-toolbar";
+import {t} from "../../../i18n/i18n";
+import {errorMessage} from "../../../shared/errors";
 import {WorkspaceTargetSettings} from "./workspace-targets";
 
-export function ToolWorkspacePage({client}:{client:MenderClient}){
+export function ToolWorkspacePage({client}:{client:ManagementClient}){
  const {providerId}=useParams();
  const navigate=useNavigate();
  const [provider,setProvider]=useState<Provider|null>(null);

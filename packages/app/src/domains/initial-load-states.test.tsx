@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { resetLocaleForTesting, setLocale } from "../i18n/i18n";
 import { AgentsPage } from "./agents/agents-page";
-import { CatalogPage } from "./catalog/catalog-page";
+import { CatalogPage } from "./tools/catalog/catalog-page";
 import { ProfilesPage } from "./profiles/profiles-page";
 import { SkillsPage } from "./skills/skills-page";
 

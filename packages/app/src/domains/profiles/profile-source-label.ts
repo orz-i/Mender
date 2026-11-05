@@ -1,6 +1,6 @@
 import type { Provider } from "@mender/sdk";
 
-import { toolSourceLabel } from "../tools/tool-source-label";
+import { toolSourceLabel } from "../tools";
 
 /**
  * A human source label isn't a configured service identity. Disambiguate

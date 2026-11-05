@@ -1114,6 +1114,7 @@ export const zhCNMessages: Readonly<Record<string, string>> = {
   "Choose Tools from the Catalog to define this Profile's exposure boundary.": "从目录中选择工具，以定义此配置档的暴露边界。",
   "Concurrency constraint": "并发约束",
   "Configuration": "配置",
+  "Configuration must be a JSON object.": "配置必须是 JSON 对象。",
   "Create a Credential first, then return here to configure Provider authentication.": "请先创建凭据，然后返回此处配置提供方身份验证。",
   "Create a Credential first, then return here to grant this binding access.": "请先创建凭据，然后返回此处为该绑定授予访问权限。",
   "Create a Profile before exposing Tools through MCP.": "通过 MCP 暴露工具之前，请先创建配置档。",

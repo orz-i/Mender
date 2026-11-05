@@ -1,5 +1,5 @@
 import type { Provider, UpdateProviderRequest } from "@mender/sdk";
-import { t } from "../../i18n/i18n";
+import { t } from "../../../i18n/i18n";
 
 export const MCP_PLUGIN_ID = "io.mender.provider.mcp";
 export const MODEL_TOOLS_PLUGIN_ID = "io.mender.provider.model-tools";

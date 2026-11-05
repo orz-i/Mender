@@ -1,5 +1,5 @@
 import type { Provider } from "@mender/sdk";
-import { t } from "../../i18n/i18n";
+import { t } from "../../../i18n/i18n";
 
 /** Translate only host-generated, owner-verified Tool service summaries.
  * User and third-party descriptions are immutable display data.

@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 
-import type { Credential, ProviderPlugin } from "@mender/sdk";
 import { Button } from "@mender/ui/components/button";
 import { Input } from "@mender/ui/components/input";
 import { Textarea } from "@mender/ui/components/textarea";
 
+import { t } from "../../i18n/i18n";
 import {
   MAX_SCHEMA_DEPTH,
   additionalPropertiesSchema,
@@ -22,17 +22,17 @@ import {
   stringArray,
   stringValue,
   uiHint,
-} from "./generic-provider-config-schema";
+} from "./schema";
 import type {
   ConfigSchema,
+  ConfigUISchema,
   ConfigValue,
   SchemaObject,
   UIHint,
-} from "./generic-provider-config-schema";
-
-import { t } from "../../i18n/i18n";
+} from "./schema";
 
 type ReportDraftIssue = (path: string, issue: string | null) => void;
+type CredentialOption = { reference: string; displayName: string };
 
 function visibleSchemaError(error: string | null): string | null {
   if (!error) return null;
@@ -55,18 +55,22 @@ function fieldDescriptionIds(id: string, description?: string, error?: string | 
 
 /** A JSON field can have a local invalid draft even while its last valid
  * parent value remains schema-valid. The form reports those drafts separately. */
-export function GenericProviderConfigForm({
+export function PluginConfigForm({
   schema,
   uiSchema,
   value,
   credentials,
+  rawObjectLabel = t("Configuration"),
+  rawObjectTypeError = t("Configuration must be a JSON object."),
   onChange,
   onDraftErrorChange,
 }: {
-  schema: ProviderPlugin["configSchema"];
-  uiSchema: ProviderPlugin["uiSchema"];
+  schema: ConfigSchema | undefined;
+  uiSchema: ConfigUISchema | undefined;
   value: ConfigValue;
-  credentials: Credential[];
+  credentials: readonly CredentialOption[];
+  rawObjectLabel?: string;
+  rawObjectTypeError?: string;
   onChange: (value: ConfigValue) => void;
   onDraftErrorChange?: (error: string | null) => void;
 }) {
@@ -91,7 +95,8 @@ export function GenericProviderConfigForm({
   if (schema === undefined || schema === true) {
     return (
       <RawObjectEditor
-        label={t("Provider configuration")}
+        label={rawObjectLabel}
+        typeError={rawObjectTypeError}
         value={value}
         path="$"
         reportDraftIssue={reportDraftIssue}
@@ -130,9 +135,9 @@ function ObjectFields({
   showRequired = true,
 }: {
   schema: SchemaObject;
-  uiSchema: ProviderPlugin["uiSchema"];
+  uiSchema: ConfigUISchema | undefined;
   value: ConfigValue;
-  credentials: Credential[];
+  credentials: readonly CredentialOption[];
   depth: number;
   path: string;
   reportDraftIssue: ReportDraftIssue;
@@ -200,7 +205,7 @@ function SchemaField({
   hint: UIHint;
   required: boolean;
   value: unknown;
-  credentials: Credential[];
+  credentials: readonly CredentialOption[];
   depth: number;
   path: string;
   reportDraftIssue: ReportDraftIssue;
@@ -719,12 +724,14 @@ function JSONValueEditor({
 
 function RawObjectEditor({
   label,
+  typeError,
   value,
   path,
   reportDraftIssue,
   onChange,
 }: {
   label: string;
+  typeError: string;
   value: ConfigValue;
   path: string;
   reportDraftIssue: ReportDraftIssue;
@@ -753,7 +760,7 @@ function RawObjectEditor({
           try {
             const parsed: unknown = JSON.parse(nextText);
             if (!isRecord(parsed)) {
-              draft.setError(t("Provider configuration must be a JSON object."));
+              draft.setError(typeError);
               return;
             }
             draft.setError("");

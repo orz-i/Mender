@@ -1,7 +1,7 @@
 import type { Provider } from "@mender/sdk";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { resetLocaleForTesting, setLocale } from "../../i18n/i18n";
+import { resetLocaleForTesting, setLocale } from "../../../i18n/i18n";
 import { toolServiceDescription } from "./tool-service-description";
 
 const base: Provider = {

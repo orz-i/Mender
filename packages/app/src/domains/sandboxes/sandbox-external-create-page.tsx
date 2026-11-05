@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
-import type { MenderClient, PluginCatalogueEntry } from "@mender/sdk";
+import type { ManagementClient, PluginCatalogueEntry } from "@mender/sdk";
 import { Button } from "@mender/ui/components/button";
 import { Input } from "@mender/ui/components/input";
 import { t } from "../../i18n/i18n";
@@ -8,12 +8,11 @@ import { errorMessage } from "../../shared/errors";
 import { EmptyState, ErrorNotice } from "../../shared/page";
 import { PageToolbar } from "../../shared/page-toolbar";
 import { DataPanel, EmptyPanelState } from "../../shared/workbench";
-import { GenericProviderConfigForm } from "../providers/generic-provider-config-form";
-import { genericConfigDefaults, genericConfigValidationError } from "../providers/generic-provider-config-schema";
+import { PluginConfigForm, genericConfigDefaults, genericConfigValidationError } from "../../shared/plugin-configuration";
 
 // Each view owns exactly one resource creation flow; package installation and
 // backend selection are completed before navigating here.
-export function ExternalSandboxCreatePage({ client }: { client: MenderClient }) {
+export function ExternalSandboxCreatePage({ client }: { client: ManagementClient }) {
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const installationId = params.get("installationId") ?? "";
@@ -100,7 +99,7 @@ export function ExternalSandboxCreatePage({ client }: { client: MenderClient }) 
               <Input aria-label={t("Sandbox name")} value={name} maxLength={160}
                 onChange={(event) => setName(event.target.value)} />
             </label>
-            <GenericProviderConfigForm
+            <PluginConfigForm
               key={plugin.pluginId + "@" + plugin.installationId}
               schema={plugin.configSchema}
               uiSchema={undefined}

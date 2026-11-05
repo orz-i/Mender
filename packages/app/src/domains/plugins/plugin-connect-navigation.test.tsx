@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { resetLocaleForTesting, setLocale } from "../../i18n/i18n";
 import { PluginDetailPage, PluginsPage } from "./plugins-page";
-import { ProvidersPage } from "../providers/providers-page";
+import { ToolsPage } from "../tools";
 
 const anySearch = {
   offeringId: "io.mender.integration.anysearch",
@@ -74,7 +74,7 @@ function setup(initial: string, includeBuiltin = false) {
     <Routes>
       <Route path="/plugins" element={<PluginsPage client={client} />} />
       <Route path="/plugins/:pluginKey" element={<PluginDetailPage client={client} />} />
-      <Route path="/tools" element={<ProvidersPage client={client} />} />
+      <Route path="/tools" element={<ToolsPage client={client} />} />
     </Routes>
   </MemoryRouter>);
   return createProvider;

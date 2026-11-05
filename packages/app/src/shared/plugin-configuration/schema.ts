@@ -1,9 +1,8 @@
-import type { ProviderPlugin } from "@mender/sdk";
-
 export const MAX_SCHEMA_DEPTH = 6;
 
-export type ConfigSchema = NonNullable<ProviderPlugin["configSchema"]>;
 export type SchemaObject = Record<string, unknown>;
+export type ConfigSchema = SchemaObject | boolean;
+export type ConfigUISchema = SchemaObject;
 export type ConfigValue = Record<string, unknown>;
 
 export interface UIHint {
@@ -14,7 +13,7 @@ export interface UIHint {
 }
 
 export function genericConfigDefaults(
-  schema: ProviderPlugin["configSchema"],
+  schema: ConfigSchema | undefined,
 ): ConfigValue {
   if (schema === undefined || typeof schema === "boolean") {
     return {};
@@ -35,7 +34,7 @@ export function genericConfigDefaults(
 }
 
 export function genericConfigValidationError(
-  schema: ProviderPlugin["configSchema"],
+  schema: ConfigSchema | undefined,
   value: ConfigValue,
 ): string | null {
   const supportError = genericSchemaSupportError(schema);
@@ -66,7 +65,7 @@ export function genericConfigFieldValidationError(
 }
 
 export function genericSchemaSupportError(
-  schema: ProviderPlugin["configSchema"],
+  schema: ConfigSchema | undefined,
 ): string | null {
   if (schema === undefined || typeof schema === "boolean") {
     return null;
@@ -127,7 +126,7 @@ export function schemaType(schema: SchemaObject, value: unknown): string {
 }
 
 export function uiHint(
-  uiSchema: ProviderPlugin["uiSchema"],
+  uiSchema: ConfigUISchema | undefined,
   name: string,
 ): UIHint {
   if (!isRecord(uiSchema) || !isRecord(uiSchema.properties)) {

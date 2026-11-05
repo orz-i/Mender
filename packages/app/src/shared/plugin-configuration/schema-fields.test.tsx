@@ -1,21 +1,20 @@
 import {cleanup,fireEvent,render,screen} from "@testing-library/react";
-import type {ProviderPlugin} from "@mender/sdk";
 import {useState} from "react";
 import {afterEach,beforeEach,describe,expect,it} from "vitest";
 
 import {resetLocaleForTesting,setLocale} from "../../i18n/i18n";
-import {genericConfigValidationError} from "./generic-provider-config-schema";
-import {GenericProviderConfigForm} from "./generic-provider-config-form";
+import {PluginConfigForm,genericConfigValidationError} from "./index";
+import type { ConfigSchema } from "./schema";
 
 function Scenario({schema,initial}:{
- schema:ProviderPlugin["configSchema"];
+ schema:ConfigSchema | undefined;
  initial:Record<string,unknown>;
 }){
  const [value,setValue]=useState(initial);
  const [draftError,setDraftError]=useState<string|null>(null);
  const validation=genericConfigValidationError(schema,value);
  return <>
-  <GenericProviderConfigForm schema={schema} uiSchema={undefined}
+  <PluginConfigForm schema={schema} uiSchema={undefined}
    value={value} credentials={[]} onChange={setValue}
    onDraftErrorChange={setDraftError}/>
   <button type="button" disabled={!!(draftError||validation)}>Save</button>

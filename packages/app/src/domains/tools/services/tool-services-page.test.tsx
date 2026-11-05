@@ -1,10 +1,10 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import type { MenderClient, Provider, ProviderPlugin } from "@mender/sdk";
+import type { ManagementClient, Provider, ProviderPlugin } from "@mender/sdk";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { resetLocaleForTesting, setLocale } from "../../i18n/i18n";
-import { ProvidersPage } from "./providers-page";
+import { resetLocaleForTesting, setLocale } from "../../../i18n/i18n";
+import { ToolsPage } from "./tool-services-page";
 
 const sampleProvider: Provider = {
   providerId: "prov_echo_01",
@@ -40,11 +40,11 @@ function mount(providers: Provider[] = [sampleProvider], plugins: ProviderPlugin
     listProviderPlugins: vi.fn().mockResolvedValue({ plugins, issues: [] }),
     listCredentials: vi.fn().mockResolvedValue({ credentials: [] }),
     listSandboxes: vi.fn().mockResolvedValue({ sandboxes: [] }),
-  } as unknown as MenderClient;
+  } as unknown as ManagementClient;
 
   render(
     <MemoryRouter>
-      <ProvidersPage client={client} />
+      <ToolsPage client={client} />
     </MemoryRouter>,
   );
   return { client };
@@ -188,9 +188,9 @@ describe("Tool service error state", () => {
       listProviders,
       listProviderPlugins: vi.fn().mockResolvedValue({ plugins: [], issues: [] }),
       listCredentials: vi.fn().mockResolvedValue({ credentials: [] }),
-    } as unknown as MenderClient;
+    } as unknown as ManagementClient;
 
-    render(<MemoryRouter><ProvidersPage client={client} /></MemoryRouter>);
+    render(<MemoryRouter><ToolsPage client={client} /></MemoryRouter>);
 
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toContain("Provider list unavailable");
@@ -218,9 +218,9 @@ describe("resource-owned Tool service navigation", () => {
       listProviders: vi.fn().mockResolvedValue({ providers: [source] }),
       listProviderPlugins: vi.fn().mockResolvedValue({ plugins: [], issues: [] }),
       listCredentials: vi.fn().mockResolvedValue({ credentials: [] }),
-    } as unknown as MenderClient;
+    } as unknown as ManagementClient;
     render(<MemoryRouter initialEntries={["/tools"]}><Routes>
-      <Route path="/tools" element={<ProvidersPage client={client} />} />
+      <Route path="/tools" element={<ToolsPage client={client} />} />
       <Route path="/agents/:agentId" element={<div>Agent owner details</div>} />
     </Routes></MemoryRouter>);
     const card = (await screen.findByRole("link", { name: "Grok - executor" }))
@@ -275,12 +275,12 @@ describe("resource-owned Tool service navigation", () => {
       listProviders: vi.fn().mockResolvedValue({ providers: [source] }),
       listProviderPlugins: vi.fn().mockResolvedValue({ plugins: [], issues: [] }),
       listCredentials: vi.fn().mockResolvedValue({ credentials: [] }),
-    } as unknown as MenderClient;
+    } as unknown as ManagementClient;
 
     render(
       <MemoryRouter initialEntries={["/tools"]}>
         <Routes>
-          <Route path="/tools" element={<ProvidersPage client={client} />} />
+          <Route path="/tools" element={<ToolsPage client={client} />} />
           <Route path="/agents/:agentId" element={<div>Agent owner details</div>} />
           <Route path="/sandboxes/:sandboxId" element={<div>Sandbox owner details</div>} />
         </Routes>

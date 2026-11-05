@@ -1,11 +1,11 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import type { MenderClient, Provider } from "@mender/sdk";
+import type { ManagementClient, Provider } from "@mender/sdk";
 import { TooltipProvider } from "@mender/ui/components/tooltip";
 import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { resetLocaleForTesting, setLocale } from "../../i18n/i18n";
-import { ProvidersPage } from "./providers-page";
+import { resetLocaleForTesting, setLocale } from "../../../i18n/i18n";
+import { ToolsPage } from "./tool-services-page";
 
 const mcpPlugin = {
   pluginId: "io.mender.provider.mcp",
@@ -29,7 +29,7 @@ const provider: Provider = {
   pluginId: mcpPlugin.pluginId,
 };
 
-function showPage(overrides: Partial<MenderClient> = {}) {
+function showPage(overrides: Partial<ManagementClient> = {}) {
   const createProvider = vi.fn().mockResolvedValue({ provider, sync: { created: 0, removed: 0, updated: 0, total: 0 } });
   const listProviders = vi.fn().mockResolvedValue({ providers: [] });
   const client = {
@@ -39,8 +39,8 @@ function showPage(overrides: Partial<MenderClient> = {}) {
     listSandboxes: vi.fn().mockResolvedValue({ sandboxes: [] }),
     createProvider,
     ...overrides,
-  } as unknown as MenderClient;
-  render(<MemoryRouter initialEntries={["/tools?create=1&pluginId=io.mender.provider.mcp"]}><TooltipProvider><ProvidersPage client={client} /></TooltipProvider></MemoryRouter>);
+  } as unknown as ManagementClient;
+  render(<MemoryRouter initialEntries={["/tools?create=1&pluginId=io.mender.provider.mcp"]}><TooltipProvider><ToolsPage client={client} /></TooltipProvider></MemoryRouter>);
   return { createProvider, listProviders };
 }
 

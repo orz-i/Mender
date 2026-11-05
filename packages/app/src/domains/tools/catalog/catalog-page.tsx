@@ -4,7 +4,7 @@ import { ArrowUpRightIcon, EyeIcon } from "lucide-react";
 
 import type {
   InvocationResult,
-  MenderClient,
+  ManagementClient,
   Provider,
   ToolDetail,
   ToolSummary,
@@ -30,23 +30,23 @@ import {
 } from "@mender/ui/components/table";
 import { Textarea } from "@mender/ui/components/textarea";
 
-import { errorMessage } from "../../shared/errors";
-import { IconButton } from "../../shared/icon-button";
-import { EmptyState, ErrorNotice } from "../../shared/page";
-import { PageToolbar, ResultPanel } from "../../shared/page-toolbar";
-import { usePagination } from "../../shared/pagination";
-import { TablePagination } from "../../shared/table-pagination";
+import { errorMessage } from "../../../shared/errors";
+import { IconButton } from "../../../shared/icon-button";
+import { EmptyState, ErrorNotice } from "../../../shared/page";
+import { PageToolbar, ResultPanel } from "../../../shared/page-toolbar";
+import { usePagination } from "../../../shared/pagination";
+import { TablePagination } from "../../../shared/table-pagination";
 import {
   EmptyPanelState,
   SearchField,
-} from "../../shared/workbench";
+} from "../../../shared/workbench";
 
-import { formatNumber, t } from "../../i18n/i18n";
-import { toolSourceLabel } from "../tools/tool-source-label";
+import { formatNumber, t } from "../../../i18n/i18n";
+import { toolSourceLabel } from "../tool-source-label";
 
 type ToolView = "overview" | "description" | "schemas" | "invoke";
 
-export function CatalogPage({ client, providerId }: { client: MenderClient; providerId: string }) {
+export function CatalogPage({ client, providerId }: { client: ManagementClient; providerId: string }) {
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [providers, setProviders] = useState<Provider[]>([]);

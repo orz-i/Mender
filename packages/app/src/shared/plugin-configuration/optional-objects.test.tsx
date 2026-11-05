@@ -1,11 +1,10 @@
 import {cleanup,fireEvent,render,screen,waitFor,within} from "@testing-library/react";
 import {useState} from "react";
-import type {ProviderPlugin} from "@mender/sdk";
 import {afterEach,beforeEach,describe,expect,it} from "vitest";
 
 import {resetLocaleForTesting,setLocale} from "../../i18n/i18n";
-import {GenericProviderConfigForm} from "./generic-provider-config-form";
-import {genericConfigDefaults,genericConfigValidationError} from "./generic-provider-config-schema";
+import {PluginConfigForm,genericConfigDefaults,genericConfigValidationError} from "./index";
+import type { ConfigSchema, ConfigUISchema } from "./schema";
 
 const schema={
  type:"object",additionalProperties:false,
@@ -25,14 +24,14 @@ const schema={
 
 function Fixture({initial={},configSchema=schema,uiSchema}:{
  initial?:Record<string,unknown>;
- configSchema?:ProviderPlugin["configSchema"];
- uiSchema?:ProviderPlugin["uiSchema"];
+ configSchema?:ConfigSchema;
+ uiSchema?:ConfigUISchema;
 }) {
  const [value,setValue]=useState(initial);
  const [draftError,setDraftError]=useState<string|null>(null);
  const validation=genericConfigValidationError(configSchema,value);
  return <>
-  <GenericProviderConfigForm schema={configSchema} uiSchema={uiSchema} value={value}
+  <PluginConfigForm schema={configSchema} uiSchema={uiSchema} value={value}
    credentials={[]} onChange={setValue} onDraftErrorChange={setDraftError}/>
   <button type="button" disabled={draftError!==null||validation!==null}>Save configuration</button>
   <output data-testid="value">{JSON.stringify(value)}</output>

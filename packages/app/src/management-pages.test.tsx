@@ -1667,7 +1667,12 @@ describe("management pages", () => {
     });
   });
 
-  it("filters Catalog browse and search by Provider", async () => {
+  it("filters Catalog browse and search by Provider and invokes the selected Tool", async () => {
+    const callTool = vi.fn().mockResolvedValue({
+      invocationId: "invocation_1",
+      kind: "complete",
+      content: { issueNumber: 17 },
+    });
     const getTool = vi.fn().mockResolvedValue({
       toolId: "tool_1",
       providerId: "prov_1",
@@ -1724,6 +1729,7 @@ describe("management pages", () => {
       browseTools,
       searchTools,
       getTool,
+      callTool,
     });
 
     expect(await screen.findByText("Web search")).toBeTruthy();
@@ -1787,8 +1793,13 @@ describe("management pages", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Back" }));
     fireEvent.click(screen.getByRole("button", { name: "Invoke tool" }));
-    expect(await screen.findByLabelText("Invocation arguments")).toBeTruthy();
+    fireEvent.change(await screen.findByLabelText("Invocation arguments"), {
+      target: { value: '{"title":"Example issue"}' },
+    });
     expect(screen.queryByText("Input schema")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Invoke through Mender" }));
+    expect(await screen.findByText("Result · complete")).toBeTruthy();
+    expect(callTool).toHaveBeenCalledExactlyOnceWith("tool_1", { title: "Example issue" });
   });
 
   it("creates an OpenAI Tunnel from Credential inventory without raw secret input", async () => {

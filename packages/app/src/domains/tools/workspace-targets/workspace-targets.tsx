@@ -1,16 +1,16 @@
 import {useEffect,useMemo,useState} from "react";
 import {useNavigate} from "react-router";
-import type {MenderClient,WorkspaceToolTarget,Sandbox} from "@mender/sdk";
+import type {ManagementClient,WorkspaceToolTarget,Sandbox} from "@mender/sdk";
 import {Button} from "@mender/ui/components/button";
 import {Input} from "@mender/ui/components/input";
 import {Dialog,DialogContent,DialogDescription,DialogFooter,DialogHeader,DialogTitle} from "@mender/ui/components/dialog";
-import {t} from "../../i18n/i18n";
-import {errorMessage} from "../../shared/errors";
-import {ErrorNotice,EmptyState} from "../../shared/page";
-import {ResultPanel} from "../../shared/page-toolbar";
-import {EmptyPanelState} from "../../shared/workbench";
+import {t} from "../../../i18n/i18n";
+import {errorMessage} from "../../../shared/errors";
+import {ErrorNotice,EmptyState} from "../../../shared/page";
+import {ResultPanel} from "../../../shared/page-toolbar";
+import {EmptyPanelState} from "../../../shared/workbench";
 
-export function WorkspaceTargetSettings({client,providerId,defaultSandboxId}:{client:MenderClient;providerId:string;defaultSandboxId:string}){
+export function WorkspaceTargetSettings({client,providerId,defaultSandboxId}:{client:ManagementClient;providerId:string;defaultSandboxId:string}){
  const navigate=useNavigate();
  const [items,setItems]=useState<WorkspaceToolTarget[]>([]);
  const [sandboxes,setSandboxes]=useState<Sandbox[]>([]);

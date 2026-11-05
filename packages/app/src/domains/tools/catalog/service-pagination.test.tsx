@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import type { MenderClient, Provider, ToolSummary } from "@mender/sdk";
+import type { ManagementClient, Provider, ToolSummary } from "@mender/sdk";
 import { TooltipProvider } from "@mender/ui/components/tooltip";
 import { MemoryRouter } from "react-router";
 import { afterEach, expect, it, vi } from "vitest";
@@ -22,7 +22,7 @@ function show(browseTools:ReturnType<typeof vi.fn>,searchTools=vi.fn()){
   const client={
     listProviders:vi.fn().mockResolvedValue({providers:[provider]}),
     browseTools,searchTools,
-  } as unknown as MenderClient;
+  } as unknown as ManagementClient;
   render(<MemoryRouter><TooltipProvider><CatalogPage client={client} providerId={provider.providerId}/></TooltipProvider></MemoryRouter>);
 }
 

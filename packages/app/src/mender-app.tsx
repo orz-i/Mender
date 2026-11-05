@@ -33,8 +33,7 @@ import { ProfileMCPDeliveryPage } from "./domains/profiles/profile-mcp-delivery-
 import { ProfileSkillDeliveryPage } from "./domains/profiles/profile-skill-delivery-page";
 import { ProfileCLIDeliveryPage } from "./domains/profiles/profile-cli-delivery-page";
 import { ProfileAgentPluginPage } from "./domains/profiles/profile-agent-plugin-page";
-import { ToolsPage, ToolServicePage } from "./domains/tools/tools-page";
-import { ToolWorkspacePage } from "./domains/tools/tool-workspace-page";
+import { ToolsPage, ToolServicePage, ToolWorkspacePage } from "./domains/tools";
 import { RuntimePage } from "./domains/runtime/runtime-page";
 import { SandboxesPage, CreateSandboxPage, SandboxDetailPage } from "./domains/sandboxes/sandboxes-page";
 import { SandboxActivityPage } from "./domains/sandboxes/sandbox-activity-page";

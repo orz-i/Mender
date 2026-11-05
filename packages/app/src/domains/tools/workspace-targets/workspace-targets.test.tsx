@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
-import type { MenderClient, Sandbox } from "@mender/sdk";
+import type { ManagementClient, Sandbox } from "@mender/sdk";
 
 import { WorkspaceTargetSettings } from "./workspace-targets";
 
@@ -29,7 +29,7 @@ describe("Workspace Tool target management", () => {
       }),
       bindWorkspaceToolTarget,
       ensureSandboxTools,
-    } as unknown as MenderClient;
+    } as unknown as ManagementClient;
 
     render(
       <MemoryRouter>
