@@ -61,7 +61,7 @@ bin/
 
 The manifest declares Plugin ID, package version, supported protocol versions, display metadata, and platform entrypoints. Entrypoints must stay inside the package. Absolute paths, parent escapes, symlinks, unsupported platforms, oversized packages, and non-executable selected entrypoints fail closed.
 
-Installation copies the package into Mender's managed plugin root, records a content digest, launches the package once to verify its protocol/runtime descriptor, and persists that bounded verified descriptor snapshot. Managed content is re-verified before later launches. Normal Provider-plugin catalog reads use the persisted descriptor snapshot and do not start verified plugin processes.
+Installation copies the package into Mender's managed plugin root, records a content digest, launches the package once to verify its protocol/runtime descriptor, and persists that bounded verified descriptor snapshot. Managed content is re-verified before later launches. Provider-plugin catalog reads use only persisted descriptor snapshots and never start plugin processes or repair installation metadata.
 
 ## Public Go SDK
 
@@ -138,7 +138,7 @@ Rebind validates the target package/configuration and synchronizes its Tool snap
 
 Web and Desktop can list, enable/disable, remove installations, configure unknown external Provider types from persisted descriptor schema, and explicitly rebind an external Provider when another enabled installation of the same PluginID is available. Provider rows display the persisted connection summary when the plugin supplies one. External Provider details use the exact installation's persisted verified descriptor, so package version/display metadata remain available even while that installation is disabled or its process is unavailable.
 
-Legacy installations without a verified descriptor may be backfilled during plugin catalog listing. Backfill persistence and process-cleanup failures are reported as installation-scoped catalog issues; one degraded installation does not hide unrelated healthy plugins. Once a verified descriptor is persisted, normal catalog reads remain process-free.
+An installation without a verified descriptor remains unavailable and appears as an installation-scoped catalog issue; one degraded installation does not hide unrelated healthy plugins. Run `mender plugin verify <installation>` to explicitly probe one enabled Provider package in a dedicated temporary process host. The verification process must close successfully before its missing descriptor snapshot is published; concurrent verification cannot replace an existing snapshot or close runtime-owned processes. Already verified installations are left unchanged without starting a process. Persistence and process-cleanup failures are reported by the verification command, never repaired during catalog listing.
 
 Browser management deliberately does not accept an arbitrary server filesystem path for installation. Desktop provides one scoped native directory picker and passes that local path only through the Wails host-local binding. Headless/local installation uses the CLI.
 

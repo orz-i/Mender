@@ -12,7 +12,7 @@ import (
 
 	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
-	mcpplugin "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/plugin"
+	managementquery "github.com/orz-i/Mender/backend/internal/management/application/query"
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
 )
 
@@ -57,64 +57,14 @@ func (h *Handler) listProviderPlugins(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) listProviders(w http.ResponseWriter, r *http.Request) {
-	providers, err := h.runtime.Catalog.ListProviders.Execute(r.Context())
+	providers, err := h.runtime.ListManagementProviders(r.Context())
 	if err != nil {
 		writeKnownError(w, err)
 		return
-	}
-	configs, err := h.runtime.ListProviderConfigs(r.Context())
-	if err != nil {
-		writeKnownError(w, err)
-		return
-	}
-	toolCounts, err := h.runtime.Catalog.ListProviderToolCounts.Execute(r.Context())
-	if err != nil {
-		writeKnownError(w, err)
-		return
-	}
-	owners, err := h.runtime.ListToolSourceOwners(r.Context())
-	if err != nil {
-		writeKnownError(w, err)
-		return
-	}
-
-	configByProvider := make(
-		map[catalogdomain.ProviderID]providerplugin.Configuration,
-		len(configs),
-	)
-	for _, config := range configs {
-		configByProvider[config.ProviderID] = config
 	}
 	items := make([]map[string]any, 0, len(providers))
 	for _, provider := range providers {
-		config, configured := configByProvider[provider.ID()]
-		var configPtr *providerplugin.Configuration
-		var descriptorPtr *providerplugin.Descriptor
-		if configured {
-			configCopy := config
-			configPtr = &configCopy
-			descriptorPtr = descriptorForProviderConfig(
-				r.Context(),
-				h.runtime,
-				config,
-			)
-		}
-		item := providerProjection(provider, configPtr, descriptorPtr, toolCounts[provider.ID()])
-		owner := bootstrap.ToolSourceForProvider(provider, configPtr, owners)
-		selectable, err := h.runtime.ProfileToolSourceSelectable(r.Context(), provider, configPtr, owners)
-		if err != nil {
-			writeKnownError(w, err)
-			return
-		}
-		item["toolSourceKind"] = owner.Kind
-		item["toolSourceSelectable"] = selectable
-		if owner.ResourceID != "" {
-			item["toolSourceId"] = owner.ResourceID
-		}
-		if owner.Name != "" {
-			item["toolSourceName"] = owner.Name
-		}
-		items = append(items, item)
+		items = append(items, providerViewProjection(provider))
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"providers": items})
 }
@@ -341,62 +291,83 @@ func providerProjection(
 	descriptor *providerplugin.Descriptor,
 	toolCount int,
 ) map[string]any {
+	return providerViewProjection(bootstrap.ManagementProviderView(provider, config, descriptor, toolCount))
+}
+
+// providerViewProjection preserves HTTP field presence independently of the
+// shared query model and the desktop binding's omitempty representation.
+func providerViewProjection(provider managementquery.ProviderView) map[string]any {
 	result := map[string]any{
-		"providerId":  provider.ID().String(),
-		"namespace":   provider.Namespace().String(),
-		"displayName": provider.DisplayName(),
-		"description": provider.Description(),
-		"createdAt":   provider.CreatedAt(),
-		"updatedAt":   provider.UpdatedAt(),
+		"providerId":  provider.ProviderID,
+		"namespace":   provider.Namespace,
+		"displayName": provider.DisplayName,
+		"description": provider.Description,
+		"createdAt":   provider.CreatedAt,
+		"updatedAt":   provider.UpdatedAt,
 		"transport":   "unconfigured",
-		"toolCount":   toolCount,
+		"toolCount":   provider.ToolCount,
 	}
+	if source := provider.Source; source != nil {
+		result["toolSourceKind"] = source.Kind
+		result["toolSourceSelectable"] = source.Selectable
+		if source.ResourceID != "" {
+			result["toolSourceId"] = source.ResourceID
+		}
+		if source.Name != "" {
+			result["toolSourceName"] = source.Name
+		}
+	}
+	config := provider.Configuration
 	if config == nil {
 		return result
 	}
 
-	result["pluginId"] = config.PluginID.String()
-	if config.InstallationID != nil {
-		result["installationId"] = config.InstallationID.String()
+	result["pluginId"] = config.PluginID
+	if config.InstallationID != "" {
+		result["installationId"] = config.InstallationID
 	}
 	result["configVersion"] = config.ConfigVersion
-	if metadata, ok := config.ConfigMetadata(); ok && metadata.ConnectionSummary != "" {
-		result["connectionSummary"] = metadata.ConnectionSummary
+	if config.ConnectionSummary != "" {
+		result["connectionSummary"] = config.ConnectionSummary
 	}
-	if safeConfig, err := providerplugin.ManagementSafeConfig(descriptor, config.Config); err == nil {
-		result["config"] = safeConfig
+	if config.HasSafeConfig {
+		result["config"] = config.SafeConfig
 	}
-	if descriptor != nil {
-		result["pluginVersion"] = descriptor.Version
-		result["pluginDisplayName"] = descriptor.DisplayName
+	if config.Plugin != nil {
+		result["pluginVersion"] = config.Plugin.Version
+		result["pluginDisplayName"] = config.Plugin.DisplayName
 	}
 
-	if config.PluginID != mcpplugin.ID {
+	connection := config.Connection
+	if connection == nil {
 		return result
 	}
-	mcpConfig, err := mcpplugin.DecodeConfig(config.Config)
-	if err != nil {
-		return result
-	}
-	switch mcpConfig.Transport.Kind {
-	case mcpplugin.TransportStreamableHTTP:
-		result["transport"] = "http"
-		result["endpoint"] = mcpConfig.Transport.Endpoint
-		result["headers"] = cloneHeaders(mcpConfig.Transport.Headers)
-		if mcpConfig.Transport.OAuthCredentialRef != "" {
-			result["oauthCredentialRef"] = mcpConfig.Transport.OAuthCredentialRef.String()
+	result["transport"] = connection.Transport
+	switch connection.Transport {
+	case "http":
+		result["endpoint"] = connection.Endpoint
+		result["headers"] = connection.Headers
+		if connection.OAuthCredentialRef != "" {
+			result["oauthCredentialRef"] = connection.OAuthCredentialRef
 		}
-		result["credentialHeaders"] = mcpCredentialHeadersProjection(
-			mcpConfig.Transport.CredentialHeaders,
-		)
-	case mcpplugin.TransportStdio:
-		result["transport"] = "stdio"
-		result["executable"] = mcpConfig.Transport.Executable
-		result["args"] = append([]string(nil), mcpConfig.Transport.Args...)
-		result["directory"] = mcpConfig.Transport.Directory
-		result["credentialEnvironment"] = mcpCredentialEnvironmentProjection(
-			mcpConfig.Transport.CredentialEnvironment,
-		)
+		headers := make([]map[string]any, 0, len(connection.CredentialHeaders))
+		for _, header := range connection.CredentialHeaders {
+			headers = append(headers, map[string]any{
+				"name": header.Name, "scheme": header.Scheme, "credentialRef": header.CredentialRef,
+			})
+		}
+		result["credentialHeaders"] = headers
+	case "stdio":
+		result["executable"] = connection.Executable
+		result["args"] = connection.Args
+		result["directory"] = connection.Directory
+		environment := make([]map[string]any, 0, len(connection.CredentialEnvironment))
+		for _, variable := range connection.CredentialEnvironment {
+			environment = append(environment, map[string]any{
+				"name": variable.Name, "credentialRef": variable.CredentialRef,
+			})
+		}
+		result["credentialEnvironment"] = environment
 	}
 	return result
 }
@@ -449,44 +420,6 @@ func descriptorForProviderConfig(
 		return nil
 	}
 	return &descriptor
-}
-
-func mcpCredentialHeadersProjection(
-	items []mcpplugin.CredentialHeader,
-) []map[string]any {
-	result := make([]map[string]any, 0, len(items))
-	for _, item := range items {
-		result = append(result, map[string]any{
-			"name":          item.Name,
-			"scheme":        item.Scheme,
-			"credentialRef": item.Reference.String(),
-		})
-	}
-	return result
-}
-
-func mcpCredentialEnvironmentProjection(
-	items []mcpplugin.CredentialEnvironment,
-) []map[string]any {
-	result := make([]map[string]any, 0, len(items))
-	for _, item := range items {
-		result = append(result, map[string]any{
-			"name":          item.Name,
-			"credentialRef": item.Reference.String(),
-		})
-	}
-	return result
-}
-
-func cloneHeaders(headers map[string]string) map[string]string {
-	if len(headers) == 0 {
-		return map[string]string{}
-	}
-	result := make(map[string]string, len(headers))
-	for name, value := range headers {
-		result[name] = value
-	}
-	return result
 }
 
 func syncProjection(result catalogapplication.SyncProviderToolsResult) map[string]any {

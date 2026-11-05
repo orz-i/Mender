@@ -30,6 +30,7 @@ type Catalog struct {
 	PageTools               application.PageTools
 	SearchTools             application.SearchTools
 	ListProviderToolCounts  application.ListProviderToolCounts
+	ProviderToolSnapshots   application.ProviderToolSnapshots
 
 	store *catalogsqlite.Store
 	ids   *identity.Generator
@@ -58,6 +59,7 @@ func NewCatalog(ctx context.Context, options CatalogOptions) (*Catalog, error) {
 		PageTools:               application.NewPageTools(store),
 		SearchTools:             application.NewSearchTools(store),
 		ListProviderToolCounts:  application.NewListProviderToolCounts(store),
+		ProviderToolSnapshots:   application.NewProviderToolSnapshots(store),
 		store:                   store,
 		ids:                     ids,
 		clock:                   clock,

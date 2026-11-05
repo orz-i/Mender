@@ -10,9 +10,10 @@ import (
 	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
+	providerapplication "github.com/orz-i/Mender/backend/internal/providerplugin/application"
 )
 
-var ErrProviderInUse = errors.New("provider is referenced by a Profile or Policy Rule")
+var ErrProviderInUse = providerapplication.ErrProviderInUse
 
 type RuntimeStatus struct {
 	Ready                bool

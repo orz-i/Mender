@@ -21,6 +21,7 @@ func (a *app) newPluginCommand() *cobra.Command {
 	}
 	command.AddCommand(a.newPluginListCommand())
 	command.AddCommand(a.newPluginInstallCommand())
+	command.AddCommand(a.newPluginVerifyCommand())
 	command.AddCommand(a.newPluginInspectCommand())
 	command.AddCommand(a.newPluginStatusCommand(true))
 	command.AddCommand(a.newPluginStatusCommand(false))

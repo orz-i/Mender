@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
@@ -124,17 +125,7 @@ func (a *Adapter) MCPServer() *mcp.Server {
 // Discoverable is the read-only Host attribution/availability gate shared by
 // MCP discovery and management source selection. It never grants execution.
 func (source ToolSource) Discoverable() bool {
-	if source.Unavailable || strings.TrimSpace(source.Name) == "" {
-		return false
-	}
-	switch source.Kind {
-	case "provider":
-		return true
-	case "agent", "sandbox":
-		return source.ResourceID != ""
-	default:
-		return false
-	}
+	return catalogapplication.SourceDiscoverable(source.Kind, source.Name, source.ResourceID, source.Unavailable)
 }
 
 func sourceDisplayName(source ToolSource) string {

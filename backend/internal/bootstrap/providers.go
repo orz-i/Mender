@@ -3,7 +3,6 @@ package bootstrap
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -15,7 +14,6 @@ import (
 	platformplugin "github.com/orz-i/Mender/backend/internal/plugin"
 	installationdomain "github.com/orz-i/Mender/backend/internal/plugin/installation/domain"
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
-	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 	sshjobsplugin "github.com/orz-i/Mender/backend/internal/sshjobs/infrastructure/plugin"
 	workspaceplugin "github.com/orz-i/Mender/backend/internal/workspace/infrastructure/plugin"
 )
@@ -51,8 +49,6 @@ type ProviderPluginCatalog struct {
 
 const (
 	providerPluginIssueResolveDescriptor = "descriptor_resolution_failed"
-	providerPluginIssuePersistDescriptor = "descriptor_backfill_failed"
-	providerPluginIssueCloseProcess      = "process_cleanup_failed"
 )
 
 // isManagedProviderFacade identifies host-owned resource Tool Suite adapters.
@@ -128,8 +124,8 @@ func (r *Runtime) ProviderPluginDescriptorForConfig(
 }
 
 // ListAvailableProviderPluginCatalog returns built-in plugins plus enabled
-// external installations and preserves installation-scoped backfill failures as
-// diagnostics instead of hiding unrelated healthy plugins.
+// external installations using only persisted descriptor snapshots. Missing or invalid snapshots remain
+// installation-scoped diagnostics instead of hiding unrelated healthy plugins.
 func (r *Runtime) ListAvailableProviderPluginCatalog(
 	ctx context.Context,
 ) (ProviderPluginCatalog, error) {
@@ -171,19 +167,9 @@ func (r *Runtime) ListAvailableProviderPluginCatalog(
 			}
 		}
 		if !verified {
-			var backfillIssues []ProviderPluginIssue
-			descriptor, verified, backfillIssues = backfillProviderPluginDescriptor(
-				ctx,
-				installation,
-				r.externalResolver,
-				r.pluginInstallations,
-				r.externalProcesses,
-			)
-			issues = append(issues, backfillIssues...)
-			if !verified {
-				continue
-			}
-			r.externalResolver.ForgetInstallation(installation.ID())
+			issues = append(issues, newProviderPluginIssue(installation.ID(), providerPluginIssueResolveDescriptor,
+				fmt.Errorf("no verified extension descriptor; run mender plugin verify %s", installation.ID())))
+			continue
 		}
 		id := installation.ID()
 		plugins = append(plugins, AvailableProviderPlugin{
@@ -237,75 +223,6 @@ func (r *Runtime) ListAvailableProviderPlugins(
 	return catalog.Plugins, nil
 }
 
-type providerPluginDescriptorBackfillResolver interface {
-	ResolveInstallation(
-		context.Context,
-		providerplugin.InstallationID,
-	) (providerplugin.Resolution, error)
-}
-
-type providerPluginVerifiedDescriptorStore interface {
-	SetVerifiedDescriptor(
-		context.Context,
-		providerplugin.InstallationID,
-		platformplugin.Descriptor,
-	) error
-}
-
-type providerPluginProcessCloser interface {
-	CloseInstallation(providerplugin.InstallationID) error
-}
-
-func backfillProviderPluginDescriptor(
-	ctx context.Context,
-	installation installationdomain.Installation,
-	resolver providerPluginDescriptorBackfillResolver,
-	store providerPluginVerifiedDescriptorStore,
-	processes providerPluginProcessCloser,
-) (providerplugin.Descriptor, bool, []ProviderPluginIssue) {
-	resolved, err := resolver.ResolveInstallation(ctx, installation.ID())
-	if err != nil {
-		return providerplugin.Descriptor{}, false, []ProviderPluginIssue{
-			newProviderPluginIssue(
-				installation.ID(),
-				providerPluginIssueResolveDescriptor,
-				err,
-			),
-		}
-	}
-	descriptor := resolved.Descriptor.Clone()
-	platformDescriptor, conversionErr := providerplugin.PlatformDescriptor(descriptor)
-	if conversionErr != nil {
-		return providerplugin.Descriptor{}, false, []ProviderPluginIssue{
-			newProviderPluginIssue(installation.ID(), providerPluginIssuePersistDescriptor, conversionErr),
-		}
-	}
-	persistErr := store.SetVerifiedDescriptor(
-		context.WithoutCancel(ctx), installation.ID(), platformDescriptor,
-	)
-	closeErr := processes.CloseInstallation(installation.ID())
-
-	issues := make([]ProviderPluginIssue, 0, 2)
-	if persistErr != nil {
-		issues = append(issues, newProviderPluginIssue(
-			installation.ID(),
-			providerPluginIssuePersistDescriptor,
-			persistErr,
-		))
-	}
-	if closeErr != nil {
-		issues = append(issues, newProviderPluginIssue(
-			installation.ID(),
-			providerPluginIssueCloseProcess,
-			closeErr,
-		))
-	}
-	if persistErr != nil {
-		return providerplugin.Descriptor{}, false, issues
-	}
-	return descriptor, true, issues
-}
-
 func newProviderPluginIssue(
 	installationID providerplugin.InstallationID,
 	code string,
@@ -349,7 +266,7 @@ func (r *Runtime) RegisterConfiguredProvider(
 	rawConfig json.RawMessage,
 	governanceContext governancedomain.Context,
 ) (catalogdomain.Provider, error) {
-	return r.registerConfiguredProvider(ctx, request, pluginID, rawConfig, governanceContext, false)
+	return r.providerManagement().RegisterConfiguredProvider(ctx, request, pluginID, rawConfig, governanceContext)
 }
 
 // registerConfiguredProvider admits private Tool Suite facade creation only
@@ -363,96 +280,10 @@ func (r *Runtime) registerConfiguredProvider(
 	governanceContext governancedomain.Context,
 	managedFacade bool,
 ) (catalogdomain.Provider, error) {
-	// A resource-owned facade may only be created by its owner workflow.
-	// The public Provider API/CLI never gets a creation authorization bit.
-	if isManagedProviderFacade(pluginID) != managedFacade {
-		return catalogdomain.Provider{}, sandboxdomain.ErrNotAuthorized
+	if managedFacade {
+		return r.providerManagement().RegisterManagedFacade(ctx, request, pluginID, rawConfig, governanceContext)
 	}
-	plugin, descriptor, err := r.resolveProviderPlugin(pluginID)
-	if err != nil {
-		return catalogdomain.Provider{}, fmt.Errorf(
-			"register configured provider: %w",
-			err,
-		)
-	}
-
-	provider, err := r.Catalog.RegisterProvider.Execute(ctx, request)
-	if err != nil {
-		return catalogdomain.Provider{}, err
-	}
-
-	config, err := providerplugin.NewConfiguration(
-		provider.ID(),
-		descriptor.ID,
-		descriptor.ConfigVersion,
-		rawConfig,
-	)
-	if err != nil {
-		removeErr := r.Catalog.RemoveProvider.Execute(ctx, provider.ID())
-		return catalogdomain.Provider{}, errors.Join(
-			fmt.Errorf("register configured provider: build config: %w", err),
-			wrapOptionalError(
-				"register configured provider: compensate provider removal",
-				removeErr,
-			),
-		)
-	}
-
-	activationErr := r.admitProviderActivation(
-		ctx,
-		provider.ID(),
-		governanceContext,
-		func(operationCtx context.Context) error {
-			if err := plugin.ValidateConfig(
-				operationCtx,
-				cloneRawJSON(rawConfig),
-			); err != nil {
-				return fmt.Errorf(
-					"register configured provider: validate config: %w: %w",
-					providerplugin.ErrInvalidConfiguration,
-					err,
-				)
-			}
-			metadata, err := plugin.InspectConfig(
-				operationCtx,
-				cloneRawJSON(rawConfig),
-			)
-			if err != nil {
-				return fmt.Errorf(
-					"register configured provider: inspect config: %w",
-					err,
-				)
-			}
-			nextConfig, err := config.WithMetadata(metadata)
-			if err != nil {
-				return fmt.Errorf(
-					"register configured provider: normalize config metadata: %w",
-					err,
-				)
-			}
-			if err := r.providerConfigs.Save(operationCtx, nextConfig); err != nil {
-				return fmt.Errorf(
-					"register configured provider: save config: %w",
-					err,
-				)
-			}
-			return nil
-		},
-	)
-	if activationErr != nil {
-		removeErr := r.Catalog.RemoveProvider.Execute(
-			context.WithoutCancel(ctx),
-			provider.ID(),
-		)
-		return catalogdomain.Provider{}, errors.Join(
-			activationErr,
-			wrapOptionalError(
-				"register configured provider: compensate provider removal",
-				removeErr,
-			),
-		)
-	}
-	return provider, nil
+	return r.providerManagement().RegisterConfiguredProvider(ctx, request, pluginID, rawConfig, governanceContext)
 }
 
 // RegisterInstalledProvider persists a Provider pinned to one exact external
@@ -466,107 +297,10 @@ func (r *Runtime) RegisterInstalledProvider(
 	rawConfig json.RawMessage,
 	governanceContext governancedomain.Context,
 ) (catalogdomain.Provider, error) {
-	if isManagedProviderFacade(pluginID) {
-		return catalogdomain.Provider{}, sandboxdomain.ErrNotAuthorized
-	}
 	if r == nil || r.externalResolver == nil {
-		return catalogdomain.Provider{}, fmt.Errorf(
-			"register installed provider: external plugin resolver is unavailable",
-		)
+		return catalogdomain.Provider{}, fmt.Errorf("register installed provider: external plugin resolver is unavailable")
 	}
-	resolved, err := r.externalResolver.ResolveInstallation(ctx, installationID)
-	if err != nil {
-		return catalogdomain.Provider{}, fmt.Errorf(
-			"register installed provider: %w",
-			err,
-		)
-	}
-	if resolved.Descriptor.ID != pluginID {
-		return catalogdomain.Provider{}, fmt.Errorf(
-			"register installed provider: installation %s owns plugin %s, request uses %s",
-			installationID,
-			resolved.Descriptor.ID,
-			pluginID,
-		)
-	}
-
-	provider, err := r.Catalog.RegisterProvider.Execute(ctx, request)
-	if err != nil {
-		return catalogdomain.Provider{}, err
-	}
-	config, err := providerplugin.NewInstalledConfiguration(
-		provider.ID(),
-		resolved.Descriptor.ID,
-		installationID,
-		resolved.Descriptor.ConfigVersion,
-		rawConfig,
-	)
-	if err != nil {
-		removeErr := r.Catalog.RemoveProvider.Execute(ctx, provider.ID())
-		return catalogdomain.Provider{}, errors.Join(
-			fmt.Errorf("register installed provider: build config: %w", err),
-			wrapOptionalError(
-				"register installed provider: compensate provider removal",
-				removeErr,
-			),
-		)
-	}
-
-	activationErr := r.admitProviderActivation(
-		ctx,
-		provider.ID(),
-		governanceContext,
-		func(operationCtx context.Context) error {
-			if err := resolved.Plugin.ValidateConfig(
-				operationCtx,
-				cloneRawJSON(rawConfig),
-			); err != nil {
-				return fmt.Errorf(
-					"register installed provider: validate config: %w: %w",
-					providerplugin.ErrInvalidConfiguration,
-					err,
-				)
-			}
-			metadata, err := resolved.Plugin.InspectConfig(
-				operationCtx,
-				cloneRawJSON(rawConfig),
-			)
-			if err != nil {
-				return fmt.Errorf(
-					"register installed provider: inspect config: %w",
-					err,
-				)
-			}
-			nextConfig, err := config.WithMetadata(metadata)
-			if err != nil {
-				return fmt.Errorf(
-					"register installed provider: normalize config metadata: %w",
-					err,
-				)
-			}
-			if err := r.providerConfigs.Save(operationCtx, nextConfig); err != nil {
-				return fmt.Errorf(
-					"register installed provider: save config: %w",
-					err,
-				)
-			}
-			return nil
-		},
-	)
-	if activationErr != nil {
-		removeErr := r.Catalog.RemoveProvider.Execute(
-			context.WithoutCancel(ctx),
-			provider.ID(),
-		)
-		return catalogdomain.Provider{}, errors.Join(
-			activationErr,
-			wrapOptionalError(
-				"register installed provider: compensate provider removal",
-				removeErr,
-			),
-		)
-	}
-	return provider, nil
+	return r.providerManagement().RegisterInstalledProvider(ctx, request, pluginID, installationID, rawConfig, governanceContext)
 }
 
 // UpdateConfiguredProvider updates canonical metadata and plugin configuration
@@ -579,354 +313,7 @@ func (r *Runtime) UpdateConfiguredProvider(
 	rawConfig json.RawMessage,
 	governanceContext governancedomain.Context,
 ) (catalogdomain.Provider, error) {
-	if r.Sandboxes != nil && r.Sandboxes.store != nil {
-		managed, err := r.Sandboxes.store.IsManagedSandboxSuiteProvider(ctx, providerID.String())
-		if err != nil {
-			return catalogdomain.Provider{}, err
-		}
-		if managed {
-			return catalogdomain.Provider{}, fmt.Errorf("%w: Provider belongs to a Sandbox Tool Suite", ErrProviderInUse)
-		}
-	}
-	currentProvider, err := r.Catalog.GetProvider.Execute(ctx, providerID)
-	if err != nil {
-		return catalogdomain.Provider{}, err
-	}
-	if _, err := currentProvider.UpdateMetadata(
-		request.DisplayName,
-		request.Description,
-		r.Catalog.clock.Now(),
-	); err != nil {
-		return catalogdomain.Provider{}, err
-	}
-
-	currentConfig, err := r.providerConfigs.GetProviderConfig(ctx, providerID)
-	if err != nil {
-		return catalogdomain.Provider{}, fmt.Errorf(
-			"update configured provider: load config: %w",
-			err,
-		)
-	}
-	if isManagedProviderFacade(currentConfig.PluginID) {
-		return catalogdomain.Provider{}, fmt.Errorf("%w: Provider belongs to a resource-owned Tool Suite", ErrProviderInUse)
-	}
-	resolved, err := r.providerResolver.Resolve(ctx, currentConfig)
-	if err != nil {
-		return catalogdomain.Provider{}, fmt.Errorf(
-			"update configured provider: resolve plugin: %w",
-			err,
-		)
-	}
-	nextConfig, err := updatedProviderConfiguration(
-		providerID,
-		currentConfig,
-		resolved.Descriptor.ConfigVersion,
-		rawConfig,
-	)
-	if err != nil {
-		return catalogdomain.Provider{}, fmt.Errorf(
-			"update configured provider: build config: %w",
-			err,
-		)
-	}
-
-	var updated catalogdomain.Provider
-	activationErr := r.admitProviderActivation(
-		ctx,
-		providerID,
-		governanceContext,
-		func(operationCtx context.Context) error {
-			if err := resolved.Plugin.ValidateConfig(
-				operationCtx,
-				cloneRawJSON(rawConfig),
-			); err != nil {
-				return fmt.Errorf(
-					"update configured provider: validate config: %w: %w",
-					providerplugin.ErrInvalidConfiguration,
-					err,
-				)
-			}
-			metadata, err := resolved.Plugin.InspectConfig(
-				operationCtx,
-				cloneRawJSON(rawConfig),
-			)
-			if err != nil {
-				return fmt.Errorf(
-					"update configured provider: inspect config: %w",
-					err,
-				)
-			}
-			nextConfigWithMetadata, err := nextConfig.WithMetadata(metadata)
-			if err != nil {
-				return fmt.Errorf(
-					"update configured provider: normalize config metadata: %w",
-					err,
-				)
-			}
-			if err := r.providerConfigs.Save(
-				operationCtx,
-				nextConfigWithMetadata,
-			); err != nil {
-				return fmt.Errorf(
-					"update configured provider: save config: %w",
-					err,
-				)
-			}
-
-			request.ProviderID = providerID
-			updated, err = r.Catalog.UpdateProvider.Execute(
-				operationCtx,
-				request,
-			)
-			if err != nil {
-				restoreErr := r.providerConfigs.Save(
-					context.WithoutCancel(operationCtx),
-					currentConfig,
-				)
-				return errors.Join(
-					fmt.Errorf(
-						"update configured provider: metadata: %w",
-						err,
-					),
-					wrapOptionalError(
-						"update configured provider: restore config",
-						restoreErr,
-					),
-				)
-			}
-			return nil
-		},
-	)
-	if activationErr != nil {
-		return catalogdomain.Provider{}, activationErr
-	}
-	return updated, nil
-}
-
-// RebindProviderInstallation explicitly moves one external Provider to another
-// verified installation of the same PluginID while preserving canonical
-// Provider identity. The target Tool snapshot is proven before the persisted pin
-// and execution route are retired from the current installation.
-func (r *Runtime) rebindProviderInstallation(
-	ctx context.Context,
-	providerID catalogdomain.ProviderID,
-	targetInstallationID providerplugin.InstallationID,
-	rawConfig json.RawMessage,
-) (catalogapplication.SyncProviderToolsResult, error) {
-	if _, err := r.Catalog.GetProvider.Execute(ctx, providerID); err != nil {
-		return catalogapplication.SyncProviderToolsResult{}, fmt.Errorf(
-			"rebind provider installation: provider: %w",
-			err,
-		)
-	}
-	currentConfig, err := r.providerConfigs.GetProviderConfig(ctx, providerID)
-	if err != nil {
-		return catalogapplication.SyncProviderToolsResult{}, fmt.Errorf(
-			"rebind provider installation: load current config: %w",
-			err,
-		)
-	}
-	if currentConfig.InstallationID == nil {
-		return catalogapplication.SyncProviderToolsResult{}, fmt.Errorf(
-			"rebind provider installation: Provider %s uses a built-in plugin",
-			providerID,
-		)
-	}
-	if *currentConfig.InstallationID == targetInstallationID {
-		return catalogapplication.SyncProviderToolsResult{}, fmt.Errorf(
-			"rebind provider installation: Provider %s already uses installation %s",
-			providerID,
-			targetInstallationID,
-		)
-	}
-
-	resolved, err := r.externalResolver.ResolveInstallation(ctx, targetInstallationID)
-	if err != nil {
-		return catalogapplication.SyncProviderToolsResult{}, fmt.Errorf(
-			"rebind provider installation: target: %w",
-			err,
-		)
-	}
-	if resolved.Descriptor.ID != currentConfig.PluginID {
-		return catalogapplication.SyncProviderToolsResult{}, fmt.Errorf(
-			"rebind provider installation: target plugin %s does not match Provider plugin %s",
-			resolved.Descriptor.ID,
-			currentConfig.PluginID,
-		)
-	}
-	if err := resolved.Plugin.ValidateConfig(ctx, cloneRawJSON(rawConfig)); err != nil {
-		return catalogapplication.SyncProviderToolsResult{}, fmt.Errorf(
-			"rebind provider installation: validate config: %w: %w",
-			providerplugin.ErrInvalidConfiguration,
-			err,
-		)
-	}
-	metadata, err := resolved.Plugin.InspectConfig(ctx, cloneRawJSON(rawConfig))
-	if err != nil {
-		return catalogapplication.SyncProviderToolsResult{}, fmt.Errorf(
-			"rebind provider installation: inspect config: %w",
-			err,
-		)
-	}
-	targetConfig, err := providerplugin.NewInstalledConfiguration(
-		providerID,
-		currentConfig.PluginID,
-		targetInstallationID,
-		resolved.Descriptor.ConfigVersion,
-		rawConfig,
-	)
-	if err != nil {
-		return catalogapplication.SyncProviderToolsResult{}, fmt.Errorf(
-			"rebind provider installation: build target config: %w",
-			err,
-		)
-	}
-	targetConfig, err = targetConfig.WithMetadata(metadata)
-	if err != nil {
-		return catalogapplication.SyncProviderToolsResult{}, fmt.Errorf(
-			"rebind provider installation: normalize target metadata: %w",
-			err,
-		)
-	}
-
-	previousTools, err := r.Catalog.store.ListProviderTools(ctx, providerID)
-	if err != nil {
-		return catalogapplication.SyncProviderToolsResult{}, fmt.Errorf(
-			"rebind provider installation: snapshot current tools: %w",
-			err,
-		)
-	}
-
-	candidate, err := resolved.Plugin.Open(ctx, providerplugin.OpenRequest{
-		ProviderID:    providerID,
-		ConfigVersion: targetConfig.ConfigVersion,
-		Config:        cloneRawJSON(targetConfig.Config),
-		Credentials:   r.Credentials.Resolver,
-	})
-	if err != nil {
-		return catalogapplication.SyncProviderToolsResult{}, fmt.Errorf(
-			"rebind provider installation: open target: %w",
-			err,
-		)
-	}
-	if candidate == nil {
-		return catalogapplication.SyncProviderToolsResult{}, fmt.Errorf(
-			"rebind provider installation: target returned a nil instance",
-		)
-	}
-	candidateClosed := false
-	closeCandidate := func() error {
-		if candidateClosed {
-			return nil
-		}
-		candidateClosed = true
-		return candidate.Close()
-	}
-	defer func() { _ = closeCandidate() }()
-
-	syncTools := r.Catalog.SyncProviderTools(candidate)
-	result, err := syncTools.Execute(ctx, providerID)
-	if err != nil {
-		return catalogapplication.SyncProviderToolsResult{}, fmt.Errorf(
-			"rebind provider installation: synchronize target: %w",
-			err,
-		)
-	}
-	if err := closeCandidate(); err != nil {
-		restoreErr := r.Catalog.store.ReplaceProviderTools(
-			context.WithoutCancel(ctx),
-			providerID,
-			previousTools,
-		)
-		return catalogapplication.SyncProviderToolsResult{}, errors.Join(
-			fmt.Errorf("rebind provider installation: close prepared target: %w", err),
-			wrapOptionalError(
-				"rebind provider installation: restore Tool snapshot",
-				restoreErr,
-			),
-		)
-	}
-
-	if err := r.providerConfigs.Save(ctx, targetConfig); err != nil {
-		restoreErr := r.Catalog.store.ReplaceProviderTools(
-			context.WithoutCancel(ctx),
-			providerID,
-			previousTools,
-		)
-		return catalogapplication.SyncProviderToolsResult{}, errors.Join(
-			fmt.Errorf("rebind provider installation: save target config: %w", err),
-			wrapOptionalError(
-				"rebind provider installation: restore Tool snapshot",
-				restoreErr,
-			),
-		)
-	}
-
-	if _, err := r.providerInstances.Reload(ctx, providerID); err != nil {
-		restoreConfigErr := r.providerConfigs.Save(
-			context.WithoutCancel(ctx),
-			currentConfig,
-		)
-		restoreToolsErr := r.Catalog.store.ReplaceProviderTools(
-			context.WithoutCancel(ctx),
-			providerID,
-			previousTools,
-		)
-		var restoreRouteErr error
-		if restoreConfigErr == nil {
-			_, restoreRouteErr = r.providerInstances.Reload(
-				context.WithoutCancel(ctx),
-				providerID,
-			)
-		}
-		return catalogapplication.SyncProviderToolsResult{}, errors.Join(
-			fmt.Errorf("rebind provider installation: activate target: %w", err),
-			wrapOptionalError(
-				"rebind provider installation: restore config",
-				restoreConfigErr,
-			),
-			wrapOptionalError(
-				"rebind provider installation: restore Tool snapshot",
-				restoreToolsErr,
-			),
-			wrapOptionalError(
-				"rebind provider installation: restore execution route",
-				restoreRouteErr,
-			),
-		)
-	}
-	return result, nil
-}
-
-// SyncConfiguredProvider reloads the current Provider plugin instance and
-// atomically refreshes its canonical Tool snapshot.
-func (r *Runtime) syncConfiguredProvider(
-	ctx context.Context,
-	providerID catalogdomain.ProviderID,
-) (catalogapplication.SyncProviderToolsResult, error) {
-	if _, err := r.Catalog.GetProvider.Execute(ctx, providerID); err != nil {
-		return catalogapplication.SyncProviderToolsResult{}, fmt.Errorf(
-			"sync configured provider: provider: %w",
-			err,
-		)
-	}
-
-	instance, err := r.providerInstances.Reload(ctx, providerID)
-	if err != nil {
-		return catalogapplication.SyncProviderToolsResult{}, fmt.Errorf(
-			"sync configured provider: activate: %w",
-			err,
-		)
-	}
-	syncTools := r.Catalog.SyncProviderTools(instance)
-	result, err := syncTools.Execute(ctx, providerID)
-	if err != nil {
-		return catalogapplication.SyncProviderToolsResult{}, fmt.Errorf(
-			"sync configured provider: synchronize: %w",
-			err,
-		)
-	}
-	return result, nil
+	return r.providerManagement().UpdateConfiguredProvider(ctx, providerID, request, rawConfig, governanceContext)
 }
 
 // DeleteConfiguredProvider removes generic Provider configuration and canonical
@@ -935,142 +322,12 @@ func (r *Runtime) DeleteConfiguredProvider(
 	ctx context.Context,
 	providerID catalogdomain.ProviderID,
 ) error {
-	// Managed Agent facades cannot be torn down through Provider CRUD;
-	// otherwise CloseProvider would run before the persisted guard fails.
-	if r.agentStore != nil {
-		managed, err := r.agentStore.IsToolFacadeProvider(ctx, providerID.String())
-		if err != nil {
-			return err
-		}
-		if managed {
-			return fmt.Errorf("%w: Provider is owned by an Agent Tool Suite", ErrProviderInUse)
-		}
-	}
-	if r.Sandboxes != nil && r.Sandboxes.store != nil {
-		managed, err := r.Sandboxes.store.IsManagedSandboxSuiteProvider(ctx, providerID.String())
-		if err != nil {
-			return err
-		}
-		if managed {
-			return fmt.Errorf("%w: Provider belongs to a Sandbox Tool Suite", ErrProviderInUse)
-		}
-	}
-	if err := r.ensureProviderUnused(ctx, providerID); err != nil {
-		return err
-	}
-
-	if err := r.providerInstances.CloseProvider(providerID); err != nil {
-		return fmt.Errorf("delete configured provider: close active instance: %w", err)
-	}
-	return deleteConfiguredProviderRows(ctx, r.providerDatabasePath, providerID)
+	return r.providerManagement().DeleteConfiguredProvider(ctx, providerID)
 }
 
 func (r *Runtime) ensureProviderUnused(
 	ctx context.Context,
 	providerID catalogdomain.ProviderID,
 ) error {
-	profiles, err := r.Profiles.List.Execute(ctx)
-	if err != nil {
-		return fmt.Errorf("check provider usage: list profiles: %w", err)
-	}
-	for _, profile := range profiles {
-		for _, binding := range profile.Bindings() {
-			tool, describeErr := r.Catalog.DescribeTool.Execute(ctx, binding.ToolID())
-			if describeErr != nil {
-				if errors.Is(describeErr, catalogapplication.ErrToolNotFound) {
-					return fmt.Errorf("%w: Profile %s contains an unresolved ToolID", ErrProviderInUse, profile.Slug())
-				}
-				return fmt.Errorf(
-					"check provider usage: inspect profile %s: %w",
-					profile.Slug(),
-					describeErr,
-				)
-			}
-			if tool.ProviderID() == providerID {
-				return fmt.Errorf(
-					"%w: profile %s selects tool %s",
-					ErrProviderInUse,
-					profile.Slug(),
-					tool.ID(),
-				)
-			}
-		}
-	}
-
-	policy, err := r.Policy.Get.Execute(ctx)
-	if err != nil {
-		return fmt.Errorf("check provider usage: inspect Policy: %w", err)
-	}
-	for _, rule := range policy.Rules() {
-		for _, referencedProviderID := range rule.Match().ProviderIDs() {
-			if referencedProviderID == providerID.String() {
-				return fmt.Errorf("%w: Policy Rule %s references Provider %s", ErrProviderInUse, rule.ID(), providerID)
-			}
-		}
-		for _, rawToolID := range rule.Match().ToolIDs() {
-			toolID, parseErr := catalogdomain.ParseToolID(rawToolID)
-			if parseErr != nil {
-				return fmt.Errorf("%w: Policy Rule %s has invalid ToolID", ErrProviderInUse, rule.ID())
-			}
-			tool, lookupErr := r.Catalog.DescribeTool.Execute(ctx, toolID)
-			if errors.Is(lookupErr, catalogapplication.ErrToolNotFound) {
-				return fmt.Errorf("%w: Policy Rule %s refers to unresolved ToolID", ErrProviderInUse, rule.ID())
-			}
-			if lookupErr != nil {
-				return lookupErr
-			}
-			if tool.ProviderID() == providerID {
-				return fmt.Errorf("%w: Policy Rule %s references Tool %s", ErrProviderInUse, rule.ID(), rawToolID)
-			}
-		}
-	}
-	return nil
-}
-
-func updatedProviderConfiguration(
-	providerID catalogdomain.ProviderID,
-	current providerplugin.Configuration,
-	configVersion int,
-	rawConfig json.RawMessage,
-) (providerplugin.Configuration, error) {
-	if current.InstallationID == nil {
-		return providerplugin.NewConfiguration(
-			providerID,
-			current.PluginID,
-			configVersion,
-			rawConfig,
-		)
-	}
-	return providerplugin.NewInstalledConfiguration(
-		providerID,
-		current.PluginID,
-		*current.InstallationID,
-		configVersion,
-		rawConfig,
-	)
-}
-
-func (r *Runtime) resolveProviderPlugin(
-	pluginID providerplugin.ID,
-) (providerplugin.Plugin, providerplugin.Descriptor, error) {
-	plugin, err := r.providerPlugins.Lookup(pluginID)
-	if err != nil {
-		return nil, providerplugin.Descriptor{}, err
-	}
-	descriptor := plugin.Descriptor()
-	if descriptor.ID != pluginID {
-		return nil, providerplugin.Descriptor{}, fmt.Errorf(
-			"provider plugin descriptor id %s does not match registry id %s",
-			descriptor.ID,
-			pluginID,
-		)
-	}
-	return plugin, descriptor, nil
-}
-
-func cloneRawJSON(raw json.RawMessage) json.RawMessage {
-	if raw == nil {
-		return nil
-	}
-	return append(json.RawMessage(nil), raw...)
+	return r.providerManagement().EnsureProviderUnused(ctx, providerID)
 }

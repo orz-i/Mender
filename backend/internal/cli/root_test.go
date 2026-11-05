@@ -23,6 +23,7 @@ func TestProviderPluginCommandSurface(t *testing.T) {
 	for _, path := range [][]string{
 		{"plugin", "list"},
 		{"plugin", "install"},
+		{"plugin", "verify"},
 		{"plugin", "inspect"},
 		{"plugin", "enable"},
 		{"plugin", "disable"},

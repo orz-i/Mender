@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
+	providerretirement "github.com/orz-i/Mender/backend/internal/providerplugin/infrastructure/sqlite"
 	_ "modernc.org/sqlite"
 )
 
@@ -141,49 +141,5 @@ func installProviderReferenceGuards(ctx context.Context, path string) error {
 // check: late Profile/Policy writers either commit first and block this delete,
 // or see the missing Tool/Provider afterwards and fail their own insert guard.
 func deleteConfiguredProviderRows(ctx context.Context, databasePath string, providerID catalogdomain.ProviderID) error {
-	db, err := openProviderReferenceDB(ctx, databasePath)
-	if err != nil {
-		return fmt.Errorf("delete provider: open reference database: %w", err)
-	}
-	defer func() { _ = db.Close() }()
-	tx, err := db.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("delete provider: begin: %w", err)
-	}
-	defer func() { _ = tx.Rollback() }()
-
-	// First statement acquires the SQLite writer gate; no read snapshot is
-	// taken before the write. All following changes roll back together.
-	if _, err := tx.ExecContext(ctx, "DELETE FROM provider_configs WHERE provider_id=?", providerID.String()); err != nil {
-		return referenceDeletionError("config", err)
-	}
-	if _, err := tx.ExecContext(ctx, "DELETE FROM tools_fts WHERE provider_id=?", providerID.String()); err != nil {
-		return referenceDeletionError("search index", err)
-	}
-	result, err := tx.ExecContext(ctx, "DELETE FROM providers WHERE id=?", providerID.String())
-	if err != nil {
-		return referenceDeletionError("catalogue", err)
-	}
-	count, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("delete provider: affected rows: %w", err)
-	}
-	if count != 1 {
-		return catalogapplication.ErrProviderNotFound
-	}
-	if err := tx.Commit(); err != nil {
-		return referenceDeletionError("commit", err)
-	}
-	return nil
-}
-
-func referenceDeletionError(phase string, err error) error {
-	msg := strings.ToLower(err.Error())
-	if strings.Contains(msg, "provider has active references") ||
-		strings.Contains(msg, "foreign key constraint failed") ||
-		strings.Contains(msg, "resource-owned") ||
-		strings.Contains(msg, "managed agent facade") {
-		return fmt.Errorf("%w: Provider references changed during %s", ErrProviderInUse, phase)
-	}
-	return fmt.Errorf("delete provider: %s: %w", phase, err)
+	return providerretirement.NewRetirement(databasePath).Delete(ctx, providerID)
 }

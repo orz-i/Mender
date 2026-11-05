@@ -21,7 +21,6 @@ import (
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	mcpplugin "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/plugin"
 	openapiplugin "github.com/orz-i/Mender/backend/internal/openapi/infrastructure/plugin"
-	platformplugin "github.com/orz-i/Mender/backend/internal/plugin"
 	installationdomain "github.com/orz-i/Mender/backend/internal/plugin/installation/domain"
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
 	providerconfigstore "github.com/orz-i/Mender/backend/internal/providerplugin/configstore"
@@ -193,7 +192,10 @@ func TestListAvailableProviderPluginsIsolatesBrokenLegacyInstallation(t *testing
 		t.Fatal(err)
 	}
 
-	catalog, err := runtime.ListAvailableProviderPluginCatalog(ctx)
+	// Deliberately omit executable resolver/process capabilities. Reading an
+	// unverified installation must work without either and must not repair it.
+	readOnly := &Runtime{providerPlugins: runtime.providerPlugins, pluginInstallations: runtime.pluginInstallations}
+	catalog, err := readOnly.ListAvailableProviderPluginCatalog(ctx)
 	if err != nil {
 		t.Fatalf("ListAvailableProviderPluginCatalog() error = %v", err)
 	}
@@ -210,126 +212,16 @@ func TestListAvailableProviderPluginsIsolatesBrokenLegacyInstallation(t *testing
 		catalog.Issues[0].Code != providerPluginIssueResolveDescriptor {
 		t.Fatalf("catalog issues = %+v", catalog.Issues)
 	}
-}
-
-func TestBackfillProviderPluginDescriptorSurfacesPersistenceAndCleanupFailures(t *testing.T) {
-	t.Parallel()
-
-	installationID, err := providerplugin.ParseInstallationID(
-		"pinst_00000000000000000000000000000098",
-	)
+	if !strings.Contains(catalog.Issues[0].Message, "mender plugin verify "+installationID.String()) {
+		t.Fatalf("missing explicit verification remedy: %+v", catalog.Issues)
+	}
+	after, err := runtime.pluginInstallations.Get(ctx, installationID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	pluginID, err := providerplugin.ParseID("dev.example.backfill")
-	if err != nil {
-		t.Fatal(err)
+	if _, verified := after.VerifiedDescriptor(); verified {
+		t.Fatal("catalog read persisted a verified descriptor")
 	}
-	installation, err := installationdomain.NewInstallation(
-		installationID,
-		pluginID,
-		"1.0.0",
-		installationdomain.SourceLocal,
-		"/tmp/mender-backfill-provider-fixture",
-		"sha256:"+strings.Repeat("8", 64),
-		[]byte(`{
-			"manifestVersion": 2,
-			"pluginId": "dev.example.backfill",
-			"version": "1.0.0",
-			"extensions": [{"id":"main","kind":"provider.tools","protocolVersion":1}],
-			"displayName": "Backfill",
-			"description": "Backfill fixture",
-			"entrypoints": {"linux/amd64": "bin/plugin"}
-		}`),
-		installationdomain.StatusEnabled,
-		time.Date(2026, 9, 28, 12, 0, 0, 0, time.UTC),
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
-	descriptor := providerplugin.Descriptor{
-		ID:              pluginID,
-		Version:         "1.0.0",
-		DisplayName:     "Backfill",
-		ConfigVersion:   1,
-		ProtocolVersion: 1,
-	}
-
-	t.Run("persistence failure still attempts cleanup", func(t *testing.T) {
-		closer := &backfillProcessCloser{err: errors.New("cleanup failed")}
-		_, verified, issues := backfillProviderPluginDescriptor(
-			t.Context(),
-			installation,
-			backfillResolver{descriptor: descriptor},
-			backfillDescriptorStore{err: errors.New("database is read-only")},
-			closer,
-		)
-		if verified {
-			t.Fatal("backfill unexpectedly reported verified descriptor")
-		}
-		if !closer.called {
-			t.Fatal("backfill did not attempt process cleanup after persistence failure")
-		}
-		if len(issues) != 2 ||
-			issues[0].Code != providerPluginIssuePersistDescriptor ||
-			issues[1].Code != providerPluginIssueCloseProcess {
-			t.Fatalf("issues = %+v", issues)
-		}
-	})
-
-	t.Run("cleanup failure remains scoped after durable snapshot", func(t *testing.T) {
-		closer := &backfillProcessCloser{err: errors.New("cleanup failed")}
-		got, verified, issues := backfillProviderPluginDescriptor(
-			t.Context(),
-			installation,
-			backfillResolver{descriptor: descriptor},
-			backfillDescriptorStore{},
-			closer,
-		)
-		if !verified || got.ID != descriptor.ID {
-			t.Fatalf("backfill = descriptor %+v verified=%v", got, verified)
-		}
-		if len(issues) != 1 || issues[0].Code != providerPluginIssueCloseProcess {
-			t.Fatalf("issues = %+v", issues)
-		}
-	})
-}
-
-type backfillResolver struct {
-	descriptor providerplugin.Descriptor
-	err        error
-}
-
-func (r backfillResolver) ResolveInstallation(
-	context.Context,
-	providerplugin.InstallationID,
-) (providerplugin.Resolution, error) {
-	if r.err != nil {
-		return providerplugin.Resolution{}, r.err
-	}
-	return providerplugin.Resolution{Descriptor: r.descriptor}, nil
-}
-
-type backfillDescriptorStore struct {
-	err error
-}
-
-func (s backfillDescriptorStore) SetVerifiedDescriptor(
-	context.Context,
-	providerplugin.InstallationID,
-	platformplugin.Descriptor,
-) error {
-	return s.err
-}
-
-type backfillProcessCloser struct {
-	called bool
-	err    error
-}
-
-func (c *backfillProcessCloser) CloseInstallation(providerplugin.InstallationID) error {
-	c.called = true
-	return c.err
 }
 
 func TestOpenAPIProviderRuntimeEndToEndAndRefreshPreservesToolID(t *testing.T) {

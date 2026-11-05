@@ -286,7 +286,8 @@ func (s *Store) SetVerifiedDescriptor(
 	}
 	result, err := s.db.ExecContext(
 		ctx,
-		"UPDATE plugin_installations SET verified_descriptor_json = ? WHERE installation_id = ?",
+		`UPDATE plugin_installations SET verified_descriptor_json = ?
+		 WHERE installation_id = ? AND verified_descriptor_json IS NULL`,
 		value,
 		id.String(),
 	)
@@ -298,7 +299,28 @@ func (s *Store) SetVerifiedDescriptor(
 		return fmt.Errorf("set verified plugin descriptor: rows affected: %w", err)
 	}
 	if count == 0 {
-		return installationapplication.ErrInstallationNotFound
+		// Another verifier may have committed after our initial read. Never
+		// overwrite its immutable snapshot: identical publication is idempotent,
+		// while a competing descriptor must fail closed.
+		current, err := s.Get(ctx, id)
+		if err != nil {
+			return fmt.Errorf("set verified plugin descriptor: concurrent publication: %w", err)
+		}
+		existing, ok := current.VerifiedDescriptor()
+		if !ok {
+			return fmt.Errorf("set verified plugin descriptor: descriptor snapshot changed during publication")
+		}
+		existingVerified, err := installationdomain.NewVerifiedDescriptor(existing)
+		if err != nil {
+			return fmt.Errorf("set verified plugin descriptor: concurrent descriptor: %w", err)
+		}
+		nextVerified, err := installationdomain.NewVerifiedDescriptor(descriptor)
+		if err != nil {
+			return fmt.Errorf("set verified plugin descriptor: next descriptor: %w", err)
+		}
+		if !existingVerified.Equal(nextVerified) {
+			return fmt.Errorf("set verified plugin descriptor: descriptor snapshot is immutable")
+		}
 	}
 	return nil
 }
