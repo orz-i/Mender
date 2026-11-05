@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
+	managementquery "github.com/orz-i/Mender/backend/internal/management/application/query"
 	mcpserver "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/server"
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
@@ -70,7 +71,7 @@ func (r *Runtime) resolveMCPToolSources(
 func (r *Runtime) profileToolSource(
 	ctx context.Context, provider catalogdomain.Provider,
 	config *providerplugin.Configuration,
-	owners map[catalogdomain.ProviderID]ToolSourceOwner,
+	owners map[catalogdomain.ProviderID]managementquery.ToolSourceOwner,
 ) (mcpserver.ToolSource, error) {
 	owner := ToolSourceForProvider(provider, config, owners)
 	source := mcpserver.ToolSource{Kind: owner.Kind}
@@ -100,7 +101,7 @@ func (r *Runtime) profileToolSource(
 func (r *Runtime) ProfileToolSourceSelectable(
 	ctx context.Context, provider catalogdomain.Provider,
 	config *providerplugin.Configuration,
-	owners map[catalogdomain.ProviderID]ToolSourceOwner,
+	owners map[catalogdomain.ProviderID]managementquery.ToolSourceOwner,
 ) (bool, error) {
 	source, err := r.profileToolSource(ctx, provider, config, owners)
 	if err != nil {

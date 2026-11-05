@@ -211,18 +211,6 @@ func (r *Runtime) ListAvailableProviderPluginCatalog(
 	return ProviderPluginCatalog{Plugins: plugins, Issues: issues}, nil
 }
 
-// ListAvailableProviderPlugins retains the original plugin-only Runtime API for
-// callers that do not need installation-scoped catalog diagnostics.
-func (r *Runtime) ListAvailableProviderPlugins(
-	ctx context.Context,
-) ([]AvailableProviderPlugin, error) {
-	catalog, err := r.ListAvailableProviderPluginCatalog(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return catalog.Plugins, nil
-}
-
 func newProviderPluginIssue(
 	installationID providerplugin.InstallationID,
 	code string,

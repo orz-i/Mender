@@ -9,6 +9,7 @@ import (
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
+	workspace "github.com/orz-i/Mender/backend/internal/workspace/domain"
 )
 
 func (p *Plugin) ExtractGovernanceFacts(
@@ -33,7 +34,7 @@ func (p *Plugin) ExtractGovernanceFacts(
 	var resourcePath string
 	switch tool.SourceKey() {
 	case sourceKeyRead:
-		var input readInput
+		var input workspace.ReadRequest
 		if err := decodeStrict(clean.Bytes(), &input, "decode workspace.read governance arguments"); err != nil {
 			return invocationdomain.GovernanceFacts{}, err
 		}
@@ -45,7 +46,7 @@ func (p *Plugin) ExtractGovernanceFacts(
 		resourcePath = normalized
 
 	case sourceKeySearch:
-		var input searchInput
+		var input workspace.SearchRequest
 		if err := decodeStrict(clean.Bytes(), &input, "decode workspace.search governance arguments"); err != nil {
 			return invocationdomain.GovernanceFacts{}, err
 		}
@@ -60,7 +61,7 @@ func (p *Plugin) ExtractGovernanceFacts(
 		resourcePath = normalized
 
 	case sourceKeyEdit:
-		var input editInput
+		var input workspace.EditRequest
 		if err := decodeStrict(clean.Bytes(), &input, "decode workspace.edit governance arguments"); err != nil {
 			return invocationdomain.GovernanceFacts{}, err
 		}
@@ -72,7 +73,7 @@ func (p *Plugin) ExtractGovernanceFacts(
 		resourcePath = normalized
 
 	case sourceKeyShell:
-		var input shellInput
+		var input workspace.ShellRequest
 		if err := decodeStrict(clean.Bytes(), &input, "decode workspace.shell governance arguments"); err != nil {
 			return invocationdomain.GovernanceFacts{}, err
 		}

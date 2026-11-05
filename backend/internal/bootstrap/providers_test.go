@@ -45,14 +45,14 @@ func TestRuntimeExposesBuiltInProviderPluginDescriptors(t *testing.T) {
 		}
 	}
 
-	available, err := runtime.ListAvailableProviderPlugins(context.Background())
+	catalog, err := runtime.ListAvailableProviderPluginCatalog(context.Background())
 	if err != nil {
-		t.Fatalf("ListAvailableProviderPlugins() error = %v", err)
+		t.Fatalf("ListAvailableProviderPluginCatalog() error = %v", err)
 	}
-	if len(available) != 3 {
-		t.Fatalf("ListAvailableProviderPlugins() len = %d, want 3", len(available))
+	if len(catalog.Plugins) != 3 {
+		t.Fatalf("ListAvailableProviderPluginCatalog() plugins = %d, want 3", len(catalog.Plugins))
 	}
-	for _, item := range available {
+	for _, item := range catalog.Plugins {
 		if item.SourceKind != ProviderPluginSourceBuiltIn ||
 			item.InstallationID != nil ||
 			!item.Enabled {
@@ -150,7 +150,7 @@ func TestProviderPluginDescriptorForConfigUsesPersistedExternalSnapshotOffline(t
 	}
 }
 
-func TestListAvailableProviderPluginsIsolatesBrokenLegacyInstallation(t *testing.T) {
+func TestListAvailableProviderPluginCatalogIsolatesBrokenLegacyInstallation(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()

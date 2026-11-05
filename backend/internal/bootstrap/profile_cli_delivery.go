@@ -7,9 +7,6 @@ import (
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 )
 
-// LocalProfileCLI remains the management-facing command recipe payload.
-type LocalProfileCLI = profiledelivery.LocalProfileCLI
-
-func (r *Runtime) LocalProfileCLI(ctx context.Context, slug profiledomain.Slug) (LocalProfileCLI, error) {
+func (r *Runtime) LocalProfileCLI(ctx context.Context, slug profiledomain.Slug) (profiledelivery.LocalProfileCLI, error) {
 	return r.profileDelivery.LocalProfileCLI(ctx, slug)
 }

@@ -122,11 +122,11 @@ func TestNativeTunnelTransportManagedMCPAndReferences(t *testing.T) {
 	if r.externalProcesses.Running(installed.ID()) {
 		t.Fatal("installation descriptor probe left process running")
 	}
-	available, err := r.ListAvailableProviderPlugins(ctx)
+	catalog, err := r.ListAvailableProviderPluginCatalog(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, candidate := range available {
+	for _, candidate := range catalog.Plugins {
 		if candidate.InstallationID != nil && *candidate.InstallationID == installed.ID() {
 			t.Fatal("Tunnel transport produced upstream Tools")
 		}

@@ -96,11 +96,11 @@ func TestExternalSandboxPluginGovernedLifecycleAndExecution(t *testing.T) {
 	if runtime.externalProcesses.Running(installation.ID()) {
 		t.Fatal("install probe left native plugin process running")
 	}
-	catalog, err := runtime.ListAvailableProviderPlugins(ctx)
+	catalog, err := runtime.ListAvailableProviderPluginCatalog(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, entry := range catalog {
+	for _, entry := range catalog.Plugins {
 		if entry.InstallationID != nil && *entry.InstallationID == installation.ID() {
 			t.Fatal("sandbox plugin masqueraded as tool Provider")
 		}

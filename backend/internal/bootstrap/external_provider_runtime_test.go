@@ -115,13 +115,13 @@ func TestRuntimeInstalledExternalProviderEndToEnd(t *testing.T) {
 		}
 	}
 
-	available, err := runtime.ListAvailableProviderPlugins(ctx)
+	catalog, err := runtime.ListAvailableProviderPluginCatalog(ctx)
 	if err != nil {
-		t.Fatalf("ListAvailableProviderPlugins() error = %v", err)
+		t.Fatalf("ListAvailableProviderPluginCatalog() error = %v", err)
 	}
 	var external *AvailableProviderPlugin
-	for index := range available {
-		item := &available[index]
+	for index := range catalog.Plugins {
+		item := &catalog.Plugins[index]
 		if item.InstallationID != nil && *item.InstallationID == installationID {
 			external = item
 			break
