@@ -60,3 +60,23 @@ func TestArchitectureRejectsInfrastructureAndReverseApplicationEdges(t *testing.
 		t.Fatalf("expected three bad edges and an allowed consumer port: %v %v", violations, err)
 	}
 }
+
+func TestArchitectureRejectsFilepathMechanismsAndAliases(t *testing.T) {
+	root := t.TempDir()
+	writeArchitectureFixture(t, root, "backend/internal/example/application/resolve.go", "package application\nimport fp \"path/filepath\"\nvar resolve = fp.EvalSymlinks\n")
+	writeArchitectureFixture(t, root, "backend/internal/example/domain/walk.go", "package domain\nimport \"path/filepath\"\nvar walk = filepath.WalkDir\n")
+	writeArchitectureFixture(t, root, "backend/internal/example/application/cwd.go", "package application\nimport \"path/filepath\"\nvar absolute = filepath.Abs\n")
+	writeArchitectureFixture(t, root, "backend/internal/example/application/dot.go", "package application\nimport . \"path/filepath\"\nvar resolve = EvalSymlinks\n")
+	writeArchitectureFixture(t, root, "backend/internal/example/application/raw.go", "package application\nimport fp `path/filepath`\nvar walk = fp.Walk\n")
+	writeArchitectureFixture(t, root, "backend/internal/example/application/lexical.go", "package application\nimport fp \"path/filepath\"\nvar clean = fp.Clean\nfunc scoped(fp interface { EvalSymlinks(string) (string, error) }) { _, _ = fp.EvalSymlinks(\"x\") }\n")
+	writeArchitectureFixture(t, root, "backend/internal/example/infrastructure/resolve.go", "package infrastructure\nimport \"path/filepath\"\nvar resolve = filepath.EvalSymlinks\n")
+	violations, err := checkArchitecture(root, nil)
+	if err != nil || len(violations) != 5 {
+		t.Fatalf("filesystem mechanisms not isolated from lexical/port operations: %v %v", violations, err)
+	}
+	for _, expected := range []string{"filepath.EvalSymlinks", "filepath.WalkDir", "filepath.Walk", "filepath.Abs", "dot-imports path/filepath"} {
+		if !strings.Contains(strings.Join(violations, "\n"), expected) {
+			t.Fatalf("missing %s violation: %v", expected, violations)
+		}
+	}
+}

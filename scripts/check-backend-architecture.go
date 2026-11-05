@@ -5,6 +5,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"go/ast"
 	"go/parser"
 	"go/token"
 	"io/fs"
@@ -85,7 +86,7 @@ func checkArchitecture(root string, exceptions []architectureException) ([]strin
 		}
 		relative = filepath.ToSlash(relative)
 		fset := token.NewFileSet()
-		file, err := parser.ParseFile(fset, path, nil, parser.ImportsOnly)
+		file, err := parser.ParseFile(fset, path, nil, 0)
 		if err != nil {
 			return err
 		}
@@ -105,6 +106,7 @@ func checkArchitecture(root string, exceptions []architectureException) ([]strin
 			}
 			violations = append(violations, fmt.Sprintf("%s:%d: %s imports %s", relative, fset.Position(spec.Pos()).Line, reason, imported))
 		}
+		violations = append(violations, filepathMechanismViolations(relative, file, fset)...)
 		return nil
 	})
 	if err != nil {
@@ -117,6 +119,48 @@ func checkArchitecture(root string, exceptions []architectureException) ([]strin
 	}
 	slices.Sort(violations)
 	return violations, nil
+}
+
+// filepath also contains filesystem operations. Allowing its lexical helpers
+// must not implicitly allow directory walks, symlink resolution or cwd lookup.
+func filepathMechanismViolations(path string, file *ast.File, fset *token.FileSet) []string {
+	parts := strings.Split(path, "/")
+	if !slices.Contains(parts, "application") && !slices.Contains(parts, "domain") {
+		return nil
+	}
+	var violations []string
+	aliases := map[string]bool{}
+	for _, imported := range file.Imports {
+		importPath, err := strconv.Unquote(imported.Path.Value)
+		if err != nil || importPath != "path/filepath" {
+			continue
+		}
+		alias := "filepath"
+		if imported.Name != nil {
+			alias = imported.Name.Name
+		}
+		if alias == "." {
+			violations = append(violations, fmt.Sprintf("%s:%d: inward layer dot-imports path/filepath", path, fset.Position(imported.Pos()).Line))
+		} else {
+			aliases[alias] = true
+		}
+	}
+	ast.Inspect(file, func(node ast.Node) bool {
+		selector, ok := node.(*ast.SelectorExpr)
+		if !ok {
+			return true
+		}
+		qualifier, ok := selector.X.(*ast.Ident)
+		if !ok || qualifier.Obj != nil || !aliases[qualifier.Name] {
+			return true
+		}
+		switch selector.Sel.Name {
+		case "Abs", "EvalSymlinks", "Glob", "Walk", "WalkDir":
+			violations = append(violations, fmt.Sprintf("%s:%d: application/domain mechanism boundary uses filepath.%s", path, fset.Position(selector.Pos()).Line, selector.Sel.Name))
+		}
+		return true
+	})
+	return violations
 }
 
 func forbiddenDependency(file, imported string) string {
