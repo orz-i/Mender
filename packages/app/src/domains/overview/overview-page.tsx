@@ -1,12 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
-import {
-  ActivityIcon,
-  ArrowUpRightIcon,
-  BookOpenIcon,
-  Layers3Icon,
-  PlugIcon,
-} from "lucide-react";
+import { ArrowUpRightIcon } from "lucide-react";
 
 import type {
   AuditRecord,
@@ -18,7 +12,6 @@ import type {
   ToolSummary,
 } from "@mender/sdk";
 import { Badge } from "@mender/ui/components/badge";
-import { MendyFigure } from "../../brand/mendy-figure";
 import {
   Table,
   TableBody,
@@ -32,15 +25,11 @@ import { formatDateTime, formatNumber, t, tCount } from "../../i18n/i18n";
 import { StatusBadge } from "../../shared/status-badge";
 import { errorMessage } from "../../shared/errors";
 import { ErrorNotice, InsightBanner } from "../../shared/page";
-import { FocusSwitch } from "../../shared/focus-switch";
-import { PageToolbar } from "../../shared/page-toolbar";
 import { usePagination } from "../../shared/pagination";
 import { TablePagination } from "../../shared/table-pagination";
 import {
   DataPanel,
   EmptyPanelState,
-  MetricStrip,
-  MetricTile,
 } from "../../shared/workbench";
 
 type OverviewState = {
@@ -110,7 +99,6 @@ function PanelLink({ to, label, destination = label }: { to: string; label: stri
 export function OverviewPage({ client }: { client: ManagementClient }) {
   const [data, setData] = useState<OverviewState | null>(null);
   const [error, setError] = useState("");
-  const [view, setView] = useState<"activity" | "resources">("activity");
   const [dismissedInsight, setDismissedInsight] = useState(false);
   const [reloadVersion, setReloadVersion] = useState(0);
 
@@ -157,100 +145,48 @@ export function OverviewPage({ client }: { client: ManagementClient }) {
 
   return (
     <>
-      <PageToolbar
-        tabs={
-          <FocusSwitch
-            label="Overview"
-            value={view}
-            onChange={setView}
-            items={[
-              { value: "activity", label: "Recent invocations" },
-              { value: "resources", label: `${t("Providers")} / ${t("Profiles")}` },
-            ]}
-          />
-        }
-      />
-
-      {!dismissedInsight && data !== null && data.providers.length === 0 ? (
+      {!dismissedInsight && data.providers.length === 0 ? (
         <InsightBanner
           title="Get started with tool providers"
           description="Register external MCP servers, OpenAPI services, or local workspaces to equip your profiles with governed tools."
           onDismiss={() => setDismissedInsight(true)}
-          actions={
-            <Link
-              to="/plugins"
-              className="inline-flex h-8 items-center justify-center rounded-lg bg-primary px-3 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-            >
-              {t("Explore Marketplace")}
-            </Link>
-          }
+          actions={<Link to="/plugins" className="inline-flex h-8 items-center justify-center rounded-lg bg-primary px-3 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90">
+            {t("Explore Marketplace")}
+          </Link>}
         />
-      ) : !dismissedInsight && data !== null && data.providers.length > 0 && data.profiles.length === 0 ? (
+      ) : !dismissedInsight && data.profiles.length === 0 ? (
         <InsightBanner
           title="Configure an exposure boundary"
           description="Tool providers are registered. Create a Profile to define which tools and sandboxes are exposed to agent clients."
           onDismiss={() => setDismissedInsight(true)}
-          actions={
-            <Link
-              to="/profiles"
-              className="inline-flex h-8 items-center justify-center rounded-lg bg-primary px-3 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-            >
-              {t("Create profile")}
-            </Link>
-          }
+          actions={<Link to="/profiles/new" className="inline-flex h-8 items-center justify-center rounded-lg bg-primary px-3 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90">
+            {t("Create profile")}
+          </Link>}
         />
       ) : null}
 
-      {view === "activity" ? (
-        <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-2.5 text-sm">
-          <p className="flex items-center gap-2">
-            <span className="text-muted-foreground">{t("Runtime")}</span>
-            <span className="font-semibold">{t(data.status.ready ? "Ready" : "Unavailable")}</span>
-          </p>
-          <p className="text-muted-foreground">
-            {t("Providers")}: <span className="font-medium text-foreground tabular-nums">{formatNumber(data.providers.length)}</span>
-            <span className="px-2 text-border">·</span>
-            {t("Profiles")}: <span className="font-medium text-foreground tabular-nums">{formatNumber(data.profiles.length)}</span>
-          </p>
+      <section aria-label={t("Workspace summary")} data-slot="workspace-summary"
+        className="mb-4 flex min-w-0 flex-wrap items-center justify-between gap-x-6 gap-y-2 rounded-xl border border-border bg-card px-4 py-3 text-[13px]">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className={["size-2 shrink-0 rounded-full", data.status.ready ? "bg-teal" : "bg-destructive"].join(" ")} aria-hidden="true" />
+          <span className="text-muted-foreground">{t("Runtime")}</span>
+          <span className="font-semibold">{t(data.status.ready ? "Ready" : "Unavailable")}</span>
         </div>
-      ) : (
-      <MetricStrip>
-        <MetricTile
-          icon={ActivityIcon}
-          label="Runtime"
-          value={data === null ? t("Loading") : t(data.status.ready ? "Ready" : "Unavailable")}
-          description="Shared local control plane"
-        />
-        <MetricTile
-          icon={PlugIcon}
-          label="Providers"
-          value={data?.providers.length ?? 0}
-          description="Registered tool sources"
-        />
-        <MetricTile
-          icon={BookOpenIcon}
-          label="Skills"
-          value={data?.skills.length ?? 0}
-          description="Portable agent workflows"
-        />
-        <MetricTile
-          icon={Layers3Icon}
-          label="Profiles"
-          value={data?.profiles.length ?? 0}
-          description="Selected Tools"
-        />
-      </MetricStrip>
-      )}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-muted-foreground">
+          <span>{t("Providers")} <strong className="font-semibold text-foreground tabular-nums">{formatNumber(data.providers.length)}</strong></span>
+          <span>{t("Profiles")} <strong className="font-semibold text-foreground tabular-nums">{formatNumber(data.profiles.length)}</strong></span>
+          <span>{t("Skills")} <strong className="font-semibold text-foreground tabular-nums">{formatNumber(data.skills.length)}</strong></span>
+        </div>
+      </section>
 
-      {view === "activity" ? (
-        <div className="min-w-0">
-        {data.providers.length === 0 && data.records.length === 0 ? null : <DataPanel
-          title="Recent invocations"
-          description="Latest tool execution activity across the local control plane."
-          actions={<PanelLink to="/audit" label="Audit" />}
-        >
-          {data?.records.length ? (
-            <>
+      <div className={data.records.length
+        ? "grid min-w-0 items-start gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(290px,1fr)]"
+        : "min-w-0"}>
+        {data.records.length > 0 ? <div className="min-w-0">
+          <DataPanel title="Recent invocations"
+            description="Latest tool execution activity across the local control plane."
+            actions={<PanelLink to="/audit" label="Audit" />}>
+            {data.records.length ? (
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -279,34 +215,29 @@ export function OverviewPage({ client }: { client: ManagementClient }) {
                   ))}
                 </TableBody>
               </Table>
-            </>
-          ) : (
-            <div className="flex min-h-[220px] flex-col items-center justify-center gap-2 px-5 py-6 text-center">
-              <MendyFigure expression="empty" className="mb-1 h-[92px] w-[64px]" aria-hidden="true" />
-              <p className="text-base font-semibold">{t("No invocation records yet.")}</p>
-              <p className="max-w-md text-sm leading-6 text-muted-foreground">{t("Latest tool execution activity across the local control plane.")}</p>
-            </div>
-          )}
-        </DataPanel>}
-        {data?.records.length ? (
-          <TablePagination label="Recent invocations" pagination={invocationPagination} />
-        ) : null}
+            ) : (
+              <div className="flex min-h-[124px] items-center justify-center px-4 py-6 text-center">
+                <p className="text-[13px] text-muted-foreground">{t("No invocation records yet.")}</p>
+              </div>
+            )}
+          </DataPanel>
+          {invocationPagination.total > 0 ? (
+            <TablePagination label="Recent invocations" pagination={invocationPagination} />
+          ) : null}
+        </div> : null}
 
-        </div>
-      ) : (
-        <div className="grid min-w-0 items-start gap-3 lg:grid-cols-2">
-
+        <div className={data.records.length ? "grid min-w-0 gap-4" : "grid min-w-0 gap-4 md:grid-cols-2"}>
           <DataPanel
             title="Providers"
             description="Registered tool sources"
             actions={<PanelLink to="/tools" label="View" destination="Tool services" />}
           >
-            {data?.providers.length ? (
+            {data.providers.length ? (
               <div className="divide-y divide-border/70 px-4 pb-1">
                 {data.providers.slice(0, 4).map((provider) => (
-                  <div key={provider.providerId} className="flex min-w-0 items-center justify-between gap-3 py-3">
+                  <div key={provider.providerId} className="flex min-w-0 items-center justify-between gap-3 py-2.5">
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-medium">{provider.displayName || provider.namespace}</p>
+                      <p className="truncate text-[13px] font-medium">{provider.displayName || provider.namespace}</p>
                       <p className="mt-0.5 truncate text-xs text-muted-foreground">{provider.pluginDisplayName || provider.namespace}</p>
                     </div>
                     <Badge variant="secondary">{formatNumber(provider.toolCount)} {t("Tools")}</Badge>
@@ -314,23 +245,22 @@ export function OverviewPage({ client }: { client: ManagementClient }) {
                 ))}
               </div>
             ) : (
-              <EmptyPanelState>
-                <p className="text-sm text-muted-foreground">{t(data === null ? "Loading" : "No providers")}</p>
+              <EmptyPanelState className="min-h-[100px]!">
+                <p className="text-sm text-muted-foreground">{t("No providers")}</p>
               </EmptyPanelState>
             )}
           </DataPanel>
-
           <DataPanel
             title="Profiles"
             description="Selected Tools"
             actions={<PanelLink to="/profiles" label="View" destination="Profiles" />}
           >
-            {data?.profiles.length ? (
+            {data.profiles.length ? (
               <div className="divide-y divide-border/70 px-4 pb-1">
                 {data.profiles.slice(0, 4).map((profile) => (
-                  <div key={profile.profileId} className="flex min-w-0 items-center justify-between gap-3 py-3">
+                  <div key={profile.profileId} className="flex min-w-0 items-center justify-between gap-3 py-2.5">
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-medium">{profile.displayName || profile.slug}</p>
+                      <p className="truncate text-[13px] font-medium">{profile.displayName || profile.slug}</p>
                       <p className="mt-0.5 truncate text-xs text-muted-foreground">{profile.slug}</p>
                     </div>
                     <Badge variant="outline">{tCount(profile.tools.length, "{{count}} selected Tool", "{{count}} selected Tools")}</Badge>
@@ -338,13 +268,19 @@ export function OverviewPage({ client }: { client: ManagementClient }) {
                 ))}
               </div>
             ) : (
-              <EmptyPanelState>
-                <p className="text-sm text-muted-foreground">{t(data === null ? "Loading" : "No profiles")}</p>
+              <EmptyPanelState className="min-h-[100px]!">
+                <p className="text-sm text-muted-foreground">{t("No profiles")}</p>
               </EmptyPanelState>
             )}
           </DataPanel>
         </div>
-      )}
+      </div>
+      {data.records.length === 0 ? (
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/70 px-4 py-2.5 text-[13px] text-muted-foreground">
+          <span>{t("No invocation records yet.")}</span>
+          <PanelLink to="/audit" label="Audit" />
+        </div>
+      ) : null}
     </>
   );
 }

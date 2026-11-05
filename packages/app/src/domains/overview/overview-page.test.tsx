@@ -41,10 +41,11 @@ describe("OverviewPage load states", () => {
     await screen.findByText("Get started with tool providers");
     await waitFor(() => expect(getSystemStatus).toHaveBeenCalledTimes(2));
     expect(screen.queryByRole("alert")).toBeNull();
-    expect(screen.queryByText("No invocation records yet.")).toBeNull();
-
-    fireEvent.click(screen.getByRole("button", { name: "Providers / Profiles" }));
-    expect(document.querySelector('[data-slot="metric-strip"]')).not.toBeNull();
+    expect(screen.getByText("No invocation records yet.")).toBeTruthy();
+    expect(screen.getByRole("region", { name: "Workspace summary" })).toBeTruthy();
+    expect(screen.getByText("No providers")).toBeTruthy();
+    expect(screen.getByText("No profiles")).toBeTruthy();
+    expect(document.querySelector('[data-slot="metric-strip"]')).toBeNull();
   });
 });
 

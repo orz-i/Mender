@@ -823,7 +823,7 @@ describe("management pages", () => {
     expect(screen.queryByRole("region",{name:"Choose backend"})).toBeNull();
     fireEvent.click(screen.getByRole("button",{name:"Back"}));
     expect(await screen.findByRole("button",{name:"Capabilities"})).toBeTruthy();
-    expect(screen.getByText("Local workspace")).toBeTruthy();
+    expect((await screen.findAllByText("Local workspace")).length).toBeGreaterThan(0);
   });
 
   it("requires an in-app Tunnel deletion confirmation, never native browser confirm",async()=>{

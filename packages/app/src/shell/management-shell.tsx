@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   BlocksIcon,
   BellIcon,
@@ -6,7 +6,7 @@ import {
   BookOpenIcon,
   BoxIcon,
   CableIcon,
-  ChevronDownIcon,
+  ChevronLeftIcon,
   GaugeIcon,
   KeyRoundIcon,
   LanguagesIcon,
@@ -15,6 +15,8 @@ import {
   MenuIcon,
   PanelLeftCloseIcon,
   PanelLeftOpenIcon,
+  PanelLeftIcon,
+  PanelTopIcon,
   ScrollTextIcon,
   SearchIcon,
   ShieldCheckIcon,
@@ -22,7 +24,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
-import { NavLink, Outlet, useLocation, useNavigate } from "react-router";
+import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router";
 
 import type { AgentApprovalCapability, ManagementClient } from "@mender/sdk";
 import { Button } from "@mender/ui/components/button";
@@ -41,8 +43,10 @@ import {
 
 import { BrandMark } from "../brand/brand-mark";
 import { setLocale, t, useLocale } from "../i18n/i18n";
+import { PageHeadingContext, getPageTrail } from "./page-chrome";
 
 const SIDEBAR_STORAGE_KEY = "mender.sidebar.collapsed";
+const NAV_LAYOUT_STORAGE_KEY = "mender.navigation.layout";
 
 type NavigationItem = {
   to: string;
@@ -62,30 +66,29 @@ const navigation: NavigationGroup[] = [
       { to: "/", label: "Overview", icon: LayoutDashboardIcon },
       { to: "/plugins", label: "Plugin Marketplace", icon: BlocksIcon },
       { to: "/tools", label: "Tools", icon: WrenchIcon },
-      { to: "/skills", label: "Skills", icon: BookOpenIcon },
+      { to: "/profiles", label: "Profiles", icon: Layers3Icon },
       { to: "/agents", label: "Agents", icon: BotIcon },
       { to: "/sandboxes", label: "Sandboxes", icon: BoxIcon },
+      { to: "/skills", label: "Skills", icon: BookOpenIcon },
     ],
   },
   {
     label: "Connections",
     items: [
-      { to: "/profiles", label: "Profiles", icon: Layers3Icon },
       { to: "/tunnels", label: "Tunnels", icon: CableIcon },
+      { to: "/credentials", label: "Credentials", icon: KeyRoundIcon },
     ],
   },
   {
     label: "Advanced",
     items: [
-      { to: "/runtime", label: "Runtime", icon: GaugeIcon },
-      { to: "/policy", label: "Policy", icon: ShieldCheckIcon },
-      { to: "/credentials", label: "Credentials", icon: KeyRoundIcon },
-      { to: "/audit", label: "Audit", icon: ScrollTextIcon },
       { to: "/approvals", label: "Approvals", icon: BellIcon },
+      { to: "/audit", label: "Audit", icon: ScrollTextIcon },
+      { to: "/policy", label: "Policy", icon: ShieldCheckIcon },
+      { to: "/runtime", label: "Runtime", icon: GaugeIcon },
     ],
   },
 ];
-
 const flatNavigation = navigation.flatMap((group) => group.items);
 
 export function ManagementShell({ client, approvals }: {
@@ -100,16 +103,30 @@ export function ManagementShell({ client, approvals }: {
     typeof window !== "undefined" &&
     window.localStorage.getItem(SIDEBAR_STORAGE_KEY) === "true",
   );
+  const [layout, setLayout] = useState<"side" | "top">(() =>
+    typeof window !== "undefined" && window.localStorage.getItem(NAV_LAYOUT_STORAGE_KEY) === "top"
+      ? "top" : "side",
+  );
+  const [topGroup, setTopGroup] = useState<{ pathname: string; label: string } | null>(null);
+  const [pageHeading, setPageHeading] = useState<{ path: string; value: string } | null>(null);
   const [runtimeReady, setRuntimeReady] = useState<boolean | null>(null);
   const [commandOpen, setCommandOpen] = useState(false);
   const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
-  const [expandedGroups, setExpandedGroups] = useState<Record<string, { pathname: string; open: boolean }>>({});
   const [query, setQuery] = useState("");
   const [pendingApprovalCount, setPendingApprovalCount] = useState(0);
 
   useEffect(() => {
     window.localStorage.setItem(SIDEBAR_STORAGE_KEY, String(collapsed));
   }, [collapsed]);
+
+  useEffect(() => {
+    window.localStorage.setItem(NAV_LAYOUT_STORAGE_KEY, layout);
+  }, [layout]);
+
+  const updatePageHeading = useCallback((path: string, value?: string) => {
+    setPageHeading((current) => value ? { path, value } :
+      current?.path === path ? null : current);
+  }, []);
 
   // Follow the operating-system appearance without adding a per-page theme control.
   // Keep Tailwind dark variants and semantic colors on the same root class.
@@ -159,28 +176,24 @@ export function ManagementShell({ client, approvals }: {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
-  const activeItem =
-    flatNavigation.find((item) =>
-      item.to === "/"
-        ? location.pathname === "/"
-        : location.pathname.startsWith(item.to),
-    ) ?? flatNavigation[0]!;
+  const activeItem = flatNavigation.find((item) =>
+    item.to === "/" ? location.pathname === "/" :
+      location.pathname === item.to || location.pathname.startsWith(item.to + "/"),
+  ) ?? flatNavigation[0]!;
+  const visibleNavigation = flatNavigation.filter((item) =>
+    item.to !== "/approvals" || approvals !== undefined);
+  const activeGroup = navigation.find((group) => group.items.some((item) => item.to === activeItem.to)) ?? navigation[0]!;
+  const selectedGroup = navigation.find((group) => group.label === (topGroup?.pathname === location.pathname ? topGroup.label : activeGroup.label)) ?? activeGroup;
+  const trail = getPageTrail(location.pathname, activeItem);
+  const currentHeading = pageHeading?.path === location.pathname ? pageHeading.value : undefined;
+  if (currentHeading && trail.length > 1) {
+    trail[1] = { ...trail[1]!, label: currentHeading };
+  }
   const normalizedQuery = query.trim().toLocaleLowerCase();
-  const visibleNavigation=flatNavigation.filter(item=>item.to!=="/approvals"||approvals !== undefined);
   const filteredNavigation = normalizedQuery
     ? visibleNavigation.filter((item) =>
-        t(item.label).toLocaleLowerCase().includes(normalizedQuery),
-      )
+        t(item.label).toLocaleLowerCase().includes(normalizedQuery))
     : visibleNavigation;
-
-  function groupExpanded(group: NavigationGroup) {
-    const override = expandedGroups[group.label];
-    if (override?.pathname === location.pathname) return override.open;
-    return group.label === "Workspace" || group.items.some((item) =>
-      item.to === location.pathname || (item.to !== "/" && location.pathname.startsWith(item.to + "/")),
-    );
-  }
-
   function goTo(to: string) {
     void navigate(to);
     setMobileNavigationOpen(false);
@@ -193,8 +206,8 @@ export function ManagementShell({ client, approvals }: {
   }
 
   return (
-    <div className="flex min-h-screen bg-background text-foreground">
-      <aside
+    <div data-slot="management-layout" data-layout={layout} className="flex min-h-screen bg-background text-foreground">
+      {layout === "side" ? <aside
         className={[
           "sticky top-0 z-30 hidden h-dvh shrink-0 flex-col border-r border-border bg-sidebar transition-[width] duration-200 ease-out lg:flex",
           collapsed ? "w-[64px]" : "w-[228px]",
@@ -273,24 +286,15 @@ export function ManagementShell({ client, approvals }: {
           {navigation.map((group, groupIndex) => (
             <div key={group.label} className={groupIndex === 0 ? "mt-1" : "mt-3"}>
               {!collapsed ? (
-                <button
-                  type="button"
-                  aria-expanded={groupExpanded(group)}
-                  aria-controls={`nav-group-${groupIndex}`}
-                  onClick={() => setExpandedGroups((current) => ({
-                    ...current,
-                    [group.label]: { pathname: location.pathname, open: !groupExpanded(group) },
-                  }))}
-                  className="mb-1 flex h-7 w-full items-center justify-between rounded-lg px-3 text-left text-[10px] font-semibold tracking-[0.06em] uppercase text-muted-foreground hover:bg-muted/70 hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
-                >
+                <p className="mb-1 px-3 py-1.5 text-[10px] font-semibold tracking-[0.06em] uppercase text-muted-foreground">
                   {t(group.label)}
-                  <ChevronDownIcon className={["size-3.5 transition-transform", groupExpanded(group) ? "rotate-180" : ""].join(" ")} aria-hidden="true" />
-                </button>
+                </p>
               ) : groupIndex > 0 ? (
                 <div className="mx-2 mb-3 border-t border-border/80" />
               ) : null}
-              <div id={`nav-group-${groupIndex}`} className="flex flex-col gap-0.5">
-                {(collapsed || groupExpanded(group) ? group.items.filter(item=>item.to!=="/approvals"||approvals !== undefined) : []).map((item) => {
+              <div className="flex flex-col gap-0.5">
+                {group.items.filter((item) =>
+                  item.to !== "/approvals" || approvals !== undefined).map((item) => {
                   const Icon = item.icon;
                   const link = (
                     <NavLink
@@ -314,6 +318,11 @@ export function ManagementShell({ client, approvals }: {
                             aria-hidden="true"
                           />
                           {!collapsed ? <span className="min-w-0 truncate">{t(item.label)}</span> : null}
+                          {!collapsed && item.to === "/approvals" && pendingApprovalCount > 0 ?
+                            <span aria-label={t("Pending approvals") + ": " + pendingApprovalCount}
+                              className="ml-auto rounded-md bg-destructive/10 px-1.5 text-[11px] text-destructive tabular-nums">
+                              {pendingApprovalCount}
+                            </span> : null}
                         </>
                       )}
                     </NavLink>
@@ -330,7 +339,7 @@ export function ManagementShell({ client, approvals }: {
           ))}
         </nav>
 
-      </aside>
+      </aside> : null}
 
       <Dialog open={mobileNavigationOpen} onOpenChange={setMobileNavigationOpen}>
         <DialogContent className="top-0 left-0 flex h-dvh max-h-dvh w-[min(336px,calc(100vw-1rem))] max-w-none flex-col gap-0 overflow-hidden rounded-none rounded-r-2xl p-0 translate-x-0 translate-y-0 sm:max-w-none lg:hidden">
@@ -372,6 +381,12 @@ export function ManagementShell({ client, approvals }: {
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-20 flex h-[54px] shrink-0 items-center justify-between gap-2 border-b border-border bg-background/95 px-4 backdrop-blur-sm sm:px-5 lg:px-6">
           <div className="flex min-w-0 items-center gap-2">
+            {layout === "top" ? (
+              <div className="hidden shrink-0 items-center gap-2 border-r border-border pr-3 lg:flex">
+                <BrandMark className="size-5" aria-hidden="true" />
+                <span className="text-sm font-semibold">Mender</span>
+              </div>
+            ) : null}
             <Button
               type="button"
               variant="ghost"
@@ -382,12 +397,44 @@ export function ManagementShell({ client, approvals }: {
             >
               <MenuIcon className="size-5" />
             </Button>
-            <h1 className="truncate text-[16px] leading-tight font-semibold tracking-[-0.02em] sm:text-[17px]">
-              {t(activeItem.label)}
-            </h1>
+            <nav aria-label={t("Breadcrumb")} data-slot="page-breadcrumb" className="flex min-w-0 items-center gap-1.5 text-[13px] sm:text-sm">
+              {trail.length > 1 ? (
+                <Link to={trail[trail.length - 2]!.to} aria-label={t("Back") + ": " + t(trail[trail.length - 2]!.label)}
+                  className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring sm:hidden">
+                  <ChevronLeftIcon className="size-4" aria-hidden="true" />
+                </Link>
+              ) : null}
+              <span className="hidden min-w-0 items-center gap-1.5 sm:flex">
+                {trail.slice(0, -1).map((crumb) => (
+                  <span key={crumb.to} className="flex min-w-0 shrink-0 items-center gap-1.5">
+                    <Link to={crumb.to} title={t(crumb.label)}
+                      className="max-w-24 truncate text-muted-foreground hover:text-foreground hover:underline focus-visible:outline-2 focus-visible:outline-ring sm:max-w-40">
+                      {t(crumb.label)}
+                    </Link>
+                    <span className="text-muted-foreground/50" aria-hidden="true">/</span>
+                  </span>
+                ))}
+              </span>
+              <h1 className="min-w-0 truncate text-[15px] leading-tight font-semibold tracking-[-0.02em] sm:text-[16px]" title={t(trail[trail.length - 1]!.label)}>
+                {t(trail[trail.length - 1]!.label)}
+              </h1>
+            </nav>
           </div>
 
           <div className="flex min-w-0 shrink-0 items-center justify-end gap-1 sm:gap-2">
+            <Tooltip>
+              <TooltipTrigger render={<Button
+                type="button" variant="ghost" size="icon-sm"
+                aria-label={t(layout === "side" ? "Switch to top navigation" : "Switch to sidebar navigation")}
+                onClick={() => setLayout((current) => current === "side" ? "top" : "side")}
+                className="hidden size-8 text-muted-foreground hover:text-foreground lg:inline-flex"
+              />}>
+                {layout === "side" ? <PanelTopIcon className="size-4" /> : <PanelLeftIcon className="size-4" />}
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                {t(layout === "side" ? "Switch to top navigation" : "Switch to sidebar navigation")}
+              </TooltipContent>
+            </Tooltip>
             <button
               type="button"
               onClick={() => setCommandOpen(true)}
@@ -465,6 +512,42 @@ export function ManagementShell({ client, approvals }: {
           </div>
         </header>
 
+        {layout === "top" ? (
+          <nav data-slot="top-navigation" aria-label={t("Primary navigation")}
+            className="hidden border-b border-border bg-sidebar lg:block">
+            <div className="flex h-9 items-center gap-1 border-b border-border/60 px-5" role="group"
+              aria-label={t("Navigation groups")}>
+              {navigation.map((group) => (
+                <button key={group.label} type="button" aria-pressed={selectedGroup.label === group.label}
+                  onClick={() => setTopGroup({ pathname: location.pathname, label: group.label })}
+                  className={[
+                    "h-8 rounded-md px-3 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-ring",
+                    selectedGroup.label === group.label ? "bg-card text-foreground shadow-sm" :
+                      "text-muted-foreground hover:bg-muted hover:text-foreground",
+                  ].join(" ")}>
+                  {t(group.label)}
+                </button>
+              ))}
+            </div>
+            <div className="flex h-11 items-center gap-1 overflow-x-auto px-5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {selectedGroup.items.filter((item) =>
+                item.to !== "/approvals" || approvals !== undefined).map((item) => {
+                const Icon = item.icon;
+                return <NavLink key={item.to} to={item.to} end={item.to === "/"}
+                  className={({ isActive }) => [
+                    "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-3 text-[13px] font-medium transition-colors focus-visible:outline-2 focus-visible:outline-ring",
+                    isActive ? "bg-accent text-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                  ].join(" ")}>
+                  <Icon className="size-3.5 shrink-0" aria-hidden="true" />
+                  <span>{t(item.label)}</span>
+                  {item.to === "/approvals" && pendingApprovalCount > 0 ?
+                    <span className="rounded bg-destructive/10 px-1 text-[11px] text-destructive">{pendingApprovalCount}</span> : null}
+                </NavLink>;
+              })}
+            </div>
+          </nav>
+        ) : null}
+
         <main className="flex min-w-0 flex-1 flex-col">
           <motion.div
             key={location.pathname}
@@ -473,7 +556,9 @@ export function ManagementShell({ client, approvals }: {
             transition={{ duration: 0.12, ease: "easeOut" }}
             className="mx-auto flex w-full max-w-[1560px] flex-1 flex-col px-4 pt-4 pb-7 sm:px-5 lg:px-6"
           >
-            <Outlet />
+            <PageHeadingContext.Provider value={updatePageHeading}>
+              <Outlet />
+            </PageHeadingContext.Provider>
           </motion.div>
         </main>
       </div>

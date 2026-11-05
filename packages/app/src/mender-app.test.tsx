@@ -41,7 +41,6 @@ describe("MenderApp", () => {
       },
     };
     render(<MemoryRouter><MenderApp client={overviewClient()} localOwner={localOwner} /></MemoryRouter>);
-    fireEvent.click(screen.getByRole("button", { name: "Advanced" }));
     expect(screen.getByRole("link",{name:"Approvals"})).toBeTruthy();
     const topbar=within(screen.getByRole("banner"));
     expect(await topbar.findByLabelText("Pending approvals: 1")).toBeTruthy();
@@ -63,18 +62,45 @@ describe("MenderApp", () => {
     for (const name of ["Overview", "Plugin Marketplace", "Tools", "Skills", "Agents", "Sandboxes"]) {
       expect(screen.getByRole("link", { name })).toBeTruthy();
     }
-    expect(screen.queryByRole("link", { name: "Profiles" })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Connections" }));
-    for (const name of ["Profiles", "Tunnels"]) {
+    for (const name of ["Profiles", "Tunnels", "Runtime", "Policy", "Credentials", "Audit"]) {
       expect(screen.getByRole("link", { name })).toBeTruthy();
     }
     expect(screen.queryByRole("link", { name: "Servers" })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Advanced" }));
     expect(screen.queryByRole("link", { name: "Approvals" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Pending approvals" })).toBeNull();
-    for (const name of ["Runtime", "Policy", "Credentials", "Audit"]) {
-      expect(screen.getByRole("link", { name })).toBeTruthy();
-    }
+    // Collection access is visible without expanding technical categories.
+    expect(screen.queryByRole("button", { name: "Connections" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Advanced" })).toBeNull();
+  });
+
+  it("supports grouped top navigation without hiding destinations or losing the saved layout", () => {
+    render(<MemoryRouter><MenderApp client={overviewClient()} /></MemoryRouter>);
+    fireEvent.click(screen.getByRole("button", { name: "Switch to top navigation" }));
+    expect(document.querySelector('[data-slot="management-layout"]')?.getAttribute("data-layout")).toBe("top");
+    expect(window.localStorage.getItem("mender.navigation.layout")).toBe("top");
+    const top = screen.getByRole("navigation", { name: "Primary navigation" });
+    expect(within(top).getByRole("link", { name: "Tools" })).toBeTruthy();
+    fireEvent.click(within(top).getByRole("button", { name: "Connections" }));
+    expect(within(top).getByRole("link", { name: "Tunnels" })).toBeTruthy();
+    fireEvent.click(within(top).getByRole("button", { name: "Advanced" }));
+    expect(within(top).getByRole("link", { name: "Audit" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Switch to sidebar navigation" }));
+    expect(document.querySelector('[data-slot="management-layout"]')?.getAttribute("data-layout")).toBe("side");
+    expect(window.localStorage.getItem("mender.navigation.layout")).toBe("side");
+    expect(screen.getByRole("link", { name: "Tools" })).toBeTruthy();
+  });
+
+  it("shows an exact return breadcrumb on create routes", () => {
+    render(
+      <MemoryRouter initialEntries={["/profiles/new"]}>
+        <MenderApp client={overviewClient()} />
+      </MemoryRouter>,
+    );
+    const trail = screen.getByRole("navigation", { name: "Breadcrumb" });
+    expect(within(trail).getByRole("link", { name: "Profiles" })).toBeTruthy();
+    expect(within(trail).getByRole("heading", { name: "Create profile" })).toBeTruthy();
+    fireEvent.click(within(trail).getByRole("link", { name: "Profiles" }));
+    expect(screen.getByRole("heading", { name: "Profiles" })).toBeTruthy();
   });
 
   it("opens a textual mobile menu and closes it when a destination is selected", () => {
@@ -116,7 +142,7 @@ describe("MenderApp", () => {
     expect(brand?.textContent?.trim()).toBe("Mender");
   });
 
-  it("shows one overview topic at a time and switches to read-only resource previews", async () => {
+  it("shows resources and recent activity together without hidden overview tabs", async () => {
     render(
       <MemoryRouter>
         <MenderApp client={overviewClient()} />
@@ -124,13 +150,11 @@ describe("MenderApp", () => {
     );
 
     expect(await screen.findByText("Get started with tool providers")).toBeTruthy();
-    expect(screen.queryByText("No invocation records yet.")).toBeNull();
-    expect(screen.queryByText("No providers")).toBeNull();
-
-    fireEvent.click(screen.getByRole("button", { name: "Providers / Profiles" }));
-    expect(await screen.findByText("No providers")).toBeTruthy();
-    expect(await screen.findByText("No profiles")).toBeTruthy();
-    expect(screen.queryByText("No invocation records yet.")).toBeNull();
+    expect(screen.getByText("No providers")).toBeTruthy();
+    expect(screen.getByText("No profiles")).toBeTruthy();
+    expect(screen.getByText("No invocation records yet.")).toBeTruthy();
+    expect(screen.getByRole("region", { name: "Workspace summary" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Providers / Profiles" })).toBeNull();
     expect(screen.queryByRole("textbox", { name: "Display name" })).toBeNull();
   });
 
