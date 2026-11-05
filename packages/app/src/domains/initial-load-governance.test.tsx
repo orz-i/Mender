@@ -9,9 +9,9 @@ import { resetLocaleForTesting, setLocale } from "../i18n/i18n";
 import { AuditPage } from "./audit/audit-page";
 import { CredentialsPage } from "./credentials/credentials-page";
 import { PolicyPage } from "./policy/policy-page";
+import { ProfileMCPServersPanel } from "./profiles/profile-mcp-servers-panel";
 import { RuntimePage } from "./runtime/runtime-page";
 import { SandboxesPage } from "./sandboxes/sandboxes-page";
-import { ServersPage } from "./servers/servers-page";
 import { TunnelsPage } from "./tunnels/tunnels-page";
 
 function mount(view: ReactElement) {
@@ -63,10 +63,10 @@ describe("Initial failure is not mistaken for an empty inventory", () => {
     const listMCPServers = vi.fn()
       .mockRejectedValueOnce(new Error("Server inventory unavailable"))
       .mockResolvedValue({ servers: [] });
-    mount(<ServersPage client={{
-      listProfiles: vi.fn().mockResolvedValue({ profiles: [] }),
-      listMCPServers,
-    } as unknown as ManagementClient} />);
+    mount(<ProfileMCPServersPanel
+      client={{ listMCPServers } as unknown as ManagementClient}
+      profile={{ slug: "default", displayName: "Default", tools: [] }}
+    />);
     await retryInitialFailure("Server inventory unavailable", "No running MCP servers");
     await screen.findByText("No running MCP servers");
     expect(listMCPServers).toHaveBeenCalledTimes(2);

@@ -42,7 +42,6 @@ function mount(servers: MCPServerInstance[], options:{config?:ProfileMCPDelivery
     configureProfileMCPDelivery,
     getTool:vi.fn().mockResolvedValue({name:"Echo",title:"Echo"}),
     listTunnels:vi.fn().mockResolvedValue({tunnels:[{tunnelId:"tun_00000000000000000000000000000001",displayName:"Work Tunnel"}]}),
-    listProfiles: vi.fn().mockResolvedValue({ profiles: [alpha, beta] }),
     listMCPServers: vi.fn().mockResolvedValue({ servers }),
     startMCPServer, restartMCPServer, stopMCPServer,
   } as unknown as ManagementClient;

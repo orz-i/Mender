@@ -5,9 +5,9 @@ import { useNavigate, useParams } from "react-router";
 import { MenderClientInvariantError, type ManagementClient, type Profile, type ProfileMCPDelivery, type Tunnel } from "@mender/sdk";
 import { Button } from "@mender/ui/components/button";
 import { t } from "../../i18n/i18n";
-import { ServersPage } from "../servers/servers-page";
 import { errorMessage } from "../../shared/errors";
 import { ErrorNotice } from "../../shared/page";
+import { ProfileMCPServersPanel } from "./profile-mcp-servers-panel";
 
 /** MCP owns projection settings; Profile continues to own membership. */
 export function ProfileMCPDeliveryPage({
@@ -131,7 +131,7 @@ function MCPDeliveryEditor({slug,client,copyText}:{slug:string;client:Management
           <Button type="submit" disabled={busy||!dirty}>{t(busy?"Saving…":"Save MCP settings")}</Button>
         </div>
       </form>:null}
-      {snapshot?.config?<ServersPage client={client} profileSlug={slug}
+      {snapshot?.config?<ProfileMCPServersPanel client={client} profile={snapshot.profile}
         {...(copyText === undefined ? {} : { copyText })} />:null}
     </div>
   );

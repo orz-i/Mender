@@ -4,7 +4,7 @@ import { TooltipProvider } from "@mender/ui/components/tooltip";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { resetLocaleForTesting, setLocale } from "../../i18n/i18n";
-import { ServersPage } from "./servers-page";
+import { ProfileMCPServersPanel } from "./profile-mcp-servers-panel";
 
 const fixture = {
   serverId: "srv_fixture_01",
@@ -20,6 +20,7 @@ const fixture = {
   tunnelExternalId: "tunnel_test",
   tunnelStatus: "starting",
 } as const satisfies MCPServerInstance;
+const profile = { slug: fixture.profile, displayName: "Default", tools: [] };
 
 beforeEach(() => { resetLocaleForTesting(); setLocale("en"); });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); resetLocaleForTesting(); });
@@ -49,14 +50,10 @@ function showServer(
   listMCPServers: ReturnType<typeof vi.fn>,
   overrides: Partial<ManagementClient> = {},
 ) {
-  const listProfiles = vi.fn().mockResolvedValue({
-    profiles: [{ profileId: "prof_00000000000000000000000000000001", slug: "default", displayName: "Default", mode: "hybrid", tools: [] }],
-  });
-  const client = { listProfiles, listMCPServers, ...overrides } as unknown as ManagementClient;
-  const view = render(
-    <TooltipProvider><ServersPage client={client} /></TooltipProvider>,
+  const client = { listMCPServers, ...overrides } as unknown as ManagementClient;
+  return render(
+    <TooltipProvider><ProfileMCPServersPanel client={client} profile={profile} /></TooltipProvider>,
   );
-  return { listProfiles, ...view };
 }
 
 it.each([
@@ -67,8 +64,8 @@ it.each([
     servers: [{ ...fixture, tunnelDisplayName: "Mender", tunnelProvider: provider, tunnelStatus: "ready" }],
   }));
 
-  const row = await screen.findByRole("row", { name: /default/ });
-  const tunnelCell = within(row).getAllByRole("cell")[2]!;
+  const row = await screen.findByRole("row", { name: /Server running/ });
+  const tunnelCell = within(row).getAllByRole("cell")[1]!;
   const tunnelName = within(tunnelCell).getByText("Mender");
   expect(tunnelCell.textContent).toBe("Mender");
   expect(tunnelName.getAttribute("title")).toBe("Mender · " + label + " · Ready");
@@ -82,8 +79,8 @@ it("does not assume an OpenAI Tunnel provider when provider metadata is absent",
   showServer(vi.fn().mockResolvedValue({
     servers: [{ ...withoutProvider, tunnelDisplayName: "Mender", tunnelStatus: "ready" }],
   }));
-  const row = await screen.findByRole("row", { name: /default/ });
-  const tunnelCell = within(row).getAllByRole("cell")[2]!;
+  const row = await screen.findByRole("row", { name: /Server running/ });
+  const tunnelCell = within(row).getAllByRole("cell")[1]!;
   expect(tunnelCell.textContent).toBe("Mender");
   expect(within(tunnelCell).getByText("Mender").getAttribute("title")).toBe("Mender · Ready");
   expect(within(row).queryByText("OpenAI")).toBeNull();
@@ -97,8 +94,8 @@ it.each([
   showServer(vi.fn().mockResolvedValue({
     servers: [{ ...fixture, tunnelDisplayName: "Mender", tunnelStatus: status }],
   }));
-  const row = await screen.findByRole("row", { name: /default/ });
-  const tunnelCell = within(row).getAllByRole("cell")[2]!;
+  const row = await screen.findByRole("row", { name: /Server running/ });
+  const tunnelCell = within(row).getAllByRole("cell")[1]!;
   expect(within(tunnelCell).getByText("Mender")).toBeTruthy();
   const warning = tunnelCell.querySelector('[data-slot="badge"]');
   expect(warning?.className).toContain(variant);
@@ -112,7 +109,7 @@ it("reconciles Tunnel starting -> ready -> degraded from Mender without manual R
       .mockResolvedValueOnce({ servers: [fixture] })
       .mockResolvedValueOnce({ servers: [{ ...fixture, tunnelStatus: "ready" }] })
       .mockResolvedValueOnce({ servers: [{ ...fixture, tunnelStatus: "degraded" }] });
-    const { listProfiles, unmount } = showServer(listMCPServers);
+    const { unmount } = showServer(listMCPServers);
     const tunnel = await screen.findByText("OpenAI Test Tunnel");
     expect(tunnel.getAttribute("title")).toContain("Starting");
     expect(screen.queryByText("Starting")).toBeNull();
@@ -125,7 +122,6 @@ it("reconciles Tunnel starting -> ready -> degraded from Mender without manual R
     expect(await screen.findByText("Degraded")).toBeTruthy();
     // Degraded remains visibly actionable without being conflated with a terminal failure.
     expect(screen.getByText("Degraded").className).toContain("bg-sunlight/20");
-    expect(listProfiles).toHaveBeenCalledTimes(1);
     expect(listMCPServers).toHaveBeenCalledTimes(3);
 
     unmount();
@@ -162,46 +158,41 @@ it("does not resurrect a stopped Tunnel server from an in-flight stale status re
   } finally { polling.restore(); }
 });
 
-it("requires an explicit Profile when multiple exist and preserves inputs after a start error", async () => {
-  const profiles = [
-    { profileId: "prof_alpha", slug: "alpha", displayName: "Alpha", mode: "hybrid", tools: [] },
-    { profileId: "prof_beta", slug: "beta", displayName: "Beta", mode: "hybrid", tools: [] },
-  ];
-  const startMCPServer = vi.fn().mockRejectedValue(new Error("Address is already in use"));
-  showServer(vi.fn().mockResolvedValue({ servers: [] }), {
-    listProfiles: vi.fn().mockResolvedValue({ profiles }),
-    startMCPServer,
-  });
+it("starts only the selected Profile and preserves the address for retry after a start error", async () => {
+  const foreignServer = { ...fixture, profile: "other", endpoint: "http://127.0.0.1:9000/mcp" };
+  const startMCPServer = vi.fn()
+    .mockRejectedValueOnce(new Error("Address is already in use"))
+    .mockResolvedValueOnce(fixture);
+  showServer(vi.fn().mockResolvedValue({ servers: [foreignServer] }), { startMCPServer });
   expect(await screen.findByText("No running MCP servers")).toBeTruthy();
+  expect(screen.queryByText(foreignServer.endpoint)).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "Start server" }));
   const form = within(screen.getByRole("dialog", { name: "Start MCP server" }));
-  expect(form.getByLabelText<HTMLSelectElement>("Server profile").value).toBe("");
-  expect(form.getByRole<HTMLButtonElement>("button", { name: "Start server" }).disabled).toBe(true);
+  expect(form.queryByRole("combobox")).toBeNull();
+  expect(form.getByText("MCP delivery belongs to Profile Default.")).toBeTruthy();
   expect(form.getByText("Advanced settings").closest("details")?.open).toBe(false);
   expect(form.getByText("127.0.0.1:8765")).toBeTruthy();
-  fireEvent.change(form.getByLabelText("Server profile"), { target: { value: "beta" } });
   fireEvent.click(form.getByText("Advanced settings"));
-  expect(form.getByLabelText<HTMLInputElement>("Listen address").value).toBe("127.0.0.1:8765");
+  const address = form.getByLabelText<HTMLInputElement>("Listen address");
+  fireEvent.change(address, { target: { value: "127.0.0.1:9901" } });
   fireEvent.click(form.getByRole("button", { name: "Start server" }));
   expect((await form.findByRole("alert")).textContent).toContain("already in use");
-  expect(startMCPServer).toHaveBeenCalledWith({ profile: "beta", address: "127.0.0.1:8765" });
-  expect(form.getByLabelText<HTMLSelectElement>("Server profile").value).toBe("beta");
-  expect(form.getByLabelText<HTMLInputElement>("Listen address").value).toBe("127.0.0.1:8765");
+  expect(address.value).toBe("127.0.0.1:9901");
+  fireEvent.click(form.getByRole("button", { name: "Start server" }));
+  expect(await screen.findByText(fixture.endpoint)).toBeTruthy();
+  expect(startMCPServer.mock.calls).toEqual([
+    [{ profile: profile.slug, address: "127.0.0.1:9901" }],
+    [{ profile: profile.slug, address: "127.0.0.1:9901" }],
+  ]);
 });
 
 it("displays the real rotated endpoint without asking the user to search for a free port", async () => {
-  const current = { ...fixture, profile: "alpha", tunnelId: undefined, tunnelStatus: undefined,
+  const current = { ...fixture, tunnelId: undefined, tunnelStatus: undefined,
     tunnelDisplayName: undefined, tunnelProvider: undefined, tunnelExternalId: undefined };
-  const rotated = { ...current, serverId: "srv_rotated", profile: "beta",
+  const rotated = { ...current, serverId: "srv_rotated",
     address: "127.0.0.1:8766", endpoint: "http://127.0.0.1:8766/mcp" };
   const startMCPServer = vi.fn().mockResolvedValue(rotated);
-  showServer(vi.fn().mockResolvedValue({ servers: [current] }), {
-    listProfiles: vi.fn().mockResolvedValue({ profiles: [
-      { profileId: "p_alpha", slug: "alpha", displayName: "Alpha", mode: "hybrid", tools: [] },
-      { profileId: "p_beta", slug: "beta", displayName: "Beta", mode: "hybrid", tools: [] },
-    ] }),
-    startMCPServer,
-  });
+  showServer(vi.fn().mockResolvedValue({ servers: [current] }), { startMCPServer });
   expect(await screen.findByText(current.endpoint)).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "Start server" }));
   const dialog = within(screen.getByRole("dialog", { name: "Start MCP server" }));
@@ -209,10 +200,9 @@ it("displays the real rotated endpoint without asking the user to search for a f
   fireEvent.click(dialog.getByRole("button", { name: "Help for Local listen address" }));
   expect(await screen.findByText(/automatically tries the next local ports/)).toBeTruthy();
   expect(dialog.getByText("127.0.0.1:8765")).toBeTruthy();
-  fireEvent.change(dialog.getByLabelText("Server profile"), { target: { value: "beta" } });
   fireEvent.click(dialog.getByRole("button", { name: "Start server" }));
   await waitFor(() => expect(startMCPServer).toHaveBeenCalledWith({
-    profile: "beta", address: "127.0.0.1:8765",
+    profile: profile.slug, address: "127.0.0.1:8765",
   }));
   expect(await screen.findByText(rotated.endpoint)).toBeTruthy();
   expect(screen.getByText(current.endpoint)).toBeTruthy();
@@ -223,14 +213,11 @@ it("keeps the single-server view focused and retains all commands in explicit ac
   const stopMCPServer = vi.fn();
   const local = { ...fixture, tunnelId: undefined, tunnelStatus: undefined };
   const client = {
-    listProfiles: vi.fn().mockResolvedValue({ profiles: [{
-      profileId: "prof_default", slug: "default", displayName: "Default", mode: "hybrid", tools: [],
-    }] }),
     listMCPServers: vi.fn().mockResolvedValue({ servers: [local] }),
     restartMCPServer: vi.fn(), stopMCPServer,
   } as unknown as ManagementClient;
-  render(<TooltipProvider><ServersPage client={client} copyText={copyText} /></TooltipProvider>);
-  const row = await screen.findByRole("row", { name: /default/ });
+  render(<TooltipProvider><ProfileMCPServersPanel client={client} profile={profile} copyText={copyText} /></TooltipProvider>);
+  const row = await screen.findByRole("row", { name: /Server running/ });
   expect(within(row).getByRole("button", { name: "Copy endpoint" })).toBeTruthy();
   expect(screen.queryByRole("textbox", { name: "Search servers" })).toBeNull();
   expect(screen.queryByRole("columnheader", { name: "Started" })).toBeNull();
@@ -264,15 +251,17 @@ it("shows search when the scoped inventory grows beyond five servers", async () 
   expect(screen.queryByText("http://127.0.0.1:8765/mcp")).toBeNull();
 });
 
-it("does not poll local-only MCP servers or install background network checks", async () => {
+it("does not poll when only another Profile has a tunneled MCP server", async () => {
   const polling = captureServerStatusPolling();
   try {
     const local = { ...fixture };
     const { tunnelId: _id, tunnelDisplayName: _name, tunnelExternalId: _external, tunnelProvider: _provider, tunnelStatus: _status, ...localOnly } = local;
     void _id; void _name; void _external; void _provider; void _status;
-    const listMCPServers = vi.fn().mockResolvedValue({ servers: [localOnly] });
+    const foreignServer = { ...fixture, profile: "other", serverId: "srv_other" };
+    const listMCPServers = vi.fn().mockResolvedValue({ servers: [localOnly, foreignServer] });
     showServer(listMCPServers);
     expect(await screen.findByText("Local only")).toBeTruthy();
+    expect(screen.queryByText(foreignServer.tunnelDisplayName)).toBeNull();
     expect(polling.installed()).toBe(false);
     expect(listMCPServers).toHaveBeenCalledTimes(1);
   } finally { polling.restore(); }

@@ -39,7 +39,7 @@ import { usePagination } from "../../shared/pagination";
 import { TablePagination } from "../../shared/table-pagination";
 import { EmptyPanelState, SearchField } from "../../shared/workbench";
 
-import { formatDateTime, t, tCount } from "../../i18n/i18n";
+import { formatDateTime, t } from "../../i18n/i18n";
 
 const defaultAddress = "127.0.0.1:8765";
 const serverStatusPollIntervalMs = 2000;
@@ -65,16 +65,16 @@ function tunnelHint(server: MCPServerInstance): string {
   ].filter(Boolean).join(" · ");
 }
 
-export function ServersPage({
+export function ProfileMCPServersPanel({
   client,
   copyText = browserCopyText,
-  profileSlug,
+  profile,
 }: {
   client: ManagementClient;
   copyText?: (value: string) => Promise<void>;
-  profileSlug?: string;
+  profile: Pick<Profile, "slug" | "displayName" | "tools">;
 }) {
-  const [profiles, setProfiles] = useState<Profile[]>([]);
+  const profileSlug = profile.slug;
   const [servers, setServers] = useState<MCPServerInstance[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [hasSnapshot, setHasSnapshot] = useState(false);
@@ -90,19 +90,14 @@ export function ServersPage({
 
   const [startOpen, setStartOpen] = useState(false);
   const [startError, setStartError] = useState("");
-  const [startProfile, setStartProfile] = useState("");
   const [startAddress, setStartAddress] = useState(defaultAddress);
 
   const refresh = useCallback(async () => {
     serverOperationEpoch.current += 1;
     setBusy("refresh");
     try {
-      const [profileResult, serverResult] = await Promise.all([
-        client.listProfiles(),
-        client.listMCPServers(),
-      ]);
-      setProfiles(profileResult.profiles);
-      setServers(serverResult.servers);
+      const { servers: current } = await client.listMCPServers();
+      setServers(current);
       setHasSnapshot(true);
       setError("");
     } catch (reason) {
@@ -116,11 +111,10 @@ export function ServersPage({
   useEffect(() => {
     let active = true;
 
-    void Promise.all([client.listProfiles(), client.listMCPServers()])
-      .then(([profileResult, serverResult]) => {
+    void client.listMCPServers()
+      .then(({ servers: current }) => {
         if (active) {
-          setProfiles(profileResult.profiles);
-          setServers(serverResult.servers);
+          setServers(current);
           setHasSnapshot(true);
           setError("");
           setLoaded(true);
@@ -142,7 +136,11 @@ export function ServersPage({
   // the initial Start response. Poll only this read-only Mender inventory
   // while a tunneled server is visible; no Tunnel credentials or endpoints
   // are queried by the frontend.
-  const hasManagedTunnel = servers.some((server) => Boolean(server.tunnelId));
+  const scopedServers = useMemo(
+    () => servers.filter((server) => server.profile === profileSlug),
+    [servers, profileSlug],
+  );
+  const hasManagedTunnel = scopedServers.some((server) => Boolean(server.tunnelId));
   useEffect(() => {
     if (!loaded || !hasManagedTunnel || busy !== "") return;
 
@@ -169,23 +167,19 @@ export function ServersPage({
 
   function openStartDialog() {
     setError("");
-    // A single Profile is unambiguous; with multiple Profiles, require an explicit choice.
-    setStartProfile(profileSlug ?? (profiles.length === 1 ? profiles[0]?.slug ?? "" : ""));
     setStartAddress(defaultAddress);
     setStartError("");
     setStartOpen(true);
   }
 
   async function startServer() {
-    if (!startProfile.trim() || !startAddress.trim() || busy !== "" ||
-        (profileSlug !== undefined && startProfile !== profileSlug) ||
-        !profiles.some((profile) => profile.slug === startProfile)) return;
+    if (!startAddress.trim() || busy !== "") return;
     serverOperationEpoch.current += 1;
     setBusy("start");
     setStartError("");
     try {
       const instance = await client.startMCPServer({
-        profile: startProfile,
+        profile: profileSlug,
         address: startAddress,
       });
       setServers((current) => [...current, instance]);
@@ -201,16 +195,13 @@ export function ServersPage({
 
   const visibleServers = useMemo(() => {
     const needle = inventoryQuery.trim().toLocaleLowerCase();
-    return servers.filter((server) =>
-      (profileSlug === undefined || server.profile === profileSlug) &&
-      (!needle || [server.profile, server.endpoint, server.status, server.tunnelDisplayName ?? ""]
-        .some((value) => value.toLocaleLowerCase().includes(needle)))
+    return scopedServers.filter((server) =>
+      !needle || [server.profile, server.endpoint, server.status, server.tunnelDisplayName ?? ""]
+        .some((value) => value.toLocaleLowerCase().includes(needle))
     );
-  }, [servers, inventoryQuery, profileSlug]);
+  }, [scopedServers, inventoryQuery]);
   const serverPagination = usePagination(visibleServers);
-  const scopedServerCount = servers.filter((server) =>
-    profileSlug === undefined || server.profile === profileSlug).length;
-  const showSearch = scopedServerCount > 5 || inventoryQuery.trim() !== "";
+  const showSearch = scopedServers.length > 5 || inventoryQuery.trim() !== "";
 
   async function restartServer(server: MCPServerInstance) {
     serverOperationEpoch.current += 1;
@@ -250,9 +241,6 @@ export function ServersPage({
     }
   }
 
-  const selectedProfile =
-    profiles.find((profile) => profile.slug === startProfile) ?? null;
-
   async function copy(value: string, key: string) {
     try {
       await copyText(value);
@@ -278,7 +266,7 @@ export function ServersPage({
         actions={
           <>
             <Button size="sm" variant="outline" disabled={busy !== ""} onClick={() => void refresh()}>{t("Refresh")}</Button>
-            <Button size="sm" disabled={(profileSlug ? !profiles.some((p) => p.slug === profileSlug) : profiles.length === 0) || busy !== ""} onClick={openStartDialog}>{t("Start server")}</Button>
+            <Button size="sm" disabled={!hasSnapshot || busy !== ""} onClick={openStartDialog}>{t("Start server")}</Button>
           </>
         }
       />
@@ -293,7 +281,6 @@ export function ServersPage({
               <Table>
               <TableHeader>
                 <TableRow>
-                  {profileSlug === undefined ? <TableHead>{t("Profile")}</TableHead> : null}
                   <TableHead>{t("Status")}</TableHead>
                   <TableHead>{t("Tunnel")}</TableHead>
                   <TableHead>{t("Endpoint")}</TableHead>
@@ -303,7 +290,6 @@ export function ServersPage({
               <TableBody>
                 {serverPagination.items.map((server) => (
                   <TableRow key={server.serverId}>
-                    {profileSlug === undefined ? <TableCell className="font-medium">{server.profile}</TableCell> : null}
                     <TableCell>
                       <Badge variant="information">{t("Server running")}</Badge>
                     </TableCell>
@@ -400,11 +386,7 @@ export function ServersPage({
             <EmptyPanelState>
               <EmptyState
                 title="No running MCP servers"
-                description={
-                  profiles.length
-                    ? t("Start a Profile as a loopback Streamable HTTP server.")
-                    : t("Create a Profile before starting an MCP server.")
-                }
+                description={t("Start a Profile as a loopback Streamable HTTP server.")}
               />
             </EmptyPanelState>
           )}
@@ -457,7 +439,6 @@ export function ServersPage({
         onOpenChange={(open) => {
           setStartOpen(open);
           if (!open) {
-            setStartProfile("");
             setStartAddress(defaultAddress);
             setStartError("");
           }
@@ -467,7 +448,7 @@ export function ServersPage({
           <DialogHeader>
             <DialogTitle>{t("Start MCP server")}</DialogTitle>
             <DialogDescription className="sr-only">
-              {t("Choose which Profile to share through a local MCP server. The listener remains on this computer.")}
+              {t("Start a Profile as a loopback Streamable HTTP server.")}
             </DialogDescription>
             {startError ? (
               <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
@@ -477,26 +458,11 @@ export function ServersPage({
           </DialogHeader>
 
           <DialogBody className="space-y-4">
-            {profileSlug ? <p className="text-sm text-muted-foreground">
-              {t("MCP delivery belongs to Profile {{name}}.", { name: selectedProfile?.displayName ?? profileSlug })}
-            </p> : <Field label="Profile" help={t("Clients with this endpoint can use the selected Profile’s tools.")}>
-              <select
-                aria-label={t("Server profile")}
-                value={startProfile}
-                onChange={(event) => { setStartError(""); setStartProfile(event.target.value); }}
-                className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
-              >
-                <option value="">{t("Choose a Profile")}</option>
-                {profiles.map((profile) => (
-                  <option key={profile.profileId} value={profile.slug}>
-                    {profile.displayName} ({profile.slug}) ·{" "}
-                    {tCount(profile.tools.length, "{{count}} tool", "{{count}} tools")}
-                  </option>
-                ))}
-              </select>
-            </Field>}
+            <p className="text-sm text-muted-foreground">
+              {t("MCP delivery belongs to Profile {{name}}.", { name: profile.displayName })}
+            </p>
 
-            {selectedProfile !== null && selectedProfile.tools.length === 0 ? (
+            {profile.tools.length === 0 ? (
               <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-5">
                 {t("This Profile currently contains 0 Tools. The server can start, but downstream discovery will not return Provider Tools until you add Tool membership on the Profiles page and Restart it.")}
               </div>
@@ -530,7 +496,6 @@ export function ServersPage({
             <Button
               disabled={
                 busy === "start" ||
-                !startProfile.trim() ||
                 !startAddress.trim()
               }
               onClick={() => void startServer()}
