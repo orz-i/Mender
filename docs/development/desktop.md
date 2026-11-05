@@ -40,13 +40,13 @@ apps/desktop Wails shell
   -> Domain
 ```
 
-The frontend path is:
+The frontend composes the shared application and both capability contracts.
 
 ```text
 apps/desktop/frontend
-  -> Wails generated bindings
-  -> desktop MenderClient adapter
   -> packages/app
+       -> ManagementClient -> desktop adapter -> generated Wails bindings
+       -> LocalOwnerCapabilities -> desktop owner adapter -> generated Wails bindings
 ```
 
 The browser continues to use:
@@ -58,7 +58,12 @@ apps/web
   -> menderd
 ```
 
-`packages/app` does not import Wails bindings. It receives the same explicit `MenderClient` contract from either host.
+`packages/app` receives a `ManagementClient` from either host. Desktop
+also supplies local owner approval and Agent Tool placement capabilities.
+Host callbacks provide the system-browser handoff for OAuth and local
+Profile CLI recipes. Wails imports and generated bindings live in the
+desktop host. The backend binding checks owner authorization independently
+of which UI controls are available.
 
 The desktop process does not start `menderd` and does not use the management HTTP API internally.
 
@@ -74,10 +79,19 @@ The desktop process resolves its default database under Go's per-user `os.UserCo
 <UserConfigDir>/Mender/mender.db
 ```
 
-For development or isolated testing, override it with:
+For development or isolated testing, set `MENDER_DB` to an absolute path in a
+dedicated temporary directory. The default managed Skill and plugin roots are
+siblings of the database. Native credentials still use the OS keyring.
 
 ```bash
 MENDER_DB=/absolute/path/to/mender.db wails3 dev
+```
+
+In PowerShell:
+
+```powershell
+$env:MENDER_DB = 'C:\path\to\isolated-mender\mender.db'
+wails3 dev
 ```
 
 The parent directory is created before Runtime startup.
@@ -223,26 +237,39 @@ pnpm check
 
 It includes binding regeneration, desktop architecture checks, desktop adapter Go tests, race tests, strict TypeScript, Vitest, and both Web/Desktop Vite production builds.
 
-Native Wails build/package remain explicit platform smoke checks rather than part of `pnpm check`, because they require OS-specific GUI toolchains and packaging dependencies.
+Native Wails build, packaging and WebView interaction require separate platform
+verification. See the [real-environment acceptance matrix](../planning/refactor-r7-2026-11-05.md#real-environment-acceptance).
 
 ## Product scope
 
 Desktop currently exposes the same management workflows as the Web UI:
 
-- Providers,
-- Catalog search/describe/invoke,
+- Tools services, Catalog search/describe/invoke and Workspace targets,
 - Profiles,
-- managed MCP Servers,
+- managed MCP Servers from Profile delivery,
 - editable PolicySet / Rule management,
 - Credential inventory/create/rotate/delete,
 - Audit.
 
 Policy management is shared with Web through the generated Wails contract. Desktop exposes the same persistent PolicySet/default/Rule CRUD, validates Wails string enums at the TypeScript host boundary, and uses the same three-step Decision → Scope/Targets → Governance Facts editor with inventory-backed Profile/Provider/Tool selectors. Rule order is never presented as priority, and `require_approval` accurately reports the current fail-closed Approval behavior.
 
-Credential management is also shared with Web: the creation form converts human-readable namespace/name inputs to validated canonical identifiers, previews the exact resulting Reference, and reports safe creation errors inside the dialog. Native secret values appear only as Create/Rotate method arguments and never in returned Credential models. Profile ToolBinding management adds a separate Credentials selector beside Presentation/Governance, and Provider connection/authentication use separate Dialogs. The Wails host fills inherited defaults for older ToolID/direct requests and maps normalized Credential References without resolving secret bytes in TypeScript. Desktop Tool calls use the same canonical Invocation outcomes as the management HTTP adapter, including `rejected` and `failed`; Audit details expose the same origin/scope/outcome metadata as Web and do not expose Credential References or secret values.
+Credential management is shared with Web. Native secret values appear only as
+Create/Rotate method arguments. Profile ToolBinding management provides separate
+Presentation, Governance and Credentials actions. Provider connection and
+authentication have separate dialogs. The Wails adapter maps normalized
+Credential References, and TypeScript never resolves secret bytes. Desktop Tool
+calls use the same canonical Invocation outcomes as management HTTP, including
+`rejected` and `failed`. Audit exposes minimized origin, scope and outcome
+metadata.
 
-The Desktop `Servers` page can start a Profile as a loopback Streamable HTTP MCP server without launching a second Mender process. Running servers are ephemeral Runtime state and stop with the Desktop process. The page provides endpoint/config copy plus Restart/Stop controls. stdio serving remains client-launched through the CLI because its lifetime is tied to the external client's stdin/stdout process.
+The Profile's MCP delivery page configures mode, Tunnel and direct projection,
+then starts or stops its loopback Streamable HTTP server. Running servers stop
+with the Desktop process. Requests refresh projections from the current
+Profile, MCP delivery and Catalog revisions. stdio serving remains
+client-launched through the CLI and uses its startup snapshot.
 
-The `Providers` page also manages external Provider plugin installations. Desktop can choose/install a local package directory, list exact package/Installation identity, enable/disable packages, remove unreferenced packages, configure unknown Provider types through Mender's schema-driven form, and explicitly rebind a Provider to another enabled installation of the same PluginID while preserving Provider identity. Persisted plugin connection summaries are shown without starting plugin processes. Web shares list/status/remove/configuration/rebind management, but does not expose a server-path install field. See [External Provider Plugins](provider-plugins.md).
-
-Phase 7 intentionally did not add tray behavior, notifications, deep links, file dialogs, auto-start, or other native integrations. Phase 16 adds only the scoped Provider-plugin directory picker described above; broader native file-dialog behavior remains out of scope without a separate product requirement.
+Plugin Marketplace manages installations. Desktop can pick a local package
+directory. Tools configures external Provider services from the persisted
+schema and can rebind a Provider to another enabled installation of the same
+PluginID while preserving ProviderID. Web shares inventory, configuration and
+rebinding. See [External Provider Plugins](provider-plugins.md).

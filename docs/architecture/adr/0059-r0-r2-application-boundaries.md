@@ -91,6 +91,10 @@ The import check enforces explicit dependency edges, not arbitrary runtime
 side-effect freedom. Query purity, safe projection and process/transaction
 ownership also require behavior tests and review.
 
+R3 removed the temporary Agent filesystem edges. R7 retired the empty
+exception file and its loader. See the
+[R7 integration record](../../planning/refactor-r7-2026-11-05.md).
+
 ## Alternatives considered
 
 - **Move files without extracting use cases:** leaves ownership and duplicated

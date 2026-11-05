@@ -110,7 +110,10 @@ Direct enumeration remains available for small profiles and protocol compatibili
 
 ## 10. Profiles are operational and security boundaries
 
-A Profile is more than a list of Tools. Its Profile-to-Tool relationship is a ToolBinding that may define exposure, machine/model presentation, restrictive policy, execution constraints, and an inventory-validated Credential allowlist.
+A Profile selects canonical Tools and exact Skill installations. ToolBinding
+owns Profile-specific presentation, restrictive policy, execution constraints
+and an inventory-validated Credential allowlist. MCP delivery owns mode, the
+direct projection subset, optional Tunnel and its own configuration revision.
 
 Remote endpoints may bind directly to Profiles. Profile-scoped ToolBinding membership must be enforced by the shared Invocation pipeline; adapter checks may narrow discovery/projection but are not the authoritative execution boundary. Binding policy may tighten global Policy but must never relax it.
 
@@ -124,7 +127,9 @@ At the same time, core APIs and storage abstractions must permit remote deployme
 
 Wails v3 may provide desktop packaging, native integration, and transport to the shared application core.
 
-The core must remain buildable and testable without Wails.
+The core must remain buildable and testable without Wails. Web and Desktop
+supply the common `ManagementClient`; Desktop adds local owner capabilities
+independently. Backend authorization applies at each owner operation.
 
 ## 13. Strict static quality gates
 

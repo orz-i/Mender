@@ -2,6 +2,10 @@
 
 Architecture Decision Records (ADRs) capture decisions that materially constrain Mender's architecture or engineering model.
 
+The [R7 integration record](../../planning/refactor-r7-2026-11-05.md)
+summarizes the R0–R6 decisions, cleanup and acceptance evidence. See the
+[current system diagrams](../context.md) for the resulting boundaries.
+
 ## Status values
 
 - Proposed: under discussion; implementation must not assume acceptance.

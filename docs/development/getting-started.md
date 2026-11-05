@@ -109,17 +109,31 @@ Release and upgrade procedures are documented in [Release and Distribution](rele
 
 The repository now includes Catalog, the shared Invocation/Policy/Credential/Audit runtime, persistent Profiles, the generic Provider Plugin Runtime with directly configurable MCP, OpenAPI and Model Tools Providers plus resource-owned Sandbox Workspace Tools, downstream MCP adapters, the local CLI/Agent Skill workflow, the OpenAPI management control plane, typed TypeScript SDK, and shared React management application.
 
-- `backend/` contains Go executable hosts, domain/application contexts, MCP infrastructure adapters, and composition roots.
+- `backend/` contains Go executable hosts, bounded contexts and adapters.
+  `backend/internal/bootstrap` wires dependencies and owns Runtime shutdown.
+  Shared management read models live in `management/application/query`.
 - `apps/web/` is the browser host.
 - `apps/desktop/` is the isolated Wails v3 desktop host and separate Go module.
-- `packages/app/` is the shared React application shell.
-- `packages/ui/` is the shared UI boundary and shadcn/ui destination.
-- `packages/sdk/` is the generated/typed management API client boundary and the only browser HTTP boundary.
+- `packages/app/` contains the shared React shell and product features. Use
+  the public Tools entry for services, Catalog and Workspace targets. Shared
+  plugin configuration controls live under `src/shared/plugin-configuration`.
+- `packages/ui/` provides product-independent UI primitives.
+- `packages/sdk/` owns the management and local owner contracts and the
+  browser HTTP adapter. OpenAPI output lives under `src/generated`.
 - `contracts/` owns the OpenAPI management contract; `skills/` contains the Agent Skill surface.
 - Wails remains isolated from `backend/go.mod`; CLI/server dependency graphs do not contain Wails.
-- Web and Desktop both mount `packages/app` behind the same `MenderClient` contract, using HTTP and Wails transports respectively.
+- Both hosts supply a `ManagementClient`. Desktop additionally supplies
+  optional local approval and Agent Tool placement capabilities and
+  host callbacks. Web uses HTTP and Desktop uses Wails.
 
-Native Wails build/package checks are documented separately because they require platform GUI and packaging toolchains. Release signing, SBOM/checksum generation, dependency scanning, and database compatibility rules are repository-owned hardening concerns rather than UI behavior.
+See the [system diagrams](../architecture/context.md) for the dependency and
+execution boundaries. The Go architecture gate checks forbidden import
+edges directly. ESLint checks the common client, shared feature code, the Tools
+public entry and UI dependency direction.
+
+Native Wails build/package and live backend checks are separate from the
+portable gate. The [real-environment acceptance matrix](../planning/refactor-r7-2026-11-05.md#real-environment-acceptance)
+lists prerequisites and the evidence to record.
 
 ## Quality policy
 

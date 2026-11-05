@@ -2,38 +2,56 @@
 
 Mender uses forward-only, context-owned SQLite migrations.
 
-Catalog, Audit, Profiles, canonical Provider plugin configuration, Agent/Sandbox resources, and Runtime governance share the configured SQLite database file with context-owned migration versions. The legacy MCP configuration store has been retired; there is only one runtime Provider configuration authority.
+Catalog, Audit, Profiles, MCP delivery, canonical Provider configuration,
+Agent/Sandbox resources and Runtime governance share the configured SQLite
+file with context-owned migration versions.
 
 ## Migration ownership
 
-Current migration tables are:
+Relevant migration tables include:
 
 - `catalog_schema_migrations`,
 - `audit_schema_migrations`,
 - `profile_schema_migrations`,
+- `mcp_delivery_schema_migrations`,
 - `provider_config_schema_migrations`,
-- `provider_plugin_installation_schema_migrations`,
+- `plugin_installation_schema_migrations`,
 - `agent_schema_migrations`,
 - `sandbox_schema_migrations`,
 - `runtime_governance_schema_migrations`.
 
 The retired `mcp_config_schema_migrations` and `provider_config_imports` tables are **not** recreated.
 
-Each bounded context applies only its own migrations.
-
-Migration execution is transactional.
+Migrations are transactional. The Profile-to-MCP delivery handoff uses a
+single transaction for both version records and the historical conversion.
 
 The canonical Provider plugin configuration schema is **version 4**. Version 2 added nullable `plugin_installation_id` to `provider_configs`; external Provider rows require an exact Installation ID so package upgrades cannot silently retarget a configured Provider. Version 3 added nullable `credential_refs_json` and `connection_summary` host projections. New/updated Provider configs persist normalized Credential References and bounded connection summary metadata from `InspectConfig` alongside the exact config revision; no resolved secret bytes are stored. A null Credential metadata column on a migrated older row means “not yet normalized”, not “verified empty”. Existing Provider rows retain ProviderID, PluginID, config version/revision, plugin-owned JSON, ToolIDs, Profile bindings, Policy targets, and Audit identity.
 
-The external Provider plugin installation schema is version 2. Version 1 stored non-secret installation identity and package metadata including PluginID, package version, source kind/reference, content digest, manifest JSON, administrative status, and installation timestamp. Version 2 adds nullable `verified_descriptor_json`, a bounded snapshot of the runtime descriptor verified during installation. Normal plugin catalog reads use this snapshot instead of starting third-party processes. Legacy version-1 rows may be verified/backfilled lazily. Plugin executable/package files remain in the managed plugin root rather than SQLite.
+The generic plugin installation schema is version 1. It records package
+identity, digest, administrative status and the verified descriptor snapshot.
+Package files live in the managed plugin root. A Provider installation with a
+missing snapshot remains unavailable in the catalog until explicitly verified
+with `mender plugin verify <installation>`. Listing uses persisted metadata.
+A database containing the retired Provider-only inventory requires offline
+migration with a compatible prior release before current Runtime startup.
 
 Phase 14 OpenAPI and Phase 15 Model Tools still use the generic Provider table as built-in plugins. Phase 16 introduced exact external InstallationID pinning; Phase 17 adds offline host-governed Provider metadata and verified installation descriptors without changing canonical Provider/Tool identity.
 
-Downgrading to a binary that supports only provider-config schema version 2 fails closed during Provider config store startup after version 3 has been recorded; binaries that understand only plugin-installation schema version 1 likewise fail closed after installation schema version 2 is recorded. Restore the pre-upgrade database backup before running such an older binary; do not delete migration rows or rewrite/null new columns to force a downgrade. A binary that understands current schemas but lacks a particular built-in or installed external plugin still fails closed when that Provider is activated rather than substituting another implementation.
+An older binary fails closed on unsupported versions. A binary that supports
+the current schema but lacks a particular built-in or installed plugin still
+fails closed when that Provider is activated.
 
 **Provider Config version 4 is a destructive hard-cut upgrade.** It checks that every legacy `mcp_provider_configs` ProviderID has a valid canonical `io.mender.provider.mcp` Plugin configuration at version 1, and that no built-in Workspace Provider remains at ConfigVersion 1. It then atomically removes obsolete `mcp_provider_configs`, `mcp_config_schema_migrations`, and `provider_config_imports` tables, installing SQL guards against reintroducing Workspace v1. A missing/invalid canonical mapping or remaining Workspace v1 causes an error **before any legacy table is removed**. The Runtime no longer imports or dual-writes old MCP configs, nor interprets obsolete flat MCP HTTP/stdio Provider create/update API requests. Only typed plugin configs through generic Provider CRUD remain. An old binary that supports Provider Config schema 3 will fail closed after version 4 is recorded; use a verified backup for any downgrade.
 
 The current Audit schema is version 2. Version 2 adds `error_summary TEXT NOT NULL DEFAULT ''`. Existing Audit rows migrate with an empty summary. New failed Invocations may store only the bounded/redacted diagnostic summary produced at the Invocation boundary; arguments and full result payloads remain absent from Audit storage.
+
+**Profile schema 7 and MCP delivery schema 1** move mode, Tunnel association
+and direct projection out of Profile. The transaction preserves effective
+projection, Profile and Tool identities, selection revisions and Skill
+deployment ownership. It does not start servers or rewrite managed artifacts.
+Profile v6 binaries reject the migrated database. Before production rollout,
+verify an upgrade on a restored copy with representative data. See
+[ADR-0062](../architecture/adr/0062-r5-profile-delivery-schema-boundaries.md).
 
 ## Before upgrading
 
@@ -41,7 +59,8 @@ For a release that adds a migration:
 
 1. stop every Mender process using the database,
 2. identify the exact database path,
-3. create a backup copy while no process has the file open,
+3. back up a consistent copy of the shared SQLite database, including any
+   required WAL state, and the matching managed resource directories,
 4. retain the previous Mender binary/package until the upgrade is verified,
 5. review release notes for migration-specific recovery requirements.
 
@@ -59,7 +78,8 @@ Desktop defaults to:
 
 and also supports `MENDER_DB` for explicit development/test control.
 
-Because all Runtime-owned SQLite stores use the same database path, back up the database as one unit.
+Restore the backup to a disposable location and verify it with the target
+binary before upgrading the live database.
 
 ## Upgrade
 
@@ -86,7 +106,10 @@ If an older binary sees a schema version newer than it understands, it fails clo
 This means a downgrade has two possible paths:
 
 - if no newer schema version was written, install/run the older binary normally;
-- if the database was migrated beyond the older binary's supported version, stop Mender and restore the pre-upgrade database backup before starting the old binary.
+- if the database was migrated beyond the older binary's supported version,
+  stop Mender and restore the matching pre-upgrade database and managed
+  resources before starting the old binary. Reconcile any writes made after
+  upgrade before restoring the backup.
 
 Do not delete rows from a `*_schema_migrations` table merely to force an old binary to start. The underlying schema/data may already have changed.
 

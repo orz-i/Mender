@@ -1,46 +1,70 @@
 # System Context
 
-## High-level view
+## Backend boundaries
 
-```text
-                   External LLMs / Agents
-                       |        |
-               CLI / MCP / Agent Skills
-                       |        |              Managed Tunnel
-                       v        v                    |
-                Protocol / UI Adapters <-------------+
-                       |
-             Catalog or Profile Scope
-             (ToolID / ToolBinding)
-                       |
-                       v
-               Governed Invocation
-             / Principal / Policy /
-             Runtime Budget / Credential
-                 Result Guard / Audit
-                       |
-                       v
-           Canonical Tool / Provider Facade
-                       |
-        +--------------+-----------------+
-        |              |                 |
-        v              v                 v
-   Built-in /      Managed Tool       External native
-   Remote MCP      Suite facades      Plugin Extensions
-   / OpenAPI        (Agent/SSH/             |
-   / Model Tools    Workspace)              |
-        |              |                    |
-        +--------------+--------------------+
-                       |
-              Configured Resources
-         Provider / Agent / Sandbox / Tunnel
-                       |
-           Platform, network, runtime hosts
+Solid arrows show calls across boundaries. `bootstrap.Runtime` constructs the
+adapters and owns shutdown. HTTP and Wails share the management read models and
+delegate writes to the application that owns the resource.
 
-  Persistence: SQLite context stores + reviewed commit-point guards
-  Secrets: OS Keyring / execution-bound environment (never Catalog)
-  Agent loop, LLM reasoning, planning and model scheduling: external
+```mermaid
+flowchart LR
+  Control["Management HTTP / Wails binding"] --> Query["Management queries"]
+  Query --> Projection["Read-only SQLite projection"]
+  Control --> UseCases["Provider / Agent / Sandbox use cases"]
+  UseCases --> Stores["Context stores and atomic reference guards"]
+  Control --> Delivery["Profile delivery use cases"]
+  Delivery --> Skill["Skill deployment and export ports"]
+  Control --> Config["MCP delivery configuration"]
+  Config --> Stores
+  Profile["Profile membership and governance use cases"] --> Stores
+  Managed["Managed MCP HTTP listener and Tunnel"] --> Config
+  Managed --> Profile
+  Managed --> Invoke["Governed Invocation"]
+  CLI["CLI / Agent Skill / MCP stdio"] --> Invoke
+  Control --> Invoke
+  Invoke --> Executors["Built-in Tools / Provider plugins / resource-owned Tool suites"]
 ```
+
+The shared Invocation entry point owns preflight, admission, execution and
+terminal audit. Provider activation has its own admission decision. Agent
+resource admission, ACP native permission handling and Tool authorization are
+separate. Agent Task/Session execution and native approvals share one runtime
+coordinator, and the local workspace verifier supplies filesystem observations.
+Secrets are resolved at the execution or connection boundary.
+
+Workspace Tool JSON decoding and Outcome mapping live in the Tool adapter.
+`workspace/application` applies common operation semantics and consumes a
+lease port. `workspace/infrastructure/sandboxbridge` implements that port by
+calling the Sandbox router for an admitted target. Sandbox owns grants,
+placement, generation, leases and driver selection. Local, Docker, Daytona,
+SSH and External sessions use `workspace/domain` operation types. The
+External adapter maps them to Sandbox Plugin Protocol v1.
+
+## Client and feature boundaries
+
+```mermaid
+flowchart LR
+  Web["Web host"] --> HTTP["SDK HTTP adapter"]
+  Desktop["Desktop host"] --> Wails["Wails adapter"]
+  HTTP --> Common["ManagementClient"]
+  Wails --> Common
+  Desktop --> Owner["LocalOwnerCapabilities"]
+  App["Shared product app"] --> Common
+  App --> Owner
+  App --> Tools["Tools public entry"]
+  Tools --> Features["Services / Catalog / Workspace Targets"]
+  Features --> Form["Shared plugin configuration"]
+  Sandbox["External Sandbox creation"] --> Form
+  Features --> UI["UI primitives"]
+  Form --> UI
+```
+
+Desktop supplies approval and Agent Tool placement capability objects.
+Their availability controls the UI. The backend binding still authorizes each
+owner operation. The Web host supplies the common client. Feature consumers
+import Tools through its public entry, and shared form controls depend on no
+feature. See [local development](../development/getting-started.md) for the
+repository paths and verification commands.
 
 ## Core domain language
 
@@ -62,11 +86,15 @@ A Tool is not an MCP-specific struct.
 
 ### Profile
 
-A named view over the Catalog that controls exposure and execution constraints.
+A named selection of canonical Tools and exact Skill installations with
+restrictive execution constraints.
 
-A Profile owns ToolBindings rather than copying canonical Tool state. A ToolBinding is the Profile-specific relationship to one Tool and can carry exposure/presentation overrides plus restrictive execution governance.
+A Profile owns ToolBindings and its selection revision. MCP delivery owns
+mode, Tunnel association, direct projection selection and a separate revision.
+Profile-scoped authorization remains based on membership and binding governance.
 
-Profiles can be used by CLI sessions, MCP endpoints, Agent Skills, or management clients.
+Profiles support CLI recipes, MCP endpoints, Skill deployment and Agent Plugin
+export. Local recipes and exported artifacts are explicit snapshots.
 
 ### ToolBinding
 
@@ -128,7 +156,9 @@ Data-minimized durable governance evidence. Invocation Audit records Principal, 
 
 Converts MCP requests into application commands and queries.
 
-It may expose a profile in direct, dynamic, or hybrid discovery mode.
+It exposes a configured Profile using its MCP delivery mode. Managed HTTP
+refreshes projections using Profile, MCP delivery and Catalog revisions. A
+stdio instance uses a startup snapshot for the life of the client process.
 
 ### MCP provider adapter
 

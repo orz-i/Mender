@@ -137,25 +137,18 @@ routes, generated OpenAPI/SDK/Wails bindings and a trusted desktop-local
 package chooser. Web does **not** expose an arbitrary native package install
 endpoint.
 
-## Forward-only hard cut for already installed Provider packages
+## Installed Provider package compatibility
 
-Existing immutable external Provider packages are **not rewritten or rehashed**.
-The new `plugin_installations` inventory retains each InstallationID,
-PluginID, version, original SHA-256 tree digest, exact package location and
-administrative status. Legacy v1 manifest and verified descriptor metadata are
-converted once to typed metadata within a transaction. The original artifact
-location `mender-provider.json` is recorded as an integrity-verification path;
-the runtime verifies the entire original byte tree with its original v1 digest
-domain and resolves the executable from normalized, pinned v2 metadata.
-It never parses the v1 manifest on normal launch or catalogue reads.
+The Runtime opens the generic `plugin_installations` inventory. Databases
+that still contain the retired Provider v1 tables need offline conversion
+with a compatible prior release. Verify the converted database and managed
+package root together before rollout. See [upgrade and recovery](upgrades.md).
 
-Before an old inventory is migrated, the database store writes a SQLite-consistent
-`.mender-phase27-backup-*.db` snapshot adjacent to the configured database.
-An incompatible row aborts the migration, leaving the old inventory intact.
-New installations use `mender-plugin.json` and the v2 digest domain. Unknown
-future schema versions fail closed. There is no permanent dual-read installation
-inventory. Do not delete the pre-upgrade backup until verifying normal Runtime
-startup and resource references on the upgraded database.
+Previously converted immutable packages retain their InstallationID, package
+location and original SHA-256 digest. The Runtime verifies the existing byte
+tree using the recorded manifest path and digest domain, then resolves the
+executable from normalized pinned metadata. New installations use
+`mender-plugin.json` and the v2 digest domain.
 
 PluginID and installation identity are separate from ProviderID, SandboxID and
 TunnelID; side-by-side package versions never automatically rebind resources.
@@ -309,9 +302,11 @@ mender tunnel list
 
 The Credential Reference must exist in Mender's inventory. The example uses
 a local loopback MCP reachability probe only and does **not** connect to a
-cloud relay. Attach the TunnelID to a Profile through the existing managed
-Profile Tunnel binding flow, then start that Profile's managed MCP Server.
-Once the Profile is unbound and its MCP server stopped, `mender tunnel delete`
+cloud relay. Set the TunnelID in the Profile's MCP delivery configuration
+using the current Profile selection and delivery revisions, then start its
+managed MCP server. See [the CLI reference](cli.md) for the configuration command.
+After the managed server is stopped and its delivery configuration no longer
+references the Tunnel, `mender tunnel delete`
 can remove the Tunnel resource. CLI/Runtime and the Phase 27 E Web/Desktop
 focused Tunnel plugin selection/creation flow are implemented. This is not
 verification of publicly reachable OpenAI or third-party relay connectivity.

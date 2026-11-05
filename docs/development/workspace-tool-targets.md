@@ -32,6 +32,16 @@ mender sandbox targets unbind <tool-service-provider-id> project-b
 
 The same owner-only operations are supported through loopback management HTTP, TypeScript SDK and Wails/Desktop. Registration does **not** publish new Tools or Profile permissions. Unbind only blocks future selection and does not silently alter the target Sandbox grant inventory.
 
+## Implementation boundary
+
+The Workspace Tool adapter handles Tool JSON and Invocation outcomes.
+`workspace/application` owns operation semantics and the lease port.
+`workspace/infrastructure/sandboxbridge` binds that port to the Sandbox
+execution router. The router owns admission and durable lease handling.
+Local, Docker, Daytona, SSH and External sessions consume typed requests
+from `workspace/domain`. The External adapter preserves the Sandbox Plugin
+v1 JSON wire contract, including omission and error behavior.
+
 ## Governance and limits
 
 - Alias lookup requires the exact managed Workspace service. An unrelated Provider cannot use its aliases. Backend mismatch, incompatible capability contracts, missing/retired Sandboxes and owner mismatch fail closed.

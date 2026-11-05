@@ -33,19 +33,34 @@ Vite proxies /api to http://127.0.0.1:8080, so product UI code uses relative man
 The shared React application provides:
 
 - Overview
-- Providers
-- Catalog
-- Profiles
-- Servers
+- Tools: services, Catalog and Workspace targets
+- Profiles: selection, governance and delivery
+- Plugin Marketplace, Skills, Sandboxes, Agents, Tunnels and Runtime
 - Policy
 - Credentials
 - Audit
 
-### Providers
+### Tool services
 
-The Providers page is list-first. `Add provider` is a two-stage plugin-first workflow: the first Dialog lists available Provider plugins with an explicit Add action for each entry and contains no configuration fields; after selecting one plugin, a second focused Dialog shows only that plugin's configuration. A create handoff from Plugin Marketplace already carries an exact plugin identity, so it bypasses the chooser and opens the same focused configuration Dialog directly. Built-in plugins currently include `io.mender.provider.mcp`, `io.mender.provider.model-tools`, `io.mender.provider.openapi`, and `io.mender.provider.workspace`. Enabled external installations appear alongside built-ins with their exact package version/Installation ID; unknown external PluginIDs use Mender's schema-driven generic form and remain pinned to that exact installation. MCP offers `Local command` (stdio) and `Remote endpoint` (Streamable HTTP); HTTP/stdio are MCP transport choices rather than top-level Provider kinds. OpenAPI offers an explicit description source (HTTPS/loopback URL or absolute local file), optional API server override, operation include/exclude SourceKey filters, and a separate Authentication workflow. Model Tools offers an engine selector (OpenAI / Anthropic / Gemini), a model identifier, the normalized v1 `web_search` capability, and a separate Model API Credential selector. Workspace uses the generic schema renderer for one absolute host-local root and exposes `read`, `search`, `edit`, and `shell`; the browser does not turn that root into a client-side filesystem grant. Provider rows expose View, Edit, Sync, and Delete actions; an external Provider additionally exposes Rebind when another enabled installation of the same PluginID is available.
+The service list lives at `/tools`. Choose an available plugin, then fill in its
+focused configuration dialog. A Marketplace create handoff can select the
+plugin and exact Installation ID in advance. Configurable built-ins include
+MCP (stdio or Streamable HTTP), OpenAPI and Model Tools. Enabled external
+installations show their exact package versions and use the shared
+schema-driven configuration form. Create the Workspace Tool Suite from its
+owning Sandbox, then manage additional targets from the service page. See
+[Workspace Tool Targets](workspace-tool-targets.md).
 
-Provider ID, namespace, and Plugin ID remain stable during editing. Plugin-owned configuration can change without changing canonical Provider identity. Saving persists metadata/configuration and re-synchronizes the Provider; for OpenAPI this reloads the description and preserves ToolID when the operation SourceKey is unchanged, Model Tools keeps stable `web_search` identity across engine/model configuration refreshes, and Workspace keeps the four stable SourceKeys while the configured root changes explicitly.
+Service actions include View, Edit, Sync and Delete as applicable. An external
+Provider can be rebound to another enabled installation of the same PluginID.
+Catalog drilldown and Workspace targets use `/tools/:providerId` and
+`/tools/:providerId/workspaces`. The route parameter is the canonical
+ProviderID.
+
+ProviderID, namespace and PluginID remain stable during editing. Saving
+persists metadata/configuration and re-synchronizes the Provider. OpenAPI
+operations retain ToolIDs when their SourceKeys stay the same, and Model Tools
+retains its `web_search` identity across engine/model changes.
 
 Provider management uses one typed Plugin contract: `GET /api/v1/provider-plugins`, installation inventory/enable/disable/delete, `POST /api/v1/providers` and `PUT /api/v1/providers/{providerId}` with a required plugin-owned `config`, `DELETE /api/v1/providers/{providerId}`, and `POST /api/v1/providers/{providerId}/rebind`. The old `/providers/http`, `/providers/stdio` and flat MCP-specific PUT variants have been removed (ADR-0043). MCP HTTP/stdio is selected by `config.transport.kind` inside the built-in MCP Provider Plugin, not through separate persistence or endpoints. External creation carries optional `installationId`; Provider responses retain that exact pin and can include a bounded connection summary. Rebind accepts target installation identity plus plugin-owned config and never changes ProviderID or PluginID. Web management has no arbitrary server-filesystem plugin installation endpoint; local package installation belongs to CLI/Desktop. No second store or implicit Provider grants are created by these operations.
 
@@ -66,7 +81,8 @@ Non-loopback HTTP Provider endpoints must use HTTPS, and Provider URLs cannot co
 
 ### Catalog
 
-Catalog now opens with a compact browse of synchronized Tools, so successful Provider synchronization is visible without guessing a search term. Provider rows also expose their current synchronized Tool count.
+Catalog opens from a service with a compact browse of its synchronized Tools.
+Service rows show the synchronized Tool count.
 
 Catalog still follows progressive disclosure:
 
@@ -83,29 +99,45 @@ Tool calls return the canonical Invocation outcome body even when the outcome is
 
 ### Profiles
 
-Profiles is also list-first. `Create profile` opens a Dialog; Tool membership management opens from each Profile row in a separate Manage Dialog.
+Profiles has dedicated creation, detail and selection editing routes.
 
 Normal Profile governance never asks the user to type or copy a ToolID. `Choose tools` opens a Catalog-backed picker with Tool search, Provider filtering, multi-select, and human-readable Tool/Provider metadata. Existing membership rows also display Tool names and Providers rather than stable IDs.
 
-Saving picker selection uses one atomic binding-replacement operation. The application validates every selected Tool before the Profile repository transaction replaces bindings, so a multi-select update cannot intentionally leave a partially saved Profile. Hybrid Profiles expose the Direct export choice; direct/dynamic modes normalize that flag automatically. Existing alias/presentation/policy/concurrency fields are preserved when membership or Direct state changes.
+Saving picker selection uses one atomic binding replacement. The application
+validates every selected Tool before the Profile repository writes membership.
+Retained bindings preserve their presentation, policy, concurrency and
+credential constraints.
 
-Each selected Tool exposes separate focused `Presentation`, `Governance`, and `Credentials` actions rather than expanding the picker into a dense form. Presentation edits alias/title/description plus hybrid Direct export; Governance edits restrictive policy (`inherit`, `require approval`, `deny`) and binding-local concurrency (`inherit`, `serial`); Credentials multi-selects existing inventory items. Long descriptions stay truncated in the selected-Tool row. The dialogs never overlap the Manage dialog, and normal management asks for neither ToolID nor a raw Credential Reference.
+Each selected Tool has focused `Presentation`, `Governance` and
+`Credentials` actions. Presentation edits alias/title/description, Governance
+edits restrictive policy and binding-local concurrency, and Credentials
+selects existing inventory entries.
 
-### Servers
+### MCP delivery
 
-Servers completes the management flow by exposing a persisted Profile as a running downstream MCP endpoint.
+Open a Profile's MCP delivery page at `/profiles/:slug/deliveries/mcp` to
+configure mode, optional Tunnel and the hybrid direct Tool subset. Configuration
+has its own revision and also checks the Profile selection revision on save.
+Direct mode derives its projection from all current members. Dynamic mode
+uses discovery. Hybrid exposes the configured direct subset alongside
+discovery. Saving configuration is separate from starting a server.
 
-The page lists runtime-owned Streamable HTTP servers and supports Start, Restart, Stop, endpoint copy, and client-config copy.
-
-Start selects a Profile and loopback bind address. The endpoint is exposed at `/mcp`, for example:
+Start, Restart and Stop control the managed Streamable HTTP instance for the
+Profile. The page offers endpoint and client-config copy. The loopback
+endpoint is exposed at `/mcp`, for example:
 
 ```text
 http://127.0.0.1:8765/mcp
 ```
 
-Managed servers are runtime-only. They stop when Mender exits and are not auto-started after restart. Profile changes require Restart before an already-running server sees the new Profile snapshot.
+Managed servers stop when Mender exits and require an explicit start after
+restart. Requests refresh the projection when Profile selection, MCP delivery
+configuration or Catalog revisions change. This refresh preserves the active
+listener and Tunnel. stdio uses a startup snapshot for its client process.
 
-Desktop-managed/management-managed servers are loopback-only and reject non-local Host/Origin and explicit cross-site browser requests. Remote downstream serving is intentionally unavailable until authentication/authorization is designed.
+Managed listeners bind to loopback and reject non-local Host/Origin and
+explicit cross-site browser requests. External reachability uses a configured
+Tunnel subject to the Runtime's lifecycle and admission checks.
 
 stdio remains client-launched through:
 
@@ -162,9 +194,11 @@ pnpm check verifies that regenerating the contract produces no diff.
 
 ## Frontend transport boundary
 
-packages/sdk is the only browser package allowed to perform HTTP requests.
-
-The product UI in `packages/app` receives a typed `MenderClient` from its host. The browser host constructs the HTTP implementation; the Wails desktop host constructs a binding-backed implementation without duplicating product pages.
+`packages/sdk` is the browser HTTP boundary. The Web host gives
+`packages/app` a `ManagementClient` implemented by the SDK. Desktop supplies
+the same contract through Wails and separately supplies local owner
+capabilities. Native Agent approvals and Tool placement are therefore
+available only through the host that supplies those capabilities.
 
 ## Production build
 

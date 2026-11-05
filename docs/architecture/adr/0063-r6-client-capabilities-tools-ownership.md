@@ -18,8 +18,9 @@ The desktop host also supplies the callbacks for local Profile CLI recipes
 and opening the system browser for OAuth, alongside the existing host callbacks.
 Backend owner authorization remains the enforcement point. Capability
 presence governs UI availability. OpenAPI and the generated Wails surface
-retain their existing operations. `MenderClient` remains a type alias for the
-common contract so existing common-client consumers can keep their imports.
+retain their existing operations. R6 temporarily exported `MenderClient`
+as a type alias for the common contract. R7 moved the remaining consumers to
+`ManagementClient` and retired the alias.
 
 ## Feature ownership
 
