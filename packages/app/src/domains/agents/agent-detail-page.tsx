@@ -455,7 +455,7 @@ export function AgentDetailPage({client,chooseLocalDirectory}:{client:MenderClie
         {client.supportsLocalAgentApprovals===true&&agent?.backend!=="antigravity"&&viewTask&&(viewTask.status==="running"||viewTask.status==="queued")?
           <AgentTaskApprovals client={client} task={viewTask} onTaskUpdated={updateViewedTask}/>:null}
         {viewTask&&agent?.isolation==="host"?<p role="note" className="text-xs leading-5 text-muted-foreground">
-          {t(agent.backend==="antigravity"?"Antigravity native permissions are not Mender ACP approvals; no ACP approval receipt can prove its native tool activity.":"ACP approvals show only requests sent to Mender; zero approvals does not prove the Host Agent performed no native file or command actions.")}
+          {t(agent.backend==="antigravity"?"Antigravity native permissions are not Mender ACP approvals; no ACP approval receipt can prove its native tool activity.":"ACP approvals are voluntary requests made by the Agent and do not form a complete record of native file and shell activity; zero approvals does not prove that no operations occurred.")}
         </p>:null}
         </DialogBody>
         <DialogFooter>

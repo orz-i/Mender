@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { Agent, AgentTools, AgentTask, MenderClient } from "@mender/sdk";
 import { MemoryRouter, Route, Routes, useNavigate } from "react-router";
@@ -496,7 +497,7 @@ describe("Agents focused management",()=>{
       fireEvent.click(await screen.findByRole("button",{name:/^Tasks/}));
       fireEvent.click(await screen.findByRole("button",{name:/^View Task #/}));
       const note=await screen.findByRole("note");
-      expect(note.textContent).toContain("ACP approvals show only requests sent to Mender");
+      expect(note.textContent).toContain("ACP approvals are voluntary requests made by the Agent");
       expect(note.textContent).toContain("zero approvals does not prove");
     });
   }
@@ -513,7 +514,8 @@ describe("Agents focused management",()=>{
     });
     fireEvent.click(await screen.findByRole("button",{name:/^任务/}));
     fireEvent.click(await screen.findByRole("button",{name:/^查看 任务 #/}));
-    expect((await screen.findByRole("note")).textContent).toContain("没有审批记录，不代表 Host 智能体没有执行原生文件或命令操作");
+    expect((await screen.findByRole("note")).textContent).toContain("并不构成原生文件与 Shell 操作的完整记录");
+    expect((await screen.findByRole("note")).textContent).toContain("没有任何审批记录不代表未发生任何操作");
   });
   it("renders mobile-card-ready inventory layout and navigates to agent detail", async () => {
     const readyAgent: Agent = {

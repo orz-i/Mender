@@ -315,21 +315,21 @@ func TestResolveApprovalByPolicyTaskCapParity(t *testing.T) {
 	}
 	defer func() { _ = s.Close() }()
 
-	for _, cap := range []struct{ existing int }{{64}, {63}} {
-		agent, root := scopeFixtureAgent(t, s, fmt.Sprintf("Cap Agent %d", cap.existing))
+	for _, step := range []struct{ existing int }{{64}, {63}} {
+		agent, root := scopeFixtureAgent(t, s, fmt.Sprintf("Cap Agent %d", step.existing))
 		task := scopeFixtureTask(t, s, agent, "cap", root)
 		policy := agentdomain.ApprovalPolicy{AgentID: agent.ID(), WorkspaceKey: "cap",
 			WorkspaceRoot: root, Mode: agentdomain.ApprovalWorkspaceRead, UpdatedAt: time.Now().UTC()}
 		if err := s.SetApprovalPolicy(ctx, policy); err != nil {
 			t.Fatal(err)
 		}
-		insertPolicySourcedReceipts(t, s, task, cap.existing)
-		request := newFixtureApproval(t, agent, task, fmt.Sprintf("release-%d", cap.existing))
+		insertPolicySourcedReceipts(t, s, task, step.existing)
+		request := newFixtureApproval(t, agent, task, fmt.Sprintf("release-%d", step.existing))
 		if err := s.CreateApproval(ctx, request); err != nil {
 			t.Fatal(err)
 		}
 		err := s.ResolveApprovalByPolicy(ctx, request.ID, agentdomain.ApprovalWorkspaceRead, 1)
-		if cap.existing >= 64 {
+		if step.existing >= 64 {
 			if !errors.Is(err, agentdomain.ErrConflict) {
 				t.Fatalf("64 previous policy decisions permitted another release: %v", err)
 			}
