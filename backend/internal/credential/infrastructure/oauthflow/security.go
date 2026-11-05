@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -243,8 +244,14 @@ func writeFlowPage(w http.ResponseWriter, status int, page string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Content-Length", strconv.Itoa(len(page)))
 	w.WriteHeader(status)
 	_, _ = w.Write([]byte(page))
+	// fail/deliver can make the flow runner close the listener immediately.
+	// Flush a complete fixed-length response before either signal; flushing a
+	// chunked response alone would still leave its final chunk until return.
+	// Browser I/O errors must not change callback authorization/state handling.
+	_ = http.NewResponseController(w).Flush()
 }
 
 func newFlowID() (string, error) {

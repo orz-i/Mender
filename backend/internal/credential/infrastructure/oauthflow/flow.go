@@ -46,6 +46,7 @@ type flow struct {
 	urlReady     chan struct{}
 
 	shutdownOnce sync.Once
+	drainOnce    sync.Once
 
 	mu                   sync.Mutex
 	status               FlowStatus
@@ -230,7 +231,7 @@ func (f *flow) run(m *Manager) {
 // finish maps any leftover pending state to a terminal status, releases the
 // loopback listener, and unblocks Start even on early failures.
 func (f *flow) finish() {
-	defer f.shutdownListener()
+	defer f.drainCallbackListener()
 	defer func() {
 		f.urlReadyOnce.Do(func() { close(f.urlReady) })
 	}()
@@ -473,6 +474,19 @@ func (f *flow) shutdownListener() {
 	f.shutdownOnce.Do(func() {
 		_ = f.listener.Close()
 		_ = f.server.Close()
+	})
+}
+
+// A completed flow stops new callbacks but lets the current HTTP handler finish
+// its response before closing active connections. Owner cancellation remains an
+// independent immediate Close and can interrupt this bounded drain.
+func (f *flow) drainCallbackListener() {
+	f.drainOnce.Do(func() {
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(f.ctx), 5*time.Second)
+		defer cancel()
+		if err := f.server.Shutdown(ctx); err != nil {
+			f.shutdownListener()
+		}
 	})
 }
 
