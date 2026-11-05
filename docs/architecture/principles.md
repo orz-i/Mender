@@ -48,6 +48,8 @@ One context must not reach into another context's repository or database tables 
 
 **Narrow persistence exception:** resource retirement and grant acquisition must be serialized at a shared SQLite commit point. Explicit infrastructure-only Provider/Profile/Policy/Agent/Sandbox reference guards and lifecycle CAS may inspect another context's physical rows for that atomicity, as documented by ADR-0039/0041/0042. These constraints need forward-only upgrade tests, cross-connection race fixtures and fail-closed semantics. They are not permission to import foreign repositories into domain/application logic.
 
+**Reviewed read projection exception:** management infrastructure may join exact resource-to-facade ownership relations through a read-only SQLite connection and expose a narrow query DTO (ADR-0059). It provides display attribution only, never grants or mutation authority. It is distinct from the commit-point exception and is not permission for application code to read foreign tables.
+
 A shared physical database does not imply shared domain ownership.
 
 ## 6. Infrastructure types do not leak inward
