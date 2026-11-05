@@ -1,70 +1,69 @@
-@import "@fontsource-variable/manrope/wght.css";
-@import "@fontsource-variable/newsreader/wght.css";
 @import "tailwindcss";
 @source "../components";
 @source "../../../app/src";
 
 /* Mender visual foundations — see docs/planning/interface-visual-refresh.md */
 :root {
-  --font-ui: "Manrope Variable", "PingFang SC", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Newsreader Variable", "Songti SC", "Noto Serif CJK SC", Georgia, serif;
+  /* Magpie-inspired quiet desktop surface; Mender owns these semantic tokens. */
+  --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "PingFang SC", "Microsoft YaHei UI", system-ui, sans-serif;
+  --font-display: var(--font-ui);
   font-family: var(--font-ui);
   color-scheme: light;
-  --radius: 0.875rem;
-  --background: #f6f5f3;
-  --foreground: #121212;
+  --radius: 0.75rem;
+  --background: #f4f4f6;
+  --foreground: #1c1c21;
   --card: #ffffff;
-  --card-foreground: #121212;
+  --card-foreground: #1c1c21;
   --popover: #ffffff;
-  --popover-foreground: #121212;
-  --primary: #7cd56e;
-  --primary-foreground: #121212;
-  --primary-ink: #24642e;
-  --action: #121212;
+  --popover-foreground: #1c1c21;
+  --primary: #4f46e5;
+  --primary-foreground: #ffffff;
+  --primary-ink: #4338ca;
+  --action: #1c1c21;
   --action-foreground: #ffffff;
-  --secondary: #f2f4f7;
-  --secondary-foreground: #323438;
-  --muted: #f2f4f7;
-  --muted-foreground: #5c5e63;
-  --accent: #e7f6e2;
-  --accent-foreground: #225b2b;
-  --destructive: #c43432;
-  --border: #e7e6e3;
-  --input: #dadad8;
-  --ring: #28874b;
-  --sidebar: #f6f5f3;
-  --teal: #02a794;
-  --sunlight: #ffc954;
-  --card-elevation: 0 16px 36px -30px rgb(18 18 18 / 0.23), 0 2px 7px -5px rgb(18 18 18 / 0.10);
+  --secondary: #f1f1f4;
+  --secondary-foreground: #4b4b53;
+  --muted: #f1f1f4;
+  --muted-foreground: #686872;
+  --accent: #eeedfd;
+  --accent-foreground: #3730a3;
+  --destructive: #c63742;
+  --border: #e3e3e8;
+  --input: #d5d5dd;
+  --ring: #4f46e5;
+  --sidebar: #f4f4f6;
+  --teal: #189a58;
+  --sunlight: #b45309;
+  --card-elevation: 0 1px 2px rgb(20 20 30 / 0.035);
 }
 
 .dark {
   color-scheme: dark;
-  --background: #181a19;
-  --foreground: #f4f4f1;
-  --card: #242625;
-  --card-foreground: #f4f4f1;
-  --popover: #292b2a;
-  --popover-foreground: #f4f4f1;
-  --primary: #7cd56e;
-  --primary-foreground: #121212;
-  --primary-ink: #9aec90;
-  --action: #dedfdc;
-  --action-foreground: #1b1d1b;
-  --secondary: #333635;
-  --secondary-foreground: #eeefec;
-  --muted: #323433;
-  --muted-foreground: #b4b7b2;
-  --accent: #2d4431;
-  --accent-foreground: #acf29e;
-  --destructive: #ff827d;
-  --border: #3b3e3b;
-  --input: #555854;
-  --ring: #87dd7a;
-  --sidebar: #1e201f;
-  --teal: #43cfbe;
-  --sunlight: #f6c65a;
-  --card-elevation: 0 16px 36px -28px rgb(0 0 0 / 0.45), 0 2px 7px -5px rgb(0 0 0 / 0.28);
+  --background: #1a1a1e;
+  --foreground: #ededf1;
+  --card: #232327;
+  --card-foreground: #ededf1;
+  --popover: #28282d;
+  --popover-foreground: #ededf1;
+  --primary: #a5b4fc;
+  --primary-foreground: #14142a;
+  --primary-ink: #c7d2fe;
+  --action: #ededf1;
+  --action-foreground: #1a1a1e;
+  --secondary: #2d2d33;
+  --secondary-foreground: #d4d4da;
+  --muted: #2d2d33;
+  --muted-foreground: #a1a1aa;
+  --accent: #2b2c47;
+  --accent-foreground: #c7d2fe;
+  --destructive: #f28b82;
+  --border: #333339;
+  --input: #45454d;
+  --ring: #a5b4fc;
+  --sidebar: #1e1e23;
+  --teal: #6fd99b;
+  --sunlight: #f2b544;
+  --card-elevation: 0 1px 2px rgb(0 0 0 / 0.12);
 }
 
 @theme inline {
@@ -115,24 +114,18 @@
     @apply bg-background text-foreground antialiased;
     margin: 0;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    font-size: 14px;
   }
 
   ::selection {
     background: color-mix(in srgb, var(--primary) 45%, transparent);
   }
 
-  .brand-display {
-    font-family: var(--font-display);
-    font-optical-sizing: auto;
-    font-weight: 500;
-    letter-spacing: -0.025em;
-  }
-
+  .brand-display,
   .brand-wordmark {
-    font-family: var(--font-display);
-    font-optical-sizing: auto;
-    font-weight: 500;
-    letter-spacing: -0.015em;
+    font-family: var(--font-ui);
+    font-weight: 600;
+    letter-spacing: -0.025em;
   }
 
   button,
