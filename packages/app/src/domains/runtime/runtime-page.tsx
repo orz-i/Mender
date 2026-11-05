@@ -21,9 +21,7 @@ import {
 import { t } from "../../i18n/i18n";
 import { errorMessage } from "../../shared/errors";
 import { ErrorNotice } from "../../shared/page";
-import { FocusSwitch } from "../../shared/focus-switch";
-import { PageToolbar } from "../../shared/page-toolbar";
-import { DataPanel, MetricStrip, MetricTile } from "../../shared/workbench";
+import { DataPanel } from "../../shared/workbench";
 import { FormInfo } from "../../shared/form-info";
 
 const budgetFields: Array<{
@@ -96,7 +94,6 @@ export function RuntimePage({ client }: { client: ManagementClient }) {
   const [reloadVersion, setReloadVersion] = useState(0);
   const [busy, setBusy] = useState("");
   const [editor, setEditor] = useState<"budget" | "isolation" | null>(null);
-  const [focus, setFocus] = useState<"status" | "budget" | "isolation">("status");
   const [acknowledgeExternalHost, setAcknowledgeExternalHost] = useState(false);
 
   useEffect(() => {
@@ -180,62 +177,86 @@ export function RuntimePage({ client }: { client: ManagementClient }) {
   return (
     <div className="space-y-4">
       {error && !editor ? <ErrorNotice message={error} /> : null}
-      <PageToolbar
-        tabs={
-          <FocusSwitch
-            label="Runtime governance"
-            value={focus}
-            onChange={setFocus}
-            items={[
-              { value: "status", label: "Runtime" },
-              { value: "budget", label: "Runtime budget" },
-              { value: "isolation", label: "Process isolation" },
-            ]}
-          />
-        }
-        actions={
-          focus === "budget" ? (
-            <Button size="sm" variant="outline" disabled={budget === null} onClick={() => { if (budget) { setBudgetDraft(budgetToDraft(budget)); setError(""); setEditor("budget"); } }}>{t("Edit")}</Button>
-          ) : focus === "isolation" ? (
-            <Button size="sm" variant="outline" disabled={isolation === null} onClick={() => { setError(""); setAcknowledgeExternalHost(false); setEditor("isolation"); }}>{t("Edit")}</Button>
-          ) : null
-        }
-      />
+      <div className="flex flex-wrap items-center justify-between gap-3 pb-1">
+        <div>
+          <p className="flex items-center gap-2 text-[12px] font-semibold tracking-[0.045em] text-muted-foreground uppercase">
+            {t("Runtime")}
+            <span className="size-1.5 rounded-full bg-teal" aria-hidden="true" />
+            <span className="font-normal normal-case tracking-normal">{t("Local control plane")}</span>
+          </p>
+          <p className="mt-1.5 text-[13px] text-muted-foreground">{t("Current execution capacity, limits and process authority.")}</p>
+        </div>
+        <Button variant="outline" size="sm" onClick={() => setReloadVersion((n) => n + 1)}>
+          {t("Refresh")}
+        </Button>
+      </div>
 
-      {focus === "status" ? <MetricStrip>
-        <MetricTile icon={ActivityIcon} value={status?.usage.invocations ?? "—"} label="In-flight invocations" />
-        <MetricTile icon={WorkflowIcon} value={status?.usage.activations ?? "—"} label="In-flight activations" />
-        <MetricTile icon={BoxesIcon} value={status?.backend.name ?? "—"} label="Isolation backend" />
-        <MetricTile
-          icon={ShieldCheckIcon}
-          value={restrictedAvailable ? t("Available") : t("Unavailable")}
-          label="Restricted host"
-        />
-      </MetricStrip> : focus === "budget" ? (
-        <DataPanel title="Runtime budget" description="Hard limits apply after governance admission. Profile constraints may only tighten them.">
-          <div className="grid gap-x-6 gap-y-5 p-5 sm:grid-cols-2">
-            {budgetFields.map((field) => <div key={field.key} className="min-w-0 border-b border-border/60 pb-3">
-              <p className="truncate text-xs text-muted-foreground">{t(field.label)}</p>
-              <p className="mt-1 text-xl font-semibold tabular-nums">{budget?.[field.key] ?? "—"}</p>
-            </div>)}
+      <section aria-label={t("Runtime summary")} className="grid overflow-hidden rounded-xl border border-border bg-card sm:grid-cols-2 xl:grid-cols-4">
+        {([
+          { icon: ActivityIcon, label: "In-flight invocations", value: String(status.usage.invocations ?? 0) },
+          { icon: WorkflowIcon, label: "In-flight activations", value: String(status.usage.activations ?? 0) },
+          { icon: BoxesIcon, label: "Isolation backend", value: status.backend.name ?? "—" },
+          { icon: ShieldCheckIcon, label: "Restricted host", value: t(restrictedAvailable ? "Available" : "Unavailable") },
+        ] as const).map(({ icon: Icon, label, value }, i) => (
+          <div key={label} className={[
+            "min-w-0 px-5 py-4",
+            i > 0 ? "border-t border-border sm:border-t-0" : "",
+            i % 2 === 1 ? "sm:border-l" : "",
+            i >= 2 ? "sm:border-t xl:border-t-0" : "",
+            i > 0 ? "xl:border-l" : "",
+          ].join(" ")}>
+            <p className="flex items-center gap-2 text-[12px] text-muted-foreground">
+              <Icon className="size-4 shrink-0" aria-hidden="true" />
+              {t(label)}
+            </p>
+            <p className="mt-2 truncate text-[22px] leading-7 font-semibold tracking-[-0.02em]" title={value}>{value}</p>
           </div>
-        </DataPanel>
-      ) : (
-        <DataPanel title="Process isolation" description="Isolation changes host filesystem authority; it does not change Policy decisions.">
-          <div className="divide-y divide-border/70 px-5 pb-3">
-            {(["workspaceShell", "externalProvider", "tunnelClient"] as const).map((key, i) => (
-              <div key={key} className="flex items-center justify-between gap-4 py-4">
-                <span className="text-sm">{[t("Workspace shell"), t("External Providers"), t("Tunnel client")][i]!}</span>
-                <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium">{t((isolation?.[key] ?? "host") === "host" ? "Host" : "Restricted host")}</span>
+        ))}
+      </section>
+
+      <div className="grid min-w-0 items-start gap-4 xl:grid-cols-2">
+        <DataPanel title="Runtime budget"
+          description="Hard limits apply after governance admission. Profile constraints may only tighten them."
+          actions={<Button size="sm" variant="outline" disabled={!budget} onClick={() => {
+            if (budget) { setBudgetDraft(budgetToDraft(budget)); setError(""); setEditor("budget"); }
+          }}>{t("Edit")}</Button>}>
+          <dl className="grid grid-cols-2 gap-x-5 gap-y-0 p-4 sm:grid-cols-4 xl:grid-cols-2 2xl:grid-cols-4">
+            {budgetFields.map((field) => (
+              <div key={field.key} className="min-w-0 border-b border-border/75 px-1 py-3">
+                <dt className="truncate text-[11px] text-muted-foreground" title={t(field.label)}>{t(field.label)}</dt>
+                <dd className="mt-1.5 truncate text-[17px] font-semibold tabular-nums" title={String(budget?.[field.key] ?? "—")}>
+                  {budget?.[field.key] ?? "—"}
+                </dd>
               </div>
             ))}
-            {isolation?.externalProvider === "host" ? <p role="status" className="pt-4 text-xs leading-5 text-muted-foreground">{t("External native Providers use the Runtime user's full host process authority in Host mode. Install only trusted plugins; restricted_host limits filesystem access but not network egress.")}</p> : null}
-            <p className="pt-4 text-xs leading-5 text-muted-foreground">{restrictedAvailable
-              ? t("restricted_host provides host containment, not a VM or container. Network access remains available in this phase.")
-              : t("restricted_host is unavailable on this Runtime. Host mode keeps the local process authority of the Runtime user.")}</p>
+          </dl>
+        </DataPanel>
+
+        <DataPanel title="Process isolation"
+          description="Isolation changes host filesystem authority; it does not change Policy decisions."
+          actions={<Button size="sm" variant="outline" disabled={!isolation} onClick={() => {
+            setError(""); setAcknowledgeExternalHost(false); setEditor("isolation");
+          }}>{t("Edit")}</Button>}>
+          <dl className="divide-y divide-border/75 px-5">
+            {(["workspaceShell", "externalProvider", "tunnelClient"] as const).map((key, i) => (
+              <div key={key} className="flex min-w-0 items-center justify-between gap-3 py-4">
+                <dt className="text-[13px]">{t(["Workspace shell", "External Providers", "Tunnel client"][i]!)}</dt>
+                <dd className="shrink-0 text-[12px] font-medium text-foreground">
+                  {t(isolation?.[key] === "host" ? "Host" : "Restricted host")}
+                </dd>
+              </div>
+            ))}
+          </dl>
+          <div className="border-t border-border px-5 py-3 text-[12px] leading-5 text-muted-foreground">
+            {isolation?.externalProvider === "host"
+              ? <p role="status" className="mb-1">{t("External native Providers use the Runtime user's full host process authority in Host mode. Install only trusted plugins; restricted_host limits filesystem access but not network egress.")}</p>
+              : null}
+            {t(restrictedAvailable
+              ? "restricted_host provides host containment, not a VM or container. Network access remains available in this phase."
+              : "restricted_host is unavailable on this Runtime. Host mode keeps the local process authority of the Runtime user.")}
           </div>
         </DataPanel>
-      )}
+      </div>
       <Dialog open={editor === "budget"} onOpenChange={(open) => { if (!open) closeEditor(); }}>
         <DialogContent className="grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden sm:max-w-2xl">
           <DialogHeader>

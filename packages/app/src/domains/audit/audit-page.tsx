@@ -30,6 +30,7 @@ import {
   FilterSelect,
   SearchField,
 } from "../../shared/workbench";
+import { AuditUsageSummary } from "./audit-usage-summary";
 import {
   AuditDetailDialog,
   AuditStatusBadge,
@@ -231,6 +232,7 @@ export function AuditPage({ client }: { client: ManagementClient }) {
 
   return (
     <>
+      {hasSnapshot && topic === "invocations" ? <AuditUsageSummary records={records} /> : null}
       <PageToolbar
         tabs={
           <FocusSwitch

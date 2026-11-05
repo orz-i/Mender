@@ -2576,15 +2576,13 @@ describe("management pages", () => {
       updateRuntimeIsolation,
     });
 
-    expect(await screen.findByRole("group", { name: "Runtime governance" })).toBeTruthy();
+    expect(await screen.findByRole("region", { name: "Runtime summary" })).toBeTruthy();
+    expect(screen.queryByRole("group", { name: "Runtime governance" })).toBeNull();
     expect(screen.queryByLabelText("Tunnel client")).toBeNull();
     expect(screen.queryByLabelText("Global invocations")).toBeNull();
-    expect(screen.queryByText("restricted_host is unavailable on this Runtime. Host mode keeps the local process authority of the Runtime user.")).toBeNull();
-    expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
-
-    fireEvent.click(screen.getByRole("button", { name: "Runtime budget" }));
-    expect(screen.queryByLabelText("Global invocations")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    expect(screen.getByText("restricted_host is unavailable on this Runtime. Host mode keeps the local process authority of the Runtime user.")).toBeTruthy();
+    const budgetCard = screen.getByText("Runtime budget").closest('[data-slot="card"]') as HTMLElement;
+    fireEvent.click(within(budgetCard).getByRole("button", { name: "Edit" }));
     expectAnchoredDialog("Runtime budget");
     const globalInput = screen.getByLabelText("Global invocations");
     fireEvent.change(globalInput, { target: { value: "12" } });
@@ -2597,10 +2595,10 @@ describe("management pages", () => {
       });
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Process isolation" }));
+    const isolationCard = screen.getByText("Process isolation").closest('[data-slot="card"]') as HTMLElement;
     expect(screen.getByText("restricted_host is unavailable on this Runtime. Host mode keeps the local process authority of the Runtime user.")).toBeTruthy();
     expect(screen.queryByLabelText("Tunnel client")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    fireEvent.click(within(isolationCard).getByRole("button", { name: "Edit" }));
     expect(screen.getByLabelText("Tunnel client")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Save isolation" }));
     await waitFor(() => {
@@ -2640,7 +2638,7 @@ describe("management pages", () => {
       }),
     });
 
-    expect(await screen.findByText("Completed")).toBeTruthy();
+    expect((await screen.findAllByText("Completed")).length).toBeGreaterThan(0);
     expect(screen.getByText("Unknown Tool")).toBeTruthy();
     expect(screen.getByRole("table", { name: "Invocation history" })).toBeTruthy();
     expect(screen.queryByRole("table", { name: "Provider activation history" })).toBeNull();

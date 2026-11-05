@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { ManagementClient, RuntimeGovernanceStatus } from "@mender/sdk";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
@@ -43,8 +43,8 @@ function showRuntime(externalProvider: "host" | "restricted_host", available: bo
 it("shows localized isolation labels in closed selects, never raw API enums", async () => {
   setLocale("zh-CN");
   showRuntime("host", true);
-  fireEvent.click(await screen.findByRole("button", { name: "进程隔离" }));
-  fireEvent.click(screen.getByRole("button", { name: "编辑" }));
+  const heading = await screen.findByText("进程隔离");
+  fireEvent.click(within(heading.closest('[data-slot="card"]') as HTMLElement).getByRole("button", { name: "编辑" }));
 
   const shell = screen.getByRole("combobox", { name: "工作区 Shell" });
   const provider = screen.getByRole("combobox", { name: "外部提供方" });
@@ -60,8 +60,8 @@ it("shows localized isolation labels in closed selects, never raw API enums", as
 
 it("requires an explicit trust acknowledgement before elevating native Provider plugins to Host", async () => {
   const updateIsolation = showRuntime("restricted_host", true);
-  fireEvent.click(await screen.findByRole("button", { name: "Process isolation" }));
-  fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+  const heading = await screen.findByText("Process isolation");
+  fireEvent.click(within(heading.closest('[data-slot="card"]') as HTMLElement).getByRole("button", { name: "Edit" }));
   const externalSelect = screen.getByRole("combobox", { name: "External Providers" });
   fireEvent.click(externalSelect);
   const hostOption = await screen.findByRole("option", { name: "Host" });
@@ -83,9 +83,10 @@ it("requires an explicit trust acknowledgement before elevating native Provider 
 
 it("discloses high host authority on read-only isolation view without forcing a no-op save", async () => {
   const updateIsolation = showRuntime("host", true);
-  fireEvent.click(await screen.findByRole("button", { name: "Process isolation" }));
-  expect(screen.getByRole("status").textContent).toContain("External native Providers use the Runtime user's full host process authority");
-  fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+  const heading = await screen.findByText("Process isolation");
+  const panel = heading.closest('[data-slot="card"]') as HTMLElement;
+  expect(within(panel).getByRole("status").textContent).toContain("External native Providers use the Runtime user's full host process authority");
+  fireEvent.click(within(panel).getByRole("button", { name: "Edit" }));
   expect(screen.queryByLabelText("I trust the installed external native plugins and accept unrestricted Host process access.")).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "Save isolation" }));
   await waitFor(() => expect(updateIsolation).toHaveBeenCalledTimes(1));

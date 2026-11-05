@@ -25,8 +25,8 @@ function makeClient(overrides:Record<string,unknown>={}):ManagementClient {
  } as unknown as ManagementClient;
 }
 async function openBudget() {
- fireEvent.click(await screen.findByRole("button",{name:"Runtime budget"}));
- fireEvent.click(screen.getByRole("button",{name:"Edit"}));
+ const heading = await screen.findByText("Runtime budget");
+ fireEvent.click(within(heading.closest('[data-slot="card"]') as HTMLElement).getByRole("button",{name:"Edit"}));
  return screen.getByRole("dialog",{name:"Runtime budget"});
 }
 beforeEach(()=>{resetLocaleForTesting();setLocale("en");});
@@ -95,8 +95,8 @@ describe("Runtime budget dialog form",()=>{
  it("shows isolation save errors within its pinned dialog rather than behind the overlay",async()=>{
   const updateIsolation=vi.fn().mockRejectedValue(new Error("Isolation update denied"));
   render(<RuntimePage client={makeClient({updateRuntimeIsolation:updateIsolation})}/>);
-  fireEvent.click(await screen.findByRole("button",{name:"Process isolation"}));
-  fireEvent.click(screen.getByRole("button",{name:"Edit"}));
+  const heading = await screen.findByText("Process isolation");
+  fireEvent.click(within(heading.closest('[data-slot="card"]') as HTMLElement).getByRole("button",{name:"Edit"}));
   const dialog=screen.getByRole("dialog",{name:"Process isolation"});
   expect(dialog.className).toContain("grid-rows-[auto_minmax(0,1fr)_auto]");
   expect(dialog.querySelector('[data-slot="dialog-body"]')).not.toBeNull();

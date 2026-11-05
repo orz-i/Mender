@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
+import { ArrowRightIcon, ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import { useLocation, useNavigate, useParams } from "react-router";
 
 import type { MCPServerInstance, ManagementClient, Profile, Provider, SkillInstallation, ToolSummary } from "@mender/sdk";
@@ -155,12 +155,16 @@ function ProfileDetailContent({ client, slug }: { client: ManagementClient; slug
       {profile ? (
         <DataPanel title={section === "overview" ? profile.displayName : section === "tools" ? "Tools" : section === "skills" ? "Skills" : "Deliveries"} description={section === "overview" ? profile.slug : undefined}>
           {section === "overview" ? (
+            <>
             <dl className="grid gap-x-8 gap-y-6 p-5 sm:grid-cols-2">
               <Metadata name={t("Slug")} value={profile.slug} />
               <Metadata name={t("Display name")} value={profile.displayName} />
               <Metadata name={t("Tools")} value={tCount(profile.tools.length, "{{count}} selected Tool", "{{count}} selected Tools")} />
               <Metadata name={t("Skills")} value={String(profile.skills?.length ?? 0)} />
             </dl>
+            <ProfileSupplyPath profile={profile} sources={sourceGroups}
+              onManageDelivery={() => setSection("deliveries")} />
+            </>
           ) : section === "skills" ? (
             <div className="flex flex-col gap-4 p-5">
               <div className="flex flex-wrap items-center justify-between gap-3">
@@ -346,4 +350,62 @@ function Metadata({ name, value }: { name: string; value: string }) {
     <dt className="mb-1 text-xs text-muted-foreground">{name}</dt>
     <dd className="break-words text-sm font-medium">{value}</dd>
   </div>;
+}
+
+
+/**
+ * The relation is factual: selected source bindings -> this Profile -> ways
+ * to configure delivery. Delivery entries intentionally make no claim about
+ * running endpoints or existing Agent grants.
+ */
+function ProfileSupplyPath({
+  profile,
+  sources,
+  onManageDelivery,
+}: {
+  profile: Profile;
+  sources: ReadonlyArray<{ id: string; count: number; label: string }>;
+  onManageDelivery: () => void;
+}) {
+  return (
+    <section aria-label={t("Supply path")} className="border-t border-border px-4 py-4 sm:px-5">
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <h3 className="text-[12px] font-semibold tracking-[0.04em] text-muted-foreground uppercase">{t("Supply path")}</h3>
+        <span className="text-[11px] text-muted-foreground">{t("Selected resources, not active connections.")}</span>
+      </div>
+      <div className="grid min-w-0 items-stretch gap-2 lg:grid-cols-[minmax(0,1fr)_20px_minmax(0,1fr)_20px_minmax(0,1fr)] lg:gap-3">
+        <div className="min-w-0 rounded-xl border border-border bg-background/50 px-3.5 py-3">
+          <p className="mb-2 text-[11px] font-medium text-muted-foreground">{t("Tool sources")}</p>
+          {sources.length ? sources.slice(0, 4).map((source) => (
+            <div key={source.id} className="flex items-center justify-between gap-2 border-t border-border/70 py-2 first:border-t-0">
+              <p className="min-w-0 truncate text-[12px] font-medium" title={source.label}>{source.label}</p>
+              <span className="shrink-0 font-mono text-[11px] text-muted-foreground">{source.count}</span>
+            </div>
+          )) : <p className="py-2 text-[12px] text-muted-foreground">{t("No tools selected")}</p>}
+          {sources.length > 4 ? <p className="text-[11px] text-muted-foreground">{t("More sources selected")}: +{sources.length - 4}</p> : null}
+        </div>
+        <ArrowRightIcon aria-hidden="true" className="hidden size-4 self-center justify-self-center text-muted-foreground lg:block" />
+        <div className="flex min-w-0 flex-col items-center justify-center rounded-xl border border-primary/25 bg-accent/45 px-3.5 py-5 text-center">
+          <p className="text-[10px] font-medium tracking-wider text-primary-ink uppercase">{t("Profile")}</p>
+          <p className="mt-2 max-w-full truncate text-[15px] font-semibold" title={profile.displayName}>{profile.displayName}</p>
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            {t("{{count}} tools in this Profile", { count: profile.tools.length })}
+            {" · "}
+            {t("{{count}} Skills", { count: profile.skills?.length ?? 0 })}
+          </p>
+        </div>
+        <ArrowRightIcon aria-hidden="true" className="hidden size-4 self-center justify-self-center text-muted-foreground lg:block" />
+        <div className="min-w-0 rounded-xl border border-border bg-background/50 px-3.5 py-3">
+          <p className="mb-2 text-[11px] font-medium text-muted-foreground">{t("Delivery methods")}</p>
+          {(["MCP", "Agent Skills", "Local CLI"] as const).map((method) => (
+            <button key={method} type="button" onClick={onManageDelivery}
+              className="flex w-full items-center justify-between gap-2 border-t border-border/70 py-2 text-left text-[12px] font-medium hover:text-primary-ink focus-visible:outline-2 focus-visible:outline-ring first:border-t-0">
+              {t(method)}
+              <ChevronRightIcon className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+            </button>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
 }
