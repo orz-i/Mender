@@ -18,6 +18,20 @@ func writeArchitectureFixture(t *testing.T, root, file, source string) {
 	}
 }
 
+func TestArchitectureRejectsWorkspacePresentationAndLegacyPorts(t *testing.T) {
+	root := t.TempDir()
+	writeArchitectureFixture(t, root, "backend/internal/workspace/application/json.go", "package application\nimport _ \"encoding/json\"\n")
+	writeArchitectureFixture(t, root, "backend/internal/workspace/domain/outcome.go", "package domain\nimport _ \"github.com/orz-i/Mender/backend/internal/invocation/domain\"\n")
+	writeArchitectureFixture(t, root, "backend/internal/sandbox/infrastructure/localworkspace/work.go", "package localworkspace\nimport inv \"github.com/orz-i/Mender/backend/internal/invocation/domain\"\nfunc ExecuteWorkspace() {}\n")
+	writeArchitectureFixture(t, root, "backend/internal/sandbox/application/old.go", "package application\ntype WorkspaceSession interface{}\n")
+	writeArchitectureFixture(t, root, "backend/internal/sandbox/infrastructure/external/workspace.go", "package external\nimport _ \"github.com/orz-i/Mender/backend/internal/invocation/domain\"\n")
+	writeArchitectureFixture(t, root, "backend/internal/sandbox/infrastructure/external/configuration.go", "package external\nimport _ \"github.com/orz-i/Mender/backend/internal/invocation/infrastructure/jsonschema\"\n")
+	violations, err := checkArchitecture(root, nil)
+	if err != nil || len(violations) != 6 {
+		t.Fatalf("typed Workspace boundary: %v %v", violations, err)
+	}
+}
+
 func TestArchitectureChecksPlatformFilesAndIgnoresTestFixtures(t *testing.T) {
 	root := t.TempDir()
 	writeArchitectureFixture(t, root, "backend/internal/example/application/leak_darwin.go", "package application\nimport _ \"database/sql\"\n")

@@ -107,6 +107,7 @@ func checkArchitecture(root string, exceptions []architectureException) ([]strin
 			violations = append(violations, fmt.Sprintf("%s:%d: %s imports %s", relative, fset.Position(spec.Pos()).Line, reason, imported))
 		}
 		violations = append(violations, filepathMechanismViolations(relative, file, fset)...)
+		violations = append(violations, workspaceLegacyViolations(relative, file, fset)...)
 		return nil
 	})
 	if err != nil {
@@ -164,6 +165,22 @@ func filepathMechanismViolations(path string, file *ast.File, fset *token.FileSe
 }
 
 func forbiddenDependency(file, imported string) string {
+	if strings.HasPrefix(file, "backend/internal/workspace/domain/") || strings.HasPrefix(file, "backend/internal/workspace/application/") {
+		if imported == "encoding/json" || strings.HasPrefix(imported, internalPrefix+"invocation/") || strings.HasPrefix(imported, internalPrefix+"sandbox/") {
+			return "Workspace typed boundary"
+		}
+	}
+	if workspaceDriver(file) && (strings.HasPrefix(imported, internalPrefix+"invocation/domain") || strings.HasPrefix(imported, internalPrefix+"invocation/infrastructure/")) {
+		// External configuration validation still reuses the existing JSON Schema
+		// validator; the typed Workspace codec is checked independently.
+		if file != "backend/internal/sandbox/infrastructure/external/configuration.go" {
+			return "Workspace driver presentation boundary"
+		}
+	}
+	if strings.HasPrefix(file, "backend/internal/sandbox/application/") &&
+		(strings.HasPrefix(imported, internalPrefix+"workspace/") || strings.HasPrefix(imported, internalPrefix+"invocation/")) {
+		return "Sandbox lifetime boundary"
+	}
 	parts := strings.Split(file, "/")
 	domain := slices.Contains(parts, "domain")
 	application := slices.Contains(parts, "application")
@@ -199,4 +216,34 @@ func forbiddenDependency(file, imported string) string {
 		return "Provider runtime reverse edge"
 	}
 	return ""
+}
+
+func workspaceDriver(file string) bool {
+	for _, backend := range []string{"localworkspace", "dockerengine", "daytona", "sshremote", "external"} {
+		if strings.HasPrefix(file, "backend/internal/sandbox/infrastructure/"+backend+"/") {
+			return true
+		}
+	}
+	return false
+}
+
+func workspaceLegacyViolations(path string, file *ast.File, fset *token.FileSet) []string {
+	if !workspaceDriver(path) && !strings.HasPrefix(path, "backend/internal/sandbox/application/") {
+		return nil
+	}
+	var violations []string
+	ast.Inspect(file, func(node ast.Node) bool {
+		switch value := node.(type) {
+		case *ast.FuncDecl:
+			if value.Name.Name == "ExecuteWorkspace" {
+				violations = append(violations, fmt.Sprintf("%s:%d: legacy JSON Workspace execution method", path, fset.Position(value.Pos()).Line))
+			}
+		case *ast.TypeSpec:
+			if value.Name.Name == "WorkspaceSession" {
+				violations = append(violations, fmt.Sprintf("%s:%d: legacy JSON Workspace session port", path, fset.Position(value.Pos()).Line))
+			}
+		}
+		return true
+	})
+	return violations
 }
