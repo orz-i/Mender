@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router";
+import { Link, useNavigate } from "react-router";
 
 import type { Agent, ManagementClient } from "@mender/sdk";
 import { Button } from "@mender/ui/components/button";
@@ -86,14 +86,13 @@ export function AgentsPage({ client }: { client: ManagementClient }) {
             <TableHead>{t("Isolation")}</TableHead>
             <TableHead>{t("Status")}</TableHead>
             <TableHead>{t("Workspace")}</TableHead>
-            <TableHead className="text-right">{t("Actions")}</TableHead>
           </TableRow></TableHeader>
           <TableBody className="max-md:block">{pagination.items.map(a=><TableRow
             key={a.agentId}
             className="md:[&>td]:py-3 max-md:grid max-md:grid-cols-[minmax(0,1fr)_auto] max-md:items-start max-md:gap-x-3 max-md:gap-y-1.5 max-md:px-4 max-md:py-3.5 max-md:border-b max-md:last:border-b-0"
           >
             <TableCell className="font-medium max-md:col-start-1 max-md:row-start-1 max-md:block max-md:min-w-0 max-md:p-0 md:max-w-[200px] md:truncate">
-              <span className="block truncate font-medium text-sm text-foreground" title={a.name}>{a.name}</span>
+              <Link to={"/agents/" + a.agentId} className="block truncate rounded-sm font-medium text-sm text-foreground hover:text-primary-ink hover:underline focus-visible:outline-2 focus-visible:outline-ring" title={a.name}>{a.name}</Link>
             </TableCell>
             <TableCell className="max-md:col-start-1 max-md:row-start-2 max-md:block max-md:min-w-0 max-md:p-0">
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -115,10 +114,6 @@ export function AgentsPage({ client }: { client: ManagementClient }) {
               <span className="block truncate font-mono text-xs text-muted-foreground">
                 {workspacePreview(a.workspaceRoot)}
               </span>
-            </TableCell>
-            <TableCell className="text-right max-md:col-start-2 max-md:row-start-2 max-md:row-span-2 max-md:block max-md:self-center max-md:p-0 max-md:justify-self-end">
-              <Button size="sm" variant="outline" className="max-md:h-8 max-md:px-3 max-md:text-xs"
-                onClick={()=>void navigate("/agents/"+a.agentId)}>{t("View")}</Button>
             </TableCell>
           </TableRow>)}</TableBody>
         </Table>

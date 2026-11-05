@@ -78,7 +78,6 @@ export function ProfilesPage({ client }: { client: ManagementClient }) {
               <TableRow>
                 <TableHead>{t("Profile")}</TableHead>
                 <TableHead>{t("Tools")}</TableHead>
-                <TableHead className="text-right">{t("Actions")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -92,11 +91,6 @@ export function ProfilesPage({ client }: { client: ManagementClient }) {
                     <div className="mt-1 text-xs text-muted-foreground">{profile.slug}</div>
                   </TableCell>
                   <TableCell>{formatNumber(profile.tools.length)}</TableCell>
-                  <TableCell className="text-right">
-                    <Button size="sm" variant="outline" onClick={() => void navigate("/profiles/" + encodeURIComponent(profile.slug))}>
-                      {t("View details")}
-                    </Button>
-                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>

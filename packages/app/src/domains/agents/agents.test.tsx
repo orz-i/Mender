@@ -92,7 +92,7 @@ describe("Agents focused management",()=>{
     expect(screen.queryByRole("row", { name: /Windows Agent/ })).toBeNull();
 
     fireEvent.click(within(screen.getByRole("row", { name: /Mac Agent/ }))
-      .getByRole("button", { name: "View" }));
+      .getByRole("link", { name: "Mac Agent" }));
     expect(await screen.findByText("/Users/mini/Coding/Mender")).toBeTruthy();
   });
 
@@ -132,7 +132,7 @@ describe("Agents focused management",()=>{
       expect(within(row).getByText(label)).toBeTruthy();
     }
     const openCodeRow=screen.getByRole("row",{name:/OpenCode Instance/});
-    fireEvent.click(within(openCodeRow).getByRole("button",{name:"View"}));
+    fireEvent.click(within(openCodeRow).getByRole("link",{name:"OpenCode Instance"}));
     expect(await screen.findByText("OpenCode Instance")).toBeTruthy();
     expect(screen.getByText("OpenCode")).toBeTruthy();
     expect(screen.queryByText("Grok")).toBeNull();
@@ -292,7 +292,7 @@ describe("Agents focused management",()=>{
       listProfiles:vi.fn().mockResolvedValue({profiles:[profile]}),
     });
     expect(await screen.findByText("codex-acp adapter not installed")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button",{name:"View Agent tools"}));
+    fireEvent.click(screen.getByRole("button",{name:"Tools"}));
     expect(await screen.findByText("Code Reviewer · delegate")).toBeTruthy();
     expect(client.ensureAgentTools).not.toHaveBeenCalled();
     expect(screen.queryByText("fixture reviewed")).toBeNull();
@@ -565,9 +565,9 @@ describe("Agents focused management",()=>{
     expect(within(table).getByText("/tmp/autonomous-coder-workspace")).toBeTruthy();
 
     // Details navigation entrypoint is accessible and functional
-    const viewButtons = within(table).getAllByRole("button", { name: "View" });
-    expect(viewButtons.length).toBe(2);
-    fireEvent.click(viewButtons[1]!);
+    const destinations = within(table).getAllByRole("link");
+    expect(destinations.length).toBe(2);
+    fireEvent.click(within(table).getByRole("link", { name: "Autonomous Coder" }));
     expect(await screen.findByText("Autonomous Coder")).toBeTruthy();
     expect(getAgent).toHaveBeenCalledWith(readyAgent.agentId);
   });
