@@ -26,10 +26,15 @@
 - 首屏信息负载：不得只有统计条 + 一大片未说明的空白。无记录状态给出简短事实、配置入口或用户下一步动作。
 
 ## 实施步骤
-- [ ] 1. 硬切单行全局导航和 Settings，移除侧栏布局状态，不留历史桥接。
-- [ ] 2. 重建 Agent 资源行与插件发现方式，避免管理后台表格/卡片复制。
-- [ ] 3. Runtime 同页信息架构，审计活动数据呈现；保持权限表单。
-- [ ] 4. Wails 真实窗口截图 + 390px/1280px 交互、全测试、i18n、build；分段提交。
+- [x] 1. 硬切单行全局导航和 Settings，移除侧栏布局状态，不留历史桥接。
+- [x] 2. 重建 Agent、Tool Source、Profile、Sandbox、Skill 资源行与插件发现方式，避免管理后台表格/卡片复制。
+- [x] 3. Runtime 同页信息架构，审计活动数据呈现，以及 Profile 供应路径；保持权限表单。
+- [ ] 4. 390px/1480px 浏览器交互、全测试、i18n、前端 build 已完成；真实 Wails 窗口当前处于 macOS 锁屏，原生截图与业务交互待复验。
 - [ ] 5. 仅在真实 Wails 视觉复核后宣布达标；不因 Vitest 通过而单独宣称设计通过。
 
 本轮不修改后端、数据 schema、Agent Loop/ACP、插件契约或持久数据。现有 11 个未推送历史提交暂不 push。
+
+
+## 验收证据与限制
+
+完整浏览器截图、自动化结果和锁屏导致的 Wails 实机阻断记录见 [`docs/design/magpie-native-ux-qa/README.md`](../design/magpie-native-ux-qa/README.md)。
