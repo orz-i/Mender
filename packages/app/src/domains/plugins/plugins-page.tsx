@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  ArrowLeftIcon,
   BlocksIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -35,6 +34,8 @@ import { EmptyState, ErrorNotice } from "../../shared/page";
 import { FocusSwitch } from "../../shared/focus-switch";
 import { PageToolbar, ResultPanel } from "../../shared/page-toolbar";
 import { FilterPopover, FilterSelectField } from "../../shared/filter-popover";
+import { DetailWorkspace } from "../../shared/detail-workspace";
+import { usePageHeading } from "../../shell/page-chrome";
 import {
   DataPanel,
   EmptyPanelState,
@@ -298,8 +299,6 @@ export function PluginDetailPage({ client }: { client: ManagementClient }) {
   useLocale();
   const navigate = useNavigate();
   const location = useLocation();
-  const [searchParams] = useSearchParams();
-  const backPath=searchParams.get("view")==="installed"?"/plugins?view=installed":"/plugins";
   const { pluginKey = "" } = useParams();
   const { plugins, loaded, hasSnapshot, error, setError, refresh } =
     useMarketplacePlugins(client);
@@ -307,6 +306,7 @@ export function PluginDetailPage({ client }: { client: ManagementClient }) {
   const [removeTarget,setRemoveTarget]=useState<MarketplacePlugin|null>(null);
   const [section, setSection] = useState<"overview" | "capabilities" | "technical">("overview");
   const plugin = plugins.find((item) => item.key === pluginKey) ?? null;
+  usePageHeading(plugin?.displayName);
   const createAction = plugin?.createAction;
   async function setEnabled(
     current: MarketplacePlugin,
@@ -342,29 +342,8 @@ export function PluginDetailPage({ client }: { client: ManagementClient }) {
   return (
     <>
       <PageToolbar
-        tabs={plugin ? (
-          <FocusSwitch
-            label="Plugin details"
-            value={section}
-            onChange={setSection}
-            items={[
-              { value: "overview", label: "Overview" },
-              { value: "capabilities", label: "Capabilities" },
-              { value: "technical", label: "Technical details" },
-            ]}
-          />
-        ) : undefined}
         actions={
           <div className="flex flex-wrap items-center justify-end gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => void navigate(backPath)}
-            >
-              <ArrowLeftIcon data-icon="inline-start" />
-              {t("Back")}
-            </Button>
             {createAction !== undefined ? (
               <Button
                 type="button"
@@ -447,6 +426,12 @@ export function PluginDetailPage({ client }: { client: ManagementClient }) {
         </DialogContent>
       </Dialog>
 
+      <DetailWorkspace<"overview" | "capabilities" | "technical"> label="Plugin details"
+        sections={plugin ? [
+          { value: "overview", label: "Overview" },
+          { value: "capabilities", label: "Capabilities" },
+          { value: "technical", label: "Technical details" },
+        ] : []} active={section} onChange={setSection}>
       {error ? <ErrorNotice message={error} onRetry={!hasSnapshot ? () => { void refresh(); } : undefined} /> : null}
 
       {error && !hasSnapshot ? null : !loaded ? (
@@ -541,6 +526,7 @@ export function PluginDetailPage({ client }: { client: ManagementClient }) {
           )}
         </div>
       )}
+      </DetailWorkspace>
     </>
   );
 }

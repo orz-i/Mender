@@ -11,16 +11,18 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { formatDateTime, t } from "../../i18n/i18n";
 import { errorMessage } from "../../shared/errors";
 import { ErrorNotice, EmptyState } from "../../shared/page";
-import { PageTab, PageTabs, PageToolbar, ResultPanel } from "../../shared/page-toolbar";
+import { PageToolbar, ResultPanel } from "../../shared/page-toolbar";
 import { usePagination } from "../../shared/pagination";
 import { TablePagination } from "../../shared/table-pagination";
 import { StatusBadge } from "../../shared/status-badge";
 import { EmptyPanelState } from "../../shared/workbench";
+import { DetailWorkspace } from "../../shared/detail-workspace";
 import { Input } from "@mender/ui/components/input";
 import { AgentWorkspaceSettings } from "./agent-workspaces";
 import { agentBackendLabel } from "./agent-backends";
 import { AgentTaskApprovals } from "./agent-approvals";
 import { AgentToolExecutionSettings } from "./agent-tool-execution";
+import { usePageHeading } from "../../shell/page-chrome";
 
 function taskStatusText(value:AgentTask["status"]):string{
   switch(value){
@@ -101,6 +103,7 @@ export function AgentDetailPage({ client, localOwner, chooseLocalDirectory }: {
   const {agentId}=useParams();
   const navigate=useNavigate();
   const [agent,setAgent]=useState<Agent|null>(null);
+  usePageHeading(agent?.name);
   const [tasks,setTasks]=useState<AgentTask[]>([]);
   const [tools,setTools]=useState<AgentTools|null>(null);
   const [activity,setActivity]=useState<AgentAdmissionEvent[]>([]);
@@ -229,21 +232,25 @@ export function AgentDetailPage({ client, localOwner, chooseLocalDirectory }: {
     }catch(reason){setError(errorMessage(reason));}
   }
   return <>
-    <PageToolbar
-      tabs={agent?<PageTabs label="Agent details">
-        <PageTab label="Overview" active={topic==="overview"} onClick={()=>setTopic("overview")}/>
-        <PageTab label="Workspaces" active={topic==="workspaces"} onClick={()=>setTopic("workspaces")}/>
-        {toolPlacements?<PageTab label="Governed tools" active={topic==="execution"} onClick={()=>setTopic("execution")}/>:null}
-        <PageTab label="Tools" count={tools?.tools.length??0} active={topic==="tools"} onClick={()=>setTopic("tools")}/>
-        <PageTab label="Tasks" count={tasks.length} active={topic==="tasks"} onClick={()=>setTopic("tasks")}/>
-        <PageTab label="Access" count={grants.length} active={topic==="access"} onClick={()=>setTopic("access")}/>
-        <PageTab label="Activity" active={topic==="activity"} onClick={()=>setTopic("activity")}/>
-      </PageTabs>:undefined}
-      actions={<>
-        <Button variant="outline" size="sm" onClick={()=>void navigate("/agents")}>{t("Back to agents")}</Button>
-        <Button variant="outline" size="sm" onClick={()=>setRevision(n=>n+1)}>{t("Refresh")}</Button>
-      </>}
-    />
+    <PageToolbar actions={
+      <Button variant="outline" size="sm" onClick={() => setRevision(n => n + 1)}>
+        {t("Refresh")}
+      </Button>
+    } />
+    <DetailWorkspace<Topic>
+      label="Agent details"
+      sections={agent ? [
+        { value: "overview", label: "Overview" },
+        { value: "workspaces", label: "Workspaces" },
+        ...(toolPlacements ? [{ value: "execution" as const, label: "Governed tools" }] : []),
+        { value: "tools", label: "Tools", count: tools?.tools.length ?? 0 },
+        { value: "tasks", label: "Tasks", count: tasks.length },
+        { value: "access", label: "Access", count: grants.length },
+        { value: "activity", label: "Activity" },
+      ] : []}
+      active={topic}
+      onChange={setTopic}
+    >
     {error?<ErrorNotice message={error}/>:null}
     {!loaded?<ResultPanel title="Agent details"><p className="p-6 text-sm text-muted-foreground">{t("Loading agents…")}</p></ResultPanel>:
     !agent?<ResultPanel title="Agent details"><EmptyPanelState><EmptyState title="No agents" description="This Agent could not be found."/></EmptyPanelState></ResultPanel>:
@@ -269,8 +276,6 @@ export function AgentDetailPage({ client, localOwner, chooseLocalDirectory }: {
         <p className="max-w-xl text-xs leading-5 text-muted-foreground">{t("Grant Profile access explicitly; this Agent will not run until invoked through an authorized Tool.")}</p>
         <div className="flex flex-wrap gap-2">
           <Button size="sm" variant="outline" onClick={editDefaultModel}>{t("Edit runtime defaults")}</Button>
-          <Button size="sm" variant="outline" onClick={()=>setTopic("workspaces")}>{t("Manage workspaces")}</Button>
-          <Button size="sm" onClick={()=>setTopic("tools")}>{t("View Agent tools")}</Button>
           <Button size="sm" variant="destructive" onClick={()=>setConfirm({kind:"delete",id:agent.agentId})}>{t("Delete agent")}</Button>
         </div>
       </div>
@@ -352,6 +357,8 @@ export function AgentDetailPage({ client, localOwner, chooseLocalDirectory }: {
         </div>)}</div>:
         <EmptyPanelState><EmptyState title="No Agent grants" description="Profiles have no access to this Agent until explicitly granted."/></EmptyPanelState>}
     </ResultPanel>}
+
+    </DetailWorkspace>
 
     <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
       <DialogContent><DialogHeader><DialogTitle>{t("Edit runtime defaults")}</DialogTitle>

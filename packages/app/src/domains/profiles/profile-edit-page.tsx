@@ -35,11 +35,12 @@ import { FormHeading } from "../../shared/form-info";
 import { ProfileToolSourcePicker } from "./profile-tool-source-picker";
 import { profileSourceLabels } from "./profile-source-label";
 import { EmptyState, ErrorNotice } from "../../shared/page";
-import { PageTab, PageTabs, PageToolbar } from "../../shared/page-toolbar";
+import { DetailWorkspace } from "../../shared/detail-workspace";
 import { usePagination } from "../../shared/pagination";
 import { TablePagination } from "../../shared/table-pagination";
 
 import { t, tCount } from "../../i18n/i18n";
+import { usePageHeading } from "../../shell/page-chrome";
 
 type ProfileToolBinding = Profile["tools"][number];
 
@@ -157,6 +158,7 @@ function ProfileEditor({ client, slug }: { client: ManagementClient; slug: strin
     () => profiles.find((profile) => profile.slug === manageSlug) ?? null,
     [profiles, manageSlug],
   );
+  usePageHeading(managedProfile?.displayName);
   const pickerProfile = useMemo(
     () => profiles.find((profile) => profile.slug === pickerSlug) ?? null,
     [profiles, pickerSlug],
@@ -617,30 +619,19 @@ function ProfileEditor({ client, slug }: { client: ManagementClient; slug: strin
 
   return (
     <>
-      <PageToolbar
-        tabs={managedProfile ? <span className="text-sm font-medium">{t("Edit profile")}</span> : undefined}
-        actions={<Button variant="outline" onClick={() => void navigate(slug ? "/profiles/" + encodeURIComponent(slug) : "/profiles")}>
-          {t("Back to profile")}
-        </Button>}
-      />
       {error && !pickerProfile ? <ErrorNotice message={error} onRetry={() => setRetryVersion((v) => v + 1)} /> : null}
       {!loaded ? <p className="text-sm text-muted-foreground">{t("Loading profiles…")}</p> : null}
       {loaded && hasSnapshot && !managedProfile && !pickerProfile ?
         <ErrorNotice message={t("The requested item was not found.")} /> : null}
       {managedProfile && !pickerProfile ? (
         <section data-slot="profile-editor" aria-label={t("Manage profile")} className="flex flex-col gap-5 rounded-xl border border-border bg-card p-5">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h2 className="text-base font-semibold">{managedProfile?.displayName ?? t("Manage profile")}</h2>
-            </div>
-            <PageTabs label="Manage Profile sections">
-              <PageTab label="Overview" active={manageView === "overview"}
-                onClick={() => setManageView("overview")} />
-              <PageTab label="Tools" count={managedProfile.tools.length}
-                active={manageView === "tools"} onClick={() => setManageView("tools")} />
-            </PageTabs>
-          </div>
-
+          <h2 className="min-w-0 truncate text-base font-semibold">{managedProfile.displayName || t("Manage profile")}</h2>
+          <DetailWorkspace<"overview" | "tools"> label="Manage Profile sections"
+            sections={[
+              { value: "overview", label: "Overview" },
+              { value: "tools", label: "Tools", count: managedProfile.tools.length },
+            ]}
+            active={manageView} onChange={setManageView}>
           {managedProfile !== null ? (
             <div className="flex flex-col gap-4">
               {manageView === "overview" ? (
@@ -843,7 +834,7 @@ function ProfileEditor({ client, slug }: { client: ManagementClient; slug: strin
               )}
             </div>
           ) : null}
-
+          </DetailWorkspace>
         </section>
       ) : null}
       <ProfileToolSourcePicker

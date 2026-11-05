@@ -8,12 +8,13 @@ import { Button } from "@mender/ui/components/button";
 
 import { t, tCount } from "../../i18n/i18n";
 import { errorMessage } from "../../shared/errors";
-import { FocusSwitch } from "../../shared/focus-switch";
 import { EmptyState, ErrorNotice } from "../../shared/page";
 import { PageToolbar } from "../../shared/page-toolbar";
+import { usePageHeading } from "../../shell/page-chrome";
 import { usePagination } from "../../shared/pagination";
 import { TablePagination } from "../../shared/table-pagination";
 import { DataPanel } from "../../shared/workbench";
+import { DetailWorkspace } from "../../shared/detail-workspace";
 import { profileSourceLabels } from "./profile-source-label";
 
 type Section = "overview" | "tools" | "skills" | "deliveries";
@@ -27,6 +28,7 @@ function ProfileDetailContent({ client, slug }: { client: ManagementClient; slug
   const navigate = useNavigate();
   const location = useLocation();
   const [profile, setProfile] = useState<Profile | null>(null);
+  usePageHeading(profile?.displayName);
   const [providers, setProviders] = useState<Provider[]>([]);
   const [tools, setTools] = useState<ToolSummary[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -130,24 +132,28 @@ function ProfileDetailContent({ client, slug }: { client: ManagementClient; slug
 
   return (
     <>
-      <PageToolbar
-        tabs={profile ? <FocusSwitch label="Profile sections" value={section}
-          onChange={(next) => { setSection(next); setSourceId(""); if (next === "deliveries") setDeliveriesLoaded(false); sourcePagination.reset(); toolPagination.reset(); }}
-          items={[{ value: "overview", label: "Overview" }, { value: "tools", label: "Tools" }, { value: "skills", label: "Skills" }, { value: "deliveries", label: "Deliveries" }]}  /> : undefined}
-        actions={<>
-          <Button variant="outline" onClick={() => void navigate("/profiles")}>{t("Back to profiles")}</Button>
-          {profile ? <Button onClick={() => void navigate("/profiles/" + encodeURIComponent(profile.slug) + "/edit", {
-            state: { initialSection: section },
-          })}>
-            {t("Edit profile")}
-          </Button> : null}
-        </>}
-      />
+      <PageToolbar actions={profile ? <Button onClick={() => void navigate("/profiles/" +
+        encodeURIComponent(profile.slug) + "/edit", { state: { initialSection: section } })}>
+        {t("Edit profile")}
+      </Button> : undefined} />
+      <DetailWorkspace<Section> label="Profile sections" sections={profile ? [
+        { value: "overview", label: "Overview" },
+        { value: "tools", label: "Tools", count: profile.tools.length },
+        { value: "skills", label: "Skills", count: profile.skills?.length ?? 0 },
+        { value: "deliveries", label: "Deliveries" },
+      ] : []} active={section}
+        onChange={(next) => {
+          setSection(next);
+          setSourceId("");
+          if (next === "deliveries") setDeliveriesLoaded(false);
+          sourcePagination.reset();
+          toolPagination.reset();
+        }}>
       {error || !slug ? <ErrorNotice message={error || t("The requested item was not found.")}
         onRetry={slug ? () => setVersion((v) => v + 1) : undefined} /> : null}
       {!loaded ? <p className="text-sm text-muted-foreground">{t("Loading profiles…")}</p> : null}
       {profile ? (
-        <DataPanel title={profile.displayName} description={profile.slug}>
+        <DataPanel title={section === "overview" ? profile.displayName : section === "tools" ? "Tools" : section === "skills" ? "Skills" : "Deliveries"} description={section === "overview" ? profile.slug : undefined}>
           {section === "overview" ? (
             <dl className="grid gap-x-8 gap-y-6 p-5 sm:grid-cols-2">
               <Metadata name={t("Slug")} value={profile.slug} />
@@ -312,6 +318,7 @@ function ProfileDetailContent({ client, slug }: { client: ManagementClient; slug
           )}
         </DataPanel>
       ) : null}
+      </DetailWorkspace>
     </>
   );
 }

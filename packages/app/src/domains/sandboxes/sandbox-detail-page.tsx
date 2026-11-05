@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { ActivityIcon, ShieldCheckIcon } from "lucide-react";
 import { useNavigate, useParams } from "react-router";
+import { usePageHeading } from "../../shell/page-chrome";
 
 import { MenderApiError, type ManagementClient, type Sandbox } from "@mender/sdk";
 import { Button } from "@mender/ui/components/button";
@@ -16,10 +17,10 @@ import {
 
 import { t } from "../../i18n/i18n";
 import { errorMessage } from "../../shared/errors";
-import { FocusSwitch } from "../../shared/focus-switch";
 import { ErrorNotice } from "../../shared/page";
 import { PageToolbar } from "../../shared/page-toolbar";
 import { DataPanel } from "../../shared/workbench";
+import { DetailWorkspace } from "../../shared/detail-workspace";
 import { isolationLabel, sandboxBackend, sandboxStateLabel } from "./sandbox-display";
 import { SandboxMetadata } from "./sandbox-metadata";
 import { SandboxAccessPanel } from "./sandbox-access-panel";
@@ -32,6 +33,7 @@ export function SandboxDetailPage({ client }: { client: ManagementClient }) {
   const { sandboxId } = useParams();
   const navigate = useNavigate();
   const [item, setItem] = useState<Sandbox | null>(null);
+  usePageHeading(item?.name);
   const [error, setError] = useState("");
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -130,38 +132,23 @@ export function SandboxDetailPage({ client }: { client: ManagementClient }) {
 
   return (
     <>
-      <PageToolbar
-        tabs={item ? (
-          <FocusSwitch
-            label="Sandbox overview"
-            value={topic}
-            onChange={setTopic}
-            items={[
-              { value: "overview", label: "Sandbox overview" },
-              { value: "security", label: "Security boundary" },
-              { value: "access", label: "Profile access" },
-              { value: "tools", label: "Tools" },
-            ]}
-          />
-        ) : undefined}
-        actions={
-          <div className="flex flex-wrap justify-end gap-2">
-            <Button variant="outline" onClick={() => void navigate("/sandboxes")}>
-              {t("Back to sandboxes")}
+      <PageToolbar actions={
+        <div className="flex flex-wrap justify-end gap-2">
+          {item ? (
+            <Button variant="outline" size="sm" onClick={() => void navigate("/sandboxes/" + item.sandboxId + "/activity")}>
+              <ActivityIcon data-icon="inline-start" />
+              {t("Activity")}
             </Button>
-            {item ? (
-              <Button variant="outline" onClick={() => void navigate(`/sandboxes/${item.sandboxId}/activity`)}>
-                <ActivityIcon data-icon="inline-start" />
-                {t("Activity")}
-              </Button>
-            ) : null}
-            {hasActions ? (
-              <Button onClick={() => setManageOpen(true)}>{t("Manage sandbox")}</Button>
-            ) : null}
-          </div>
-        }
-      />
-
+          ) : null}
+          {hasActions ? <Button size="sm" onClick={() => setManageOpen(true)}>{t("Manage sandbox")}</Button> : null}
+        </div>
+      } />
+      <DetailWorkspace<DetailTopic> label="Sandbox overview" sections={item ? [
+        { value: "overview", label: "Sandbox overview" },
+        { value: "security", label: "Security boundary" },
+        { value: "access", label: "Profile access" },
+        { value: "tools", label: "Tools" },
+      ] : []} active={topic} onChange={setTopic}>
       {(error && !manageOpen) || !sandboxId
         ? <ErrorNotice message={error || t("The requested item was not found.")} />
         : null}
@@ -231,6 +218,7 @@ export function SandboxDetailPage({ client }: { client: ManagementClient }) {
             )}
           </div>
         ) : null}
+      </DetailWorkspace>
 
       <Dialog open={manageOpen && hasActions} onOpenChange={(open) => {
         if (!busy) {
