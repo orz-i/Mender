@@ -51,7 +51,8 @@ describe("PluginsPage card density", () => {
 
     const cardLink = await screen.findByRole("link", { name: "View Example Search" });
     expect(screen.queryByRole("navigation", { name: "Plugin Marketplace pagination" })).toBeNull();
-    expect(within(cardLink).getAllByText("Provider plugin").length).toBe(1);
+    expect(screen.getByRole("region", { name: "Provider plugin" })).toBeTruthy();
+    expect(within(cardLink).queryByText("Provider plugin")).toBeNull();
     expect(within(cardLink).queryByText("tool.search")).toBeNull();
     expect(within(cardLink).queryByText("2.1.0")).toBeNull();
     fireEvent.click(cardLink);

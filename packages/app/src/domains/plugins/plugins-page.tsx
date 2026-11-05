@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   BlocksIcon,
+  BotIcon,
+  BoxIcon,
+  CableIcon,
+  CheckIcon,
+  PlugIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
   PackagePlusIcon,
@@ -19,12 +24,6 @@ import {
   DialogTitle,
 } from "@mender/ui/components/dialog";
 import { Button } from "@mender/ui/components/button";
-import {
-  Card,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@mender/ui/components/card";
 
 import { formatDateTime, formatNumber, t, useLocale } from "../../i18n/i18n";
 import { errorMessage } from "../../shared/errors";
@@ -139,6 +138,20 @@ export function PluginsPage({
       ),
     [cursor, visiblePlugins],
   );
+
+  const groupedPage = useMemo(() => {
+    const order = ["integration", "provider", "agent", "sandbox", "tunnel"];
+    const groups = new Map<string, { label: string; items: MarketplacePlugin[] }>();
+    for (const item of page.items) {
+      const entry = groups.get(item.kind);
+      if (entry) entry.items.push(item);
+      else groups.set(item.kind, { label: pluginKindLabel(item), items: [item] });
+    }
+    return [...groups].sort(([a], [b]) => {
+      const ia = order.indexOf(a), ib = order.indexOf(b);
+      return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+    }).map(([kind, entry]) => ({ kind, ...entry }));
+  }, [page.items]);
 
   async function installPlugin(installer: MarketplaceInstaller) {
     setBusy("install:" + installer.key);
@@ -255,12 +268,22 @@ export function PluginsPage({
             {t("Loading plugins…")}
           </div>
         ) : visiblePlugins.length ? (
-          <div className="w-full">
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {page.items.map((plugin) => (
-                <PluginCard key={plugin.key} plugin={plugin} view={view} />
-              ))}
-            </div>
+          <div className="w-full space-y-6">
+            {groupedPage.map((group) => (
+              <section key={group.kind} aria-label={group.label}>
+                <div className="mb-2 flex items-center gap-2 px-1">
+                  <h2 className="text-[11px] font-semibold tracking-[0.06em] text-muted-foreground uppercase">
+                    {group.label}
+                  </h2>
+                  <span className="text-[11px] tabular-nums text-muted-foreground/65">{group.items.length}</span>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+                  {group.items.map((plugin) => (
+                    <PluginCard key={plugin.key} plugin={plugin} view={view} />
+                  ))}
+                </div>
+              </section>
+            ))}
           </div>
         ) : (
           <EmptyPanelState>
@@ -603,35 +626,35 @@ function useMarketplacePlugins(client: ManagementClient) {
 }
 
 function PluginCard({ plugin,view }: { plugin: MarketplacePlugin; view:"discover"|"installed" }) {
+  const Icon = plugin.kind === "agent" ? BotIcon :
+    plugin.kind === "sandbox" ? BoxIcon :
+    plugin.kind === "tunnel" ? CableIcon :
+    plugin.kind === "integration" ? PlugIcon : BlocksIcon;
+  const unavailable = ["invalid", "unavailable", "degraded"].includes(plugin.status);
   return (
     <Link
       to={`/plugins/${encodeURIComponent(plugin.key)}?view=${view}`}
-      aria-label={t("View {{plugin}}", {
-        plugin: plugin.displayName,
-      })}
-      className="group block rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+      aria-label={t("View {{plugin}}", { plugin: plugin.displayName })}
+      className={[
+        "group flex min-h-[76px] min-w-0 items-center gap-3 rounded-xl border bg-card px-3.5 py-3 text-left",
+        "transition-[border-color,background-color,box-shadow] outline-none hover:border-primary/40 hover:bg-card hover:shadow-sm focus-visible:ring-2 focus-visible:ring-ring/40",
+        unavailable ? "border-border/75" : "border-border",
+      ].join(" ")}
     >
-      <Card className="h-full border-border transition-[background-color,border-color] duration-150 group-hover:border-primary/30 group-hover:bg-muted/30">
-        <CardHeader className="gap-2">
-          <div className="flex min-w-0 items-start gap-2.5">
-            <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-secondary text-muted-foreground">
-              <BlocksIcon className="size-4" aria-hidden="true" />
-            </span>
-            <div className="min-w-0 flex-1">
-              <CardTitle className="truncate text-sm" title={plugin.displayName}>
-                {plugin.displayName}
-              </CardTitle>
-              <p className="mt-1 text-xs text-muted-foreground">{pluginKindLabel(plugin)}</p>
-            </div>
-            <Badge variant={pluginStatusVariant(plugin.status)}>
-              {pluginStatusLabel(plugin)}
-            </Badge>
-          </div>
-          <CardDescription className="min-h-8 line-clamp-2 text-xs leading-4">
-            {marketplaceDescription(plugin) || t("No plugin description.")}
-          </CardDescription>
-        </CardHeader>
-      </Card>
+      <Icon className="size-[22px] shrink-0 text-muted-foreground" aria-hidden="true" />
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[13px] font-semibold text-foreground" title={plugin.displayName}>
+          {plugin.displayName}
+        </span>
+        <span className="mt-1 block truncate text-[11px] leading-4 text-muted-foreground" title={marketplaceDescription(plugin) || t("No plugin description.")}>
+          {marketplaceDescription(plugin) || t("No plugin description.")}
+        </span>
+      </span>
+      {plugin.status === "enabled" ? (
+        <CheckIcon className="size-3.5 shrink-0 text-teal" aria-label={t("Enabled")} />
+      ) : unavailable ? (
+        <span className="size-1.5 shrink-0 rounded-full bg-sunlight" title={pluginStatusLabel(plugin)} aria-label={pluginStatusLabel(plugin)} />
+      ) : null}
     </Link>
   );
 }
@@ -737,25 +760,6 @@ function pluginSourceLabel(plugin:MarketplacePlugin){
   }
 }
 
-function pluginStatusVariant(
-  status: MarketplacePluginStatus,
-): "default" | "secondary" | "destructive" | "outline" | "caution" {
-  switch (status) {
-    case "enabled":
-      return "default";
-    case "available":
-      return "outline";
-    case "disabled":
-      return "secondary";
-    case "invalid":
-      return "destructive";
-    case "degraded":
-    case "unavailable":
-      return "caution";
-    default:
-      return "secondary";
-  }
-}
 
 function pluginStatusLabel(plugin: MarketplacePlugin) {
   switch (plugin.status) {
