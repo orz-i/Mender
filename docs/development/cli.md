@@ -322,20 +322,16 @@ Create:
 ```bash
 mender profile create \
   --slug default \
-  --name "Default" \
-  --mode hybrid
+  --name "Default"
 ```
 
-Available modes:
-
-- `direct`
-- `dynamic`
-- `hybrid`
+Profile creation configures identity only. Tool/Skill membership and governance
+are independent from MCP delivery settings.
 
 Manage membership and optional ToolBinding governance:
 
 ```bash
-mender profile add-tool default tool_... --direct
+mender profile add-tool default tool_...
 
 mender profile add-tool default tool_... \
   --alias create_prod_issue \
@@ -348,7 +344,7 @@ mender profile add-tool default tool_... \
 mender profile remove-tool default tool_...
 ```
 
-ToolBinding policy accepts `inherit`, `require_approval`, or `deny`; it can only tighten the global Policy decision. Concurrency accepts `inherit` or `serial`, where `serial` applies only to that Profile + Tool binding. `--credential-ref` is an advanced metadata-only CLI path and may be repeated; the referenced Credential must already exist in inventory. Normal Web/Desktop management uses a selector instead of requiring raw Reference entry. Profile JSON always returns normalized binding fields. Existing clients that supply only ToolID/direct retain inherited defaults and an empty Credential allowlist.
+ToolBinding policy accepts `inherit`, `require_approval`, or `deny`; it can only tighten the global Policy decision. Concurrency accepts `inherit` or `serial`, where `serial` applies only to that Profile + Tool binding. `--credential-ref` is an advanced metadata-only CLI path and may be repeated; the referenced Credential must already exist in inventory. Normal Web/Desktop management uses a selector instead of requiring raw Reference entry. Profile JSON returns generic membership, presentation and governance fields; MCP mode, Tunnel and direct-export selection belong to delivery configuration.
 
 Inspect:
 
@@ -358,6 +354,24 @@ mender profile show default --output json
 ```
 
 ## MCP serving
+
+Configure MCP explicitly before serving. `--profile-revision` is the selection
+revision from `profile show`; omitting `--revision` creates only. To update,
+include the delivery revision returned by `mcp-delivery show` (including zero).
+Configuration does not start a Server/Tunnel or change Profile membership.
+
+```bash
+mender profile mcp-delivery show default --output json
+mender profile mcp-delivery configure default \
+  --mode hybrid --profile-revision 1 --direct-tool tool_...
+mender profile mcp-delivery configure default \
+  --mode dynamic --profile-revision 1 --revision 0
+```
+
+Modes are `direct` (all current members), `dynamic` (discovery meta-tools), and
+`hybrid` (meta-tools plus an explicit member subset). Use `--tunnel tun_...` to
+configure a Tunnel, or omit it when saving local-only configuration. A missing
+configuration is reported explicitly and is never created by reading it.
 
 Serve a persisted Profile over stdio:
 
