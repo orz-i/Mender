@@ -45,4 +45,54 @@ export default tseslint.config(
       "react-refresh/only-export-components": "off",
     },
   },
+  {
+    files: ["packages/sdk/src/client.ts", "packages/sdk/src/contracts/management-client.ts"],
+    rules: {
+      "no-restricted-imports": ["error", {
+        patterns: [{
+          regex: "(?:^|/)local-owner(?:\\.[jt]s)?$",
+          message: "The common management contract and HTTP adapter must not depend on local owner capabilities.",
+        }],
+      }],
+    },
+  },
+  {
+    files: ["packages/ui/src/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": ["error", {
+        patterns: [{
+          regex: "^@mender/(?:app|sdk)(?:/|$)|(?:^|/)(?:app|sdk)/src(?:/|$)",
+          message: "UI primitives must not depend on product features or management contracts.",
+        }],
+      }],
+    },
+  },
+  {
+    files: ["packages/app/src/shared/**/*.{ts,tsx}"],
+    ignores: ["**/*.test.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": ["error", {
+        patterns: [{
+          regex: "(?:^|/)(?:domains|shell)(?:/|$)|(?:^|/)mender-app(?:\\.[jt]sx?)?$",
+          message: "Shared code must not depend on features or app composition.",
+        }],
+      }],
+    },
+  },
+  {
+    files: ["packages/app/src/**/*.{ts,tsx}"],
+    ignores: [
+      "packages/app/src/domains/tools/**",
+      "packages/app/src/shared/**",
+      "**/*.test.{ts,tsx}",
+    ],
+    rules: {
+      "no-restricted-imports": ["error", {
+        patterns: [{
+          regex: "(?:^|/)tools/(?!index(?:\\.[jt]sx?)?$)",
+          message: "Use the public Tools entry point instead of an internal module.",
+        }],
+      }],
+    },
+  },
 );
