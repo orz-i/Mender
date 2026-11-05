@@ -3,9 +3,7 @@ package antigravity
 import (
 	"context"
 	"errors"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -30,31 +28,24 @@ func agyFixture(t *testing.T) agentdomain.Agent {
 	}
 	return a
 }
-func scriptFixture(t *testing.T, body string) string {
-	t.Helper()
-	p := filepath.Join(t.TempDir(), "fake-agy.sh")
-	if err := os.WriteFile(p, []byte("#!/bin/sh\n"+body+"\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	// #nosec G302 -- private fixture script must be executable for the subprocess test.
-	if err := os.Chmod(p, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	return p
-}
 func runnerFixture(path string, calls *int) Runner {
 	return Runner{NewCommand: func(ctx context.Context, _ agentdomain.Agent, _, _, _ string, inspect, yolo bool) (*exec.Cmd, error) {
 		*calls++
 		if inspect || yolo {
 			return nil, errors.New("unexpected test flags")
 		}
-		return exec.CommandContext(ctx, path), nil
+		return fixtureCommand(ctx, path), nil
 	}}
 }
 func TestNativeHeadlessAcceptsExactlyOneSuccessfulResultAndStdinPrompt(t *testing.T) {
-	script := scriptFixture(t, `IFS= read -r prompt || exit 12
-case "$prompt" in *"ONLY_FROM_STDIN"*) ;; *) exit 13;; esac
-printf '%s\n' '{"event":"init","init":{"permission_mode":"request-review"}}' '{"event":"step_update","step_update":{"step_type":"tool","tool_info":{"path":"SENSITIVE"}}}' '{"event":"result","result":{"status":"SUCCESS","response":"completed"}}'`)
+	script := processFixture(t, headlessProcessFixture{
+		ExpectedPrompt: "ONLY_FROM_STDIN",
+		AfterPrompt: []string{
+			`{"event":"init","init":{"permission_mode":"request-review"}}`,
+			`{"event":"step_update","step_update":{"step_type":"tool","tool_info":{"path":"SENSITIVE"}}}`,
+			`{"event":"result","result":{"status":"SUCCESS","response":"completed"}}`,
+		},
+	})
 	calls := 0
 	r := runnerFixture(script, &calls)
 	a := agyFixture(t)
@@ -103,16 +94,45 @@ func TestNativeHeadlessRejectsToolSupplyBeforeStartingProcess(t *testing.T) {
 	}
 }
 func TestNativeHeadlessCancelStopsOwnedProcess(t *testing.T) {
-	script := scriptFixture(t, "IFS= read -r line || exit 12\nexec sleep 20")
+	script := processFixture(t, headlessProcessFixture{
+		AfterPrompt:      []string{`{"event":"init","conversation_id":"fixture-ready"}`},
+		BlockAfterPrompt: true,
+	})
 	a := agyFixture(t)
 	calls := 0
 	r := runnerFixture(script, &calls)
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Millisecond)
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	ready := make(chan struct{}, 1)
+	result := make(chan error, 1)
+	go func() {
+		_, err := r.ExecuteConfigured(ctx, a, "a short prompt", agentapp.RunConfig{
+			WorkspaceRoot: a.Spec().WorkspaceRoot,
+			Observe: func(event agentdomain.ExecutionEvent) error {
+				if event.Kind == agentdomain.EventSessionReady {
+					ready <- struct{}{}
+				}
+				return nil
+			},
+		})
+		result <- err
+	}()
+	select {
+	case <-ready:
+	case err := <-result:
+		t.Fatalf("child exited before cancellation: %v", err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("fixture child never became ready")
+	}
 	start := time.Now()
-	_, err := r.ExecuteConfigured(ctx, a, "a short prompt", agentapp.RunConfig{WorkspaceRoot: a.Spec().WorkspaceRoot})
-	if !errors.Is(err, context.DeadlineExceeded) || time.Since(start) > 4*time.Second {
-		t.Fatalf("cancel=%v duration=%s", err, time.Since(start))
+	cancel()
+	select {
+	case err := <-result:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("cancel=%v", err)
+		}
+	case <-time.After(4 * time.Second):
+		t.Fatalf("owned child did not exit after cancellation in %s", time.Since(start))
 	}
 }
 func TestNativeHeadlessModelInspectionBoundedAndValidated(t *testing.T) {

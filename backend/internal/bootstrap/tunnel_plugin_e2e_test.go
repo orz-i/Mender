@@ -319,7 +319,11 @@ func TestNativeTunnelPackageTamperingRollsBackBeforeConnect(t *testing.T) {
 	ctx := context.Background()
 	r, installed, managed := setupExternalTunnelFixture(t)
 	_, profile := fixtureExternalTunnel(t, r, installed, "verify-tamper")
-	exe := filepath.Join(managed, installed.ID().String(), "bin", "mender-tunnel-example")
+	manifest, err := installed.Manifest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	exe := filepath.Join(managed, installed.ID().String(), filepath.FromSlash(manifest.Entrypoints[runtime.GOOS+"/"+runtime.GOARCH]))
 	if err := os.Chmod(exe, 0o600); err != nil {
 		t.Fatal(err)
 	} // #nosec G302 -- test-owned managed plugin fixture.

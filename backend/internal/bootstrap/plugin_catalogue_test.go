@@ -52,8 +52,9 @@ func TestCanonicalPluginCatalogueAllTypesInertAndStable(t *testing.T) {
 			}
 		case "io.mender.sandbox.e2b":
 			t.Fatal("unimplemented E2B must not appear in the technical plugin inventory")
-		case "io.mender.agent.codex", "io.mender.agent.grok", "io.mender.agent.opencode":
+		case "io.mender.agent.codex", "io.mender.agent.grok", "io.mender.agent.opencode", "io.mender.agent.antigravity":
 			if plugin.SourceKind != "builtin" || plugin.Kind != platformplugin.AgentBackend || len(plugin.Capabilities) != 3 ||
+				(plugin.Status == "enabled" && (!plugin.Enabled || plugin.Issue != "")) ||
 				(plugin.Status != "enabled" && plugin.Status != "unavailable") ||
 				(plugin.Status == "unavailable" && (plugin.Enabled || plugin.Issue == "")) {
 				t.Fatalf("Agent Backend status or trust incorrectly reported: %+v", plugin)

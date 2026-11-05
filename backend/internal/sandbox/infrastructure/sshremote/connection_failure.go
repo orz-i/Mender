@@ -6,7 +6,6 @@ import (
 	"net"
 	"os"
 	"strings"
-	"syscall"
 
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 	"github.com/pkg/sftp"
@@ -87,7 +86,7 @@ func networkFailure(err error) error {
 	case errors.Is(err, context.DeadlineExceeded),
 		errors.As(err, &networkErr) && networkErr.Timeout():
 		return newConnectionFailure(FailureNetworkTimeout)
-	case errors.Is(err, syscall.ECONNREFUSED):
+	case connectionRefused(err):
 		return newConnectionFailure(FailureNetworkRefused)
 	default:
 		return newConnectionFailure(FailureNetworkUnreachable)

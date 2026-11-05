@@ -34,6 +34,7 @@ func (f *fixtureV2Runner) PersistV2Directory(_ context.Context, _ string) error 
 // The fixture models an independent, content-checked fsync acknowledgement
 // without creating a new marker or lock; only its temporary job files exist.
 func (f *fixtureV2Runner) ProveV2ResolutionDurable(_ context.Context, dir, expectedHash string) error {
+	dir = localFixturePath(dir)
 	f.muV2.Lock()
 	f.proofCalls++
 	failure := f.proofErr
@@ -88,6 +89,7 @@ func (f *fixtureV2Runner) ProveV2ResolutionDurable(_ context.Context, dir, expec
 	return nil
 }
 func (f *fixtureV2Runner) ResolveV2UnderLock(_ context.Context, r v2RemoteResolution) error {
+	r.TaskDir = localFixturePath(r.TaskDir)
 	if f.recoveryErr != nil {
 		return f.recoveryErr
 	}
@@ -172,6 +174,7 @@ func (f *fixtureV2Runner) ResolveV2UnderLock(_ context.Context, r v2RemoteResolu
 
 func fixtureV2Jobs(t *testing.T) (*Jobs, func() *Jobs, *fixtureV2Runner) {
 	t.Helper()
+	requirePOSIXJobFixture(t)
 	runner := &fixtureV2Runner{}
 	jobs, reconnect := fixtureJobs(t, runner)
 	// Test-only durable injection models successful fsync@openssh.com. This
@@ -282,7 +285,7 @@ func TestV2RecoveryRejectsUnsafePartialAndStartEvidence(t *testing.T) {
 			if e != nil {
 				t.Fatal(e)
 			}
-			dst := filepath.Join(j.store.taskPath(snapshot.TaskID), tc.file)
+			dst := filepath.Join(localFixturePath(j.store.taskPath(snapshot.TaskID)), tc.file)
 			if tc.data == "symlink" {
 				e = os.Symlink(filepath.Join(t.TempDir(), "absent"), dst)
 			} else {
@@ -351,7 +354,7 @@ func TestV2ForgedResolutionFingerprintNeverClearsQuiescence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = os.WriteFile(filepath.Join(j.store.taskPath(snap.TaskID), "resolution.json"), payload, 0600); err != nil {
+	if err = os.WriteFile(filepath.Join(localFixturePath(j.store.taskPath(snap.TaskID)), "resolution.json"), payload, 0600); err != nil {
 		t.Fatal(err)
 	}
 	if err = j.Quiescent(ctx); !errors.Is(err, ErrJobUnknown) {

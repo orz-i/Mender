@@ -16,6 +16,7 @@ import (
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	profileapp "github.com/orz-i/Mender/backend/internal/profile/application"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
+	processisolation "github.com/orz-i/Mender/backend/internal/runtimegovernance/infrastructure/processisolation"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 )
 
@@ -54,6 +55,10 @@ type governedTaskToolFixture struct {
 
 func setupGovernedTaskToolFixture(t *testing.T) *governedTaskToolFixture {
 	t.Helper()
+	if !processisolation.New().Info().RestrictedHostAvailable {
+		t.Skip("governed task tools require a verified restricted_host backend; no host fallback")
+	}
+
 	ctx := context.Background()
 	exec := waitingForTaskToolExecutor{started: make(chan struct{}, 2), selected: make(chan agentapp.ToolSupply, 2)}
 	r, err := NewRuntime(ctx, RuntimeOptions{

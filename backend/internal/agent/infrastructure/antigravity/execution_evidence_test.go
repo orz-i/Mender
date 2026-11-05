@@ -10,8 +10,11 @@ import (
 )
 
 func TestHeadlessEvidenceCapturesExactConversationWithoutRawUpdates(t *testing.T) {
-	script := scriptFixture(t, `IFS= read -r prompt || exit 12
-printf '%s\n' '{"event":"init","conversation_id":"exact-conversation-123","init":{"cwd":"/private"}}' '{"event":"step_update","step_update":{"rawInput":{"password":"SECRET"}}}' '{"event":"result","result":{"status":"SUCCESS","response":"done"}}'`)
+	script := processFixture(t, headlessProcessFixture{AfterPrompt: []string{
+		`{"event":"init","conversation_id":"exact-conversation-123","init":{"cwd":"/private"}}`,
+		`{"event":"step_update","step_update":{"rawInput":{"password":"SECRET"}}}`,
+		`{"event":"result","result":{"status":"SUCCESS","response":"done"}}`,
+	}})
 	a := agyFixture(t)
 	var calls int
 	var events []agentdomain.ExecutionEvent
@@ -40,8 +43,10 @@ printf '%s\n' '{"event":"init","conversation_id":"exact-conversation-123","init"
 }
 
 func TestHeadlessSessionStorageFailureAfterDispatchIsUnknown(t *testing.T) {
-	script := scriptFixture(t, `IFS= read -r prompt || exit 12
-printf '%s\n' '{"event":"init","conversation_id":"exact-conversation-123"}' '{"event":"result","result":{"status":"SUCCESS","response":"done"}}'`)
+	script := processFixture(t, headlessProcessFixture{AfterPrompt: []string{
+		`{"event":"init","conversation_id":"exact-conversation-123"}`,
+		`{"event":"result","result":{"status":"SUCCESS","response":"done"}}`,
+	}})
 	a := agyFixture(t)
 	var calls int
 	var sawPrompt bool

@@ -95,7 +95,7 @@ func TestToolPlacementRejectsInvalidToolIDsAndAliases(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fixture := agentdomain.ToolPlacement{AgentID: id, WorkspaceRoot: "/tmp/placement", SandboxID: "sbx_0123456789abcdef0123456789abcdef",
+	fixture := agentdomain.ToolPlacement{AgentID: id, WorkspaceRoot: t.TempDir(), SandboxID: "sbx_0123456789abcdef0123456789abcdef",
 		ToolIDs: []string{"tool_0123456789abcdef0123456789abcdef"}, UpdatedAt: time.Now().UTC()}
 	if err := fixture.Validate(); err != nil {
 		t.Fatal(err)

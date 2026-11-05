@@ -21,9 +21,12 @@ import (
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 )
 
-type fixtureAgentExecutor struct{}
+type fixtureAgentExecutor struct{ finished chan struct{} }
 
-func (fixtureAgentExecutor) ExecuteConfigured(_ context.Context, _ agentdomain.Agent, prompt string, cfg agentapplication.RunConfig) (string, error) {
+func (e fixtureAgentExecutor) ExecuteConfigured(_ context.Context, _ agentdomain.Agent, prompt string, cfg agentapplication.RunConfig) (string, error) {
+	if e.finished != nil {
+		defer close(e.finished)
+	}
 	// A fixture must provide the native terminal and process-reap proof
 	// that the real Runner supplies; nil error alone is not Task success.
 	for _, e := range []agentdomain.ExecutionEvent{
@@ -65,9 +68,10 @@ func taskServicePrincipal(t *testing.T, profileID string) gov.Context {
 
 func TestGovernedCanonicalAgentDelegationToolFixture(t *testing.T) {
 	ctx := context.Background()
+	finished := make(chan struct{})
 	r, err := NewRuntime(ctx, RuntimeOptions{
 		DatabasePath:  filepath.Join(t.TempDir(), "mender.sqlite"),
-		AgentExecutor: fixtureAgentExecutor{},
+		AgentExecutor: fixtureAgentExecutor{finished: finished},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -141,6 +145,13 @@ func TestGovernedCanonicalAgentDelegationToolFixture(t *testing.T) {
 	}
 	if _, err := agentdomain.ParseTaskID(receipt.TaskID); err != nil {
 		t.Fatal(err)
+	}
+	// Wait for native fixture evidence before polling the result API. Repeated
+	// SQLite reads must not compete with the worker's terminal evidence writes.
+	select {
+	case <-finished:
+	case <-time.After(4 * time.Second):
+		t.Fatal("fixture execution did not finish recording terminal evidence")
 	}
 	var last struct {
 		Status string `json:"status"`

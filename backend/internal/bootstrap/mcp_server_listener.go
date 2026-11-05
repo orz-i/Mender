@@ -1,11 +1,9 @@
 package bootstrap
 
 import (
-	"errors"
 	"fmt"
 	"net"
 	"strconv"
-	"syscall"
 )
 
 // Bounded retries stay inside one Start operation: only the TCP bind is retried,
@@ -35,7 +33,7 @@ func listenManagedMCPPort(address string) (net.Listener, error) {
 		if bindErr == nil {
 			return listener, nil
 		}
-		if !errors.Is(bindErr, syscall.EADDRINUSE) {
+		if !managedMCPAddressInUse(bindErr) {
 			return nil, fmt.Errorf("listen on %s: %w", candidate, bindErr)
 		}
 		occupied = bindErr

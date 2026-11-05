@@ -12,6 +12,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -129,8 +130,9 @@ func sshFixtureWithSFTP(t *testing.T, private []byte, hostKey string, enableSFTP
 									return
 								}
 								_ = req.Reply(true, nil)
+								command := strings.ReplaceAll(payload.Command, remoteFixturePath(root), filepath.ToSlash(root))
 								// #nosec G204 -- command is supplied only by this test's ephemeral SSH client; fixture is local and test-owned.
-								cmd := exec.Command("sh", "-c", payload.Command)
+								cmd := exec.Command("sh", "-c", command)
 								cmd.Dir = root
 								cmd.Stdout = ch
 								cmd.Stderr = ch.Stderr()
@@ -158,7 +160,7 @@ func sshFixtureWithSFTP(t *testing.T, private []byte, hostKey string, enableSFTP
 	}
 	ref, _ := credentialdomain.ParseReference("credential://ssh/fixture")
 	// #nosec G115 -- the listener port was checked to be within 1..65535.
-	return Template{Host: host, Port: uint16(port), User: "agent", Root: root, HostPublicKey: hostKey, CredentialRef: ref}, fixtureCredentials{private}
+	return Template{Host: host, Port: uint16(port), User: "agent", Root: remoteFixturePath(root), HostPublicKey: hostKey, CredentialRef: ref}, fixtureCredentials{private}
 }
 func TestSSHRemoteRSA2048UsesSHA2ForClientAndPinnedHost(t *testing.T) {
 	private, err := rsa.GenerateKey(rand.Reader, 2048)
@@ -186,7 +188,7 @@ func TestSSHRemoteRSA2048UsesSHA2ForClientAndPinnedHost(t *testing.T) {
 		t.Fatalf("RSA-2048 pinned SSH connection failed: %v", err)
 	}
 	defer func() { _ = connection.Close() }()
-	info, err := connection.SFTP.Stat(filepath.Join(template.Root, "hello.txt"))
+	info, err := connection.SFTP.Stat(path.Join(template.Root, "hello.txt"))
 	if err != nil || info.IsDir() {
 		t.Fatalf("RSA-2048 pinned SFTP failed: info=%v, err=%v", info, err)
 	}
@@ -207,7 +209,7 @@ func TestSSHRemoteRootLoginUsesPinnedKeyAndSFTP(t *testing.T) {
 		t.Fatalf("root SSH login with explicit pinned host key failed: %v", err)
 	}
 	defer func() { _ = connection.Close() }()
-	info, err := connection.SFTP.Stat(filepath.Join(template.Root, "hello.txt"))
+	info, err := connection.SFTP.Stat(path.Join(template.Root, "hello.txt"))
 	if err != nil || info.IsDir() {
 		t.Fatalf("root SSH session SFTP verification failed: info=%v, err=%v", info, err)
 	}
@@ -239,25 +241,25 @@ func TestSSHRemoteProvisioningReportsActualFailureStage(t *testing.T) {
 
 	t.Run("remote workspace does not exist", func(t *testing.T) {
 		template, credentials := sshFixture(t)
-		template.Root = filepath.Join(template.Root, "missing-folder")
+		template.Root = path.Join(template.Root, "missing-folder")
 		_, err := (Dialer{Credentials: credentials}).Connect(context.Background(), template)
 		expectConnectionFailure(t, err, FailureWorkspaceMissing)
 	})
 
 	t.Run("remote workspace is not a directory", func(t *testing.T) {
 		template, credentials := sshFixture(t)
-		template.Root = filepath.Join(template.Root, "hello.txt")
+		template.Root = path.Join(template.Root, "hello.txt")
 		_, err := (Dialer{Credentials: credentials}).Connect(context.Background(), template)
 		expectConnectionFailure(t, err, FailureWorkspaceInvalid)
 	})
 
 	t.Run("remote workspace contains symbolic link", func(t *testing.T) {
 		template, credentials := sshFixture(t)
-		symlink := filepath.Join(template.Root, "redirect")
-		if err := os.Symlink(template.Root, symlink); err != nil {
+		symlink := filepath.Join(localFixturePath(template.Root), "redirect")
+		if err := os.Symlink(localFixturePath(template.Root), symlink); err != nil {
 			t.Fatal(err)
 		}
-		template.Root = symlink
+		template.Root = remoteFixturePath(symlink)
 		_, err := (Dialer{Credentials: credentials}).Connect(context.Background(), template)
 		expectConnectionFailure(t, err, FailureWorkspaceInvalid)
 	})
@@ -331,13 +333,18 @@ func TestSSHRemoteWorkspaceOverPinnedSSHAndSFTP(t *testing.T) {
 	if preserved["content"] != "created" {
 		t.Fatalf("exclusive SFTP create overwrote original bytes: %+v", preserved)
 	}
-	result := execute(t, s, sandboxdomain.CapabilityShell, map[string]any{"command": "pwd && cat hello.txt"})
-	if result["exitCode"] != float64(0) || !strings.Contains(fmt.Sprint(result["stdout"]), "hello secure") {
-		t.Fatalf("shell: %+v", result)
-	}
+	t.Run("remote POSIX shell", func(t *testing.T) {
+		if _, err := exec.LookPath("sh"); err != nil {
+			t.Skip("local SSH server fixture has no POSIX sh; Windows clients can still use a remote Linux shell")
+		}
+		result := execute(t, s, sandboxdomain.CapabilityShell, map[string]any{"command": "pwd && cat hello.txt"})
+		if result["exitCode"] != float64(0) || !strings.Contains(fmt.Sprint(result["stdout"]), "hello secure") {
+			t.Fatalf("shell: %+v", result)
+		}
+	})
 	// Trusted remote server may support symbolic links; structured tools
 	// must refuse them, not silently follow outside the configured root.
-	if err := os.Symlink("hello.txt", filepath.Join(template.Root, "linked.txt")); err != nil {
+	if err := os.Symlink("hello.txt", filepath.Join(localFixturePath(template.Root), "linked.txt")); err != nil {
 		t.Fatal(err)
 	}
 	symlinkRead, err := s.ExecuteWorkspace(ctx, sandboxdomain.CapabilityRead, jsonArg(t,

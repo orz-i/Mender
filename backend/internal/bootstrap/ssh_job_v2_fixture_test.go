@@ -24,6 +24,13 @@ type fixtureSSHJobV2 struct {
 
 func seedSSHJobV2(t *testing.T, root string, id sandboxdomain.ID, taskID string, terminal bool) fixtureSSHJobV2 {
 	t.Helper()
+	info, err := os.Stat(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm()&0o077 != 0 {
+		t.Skip("local SFTP job fixture cannot represent POSIX private permissions on this filesystem; Windows clients connecting to a Linux SSH server remain supported")
+	}
 	if len(taskID) != 37 || taskID[:5] != "sjob_" {
 		t.Fatal("invalid fixed task ID")
 	}

@@ -3,7 +3,6 @@ package antigravity
 import (
 	"context"
 	"errors"
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -33,10 +32,11 @@ func resumeFixturePlan(t *testing.T, a agentdomain.Agent) *agentdomain.SessionCo
 }
 
 func TestHeadlessContinuationChecksNativeIdentityBeforeDispatch(t *testing.T) {
-	script := scriptFixture(t, `printf '%s\n' '{"event":"init","conversation_id":"`+fixtureConversationID+`"}'
-IFS= read -r line || exit 21
-case "$line" in *"NEW_PROMPT_ONLY"*) ;; *) exit 22;; esac
-printf '%s\n' '{"event":"step_update"}' '{"event":"result","conversation_id":"`+fixtureConversationID+`","result":{"status":"SUCCESS","response":"resumed"}}'`)
+	script := processFixture(t, headlessProcessFixture{
+		BeforePrompt:   []string{`{"event":"init","conversation_id":"` + fixtureConversationID + `"}`},
+		ExpectedPrompt: "NEW_PROMPT_ONLY",
+		AfterPrompt:    []string{`{"event":"step_update"}`, `{"event":"result","conversation_id":"` + fixtureConversationID + `","result":{"status":"SUCCESS","response":"resumed"}}`},
+	})
 	a := agyFixture(t)
 	plan := resumeFixturePlan(t, a)
 	calls := 0
@@ -51,7 +51,7 @@ printf '%s\n' '{"event":"step_update"}' '{"event":"result","conversation_id":"`+
 			if root != a.Spec().WorkspaceRoot || model != "" || effort != "" || conversation != fixtureConversationID || yolo {
 				t.Fatalf("wrong native resume command parameters: root=%q cid=%q", root, conversation)
 			}
-			return exec.CommandContext(ctx, script), nil
+			return fixtureCommand(ctx, script), nil
 		},
 	}
 	result, err := r.ExecuteConfigured(context.Background(), a, "NEW_PROMPT_ONLY", agentapp.RunConfig{
@@ -91,14 +91,15 @@ func TestHeadlessContinuationNeverSendsPromptToNativeFallback(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			flag := filepath.Join(t.TempDir(), "prompt-was-sent")
-			script := scriptFixture(t, fmt.Sprintf(`printf '%%s\n' '%s'
-if IFS= read -r line; then printf sent > '%s'; fi`, tc.firstLine, flag))
+			script := processFixture(t, headlessProcessFixture{
+				BeforePrompt: []string{tc.firstLine}, PromptMarker: flag,
+			})
 			var events []agentdomain.ExecutionEventKind
 			r := Runner{NewCommand: func(context.Context, agentdomain.Agent, string, string, string, bool, bool) (*exec.Cmd, error) {
 				t.Fatal("incorrect new CLI path")
 				return nil, nil
 			}, NewResumeCommand: func(ctx context.Context, _ agentdomain.Agent, _, _, _, _ string, _ bool) (*exec.Cmd, error) {
-				return exec.CommandContext(ctx, script), nil
+				return fixtureCommand(ctx, script), nil
 			}}
 			_, err := r.ExecuteConfigured(context.Background(), a, "MUST_NOT_BE_SENT", agentapp.RunConfig{
 				WorkspaceRoot: a.Spec().WorkspaceRoot, Resume: plan,
@@ -137,8 +138,9 @@ func TestPrePromptResumeUnavailableRetainsSentinelAndSafeStage(t *testing.T) {
 func TestHeadlessContinuationRejectsUnverifiedInitTimeoutAndStorageFailure(t *testing.T) {
 	a := agyFixture(t)
 	plan := resumeFixturePlan(t, a)
-	blocking := scriptFixture(t, `IFS= read -r line || exit 12
-printf '%s\n' '{"event":"init","conversation_id":"`+fixtureConversationID+`"}'`)
+	blocking := processFixture(t, headlessProcessFixture{
+		AfterPrompt: []string{`{"event":"init","conversation_id":"` + fixtureConversationID + `"}`},
+	})
 	timeoutCtx, cancel := context.WithTimeout(context.Background(), 140*time.Millisecond)
 	defer cancel()
 	var sent bool
@@ -146,7 +148,7 @@ printf '%s\n' '{"event":"init","conversation_id":"`+fixtureConversationID+`"}'`)
 		t.Fatal("new command used")
 		return nil, nil
 	}, NewResumeCommand: func(ctx context.Context, _ agentdomain.Agent, _, _, _, _ string, _ bool) (*exec.Cmd, error) {
-		return exec.CommandContext(ctx, blocking), nil
+		return fixtureCommand(ctx, blocking), nil
 	}}
 	_, err := r.ExecuteConfigured(timeoutCtx, a, "NEVER_SEND", agentapp.RunConfig{
 		WorkspaceRoot: a.Spec().WorkspaceRoot, Resume: plan,
@@ -160,11 +162,12 @@ printf '%s\n' '{"event":"init","conversation_id":"`+fixtureConversationID+`"}'`)
 	if !errors.Is(err, context.DeadlineExceeded) || sent {
 		t.Fatalf("missing preprompt init did not fail closed: err=%v sent=%v", err, sent)
 	}
-	ready := scriptFixture(t, `printf '%s\n' '{"event":"init","conversation_id":"`+fixtureConversationID+`"}'
-IFS= read -r line || exit 11`)
+	ready := processFixture(t, headlessProcessFixture{
+		BeforePrompt: []string{`{"event":"init","conversation_id":"` + fixtureConversationID + `"}`},
+	})
 	storageFailure := errors.New("synthetic Task evidence failure")
 	r.NewResumeCommand = func(ctx context.Context, _ agentdomain.Agent, _, _, _, _ string, _ bool) (*exec.Cmd, error) {
-		return exec.CommandContext(ctx, ready), nil
+		return fixtureCommand(ctx, ready), nil
 	}
 	sent = false
 	_, err = r.ExecuteConfigured(context.Background(), a, "MUST_NOT_SEND", agentapp.RunConfig{
@@ -187,14 +190,15 @@ IFS= read -r line || exit 11`)
 func TestHeadlessContinuationRejectsPostPromptTerminalIdentityAsUnknown(t *testing.T) {
 	a := agyFixture(t)
 	plan := resumeFixturePlan(t, a)
-	script := scriptFixture(t, `printf '%s\n' '{"event":"init","conversation_id":"`+fixtureConversationID+`"}'
-IFS= read -r line || exit 11
-printf '%s\n' '{"event":"result","conversation_id":"00000000-0000-4000-8000-000000000000","result":{"status":"SUCCESS","response":"wrong session"}}'`)
+	script := processFixture(t, headlessProcessFixture{
+		BeforePrompt: []string{`{"event":"init","conversation_id":"` + fixtureConversationID + `"}`},
+		AfterPrompt:  []string{`{"event":"result","conversation_id":"00000000-0000-4000-8000-000000000000","result":{"status":"SUCCESS","response":"wrong session"}}`},
+	})
 	r := Runner{NewCommand: func(context.Context, agentdomain.Agent, string, string, string, bool, bool) (*exec.Cmd, error) {
 		t.Fatal("new command used")
 		return nil, nil
 	}, NewResumeCommand: func(ctx context.Context, _ agentdomain.Agent, _, _, _, _ string, _ bool) (*exec.Cmd, error) {
-		return exec.CommandContext(ctx, script), nil
+		return fixtureCommand(ctx, script), nil
 	}}
 	var dispatched bool
 	_, err := r.ExecuteConfigured(context.Background(), a, "a sent prompt", agentapp.RunConfig{

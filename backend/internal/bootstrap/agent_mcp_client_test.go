@@ -20,11 +20,11 @@ import (
 // fixture task and retrieve its result. No CLI, real account, or remote
 // endpoint is involved in this test.
 func TestAgentDelegationThroughMCPClientSession(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
-	defer cancel()
+	ctx := t.Context()
+	finished := make(chan struct{})
 	r, err := NewRuntime(ctx, RuntimeOptions{
 		DatabasePath:  filepath.Join(t.TempDir(), "mcp-agent.db"),
-		AgentExecutor: fixtureAgentExecutor{},
+		AgentExecutor: fixtureAgentExecutor{finished: finished},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -71,6 +71,10 @@ func TestAgentDelegationThroughMCPClientSession(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	// Migration and resource setup are bounded by the Go test deadline, not
+	// the protocol exercise budget. Start that budget once the fixture exists.
+	ctx, cancel := context.WithTimeout(ctx, 12*time.Second)
+	defer cancel()
 	adapter, err := r.NewMCPServer(ctx, profile)
 	if err != nil {
 		t.Fatal(err)
@@ -126,6 +130,11 @@ func TestAgentDelegationThroughMCPClientSession(t *testing.T) {
 	id, ok := rawResult["taskId"].(string)
 	if !ok || id == "" {
 		t.Fatalf("MCP TaskID missing: %#v", rawResult)
+	}
+	select {
+	case <-finished:
+	case <-ctx.Done():
+		t.Fatalf("fixture did not finish native terminal evidence: %v", ctx.Err())
 	}
 	deadline := time.Now().Add(3 * time.Second)
 	for {

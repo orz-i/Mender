@@ -13,9 +13,11 @@ import (
 type twoConcurrentReadApprovals struct {
 	submitSecond chan struct{}
 	done         chan agentdomain.ApprovalChoice
+	finished     chan struct{}
 }
 
 func (runner *twoConcurrentReadApprovals) ExecuteConfigured(ctx context.Context, _ agentdomain.Agent, _ string, cfg RunConfig) (string, error) {
+	defer close(runner.finished)
 	type outcome struct {
 		choice agentdomain.ApprovalChoice
 		err    error
@@ -58,6 +60,7 @@ func TestMissingReadPreviewDoesNotBlockLaterValidApproval(t *testing.T) {
 	runner := &twoConcurrentReadApprovals{
 		submitSecond: make(chan struct{}),
 		done:         make(chan agentdomain.ApprovalChoice, 2),
+		finished:     make(chan struct{}),
 	}
 	s, ownerCtx := newFixtureService(t, runner)
 	root := t.TempDir()
@@ -128,7 +131,6 @@ func TestMissingReadPreviewDoesNotBlockLaterValidApproval(t *testing.T) {
 	if _, err := s.DecideApproval(ctx, badID, agentdomain.ApprovalReject, ownerCtx); err != nil {
 		t.Fatal(err)
 	}
-	_ = waitTask(t, s, task.ID, ownerCtx, agentdomain.TaskCompleted)
 	var accepted, rejected int
 	for i := 0; i < 2; i++ {
 		select {
@@ -143,6 +145,14 @@ func TestMissingReadPreviewDoesNotBlockLaterValidApproval(t *testing.T) {
 			t.Fatal("one of the two live decisions was lost")
 		}
 	}
+	// Both permission request defers and terminal evidence writes must finish
+	// before terminal-state reads compete for the same SQLite connection.
+	select {
+	case <-runner.finished:
+	case <-time.After(3 * time.Second):
+		t.Fatal("approval fixture did not finish recording terminal evidence")
+	}
+	_ = waitTask(t, s, task.ID, ownerCtx, agentdomain.TaskCompleted)
 	if accepted != 1 || rejected != 1 {
 		t.Fatalf("unexpected read decisions: accepted=%d rejected=%d", accepted, rejected)
 	}

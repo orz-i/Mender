@@ -99,7 +99,7 @@ func TestSSHJobsV2ValidateRequestAndSymlink(t *testing.T) {
 		t.Fatal("oversized command accepted")
 	}
 	jobs, _, runner := fixtureV2Jobs(t)
-	if err := os.Symlink(t.TempDir(), jobs.root+jobStorageDir); err != nil {
+	if err := os.Symlink(t.TempDir(), localFixturePath(jobs.root+jobStorageDir)); err != nil {
 		t.Fatal(err)
 	}
 	_, err := jobs.Submit(context.Background(), JobRequest{IdempotencyKey: strings.Repeat("1", 32), Command: "echo no"}, 1)
@@ -123,7 +123,7 @@ func TestSSHJobsV2StatusLogsAndCancellation(t *testing.T) {
 		t.Fatal(err)
 	}
 	start := "v2:" + first.TaskID + ":" + manifest.AttemptID + ":" + manifest.CommandDigest + "\n"
-	dir := jobs.store.taskPath(first.TaskID)
+	dir := localFixturePath(jobs.store.taskPath(first.TaskID))
 	if err = os.WriteFile(filepath.Join(dir, "start.intent"), []byte(start), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -169,7 +169,7 @@ func TestSSHJobsV2RetiredIDsPreventReplayWithoutTaskData(t *testing.T) {
 	}
 	req := JobRequest{IdempotencyKey: strings.Repeat("b", 32), Command: "echo never-execute-retired"}
 	id := jobs.identity(req.IdempotencyKey)
-	marker := jobs.store.retiredMarkerPath(id)
+	marker := localFixturePath(jobs.store.retiredMarkerPath(id))
 	if err := os.WriteFile(marker, []byte(retiredMarker), 0600); err != nil {
 		t.Fatal(err)
 	}

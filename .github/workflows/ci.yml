@@ -22,10 +22,14 @@ jobs:
           cache-dependency-path: backend/go.mod
       - name: Verify formatting
         run: |
-          gofmt -w backend
-          git diff --exit-code -- backend
+          gofmt -w backend scripts/check-backend-architecture.go scripts/check-backend-architecture_test.go
+          git diff --exit-code -- backend scripts/check-backend-architecture.go scripts/check-backend-architecture_test.go
       - name: Test
         run: go test ./backend/...
+      - name: Backend architecture
+        run: |
+          go test scripts/check-backend-architecture.go scripts/check-backend-architecture_test.go
+          go run scripts/check-backend-architecture.go
       - name: Race test
         run: go test -race ./backend/...
 
@@ -44,6 +48,28 @@ jobs:
           version-file: .golangci-lint-version
           args: ./backend/...
 
+  windows:
+    name: Windows Go and portable scripts
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.mod
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Portable script tests
+        run: node --test scripts/check-plugins.node-test.mjs
+      - name: Native example build and SDK test
+        run: |
+          node scripts/check-plugins.mjs provider-plugin:example:build
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/check-plugins.mjs provider-plugin:sdk:test
+      - name: Backend tests
+        run: go test ./backend/...
+
   web:
     name: Web quality gates
     runs-on: ubuntu-latest
@@ -59,6 +85,8 @@ jobs:
           cache: pnpm
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: Portable script tests
+        run: pnpm scripts:test
       - name: Lint
         run: pnpm lint
       - name: Typecheck

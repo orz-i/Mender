@@ -8,6 +8,7 @@ Mender's foundation currently expects:
 - Node.js 22 or newer; Node.js 24 is the CI baseline.
 - pnpm 12.4.2.
 - golangci-lint v2.14.0.
+- A Go-supported C toolchain with CGO enabled for race checks.
 
 The repository pins pnpm in the root `package.json` and golangci-lint in `.golangci-lint-version`. Native desktop development additionally uses Wails v3.0.0-beta.26; the portable `pnpm check` gate regenerates bindings with that pinned version through `go run`, so a globally installed Wails CLI is only required for `wails3 dev`, native build, and packaging.
 
@@ -28,16 +29,27 @@ pnpm check
 
 `pnpm check` is the repository-level verification command. It currently runs:
 
-1. OpenAPI TypeScript regeneration/diff verification.
-2. Wails binding regeneration/diff verification.
-3. Desktop architecture boundary verification.
-4. golangci-lint.
-5. Go tests.
-6. Go race tests.
-7. ESLint.
-8. strict TypeScript type checking.
-9. Vitest.
-10. Web and Desktop production frontend builds.
+1. Portable script tests and backend architecture boundary verification.
+2. Plugin protocol lint/regeneration/parity and SDK/example lint, tests, race checks and builds.
+3. Isolated Go module verification.
+4. OpenAPI TypeScript and Wails binding regeneration/diff verification.
+5. Desktop architecture boundary verification.
+6. Backend golangci-lint, tests and race tests.
+7. ESLint, strict TypeScript type checking, Vitest and i18n coverage.
+8. Web and Desktop production frontend builds.
+
+The same command runs in Windows PowerShell/cmd and Unix shells. Plugin checks
+use Node's argv, working-directory and environment APIs, including `GOWORK=off`;
+example builds use disposable output directories rather than shell cleanup.
+Repository `.gitattributes` keeps text in LF regardless of global
+`core.autocrlf`, with explicit CRLF exceptions for native `.bat`/`.cmd` files.
+
+Fixtures that require a verified restricted-host backend or a local POSIX
+filesystem/shell report explicit capability skips when unavailable. Their
+rejection paths remain tested. A local Windows SFTP fixture limitation does not
+imply a Windows client cannot connect to a real Linux SSH server. See the
+[check portability record](../planning/check-portability-2026-11-05.md) for the
+failure classification and verification evidence.
 
 ## Common commands
 
@@ -66,6 +78,8 @@ pnpm run:server
 Run individual portable quality gates:
 
 ```bash
+pnpm scripts:test
+pnpm backend:architecture:check
 pnpm desktop:bindings:check
 pnpm desktop:architecture:check
 pnpm go:lint

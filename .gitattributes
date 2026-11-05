@@ -1,0 +1,6 @@
+# Keep source, generated contracts and scripts stable even with core.autocrlf=true.
+* text=auto eol=lf
+
+# Native Windows command scripts require their platform line endings.
+*.bat text eol=crlf
+*.cmd text eol=crlf

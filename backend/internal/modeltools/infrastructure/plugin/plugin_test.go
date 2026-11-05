@@ -214,14 +214,9 @@ func testModelToolInstance(
 		Capabilities:  []Capability{CapabilityWebSearch},
 	}
 	tools := discoveredCapabilityTools(config)
-	return &Instance{
-		config: config,
-		engine: engine,
-		tools:  tools,
-	}, modelToolFromDiscovery(t, tools[0]), &testModelCredentialResolver{
-		ref:    ref,
-		secret: []byte("secret"),
-	}
+	instance := &Instance{config: config, engine: engine, tools: tools}
+	resolver := &testModelCredentialResolver{ref: ref, secret: []byte("secret")}
+	return instance, modelToolFromDiscovery(t, tools[0]), resolver
 }
 
 func modelToolFromDiscovery(
