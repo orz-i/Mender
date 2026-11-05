@@ -1,77 +1,55 @@
 import { useCallback, useEffect, useState } from "react";
 import {
-  BlocksIcon,
   BellIcon,
+  BlocksIcon,
   BotIcon,
   BookOpenIcon,
   BoxIcon,
   CableIcon,
   ChevronLeftIcon,
+  CommandIcon,
   GaugeIcon,
   KeyRoundIcon,
   LanguagesIcon,
   Layers3Icon,
   LayoutDashboardIcon,
   MenuIcon,
-  PanelLeftCloseIcon,
-  PanelLeftOpenIcon,
-  PanelLeftIcon,
-  PanelTopIcon,
+  RefreshCwIcon,
   ScrollTextIcon,
   SearchIcon,
+  Settings2Icon,
   ShieldCheckIcon,
   WrenchIcon,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { motion, useReducedMotion } from "motion/react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router";
 
 import type { AgentApprovalCapability, ManagementClient } from "@mender/sdk";
 import { Button } from "@mender/ui/components/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
+  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from "@mender/ui/components/dialog";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@mender/ui/components/tooltip";
+import { Popover, PopoverContent, PopoverTrigger } from "@mender/ui/components/popover";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@mender/ui/components/tooltip";
 
 import { BrandMark } from "../brand/brand-mark";
 import { setLocale, t, useLocale } from "../i18n/i18n";
 import { PageHeadingContext, getPageTrail } from "./page-chrome";
 
-const SIDEBAR_STORAGE_KEY = "mender.sidebar.collapsed";
-const NAV_LAYOUT_STORAGE_KEY = "mender.navigation.layout";
+type NavigationItem = { to: string; label: string; icon: LucideIcon };
 
-type NavigationItem = {
-  to: string;
-  label: string;
-  icon: LucideIcon;
-};
+const primaryNavigation: NavigationItem[] = [
+  { to: "/", label: "Overview", icon: LayoutDashboardIcon },
+  { to: "/tools", label: "Tools", icon: WrenchIcon },
+  { to: "/profiles", label: "Profiles", icon: Layers3Icon },
+  { to: "/agents", label: "Agents", icon: BotIcon },
+  { to: "/sandboxes", label: "Sandboxes", icon: BoxIcon },
+  { to: "/skills", label: "Skills", icon: BookOpenIcon },
+  { to: "/plugins", label: "Plugin Marketplace", icon: BlocksIcon },
+  { to: "/audit", label: "Audit", icon: ScrollTextIcon },
+];
 
-type NavigationGroup = {
-  label: string;
-  items: NavigationItem[];
-};
-
-const navigation: NavigationGroup[] = [
-  {
-    label: "Workspace",
-    items: [
-      { to: "/", label: "Overview", icon: LayoutDashboardIcon },
-      { to: "/plugins", label: "Plugin Marketplace", icon: BlocksIcon },
-      { to: "/tools", label: "Tools", icon: WrenchIcon },
-      { to: "/profiles", label: "Profiles", icon: Layers3Icon },
-      { to: "/agents", label: "Agents", icon: BotIcon },
-      { to: "/sandboxes", label: "Sandboxes", icon: BoxIcon },
-      { to: "/skills", label: "Skills", icon: BookOpenIcon },
-    ],
-  },
+const secondaryNavigation: Array<{ label: string; items: NavigationItem[] }> = [
   {
     label: "Connections",
     items: [
@@ -83,13 +61,21 @@ const navigation: NavigationGroup[] = [
     label: "Advanced",
     items: [
       { to: "/approvals", label: "Approvals", icon: BellIcon },
-      { to: "/audit", label: "Audit", icon: ScrollTextIcon },
       { to: "/policy", label: "Policy", icon: ShieldCheckIcon },
       { to: "/runtime", label: "Runtime", icon: GaugeIcon },
     ],
   },
 ];
-const flatNavigation = navigation.flatMap((group) => group.items);
+const flatNavigation = [...primaryNavigation, ...secondaryNavigation.flatMap((group) => group.items)];
+
+const APPEARANCE_STORAGE_KEY = "mender.appearance";
+type Appearance = "light" | "dark" | "system";
+
+function readAppearance(): Appearance {
+  if (typeof window === "undefined") return "light";
+  const stored = window.localStorage.getItem(APPEARANCE_STORAGE_KEY);
+  return stored === "dark" || stored === "system" ? stored : "light";
+}
 
 export function ManagementShell({ client, approvals }: {
   client: ManagementClient;
@@ -98,517 +84,313 @@ export function ManagementShell({ client, approvals }: {
   const locale = useLocale();
   const location = useLocation();
   const navigate = useNavigate();
-  const reduceMotion = useReducedMotion();
-  const [collapsed, setCollapsed] = useState(() =>
-    typeof window !== "undefined" &&
-    window.localStorage.getItem(SIDEBAR_STORAGE_KEY) === "true",
-  );
-  const [layout, setLayout] = useState<"side" | "top">(() =>
-    typeof window !== "undefined" && window.localStorage.getItem(NAV_LAYOUT_STORAGE_KEY) === "top"
-      ? "top" : "side",
-  );
-  const [topGroup, setTopGroup] = useState<{ pathname: string; label: string } | null>(null);
   const [pageHeading, setPageHeading] = useState<{ path: string; value: string } | null>(null);
   const [runtimeReady, setRuntimeReady] = useState<boolean | null>(null);
   const [commandOpen, setCommandOpen] = useState(false);
-  const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
+  const [navigationOpen, setNavigationOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [pendingApprovalCount, setPendingApprovalCount] = useState(0);
-
-  useEffect(() => {
-    window.localStorage.setItem(SIDEBAR_STORAGE_KEY, String(collapsed));
-  }, [collapsed]);
-
-  useEffect(() => {
-    window.localStorage.setItem(NAV_LAYOUT_STORAGE_KEY, layout);
-  }, [layout]);
+  const [appearance, setAppearance] = useState<Appearance>(readAppearance);
 
   const updatePageHeading = useCallback((path: string, value?: string) => {
-    setPageHeading((current) => value ? { path, value } :
-      current?.path === path ? null : current);
+    setPageHeading((current) => value ? { path, value } : current?.path === path ? null : current);
   }, []);
 
-  // Follow the operating-system appearance without adding a per-page theme control.
-  // Keep Tailwind dark variants and semantic colors on the same root class.
   useEffect(() => {
-    if (typeof window.matchMedia !== "function") return;
-    const preference = window.matchMedia("(prefers-color-scheme: dark)");
-    const applyAppearance = () => document.documentElement.classList.toggle("dark", preference.matches);
-    applyAppearance();
-    preference.addEventListener("change", applyAppearance);
-    return () => preference.removeEventListener("change", applyAppearance);
-  }, []);
+    window.localStorage.setItem(APPEARANCE_STORAGE_KEY, appearance);
+    if (typeof window.matchMedia !== "function") {
+      document.documentElement.classList.toggle("dark", appearance === "dark");
+      return;
+    }
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const apply = () => document.documentElement.classList.toggle("dark",
+      appearance === "dark" || (appearance === "system" && media.matches));
+    apply();
+    if (appearance === "system") {
+      media.addEventListener("change", apply);
+      return () => media.removeEventListener("change", apply);
+    }
+    return undefined;
+  }, [appearance]);
 
   useEffect(() => {
     let active = true;
-    void Promise.resolve()
-      .then(() => client.getSystemStatus())
-      .then((status) => {
-        if (active) setRuntimeReady(status.ready);
-      })
-      .catch(() => {
-        if (active) setRuntimeReady(false);
-      });
+    void Promise.resolve().then(() => client.getSystemStatus())
+      .then((status) => { if (active) setRuntimeReady(status.ready); })
+      .catch(() => { if (active) setRuntimeReady(false); });
     return () => { active = false; };
   }, [client]);
 
   useEffect(() => {
     if (!approvals) return;
-    let live=true;
-    const poll=()=>{
-      void approvals.listPendingAgentApprovals().then(({approvals})=>{
-        if(live)setPendingApprovalCount(approvals.length);
-      }).catch(()=>{if(live)setPendingApprovalCount(0);});
+    let active = true;
+    const refresh = () => {
+      void approvals.listPendingAgentApprovals()
+        .then(({ approvals: pending }) => {
+          if (active) setPendingApprovalCount(pending.length);
+        })
+        .catch(() => { if (active) setPendingApprovalCount(0); });
     };
-    poll();
-    const timer=setInterval(poll,2500);
-    return()=>{live=false;clearInterval(timer);};
-  },[approvals]);
+    refresh();
+    const timer = setInterval(refresh, 2500);
+    return () => { active = false; clearInterval(timer); };
+  }, [approvals]);
 
   useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
+    const handler = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
         setCommandOpen((open) => !open);
       }
     };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
   }, []);
 
-  const activeItem = flatNavigation.find((item) =>
-    item.to === "/" ? location.pathname === "/" :
-      location.pathname === item.to || location.pathname.startsWith(item.to + "/"),
-  ) ?? flatNavigation[0]!;
-  const visibleNavigation = flatNavigation.filter((item) =>
-    item.to !== "/approvals" || approvals !== undefined);
-  const activeGroup = navigation.find((group) => group.items.some((item) => item.to === activeItem.to)) ?? navigation[0]!;
-  const selectedGroup = navigation.find((group) => group.label === (topGroup?.pathname === location.pathname ? topGroup.label : activeGroup.label)) ?? activeGroup;
+  const activeItem = flatNavigation.find((item) => item.to === "/"
+    ? location.pathname === "/"
+    : location.pathname === item.to || location.pathname.startsWith(item.to + "/")) ?? primaryNavigation[0]!;
   const trail = getPageTrail(location.pathname, activeItem);
   const currentHeading = pageHeading?.path === location.pathname ? pageHeading.value : undefined;
   if (currentHeading && trail.length > 1) {
     trail[1] = { ...trail[1]!, label: currentHeading };
   }
-  const normalizedQuery = query.trim().toLocaleLowerCase();
-  const filteredNavigation = normalizedQuery
-    ? visibleNavigation.filter((item) =>
-        t(item.label).toLocaleLowerCase().includes(normalizedQuery))
+  const visibleNavigation = flatNavigation.filter((item) => item.to !== "/approvals" || approvals !== undefined);
+  const needle = query.trim().toLocaleLowerCase();
+  const results = needle
+    ? visibleNavigation.filter((item) => t(item.label).toLocaleLowerCase().includes(needle))
     : visibleNavigation;
+
   function goTo(to: string) {
     void navigate(to);
-    setMobileNavigationOpen(false);
     setCommandOpen(false);
+    setNavigationOpen(false);
+    setSettingsOpen(false);
     setQuery("");
   }
 
-  function switchLocale() {
-    setLocale(locale === "en" ? "zh-CN" : "en");
-  }
-
   return (
-    <div data-slot="management-layout" data-layout={layout} className="flex min-h-screen bg-background text-foreground">
-      {layout === "side" ? <aside
-        className={[
-          "sticky top-0 z-30 hidden h-dvh shrink-0 flex-col border-r border-border bg-sidebar transition-[width] duration-200 ease-out lg:flex",
-          collapsed ? "w-[64px]" : "w-[228px]",
-        ].join(" ")}
-      >
-        <div
-          data-slot="sidebar-brand"
-          className={[
-            "flex h-[56px] shrink-0 items-center",
-            collapsed
-              ? "justify-center px-2"
-              : "justify-center px-3 lg:justify-start lg:gap-2 lg:px-4",
-          ].join(" ")}
-        >
-          {collapsed ? (
-            <div
-              data-slot="sidebar-brand-logo"
-              className="group/brand relative flex size-8 shrink-0 items-center justify-center rounded-lg"
-            >
-              <BrandMark className="size-6 transition-opacity duration-150 group-hover/brand:opacity-0" aria-hidden="true" />
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      aria-label={t("Expand sidebar")}
-                      onClick={() => setCollapsed(false)}
-                      className="absolute inset-0 size-8 rounded-lg text-foreground opacity-0 transition-opacity duration-150 hover:bg-muted focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-ring group-hover/brand:opacity-100"
-                    />
-                  }
-                >
-                  <PanelLeftOpenIcon className="size-[19px]" />
-                </TooltipTrigger>
-                <TooltipContent side="right">
-                  {t("Expand sidebar")}
-                </TooltipContent>
-              </Tooltip>
-            </div>
-          ) : (
-            <>
-              <div className="flex size-8 shrink-0 items-center justify-center rounded-lg">
-                <BrandMark className="size-6" aria-hidden="true" />
-              </div>
-              <div className="hidden min-w-0 flex-1 lg:block">
-                <p className="brand-wordmark truncate text-[17px] leading-tight text-foreground">Mender</p>
-              </div>
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      aria-label={t("Collapse sidebar")}
-                      onClick={() => setCollapsed(true)}
-                      className="hidden size-7 shrink-0 text-muted-foreground hover:text-foreground lg:inline-flex"
-                    />
-                  }
-                >
-                  <PanelLeftCloseIcon />
-                </TooltipTrigger>
-                <TooltipContent side="right">
-                  {t("Collapse sidebar")}
-                </TooltipContent>
-              </Tooltip>
-            </>
-          )}
+    <div data-slot="management-layout" data-layout="top" className="flex min-h-screen min-w-0 flex-col bg-background text-foreground">
+      <header data-slot="app-header" className="sticky top-0 z-30 flex h-[58px] shrink-0 items-center gap-3 border-b border-border/65 bg-background px-4 sm:px-6">
+        <div className="flex min-w-[128px] shrink-0 items-center gap-2">
+          <Button type="button" variant="ghost" size="icon-sm"
+            aria-label={t("Open navigation")} onClick={() => setNavigationOpen(true)}
+            className="size-8 lg:hidden">
+            <MenuIcon className="size-[19px]" aria-hidden="true" />
+          </Button>
+          <Link to="/" className="inline-flex items-center gap-2 rounded-md text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/40">
+            <BrandMark className="size-6" aria-hidden="true" />
+            <span className="brand-wordmark text-[17px] font-semibold tracking-[-0.035em]">Mender</span>
+          </Link>
         </div>
-
-        <nav
-          className={["min-h-0 flex-1 overflow-y-auto pb-5", collapsed ? "px-2" : "px-2 lg:px-3"].join(" ")}
-          aria-label={t("Primary navigation")}
-        >
-          {navigation.map((group, groupIndex) => (
-            <div key={group.label} className={groupIndex === 0 ? "mt-1" : "mt-3"}>
-              {!collapsed ? (
-                <p className="mb-1 px-3 py-1.5 text-[10px] font-semibold tracking-[0.06em] uppercase text-muted-foreground">
-                  {t(group.label)}
-                </p>
-              ) : groupIndex > 0 ? (
-                <div className="mx-2 mb-3 border-t border-border/80" />
-              ) : null}
-              <div className="flex flex-col gap-0.5">
-                {group.items.filter((item) =>
-                  item.to !== "/approvals" || approvals !== undefined).map((item) => {
-                  const Icon = item.icon;
-                  const link = (
-                    <NavLink
-                      key={item.to}
-                      to={item.to}
-                      end={item.to === "/"}
-                      aria-label={t(item.label)}
-                      title={t(item.label)}
-                      className={({ isActive }) => [
-                        "group flex h-9 min-w-0 items-center rounded-lg text-[13px] font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
-                        collapsed ? "justify-center px-0" : "justify-start gap-2.5 px-3",
-                        isActive
-                          ? "bg-accent text-foreground"
-                          : "text-muted-foreground hover:bg-muted/75 hover:text-foreground",
-                      ].join(" ")}
-                    >
-                      {({ isActive }) => (
-                        <>
-                          <Icon
-                            className={["size-[17px] shrink-0", isActive ? "text-primary-ink" : "text-muted-foreground group-hover:text-foreground"].join(" ")}
-                            aria-hidden="true"
-                          />
-                          {!collapsed ? <span className="min-w-0 truncate">{t(item.label)}</span> : null}
-                          {!collapsed && item.to === "/approvals" && pendingApprovalCount > 0 ?
-                            <span aria-label={t("Pending approvals") + ": " + pendingApprovalCount}
-                              className="ml-auto rounded-md bg-destructive/10 px-1.5 text-[11px] text-destructive tabular-nums">
-                              {pendingApprovalCount}
-                            </span> : null}
-                        </>
-                      )}
-                    </NavLink>
-                  );
-                  return collapsed ? (
-                    <Tooltip key={item.to}>
-                      <TooltipTrigger render={link} />
-                      <TooltipContent side="right">{t(item.label)}</TooltipContent>
-                    </Tooltip>
-                  ) : link;
-                })}
-              </div>
-            </div>
-          ))}
+        <nav aria-label={t("Primary navigation")} data-slot="top-navigation"
+          className="hidden min-w-0 flex-1 items-center justify-center overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:flex">
+          <div className="flex w-max shrink-0 items-center gap-1 rounded-[11px] bg-secondary/70 p-1">
+            {primaryNavigation.map((item) => (
+              <NavLink key={item.to} to={item.to} end={item.to === "/"}
+                aria-label={t(item.label)}
+                className={({ isActive }) => [
+                  "inline-flex h-[35px] shrink-0 items-center justify-center rounded-lg px-3.5 text-[13px] font-medium whitespace-nowrap transition-colors focus-visible:outline-2 focus-visible:outline-ring",
+                  isActive ? "bg-card text-foreground shadow-[0_1px_3px_rgb(15_15_20/0.12)]" :
+                    "text-muted-foreground hover:bg-card/65 hover:text-foreground",
+                ].join(" ")}>
+                {t(item.label)}
+              </NavLink>
+            ))}
+          </div>
         </nav>
-
-      </aside> : null}
-
-      <Dialog open={mobileNavigationOpen} onOpenChange={setMobileNavigationOpen}>
-        <DialogContent className="top-0 left-0 flex h-dvh max-h-dvh w-[min(336px,calc(100vw-1rem))] max-w-none flex-col gap-0 overflow-hidden rounded-none rounded-r-2xl p-0 translate-x-0 translate-y-0 sm:max-w-none lg:hidden">
-          <DialogHeader className="flex h-[76px] shrink-0 flex-row items-center gap-3 border-b border-border/70 px-5">
-            <BrandMark className="size-8 shrink-0" aria-hidden="true" />
-            <DialogTitle className="brand-wordmark text-lg">Mender</DialogTitle>
-            <DialogDescription className="sr-only">{t("Primary navigation")}</DialogDescription>
-          </DialogHeader>
-          <nav className="min-h-0 flex-1 overflow-y-auto px-3 py-3" aria-label={t("Primary navigation")}>
-            {navigation.map((group) => (
-              <div key={group.label} className="mb-4">
-                <p className="px-3 py-2 text-xs font-semibold text-muted-foreground">{t(group.label)}</p>
-                <div className="grid gap-1">
-                  {group.items.filter(item => item.to !== "/approvals" || approvals !== undefined).map((item) => {
+        <div className="ml-auto flex shrink-0 items-center gap-0.5 sm:gap-1">
+          <Tooltip>
+            <TooltipTrigger render={<Button type="button" size="icon-sm" variant="ghost" className="size-8 text-muted-foreground hover:text-foreground"
+              aria-label={t("Search pages…")} onClick={() => setCommandOpen(true)} />}>
+              <SearchIcon className="size-[17px]" aria-hidden="true" />
+            </TooltipTrigger>
+            <TooltipContent side="bottom">{t("Search pages…") + " (" + t("⌘K") + ")"}</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger render={<Button type="button" size="icon-sm" variant="ghost" className="size-8 text-muted-foreground hover:text-foreground"
+              aria-label={t("Refresh")} onClick={() => { void navigate(0); }} />}>
+              <RefreshCwIcon className="size-[17px]" aria-hidden="true" />
+            </TooltipTrigger>
+            <TooltipContent side="bottom">{t("Refresh")}</TooltipContent>
+          </Tooltip>
+          {approvals !== undefined ? (
+            <Tooltip>
+              <TooltipTrigger render={<Button type="button" size="icon-sm" variant="ghost"
+                className="relative size-8 text-muted-foreground hover:text-foreground"
+                aria-label={t("Pending approvals")} onClick={() => goTo("/approvals")} />}>
+                <BellIcon className="size-[17px]" aria-hidden="true" />
+                {pendingApprovalCount > 0 ? (
+                  <span aria-label={t("Pending approvals") + ": " + pendingApprovalCount}
+                    className="absolute -right-0.5 -top-0.5 min-w-4 rounded-full bg-destructive px-1 text-center text-[10px] leading-4 text-white">
+                    {pendingApprovalCount > 99 ? "99+" : pendingApprovalCount}
+                  </span>
+                ) : null}
+              </TooltipTrigger>
+              <TooltipContent side="bottom">{t("Pending approvals")} ({pendingApprovalCount})</TooltipContent>
+            </Tooltip>
+          ) : null}
+          <Popover open={settingsOpen} onOpenChange={setSettingsOpen}>
+            <PopoverTrigger render={<Button type="button" size="icon-sm" variant="ghost"
+              className="size-8 text-muted-foreground hover:text-foreground" aria-label={t("Settings")} />}>
+              <Settings2Icon className="size-[18px]" aria-hidden="true" />
+            </PopoverTrigger>
+            <PopoverContent side="bottom" align="end" sideOffset={9}
+              className="w-[256px] rounded-xl border-border bg-popover p-2 shadow-lg">
+              <p className="px-2 py-2 text-[12px] font-semibold text-foreground">{t("Settings")}</p>
+              {secondaryNavigation.map((group) => (
+                <div key={group.label} className="border-t border-border/75 py-1.5">
+                  <p className="px-2 py-1.5 text-[10px] font-semibold tracking-wider text-muted-foreground uppercase">{t(group.label)}</p>
+                  {group.items.filter((item) => item.to !== "/approvals" || approvals !== undefined).map((item) => {
                     const Icon = item.icon;
                     return (
-                      <NavLink
-                        key={item.to}
-                        to={item.to}
-                        end={item.to === "/"}
-                        onClick={() => setMobileNavigationOpen(false)}
-                        className={({ isActive }) => [
-                          "flex min-h-10 items-center gap-2.5 rounded-lg px-3 text-[13px] font-medium focus-visible:outline-2 focus-visible:outline-ring",
-                          isActive ? "bg-accent text-foreground" : "text-foreground hover:bg-muted",
-                        ].join(" ")}
-                      >
-                        <Icon className="size-[17px] shrink-0" aria-hidden="true" />
-                        {t(item.label)}
-                      </NavLink>
+                      <button key={item.to} type="button" onClick={() => goTo(item.to)}
+                        className="flex h-9 w-full items-center gap-2 rounded-lg px-2 text-left text-[13px] text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring">
+                        <Icon className="size-[16px] text-muted-foreground" aria-hidden="true" />
+                        <span className="flex-1">{t(item.label)}</span>
+                        {item.to === "/approvals" && pendingApprovalCount > 0 ? (
+                          <span className="rounded-md bg-destructive/10 px-1.5 text-[11px] text-destructive">{pendingApprovalCount}</span>
+                        ) : null}
+                      </button>
                     );
                   })}
                 </div>
+              ))}
+              <div className="border-t border-border/75 px-2 pt-2 pb-1">
+                <p className="mb-2 text-[11px] font-medium text-muted-foreground">{t("Appearance")}</p>
+                <div role="group" aria-label={t("Appearance")} className="flex gap-1 rounded-lg bg-secondary p-1">
+                  {(["light", "dark", "system"] as const).map((option) => (
+                    <button key={option} type="button" aria-pressed={appearance === option}
+                      onClick={() => setAppearance(option)}
+                      className={[
+                        "h-7 flex-1 rounded-md px-1 text-[11px] focus-visible:outline-2 focus-visible:outline-ring",
+                        appearance === option ? "bg-card font-semibold text-foreground shadow-sm" :
+                          "text-muted-foreground hover:text-foreground",
+                      ].join(" ")}>
+                      {t(option === "light" ? "Light" : option === "dark" ? "Dark" : "System")}
+                    </button>
+                  ))}
+                </div>
+                <button type="button" onClick={() => { setLocale(locale === "en" ? "zh-CN" : "en"); }}
+                  className="mt-2 flex h-8 w-full items-center gap-2 rounded-lg px-1 text-left text-[12px] text-muted-foreground hover:bg-muted hover:text-foreground">
+                  <LanguagesIcon className="size-4" aria-hidden="true" />
+                  {t("Language")}: {locale === "en" ? t("Simplified Chinese") : t("English")}
+                </button>
               </div>
-            ))}
+            </PopoverContent>
+          </Popover>
+          <Tooltip>
+            <TooltipTrigger render={<div role="status" aria-label={
+              runtimeReady === true ? t("Connected") : runtimeReady === false ? t("Unavailable") : t("Loading")
+            } className="ml-1 flex size-5 cursor-default items-center justify-center" />}>
+              <span className={[
+                "size-2 rounded-full", runtimeReady === true ? "bg-teal" :
+                  runtimeReady === false ? "bg-destructive" : "animate-pulse bg-muted-foreground",
+              ].join(" ")} aria-hidden="true" />
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              {t(runtimeReady === true ? "Connected" : runtimeReady === false ? "Unavailable" : "Loading")}
+            </TooltipContent>
+          </Tooltip>
+        </div>
+        <h1 className="sr-only">{t(trail[trail.length - 1]!.label)}</h1>
+      </header>
+
+      <Dialog open={navigationOpen} onOpenChange={setNavigationOpen}>
+        <DialogContent className="top-0 left-0 flex h-dvh max-h-dvh w-[min(330px,calc(100vw-1rem))] max-w-none flex-col gap-0 overflow-hidden rounded-none rounded-r-xl p-0 translate-x-0 translate-y-0 sm:max-w-none lg:hidden">
+          <DialogHeader className="flex h-[60px] shrink-0 flex-row items-center gap-2 border-b border-border px-5">
+            <BrandMark className="size-6 shrink-0" aria-hidden="true" />
+            <DialogTitle className="brand-wordmark text-lg">Mender</DialogTitle>
+            <DialogDescription className="sr-only">{t("Primary navigation")}</DialogDescription>
+          </DialogHeader>
+          <nav aria-label={t("Primary navigation")} className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
+            <p className="px-3 py-2 text-[11px] font-medium text-muted-foreground">{t("Primary navigation")}</p>
+            {primaryNavigation.map((item) => {
+              const Icon = item.icon;
+              return <NavLink key={item.to} to={item.to} end={item.to === "/"}
+                onClick={() => setNavigationOpen(false)}
+                className={({ isActive }) => [
+                  "flex h-10 items-center gap-3 rounded-lg px-3 text-[13px] font-medium",
+                  isActive ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                ].join(" ")}>
+                <Icon className="size-4" aria-hidden="true" />
+                {t(item.label)}
+              </NavLink>;
+            })}
+            <p className="mt-4 border-t border-border px-3 pt-4 pb-2 text-[11px] font-medium text-muted-foreground">{t("Settings")}</p>
+            {secondaryNavigation.flatMap((group) => group.items)
+              .filter((item) => item.to !== "/approvals" || approvals !== undefined)
+              .map((item) => {
+                const Icon = item.icon;
+                return <NavLink key={item.to} to={item.to} onClick={() => setNavigationOpen(false)}
+                  className={({ isActive }) => [
+                    "flex h-10 items-center gap-3 rounded-lg px-3 text-[13px] font-medium",
+                    isActive ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                  ].join(" ")}>
+                  <Icon className="size-4" aria-hidden="true" />
+                  {t(item.label)}
+                </NavLink>;
+              })}
           </nav>
         </DialogContent>
       </Dialog>
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-20 flex h-[54px] shrink-0 items-center justify-between gap-2 border-b border-border bg-background/95 px-4 backdrop-blur-sm sm:px-5 lg:px-6">
-          <div className="flex min-w-0 items-center gap-2">
-            {layout === "top" ? (
-              <div className="hidden shrink-0 items-center gap-2 border-r border-border pr-3 lg:flex">
-                <BrandMark className="size-5" aria-hidden="true" />
-                <span className="text-sm font-semibold">Mender</span>
-              </div>
-            ) : null}
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-lg"
-              aria-label={t("Open navigation")}
-              onClick={() => setMobileNavigationOpen(true)}
-              className="size-8 shrink-0 rounded-lg lg:hidden"
-            >
-              <MenuIcon className="size-5" />
-            </Button>
-            <nav aria-label={t("Breadcrumb")} data-slot="page-breadcrumb" className="flex min-w-0 items-center gap-1.5 text-[13px] sm:text-sm">
-              {trail.length > 1 ? (
-                <Link to={trail[trail.length - 2]!.to} aria-label={t("Back") + ": " + t(trail[trail.length - 2]!.label)}
-                  className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring sm:hidden">
-                  <ChevronLeftIcon className="size-4" aria-hidden="true" />
-                </Link>
-              ) : null}
-              <span className="hidden min-w-0 items-center gap-1.5 sm:flex">
-                {trail.slice(0, -1).map((crumb) => (
-                  <span key={crumb.to} className="flex min-w-0 shrink-0 items-center gap-1.5">
-                    <Link to={crumb.to} title={t(crumb.label)}
-                      className="max-w-24 truncate text-muted-foreground hover:text-foreground hover:underline focus-visible:outline-2 focus-visible:outline-ring sm:max-w-40">
-                      {t(crumb.label)}
-                    </Link>
-                    <span className="text-muted-foreground/50" aria-hidden="true">/</span>
-                  </span>
-                ))}
+      <main className="mx-auto flex w-full max-w-[1680px] min-w-0 flex-1 flex-col px-4 pt-5 pb-8 sm:px-6 lg:px-7" data-slot="app-workspace">
+        {trail.length > 1 ? (
+          <nav aria-label={t("Breadcrumb")} data-slot="page-breadcrumb" className="mb-4 flex min-w-0 items-center gap-1.5 text-[12px] text-muted-foreground">
+            {trail.length > 1 ? <Link to={trail[trail.length - 2]!.to}
+              aria-label={t("Back") + ": " + t(trail[trail.length - 2]!.label)}
+              className="flex items-center gap-1 rounded-md hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40 sm:hidden">
+              <ChevronLeftIcon className="size-4" />{t("Back")}
+            </Link> : null}
+            {trail.slice(0, -1).map((crumb) => (
+              <span key={crumb.to} className="hidden min-w-0 items-center gap-1.5 sm:inline-flex">
+                <Link to={crumb.to} className="max-w-44 truncate hover:text-foreground hover:underline">{t(crumb.label)}</Link>
+                <span className="text-muted-foreground/45" aria-hidden="true">/</span>
               </span>
-              <h1 className="min-w-0 truncate text-[15px] leading-tight font-semibold tracking-[-0.02em] sm:text-[16px]" title={t(trail[trail.length - 1]!.label)}>
-                {t(trail[trail.length - 1]!.label)}
-              </h1>
-            </nav>
-          </div>
-
-          <div className="flex min-w-0 shrink-0 items-center justify-end gap-1 sm:gap-2">
-            <Tooltip>
-              <TooltipTrigger render={<Button
-                type="button" variant="ghost" size="icon-sm"
-                aria-label={t(layout === "side" ? "Switch to top navigation" : "Switch to sidebar navigation")}
-                onClick={() => setLayout((current) => current === "side" ? "top" : "side")}
-                className="hidden size-8 text-muted-foreground hover:text-foreground lg:inline-flex"
-              />}>
-                {layout === "side" ? <PanelTopIcon className="size-4" /> : <PanelLeftIcon className="size-4" />}
-              </TooltipTrigger>
-              <TooltipContent side="bottom">
-                {t(layout === "side" ? "Switch to top navigation" : "Switch to sidebar navigation")}
-              </TooltipContent>
-            </Tooltip>
-            <button
-              type="button"
-              onClick={() => setCommandOpen(true)}
-              aria-label={t("Search pages…")}
-              className="flex h-8 min-w-8 items-center justify-center gap-2 rounded-lg border border-border bg-card px-2.5 text-left text-[13px] text-muted-foreground transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring sm:w-[178px] sm:justify-start xl:w-[210px]"
-            >
-              <SearchIcon className="size-4 shrink-0" aria-hidden="true" />
-              <span className="hidden truncate sm:inline">{t("Search pages…")}</span>
-              <span className="ml-auto hidden rounded-md bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground xl:inline">
-                {t("⌘K")}
-              </span>
-            </button>
-            {approvals !== undefined?<Tooltip>
-              <TooltipTrigger render={<Button type="button" variant="ghost" size="icon-lg"
-                aria-label={t("Pending approvals")} onClick={()=>void navigate("/approvals")}
-                className="relative size-8 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"/>}>
-                <BellIcon className="size-4"/>
-                {pendingApprovalCount>0?<span aria-label={t("Pending approvals")+": "+pendingApprovalCount}
-                  className="absolute -right-1 -top-1 flex min-w-4 items-center justify-center rounded-full bg-foreground px-1 text-[10px] text-background">
-                  {pendingApprovalCount>99?"99+":pendingApprovalCount}
-                </span>:null}
-              </TooltipTrigger>
-              <TooltipContent side="bottom">{t("Pending approvals")} ({pendingApprovalCount})</TooltipContent>
-            </Tooltip>:null}
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-lg"
-                    aria-label={t("Language")}
-                    onClick={switchLocale}
-                    className="size-8 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
-                  />
-                }
-              >
-                <LanguagesIcon />
-              </TooltipTrigger>
-              <TooltipContent side="bottom">
-                {t("Language")}: {locale === "en" ? t("English") : t("Simplified Chinese")}
-                {" → "}
-                {locale === "en" ? t("Simplified Chinese") : t("English")}
-              </TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <div
-                    role="status"
-                    aria-label={runtimeReady === true ? t("Connected") : runtimeReady === false ? t("Unavailable") : t("Loading")}
-                    className="flex size-7 items-center justify-center cursor-default"
-                  >
-                    <span
-                      className={[
-                        "size-2 rounded-full transition-colors",
-                        runtimeReady === true
-                          ? "bg-teal"
-                          : runtimeReady === false
-                            ? "bg-destructive"
-                            : "bg-muted-foreground animate-pulse",
-                      ].join(" ")}
-                      aria-hidden="true"
-                    />
-                    <span className="sr-only">
-                      {runtimeReady === true ? t("Connected") : runtimeReady === false ? t("Unavailable") : t("Loading")}
-                    </span>
-                  </div>
-                }
-              />
-              <TooltipContent side="bottom">
-                {runtimeReady === true ? t("Connected") : runtimeReady === false ? t("Unavailable") : t("Loading")}
-              </TooltipContent>
-            </Tooltip>
-          </div>
-        </header>
-
-        {layout === "top" ? (
-          <nav data-slot="top-navigation" aria-label={t("Primary navigation")}
-            className="hidden border-b border-border bg-sidebar lg:block">
-            <div className="flex h-9 items-center gap-1 border-b border-border/60 px-5" role="group"
-              aria-label={t("Navigation groups")}>
-              {navigation.map((group) => (
-                <button key={group.label} type="button" aria-pressed={selectedGroup.label === group.label}
-                  onClick={() => setTopGroup({ pathname: location.pathname, label: group.label })}
-                  className={[
-                    "h-8 rounded-md px-3 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-ring",
-                    selectedGroup.label === group.label ? "bg-card text-foreground shadow-sm" :
-                      "text-muted-foreground hover:bg-muted hover:text-foreground",
-                  ].join(" ")}>
-                  {t(group.label)}
-                </button>
-              ))}
-            </div>
-            <div className="flex h-11 items-center gap-1 overflow-x-auto px-5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              {selectedGroup.items.filter((item) =>
-                item.to !== "/approvals" || approvals !== undefined).map((item) => {
-                const Icon = item.icon;
-                return <NavLink key={item.to} to={item.to} end={item.to === "/"}
-                  className={({ isActive }) => [
-                    "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-3 text-[13px] font-medium transition-colors focus-visible:outline-2 focus-visible:outline-ring",
-                    isActive ? "bg-accent text-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground",
-                  ].join(" ")}>
-                  <Icon className="size-3.5 shrink-0" aria-hidden="true" />
-                  <span>{t(item.label)}</span>
-                  {item.to === "/approvals" && pendingApprovalCount > 0 ?
-                    <span className="rounded bg-destructive/10 px-1 text-[11px] text-destructive">{pendingApprovalCount}</span> : null}
-                </NavLink>;
-              })}
-            </div>
+            ))}
+            <span className="min-w-0 truncate font-medium text-foreground" title={t(trail[trail.length - 1]!.label)}>
+              {t(trail[trail.length - 1]!.label)}
+            </span>
           </nav>
         ) : null}
+        <PageHeadingContext.Provider value={updatePageHeading}>
+          <Outlet />
+        </PageHeadingContext.Provider>
+      </main>
 
-        <main className="flex min-w-0 flex-1 flex-col">
-          <motion.div
-            key={location.pathname}
-            initial={reduceMotion ? false : { opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.12, ease: "easeOut" }}
-            className="mx-auto flex w-full max-w-[1560px] flex-1 flex-col px-4 pt-4 pb-7 sm:px-5 lg:px-6"
-          >
-            <PageHeadingContext.Provider value={updatePageHeading}>
-              <Outlet />
-            </PageHeadingContext.Provider>
-          </motion.div>
-        </main>
-      </div>
-
-      <Dialog
-        open={commandOpen}
-        onOpenChange={(open) => {
-          setCommandOpen(open);
-          if (!open) setQuery("");
-        }}
-      >
+      <Dialog open={commandOpen} onOpenChange={(open) => {
+        setCommandOpen(open);
+        if (!open) setQuery("");
+      }}>
         <DialogContent className="gap-0 p-0 sm:max-w-lg">
-          <DialogHeader className="border-b border-border/70 px-5 py-4">
+          <DialogHeader className="border-b border-border px-5 py-4">
             <DialogTitle className="text-base">{t("Quick navigation")}</DialogTitle>
-            <DialogDescription className="sr-only">
-              {t("Search pages and jump to a management area.")}
-            </DialogDescription>
+            <DialogDescription className="sr-only">{t("Search pages and jump to a management area.")}</DialogDescription>
           </DialogHeader>
-          <div className="border-b border-border/70 p-3">
-            <input
-              autoFocus
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder={t("Search pages…")}
-              aria-label={t("Search pages")}
-              className="h-9 w-full rounded-lg border border-input bg-card px-3 text-sm outline-none placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/20"
-            />
+          <div className="border-b border-border p-3">
+            <div className="relative">
+              <SearchIcon className="pointer-events-none absolute top-2.5 left-3 size-4 text-muted-foreground" />
+              <input autoFocus aria-label={t("Search pages")} value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder={t("Search pages…")}
+                className="h-9 w-full rounded-lg border border-input bg-card pr-3 pl-9 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/40" />
+            </div>
           </div>
-          <div className="max-h-[360px] overflow-y-auto p-2">
-            {filteredNavigation.length ? (
-              filteredNavigation.map((item) => {
-                const Icon = item.icon;
-                return (
-                  <button
-                    key={item.to}
-                    type="button"
-                    onClick={() => goTo(item.to)}
-                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"
-                  >
-                    <span className="flex size-7 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-                      <Icon className="size-4" aria-hidden="true" />
-                    </span>
-                    <span className="font-medium">{t(item.label)}</span>
-                  </button>
-                );
-              })
-            ) : (
-              <p className="px-3 py-8 text-center text-sm text-muted-foreground">
-                {t("No matching pages")}
-              </p>
+          <div className="max-h-[min(64vh,440px)] space-y-0.5 overflow-y-auto p-2">
+            {results.length ? results.map((item) => {
+              const Icon = item.icon;
+              return (
+                <button key={item.to} type="button" onClick={() => goTo(item.to)}
+                  className="flex h-10 w-full items-center gap-3 rounded-lg px-3 text-left text-sm transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring">
+                  <Icon className="size-4 text-muted-foreground" aria-hidden="true" />
+                  <span className="flex-1">{t(item.label)}</span>
+                  <CommandIcon className="size-3.5 text-muted-foreground/40" aria-hidden="true" />
+                </button>
+              );
+            }) : (
+              <p className="px-3 py-8 text-center text-sm text-muted-foreground">{t("No matching pages")}</p>
             )}
           </div>
         </DialogContent>
