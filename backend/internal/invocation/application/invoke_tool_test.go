@@ -903,7 +903,7 @@ func TestExecutorUnavailableReturnsRuntimeFailureOutcome(t *testing.T) {
 	t.Parallel()
 
 	fixture := newFixture(t)
-	fixture.useCase.router = fakeRouter{err: ErrExecutorNotFound}
+	fixture.useCase.execution.router = fakeRouter{err: ErrExecutorNotFound}
 
 	response, err := fixture.useCase.Execute(context.Background(), InvokeToolRequest{
 		ToolID:    fixture.tool.ID(),
