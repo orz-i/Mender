@@ -8,6 +8,7 @@ import (
 	agentdomain "github.com/orz-i/Mender/backend/internal/agent/domain"
 	agentacp "github.com/orz-i/Mender/backend/internal/agent/infrastructure/acp"
 	agentagy "github.com/orz-i/Mender/backend/internal/agent/infrastructure/antigravity"
+	agentworkspace "github.com/orz-i/Mender/backend/internal/agent/infrastructure/localworkspace"
 	agentsqlite "github.com/orz-i/Mender/backend/internal/agent/infrastructure/sqlite"
 	gov "github.com/orz-i/Mender/backend/internal/governance/domain"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
@@ -59,7 +60,7 @@ func newAgents(ctx context.Context, dbPath string, owner gov.Principal,
 			antigravity: agentagy.Runner{NewCommand: launcher.AntigravityCommand, NewResumeCommand: launcher.AntigravityResumeCommand},
 		}
 	}
-	service, err := agentapplication.NewService(store, runner, admit.Execute, owner, profileExists)
+	service, err := agentapplication.NewService(store, runner, admit.Execute, owner, profileExists, agentworkspace.New())
 	if err != nil {
 		_ = store.Close()
 		return nil, nil, nil, err

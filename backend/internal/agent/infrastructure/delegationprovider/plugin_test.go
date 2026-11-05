@@ -10,6 +10,7 @@ import (
 
 	agentapplication "github.com/orz-i/Mender/backend/internal/agent/application"
 	agentdomain "github.com/orz-i/Mender/backend/internal/agent/domain"
+	agentworkspace "github.com/orz-i/Mender/backend/internal/agent/infrastructure/localworkspace"
 	agentsqlite "github.com/orz-i/Mender/backend/internal/agent/infrastructure/sqlite"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	gov "github.com/orz-i/Mender/backend/internal/governance/domain"
@@ -38,7 +39,7 @@ func TestPluginConfigAndBoundToolDiscovery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	svc, err := agentapplication.NewService(s, inertRunner{}, func(context.Context, gov.Context, agentdomain.Agent, gov.Action) error { return nil }, owner, nil)
+	svc, err := agentapplication.NewService(s, inertRunner{}, func(context.Context, gov.Context, agentdomain.Agent, gov.Action) error { return nil }, owner, nil, agentworkspace.New())
 	if err != nil {
 		t.Fatal(err)
 	}

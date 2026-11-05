@@ -8,6 +8,7 @@ import (
 	"time"
 
 	agentdomain "github.com/orz-i/Mender/backend/internal/agent/domain"
+	"github.com/orz-i/Mender/backend/internal/agent/infrastructure/localworkspace"
 	agentsqlite "github.com/orz-i/Mender/backend/internal/agent/infrastructure/sqlite"
 	gov "github.com/orz-i/Mender/backend/internal/governance/domain"
 )
@@ -98,7 +99,7 @@ func newFixtureService(t *testing.T, run Executor) (*Service, gov.Context) {
 				return nil
 			}
 			return errors.New("profile missing")
-		})
+		}, fixtureWorkspaceVerifier())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -199,7 +200,7 @@ func TestServiceDeniedPolicyNeverStartsRunner(t *testing.T) {
 	x := fakeExecutor{started: make(chan struct{}), release: make(chan struct{})}
 	s, err := NewService(store, x, func(_ context.Context, _ gov.Context, _ agentdomain.Agent, _ gov.Action) error {
 		return agentdomain.ErrForbidden
-	}, o.Principal(), nil)
+	}, o.Principal(), nil, fixtureWorkspaceVerifier())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -321,3 +322,5 @@ func TestCancelDuringGovernedToolResolutionRetainsCancelledLifecycle(t *testing.
 	default:
 	}
 }
+
+func fixtureWorkspaceVerifier() LocalWorkspaceVerifier { return localworkspace.New() }

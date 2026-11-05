@@ -112,10 +112,10 @@ func TestACPConcurrentCancellationAfterPersistenceStartsKeepsInProcessReceipt(t 
 		offers: make(chan *pendingApprovalHandoff),
 		done:   make(chan struct{}),
 	}
-	s.mu.Lock()
-	s.active[taskID] = func() {}
-	s.pending[id] = waiter
-	s.mu.Unlock()
+	s.tasks.mu.Lock()
+	s.tasks.active[taskID] = func() {}
+	s.tasks.pending[id] = waiter
+	s.tasks.mu.Unlock()
 
 	requestCtx, cancelRequest := context.WithCancel(context.Background())
 	defer cancelRequest()
@@ -124,7 +124,7 @@ func TestACPConcurrentCancellationAfterPersistenceStartsKeepsInProcessReceipt(t 
 	writes := atomic.Int32{}
 	ownerDone := make(chan error, 1)
 	go func() {
-		ownerDone <- s.resolveWaitingApproval(
+		ownerDone <- s.approvals.resolveWaitingApproval(
 			context.Background(), id, taskID,
 			PermissionDecision{Choice: agentdomain.ApprovalAllowOnce},
 			func(context.Context) error {

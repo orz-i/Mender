@@ -13,7 +13,7 @@ import (
 // Resume creates a new explicit Task from an existing, proven-complete
 // native Session. It never retries the old prompt, mutates an unknown Task,
 // trusts a raw native ID from a model, or bypasses ordinary submit grants.
-func (s *Service) Resume(ctx context.Context, id agentdomain.TaskID, prompt string,
+func (s *TaskService) Resume(ctx context.Context, id agentdomain.TaskID, prompt string,
 	agentID agentdomain.ID, caller gov.Context) (agentdomain.Task, error) {
 	if caller.Validate() != nil {
 		return agentdomain.Task{}, agentdomain.ErrForbidden
@@ -56,7 +56,7 @@ func (s *Service) Resume(ctx context.Context, id agentdomain.TaskID, prompt stri
 		if root != parent.WorkspaceRoot {
 			return agentdomain.Task{}, agentdomain.ErrResumeUnavailable
 		}
-		if err := validateRegisteredWorkspaceRoot(root); err != nil {
+		if err := s.validateRegisteredWorkspaceRoot(ctx, root); err != nil {
 			return agentdomain.Task{}, agentdomain.ErrResumeUnavailable
 		}
 		if profileID != "" {
@@ -72,7 +72,7 @@ func (s *Service) Resume(ctx context.Context, id agentdomain.TaskID, prompt stri
 		if agent.Spec().WorkspaceRoot != parent.WorkspaceRoot {
 			return agentdomain.Task{}, agentdomain.ErrResumeUnavailable
 		}
-		if err := validateRegisteredWorkspaceRoot(parent.WorkspaceRoot); err != nil {
+		if err := s.validateRegisteredWorkspaceRoot(ctx, parent.WorkspaceRoot); err != nil {
 			return agentdomain.Task{}, agentdomain.ErrResumeUnavailable
 		}
 	}

@@ -76,7 +76,7 @@ func TestExplicitOwnerApprovalAllowsOnceWithoutProfileImpersonation(t *testing.T
 	exec := &approvalExecutorFixture{ready: make(chan struct{}), decision: make(chan agentdomain.ApprovalChoice, 1)}
 	ownerCtx := owner(t)
 	service, err := NewService(db, exec, func(context.Context, gov.Context, agentdomain.Agent, gov.Action) error { return nil },
-		ownerCtx.Principal(), func(context.Context, string) error { return nil })
+		ownerCtx.Principal(), func(context.Context, string) error { return nil }, fixtureWorkspaceVerifier())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -177,7 +177,7 @@ func newApprovalFixture(t *testing.T) (*Service, gov.Context, *approvalExecutorF
 	executor := &approvalExecutorFixture{ready: make(chan struct{}), decision: make(chan agentdomain.ApprovalChoice, 1)}
 	o := owner(t)
 	service, err := NewService(db, executor, func(context.Context, gov.Context, agentdomain.Agent, gov.Action) error { return nil },
-		o.Principal(), func(context.Context, string) error { return nil })
+		o.Principal(), func(context.Context, string) error { return nil }, fixtureWorkspaceVerifier())
 	if err != nil {
 		t.Fatal(err)
 	}

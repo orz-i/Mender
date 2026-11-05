@@ -90,7 +90,7 @@ func TestRuntimeSelectionsRequireExplicitWorkspaceGrantAndSnapshot(t *testing.T)
 				return nil
 			}
 			return errors.New("no profile")
-		})
+		}, fixtureWorkspaceVerifier())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -191,7 +191,7 @@ func TestLocalAgentWorkspaceApprovalRejectsPathRedirectionWithoutLaunching(t *te
 				return nil
 			}
 			return errors.New("unknown Profile")
-		})
+		}, fixtureWorkspaceVerifier())
 	if err != nil {
 		t.Fatal(err)
 	}

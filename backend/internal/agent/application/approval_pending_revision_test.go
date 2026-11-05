@@ -39,7 +39,7 @@ func TestPendingPolicyReleaseRejectsStaleGovernanceGeneration(t *testing.T) {
 	}
 	exec := &approvalExecutorFixture{ready: make(chan struct{}), decision: make(chan agentdomain.ApprovalChoice, 1)}
 	ownerCtx := owner(t)
-	svc, err := NewService(store, exec, admit, ownerCtx.Principal(), nil)
+	svc, err := NewService(store, exec, admit, ownerCtx.Principal(), nil, fixtureWorkspaceVerifier())
 	if err != nil {
 		t.Fatal(err)
 	}

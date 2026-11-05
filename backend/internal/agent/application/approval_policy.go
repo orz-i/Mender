@@ -3,7 +3,6 @@ package application
 import (
 	"context"
 	"errors"
-	"path/filepath"
 	"time"
 
 	agentdomain "github.com/orz-i/Mender/backend/internal/agent/domain"
@@ -12,8 +11,8 @@ import (
 
 // ResolveApprovalWorkspace verifies the owner-selected existing canonical
 // root. Workspaces and mode settings remain unrelated to Sandbox creation.
-func (s *Service) approvalWorkspace(ctx context.Context, id agentdomain.ID, key string, owner gov.Context) (agentdomain.Agent, string, error) {
-	a, err := s.Get(ctx, id, owner)
+func (s *ApprovalService) approvalWorkspace(ctx context.Context, id agentdomain.ID, key string, owner gov.Context) (agentdomain.Agent, string, error) {
+	a, err := s.agentForOwner(ctx, id, owner)
 	if err != nil {
 		return a, "", err
 	}
@@ -27,13 +26,13 @@ func (s *Service) approvalWorkspace(ctx context.Context, id agentdomain.ID, key 
 			return a, "", err
 		}
 	}
-	canonical, err := filepath.EvalSymlinks(root)
+	canonical, err := s.workspace.ResolvePath(ctx, root)
 	if err != nil || canonical != root {
 		return a, "", agentdomain.ErrUnavailable
 	}
 	return a, root, nil
 }
-func (s *Service) GetApprovalPolicy(ctx context.Context, id agentdomain.ID, key string, owner gov.Context) (agentdomain.ApprovalPolicy, error) {
+func (s *ApprovalService) GetApprovalPolicy(ctx context.Context, id agentdomain.ID, key string, owner gov.Context) (agentdomain.ApprovalPolicy, error) {
 	_, root, err := s.approvalWorkspace(ctx, id, key, owner)
 	if err != nil {
 		return agentdomain.ApprovalPolicy{}, err
@@ -53,7 +52,7 @@ func (s *Service) GetApprovalPolicy(ctx context.Context, id agentdomain.ID, key 
 	}
 	return policy, nil
 }
-func (s *Service) SetApprovalPolicy(ctx context.Context, id agentdomain.ID, key string, mode agentdomain.ApprovalMode, owner gov.Context) (agentdomain.ApprovalPolicy, error) {
+func (s *ApprovalService) SetApprovalPolicy(ctx context.Context, id agentdomain.ID, key string, mode agentdomain.ApprovalMode, owner gov.Context) (agentdomain.ApprovalPolicy, error) {
 	a, root, err := s.approvalWorkspace(ctx, id, key, owner)
 	if err != nil {
 		return agentdomain.ApprovalPolicy{}, err
@@ -85,14 +84,14 @@ func (s *Service) SetApprovalPolicy(ctx context.Context, id agentdomain.ID, key 
 
 // These methods are owner-only, never published through Agent delegation
 // tools, HTTP Profile APIs, or model-originated tool requests.
-func (s *Service) ListPendingApprovals(ctx context.Context, owner gov.Context) ([]agentdomain.PendingApproval, error) {
+func (s *ApprovalService) ListPendingApprovals(ctx context.Context, owner gov.Context) ([]agentdomain.PendingApproval, error) {
 	if err := s.requireOwner(owner); err != nil {
 		return nil, err
 	}
 	return s.store.ListPendingApprovals(ctx, 50)
 }
-func (s *Service) ListApprovalPolicies(ctx context.Context, id agentdomain.ID, owner gov.Context) ([]agentdomain.ApprovalPolicy, error) {
-	if _, err := s.Get(ctx, id, owner); err != nil {
+func (s *ApprovalService) ListApprovalPolicies(ctx context.Context, id agentdomain.ID, owner gov.Context) ([]agentdomain.ApprovalPolicy, error) {
+	if _, err := s.agentForOwner(ctx, id, owner); err != nil {
 		return nil, err
 	}
 	policies, err := s.store.ListApprovalPolicies(ctx, id)
@@ -116,7 +115,7 @@ func (s *Service) ListApprovalPolicies(ctx context.Context, id agentdomain.ID, o
 // explicit owner mode change. The new mode does not automatically override
 // unknown or unsafe requests. All actual ACP responses still select the
 // originally advertised *allow_once* option for each distinct ToolCallID.
-func (s *Service) AllowPendingWithCurrentPolicy(ctx context.Context, id agentdomain.ID, key string, owner gov.Context) (int, error) {
+func (s *ApprovalService) AllowPendingWithCurrentPolicy(ctx context.Context, id agentdomain.ID, key string, owner gov.Context) (int, error) {
 	if err := s.requireOwner(owner); err != nil {
 		return 0, err
 	}
@@ -160,12 +159,12 @@ func (s *Service) AllowPendingWithCurrentPolicy(ctx context.Context, id agentdom
 			if task.WorkspaceKey != key || task.WorkspaceRoot != p.WorkspaceRoot {
 				continue
 			}
-			canonical, e := filepath.EvalSymlinks(task.WorkspaceRoot)
+			canonical, e := s.workspace.ResolvePath(ctx, task.WorkspaceRoot)
 			if e != nil || canonical != task.WorkspaceRoot {
 				return count, agentdomain.ErrForbidden
 			}
 			if p.Mode == agentdomain.ApprovalWorkspaceRead {
-				if e := revalidateReadPreview(task.WorkspaceRoot, a.Target); e != nil {
+				if e := s.revalidateReadPreview(ctx, task.WorkspaceRoot, a.Target); e != nil {
 					// A missing or invalid preview is not an authorization.
 					// Leave it pending for the owner; proceed to other files.
 					continue
@@ -205,7 +204,7 @@ func (s *Service) AllowPendingWithCurrentPolicy(ctx context.Context, id agentdom
 	return count, nil
 }
 
-func (s *Service) tryAutomaticApproval(ctx context.Context, task agentdomain.Task, a agentdomain.Approval) (PermissionDecision, bool, error) {
+func (s *ApprovalService) tryAutomaticApproval(ctx context.Context, task agentdomain.Task, a agentdomain.Approval) (PermissionDecision, bool, error) {
 	empty := PermissionDecision{}
 	p, err := s.store.ApprovalPolicy(ctx, task.AgentID, task.WorkspaceKey)
 	if errors.Is(err, agentdomain.ErrNotFound) {
@@ -218,12 +217,12 @@ func (s *Service) tryAutomaticApproval(ctx context.Context, task agentdomain.Tas
 	if p.WorkspaceRoot != task.WorkspaceRoot || !p.Allows(a.Kind, a.CanAllow, now) {
 		return empty, false, nil
 	}
-	canonical, err := filepath.EvalSymlinks(task.WorkspaceRoot)
+	canonical, err := s.workspace.ResolvePath(ctx, task.WorkspaceRoot)
 	if err != nil || canonical != task.WorkspaceRoot {
 		return empty, false, agentdomain.ErrForbidden
 	}
 	if p.Mode == agentdomain.ApprovalWorkspaceRead {
-		if err := revalidateReadPreview(task.WorkspaceRoot, a.Target); err != nil {
+		if err := s.revalidateReadPreview(ctx, task.WorkspaceRoot, a.Target); err != nil {
 			return empty, false, err
 		}
 	}
@@ -254,4 +253,19 @@ func (s *Service) tryAutomaticApproval(ctx context.Context, task agentdomain.Tas
 		return empty, false, err
 	}
 	return PermissionDecision{Choice: agentdomain.ApprovalAllowOnce, AuthorizedByPolicy: true}, true, nil
+}
+
+// nativeYOLOAllowed reads the exact persisted launch policy. It deliberately
+// keeps the existing Antigravity semantics: expiry and workspace identity are
+// checked for future launches; it does not retroactively revoke a process.
+func (s *ApprovalService) nativeYOLOAllowed(ctx context.Context, task agentdomain.Task) (bool, error) {
+	policy, err := s.store.ApprovalPolicy(ctx, task.AgentID, task.WorkspaceKey)
+	if errors.Is(err, agentdomain.ErrNotFound) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return policy.Mode == agentdomain.ApprovalTrusted && policy.WorkspaceRoot == task.WorkspaceRoot &&
+		!policy.ExpiresAt.IsZero() && time.Now().Before(policy.ExpiresAt), nil
 }

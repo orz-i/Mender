@@ -10,6 +10,7 @@ import (
 
 	agentapp "github.com/orz-i/Mender/backend/internal/agent/application"
 	agentdomain "github.com/orz-i/Mender/backend/internal/agent/domain"
+	agentworkspace "github.com/orz-i/Mender/backend/internal/agent/infrastructure/localworkspace"
 	agentsqlite "github.com/orz-i/Mender/backend/internal/agent/infrastructure/sqlite"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	gov "github.com/orz-i/Mender/backend/internal/governance/domain"
@@ -34,7 +35,7 @@ func TestDelegateExplicitTaskTitleEndToEndWithoutPersistingPrompt(t *testing.T) 
 		t.Fatal(err)
 	}
 	svc, err := agentapp.NewService(store, inertRunner{},
-		func(context.Context, gov.Context, agentdomain.Agent, gov.Action) error { return nil }, principal, nil)
+		func(context.Context, gov.Context, agentdomain.Agent, gov.Action) error { return nil }, principal, nil, agentworkspace.New())
 	if err != nil {
 		t.Fatal(err)
 	}

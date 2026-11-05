@@ -49,7 +49,7 @@ func TestApprovalPolicyRevisionFencesStaleAutoAndOwnerDecisions(t *testing.T) {
 			}
 			executor := &approvalExecutorFixture{ready: make(chan struct{}), decision: make(chan agentdomain.ApprovalChoice, 1)}
 			ownerCtx := owner(t)
-			svc, err := NewService(store, executor, admit, ownerCtx.Principal(), nil)
+			svc, err := NewService(store, executor, admit, ownerCtx.Principal(), nil, fixtureWorkspaceVerifier())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -158,12 +158,12 @@ func TestDetachedACPWaiterCannotPersistApproval(t *testing.T) {
 	alreadyDone := make(chan struct{})
 	close(alreadyDone)
 	w := &pendingApproval{offers: make(chan *pendingApprovalHandoff), done: alreadyDone}
-	s.mu.Lock()
-	s.active[taskID] = func() {}
-	s.pending[id] = w
-	s.mu.Unlock()
+	s.tasks.mu.Lock()
+	s.tasks.active[taskID] = func() {}
+	s.tasks.pending[id] = w
+	s.tasks.mu.Unlock()
 	var called atomic.Bool
-	err = s.resolveWaitingApproval(context.Background(), id, taskID, PermissionDecision{Choice: agentdomain.ApprovalAllowOnce},
+	err = s.approvals.resolveWaitingApproval(context.Background(), id, taskID, PermissionDecision{Choice: agentdomain.ApprovalAllowOnce},
 		func(context.Context) error { called.Store(true); return nil })
 	if !errors.Is(err, agentdomain.ErrConflict) || called.Load() {
 		t.Fatalf("detached waiter received or persisted positive approval: err=%v writes=%v", err, called.Load())

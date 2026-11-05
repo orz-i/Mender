@@ -69,7 +69,7 @@ func TestAntigravityYOLOOnlyFromOwnerTrustedUnexpiredMatchingWorkspace(t *testin
 	run("", false)
 	// Existing table retention/mode lookup must never re-enable an expired flag.
 	p := agentdomain.ApprovalPolicy{AgentID: a.ID(), WorkspaceRoot: a.Spec().WorkspaceRoot, Mode: agentdomain.ApprovalTrusted, UpdatedAt: time.Now().UTC(), ExpiresAt: time.Now().Add(120 * time.Millisecond).UTC()}
-	if err := s.store.SetApprovalPolicy(ctx, p); err != nil {
+	if err := s.approvals.store.SetApprovalPolicy(ctx, p); err != nil {
 		t.Fatal(err)
 	}
 	time.Sleep(160 * time.Millisecond)

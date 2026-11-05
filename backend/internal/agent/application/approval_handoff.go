@@ -64,7 +64,7 @@ func waitForApprovalCommit(ctx context.Context, deadline <-chan time.Time, offer
 // persist anything until a request consumer has accepted the offer. Durable
 // storage has an independent 2-second deadline. The owner observes completion
 // only after the in-process consumer acknowledges the persistence result.
-func (s *Service) resolveWaitingApproval(
+func (s *ApprovalService) resolveWaitingApproval(
 	ctx context.Context,
 	id agentdomain.ApprovalID,
 	taskID agentdomain.TaskID,

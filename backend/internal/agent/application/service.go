@@ -1,116 +1,26 @@
-// Package application owns the Agent resource and Task lifecycle without
-// implementing, supervising, or planning an Agent's own reasoning loop.
+// Package application owns Agent resources, Task/Session lifecycle and
+// native approvals, without implementing the Agent's own reasoning loop.
 package application
 
 import (
 	"context"
 	"errors"
-	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
-	"sync"
-	"time"
 
 	agentdomain "github.com/orz-i/Mender/backend/internal/agent/domain"
 	gov "github.com/orz-i/Mender/backend/internal/governance/domain"
-	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 )
 
-const (
-	maxActivePerAgent = 2
-	TaskTimeout       = agentdomain.DefaultTimeoutSeconds * time.Second
-)
-
-// Repository is the Agent consuming-side storage port.
-type Repository interface {
-	CreateAgent(context.Context, agentdomain.Agent) error
-	GetAgent(context.Context, agentdomain.ID) (agentdomain.Agent, error)
-	ListAgents(context.Context) ([]agentdomain.Agent, error)
-	DeleteAgent(context.Context, agentdomain.ID) error
-	GetTask(context.Context, agentdomain.TaskID) (agentdomain.Task, error)
-	ListTasks(context.Context, agentdomain.ID) ([]agentdomain.Task, error)
-	CreateAdmittedTask(context.Context, agentdomain.Task, int, string) error
-	ResumePlan(context.Context, agentdomain.TaskID) (agentdomain.SessionContinuation, error)
-	CreateResumedTask(context.Context, agentdomain.Task, agentdomain.SessionContinuation, int, string) error
-	TaskParent(context.Context, agentdomain.TaskID) (agentdomain.TaskID, error)
-	BeginAttempt(context.Context, agentdomain.Task, string) error
-	RecordExecution(context.Context, agentdomain.Task, string, agentdomain.ExecutionEvent) error
-	TaskObservation(context.Context, agentdomain.TaskID) (*agentdomain.TaskObservation, error)
-	Transition(context.Context, agentdomain.TaskID, uint64, agentdomain.TaskStatus, agentdomain.TaskStatus, string, string) error
-	RequestCancel(context.Context, agentdomain.TaskID, uint64) error
-	HasProfileGrant(context.Context, agentdomain.ID, string) (bool, error)
-	ListProfileGrants(context.Context, agentdomain.ID) ([]string, error)
-	ListAdmissions(context.Context, agentdomain.ID, int) ([]agentdomain.AdmissionEvent, error)
-	GrantProfile(context.Context, agentdomain.ID, string) error
-	RevokeProfile(context.Context, agentdomain.ID, string) error
-	SetDefaults(context.Context, agentdomain.ID, string, string) error
-	BindWorkspace(context.Context, agentdomain.ID, string, string) error
-	Workspace(context.Context, agentdomain.ID, string) (string, error)
-	HasWorkspaceGrant(context.Context, agentdomain.ID, string, string) (bool, error)
-	ListWorkspaces(context.Context, agentdomain.ID) ([]agentdomain.WorkspaceBinding, error)
-	UnbindWorkspace(context.Context, agentdomain.ID, string) error
-	GrantWorkspace(context.Context, agentdomain.ID, string, string) error
-	RevokeWorkspace(context.Context, agentdomain.ID, string, string) error
-	CreateApproval(context.Context, agentdomain.Approval) error
-	GetApproval(context.Context, agentdomain.ApprovalID) (agentdomain.Approval, error)
-	ListTaskApprovals(context.Context, agentdomain.TaskID) ([]agentdomain.Approval, error)
-	ResolveApproval(context.Context, agentdomain.ApprovalID, agentdomain.ApprovalStatus, int64) error
-	InvalidateApproval(context.Context, agentdomain.ApprovalID) error
-	ApprovalPolicy(context.Context, agentdomain.ID, string) (agentdomain.ApprovalPolicy, error)
-	ListApprovalPolicies(context.Context, agentdomain.ID) ([]agentdomain.ApprovalPolicy, error)
-	SetApprovalPolicy(context.Context, agentdomain.ApprovalPolicy) error
-	ClearApprovalPolicy(context.Context, agentdomain.ID, string) error
-	CurrentPolicyRevision(context.Context) (int64, error)
-	RecordAutomaticApproval(context.Context, agentdomain.Approval, agentdomain.ApprovalMode, int64) error
-	ResolveApprovalByPolicy(context.Context, agentdomain.ApprovalID, agentdomain.ApprovalMode, int64) error
-	ListPendingApprovals(context.Context, int) ([]agentdomain.PendingApproval, error)
-	ListPendingApprovalsForWorkspace(context.Context, agentdomain.ID, string, agentdomain.ApprovalMode, agentdomain.ApprovalID, int) ([]agentdomain.PendingApproval, error)
-}
-
-// Executor receives only one immutable, admitted task configuration.
-// There is no legacy unconfigured execution path; even default tasks get
-// the reviewed canonical working directory and model/effort snapshot.
-type Executor interface {
-	ExecuteConfigured(context.Context, agentdomain.Agent, string, RunConfig) (string, error)
-}
-type RunConfig struct {
-	WorkspaceRoot       string
-	Model               string
-	ReasoningEffort     string
-	PermissionRequester PermissionRequester
-	ToolSupply          ToolSupply                             // optional backend-neutral, Task-scoped tool delivery
-	AllowNativeYOLO     bool                                   // owner-approved, unexpired Antigravity trusted workspace only
-	Resume              *agentdomain.SessionContinuation       // host-resolved, never from Tool arguments
-	Observe             func(agentdomain.ExecutionEvent) error // trusted, Task-scoped evidence sink
-}
-
-type Admission func(context.Context, gov.Context, agentdomain.Agent, gov.Action) error
-type ProfileExists func(context.Context, string) error
-
-// ToolSupplyResolver is the trusted Runtime's optional, backend-neutral
-// capability issuer. It is never populated by a model/Tool request.
-type ToolSupplyResolver func(context.Context, agentdomain.Task) (ToolSupply, func(), error)
-
+// Service preserves the management and delegation API while delegating to
+// resource, Task/Session and native approval use cases with separate ports.
 type Service struct {
-	store              Repository
-	runner             Executor
-	admit              Admission
-	profileExists      ProfileExists
-	toolSupplyResolver ToolSupplyResolver
-	owner              gov.Principal
-	runtimeInstance    string
-	rootContext        context.Context
-	rootCancel         context.CancelFunc
-	mu                 sync.Mutex
-	active             map[agentdomain.TaskID]context.CancelFunc
-	pending            map[agentdomain.ApprovalID]*pendingApproval
-	closed             bool
-	wg                 sync.WaitGroup
+	resources *ResourceService
+	tasks     *TaskService
+	approvals *ApprovalService
 }
 
-func NewService(store Repository, runner Executor, admit Admission, owner gov.Principal, profileExists ProfileExists) (*Service, error) {
-	if store == nil || runner == nil || admit == nil || owner.Validate() != nil ||
+func NewService(store Repository, runner Executor, admit Admission, owner gov.Principal, profileExists ProfileExists, verifier LocalWorkspaceVerifier) (*Service, error) {
+	if store == nil || runner == nil || admit == nil || verifier == nil || owner.Validate() != nil ||
 		owner.Kind() != gov.PrincipalLocalUser {
 		return nil, errors.New("agent service: missing trusted dependencies")
 	}
@@ -119,567 +29,149 @@ func NewService(store Repository, runner Executor, admit Admission, owner gov.Pr
 		return nil, err
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	return &Service{store: store, runner: runner, admit: admit, owner: owner,
+	runtime := &runtimeCoordinator{
 		runtimeInstance: "arun_" + strings.TrimPrefix(string(runtimeID), "agent_"),
-		profileExists:   profileExists, rootContext: ctx, rootCancel: cancel,
+		rootContext:     ctx, rootCancel: cancel,
 		active:  map[agentdomain.TaskID]context.CancelFunc{},
-		pending: map[agentdomain.ApprovalID]*pendingApproval{}}, nil
+		pending: map[agentdomain.ApprovalID]*pendingApproval{},
+	}
+	authority := &agentAuthority{owner: owner, grants: store}
+	access := &taskAccess{agentAuthority: authority, store: store}
+	workspace := &localWorkspaceRules{workspace: verifier}
+	approvals := &ApprovalService{taskAccess: access, runtimeCoordinator: runtime,
+		localWorkspaceRules: workspace, store: store, admit: admit}
+	tasks := &TaskService{taskAccess: access, runtimeCoordinator: runtime,
+		localWorkspaceRules: workspace, store: store, runner: runner, admit: admit, approvals: approvals}
+	inspector, _ := runner.(ModelInspector)
+	resources := &ResourceService{agentAuthority: authority, localWorkspaceRules: workspace,
+		store: store, inspector: inspector, profileExists: profileExists}
+	return &Service{resources: resources, tasks: tasks, approvals: approvals}, nil
 }
 
-func (s *Service) isOwner(caller gov.Context) bool {
-	return caller.Validate() == nil && caller.Principal() == s.owner &&
-		caller.Scope().Kind() == gov.ScopeCatalog &&
-		(caller.Origin() == gov.OriginCLI || caller.Origin() == gov.OriginDesktop ||
-			caller.Origin() == gov.OriginManagementHTTP || caller.Origin() == gov.OriginInternal)
-}
-func (s *Service) requireOwner(caller gov.Context) error {
-	if !s.isOwner(caller) {
-		return agentdomain.ErrForbidden
-	}
-	return nil
-}
-func (s *Service) isTrustedProfile(caller gov.Context) string {
-	if caller.Validate() != nil || caller.Origin() != gov.OriginMCP ||
-		caller.Principal().Kind() != gov.PrincipalService || caller.Scope().Kind() != gov.ScopeProfile {
-		return ""
-	}
-	id := caller.Scope().Reference()
-	if _, err := profiledomain.ParseProfileID(id); err != nil || caller.Principal().Reference() != "profile:"+id {
-		return ""
-	}
-	return id
-}
-func (s *Service) allowed(ctx context.Context, agent agentdomain.Agent, caller gov.Context) (string, error) {
-	if s.isOwner(caller) && agent.OwnedBy(string(s.owner.Kind()), s.owner.Reference()) {
-		return "", nil
-	}
-	profileID := s.isTrustedProfile(caller)
-	if profileID == "" {
-		return "", agentdomain.ErrForbidden
-	}
-	grant, err := s.store.HasProfileGrant(ctx, agent.ID(), profileID)
-	if err != nil {
-		return "", err
-	}
-	if !grant {
-		return "", agentdomain.ErrForbidden
-	}
-	return profileID, nil
-}
-
-type CreateRequest struct {
-	Name                   string              `json:"name"`
-	Backend                agentdomain.Backend `json:"backend"`
-	WorkspaceRoot          string              `json:"workspaceRoot"`
-	Isolation              string              `json:"isolation"`
-	DefaultModel           string              `json:"defaultModel,omitempty"`
-	DefaultReasoningEffort string              `json:"defaultReasoningEffort,omitempty"`
-}
-
-// Create stores one owner-selected backend and canonical local directory;
-// unlike status listing, this may inspect the filesystem after owner admission.
 func (s *Service) Create(ctx context.Context, request CreateRequest, caller gov.Context) (agentdomain.Agent, error) {
-	if err := s.requireOwner(caller); err != nil {
-		return agentdomain.Agent{}, err
-	}
-	if request.Backend.PluginID() == "" {
-		return agentdomain.Agent{}, agentdomain.ErrInvalid
-	}
-	if err := agentdomain.ValidateModel(request.DefaultModel); err != nil {
-		return agentdomain.Agent{}, err
-	}
-	if err := agentdomain.ValidateReasoningEffort(request.DefaultReasoningEffort); err != nil {
-		return agentdomain.Agent{}, err
-	}
-	if !filepath.IsAbs(request.WorkspaceRoot) {
-		return agentdomain.Agent{}, agentdomain.ErrInvalid
-	}
-	resolved, err := filepath.EvalSymlinks(request.WorkspaceRoot)
-	if err != nil {
-		return agentdomain.Agent{}, fmt.Errorf("%w: Agent workspace unavailable: %w", agentdomain.ErrInvalid, err)
-	}
-	info, err := os.Stat(resolved)
-	if err != nil {
-		return agentdomain.Agent{}, fmt.Errorf("%w: Agent workspace stat: %w", agentdomain.ErrInvalid, err)
-	}
-	if !info.IsDir() {
-		return agentdomain.Agent{}, agentdomain.ErrInvalid
-	}
-	id, err := agentdomain.NewID()
-	if err != nil {
-		return agentdomain.Agent{}, err
-	}
-	isolation := request.Isolation
-	if isolation == "" {
-		isolation = "restricted_host"
-	}
-	agent, err := agentdomain.NewAgent(agentdomain.Spec{ID: id, Name: request.Name, Backend: request.Backend,
-		PluginID: request.Backend.PluginID(), ExtensionID: "main", WorkspaceRoot: filepath.Clean(resolved),
-		Isolation: isolation, DefaultModel: request.DefaultModel, DefaultReasoningEffort: request.DefaultReasoningEffort, OwnerKind: string(s.owner.Kind()), OwnerRef: s.owner.Reference(),
-		CreatedAt: time.Now().UTC()})
-	if err != nil {
-		return agentdomain.Agent{}, err
-	}
-	if err := s.store.CreateAgent(ctx, agent); err != nil {
-		return agentdomain.Agent{}, err
-	}
-	return agent, nil
+	return s.resources.Create(ctx, request, caller)
 }
+
 func (s *Service) List(ctx context.Context, caller gov.Context) ([]agentdomain.Agent, error) {
-	if err := s.requireOwner(caller); err != nil {
-		return nil, err
-	}
-	return s.store.ListAgents(ctx)
+	return s.resources.List(ctx, caller)
 }
+
 func (s *Service) Get(ctx context.Context, id agentdomain.ID, caller gov.Context) (agentdomain.Agent, error) {
-	if err := s.requireOwner(caller); err != nil {
-		return agentdomain.Agent{}, err
-	}
-	return s.store.GetAgent(ctx, id)
+	return s.resources.Get(ctx, id, caller)
 }
+
 func (s *Service) Delete(ctx context.Context, id agentdomain.ID, caller gov.Context) error {
-	if err := s.requireOwner(caller); err != nil {
-		return err
-	}
-	return s.store.DeleteAgent(ctx, id)
+	return s.resources.Delete(ctx, id, caller)
 }
 
 func (s *Service) Grant(ctx context.Context, id agentdomain.ID, profileID string, caller gov.Context) error {
-	if err := s.requireOwner(caller); err != nil {
-		return err
-	}
-	if s.profileExists == nil {
-		return agentdomain.ErrUnavailable
-	}
-	if _, err := profiledomain.ParseProfileID(profileID); err != nil {
-		return agentdomain.ErrInvalid
-	}
-	a, err := s.store.GetAgent(ctx, id)
-	if err != nil {
-		return err
-	}
-	if !a.OwnedBy(string(s.owner.Kind()), s.owner.Reference()) {
-		return agentdomain.ErrForbidden
-	}
-	if err := s.profileExists(ctx, profileID); err != nil {
-		return fmt.Errorf("agent Profile grant: %w", err)
-	}
-	return s.store.GrantProfile(ctx, id, profileID)
+	return s.resources.Grant(ctx, id, profileID, caller)
 }
+
 func (s *Service) Revoke(ctx context.Context, id agentdomain.ID, profileID string, caller gov.Context) error {
-	if err := s.requireOwner(caller); err != nil {
-		return err
-	}
-	if _, err := profiledomain.ParseProfileID(profileID); err != nil {
-		return agentdomain.ErrInvalid
-	}
-	if _, err := s.store.GetAgent(ctx, id); err != nil {
-		return err
-	}
-	return s.store.RevokeProfile(ctx, id, profileID)
+	return s.resources.Revoke(ctx, id, profileID, caller)
 }
+
 func (s *Service) Grants(ctx context.Context, id agentdomain.ID, caller gov.Context) ([]string, error) {
-	if err := s.requireOwner(caller); err != nil {
-		return nil, err
-	}
-	if _, err := s.store.GetAgent(ctx, id); err != nil {
-		return nil, err
-	}
-	return s.store.ListProfileGrants(ctx, id)
+	return s.resources.Grants(ctx, id, caller)
 }
 
-// Admissions is an owner-only audit view, not an MCP task capability.
 func (s *Service) Admissions(ctx context.Context, id agentdomain.ID, caller gov.Context, limit int) ([]agentdomain.AdmissionEvent, error) {
-	if err := s.requireOwner(caller); err != nil {
-		return nil, err
-	}
-	if _, err := s.store.GetAgent(ctx, id); err != nil {
-		return nil, err
-	}
-	return s.store.ListAdmissions(ctx, id, limit)
-}
-
-type SubmitOptions struct {
-	Title           string `json:"title,omitempty"`
-	Model           string `json:"model,omitempty"`
-	ReasoningEffort string `json:"reasoningEffort,omitempty"`
-	Workspace       string `json:"workspace,omitempty"`
-	TimeoutMinutes  int    `json:"timeoutMinutes,omitempty"` // optional 10/20/30, only future Tasks
+	return s.resources.Admissions(ctx, id, caller, limit)
 }
 
 func (s *Service) Submit(ctx context.Context, id agentdomain.ID, prompt string, caller gov.Context) (agentdomain.Task, error) {
-	return s.SubmitWithOptions(ctx, id, prompt, SubmitOptions{}, caller)
-}
-func (s *Service) SubmitWithOptions(ctx context.Context, id agentdomain.ID, prompt string, options SubmitOptions, caller gov.Context) (agentdomain.Task, error) {
-	if caller.Validate() != nil {
-		return agentdomain.Task{}, agentdomain.ErrForbidden
-	}
-	if len(prompt) > agentdomain.MaxPromptBytes || strings.TrimSpace(prompt) == "" {
-		return agentdomain.Task{}, agentdomain.ErrInvalid
-	}
-	if err := agentdomain.ValidateTaskTitle(options.Title); err != nil {
-		return agentdomain.Task{}, err
-	}
-	agent, err := s.store.GetAgent(ctx, id)
-	if err != nil {
-		return agentdomain.Task{}, err
-	}
-	profileID, err := s.allowed(ctx, agent, caller)
-	if err != nil {
-		return agentdomain.Task{}, err
-	}
-	if options.TimeoutMinutes != 0 && options.TimeoutMinutes != 10 &&
-		options.TimeoutMinutes != 20 && options.TimeoutMinutes != 30 {
-		return agentdomain.Task{}, agentdomain.ErrInvalid
-	}
-	seconds := options.TimeoutMinutes * 60
-	if seconds == 0 {
-		seconds = agentdomain.DefaultTimeoutSeconds
-	}
-	if err := agentdomain.ValidateModel(options.Model); err != nil {
-		return agentdomain.Task{}, err
-	}
-	model := options.Model
-	if model == "" {
-		model = agent.Spec().DefaultModel
-	}
-	if err := agentdomain.ValidateReasoningEffort(options.ReasoningEffort); err != nil {
-		return agentdomain.Task{}, err
-	}
-	effort := options.ReasoningEffort
-	if effort == "" {
-		effort = agent.Spec().DefaultReasoningEffort
-	}
-	root := agent.Spec().WorkspaceRoot
-	if options.Workspace != "" {
-		if err := agentdomain.ValidateWorkspaceKey(options.Workspace); err != nil {
-			return agentdomain.Task{}, err
-		}
-		registeredRoot, err := s.store.Workspace(ctx, id, options.Workspace)
-		if err != nil {
-			return agentdomain.Task{}, err
-		}
-		// Registration does not authorize an arbitrary task-supplied path.
-		// Verify the stored canonical directory before task admission.
-		if err := validateRegisteredWorkspaceRoot(registeredRoot); err != nil {
-			return agentdomain.Task{}, err
-		}
-		if profileID != "" {
-			granted, err := s.store.HasWorkspaceGrant(ctx, id, options.Workspace, profileID)
-			if err != nil {
-				return agentdomain.Task{}, err
-			}
-			if !granted {
-				return agentdomain.Task{}, agentdomain.ErrForbidden
-			}
-		}
-		root = registeredRoot
-	}
-	// Admission is before process, CLI/account, workspace and credential access.
-	for _, action := range []gov.Action{gov.ActionAgentActivate, gov.ActionAgentTaskSubmit} {
-		if err := s.admit(ctx, caller, agent, action); err != nil {
-			return agentdomain.Task{}, err
-		}
-	}
-	taskID, err := agentdomain.NewTaskID()
-	if err != nil {
-		return agentdomain.Task{}, err
-	}
-	now := time.Now().UTC()
-	task := agentdomain.Task{ID: taskID, AgentID: id, Status: agentdomain.TaskQueued,
-		Title: options.Title, Model: model, ReasoningEffort: effort, TimeoutSeconds: seconds, WorkspaceKey: options.Workspace, WorkspaceRoot: root,
-		Origin: string(caller.Origin()), PrincipalKind: string(caller.Principal().Kind()),
-		PrincipalRef: caller.Principal().Reference(), ScopeKind: string(caller.Scope().Kind()),
-		ScopeRef: caller.Scope().Reference(), Generation: 1, CreatedAt: now, UpdatedAt: now}
-	s.mu.Lock()
-	if s.closed {
-		s.mu.Unlock()
-		return agentdomain.Task{}, agentdomain.ErrUnavailable
-	}
-	if err := s.store.CreateAdmittedTask(ctx, task, maxActivePerAgent, profileID); err != nil {
-		s.mu.Unlock()
-		return agentdomain.Task{}, err
-	}
-	runCtx, cancel := context.WithTimeout(s.rootContext, task.ExecutionTimeout())
-	s.active[taskID] = cancel
-	s.wg.Add(1)
-	s.mu.Unlock()
-	go s.run(runCtx, cancel, agent, task, prompt, caller, nil)
-	return task, nil
+	return s.tasks.Submit(ctx, id, prompt, caller)
 }
 
-// TaskLocallyActive fences a Task to the exact in-memory Runtime that
-// admitted it. Other processes may read the same SQLite Task history, but
-// they cannot mint governed Tool capabilities for an orphan/stale Task.
-// ConfigureToolSupplyResolver is a one-time bootstrap operation before any
-// Task can start. No user/Plugin API can replace the resolver at runtime.
-func (s *Service) ConfigureToolSupplyResolver(resolve ToolSupplyResolver) error {
-	if resolve == nil {
-		return agentdomain.ErrInvalid
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.closed || s.toolSupplyResolver != nil || len(s.active) != 0 {
-		return agentdomain.ErrConflict
-	}
-	s.toolSupplyResolver = resolve
-	return nil
+func (s *Service) SubmitWithOptions(ctx context.Context, id agentdomain.ID, prompt string, options SubmitOptions, caller gov.Context) (agentdomain.Task, error) {
+	return s.tasks.SubmitWithOptions(ctx, id, prompt, options, caller)
 }
+
+func (s *Service) ConfigureToolSupplyResolver(resolve ToolSupplyResolver) error {
+	return s.tasks.ConfigureToolSupplyResolver(resolve)
+}
+
 func (s *Service) TaskLocallyActive(id agentdomain.TaskID) bool {
 	if s == nil {
 		return false
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return !s.closed && s.active[id] != nil
+	return s.tasks.TaskLocallyActive(id)
 }
 
-func (s *Service) run(ctx context.Context, cancel context.CancelFunc, agent agentdomain.Agent, task agentdomain.Task, prompt string, caller gov.Context, continuation *agentdomain.SessionContinuation) {
-	defer s.wg.Done()
-	defer func() {
-		cancel()
-		s.mu.Lock()
-		delete(s.active, task.ID)
-		s.mu.Unlock()
-	}()
-	// A concurrent cancellation may fence queued → running.
-	if err := ctx.Err(); err != nil {
-		_ = s.store.Transition(context.WithoutCancel(ctx), task.ID, task.Generation, agentdomain.TaskQueued, agentdomain.TaskCancelled, "", "")
-		return
-	}
-	if err := s.store.Transition(context.WithoutCancel(ctx), task.ID, task.Generation, agentdomain.TaskQueued, agentdomain.TaskRunning, "", ""); err != nil {
-		_ = s.store.Transition(context.WithoutCancel(ctx), task.ID, task.Generation, agentdomain.TaskQueued, agentdomain.TaskCancelled, "", "")
-		return
-	}
-	// Reservation is durable before resolving capabilities or starting a CLI.
-	// Failure to record provenance fails closed, without launching the Agent.
-	if err := s.store.BeginAttempt(context.WithoutCancel(ctx), task, s.runtimeInstance); err != nil {
-		// A caller can cancel after queued→running but before the durable
-		// reservation. No process was started, so preserve cancellation.
-		next, diagnostic := agentdomain.TaskFailed, "Agent execution evidence unavailable"
-		if observed, readErr := s.store.GetTask(context.WithoutCancel(ctx), task.ID); readErr == nil && observed.CancelRequested {
-			next, diagnostic = agentdomain.TaskCancelled, "Task cancelled"
-		}
-		_ = s.store.Transition(context.WithoutCancel(ctx), task.ID, task.Generation,
-			agentdomain.TaskRunning, next, "", diagnostic)
-		return
-	}
-	config := RunConfig{WorkspaceRoot: task.WorkspaceRoot, Model: task.Model, ReasoningEffort: task.ReasoningEffort,
-		Resume: continuation,
-		Observe: func(event agentdomain.ExecutionEvent) error {
-			writeCtx, done := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
-			defer done()
-			return s.store.RecordExecution(writeCtx, task, s.runtimeInstance, event)
-		},
-		PermissionRequester: func(ctx context.Context, req PermissionRequest) (PermissionDecision, error) {
-			return s.requestPermission(ctx, task, caller, req)
-		}}
-	// Runtime heartbeat reports only that this task's local supervisory worker
-	// remains alive. It is separate from native Agent progress or completion
-	// evidence; a stale/failed heartbeat never authorizes replay or recovery.
-	heartbeatStop := make(chan struct{})
-	heartbeatDone := make(chan struct{})
-	go func() {
-		defer close(heartbeatDone)
-		ticker := time.NewTicker(15 * time.Second)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-heartbeatStop:
-				return
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				_ = config.Observe(agentdomain.ExecutionEvent{Kind: agentdomain.EventWorkerHeartbeat})
-			}
-		}
-	}()
-	defer func() { close(heartbeatStop); <-heartbeatDone }()
-	var result string
-	var err error
-	// Antigravity has no ACP permission callback. The existing per-Agent,
-	// per-workspace 24h trusted grant is the ONLY authority for headless YOLO.
-	// Decide at task launch: revoking a grant affects future processes, not
-	// already-running native actions. No Profile or model may set this flag.
-	if agent.Spec().Backend == agentdomain.BackendAntigravity {
-		policy, policyErr := s.store.ApprovalPolicy(ctx, task.AgentID, task.WorkspaceKey)
-		if policyErr == nil {
-			config.AllowNativeYOLO = policy.Mode == agentdomain.ApprovalTrusted &&
-				policy.WorkspaceRoot == task.WorkspaceRoot &&
-				!policy.ExpiresAt.IsZero() && time.Now().Before(policy.ExpiresAt)
-		} else if !errors.Is(policyErr, agentdomain.ErrNotFound) {
-			err = policyErr // fail closed instead of losing policy evidence
-		}
-	}
-	supplyFailed := false
-	if err == nil && s.toolSupplyResolver != nil {
-		var supply ToolSupply
-		var release func()
-		supply, release, err = s.toolSupplyResolver(ctx, task)
-		if err != nil {
-			supplyFailed = true
-		} else {
-			if release != nil {
-				defer release()
-			}
-			config.ToolSupply = supply
-		}
-	}
-	if err == nil {
-		result, err = s.runner.ExecuteConfigured(ctx, agent, prompt, config)
-	}
-	// A runner that reports success after cancellation cannot prove it
-	// stopped executing side effects. Preserve the uncertainty instead.
-	if ctx.Err() != nil && err == nil {
-		_ = s.store.Transition(context.WithoutCancel(ctx), task.ID, task.Generation,
-			agentdomain.TaskRunning, agentdomain.TaskUnknown, "", "Agent outcome unknown after cancellation")
-		return
-	}
-	next := agentdomain.TaskCompleted
-	diagnostic := ""
-	if err != nil {
-		next = agentdomain.TaskFailed
-		diagnostic = agentFailureDiagnostic(err)
-		if supplyFailed {
-			diagnostic = "Governed tool execution unavailable"
-		}
-		if errors.Is(err, context.Canceled) {
-			// The request to stop can originate from the caller or from
-			// Mender shutting down. Only a caller-initiated cancellation
-			// has a persisted CancelRequested bit.
-			persisted, readErr := s.store.GetTask(context.WithoutCancel(ctx), task.ID)
-			if readErr == nil && persisted.CancelRequested {
-				next = agentdomain.TaskCancelled
-				diagnostic = "Task cancelled"
-			} else {
-				next = agentdomain.TaskUnknown
-				diagnostic = "Agent outcome unknown after runtime shutdown"
-			}
-		}
-		if errors.Is(err, context.DeadlineExceeded) {
-			next = agentdomain.TaskUnknown
-			diagnostic = "Agent outcome unknown after timeout"
-		}
-		if errors.Is(err, agentdomain.ErrOutcomeUncertain) {
-			next = agentdomain.TaskUnknown
-			diagnostic = "Agent outcome unknown after execution evidence loss"
-		}
-		result = ""
-	}
-	if len(result) > agentdomain.MaxResultBytes {
-		next = agentdomain.TaskFailed
-		result = ""
-		diagnostic = "Agent output exceeded the permitted limit"
-	}
-	// A runner's nil error is not native completion proof. The durable Task
-	// transition independently requires terminal_seen and leader_reaped for
-	// this exact generation; a rejected success must remain uncertain instead
-	// of leaving a finished worker reported as running with an asserted result.
-	writeCtx := context.WithoutCancel(ctx)
-	if transitionErr := s.store.Transition(writeCtx, task.ID, task.Generation,
-		agentdomain.TaskRunning, next, result, diagnostic); transitionErr != nil && next == agentdomain.TaskCompleted {
-		_ = s.store.Transition(writeCtx, task.ID, task.Generation, agentdomain.TaskRunning,
-			agentdomain.TaskUnknown, "", "Agent outcome unknown after execution evidence loss")
-	}
-}
-func (s *Service) authorizedTask(ctx context.Context, id agentdomain.TaskID, caller gov.Context) (agentdomain.Task, agentdomain.Agent, error) {
-	task, err := s.store.GetTask(ctx, id)
-	if err != nil {
-		return task, agentdomain.Agent{}, err
-	}
-	agent, err := s.store.GetAgent(ctx, task.AgentID)
-	if err != nil {
-		return task, agent, err
-	}
-	if s.isOwner(caller) && agent.OwnedBy(string(s.owner.Kind()), s.owner.Reference()) {
-		return task, agent, nil
-	}
-	profileID, err := s.allowed(ctx, agent, caller)
-	if err != nil {
-		return task, agent, err
-	}
-	if profileID == "" || !task.OwnedBy(string(caller.Principal().Kind()), caller.Principal().Reference(),
-		string(caller.Scope().Kind()), caller.Scope().Reference()) {
-		return task, agent, agentdomain.ErrForbidden
-	}
-	return task, agent, nil
-}
 func (s *Service) Task(ctx context.Context, id agentdomain.TaskID, caller gov.Context) (agentdomain.Task, error) {
-	task, _, err := s.authorizedTask(ctx, id, caller)
-	if err != nil {
-		return task, err
-	}
-	return s.attachObservation(ctx, task)
+	return s.tasks.Task(ctx, id, caller)
 }
 
-func (s *Service) attachObservation(ctx context.Context, task agentdomain.Task) (agentdomain.Task, error) {
-	obs, err := s.store.TaskObservation(ctx, task.ID)
-	if err != nil {
-		return task, err
-	}
-	if obs != nil && task.Status == agentdomain.TaskRunning && s.TaskLocallyActive(task.ID) &&
-		obs.Phase != "reserved" && !obs.LeaderReaped {
-		obs.Activity = "local_active"
-	}
-	task.Observation = obs
-	parent, err := s.store.TaskParent(ctx, task.ID)
-	if err != nil {
-		return task, err
-	}
-	task.ContinuedFromTaskID = parent
-	return task, nil
-}
 func (s *Service) Tasks(ctx context.Context, id agentdomain.ID, caller gov.Context) ([]agentdomain.Task, error) {
-	if err := s.requireOwner(caller); err != nil {
-		return nil, err
-	}
-	if _, err := s.store.GetAgent(ctx, id); err != nil {
-		return nil, err
-	}
-	tasks, err := s.store.ListTasks(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-	for i := range tasks {
-		if tasks[i], err = s.attachObservation(ctx, tasks[i]); err != nil {
-			return nil, err
-		}
-	}
-	return tasks, nil
+	return s.tasks.Tasks(ctx, id, caller)
 }
+
 func (s *Service) Cancel(ctx context.Context, id agentdomain.TaskID, caller gov.Context) error {
-	task, agent, err := s.authorizedTask(ctx, id, caller)
-	if err != nil {
-		return err
-	}
-	if err := s.admit(ctx, caller, agent, gov.ActionAgentTaskCancel); err != nil {
-		return err
-	}
-	if err := s.store.RequestCancel(ctx, id, task.Generation); err != nil {
-		return err
-	}
-	s.mu.Lock()
-	cancel := s.active[id]
-	s.mu.Unlock()
-	if cancel != nil {
-		cancel()
-	}
-	// No claim of termination here. Only the owned runner may mark terminal
-	// after observing child exit.
-	return nil
+	return s.tasks.Cancel(ctx, id, caller)
 }
+
 func (s *Service) Close() error {
-	s.mu.Lock()
-	if s.closed {
-		s.mu.Unlock()
-		return nil
-	}
-	s.closed = true
-	s.rootCancel()
-	for _, cancel := range s.active {
-		cancel()
-	}
-	s.mu.Unlock()
-	s.wg.Wait()
-	return nil
+	return s.tasks.Close()
+}
+
+func (s *Service) InspectModels(ctx context.Context, id agentdomain.ID, caller gov.Context) (ModelChoices, error) {
+	return s.resources.InspectModels(ctx, id, caller)
+}
+
+func (s *Service) UpdateDefaults(ctx context.Context, id agentdomain.ID, model, effort string, caller gov.Context) (agentdomain.Agent, error) {
+	return s.resources.UpdateDefaults(ctx, id, model, effort, caller)
+}
+
+func (s *Service) BindWorkspace(ctx context.Context, id agentdomain.ID, key, workspaceRoot string, caller gov.Context) error {
+	return s.resources.BindWorkspace(ctx, id, key, workspaceRoot, caller)
+}
+
+func (s *Service) Workspaces(ctx context.Context, id agentdomain.ID, caller gov.Context) ([]agentdomain.WorkspaceBinding, error) {
+	return s.resources.Workspaces(ctx, id, caller)
+}
+
+func (s *Service) UnbindWorkspace(ctx context.Context, id agentdomain.ID, key string, caller gov.Context) error {
+	return s.resources.UnbindWorkspace(ctx, id, key, caller)
+}
+
+func (s *Service) GrantWorkspace(ctx context.Context, id agentdomain.ID, key, profileID string, caller gov.Context) error {
+	return s.resources.GrantWorkspace(ctx, id, key, profileID, caller)
+}
+
+func (s *Service) RevokeWorkspace(ctx context.Context, id agentdomain.ID, key, profileID string, caller gov.Context) error {
+	return s.resources.RevokeWorkspace(ctx, id, key, profileID, caller)
+}
+
+func (s *Service) ListApprovals(ctx context.Context, taskID agentdomain.TaskID, caller gov.Context) ([]agentdomain.Approval, error) {
+	return s.approvals.ListApprovals(ctx, taskID, caller)
+}
+
+func (s *Service) DecideApproval(ctx context.Context, id agentdomain.ApprovalID, choice agentdomain.ApprovalChoice, caller gov.Context) (agentdomain.Approval, error) {
+	return s.approvals.DecideApproval(ctx, id, choice, caller)
+}
+
+func (s *Service) GetApprovalPolicy(ctx context.Context, id agentdomain.ID, key string, owner gov.Context) (agentdomain.ApprovalPolicy, error) {
+	return s.approvals.GetApprovalPolicy(ctx, id, key, owner)
+}
+
+func (s *Service) SetApprovalPolicy(ctx context.Context, id agentdomain.ID, key string, mode agentdomain.ApprovalMode, owner gov.Context) (agentdomain.ApprovalPolicy, error) {
+	return s.approvals.SetApprovalPolicy(ctx, id, key, mode, owner)
+}
+
+func (s *Service) ListPendingApprovals(ctx context.Context, owner gov.Context) ([]agentdomain.PendingApproval, error) {
+	return s.approvals.ListPendingApprovals(ctx, owner)
+}
+
+func (s *Service) ListApprovalPolicies(ctx context.Context, id agentdomain.ID, owner gov.Context) ([]agentdomain.ApprovalPolicy, error) {
+	return s.approvals.ListApprovalPolicies(ctx, id, owner)
+}
+
+func (s *Service) AllowPendingWithCurrentPolicy(ctx context.Context, id agentdomain.ID, key string, owner gov.Context) (int, error) {
+	return s.approvals.AllowPendingWithCurrentPolicy(ctx, id, key, owner)
+}
+
+func (s *Service) Resume(ctx context.Context, id agentdomain.TaskID, prompt string,
+	agentID agentdomain.ID, caller gov.Context) (agentdomain.Task, error) {
+	return s.tasks.Resume(ctx, id, prompt, agentID, caller)
 }

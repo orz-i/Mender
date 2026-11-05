@@ -3,14 +3,21 @@ package application
 import (
 	"context"
 	"fmt"
-	"os"
-	"path/filepath"
-	"strings"
 	"time"
 
 	agentdomain "github.com/orz-i/Mender/backend/internal/agent/domain"
 	gov "github.com/orz-i/Mender/backend/internal/governance/domain"
 )
+
+// ApprovalService owns native permission decisions and owner approval modes.
+// Its shared coordinator fences every handoff to the exact live local Task.
+type ApprovalService struct {
+	*taskAccess
+	*runtimeCoordinator
+	*localWorkspaceRules
+	store ApprovalRepository
+	admit Admission
+}
 
 const ApprovalWaitLimit = 2 * time.Minute
 
@@ -41,7 +48,7 @@ type pendingApproval struct {
 // requestPermission starts one bounded owner decision wait, without blocking
 // the ACP message pump. The runner will echo only the originally offered
 // ACP optionId after the local owner's verified decision.
-func (s *Service) requestPermission(ctx context.Context, task agentdomain.Task, caller gov.Context, req PermissionRequest) (PermissionDecision, error) {
+func (s *ApprovalService) requestPermission(ctx context.Context, task agentdomain.Task, caller gov.Context, req PermissionRequest) (PermissionDecision, error) {
 	var none PermissionDecision
 	if req.SessionID == "" || len(req.SessionID) > 512 ||
 		req.ToolCallID == "" || len(req.ToolCallID) > 128 ||
@@ -117,7 +124,7 @@ func (s *Service) requestPermission(ctx context.Context, task agentdomain.Task, 
 
 // ListApprovals is for the local owner only. A model/Profile cannot browse
 // another task's permission requests using a guessed TaskID.
-func (s *Service) ListApprovals(ctx context.Context, taskID agentdomain.TaskID, caller gov.Context) ([]agentdomain.Approval, error) {
+func (s *ApprovalService) ListApprovals(ctx context.Context, taskID agentdomain.TaskID, caller gov.Context) ([]agentdomain.Approval, error) {
 	if err := s.requireOwner(caller); err != nil {
 		return nil, err
 	}
@@ -133,7 +140,7 @@ func (s *Service) ListApprovals(ctx context.Context, taskID agentdomain.TaskID, 
 
 // DecideApproval is Wails-owner-only in Phase B/C, not part of the
 // Profile-exposed MCP Delegation tool suite.
-func (s *Service) DecideApproval(ctx context.Context, id agentdomain.ApprovalID, choice agentdomain.ApprovalChoice, caller gov.Context) (agentdomain.Approval, error) {
+func (s *ApprovalService) DecideApproval(ctx context.Context, id agentdomain.ApprovalID, choice agentdomain.ApprovalChoice, caller gov.Context) (agentdomain.Approval, error) {
 	if err := s.requireOwner(caller); err != nil {
 		return agentdomain.Approval{}, err
 	}
@@ -161,7 +168,7 @@ func (s *Service) DecideApproval(ctx context.Context, id agentdomain.ApprovalID,
 		}
 		// Recheck the originally previewed lexical path. A workspace or
 		// symlink changed since the ACP request must not be approved.
-		if err := revalidateReadPreview(task.WorkspaceRoot, approval.Target); err != nil {
+		if err := s.revalidateReadPreview(ctx, task.WorkspaceRoot, approval.Target); err != nil {
 			return agentdomain.Approval{}, err
 		}
 		// An allow-once must satisfy the ORIGINAL submitting principal's
@@ -218,40 +225,10 @@ func approvalCaller(task agentdomain.Task) (gov.Context, error) {
 	}
 	return gov.NewContext(gov.Origin(task.Origin), principal, scope)
 }
-func (s *Service) allowedForApproval(ctx context.Context, agent agentdomain.Agent, caller gov.Context) error {
+func (s *ApprovalService) allowedForApproval(ctx context.Context, agent agentdomain.Agent, caller gov.Context) error {
 	_, err := s.allowed(ctx, agent, caller)
 	if err != nil {
 		return err
-	}
-	return nil
-}
-
-// revalidateReadPreview is a last-moment cooperative boundary check, not
-// filesystem isolation. OpenCode still executes its own native read and
-// could deviate from reported ACP metadata in host mode.
-func revalidateReadPreview(root, relative string) error {
-	if relative == "" || filepath.IsAbs(relative) || filepath.Clean(relative) != relative ||
-		relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) ||
-		strings.ContainsAny(relative, "\r\n\x00") {
-		return agentdomain.ErrForbidden
-	}
-	canonicalRoot, err := filepath.EvalSymlinks(root)
-	if err != nil || canonicalRoot != root {
-		return agentdomain.ErrForbidden
-	}
-	canonicalTarget, err := filepath.EvalSymlinks(filepath.Join(root, relative))
-	if err != nil {
-		return agentdomain.ErrForbidden
-	}
-	inside, err := filepath.Rel(root, canonicalTarget)
-	if err != nil || inside == "." || inside == ".." ||
-		strings.HasPrefix(inside, ".."+string(filepath.Separator)) ||
-		filepath.IsAbs(inside) {
-		return agentdomain.ErrForbidden
-	}
-	info, err := os.Stat(canonicalTarget)
-	if err != nil || !info.Mode().IsRegular() {
-		return agentdomain.ErrForbidden
 	}
 	return nil
 }
