@@ -11,6 +11,7 @@ import (
 
 	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
 	gov "github.com/orz-i/Mender/backend/internal/governance/domain"
+	sandboxapplication "github.com/orz-i/Mender/backend/internal/sandbox/application"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 	sshremote "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/sshremote"
 	"golang.org/x/crypto/ssh"
@@ -65,7 +66,7 @@ func TestSSHRemoteCreateRequiresLocalOperatorBeforeKeyResolution(t *testing.T) {
 		t.Fatal(err)
 	}
 	ref, _ := credentialdomain.ParseReference("credential://ssh/unavailable")
-	request := CreateSSHRemoteSandboxRequest{Name: "Restricted remote", Template: sshremote.Template{
+	request := CreateSSHRemoteSandboxRequest{Name: "Restricted remote", Template: sandboxapplication.SSHRemoteTemplate{
 		Host: "127.0.0.1", Port: 22, User: "agent", Root: "/home/agent/work",
 		CredentialRef: ref, HostPublicKey: strings.TrimSpace(string(ssh.MarshalAuthorizedKey(pub))),
 	}}

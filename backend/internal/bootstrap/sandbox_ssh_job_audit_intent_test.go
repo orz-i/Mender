@@ -9,6 +9,7 @@ import (
 
 	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
 	gov "github.com/orz-i/Mender/backend/internal/governance/domain"
+	sandboxapplication "github.com/orz-i/Mender/backend/internal/sandbox/application"
 	sshremote "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/sshremote"
 )
 
@@ -38,7 +39,7 @@ func TestSSHRecoveryAuditIntentCommitsBeforeAnyRemoteContact(t *testing.T) {
 		t.Fatal(err)
 	}
 	resource, err := runtime.Sandboxes.CreateSSHRemoteSandbox(ctx,
-		CreateSSHRemoteSandboxRequest{Name: "R3 audit preflight fixture", Template: template}, owner)
+		CreateSSHRemoteSandboxRequest{Name: "R3 audit preflight fixture", Template: sandboxapplication.SSHRemoteTemplate(template)}, owner)
 	if err != nil {
 		t.Fatal(err)
 	}

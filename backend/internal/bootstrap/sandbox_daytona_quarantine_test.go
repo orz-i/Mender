@@ -9,6 +9,7 @@ import (
 
 	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
 	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
+	sandboxapplication "github.com/orz-i/Mender/backend/internal/sandbox/application"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 	sandboxdaytona "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/daytona"
 )
@@ -38,7 +39,7 @@ func TestDaytonaExperimentalDisabledByDefaultRetainsInventoryButBlocksExecution(
 		t.Fatal(err)
 	}
 	template := sandboxdaytona.Template{CredentialRef: ref, ImageDigest: "docker.io/library/python@sha256:" + strings.Repeat("a", 64), Target: sandboxdaytona.TargetUS, CPU: 1, MemoryGiB: 2, DiskGiB: 3, TTLMinutes: 30}
-	if _, err := s.CreateDaytonaSandbox(ctx, CreateDaytonaSandboxRequest{Name: "No charge", Template: template}, caller); !errors.Is(err, sandboxdomain.ErrBackendUnavailable) {
+	if _, err := s.CreateDaytonaSandbox(ctx, CreateDaytonaSandboxRequest{Name: "No charge", Template: sandboxapplication.DaytonaTemplate(template)}, caller); !errors.Is(err, sandboxdomain.ErrBackendUnavailable) {
 		t.Fatalf("remote create available by default: %v", err)
 	}
 	id := sandboxdomain.ID("sbx_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")

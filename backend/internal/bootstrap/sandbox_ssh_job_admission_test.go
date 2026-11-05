@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	gov "github.com/orz-i/Mender/backend/internal/governance/domain"
+	sandboxapplication "github.com/orz-i/Mender/backend/internal/sandbox/application"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 	sshremote "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/sshremote"
 )
@@ -23,7 +24,7 @@ func TestSSHJobOwnerPausePreventsNetworkBeforeSubmissionAcrossRestart(t *testing
 	}
 	first.Sandboxes.sshRemote.Dial.Credentials = sshFixtureCredentialResolver{secret: secret}
 	owner, _ := gov.NewContext(gov.OriginInternal, first.OwnerPrincipal(), gov.CatalogScope())
-	item, err := first.Sandboxes.CreateSSHRemoteSandbox(ctx, CreateSSHRemoteSandboxRequest{Name: "SSH Pause", Template: tpl}, owner)
+	item, err := first.Sandboxes.CreateSSHRemoteSandbox(ctx, CreateSSHRemoteSandboxRequest{Name: "SSH Pause", Template: sandboxapplication.SSHRemoteTemplate(tpl)}, owner)
 	if err != nil {
 		t.Fatal(err)
 	}

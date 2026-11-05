@@ -9,6 +9,7 @@ import (
 
 	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
 	gov "github.com/orz-i/Mender/backend/internal/governance/domain"
+	sandboxapplication "github.com/orz-i/Mender/backend/internal/sandbox/application"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 	jobsplugin "github.com/orz-i/Mender/backend/internal/sshjobs/infrastructure/plugin"
 )
@@ -27,7 +28,7 @@ func TestSSHJobsFacadeRecoversAfterInterruptedCreationWithoutNewIdentity(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
-	resource, err := first.Sandboxes.CreateSSHRemoteSandbox(ctx, CreateSSHRemoteSandboxRequest{Name: "Interrupted Job Suite", Template: template}, owner)
+	resource, err := first.Sandboxes.CreateSSHRemoteSandbox(ctx, CreateSSHRemoteSandboxRequest{Name: "Interrupted Job Suite", Template: sandboxapplication.SSHRemoteTemplate(template)}, owner)
 	if err != nil {
 		t.Fatal(err)
 	}

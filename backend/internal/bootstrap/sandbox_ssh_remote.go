@@ -7,6 +7,7 @@ import (
 
 	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
 	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
+	sandboxapplication "github.com/orz-i/Mender/backend/internal/sandbox/application"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 	sandboxidentity "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/identity"
 	sshremote "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/sshremote"
@@ -14,7 +15,7 @@ import (
 
 type CreateSSHRemoteSandboxRequest struct {
 	Name     string
-	Template sshremote.Template
+	Template sandboxapplication.SSHRemoteTemplate
 }
 
 // InspectSSHHostKey is an operator-only pre-auth handshake. Admission precedes
@@ -67,7 +68,8 @@ func (s *Sandboxes) CreateSSHRemoteSandbox(ctx context.Context, input CreateSSHR
 		caller.Origin() == governancedomain.OriginMCP {
 		return sandboxdomain.Sandbox{}, sandboxdomain.ErrNotAuthorized
 	}
-	if err := input.Template.Validate(); err != nil {
+	template := sshremote.Template(input.Template)
+	if err := template.Validate(); err != nil {
 		return sandboxdomain.Sandbox{}, err
 	}
 	id, err := sandboxidentity.Generator{}.NewSandboxID()
@@ -87,21 +89,21 @@ func (s *Sandboxes) CreateSSHRemoteSandbox(ctx context.Context, input CreateSSHR
 	if err := s.admission.AdmitAction(ctx, caller, item, governancedomain.ActionSandboxProvision); err != nil {
 		return sandboxdomain.Sandbox{}, err
 	}
-	conn, err := s.sshRemote.Dial.Connect(ctx, input.Template)
+	conn, err := s.sshRemote.Dial.Connect(ctx, template)
 	if err != nil {
 		return sandboxdomain.Sandbox{}, fmt.Errorf("SSH remote connection failed: %w", err)
 	}
 	defer func() { _ = conn.Close() }()
 	// Persist only the host key proven by the exact pinned SSH handshake.
 	// Mender maintains its own known_hosts; the user's SSH files stay untouched.
-	if err := s.sshRemote.Dial.Trust.RememberPinned(input.Template.Host, input.Template.Port, input.Template.HostPublicKey); err != nil {
+	if err := s.sshRemote.Dial.Trust.RememberPinned(template.Host, template.Port, template.HostPublicKey); err != nil {
 		return sandboxdomain.Sandbox{}, err
 	}
 	run, err := sandboxdomain.NewRun(id, 1, sandboxdomain.StateReady, "ssh_remote:"+id.String())
 	if err != nil {
 		return sandboxdomain.Sandbox{}, err
 	}
-	if err := s.store.CreateReadySSH(ctx, item, run, input.Template); err != nil {
+	if err := s.store.CreateReadySSH(ctx, item, run, template); err != nil {
 		return sandboxdomain.Sandbox{}, err
 	}
 	return item, nil

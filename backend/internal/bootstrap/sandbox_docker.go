@@ -164,7 +164,7 @@ func (s *Sandboxes) BackendAvailable(item sandboxdomain.Sandbox) bool {
 
 type CreateDockerSandboxRequest struct {
 	Name     string
-	Template sandboxdocker.Template
+	Template sandboxapplication.DockerTemplate
 }
 
 // CreateDockerSandbox admits before any Engine I/O or resource creation, then
@@ -182,7 +182,8 @@ func (s *Sandboxes) CreateDockerSandbox(ctx context.Context, request CreateDocke
 	if err := caller.Validate(); err != nil {
 		return sandboxdomain.Sandbox{}, err
 	}
-	if err := request.Template.Validate(); err != nil {
+	template := sandboxdocker.Template(request.Template)
+	if err := template.Validate(); err != nil {
 		return sandboxdomain.Sandbox{}, err
 	}
 	id, err := sandboxidentity.Generator{}.NewSandboxID()
@@ -197,10 +198,10 @@ func (s *Sandboxes) CreateDockerSandbox(ctx context.Context, request CreateDocke
 	if err := s.admission.AdmitAction(ctx, caller, item, governancedomain.ActionSandboxProvision); err != nil {
 		return sandboxdomain.Sandbox{}, err
 	}
-	if _, err := s.docker.VerifyLocalImage(ctx, request.Template); err != nil {
+	if _, err := s.docker.VerifyLocalImage(ctx, template); err != nil {
 		return sandboxdomain.Sandbox{}, err
 	}
-	if err := s.dockerTemplates.CreateDefinedSandbox(ctx, item, request.Template); err != nil {
+	if err := s.dockerTemplates.CreateDefinedSandbox(ctx, item, template); err != nil {
 		return sandboxdomain.Sandbox{}, err
 	}
 	if _, err := s.docker.Provision(ctx, caller, id); err != nil {

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	gov "github.com/orz-i/Mender/backend/internal/governance/domain"
+	sandboxapplication "github.com/orz-i/Mender/backend/internal/sandbox/application"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 	sshremote "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/sshremote"
 )
@@ -23,7 +24,7 @@ func TestSSHRecoveryV2OwnerResolveIsFenced(t *testing.T) {
 	defer func() { _ = runtime.Close() }()
 	runtime.Sandboxes.sshRemote.Dial.Credentials = sshFixtureCredentialResolver{secret: secret}
 	owner, _ := gov.NewContext(gov.OriginInternal, runtime.OwnerPrincipal(), gov.CatalogScope())
-	item, err := runtime.Sandboxes.CreateSSHRemoteSandbox(ctx, CreateSSHRemoteSandboxRequest{Name: "v2 owner recovery fence", Template: tpl}, owner)
+	item, err := runtime.Sandboxes.CreateSSHRemoteSandbox(ctx, CreateSSHRemoteSandboxRequest{Name: "v2 owner recovery fence", Template: sandboxapplication.SSHRemoteTemplate(tpl)}, owner)
 	if err != nil {
 		t.Fatal(err)
 	}

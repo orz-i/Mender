@@ -2,8 +2,6 @@ package bootstrap
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"time"
 
 	agentapplication "github.com/orz-i/Mender/backend/internal/agent/application"
@@ -12,8 +10,6 @@ import (
 	agentagy "github.com/orz-i/Mender/backend/internal/agent/infrastructure/antigravity"
 	agentsqlite "github.com/orz-i/Mender/backend/internal/agent/infrastructure/sqlite"
 	gov "github.com/orz-i/Mender/backend/internal/governance/domain"
-	policyapplication "github.com/orz-i/Mender/backend/internal/policy/application"
-	policydomain "github.com/orz-i/Mender/backend/internal/policy/domain"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 )
 
@@ -47,53 +43,7 @@ func newAgents(ctx context.Context, dbPath string, owner gov.Principal,
 		_ = store.Close()
 		return nil, nil, nil, err
 	}
-	admit := func(ctx context.Context, caller gov.Context, a agentdomain.Agent, action gov.Action) error {
-		if err := caller.Validate(); err != nil {
-			return agentdomain.ErrForbidden
-		}
-		// The AgentID is a reviewed policy resource, never model-provided
-		// identity, arbitrary exec path or prompt content.
-		decision, err := policies.Evaluate.Execute(ctx, policyapplication.EvaluateRequest{
-			Action: action, Origin: caller.Origin(), PrincipalKind: caller.Principal().Kind(),
-			PrincipalReference: caller.Principal().Reference(), ScopeKind: caller.Scope().Kind(),
-			ScopeReference: caller.Scope().Reference(), FactKnowledge: policydomain.FactKnown,
-			Resources: []policyapplication.ResourceFact{
-				{Kind: "agent_id", Value: string(a.ID())},
-				{Kind: "agent_backend", Value: string(a.Spec().Backend)},
-				{Kind: "agent_isolation", Value: a.Spec().Isolation},
-			},
-		})
-		policyKind := "failed"
-		policyReason := "policy_evaluation_error"
-		status := "failed"
-		if err == nil {
-			policyKind = string(decision.Kind())
-			policyReason = decision.ReasonCode()
-			if decision.Kind() == policydomain.DecisionAllow {
-				status = "admitted"
-			} else {
-				status = "denied"
-			}
-		}
-		recordCtx, recordCancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-		recordErr := store.RecordAdmission(recordCtx, agentsqlite.AdmissionEvent{
-			AgentID: a.ID(), Action: string(action),
-			PrincipalKind: string(caller.Principal().Kind()), PrincipalRef: caller.Principal().Reference(),
-			Origin: string(caller.Origin()), ScopeKind: string(caller.Scope().Kind()),
-			ScopeRef: caller.Scope().Reference(), PolicyKind: policyKind, PolicyReason: policyReason, Status: status,
-		})
-		recordCancel()
-		if err != nil {
-			return errors.Join(fmt.Errorf("agent admission: %w", err), recordErr)
-		}
-		if recordErr != nil {
-			return fmt.Errorf("agent admission audit unavailable: %w", recordErr)
-		}
-		if decision.Kind() != policydomain.DecisionAllow {
-			return agentdomain.ErrForbidden
-		}
-		return nil
-	}
+	admit := agentapplication.NewAdmit(policies.Evaluate, store)
 	profileExists := func(ctx context.Context, id string) error {
 		parsed, err := profiledomain.ParseProfileID(id)
 		if err != nil {
@@ -109,7 +59,7 @@ func newAgents(ctx context.Context, dbPath string, owner gov.Principal,
 			antigravity: agentagy.Runner{NewCommand: launcher.AntigravityCommand, NewResumeCommand: launcher.AntigravityResumeCommand},
 		}
 	}
-	service, err := agentapplication.NewService(store, runner, admit, owner, profileExists)
+	service, err := agentapplication.NewService(store, runner, admit.Execute, owner, profileExists)
 	if err != nil {
 		_ = store.Close()
 		return nil, nil, nil, err

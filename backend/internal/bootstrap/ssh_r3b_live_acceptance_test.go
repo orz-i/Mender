@@ -13,6 +13,7 @@ import (
 	"time"
 
 	gov "github.com/orz-i/Mender/backend/internal/governance/domain"
+	sandboxapplication "github.com/orz-i/Mender/backend/internal/sandbox/application"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 	sshremote "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/sshremote"
 )
@@ -70,7 +71,7 @@ func TestR3bRealSSHLiveAcceptance(t *testing.T) {
 	// A brand-new logical Sandbox isolates the test TaskID directory from all
 	// user jobs. Never target or retry a preexisting TaskID.
 	owned, err := r.Sandboxes.CreateSSHRemoteSandbox(ctx, CreateSSHRemoteSandboxRequest{
-		Name: "R3b Rocky acceptance temporary", Template: template,
+		Name: "R3b Rocky acceptance temporary", Template: sandboxapplication.SSHRemoteTemplate(template),
 	}, caller)
 	if err != nil {
 		t.Fatalf("cannot create scoped acceptance Sandbox: %v", err)

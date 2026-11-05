@@ -73,7 +73,7 @@ func (s *Sandboxes) DaytonaStatus() string {
 
 type CreateDaytonaSandboxRequest struct {
 	Name     string
-	Template sandboxdaytona.Template
+	Template sandboxapplication.DaytonaTemplate
 }
 
 func (s *Sandboxes) CreateDaytonaSandbox(ctx context.Context, input CreateDaytonaSandboxRequest, caller governancedomain.Context) (sandboxdomain.Sandbox, error) {
@@ -83,7 +83,8 @@ func (s *Sandboxes) CreateDaytonaSandbox(ctx context.Context, input CreateDayton
 	if err := caller.Validate(); err != nil {
 		return sandboxdomain.Sandbox{}, err
 	}
-	if err := input.Template.Validate(); err != nil {
+	template := sandboxdaytona.Template(input.Template)
+	if err := template.Validate(); err != nil {
 		return sandboxdomain.Sandbox{}, err
 	}
 	id, err := sandboxidentity.Generator{}.NewSandboxID()
@@ -100,10 +101,10 @@ func (s *Sandboxes) CreateDaytonaSandbox(ctx context.Context, input CreateDayton
 	}
 	// Check the reference BEFORE reserving one of two scarce/billable allocation
 	// slots. Do not create a durable defined resource for a missing API key.
-	if err := s.daytona.CheckCredential(ctx, input.Template); err != nil {
+	if err := s.daytona.CheckCredential(ctx, template); err != nil {
 		return sandboxdomain.Sandbox{}, err
 	}
-	if err := s.daytonaTemplates.CreateDefinedSandbox(ctx, item, input.Template); err != nil {
+	if err := s.daytonaTemplates.CreateDefinedSandbox(ctx, item, template); err != nil {
 		return sandboxdomain.Sandbox{}, err
 	}
 	if _, err := s.daytona.Provision(ctx, caller, id); err != nil {

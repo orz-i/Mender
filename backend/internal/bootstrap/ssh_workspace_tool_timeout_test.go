@@ -11,6 +11,7 @@ import (
 	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
+	sandboxapplication "github.com/orz-i/Mender/backend/internal/sandbox/application"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 )
 
@@ -31,7 +32,7 @@ func TestSSHJobsImplicitTimeoutIsExactPinnedAndDoesNotLeak(t *testing.T) {
 	template, secret, _ := startInProcessSSHForSandbox(t)
 	runtime.Sandboxes.sshRemote.Dial.Credentials = sshFixtureCredentialResolver{secret: secret}
 	template.User = "root" // local test-owned SSH fixture; no real root host or systemd
-	remote, err := runtime.Sandboxes.CreateSSHRemoteSandbox(ctx, CreateSSHRemoteSandboxRequest{Name: "Verified root SSH Jobs", Template: template}, caller)
+	remote, err := runtime.Sandboxes.CreateSSHRemoteSandbox(ctx, CreateSSHRemoteSandboxRequest{Name: "Verified root SSH Jobs", Template: sandboxapplication.SSHRemoteTemplate(template)}, caller)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +81,7 @@ func TestSSHWorkspaceBudgetAndTypedToolFailureAreScoped(t *testing.T) {
 	}
 
 	remote, err := r.Sandboxes.CreateSSHRemoteSandbox(ctx, CreateSSHRemoteSandboxRequest{
-		Name: "SSH Tool diagnostic fixture", Template: template,
+		Name: "SSH Tool diagnostic fixture", Template: sandboxapplication.SSHRemoteTemplate(template),
 	}, caller)
 	if err != nil {
 		t.Fatal(err)

@@ -12,6 +12,7 @@ import (
 	gov "github.com/orz-i/Mender/backend/internal/governance/domain"
 	profileapp "github.com/orz-i/Mender/backend/internal/profile/application"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
+	sandboxapplication "github.com/orz-i/Mender/backend/internal/sandbox/application"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 )
 
@@ -33,7 +34,7 @@ func TestMCPSSHJobsSeparateGrantsAndReadOnlyRecoveryWithUncertainLease(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	item, err := r.Sandboxes.CreateSSHRemoteSandbox(ctx, CreateSSHRemoteSandboxRequest{Name: "MCP Jobs", Template: template}, owner)
+	item, err := r.Sandboxes.CreateSSHRemoteSandbox(ctx, CreateSSHRemoteSandboxRequest{Name: "MCP Jobs", Template: sandboxapplication.SSHRemoteTemplate(template)}, owner)
 	if err != nil {
 		t.Fatal(err)
 	}

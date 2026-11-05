@@ -9,8 +9,8 @@ import (
 	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
 	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	platformplugin "github.com/orz-i/Mender/backend/internal/plugin"
+	sandboxapplication "github.com/orz-i/Mender/backend/internal/sandbox/application"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
-	sandboxsqlite "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/sqlite"
 	tunneldomain "github.com/orz-i/Mender/backend/internal/tunnel/domain"
 )
 
@@ -47,7 +47,7 @@ func (h *Handler) createExternalSandbox(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	created, createErr := h.runtime.Sandboxes.CreateExternalSandbox(r.Context(), bootstrap.CreateExternalSandboxRequest{
-		Name: input.Name, InstallationID: id, Config: sandboxsqlite.ExternalConfig{
+		Name: input.Name, InstallationID: id, Config: sandboxapplication.ExternalConfig{
 			ConfigVersion: descriptor.ConfigVersion, JSON: input.Config,
 		},
 	}, caller)

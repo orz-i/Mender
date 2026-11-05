@@ -7,6 +7,7 @@ import (
 	"github.com/orz-i/Mender/backend/internal/bootstrap"
 	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
 	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
+	sandboxapplication "github.com/orz-i/Mender/backend/internal/sandbox/application"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 	sandboxssh "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/sshremote"
 )
@@ -77,7 +78,7 @@ func (h *Handler) createSSHRemoteSandbox(w http.ResponseWriter, r *http.Request)
 		writeKnownError(w, err)
 		return
 	}
-	t := sandboxssh.Template{Host: input.Host, Port: input.Port, User: input.User, Root: input.Root, HostPublicKey: input.HostPublicKey, CredentialRef: ref}
+	t := sandboxapplication.SSHRemoteTemplate{Host: input.Host, Port: input.Port, User: input.User, Root: input.Root, HostPublicKey: input.HostPublicKey, CredentialRef: ref}
 	item, err := h.runtime.Sandboxes.CreateSSHRemoteSandbox(r.Context(), bootstrap.CreateSSHRemoteSandboxRequest{Name: input.Name, Template: t}, caller)
 	if err != nil {
 		switch {

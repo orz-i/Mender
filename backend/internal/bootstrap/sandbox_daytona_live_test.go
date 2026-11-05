@@ -16,6 +16,7 @@ import (
 	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
 	gov "github.com/orz-i/Mender/backend/internal/governance/domain"
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
+	sandboxapplication "github.com/orz-i/Mender/backend/internal/sandbox/application"
 	sand "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 	daytonadriver "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/daytona"
 	workspaceplugin "github.com/orz-i/Mender/backend/internal/workspace/infrastructure/plugin"
@@ -67,7 +68,7 @@ func TestDaytonaLiveRuntimeProviderAndCleanup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	item, provisionErr := runtime.Sandboxes.CreateDaytonaSandbox(ctx, CreateDaytonaSandboxRequest{Name: "Mender Stage E live validation", Template: template}, caller)
+	item, provisionErr := runtime.Sandboxes.CreateDaytonaSandbox(ctx, CreateDaytonaSandboxRequest{Name: "Mender Stage E live validation", Template: sandboxapplication.DaytonaTemplate(template)}, caller)
 	if item.ID() != "" {
 		defer func() {
 			cleanupCtx, done := context.WithTimeout(context.Background(), 75*time.Second)

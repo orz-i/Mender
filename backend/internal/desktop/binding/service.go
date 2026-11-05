@@ -29,11 +29,8 @@ import (
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
 	runtimegovernancedomain "github.com/orz-i/Mender/backend/internal/runtimegovernance/domain"
+	sandboxapplication "github.com/orz-i/Mender/backend/internal/sandbox/application"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
-	sandboxdaytona "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/daytona"
-	sandboxdocker "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/dockerengine"
-	sandboxsqlite "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/sqlite"
-	sandboxssh "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/sshremote"
 	skillapplication "github.com/orz-i/Mender/backend/internal/skill/application"
 	skilldomain "github.com/orz-i/Mender/backend/internal/skill/domain"
 	tunnelapplication "github.com/orz-i/Mender/backend/internal/tunnel/application"
@@ -196,7 +193,7 @@ func (s *Service) CreateExternalSandbox(input CreateExternalSandboxInput) (Sandb
 	}
 	item, createErr := s.runtime.Sandboxes.CreateExternalSandbox(s.ctx, bootstrap.CreateExternalSandboxRequest{
 		Name: input.Name, InstallationID: id,
-		Config: sandboxsqlite.ExternalConfig{ConfigVersion: descriptor.ConfigVersion, JSON: json.RawMessage(input.ConfigJSON)},
+		Config: sandboxapplication.ExternalConfig{ConfigVersion: descriptor.ConfigVersion, JSON: json.RawMessage(input.ConfigJSON)},
 	}, caller)
 	if createErr != nil && item.ID() == "" {
 		return Sandbox{}, createErr
@@ -248,7 +245,7 @@ func (s *Service) CreateSSHRemoteSandbox(input CreateSSHRemoteSandboxInput) (San
 	if err != nil {
 		return Sandbox{}, err
 	}
-	t := sandboxssh.Template{Host: input.Host, Port: input.Port, User: input.User,
+	t := sandboxapplication.SSHRemoteTemplate{Host: input.Host, Port: input.Port, User: input.User,
 		Root: input.Root, HostPublicKey: input.HostPublicKey, CredentialRef: ref}
 	item, err := s.runtime.Sandboxes.CreateSSHRemoteSandbox(s.ctx,
 		bootstrap.CreateSSHRemoteSandboxRequest{Name: input.Name, Template: t}, caller)
@@ -266,7 +263,7 @@ func (s *Service) CreateDaytonaSandbox(input CreateDaytonaSandboxInput) (Sandbox
 	if err != nil {
 		return Sandbox{}, err
 	}
-	item, err := s.runtime.Sandboxes.CreateDaytonaSandbox(s.ctx, bootstrap.CreateDaytonaSandboxRequest{Name: input.Name, Template: sandboxdaytona.Template{CredentialRef: ref, ImageDigest: input.ImageDigest, Target: input.Target, CPU: input.CPU, MemoryGiB: input.MemoryGiB, DiskGiB: input.DiskGiB, TTLMinutes: input.TTLMinutes}}, caller)
+	item, err := s.runtime.Sandboxes.CreateDaytonaSandbox(s.ctx, bootstrap.CreateDaytonaSandboxRequest{Name: input.Name, Template: sandboxapplication.DaytonaTemplate{CredentialRef: ref, ImageDigest: input.ImageDigest, Target: input.Target, CPU: input.CPU, MemoryGiB: input.MemoryGiB, DiskGiB: input.DiskGiB, TTLMinutes: input.TTLMinutes}}, caller)
 	if err != nil && item.ID() == "" {
 		return Sandbox{}, err
 	}
@@ -295,7 +292,7 @@ func (s *Service) CreateDockerSandbox(input CreateDockerSandboxInput) (Sandbox, 
 	if err != nil {
 		return Sandbox{}, err
 	}
-	item, err := s.runtime.Sandboxes.CreateDockerSandbox(s.ctx, bootstrap.CreateDockerSandboxRequest{Name: input.Name, Template: sandboxdocker.Template{ImageDigest: input.ImageDigest, UserID: input.UserID, GroupID: input.GroupID, CPUmilli: input.CPUmilli, MemoryMiB: input.MemoryMiB, WorkspaceMiB: input.WorkspaceMiB, PIDs: input.PIDs}}, caller)
+	item, err := s.runtime.Sandboxes.CreateDockerSandbox(s.ctx, bootstrap.CreateDockerSandboxRequest{Name: input.Name, Template: sandboxapplication.DockerTemplate{ImageDigest: input.ImageDigest, UserID: input.UserID, GroupID: input.GroupID, CPUmilli: input.CPUmilli, MemoryMiB: input.MemoryMiB, WorkspaceMiB: input.WorkspaceMiB, PIDs: input.PIDs}}, caller)
 	if err != nil && item.ID() == "" {
 		return Sandbox{}, err
 	}

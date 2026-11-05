@@ -63,7 +63,7 @@ func ownerContext(t *testing.T, r *Runtime) governancedomain.Context {
 }
 func fixtureSandboxRequest(inst platformplugin.InstallationID, config string) CreateExternalSandboxRequest {
 	return CreateExternalSandboxRequest{Name: "Example backend", InstallationID: inst,
-		Config: sandboxsqlite.ExternalConfig{ConfigVersion: 1, JSON: json.RawMessage(config)}}
+		Config: sandboxapp.ExternalConfig{ConfigVersion: 1, JSON: json.RawMessage(config)}}
 }
 
 func TestExternalSandboxPluginGovernedLifecycleAndExecution(t *testing.T) {

@@ -8,8 +8,6 @@ import (
 
 	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
 	sandboxapplication "github.com/orz-i/Mender/backend/internal/sandbox/application"
-	sandboxdaytona "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/daytona"
-	sandboxdocker "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/dockerengine"
 
 	"github.com/orz-i/Mender/backend/internal/bootstrap"
 	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
@@ -210,7 +208,7 @@ func (h *Handler) createDockerSandbox(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	item, err := h.runtime.Sandboxes.CreateDockerSandbox(r.Context(), bootstrap.CreateDockerSandboxRequest{
-		Name: input.Name, Template: sandboxdocker.Template{ImageDigest: input.ImageDigest, UserID: input.UserID, GroupID: input.GroupID, CPUmilli: input.CPUmilli, MemoryMiB: input.MemoryMiB, WorkspaceMiB: input.WorkspaceMiB, PIDs: input.PIDs},
+		Name: input.Name, Template: sandboxapplication.DockerTemplate{ImageDigest: input.ImageDigest, UserID: input.UserID, GroupID: input.GroupID, CPUmilli: input.CPUmilli, MemoryMiB: input.MemoryMiB, WorkspaceMiB: input.WorkspaceMiB, PIDs: input.PIDs},
 	}, caller)
 	if err != nil {
 		// Resource and immutable Template already exist when a nonzero ID is
@@ -309,7 +307,7 @@ func (h *Handler) createDaytonaSandbox(w http.ResponseWriter, r *http.Request) {
 		writeKnownError(w, err)
 		return
 	}
-	template := sandboxdaytona.Template{CredentialRef: ref, ImageDigest: input.ImageDigest, Target: input.Target, CPU: input.CPU, MemoryGiB: input.MemoryGiB, DiskGiB: input.DiskGiB, TTLMinutes: input.TTLMinutes}
+	template := sandboxapplication.DaytonaTemplate{CredentialRef: ref, ImageDigest: input.ImageDigest, Target: input.Target, CPU: input.CPU, MemoryGiB: input.MemoryGiB, DiskGiB: input.DiskGiB, TTLMinutes: input.TTLMinutes}
 	item, err := h.runtime.Sandboxes.CreateDaytonaSandbox(r.Context(), bootstrap.CreateDaytonaSandboxRequest{Name: input.Name, Template: template}, caller)
 	if err != nil {
 		if item.ID() != "" {

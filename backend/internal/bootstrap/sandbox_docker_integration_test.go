@@ -18,6 +18,7 @@ import (
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	gov "github.com/orz-i/Mender/backend/internal/governance/domain"
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
+	sandboxapplication "github.com/orz-i/Mender/backend/internal/sandbox/application"
 	sand "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 	sanddocker "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/dockerengine"
 	workspaceplugin "github.com/orz-i/Mender/backend/internal/workspace/infrastructure/plugin"
@@ -197,7 +198,7 @@ func TestRuntimeDockerSandboxProviderEndToEnd(t *testing.T) {
 		t.Fatal(err)
 	}
 	template := sanddocker.Template{ImageDigest: image, UserID: 10001, GroupID: 10001, CPUmilli: 1000, MemoryMiB: 512, WorkspaceMiB: 64, PIDs: 64}
-	item, err := runtime.Sandboxes.CreateDockerSandbox(ctx, CreateDockerSandboxRequest{Name: "Docker End-to-End", Template: template}, caller)
+	item, err := runtime.Sandboxes.CreateDockerSandbox(ctx, CreateDockerSandboxRequest{Name: "Docker End-to-End", Template: sandboxapplication.DockerTemplate(template)}, caller)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	gov "github.com/orz-i/Mender/backend/internal/governance/domain"
+	sandboxapplication "github.com/orz-i/Mender/backend/internal/sandbox/application"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 	sshremote "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/sshremote"
 )
@@ -29,7 +30,7 @@ func TestSSHManagedJobsV2UnknownOutcomeBlocksLifecycleAcrossRestart(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	item, err := runtime.Sandboxes.CreateSSHRemoteSandbox(ctx, CreateSSHRemoteSandboxRequest{Name: "managed v2 jobs SSH", Template: tpl}, owner)
+	item, err := runtime.Sandboxes.CreateSSHRemoteSandbox(ctx, CreateSSHRemoteSandboxRequest{Name: "managed v2 jobs SSH", Template: sandboxapplication.SSHRemoteTemplate(tpl)}, owner)
 	if err != nil {
 		t.Fatal(err)
 	}

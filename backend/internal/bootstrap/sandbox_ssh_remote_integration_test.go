@@ -18,6 +18,7 @@ import (
 	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
 	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
+	sandboxapplication "github.com/orz-i/Mender/backend/internal/sandbox/application"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 	sshremote "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/sshremote"
 	"github.com/pkg/sftp"
@@ -165,7 +166,7 @@ func TestRuntimeSSHRemoteAdmissionRouterWorkspaceAndLocalLifecycle(t *testing.T)
 		t.Fatalf("initial SSH identity should require first-use confirmation: %+v %v", firstIdentity, err)
 	}
 	item, err := r.Sandboxes.CreateSSHRemoteSandbox(ctx, CreateSSHRemoteSandboxRequest{
-		Name: "Pinned test SSH host", Template: tpl,
+		Name: "Pinned test SSH host", Template: sandboxapplication.SSHRemoteTemplate(tpl),
 	}, caller)
 	if err != nil {
 		t.Fatalf("create verified SSH resource: %v", err)

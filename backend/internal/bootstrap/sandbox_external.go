@@ -14,6 +14,7 @@ import (
 	installationdomain "github.com/orz-i/Mender/backend/internal/plugin/installation/domain"
 	installationidentity "github.com/orz-i/Mender/backend/internal/plugin/installation/infrastructure/identity"
 	pluginprocess "github.com/orz-i/Mender/backend/internal/plugin/process"
+	sandboxapplication "github.com/orz-i/Mender/backend/internal/sandbox/application"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 	sandboxexternal "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/external"
 	sandboxidentity "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/identity"
@@ -149,7 +150,7 @@ func (r *Runtime) RemoveSandboxPluginInstallation(ctx context.Context, id platfo
 type CreateExternalSandboxRequest struct {
 	Name           string
 	InstallationID platformplugin.InstallationID
-	Config         sandboxsqlite.ExternalConfig
+	Config         sandboxapplication.ExternalConfig
 }
 
 func (s *Sandboxes) externalBackend(binding sandboxdomain.BackendBinding) (*sandboxexternal.Backend, error) {
@@ -190,7 +191,8 @@ func (s *Sandboxes) CreateExternalSandbox(ctx context.Context, request CreateExt
 		caller.Origin() == governancedomain.OriginMCP {
 		return sandboxdomain.Sandbox{}, sandboxdomain.ErrNotAuthorized
 	}
-	if err := request.Config.Validate(); err != nil {
+	config := sandboxsqlite.ExternalConfig(request.Config)
+	if err := config.Validate(); err != nil {
 		return sandboxdomain.Sandbox{}, err
 	}
 	installation, err := s.externalInstallationLookup.Get(ctx, request.InstallationID)
@@ -201,7 +203,7 @@ func (s *Sandboxes) CreateExternalSandbox(ctx context.Context, request CreateExt
 		return sandboxdomain.Sandbox{}, sandboxdomain.ErrBackendUnavailable
 	}
 	descriptor, ok := installation.VerifiedDescriptor()
-	if !ok || descriptor.ConfigVersion != request.Config.ConfigVersion {
+	if !ok || descriptor.ConfigVersion != config.ConfigVersion {
 		return sandboxdomain.Sandbox{}, sandboxdomain.ErrBackendUnavailable
 	}
 	id, err := sandboxidentity.Generator{}.NewSandboxID()
@@ -226,10 +228,10 @@ func (s *Sandboxes) CreateExternalSandbox(ctx context.Context, request CreateExt
 	if err != nil {
 		return sandboxdomain.Sandbox{}, err
 	}
-	if err := backend.ValidateConfig(ctx, binding, request.Config); err != nil {
+	if err := backend.ValidateConfig(ctx, binding, config); err != nil {
 		return sandboxdomain.Sandbox{}, err
 	}
-	if err := s.store.CreateDefinedExternal(ctx, item, request.Config); err != nil {
+	if err := s.store.CreateDefinedExternal(ctx, item, config); err != nil {
 		return sandboxdomain.Sandbox{}, err
 	}
 	current, err := s.store.GetRun(ctx, id)

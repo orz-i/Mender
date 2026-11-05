@@ -7,6 +7,7 @@ import (
 
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
+	sandboxapplication "github.com/orz-i/Mender/backend/internal/sandbox/application"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 )
 
@@ -30,7 +31,7 @@ func TestResolveMCPToolSourcesRetainsStoppedSSHJobsRecovery(t *testing.T) {
 		t.Fatal(err)
 	}
 	item, err := r.Sandboxes.CreateSSHRemoteSandbox(ctx, CreateSSHRemoteSandboxRequest{
-		Name: "Recovery Sandbox", Template: template,
+		Name: "Recovery Sandbox", Template: sandboxapplication.SSHRemoteTemplate(template),
 	}, owner)
 	if err != nil {
 		t.Fatal(err)

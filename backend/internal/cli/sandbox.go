@@ -9,6 +9,7 @@ import (
 	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
 	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	platformplugin "github.com/orz-i/Mender/backend/internal/plugin"
+	sandboxapplication "github.com/orz-i/Mender/backend/internal/sandbox/application"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 	sandboxdaytona "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/daytona"
 	sandboxdocker "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/dockerengine"
@@ -252,7 +253,7 @@ func (a *app) newSandboxAddDockerCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			item, err := runtime.Sandboxes.CreateDockerSandbox(cmd.Context(), bootstrap.CreateDockerSandboxRequest{Name: name, Template: template}, caller)
+			item, err := runtime.Sandboxes.CreateDockerSandbox(cmd.Context(), bootstrap.CreateDockerSandboxRequest{Name: name, Template: sandboxapplication.DockerTemplate(template)}, caller)
 			if err != nil {
 				return err
 			}
@@ -321,7 +322,7 @@ func (a *app) newSandboxAddDaytonaCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			item, err := runtime.Sandboxes.CreateDaytonaSandbox(cmd.Context(), bootstrap.CreateDaytonaSandboxRequest{Name: name, Template: template}, caller)
+			item, err := runtime.Sandboxes.CreateDaytonaSandbox(cmd.Context(), bootstrap.CreateDaytonaSandboxRequest{Name: name, Template: sandboxapplication.DaytonaTemplate(template)}, caller)
 			if err != nil && item.ID() == "" {
 				return err
 			}
@@ -366,7 +367,7 @@ func (a *app) newSandboxAddSSHRemoteCommand() *cobra.Command {
 					return err
 				}
 				item, err := runtime.Sandboxes.CreateSSHRemoteSandbox(cmd.Context(),
-					bootstrap.CreateSSHRemoteSandboxRequest{Name: name, Template: t}, caller)
+					bootstrap.CreateSSHRemoteSandboxRequest{Name: name, Template: sandboxapplication.SSHRemoteTemplate(t)}, caller)
 				if err != nil {
 					return err
 				}
@@ -416,7 +417,7 @@ func (a *app) newSandboxAddExternalCommand() *cobra.Command {
 					return err
 				}
 				item, createErr := runtime.Sandboxes.CreateExternalSandbox(cmd.Context(), bootstrap.CreateExternalSandboxRequest{
-					Name: name, InstallationID: id, Config: config,
+					Name: name, InstallationID: id, Config: sandboxapplication.ExternalConfig(config),
 				}, caller)
 				if item.ID() == "" {
 					return createErr

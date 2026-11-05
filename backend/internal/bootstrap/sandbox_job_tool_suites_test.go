@@ -10,6 +10,7 @@ import (
 	catalogapp "github.com/orz-i/Mender/backend/internal/catalog/application"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	gov "github.com/orz-i/Mender/backend/internal/governance/domain"
+	sandboxapplication "github.com/orz-i/Mender/backend/internal/sandbox/application"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 	sshjobsplugin "github.com/orz-i/Mender/backend/internal/sshjobs/infrastructure/plugin"
 )
@@ -28,7 +29,7 @@ func TestSSHJobsManagedSuiteOnlyAfterExplicitOwnerPrepare(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	item, err := r.Sandboxes.CreateSSHRemoteSandbox(ctx, CreateSSHRemoteSandboxRequest{Name: "Suite SSH", Template: tpl}, owner)
+	item, err := r.Sandboxes.CreateSSHRemoteSandbox(ctx, CreateSSHRemoteSandboxRequest{Name: "Suite SSH", Template: sandboxapplication.SSHRemoteTemplate(tpl)}, owner)
 	if err != nil {
 		t.Fatal(err)
 	}
