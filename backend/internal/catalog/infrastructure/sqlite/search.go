@@ -63,7 +63,7 @@ func (s *Store) pagedSearchToolDomain(
 		return []domain.Tool{}, nil
 	}
 
-	statement, args, err := searchStatement(match, query, limit, offset, scope)
+	statement, args, err := searchStatement(searchToolsStatement, match, query, limit, offset, scope)
 	if err != nil {
 		return nil, fmt.Errorf("search tools: %w", err)
 	}
@@ -93,14 +93,16 @@ func (s *Store) pagedSearchToolDomain(
 	return tools, nil
 }
 
-// searchStatement builds one parameterized search query. Any Profile
-// allowance is restricted with a JSON1 IN predicate, evaluated together with
-// the provider filter before ranking, LIMIT and OFFSET, so pagination can
-// never bypass the scope.
+// searchStatement builds one parameterized search query from a select prefix.
+// Any Profile allowance is restricted with a JSON1 IN predicate, evaluated
+// together with the provider filter before ranking, LIMIT and OFFSET, so
+// pagination can never bypass the scope. Every search path composes through
+// this builder so weighted ranking and scope fragments stay identical.
 func searchStatement(
+	selectPrefix string,
 	match string, query string, limit int, offset int, scope application.ToolSearchScope,
 ) (string, []any, error) {
-	statement := searchToolsStatement
+	statement := selectPrefix
 	args := []any{match}
 	if scope.ProviderID != nil {
 		statement += `

@@ -8,6 +8,13 @@ import (
 	"github.com/orz-i/Mender/backend/internal/catalog/domain"
 )
 
+// pagedSearchToolsStatement is the compact metadata projection used for
+// list/search browsing; the full row search (searchToolsStatement) shares
+// every scope fragment and the ftsRankOrder clause through searchStatement.
+const pagedSearchToolsStatement = `SELECT t.id,t.provider_id,t.name,t.title,t.description
+  FROM tools_fts JOIN tools t ON t.id=tools_fts.tool_id
+  WHERE tools_fts MATCH ?`
+
 // PagedSearchTools reads only compact metadata. Schema bytes are loaded
 // exclusively by Tool detail/invocation paths, never list/search browsing.
 func (s *Store) PagedSearchTools(
@@ -18,25 +25,12 @@ func (s *Store) PagedSearchTools(
 	if match == "" || (scope.AllowedToolIDs != nil && len(scope.AllowedToolIDs) == 0) {
 		return []application.ToolListItem{}, nil
 	}
-	statement := `SELECT t.id,t.provider_id,t.name,t.title,t.description
-  FROM tools_fts JOIN tools t ON t.id=tools_fts.tool_id
-  WHERE tools_fts MATCH ?`
-	args := []any{match}
-	if scope.ProviderID != nil {
-		statement += " AND tools_fts.provider_id=?"
-		args = append(args, scope.ProviderID.String())
+	statement, args, err := searchStatement(
+		pagedSearchToolsStatement, match, query, limit, offset, scope,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("paged tool search: %w", err)
 	}
-	if scope.AllowedToolIDs != nil {
-		encoded, err := encodeAllowedToolIDs(scope.AllowedToolIDs)
-		if err != nil {
-			return nil, fmt.Errorf("paged tool search: allowed IDs: %w", err)
-		}
-		statement += " AND t.id IN (SELECT value FROM json_each(?))"
-		args = append(args, encoded)
-	}
-	statement += "\n" + ftsRankOrder + "\nLIMIT ? OFFSET ?"
-	args = append(args, ftsRankingArgs(query)...)
-	args = append(args, limit, offset)
 	rows, err := s.db.QueryContext(ctx, statement, args...)
 	if err != nil {
 		return nil, fmt.Errorf("paged tool search: query: %w", err)
