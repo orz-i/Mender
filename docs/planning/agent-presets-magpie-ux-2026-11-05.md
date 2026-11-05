@@ -29,6 +29,10 @@ Match Magpie's Agents screen shown by the user: one full-width bordered list, ea
 - Do not write real user's Agent store during QA; mock API for flow tests. Changes committed in stages, not pushed.
 
 ## Progress
-- [ ] Preset catalog and backend selection
-- [ ] Pinned configuration language and marketplace CTA
-- [ ] Responsive/browser/Wails QA and full gates
+- [x] Preset catalog and backend selection
+- [x] Pinned configuration language and marketplace CTA
+- [ ] Responsive/browser/Wails QA and full gates — browser, axe, Vitest, lint, TS, translations, Web/desktop frontend build passed; native Wails window unavailable for post-change visual acceptance
+
+## Acceptance evidence
+
+[Agent preset directory design and browser QA](../design/agent-presets-qa/README.md) documents desktop/mobile captures, direct existing-Agent configuration, multi-workspace selection, unavailable diagnostics and all limitations. Brand marks are locally vendored from MIT-licensed LobeHub Icons with source/notice files. No production Agent inventory, grants, Task histories or plugin status were modified.
