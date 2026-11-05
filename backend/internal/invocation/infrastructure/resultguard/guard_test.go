@@ -86,6 +86,39 @@ func TestGuardLeavesNonCompleteOutcomesUnchanged(t *testing.T) {
 	}
 }
 
+func TestGuardPreservesHostMeasuredV1SizeAcrossTypedEncoding(t *testing.T) {
+	t.Parallel()
+	guard := New(invocationjsonschema.Validator{})
+	tool := resultTool(t, []byte(`{"type":"object","required":["ok"]}`))
+	content, err := invocationdomain.NewJSONValue([]byte(`{"ok":true}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, size := range []int{5, 16, 17} {
+		out, err := invocationdomain.CompleteWithResultSize(content, size)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := guard.Guard(context.Background(), tool, out, 16)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if size > 16 {
+			if got.FailureCode() != invocationdomain.FailureResultTooLarge {
+				t.Fatalf("original size ignored: %+v", got)
+			}
+		} else if got.Kind() != invocationdomain.OutcomeKindComplete {
+			t.Fatalf("typed encoding changed budget: %+v", got)
+		}
+	}
+	if _, err := invocationdomain.CompleteWithResultSize(content, 0); err == nil {
+		t.Fatal("invalid measured size accepted")
+	}
+	if _, err := invocationdomain.CompleteWithResultSize(invocationdomain.JSONValue{}, 10); err == nil {
+		t.Fatal("missing measured content accepted")
+	}
+}
+
 func TestGuardTreatsUnevaluableOutputSchemaAsInternalFailure(t *testing.T) {
 	t.Parallel()
 

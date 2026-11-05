@@ -58,7 +58,8 @@ func (e invocationExecution) run(ctx context.Context, attempt invocationAttempt,
 	credentials := credentialResolverForScope(e.credentials, attempt.metadata.context.Scope(), prepared.governance)
 	outcome, err := executeWithGuardRelease(ctx, executor, ExecutionRequest{
 		InvocationID: attempt.metadata.id, Tool: prepared.tool, Arguments: prepared.arguments,
-		AdmittedFacts: prepared.facts, Context: attempt.metadata.context,
+		MaxResultBytes: attempt.budget.MaxResultBytes(),
+		AdmittedFacts:  prepared.facts, Context: attempt.metadata.context,
 	}, credentials, attempt.events, release)
 	if err != nil {
 		return executionFailure(ctx, admitted, err)

@@ -148,6 +148,9 @@ type ExecutionRequest struct {
 	InvocationID invocationdomain.InvocationID
 	Tool         catalogdomain.Tool
 	Arguments    invocationdomain.JSONValue
+	// MaxResultBytes is copied from this invocation's one budget snapshot.
+	// Adapters that validate typed results must retain size-before-schema order.
+	MaxResultBytes int
 	// AdmittedFacts are the exact host-reviewed facts used for this
 	// invocation's Policy decision. Executors may compare mutable target
 	// resolution against this snapshot, but cannot broaden its authority.

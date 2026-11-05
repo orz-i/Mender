@@ -67,6 +67,7 @@ type Outcome struct {
 	rejectCode  RejectionCode
 	failSource  FailureSource
 	failCode    FailureCode
+	resultBytes int
 }
 
 // Complete constructs an immediately completed outcome.
@@ -75,6 +76,28 @@ func Complete(content JSONValue) (Outcome, error) {
 		return Outcome{}, validationError("content", "must be provided")
 	}
 	return Outcome{kind: OutcomeKindComplete, content: content}, nil
+}
+
+// CompleteWithResultSize retains a host-measured result size when a typed
+// transport adapter re-encodes an existing wire contract. The measurement is
+// internal metadata, never supplied by Tool arguments or exposed in output.
+func CompleteWithResultSize(content JSONValue, resultBytes int) (Outcome, error) {
+	if resultBytes <= 0 {
+		return Outcome{}, validationError("result_bytes", "must be positive")
+	}
+	outcome, err := Complete(content)
+	if err != nil {
+		return Outcome{}, err
+	}
+	outcome.resultBytes = resultBytes
+	return outcome, nil
+}
+
+func (o Outcome) ResultBytes() int {
+	if o.resultBytes > 0 {
+		return o.resultBytes
+	}
+	return len(o.content.raw)
 }
 
 // InputRequired constructs an outcome requesting additional caller/model input.

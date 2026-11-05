@@ -35,7 +35,7 @@ func (g Guard) Guard(
 		return invocationdomain.Outcome{}, fmt.Errorf("result guard: max bytes must be positive")
 	}
 	content := outcome.Content()
-	if len(content.Bytes()) > maxBytes {
+	if outcome.ResultBytes() > maxBytes {
 		return invocationdomain.Failed(
 			invocationdomain.FailureSourceResultGuard,
 			invocationdomain.FailureResultTooLarge,
