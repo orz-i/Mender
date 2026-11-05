@@ -6,9 +6,9 @@ import (
 	"sync/atomic"
 
 	mobyclient "github.com/moby/moby/client"
-	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	sandboxapplication "github.com/orz-i/Mender/backend/internal/sandbox/application"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
+	workspaceapplication "github.com/orz-i/Mender/backend/internal/workspace/application"
 )
 
 // SessionAPI is a deliberately bounded subset of Docker Engine required for
@@ -108,26 +108,12 @@ func (s *workspaceSession) Close() error {
 	}
 	return nil
 }
-func (s *workspaceSession) ExecuteWorkspace(ctx context.Context, cap sandboxdomain.Capability, args invocationdomain.JSONValue) (invocationdomain.Outcome, error) {
+func (s *workspaceSession) validateWorkspaceSession(ctx context.Context) error {
 	if s == nil || s.api == nil || !containerIDPattern.MatchString(s.containerID) {
-		return invocationdomain.Outcome{}, sandboxdomain.ErrBackendUnavailable
+		return sandboxdomain.ErrBackendUnavailable
 	}
-	if err := ctx.Err(); err != nil {
-		return invocationdomain.Outcome{}, err
-	}
-	switch cap {
-	case sandboxdomain.CapabilityRead:
-		return s.read(ctx, args)
-	case sandboxdomain.CapabilitySearch:
-		return s.search(ctx, args)
-	case sandboxdomain.CapabilityEdit:
-		return s.edit(ctx, args)
-	case sandboxdomain.CapabilityShell:
-		return s.shell(ctx, args)
-	default:
-		return invocationdomain.Outcome{}, sandboxdomain.ErrCapabilityUnavailable
-	}
+	return ctx.Err()
 }
 
 var _ sandboxapplication.Backend = (*Backend)(nil)
-var _ sandboxapplication.WorkspaceSession = (*workspaceSession)(nil)
+var _ workspaceapplication.Session = (*workspaceSession)(nil)

@@ -4,7 +4,6 @@ import (
 	"context"
 
 	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
-	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 )
 
@@ -25,17 +24,9 @@ type AdmissionGate interface {
 	AdmitAcquire(context.Context, governancedomain.Context, Placement) error
 }
 
-// Session is a backend-owned execution context. Its File and Process ports
-// will be added with concrete operations in the Workspace migration cluster.
+// Session is a backend-owned lifetime. Operation ports are defined by their
+// consuming applications, independently of Tool JSON and Invocation outcomes.
 type Session interface{ Close() error }
-
-// WorkspaceSession executes an explicitly selected Workspace capability on
-// the same backend filesystem, without permitting Tool arguments to choose a
-// Sandbox or remount the host.
-type WorkspaceSession interface {
-	Session
-	ExecuteWorkspace(context.Context, sandboxdomain.Capability, invocationdomain.JSONValue) (invocationdomain.Outcome, error)
-}
 
 type Backend interface {
 	Kind() sandboxdomain.BackendKind

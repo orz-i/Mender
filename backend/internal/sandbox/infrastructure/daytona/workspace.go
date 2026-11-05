@@ -6,7 +6,6 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"io"
 	"path"
@@ -15,8 +14,8 @@ import (
 	"time"
 	"unicode/utf8"
 
-	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
+	workspacedomain "github.com/orz-i/Mender/backend/internal/workspace/domain"
 )
 
 const (
@@ -30,49 +29,6 @@ const (
 
 var safeFilePath = regexp.MustCompile(`^[a-zA-Z0-9._/-]+$`)
 
-type readArgs struct {
-	Path   string `json:"path"`
-	Offset int    `json:"offset,omitempty"`
-	Limit  int    `json:"limit,omitempty"`
-}
-type editArgs struct {
-	Path      string     `json:"path"`
-	Operation string     `json:"operation"`
-	Content   string     `json:"content,omitempty"`
-	Edits     []textEdit `json:"edits,omitempty"`
-}
-type textEdit struct {
-	OldText              string `json:"oldText"`
-	NewText              string `json:"newText"`
-	ExpectedReplacements int    `json:"expectedReplacements,omitempty"`
-}
-type searchArgs struct {
-	Mode          string `json:"mode"`
-	Path          string `json:"path,omitempty"`
-	Query         string `json:"query,omitempty"`
-	Pattern       string `json:"pattern,omitempty"`
-	Regex         bool   `json:"regex,omitempty"`
-	CaseSensitive bool   `json:"caseSensitive,omitempty"`
-	MaxResults    int    `json:"maxResults,omitempty"`
-}
-type shellArgs struct {
-	Command   string `json:"command"`
-	Cwd       string `json:"cwd,omitempty"`
-	TimeoutMS int64  `json:"timeoutMs,omitempty"`
-}
-
-func strictJSON(raw []byte, target any) error {
-	dec := json.NewDecoder(bytes.NewReader(raw))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(target); err != nil {
-		return fmt.Errorf("daytona Workspace: invalid arguments: %w", err)
-	}
-	var extra any
-	if err := dec.Decode(&extra); err != io.EOF {
-		return fmt.Errorf("daytona Workspace: trailing data")
-	}
-	return nil
-}
 func remotePath(raw string, rootOK bool) (string, error) {
 	if raw == "" && rootOK {
 		return ".", nil
@@ -173,18 +129,7 @@ func (s *session) readBytes(ctx context.Context, relative string, limit int) ([]
 	}
 	return content, nil
 }
-func completed(value any) (invocationdomain.Outcome, error) {
-	raw, err := json.Marshal(value)
-	if err != nil {
-		return invocationdomain.Outcome{}, err
-	}
-	encoded, err := invocationdomain.NewJSONValue(raw)
-	if err != nil {
-		return invocationdomain.Outcome{}, err
-	}
-	return invocationdomain.Complete(encoded)
-}
-func rejected(err error) (invocationdomain.Outcome, error) {
+func rejected(err error) error {
 	if err == nil {
 		err = fmt.Errorf("daytona Workspace rejected operation")
 	}
@@ -192,77 +137,63 @@ func rejected(err error) (invocationdomain.Outcome, error) {
 	if len(text) > 1024 {
 		text = text[:1024]
 	}
-	return invocationdomain.Failed(invocationdomain.FailureSourceTool, invocationdomain.FailureToolError, text)
+	return &workspacedomain.ToolError{Message: text}
 }
-func (s *session) read(ctx context.Context, args invocationdomain.JSONValue) (invocationdomain.Outcome, error) {
-	var a readArgs
-	if err := strictJSON(args.Bytes(), &a); err != nil {
-		return rejected(err)
+func (s *session) Read(ctx context.Context, a workspacedomain.ReadRequest) (workspacedomain.ReadResult, error) {
+	if err := s.validateWorkspaceSession(ctx); err != nil {
+		return workspacedomain.ReadResult{}, err
 	}
 	rel, err := remotePath(a.Path, false)
 	if err != nil {
-		return rejected(err)
-	}
-	if a.Offset == 0 {
-		a.Offset = 1
-	}
-	if a.Limit == 0 {
-		a.Limit = 200
+		return workspacedomain.ReadResult{}, rejected(err)
 	}
 	if a.Offset < 1 || a.Limit < 1 || a.Limit > 2000 {
-		return rejected(fmt.Errorf("read line offset/limit out of bounds"))
+		return workspacedomain.ReadResult{}, rejected(fmt.Errorf("read line offset/limit out of bounds"))
 	}
 	content, err := s.readBytes(ctx, rel, maxReadBytes)
 	if err != nil {
-		return rejected(err)
+		return workspacedomain.ReadResult{}, rejected(err)
 	}
 	if !utf8.Valid(content) {
-		return rejected(fmt.Errorf("UTF-8 text required"))
+		return workspacedomain.ReadResult{}, rejected(fmt.Errorf("UTF-8 text required"))
 	}
 	lines := strings.Split(strings.TrimSuffix(string(content), "\n"), "\n")
 	start := a.Offset - 1
 	if start >= len(lines) {
-		return completed(map[string]any{"path": rel, "content": "", "startLine": 0, "endLine": 0, "truncated": false})
+		return workspacedomain.ReadResult{Path: rel}, nil
 	}
 	end := min(start+a.Limit, len(lines))
-	return completed(map[string]any{"path": rel, "content": strings.Join(lines[start:end], "\n"), "startLine": start + 1, "endLine": end, "truncated": end < len(lines)})
+	return workspacedomain.ReadResult{Path: rel, Content: strings.Join(lines[start:end], "\n"), StartLine: start + 1, EndLine: end, Truncated: end < len(lines)}, nil
 }
-func (s *session) shell(ctx context.Context, args invocationdomain.JSONValue) (invocationdomain.Outcome, error) {
-	var a shellArgs
-	if err := strictJSON(args.Bytes(), &a); err != nil {
-		return rejected(err)
+func (s *session) Shell(ctx context.Context, a workspacedomain.ShellRequest) (workspacedomain.ShellResult, error) {
+	if err := s.validateWorkspaceSession(ctx); err != nil {
+		return workspacedomain.ShellResult{}, err
 	}
 	if strings.TrimSpace(a.Command) == "" || len(a.Command) > maxShellBytes {
-		return rejected(fmt.Errorf("daytona shell must be nonempty and bounded"))
-	}
-	if a.Cwd == "" {
-		a.Cwd = "."
+		return workspacedomain.ShellResult{}, rejected(fmt.Errorf("daytona shell must be nonempty and bounded"))
 	}
 	cwd, err := remotePath(a.Cwd, true)
 	if err != nil {
-		return rejected(err)
+		return workspacedomain.ShellResult{}, rejected(err)
 	}
 	if err := s.checkPath(ctx, cwd, true, false); err != nil {
-		return rejected(err)
+		return workspacedomain.ShellResult{}, rejected(err)
 	}
-	duration := 30 * time.Second
-	if a.TimeoutMS != 0 {
-		if a.TimeoutMS < 100 || a.TimeoutMS > 120000 {
-			return rejected(fmt.Errorf("daytona shell timeout exceeds bounds"))
-		}
-		duration = time.Duration(a.TimeoutMS) * time.Millisecond
+	if a.TimeoutMS < 100 || a.TimeoutMS > 120000 {
+		return workspacedomain.ShellResult{}, rejected(fmt.Errorf("daytona shell timeout exceeds bounds"))
 	}
+	duration := time.Duration(a.TimeoutMS) * time.Millisecond
 	runCtx, cancel := context.WithTimeout(ctx, duration+2*time.Second)
 	defer cancel()
 	output, err := s.remote.Exec(runCtx, a.Command, s.absolute(cwd), duration)
 	if err != nil {
 		s.uncertain.Store(true) // The remote process may still be running.
-		return invocationdomain.Outcome{}, safeRemoteError(runCtx, err)
+		return workspacedomain.ShellResult{}, safeRemoteError(runCtx, err)
 	}
 	if len(output.Output) > maxOutputBytes {
-		return rejected(fmt.Errorf("daytona shell output exceeded approved bounds"))
+		return workspacedomain.ShellResult{}, rejected(fmt.Errorf("daytona shell output exceeded approved bounds"))
 	}
-	return completed(map[string]any{"exitCode": output.ExitCode, "stdout": output.Output, "stderr": "", "truncated": false, "timedOut": false})
+	return workspacedomain.ShellResult{ExitCode: output.ExitCode, Stdout: output.Output}, nil
 }
 func (s *session) stage(ctx context.Context, relative string, data []byte) (string, error) {
 	if len(data) > maxEditBytes {
@@ -296,145 +227,134 @@ func (s *session) cleanupStage(ctx context.Context, staged string) {
 		s.uncertain.Store(true)
 	}
 }
-func (s *session) edit(ctx context.Context, args invocationdomain.JSONValue) (invocationdomain.Outcome, error) {
-	var a editArgs
-	if err := strictJSON(args.Bytes(), &a); err != nil {
-		return rejected(err)
+func (s *session) Edit(ctx context.Context, a workspacedomain.EditRequest) (workspacedomain.EditResult, error) {
+	if err := s.validateWorkspaceSession(ctx); err != nil {
+		return workspacedomain.EditResult{}, err
 	}
 	relative, err := remotePath(a.Path, false)
 	if err != nil {
-		return rejected(err)
+		return workspacedomain.EditResult{}, rejected(err)
 	}
 	if len(a.Content) > maxEditBytes || len(a.Edits) > 64 {
-		return rejected(fmt.Errorf("edit size/count exceeds limits"))
+		return workspacedomain.EditResult{}, rejected(fmt.Errorf("edit size/count exceeds limits"))
 	}
 	parent := path.Dir(relative)
 	if err := s.checkPath(ctx, parent, true, false); err != nil {
-		return rejected(err)
+		return workspacedomain.EditResult{}, rejected(err)
 	}
 	dest := s.absolute(relative)
 	switch a.Operation {
 	case "create":
 		if len(a.Edits) > 0 || !utf8.ValidString(a.Content) {
-			return rejected(fmt.Errorf("create requires UTF-8 content"))
+			return workspacedomain.EditResult{}, rejected(fmt.Errorf("create requires UTF-8 content"))
 		}
 		if err := s.checkPath(ctx, relative, false, true); err != nil {
-			return rejected(err)
+			return workspacedomain.EditResult{}, rejected(err)
 		}
 		staged, err := s.stage(ctx, relative, []byte(a.Content))
 		if err != nil {
-			return invocationdomain.Outcome{}, err
+			return workspacedomain.EditResult{}, err
 		}
 		result, err := s.executeFixed(ctx, "test ! -e "+remoteQuote(dest)+" && test ! -L "+remoteQuote(dest)+" && ln "+remoteQuote(staged)+" "+remoteQuote(dest), 15*time.Second)
 		s.cleanupStage(ctx, staged)
 		if err != nil {
-			return invocationdomain.Outcome{}, err
+			return workspacedomain.EditResult{}, err
 		}
 		if result.ExitCode != 0 {
-			return rejected(fmt.Errorf("create destination already exists"))
+			return workspacedomain.EditResult{}, rejected(fmt.Errorf("create destination already exists"))
 		}
-		return completed(map[string]any{"path": relative, "operation": "create", "bytesBefore": 0, "bytesAfter": len(a.Content), "replacements": 0})
+		return workspacedomain.EditResult{Path: relative, Operation: "create", BytesAfter: int64(len(a.Content))}, nil
 	case "replace":
 		if a.Content != "" || len(a.Edits) == 0 {
-			return rejected(fmt.Errorf("replace requires edits"))
+			return workspacedomain.EditResult{}, rejected(fmt.Errorf("replace requires edits"))
 		}
 		before, err := s.readBytes(ctx, relative, maxEditBytes)
 		if err != nil {
-			return rejected(err)
+			return workspacedomain.EditResult{}, rejected(err)
 		}
 		if !utf8.Valid(before) {
-			return rejected(fmt.Errorf("replace requires UTF-8 file"))
+			return workspacedomain.EditResult{}, rejected(fmt.Errorf("replace requires UTF-8 file"))
 		}
 		modified := string(before)
 		replacements := 0
 		for _, entry := range a.Edits {
 			wanted := entry.ExpectedReplacements
-			if wanted == 0 {
-				wanted = 1
-			}
 			if entry.OldText == "" || wanted < 1 || wanted > 1000 || strings.Count(modified, entry.OldText) != wanted {
-				return rejected(fmt.Errorf("replace count mismatch"))
+				return workspacedomain.EditResult{}, rejected(fmt.Errorf("replace count mismatch"))
 			}
 			modified = strings.ReplaceAll(modified, entry.OldText, entry.NewText)
 			if len(modified) > maxEditBytes || !utf8.ValidString(modified) {
-				return rejected(fmt.Errorf("replace would exceed file limits"))
+				return workspacedomain.EditResult{}, rejected(fmt.Errorf("replace would exceed file limits"))
 			}
 			replacements += wanted
 		}
 		staged, err := s.stage(ctx, relative, []byte(modified))
 		if err != nil {
-			return invocationdomain.Outcome{}, err
+			return workspacedomain.EditResult{}, err
 		}
 		oldHash := sha256.Sum256(before)
 		command := "test -f " + remoteQuote(dest) + " && test ! -L " + remoteQuote(dest) + " && test \"$(sha256sum " + remoteQuote(dest) + " | cut -d' ' -f1)\" = " + remoteQuote(hex.EncodeToString(oldHash[:])) + " && mv -f -- " + remoteQuote(staged) + " " + remoteQuote(dest)
 		out, err := s.executeFixed(ctx, command, 20*time.Second)
 		s.cleanupStage(ctx, staged)
 		if err != nil {
-			return invocationdomain.Outcome{}, err
+			return workspacedomain.EditResult{}, err
 		}
 		if out.ExitCode != 0 {
-			return rejected(fmt.Errorf("file content changed before replace"))
+			return workspacedomain.EditResult{}, rejected(fmt.Errorf("file content changed before replace"))
 		}
-		return completed(map[string]any{"path": relative, "operation": "replace", "replacements": replacements, "bytesBefore": len(before), "bytesAfter": len(modified)})
+		return workspacedomain.EditResult{Path: relative, Operation: "replace", Replacements: replacements, BytesBefore: int64(len(before)), BytesAfter: int64(len(modified))}, nil
 	case "delete":
 		if len(a.Edits) != 0 || a.Content != "" {
-			return rejected(fmt.Errorf("delete cannot include content"))
+			return workspacedomain.EditResult{}, rejected(fmt.Errorf("delete cannot include content"))
 		}
 		original, err := s.readBytes(ctx, relative, maxEditBytes)
 		if err != nil {
-			return rejected(err)
+			return workspacedomain.EditResult{}, rejected(err)
 		}
 		output, err := s.executeFixed(ctx, "test -f "+remoteQuote(dest)+" && test ! -L "+remoteQuote(dest)+" && rm -- "+remoteQuote(dest), 15*time.Second)
 		if err != nil {
-			return invocationdomain.Outcome{}, err
+			return workspacedomain.EditResult{}, err
 		}
 		if output.ExitCode != 0 {
-			return rejected(fmt.Errorf("delete failed or path changed"))
+			return workspacedomain.EditResult{}, rejected(fmt.Errorf("delete failed or path changed"))
 		}
-		return completed(map[string]any{"path": relative, "operation": "delete", "replacements": 0, "bytesBefore": len(original), "bytesAfter": 0})
+		return workspacedomain.EditResult{Path: relative, Operation: "delete", BytesBefore: int64(len(original))}, nil
 	default:
-		return rejected(fmt.Errorf("unsupported edit operation"))
+		return workspacedomain.EditResult{}, rejected(fmt.Errorf("unsupported edit operation"))
 	}
 }
-func (s *session) search(ctx context.Context, args invocationdomain.JSONValue) (invocationdomain.Outcome, error) {
-	var a searchArgs
-	if err := strictJSON(args.Bytes(), &a); err != nil {
-		return rejected(err)
-	}
-	if a.Path == "" {
-		a.Path = "."
+func (s *session) Search(ctx context.Context, a workspacedomain.SearchRequest) (workspacedomain.SearchResult, error) {
+	if err := s.validateWorkspaceSession(ctx); err != nil {
+		return workspacedomain.SearchResult{}, err
 	}
 	folder, err := remotePath(a.Path, true)
 	if err != nil {
-		return rejected(err)
-	}
-	if a.MaxResults == 0 {
-		a.MaxResults = 100
+		return workspacedomain.SearchResult{}, rejected(err)
 	}
 	if a.MaxResults < 1 || a.MaxResults > 500 || len(a.Pattern) > 1024 || len(a.Query) > 4096 {
-		return rejected(fmt.Errorf("search bounds exceeded"))
+		return workspacedomain.SearchResult{}, rejected(fmt.Errorf("search bounds exceeded"))
 	}
 	if a.Mode != "files" && a.Mode != "content" {
-		return rejected(fmt.Errorf("unsupported search mode"))
+		return workspacedomain.SearchResult{}, rejected(fmt.Errorf("unsupported search mode"))
 	}
 	if a.Mode == "files" && a.Pattern == "" || a.Mode == "content" && a.Query == "" {
-		return rejected(fmt.Errorf("search pattern or query missing"))
+		return workspacedomain.SearchResult{}, rejected(fmt.Errorf("search pattern or query missing"))
 	}
 	if err := s.checkPath(ctx, folder, true, false); err != nil {
-		return rejected(err)
+		return workspacedomain.SearchResult{}, rejected(err)
 	}
 	files, err := s.remote.ListFiles(ctx, s.absolute(folder), 4)
 	if err != nil {
-		return rejected(err)
+		return workspacedomain.SearchResult{}, rejected(err)
 	}
 	if len(files) > maxRemoteCalls {
-		return rejected(fmt.Errorf("remote listing exceeds limit"))
+		return workspacedomain.SearchResult{}, rejected(fmt.Errorf("remote listing exceeds limit"))
 	}
 	var glob *regexp.Regexp
 	if a.Pattern != "" {
 		glob, err = remoteGlob(a.Pattern)
 		if err != nil {
-			return rejected(err)
+			return workspacedomain.SearchResult{}, rejected(err)
 		}
 	}
 	var matcher func(string) bool
@@ -446,7 +366,7 @@ func (s *session) search(ctx context.Context, args invocationdomain.JSONValue) (
 			}
 			rx, err := regexp.Compile(expr)
 			if err != nil {
-				return rejected(err)
+				return workspacedomain.SearchResult{}, rejected(err)
 			}
 			matcher = rx.MatchString
 		}
@@ -458,7 +378,7 @@ func (s *session) search(ctx context.Context, args invocationdomain.JSONValue) (
 			matcher = func(line string) bool { return strings.Contains(strings.ToLower(line), lower) }
 		}
 	}
-	result := make([]map[string]any, 0)
+	result := make([]workspacedomain.SearchMatch, 0)
 	truncated := false
 	total := 0
 	for _, file := range files {
@@ -476,7 +396,7 @@ func (s *session) search(ctx context.Context, args invocationdomain.JSONValue) (
 			continue
 		}
 		if a.Mode == "files" {
-			result = append(result, map[string]any{"path": rel})
+			result = append(result, workspacedomain.SearchMatch{Path: rel})
 		}
 		if a.Mode == "content" {
 			if file.Size < 0 || file.Size > 1024*1024 || total+int(file.Size) > maxSearchBytes {
@@ -493,7 +413,7 @@ func (s *session) search(ctx context.Context, args invocationdomain.JSONValue) (
 					if len(line) > 2048 {
 						line = line[:2048]
 					}
-					result = append(result, map[string]any{"path": rel, "line": number + 1, "text": line})
+					result = append(result, workspacedomain.SearchMatch{Path: rel, Line: number + 1, Text: workspacedomain.PresentText(line)})
 				}
 				if len(result) >= a.MaxResults {
 					break
@@ -505,7 +425,7 @@ func (s *session) search(ctx context.Context, args invocationdomain.JSONValue) (
 			break
 		}
 	}
-	return completed(map[string]any{"mode": a.Mode, "matches": result, "truncated": truncated})
+	return workspacedomain.SearchResult{Mode: a.Mode, Matches: result, Truncated: truncated}, nil
 }
 func remoteGlob(glob string) (*regexp.Regexp, error) {
 	if glob == "" || len(glob) > 1024 || strings.HasPrefix(glob, "/") || strings.Contains(glob, "../") {

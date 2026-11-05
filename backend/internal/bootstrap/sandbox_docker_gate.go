@@ -3,9 +3,10 @@ package bootstrap
 import (
 	"context"
 
-	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	sandboxapp "github.com/orz-i/Mender/backend/internal/sandbox/application"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
+	workspaceapp "github.com/orz-i/Mender/backend/internal/workspace/application"
+	workspace "github.com/orz-i/Mender/backend/internal/workspace/domain"
 )
 
 // dockerBackendGate preserves the exact host-owned Plugin/Router binding.
@@ -31,7 +32,7 @@ func (b dockerBackendGate) Open(ctx context.Context, item sandboxdomain.Sandbox,
 	if err != nil {
 		return nil, err
 	}
-	workspace, ok := session.(sandboxapp.WorkspaceSession)
+	workspace, ok := session.(workspaceapp.Session)
 	if !ok {
 		if session != nil {
 			_ = session.Close()
@@ -42,23 +43,44 @@ func (b dockerBackendGate) Open(ctx context.Context, item sandboxdomain.Sandbox,
 		_ = workspace.Close()
 		return nil, sandboxdomain.ErrBackendUnavailable
 	}
-	return dockerWorkspaceSessionGate{WorkspaceSession: workspace, owner: b.owner}, nil
+	return dockerWorkspaceSessionGate{Session: workspace, owner: b.owner}, nil
 }
 
 // Already-acquired sessions must not silently keep executing after the host
 // has observed daemon loss or identity drift. Lease cleanup remains delegated
 // to the exact original session; no lease is auto-released by health polling.
 type dockerWorkspaceSessionGate struct {
-	sandboxapp.WorkspaceSession
+	workspaceapp.Session
 	owner *Sandboxes
 }
 
-func (s dockerWorkspaceSessionGate) ExecuteWorkspace(ctx context.Context, cap sandboxdomain.Capability, args invocationdomain.JSONValue) (invocationdomain.Outcome, error) {
+func (s dockerWorkspaceSessionGate) Read(ctx context.Context, in workspace.ReadRequest) (workspace.ReadResult, error) {
 	if s.owner == nil || !s.owner.DockerAvailable() {
-		return invocationdomain.Outcome{}, sandboxdomain.ErrBackendUnavailable
+		return workspace.ReadResult{}, sandboxdomain.ErrBackendUnavailable
 	}
-	return s.WorkspaceSession.ExecuteWorkspace(ctx, cap, args)
+	return s.Session.Read(ctx, in)
+}
+
+func (s dockerWorkspaceSessionGate) Search(ctx context.Context, in workspace.SearchRequest) (workspace.SearchResult, error) {
+	if s.owner == nil || !s.owner.DockerAvailable() {
+		return workspace.SearchResult{}, sandboxdomain.ErrBackendUnavailable
+	}
+	return s.Session.Search(ctx, in)
+}
+
+func (s dockerWorkspaceSessionGate) Edit(ctx context.Context, in workspace.EditRequest) (workspace.EditResult, error) {
+	if s.owner == nil || !s.owner.DockerAvailable() {
+		return workspace.EditResult{}, sandboxdomain.ErrBackendUnavailable
+	}
+	return s.Session.Edit(ctx, in)
+}
+
+func (s dockerWorkspaceSessionGate) Shell(ctx context.Context, in workspace.ShellRequest) (workspace.ShellResult, error) {
+	if s.owner == nil || !s.owner.DockerAvailable() {
+		return workspace.ShellResult{}, sandboxdomain.ErrBackendUnavailable
+	}
+	return s.Session.Shell(ctx, in)
 }
 
 var _ sandboxapp.Backend = dockerBackendGate{}
-var _ sandboxapp.WorkspaceSession = dockerWorkspaceSessionGate{}
+var _ workspaceapp.Session = dockerWorkspaceSessionGate{}

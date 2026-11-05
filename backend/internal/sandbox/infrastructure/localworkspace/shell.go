@@ -10,12 +10,11 @@ import (
 	"sync"
 	"time"
 
-	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
+	workspace "github.com/orz-i/Mender/backend/internal/workspace/domain"
 )
 
 const (
-	defaultShellTimeout  = 30 * time.Second
 	maxShellTimeout      = 2 * time.Minute
 	maxShellCommandBytes = 64 * 1024
 	maxShellOutputBytes  = 64 * 1024
@@ -35,56 +34,31 @@ type ShellLauncher interface {
 	) (*exec.Cmd, error)
 }
 
-type shellInput struct {
-	Command   string `json:"command"`
-	Cwd       string `json:"cwd,omitempty"`
-	TimeoutMS int64  `json:"timeoutMs,omitempty"`
-}
-
-type shellOutput struct {
-	ExitCode  int    `json:"exitCode"`
-	Stdout    string `json:"stdout"`
-	Stderr    string `json:"stderr"`
-	TimedOut  bool   `json:"timedOut"`
-	Truncated bool   `json:"truncated"`
-}
-
-func (i *Instance) executeShell(
+func (i *Instance) Shell(
 	ctx context.Context,
-	arguments invocationdomain.JSONValue,
-) (invocationdomain.Outcome, error) {
-	var input shellInput
-	if err := decodeStrict(arguments.Bytes(), &input, "decode workspace.shell arguments"); err != nil {
-		return toolFailure(err)
+	input workspace.ShellRequest,
+) (workspace.ShellResult, error) {
+	if err := i.ready(ctx); err != nil {
+		return workspace.ShellResult{}, err
 	}
 	if strings.TrimSpace(input.Command) == "" {
-		return toolFailure(fmt.Errorf("command must not be empty"))
+		return workspace.ShellResult{}, toolFailure(fmt.Errorf("command must not be empty"))
 	}
 	if len(input.Command) > maxShellCommandBytes {
-		return toolFailure(fmt.Errorf("command exceeds %d byte limit", maxShellCommandBytes))
+		return workspace.ShellResult{}, toolFailure(fmt.Errorf("command exceeds %d byte limit", maxShellCommandBytes))
 	}
 
-	timeout := defaultShellTimeout
-	if input.TimeoutMS != 0 {
-		if input.TimeoutMS < 1 || input.TimeoutMS > maxShellTimeout.Milliseconds() {
-			return toolFailure(fmt.Errorf(
-				"timeoutMs must be between 1 and %d",
-				maxShellTimeout.Milliseconds(),
-			))
-		}
-		timeout = time.Duration(input.TimeoutMS) * time.Millisecond
+	if input.TimeoutMS < 1 || input.TimeoutMS > maxShellTimeout.Milliseconds() {
+		return workspace.ShellResult{}, toolFailure(fmt.Errorf("timeoutMs must be between 1 and %d", maxShellTimeout.Milliseconds()))
 	}
-
+	timeout := time.Duration(input.TimeoutMS) * time.Millisecond
 	cwd := input.Cwd
-	if cwd == "" {
-		cwd = "."
-	}
 	_, directory, info, err := i.resolver.resolveExisting(cwd, true)
 	if err != nil {
-		return toolFailure(err)
+		return workspace.ShellResult{}, toolFailure(err)
 	}
 	if !info.IsDir() {
-		return toolFailure(fmt.Errorf("cwd must be a directory"))
+		return workspace.ShellResult{}, toolFailure(fmt.Errorf("cwd must be a directory"))
 	}
 
 	runCtx, cancel := context.WithTimeout(ctx, timeout)
@@ -93,7 +67,7 @@ func (i *Instance) executeShell(
 	stdout := newBoundedCapture(maxShellOutputBytes)
 	stderr := newBoundedCapture(maxShellOutputBytes)
 	if i.shellLauncher == nil {
-		return invocationdomain.Outcome{}, fmt.Errorf("execute workspace shell: launcher is unavailable")
+		return workspace.ShellResult{}, fmt.Errorf("execute workspace shell: launcher is unavailable")
 	}
 	command, err := i.shellLauncher.Command(
 		runCtx,
@@ -104,7 +78,7 @@ func (i *Instance) executeShell(
 		shellEnvironment(),
 	)
 	if err != nil {
-		return invocationdomain.Outcome{}, fmt.Errorf("execute workspace shell: construct command: %w", err)
+		return workspace.ShellResult{}, fmt.Errorf("execute workspace shell: construct command: %w", err)
 	}
 	command.Stdout = stdout
 	command.Stderr = stderr
@@ -113,7 +87,7 @@ func (i *Instance) executeShell(
 	parentErr := ctx.Err()
 	runErr := runCtx.Err()
 	if parentErr != nil {
-		return invocationdomain.Outcome{}, parentErr
+		return workspace.ShellResult{}, parentErr
 	}
 
 	timedOut := errors.Is(runErr, context.DeadlineExceeded)
@@ -124,17 +98,17 @@ func (i *Instance) executeShell(
 	if err != nil && !timedOut {
 		var exitErr *exec.ExitError
 		if !errors.As(err, &exitErr) {
-			return invocationdomain.Outcome{}, fmt.Errorf("execute workspace shell: %w", err)
+			return workspace.ShellResult{}, fmt.Errorf("execute workspace shell: %w", err)
 		}
 	}
 
-	return completeJSON(shellOutput{
+	return workspace.ShellResult{
 		ExitCode:  exitCode,
 		Stdout:    string(stdout.Bytes()),
 		Stderr:    string(stderr.Bytes()),
 		TimedOut:  timedOut,
 		Truncated: stdout.Truncated() || stderr.Truncated(),
-	})
+	}, nil
 }
 
 var shellEnvironmentKeys = []string{

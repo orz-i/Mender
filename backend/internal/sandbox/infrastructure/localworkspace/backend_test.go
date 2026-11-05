@@ -13,6 +13,8 @@ import (
 
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
+	workspaceapp "github.com/orz-i/Mender/backend/internal/workspace/application"
+	workspace "github.com/orz-i/Mender/backend/internal/workspace/domain"
 )
 
 type testLauncher struct {
@@ -67,14 +69,59 @@ func execute(t *testing.T, instance *Instance, capability sandboxdomain.Capabili
 	if err != nil {
 		t.Fatal(err)
 	}
-	args, err := invocationdomain.NewJSONValue(raw)
+	var result any
+	switch capability {
+	case sandboxdomain.CapabilityRead:
+		var in workspace.ReadRequest
+		if err := json.Unmarshal(raw, &in); err != nil {
+			t.Fatal(err)
+		}
+		result, err = instance.Read(context.Background(), workspaceapp.NormalizeRead(in))
+	case sandboxdomain.CapabilitySearch:
+		var in workspace.SearchRequest
+		if err := json.Unmarshal(raw, &in); err != nil {
+			t.Fatal(err)
+		}
+		result, err = instance.Search(context.Background(), workspaceapp.NormalizeSearch(in))
+	case sandboxdomain.CapabilityEdit:
+		var in workspace.EditRequest
+		if err := json.Unmarshal(raw, &in); err != nil {
+			t.Fatal(err)
+		}
+		result, err = instance.Edit(context.Background(), workspaceapp.NormalizeEdit(in))
+	case sandboxdomain.CapabilityShell:
+		var in workspace.ShellRequest
+		if err := json.Unmarshal(raw, &in); err != nil {
+			t.Fatal(err)
+		}
+		result, err = instance.Shell(context.Background(), workspaceapp.NormalizeShell(in))
+	default:
+		t.Fatalf("unsupported fixture capability %q", capability)
+	}
+	var tool *workspace.ToolError
+	if errors.As(err, &tool) {
+		outcome, failureErr := invocationdomain.Failed(invocationdomain.FailureSourceTool, invocationdomain.FailureToolError, tool.Message)
+		if failureErr != nil {
+			t.Fatal(failureErr)
+		}
+		return outcome
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
-	outcome, err := instance.ExecuteWorkspace(context.Background(), capability, args)
+	encoded, err := json.Marshal(result)
 	if err != nil {
 		t.Fatal(err)
 	}
+	content, err := invocationdomain.NewJSONValue(encoded)
+	if err != nil {
+		t.Fatal(err)
+	}
+	outcome, err := invocationdomain.Complete(content)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	return outcome
 }
 func requireComplete(t *testing.T, o invocationdomain.Outcome) {
@@ -149,7 +196,7 @@ func TestAllWorkspaceCapabilitiesShareOneRoot(t *testing.T) {
 		t.Fatalf("mode %+v", launcher.received)
 	}
 }
-func TestLocalWorkspaceRejectsSymlinkEscapeAndUnknownOperation(t *testing.T) {
+func TestLocalWorkspaceRejectsSymlinkEscapeAndTraversal(t *testing.T) {
 	root := t.TempDir()
 	outside := t.TempDir()
 	if err := os.WriteFile(filepath.Join(outside, "secret"), []byte("outside"), 0o600); err != nil {
@@ -168,9 +215,6 @@ func TestLocalWorkspaceRejectsSymlinkEscapeAndUnknownOperation(t *testing.T) {
 	defer func() { _ = instance.Close() }()
 	requireFailure(t, execute(t, instance, sandboxdomain.CapabilityRead, map[string]any{"path": "escape"}))
 	requireFailure(t, execute(t, instance, sandboxdomain.CapabilityEdit, map[string]any{"path": "../outside", "operation": "create", "content": "x"}))
-	if _, err := instance.ExecuteWorkspace(context.Background(), "unknown", invocationdomain.JSONValue{}); !errors.Is(err, sandboxdomain.ErrCapabilityUnavailable) {
-		t.Fatalf("unknown operation: %v", err)
-	}
 }
 func TestRestrictedHostModeIsForwardedAndNeverDowngraded(t *testing.T) {
 	launcher := &testLauncher{allowRestricted: true}
@@ -182,7 +226,7 @@ func TestRestrictedHostModeIsForwardedAndNeverDowngraded(t *testing.T) {
 	}
 	instance := opened.(*Instance)
 	defer func() { _ = instance.Close() }()
-	_, err = instance.ExecuteWorkspace(context.Background(), sandboxdomain.CapabilityShell, mustJSON(t, map[string]any{"command": "echo must-not-run"}))
+	_, err = instance.Shell(context.Background(), workspaceapp.NormalizeShell(workspace.ShellRequest{Command: "echo must-not-run"}))
 	if err == nil || len(launcher.received) != 1 || launcher.received[0] != sandboxdomain.IsolationRestrictedHost {
 		t.Fatalf("restricted host silently downgraded: %v; %+v", err, launcher.received)
 	}
@@ -216,15 +260,82 @@ func TestBackendOpenRejectsStaleOrInvalidIdentity(t *testing.T) {
 		t.Fatal("nil launcher allowed")
 	}
 }
-func mustJSON(t *testing.T, input any) invocationdomain.JSONValue {
-	t.Helper()
-	raw, err := json.Marshal(input)
+
+func TestTypedLocalWorkspacePreservesEmptyReadAndSearchFields(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "empty-line.txt"), []byte("\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	backend, _ := New(&testLauncher{})
+	item, run := testLocalSandbox(t, root, sandboxdomain.IsolationHost)
+	opened, err := backend.Open(context.Background(), item, run)
 	if err != nil {
 		t.Fatal(err)
 	}
-	v, err := invocationdomain.NewJSONValue(raw)
+	instance := opened.(*Instance)
+	defer func() { _ = instance.Close() }()
+	read, err := instance.Read(context.Background(), workspaceapp.NormalizeRead(workspace.ReadRequest{Path: "./empty-line.txt"}))
+	if err != nil || read.Path != "empty-line.txt" || read.Content != "" || read.StartLine != 1 || read.EndLine != 1 || read.Truncated {
+		t.Fatalf("empty line read changed: %+v err=%v", read, err)
+	}
+	beyond, err := instance.Read(context.Background(), workspaceapp.NormalizeRead(workspace.ReadRequest{Path: "./empty-line.txt", Offset: 3}))
+	if err != nil || beyond != (workspace.ReadResult{Path: "empty-line.txt"}) {
+		t.Fatalf("out-of-range read changed: %+v err=%v", beyond, err)
+	}
+	search, err := instance.Search(context.Background(), workspaceapp.NormalizeSearch(workspace.SearchRequest{Mode: "content", Query: "^$", Regex: true}))
+	if err != nil || len(search.Matches) != 1 || search.Matches[0].Line != 1 || search.Matches[0].Text != nil {
+		t.Fatalf("empty snippet presence changed: %+v err=%v", search, err)
+	}
+	encoded, err := json.Marshal(search)
+	if err != nil || strings.Contains(string(encoded), `"text"`) {
+		t.Fatalf("empty local snippet is no longer omitted: %s err=%v", encoded, err)
+	}
+	missing, err := instance.Search(context.Background(), workspaceapp.NormalizeSearch(workspace.SearchRequest{Mode: "content", Query: "missing"}))
+	if err != nil || missing.Matches == nil || len(missing.Matches) != 0 {
+		t.Fatalf("empty matches must remain an array: %+v err=%v", missing, err)
+	}
+}
+
+func TestTypedLocalWorkspacePreservesContextAndClosedSessionErrors(t *testing.T) {
+	backend, _ := New(&testLauncher{})
+	item, run := testLocalSandbox(t, t.TempDir(), sandboxdomain.IsolationHost)
+	opened, err := backend.Open(context.Background(), item, run)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return v
+	instance := opened.(*Instance)
+	defer func() { _ = instance.Close() }()
+	operations := map[string]func(context.Context) error{
+		"read": func(ctx context.Context) error {
+			_, err := instance.Read(ctx, workspaceapp.NormalizeRead(workspace.ReadRequest{Path: "missing.txt"}))
+			return err
+		},
+		"search": func(ctx context.Context) error {
+			_, err := instance.Search(ctx, workspaceapp.NormalizeSearch(workspace.SearchRequest{Mode: "files", Pattern: "*"}))
+			return err
+		},
+		"edit": func(ctx context.Context) error {
+			_, err := instance.Edit(ctx, workspaceapp.NormalizeEdit(workspace.EditRequest{Path: "new.txt", Operation: "create"}))
+			return err
+		},
+		"shell": func(ctx context.Context) error {
+			_, err := instance.Shell(ctx, workspaceapp.NormalizeShell(workspace.ShellRequest{Command: "must-not-run"}))
+			return err
+		},
+	}
+	cancelled, cancel := context.WithCancel(context.Background())
+	cancel()
+	for name, operation := range operations {
+		if err := operation(cancelled); !errors.Is(err, context.Canceled) {
+			t.Fatalf("%s lost cancellation error: %v", name, err)
+		}
+	}
+	if err := instance.Close(); err != nil {
+		t.Fatal(err)
+	}
+	for name, operation := range operations {
+		if err := operation(context.Background()); !errors.Is(err, sandboxdomain.ErrBackendUnavailable) {
+			t.Fatalf("%s accepted a closed session: %v", name, err)
+		}
+	}
 }

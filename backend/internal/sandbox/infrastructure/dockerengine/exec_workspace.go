@@ -10,24 +10,11 @@ import (
 
 	"github.com/moby/moby/api/pkg/stdcopy"
 	mobyclient "github.com/moby/moby/client"
-	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
+	workspacedomain "github.com/orz-i/Mender/backend/internal/workspace/domain"
 )
 
 const maxDockerShellTimeout = 120 * time.Second
-
-type shellArguments struct {
-	Command   string `json:"command"`
-	Cwd       string `json:"cwd,omitempty"`
-	TimeoutMS int64  `json:"timeoutMs,omitempty"`
-}
-type shellResult struct {
-	ExitCode  int    `json:"exitCode"`
-	Stdout    string `json:"stdout"`
-	Stderr    string `json:"stderr"`
-	TimedOut  bool   `json:"timedOut"`
-	Truncated bool   `json:"truncated"`
-}
 
 type cappedWriter struct {
 	content   []byte
@@ -51,27 +38,27 @@ func (w *cappedWriter) Write(input []byte) (int, error) {
 // Public shell deliberately uses /bin/sh -c; file mutations use *fixed* argv
 // without injecting Tool text into command templates. Any ambiguous operation
 // retains the durable external execution lease for operator reconciliation.
-func (s *workspaceSession) runExec(ctx context.Context, cwd string, argv []string) (shellResult, error) {
+func (s *workspaceSession) runExec(ctx context.Context, cwd string, argv []string) (workspacedomain.ShellResult, error) {
 	return s.runExecStreamBounded(ctx, cwd, argv, nil, maxDockerOutputBytes)
 }
 
 // runExecStream is the single bounded, non-root Docker stdin transport.
 // It is required because Docker Engine archive PUT rejects ReadonlyRootfs.
-func (s *workspaceSession) runExecStream(ctx context.Context, cwd string, argv []string, input []byte) (shellResult, error) {
+func (s *workspaceSession) runExecStream(ctx context.Context, cwd string, argv []string, input []byte) (workspacedomain.ShellResult, error) {
 	return s.runExecStreamBounded(ctx, cwd, argv, input, maxDockerOutputBytes)
 }
-func (s *workspaceSession) runExecOutput(ctx context.Context, cwd string, argv []string, maxStdout int) (shellResult, error) {
+func (s *workspaceSession) runExecOutput(ctx context.Context, cwd string, argv []string, maxStdout int) (workspacedomain.ShellResult, error) {
 	return s.runExecStreamBounded(ctx, cwd, argv, nil, maxStdout)
 }
-func (s *workspaceSession) runExecStreamBounded(ctx context.Context, cwd string, argv []string, input []byte, maxStdout int) (shellResult, error) {
+func (s *workspaceSession) runExecStreamBounded(ctx context.Context, cwd string, argv []string, input []byte, maxStdout int) (workspacedomain.ShellResult, error) {
 	if maxStdout < 1 || maxStdout > maxDockerSearchBytes+1 {
-		return shellResult{}, fmt.Errorf("docker exec output budget invalid")
+		return workspacedomain.ShellResult{}, fmt.Errorf("docker exec output budget invalid")
 	}
 	if err := ctx.Err(); err != nil {
-		return shellResult{}, err
+		return workspacedomain.ShellResult{}, err
 	}
 	if len(argv) == 0 || len(argv) > 32 {
-		return shellResult{}, sandboxdomain.ErrCapabilityUnavailable
+		return workspacedomain.ShellResult{}, sandboxdomain.ErrCapabilityUnavailable
 	}
 	config := mobyclient.ExecCreateOptions{
 		User:       fmt.Sprintf("%d:%d", s.template.UserID, s.template.GroupID),
@@ -82,21 +69,21 @@ func (s *workspaceSession) runExecStreamBounded(ctx context.Context, cwd string,
 	created, err := s.api.ExecCreate(ctx, s.containerID, config)
 	if err != nil {
 		s.uncertain.Store(true)
-		return shellResult{}, safeDaemonError(ctx, err)
+		return workspacedomain.ShellResult{}, safeDaemonError(ctx, err)
 	}
 	if created.ID == "" {
 		s.uncertain.Store(true)
-		return shellResult{}, sandboxdomain.ErrBackendUnavailable
+		return workspacedomain.ShellResult{}, sandboxdomain.ErrBackendUnavailable
 	}
 	attached, err := s.api.ExecAttach(ctx, created.ID, mobyclient.ExecAttachOptions{TTY: false})
 	if err != nil {
 		s.uncertain.Store(true)
-		return shellResult{}, safeDaemonError(ctx, err)
+		return workspacedomain.ShellResult{}, safeDaemonError(ctx, err)
 	}
 	defer attached.Close()
 	if attached.Reader == nil || attached.Conn == nil {
 		s.uncertain.Store(true)
-		return shellResult{}, sandboxdomain.ErrBackendUnavailable
+		return workspacedomain.ShellResult{}, sandboxdomain.ErrBackendUnavailable
 	}
 	done := make(chan struct{})
 	defer close(done)
@@ -126,54 +113,47 @@ func (s *workspaceSession) runExecStreamBounded(ctx context.Context, cwd string,
 		writeErr := <-writeResult
 		if writeErr != nil {
 			s.uncertain.Store(true)
-			return shellResult{}, safeDaemonError(ctx, writeErr)
+			return workspacedomain.ShellResult{}, safeDaemonError(ctx, writeErr)
 		}
 	}
 	if err != nil {
 		s.uncertain.Store(true)
-		return shellResult{}, safeDaemonError(ctx, err)
+		return workspacedomain.ShellResult{}, safeDaemonError(ctx, err)
 	}
 	if err := ctx.Err(); err != nil {
 		s.uncertain.Store(true)
-		return shellResult{}, err
+		return workspacedomain.ShellResult{}, err
 	}
 	inspection, err := s.api.ExecInspect(ctx, created.ID, mobyclient.ExecInspectOptions{})
 	if err != nil {
 		s.uncertain.Store(true)
-		return shellResult{}, safeDaemonError(ctx, err)
+		return workspacedomain.ShellResult{}, safeDaemonError(ctx, err)
 	}
 	if inspection.ContainerID != s.containerID || inspection.Running || inspection.ID != created.ID {
 		s.uncertain.Store(true)
-		return shellResult{}, sandboxdomain.ErrConflict
+		return workspacedomain.ShellResult{}, sandboxdomain.ErrConflict
 	}
-	return shellResult{ExitCode: inspection.ExitCode, Stdout: string(stdout.content), Stderr: string(stderr.content), Truncated: stdout.truncated || stderr.truncated}, nil
+	return workspacedomain.ShellResult{ExitCode: inspection.ExitCode, Stdout: string(stdout.content), Stderr: string(stderr.content), Truncated: stdout.truncated || stderr.truncated}, nil
 }
 
-func (s *workspaceSession) shell(ctx context.Context, args invocationdomain.JSONValue) (invocationdomain.Outcome, error) {
-	var input shellArguments
-	if err := decodeDockerArgs(args.Bytes(), &input); err != nil {
-		return dockerFailure(err)
+func (s *workspaceSession) Shell(ctx context.Context, input workspacedomain.ShellRequest) (workspacedomain.ShellResult, error) {
+	if err := s.validateWorkspaceSession(ctx); err != nil {
+		return workspacedomain.ShellResult{}, err
 	}
 	if strings.TrimSpace(input.Command) == "" || len(input.Command) > maxDockerCommandBytes {
-		return dockerFailure(fmt.Errorf("shell command must be nonempty and at most %d bytes", maxDockerCommandBytes))
+		return workspacedomain.ShellResult{}, dockerFailure(fmt.Errorf("shell command must be nonempty and at most %d bytes", maxDockerCommandBytes))
 	}
-	timeout := 30 * time.Second
-	if input.TimeoutMS != 0 {
-		if input.TimeoutMS < 1 || input.TimeoutMS > maxDockerShellTimeout.Milliseconds() {
-			return dockerFailure(fmt.Errorf("shell timeout exceeds allowed bounds"))
-		}
-		timeout = time.Duration(input.TimeoutMS) * time.Millisecond
+	if input.TimeoutMS < 1 || input.TimeoutMS > maxDockerShellTimeout.Milliseconds() {
+		return workspacedomain.ShellResult{}, dockerFailure(fmt.Errorf("shell timeout exceeds allowed bounds"))
 	}
+	timeout := time.Duration(input.TimeoutMS) * time.Millisecond
 	cwd := input.Cwd
-	if cwd == "" {
-		cwd = "."
-	}
 	relative, err := relativePath(cwd, true)
 	if err != nil {
-		return dockerFailure(err)
+		return workspacedomain.ShellResult{}, dockerFailure(err)
 	}
 	if err := s.verifyPath(ctx, relative, true, false); err != nil {
-		return dockerFailure(err)
+		return workspacedomain.ShellResult{}, dockerFailure(err)
 	}
 	runCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
@@ -183,11 +163,11 @@ func (s *workspaceSession) shell(ctx context.Context, args invocationdomain.JSON
 	if err != nil {
 		if runCtx.Err() != nil {
 			s.uncertain.Store(true)
-			return invocationdomain.Outcome{}, fmt.Errorf("docker shell result uncertain after timeout/cancellation: %w", runCtx.Err())
+			return workspacedomain.ShellResult{}, fmt.Errorf("docker shell result uncertain after timeout/cancellation: %w", runCtx.Err())
 		}
-		return invocationdomain.Outcome{}, err
+		return workspacedomain.ShellResult{}, err
 	}
-	return dockerComplete(output)
+	return output, nil
 }
 func (s *workspaceSession) runFixed(ctx context.Context, argv []string) (int, error) {
 	result, err := s.runExec(ctx, workspacePath, argv)

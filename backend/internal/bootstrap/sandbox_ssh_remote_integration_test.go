@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
-	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"net"
@@ -17,10 +16,11 @@ import (
 
 	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
 	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
-	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	sandboxapplication "github.com/orz-i/Mender/backend/internal/sandbox/application"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 	sshremote "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/sshremote"
+	workspaceapp "github.com/orz-i/Mender/backend/internal/workspace/application"
+	workspacedomain "github.com/orz-i/Mender/backend/internal/workspace/domain"
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
 )
@@ -206,24 +206,12 @@ func TestRuntimeSSHRemoteAdmissionRouterWorkspaceAndLocalLifecycle(t *testing.T)
 	if err != nil {
 		t.Fatalf("admitted Router failed to acquire SSH: %v", err)
 	}
-	input, err := invocationdomain.NewJSONValue([]byte(`{"path":"greeting.txt"}`))
-	if err != nil {
-		t.Fatal(err)
-	}
-	workspaceSession, ok := lease.Session.(interface {
-		ExecuteWorkspace(context.Context, sandboxdomain.Capability, invocationdomain.JSONValue) (invocationdomain.Outcome, error)
-	})
+	workspaceSession, ok := lease.Session.(workspaceapp.Session)
 	if !ok {
-		t.Fatal("SSH acquired session lacks Workspace interface")
+		t.Fatal("SSH acquired session lacks typed Workspace interface")
 	}
-	outcome, err := workspaceSession.ExecuteWorkspace(ctx, sandboxdomain.CapabilityRead, input)
+	result, err := workspaceSession.Read(ctx, workspaceapp.NormalizeRead(workspacedomain.ReadRequest{Path: "greeting.txt"}))
 	if err != nil {
-		t.Fatal(err)
-	}
-	var result struct {
-		Content string `json:"content"`
-	}
-	if err := json.Unmarshal(outcome.Content().Bytes(), &result); err != nil {
 		t.Fatal(err)
 	}
 	if result.Content != "hello from ssh fixture" {

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"slices"
@@ -16,6 +15,9 @@ import (
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
 	sandboxapplication "github.com/orz-i/Mender/backend/internal/sandbox/application"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
+	workspaceapp "github.com/orz-i/Mender/backend/internal/workspace/application"
+	workspace "github.com/orz-i/Mender/backend/internal/workspace/domain"
+	"github.com/orz-i/Mender/backend/internal/workspace/infrastructure/sandboxbridge"
 )
 
 // Plugin is a statically discoverable Tool facade over an explicitly bound Sandbox.
@@ -80,14 +82,14 @@ func (p *Plugin) Open(_ context.Context, request providerplugin.OpenRequest) (pr
 		return nil, fmt.Errorf("open Sandbox Workspace Tools: %w", err)
 	}
 	// Do not resolve or acquire Sandbox on Provider activation or discovery.
-	return &Instance{sandboxID: sandboxdomain.ID(config.SandboxID), providerID: request.ProviderID.String(), targets: p.targets, router: p.router, tools: discoveredFileTools()}, nil
+	return &Instance{sandboxID: sandboxdomain.ID(config.SandboxID), providerID: request.ProviderID.String(), targets: p.targets, leases: sandboxbridge.Provider{Router: p.router}, tools: discoveredFileTools()}, nil
 }
 
 type Instance struct {
 	sandboxID  sandboxdomain.ID
 	providerID string
 	targets    TargetLookup
-	router     sandboxapplication.ExecutionRouter
+	leases     workspaceapp.LeaseProvider
 	tools      []catalogapplication.DiscoveredTool
 }
 
@@ -102,22 +104,22 @@ func (i *Instance) DiscoverTools(_ context.Context, _ catalogdomain.Provider) ([
 	return result, nil
 }
 func (i *Instance) Execute(ctx context.Context, request invocationapplication.ExecutionRequest, _ invocationapplication.CredentialResolver, _ invocationapplication.ProgressReporter) (invocationdomain.Outcome, error) {
-	if i == nil || i.router == nil {
+	if i == nil || i.leases == nil {
 		return invocationdomain.Outcome{}, fmt.Errorf("execute Sandbox Workspace Tool: Router unavailable")
 	}
 	if err := request.Context.Validate(); err != nil {
 		return invocationdomain.Outcome{}, fmt.Errorf("execute Sandbox Workspace Tool: trusted context: %w", err)
 	}
-	var capability sandboxdomain.Capability
+	var operation workspace.Operation
 	switch request.Tool.SourceKey() {
 	case sourceKeyRead:
-		capability = sandboxdomain.CapabilityRead
+		operation = workspace.Read
 	case sourceKeySearch:
-		capability = sandboxdomain.CapabilitySearch
+		operation = workspace.Search
 	case sourceKeyEdit:
-		capability = sandboxdomain.CapabilityEdit
+		operation = workspace.Edit
 	case sourceKeyShell:
-		capability = sandboxdomain.CapabilityShell
+		operation = workspace.Shell
 	default:
 		return invocationdomain.Outcome{}, sandboxdomain.ErrCapabilityUnavailable
 	}
@@ -134,27 +136,11 @@ func (i *Instance) Execute(ctx context.Context, request invocationapplication.Ex
 			return invocationdomain.Outcome{}, sandboxdomain.ErrNotAuthorized
 		}
 	}
-	placement, err := i.router.Resolve(ctx, selection, capability)
+	lease, err := i.leases.Acquire(ctx, request.Context, selection.String(), operation)
 	if err != nil {
-		return invocationdomain.Outcome{}, fmt.Errorf("resolve Sandbox Workspace execution: %w", err)
+		return invocationdomain.Outcome{}, err
 	}
-	lease, err := i.router.Acquire(ctx, request.Context, placement)
-	if err != nil {
-		return invocationdomain.Outcome{}, fmt.Errorf("acquire Sandbox Workspace execution: %w", err)
-	}
-	if lease == nil {
-		return invocationdomain.Outcome{}, fmt.Errorf("acquire Sandbox Workspace execution: missing lease")
-	}
-	session, ok := lease.Session.(sandboxapplication.WorkspaceSession)
-	if !ok {
-		return invocationdomain.Outcome{}, errors.Join(sandboxdomain.ErrCapabilityUnavailable, lease.Close())
-	}
-	result, runErr := session.ExecuteWorkspace(ctx, capability, arguments)
-	closeErr := lease.Close()
-	if closeErr != nil {
-		return invocationdomain.Outcome{}, errors.Join(runErr, fmt.Errorf("release Sandbox Workspace lease: %w", closeErr))
-	}
-	return result, runErr
+	return executeTyped(ctx, lease, operation, arguments, request.MaxResultBytes)
 }
 func (*Instance) Close() error { return nil } // lifecycle owned by Sandbox Router leases
 

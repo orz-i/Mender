@@ -8,9 +8,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	sandboxapplication "github.com/orz-i/Mender/backend/internal/sandbox/application"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
+	workspaceapplication "github.com/orz-i/Mender/backend/internal/workspace/application"
 )
 
 type Backend struct {
@@ -129,25 +129,11 @@ func (s *session) Close() error {
 	}
 	return nil
 }
-func (s *session) ExecuteWorkspace(ctx context.Context, cap sandboxdomain.Capability, args invocationdomain.JSONValue) (invocationdomain.Outcome, error) {
+func (s *session) validateWorkspaceSession(ctx context.Context) error {
 	if s == nil || s.remote == nil || s.client == nil {
-		return invocationdomain.Outcome{}, sandboxdomain.ErrBackendUnavailable
+		return sandboxdomain.ErrBackendUnavailable
 	}
-	if err := ctx.Err(); err != nil {
-		return invocationdomain.Outcome{}, err
-	}
-	switch cap {
-	case sandboxdomain.CapabilityRead:
-		return s.read(ctx, args)
-	case sandboxdomain.CapabilitySearch:
-		return s.search(ctx, args)
-	case sandboxdomain.CapabilityEdit:
-		return s.edit(ctx, args)
-	case sandboxdomain.CapabilityShell:
-		return s.shell(ctx, args)
-	default:
-		return invocationdomain.Outcome{}, sandboxdomain.ErrCapabilityUnavailable
-	}
+	return ctx.Err()
 }
 func (s *session) executeFixed(ctx context.Context, command string, timeout time.Duration) (RemoteExec, error) {
 	if timeout < time.Second || timeout > 30*time.Second {
@@ -169,4 +155,4 @@ func (s *session) executeFixed(ctx context.Context, command string, timeout time
 }
 
 var _ sandboxapplication.Backend = (*Backend)(nil)
-var _ sandboxapplication.WorkspaceSession = (*session)(nil)
+var _ workspaceapplication.Session = (*session)(nil)

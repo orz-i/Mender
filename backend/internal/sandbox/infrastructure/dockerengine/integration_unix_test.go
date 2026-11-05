@@ -16,10 +16,11 @@ import (
 
 	mobyclient "github.com/moby/moby/client"
 	gov "github.com/orz-i/Mender/backend/internal/governance/domain"
-	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	providerconfigstore "github.com/orz-i/Mender/backend/internal/providerplugin/configstore"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 	sandboxsqlite "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/sqlite"
+	workspaceapplication "github.com/orz-i/Mender/backend/internal/workspace/application"
+	workspacedomain "github.com/orz-i/Mender/backend/internal/workspace/domain"
 )
 
 func TestDockerLiveWorkspaceParityAndIsolation(t *testing.T) {
@@ -127,48 +128,44 @@ func TestDockerLiveWorkspaceParityAndIsolation(t *testing.T) {
 			t.Errorf("Docker session uncertain: %v", err)
 		}
 	}()
-	call := func(cap sandboxdomain.Capability, payload string) map[string]any {
+	call := func(result any, err error) map[string]any {
 		t.Helper()
-		arg, err := invocationdomain.NewJSONValue([]byte(payload))
+		if err != nil {
+			t.Fatalf("Workspace execution: %v", err)
+		}
+		raw, err := json.Marshal(result)
 		if err != nil {
 			t.Fatal(err)
 		}
-		out, err := workspace.ExecuteWorkspace(ctx, cap, arg)
-		if err != nil {
-			t.Fatalf("%s execution: %v", cap, err)
-		}
-		if out.Kind() != invocationdomain.OutcomeKindComplete {
-			t.Fatalf("%s Outcome %s: %s", cap, out.Kind(), out.Message())
-		}
 		var content map[string]any
-		if err := json.Unmarshal(out.Content().Bytes(), &content); err != nil {
+		if err := json.Unmarshal(raw, &content); err != nil {
 			t.Fatal(err)
 		}
 		return content
 	}
-	shell := call(sandboxdomain.CapabilityShell, `{"command":"pwd; id; ls -ld /workspace; test ! -e /var/run/docker.sock; cat /proc/self/status | grep -E '^NoNewPrivs:'"}`)
+	shell := call(workspace.Shell(ctx, workspaceapplication.NormalizeShell(workspacedomain.ShellRequest{Command: "pwd; id; ls -ld /workspace; test ! -e /var/run/docker.sock; cat /proc/self/status | grep -E '^NoNewPrivs:'"})))
 	t.Logf("Docker shell initial: %+v", shell)
 	if shell["exitCode"] != float64(0) || !strings.Contains(fmt.Sprint(shell["stdout"]), "/workspace") {
 		t.Fatal("shell did not execute inside container")
 	}
-	call(sandboxdomain.CapabilityEdit, `{"path":"draft.txt","operation":"create","content":"hello world\n"}`)
-	read := call(sandboxdomain.CapabilityRead, `{"path":"draft.txt"}`)
+	call(workspace.Edit(ctx, workspaceapplication.NormalizeEdit(workspacedomain.EditRequest{Path: "draft.txt", Operation: "create", Content: "hello world\n"})))
+	read := call(workspace.Read(ctx, workspaceapplication.NormalizeRead(workspacedomain.ReadRequest{Path: "draft.txt"})))
 	if read["content"] != "hello world" {
 		t.Fatalf("read after create %+v", read)
 	}
-	search := call(sandboxdomain.CapabilitySearch, `{"mode":"content","query":"hello"}`)
+	search := call(workspace.Search(ctx, workspaceapplication.NormalizeSearch(workspacedomain.SearchRequest{Mode: "content", Query: "hello"})))
 	if len(search["matches"].([]any)) != 1 {
 		t.Fatalf("search %+v", search)
 	}
-	changed := call(sandboxdomain.CapabilityEdit, `{"path":"draft.txt","operation":"replace","edits":[{"oldText":"hello","newText":"goodbye"}]}`)
+	changed := call(workspace.Edit(ctx, workspaceapplication.NormalizeEdit(workspacedomain.EditRequest{Path: "draft.txt", Operation: "replace", Edits: []workspacedomain.TextEdit{{OldText: "hello", NewText: "goodbye"}}})))
 	if changed["replacements"] != float64(1) {
 		t.Fatalf("replace %+v", changed)
 	}
-	after := call(sandboxdomain.CapabilityShell, `{"command":"cat draft.txt"}`)
+	after := call(workspace.Shell(ctx, workspaceapplication.NormalizeShell(workspacedomain.ShellRequest{Command: "cat draft.txt"})))
 	if !strings.Contains(fmt.Sprint(after["stdout"]), "goodbye world") {
 		t.Fatalf("shell and file APIs differ %+v", after)
 	}
-	call(sandboxdomain.CapabilityEdit, `{"path":"draft.txt","operation":"delete"}`)
+	call(workspace.Edit(ctx, workspaceapplication.NormalizeEdit(workspacedomain.EditRequest{Path: "draft.txt", Operation: "delete"})))
 	if _, err := workspace.readFile(ctx, "draft.txt", maxDockerReadBytes); err == nil {
 		t.Fatal("deleted file still exists")
 	}

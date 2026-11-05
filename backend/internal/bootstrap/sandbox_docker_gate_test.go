@@ -5,11 +5,12 @@ import (
 	"errors"
 	"testing"
 
-	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	sandboxapp "github.com/orz-i/Mender/backend/internal/sandbox/application"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 	sandboxdocker "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/dockerengine"
 	sandboxpluginregistry "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/pluginregistry"
+	workspaceapp "github.com/orz-i/Mender/backend/internal/workspace/application"
+	workspace "github.com/orz-i/Mender/backend/internal/workspace/domain"
 )
 
 type dockerGateFixtureBackend struct {
@@ -19,7 +20,7 @@ type dockerGateFixtureBackend struct {
 
 func (*dockerGateFixtureBackend) Kind() sandboxdomain.BackendKind { return sandboxdomain.BackendDocker }
 func (*dockerGateFixtureBackend) Capabilities() sandboxdomain.Capabilities {
-	return sandboxdomain.Capabilities{Read: true}
+	return sandboxdomain.Capabilities{Read: true, Search: true, Edit: true, Shell: true}
 }
 func (b *dockerGateFixtureBackend) Open(context.Context, sandboxdomain.Sandbox, sandboxdomain.Run) (sandboxapp.Session, error) {
 	b.opened++
@@ -29,9 +30,21 @@ func (b *dockerGateFixtureBackend) Open(context.Context, sandboxdomain.Sandbox, 
 type dockerGateFixtureSession struct{ executed, closed int }
 
 func (s *dockerGateFixtureSession) Close() error { s.closed++; return nil }
-func (s *dockerGateFixtureSession) ExecuteWorkspace(context.Context, sandboxdomain.Capability, invocationdomain.JSONValue) (invocationdomain.Outcome, error) {
+func (s *dockerGateFixtureSession) Read(context.Context, workspace.ReadRequest) (workspace.ReadResult, error) {
 	s.executed++
-	return invocationdomain.Outcome{}, nil
+	return workspace.ReadResult{}, nil
+}
+func (s *dockerGateFixtureSession) Search(context.Context, workspace.SearchRequest) (workspace.SearchResult, error) {
+	s.executed++
+	return workspace.SearchResult{}, nil
+}
+func (s *dockerGateFixtureSession) Edit(context.Context, workspace.EditRequest) (workspace.EditResult, error) {
+	s.executed++
+	return workspace.EditResult{}, nil
+}
+func (s *dockerGateFixtureSession) Shell(context.Context, workspace.ShellRequest) (workspace.ShellResult, error) {
+	s.executed++
+	return workspace.ShellResult{}, nil
 }
 
 func TestRegisteredDockerBackendFailsClosedOnLossAndGatesAlreadyOpenSession(t *testing.T) {
@@ -71,12 +84,31 @@ func TestRegisteredDockerBackendFailsClosedOnLossAndGatesAlreadyOpenSession(t *t
 	if err != nil {
 		t.Fatal(err)
 	}
-	work, ok := ws.(sandboxapp.WorkspaceSession)
+	work, ok := ws.(workspaceapp.Session)
 	if !ok {
 		t.Fatal("Docker execution session was not gated")
 	}
-	if _, err := work.ExecuteWorkspace(context.Background(), sandboxdomain.CapabilityRead, invocationdomain.JSONValue{}); err != nil {
-		t.Fatalf("ready Engine execution rejected: %v", err)
+	operations := map[string]func() error{}
+	operations["read"] = func() error {
+		_, err := work.Read(context.Background(), workspaceapp.NormalizeRead(workspace.ReadRequest{}))
+		return err
+	}
+	operations["search"] = func() error {
+		_, err := work.Search(context.Background(), workspaceapp.NormalizeSearch(workspace.SearchRequest{}))
+		return err
+	}
+	operations["edit"] = func() error {
+		_, err := work.Edit(context.Background(), workspaceapp.NormalizeEdit(workspace.EditRequest{}))
+		return err
+	}
+	operations["shell"] = func() error {
+		_, err := work.Shell(context.Background(), workspaceapp.NormalizeShell(workspace.ShellRequest{}))
+		return err
+	}
+	for name, operation := range operations {
+		if err := operation(); err != nil {
+			t.Fatalf("ready Engine %s execution rejected: %v", name, err)
+		}
 	}
 	s.updateDockerHealth(controller, errors.New("offline"))
 	if s.BackendAvailable(item) {
@@ -85,18 +117,25 @@ func TestRegisteredDockerBackendFailsClosedOnLossAndGatesAlreadyOpenSession(t *t
 	if _, err := resolved.Open(context.Background(), item, sandboxdomain.Run{}); !errors.Is(err, sandboxdomain.ErrBackendUnavailable) {
 		t.Fatalf("offline Engine still acquired: %v", err)
 	}
-	if _, err := work.ExecuteWorkspace(context.Background(), sandboxdomain.CapabilityRead, invocationdomain.JSONValue{}); !errors.Is(err, sandboxdomain.ErrBackendUnavailable) {
-		t.Fatalf("offline Engine still executed existing session: %v", err)
+	for name, operation := range operations {
+		if err := operation(); !errors.Is(err, sandboxdomain.ErrBackendUnavailable) {
+			t.Fatalf("offline Engine still executed existing %s session: %v", name, err)
+		}
 	}
-	if concrete.opened != 1 || session.executed != 1 {
+	if concrete.opened != 1 || session.executed != len(operations) {
 		t.Fatalf("unhealthy backend executed: opened %d, executed %d", concrete.opened, session.executed)
 	}
 	s.updateDockerHealth(controller, nil)
 	if !s.BackendAvailable(item) {
 		t.Fatal("same-Engine recovery not reflected in bound Sandbox")
 	}
-	if _, err := work.ExecuteWorkspace(context.Background(), sandboxdomain.CapabilityRead, invocationdomain.JSONValue{}); err != nil {
-		t.Fatalf("recovered Engine execution rejected: %v", err)
+	for name, operation := range operations {
+		if err := operation(); err != nil {
+			t.Fatalf("recovered Engine %s execution rejected: %v", name, err)
+		}
+	}
+	if session.executed != 2*len(operations) {
+		t.Fatalf("recovered Engine execution count %d", session.executed)
 	}
 	if err := ws.Close(); err != nil || session.closed != 1 {
 		t.Fatalf("session cleanup lost: %v, count %d", err, session.closed)

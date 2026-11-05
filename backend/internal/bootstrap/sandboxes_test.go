@@ -3,18 +3,17 @@ package bootstrap
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
 	"testing"
 
 	governance "github.com/orz-i/Mender/backend/internal/governance/domain"
-	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	policyapplication "github.com/orz-i/Mender/backend/internal/policy/application"
 	policydomain "github.com/orz-i/Mender/backend/internal/policy/domain"
-	sandboxapplication "github.com/orz-i/Mender/backend/internal/sandbox/application"
 	sandbox "github.com/orz-i/Mender/backend/internal/sandbox/domain"
+	workspaceapp "github.com/orz-i/Mender/backend/internal/workspace/application"
+	workspacedomain "github.com/orz-i/Mender/backend/internal/workspace/domain"
 )
 
 func TestRuntimeSandboxLocalBackendUsesGovernedLeasesAndPersists(t *testing.T) {
@@ -63,26 +62,16 @@ func TestRuntimeSandboxLocalBackendUsesGovernedLeasesAndPersists(t *testing.T) {
 	if err != nil {
 		t.Fatalf("registered local backend unavailable: %v", err)
 	}
-	workspace, ok := lease.Session.(sandboxapplication.WorkspaceSession)
+	workspace, ok := lease.Session.(workspaceapp.Session)
 	if !ok {
 		t.Fatalf("backend session does not expose Workspace operations: %T", lease.Session)
 	}
-	args, err := invocationdomain.NewJSONValue([]byte(`{"path":"notes.txt"}`))
+	read, err := workspace.Read(ctx, workspaceapp.NormalizeRead(workspacedomain.ReadRequest{Path: "notes.txt"}))
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("sandbox read: %v", err)
 	}
-	read, err := workspace.ExecuteWorkspace(ctx, sandbox.CapabilityRead, args)
-	if err != nil || read.Kind() != invocationdomain.OutcomeKindComplete {
-		t.Fatalf("sandbox read: %v %s", err, read.Kind())
-	}
-	var result struct {
-		Content string `json:"content"`
-	}
-	if err := json.Unmarshal(read.Content().Bytes(), &result); err != nil {
-		t.Fatal(err)
-	}
-	if result.Content != "local sandbox" {
-		t.Fatalf("read %q", result.Content)
+	if read.Content != "local sandbox" {
+		t.Fatalf("read %q", read.Content)
 	}
 	if err := lease.Close(); err != nil {
 		t.Fatal(err)
@@ -212,17 +201,13 @@ func TestLocalSandboxProvisionAndSandboxLeaseShareOwner(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = lease.Close() }()
-	ws, ok := lease.Session.(sandboxapplication.WorkspaceSession)
+	ws, ok := lease.Session.(workspaceapp.Session)
 	if !ok {
-		t.Fatalf("not WorkspaceSession %T", lease.Session)
+		t.Fatalf("not typed Workspace Session %T", lease.Session)
 	}
-	args, err := invocationdomain.NewJSONValue([]byte(`{"path":"hello.txt"}`))
-	if err != nil {
-		t.Fatal(err)
-	}
-	outcome, err := ws.ExecuteWorkspace(ctx, sandbox.CapabilityRead, args)
-	if err != nil || outcome.Kind() != invocationdomain.OutcomeKindComplete {
-		t.Fatalf("read %+v %v", outcome, err)
+	read, err := ws.Read(ctx, workspaceapp.NormalizeRead(workspacedomain.ReadRequest{Path: "hello.txt"}))
+	if err != nil || read.Content != "sandbox" {
+		t.Fatalf("read %+v %v", read, err)
 	}
 	admitted, err := runtime.Sandboxes.store.ListSandboxAdmissions(ctx, item.ID(), 10)
 	if err != nil || len(admitted) != 2 || admitted[0].Action != governance.ActionSandboxAcquire || admitted[1].Action != governance.ActionSandboxProvision {

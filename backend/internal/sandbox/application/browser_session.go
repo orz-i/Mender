@@ -2,7 +2,7 @@ package application
 
 import "context"
 
-// BrowserSession is intentionally separate from WorkspaceSession. It is only
+// BrowserSession is intentionally separate from Workspace operations. It is only
 // an integration contract: Mender currently has NO registered implementation
 // or execution router for a managed browser session.
 //

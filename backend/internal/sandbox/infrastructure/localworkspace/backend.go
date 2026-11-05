@@ -4,19 +4,17 @@
 package localworkspace
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"unicode/utf8"
 
-	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	sandboxapplication "github.com/orz-i/Mender/backend/internal/sandbox/application"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
+	workspaceapp "github.com/orz-i/Mender/backend/internal/workspace/application"
+	workspace "github.com/orz-i/Mender/backend/internal/workspace/domain"
 )
 
 // Backend is a host-owned local adapter. The ShellLauncher must enforce the
@@ -91,25 +89,11 @@ type Instance struct {
 	mode          sandboxdomain.IsolationClass
 }
 
-func (i *Instance) ExecuteWorkspace(ctx context.Context, capability sandboxdomain.Capability, arguments invocationdomain.JSONValue) (invocationdomain.Outcome, error) {
+func (i *Instance) ready(ctx context.Context) error {
 	if i == nil || i.fsRoot == nil {
-		return invocationdomain.Outcome{}, sandboxdomain.ErrBackendUnavailable
+		return sandboxdomain.ErrBackendUnavailable
 	}
-	if err := ctx.Err(); err != nil {
-		return invocationdomain.Outcome{}, err
-	}
-	switch capability {
-	case sandboxdomain.CapabilityRead:
-		return i.executeRead(ctx, arguments)
-	case sandboxdomain.CapabilitySearch:
-		return i.executeSearch(ctx, arguments)
-	case sandboxdomain.CapabilityEdit:
-		return i.executeEdit(ctx, arguments)
-	case sandboxdomain.CapabilityShell:
-		return i.executeShell(ctx, arguments)
-	default:
-		return invocationdomain.Outcome{}, sandboxdomain.ErrCapabilityUnavailable
-	}
+	return ctx.Err()
 }
 func (i *Instance) Close() error {
 	if i == nil || i.fsRoot == nil {
@@ -120,18 +104,7 @@ func (i *Instance) Close() error {
 	return root.Close()
 }
 
-func completeJSON(value any) (invocationdomain.Outcome, error) {
-	raw, err := json.Marshal(value)
-	if err != nil {
-		return invocationdomain.Outcome{}, fmt.Errorf("encode Workspace result: %w", err)
-	}
-	content, err := invocationdomain.NewJSONValue(raw)
-	if err != nil {
-		return invocationdomain.Outcome{}, fmt.Errorf("normalize Workspace result: %w", err)
-	}
-	return invocationdomain.Complete(content)
-}
-func toolFailure(err error) (invocationdomain.Outcome, error) {
+func toolFailure(err error) error {
 	if err == nil {
 		err = errors.New("workspace tool failed")
 	}
@@ -141,23 +114,8 @@ func toolFailure(err error) (invocationdomain.Outcome, error) {
 		runes := []rune(message)
 		message = string(runes[:maxToolFailureRunes]) + "..."
 	}
-	return invocationdomain.Failed(invocationdomain.FailureSourceTool, invocationdomain.FailureToolError, message)
-}
-func decodeStrict(raw []byte, target any, label string) error {
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(target); err != nil {
-		return fmt.Errorf("%s: %w", label, err)
-	}
-	var extra any
-	if err := decoder.Decode(&extra); err != io.EOF {
-		if err == nil {
-			return fmt.Errorf("%s: multiple JSON values", label)
-		}
-		return fmt.Errorf("%s: trailing data: %w", label, err)
-	}
-	return nil
+	return &workspace.ToolError{Message: message}
 }
 
 var _ sandboxapplication.Backend = (*Backend)(nil)
-var _ sandboxapplication.WorkspaceSession = (*Instance)(nil)
+var _ workspaceapp.Session = (*Instance)(nil)

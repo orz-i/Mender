@@ -10,11 +10,10 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
+	workspace "github.com/orz-i/Mender/backend/internal/workspace/domain"
 )
 
 const (
-	defaultSearchResults    = 100
 	maxSearchResults        = 500
 	maxSearchVisitedFiles   = 10000
 	maxSearchFileBytes      = 1024 * 1024
@@ -24,85 +23,56 @@ const (
 	maxSearchPatternBytes   = 1024
 )
 
-type searchInput struct {
-	Mode          string `json:"mode"`
-	Path          string `json:"path,omitempty"`
-	Query         string `json:"query,omitempty"`
-	Pattern       string `json:"pattern,omitempty"`
-	Regex         bool   `json:"regex,omitempty"`
-	CaseSensitive bool   `json:"caseSensitive,omitempty"`
-	MaxResults    int    `json:"maxResults,omitempty"`
-}
-
-type searchMatch struct {
-	Path string `json:"path"`
-	Line int    `json:"line,omitempty"`
-	Text string `json:"text,omitempty"`
-}
-
-type searchOutput struct {
-	Mode      string        `json:"mode"`
-	Matches   []searchMatch `json:"matches"`
-	Truncated bool          `json:"truncated"`
-}
-
-func (i *Instance) executeSearch(
+func (i *Instance) Search(
 	ctx context.Context,
-	arguments invocationdomain.JSONValue,
-) (invocationdomain.Outcome, error) {
-	var input searchInput
-	if err := decodeStrict(arguments.Bytes(), &input, "decode workspace.search arguments"); err != nil {
-		return toolFailure(err)
-	}
-	if input.MaxResults == 0 {
-		input.MaxResults = defaultSearchResults
+	input workspace.SearchRequest,
+) (workspace.SearchResult, error) {
+	if err := i.ready(ctx); err != nil {
+		return workspace.SearchResult{}, err
 	}
 	if input.MaxResults < 1 || input.MaxResults > maxSearchResults {
-		return toolFailure(fmt.Errorf("maxResults must be between 1 and %d", maxSearchResults))
+		return workspace.SearchResult{}, toolFailure(fmt.Errorf("maxResults must be between 1 and %d", maxSearchResults))
 	}
 	if len(input.Query) > maxSearchQueryBytes {
-		return toolFailure(fmt.Errorf("query must be at most %d bytes", maxSearchQueryBytes))
+		return workspace.SearchResult{}, toolFailure(fmt.Errorf("query must be at most %d bytes", maxSearchQueryBytes))
 	}
 	if len(input.Pattern) > maxSearchPatternBytes {
-		return toolFailure(fmt.Errorf("pattern must be at most %d bytes", maxSearchPatternBytes))
-	}
-	if input.Path == "" {
-		input.Path = "."
+		return workspace.SearchResult{}, toolFailure(fmt.Errorf("pattern must be at most %d bytes", maxSearchPatternBytes))
 	}
 
 	searchRelative, _, info, err := i.resolver.resolveExisting(input.Path, true)
 	if err != nil {
-		return toolFailure(err)
+		return workspace.SearchResult{}, toolFailure(err)
 	}
 	if !info.IsDir() {
-		return toolFailure(fmt.Errorf("search path must be a directory"))
+		return workspace.SearchResult{}, toolFailure(fmt.Errorf("search path must be a directory"))
 	}
 
 	var pattern *regexp.Regexp
 	if input.Pattern != "" {
 		pattern, err = compileWorkspaceGlob(input.Pattern)
 		if err != nil {
-			return toolFailure(err)
+			return workspace.SearchResult{}, toolFailure(err)
 		}
 	}
 
-	output := searchOutput{Mode: input.Mode, Matches: make([]searchMatch, 0)}
+	output := workspace.SearchResult{Mode: input.Mode, Matches: make([]workspace.SearchMatch, 0)}
 	switch input.Mode {
 	case "files":
 		if input.Pattern == "" {
-			return toolFailure(fmt.Errorf("files search requires pattern"))
+			return workspace.SearchResult{}, toolFailure(fmt.Errorf("files search requires pattern"))
 		}
 	case "content":
 		if input.Query == "" {
-			return toolFailure(fmt.Errorf("content search requires query"))
+			return workspace.SearchResult{}, toolFailure(fmt.Errorf("content search requires query"))
 		}
 	default:
-		return toolFailure(fmt.Errorf("unsupported search mode %q", input.Mode))
+		return workspace.SearchResult{}, toolFailure(fmt.Errorf("unsupported search mode %q", input.Mode))
 	}
 
 	contentMatcher, err := compileContentMatcher(input)
 	if err != nil {
-		return toolFailure(err)
+		return workspace.SearchResult{}, toolFailure(err)
 	}
 
 	visitedFiles := 0
@@ -152,7 +122,7 @@ func (i *Instance) executeSearch(
 		}
 
 		if input.Mode == "files" {
-			output.Matches = append(output.Matches, searchMatch{Path: workspaceRelative})
+			output.Matches = append(output.Matches, workspace.SearchMatch{Path: workspaceRelative})
 			if len(output.Matches) >= input.MaxResults {
 				output.Truncated = true
 				return fs.SkipAll
@@ -179,10 +149,10 @@ func (i *Instance) executeSearch(
 			if !contentMatcher(line) {
 				continue
 			}
-			output.Matches = append(output.Matches, searchMatch{
+			output.Matches = append(output.Matches, workspace.SearchMatch{
 				Path: workspaceRelative,
 				Line: lineIndex + 1,
-				Text: truncateUTF8(line, maxSearchSnippetBytes),
+				Text: workspace.OptionalText(truncateUTF8(line, maxSearchSnippetBytes)),
 			})
 			if len(output.Matches) >= input.MaxResults {
 				output.Truncated = true
@@ -192,12 +162,12 @@ func (i *Instance) executeSearch(
 		return nil
 	})
 	if walkErr != nil {
-		return toolFailure(fmt.Errorf("search workspace %q: %w", searchRelative, walkErr))
+		return workspace.SearchResult{}, toolFailure(fmt.Errorf("search workspace %q: %w", searchRelative, walkErr))
 	}
-	return completeJSON(output)
+	return output, nil
 }
 
-func compileContentMatcher(input searchInput) (func(string) bool, error) {
+func compileContentMatcher(input workspace.SearchRequest) (func(string) bool, error) {
 	if input.Mode != "content" {
 		return func(string) bool { return false }, nil
 	}

@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -18,9 +17,10 @@ import (
 	"time"
 	"unicode/utf8"
 
-	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	sandboxapp "github.com/orz-i/Mender/backend/internal/sandbox/application"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
+	workspaceapp "github.com/orz-i/Mender/backend/internal/workspace/application"
+	workspace "github.com/orz-i/Mender/backend/internal/workspace/domain"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -74,65 +74,25 @@ func (s *Session) Close() error {
 	return nil
 }
 
-// A remote shell executes as the selected SSH account, outside Mender's local
-// host. The workspace root is only a convenience for shell cwd, NOT a jail.
-func (s *Session) ExecuteWorkspace(ctx context.Context, cap sandboxdomain.Capability, args invocationdomain.JSONValue) (invocationdomain.Outcome, error) {
+// beginWorkspace bounds context-free SFTP requests by closing the exact
+// authenticated transport on cancellation. Uncertainty remains sticky through
+// Close so the Sandbox router retains its durable execution lease.
+func (s *Session) beginWorkspace(ctx context.Context) (func(), error) {
 	if s == nil || s.conn == nil || s.conn.SFTP == nil {
-		return invocationdomain.Outcome{}, sandboxdomain.ErrBackendUnavailable
+		return nil, sandboxdomain.ErrBackendUnavailable
 	}
 	if err := ctx.Err(); err != nil {
-		return invocationdomain.Outcome{}, err
+		return nil, err
 	}
-	// SFTP requests do not take Context. Closing the authenticated transport
-	// on invocation cancellation bounds an unresponsive remote server. Its
-	// outcome remains uncertain and the durable execution lease is retained.
 	stopCancel := context.AfterFunc(ctx, func() {
 		s.uncertain.Store(true)
 		_ = s.conn.Close()
 	})
-	defer stopCancel()
-	if len(args.Bytes()) > 1<<20 {
-		return failure("SSH workspace arguments exceed limit")
-	}
-	switch cap {
-	case sandboxdomain.CapabilityRead:
-		return s.read(ctx, args)
-	case sandboxdomain.CapabilitySearch:
-		return s.search(ctx, args)
-	case sandboxdomain.CapabilityEdit:
-		return s.edit(ctx, args)
-	case sandboxdomain.CapabilityShell:
-		return s.shell(ctx, args)
-	default:
-		return invocationdomain.Outcome{}, sandboxdomain.ErrCapabilityUnavailable
-	}
+	return func() { stopCancel() }, nil
 }
-func readJSON(args invocationdomain.JSONValue, target any) error {
-	dec := json.NewDecoder(bytes.NewReader(args.Bytes()))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(target); err != nil {
-		return errors.New("invalid SSH workspace arguments")
-	}
-	var extra any
-	if err := dec.Decode(&extra); err != io.EOF {
-		return errors.New("unexpected SSH workspace input")
-	}
-	return nil
-}
-func complete(value any) (invocationdomain.Outcome, error) {
-	data, err := json.Marshal(value)
-	if err != nil {
-		return invocationdomain.Outcome{}, err
-	}
-	normalized, err := invocationdomain.NewJSONValue(data)
-	if err != nil {
-		return invocationdomain.Outcome{}, err
-	}
-	return invocationdomain.Complete(normalized)
-}
-func failure(message string) (invocationdomain.Outcome, error) {
-	return invocationdomain.Failed(invocationdomain.FailureSourceTool, invocationdomain.FailureToolError, message)
-}
+
+func failure(message string) error { return &workspace.ToolError{Message: message} }
+
 func relative(raw string, allowRoot bool) (string, error) {
 	if len(raw) > 1024 || path.IsAbs(raw) || strings.ContainsAny(raw, "\x00\r\n") {
 		return "", errors.New("SSH workspace path must be relative and bounded")
@@ -187,45 +147,34 @@ func (s *Session) checked(raw string, allowRoot, mayCreate bool) (string, fs.Fil
 	return "", nil, errors.New("invalid workspace path")
 }
 
-type readArgs struct {
-	Path   string `json:"path"`
-	Offset int    `json:"offset"`
-	Limit  int    `json:"limit"`
-}
-
-func (s *Session) read(ctx context.Context, args invocationdomain.JSONValue) (invocationdomain.Outcome, error) {
-	var in readArgs
-	if readJSON(args, &in) != nil {
-		return failure("invalid read input")
+func (s *Session) Read(ctx context.Context, in workspace.ReadRequest) (workspace.ReadResult, error) {
+	stopCancel, err := s.beginWorkspace(ctx)
+	if err != nil {
+		return workspace.ReadResult{}, err
 	}
-	if in.Offset == 0 {
-		in.Offset = 1
-	}
-	if in.Limit == 0 {
-		in.Limit = 200
-	}
+	defer stopCancel()
 	if in.Offset < 1 || in.Limit < 1 || in.Limit > 2000 {
-		return failure("read offset/limit out of bounds")
+		return workspace.ReadResult{}, failure("read offset/limit out of bounds")
 	}
 	remote, info, err := s.checked(in.Path, false, false)
 	if err != nil || !info.Mode().IsRegular() {
-		return failure("remote file not available")
+		return workspace.ReadResult{}, failure("remote file not available")
 	}
 	if info.Size() > 2<<20 {
-		return failure("file exceeds SSH read limit")
+		return workspace.ReadResult{}, failure("file exceeds SSH read limit")
 	}
 	f, err := s.conn.SFTP.Open(remote)
 	if err != nil {
-		return failure("remote file not readable")
+		return workspace.ReadResult{}, failure("remote file not readable")
 	}
 	defer func() { _ = f.Close() }()
 	data, err := io.ReadAll(io.LimitReader(f, 2<<20+1))
 	if err != nil {
 		s.uncertain.Store(true)
-		return invocationdomain.Outcome{}, sandboxdomain.ErrBackendUnavailable
+		return workspace.ReadResult{}, sandboxdomain.ErrBackendUnavailable
 	}
 	if len(data) > 2<<20 || !utf8.Valid(data) {
-		return failure("remote file too large or not UTF-8")
+		return workspace.ReadResult{}, failure("remote file too large or not UTF-8")
 	}
 	text := strings.TrimSuffix(string(data), "\n")
 	lines := []string{}
@@ -238,33 +187,22 @@ func (s *Session) read(ctx context.Context, args invocationdomain.JSONValue) (in
 	if end > start {
 		content = strings.Join(lines[start:end], "\n")
 	}
-	return complete(map[string]any{"path": in.Path, "content": content, "startLine": start + 1, "endLine": end, "truncated": end < len(lines)})
+	return workspace.ReadResult{Path: in.Path, Content: content, StartLine: start + 1, EndLine: end, Truncated: end < len(lines)}, nil
 }
 
-type editChange struct {
-	OldText              string `json:"oldText"`
-	NewText              string `json:"newText"`
-	ExpectedReplacements int    `json:"expectedReplacements"`
-}
-type editArgs struct {
-	Path      string       `json:"path"`
-	Operation string       `json:"operation"`
-	Content   string       `json:"content"`
-	Edits     []editChange `json:"edits"`
-}
-
-func (s *Session) edit(ctx context.Context, args invocationdomain.JSONValue) (invocationdomain.Outcome, error) {
-	var in editArgs
-	if readJSON(args, &in) != nil {
-		return failure("invalid edit input")
+func (s *Session) Edit(ctx context.Context, in workspace.EditRequest) (workspace.EditResult, error) {
+	stopCancel, err := s.beginWorkspace(ctx)
+	if err != nil {
+		return workspace.EditResult{}, err
 	}
+	defer stopCancel()
 	if len(in.Content) > 4<<20 || !utf8.ValidString(in.Content) || len(in.Edits) > 64 {
-		return failure("edit exceeds limits")
+		return workspace.EditResult{}, failure("edit exceeds limits")
 	}
 	mayCreate := in.Operation == "create"
 	remote, info, err := s.checked(in.Path, false, mayCreate)
 	if err != nil {
-		return failure("remote edit path unavailable")
+		return workspace.EditResult{}, failure("remote edit path unavailable")
 	}
 	var original []byte
 	before := int64(0)
@@ -272,57 +210,54 @@ func (s *Session) edit(ctx context.Context, args invocationdomain.JSONValue) (in
 	switch in.Operation {
 	case "create":
 		if info != nil || len(in.Edits) != 0 {
-			return failure("create requires absent file and no replacements")
+			return workspace.EditResult{}, failure("create requires absent file and no replacements")
 		}
 	case "delete", "replace":
 		if info == nil || !info.Mode().IsRegular() || info.Size() > 4<<20 {
-			return failure("edit requires regular bounded file")
+			return workspace.EditResult{}, failure("edit requires regular bounded file")
 		}
 		before = info.Size()
 		if in.Operation == "delete" {
 			if in.Content != "" || len(in.Edits) != 0 {
-				return failure("delete must not specify content")
+				return workspace.EditResult{}, failure("delete must not specify content")
 			}
 			if err := s.conn.SFTP.Remove(remote); err != nil {
 				s.uncertain.Store(true)
-				return invocationdomain.Outcome{}, sandboxdomain.ErrBackendUnavailable
+				return workspace.EditResult{}, sandboxdomain.ErrBackendUnavailable
 			}
-			return complete(map[string]any{"path": in.Path, "operation": "delete", "bytesBefore": before, "bytesAfter": 0, "replacements": 0})
+			return workspace.EditResult{Path: in.Path, Operation: "delete", BytesBefore: before}, nil
 		}
 		if in.Content != "" || len(in.Edits) == 0 {
-			return failure("replace requires replacement list")
+			return workspace.EditResult{}, failure("replace requires replacement list")
 		}
 		f, e := s.conn.SFTP.Open(remote)
 		if e != nil {
-			return failure("file cannot be opened")
+			return workspace.EditResult{}, failure("file cannot be opened")
 		}
 		original, e = io.ReadAll(io.LimitReader(f, 4<<20+1))
 		_ = f.Close()
 		if e != nil {
 			s.uncertain.Store(true)
-			return invocationdomain.Outcome{}, sandboxdomain.ErrBackendUnavailable
+			return workspace.EditResult{}, sandboxdomain.ErrBackendUnavailable
 		}
 		if len(original) > 4<<20 || !utf8.Valid(original) {
-			return failure("remote file too large or not UTF-8")
+			return workspace.EditResult{}, failure("remote file too large or not UTF-8")
 		}
 		working := string(original)
 		for _, ch := range in.Edits {
 			expected := ch.ExpectedReplacements
-			if expected == 0 {
-				expected = 1
-			}
 			if ch.OldText == "" || expected < 1 || expected > 1000 || strings.Count(working, ch.OldText) != expected {
-				return failure("replacement text or expected count mismatch")
+				return workspace.EditResult{}, failure("replacement text or expected count mismatch")
 			}
 			working = strings.ReplaceAll(working, ch.OldText, ch.NewText)
 			replacements += expected
 			if len(working) > 4<<20 {
-				return failure("result exceeds edit limit")
+				return workspace.EditResult{}, failure("result exceeds edit limit")
 			}
 		}
 		in.Content = working
 	default:
-		return failure("unsupported SSH edit operation")
+		return workspace.EditResult{}, failure("unsupported SSH edit operation")
 	}
 	if in.Operation == "create" {
 		// SSH_FXF_EXCL must be checked atomically by the trusted SFTP server.
@@ -330,80 +265,58 @@ func (s *Session) edit(ctx context.Context, args invocationdomain.JSONValue) (in
 		// those calls, even if both calls reported success independently.
 		file, err := s.conn.SFTP.OpenFile(remote, os.O_WRONLY|os.O_CREATE|os.O_EXCL)
 		if err != nil {
-			return failure("remote target already exists or exclusive create unavailable")
+			return workspace.EditResult{}, failure("remote target already exists or exclusive create unavailable")
 		}
 		written, writeErr := io.Copy(file, strings.NewReader(in.Content))
 		closeErr := file.Close()
 		if writeErr != nil || closeErr != nil || written != int64(len(in.Content)) {
 			s.uncertain.Store(true)
-			return invocationdomain.Outcome{}, sandboxdomain.ErrBackendUnavailable
+			return workspace.EditResult{}, sandboxdomain.ErrBackendUnavailable
 		}
-		return complete(map[string]any{"path": in.Path, "operation": "create", "replacements": 0,
-			"bytesBefore": 0, "bytesAfter": written})
+		return workspace.EditResult{Path: in.Path, Operation: "create", BytesAfter: written}, nil
 	}
 	// Replace uses a new exclusive temporary file and POSIX atomic rename
 	// on SFTP servers that support it. An uncertain result retains the lease.
 	var nonce [12]byte
 	if _, err := rand.Read(nonce[:]); err != nil {
-		return invocationdomain.Outcome{}, err
+		return workspace.EditResult{}, err
 	}
 	temporary := path.Join(path.Dir(remote), ".mender-"+hex.EncodeToString(nonce[:]))
 	file, err := s.conn.SFTP.OpenFile(temporary, os.O_WRONLY|os.O_CREATE|os.O_EXCL)
 	if err != nil {
-		return failure("remote temporary file unavailable")
+		return workspace.EditResult{}, failure("remote temporary file unavailable")
 	}
 	written, writeErr := io.Copy(file, strings.NewReader(in.Content))
 	closeErr := file.Close()
 	if writeErr != nil || closeErr != nil || written != int64(len(in.Content)) {
 		s.uncertain.Store(true)
-		return invocationdomain.Outcome{}, sandboxdomain.ErrBackendUnavailable
+		return workspace.EditResult{}, sandboxdomain.ErrBackendUnavailable
 	}
 	if err := s.conn.SFTP.PosixRename(temporary, remote); err != nil {
 		s.uncertain.Store(true)
-		return invocationdomain.Outcome{}, sandboxdomain.ErrBackendUnavailable
+		return workspace.EditResult{}, sandboxdomain.ErrBackendUnavailable
 	}
-	return complete(map[string]any{"path": in.Path, "operation": "replace", "replacements": replacements,
-		"bytesBefore": before, "bytesAfter": written})
+	return workspace.EditResult{Path: in.Path, Operation: "replace", Replacements: replacements, BytesBefore: before, BytesAfter: written}, nil
 }
 
-type searchArgs struct {
-	Mode          string `json:"mode"`
-	Path          string `json:"path"`
-	Query         string `json:"query"`
-	Pattern       string `json:"pattern"`
-	Regex         bool   `json:"regex"`
-	CaseSensitive bool   `json:"caseSensitive"`
-	MaxResults    int    `json:"maxResults"`
-}
-type match struct {
-	Path string `json:"path"`
-	Line int    `json:"line,omitempty"`
-	Text string `json:"text,omitempty"`
-}
-
-func (s *Session) search(ctx context.Context, args invocationdomain.JSONValue) (invocationdomain.Outcome, error) {
-	var in searchArgs
-	if readJSON(args, &in) != nil {
-		return failure("invalid search input")
+func (s *Session) Search(ctx context.Context, in workspace.SearchRequest) (workspace.SearchResult, error) {
+	stopCancel, err := s.beginWorkspace(ctx)
+	if err != nil {
+		return workspace.SearchResult{}, err
 	}
-	if in.MaxResults == 0 {
-		in.MaxResults = 100
-	}
+	defer stopCancel()
 	if in.MaxResults < 1 || in.MaxResults > 500 || len(in.Query) > 4096 || len(in.Pattern) > 1024 {
-		return failure("search limits exceeded")
+		return workspace.SearchResult{}, failure("search limits exceeded")
 	}
 	if in.Mode != "files" && in.Mode != "content" {
-		return failure("unsupported search mode")
+		return workspace.SearchResult{}, failure("unsupported search mode")
 	}
 	if (in.Mode == "files" && in.Pattern == "") || (in.Mode == "content" && in.Query == "") {
-		return failure("missing search query or pattern")
-	}
-	if in.Path == "" {
-		in.Path = "."
+		return workspace.SearchResult{}, failure("missing search query or pattern")
 	}
 	directory, info, e := s.checked(in.Path, true, false)
 	if e != nil || !info.IsDir() {
-		return failure("search root unavailable")
+		return workspace.SearchResult{}, failure("search root unavailable")
 	}
 	var re *regexp.Regexp
 	if in.Regex {
@@ -414,10 +327,10 @@ func (s *Session) search(ctx context.Context, args invocationdomain.JSONValue) (
 		var err error
 		re, err = regexp.Compile(expression)
 		if err != nil {
-			return failure("invalid search expression")
+			return workspace.SearchResult{}, failure("invalid search expression")
 		}
 	}
-	matches := make([]match, 0)
+	matches := make([]workspace.SearchMatch, 0)
 	files := 0
 	visitedEntries := 0
 	discoveredDirs := 1
@@ -431,7 +344,7 @@ func (s *Session) search(ctx context.Context, args invocationdomain.JSONValue) (
 	queue := []node{{directory, 0}}
 	for len(queue) > 0 {
 		if ctx.Err() != nil {
-			return invocationdomain.Outcome{}, ctx.Err()
+			return workspace.SearchResult{}, ctx.Err()
 		}
 		curr := queue[0]
 		queue = queue[1:]
@@ -441,11 +354,11 @@ func (s *Session) search(ctx context.Context, args invocationdomain.JSONValue) (
 		}
 		entries, err := s.conn.SFTP.ReadDir(curr.dir)
 		if err != nil {
-			return failure("remote search listing failed")
+			return workspace.SearchResult{}, failure("remote search listing failed")
 		}
 		for _, entry := range entries {
 			if ctx.Err() != nil {
-				return invocationdomain.Outcome{}, ctx.Err()
+				return workspace.SearchResult{}, ctx.Err()
 			}
 			visitedEntries++
 			if visitedEntries > 10000 {
@@ -477,14 +390,14 @@ func (s *Session) search(ctx context.Context, args invocationdomain.JSONValue) (
 			if in.Pattern != "" {
 				matched, err := path.Match(in.Pattern, rel)
 				if err != nil {
-					return failure("invalid search path pattern")
+					return workspace.SearchResult{}, failure("invalid search path pattern")
 				}
 				if !matched {
 					continue
 				}
 			}
 			if in.Mode == "files" {
-				matches = append(matches, match{Path: rel})
+				matches = append(matches, workspace.SearchMatch{Path: rel})
 			} else {
 				if entry.Size() > 1<<20 || aggregate+entry.Size() > 32<<20 {
 					truncated = true
@@ -514,7 +427,7 @@ func (s *Session) search(ctx context.Context, args invocationdomain.JSONValue) (
 						if len(line) > 2048 {
 							line = line[:2048]
 						}
-						matches = append(matches, match{Path: rel, Line: idx + 1, Text: line})
+						matches = append(matches, workspace.SearchMatch{Path: rel, Line: idx + 1, Text: workspace.OptionalText(line)})
 					}
 					if len(matches) >= in.MaxResults {
 						truncated = true
@@ -531,14 +444,9 @@ func (s *Session) search(ctx context.Context, args invocationdomain.JSONValue) (
 			break
 		}
 	}
-	return complete(map[string]any{"mode": in.Mode, "matches": matches, "truncated": truncated})
+	return workspace.SearchResult{Mode: in.Mode, Matches: matches, Truncated: truncated}, nil
 }
 
-type shellArgs struct {
-	Command   string `json:"command"`
-	Cwd       string `json:"cwd"`
-	TimeoutMS int64  `json:"timeoutMs"`
-}
 type limitedOutput struct {
 	data      bytes.Buffer
 	limit     int
@@ -557,34 +465,32 @@ func (b *limitedOutput) Write(raw []byte) (int, error) {
 	return n, nil
 }
 func quoted(raw string) string { return "'" + strings.ReplaceAll(raw, "'", "'\\''") + "'" }
-func (s *Session) shell(ctx context.Context, args invocationdomain.JSONValue) (invocationdomain.Outcome, error) {
-	var in shellArgs
-	if readJSON(args, &in) != nil {
-		return failure("invalid shell input")
+
+// Shell executes as the selected SSH account, outside Mender's local host.
+// The workspace root is only a convenience for shell cwd, NOT a jail.
+func (s *Session) Shell(ctx context.Context, in workspace.ShellRequest) (workspace.ShellResult, error) {
+	stopCancel, err := s.beginWorkspace(ctx)
+	if err != nil {
+		return workspace.ShellResult{}, err
 	}
+	defer stopCancel()
 	if strings.TrimSpace(in.Command) == "" || len(in.Command) > 64*1024 {
-		return failure("shell command missing or too large")
+		return workspace.ShellResult{}, failure("shell command missing or too large")
 	}
-	timeout := 30 * time.Second
-	if in.TimeoutMS != 0 {
-		if in.TimeoutMS < 1 || in.TimeoutMS > 120000 {
-			return failure("shell timeout exceeds 2 minutes")
-		}
-		timeout = time.Duration(in.TimeoutMS) * time.Millisecond
+	if in.TimeoutMS < 1 || in.TimeoutMS > 120000 {
+		return workspace.ShellResult{}, failure("shell timeout exceeds 2 minutes")
 	}
+	timeout := time.Duration(in.TimeoutMS) * time.Millisecond
 	cwd := in.Cwd
-	if cwd == "" {
-		cwd = "."
-	}
 	directory, info, err := s.checked(cwd, true, false)
 	if err != nil || !info.IsDir() {
-		return failure("remote shell cwd unavailable")
+		return workspace.ShellResult{}, failure("remote shell cwd unavailable")
 	}
 	runCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	session, err := s.conn.SSH.NewSession()
 	if err != nil {
-		return invocationdomain.Outcome{}, sandboxdomain.ErrBackendUnavailable
+		return workspace.ShellResult{}, sandboxdomain.ErrBackendUnavailable
 	}
 	defer func() { _ = session.Close() }()
 	stdout := &limitedOutput{limit: 64 * 1024}
@@ -603,7 +509,7 @@ func (s *Session) shell(ctx context.Context, args invocationdomain.JSONValue) (i
 		_ = session.Close()
 		_ = s.conn.SSH.Close()
 		s.uncertain.Store(true)
-		return invocationdomain.Outcome{}, runCtx.Err()
+		return workspace.ShellResult{}, runCtx.Err()
 	}
 	exitCode := 0
 	if result != nil {
@@ -612,11 +518,11 @@ func (s *Session) shell(ctx context.Context, args invocationdomain.JSONValue) (i
 			exitCode = exit.ExitStatus()
 		} else {
 			s.uncertain.Store(true)
-			return invocationdomain.Outcome{}, sandboxdomain.ErrBackendUnavailable
+			return workspace.ShellResult{}, sandboxdomain.ErrBackendUnavailable
 		}
 	}
-	return complete(map[string]any{"exitCode": exitCode, "stdout": stdout.data.String(), "stderr": stderr.data.String(), "timedOut": false, "truncated": stdout.truncated || stderr.truncated})
+	return workspace.ShellResult{ExitCode: exitCode, Stdout: stdout.data.String(), Stderr: stderr.data.String(), TimedOut: false, Truncated: stdout.truncated || stderr.truncated}, nil
 }
 
 var _ sandboxapp.Backend = (*Backend)(nil)
-var _ sandboxapp.WorkspaceSession = (*Session)(nil)
+var _ workspaceapp.Session = (*Session)(nil)

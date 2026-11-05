@@ -22,10 +22,12 @@ import (
 	sandboxapp "github.com/orz-i/Mender/backend/internal/sandbox/application"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 	sandboxsqlite "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/sqlite"
+	workspaceapp "github.com/orz-i/Mender/backend/internal/workspace/application"
+	workspace "github.com/orz-i/Mender/backend/internal/workspace/domain"
 	workspaceplugin "github.com/orz-i/Mender/backend/internal/workspace/infrastructure/plugin"
 )
 
-func exampleSandboxPluginPackage(t *testing.T) string {
+func exampleSandboxPluginPackage(t *testing.T, overlays ...string) string {
 	t.Helper()
 	root := bootstrapRepositoryRoot(t)
 	source := filepath.Join(root, "examples", "sandbox-plugin-example")
@@ -37,7 +39,12 @@ func exampleSandboxPluginPackage(t *testing.T) string {
 	if goruntime.GOOS == "windows" {
 		binName += ".exe"
 	}
-	cmd := exec.Command("go", "build", "-o", filepath.Join(pkg, "bin", binName), "./cmd/mender-sandbox-example") // #nosec G204 -- fixed checked-in fixture in a temporary path.
+	buildArgs := []string{"build", "-o", filepath.Join(pkg, "bin", binName)}
+	for _, overlay := range overlays {
+		buildArgs = append(buildArgs, "-overlay", overlay)
+	}
+	buildArgs = append(buildArgs, "./cmd/mender-sandbox-example")
+	cmd := exec.Command("go", buildArgs...) // #nosec G204 -- fixed checked-in fixture in a temporary path.
 	cmd.Dir = source
 	cmd.Env = append(os.Environ(), "GOWORK=off")
 	if output, err := cmd.CombinedOutput(); err != nil {
@@ -140,20 +147,15 @@ func TestExternalSandboxPluginGovernedLifecycleAndExecution(t *testing.T) {
 	if err != nil {
 		t.Fatalf("acquire: %v", err)
 	}
-	ws, ok := lease.Session.(sandboxapp.WorkspaceSession)
+	ws, ok := lease.Session.(workspaceapp.Session)
 	if !ok {
 		t.Fatal("external session has no workspace execution")
 	}
-	args, err := invocationdomain.NewJSONValue([]byte(`{"path":"README.txt"}`))
-	if err != nil {
-		t.Fatal(err)
+	read, err := ws.Read(ctx, workspaceapp.NormalizeRead(workspace.ReadRequest{Path: "README.txt"}))
+	if err != nil || !strings.Contains(read.Content, "Example Sandbox") {
+		t.Fatalf("external workspace execution %+v %v", read, err)
 	}
-	outcome, err := ws.ExecuteWorkspace(ctx, sandboxdomain.CapabilityRead, args)
-	if err != nil || outcome.Kind() != invocationdomain.OutcomeKindComplete ||
-		!strings.Contains(string(outcome.Content().Bytes()), "Example Sandbox") {
-		t.Fatalf("external workspace execution %+v %v", outcome, err)
-	}
-	if _, err := ws.ExecuteWorkspace(ctx, sandboxdomain.CapabilityShell, args); !errors.Is(err, sandboxdomain.ErrCapabilityUnavailable) {
+	if _, err := ws.Shell(ctx, workspaceapp.NormalizeShell(workspace.ShellRequest{Command: "must-not-run"})); !errors.Is(err, sandboxdomain.ErrCapabilityUnavailable) {
 		t.Fatalf("capability fallback: %v", err)
 	}
 	if _, err := runtime.Sandboxes.ChangeLifecycle(ctx, item.ID(), governancedomain.ActionSandboxDestroy, caller); !errors.Is(err, sandboxdomain.ErrConflict) {

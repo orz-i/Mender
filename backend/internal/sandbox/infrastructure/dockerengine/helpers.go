@@ -1,16 +1,13 @@
 package dockerengine
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"path"
 	"strings"
 	"unicode/utf8"
 
-	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
+	workspacedomain "github.com/orz-i/Mender/backend/internal/workspace/domain"
 )
 
 const maxDockerPathBytes = 4096
@@ -42,30 +39,7 @@ func containerPath(relative string) string {
 	}
 	return path.Join("/workspace", relative)
 }
-func decodeDockerArgs(raw []byte, target any) error {
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(target); err != nil {
-		return fmt.Errorf("invalid Docker Workspace arguments: %w", err)
-	}
-	var extra any
-	if err := decoder.Decode(&extra); err != io.EOF {
-		return fmt.Errorf("docker Workspace arguments have trailing data")
-	}
-	return nil
-}
-func dockerComplete(value any) (invocationdomain.Outcome, error) {
-	raw, err := json.Marshal(value)
-	if err != nil {
-		return invocationdomain.Outcome{}, err
-	}
-	result, err := invocationdomain.NewJSONValue(raw)
-	if err != nil {
-		return invocationdomain.Outcome{}, err
-	}
-	return invocationdomain.Complete(result)
-}
-func dockerFailure(err error) (invocationdomain.Outcome, error) {
+func dockerFailure(err error) error {
 	if err == nil {
 		err = fmt.Errorf("docker Workspace operation failed")
 	}
@@ -73,11 +47,11 @@ func dockerFailure(err error) (invocationdomain.Outcome, error) {
 	if utf8.RuneCountInString(msg) > 1000 {
 		msg = string([]rune(msg)[:1000])
 	}
-	return invocationdomain.Failed(invocationdomain.FailureSourceTool, invocationdomain.FailureToolError, msg)
+	return &workspacedomain.ToolError{Message: msg}
 }
-func sanitizedFailure(ctx context.Context, err error) (invocationdomain.Outcome, error) {
+func sanitizedFailure(ctx context.Context, err error) error {
 	if ctx.Err() != nil {
-		return invocationdomain.Outcome{}, ctx.Err()
+		return ctx.Err()
 	}
 	return dockerFailure(fmt.Errorf("docker Workspace operation unavailable"))
 }

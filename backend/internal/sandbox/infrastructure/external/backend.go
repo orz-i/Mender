@@ -6,9 +6,6 @@ import (
 	"slices"
 	"time"
 
-	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
-	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
-	invocationjsonschema "github.com/orz-i/Mender/backend/internal/invocation/infrastructure/jsonschema"
 	platformplugin "github.com/orz-i/Mender/backend/internal/plugin"
 	installationdomain "github.com/orz-i/Mender/backend/internal/plugin/installation/domain"
 	pluginprocess "github.com/orz-i/Mender/backend/internal/plugin/process"
@@ -139,56 +136,6 @@ func (b *Backend) config(ctx context.Context, item sandboxdomain.Sandbox) (sandb
 	return config, nil
 }
 
-func (b *Backend) ValidateConfig(ctx context.Context, binding sandboxdomain.BackendBinding, config sandboxsqlite.ExternalConfig) error {
-	if err := config.Validate(); err != nil {
-		return err
-	}
-	if config.ConfigVersion != b.descriptor.ConfigVersion {
-		return fmt.Errorf("sandbox plugin config version mismatch")
-	}
-	if len(b.descriptor.ConfigSchema) > 0 {
-		schema, err := catalogdomain.NewSchema(b.descriptor.ConfigSchema)
-		if err != nil {
-			return err
-		}
-		value, err := invocationdomain.NewJSONValue(config.JSON)
-		if err != nil {
-			return err
-		}
-		valid, err := invocationjsonschema.Validator{}.Validate(ctx, schema, value)
-		if err != nil {
-			return err
-		}
-		if !valid {
-			return fmt.Errorf("sandbox plugin configuration violates host-validated schema")
-		}
-	}
-	p, err := b.process(ctx, binding)
-	if err != nil {
-		return err
-	}
-	response, err := p.Service().ValidateConfig(ctx, &sandboxv1.ValidateConfigRequest{
-		ConfigVersion: config.ConfigVersion, ConfigJson: config.JSON})
-	if err != nil {
-		return fmt.Errorf("sandbox plugin validate config: %w", err)
-	}
-	if !response.GetValid() {
-		return fmt.Errorf("sandbox plugin config rejected: %s", response.GetDiagnostic())
-	}
-	metadata, err := p.Service().InspectConfig(ctx, &sandboxv1.InspectConfigRequest{
-		ConfigVersion: config.ConfigVersion, ConfigJson: config.JSON})
-	if err != nil {
-		return fmt.Errorf("sandbox plugin inspect config: %w", err)
-	}
-	if len(metadata.GetCredentialRefs()) != 0 {
-		return fmt.Errorf("sandbox plugin requests unsupported credential scope")
-	}
-	if len(metadata.GetConnectionSummary()) > 4096 {
-		return fmt.Errorf("sandbox plugin metadata too large")
-	}
-	return nil
-}
-
 type Observation struct {
 	Run        sandboxdomain.Run
 	Diagnostic string
@@ -312,50 +259,3 @@ func (b *Backend) Open(ctx context.Context, item sandboxdomain.Sandbox, run sand
 	}
 	return &Session{service: p.Service(), id: id, capabilities: b.capabilities}, nil
 }
-
-type Session struct {
-	service      sandboxv1.SandboxPluginServiceClient
-	id           string
-	capabilities sandboxdomain.Capabilities
-}
-
-func (s *Session) ExecuteWorkspace(ctx context.Context, capability sandboxdomain.Capability,
-	arguments invocationdomain.JSONValue) (invocationdomain.Outcome, error) {
-	if s == nil || s.service == nil {
-		return invocationdomain.Outcome{}, sandboxdomain.ErrBackendUnavailable
-	}
-	if err := capability.Validate(); err != nil {
-		return invocationdomain.Outcome{}, err
-	}
-	if !s.capabilities.Supports(capability) {
-		return invocationdomain.Outcome{}, sandboxdomain.ErrCapabilityUnavailable
-	}
-	if len(arguments.Bytes()) > 1024*1024 {
-		return invocationdomain.Outcome{}, fmt.Errorf("sandbox plugin arguments exceed limit")
-	}
-	res, err := s.service.ExecuteWorkspace(ctx, &sandboxv1.ExecuteWorkspaceRequest{
-		SessionId: s.id, Capability: string(capability), ArgumentsJson: arguments.Bytes(),
-	})
-	if err != nil {
-		return invocationdomain.Outcome{}, fmt.Errorf("sandbox plugin workspace: %w", err)
-	}
-	if len(res.GetContentJson()) > maxResultJSON {
-		return invocationdomain.Outcome{}, fmt.Errorf("sandbox plugin result too large")
-	}
-	value, err := invocationdomain.NewJSONValue(res.GetContentJson())
-	if err != nil {
-		return invocationdomain.Outcome{}, fmt.Errorf("sandbox plugin returned invalid JSON: %w", err)
-	}
-	return invocationdomain.Complete(value)
-}
-func (s *Session) Close() error {
-	if s == nil || s.service == nil {
-		return nil
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), closeTimeout)
-	defer cancel()
-	_, err := s.service.CloseSession(ctx, &sandboxv1.CloseSessionRequest{SessionId: s.id})
-	return err
-}
-
-var _ sandboxapp.WorkspaceSession = (*Session)(nil)

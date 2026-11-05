@@ -21,8 +21,9 @@ import (
 	"time"
 
 	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
-	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
+	workspaceapp "github.com/orz-i/Mender/backend/internal/workspace/application"
+	workspace "github.com/orz-i/Mender/backend/internal/workspace/domain"
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
 )
@@ -265,29 +266,53 @@ func TestSSHRemoteProvisioningReportsActualFailureStage(t *testing.T) {
 	})
 }
 
-func jsonArg(t *testing.T, content any) invocationdomain.JSONValue {
-	t.Helper()
-	data, e := json.Marshal(content)
-	if e != nil {
-		t.Fatal(e)
-	}
-	value, e := invocationdomain.NewJSONValue(data)
-	if e != nil {
-		t.Fatal(e)
-	}
-	return value
-}
 func execute(t *testing.T, s *Session, cap sandboxdomain.Capability, arg any) map[string]any {
 	t.Helper()
-	outcome, err := s.ExecuteWorkspace(context.Background(), cap, jsonArg(t, arg))
+	raw, err := json.Marshal(arg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var result any
+	switch cap {
+	case sandboxdomain.CapabilityRead:
+		var in workspace.ReadRequest
+		if err := json.Unmarshal(raw, &in); err != nil {
+			t.Fatal(err)
+		}
+		result, err = s.Read(context.Background(), workspaceapp.NormalizeRead(in))
+	case sandboxdomain.CapabilitySearch:
+		var in workspace.SearchRequest
+		if err := json.Unmarshal(raw, &in); err != nil {
+			t.Fatal(err)
+		}
+		result, err = s.Search(context.Background(), workspaceapp.NormalizeSearch(in))
+	case sandboxdomain.CapabilityEdit:
+		var in workspace.EditRequest
+		if err := json.Unmarshal(raw, &in); err != nil {
+			t.Fatal(err)
+		}
+		result, err = s.Edit(context.Background(), workspaceapp.NormalizeEdit(in))
+	case sandboxdomain.CapabilityShell:
+		var in workspace.ShellRequest
+		if err := json.Unmarshal(raw, &in); err != nil {
+			t.Fatal(err)
+		}
+		result, err = s.Shell(context.Background(), workspaceapp.NormalizeShell(in))
+	default:
+		t.Fatalf("unsupported fixture capability %q", cap)
+	}
 	if err != nil {
 		t.Fatalf("%s: %v", cap, err)
 	}
-	var result map[string]any
-	if e := json.Unmarshal(outcome.Content().Bytes(), &result); e != nil {
-		t.Fatalf("%s decode %v", cap, e)
+	encoded, err := json.Marshal(result)
+	if err != nil {
+		t.Fatal(err)
 	}
-	return result
+	var output map[string]any
+	if err := json.Unmarshal(encoded, &output); err != nil {
+		t.Fatalf("%s decode %v", cap, err)
+	}
+	return output
 }
 func TestSSHRemoteWorkspaceOverPinnedSSHAndSFTP(t *testing.T) {
 	template, creds := sshFixture(t)
@@ -304,6 +329,67 @@ func TestSSHRemoteWorkspaceOverPinnedSSHAndSFTP(t *testing.T) {
 	if read["content"] != "hello ssh" {
 		t.Fatalf("read: %+v", read)
 	}
+	t.Run("typed read and search fields", func(t *testing.T) {
+		literal, err := s.Read(ctx, workspaceapp.NormalizeRead(workspace.ReadRequest{Path: "./hello.txt"}))
+		if err != nil || literal.Path != "./hello.txt" || literal.StartLine != 1 || literal.EndLine != 1 {
+			t.Fatalf("SSH literal path or line range changed: %+v %v", literal, err)
+		}
+		beyond, err := s.Read(ctx, workspaceapp.NormalizeRead(workspace.ReadRequest{Path: "hello.txt", Offset: 5}))
+		if err != nil || beyond != (workspace.ReadResult{Path: "hello.txt", StartLine: 2, EndLine: 1}) {
+			t.Fatalf("SSH out-of-range line fields changed: %+v %v", beyond, err)
+		}
+		for name, data := range map[string]string{"empty.txt": "", "empty-line.txt": "\n"} {
+			if err := os.WriteFile(filepath.Join(localFixturePath(template.Root), name), []byte(data), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			empty, err := s.Read(ctx, workspaceapp.NormalizeRead(workspace.ReadRequest{Path: name}))
+			if err != nil || empty != (workspace.ReadResult{Path: name, StartLine: 1}) {
+				t.Fatalf("SSH empty file line fields changed: %+v %v", empty, err)
+			}
+		}
+		empty, err := s.Search(ctx, workspaceapp.NormalizeSearch(workspace.SearchRequest{Mode: "content", Query: "^$", Regex: true}))
+		if err != nil || len(empty.Matches) != 2 {
+			t.Fatalf("SSH empty-line matches changed: %+v %v", empty, err)
+		}
+		for _, match := range empty.Matches {
+			if match.Line != 1 || match.Text != nil {
+				t.Fatalf("SSH empty snippet presence changed: %+v", match)
+			}
+		}
+	})
+	t.Run("pre-cancelled typed operations", func(t *testing.T) {
+		cancelled, stop := context.WithCancel(context.Background())
+		stop()
+		operations := map[string]func() error{
+			"read": func() error {
+				_, err := s.Read(cancelled, workspaceapp.NormalizeRead(workspace.ReadRequest{Path: "hello.txt"}))
+				return err
+			},
+			"search": func() error {
+				_, err := s.Search(cancelled, workspaceapp.NormalizeSearch(workspace.SearchRequest{Mode: "files", Pattern: "*"}))
+				return err
+			},
+			"edit": func() error {
+				_, err := s.Edit(cancelled, workspaceapp.NormalizeEdit(workspace.EditRequest{Path: "must-not-exist", Operation: "create"}))
+				return err
+			},
+			"shell": func() error {
+				_, err := s.Shell(cancelled, workspaceapp.NormalizeShell(workspace.ShellRequest{Command: "must-not-run"}))
+				return err
+			},
+		}
+		for name, operation := range operations {
+			if err := operation(); !errors.Is(err, context.Canceled) {
+				t.Fatalf("%s lost pre-execution cancellation: %v", name, err)
+			}
+		}
+		if s.uncertain.Load() {
+			t.Fatal("pre-execution cancellation marked an untouched transport uncertain")
+		}
+		if _, err := s.conn.SFTP.Lstat(path.Join(template.Root, "must-not-exist")); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("cancelled edit reached SFTP: %v", err)
+		}
+	})
 	search := execute(t, s, sandboxdomain.CapabilitySearch, map[string]any{"mode": "content", "query": "ssh"})
 	matches, ok := search["matches"].([]any)
 	if !ok || len(matches) != 1 {
@@ -323,10 +409,11 @@ func TestSSHRemoteWorkspaceOverPinnedSSHAndSFTP(t *testing.T) {
 		t.Fatalf("create: %+v", created)
 	}
 	// Repeated exclusive create must never overwrite the existing target.
-	duplicate, err := s.ExecuteWorkspace(ctx, sandboxdomain.CapabilityEdit, jsonArg(t, map[string]any{
-		"path": "added.txt", "operation": "create", "content": "must-not-overwrite",
+	duplicate, err := s.Edit(ctx, workspaceapp.NormalizeEdit(workspace.EditRequest{
+		Path: "added.txt", Operation: "create", Content: "must-not-overwrite",
 	}))
-	if err != nil || duplicate.Kind() != invocationdomain.OutcomeKindFailed {
+	var toolError *workspace.ToolError
+	if !errors.As(err, &toolError) {
 		t.Fatalf("exclusive SFTP create did not reject existing file: %v %+v", err, duplicate)
 	}
 	preserved := execute(t, s, sandboxdomain.CapabilityRead, map[string]any{"path": "added.txt"})
@@ -347,9 +434,8 @@ func TestSSHRemoteWorkspaceOverPinnedSSHAndSFTP(t *testing.T) {
 	if err := os.Symlink("hello.txt", filepath.Join(localFixturePath(template.Root), "linked.txt")); err != nil {
 		t.Fatal(err)
 	}
-	symlinkRead, err := s.ExecuteWorkspace(ctx, sandboxdomain.CapabilityRead, jsonArg(t,
-		map[string]any{"path": "linked.txt"}))
-	if err != nil || symlinkRead.Kind() != invocationdomain.OutcomeKindFailed {
+	symlinkRead, err := s.Read(ctx, workspaceapp.NormalizeRead(workspace.ReadRequest{Path: "linked.txt"}))
+	if !errors.As(err, &toolError) {
 		t.Fatalf("structured SFTP read followed a symlink: %v %+v", err, symlinkRead)
 	}
 	deleted := execute(t, s, sandboxdomain.CapabilityEdit, map[string]any{"path": "added.txt", "operation": "delete"})
