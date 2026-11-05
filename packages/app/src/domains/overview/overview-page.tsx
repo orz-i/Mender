@@ -99,7 +99,7 @@ function PanelLink({ to, label, destination = label }: { to: string; label: stri
     <Link
       to={to}
       aria-label={t("View {{plugin}}", { plugin: t(destination) })}
-      className="inline-flex h-8 items-center gap-1.5 rounded-xl border border-border bg-card px-3 text-xs font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"
+      className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-xs font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"
     >
       {t(label)}
       <ArrowUpRightIcon className="size-3.5" aria-hidden="true" />
@@ -179,7 +179,7 @@ export function OverviewPage({ client }: { client: ManagementClient }) {
           actions={
             <Link
               to="/plugins"
-              className="inline-flex h-8 items-center justify-center rounded-xl bg-primary px-3 text-xs font-semibold text-primary-foreground transition-all hover:bg-primary/90"
+              className="inline-flex h-8 items-center justify-center rounded-lg bg-primary px-3 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90"
             >
               {t("Explore Marketplace")}
             </Link>
@@ -193,7 +193,7 @@ export function OverviewPage({ client }: { client: ManagementClient }) {
           actions={
             <Link
               to="/profiles"
-              className="inline-flex h-8 items-center justify-center rounded-xl bg-primary px-3 text-xs font-semibold text-primary-foreground transition-all hover:bg-primary/90"
+              className="inline-flex h-8 items-center justify-center rounded-lg bg-primary px-3 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90"
             >
               {t("Create profile")}
             </Link>
@@ -202,7 +202,7 @@ export function OverviewPage({ client }: { client: ManagementClient }) {
       ) : null}
 
       {view === "activity" ? (
-        <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border/70 bg-card px-4 py-3 text-sm">
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-2.5 text-sm">
           <p className="flex items-center gap-2">
             <span className="text-muted-foreground">{t("Runtime")}</span>
             <span className="font-semibold">{t(data.status.ready ? "Ready" : "Unavailable")}</span>
@@ -281,8 +281,8 @@ export function OverviewPage({ client }: { client: ManagementClient }) {
               </Table>
             </>
           ) : (
-            <div className="flex min-h-[310px] flex-col items-center justify-center gap-2 px-5 py-7 text-center">
-              <MendyFigure expression="empty" className="mb-1 h-[150px] w-[104px]" aria-hidden="true" />
+            <div className="flex min-h-[220px] flex-col items-center justify-center gap-2 px-5 py-6 text-center">
+              <MendyFigure expression="empty" className="mb-1 h-[92px] w-[64px]" aria-hidden="true" />
               <p className="text-base font-semibold">{t("No invocation records yet.")}</p>
               <p className="max-w-md text-sm leading-6 text-muted-foreground">{t("Latest tool execution activity across the local control plane.")}</p>
             </div>
@@ -294,7 +294,7 @@ export function OverviewPage({ client }: { client: ManagementClient }) {
 
         </div>
       ) : (
-        <div className="grid min-w-0 items-start gap-5 lg:grid-cols-2">
+        <div className="grid min-w-0 items-start gap-3 lg:grid-cols-2">
 
           <DataPanel
             title="Providers"
@@ -302,7 +302,7 @@ export function OverviewPage({ client }: { client: ManagementClient }) {
             actions={<PanelLink to="/tools" label="View" destination="Tool services" />}
           >
             {data?.providers.length ? (
-              <div className="divide-y divide-border/70 px-5 pb-2">
+              <div className="divide-y divide-border/70 px-4 pb-1">
                 {data.providers.slice(0, 4).map((provider) => (
                   <div key={provider.providerId} className="flex min-w-0 items-center justify-between gap-3 py-3">
                     <div className="min-w-0">
@@ -326,7 +326,7 @@ export function OverviewPage({ client }: { client: ManagementClient }) {
             actions={<PanelLink to="/profiles" label="View" destination="Profiles" />}
           >
             {data?.profiles.length ? (
-              <div className="divide-y divide-border/70 px-5 pb-2">
+              <div className="divide-y divide-border/70 px-4 pb-1">
                 {data.profiles.slice(0, 4).map((profile) => (
                   <div key={profile.profileId} className="flex min-w-0 items-center justify-between gap-3 py-3">
                     <div className="min-w-0">

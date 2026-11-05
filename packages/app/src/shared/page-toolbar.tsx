@@ -50,16 +50,16 @@ export function PageToolbar({
   return (
     <div
       data-slot="page-toolbar"
-      className={["mb-5 flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-3", className].join(" ")}
+      className={["mb-3 flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-2", className].join(" ")}
     >
       {tabs ? <div data-slot="page-toolbar-tabs" className="flex min-w-0 max-w-full flex-wrap items-center gap-2">{tabs}</div> : null}
       {filters || actions ? (
         <div
           data-slot="page-toolbar-controls"
-          className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2"
+          className="flex w-full min-w-0 flex-wrap items-center justify-end gap-2 md:w-auto md:min-w-[280px] md:flex-1"
         >
           {filters ? (
-            <div data-slot="page-toolbar-filters" className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2">
+            <div data-slot="page-toolbar-filters" className="flex w-full min-w-0 flex-wrap items-center justify-start gap-2 md:w-auto md:flex-1 md:justify-end">
               {filters}
             </div>
           ) : null}
@@ -124,7 +124,7 @@ export function PageTabs({ label, children }: { label: string; children: ReactNo
     <div
       role="group"
       aria-label={t(label)}
-      className="inline-flex max-w-full items-center gap-1 overflow-x-auto rounded-2xl bg-secondary p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      className="inline-flex max-w-full items-center gap-0.5 overflow-x-auto rounded-lg bg-secondary p-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
     >
       {children}
     </div>
@@ -148,14 +148,14 @@ export function PageTab({
       aria-pressed={active}
       onClick={onClick}
       className={[
-        "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-xl px-3 text-sm font-medium whitespace-nowrap",
+        "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-[12px] font-medium whitespace-nowrap",
         "transition-[background-color,color,box-shadow] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
-        active ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:bg-card/65 hover:text-foreground",
+        active ? "bg-card text-foreground shadow-[0_1px_2px_rgb(0_0_0/0.11)]" : "text-muted-foreground hover:bg-card/65 hover:text-foreground",
       ].join(" ")}
     >
       {t(label)}
       {count !== undefined ? (
-        <span className={["rounded-md px-1.5 py-0.5 text-xs tabular-nums", active ? "bg-muted text-foreground" : "bg-muted/80 text-muted-foreground"].join(" ")}>
+        <span className={["rounded px-1.5 text-[11px] tabular-nums", active ? "bg-muted text-foreground" : "bg-muted/80 text-muted-foreground"].join(" ")}>
           {formatNumber(count)}
         </span>
       ) : null}

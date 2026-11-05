@@ -623,16 +623,16 @@ function PluginCard({ plugin,view }: { plugin: MarketplacePlugin; view:"discover
       aria-label={t("View {{plugin}}", {
         plugin: plugin.displayName,
       })}
-      className="group block rounded-[22px] outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+      className="group block rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
     >
-      <Card className="h-full border-border/60 transition-[transform,box-shadow,border-color] duration-200 group-hover:-translate-y-0.5 group-hover:border-border group-hover:shadow-[0_12px_28px_-12px_rgb(18_18_18/0.15)] dark:group-hover:shadow-[0_12px_28px_-12px_rgb(0_0_0/0.4)]">
-        <CardHeader className="gap-3">
-          <div className="flex min-w-0 items-start gap-3">
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-foreground text-background dark:bg-muted dark:text-foreground">
-              <BlocksIcon className="size-[19px]" aria-hidden="true" />
+      <Card className="h-full border-border transition-[background-color,border-color] duration-150 group-hover:border-primary/30 group-hover:bg-muted/30">
+        <CardHeader className="gap-2">
+          <div className="flex min-w-0 items-start gap-2.5">
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-secondary text-muted-foreground">
+              <BlocksIcon className="size-4" aria-hidden="true" />
             </span>
             <div className="min-w-0 flex-1">
-              <CardTitle className="truncate text-base" title={plugin.displayName}>
+              <CardTitle className="truncate text-sm" title={plugin.displayName}>
                 {plugin.displayName}
               </CardTitle>
               <p className="mt-1 text-xs text-muted-foreground">{pluginKindLabel(plugin)}</p>
@@ -641,7 +641,7 @@ function PluginCard({ plugin,view }: { plugin: MarketplacePlugin; view:"discover
               {pluginStatusLabel(plugin)}
             </Badge>
           </div>
-          <CardDescription className="min-h-10 line-clamp-2">
+          <CardDescription className="min-h-8 line-clamp-2 text-xs leading-4">
             {marketplaceDescription(plugin) || t("No plugin description.")}
           </CardDescription>
         </CardHeader>
@@ -715,7 +715,7 @@ function DetailField({
   mono?: boolean;
 }) {
   return (
-    <div className="rounded-xl border border-border/70 bg-muted/20 p-3">
+    <div className="rounded-lg border border-border bg-muted/20 p-3">
       <p className="text-xs font-medium text-muted-foreground">
         {t(label)}
       </p>

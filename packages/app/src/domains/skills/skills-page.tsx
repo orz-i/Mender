@@ -411,7 +411,7 @@ export function SkillsPage({
                   {skillPagination.items.map((item) => (
                       <div
                         key={item.installationId}
-                        className="group flex min-h-[88px] min-w-0 flex-col items-stretch gap-3 rounded-xl border border-border/70 bg-card p-3.5 transition-[border-color,box-shadow] hover:border-border hover:shadow-xs lg:flex-row lg:items-center dark:hover:border-border/80"
+                        className="group flex min-h-[64px] min-w-0 flex-col items-stretch gap-2.5 rounded-xl border border-border/70 bg-card p-3.5 transition-[border-color,box-shadow] hover:border-border hover:shadow-xs lg:flex-row lg:items-center dark:hover:border-border/80"
                       >
                         <button
                           type="button"
@@ -420,9 +420,9 @@ export function SkillsPage({
                         >
                           <span
                             className={[
-                              "flex size-11 shrink-0 items-center justify-center rounded-xl",
+                              "flex size-9 shrink-0 items-center justify-center rounded-lg",
                               item.builtIn
-                                ? "bg-foreground text-background dark:bg-muted dark:text-foreground"
+                                ? "bg-secondary text-muted-foreground"
                                 : "bg-muted text-muted-foreground",
                             ].join(" ")}
                           >
@@ -587,7 +587,7 @@ export function SkillsPage({
           {selected !== null && skillView === "overview" ? (
             <div className="space-y-5">
               <div className="flex items-start gap-3 rounded-xl border border-border/70 bg-muted/20 p-4">
-                <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-foreground text-background dark:bg-muted dark:text-foreground">
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-secondary text-muted-foreground">
                   {selected.builtIn ? (
                     <BookOpenIcon className="size-5" />
                   ) : (

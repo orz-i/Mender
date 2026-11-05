@@ -16,7 +16,7 @@ export function FocusSwitch<Value extends string>({
     <div
       role="group"
       aria-label={t(label)}
-      className="inline-flex max-w-full flex-wrap items-center gap-1 rounded-2xl bg-secondary p-1"
+      className="inline-flex max-w-full flex-wrap items-center gap-0.5 rounded-lg bg-secondary p-0.5"
     >
       {items.map((item) => (
         <button
@@ -25,10 +25,10 @@ export function FocusSwitch<Value extends string>({
           aria-pressed={value === item.value}
           onClick={() => onChange(item.value)}
           className={[
-            "min-h-9 rounded-xl px-4 py-2 text-sm font-medium transition-[background-color,box-shadow,color]",
+            "min-h-8 rounded-md px-3 py-1.5 text-[12px] font-medium transition-[background-color,box-shadow,color]",
             "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
             value === item.value
-              ? "bg-card text-foreground shadow-sm"
+              ? "bg-card text-foreground shadow-[0_1px_2px_rgb(0_0_0/0.11)]"
               : "text-muted-foreground hover:bg-card/65 hover:text-foreground",
           ].join(" ")}
         >

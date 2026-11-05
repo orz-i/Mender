@@ -39,7 +39,7 @@ export function FilterPopover({
             size="sm"
             aria-label={labelText}
             className={cn(
-              "h-9 gap-1.5 rounded-xl border-input bg-card px-3 text-sm font-medium text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring",
+              "h-8 gap-1.5 rounded-lg border-input bg-card px-2.5 text-[12px] font-medium text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring",
               activeCount > 0 && "border-primary/40 bg-accent text-accent-foreground font-semibold",
               className,
             )}
@@ -58,7 +58,7 @@ export function FilterPopover({
         align="end"
         side="bottom"
         sideOffset={6}
-        className="w-72 rounded-2xl border border-border/80 bg-popover p-4 text-popover-foreground shadow-xl"
+        className="w-72 rounded-xl border border-border bg-popover p-3.5 text-popover-foreground shadow-lg"
       >
         <div className="flex items-center justify-between border-b border-border/70 pb-2.5">
           <div className="flex items-center gap-2">
@@ -103,7 +103,7 @@ export function FilterSelectField({
         aria-label={t(label)}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="h-9 w-full rounded-xl border border-input bg-card px-2.5 text-sm text-foreground outline-none transition-colors focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
+        className="h-9 w-full rounded-lg border border-input bg-card px-2.5 text-sm text-foreground outline-none transition-colors focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
       >
         {options.map((option) => (
           <option key={option.value} value={option.value}>

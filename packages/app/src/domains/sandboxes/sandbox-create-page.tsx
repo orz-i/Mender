@@ -116,7 +116,7 @@ function BackendChoice({
 }) {
   const inner = (
     <>
-      <span className="flex size-11 items-center justify-center rounded-xl bg-foreground text-background dark:bg-muted dark:text-foreground">
+      <span className="flex size-9 items-center justify-center rounded-lg bg-secondary text-muted-foreground">
         <Icon className="size-5" aria-hidden="true" />
       </span>
       <span className="mt-4 flex items-center justify-between gap-3 font-semibold">

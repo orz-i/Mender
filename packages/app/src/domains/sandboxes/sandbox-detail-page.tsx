@@ -203,7 +203,7 @@ export function SandboxDetailPage({ client }: { client: ManagementClient }) {
             ) : (
               <DataPanel title="Security boundary" description="Isolation depends on the actual backend, not the Sandbox name.">
                 <div className="flex flex-col gap-4 p-5">
-                  <span className="flex size-11 items-center justify-center rounded-xl bg-foreground text-background dark:bg-muted dark:text-foreground">
+                  <span className="flex size-9 items-center justify-center rounded-lg bg-secondary text-muted-foreground">
                     <ShieldCheckIcon className="size-5" aria-hidden="true" />
                   </span>
                   <p className="max-w-2xl text-sm leading-6 text-muted-foreground">

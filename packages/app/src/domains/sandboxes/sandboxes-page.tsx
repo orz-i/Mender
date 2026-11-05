@@ -74,7 +74,7 @@ export function SandboxesPage({ client }: { client: ManagementClient }) {
             aria-label={t("Backend filter")}
             value={backend}
             onChange={(event) => setBackend(event.target.value)}
-            className="h-9 w-36 min-w-0 rounded-xl border border-input bg-card px-3 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="h-9 w-36 min-w-0 rounded-lg border border-input bg-card px-3 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <option value="all">{t("All backends")}</option>
             <option value="local_workspace">{t("Local workspace")}</option>
