@@ -161,6 +161,13 @@ export function AgentDetailPage({ client, localOwner, chooseLocalDirectory }: {
   },[client,agentId,topic,revision]);
   const pagination=usePagination(tasks);
   const options=useMemo(()=>profiles.filter(p=>!grants.includes(p.profileId)),[profiles,grants]);
+  const taskSummary = useMemo(() => ({
+    recent: [...tasks].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)).slice(0, 5),
+    inProgress: tasks.filter((task) => task.status === "running" || task.status === "queued").length,
+    unknown: tasks.filter((task) => task.status === "unknown").length,
+    failed: tasks.filter((task) => task.status === "failed").length,
+  }), [tasks]);
+
 
   async function repairTools(){
     if(!agentId||busy)return;
@@ -255,6 +262,75 @@ export function AgentDetailPage({ client, localOwner, chooseLocalDirectory }: {
     {!loaded?<ResultPanel title="Agent details"><p className="p-6 text-sm text-muted-foreground">{t("Loading agents…")}</p></ResultPanel>:
     !agent?<ResultPanel title="Agent details"><EmptyPanelState><EmptyState title="No agents" description="This Agent could not be found."/></EmptyPanelState></ResultPanel>:
     topic==="overview"?<ResultPanel title="Agent overview">
+      <div data-slot="agent-task-summary" className="grid grid-cols-2 gap-px border-b border-border bg-border/80 sm:grid-cols-4">
+        {([
+          { label: "Tasks", value: tasks.length },
+          { label: "In progress", value: taskSummary.inProgress },
+          { label: "Needs attention", value: taskSummary.unknown + taskSummary.failed },
+          { label: "Profile access", value: grants.length },
+        ] as const).map(({ label, value }) => (
+          <div key={label} className="min-w-0 bg-card px-4 py-3.5">
+            <p className="truncate text-[11px] text-muted-foreground">{t(label)}</p>
+            <p className="mt-1.5 text-[22px] font-semibold leading-none tabular-nums">{value}</p>
+          </div>
+        ))}
+      </div>
+      {taskSummary.unknown + taskSummary.failed > 0 ? (
+        <div role="status" className="flex flex-wrap items-center justify-between gap-3 border-b border-sunlight/25 bg-sunlight/5 px-4 py-3.5">
+          <div className="min-w-0">
+            <p className="text-[13px] font-semibold">{t("{{count}} task results need review", { count: taskSummary.unknown + taskSummary.failed })}</p>
+            {taskSummary.unknown > 0 ? (
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                {t("Unknown outcomes require checking actual deliverables; never retry automatically.")}
+              </p>
+            ) : null}
+          </div>
+          <Button size="sm" variant="outline" onClick={() => setTopic("tasks")}>{t("Review tasks")}</Button>
+        </div>
+      ) : null}
+      {!agent.backendAvailable || tools?.status === "conflict" ? (
+        <div role="status" className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-muted/25 px-4 py-3">
+          <p className="text-xs leading-5 text-muted-foreground">
+            {!agent.backendAvailable ? t("CLI missing") : t("Agent tool sources conflict; review them in Tools before proceeding.")}
+          </p>
+          {tools?.status === "conflict" ? <Button size="sm" variant="outline" onClick={() => void navigate("/tools")}>{t("View tool services")}</Button> : null}
+        </div>
+      ) : null}
+      <section aria-label={t("Recent tasks")}>
+        <div className="flex items-center justify-between gap-3 px-4 py-3.5">
+          <h3 className="text-[13px] font-semibold">{t("Recent tasks")}</h3>
+          {tasks.length > 0 ? (
+            <Button size="sm" variant="ghost" onClick={() => setTopic("tasks")}>{t("View all tasks")}</Button>
+          ) : null}
+        </div>
+        {taskSummary.recent.length > 0 ? (
+          <div className="divide-y divide-border/75 border-t border-border/75">
+            {taskSummary.recent.map((task) => (
+              <button type="button" key={task.taskId} onClick={() => void openTask(task.taskId)}
+                aria-label={t("View task") + ": " + taskDisplayName(task)}
+                className="flex w-full min-w-0 items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/35 focus-visible:outline-2 focus-visible:outline-ring">
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[13px] font-medium">{taskDisplayName(task)}</span>
+                  <span className="mt-1 block truncate text-[11px] text-muted-foreground" title={task.taskId}>
+                    #{task.taskId.slice(-8)} · {formatDateTime(task.createdAt)}
+                  </span>
+                </span>
+                <StatusBadge status={task.status}>{taskStatusText(task.status)}</StatusBadge>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p className="border-t border-border px-4 py-6 text-[12px] text-muted-foreground">
+            {t("Delegated task history will appear here.")}
+          </p>
+        )}
+      </section>
+      <details className="group border-t border-border">
+        <summary className="cursor-pointer px-4 py-3.5 text-[13px] font-medium text-foreground hover:bg-muted/35 focus-visible:outline-2 focus-visible:outline-ring">
+          {t("Agent configuration")}
+          <span className="ml-2 text-[11px] font-normal text-muted-foreground">{t("Model, workspace, isolation and advanced actions")}</span>
+        </summary>
+        <div className="border-t border-border/75">
       <dl className="grid grid-cols-1 gap-5 p-5 sm:grid-cols-2">
         <div><dt className="text-xs text-muted-foreground">{t("Name")}</dt><dd className="mt-1 font-medium">{agent.name}</dd></div>
         <div><dt className="text-xs text-muted-foreground">{t("Backend")}</dt><dd className="mt-1">{agentBackendLabel(agent.backend)}</dd></div>
@@ -272,13 +348,15 @@ export function AgentDetailPage({ client, localOwner, chooseLocalDirectory }: {
         <div><dt className="text-xs text-muted-foreground">{t("Created at")}</dt><dd className="mt-1 text-sm">{formatDateTime(agent.createdAt)}</dd></div>
         {agent.issue?<div className="sm:col-span-2 text-sm text-destructive">{agent.issue}</div>:null}
       </dl>
-      <div className="flex flex-wrap justify-between gap-2 border-t border-border p-4">
-        <p className="max-w-xl text-xs leading-5 text-muted-foreground">{t("Grant Profile access explicitly; this Agent will not run until invoked through an authorized Tool.")}</p>
-        <div className="flex flex-wrap gap-2">
-          <Button size="sm" variant="outline" onClick={editDefaultModel}>{t("Edit runtime defaults")}</Button>
-          <Button size="sm" variant="destructive" onClick={()=>setConfirm({kind:"delete",id:agent.agentId})}>{t("Delete agent")}</Button>
+          <div className="flex flex-wrap justify-between gap-2 border-t border-border p-4">
+            <p className="max-w-xl text-xs leading-5 text-muted-foreground">{t("Grant Profile access explicitly; this Agent will not run until invoked through an authorized Tool.")}</p>
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" variant="outline" onClick={editDefaultModel}>{t("Edit runtime defaults")}</Button>
+              <Button size="sm" variant="destructive" onClick={() => setConfirm({kind:"delete",id:agent.agentId})}>{t("Delete agent")}</Button>
+            </div>
+          </div>
         </div>
-      </div>
+      </details>
     </ResultPanel>:
     topic==="workspaces"?<AgentWorkspaceSettings client={client} agent={agent}
       {...(chooseLocalDirectory===undefined?{}:{chooseLocalDirectory})}/>:

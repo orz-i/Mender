@@ -631,31 +631,45 @@ function PluginCard({ plugin,view }: { plugin: MarketplacePlugin; view:"discover
     plugin.kind === "tunnel" ? CableIcon :
     plugin.kind === "integration" ? PlugIcon : BlocksIcon;
   const unavailable = ["invalid", "unavailable", "degraded"].includes(plugin.status);
+  const detailsHref = `/plugins/${encodeURIComponent(plugin.key)}?view=${view}`;
+  const createAction = view === "discover" ? plugin.createAction : undefined;
   return (
-    <Link
-      to={`/plugins/${encodeURIComponent(plugin.key)}?view=${view}`}
-      aria-label={t("View {{plugin}}", { plugin: plugin.displayName })}
-      className={[
-        "group flex min-h-[76px] min-w-0 items-center gap-3 rounded-xl border bg-card px-3.5 py-3 text-left",
-        "transition-[border-color,background-color,box-shadow] outline-none hover:border-primary/40 hover:bg-card hover:shadow-sm focus-visible:ring-2 focus-visible:ring-ring/40",
-        unavailable ? "border-border/75" : "border-border",
-      ].join(" ")}
-    >
-      <Icon className="size-[22px] shrink-0 text-muted-foreground" aria-hidden="true" />
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-[13px] font-semibold text-foreground" title={plugin.displayName}>
-          {plugin.displayName}
+    <div className={[
+      "group flex min-h-[76px] min-w-0 items-center gap-1 rounded-xl border bg-card pr-2",
+      "transition-[border-color,background-color,box-shadow] hover:border-primary/40 hover:shadow-sm",
+      unavailable ? "border-border/75" : "border-border",
+    ].join(" ")}>
+      <Link
+        to={createAction?.href ?? detailsHref}
+        state={createAction ? { marketplaceReturnTo: "/plugins?view=discover" } : undefined}
+        aria-label={createAction ? t("Configure {{plugin}}", { plugin: plugin.displayName }) : t("View {{plugin}}", { plugin: plugin.displayName })}
+        title={createAction ? t(createAction.label) : t("Plugin details")}
+        className="flex min-h-[74px] min-w-0 flex-1 items-center gap-3 rounded-lg py-3 pl-3.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/45"
+      >
+        <Icon className="size-[22px] shrink-0 text-muted-foreground" aria-hidden="true" />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[13px] font-semibold text-foreground" title={plugin.displayName}>
+            {plugin.displayName}
+          </span>
+          <span className="mt-1 block truncate text-[11px] leading-4 text-muted-foreground" title={marketplaceDescription(plugin) || t("No plugin description.")}>
+            {marketplaceDescription(plugin) || t("No plugin description.")}
+          </span>
         </span>
-        <span className="mt-1 block truncate text-[11px] leading-4 text-muted-foreground" title={marketplaceDescription(plugin) || t("No plugin description.")}>
-          {marketplaceDescription(plugin) || t("No plugin description.")}
-        </span>
-      </span>
-      {plugin.status === "enabled" ? (
-        <CheckIcon className="size-3.5 shrink-0 text-teal" aria-label={t("Enabled")} />
-      ) : unavailable ? (
-        <span className="size-1.5 shrink-0 rounded-full bg-sunlight" title={pluginStatusLabel(plugin)} aria-label={pluginStatusLabel(plugin)} />
+        {plugin.status === "enabled" ? (
+          <CheckIcon className="size-3.5 shrink-0 text-teal" aria-label={t("Enabled")} />
+        ) : unavailable ? (
+          <span className="size-1.5 shrink-0 rounded-full bg-sunlight" title={pluginStatusLabel(plugin)} aria-label={pluginStatusLabel(plugin)} />
+        ) : null}
+      </Link>
+      {createAction ? (
+        <Link to={detailsHref}
+          aria-label={t("View {{plugin}}", { plugin: plugin.displayName })}
+          title={t("Plugin details")}
+          className="shrink-0 rounded-md px-2 py-2 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring">
+          {t("Details")}
+        </Link>
       ) : null}
-    </Link>
+    </div>
   );
 }
 

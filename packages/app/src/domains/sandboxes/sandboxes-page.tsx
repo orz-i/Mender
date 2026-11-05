@@ -27,7 +27,7 @@ export function SandboxesPage({ client }: { client: ManagementClient }) {
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
   const [backend, setBackend] = useState("all");
-  const [category, setCategory] = useState<"all" | "ready" | "local" | "unavailable">("all");
+  const [category, setCategory] = useState<"active" | "ready" | "not_ready" | "archived">("active");
 
   useEffect(() => {
     let active = true;
@@ -42,9 +42,10 @@ export function SandboxesPage({ client }: { client: ManagementClient }) {
 
   const filtered = useMemo(() => items.filter((item) =>
     (backend === "all" || item.backend === backend) &&
-    (category === "all" || (category === "ready" && item.state === "ready") ||
-      (category === "local" && item.backend === "local_workspace") ||
-      (category === "unavailable" && item.state !== "ready")) &&
+    ((category === "active" && item.state !== "destroyed") ||
+      (category === "ready" && item.state === "ready") ||
+      (category === "not_ready" && item.state !== "ready" && item.state !== "destroyed") ||
+      (category === "archived" && item.state === "destroyed")) &&
     `${item.name} ${item.sandboxId} ${item.localRoot}`.toLowerCase().includes(query.toLowerCase()),
   ),[items,backend,category,query]);
   const pagination = usePagination(filtered);
@@ -57,10 +58,10 @@ export function SandboxesPage({ client }: { client: ManagementClient }) {
     <PageToolbar
       tabs={hasSnapshot ?
         <PageTabs label="Sandboxes">
-          <PageTab label="Sandboxes" count={items.length} active={category === "all"} onClick={() => setCategory("all")} />
+          <PageTab label="Active sandboxes" count={items.filter((item) => item.state !== "destroyed").length} active={category === "active"} onClick={() => setCategory("active")} />
           <PageTab label="Ready sandboxes" count={items.filter((item) => item.state === "ready").length} active={category === "ready"} onClick={() => setCategory("ready")} />
-          <PageTab label="Local workspaces" count={items.filter((item) => item.backend === "local_workspace").length} active={category === "local"} onClick={() => setCategory("local")} />
-          <PageTab label="Unavailable sandboxes" count={items.filter((item) => item.state !== "ready").length} active={category === "unavailable"} onClick={() => setCategory("unavailable")} />
+          <PageTab label="Not ready" count={items.filter((item) => item.state !== "ready" && item.state !== "destroyed").length} active={category === "not_ready"} onClick={() => setCategory("not_ready")} />
+          <PageTab label="Archived sandboxes" count={items.filter((item) => item.state === "destroyed").length} active={category === "archived"} onClick={() => setCategory("archived")} />
         </PageTabs> : <span className="text-xs text-muted-foreground">{t("Loading Sandboxes…")}</span>
       }
       filters={
@@ -126,12 +127,13 @@ export function SandboxesPage({ client }: { client: ManagementClient }) {
         ) : (
           <EmptyPanelState>
             <EmptyState
-              title={items.length ? t("No matching sandboxes") : t("No sandboxes")}
-              description={
-                items.length
-                  ? t("Try a different search or filter.")
-                  : t("Create a local Sandbox before binding Workspace tools to it.")
-              }
+              title={category === "active" && items.length > 0 && items.every((item) => item.state === "destroyed")
+                ? t("No active sandboxes")
+                : items.length ? t("No matching sandboxes") : t("No sandboxes")}
+              description={category === "active" && items.length > 0 && items.every((item) => item.state === "destroyed")
+                ? t("Previously destroyed sandboxes remain in the Archived sandboxes view.")
+                : items.length ? t("Try a different search or filter.")
+                  : t("Create a local Sandbox before binding Workspace tools to it.")}
             />
           </EmptyPanelState>
         )}

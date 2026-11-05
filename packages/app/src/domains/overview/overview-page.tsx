@@ -23,6 +23,7 @@ import {
 
 import { formatDateTime, formatNumber, t, tCount } from "../../i18n/i18n";
 import { StatusBadge } from "../../shared/status-badge";
+import { auditPrincipalLabel } from "../../shared/audit-principal";
 import { errorMessage } from "../../shared/errors";
 import { ErrorNotice, InsightBanner } from "../../shared/page";
 import { usePagination } from "../../shared/pagination";
@@ -56,22 +57,6 @@ function indexTools(tools: ToolSummary[]) {
 function toolLabel(toolsById: Record<string, ToolSummary>, toolId: string) {
   const tool = toolsById[toolId];
   return tool?.title || tool?.name || t("Unknown Tool");
-}
-
-function referenceHint(reference: string) {
-  const tail = reference.split(":").at(-1) ?? reference;
-  return tail.length > 10 ? "…" + tail.slice(-8) : tail || "—";
-}
-
-function callerLabel(record: AuditRecord, profiles: Profile[]) {
-  if (record.principalKind === "service" && record.principalRef.startsWith("profile:")) {
-    const profileId = record.principalRef.slice("profile:".length);
-    const profile = profiles.find((item) => item.profileId === profileId);
-    return t("Profile") + " · " + (profile?.displayName || profile?.slug || referenceHint(profileId));
-  }
-  const kind = record.principalKind === "local_user" ? t("Local user") :
-    record.principalKind === "service" ? t("Service") : record.principalKind;
-  return kind + (record.principalRef ? " · " + referenceHint(record.principalRef) : "");
 }
 
 function invocationStatusLabel(status: string) {
@@ -143,6 +128,8 @@ export function OverviewPage({ client }: { client: ManagementClient }) {
     return <div role="status" className="py-12 text-center text-sm text-muted-foreground">{t("Loading")}</div>;
   }
 
+  const recentFailures = data.records.filter((record) => record.status === "failed" || record.status === "denied").length;
+
   return (
     <>
       {!dismissedInsight && data.providers.length === 0 ? (
@@ -176,6 +163,11 @@ export function OverviewPage({ client }: { client: ManagementClient }) {
           <span>{t("Providers")} <strong className="font-semibold text-foreground tabular-nums">{formatNumber(data.providers.length)}</strong></span>
           <span>{t("Profiles")} <strong className="font-semibold text-foreground tabular-nums">{formatNumber(data.profiles.length)}</strong></span>
           <span>{t("Skills")} <strong className="font-semibold text-foreground tabular-nums">{formatNumber(data.skills.length)}</strong></span>
+          {recentFailures > 0 ? (
+            <Link to="/audit?status=attention" className="rounded-md font-medium text-primary-ink hover:underline focus-visible:outline-2 focus-visible:outline-ring">
+              {t("{{count}} failures in recent calls", { count: formatNumber(recentFailures) })}
+            </Link>
+          ) : null}
         </div>
       </section>
 
@@ -200,10 +192,14 @@ export function OverviewPage({ client }: { client: ManagementClient }) {
                   {invocationPagination.items.map((record) => (
                     <TableRow key={record.invocationId}>
                       <TableCell className="max-w-[230px] truncate font-medium" title={toolLabel(data.toolsById, record.toolId)}>
-                        {toolLabel(data.toolsById, record.toolId)}
+                        <Link to={"/audit?q=" + encodeURIComponent(record.invocationId)}
+                          aria-label={t("View invocation") + ": " + toolLabel(data.toolsById, record.toolId) + " · " + formatDateTime(record.finishedAt)}
+                          className="block max-w-full truncate rounded-sm hover:text-primary-ink hover:underline focus-visible:outline-2 focus-visible:outline-ring">
+                          {toolLabel(data.toolsById, record.toolId)}
+                        </Link>
                       </TableCell>
                       <TableCell className="max-w-[220px] truncate" title={record.principalKind + ":" + record.principalRef}>
-                        {callerLabel(record, data.profiles)}
+                        {auditPrincipalLabel(record, data.profiles)}
                       </TableCell>
                       <TableCell>
                         <StatusBadge status={record.status}>{invocationStatusLabel(record.status)}</StatusBadge>

@@ -18,7 +18,7 @@ import {
   SelectValue,
 } from "@mender/ui/components/select";
 
-import { t } from "../../i18n/i18n";
+import { formatNumber, t } from "../../i18n/i18n";
 import { errorMessage } from "../../shared/errors";
 import { ErrorNotice } from "../../shared/page";
 import { DataPanel } from "../../shared/workbench";
@@ -39,6 +39,29 @@ const budgetFields: Array<{
   { key: "maxArgumentBytes", label: "Max argument bytes", min: 1, max: 67_108_864 },
   { key: "maxResultBytes", label: "Max result bytes", min: 1, max: 67_108_864 },
 ];
+
+function budgetDisplayLabel(field: (typeof budgetFields)[number]): string {
+  switch (field.key) {
+    case "maxExecutionTimeoutMs": return t("Execution time limit");
+    case "maxArgumentBytes": return t("Argument size limit");
+    case "maxResultBytes": return t("Result size limit");
+    default: return t(field.label);
+  }
+}
+
+function budgetDisplayValue(key: keyof RuntimeBudget, value: number): string {
+  if (key === "maxExecutionTimeoutMs") {
+    if (value % 60_000 === 0) return t("{{count}} min", { count: formatNumber(value / 60_000) });
+    if (value % 1_000 === 0) return t("{{count}} sec", { count: formatNumber(value / 1_000) });
+    return t("{{count}} ms", { count: formatNumber(value) });
+  }
+  if (key === "maxArgumentBytes" || key === "maxResultBytes") {
+    if (value >= 1_048_576 && value % 1_048_576 === 0) return formatNumber(value / 1_048_576) + " MiB";
+    if (value >= 1_024 && value % 1_024 === 0) return formatNumber(value / 1_024) + " KiB";
+    return formatNumber(value) + " B";
+  }
+  return formatNumber(value);
+}
 
 function budgetDescription(key: keyof RuntimeBudget): string {
   switch (key) {
@@ -223,9 +246,11 @@ export function RuntimePage({ client }: { client: ManagementClient }) {
           <dl className="grid grid-cols-2 gap-x-5 gap-y-0 p-4 sm:grid-cols-4 xl:grid-cols-2 2xl:grid-cols-4">
             {budgetFields.map((field) => (
               <div key={field.key} className="min-w-0 border-b border-border/75 px-1 py-3">
-                <dt className="truncate text-[11px] text-muted-foreground" title={t(field.label)}>{t(field.label)}</dt>
-                <dd className="mt-1.5 truncate text-[17px] font-semibold tabular-nums" title={String(budget?.[field.key] ?? "—")}>
-                  {budget?.[field.key] ?? "—"}
+                <dt className="truncate text-[11px] text-muted-foreground" title={t(field.label)}>{budgetDisplayLabel(field)}</dt>
+                <dd className="mt-1.5 truncate text-[17px] font-semibold tabular-nums"
+                  title={budget === null ? undefined : String(budget[field.key]) +
+                    (field.key === "maxExecutionTimeoutMs" ? " ms" : field.key === "maxArgumentBytes" || field.key === "maxResultBytes" ? " B" : "")}>
+                  {budget === null ? t("Unavailable") : budgetDisplayValue(field.key, budget[field.key])}
                 </dd>
               </div>
             ))}

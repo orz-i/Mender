@@ -238,6 +238,9 @@ describe("Sandbox lifecycle management", () => {
         } as unknown as ManagementClient} />
       </MemoryRouter>,
     );
+    expect(await screen.findByText("暂无当前沙盒")).toBeTruthy();
+    expect(screen.queryByText("已销毁")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /历史沙盒/ }));
     expect(await screen.findByText("已销毁")).toBeTruthy();
     expect(screen.queryByText("后端不可用")).toBeNull();
   });

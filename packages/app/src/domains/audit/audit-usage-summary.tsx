@@ -8,7 +8,13 @@ type DayUsage = { key: string; count: number; dateLabel: string };
  * Audit API currently provides a bounded latest-record window, not full usage
  * aggregation. Display only the observed sample and label its limits.
  */
-export function AuditUsageSummary({ records }: { records: ReadonlyArray<AuditRecord> }) {
+export function AuditUsageSummary({
+  records,
+  onReviewFailures,
+}: {
+  records: ReadonlyArray<AuditRecord>;
+  onReviewFailures?: () => void;
+}) {
   const usage = useMemo(() => {
     const dated = records.flatMap((record) => {
       const date = new Date(record.finishedAt);
@@ -47,9 +53,17 @@ export function AuditUsageSummary({ records }: { records: ReadonlyArray<AuditRec
     <section data-slot="audit-usage" aria-label={t("Recent invocation sample")} className="mb-5">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-[12px] font-semibold tracking-[0.04em] text-muted-foreground uppercase">{t("Recent invocation sample")}</h2>
-        <p className="text-[11px] text-muted-foreground">
-          {t("Based on up to 100 latest records, not complete historical totals.")}
-        </p>
+        <div className="flex flex-wrap items-center gap-3">
+          <p className="text-[11px] text-muted-foreground">
+            {t("Based on up to 100 latest records, not complete historical totals.")}
+          </p>
+          {usage.other > 0 && onReviewFailures ? (
+            <button type="button" onClick={onReviewFailures}
+              className="rounded-md text-[12px] font-medium text-primary-ink hover:underline focus-visible:outline-2 focus-visible:outline-ring">
+              {t("Review failures")}
+            </button>
+          ) : null}
+        </div>
       </div>
       <div className="grid overflow-hidden rounded-xl border border-border bg-card sm:grid-cols-4">
         {([

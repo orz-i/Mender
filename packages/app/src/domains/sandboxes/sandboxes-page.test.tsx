@@ -70,6 +70,23 @@ describe("SandboxesPage resource rows", () => {
     expect(within(collection).queryByRole("table")).toBeNull();
   });
 
+  it("keeps destroyed sandboxes accessible as history without mixing them into active resources", async () => {
+    const archived: Sandbox = {
+      ...sandboxes[0]!, sandboxId: "sbx_old_03", name: "Old Workspace",
+      state: "destroyed", backendAvailable: false,
+    };
+    mount([...sandboxes, archived]);
+    const collection = await screen.findByRole("list", { name: "Sandbox inventory" });
+    expect(within(collection).queryByRole("link", { name: "Old Workspace" })).toBeNull();
+    expect(within(collection).getByRole("link", { name: "Primary Workspace" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /Archived sandboxes/ }));
+    expect(within(collection).getByRole("link", { name: "Old Workspace" })).toBeTruthy();
+    expect(within(collection).queryByRole("link", { name: "Primary Workspace" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Active sandboxes/ }));
+    expect(within(collection).queryByRole("link", { name: "Old Workspace" })).toBeNull();
+    expect(within(collection).getAllByRole("listitem")).toHaveLength(2);
+  });
+
   it("filters sandboxes by query and category tab", async () => {
     mount();
     expect(await screen.findByText("Primary Workspace")).toBeTruthy();

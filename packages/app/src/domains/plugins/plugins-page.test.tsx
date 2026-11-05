@@ -49,7 +49,10 @@ describe("PluginsPage card density", () => {
       </MemoryRouter>,
     );
 
-    const cardLink = await screen.findByRole("link", { name: "View Example Search" });
+    const configureLink = await screen.findByRole("link", { name: "Configure Example Search" });
+    expect(configureLink.getAttribute("href")).toContain("/tools?create=1");
+    expect(within(configureLink).getByText("Example Search")).toBeTruthy();
+    const cardLink = screen.getByRole("link", { name: "View Example Search" });
     expect(screen.queryByRole("navigation", { name: "Plugin Marketplace pagination" })).toBeNull();
     expect(screen.getByRole("region", { name: "Provider plugin" })).toBeTruthy();
     expect(within(cardLink).queryByText("Provider plugin")).toBeNull();
@@ -61,6 +64,31 @@ describe("PluginsPage card density", () => {
     expect(await screen.findByText("tool.search")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Overview" }));
     expect(await screen.findByText("2.1.0")).toBeTruthy();
+  });
+});
+
+describe("Marketplace direct setup path", () => {
+  it("opens a vetted provider creation route directly while preserving optional package details", async () => {
+    const client = {
+      listPluginCatalogue: vi.fn().mockResolvedValue({ plugins: [{
+        key: "io.mender.provider.mcp@builtin", pluginId: "io.mender.provider.mcp",
+        extensionId: "main", kind: "provider.tools", marketplaceAction: "create.provider",
+        displayName: "MCP", description: "Model Context Protocol provider", packageVersion: "1.0.0",
+        sourceKind: "builtin", status: "enabled", enabled: true, capabilities: ["mcp.tools"],
+        usageCount: 0, configVersion: 1, protocolVersion: 1,
+      }] }),
+      listIntegrationOfferings: vi.fn().mockResolvedValue({ integrations: [] }),
+    } as unknown as ManagementClient;
+    render(<MemoryRouter initialEntries={["/plugins"]}><Routes>
+      <Route path="/plugins" element={<PluginsPage client={client} />} />
+      <Route path="/tools" element={<p>Provider setup destination</p>} />
+    </Routes></MemoryRouter>);
+    const create = await screen.findByRole("link", { name: "Configure MCP" });
+    expect(create.getAttribute("href")).toContain("/tools?create=1");
+    expect(create.getAttribute("href")).toContain("pluginId=io.mender.provider.mcp");
+    expect(screen.getByRole("link", { name: "View MCP" })).toBeTruthy();
+    fireEvent.click(create);
+    expect(screen.getByText("Provider setup destination")).toBeTruthy();
   });
 });
 
@@ -91,11 +119,12 @@ describe("Marketplace host description localization", () => {
       <Route path="/plugins" element={<PluginsPage client={client} />} />
       <Route path="/plugins/:pluginKey" element={<PluginDetailPage client={client} />} />
     </Routes></MemoryRouter>);
-    const link = await screen.findByRole("link", { name: "View MCP" });
-    expect(within(link).getByText(raw)).toBeTruthy();
+    const configure = await screen.findByRole("link", { name: "Configure MCP" });
+    expect(within(configure).getByText(raw)).toBeTruthy();
+    expect(screen.getByRole("link", { name: "View MCP" })).toBeTruthy();
 
     act(() => setLocale("zh-CN"));
-    expect(within(link).getByText("通过 MCP 协议接入外部工具来源")).toBeTruthy();
+    expect(within(configure).getByText("通过 MCP 协议接入外部工具来源")).toBeTruthy();
     const search = screen.getByRole("textbox", { name: "搜索插件" });
     fireEvent.change(search, { target: { value: "接入外部工具来源" } });
     expect(screen.getByRole("link", { name: "查看 MCP" })).toBeTruthy();
@@ -125,8 +154,9 @@ describe("Marketplace host description localization", () => {
     } as unknown as ManagementClient;
     setLocale("zh-CN");
     render(<MemoryRouter><PluginsPage client={client} /></MemoryRouter>);
-    const card = await screen.findByRole("link", { name: "查看 AnySearch" });
+    const card = await screen.findByRole("link", { name: "配置 AnySearch" });
     expect(within(card).getByText("通过 AnySearch 托管的 MCP 服务搜索网页并获取页面内容")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "查看 AnySearch" })).toBeTruthy();
     expect(offering.description).toBe("Search the web and retrieve pages through AnySearch's hosted MCP service.");
   });
 });

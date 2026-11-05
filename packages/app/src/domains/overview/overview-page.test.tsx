@@ -108,6 +108,19 @@ describe("Overview readable invocation preview", () => {
     expect(screen.queryByText("service:profile:" + testProfile.profileId)).toBeNull();
   });
 
+  it("exposes a direct Audit record destination and an explicit recent-failure workflow", async () => {
+    setLocale("en");
+    const failure = { ...overviewAuditRecord, invocationId: "inv_failed_path", status: "failed" as const };
+    mountOverviewWithRecords([overviewAuditRecord, failure]);
+    const deepLinks = await screen.findAllByRole("link", { name: /View invocation/ });
+    expect(deepLinks).toHaveLength(2);
+    const failedLink = deepLinks.find((link) => link.getAttribute("href") === "/audit?q=inv_failed_path");
+    expect(failedLink).toBeTruthy();
+    expect(failedLink?.textContent).toContain("Read Agent task result");
+    const attention = screen.getByRole("link", { name: "1 failures in recent calls" });
+    expect(attention.getAttribute("href")).toBe("/audit?status=attention");
+  });
+
   it("does not guess unknown identities and keeps distinct short hints and original values", async () => {
     setLocale("en");
     mountOverviewWithRecords([

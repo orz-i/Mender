@@ -33,6 +33,19 @@ beforeEach(()=>{resetLocaleForTesting();setLocale("en");});
 afterEach(()=>{cleanup();resetLocaleForTesting();});
 
 describe("Runtime budget dialog form",()=>{
+ it("shows human-scale limits without rounding or changing the exact editor values", async () => {
+  render(<RuntimePage client={makeClient()}/>);
+  const heading = await screen.findByText("Runtime budget");
+  const panel = heading.closest('[data-slot="card"]') as HTMLElement;
+  expect(within(panel).getByText("Execution time limit")).toBeTruthy();
+  expect(within(panel).getByText("2 min")).toBeTruthy();
+  expect(within(panel).getByText("Argument size limit")).toBeTruthy();
+  expect(within(panel).getAllByText("1 MiB")).toHaveLength(2);
+  fireEvent.click(within(panel).getByRole("button", {name:"Edit"}));
+  const dialog = screen.getByRole("dialog", {name:"Runtime budget"});
+  expect(within(dialog).getByRole<HTMLInputElement>("spinbutton", {name:"Max timeout (ms)"}).value).toBe("120000");
+  expect(within(dialog).getByRole<HTMLInputElement>("spinbutton", {name:"Max argument bytes"}).value).toBe("1048576");
+ });
  it("keeps the footer pinned and explicitly shows valid limits without eight permanent explanations",async()=>{
   render(<RuntimePage client={makeClient()}/>);
   const dialog=await openBudget();

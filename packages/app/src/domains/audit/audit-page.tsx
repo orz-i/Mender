@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { EyeIcon, RefreshCwIcon } from "lucide-react";
+import { useSearchParams } from "react-router";
 
 import type {
   AuditRecord,
   ManagementClient,
+  Profile,
   ProviderActivationAuditRecord,
   ToolSummary,
 } from "@mender/sdk";
@@ -19,6 +21,7 @@ import {
 
 import { formatDateTime, t } from "../../i18n/i18n";
 import { errorMessage } from "../../shared/errors";
+import { auditPrincipalLabel, auditPrincipalRaw } from "../../shared/audit-principal";
 import { FocusSwitch } from "../../shared/focus-switch";
 import { PageToolbar, ResultPanel } from "../../shared/page-toolbar";
 import { IconButton } from "../../shared/icon-button";
@@ -39,7 +42,7 @@ import {
 } from "./audit-detail-dialog";
 
 type AuditTopic = "invocations" | "activations";
-type StatusFilter = "all" | "completed" | "failed" | "denied";
+type StatusFilter = "all" | "attention" | "completed" | "failed" | "denied";
 
 type AuditPreview = {
   key: string;
@@ -47,6 +50,7 @@ type AuditPreview = {
   target: string;
   targetId: string;
   principal: string;
+  principalRaw: string;
   status: string;
   policy: string;
   errorClass: string;
@@ -68,8 +72,27 @@ function toolLabel(toolsById: Record<string, ToolSummary>, toolId: string) {
   return tool?.title || tool?.name || t("Unknown Tool");
 }
 
-function principalLabel(kind: string, reference: string) {
-  return reference ? kind + ":" + reference : kind || "—";
+async function listAuditProfiles(client: ManagementClient): Promise<Profile[]> {
+  // Profile display metadata is optional; audit history must still work if it
+  // cannot be read. Never downgrade a successful audit to a fake empty state.
+  if (typeof client.listProfiles !== "function") return [];
+  try {
+    return (await client.listProfiles()).profiles;
+  } catch {
+    return [];
+  }
+}
+
+function auditErrorClassLabel(value: string): string {
+  switch (value.toLowerCase()) {
+    case "execution": return t("Execution error");
+    case "policy": return t("Policy error");
+    case "provider": return t("Provider error");
+    case "transport": return t("Connection error");
+    case "credential": return t("Credential error");
+    case "timeout": return t("Timed out");
+    default: return value;
+  }
 }
 
 function policyLabel(value: string) {
@@ -81,7 +104,11 @@ function policyLabel(value: string) {
 }
 
 function matchesPreview(row: AuditPreview, search: string, status: StatusFilter) {
-  if (status !== "all" && row.status.toLowerCase() !== status) return false;
+  if (status === "attention") {
+    if (row.status !== "failed" && row.status !== "denied") return false;
+  } else if (status !== "all" && row.status.toLowerCase() !== status) {
+    return false;
+  }
   if (!search) return true;
   const localizedStatus = row.status === "completed"
     ? t("Completed")
@@ -89,14 +116,17 @@ function matchesPreview(row: AuditPreview, search: string, status: StatusFilter)
       ? t("Failed")
       : row.status === "denied" ? t("Denied") : row.status;
   return [
+    row.key,
     row.target,
     row.targetId,
     row.principal,
+    row.principalRaw,
     row.status,
     localizedStatus,
     row.policy,
     policyLabel(row.policy),
     row.errorClass,
+    auditErrorClassLabel(row.errorClass),
     formatDateTime(row.finishedAt),
   ].some((value) => value.toLocaleLowerCase().includes(search));
 }
@@ -105,9 +135,13 @@ export function AuditPage({ client }: { client: ManagementClient }) {
   const [records, setRecords] = useState<AuditRecord[]>([]);
   const [activationRecords, setActivationRecords] = useState<ProviderActivationAuditRecord[]>([]);
   const [toolsById, setToolsById] = useState<Record<string, ToolSummary>>({});
+  const [profiles, setProfiles] = useState<Profile[]>([]);
   const [topic, setTopic] = useState<AuditTopic>("invocations");
-  const [query, setQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const query = searchParams.get("q") ?? "";
+  const requestedStatus = searchParams.get("status");
+  const statusFilter: StatusFilter = requestedStatus === "attention" || requestedStatus === "completed" ||
+    requestedStatus === "failed" || requestedStatus === "denied" ? requestedStatus : "all";
   const [selected, setSelected] = useState<AuditSelection | null>(null);
   const [detailSection, setDetailSection] = useState<AuditDetailSection>("overview");
   const [error, setError] = useState("");
@@ -115,17 +149,19 @@ export function AuditPage({ client }: { client: ManagementClient }) {
   const [loaded, setLoaded] = useState(false);
   const [hasSnapshot, setHasSnapshot] = useState(false);
 
-  const refresh = useCallback(async () => {
+  async function refresh() {
     setBusy(true);
     try {
-      const [invocations, activations, tools] = await Promise.all([
+      const [invocations, activations, tools, availableProfiles] = await Promise.all([
         client.listAudit(100),
         client.listProviderActivationAudit(100),
         browseAuditTools(client),
+        listAuditProfiles(client),
       ]);
       setRecords(invocations.records);
       setActivationRecords(activations.records);
       if (tools !== null) setToolsById(indexTools(tools.tools));
+      setProfiles(availableProfiles);
       setHasSnapshot(true);
       setError("");
     } catch (reason) {
@@ -134,7 +170,7 @@ export function AuditPage({ client }: { client: ManagementClient }) {
       setBusy(false);
       setLoaded(true);
     }
-  }, [client]);
+  }
 
   useEffect(() => {
     let active = true;
@@ -142,12 +178,14 @@ export function AuditPage({ client }: { client: ManagementClient }) {
       client.listAudit(100),
       client.listProviderActivationAudit(100),
       browseAuditTools(client),
+      listAuditProfiles(client),
     ])
-      .then(([invocations, activations, tools]) => {
+      .then(([invocations, activations, tools, availableProfiles]) => {
         if (!active) return;
         setRecords(invocations.records);
         setActivationRecords(activations.records);
         if (tools !== null) setToolsById(indexTools(tools.tools));
+        setProfiles(availableProfiles);
         setHasSnapshot(true);
         setError("");
       })
@@ -166,13 +204,14 @@ export function AuditPage({ client }: { client: ManagementClient }) {
       finishedAt: record.finishedAt,
       target: toolLabel(toolsById, record.toolId),
       targetId: record.toolId,
-      principal: principalLabel(record.principalKind, record.principalRef),
+      principal: auditPrincipalLabel(record, profiles),
+      principalRaw: auditPrincipalRaw(record),
       status: record.status,
       policy: record.policyKind,
       errorClass: record.errorClass,
       selection: { kind: "invocations", record },
     })),
-    [records, toolsById],
+    [records, toolsById, profiles],
   );
   const activationRows = useMemo<AuditPreview[]>(
     () => activationRecords.map((record) => ({
@@ -180,13 +219,14 @@ export function AuditPage({ client }: { client: ManagementClient }) {
       finishedAt: record.finishedAt,
       target: record.providerId,
       targetId: record.providerId,
-      principal: principalLabel(record.principalKind, record.principalRef),
+      principal: auditPrincipalLabel(record, profiles),
+      principalRaw: auditPrincipalRaw(record),
       status: record.status,
       policy: record.policyKind,
       errorClass: record.errorClass,
       selection: { kind: "activations", record },
     })),
-    [activationRecords],
+    [activationRecords, profiles],
   );
 
   const search = query.trim().toLocaleLowerCase();
@@ -209,9 +249,17 @@ export function AuditPage({ client }: { client: ManagementClient }) {
   const activeRecords = topic === "invocations" ? records : activationRecords;
   const panelTitle = topic === "invocations" ? "Invocation history" : "Provider activation history";
 
+  function changeFilters(nextQuery: string, nextStatus: StatusFilter) {
+    const next = new URLSearchParams(searchParams);
+    if (nextQuery) next.set("q", nextQuery);
+    else next.delete("q");
+    if (nextStatus === "all") next.delete("status");
+    else next.set("status", nextStatus);
+    if (next.toString() !== searchParams.toString()) setSearchParams(next, { replace: true });
+  }
+
   function resetFilters() {
-    setQuery("");
-    setStatusFilter("all");
+    changeFilters("", "all");
     invocationPagination.reset();
     activationPagination.reset();
   }
@@ -232,7 +280,10 @@ export function AuditPage({ client }: { client: ManagementClient }) {
 
   return (
     <>
-      {hasSnapshot && topic === "invocations" ? <AuditUsageSummary records={records} /> : null}
+      {hasSnapshot && topic === "invocations" ? <AuditUsageSummary
+        records={records}
+        onReviewFailures={() => { changeFilters("", "attention"); invocationPagination.reset(); }}
+      /> : null}
       <PageToolbar
         tabs={
           <FocusSwitch
@@ -253,7 +304,7 @@ export function AuditPage({ client }: { client: ManagementClient }) {
                 placeholder="Search audit records…"
                 value={query}
                 onChange={(value) => {
-                  setQuery(value);
+                  changeFilters(value, statusFilter);
                   invocationPagination.reset();
                   activationPagination.reset();
                 }}
@@ -263,12 +314,13 @@ export function AuditPage({ client }: { client: ManagementClient }) {
               label="Audit status"
               value={statusFilter}
               onValueChange={(value) => {
-                setStatusFilter(value as StatusFilter);
+                changeFilters(query, value as StatusFilter);
                 invocationPagination.reset();
                 activationPagination.reset();
               }}
               options={[
                 { value: "all", label: "All statuses" },
+                { value: "attention", label: "Needs attention" },
                 { value: "completed", label: "Completed" },
                 { value: "failed", label: "Failed" },
                 { value: "denied", label: "Denied" },
@@ -319,14 +371,14 @@ export function AuditPage({ client }: { client: ManagementClient }) {
                       <span title={row.target} className="block max-w-48 truncate">{row.target}</span>
                     </TableCell>
                     <TableCell className="text-xs max-md:col-start-1 max-md:row-start-2 max-md:block max-md:min-w-0 max-md:p-0">
-                      <span title={row.principal} className="block max-w-48 truncate text-muted-foreground">{row.principal}</span>
+                      <span title={row.principalRaw} className="block max-w-48 truncate text-muted-foreground">{row.principal}</span>
                     </TableCell>
                     <TableCell className="max-md:col-start-2 max-md:row-start-1 max-md:block max-md:p-0">
                       <div className="flex flex-col items-start gap-1 max-md:items-end">
                         <AuditStatusBadge status={row.status} />
                         {row.status !== "completed" && row.errorClass ? (
                           <span className="max-w-32 truncate text-xs text-muted-foreground" title={row.errorClass}>
-                            {row.errorClass}
+                            {auditErrorClassLabel(row.errorClass)}
                           </span>
                         ) : null}
                       </div>

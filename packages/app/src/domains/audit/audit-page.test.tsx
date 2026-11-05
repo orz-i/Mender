@@ -54,12 +54,13 @@ function mount(
   invocations: AuditRecord[] = [invocation],
   activations: ProviderActivationAuditRecord[] = [activation],
   overrides: Partial<ManagementClient> = {},
+  initialPath = "/audit",
 ) {
   const listAudit = vi.fn().mockResolvedValue({ records: invocations });
   const listProviderActivationAudit = vi.fn().mockResolvedValue({ records: activations });
   const client = { listAudit, listProviderActivationAudit, ...overrides } as unknown as ManagementClient;
   render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[initialPath]}>
       <TooltipProvider>
         <AuditPage client={client} />
       </TooltipProvider>
@@ -136,6 +137,77 @@ describe("Audit workbench", () => {
       expect(within(screen.getByRole("table")).getByText("Failed")).toBeTruthy();
       expect(within(screen.getByRole("table")).queryByText("Completed")).toBeNull();
     });
+  });
+
+  it("resolves actual Profile callers while retaining raw ID search and one-click failure review", async () => {
+    const profileId = "prof_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const failed: AuditRecord = {
+      ...invocation, invocationId: "inv_failed", status: "failed", errorClass: "execution",
+      principalKind: "service", principalRef: "profile:" + profileId,
+    };
+    const completed: AuditRecord = { ...invocation, invocationId: "inv_other" };
+    mount([failed, completed], [], {
+      listProfiles: vi.fn().mockResolvedValue({ profiles: [{ profileId, displayName: "Work tools", slug: "work", tools: [] }] }),
+    });
+    const table = await screen.findByRole("table", { name: "Invocation history" });
+    expect(await within(table).findByText("Profile · Work tools")).toBeTruthy();
+    expect(within(table).getByText("Execution error")).toBeTruthy();
+    expect(within(table).queryByText("service:profile:" + profileId)).toBeNull();
+    fireEvent.change(screen.getByRole("textbox", { name: "Search audit records" }), { target: { value: profileId } });
+    expect(within(table).getByText("Failed")).toBeTruthy();
+    expect(within(table).queryByText("Completed")).toBeNull();
+    fireEvent.change(screen.getByRole("textbox", { name: "Search audit records" }), { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: "Review failures" }));
+    expect(within(table).getByText("Failed")).toBeTruthy();
+    expect(within(table).queryByText("Completed")).toBeNull();
+  });
+
+  it("keeps audit usable when optional Profile metadata lookup fails", async () => {
+    const id = "prof_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    mount([{ ...invocation, principalKind: "service", principalRef: "profile:" + id }], [], {
+      listProfiles: vi.fn().mockRejectedValue(new Error("No permission to inspect Profiles")),
+    });
+    const table = await screen.findByRole("table", { name: "Invocation history" });
+    expect(within(table).getByText("Profile · …aaaaaaaa")).toBeTruthy();
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("accepts a direct Audit invocation ID URL and filters down to the exact record", async () => {
+    const records = [
+      { ...invocation, invocationId: "inv_expected", toolId: "search_one" },
+      { ...invocation, invocationId: "inv_other", toolId: "search_two" },
+    ];
+    mount(records, [], {}, "/audit?q=inv_expected");
+    const table = await screen.findByRole("table", { name: "Invocation history" });
+    expect(screen.getByRole<HTMLInputElement>("textbox", { name: "Search audit records" }).value).toBe("inv_expected");
+    expect(within(table).getByText("Unknown Tool")).toBeTruthy();
+    expect(within(table).getAllByRole("row")).toHaveLength(2);
+    fireEvent.change(screen.getByRole("textbox", { name: "Search audit records" }), {
+      target: { value: "inv_other" },
+    });
+    expect(within(table).getAllByRole("row")).toHaveLength(2);
+    expect(screen.getByRole<HTMLInputElement>("textbox", { name: "Search audit records" }).value).toBe("inv_other");
+  });
+
+  it("honors direct links to attention status and keeps explicit failed-only filtering", async () => {
+    const records = [
+      { ...invocation, invocationId: "inv_done" },
+      { ...invocation, invocationId: "inv_failed", status: "failed" as const, errorClass: "execution" },
+      { ...invocation, invocationId: "inv_denied", status: "denied" as const },
+    ];
+    mount(records, [], {}, "/audit?status=attention");
+    const table = await screen.findByRole("table", { name: "Invocation history" });
+    expect(within(table).getAllByRole("row")).toHaveLength(3);
+    expect(within(table).queryByText("Completed")).toBeNull();
+    expect(within(table).getByText("Failed")).toBeTruthy();
+    expect(within(table).getByText("Denied")).toBeTruthy();
+    fireEvent.click(screen.getByRole("combobox", { name: "Audit status" }));
+    const failed = await screen.findByRole("option", { name: "Failed" });
+    fireEvent.pointerDown(failed, { pointerId: 1, pointerType: "mouse", button: 0, isPrimary: true });
+    fireEvent.pointerUp(failed, { pointerId: 1, pointerType: "mouse", button: 0, isPrimary: true });
+    fireEvent.click(failed);
+    expect(within(table).queryByText("Denied")).toBeNull();
+    expect(within(table).getByText("Failed")).toBeTruthy();
   });
 
   it("searches the localized Chinese status shown in the audit preview", async () => {

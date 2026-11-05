@@ -246,6 +246,36 @@ describe("Agents focused management",()=>{
       isolation:"restricted_host",defaultModel:"",
     }));
   });
+  it("summarizes task outcomes before technical metadata and opens unknown result without retrying", async () => {
+    const unknown: AgentTask = {
+      ...task, taskId: "atask_unknown_001", title: "Check remote migration",
+      status: "unknown", result: "", createdAt: "2026-10-11T13:00:00Z",
+    };
+    const failed: AgentTask = {
+      ...task, taskId: "atask_failed_002", title: "Audit provider connection",
+      status: "failed", result: "", createdAt: "2026-10-11T12:00:00Z",
+    };
+    const getAgentTask = vi.fn().mockResolvedValue(unknown);
+    const client = show("/agents/" + agent.agentId, {
+      listAgentTasks: vi.fn().mockResolvedValue({ tasks: [task, failed, unknown] }),
+      listAgentGrants: vi.fn().mockResolvedValue({ profileIds: ["prof_work"] }),
+      getAgentTask,
+    });
+    const summary = await screen.findByText("Recent tasks");
+    const metrics = document.querySelector('[data-slot="agent-task-summary"]') as HTMLElement;
+    expect(metrics).toBeTruthy();
+    expect(within(metrics).getByText("Needs attention").parentElement?.textContent).toContain("2");
+    expect(within(metrics).getByText("Profile access").parentElement?.textContent).toContain("1");
+    expect(screen.getByText("2 task results need review")).toBeTruthy();
+    expect(screen.getByText("Unknown outcomes require checking actual deliverables; never retry automatically.")).toBeTruthy();
+    expect(summary).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "View task: Check remote migration" }));
+    expect(await screen.findByRole("dialog", { name: "Agent task result" })).toBeTruthy();
+    expect(screen.getByText(/Unknown does not mean the task succeeded or failed/)).toBeTruthy();
+    expect(getAgentTask).toHaveBeenCalledWith(unknown.taskId);
+    expect(client.ensureAgentTools).not.toHaveBeenCalled();
+  });
+
   it("selects ACP model and reasoning effort together without duplicating Agent",async()=>{
     const inspectAgentModels=vi.fn().mockResolvedValue({current:"fixture-one",
       models:[{id:"fixture-one",name:"Fixture One"},{id:"fixture-two",name:"Fixture Two"}],

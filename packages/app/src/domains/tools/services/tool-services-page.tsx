@@ -79,9 +79,9 @@ export function ToolsPage({ client }: { client: ManagementClient }) {
     remainingSearchParams.delete("offeringId");
     const requested = searchParams.get("create") === "1";
     const origin = (location.state as { marketplaceReturnTo?: unknown } | null)?.marketplaceReturnTo;
-    // Restore only an in-app plugin detail route, never a caller-supplied URL.
+    // Restore only an in-app plugin catalog/detail route, never an arbitrary URL.
     const marketplaceReturnTo = requested && typeof origin === "string" &&
-      /^\/plugins\/[^/?#]+(?:\?view=(?:discover|installed))?$/.test(origin) ? origin : null;
+      /^\/plugins(?:\/[^/?#]+)?(?:\?view=(?:discover|installed))?$/.test(origin) ? origin : null;
     return {
       requested,
       marketplaceReturnTo,

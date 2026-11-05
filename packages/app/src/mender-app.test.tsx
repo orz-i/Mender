@@ -145,6 +145,49 @@ describe("MenderApp Magpie-inspired native workspace", () => {
     expect(screen.getByRole("heading", { name: "Overview" })).toBeTruthy();
   });
 
+  it("goes from actual overview failures to filtered audit and exact invocation results", async () => {
+    const base = {
+      toolId: "tool_search", providerId: "prov_search", principalKind: "service",
+      principalRef: "profile:prof_test", startedAt: "2026-11-05T08:00:00Z",
+      finishedAt: "2026-11-05T08:00:01Z", policyKind: "allow",
+      policyReason: "", approval: "not_required", resultKind: "complete",
+      errorClass: "", errorSummary: "", origin: "mcp", scopeKind: "profile",
+      scopeReference: "prof_test", outcomeKind: "complete", rejectionCode: "",
+      failureSource: "", failureCode: "",
+    };
+    const client = {
+      ...overviewClient(),
+      listAudit: vi.fn().mockResolvedValue({ records: [
+        { ...base, invocationId: "inv_failure", status: "failed", errorClass: "execution" },
+        { ...base, invocationId: "inv_success", status: "completed" },
+      ] }),
+      listProviderActivationAudit: vi.fn().mockResolvedValue({ records: [] }),
+      listProfiles: vi.fn().mockResolvedValue({ profiles: [{
+        profileId: "prof_test", slug: "work", displayName: "Work Tools", tools: [],
+      }] }),
+      browseTools: vi.fn().mockResolvedValue({ tools: [{
+        toolId: "tool_search", title: "Search", name: "search",
+      }] }),
+    } as unknown as ManagementClient;
+    mount(client);
+    const attention = await screen.findByRole("link", { name: "1 failures in recent calls" });
+    fireEvent.click(attention);
+    const table = await screen.findByRole("table", { name: "Invocation history" });
+    expect(within(table).getByText("Failed")).toBeTruthy();
+    expect(within(table).queryByText("Completed")).toBeNull();
+    expect(within(table).getAllByRole("row")).toHaveLength(2);
+    fireEvent.click(screen.getByRole("link", { name: "Overview" }));
+    const deepLinks = await screen.findAllByRole("link", {
+      name: /View invocation: Search/,
+    });
+    const failedLink = deepLinks.find((link) => link.getAttribute("href") === "/audit?q=inv_failure");
+    expect(failedLink).toBeTruthy();
+    fireEvent.click(failedLink!);
+    expect(await screen.findByRole("table", { name: "Invocation history" })).toBeTruthy();
+    expect(screen.getByRole<HTMLInputElement>("textbox", { name: "Search audit records" }).value).toBe("inv_failure");
+    expect(within(screen.getByRole("table", { name: "Invocation history" })).getAllByRole("row")).toHaveLength(2);
+  });
+
   it("renders real empty overview resources and activity without fake metrics", async () => {
     mount();
     expect(await screen.findByText("Get started with tool providers")).toBeTruthy();
