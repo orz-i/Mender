@@ -13,9 +13,16 @@ describe("getPageTrail", () => {
 
   it("names create destinations and decodes exact plugin identifiers", () => {
     expect(getPageTrail("/agents/new", { to: "/agents", label: "Agents" }).at(-1)?.label)
-      .toBe("Add agent");
+      .toBe("Configure agent");
     expect(getPageTrail("/plugins/io.mender.provider.mcp%40builtin", { to: "/plugins", label: "Plugin Marketplace" }).at(-1)?.label)
       .toBe("io.mender.provider.mcp@builtin");
+  });
+
+  it("keeps Agent backend selection as one semantic destination", () => {
+    expect(getPageTrail("/agents/backend/antigravity", { to: "/agents", label: "Agents" })).toEqual([
+      { to: "/agents", label: "Agents" },
+      { to: "/agents/backend/antigravity", label: "Agent configuration" },
+    ]);
   });
 
   it("treats malformed encoded identifiers as safe text rather than throwing", () => {

@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import type { Agent, AgentTools, AgentTask, ManagementClient } from "@mender/sdk";
+import type { Agent, AgentTools, AgentTask, ManagementClient, PluginCatalogueEntry } from "@mender/sdk";
 import { MemoryRouter, Route, Routes, useNavigate } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resetLocaleForTesting, setLocale } from "../../i18n/i18n";
 import { AgentsPage } from "./agents-page";
+import { AgentBackendPage } from "./agent-backend-page";
+import { agentBackendDetails, agentBackendOptions } from "./agent-backends";
 import { AgentCreatePage } from "./agent-create-page";
 import { AgentDetailPage } from "./agent-detail-page";
 
@@ -26,6 +28,22 @@ const suite:AgentTools={suiteId:"agent.delegation",status:"ready",
     toolId:"tool_"+String(i+1).padStart(32,"0"),sourceKey:"agent."+name,name,title:name,
   })),
 };
+const presetPlugins = agentBackendOptions.map((backend): PluginCatalogueEntry => ({
+  key: agentBackendDetails[backend].pluginId + "@builtin",
+  pluginId: agentBackendDetails[backend].pluginId,
+  extensionId: "main",
+  kind: "agent.backend",
+  marketplaceAction: "create.agent",
+  displayName: agentBackendDetails[backend].name,
+  description: "Native Agent backend",
+  packageVersion: "1.0.0",
+  sourceKind: "builtin",
+  status: "enabled",
+  enabled: true,
+  capabilities: ["tasks"],
+  usageCount: 0,
+}));
+
 beforeEach(()=>{resetLocaleForTesting();setLocale("en");});
 afterEach(()=>{cleanup();resetLocaleForTesting();});
 function TestPluginRouteSwitch(){
@@ -39,6 +57,7 @@ function TestPluginRouteSwitch(){
 function show(path:string,overrides:Partial<ManagementClient>={}){
   const client:Partial<ManagementClient>={
     listAgents:vi.fn().mockResolvedValue({agents:[agent]}),
+    listPluginCatalogue:vi.fn().mockResolvedValue({plugins:presetPlugins}),
     getAgent:vi.fn().mockResolvedValue(agent),
     getAgentTools:vi.fn().mockResolvedValue(suite),
     ensureAgentTools:vi.fn().mockResolvedValue(suite),
@@ -58,6 +77,7 @@ function show(path:string,overrides:Partial<ManagementClient>={}){
   render(<MemoryRouter initialEntries={[path]}><Routes>
     <Route path="/agents" element={<AgentsPage client={client as ManagementClient}/>}/>
     <Route path="/agents/new" element={<AgentCreatePage client={client as ManagementClient}/>}/>
+    <Route path="/agents/backend/:backend" element={<AgentBackendPage client={client as ManagementClient}/>}/>
     <Route path="/agents/:agentId" element={<AgentDetailPage client={client as ManagementClient}/>}/>
     <Route path="/tools" element={<div>Provider creation target</div>}/>
     <Route path="/plugins" element={<div>Plugin catalogue</div>}/>
@@ -65,92 +85,110 @@ function show(path:string,overrides:Partial<ManagementClient>={}){
   return client;
 }
 describe("Agents focused management",()=>{
-  it("shortens repeated workspace paths in the inventory without losing full paths or search", async () => {
+  it("shows all four preset backends even without configured Agents, with no filters, search, or Add action", async () => {
+    show("/agents", { listAgents: vi.fn().mockResolvedValue({ agents: [] }) });
+    const catalog = await screen.findByRole("list", { name: "Available Agent backends" });
+    expect(within(catalog).getAllByRole("listitem")).toHaveLength(4);
+    for (const name of ["Codex", "Grok", "OpenCode", "Antigravity"]) {
+      expect(within(catalog).getByRole("link", { name: "Configure " + name })).toBeTruthy();
+    }
+    expect(within(catalog).getAllByText("Ready to configure")).toHaveLength(4);
+    expect(screen.queryByRole("textbox", { name: "Search agents" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Add agent" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Available agents/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Unavailable agents/ })).toBeNull();
+  });
+
+  it("opens pinned configuration from an unconfigured preset without generic backend selection", async () => {
+    show("/agents", { listAgents: vi.fn().mockResolvedValue({ agents: [] }) });
+    const destination = await screen.findByRole("link", { name: "Configure OpenCode" });
+    expect(destination.getAttribute("href")).toBe(
+      "/agents/new?pluginId=io.mender.agent.opencode&from=agents",
+    );
+    fireEvent.click(destination);
+    expect(await screen.findByRole("textbox", { name: "Agent name" })).toBeTruthy();
+    expect(screen.getAllByText("Configure agent").length).toBeGreaterThan(0);
+    expect(screen.queryByRole("button", { name: /Codex/ })).toBeNull();
+    fireEvent.click(screen.getAllByRole("button", { name: "Back" })[0]!);
+    expect(await screen.findByRole("list", { name: "Available Agent backends" })).toBeTruthy();
+  });
+
+  it("opens the exact existing Agent instance when a preset has one configured resource", async () => {
+    const opencode = { ...agent, agentId: "agent_opencode", name: "OpenCode Workspace",
+      backend: "opencode" as const, pluginId: "io.mender.agent.opencode", backendAvailable: true };
+    const getAgent = vi.fn().mockResolvedValue(opencode);
+    show("/agents", {
+      listAgents: vi.fn().mockResolvedValue({ agents: [opencode] }), getAgent,
+    });
+    const card = await screen.findByRole("link", { name: "Configure OpenCode" });
+    expect(card.getAttribute("href")).toBe("/agents/agent_opencode?view=configuration");
+    expect(within(card).getByText("Configured · CLI detected")).toBeTruthy();
+    expect(within(card).getByText("1 configured workspaces")).toBeTruthy();
+    fireEvent.click(card);
+    expect((await screen.findByRole("button", { name: "Configuration" })).getAttribute("aria-pressed")).toBe("true");
+    expect(await screen.findByText("OpenCode Workspace")).toBeTruthy();
+    expect(getAgent).toHaveBeenCalledWith(opencode.agentId);
+  });
+
+  it("does not silently choose one workspace when a preset has multiple configurations", async () => {
     const mac = { ...agent, agentId: "agent_mac", name: "Mac Agent",
       workspaceRoot: "/Users/mini/Coding/Mender", backendAvailable: true };
     const win = { ...agent, agentId: "agent_win", name: "Windows Agent",
       workspaceRoot: "C:\\Users\\mini\\Projects\\Mender", backendAvailable: true };
+    const getAgent = vi.fn();
     show("/agents", {
-      listAgents: vi.fn().mockResolvedValue({ agents: [mac, win] }),
-      getAgent: vi.fn().mockImplementation((id: string) =>
-        Promise.resolve([mac, win].find((item) => item.agentId === id))),
+      listAgents: vi.fn().mockResolvedValue({ agents: [mac, win] }), getAgent,
     });
-    const macRow = (await screen.findByRole("link", { name: "Mac Agent" })).closest('[role="listitem"]') as HTMLElement;
-    const macCell = within(macRow).getByLabelText("Workspace: /Users/mini/Coding/Mender");
-    expect(within(macCell).getByText("…/Coding/Mender")).toBeTruthy();
-    expect(macCell.getAttribute("title")).toBe("/Users/mini/Coding/Mender");
-    expect(within(macRow).queryByText("/Users/mini/Coding/Mender")).toBeNull();
-
-    const winRow = screen.getByRole("link", { name: "Windows Agent" }).closest('[role="listitem"]') as HTMLElement;
-    const winCell = within(winRow).getByLabelText(/Workspace: C:/);
-    expect(within(winCell).getByText("…/Projects/Mender")).toBeTruthy();
-    expect(winCell.getAttribute("title")).toBe(win.workspaceRoot);
-    fireEvent.change(screen.getByRole("textbox", { name: "Search agents" }), {
-      target: { value: "/Users/mini/Coding/Mender" },
-    });
-    expect(screen.getByRole("link", { name: "Mac Agent" })).toBeTruthy();
-    expect(screen.queryByRole("link", { name: "Windows Agent" })).toBeNull();
-
-    fireEvent.click(screen.getByRole("link", { name: "Mac Agent" }));
-    expect(await screen.findByText("/Users/mini/Coding/Mender")).toBeTruthy();
+    const card = await screen.findByRole("link", { name: "Configure Codex" });
+    expect(card.getAttribute("href")).toBe("/agents/backend/codex");
+    expect(within(card).getByText("2 configured workspaces")).toBeTruthy();
+    fireEvent.click(card);
+    const workspaces = await screen.findByRole("region", { name: "Configured Agent workspaces" });
+    expect(within(workspaces).getByRole("link", { name: /Mac Agent/ })).toBeTruthy();
+    expect(within(workspaces).getByRole("link", { name: /Windows Agent/ })).toBeTruthy();
+    expect(getAgent).not.toHaveBeenCalled();
   });
 
-  it("does not manufacture path parents for root or short workspace values", async () => {
-    const root = { ...agent, agentId: "agent_root", name: "Root Agent", workspaceRoot: "/" };
-    const short = { ...agent, agentId: "agent_short", name: "Short Agent", workspaceRoot: "src" };
-    show("/agents", { listAgents: vi.fn().mockResolvedValue({ agents: [root, short] }) });
-    expect(await screen.findByRole("link", { name: "Root Agent" })).toBeTruthy();
-    expect(screen.getByLabelText("Workspace: /").textContent).toContain("/");
-    expect(screen.getByLabelText("Workspace: src").textContent).toContain("src");
-  });
-  it("lists previews and does not show create forms on the inventory",async()=>{
-    show("/agents");
-    expect(await screen.findByText("Code Reviewer")).toBeTruthy();
-    expect(screen.getByText("CLI missing")).toBeTruthy();
-    expect(screen.queryByRole("textbox",{name:"Agent name"})).toBeNull();
-    fireEvent.click(screen.getByRole("button",{name:"Add agent"}));
-    expect(await screen.findByRole("button",{name:"Help for Select backend"})).toBeTruthy();
-    fireEvent.click(screen.getByRole("button",{name:"Help for Select backend"}));
-    expect(await screen.findByText("Choose an installed Agent CLI backend. No Agent process starts during setup.")).toBeTruthy();
-  });
-  it("shows each backend's actual identity in inventory and details",async()=>{
-    const opencode={...agent,agentId:"agent_00000000000000000000000000000200",
-      name:"OpenCode Instance",backend:"opencode" as const,pluginId:"io.mender.agent.opencode"};
-    const grok={...agent,agentId:"agent_00000000000000000000000000000201",
-      name:"Grok Instance",backend:"grok" as const,pluginId:"io.mender.agent.grok"};
-    const codex={...agent,agentId:"agent_00000000000000000000000000000202",
-      name:"Codex Instance",backend:"codex" as const,pluginId:"io.mender.agent.codex"};
-    show("/agents",{
-      listAgents:vi.fn().mockResolvedValue({agents:[opencode,grok,codex]}),
-      getAgent:vi.fn().mockImplementation((id:string)=>Promise.resolve([opencode,grok,codex].find(a=>a.agentId===id))),
+  it("keeps unavailable presets visible with actionable details rather than a fake create flow", async () => {
+    show("/agents", {
+      listAgents: vi.fn().mockResolvedValue({ agents: [] }),
+      listPluginCatalogue: vi.fn().mockResolvedValue({ plugins: presetPlugins.map((plugin) =>
+        plugin.pluginId === "io.mender.agent.codex"
+          ? { ...plugin, status: "unavailable", enabled: false, issue: "codex-acp adapter not installed" }
+          : plugin) }),
     });
-    for(const [fixture,label] of [[opencode,"OpenCode"],[grok,"Grok"],[codex,"Codex"]] as const){
-      const row=(await screen.findByRole("link",{name:fixture.name})).closest('[role="listitem"]') as HTMLElement;
-      expect(within(row).getByText(label)).toBeTruthy();
-    }
-    const openCodeRow=screen.getByRole("link",{name:"OpenCode Instance"}).closest('[role="listitem"]') as HTMLElement;
-    fireEvent.click(within(openCodeRow).getByRole("link",{name:"OpenCode Instance"}));
-    expect(await screen.findByText("OpenCode Instance")).toBeTruthy();
-    expect(screen.getByText("OpenCode")).toBeTruthy();
-    expect(screen.queryByText("Grok")).toBeNull();
+    const codex = await screen.findByRole("link", { name: "Configure Codex" });
+    expect(codex.getAttribute("href")).toBe("/agents/backend/codex");
+    expect(within(codex).getByText("Backend unavailable")).toBeTruthy();
+    fireEvent.click(codex);
+    expect(await screen.findByText("codex-acp adapter not installed")).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "Configure workspace" })).toBeNull();
   });
-  it("does not silently default a generic Agent creation to Codex",()=>{
+
+  it("treats an unavailable catalog lookup as unverified, not an empty Agent installation", async () => {
+    show("/agents", {
+      listAgents: vi.fn().mockResolvedValue({ agents: [] }),
+      listPluginCatalogue: vi.fn().mockRejectedValue(new Error("Catalogue offline")),
+    });
+    expect(await screen.findByText(/Catalogue offline/)).toBeTruthy();
+    const catalog = screen.getByRole("list", { name: "Available Agent backends" });
+    expect(within(catalog).getAllByText("Status unverified")).toHaveLength(4);
+    expect(within(catalog).getByRole("link", { name: "Configure Grok" }).getAttribute("href"))
+      .toBe("/agents/backend/grok");
+    expect(within(catalog).getAllByRole("listitem")).toHaveLength(4);
+  });
+
+  it("redirects the generic Agent creation URL to the preset list instead of showing a duplicate selector", async()=>{
     show("/agents/new");
-    const continueButton=screen.getByRole<HTMLButtonElement>("button",{name:"Continue"});
-    expect(continueButton.disabled).toBe(true);
-    const openCodeButton=screen.getByRole("button",{name:/OpenCode/});
-    expect(openCodeButton.getAttribute("aria-pressed")).toBe("false");
-    fireEvent.click(openCodeButton);
-    expect(openCodeButton.getAttribute("aria-pressed")).toBe("true");
-    expect(continueButton.disabled).toBe(false);
-    fireEvent.click(continueButton);
-    expect(screen.getByRole("textbox",{name:"Agent name"})).toBeTruthy();
+    expect(await screen.findByRole("list",{name:"Available Agent backends"})).toBeTruthy();
+    expect(screen.queryByRole("button",{name:"Select backend"})).toBeNull();
+    expect(screen.queryByRole("textbox",{name:"Agent name"})).toBeNull();
   });
   it("refuses unknown plugin IDs instead of falling back to Codex",()=>{
     show("/agents/new?create=1&pluginId=io.mender.provider.mcp");
     expect(screen.getByText("Unknown Agent backend plugin.")).toBeTruthy();
     expect(screen.queryByRole("textbox",{name:"Agent name"})).toBeNull();
-    expect(screen.queryByRole("button",{name:"Create agent"})).toBeNull();
+    expect(screen.queryByRole("button",{name:"Save configuration"})).toBeNull();
   });
   it("pins the marketplace plugin so Back cannot switch to an unrelated Agent",async()=>{
     show("/agents/new?create=1&pluginId=io.mender.agent.opencode");
@@ -192,7 +230,7 @@ describe("Agents focused management",()=>{
     fireEvent.change(screen.getByRole("textbox",{name:"Workspace directory"}),{target:{value:"/tmp/verified-opencode"}});
     fireEvent.click(screen.getByRole("button",{name:"Review"}));
     expect(screen.getByText("OpenCode")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button",{name:"Create agent"}));
+    fireEvent.click(screen.getByRole("button",{name:"Save configuration"}));
     await waitFor(()=>expect(createAgent).toHaveBeenCalledWith({
       name:"Verified OpenCode",backend:"opencode",workspaceRoot:"/tmp/verified-opencode",
       isolation:"restricted_host",defaultModel:"",
@@ -207,10 +245,10 @@ describe("Agents focused management",()=>{
     fireEvent.change(screen.getByRole("textbox",{name:"Workspace directory"}),{target:{value:"/tmp/grok-sandbox"}});
     fireEvent.click(screen.getByRole("button",{name:"Review"}));
     expect(screen.getByText("Creating does not grant Profile access.")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button",{name:"Help for Create agent"}));
-    expect(await screen.findByText(/Creating an Agent prepares its governed tools/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button",{name:"Help for Save configuration"}));
+    expect(await screen.findByText(/Saving an Agent workspace prepares governed tools/)).toBeTruthy();
     expect(client.createAgent).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button",{name:"Create agent"}));
+    fireEvent.click(screen.getByRole("button",{name:"Save configuration"}));
     await waitFor(()=>expect(client.createAgent).toHaveBeenCalledWith({
       name:"Grok Reviewer",backend:"grok",workspaceRoot:"/tmp/grok-sandbox",
       isolation:"restricted_host",defaultModel:"",
@@ -225,7 +263,7 @@ describe("Agents focused management",()=>{
     fireEvent.change(screen.getByRole("textbox",{name:"Workspace directory"}),{target:{value:"/tmp/opencode-fixture"}});
     fireEvent.click(screen.getByRole("button",{name:"Review"}));
     expect(screen.getByText("OpenCode")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button",{name:"Create agent"}));
+    fireEvent.click(screen.getByRole("button",{name:"Save configuration"}));
     await waitFor(()=>expect(client.createAgent).toHaveBeenCalledWith({
       name:"OpenCode Local",backend:"opencode",workspaceRoot:"/tmp/opencode-fixture",
       isolation:"restricted_host",defaultModel:"",
@@ -240,7 +278,7 @@ describe("Agents focused management",()=>{
     fireEvent.change(screen.getByRole("textbox",{name:"Workspace directory"}),{target:{value:"/tmp/agy-fixture"}});
     fireEvent.click(screen.getByRole("button",{name:"Review"}));
     expect(screen.getByText("Antigravity")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button",{name:"Create agent"}));
+    fireEvent.click(screen.getByRole("button",{name:"Save configuration"}));
     await waitFor(()=>expect(client.createAgent).toHaveBeenCalledWith({
       name:"Antigravity Local",backend:"antigravity",workspaceRoot:"/tmp/agy-fixture",
       isolation:"restricted_host",defaultModel:"",
@@ -544,67 +582,21 @@ describe("Agents focused management",()=>{
     expect((await screen.findByRole("note")).textContent).toContain("并不构成原生文件与 Shell 操作的完整记录");
     expect((await screen.findByRole("note")).textContent).toContain("没有任何审批记录不代表未发生任何操作");
   });
-  it("renders mobile-card-ready inventory layout and navigates to agent detail", async () => {
+  it("keeps all backend statuses visible together rather than filtering out unhealthy presets", async () => {
     const readyAgent: Agent = {
-      ...agent,
-      agentId: "agent_00000000000000000000000000000102",
-      name: "Autonomous Coder",
-      backend: "antigravity",
+      ...agent, agentId: "agent_opencode", name: "OpenCode Instance",
+      backend: "opencode", pluginId: "io.mender.agent.opencode",
       backendAvailable: true,
-      workspaceRoot: "/tmp/autonomous-coder-workspace",
-      isolation: "host",
-    };
-    const getAgent = vi.fn().mockImplementation((id: string) =>
-      Promise.resolve(id === readyAgent.agentId ? readyAgent : agent)
-    );
-    show("/agents", {
-      listAgents: vi.fn().mockResolvedValue({ agents: [agent, readyAgent] }),
-      getAgent,
-    });
-
-    const collection = await screen.findByRole("list", { name: "Agent inventory" });
-    const rows = within(collection).getAllByRole("listitem");
-    expect(rows).toHaveLength(2);
-    expect(collection.getAttribute("data-slot")).toBe("agent-collection");
-    // Source identity, runtime availability and workspace are all visible in one row.
-    expect(within(collection).getByRole("link", { name: "Code Reviewer" })).toBeTruthy();
-    expect(within(collection).getByText("CLI missing")).toBeTruthy();
-    expect(within(collection).getByRole("link", { name: "Autonomous Coder" })).toBeTruthy();
-    expect(within(collection).getByText("CLI detected")).toBeTruthy();
-    expect(within(collection).getByText("Codex")).toBeTruthy();
-    expect(within(collection).getByText("Antigravity")).toBeTruthy();
-    expect(within(collection).getByText("/tmp/mender-agent-fixture")).toBeTruthy();
-    expect(within(collection).getByText("/tmp/autonomous-coder-workspace")).toBeTruthy();
-    // A name is the entrypoint; there is no secondary redundant View button.
-    expect(within(collection).queryByRole("button", { name: "View" })).toBeNull();
-    fireEvent.click(within(collection).getByRole("link", { name: "Autonomous Coder" }));
-    expect(await screen.findByText("Autonomous Coder")).toBeTruthy();
-    expect(getAgent).toHaveBeenCalledWith(readyAgent.agentId);
-  });
-  it("filters agents by availability tab in responsive inventory", async () => {
-    const readyAgent: Agent = {
-      ...agent,
-      agentId: "agent_00000000000000000000000000000102",
-      name: "Available Agent",
-      backend: "antigravity",
-      backendAvailable: true,
-      workspaceRoot: "/tmp/available",
-      isolation: "host",
     };
     show("/agents", {
       listAgents: vi.fn().mockResolvedValue({ agents: [agent, readyAgent] }),
     });
-
-    const collection = await screen.findByRole("list", { name: "Agent inventory" });
-    expect(within(collection).getByText("Code Reviewer")).toBeTruthy();
-    expect(within(collection).getByText("Available Agent")).toBeTruthy();
-
-    fireEvent.click(screen.getByRole("button", { name: /Available agents/ }));
-    expect(within(collection).getByText("Available Agent")).toBeTruthy();
-    expect(within(collection).queryByText("Code Reviewer")).toBeNull();
-
-    fireEvent.click(screen.getByRole("button", { name: /Unavailable agents/ }));
-    expect(within(collection).getByText("Code Reviewer")).toBeTruthy();
-    expect(within(collection).queryByText("Available Agent")).toBeNull();
+    const catalog = await screen.findByRole("list", { name: "Available Agent backends" });
+    expect(within(catalog).getAllByRole("listitem")).toHaveLength(4);
+    expect(within(catalog).getByText("Configured · CLI unavailable")).toBeTruthy();
+    expect(within(catalog).getByText("Configured · CLI detected")).toBeTruthy();
+    expect(within(catalog).getAllByText("Ready to configure")).toHaveLength(2);
+    expect(screen.queryByRole("button", { name: /All agents/ })).toBeNull();
+    expect(screen.queryByRole("textbox", { name: "Search agents" })).toBeNull();
   });
 });

@@ -46,6 +46,20 @@ export function agentBackendDescription(backend:AgentBackend):string {
   }
 }
 
+/** Short, human-facing copy for the preset catalog. Technical details live on the configure screen. */
+export function agentBackendSummary(backend: AgentBackend): string {
+  switch (backend) {
+    case "codex": return t("Codex coding tasks via the local ACP adapter.");
+    case "grok": return t("Grok CLI with native ACP task delegation.");
+    case "opencode": return t("OpenCode with native ACP task delegation.");
+    case "antigravity": return t("Antigravity CLI with native tool permissions.");
+    default: {
+      const exhaustive: never = backend;
+      return exhaustive;
+    }
+  }
+}
+
 // A marketplace installation identifies a concrete Agent backend. Unknown or
 // non-Agent plugin identities cannot be silently interpreted as Codex.
 export function agentBackendForPluginId(pluginId:string):AgentBackend|null {

@@ -101,7 +101,7 @@ export function pluginCatalogueToMarketplace(entries:PluginCatalogueEntry[]):Mar
       action==="create.agent"?"/agents/new":action==="create.tunnel"?"/tunnels":null;
     const createAction=enabled && pathname?{
       label:action==="create.provider"?"Add provider":action==="create.sandbox"?"Create sandbox":
-        action==="create.agent"?"Add agent":"Add tunnel",
+        action==="create.agent"?"Configure agent":"Add tunnel",
       href:pathname+"?"+params.toString(),
     }:undefined;
     // An installation is managed by its exact ID, not by a creatable route.

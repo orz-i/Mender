@@ -1,20 +1,19 @@
 import { useState } from "react";
-import { useNavigate, useSearchParams } from "react-router";
+import { Navigate, useNavigate, useSearchParams } from "react-router";
 import type { ManagementClient } from "@mender/sdk";
 import { Button } from "@mender/ui/components/button";
 import { Input } from "@mender/ui/components/input";
 import { t } from "../../i18n/i18n";
 import { errorMessage } from "../../shared/errors";
-import { FormHeading, FormInfo } from "../../shared/form-info";
+import { FormInfo } from "../../shared/form-info";
 import { ErrorNotice } from "../../shared/page";
 import { PageToolbar } from "../../shared/page-toolbar";
 import { DataPanel } from "../../shared/workbench";
 import {
-  agentBackendDescription, agentBackendForPluginId, agentBackendLabel, agentBackendOptions,
-  type AgentBackend,
+  agentBackendForPluginId, agentBackendLabel, type AgentBackend,
 } from "./agent-backends";
 
-type Step = "select" | "configure" | "review";
+type Step = "configure" | "review";
 
 export function AgentCreatePage({
   client, chooseLocalDirectory,
@@ -25,30 +24,33 @@ export function AgentCreatePage({
   const [params]=useSearchParams();
   const navigate=useNavigate();
   const pluginId=params.get("pluginId");
-  const pinnedBackend=pluginId===null?null:agentBackendForPluginId(pluginId);
-  if(pluginId!==null&&pinnedBackend===null){
+  const fromPreset=params.get("from")==="agents";
+  // Every create route is backend-pinned. The registry is the only selector.
+  if (pluginId === null) return <Navigate to="/agents" replace />;
+  const pinnedBackend=agentBackendForPluginId(pluginId);
+  if(pinnedBackend===null){
     return <>
-      <PageToolbar actions={<Button variant="outline" onClick={()=>void navigate("/plugins")}>{t("Back")}</Button>}/>
+      <PageToolbar actions={<Button variant="outline" onClick={()=>void navigate(fromPreset?"/agents":"/plugins")}>{t("Back")}</Button>}/>
       <ErrorNotice message={t("Unknown Agent backend plugin.")}/>
     </>;
   }
   // React Router may keep this route mounted while pluginId changes. Remount
   // the focused form, so a previous plugin's backend/draft cannot carry over.
-  return <AgentCreateForm key={pluginId??"generic"} client={client}
-    {...(chooseLocalDirectory===undefined?{}:{chooseLocalDirectory})} pinnedBackend={pinnedBackend}/>;
+  return <AgentCreateForm key={pluginId} client={client}
+    {...(chooseLocalDirectory===undefined?{}:{chooseLocalDirectory})} backend={pinnedBackend}
+    returnTo={fromPreset?"/agents":"/plugins"}/>;
 }
 
 function AgentCreateForm({
-  client, chooseLocalDirectory, pinnedBackend,
+  client, chooseLocalDirectory, backend, returnTo,
 }:{
   client:ManagementClient;
   chooseLocalDirectory?:()=>Promise<string|null>;
-  pinnedBackend:AgentBackend|null;
+  backend:AgentBackend;
+  returnTo:string;
 }){
   const navigate=useNavigate();
-  const [step,setStep]=useState<Step>(pinnedBackend?"configure":"select");
-  const [selectedBackend,setSelectedBackend]=useState<AgentBackend|null>(pinnedBackend);
-  const backend=pinnedBackend??selectedBackend;
+  const [step,setStep]=useState<Step>("configure");
   const [name,setName]=useState("");
   const [root,setRoot]=useState("");
   const [defaultModel,setDefaultModel]=useState("");
@@ -60,12 +62,12 @@ function AgentCreateForm({
   const trimmedRoot=root.trim();
   const invalidName=name.length>0&&trimmedName.length===0;
   const invalidRoot=root.length>0&&!trimmedRoot.startsWith("/");
-  const valid=backend!==null&&trimmedName.length>0&&trimmedName.length<=120&&trimmedRoot.startsWith("/");
-  const stepNumber=step==="select"?1:step==="configure"?(pinnedBackend?1:2):(pinnedBackend?2:3);
-  const totalSteps=pinnedBackend?2:3;
+  const valid=trimmedName.length>0&&trimmedName.length<=120&&trimmedRoot.startsWith("/");
+  const stepNumber=step==="configure"?1:2;
+  const totalSteps=2;
 
   async function create(){
-    if(!valid || backend===null || busy || step!=="review")return;
+    if(!valid || busy || step!=="review")return;
     setBusy(true);setError("");
     try{
       const item=await client.createAgent({
@@ -80,22 +82,13 @@ function AgentCreateForm({
   }
 
   return <>
-    <PageToolbar actions={<Button variant="outline" onClick={()=>void navigate(pinnedBackend?"/plugins":"/agents")}>{t(pinnedBackend?"Back":"Back to agents")}</Button>}/>
-    <DataPanel title="Add agent">
+    <PageToolbar actions={<Button variant="outline" onClick={()=>void navigate(returnTo)}>{t("Back")}</Button>}/>
+    <DataPanel title="Configure agent">
       <div className="mx-auto flex max-w-2xl flex-col gap-5 p-5 sm:p-8">
         <div className="text-xs text-muted-foreground">{t("Step {{step}} of {{total}}",{step:stepNumber,total:totalSteps})}</div>
-        {step!=="select"?<h2 className="sr-only">{t(step==="configure"?"Configure agent":"Review agent")}</h2>:null}
-        {step==="select"?<>
-          <FormHeading label={t("Select backend")} help={t("Choose an installed Agent CLI backend. No Agent process starts during setup.")} />
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{agentBackendOptions.map(choice=>
-            <button key={choice} type="button" aria-pressed={backend===choice}
-              onClick={()=>{if(selectedBackend!==choice)setDefaultModel("");setSelectedBackend(choice);}}
-              className={`rounded-xl border p-5 text-left transition-colors focus-visible:ring-2 focus-visible:ring-ring ${backend===choice?"border-foreground bg-secondary/40":"border-border hover:border-foreground/50"}`}>
-              <div className="font-medium">{agentBackendLabel(choice)}</div>
-              <p className="mt-2 text-xs leading-5 text-muted-foreground">{agentBackendDescription(choice)}</p>
-            </button>)}</div>
-          <div className="flex justify-end"><Button disabled={backend===null} onClick={()=>setStep("configure")}>{t("Continue")}</Button></div>
-        </>:step==="configure"?<>
+        <h2 className="sr-only">{t(step==="configure"?"Configure agent":"Review configuration")}</h2>
+        {step==="configure"?<>
+
           <div className="grid gap-2">
             <label htmlFor="agent-name" className="text-sm font-medium">{t("Agent name")}</label>
             <Input id="agent-name" maxLength={120} placeholder={t("Code Reviewer")} value={name}
@@ -144,12 +137,12 @@ function AgentCreateForm({
               <p className="text-xs text-muted-foreground">{t("OpenCode may need local account and config access that Restricted host prevents. Choose Host explicitly only if you accept its filesystem and credential access.")}</p>:null}
           </div>
           <div className="flex justify-between gap-2">
-            <Button variant="outline" onClick={()=>pinnedBackend?void navigate("/plugins"):setStep("select")}>{t("Back")}</Button>
+            <Button variant="outline" onClick={()=>void navigate(returnTo)}>{t("Back")}</Button>
             <Button disabled={!valid} onClick={()=>setStep("review")}>{t("Review")}</Button>
           </div>
         </>:<>
           <div className="space-y-3 rounded-xl border border-border p-5 text-sm">
-            <div><span className="text-muted-foreground">{t("Backend")}: </span>{backend===null?t("Select backend"):agentBackendLabel(backend)}</div>
+            <div><span className="text-muted-foreground">{t("Backend")}: </span>{agentBackendLabel(backend)}</div>
             <div><span className="text-muted-foreground">{t("Name")}: </span>{trimmedName}</div>
             <div className="break-all"><span className="text-muted-foreground">{t("Workspace")}: </span>{trimmedRoot}</div>
             <div><span className="text-muted-foreground">{t("Default model (optional)")}: </span>{defaultModel.trim()||t("Use Agent default")}</div>
@@ -158,11 +151,11 @@ function AgentCreateForm({
           {error?<p role="alert" className="text-sm text-destructive">{error}</p>:null}
           <div className="flex items-center gap-1 text-sm">
             <span>{t("Creating does not grant Profile access.")}</span>
-            <FormInfo label={t("Create agent")}>{t("Creating an Agent prepares its governed tools without starting a model, approving tool requests, or granting Profile access.")}</FormInfo>
+            <FormInfo label={t("Save configuration")}>{t("Saving an Agent workspace prepares governed tools without starting a model, approving tool requests, or granting Profile access.")}</FormInfo>
           </div>
           <div className="flex justify-between gap-2">
             <Button variant="outline" disabled={busy} onClick={()=>{setError("");setStep("configure");}}>{t("Back")}</Button>
-            <Button disabled={busy||!valid} onClick={()=>void create()}>{busy?t("Creating…"):t("Create agent")}</Button>
+            <Button disabled={busy||!valid} onClick={()=>void create()}>{busy?t("Saving…"):t("Save configuration")}</Button>
           </div>
         </>}
       </div>

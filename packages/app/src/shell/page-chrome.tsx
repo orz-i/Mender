@@ -22,6 +22,10 @@ export function usePageHeading(heading: string | undefined) {
 export function getPageTrail(pathname: string, root: { to: string; label: string }) {
   const suffix = root.to === "/" ? "" : pathname.slice(root.to.length);
   const segments = suffix.split("/").filter(Boolean);
+  if (root.to === "/agents" && segments[0] === "backend" && segments.length === 2) {
+    // Preset chooser is a single destination, not a user-facing "backend" category.
+    return [{ ...root }, { to: pathname, label: "Agent configuration" }];
+  }
   const items: Array<{ to: string; label: string }> = [{ ...root }];
   let to = root.to === "/" ? "" : root.to;
   for (const segment of segments) {
@@ -30,7 +34,7 @@ export function getPageTrail(pathname: string, root: { to: string; label: string
     try { value = decodeURIComponent(segment); } catch { /* Preserve malformed route segments as text. */ }
     let label: string;
     if (value === "new") {
-      label = root.to === "/agents" ? "Add agent" :
+      label = root.to === "/agents" ? "Configure agent" :
         root.to === "/profiles" ? "Create profile" :
         root.to === "/sandboxes" ? "Create sandbox" : "Create";
     } else {

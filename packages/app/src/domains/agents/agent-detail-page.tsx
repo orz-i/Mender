@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router";
+import { useLocation, useNavigate, useParams } from "react-router";
 
 import type { Agent, AgentTools, AgentTask, AgentAdmissionEvent, AgentModelChoices, LocalOwnerCapabilities, ManagementClient, Profile } from "@mender/sdk";
 import { Button } from "@mender/ui/components/button";
@@ -92,7 +92,7 @@ function taskDisplayName(task: AgentTask): string {
   return task.title || `${t("Task")} #${task.taskId.slice(-8)}`;
 }
 
-type Topic = "overview" | "workspaces" | "execution" | "tools" | "tasks" | "access" | "activity";
+type Topic = "overview" | "configuration" | "workspaces" | "execution" | "tools" | "tasks" | "access" | "activity";
 type ConfirmAction = {kind:"cancel"|"revoke"|"delete";id:string} | null;
 
 export function AgentDetailPage({ client, localOwner, chooseLocalDirectory }: {
@@ -102,6 +102,7 @@ export function AgentDetailPage({ client, localOwner, chooseLocalDirectory }: {
 }) {
   const {agentId}=useParams();
   const navigate=useNavigate();
+  const location=useLocation();
   const [agent,setAgent]=useState<Agent|null>(null);
   usePageHeading(agent?.name);
   const [tasks,setTasks]=useState<AgentTask[]>([]);
@@ -109,7 +110,8 @@ export function AgentDetailPage({ client, localOwner, chooseLocalDirectory }: {
   const [activity,setActivity]=useState<AgentAdmissionEvent[]>([]);
   const [grants,setGrants]=useState<string[]>([]);
   const [profiles,setProfiles]=useState<Profile[]>([]);
-  const [requestedTopic, setTopic] = useState<Topic>("overview");
+  const [requestedTopic, setTopic] = useState<Topic>(() =>
+    new URLSearchParams(location.search).get("view") === "configuration" ? "configuration" : "overview");
   const approvals = localOwner?.approvals;
   const toolPlacements = agent?.backend === "antigravity" ? undefined : localOwner?.toolPlacements;
   const topic = requestedTopic === "execution" && !toolPlacements ? "overview" : requestedTopic;
@@ -238,6 +240,35 @@ export function AgentDetailPage({ client, localOwner, chooseLocalDirectory }: {
       setViewTask(value);
     }catch(reason){setError(errorMessage(reason));}
   }
+  const configuration = agent ? (
+    <>
+      <dl className="grid grid-cols-1 gap-5 p-5 sm:grid-cols-2">
+        <div><dt className="text-xs text-muted-foreground">{t("Name")}</dt><dd className="mt-1 font-medium">{agent.name}</dd></div>
+        <div><dt className="text-xs text-muted-foreground">{t("Backend")}</dt><dd className="mt-1">{agentBackendLabel(agent.backend)}</dd></div>
+        <div><dt className="text-xs text-muted-foreground">{t("Status")}</dt>
+          <dd className="mt-1"><StatusBadge status={agent.backendAvailable ? "ready" : "unavailable"}>{agent.backendAvailable?t("CLI detected"):t("CLI missing")}</StatusBadge></dd></div>
+        <div><dt className="text-xs text-muted-foreground">{t("Isolation")}</dt>
+          <dd className="mt-1">{agent.isolation==="host"?t("Host (not isolated)"):t("Restricted host")}</dd></div>
+        <div><dt className="text-xs text-muted-foreground">{t("Default model (optional)")}</dt>
+          <dd className="mt-1 text-sm">{agent.defaultModel||t("Use Agent default")}</dd></div>
+        <div><dt className="text-xs text-muted-foreground">{t("Default reasoning effort")}</dt>
+          <dd className="mt-1 text-sm">{agent.defaultReasoningEffort||t("Use Agent default")}</dd></div>
+        <div className="sm:col-span-2"><dt className="text-xs text-muted-foreground">{t("Workspace directory")}</dt>
+          <dd className="mt-1 break-all font-mono text-xs">{agent.workspaceRoot}</dd></div>
+        {agent.backend==="antigravity"?<div className="sm:col-span-2 text-xs text-muted-foreground">{t("Antigravity uses its native tool permissions. Configure workspace authorization after creation to enable 24-hour YOLO; it is off by default.")}</div>:null}
+        <div><dt className="text-xs text-muted-foreground">{t("Created at")}</dt><dd className="mt-1 text-sm">{formatDateTime(agent.createdAt)}</dd></div>
+        {agent.issue?<div className="sm:col-span-2 text-sm text-destructive">{agent.issue}</div>:null}
+      </dl>
+          <div className="flex flex-wrap justify-between gap-2 border-t border-border p-4">
+            <p className="max-w-xl text-xs leading-5 text-muted-foreground">{t("Grant Profile access explicitly; this Agent will not run until invoked through an authorized Tool.")}</p>
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" variant="outline" onClick={editDefaultModel}>{t("Edit runtime defaults")}</Button>
+              <Button size="sm" variant="destructive" onClick={() => setConfirm({kind:"delete",id:agent.agentId})}>{t("Delete agent")}</Button>
+            </div>
+          </div>
+    </>
+  ) : null;
+
   return <>
     <PageToolbar actions={
       <Button variant="outline" size="sm" onClick={() => setRevision(n => n + 1)}>
@@ -248,6 +279,7 @@ export function AgentDetailPage({ client, localOwner, chooseLocalDirectory }: {
       label="Agent details"
       sections={agent ? [
         { value: "overview", label: "Overview" },
+        { value: "configuration", label: "Configuration" },
         { value: "workspaces", label: "Workspaces" },
         ...(toolPlacements ? [{ value: "execution" as const, label: "Governed tools" }] : []),
         { value: "tools", label: "Tools", count: tools?.tools.length ?? 0 },
@@ -331,33 +363,11 @@ export function AgentDetailPage({ client, localOwner, chooseLocalDirectory }: {
           <span className="ml-2 text-[11px] font-normal text-muted-foreground">{t("Model, workspace, isolation and advanced actions")}</span>
         </summary>
         <div className="border-t border-border/75">
-      <dl className="grid grid-cols-1 gap-5 p-5 sm:grid-cols-2">
-        <div><dt className="text-xs text-muted-foreground">{t("Name")}</dt><dd className="mt-1 font-medium">{agent.name}</dd></div>
-        <div><dt className="text-xs text-muted-foreground">{t("Backend")}</dt><dd className="mt-1">{agentBackendLabel(agent.backend)}</dd></div>
-        <div><dt className="text-xs text-muted-foreground">{t("Status")}</dt>
-          <dd className="mt-1"><StatusBadge status={agent.backendAvailable ? "ready" : "unavailable"}>{agent.backendAvailable?t("CLI detected"):t("CLI missing")}</StatusBadge></dd></div>
-        <div><dt className="text-xs text-muted-foreground">{t("Isolation")}</dt>
-          <dd className="mt-1">{agent.isolation==="host"?t("Host (not isolated)"):t("Restricted host")}</dd></div>
-        <div><dt className="text-xs text-muted-foreground">{t("Default model (optional)")}</dt>
-          <dd className="mt-1 text-sm">{agent.defaultModel||t("Use Agent default")}</dd></div>
-        <div><dt className="text-xs text-muted-foreground">{t("Default reasoning effort")}</dt>
-          <dd className="mt-1 text-sm">{agent.defaultReasoningEffort||t("Use Agent default")}</dd></div>
-        <div className="sm:col-span-2"><dt className="text-xs text-muted-foreground">{t("Workspace directory")}</dt>
-          <dd className="mt-1 break-all font-mono text-xs">{agent.workspaceRoot}</dd></div>
-        {agent.backend==="antigravity"?<div className="sm:col-span-2 text-xs text-muted-foreground">{t("Antigravity uses its native tool permissions. Configure workspace authorization after creation to enable 24-hour YOLO; it is off by default.")}</div>:null}
-        <div><dt className="text-xs text-muted-foreground">{t("Created at")}</dt><dd className="mt-1 text-sm">{formatDateTime(agent.createdAt)}</dd></div>
-        {agent.issue?<div className="sm:col-span-2 text-sm text-destructive">{agent.issue}</div>:null}
-      </dl>
-          <div className="flex flex-wrap justify-between gap-2 border-t border-border p-4">
-            <p className="max-w-xl text-xs leading-5 text-muted-foreground">{t("Grant Profile access explicitly; this Agent will not run until invoked through an authorized Tool.")}</p>
-            <div className="flex flex-wrap gap-2">
-              <Button size="sm" variant="outline" onClick={editDefaultModel}>{t("Edit runtime defaults")}</Button>
-              <Button size="sm" variant="destructive" onClick={() => setConfirm({kind:"delete",id:agent.agentId})}>{t("Delete agent")}</Button>
-            </div>
-          </div>
+          {configuration}
         </div>
       </details>
     </ResultPanel>:
+    topic==="configuration"?<ResultPanel title="Agent configuration">{configuration}</ResultPanel>:
     topic==="workspaces"?<AgentWorkspaceSettings client={client} agent={agent}
       {...(chooseLocalDirectory===undefined?{}:{chooseLocalDirectory})}/>:
     topic==="execution"&&toolPlacements?<AgentToolExecutionSettings client={client} toolPlacements={toolPlacements} agent={agent}/>:

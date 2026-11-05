@@ -12,6 +12,7 @@ function show(path = "/agents/new?pluginId=io.mender.agent.opencode",
   createAgent = vi.fn().mockResolvedValue({ agentId: "agent_00000000000000000000000000000001" })) {
   const client = { createAgent } as unknown as ManagementClient;
   render(<MemoryRouter initialEntries={[path]}><Routes>
+    <Route path="/agents" element={<p>Agent preset directory</p>} />
     <Route path="/agents/new" element={<AgentCreatePage client={client} />} />
     <Route path="/agents/:agentId" element={<p>Created Agent</p>} />
   </Routes></MemoryRouter>);
@@ -19,14 +20,17 @@ function show(path = "/agents/new?pluginId=io.mender.agent.opencode",
 }
 
 describe("Agent creation form task focus and errors", () => {
-  it("shows progress without repeated backend heading for generic and plugin-pinned creation", () => {
-    show("/agents/new");
-    expect(screen.getByText("Step 1 of 3")).toBeTruthy();
-    expect(screen.getAllByText("Select backend")).toHaveLength(1);
-    fireEvent.click(screen.getByRole("button", { name: /OpenCode/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-    expect(screen.getByText("Step 2 of 3")).toBeTruthy();
+  it("starts from a pinned preset with no duplicate backend selection step", () => {
+    show();
+    expect(screen.getByText("Step 1 of 2")).toBeTruthy();
     expect(screen.getByRole("textbox", { name: "Agent name" })).toBeTruthy();
+    expect(screen.queryByText("Select backend")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Continue" })).toBeNull();
+  });
+
+  it("redirects a generic unpinned URL to the preset directory", async () => {
+    show("/agents/new");
+    expect(await screen.findByText("Agent preset directory")).toBeTruthy();
   });
 
   it("explains invalid paths, keeps the optional model behind Advanced settings, and retains it through Review", () => {
@@ -77,7 +81,7 @@ describe("Agent creation form task focus and errors", () => {
     fireEvent.change(screen.getByRole("textbox", { name: "Agent name" }), { target: { value: "  Test Reviewer  " } });
     fireEvent.change(screen.getByRole("textbox", { name: "Workspace directory" }), { target: { value: "  /tmp/agent-test  " } });
     fireEvent.click(screen.getByRole("button", { name: "Review" }));
-    fireEvent.click(screen.getByRole("button", { name: "Create agent" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save configuration" }));
 
     expect(await screen.findByRole("alert")).toHaveProperty("textContent", "Cannot create Agent in this workspace");
     expect(screen.getByText("Step 2 of 2")).toBeTruthy();
@@ -87,7 +91,7 @@ describe("Agent creation form task focus and errors", () => {
     expect(screen.getByRole<HTMLInputElement>("textbox", { name: "Workspace directory" }).value)
       .toBe("  /tmp/agent-test  ");
     fireEvent.click(screen.getByRole("button", { name: "Review" }));
-    fireEvent.click(screen.getByRole("button", { name: "Create agent" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save configuration" }));
     await waitFor(() => expect(createAgent).toHaveBeenCalledTimes(2));
     expect(createAgent).toHaveBeenLastCalledWith({
       name: "Test Reviewer", backend: "grok",

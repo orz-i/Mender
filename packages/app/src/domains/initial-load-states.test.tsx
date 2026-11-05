@@ -25,21 +25,32 @@ function retryError() {
 }
 
 describe("Initial request failures remain separate from real empty inventories", () => {
-  it("retries an Agent inventory instead of displaying empty counts after a failed load", async () => {
+  it("retries failed Agent resource discovery without confusing a preset with a configured instance", async () => {
     const listAgents = vi.fn()
       .mockRejectedValueOnce(new Error("Agent registry offline"))
       .mockResolvedValue({ agents: [] });
-    const client = { listAgents } as unknown as ManagementClient;
+    const client = {
+      listAgents,
+      listPluginCatalogue: vi.fn().mockResolvedValue({ plugins: [{
+        pluginId: "io.mender.agent.opencode", key: "io.mender.agent.opencode@builtin",
+        sourceKind: "builtin", kind: "agent.backend", status: "enabled", enabled: true,
+        marketplaceAction: "create.agent", displayName: "OpenCode",
+      }] }),
+    } as unknown as ManagementClient;
 
     render(<MemoryRouter><AgentsPage client={client} /></MemoryRouter>);
 
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toContain("Agent registry offline");
     expect(screen.queryByText("No agents")).toBeNull();
-    expect(screen.queryByRole("button", { name: /All agents/ })).toBeNull();
+    expect(screen.getByRole("list", { name: "Available Agent backends" })).toBeTruthy();
+    expect(screen.getAllByText("Status unverified")).toHaveLength(4);
     retryError();
-    expect(await screen.findByText("No agents")).toBeTruthy();
     await waitFor(() => expect(listAgents).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
+    expect(screen.getByRole("link", { name: "Configure OpenCode" })).toBeTruthy();
+    expect(screen.getByText("Ready to configure")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /All agents/ })).toBeNull();
   });
 
   it("retries the Tool detail catalogue without claiming there are no synchronized Tools", async () => {
