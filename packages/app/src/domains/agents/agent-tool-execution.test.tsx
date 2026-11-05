@@ -1,5 +1,5 @@
 import {cleanup,fireEvent,render,screen,waitFor,within} from "@testing-library/react";
-import type {Agent,AgentToolPlacement,MenderClient,Sandbox,SandboxToolSuite} from "@mender/sdk";
+import type {Agent,AgentToolPlacement,Sandbox,SandboxToolSuite} from "@mender/sdk";
 import {afterEach,beforeEach,describe,expect,it,vi} from "vitest";
 import {resetLocaleForTesting,setLocale} from "../../i18n/i18n";
 import {AgentToolExecutionSettings} from "./agent-tool-execution";
@@ -33,11 +33,13 @@ const suite:SandboxToolSuite={
   {toolId:toolShell,sourceKey:"workspace.shell",name:"shell",title:"Shell"},
  ],
 };
-const base={
+const baseClient={
  listAgentWorkspaces:vi.fn().mockResolvedValue({workspaces:[]}),
- listAgentToolPlacements:vi.fn().mockResolvedValue({placements:[]}),
  listSandboxes:vi.fn().mockResolvedValue({sandboxes}),
  getSandboxTools:vi.fn().mockResolvedValue(suite),
+};
+const basePlacements={
+ listAgentToolPlacements:vi.fn().mockResolvedValue({placements:[]}),
  configureAgentToolPlacement:vi.fn().mockResolvedValue(undefined),
  disableAgentToolPlacement:vi.fn().mockResolvedValue(undefined),
 };
@@ -49,8 +51,9 @@ describe("optional Agent governed tool execution",()=>{
   const listSandboxes=vi.fn().mockResolvedValue({sandboxes});
   const configure=vi.fn().mockResolvedValue({workspaceKey:"",sandboxId:sandboxes[0]!.sandboxId,toolIds:[toolRead]});
   const ensure=vi.fn();
-  const client={...base,listSandboxes,configureAgentToolPlacement:configure,ensureSandboxTools:ensure} as unknown as MenderClient;
-  render(<AgentToolExecutionSettings client={client} agent={agent}/>);
+  const client={...baseClient,listSandboxes,ensureSandboxTools:ensure};
+  const toolPlacements={...basePlacements,configureAgentToolPlacement:configure};
+  render(<AgentToolExecutionSettings client={client} toolPlacements={toolPlacements} agent={agent}/>);
   expect(await screen.findByText(root)).toBeTruthy();
   fireEvent.click(screen.getByRole("button",{name:"Configure"}));
   const dialog=screen.getByRole("dialog");
@@ -73,8 +76,9 @@ describe("optional Agent governed tool execution",()=>{
  });
  it("blocks configuration of Host Agent without mutating its existing workspace",async()=>{
   const list=vi.fn();const save=vi.fn();
-  const client={...base,listSandboxes:list,configureAgentToolPlacement:save} as unknown as MenderClient;
-  render(<AgentToolExecutionSettings client={client} agent={{...agent,isolation:"host"}}/>);
+  const client={...baseClient,listSandboxes:list};
+  const toolPlacements={...basePlacements,configureAgentToolPlacement:save};
+  render(<AgentToolExecutionSettings client={client} toolPlacements={toolPlacements} agent={{...agent,isolation:"host"}}/>);
   expect(await screen.findByText(root)).toBeTruthy();
   expect(screen.getByRole("alert").textContent).toContain("cannot enable governed execution");
   expect(screen.getByRole<HTMLButtonElement>("button",{name:"Configure"}).disabled).toBe(true);
@@ -83,9 +87,10 @@ describe("optional Agent governed tool execution",()=>{
  });
  it("shows a safe empty candidate state without provisioning Sandboxes or tools",async()=>{
   const ensure=vi.fn();const save=vi.fn();
-  const client={...base,listSandboxes:vi.fn().mockResolvedValue({sandboxes:sandboxes.slice(1)}),
-   ensureSandboxTools:ensure,configureAgentToolPlacement:save} as unknown as MenderClient;
-  render(<AgentToolExecutionSettings client={client} agent={agent}/>);
+  const client={...baseClient,listSandboxes:vi.fn().mockResolvedValue({sandboxes:sandboxes.slice(1)}),
+   ensureSandboxTools:ensure};
+  const toolPlacements={...basePlacements,configureAgentToolPlacement:save};
+  render(<AgentToolExecutionSettings client={client} toolPlacements={toolPlacements} agent={agent}/>);
   expect(await screen.findByText(root)).toBeTruthy();
   fireEvent.click(screen.getByRole("button",{name:"Configure"}));
   const dialog=screen.getByRole("dialog");
@@ -97,8 +102,9 @@ describe("optional Agent governed tool execution",()=>{
  });
  it("keeps owner editor open and reports configuration errors without clearing selection",async()=>{
   const configure=vi.fn().mockRejectedValue(new Error("Placement is no longer eligible"));
-  const client={...base,configureAgentToolPlacement:configure} as unknown as MenderClient;
-  render(<AgentToolExecutionSettings client={client} agent={agent}/>);
+  const client=baseClient;
+  const toolPlacements={...basePlacements,configureAgentToolPlacement:configure};
+  render(<AgentToolExecutionSettings client={client} toolPlacements={toolPlacements} agent={agent}/>);
   expect(await screen.findByText(root)).toBeTruthy();
   fireEvent.click(screen.getByRole("button",{name:"Configure"}));
   const dialog=screen.getByRole("dialog");
@@ -116,8 +122,9 @@ describe("optional Agent governed tool execution",()=>{
  it("gives a recoverable Chinese error for stale unstructured Wails save rejection",async()=>{
   setLocale("zh-CN");
   const configure=vi.fn().mockRejectedValue("agent backend unavailable");
-  const client={...base,configureAgentToolPlacement:configure} as unknown as MenderClient;
-  render(<AgentToolExecutionSettings client={client} agent={agent}/>);
+  const client=baseClient;
+  const toolPlacements={...basePlacements,configureAgentToolPlacement:configure};
+  render(<AgentToolExecutionSettings client={client} toolPlacements={toolPlacements} agent={agent}/>);
   expect(await screen.findByText(root)).toBeTruthy();
   fireEvent.click(screen.getByRole("button",{name:"配置"}));
   const dialog=screen.getByRole("dialog");
@@ -138,9 +145,10 @@ describe("optional Agent governed tool execution",()=>{
    sandboxId:sandboxes[0]!.sandboxId,toolIds:[toolRead],updatedAt:"2026-10-17T00:00:00Z",
   };
   const disable=vi.fn().mockRejectedValue(new Error("agent backend unavailable"));
-  const client={...base,listAgentToolPlacements:vi.fn().mockResolvedValue({placements:[placement]}),
-   disableAgentToolPlacement:disable} as unknown as MenderClient;
-  render(<AgentToolExecutionSettings client={client} agent={agent}/>);
+  const client=baseClient;
+  const toolPlacements={...basePlacements,listAgentToolPlacements:vi.fn().mockResolvedValue({placements:[placement]}),
+   disableAgentToolPlacement:disable};
+  render(<AgentToolExecutionSettings client={client} toolPlacements={toolPlacements} agent={agent}/>);
   expect(await screen.findByText("已配置")).toBeTruthy();
   fireEvent.click(screen.getByRole("button",{name:"编辑配置"}));
   const dialog=screen.getByRole("dialog");
@@ -156,9 +164,10 @@ describe("optional Agent governed tool execution",()=>{
   };
   const disable=vi.fn().mockResolvedValue(undefined);
   const unbind=vi.fn();
-  const client={...base,listAgentToolPlacements:vi.fn().mockResolvedValue({placements:[placement]}),
-   disableAgentToolPlacement:disable,unbindAgentWorkspace:unbind} as unknown as MenderClient;
-  render(<AgentToolExecutionSettings client={client} agent={agent}/>);
+  const client={...baseClient,unbindAgentWorkspace:unbind};
+  const toolPlacements={...basePlacements,listAgentToolPlacements:vi.fn().mockResolvedValue({placements:[placement]}),
+   disableAgentToolPlacement:disable};
+  render(<AgentToolExecutionSettings client={client} toolPlacements={toolPlacements} agent={agent}/>);
   expect(await screen.findByText("Configured")).toBeTruthy();
   fireEvent.click(screen.getByRole("button",{name:"Edit configuration"}));
   fireEvent.click(within(screen.getByRole("dialog")).getByRole("button",{name:"Disable governed tools"}));

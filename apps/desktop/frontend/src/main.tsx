@@ -4,7 +4,7 @@ import { HashRouter } from "react-router";
 
 import { MenderApp, t } from "@mender/app";
 import type { ExportProfilePluginInput, SkillDeployment } from "@mender/sdk";
-import { Clipboard, Dialogs } from "@wailsio/runtime";
+import { Browser, Clipboard, Dialogs } from "@wailsio/runtime";
 
 import "@mender/ui/globals.css";
 
@@ -12,9 +12,11 @@ import {
   createDesktopMenderClient,
   deployDesktopProfileSkills,
   exportDesktopProfilePlugin,
+  getDesktopProfileCLI,
   installDesktopPlugin,
   installDesktopSkill,
 } from "./desktop-client";
+import { createDesktopLocalOwnerCapabilities } from "./desktop-local-owner";
 
 const rootElement = document.getElementById("root");
 
@@ -23,6 +25,7 @@ if (rootElement === null) {
 }
 
 const client = createDesktopMenderClient();
+const localOwner = createDesktopLocalOwnerCapabilities();
 
 async function chooseLocalSandboxDirectory(): Promise<string | null> {
   const directory = await Dialogs.OpenFile({
@@ -108,6 +111,9 @@ createRoot(rootElement).render(
     <HashRouter>
       <MenderApp
         client={client}
+        localOwner={localOwner}
+        openExternalURL={Browser.OpenURL}
+        getLocalProfileCLI={getDesktopProfileCLI}
         copyText={Clipboard.SetText}
         chooseLocalDirectory={chooseLocalSandboxDirectory}
         installPlugin={chooseAndInstallPlugin}

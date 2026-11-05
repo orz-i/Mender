@@ -1,5 +1,5 @@
 import {cleanup,fireEvent,render,screen,waitFor} from "@testing-library/react";
-import type {AgentApproval,AgentTask,MenderClient} from "@mender/sdk";
+import type {AgentApproval,AgentTask} from "@mender/sdk";
 import {afterEach,beforeEach,describe,expect,it,vi} from "vitest";
 import {resetLocaleForTesting,setLocale} from "../../i18n/i18n";
 import {AgentTaskApprovals} from "./agent-approvals";
@@ -22,12 +22,12 @@ afterEach(()=>{cleanup();resetLocaleForTesting();});
 describe("ACP task approval owner view",()=>{
  it("shows a focused single request without revealing raw commands or a permanent allow",async()=>{
   const decide=vi.fn().mockResolvedValue({...approval,status:"allowed_once"});
-  const client={
+  const client = { getAgentTask: vi.fn().mockResolvedValue(task) };
+  const approvals = {
    listAgentApprovals:vi.fn().mockResolvedValue({approvals:[approval]}),
-   getAgentTask:vi.fn().mockResolvedValue(task),
    decideAgentApproval:decide,
-  } as unknown as MenderClient;
-  render(<AgentTaskApprovals client={client} task={task}/>);
+  };
+  render(<AgentTaskApprovals client={client} approvals={approvals} task={task}/>);
   expect(await screen.findByText(/Awaiting owner approval/)).toBeTruthy();
   expect(screen.getByText("Read")).toBeTruthy();
   expect(screen.getByText("fixture.txt")).toBeTruthy();
@@ -40,24 +40,24 @@ describe("ACP task approval owner view",()=>{
  });
  it("can explicitly reject without granting any Agent capability",async()=>{
   const decide=vi.fn().mockResolvedValue({...approval,status:"rejected"});
-  const client={
+  const client = { getAgentTask: vi.fn().mockResolvedValue(task) };
+  const approvals = {
    listAgentApprovals:vi.fn().mockResolvedValue({approvals:[approval]}),
-   getAgentTask:vi.fn().mockResolvedValue(task),
    decideAgentApproval:decide,
-  } as unknown as MenderClient;
-  render(<AgentTaskApprovals client={client} task={task}/>);
+  };
+  render(<AgentTaskApprovals client={client} approvals={approvals} task={task}/>);
   fireEvent.click(await screen.findByRole("button",{name:"Reject"}));
   await waitFor(()=>expect(decide).toHaveBeenCalledWith(approval.approvalId,"reject"));
  });
  it("does not show approval controls for resolved or missing permission requests",async()=>{
   const list=vi.fn().mockResolvedValue({approvals:[{...approval,status:"expired"}]});
   const decide=vi.fn();
-  const client={
+  const client = { getAgentTask: vi.fn().mockResolvedValue({...task,status:"completed"}) };
+  const approvals = {
    listAgentApprovals:list,
-   getAgentTask:vi.fn().mockResolvedValue({...task,status:"completed"}),
    decideAgentApproval:decide,
-  } as unknown as MenderClient;
-  render(<AgentTaskApprovals client={client} task={{...task,status:"completed"}}/>);
+  };
+  render(<AgentTaskApprovals client={client} approvals={approvals} task={{...task,status:"completed"}}/>);
   await waitFor(()=>expect(list).toHaveBeenCalledWith(task.taskId));
   expect(screen.queryByRole("button",{name:"Allow once"})).toBeNull();
   expect(decide).not.toHaveBeenCalled();
@@ -65,12 +65,12 @@ describe("ACP task approval owner view",()=>{
  it("hides owner Allow once for unreviewable native edits and Shell requests",async()=>{
   const blocked={...approval,kind:"execute" as const,canAllow:false,target:undefined};
   const decide=vi.fn().mockResolvedValue({...blocked,status:"rejected"});
-  const client={
+  const client = { getAgentTask: vi.fn().mockResolvedValue(task) };
+  const approvals = {
     listAgentApprovals:vi.fn().mockResolvedValue({approvals:[blocked]}),
-    getAgentTask:vi.fn().mockResolvedValue(task),
     decideAgentApproval:decide,
-  } as unknown as MenderClient;
-  render(<AgentTaskApprovals client={client} task={task}/>);
+  };
+  render(<AgentTaskApprovals client={client} approvals={approvals} task={task}/>);
   expect(await screen.findByText(/Awaiting owner approval/)).toBeTruthy();
   expect(screen.getByText(/lacks a reviewable in-workspace/)).toBeTruthy();
   expect(screen.queryByRole("button",{name:"Allow once"})).toBeNull();

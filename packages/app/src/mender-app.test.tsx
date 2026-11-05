@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
-import type { MenderClient } from "@mender/sdk";
+import type { LocalOwnerCapabilities, MenderClient } from "@mender/sdk";
 import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -29,11 +29,18 @@ describe("MenderApp", () => {
         canAllow:true,status:"pending" as const,
         createdAt:"2026-10-17T00:00:00Z",expiresAt:"2099-01-01T00:00:00Z"},
     };
-    const client={...overviewClient(),supportsLocalAgentApprovals:true,
-      listPendingAgentApprovals:vi.fn().mockResolvedValue({approvals:[request]}),
-      decideAgentApproval:vi.fn().mockResolvedValue({...request.approval,status:"allowed_once"}),
-    } as MenderClient;
-    render(<MemoryRouter><MenderApp client={client}/></MemoryRouter>);
+    const localOwner: LocalOwnerCapabilities = {
+      approvals: {
+        listAgentApprovals: vi.fn().mockResolvedValue({ approvals: [] }),
+        listPendingAgentApprovals: vi.fn().mockResolvedValue({ approvals: [request] }),
+        decideAgentApproval: vi.fn().mockResolvedValue({ ...request.approval, status: "allowed_once" }),
+        getAgentApprovalPolicy: vi.fn(),
+        listAgentApprovalPolicies: vi.fn(),
+        setAgentApprovalPolicy: vi.fn(),
+        releasePendingAgentApprovals: vi.fn(),
+      },
+    };
+    render(<MemoryRouter><MenderApp client={overviewClient()} localOwner={localOwner} /></MemoryRouter>);
     fireEvent.click(screen.getByRole("button", { name: "Advanced" }));
     expect(screen.getByRole("link",{name:"Approvals"})).toBeTruthy();
     const topbar=within(screen.getByRole("banner"));
@@ -63,6 +70,8 @@ describe("MenderApp", () => {
     }
     expect(screen.queryByRole("link", { name: "Servers" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Advanced" }));
+    expect(screen.queryByRole("link", { name: "Approvals" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Pending approvals" })).toBeNull();
     for (const name of ["Runtime", "Policy", "Credentials", "Audit"]) {
       expect(screen.getByRole("link", { name })).toBeTruthy();
     }

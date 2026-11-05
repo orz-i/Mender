@@ -1,5 +1,5 @@
 import {useEffect,useMemo,useState} from "react";
-import type {Agent,AgentToolPlacement,AgentWorkspace,MenderClient,Sandbox,SandboxToolSuite} from "@mender/sdk";
+import type {Agent,AgentToolPlacement,AgentToolPlacementCapability,AgentWorkspace,ManagementClient,Sandbox,SandboxToolSuite} from "@mender/sdk";
 import {Badge} from "@mender/ui/components/badge";
 import {Button} from "@mender/ui/components/button";
 import {Dialog,DialogBody,DialogContent,DialogDescription,DialogFooter,DialogHeader,DialogTitle} from "@mender/ui/components/dialog";
@@ -24,7 +24,11 @@ function placementActionError(reason:unknown,action:"save"|"disable"):string{
   t("Could not confirm governed tools were disabled. Close this dialog and refresh the Agent to check the current state before retrying.");
 }
 
-export function AgentToolExecutionSettings({client,agent}:{client:MenderClient;agent:Agent}){
+export function AgentToolExecutionSettings({ client, toolPlacements, agent }: {
+  client: Pick<ManagementClient, "listAgentWorkspaces" | "listSandboxes" | "getSandboxTools">;
+  toolPlacements: AgentToolPlacementCapability;
+  agent: Agent;
+}) {
  const [workspaces,setWorkspaces]=useState<AgentWorkspace[]>([]);
  const [placements,setPlacements]=useState<AgentToolPlacement[]>([]);
  const [loaded,setLoaded]=useState(false);
@@ -39,11 +43,11 @@ export function AgentToolExecutionSettings({client,agent}:{client:MenderClient;a
  const [busy,setBusy]=useState(false);
  useEffect(()=>{
   let live=true;
-  void Promise.all([client.listAgentWorkspaces(agent.agentId),client.listAgentToolPlacements(agent.agentId)])
+  void Promise.all([client.listAgentWorkspaces(agent.agentId),toolPlacements.listAgentToolPlacements(agent.agentId)])
    .then(([w,p])=>{if(live){setWorkspaces(w.workspaces);setPlacements(p.placements);setLoaded(true);}})
    .catch(e=>{if(live){setError(errorMessage(e));setLoaded(true);}});
   return()=>{live=false;};
- },[client,agent.agentId,revision]);
+ },[client,toolPlacements,agent.agentId,revision]);
  const options:WorkspaceOption[]=useMemo(()=>[
    {key:"",root:agent.workspaceRoot},
    ...workspaces.map(w=>({key:w.key,root:w.workspaceRoot})),
@@ -78,7 +82,7 @@ export function AgentToolExecutionSettings({client,agent}:{client:MenderClient;a
    agent.isolation!=="restricted_host")return;
   setBusy(true);setError("");
   try{
-   await client.configureAgentToolPlacement(agent.agentId,editing.key,selectedSandbox,selectedTools);
+   await toolPlacements.configureAgentToolPlacement(agent.agentId,editing.key,selectedSandbox,selectedTools);
    setEditing(null);setRevision(x=>x+1);
   }catch(e){setError(placementActionError(e,"save"));}finally{setBusy(false);}
  }
@@ -86,7 +90,7 @@ export function AgentToolExecutionSettings({client,agent}:{client:MenderClient;a
   if(!editing||!current||busy)return;
   setBusy(true);setError("");
   try{
-   await client.disableAgentToolPlacement(agent.agentId,editing.key);
+   await toolPlacements.disableAgentToolPlacement(agent.agentId,editing.key);
    setEditing(null);setRevision(x=>x+1);
   }catch(e){setError(placementActionError(e,"disable"));}finally{setBusy(false);}
  }

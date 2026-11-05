@@ -24,7 +24,7 @@ import type { LucideIcon } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router";
 
-import type { MenderClient } from "@mender/sdk";
+import type { AgentApprovalCapability, ManagementClient } from "@mender/sdk";
 import { Button } from "@mender/ui/components/button";
 import {
   Dialog,
@@ -88,7 +88,10 @@ const navigation: NavigationGroup[] = [
 
 const flatNavigation = navigation.flatMap((group) => group.items);
 
-export function ManagementShell({ client }: { client: MenderClient }) {
+export function ManagementShell({ client, approvals }: {
+  client: ManagementClient;
+  approvals?: AgentApprovalCapability | undefined;
+}) {
   const locale = useLocale();
   const location = useLocation();
   const navigate = useNavigate();
@@ -122,17 +125,17 @@ export function ManagementShell({ client }: { client: MenderClient }) {
   }, [client]);
 
   useEffect(() => {
-    if(client.supportsLocalAgentApprovals!==true)return;
+    if (!approvals) return;
     let live=true;
     const poll=()=>{
-      void client.listPendingAgentApprovals().then(({approvals})=>{
+      void approvals.listPendingAgentApprovals().then(({approvals})=>{
         if(live)setPendingApprovalCount(approvals.length);
       }).catch(()=>{if(live)setPendingApprovalCount(0);});
     };
     poll();
     const timer=setInterval(poll,2500);
     return()=>{live=false;clearInterval(timer);};
-  },[client]);
+  },[approvals]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -152,7 +155,7 @@ export function ManagementShell({ client }: { client: MenderClient }) {
         : location.pathname.startsWith(item.to),
     ) ?? flatNavigation[0]!;
   const normalizedQuery = query.trim().toLocaleLowerCase();
-  const visibleNavigation=flatNavigation.filter(item=>item.to!=="/approvals"||client.supportsLocalAgentApprovals===true);
+  const visibleNavigation=flatNavigation.filter(item=>item.to!=="/approvals"||approvals !== undefined);
   const filteredNavigation = normalizedQuery
     ? visibleNavigation.filter((item) =>
         t(item.label).toLocaleLowerCase().includes(normalizedQuery),
@@ -276,7 +279,7 @@ export function ManagementShell({ client }: { client: MenderClient }) {
                 <div className="mx-2 mb-3 border-t border-border/80" />
               ) : null}
               <div id={`nav-group-${groupIndex}`} className="flex flex-col gap-1">
-                {(collapsed || groupExpanded(group) ? group.items.filter(item=>item.to!=="/approvals"||client.supportsLocalAgentApprovals===true) : []).map((item) => {
+                {(collapsed || groupExpanded(group) ? group.items.filter(item=>item.to!=="/approvals"||approvals !== undefined) : []).map((item) => {
                   const Icon = item.icon;
                   const link = (
                     <NavLink
@@ -330,7 +333,7 @@ export function ManagementShell({ client }: { client: MenderClient }) {
               <div key={group.label} className="mb-4">
                 <p className="px-3 py-2 text-xs font-semibold text-muted-foreground">{t(group.label)}</p>
                 <div className="grid gap-1">
-                  {group.items.filter(item => item.to !== "/approvals" || client.supportsLocalAgentApprovals === true).map((item) => {
+                  {group.items.filter(item => item.to !== "/approvals" || approvals !== undefined).map((item) => {
                     const Icon = item.icon;
                     return (
                       <NavLink
@@ -386,7 +389,7 @@ export function ManagementShell({ client }: { client: MenderClient }) {
                 {t("⌘K")}
               </span>
             </button>
-            {client.supportsLocalAgentApprovals===true?<Tooltip>
+            {approvals !== undefined?<Tooltip>
               <TooltipTrigger render={<Button type="button" variant="ghost" size="icon-lg"
                 aria-label={t("Pending approvals")} onClick={()=>void navigate("/approvals")}
                 className="relative size-9 rounded-xl text-muted-foreground hover:bg-card hover:text-foreground"/>}>

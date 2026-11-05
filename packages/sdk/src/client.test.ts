@@ -1,8 +1,22 @@
 import { describe, expect, it } from "vitest";
 
-import { createMenderClient, type Profile, type ProfileMCPDelivery, type ReplaceProfileToolsRequest } from "./client";
+import { createMenderClient } from "./client";
+import type { Profile, ProfileMCPDelivery, ReplaceProfileToolsRequest } from "./contracts/management-client";
 
 describe("Mender SDK", () => {
+  it("exposes only common management operations over HTTP", () => {
+    const client = createMenderClient({ baseUrl: "http://localhost:8080/api/v1" });
+
+    for (const desktopOperation of [
+      "listAgentApprovals", "decideAgentApproval", "listPendingAgentApprovals",
+      "getAgentApprovalPolicy", "listAgentApprovalPolicies", "setAgentApprovalPolicy",
+      "releasePendingAgentApprovals", "listAgentToolPlacements", "configureAgentToolPlacement",
+      "disableAgentToolPlacement", "getLocalProfileCLI", "openExternalURL",
+    ]) {
+      expect(client).not.toHaveProperty(desktopOperation);
+    }
+  });
+
   it("discovers Provider plugins and creates a generic Provider", async () => {
     let call = 0;
     const fetch = async (request: Request) => {

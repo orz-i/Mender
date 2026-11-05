@@ -3,6 +3,7 @@ export {
   MenderApiError,
 } from "./client";
 export { MenderClientInvariantError } from "./errors";
+export type { MenderClientOptions } from "./client";
 export type {
   AddProfileToolRequest,
   AuditRecord,
@@ -27,8 +28,8 @@ export type {
   StartOAuthCredentialRequest,
   InvocationResult,
   MCPServerInstance,
-  MenderClient,
-  MenderClientOptions,
+  ManagementClient,
+  ManagementClient as MenderClient,
   Policy,
   PolicyDecision,
   PolicyDefaultRequest,
@@ -38,9 +39,6 @@ export type {
   PolicyRuleInput,
   PolicyStatus,
   Profile,
-  ProfileCLIInstructions,
-  ExportProfilePluginInput,
-  ProfileAgentPluginExport,
   ProfileMCPDelivery,
   ConfigureProfileMCPDeliveryRequest,
   Provider,
@@ -65,11 +63,6 @@ export type {
   AgentModelChoices,
   WorkspaceToolTarget,
   AgentTask,
-  AgentApproval,
-  AgentApprovalMode,
-  AgentApprovalPolicy,
-  PendingAgentApproval,
-  AgentToolPlacement,
   AgentAdmissionEvent,
   AgentGrants,
   AgentCancelReceipt,
@@ -102,4 +95,17 @@ export type {
   ToolSummary,
   Tunnel,
   UpdateProviderRequest,
-} from "./client";
+} from "./contracts/management-client";
+export type {
+  AgentApproval,
+  AgentApprovalCapability,
+  AgentApprovalMode,
+  AgentApprovalPolicy,
+  AgentToolPlacement,
+  AgentToolPlacementCapability,
+  ExportProfilePluginInput,
+  LocalOwnerCapabilities,
+  PendingAgentApproval,
+  ProfileAgentPluginExport,
+  ProfileCLIInstructions,
+} from "./contracts/local-owner";

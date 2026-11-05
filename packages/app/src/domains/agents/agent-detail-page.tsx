@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 
-import type { Agent, AgentTools, AgentTask, AgentAdmissionEvent, AgentModelChoices, MenderClient, Profile } from "@mender/sdk";
+import type { Agent, AgentTools, AgentTask, AgentAdmissionEvent, AgentModelChoices, LocalOwnerCapabilities, ManagementClient, Profile } from "@mender/sdk";
 import { Button } from "@mender/ui/components/button";
 import {
   Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
@@ -93,7 +93,11 @@ function taskDisplayName(task: AgentTask): string {
 type Topic = "overview" | "workspaces" | "execution" | "tools" | "tasks" | "access" | "activity";
 type ConfirmAction = {kind:"cancel"|"revoke"|"delete";id:string} | null;
 
-export function AgentDetailPage({client,chooseLocalDirectory}:{client:MenderClient;chooseLocalDirectory?:()=>Promise<string|null>}){
+export function AgentDetailPage({ client, localOwner, chooseLocalDirectory }: {
+  client: ManagementClient;
+  localOwner?: LocalOwnerCapabilities | undefined;
+  chooseLocalDirectory?: () => Promise<string | null>;
+}) {
   const {agentId}=useParams();
   const navigate=useNavigate();
   const [agent,setAgent]=useState<Agent|null>(null);
@@ -102,7 +106,10 @@ export function AgentDetailPage({client,chooseLocalDirectory}:{client:MenderClie
   const [activity,setActivity]=useState<AgentAdmissionEvent[]>([]);
   const [grants,setGrants]=useState<string[]>([]);
   const [profiles,setProfiles]=useState<Profile[]>([]);
-  const [topic,setTopic]=useState<Topic>("overview");
+  const [requestedTopic, setTopic] = useState<Topic>("overview");
+  const approvals = localOwner?.approvals;
+  const toolPlacements = agent?.backend === "antigravity" ? undefined : localOwner?.toolPlacements;
+  const topic = requestedTopic === "execution" && !toolPlacements ? "overview" : requestedTopic;
   const [loaded,setLoaded]=useState(false);
   const [error,setError]=useState("");
   const [revision,setRevision]=useState(0);
@@ -226,7 +233,7 @@ export function AgentDetailPage({client,chooseLocalDirectory}:{client:MenderClie
       tabs={agent?<PageTabs label="Agent details">
         <PageTab label="Overview" active={topic==="overview"} onClick={()=>setTopic("overview")}/>
         <PageTab label="Workspaces" active={topic==="workspaces"} onClick={()=>setTopic("workspaces")}/>
-        {client.supportsLocalAgentToolPlacements===true&&agent.backend!=="antigravity"?<PageTab label="Governed tools" active={topic==="execution"} onClick={()=>setTopic("execution")}/>:null}
+        {toolPlacements?<PageTab label="Governed tools" active={topic==="execution"} onClick={()=>setTopic("execution")}/>:null}
         <PageTab label="Tools" count={tools?.tools.length??0} active={topic==="tools"} onClick={()=>setTopic("tools")}/>
         <PageTab label="Tasks" count={tasks.length} active={topic==="tasks"} onClick={()=>setTopic("tasks")}/>
         <PageTab label="Access" count={grants.length} active={topic==="access"} onClick={()=>setTopic("access")}/>
@@ -270,7 +277,7 @@ export function AgentDetailPage({client,chooseLocalDirectory}:{client:MenderClie
     </ResultPanel>:
     topic==="workspaces"?<AgentWorkspaceSettings client={client} agent={agent}
       {...(chooseLocalDirectory===undefined?{}:{chooseLocalDirectory})}/>:
-    topic==="execution"?<AgentToolExecutionSettings client={client} agent={agent}/>:
+    topic==="execution"&&toolPlacements?<AgentToolExecutionSettings client={client} toolPlacements={toolPlacements} agent={agent}/>:
     topic==="tools"?<ResultPanel title="Agent tools">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4">
         <div className="min-w-0 space-y-1">
@@ -452,8 +459,8 @@ export function AgentDetailPage({client,chooseLocalDirectory}:{client:MenderClie
         </section>:viewTask?.status==="unknown"?<p className="text-sm leading-6 text-muted-foreground">{t("No execution evidence recorded for this task.")}</p>:null}
           </div>
         </details>
-        {client.supportsLocalAgentApprovals===true&&agent?.backend!=="antigravity"&&viewTask&&(viewTask.status==="running"||viewTask.status==="queued")?
-          <AgentTaskApprovals client={client} task={viewTask} onTaskUpdated={updateViewedTask}/>:null}
+        {approvals&&agent?.backend!=="antigravity"&&viewTask&&(viewTask.status==="running"||viewTask.status==="queued")?
+          <AgentTaskApprovals client={client} approvals={approvals} task={viewTask} onTaskUpdated={updateViewedTask}/>:null}
         {viewTask&&agent?.isolation==="host"?<p role="note" className="text-xs leading-5 text-muted-foreground">
           {t(agent.backend==="antigravity"?"Antigravity native permissions are not Mender ACP approvals; no ACP approval receipt can prove its native tool activity.":"ACP approvals are voluntary requests made by the Agent and do not form a complete record of native file and shell activity; zero approvals does not prove that no operations occurred.")}
         </p>:null}

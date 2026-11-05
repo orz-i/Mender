@@ -1,5 +1,5 @@
 import {cleanup,fireEvent,render,screen,waitFor,within} from "@testing-library/react";
-import type {Agent,AgentApproval,AgentApprovalPolicy,MenderClient,PendingAgentApproval} from "@mender/sdk";
+import type {Agent,AgentApproval,AgentApprovalCapability,AgentApprovalPolicy,ManagementClient,PendingAgentApproval} from "@mender/sdk";
 import {afterEach,beforeEach,describe,expect,it,vi} from "vitest";
 import {resetLocaleForTesting,setLocale} from "../../i18n/i18n";
 import {AgentApprovalCenter} from "./agent-approval-center";
@@ -18,20 +18,26 @@ const approval:AgentApproval={
 };
 const request:PendingAgentApproval={approval,agentName:agent.name,workspaceKey:""};
 const defaultPolicy:AgentApprovalPolicy={agentId:agent.agentId,workspaceKey:"",mode:"manual"};
-function makeClient(overrides:Record<string,unknown>={}):MenderClient {
- return {
-   supportsLocalAgentApprovals:true,
-   listPendingAgentApprovals:vi.fn().mockResolvedValue({approvals:[request]}),
-   listAgents:vi.fn().mockResolvedValue({agents:[agent]}),
-   getAgent:vi.fn().mockResolvedValue(agent),
-   listAgentWorkspaces:vi.fn().mockResolvedValue({workspaces:[]}),
-   listAgentApprovalPolicies:vi.fn().mockResolvedValue({policies:[]}),
-   getAgentApprovalPolicy:vi.fn().mockResolvedValue(defaultPolicy),
-   setAgentApprovalPolicy:vi.fn().mockResolvedValue(defaultPolicy),
-   releasePendingAgentApprovals:vi.fn().mockResolvedValue({released:1}),
-   decideAgentApproval:vi.fn().mockResolvedValue({...approval,status:"allowed_once"}),
-   ...overrides,
- } as unknown as MenderClient;
+function makeClient(overrides: Partial<ManagementClient> = {}): ManagementClient {
+  return {
+    listAgents: vi.fn().mockResolvedValue({ agents: [agent] }),
+    getAgent: vi.fn().mockResolvedValue(agent),
+    listAgentWorkspaces: vi.fn().mockResolvedValue({ workspaces: [] }),
+    ...overrides,
+  } as ManagementClient;
+}
+
+function makeApprovals(overrides: Partial<AgentApprovalCapability> = {}): AgentApprovalCapability {
+  return {
+    listAgentApprovals: vi.fn().mockResolvedValue({ approvals: [] }),
+    listPendingAgentApprovals: vi.fn().mockResolvedValue({ approvals: [request] }),
+    listAgentApprovalPolicies: vi.fn().mockResolvedValue({ policies: [] }),
+    getAgentApprovalPolicy: vi.fn().mockResolvedValue(defaultPolicy),
+    setAgentApprovalPolicy: vi.fn().mockResolvedValue(defaultPolicy),
+    releasePendingAgentApprovals: vi.fn().mockResolvedValue({ released: 1 }),
+    decideAgentApproval: vi.fn().mockResolvedValue({ ...approval, status: "allowed_once" }),
+    ...overrides,
+  };
 }
 beforeEach(()=>{resetLocaleForTesting();setLocale("en");});
 afterEach(()=>{cleanup();resetLocaleForTesting();});
@@ -39,8 +45,8 @@ afterEach(()=>{cleanup();resetLocaleForTesting();});
 describe("owner Agent approval center",()=>{
  it("shows cross-Agent pending requests and resolves one from the inbox, without task navigation",async()=>{
   const decision=vi.fn().mockResolvedValue({...approval,status:"allowed_once"});
-  const client=makeClient({decideAgentApproval:decision});
-  render(<AgentApprovalCenter client={client}/>);
+  const approvals=makeApprovals({decideAgentApproval:decision});
+  render(<AgentApprovalCenter client={makeClient()} approvals={approvals}/>);
   expect(await screen.findByText("Review Agent")).toBeTruthy();
   expect(screen.getByText("safe.txt")).toBeTruthy();
   fireEvent.click(screen.getByRole("button",{name:"Allow once"}));
@@ -48,8 +54,8 @@ describe("owner Agent approval center",()=>{
  });
  it("keeps an unreviewable action reject-only and can open the scoped authorization dialog",async()=>{
   const blocked:PendingAgentApproval={...request,approval:{...approval,kind:"execute",canAllow:false,target:""}};
-  const client=makeClient({listPendingAgentApprovals:vi.fn().mockResolvedValue({approvals:[blocked]})});
-  render(<AgentApprovalCenter client={client}/>);
+  const approvals=makeApprovals({listPendingAgentApprovals:vi.fn().mockResolvedValue({approvals:[blocked]})});
+  render(<AgentApprovalCenter client={makeClient()} approvals={approvals}/>);
   expect(await screen.findByText("Review Agent")).toBeTruthy();
   expect(screen.queryByRole("button",{name:"Allow once"})).toBeNull();
   expect(screen.getByRole("button",{name:"Reject"})).toBeTruthy();
@@ -65,8 +71,8 @@ describe("owner Agent approval center",()=>{
  it("sets read-only unattended mode and releases already pending matching requests",async()=>{
   const set=vi.fn().mockResolvedValue({...defaultPolicy,mode:"workspace_read"});
   const release=vi.fn().mockResolvedValue({released:1});
-  const client=makeClient({setAgentApprovalPolicy:set,releasePendingAgentApprovals:release});
-  render(<AgentApprovalCenter client={client}/>);
+  const approvals=makeApprovals({setAgentApprovalPolicy:set,releasePendingAgentApprovals:release});
+  render(<AgentApprovalCenter client={makeClient()} approvals={approvals}/>);
   expect(await screen.findByText("Review Agent")).toBeTruthy();
   fireEvent.click(screen.getByRole("button",{name:"Set authorization mode"}));
   const dialog=await screen.findByRole("dialog");
@@ -81,12 +87,14 @@ describe("owner Agent approval center",()=>{
    listAgentWorkspaces:vi.fn().mockResolvedValue({workspaces:[{
     key:"secondary",workspaceRoot:"/private/tmp/mender-agent-review/secondary",profileIds:[],
    }]}),
+  });
+  const approvals=makeApprovals({
    listAgentApprovalPolicies:vi.fn().mockResolvedValue({
     policies:[{...defaultPolicy,mode:"workspace_read"}],
    }),
    setAgentApprovalPolicy:set,
   });
-  render(<AgentApprovalCenter client={client}/>);
+  render(<AgentApprovalCenter client={client} approvals={approvals}/>);
   expect(await screen.findByText("Review Agent")).toBeTruthy();
   fireEvent.click(screen.getByRole("button",{name:"Set authorization mode"}));
   const dialog=await screen.findByRole("dialog");
@@ -102,8 +110,8 @@ describe("owner Agent approval center",()=>{
  });
  it("requires a separate risk acknowledgement for 24-hour native Host trust",async()=>{
   const set=vi.fn().mockResolvedValue({...defaultPolicy,mode:"trusted",expiresAt:"2099-01-01T00:00:00Z"});
-  const client=makeClient({setAgentApprovalPolicy:set});
-  render(<AgentApprovalCenter client={client}/>);
+  const approvals=makeApprovals({setAgentApprovalPolicy:set});
+  render(<AgentApprovalCenter client={makeClient()} approvals={approvals}/>);
   expect(await screen.findByText("Review Agent")).toBeTruthy();
   fireEvent.click(screen.getByRole("button",{name:"Set authorization mode"}));
   const dialog=await screen.findByRole("dialog");
@@ -120,11 +128,14 @@ describe("owner Agent approval center",()=>{
   const agy:Agent={...agent,name:"Antigravity Local",backend:"antigravity",pluginId:"io.mender.agent.antigravity"};
   const set=vi.fn().mockResolvedValue({...defaultPolicy,mode:"trusted"});
   const client=makeClient({
-   listPendingAgentApprovals:vi.fn().mockResolvedValue({approvals:[]}),
    listAgents:vi.fn().mockResolvedValue({agents:[agy]}),
-   getAgent:vi.fn().mockResolvedValue(agy),setAgentApprovalPolicy:set,
+   getAgent:vi.fn().mockResolvedValue(agy),
   });
-  render(<AgentApprovalCenter client={client}/>);
+  const approvals=makeApprovals({
+   listPendingAgentApprovals:vi.fn().mockResolvedValue({approvals:[]}),
+   setAgentApprovalPolicy:set,
+  });
+  render(<AgentApprovalCenter client={client} approvals={approvals}/>);
   fireEvent.click(screen.getByRole("button",{name:"Unattended authorization"}));
   expect(await screen.findByText("Antigravity Local")).toBeTruthy();
   fireEvent.click(screen.getByRole("button",{name:"Configure authorization"}));
@@ -141,7 +152,7 @@ describe("owner Agent approval center",()=>{
   await waitFor(()=>expect(set).toHaveBeenCalledWith(agy.agentId,"","trusted"));
  });
  it("restricts the inbox to the native owner",()=>{
-  render(<AgentApprovalCenter client={makeClient({supportsLocalAgentApprovals:false})}/>);
+  render(<AgentApprovalCenter client={makeClient()}/>);
   expect(screen.getByText("Local approval access required")).toBeTruthy();
   expect(screen.queryByText("Pending Agent approvals")).toBeNull();
  });

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ChevronLeftIcon, CopyIcon } from "lucide-react";
 import { useNavigate, useParams } from "react-router";
 
-import type { MenderClient, ProfileCLIInstructions } from "@mender/sdk";
+import type { ProfileCLIInstructions } from "@mender/sdk";
 import { Button } from "@mender/ui/components/button";
 import { t } from "../../i18n/i18n";
 import { errorMessage } from "../../shared/errors";
@@ -37,20 +37,20 @@ function commandHelp(field: CommandField): string {
 
 /** Local-only command recipes pinned to the current host DB and Profile. */
 export function ProfileCLIDeliveryPage({
-  client, copyText,
+  getLocalProfileCLI, copyText,
 }: {
-  client: MenderClient;
+  getLocalProfileCLI?: ((slug: string) => Promise<ProfileCLIInstructions>) | undefined;
   copyText?: (value: string) => Promise<void>;
 }) {
   const { slug } = useParams();
-  return <ProfileCLIDeliveryContent key={slug} slug={slug} client={client}
+  return <ProfileCLIDeliveryContent key={slug} slug={slug} getLocalProfileCLI={getLocalProfileCLI}
     {...(copyText === undefined ? {} : { copyText })} />;
 }
 
 function ProfileCLIDeliveryContent({
-  client, copyText, slug,
+  getLocalProfileCLI, copyText, slug,
 }: {
-  client: MenderClient;
+  getLocalProfileCLI?: ((slug: string) => Promise<ProfileCLIInstructions>) | undefined;
   copyText?: (value: string) => Promise<void>;
   slug: string | undefined;
 }) {
@@ -62,11 +62,12 @@ function ProfileCLIDeliveryContent({
   const [copied, setCopied] = useState("");
   const [loaded, setLoaded] = useState(false);
   const [version, setVersion] = useState(0);
+  const visibleLoadError = getLocalProfileCLI ? loadError : "";
 
   useEffect(() => {
-    if (!slug || !client.getLocalProfileCLI) return;
+    if (!slug || !getLocalProfileCLI) return;
     let active = true;
-    void client.getLocalProfileCLI(slug).then((item) => {
+    void getLocalProfileCLI(slug).then((item) => {
       if (!active) return;
       setRecipe(item);
       setLoadError("");
@@ -74,7 +75,7 @@ function ProfileCLIDeliveryContent({
       if (active) setLoadError(errorMessage(reason));
     }).finally(() => { if (active) setLoaded(true); });
     return () => { active = false; };
-  }, [client, slug, version]);
+  }, [getLocalProfileCLI, slug, version]);
 
   const refresh = useCallback(() => {
     setLoaded(false);
@@ -105,7 +106,7 @@ function ProfileCLIDeliveryContent({
           <ChevronLeftIcon data-icon="inline-start" />
           {t("Back to profile")}
         </Button>
-        {client.getLocalProfileCLI && !loadError ? <Button size="sm" variant="outline" onClick={refresh}>
+        {getLocalProfileCLI && !loadError ? <Button size="sm" variant="outline" onClick={refresh}>
           {t("Refresh")}
         </Button> : null}
       </div>
@@ -114,15 +115,15 @@ function ProfileCLIDeliveryContent({
           <p className="text-sm text-muted-foreground">
             {t("These commands use the current Desktop database and this exact Profile. Mender CLI must be installed locally.")}
           </p>
-          {!client.getLocalProfileCLI ?
+          {!getLocalProfileCLI ?
             <p role="note" className="text-sm text-muted-foreground">
               {t("Local CLI instructions are available only on the Mender Desktop host, not through remote management.")}
             </p> : null}
-          {client.getLocalProfileCLI && !loaded ? <p className="text-sm text-muted-foreground">{t("Loading Profile delivery…")}</p> : null}
-          {loadError || !slug ? <ErrorNotice message={loadError || t("The requested item was not found.")}
-            onRetry={slug && client.getLocalProfileCLI ? refresh : undefined} /> : null}
-          {copyError ? <ErrorNotice message={copyError} /> : null}
-          {recipe ? <>
+          {getLocalProfileCLI && !loaded ? <p className="text-sm text-muted-foreground">{t("Loading Profile delivery…")}</p> : null}
+          {visibleLoadError || !slug ? <ErrorNotice message={visibleLoadError || t("The requested item was not found.")}
+            onRetry={slug && getLocalProfileCLI ? refresh : undefined} /> : null}
+          {getLocalProfileCLI && copyError ? <ErrorNotice message={copyError} /> : null}
+          {getLocalProfileCLI && recipe ? <>
             <div className="rounded-lg border border-border p-3">
               <p className="text-xs font-medium text-muted-foreground">{t("Local database")}</p>
               <p className="mt-1 break-all font-mono text-xs">{recipe.databasePath}</p>

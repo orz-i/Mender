@@ -1,5 +1,4 @@
 import { MenderClientInvariantError } from "@mender/sdk";
-import { Browser } from "@wailsio/runtime";
 import type {
   AuditRecord,
   ProviderActivationAuditRecord,
@@ -8,7 +7,8 @@ import type {
   OAuthFlow,
   InvocationResult,
   MCPServerInstance,
-  MenderClient,
+  ManagementClient,
+  ProfileCLIInstructions,
   Policy,
   PolicyRule,
   PolicyRuleInput,
@@ -44,10 +44,6 @@ import type {
   AgentModelChoices,
   WorkspaceToolTarget,
   AgentTask,
-  AgentApproval,
-  AgentApprovalPolicy,
-  PendingAgentApproval,
-  AgentToolPlacement,
   AgentAdmissionEvent,
   SandboxActivity,
   SandboxActivityEvent,
@@ -97,10 +93,6 @@ import {
   type AgentModelChoices as BindingAgentModelChoices,
   type WorkspaceToolTarget as BindingWorkspaceToolTarget,
   type AgentTask as BindingAgentTask,
-  type AgentApproval as BindingAgentApproval,
-  type AgentApprovalPolicy as BindingAgentApprovalPolicy,
-  type AgentPendingApproval as BindingAgentPendingApproval,
-  type AgentToolPlacement as BindingAgentToolPlacement,
   type AgentAdmissionEvent as BindingAgentAdmissionEvent,
   type Sandbox as BindingSandbox,
   type SandboxToolSuite as BindingSandboxToolSuite,
@@ -165,13 +157,21 @@ export async function deployDesktopProfileSkills(
   return (output.deployments ?? []).map(skillDeployment);
 }
 
-export function createDesktopMenderClient(): MenderClient {
+export async function getDesktopProfileCLI(slug: string): Promise<ProfileCLIInstructions> {
+  const recipe = await Service.GetProfileCLIInstructions(slug);
   return {
-    supportsLocalAgentApprovals:true,
-    supportsLocalAgentToolPlacements:true,
-    async openExternalURL(url) {
-      await Browser.OpenURL(url);
-    },
+    profileSlug: recipe.profileSlug,
+    databasePath: recipe.databasePath,
+    platform: recipe.platform,
+    search: recipe.search ?? [],
+    describe: recipe.describe ?? [],
+    call: recipe.call ?? [],
+    mcpStdio: recipe.mcpStdio ?? [],
+  };
+}
+
+export function createDesktopMenderClient(): ManagementClient {
+  return {
     async getSystemStatus() {
       return systemStatus(await Service.GetSystemStatus());
     },
@@ -390,19 +390,6 @@ export function createDesktopMenderClient(): MenderClient {
       return profile(await Service.GetProfile(slug));
     },
 
-    async getLocalProfileCLI(slug) {
-      const recipe = await Service.GetProfileCLIInstructions(slug);
-      return {
-        profileSlug: recipe.profileSlug,
-        databasePath: recipe.databasePath,
-        platform: recipe.platform,
-        search: recipe.search ?? [],
-        describe: recipe.describe ?? [],
-        call: recipe.call ?? [],
-        mcpStdio: recipe.mcpStdio ?? [],
-      };
-    },
-
     async addProfileTool(slug, body) {
       return profile(
         await Service.AddProfileTool(slug, bindingProfileTool(body)),
@@ -453,12 +440,6 @@ export function createDesktopMenderClient(): MenderClient {
     async updateAgentSettings(agentId,defaultModel,defaultReasoningEffort){return agent(await Service.UpdateAgentSettings(agentId,defaultModel,defaultReasoningEffort));},
     async inspectAgentModels(agentId){return agentModelChoices(await Service.InspectAgentModels(agentId));},
     async listAgentWorkspaces(agentId){const r=await Service.ListAgentWorkspaces(agentId);return {workspaces:(r.workspaces??[]).map(agentWorkspace)};},
-    async listAgentToolPlacements(agentId){const r=await Service.ListAgentToolPlacements(agentId);
-      return {placements:(r.placements??[]).map(agentToolPlacement)};},
-    async configureAgentToolPlacement(agentId,key,sandboxId,toolIds){
-      return agentToolPlacement(await Service.ConfigureAgentToolPlacement(agentId,key,sandboxId,toolIds));
-    },
-    async disableAgentToolPlacement(agentId,key){await Service.DisableAgentToolPlacement(agentId,key);},
     async bindAgentWorkspace(agentId,key,workspaceRoot){await Service.BindAgentWorkspace(agentId,key,workspaceRoot);},
     async unbindAgentWorkspace(agentId,key){await Service.UnbindAgentWorkspace(agentId,key);},
     async grantAgentWorkspace(agentId,key,profileId){await Service.GrantAgentWorkspace(agentId,key,profileId);},
@@ -473,16 +454,6 @@ export function createDesktopMenderClient(): MenderClient {
       return {events:(result.events??[]).map(agentAdmissionEvent)};
     },
     async getAgentTask(taskId){return agentTask(await Service.GetAgentTask(taskId));},
-    async listAgentApprovals(taskId){const data=await Service.ListAgentApprovals(taskId);
-      return {approvals:(data.approvals??[]).map(agentApproval)};},
-    async decideAgentApproval(approvalId,choice){return agentApproval(await Service.DecideAgentApproval(approvalId,choice));},
-    async listPendingAgentApprovals(){const result=await Service.ListPendingAgentApprovals();
-      return {approvals:(result.approvals??[]).map(pendingAgentApproval)};},
-    async getAgentApprovalPolicy(agentId,key){return agentApprovalPolicy(await Service.GetAgentApprovalPolicy(agentId,key));},
-    async listAgentApprovalPolicies(agentId){const result=await Service.ListAgentApprovalPolicies(agentId);
-      return {policies:(result.policies??[]).map(agentApprovalPolicy)};},
-    async setAgentApprovalPolicy(agentId,key,mode){return agentApprovalPolicy(await Service.SetAgentApprovalPolicy(agentId,key,mode));},
-    async releasePendingAgentApprovals(agentId,key){return Service.ReleasePendingAgentApprovals(agentId,key);},
     async cancelAgentTask(taskId){return Service.CancelAgentTask(taskId);},
     async listAgentGrants(agentId){
       const result=await Service.ListAgentGrants(agentId);
@@ -1033,9 +1004,6 @@ function agentModelChoices(value:BindingAgentModelChoices):AgentModelChoices {
       choices:(value.reasoningEffort.choices??[]).map(m=>({id:m.id,name:m.name}))}}:{}),
   };
 }
-function agentToolPlacement(value:BindingAgentToolPlacement):AgentToolPlacement {
- return {...value,toolIds:value.toolIds??[]};
-}
 function agentWorkspace(value:BindingAgentWorkspace):AgentWorkspace {
   return {key:value.key,workspaceRoot:value.workspaceRoot,profileIds:value.profileIds??[]};
 }
@@ -1077,31 +1045,6 @@ function agentAdmissionEvent(value:BindingAgentAdmissionEvent):AgentAdmissionEve
   }
   return {...value,action:value.action,principalKind:value.principalKind,origin:value.origin,
     scopeKind:value.scopeKind,policyKind:value.policyKind,status:value.status};
-}
-function agentApproval(value:BindingAgentApproval):AgentApproval {
-  switch(value.status){
-    case "pending":case "allowed_once":case "rejected":case "expired":break;
-    default:throw new MenderClientInvariantError("Unknown Agent approval status: "+value.status);
-  }
-  switch(value.kind){
-    case "read":case "edit":case "execute":case "other":break;
-    default:throw new MenderClientInvariantError("Unknown Agent approval kind: "+value.kind);
-  }
-  if(value.decisionSource!==undefined&&value.decisionSource!=="owner"&&value.decisionSource!=="policy") {
-    throw new MenderClientInvariantError("Unknown Agent approval decision source: "+value.decisionSource);
-  }
-  const {decisionSource:rawSource,...fields}=value;
-  return {...fields,kind:value.kind,status:value.status,
-    ...(rawSource==="owner"||rawSource==="policy"?{decisionSource:rawSource}:{})};
-}
-function agentApprovalPolicy(value:BindingAgentApprovalPolicy):AgentApprovalPolicy {
-  if(value.mode!=="manual"&&value.mode!=="workspace_read"&&value.mode!=="trusted") {
-    throw new MenderClientInvariantError("Unknown Agent approval mode: "+value.mode);
-  }
-  return {...value,mode:value.mode};
-}
-function pendingAgentApproval(value:BindingAgentPendingApproval):PendingAgentApproval {
-  return {...value,approval:agentApproval(value.approval)};
 }
 function agentTask(value:BindingAgentTask):AgentTask {
   const {observation,timeoutSeconds,...task}=value;

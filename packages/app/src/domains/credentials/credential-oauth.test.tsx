@@ -39,7 +39,7 @@ afterEach(() => {
 });
 
 describe("Interactive MCP OAuth authorization", () => {
-  it("starts authorization without a raw secret and offers a browser link", async () => {
+  it.each(["Web", "Desktop"])("starts %s authorization without a raw secret and offers a browser link", async (host) => {
     const startOAuthCredential = vi.fn().mockResolvedValue({
       flowId: "mfo_test", authorizationUrl: "https://accounts.example.test/authorize?state=public-fixture",
     });
@@ -49,7 +49,8 @@ describe("Interactive MCP OAuth authorization", () => {
     const cancelOAuthFlow = vi.fn().mockResolvedValue(undefined);
     const listCredentials = vi.fn().mockResolvedValue({ credentials: [] });
     const client = { listCredentials, startOAuthCredential, getOAuthFlow, cancelOAuthFlow } as unknown as MenderClient;
-    render(<TooltipProvider><CredentialsPage client={client} /></TooltipProvider>);
+    const openExternalURL = host === "Desktop" ? vi.fn().mockRejectedValue(new Error("Browser unavailable")) : undefined;
+    render(<TooltipProvider><CredentialsPage client={client} openExternalURL={openExternalURL} /></TooltipProvider>);
     fireEvent.click(screen.getByRole("button", { name: "Add credential" }));
     fireEvent.change(screen.getByRole("combobox", { name: "Credential source" }), { target: { value: "oauth" } });
     expect(screen.queryByRole("textbox", { name: "Credential secret" })).toBeNull();
@@ -65,6 +66,9 @@ describe("Interactive MCP OAuth authorization", () => {
     }));
     const link = await screen.findByRole<HTMLAnchorElement>("link", { name: "Open authorization page" });
     expect(link.href).toContain("https://accounts.example.test/authorize");
+    if (openExternalURL) {
+      expect(openExternalURL).toHaveBeenCalledWith(link.href);
+    }
     await waitFor(() => expect(getOAuthFlow).toHaveBeenCalledWith("mfo_test"));
     fireEvent.click(screen.getByRole("button", { name: "Cancel authorization" }));
     await waitFor(() => expect(cancelOAuthFlow).toHaveBeenCalledWith("mfo_test"));

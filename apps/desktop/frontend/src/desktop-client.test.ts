@@ -34,6 +34,9 @@ vi.mock(
       GetSystemStatus: vi.fn(),
       GetAgentTask: vi.fn(),
       ListAgentTasks: vi.fn(),
+      ListPendingAgentApprovals: vi.fn(),
+      DecideAgentApproval: vi.fn(),
+      ConfigureAgentToolPlacement: vi.fn(),
       InstallProviderPlugin: vi.fn(),
       InstallLocalPlugin: vi.fn(),
       ListPluginCatalogue: vi.fn(),
@@ -83,14 +86,52 @@ import {
   createDesktopMenderClient,
   deployDesktopProfileSkills,
   exportDesktopProfilePlugin,
+  getDesktopProfileCLI,
   installDesktopProviderPlugin,
   installDesktopPlugin,
   installDesktopSkill,
 } from "./desktop-client";
+import { createDesktopLocalOwnerCapabilities } from "./desktop-local-owner";
 
 describe("desktop Mender client", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it("routes local approvals and placements through the owner capability adapter", async () => {
+    const client = createDesktopMenderClient();
+    const { approvals, toolPlacements } = createDesktopLocalOwnerCapabilities();
+    expect(client).not.toHaveProperty("decideAgentApproval");
+    expect(client).not.toHaveProperty("configureAgentToolPlacement");
+
+    const agentId = "agent_00000000000000000000000000000001";
+    const request = {
+      approvalId: "aapr_00000000000000000000000000000002",
+      taskId: "atask_00000000000000000000000000000003",
+      agentId, kind: "read", canAllow: true, status: "pending",
+      createdAt: "2026-11-05T00:00:00Z", expiresAt: "2026-11-05T00:01:00Z",
+    };
+    const pending = { approval: request, agentName: "Agent", workspaceKey: "" };
+    vi.mocked(Service.ListPendingAgentApprovals).mockResolvedValue({ approvals: [pending] });
+    await expect(approvals.listPendingAgentApprovals()).resolves.toEqual({ approvals: [pending] });
+
+    const denied = new Error("owner access required");
+    vi.mocked(Service.DecideAgentApproval).mockRejectedValueOnce(denied);
+    await expect(approvals.decideAgentApproval(request.approvalId, "reject")).rejects.toBe(denied);
+    expect(Service.DecideAgentApproval).toHaveBeenCalledWith(request.approvalId, "reject");
+
+    const placement = {
+      agentId, workspaceKey: "review", workspaceRoot: "/fixture/review",
+      sandboxId: "sbx_00000000000000000000000000000004",
+      toolIds: ["tool_00000000000000000000000000000005"], updatedAt: "2026-11-05T00:00:00Z",
+    };
+    vi.mocked(Service.ConfigureAgentToolPlacement).mockResolvedValue(placement);
+    await expect(toolPlacements.configureAgentToolPlacement(
+      agentId, placement.workspaceKey, placement.sandboxId, placement.toolIds,
+    )).resolves.toEqual(placement);
+    expect(Service.ConfigureAgentToolPlacement).toHaveBeenCalledWith(
+      agentId, placement.workspaceKey, placement.sandboxId, placement.toolIds,
+    );
   });
 
   it("validates Wails Task budget and preserves independent native progress", async () => {
@@ -1324,12 +1365,11 @@ describe("desktop Mender client", () => {
       call: ["mender", "--db", path, "profile", "tool", "call", "delivery", "<tool-id>", "--args", "{}"],
       mcpStdio: ["mender", "--db", path, "serve", "mcp", "--profile", "delivery", "--stdio"],
     });
-    const client = createDesktopMenderClient();
-    const local = await client.getLocalProfileCLI?.("delivery");
-    expect(local?.profileSlug).toBe("delivery");
-    expect(local?.databasePath).toBe(path);
-    expect(local?.search).toContain("profile");
-    expect(local?.search).toContain("delivery");
+    const local = await getDesktopProfileCLI("delivery");
+    expect(local.profileSlug).toBe("delivery");
+    expect(local.databasePath).toBe(path);
+    expect(local.search).toContain("profile");
+    expect(local.search).toContain("delivery");
     expect(Service.GetProfileCLIInstructions).toHaveBeenCalledWith("delivery");
 
     const output = {

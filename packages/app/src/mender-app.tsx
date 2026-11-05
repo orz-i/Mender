@@ -1,7 +1,9 @@
 import type {
-  MenderClient,
+  LocalOwnerCapabilities,
+  ManagementClient,
   ExportProfilePluginInput,
   ProfileAgentPluginExport,
+  ProfileCLIInstructions,
   ProviderPluginInstallation,
   SkillDeployment,
   SkillInstallation,
@@ -44,6 +46,9 @@ import { ManagementShell } from "./shell/management-shell";
 
 export function MenderApp({
   client,
+  localOwner,
+  openExternalURL,
+  getLocalProfileCLI,
   copyText,
   chooseLocalDirectory,
   installPlugin,
@@ -51,7 +56,10 @@ export function MenderApp({
   deployProfileSkills,
   exportProfilePlugin,
 }: {
-  client: MenderClient;
+  client: ManagementClient;
+  localOwner?: LocalOwnerCapabilities;
+  openExternalURL?: (url: string) => Promise<void>;
+  getLocalProfileCLI?: (slug: string) => Promise<ProfileCLIInstructions>;
   copyText?: (value: string) => Promise<void>;
   chooseLocalDirectory?: () => Promise<string | null>;
   installPlugin?: () => Promise<ProviderPluginInstallation | null>;
@@ -64,7 +72,7 @@ export function MenderApp({
   return (
     <TooltipProvider>
       <Routes>
-        <Route element={<ManagementShell client={client} />}>
+        <Route element={<ManagementShell client={client} approvals={localOwner?.approvals} />}>
           <Route index element={<OverviewPage client={client} />} />
           <Route
             path="plugins"
@@ -104,7 +112,7 @@ export function MenderApp({
             {...(copyText === undefined ? {} : { copyText })} />} />
           <Route path="profiles/:slug/deliveries/skills" element={<ProfileSkillDeliveryPage client={client}
             {...(deployProfileSkills === undefined ? {} : { deployProfileSkills })} />} />
-          <Route path="profiles/:slug/deliveries/cli" element={<ProfileCLIDeliveryPage client={client}
+          <Route path="profiles/:slug/deliveries/cli" element={<ProfileCLIDeliveryPage getLocalProfileCLI={getLocalProfileCLI}
             {...(copyText === undefined ? {} : { copyText })} />} />
           <Route path="profiles/:slug/deliveries/plugin" element={<ProfileAgentPluginPage client={client}
             {...(exportProfilePlugin === undefined ? {} : { exportProfilePlugin })} />} />
@@ -112,10 +120,10 @@ export function MenderApp({
           <Route path="servers" element={<Navigate to="/profiles" replace />} />
           <Route path="runtime" element={<RuntimePage client={client} />} />
           <Route path="agents" element={<AgentsPage client={client} />} />
-          <Route path="approvals" element={<AgentApprovalCenter client={client} />} />
+          <Route path="approvals" element={<AgentApprovalCenter client={client} approvals={localOwner?.approvals} />} />
           <Route path="agents/new" element={<AgentCreatePage client={client}
             {...(chooseLocalDirectory===undefined?{}:{chooseLocalDirectory})} />} />
-          <Route path="agents/:agentId" element={<AgentDetailPage client={client}
+          <Route path="agents/:agentId" element={<AgentDetailPage client={client} localOwner={localOwner}
             {...(chooseLocalDirectory===undefined?{}:{chooseLocalDirectory})}/>} />
           <Route path="sandboxes" element={<SandboxesPage client={client} />} />
           <Route
@@ -133,7 +141,7 @@ export function MenderApp({
           <Route path="policy" element={<PolicyPage client={client} />} />
           <Route
             path="credentials"
-            element={<CredentialsPage client={client} />}
+            element={<CredentialsPage client={client} openExternalURL={openExternalURL} />}
           />
           <Route path="audit" element={<AuditPage client={client} />} />
           <Route path="*" element={<OverviewPage client={client} />} />

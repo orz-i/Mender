@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { KeyRoundIcon, RefreshCwIcon, Trash2Icon } from "lucide-react";
 
-import type { Credential, MenderClient, OAuthFlowStart, OAuthFlow } from "@mender/sdk";
+import type { Credential, ManagementClient, OAuthFlowStart, OAuthFlow } from "@mender/sdk";
 import { Badge } from "@mender/ui/components/badge";
 import { Button } from "@mender/ui/components/button";
 import {
@@ -72,7 +72,10 @@ const emptyCreateForm = {
   oauthScopes: "",
 };
 
-export function CredentialsPage({ client }: { client: MenderClient }) {
+export function CredentialsPage({ client, openExternalURL }: {
+  client: ManagementClient;
+  openExternalURL?: ((url: string) => Promise<void>) | undefined;
+}) {
   const [credentials, setCredentials] = useState<Credential[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [hasSnapshot, setHasSnapshot] = useState(false);
@@ -222,9 +225,9 @@ export function CredentialsPage({ client }: { client: MenderClient }) {
         setOAuthFlowMessage("");
         setCreateOpen(false);
         setCreateForm(emptyCreateForm);
-        if (client.openExternalURL) {
+        if (openExternalURL) {
           try {
-            await client.openExternalURL(started.authorizationUrl);
+            await openExternalURL(started.authorizationUrl);
           } catch {
             setOAuthFlowMessage(t("Open the authorization page using the link below."));
           }

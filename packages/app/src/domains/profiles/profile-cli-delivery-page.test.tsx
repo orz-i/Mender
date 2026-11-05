@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import type { MenderClient, ProfileCLIInstructions } from "@mender/sdk";
+import type { ProfileCLIInstructions } from "@mender/sdk";
 import { TooltipProvider } from "@mender/ui/components/tooltip";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -18,17 +18,13 @@ const recipe: ProfileCLIInstructions = {
 };
 
 function show(input: {
-  getLocalProfileCLI?: MenderClient["getLocalProfileCLI"];
+  getLocalProfileCLI?: (slug: string) => Promise<ProfileCLIInstructions>;
   copyText?: (value: string) => Promise<void>;
 } = {}) {
-  const client = {
-    ...(input.getLocalProfileCLI === undefined
-      ? {} : { getLocalProfileCLI: input.getLocalProfileCLI }),
-  } as unknown as MenderClient;
   render(<MemoryRouter initialEntries={["/profiles/delivery/deliveries/cli"]}>
     <TooltipProvider><Routes>
       <Route path="/profiles/:slug/deliveries/cli" element={<ProfileCLIDeliveryPage
-        client={client} {...(input.copyText === undefined ? {} : { copyText: input.copyText })} />} />
+        {...input} />} />
       <Route path="/profiles/:slug" element={<p>Profile detail</p>} />
     </Routes></TooltipProvider>
   </MemoryRouter>);

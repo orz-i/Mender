@@ -1,5 +1,5 @@
 import {useEffect,useState} from "react";
-import type {Agent,AgentApprovalMode,AgentApprovalPolicy,AgentWorkspace,MenderClient,PendingAgentApproval} from "@mender/sdk";
+import type {Agent,AgentApprovalCapability,AgentApprovalMode,AgentApprovalPolicy,AgentWorkspace,ManagementClient,PendingAgentApproval} from "@mender/sdk";
 import {Button} from "@mender/ui/components/button";
 import {Badge} from "@mender/ui/components/badge";
 import {Dialog,DialogBody,DialogContent,DialogDescription,DialogFooter,DialogHeader,DialogTitle} from "@mender/ui/components/dialog";
@@ -16,7 +16,21 @@ const kindLabel=(kind:string)=>t(kind==="read"?"Read":kind==="edit"?"Edit":kind=
 const modeLabel=(mode:AgentApprovalMode)=>t(mode==="manual"?"Ask every time":mode==="workspace_read"?"Allow workspace reads": "Trust native Agent actions (24 hours)");
 const workspaceLabel=(key:string)=>key||t("Default workspace");
 
-export function AgentApprovalCenter({client}:{client:MenderClient}){
+export function AgentApprovalCenter({ client, approvals }: {
+  client: ManagementClient;
+  approvals?: AgentApprovalCapability | undefined;
+}) {
+  if (!approvals) {
+    return <EmptyPanelState><EmptyState title="Local approval access required"
+      description="Approval decisions and unattended modes are available only to the authenticated desktop owner." /></EmptyPanelState>;
+  }
+  return <ApprovalInbox client={client} approvals={approvals} />;
+}
+
+function ApprovalInbox({ client, approvals }: {
+  client: ManagementClient;
+  approvals: AgentApprovalCapability;
+}) {
  const [tab,setTab]=useState<"pending"|"authorization">("pending");
  const [pending,setPending]=useState<PendingAgentApproval[]>([]);
  const [agents,setAgents]=useState<Agent[]>([]);
@@ -27,32 +41,30 @@ export function AgentApprovalCenter({client}:{client:MenderClient}){
  const [busy,setBusy]=useState(false);
  const [editor,setEditor]=useState<Editor|null>(null);
  const [trustConfirmed,setTrustConfirmed]=useState(false);
- const local=client.supportsLocalAgentApprovals===true;
  useEffect(()=>{
-  if(!local)return;
   let active=true;
   const refresh=()=>{
-   void client.listPendingAgentApprovals().then(({approvals})=>{
+   void approvals.listPendingAgentApprovals().then(({approvals})=>{
     if(active){setPending(approvals);setLoaded(true);}
    }).catch(reason=>{if(active){setError(errorMessage(reason));setLoaded(true);}});
   };
   refresh();
   const timer=setInterval(refresh,2500);
   return()=>{active=false;clearInterval(timer);};
- },[client,revision,local]);
+ },[approvals,revision]);
  useEffect(()=>{
-  if(!local||tab!=="authorization")return;
+  if(tab!=="authorization")return;
   let active=true;
   void client.listAgents().then(({agents})=>{
    if(active){setAgents(agents);setAgentsLoaded(true);}
   }).catch(reason=>{if(active){setError(errorMessage(reason));setAgentsLoaded(true);}});
   return()=>{active=false;};
- },[client,tab,revision,local]);
+ },[client,tab,revision]);
  async function decide(item:PendingAgentApproval,choice:"allow_once"|"reject"){
   if(busy)return;
   setBusy(true);setError("");
   try{
-   await client.decideAgentApproval(item.approval.approvalId,choice);
+   await approvals.decideAgentApproval(item.approval.approvalId,choice);
    setPending(current=>current.filter(x=>x.approval.approvalId!==item.approval.approvalId));
    setRevision(n=>n+1);
   }catch(reason){setError(errorMessage(reason));}finally{setBusy(false);}
@@ -62,7 +74,7 @@ export function AgentApprovalCenter({client}:{client:MenderClient}){
   setBusy(true);setError("");
   try{
    const [agent,workspaces,configured]=await Promise.all([
-    client.getAgent(agentId),client.listAgentWorkspaces(agentId),client.listAgentApprovalPolicies(agentId),
+    client.getAgent(agentId),client.listAgentWorkspaces(agentId),approvals.listAgentApprovalPolicies(agentId),
    ]);
    const choices:Workspace[]=[{key:"",root:agent.workspaceRoot},
     ...(workspaces.workspaces??[]).map((item:AgentWorkspace)=>({key:item.key,root:item.workspaceRoot}))];
@@ -86,18 +98,16 @@ export function AgentApprovalCenter({client}:{client:MenderClient}){
   if(!editor||busy||(editor.mode==="trusted"&&!trustConfirmed))return;
   setBusy(true);setError("");
   try{
-   await client.setAgentApprovalPolicy(editor.agent.agentId,editor.workspaceKey,editor.mode);
+   await approvals.setAgentApprovalPolicy(editor.agent.agentId,editor.workspaceKey,editor.mode);
    if(editor.mode!=="manual"){
     // A mode selected with an existing pending request must release that
     // request too, otherwise the user would still have to watch Task details.
-    await client.releasePendingAgentApprovals(editor.agent.agentId,editor.workspaceKey);
+    await approvals.releasePendingAgentApprovals(editor.agent.agentId,editor.workspaceKey);
    }
    setEditor(null);setRevision(n=>n+1);
   }catch(reason){setError(errorMessage(reason));}finally{setBusy(false);}
  }
  const activeWorkspace=editor?.workspaces.find(x=>x.key===editor.workspaceKey);
- if(!local)return <EmptyPanelState><EmptyState title="Local approval access required"
-   description="Approval decisions and unattended modes are available only to the authenticated desktop owner."/></EmptyPanelState>;
  return <>
   <PageToolbar tabs={<PageTabs label="Agent approvals">
     <PageTab label="Pending approvals" active={tab==="pending"} count={pending.length} onClick={()=>setTab("pending")}/>

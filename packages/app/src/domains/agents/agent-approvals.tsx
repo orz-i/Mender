@@ -1,5 +1,5 @@
 import {useEffect,useState} from "react";
-import type {AgentApproval,AgentTask,MenderClient} from "@mender/sdk";
+import type {AgentApproval,AgentApprovalCapability,AgentTask,ManagementClient} from "@mender/sdk";
 import {Button} from "@mender/ui/components/button";
 import {t} from "../../i18n/i18n";
 import {errorMessage} from "../../shared/errors";
@@ -8,8 +8,13 @@ import {errorMessage} from "../../shared/errors";
 // Permission titles, raw tool arguments and diff contents are deliberately
 // absent until an independent trustworthy preview/execution boundary exists.
 export function AgentTaskApprovals({
- client,task,onTaskUpdated,
-}:{client:MenderClient;task:AgentTask;onTaskUpdated?:(task:AgentTask)=>void}){
+   client, approvals, task, onTaskUpdated,
+}: {
+  client: Pick<ManagementClient, "getAgentTask">;
+  approvals: Pick<AgentApprovalCapability, "listAgentApprovals" | "decideAgentApproval">;
+  task: AgentTask;
+  onTaskUpdated?: (task: AgentTask) => void;
+}) {
  const [records,setRecords]=useState<AgentApproval[]>([]);
  const [busy,setBusy]=useState(false);
  const [error,setError]=useState("");
@@ -17,7 +22,7 @@ export function AgentTaskApprovals({
  useEffect(()=>{
   let active=true;
   const refresh=()=>{
-   void Promise.all([client.listAgentApprovals(task.taskId),client.getAgentTask(task.taskId)])
+   void Promise.all([approvals.listAgentApprovals(task.taskId),client.getAgentTask(task.taskId)])
     .then(([result,current])=>{
      if(!active)return;
      setRecords(result.approvals);
@@ -28,12 +33,12 @@ export function AgentTaskApprovals({
   if(task.status!=="queued"&&task.status!=="running")return()=>{active=false;};
   const timer=setInterval(refresh,1500);
   return()=>{active=false;clearInterval(timer);};
- },[client,task.taskId,task.status,revision,onTaskUpdated]);
+ },[client,approvals,task.taskId,task.status,revision,onTaskUpdated]);
  async function decide(item:AgentApproval,choice:"allow_once"|"reject"){
   if(busy)return;
   setBusy(true);setError("");
   try{
-   await client.decideAgentApproval(item.approvalId,choice);
+   await approvals.decideAgentApproval(item.approvalId,choice);
    setRevision(v=>v+1);
   }catch(reason){setError(errorMessage(reason));}finally{setBusy(false);}
  }
