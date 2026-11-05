@@ -502,11 +502,6 @@ export function ServersPage({
               </div>
             ) : null}
 
-            {selectedProfile?.tunnelId ? (
-              <p role="note" className="text-xs font-medium leading-5 text-foreground">
-                {t("Also starts the linked secure Tunnel.")}
-              </p>
-            ) : null}
 
             <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
               <FormHeading label={t("Local listen address")} help={t("If the port is occupied, Mender automatically tries the next local ports. The actual endpoint is shown after the server starts.")} />

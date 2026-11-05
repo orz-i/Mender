@@ -9,7 +9,6 @@ import (
 	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	profileapplication "github.com/orz-i/Mender/backend/internal/profile/application"
-	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 )
 
 func TestDeleteConfiguredProviderRejectsProfileReference(t *testing.T) {
@@ -56,25 +55,23 @@ func TestDeleteConfiguredProviderRejectsProfileReference(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	profile, err := runtime.Profiles.Create.Execute(
+	profile, err := createMCPProfileFixture(t, runtime,
 		context.Background(),
 		profileapplication.CreateProfileRequest{
 			Slug:        "default",
 			DisplayName: "Default",
-			Mode:        profiledomain.ExposureHybrid,
-		},
-	)
+		}, "hybrid")
+
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = runtime.Profiles.AddTool.Execute(
+	_, err = addMCPProfileToolFixture(t, runtime,
 		context.Background(),
 		profileapplication.AddToolRequest{
 			ProfileSlug: profile.Slug(),
 			ToolID:      tool.ID(),
-			Direct:      true,
-		},
-	)
+		}, true)
+
 	if err != nil {
 		t.Fatal(err)
 	}

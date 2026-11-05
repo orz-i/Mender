@@ -84,8 +84,6 @@ export type CreateDaytonaSandboxRequest = components["schemas"]["CreateDaytonaSa
 export type SandboxBackends = components["schemas"]["SandboxBackends"];
 export type CreateOpenAITunnelRequest =
   components["schemas"]["CreateOpenAITunnelRequest"];
-export type SetProfileTunnelRequest =
-  components["schemas"]["SetProfileTunnelRequest"];
 export type AuditRecord = components["schemas"]["AuditRecord"];
 export type ProviderActivationAuditRecord =
   components["schemas"]["ProviderActivationAuditRecord"];
@@ -124,6 +122,8 @@ export type RebindProviderRequest = components["schemas"]["RebindProviderRequest
 export type UpdateProviderRequest =
   components["schemas"]["UpdateProviderRequest"];
 export type CreateProfileRequest = components["schemas"]["CreateProfileRequest"];
+export type ProfileMCPDelivery = components["schemas"]["ProfileMCPDelivery"];
+export type ConfigureProfileMCPDeliveryRequest = components["schemas"]["ConfigureProfileMCPDeliveryRequest"];
 export type AddProfileToolRequest =
   components["schemas"]["AddProfileToolRequest"];
 export type ReplaceProfileToolsRequest =
@@ -246,7 +246,8 @@ export interface MenderClient {
   replaceProfileSkills(slug: string, body: ReplaceProfileSkillsRequest): Promise<Profile>;
   listProfileSkillDeployments(slug: string): Promise<{ deployments: SkillDeployment[] }>;
   undeployProfileSkill(slug: string, deploymentId: string): Promise<void>;
-  setProfileTunnel(slug: string, body: SetProfileTunnelRequest): Promise<Profile>;
+  getProfileMCPDelivery(slug: string): Promise<ProfileMCPDelivery | null>;
+  configureProfileMCPDelivery(slug: string, body: ConfigureProfileMCPDeliveryRequest): Promise<ProfileMCPDelivery>;
   listIntegrationOfferings(): Promise<{integrations:IntegrationOffering[]}>;
   listAgents(): Promise<{agents:Agent[]}>;
   getAgent(agentId:string): Promise<Agent>;
@@ -654,8 +655,14 @@ export function createMenderClient(
       return requireData(result);
     },
 
-    async setProfileTunnel(slug: string, body: SetProfileTunnelRequest) {
-      const result = await client.PUT("/profiles/{slug}/tunnel", {
+    async getProfileMCPDelivery(slug: string) {
+      const result = await client.GET("/profiles/{slug}/mcp-delivery", {params:{path:{slug}}});
+      if(result.response.status===404&&result.error?.code==="mcp_delivery_not_configured")return null;
+      return requireData(result);
+    },
+
+    async configureProfileMCPDelivery(slug: string, body: ConfigureProfileMCPDeliveryRequest) {
+      const result = await client.PUT("/profiles/{slug}/mcp-delivery", {
         params: { path: { slug } },
         body,
       });

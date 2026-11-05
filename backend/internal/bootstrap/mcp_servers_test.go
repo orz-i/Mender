@@ -92,25 +92,23 @@ func TestManagedMCPHTTPServerLifecycle(t *testing.T) {
 		t.Fatalf("search = %#v", search)
 	}
 
-	profile, err := runtime.Profiles.Create.Execute(
+	profile, err := createMCPProfileFixture(t, runtime,
 		ctx,
 		profileapplication.CreateProfileRequest{
 			Slug:        "default",
 			DisplayName: "Default",
-			Mode:        profiledomain.ExposureDirect,
-		},
-	)
+		}, "direct")
+
 	if err != nil {
 		t.Fatal(err)
 	}
-	profile, err = runtime.Profiles.AddTool.Execute(
+	profile, err = addMCPProfileToolFixture(t, runtime,
 		ctx,
 		profileapplication.AddToolRequest{
 			ProfileSlug: profile.Slug(),
 			ToolID:      search[0].ToolID,
-			Direct:      true,
-		},
-	)
+		}, true)
+
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -197,14 +195,13 @@ func TestRuntimeCloseStopsManagedMCPServers(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	profile, err := runtime.Profiles.Create.Execute(
+	profile, err := createMCPProfileFixture(t, runtime,
 		ctx,
 		profileapplication.CreateProfileRequest{
 			Slug:        "empty",
 			DisplayName: "Empty",
-			Mode:        profiledomain.ExposureDynamic,
-		},
-	)
+		}, "dynamic")
+
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -266,24 +263,22 @@ func TestManagedMCPHTTPServerSupervisesProfileTunnel(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	profile, err := runtime.Profiles.Create.Execute(
+	profile, err := createMCPProfileFixture(t, runtime,
 		ctx,
 		profileapplication.CreateProfileRequest{
 			Slug:        "tunneled",
 			DisplayName: "Tunneled",
-			Mode:        profiledomain.ExposureDynamic,
-		},
-	)
+		}, "dynamic")
+
 	if err != nil {
 		t.Fatal(err)
 	}
-	profile, err = runtime.Profiles.SetTunnel.Execute(
+	profile, err = setMCPProfileTunnelFixture(t, runtime,
 		ctx,
-		profileapplication.SetTunnelRequest{
-			ProfileSlug: profile.Slug(),
-			TunnelID:    tunnel.ID(),
-		},
-	)
+
+		profile.Slug(),
+		tunnel.ID())
+
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -346,14 +341,14 @@ func TestManagedMCPHTTPServerSupervisesProfileTunnel(t *testing.T) {
 		t.Fatal("stop did not stop restarted tunnel process")
 	}
 
-	profile, err = runtime.Profiles.SetTunnel.Execute(
+	profile, err = setMCPProfileTunnelFixture(t, runtime,
 		ctx,
-		profileapplication.SetTunnelRequest{ProfileSlug: profile.Slug()},
-	)
+		profile.Slug(), "")
+
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := profile.TunnelID(); ok {
+	if _, ok := profileMCPFixtureTunnel(t, runtime, ctx, profile); ok {
 		t.Fatal("Profile TunnelID remains after clear")
 	}
 	if err := runtime.Tunnels.Delete.Execute(ctx, tunnel.ID()); err != nil {
@@ -401,24 +396,21 @@ func TestManagedMCPHTTPServerRollsBackWhenTunnelStartFails(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	profile, err := runtime.Profiles.Create.Execute(
+	profile, err := createMCPProfileFixture(t, runtime,
 		ctx,
 		profileapplication.CreateProfileRequest{
 			Slug:        "failing-tunnel",
 			DisplayName: "Failing Tunnel",
-			Mode:        profiledomain.ExposureDynamic,
-		},
-	)
+		}, "dynamic")
+
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := runtime.Profiles.SetTunnel.Execute(
+	if _, err := setMCPProfileTunnelFixture(t, runtime,
 		ctx,
-		profileapplication.SetTunnelRequest{
-			ProfileSlug: profile.Slug(),
-			TunnelID:    tunnel.ID(),
-		},
-	); err != nil {
+
+		profile.Slug(),
+		tunnel.ID()); err != nil {
 		t.Fatal(err)
 	}
 

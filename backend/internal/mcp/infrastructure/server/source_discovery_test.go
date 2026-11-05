@@ -9,6 +9,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
+	mcpdomain "github.com/orz-i/Mender/backend/internal/mcp/domain"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 )
 
@@ -71,7 +72,7 @@ func TestSourceFirstSearchDistinguishesAgentsWorkspaceAndProviders(t *testing.T)
 		}
 		bindings = append(bindings, spec)
 	}
-	adapter := fixture.adapter(t, fixture.profile(t, profiledomain.ExposureDynamic, bindings))
+	adapter := fixture.adapter(t, fixture.profile(t, mcpdomain.ModeDynamic, bindings))
 	adapter.deps.ResolveSources = func(_ context.Context, ids []catalogdomain.ProviderID) (map[catalogdomain.ProviderID]ToolSource, error) {
 		owners := map[catalogdomain.ProviderID]ToolSource{
 			fixture.provider.ID(): {Kind: "agent", Name: "OpenCode", ResourceID: "agent_1"},
@@ -176,7 +177,7 @@ func TestSourceFirstToolsPagesStaleRevisionRenameAndMalformedCursor(t *testing.T
 		fixture.tools = append(fixture.tools, tool)
 		bindings = append(bindings, profiledomain.ToolBindingSpec{ToolID: tool.ID()})
 	}
-	profile := fixture.profile(t, profiledomain.ExposureDynamic, bindings)
+	profile := fixture.profile(t, mcpdomain.ModeDynamic, bindings)
 	adapter := fixture.adapter(t, profile)
 	sourceName := "Bulk Workspace"
 	adapter.deps.ResolveSources = func(_ context.Context, ids []catalogdomain.ProviderID) (map[catalogdomain.ProviderID]ToolSource, error) {

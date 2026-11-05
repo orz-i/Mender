@@ -17,7 +17,6 @@ import (
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	mcpprovider "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/provider"
 	profileapplication "github.com/orz-i/Mender/backend/internal/profile/application"
-	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 )
 
 func TestMCPProviderAndServerShareRuntimePipeline(t *testing.T) {
@@ -129,19 +128,19 @@ func TestMCPProviderAndServerShareRuntimePipeline(t *testing.T) {
 		t.Fatalf("audit record = %#v", auditRecord)
 	}
 
-	profile, err := runtime.Profiles.Create.Execute(ctx, profileapplication.CreateProfileRequest{
+	profile, err := createMCPProfileFixture(t, runtime, ctx, profileapplication.CreateProfileRequest{
 		Slug:        "default",
 		DisplayName: "Default",
-		Mode:        profiledomain.ExposureDirect,
-	})
+	}, "direct")
+
 	if err != nil {
 		t.Fatalf("CreateProfile.Execute() error = %v", err)
 	}
-	profile, err = runtime.Profiles.AddTool.Execute(ctx, profileapplication.AddToolRequest{
+	profile, err = addMCPProfileToolFixture(t, runtime, ctx, profileapplication.AddToolRequest{
 		ProfileSlug: profile.Slug(),
 		ToolID:      toolID,
-		Direct:      true,
-	})
+	}, true)
+
 	if err != nil {
 		t.Fatalf("AddTool.Execute() error = %v", err)
 	}

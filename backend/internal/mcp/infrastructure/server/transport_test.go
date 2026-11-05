@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	mcpdomain "github.com/orz-i/Mender/backend/internal/mcp/domain"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 )
 
@@ -13,7 +14,7 @@ func TestStreamableHTTPHandlerNegotiatesLatestStatelessProtocol(t *testing.T) {
 	t.Parallel()
 
 	fixture := newServerFixture(t)
-	profile := fixture.profile(t, profiledomain.ExposureDynamic, []profiledomain.ToolBindingSpec{
+	profile := fixture.profile(t, mcpdomain.ModeDynamic, []profiledomain.ToolBindingSpec{
 		{ToolID: fixture.tools[0].ID()},
 	})
 	adapter := fixture.adapter(t, profile)

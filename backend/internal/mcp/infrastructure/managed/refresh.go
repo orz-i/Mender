@@ -1,4 +1,4 @@
-package bootstrap
+package managed
 
 import (
 	"context"
@@ -19,9 +19,9 @@ import (
 type managedProfileMCPHTTPHandler struct {
 	id       profiledomain.ProfileID
 	slug     profiledomain.Slug
-	revision func(context.Context, profiledomain.ProfileID) (uint64, error)
-	load     func(context.Context, profiledomain.ProfileID) (profiledomain.Profile, error)
-	build    func(context.Context, profiledomain.Profile) (http.Handler, error)
+	revision func(context.Context, profiledomain.ProfileID) (Versions, error)
+	load     func(context.Context, profiledomain.ProfileID) (Snapshot, error)
+	build    func(context.Context, Snapshot) (http.Handler, error)
 	catalog  managedMCPToolCatalog
 	mu       sync.Mutex
 	current  atomic.Pointer[profileMCPHTTPSnapshot]
@@ -34,22 +34,23 @@ type managedProfileMCPHTTPHandler struct {
 // metadata than the Adapter actually captured.
 type managedMCPToolCatalog struct {
 	revision           func(context.Context) (int64, error)
-	fingerprint        func(context.Context, profiledomain.Profile) (string, error)
+	fingerprint        func(context.Context, Snapshot) (string, error)
 	initialRevision    int64
 	initialFingerprint string
 }
 
 type profileMCPHTTPSnapshot struct {
-	revision        uint64
-	catalogRevision int64
-	fingerprint     string
-	handler         http.Handler
+	revision         uint64
+	deliveryRevision uint64
+	catalogRevision  int64
+	fingerprint      string
+	handler          http.Handler
 }
 
-func newManagedProfileMCPHTTPHandler(profile profiledomain.Profile, initial http.Handler,
-	revision func(context.Context, profiledomain.ProfileID) (uint64, error),
-	load func(context.Context, profiledomain.ProfileID) (profiledomain.Profile, error),
-	build func(context.Context, profiledomain.Profile) (http.Handler, error),
+func newManagedProfileMCPHTTPHandler(profile Snapshot, initial http.Handler,
+	revision func(context.Context, profiledomain.ProfileID) (Versions, error),
+	load func(context.Context, profiledomain.ProfileID) (Snapshot, error),
+	build func(context.Context, Snapshot) (http.Handler, error),
 	catalog managedMCPToolCatalog,
 ) (*managedProfileMCPHTTPHandler, error) {
 	if initial == nil || revision == nil || load == nil || build == nil ||
@@ -57,9 +58,12 @@ func newManagedProfileMCPHTTPHandler(profile profiledomain.Profile, initial http
 		catalog.initialRevision < 0 || catalog.initialFingerprint == "" {
 		return nil, errors.New("managed MCP Profile refresh requires all dependencies and an initial catalog snapshot")
 	}
+	if err := profile.validate(); err != nil {
+		return nil, err
+	}
 	h := &managedProfileMCPHTTPHandler{id: profile.ID(), slug: profile.Slug(),
 		revision: revision, load: load, build: build, catalog: catalog}
-	h.current.Store(&profileMCPHTTPSnapshot{revision: profile.Revision(),
+	h.current.Store(&profileMCPHTTPSnapshot{revision: profile.Revision(), deliveryRevision: profile.Config.Revision(),
 		catalogRevision: catalog.initialRevision, fingerprint: catalog.initialFingerprint,
 		handler: initial})
 	return h, nil
@@ -76,17 +80,17 @@ func (h *managedProfileMCPHTTPHandler) ServeHTTP(w http.ResponseWriter, req *htt
 	snap.handler.ServeHTTP(w, req)
 }
 
-func (h *managedProfileMCPHTTPHandler) versions(ctx context.Context) (uint64, int64, error) {
+func (h *managedProfileMCPHTTPHandler) versions(ctx context.Context) (Versions, int64, error) {
 	profileRev, err := h.revision(ctx, h.id)
 	if err != nil {
-		return 0, 0, err
+		return Versions{}, 0, err
 	}
 	catalogRev, err := h.catalog.revision(ctx)
 	if err != nil {
-		return 0, 0, err
+		return Versions{}, 0, err
 	}
 	if catalogRev < 0 {
-		return 0, 0, errors.New("managed MCP catalog revision is negative")
+		return Versions{}, 0, errors.New("managed MCP catalog revision is negative")
 	}
 	return profileRev, catalogRev, nil
 }
@@ -97,7 +101,7 @@ func (h *managedProfileMCPHTTPHandler) snapshotForRequest(ctx context.Context) (
 		return nil, err
 	}
 	cur := h.current.Load()
-	if cur != nil && cur.revision == profileRev && cur.catalogRevision == catalogRev {
+	if cur != nil && cur.revision == profileRev.Profile && cur.deliveryRevision == profileRev.Delivery && cur.catalogRevision == catalogRev {
 		return cur, nil
 	}
 
@@ -113,10 +117,10 @@ func (h *managedProfileMCPHTTPHandler) snapshotForRequest(ctx context.Context) (
 	}
 	cur = h.current.Load()
 	if cur != nil {
-		if profileRev < cur.revision || catalogRev < cur.catalogRevision {
-			return nil, errors.New("managed MCP Profile or Catalog revision regressed")
+		if profileRev.Profile < cur.revision || profileRev.Delivery < cur.deliveryRevision || catalogRev < cur.catalogRevision {
+			return nil, errors.New("managed MCP Profile, Delivery or Catalog revision regressed")
 		}
-		if cur.revision == profileRev && cur.catalogRevision == catalogRev {
+		if cur.revision == profileRev.Profile && cur.deliveryRevision == profileRev.Delivery && cur.catalogRevision == catalogRev {
 			return cur, nil
 		}
 	}
@@ -125,10 +129,10 @@ func (h *managedProfileMCPHTTPHandler) snapshotForRequest(ctx context.Context) (
 	if err != nil {
 		return nil, err
 	}
-	if profile.ID() != h.id || profile.Slug() != h.slug {
+	if profile.ID() != h.id || profile.Slug() != h.slug || profile.validate() != nil {
 		return nil, errors.New("managed MCP Profile identity changed")
 	}
-	if profile.Revision() != profileRev {
+	if profile.Revision() != profileRev.Profile || profile.Config.Revision() != profileRev.Delivery {
 		return nil, errors.New("managed MCP Profile changed during aggregate load")
 	}
 	fingerprint, err := h.catalog.fingerprint(ctx, profile)
@@ -142,12 +146,12 @@ func (h *managedProfileMCPHTTPHandler) snapshotForRequest(ctx context.Context) (
 		return nil, err
 	}
 	if verifiedProfileRev != profileRev || verifiedCatalogRev != catalogRev {
-		return nil, errors.New("managed MCP Profile or Catalog changed during metadata load")
+		return nil, errors.New("managed MCP Profile, Delivery or Catalog changed during metadata load")
 	}
-	if cur != nil && cur.revision == profileRev && cur.fingerprint == fingerprint {
+	if cur != nil && cur.revision == profileRev.Profile && cur.deliveryRevision == profileRev.Delivery && cur.fingerprint == fingerprint {
 		// No bound Tool metadata changed. A no-op sync or unrelated Provider
 		// write must not reactivate Providers or rebuild a live SDK projection.
-		next := &profileMCPHTTPSnapshot{revision: profileRev,
+		next := &profileMCPHTTPSnapshot{revision: profileRev.Profile, deliveryRevision: profileRev.Delivery,
 			catalogRevision: catalogRev, fingerprint: fingerprint, handler: cur.handler}
 		h.current.Store(next)
 		return next, nil
@@ -164,9 +168,9 @@ func (h *managedProfileMCPHTTPHandler) snapshotForRequest(ctx context.Context) (
 		return nil, err
 	}
 	if confirmedProfileRev != profileRev || confirmedCatalogRev != catalogRev {
-		return nil, errors.New("managed MCP Profile or Catalog changed during rebuild")
+		return nil, errors.New("managed MCP Profile, Delivery or Catalog changed during rebuild")
 	}
-	published := &profileMCPHTTPSnapshot{revision: profileRev,
+	published := &profileMCPHTTPSnapshot{revision: profileRev.Profile, deliveryRevision: profileRev.Delivery,
 		catalogRevision: catalogRev, fingerprint: fingerprint, handler: fresh}
 	h.current.Store(published)
 	return published, nil

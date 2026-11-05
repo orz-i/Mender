@@ -9,7 +9,6 @@ import (
 
 	"github.com/orz-i/Mender/backend/internal/bootstrap"
 	profileapplication "github.com/orz-i/Mender/backend/internal/profile/application"
-	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 )
 
 func runAgentJSON(t *testing.T, db string, args ...string) map[string]any {
@@ -76,7 +75,7 @@ func TestAgentCLIResourceAndProfileGrantLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	profile, err := r.Profiles.Create.Execute(ctx, profileapplication.CreateProfileRequest{
-		Slug: "agent-fixture", DisplayName: "Agent Fixture", Mode: profiledomain.ExposureDynamic,
+		Slug: "agent-fixture", DisplayName: "Agent Fixture",
 	})
 	if err != nil {
 		t.Fatal(err)

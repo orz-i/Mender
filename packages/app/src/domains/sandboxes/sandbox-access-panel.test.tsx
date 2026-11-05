@@ -13,7 +13,7 @@ const sandbox: Sandbox = {
 };
 const profile: Profile = {
   profileId: "prof_0123456789abcdef0123456789abcdef",
-  slug: "demo", displayName: "Demo MCP Profile", mode: "hybrid", tools: [],
+  slug: "demo", displayName: "Demo MCP Profile", tools: [], skills: [], revision: 0,
 };
 const empty: SandboxProfileGrants = { sandboxId: sandbox.sandboxId, grants: [] };
 const granted: SandboxProfileGrants = {

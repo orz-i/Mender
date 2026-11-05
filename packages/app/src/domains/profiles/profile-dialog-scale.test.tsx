@@ -19,10 +19,10 @@ const profile: Profile = {
   profileId: "prof_0123456789abcdef0123456789abcdef",
   slug: "large-profile",
   displayName: "Large Profile",
-  mode: "hybrid",
-  tools: tools.map((tool, index) => ({
+  skills: [],
+  revision: 0,
+  tools: tools.map((tool) => ({
     toolId: tool.toolId,
-    direct: index % 2 === 0,
     alias: "",
     titleOverride: "",
     descriptionOverride: "",
@@ -119,7 +119,8 @@ it("opens the context-selected editor section without hiding its other settings"
   expect(within(editor).getByRole("textbox", { name: "Search selected sources" })).toBeTruthy();
   expect(within(editor).queryByLabelText("Profile tunnel")).toBeNull();
   fireEvent.click(within(editor).getByRole("button", { name: "Overview" }));
-  expect(within(editor).getByLabelText("Profile tunnel")).toBeTruthy();
+  expect(within(editor).queryByLabelText("Profile tunnel")).toBeNull();
+  expect(within(editor).getByRole("button", { name: "Manage MCP delivery" })).toBeTruthy();
 });
 
 it("adds tools inside the current source and keeps the cross-source draft explicit", async () => {
@@ -154,9 +155,8 @@ it("adds tools inside the current source and keeps the cross-source draft explic
   expect(within(reopened).queryByText(/Unsaved changes/)).toBeNull();
 });
 
-it("hides fixed exposure controls but retains individual governance actions", async () => {
-  const fixed = { ...profile, mode: "direct" as const, tools: profile.tools.map((binding) => ({ ...binding, direct: true })) };
-  show({}, { initialProfile: fixed });
+it("keeps MCP delivery controls outside membership editing and retains governance actions", async () => {
+  show();
   const editor = await manage();
   fireEvent.click(within(editor).getByRole("button", { name: "Manage source Tool source 0" }));
   expect(within(editor).queryByRole("combobox", { name: "Exposure filter" })).toBeNull();
@@ -219,19 +219,21 @@ it("shows selected sources before Tools and preserves per-source management pagi
     target: { value: "Work tool 64" },
   });
   expect(within(dialog).getByText("Work tool 64")).toBeTruthy();
-  fireEvent.change(within(dialog).getByRole("combobox", { name: "Exposure filter" }), {
-    target: { value: "direct" },
+  expect(within(dialog).queryByRole("combobox", { name: "Exposure filter" })).toBeNull();
+  fireEvent.change(within(dialog).getByRole("textbox", { name: "Search selected tools" }), {
+    target: { value: "not-selected" },
   });
   expect(within(dialog).getByText("No matching Tools.")).toBeTruthy();
-  fireEvent.change(within(dialog).getByRole("combobox", { name: "Exposure filter" }), {
-    target: { value: "dynamic" },
+  fireEvent.change(within(dialog).getByRole("textbox", { name: "Search selected tools" }), {
+    target: { value: "Work tool 64" },
   });
   expect(within(dialog).getByText("Work tool 64")).toBeTruthy();
 
   fireEvent.click(within(dialog).getByRole("button", { name: "Back to sources" }));
   expect(within(dialog).getByRole("textbox", { name: "Search selected sources" })).toBeTruthy();
   fireEvent.click(within(dialog).getByRole("button", { name: "Overview" }));
-  expect(within(dialog).getByLabelText("Profile tunnel")).toBeTruthy();
+  expect(within(dialog).queryByLabelText("Profile tunnel")).toBeNull();
+  expect(within(dialog).getByRole("button", { name: "Manage MCP delivery" })).toBeTruthy();
   fireEvent.click(within(dialog).getByRole("button", { name: /^Tools/ }));
   expect(within(dialog).getByRole("textbox", { name: "Search selected sources" })).toBeTruthy();
   expect(screen.queryByRole("dialog")).toBeNull();

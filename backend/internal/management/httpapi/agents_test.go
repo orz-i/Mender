@@ -75,7 +75,7 @@ func TestAgentHTTPManagementAndGrantLifecycle(t *testing.T) {
 		t.Fatal("tool setup granted Profile permissions")
 	}
 	profile := requestJSON(t, server.Client(), http.MethodPost, api+"/profiles", map[string]any{
-		"slug": "agent-grant-fixture", "displayName": "Agent fixture", "mode": "dynamic",
+		"slug": "agent-grant-fixture", "displayName": "Agent fixture",
 	}, http.StatusCreated)
 	profileID := profile["profileId"].(string)
 	path := api + "/agents/" + id + "/profile-grants/" + profileID

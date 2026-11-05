@@ -2,7 +2,10 @@ package bootstrap
 
 import (
 	"context"
+	"errors"
 	"fmt"
+
+	mcpdelivery "github.com/orz-i/Mender/backend/internal/mcp/application/delivery"
 
 	credentialdomain "github.com/orz-i/Mender/backend/internal/credential/domain"
 	platformplugin "github.com/orz-i/Mender/backend/internal/plugin"
@@ -120,19 +123,9 @@ func (t *Tunnels) Close() error {
 	return t.store.Close()
 }
 
-type profileTunnelLookup struct {
-	get tunnelapplication.GetTunnel
-}
-
-func (a profileTunnelLookup) GetTunnel(
-	ctx context.Context,
-	id tunneldomain.TunnelID,
-) (tunneldomain.Tunnel, error) {
-	return a.get.Execute(ctx, id)
-}
-
 type runtimeTunnelUsageChecker struct {
 	profiles *Profiles
+	delivery *MCPDelivery
 	active   func(tunneldomain.TunnelID) bool
 }
 
@@ -151,10 +144,17 @@ func (a runtimeTunnelUsageChecker) Usages(
 		})
 	}
 	for _, profile := range profiles {
-		tunnelID, ok := profile.TunnelID()
+		config, err := a.delivery.Get.Execute(ctx, profile.ID())
+		if errors.Is(err, mcpdelivery.ErrNotFound) {
+			continue
+		}
+		if err != nil {
+			return nil, fmt.Errorf("tunnel usage: MCP delivery: %w", err)
+		}
+		tunnelID, ok := config.TunnelID()
 		if ok && tunnelID == id {
 			usages = append(usages, tunnelapplication.Usage{
-				Kind:        "profile",
+				Kind:        "mcp_delivery",
 				Description: fmt.Sprintf("profile %s", profile.Slug()),
 			})
 		}

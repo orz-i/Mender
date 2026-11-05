@@ -12,6 +12,7 @@ import (
 	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
 	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
+	mcpdelivery "github.com/orz-i/Mender/backend/internal/mcp/application/delivery"
 	policydomain "github.com/orz-i/Mender/backend/internal/policy/domain"
 	profileapplication "github.com/orz-i/Mender/backend/internal/profile/application"
 )
@@ -236,6 +237,7 @@ func invocationProjection(
 
 func isKnownClientError(err error) bool {
 	return errors.Is(err, catalogapplication.ErrProviderNotFound) ||
+		errors.Is(err, mcpdelivery.ErrNotFound) || errors.Is(err, mcpdelivery.ErrRevisionConflict) || errors.Is(err, mcpdelivery.ErrProfileRevisionConflict) || errors.Is(err, mcpdelivery.ErrInvalidConfiguration) || errors.Is(err, mcpdelivery.ErrToolOutsideProfile) ||
 		errors.Is(err, catalogapplication.ErrToolNotFound) ||
 		errors.Is(err, profileapplication.ErrProfileNotFound) ||
 		errors.Is(err, bootstrap.ErrInvalidMCPServerAddress) ||

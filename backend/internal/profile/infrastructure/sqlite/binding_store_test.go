@@ -20,8 +20,8 @@ func TestProfileToolBindingGovernanceRoundTrip(t *testing.T) {
 	credentialRef, _ := credentialdomain.NewReference("github", "work")
 
 	binding, err := profiledomain.NewToolBinding(profiledomain.ToolBindingSpec{
-		ToolID:                toolID,
-		Direct:                true,
+		ToolID: toolID,
+
 		Alias:                 "create_prod_issue",
 		TitleOverride:         "Create production issue",
 		DescriptionOverride:   "Create an issue in the production tracker.",
@@ -36,7 +36,7 @@ func TestProfileToolBindingGovernanceRoundTrip(t *testing.T) {
 		id,
 		slug,
 		"Governed",
-		profiledomain.ExposureHybrid,
+
 		[]profiledomain.ToolBinding{binding},
 	)
 	if err != nil {
@@ -55,8 +55,7 @@ func TestProfileToolBindingGovernanceRoundTrip(t *testing.T) {
 	if !ok {
 		t.Fatal("Binding() missing after round trip")
 	}
-	if !got.Direct() ||
-		got.Alias() != "create_prod_issue" ||
+	if got.Alias() != "create_prod_issue" ||
 		got.TitleOverride() != "Create production issue" ||
 		got.DescriptionOverride() != "Create an issue in the production tracker." ||
 		got.PolicyConstraint() != profiledomain.PolicyRequireApproval ||
@@ -74,7 +73,7 @@ func TestProfileRestoreFailsClosedOnMalformedBindingState(t *testing.T) {
 	slug, _ := profiledomain.NewSlug("malformed")
 	toolID, _ := catalogdomain.ParseToolID("tool_00000000000000000000000000000012")
 
-	binding, err := profiledomain.NewToolBinding(profiledomain.ToolBindingSpec{ToolID: toolID, Direct: false})
+	binding, err := profiledomain.NewToolBinding(profiledomain.ToolBindingSpec{ToolID: toolID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,7 +81,7 @@ func TestProfileRestoreFailsClosedOnMalformedBindingState(t *testing.T) {
 		id,
 		slug,
 		"Malformed",
-		profiledomain.ExposureDynamic,
+
 		[]profiledomain.ToolBinding{binding},
 	)
 	if err != nil {

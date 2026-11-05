@@ -33,14 +33,13 @@ func TestGovernedRuntimeIntegrationMatrix(t *testing.T) {
 	})
 	defer func() { _ = runtime.Close() }()
 
-	allowedProfile, err := runtime.Profiles.Create.Execute(
+	allowedProfile, err := createMCPProfileFixture(t, runtime,
 		ctx,
 		profileapplication.CreateProfileRequest{
 			Slug:        "allowed",
 			DisplayName: "Allowed",
-			Mode:        profiledomain.ExposureDynamic,
-		},
-	)
+		}, "dynamic")
+
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,14 +54,13 @@ func TestGovernedRuntimeIntegrationMatrix(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	restrictedProfile, err := runtime.Profiles.Create.Execute(
+	restrictedProfile, err := createMCPProfileFixture(t, runtime,
 		ctx,
 		profileapplication.CreateProfileRequest{
 			Slug:        "restricted",
 			DisplayName: "Restricted",
-			Mode:        profiledomain.ExposureDynamic,
-		},
-	)
+		}, "dynamic")
+
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -219,14 +217,13 @@ func TestProfileBindingPolicyConstraintsEndToEnd(t *testing.T) {
 	})
 	defer func() { _ = runtime.Close() }()
 
-	denyProfile, err := runtime.Profiles.Create.Execute(
+	denyProfile, err := createMCPProfileFixture(t, runtime,
 		ctx,
 		profileapplication.CreateProfileRequest{
 			Slug:        "binding-deny",
 			DisplayName: "Binding Deny",
-			Mode:        profiledomain.ExposureDynamic,
-		},
-	)
+		}, "dynamic")
+
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -282,14 +279,13 @@ func TestProfileBindingPolicyConstraintsEndToEnd(t *testing.T) {
 		)
 	}
 
-	approvalProfile, err := runtime.Profiles.Create.Execute(
+	approvalProfile, err := createMCPProfileFixture(t, runtime,
 		ctx,
 		profileapplication.CreateProfileRequest{
 			Slug:        "binding-approval",
 			DisplayName: "Binding Approval",
-			Mode:        profiledomain.ExposureDynamic,
-		},
-	)
+		}, "dynamic")
+
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -379,14 +375,13 @@ func TestProfileBindingSerialExecutionEndToEnd(t *testing.T) {
 	})
 	defer func() { _ = runtime.Close() }()
 
-	profile, err := runtime.Profiles.Create.Execute(
+	profile, err := createMCPProfileFixture(t, runtime,
 		ctx,
 		profileapplication.CreateProfileRequest{
 			Slug:        "binding-serial",
 			DisplayName: "Binding Serial",
-			Mode:        profiledomain.ExposureDynamic,
-		},
-	)
+		}, "dynamic")
+
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -532,25 +527,23 @@ func TestMCPToolFailureRoundTripsThroughMender(t *testing.T) {
 	}
 	toolID := search[0].ToolID
 
-	profile, err := runtime.Profiles.Create.Execute(
+	profile, err := createMCPProfileFixture(t, runtime,
 		ctx,
 		profileapplication.CreateProfileRequest{
 			Slug:        "default",
 			DisplayName: "Default",
-			Mode:        profiledomain.ExposureDirect,
-		},
-	)
+		}, "direct")
+
 	if err != nil {
 		t.Fatal(err)
 	}
-	profile, err = runtime.Profiles.AddTool.Execute(
+	profile, err = addMCPProfileToolFixture(t, runtime,
 		ctx,
 		profileapplication.AddToolRequest{
 			ProfileSlug: profile.Slug(),
 			ToolID:      toolID,
-			Direct:      true,
-		},
-	)
+		}, true)
+
 	if err != nil {
 		t.Fatal(err)
 	}

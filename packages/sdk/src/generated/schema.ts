@@ -604,15 +604,15 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/profiles/{slug}/tunnel": {
+    "/profiles/{slug}/mcp-delivery": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
-        put: operations["setProfileTunnel"];
+        get: operations["getProfileMCPDelivery"];
+        put: operations["configureProfileMCPDelivery"];
         post?: never;
         delete?: never;
         options?: never;
@@ -2195,12 +2195,9 @@ export interface components {
         CreateProfileRequest: {
             slug: string;
             displayName: string;
-            /** @enum {string} */
-            mode: "direct" | "dynamic" | "hybrid";
         };
         AddProfileToolRequest: {
             toolId: string;
-            direct?: boolean;
             alias?: string;
             titleOverride?: string;
             descriptionOverride?: string;
@@ -2218,7 +2215,6 @@ export interface components {
         };
         ProfileToolInput: {
             toolId: string;
-            direct?: boolean;
             alias?: string;
             titleOverride?: string;
             descriptionOverride?: string;
@@ -2230,7 +2226,6 @@ export interface components {
         };
         ProfileTool: {
             toolId: string;
-            direct: boolean;
             alias: string;
             titleOverride: string;
             descriptionOverride: string;
@@ -2244,17 +2239,34 @@ export interface components {
             profileId: string;
             slug: string;
             displayName: string;
+            tools: components["schemas"]["ProfileTool"][];
+            skills: string[];
+            /** @description Persisted Profile aggregate revision (read-only) */
+            revision: number;
+        };
+        ProfileMCPDelivery: {
+            profileId: string;
+            /** @description Profile selection revision observed for this configuration */
+            profileRevision: number;
+            /** @description Independent MCP delivery configuration revision */
+            revision: number;
             /** @enum {string} */
             mode: "direct" | "dynamic" | "hybrid";
+            /** @description Optional explicitly configured Mender Tunnel ID */
             tunnelId?: string;
-            tools: components["schemas"]["ProfileTool"][];
-            skills?: string[];
-            /** @description Persisted Profile aggregate revision (read-only) */
-            revision?: number;
+            directToolIds: string[];
         };
-        SetProfileTunnelRequest: {
-            /** @description Mender Tunnel ID. Send an empty string to clear the binding. */
-            tunnelId: string;
+        ConfigureProfileMCPDeliveryRequest: {
+            /** @enum {string} */
+            mode: "direct" | "dynamic" | "hybrid";
+            /** @description Empty or omitted means no Tunnel */
+            tunnelId?: string;
+            /** @description Explicit subset of Profile Tools for hybrid mode; empty for direct or dynamic */
+            directToolIds: string[];
+            /** @description Required selection revision fence */
+            expectedProfileRevision: number;
+            /** @description Omit to create only; include the observed MCP configuration revision to update */
+            expectedRevision?: number;
         };
         CreateExternalTunnelRequest: {
             displayName: string;
@@ -3914,7 +3926,31 @@ export interface operations {
             404: components["responses"]["NotFound"];
         };
     };
-    setProfileTunnel: {
+    getProfileMCPDelivery: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: components["parameters"]["ProfileSlug"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Explicit MCP configuration with independent selection and delivery versions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfileMCPDelivery"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    configureProfileMCPDelivery: {
         parameters: {
             query?: never;
             header?: never;
@@ -3925,22 +3961,23 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["SetProfileTunnelRequest"];
+                "application/json": components["schemas"]["ConfigureProfileMCPDeliveryRequest"];
             };
         };
         responses: {
-            /** @description Updated Profile Tunnel binding */
+            /** @description Saved MCP configuration without starting Server or Tunnel */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Profile"];
+                    "application/json": components["schemas"]["ProfileMCPDelivery"];
                 };
             };
             400: components["responses"]["BadRequest"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
     listAgents: {

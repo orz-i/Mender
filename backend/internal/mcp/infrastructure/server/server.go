@@ -13,6 +13,7 @@ import (
 	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
+	mcpdomain "github.com/orz-i/Mender/backend/internal/mcp/domain"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 )
 
@@ -54,6 +55,7 @@ type Dependencies struct {
 // Adapter projects one Profile as an MCP server.
 type Adapter struct {
 	profile           profiledomain.Profile
+	delivery          mcpdomain.Config
 	invocationContext governancedomain.Context
 	deps              Dependencies
 	server            *mcp.Server
@@ -61,9 +63,16 @@ type Adapter struct {
 }
 
 // New constructs a Profile-scoped MCP server.
-func New(ctx context.Context, profile profiledomain.Profile, deps Dependencies) (*Adapter, error) {
+func New(ctx context.Context, profile profiledomain.Profile, delivery mcpdomain.Config, deps Dependencies) (*Adapter, error) {
 	if deps.DescribeTool == nil || deps.GetProvider == nil || deps.InvokeTool == nil {
 		return nil, fmt.Errorf("build MCP server: all dependencies are required")
+	}
+	if delivery.ProfileID() != profile.ID() {
+		return nil, fmt.Errorf("build MCP server: delivery Profile identity mismatch")
+	}
+	tunnelID, _ := delivery.TunnelID()
+	if _, err := mcpdomain.NewConfig(delivery.ProfileID(), delivery.Mode(), tunnelID, delivery.DirectToolIDs()); err != nil {
+		return nil, fmt.Errorf("build MCP server: delivery: %w", err)
 	}
 
 	profileScope, err := governancedomain.ProfileScope(profile.ID().String())
@@ -88,6 +97,7 @@ func New(ctx context.Context, profile profiledomain.Profile, deps Dependencies) 
 
 	adapter := &Adapter{
 		profile:           profile,
+		delivery:          delivery,
 		invocationContext: invocationContext,
 		deps:              deps,
 		server: mcp.NewServer(
@@ -105,12 +115,12 @@ func New(ctx context.Context, profile profiledomain.Profile, deps Dependencies) 
 		adapter.tools[toolID] = tool
 	}
 
-	if profile.Mode() == profiledomain.ExposureDirect || profile.Mode() == profiledomain.ExposureHybrid {
+	if delivery.Mode() == mcpdomain.ModeDirect || delivery.Mode() == mcpdomain.ModeHybrid {
 		if err := adapter.addDirectTools(ctx); err != nil {
 			return nil, err
 		}
 	}
-	if profile.Mode() == profiledomain.ExposureDynamic || profile.Mode() == profiledomain.ExposureHybrid {
+	if delivery.Mode() == mcpdomain.ModeDynamic || delivery.Mode() == mcpdomain.ModeHybrid {
 		adapter.addMetaTools()
 	}
 
@@ -171,8 +181,12 @@ func (a *Adapter) resolveSources(ctx context.Context, pids []catalogdomain.Provi
 
 func (a *Adapter) addDirectTools(ctx context.Context) error {
 	seenNames := make(map[string]catalogdomain.ToolID)
-	directPIDs := make([]catalogdomain.ProviderID, 0, len(a.profile.DirectToolIDs()))
-	for _, selectedID := range a.profile.DirectToolIDs() {
+	directIDs := a.delivery.DirectToolIDs()
+	if a.delivery.Mode() == mcpdomain.ModeDirect {
+		directIDs = a.profile.ToolIDs()
+	}
+	directPIDs := make([]catalogdomain.ProviderID, 0, len(directIDs))
+	for _, selectedID := range directIDs {
 		tool, ok := a.tools[selectedID]
 		if !ok {
 			return fmt.Errorf("build MCP server: direct Tool %s missing from profile projection", selectedID)
@@ -184,7 +198,7 @@ func (a *Adapter) addDirectTools(ctx context.Context) error {
 		return fmt.Errorf("build MCP server: resolve direct tool sources: %w", err)
 	}
 
-	for _, selectedID := range a.profile.DirectToolIDs() {
+	for _, selectedID := range directIDs {
 		tool, ok := a.tools[selectedID]
 		if !ok {
 			return fmt.Errorf("build MCP server: direct Tool %s missing from profile projection", selectedID)

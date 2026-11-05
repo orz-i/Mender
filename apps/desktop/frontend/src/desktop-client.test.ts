@@ -27,6 +27,9 @@ vi.mock(
       GetSandboxProfileGrantEvents: vi.fn(),
       GetSkillInstallation: vi.fn(),
       GetProfileCLIInstructions: vi.fn(),
+      GetProfile: vi.fn(),
+      GetProfileMCPDelivery: vi.fn(),
+      ConfigureProfileMCPDelivery: vi.fn(),
       GetPolicyStatus: vi.fn(),
       GetSystemStatus: vi.fn(),
       GetAgentTask: vi.fn(),
@@ -1150,13 +1153,11 @@ describe("desktop Mender client", () => {
       profileId: "prof_1",
       slug: "default",
       displayName: "Default",
-      mode: "hybrid",
       skills: [],
       revision: 0,
       tools: [
         {
           toolId: "tool_1",
-          direct: true,
           alias: "profile_tool",
           titleOverride: "Profile Tool",
           descriptionOverride: "Profile-specific presentation",
@@ -1166,7 +1167,6 @@ describe("desktop Mender client", () => {
         },
         {
           toolId: "tool_2",
-          direct: false,
           alias: "",
           titleOverride: "",
           descriptionOverride: "",
@@ -1182,7 +1182,6 @@ describe("desktop Mender client", () => {
       tools: [
         {
           toolId: "tool_1",
-          direct: true,
           alias: "profile_tool",
           titleOverride: "Profile Tool",
           descriptionOverride: "Profile-specific presentation",
@@ -1190,14 +1189,13 @@ describe("desktop Mender client", () => {
           concurrencyConstraint: "serial",
           credentialRefs: ["credential://github/work"],
         },
-        { toolId: "tool_2", direct: false },
+        { toolId: "tool_2" },
       ],
     });
 
     expect(Service.ReplaceProfileTools).toHaveBeenCalledWith("default", [
       {
         toolId: "tool_1",
-        direct: true,
         alias: "profile_tool",
         titleOverride: "Profile Tool",
         descriptionOverride: "Profile-specific presentation",
@@ -1207,7 +1205,6 @@ describe("desktop Mender client", () => {
       },
       {
         toolId: "tool_2",
-        direct: false,
         alias: "",
         titleOverride: "",
         descriptionOverride: "",
@@ -1228,12 +1225,92 @@ describe("desktop Mender client", () => {
     const id = "sinst_00000000000000000000000000000001";
     vi.mocked(Service.ReplaceProfileSkills).mockResolvedValue({
       profileId: "prof_1", slug: "default", displayName: "Default",
-      mode: "hybrid", tools: [], skills: [id], revision: 1,
+      tools: [], skills: [id], revision: 1,
     });
     const client = createDesktopMenderClient();
     const updated = await client.replaceProfileSkills("default", { installationIds: [id] });
     expect(Service.ReplaceProfileSkills).toHaveBeenCalledWith("default", [id]);
     expect(updated.skills).toEqual([id]);
+  });
+
+  it("projects Profile membership without carrying legacy MCP delivery fields", async () => {
+    const toolId = "tool_0123456789abcdef0123456789abcdef";
+    const legacy = {
+      profileId: "prof_0123456789abcdef0123456789abcdef", slug: "selected", displayName: "Selected",
+      revision: 0, skills: null, mode: "hybrid", tunnelId: "tun_legacy",
+      tools: [{
+        toolId, direct: true,
+        alias: "stable_alias", titleOverride: "Chosen title", descriptionOverride: "Chosen description",
+        policyConstraint: "deny", concurrencyConstraint: "serial", credentialRefs: ["credential://service/exact"],
+      }],
+    };
+    vi.mocked(Service.GetProfile).mockResolvedValue(legacy);
+    const selected = await createDesktopMenderClient().getProfile("selected");
+    expect(selected).toEqual({
+      profileId: legacy.profileId, slug: legacy.slug, displayName: legacy.displayName, revision: 0, skills: [],
+      tools: [{
+        toolId, alias: "stable_alias", titleOverride: "Chosen title",
+        descriptionOverride: "Chosen description", policyConstraint: "deny", concurrencyConstraint: "serial",
+        credentialRefs: ["credential://service/exact"],
+      }],
+    });
+    expect(selected).not.toHaveProperty("mode");
+    expect(selected).not.toHaveProperty("tunnelId");
+    expect(selected.tools[0]).not.toHaveProperty("direct");
+    expect(Service.GetProfile).toHaveBeenCalledWith("selected");
+  });
+
+  it("maps only a native null delivery to unconfigured and preserves exact configuration identity", async () => {
+    vi.mocked(Service.GetProfileMCPDelivery).mockResolvedValueOnce(null).mockResolvedValueOnce({
+      profileId: "prof_0123456789abcdef0123456789abcdef", profileRevision: 0, revision: 0,
+      mode: "hybrid", directToolIds: null, tunnelId: "tun_0123456789abcdef0123456789abcdef",
+    });
+    const client = createDesktopMenderClient();
+    await expect(client.getProfileMCPDelivery("selected")).resolves.toBeNull();
+    await expect(client.getProfileMCPDelivery("selected")).resolves.toEqual({
+      profileId: "prof_0123456789abcdef0123456789abcdef", profileRevision: 0, revision: 0,
+      mode: "hybrid", directToolIds: [], tunnelId: "tun_0123456789abcdef0123456789abcdef",
+    });
+    expect(Service.GetProfileMCPDelivery).toHaveBeenNthCalledWith(1, "selected");
+    expect(Service.GetProfileMCPDelivery).toHaveBeenNthCalledWith(2, "selected");
+    const nativeError = new Error("Profile lookup unavailable");
+    vi.mocked(Service.GetProfileMCPDelivery).mockRejectedValueOnce(nativeError);
+    await expect(client.getProfileMCPDelivery("selected")).rejects.toBe(nativeError);
+    vi.mocked(Service.GetProfileMCPDelivery).mockResolvedValueOnce({
+      profileId: "prof_1", profileRevision: 0, revision: 0, mode: "unrecognized", directToolIds: [],
+    });
+    await expect(client.getProfileMCPDelivery("selected")).rejects.toBeInstanceOf(MenderClientInvariantError);
+  });
+
+  it("preserves both Wails CAS zeroes and omits the delivery fence only when creating", async () => {
+    vi.mocked(Service.ConfigureProfileMCPDelivery).mockResolvedValue({
+      profileId: "prof_0123456789abcdef0123456789abcdef", profileRevision: 0, revision: 0,
+      mode: "hybrid", directToolIds: ["tool_0123456789abcdef0123456789abcdef"],
+    });
+    const client = createDesktopMenderClient();
+    await expect(client.configureProfileMCPDelivery("selected", {
+      mode: "hybrid", directToolIds: ["tool_0123456789abcdef0123456789abcdef"],
+      expectedProfileRevision: 0, expectedRevision: 0,
+    })).resolves.toEqual({
+      profileId: "prof_0123456789abcdef0123456789abcdef", profileRevision: 0, revision: 0,
+      mode: "hybrid", directToolIds: ["tool_0123456789abcdef0123456789abcdef"],
+    });
+    expect(Service.ConfigureProfileMCPDelivery).toHaveBeenLastCalledWith("selected", {
+      mode: "hybrid", tunnelId: "", directToolIds: ["tool_0123456789abcdef0123456789abcdef"],
+      expectedProfileRevision: 0, expectedRevision: 0,
+    });
+    await client.configureProfileMCPDelivery("selected", {
+      mode: "dynamic", directToolIds: [], expectedProfileRevision: 0,
+    });
+    expect(Service.ConfigureProfileMCPDelivery).toHaveBeenLastCalledWith("selected", {
+      mode: "dynamic", tunnelId: "", directToolIds: [], expectedProfileRevision: 0,
+    });
+    expect(vi.mocked(Service.ConfigureProfileMCPDelivery).mock.calls.at(-1)?.[1]).not.toHaveProperty("expectedRevision");
+    const nativeConflict = new Error("stale delivery revision");
+    vi.mocked(Service.ConfigureProfileMCPDelivery).mockRejectedValueOnce(nativeConflict);
+    await expect(client.configureProfileMCPDelivery("selected", {
+      mode: "dynamic", directToolIds: [], expectedProfileRevision: 0, expectedRevision: 0,
+    })).rejects.toBe(nativeConflict);
   });
 
   it("shows Profile-local CLI recipes and exports portable plugins through Wails", async () => {

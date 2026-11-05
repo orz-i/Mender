@@ -10,7 +10,6 @@ import { ProfileDetailPage } from "./profile-detail-page";
 
 const boundTool = {
   toolId: "tool_search",
-  direct: true,
   alias: "search_prod",
   titleOverride: "",
   descriptionOverride: "",
@@ -22,7 +21,8 @@ const profile: Profile = {
   profileId: "prof_0123456789abcdef0123456789abcdef",
   slug: "my-profile",
   displayName: "My Profile",
-  mode: "hybrid",
+  skills: [],
+  revision: 0,
   tools: [boundTool],
 };
 const provider: Provider = {
@@ -44,7 +44,6 @@ function show(initial: string, overrides: Partial<MenderClient> = {}) {
     getProfile: vi.fn().mockResolvedValue(profile),
     getTool: vi.fn().mockResolvedValue({ ...tool, inputSchema: {}, tags: [] }),
     replaceProfileTools: vi.fn(),
-    setProfileTunnel: vi.fn(),
     ...overrides,
   } as unknown as MenderClient;
   render(
@@ -70,8 +69,9 @@ it("opens a read-only detail from the inventory and drills down by source", asyn
   fireEvent.click(await screen.findByRole("button", { name: "My Profile" }));
   await screen.findByRole("button", { name: "Edit profile" });
   expect(screen.queryByText("search_prod")).toBeNull(); // No tool list is exposed in overview.
-  expect(screen.getByText("hybrid")).toBeTruthy();
-  expect(screen.getByText("Local only")).toBeTruthy();
+  expect(screen.queryByText("hybrid")).toBeNull();
+  expect(screen.queryByText("Local only")).toBeNull();
+  expect(screen.getByText("1 selected Tool")).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "Tools" }));
   expect(screen.getByRole("button", { name: /AnySearch/ })).toBeTruthy();
   expect(screen.queryByText("Search the web")).toBeNull();

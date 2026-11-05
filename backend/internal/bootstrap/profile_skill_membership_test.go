@@ -23,9 +23,10 @@ func TestProfileSelectsOnlyTrustedEnabledExactSkillsAndGuardsRemoval(t *testing.
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = runtime.Close() })
-	profile, err := runtime.Profiles.Create.Execute(ctx, profileapplication.CreateProfileRequest{
-		Slug: "delivery", DisplayName: "Delivery", Mode: profiledomain.ExposureHybrid,
-	})
+	profile, err := createMCPProfileFixture(t, runtime, ctx, profileapplication.CreateProfileRequest{
+		Slug: "delivery", DisplayName: "Delivery",
+	}, "hybrid")
+
 	if err != nil {
 		t.Fatal(err)
 	}

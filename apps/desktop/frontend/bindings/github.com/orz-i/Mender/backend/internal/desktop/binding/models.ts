@@ -482,8 +482,6 @@ export interface Profile {
     "profileId": string;
     "slug": string;
     "displayName": string;
-    "mode": string;
-    "tunnelId"?: string;
     "tools": ProfileTool[] | null;
     "skills": string[] | null;
     "revision": number;
@@ -515,9 +513,29 @@ export interface ProfileList {
     "profiles": Profile[] | null;
 }
 
+/**
+ * ProfileMCPDelivery is desired delivery configuration, separate from both
+ * Profile membership and any running listener or Tunnel process.
+ */
+export interface ProfileMCPDelivery {
+    "profileId": string;
+    "profileRevision": number;
+    "revision": number;
+    "mode": string;
+    "tunnelId"?: string;
+    "directToolIds": string[] | null;
+}
+
+export interface ProfileMCPDeliveryInput {
+    "mode": string;
+    "tunnelId"?: string;
+    "directToolIds": string[] | null;
+    "expectedProfileRevision": number;
+    "expectedRevision"?: number | null;
+}
+
 export interface ProfileTool {
     "toolId": string;
-    "direct": boolean;
     "alias": string;
     "titleOverride": string;
     "descriptionOverride": string;

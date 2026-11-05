@@ -24,7 +24,6 @@ func TestProfileApplicationCreateAddListRemove(t *testing.T) {
 	profile, err := create.Execute(context.Background(), CreateProfileRequest{
 		Slug:        "default",
 		DisplayName: "Default",
-		Mode:        profiledomain.ExposureHybrid,
 	})
 	if err != nil {
 		t.Fatalf("CreateProfile.Execute() error = %v", err)
@@ -34,12 +33,11 @@ func TestProfileApplicationCreateAddListRemove(t *testing.T) {
 	profile, err = add.Execute(context.Background(), AddToolRequest{
 		ProfileSlug: profile.Slug(),
 		ToolID:      tool.ID(),
-		Direct:      true,
 	})
 	if err != nil {
 		t.Fatalf("AddTool.Execute() error = %v", err)
 	}
-	if !profile.Contains(tool.ID()) || len(profile.DirectToolIDs()) != 1 {
+	if !profile.Contains(tool.ID()) {
 		t.Fatalf("profile selections = %+v", profile.Bindings())
 	}
 
@@ -47,7 +45,7 @@ func TestProfileApplicationCreateAddListRemove(t *testing.T) {
 	profile, err = replace.Execute(context.Background(), ReplaceToolsRequest{
 		ProfileSlug: profile.Slug(),
 		Tools: []ToolBindingInput{
-			{ToolID: tool.ID(), Direct: false},
+			{ToolID: tool.ID()},
 		},
 	})
 	if err != nil {

@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 
-import type { MenderClient, Profile, Tunnel } from "@mender/sdk";
-import { Badge } from "@mender/ui/components/badge";
+import type { MenderClient, Profile } from "@mender/sdk";
 import { Button } from "@mender/ui/components/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@mender/ui/components/table";
 
@@ -17,7 +16,6 @@ import { EmptyPanelState, SearchField } from "../../shared/workbench";
 export function ProfilesPage({ client }: { client: MenderClient }) {
   const navigate = useNavigate();
   const [profiles, setProfiles] = useState<Profile[]>([]);
-  const [tunnels, setTunnels] = useState<Tunnel[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [hasSnapshot, setHasSnapshot] = useState(false);
   const [error, setError] = useState("");
@@ -26,11 +24,10 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
 
   const refresh = useCallback(() => {
     let active = true;
-    void Promise.all([client.listProfiles(), client.listTunnels()])
-      .then(([profileResult, tunnelResult]) => {
+    void client.listProfiles()
+      .then((profileResult) => {
         if (!active) return;
         setProfiles(profileResult.profiles);
-        setTunnels(tunnelResult.tunnels);
         setHasSnapshot(true);
         setError("");
       })
@@ -49,7 +46,7 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
     const needle = query.trim().toLocaleLowerCase();
     return needle
       ? profiles.filter((profile) =>
-          [profile.displayName, profile.slug, profile.mode].some((value) => value.toLocaleLowerCase().includes(needle)))
+          [profile.displayName, profile.slug].some((value) => value.toLocaleLowerCase().includes(needle)))
       : profiles;
   }, [profiles, query]);
   const pagination = usePagination(filteredProfiles);
@@ -80,9 +77,7 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
             <TableHeader>
               <TableRow>
                 <TableHead>{t("Profile")}</TableHead>
-                <TableHead>{t("Mode")}</TableHead>
                 <TableHead>{t("Tools")}</TableHead>
-                <TableHead>{t("Tunnel")}</TableHead>
                 <TableHead className="text-right">{t("Actions")}</TableHead>
               </TableRow>
             </TableHeader>
@@ -96,11 +91,7 @@ export function ProfilesPage({ client }: { client: MenderClient }) {
                     </button>
                     <div className="mt-1 text-xs text-muted-foreground">{profile.slug}</div>
                   </TableCell>
-                  <TableCell><Badge variant="outline">{t(profile.mode)}</Badge></TableCell>
                   <TableCell>{formatNumber(profile.tools.length)}</TableCell>
-                  <TableCell>{profile.tunnelId
-                    ? (tunnels.find((tunnel) => tunnel.tunnelId === profile.tunnelId)?.displayName ?? t("Configured"))
-                    : <span className="text-muted-foreground">{t("Local only")}</span>}</TableCell>
                   <TableCell className="text-right">
                     <Button size="sm" variant="outline" onClick={() => void navigate("/profiles/" + encodeURIComponent(profile.slug))}>
                       {t("View details")}

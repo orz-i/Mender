@@ -149,21 +149,20 @@ func TestServiceEndToEndUsesSharedRuntime(t *testing.T) {
 		t.Fatalf("tool detail = %#v", detail)
 	}
 
-	profile, err := service.CreateProfile("default", "Default", "hybrid")
+	profile, err := service.CreateProfile("default", "Default")
 	if err != nil {
 		t.Fatalf("CreateProfile() error = %v", err)
 	}
-	if profile.Mode != "hybrid" {
-		t.Fatalf("profile mode = %q", profile.Mode)
+	if profile.Slug != "default" || profile.ProfileID == "" {
+		t.Fatalf("profile identity = %+v", profile)
 	}
 	profile, err = service.AddProfileTool("default", ProfileTool{
 		ToolID: toolID,
-		Direct: true,
 	})
 	if err != nil {
 		t.Fatalf("AddProfileTool() error = %v", err)
 	}
-	if len(profile.Tools) != 1 || !profile.Tools[0].Direct ||
+	if len(profile.Tools) != 1 ||
 		profile.Tools[0].PolicyConstraint != "inherit" ||
 		profile.Tools[0].ConcurrencyConstraint != "inherit" {
 		t.Fatalf("profile tools = %#v", profile.Tools)
@@ -172,7 +171,6 @@ func TestServiceEndToEndUsesSharedRuntime(t *testing.T) {
 	profile, err = service.ReplaceProfileTools("default", []ProfileTool{
 		{
 			ToolID:                toolID,
-			Direct:                true,
 			Alias:                 "echo_desktop",
 			TitleOverride:         "Desktop Echo",
 			DescriptionOverride:   "Echo configured from the Desktop binding.",
@@ -214,6 +212,12 @@ func TestServiceEndToEndUsesSharedRuntime(t *testing.T) {
 		t.Fatalf("profile search tools = %#v", scoped.Tools)
 	}
 
+	desired, err := service.ConfigureProfileMCPDelivery("default", ProfileMCPDeliveryInput{
+		Mode: "hybrid", DirectToolIDs: []string{toolID}, ExpectedProfileRevision: profile.Revision,
+	})
+	if err != nil || desired.Mode != "hybrid" || len(desired.DirectToolIDs) != 1 || desired.DirectToolIDs[0] != toolID {
+		t.Fatalf("explicit MCP delivery = %+v %v", desired, err)
+	}
 	serverInstance, err := service.StartMCPServer("default", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("StartMCPServer() error = %v", err)

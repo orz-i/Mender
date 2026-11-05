@@ -1865,13 +1865,14 @@ describe("management pages", () => {
     expect(await screen.findByText("OpenAI Work")).toBeTruthy();
   });
 
-  it("binds and clears a Profile Tunnel through inventory selection", async () => {
+  it("binds and clears an MCP delivery Tunnel from the Profile's dedicated settings", async () => {
     const profile = {
       profileId: "prof_1",
       slug: "default",
       displayName: "Default",
-      mode: "hybrid" as const,
       tools: [],
+      skills: [],
+      revision: 3,
     };
     const tunnel = {
       tunnelId: "tun_00000000000000000000000000000001",
@@ -1880,48 +1881,82 @@ describe("management pages", () => {
       externalTunnelId: "tunnel_external_work",
       runtimeCredentialRef: "credential://openai/tunnel-runtime",
     };
-    const setProfileTunnel = vi
+    const getProfileMCPDelivery = vi.fn().mockResolvedValue({
+      profileId: profile.profileId,
+      profileRevision: profile.revision,
+      revision: 4,
+      mode: "hybrid" as const,
+      directToolIds: [],
+    });
+    let deliveryRevision = 4;
+    const configureProfileMCPDelivery = vi
       .fn()
       .mockImplementation((_slug: string, body: { tunnelId: string }) =>
-        Promise.resolve(
-          body.tunnelId
-            ? { ...profile, tunnelId: body.tunnelId }
-            : { ...profile },
-        ),
-      );
+        Promise.resolve({
+          profileId: profile.profileId,
+          profileRevision: profile.revision,
+          revision: ++deliveryRevision,
+          mode: "hybrid" as const,
+          directToolIds: [],
+          tunnelId: body.tunnelId,
+        }));
+    const startMCPServer = vi.fn();
+    const replaceProfileTools = vi.fn();
 
     renderApp("/profiles/default/edit", {
       listProfiles: vi.fn().mockResolvedValue({ profiles: [profile] }),
       listProviders: vi.fn().mockResolvedValue({ providers: [] }),
       listTunnels: vi.fn().mockResolvedValue({ tunnels: [tunnel] }),
       browseTools: vi.fn().mockResolvedValue({ tools: [] }),
-      setProfileTunnel,
+      getProfile: vi.fn().mockResolvedValue(profile),
+      getProfileMCPDelivery,
+      configureProfileMCPDelivery,
+      listMCPServers: vi.fn().mockResolvedValue({ servers: [] }),
+      startMCPServer,
+      replaceProfileTools,
     });
 
     expect((await screen.findAllByText("Default")).length).toBeGreaterThan(0);
+    expect(screen.queryByLabelText("Profile tunnel")).toBeNull();
+    expect(screen.queryByLabelText("Exposure mode")).toBeNull();
+    expect(getProfileMCPDelivery).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Manage MCP delivery" }));
 
     const tunnelSelect =
-      await screen.findByLabelText<HTMLSelectElement>("Profile tunnel");
+      await screen.findByLabelText<HTMLSelectElement>("MCP delivery tunnel");
     expect(tunnelSelect.value).toBe("");
 
     fireEvent.change(tunnelSelect, { target: { value: tunnel.tunnelId } });
+    expect(configureProfileMCPDelivery).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Save MCP settings" }));
     await waitFor(() => {
-      expect(setProfileTunnel).toHaveBeenLastCalledWith("default", {
+      expect(configureProfileMCPDelivery).toHaveBeenLastCalledWith("default", {
+        mode: "hybrid",
         tunnelId: tunnel.tunnelId,
+        directToolIds: [],
+        expectedProfileRevision: 3,
+        expectedRevision: 4,
       });
     });
     expect(
-      screen.getByLabelText<HTMLSelectElement>("Profile tunnel").value,
+      screen.getByLabelText<HTMLSelectElement>("MCP delivery tunnel").value,
     ).toBe(tunnel.tunnelId);
 
-    fireEvent.change(screen.getByLabelText("Profile tunnel"), {
+    fireEvent.change(screen.getByLabelText("MCP delivery tunnel"), {
       target: { value: "" },
     });
+    fireEvent.click(screen.getByRole("button", { name: "Save MCP settings" }));
     await waitFor(() => {
-      expect(setProfileTunnel).toHaveBeenLastCalledWith("default", {
+      expect(configureProfileMCPDelivery).toHaveBeenLastCalledWith("default", {
+        mode: "hybrid",
         tunnelId: "",
+        directToolIds: [],
+        expectedProfileRevision: 3,
+        expectedRevision: 5,
       });
     });
+    expect(startMCPServer).not.toHaveBeenCalled();
+    expect(replaceProfileTools).not.toHaveBeenCalled();
   });
 
   it("manages Profile membership through a source-first Tool picker without ToolID input", async () => {
@@ -1929,11 +1964,11 @@ describe("management pages", () => {
       profileId: "prof_1",
       slug: "default",
       displayName: "Default",
-      mode: "hybrid" as const,
+      skills: [],
+      revision: 0,
       tools: [
         {
           toolId: "tool_1",
-          direct: true,
           alias: "search_prod",
           titleOverride: "",
           descriptionOverride: "",
@@ -1958,7 +1993,6 @@ describe("management pages", () => {
         Promise.resolve({
           ...profile,
           tools: body.tools.map((tool) => ({
-            direct: false,
             alias: "",
             titleOverride: "",
             descriptionOverride: "",
@@ -2055,7 +2089,6 @@ describe("management pages", () => {
         tools: [
           {
             toolId: "tool_1",
-            direct: true,
             alias: "search_prod",
             titleOverride: "",
             descriptionOverride: "",
@@ -2063,7 +2096,7 @@ describe("management pages", () => {
             concurrencyConstraint: "serial",
             credentialRefs: [],
           },
-          { toolId: "tool_2", direct: false },
+          { toolId: "tool_2" },
         ],
       });
     });
@@ -2153,9 +2186,9 @@ describe("management pages", () => {
       profileId: "prof_1",
       slug: "default",
       displayName: "Default",
-      mode: "hybrid" as const,
-      tunnelId: "tun_00000000000000000000000000000001",
-      tools: [{ toolId: "tool_1", direct: true }],
+      skills: [],
+      revision: 0,
+      tools: [{ toolId: "tool_1" }],
     };
     const started = {
       serverId: "srv_1",
@@ -2185,6 +2218,23 @@ describe("management pages", () => {
 
     renderApp("/profiles/default/deliveries/mcp", {
       listProfiles: vi.fn().mockResolvedValue({ profiles: [profile] }),
+      getProfile: vi.fn().mockResolvedValue(profile),
+      getProfileMCPDelivery: vi.fn().mockResolvedValue({
+        profileId: profile.profileId,
+        profileRevision: profile.revision,
+        revision: 0,
+        mode: "hybrid" as const,
+        tunnelId: started.tunnelId,
+        directToolIds: ["tool_1"],
+      }),
+      getTool: vi.fn().mockResolvedValue({ name: "Search", title: "Search" }),
+      listTunnels: vi.fn().mockResolvedValue({ tunnels: [{
+        tunnelId: started.tunnelId,
+        displayName: started.tunnelDisplayName,
+        provider: started.tunnelProvider,
+        externalTunnelId: started.tunnelExternalId,
+        runtimeCredentialRef: "credential://openai/tunnel-runtime",
+      }] }),
       listMCPServers: vi.fn().mockResolvedValue({ servers: [] }),
       startMCPServer,
       restartMCPServer,
@@ -2198,9 +2248,8 @@ describe("management pages", () => {
     expectAnchoredDialog("Start MCP server");
     expect(screen.getByText("MCP delivery belongs to Profile Default.")).toBeTruthy();
     expect(screen.queryByLabelText("Server profile")).toBeNull();
-    expect(
-      screen.getByText("Also starts the linked secure Tunnel."),
-    ).toBeTruthy();
+    expect(screen.getByLabelText<HTMLSelectElement>("MCP delivery tunnel").value)
+      .toBe(started.tunnelId);
 
     fireEvent.click(screen.getByRole("button", { name: "Start server" }));
 
@@ -2211,7 +2260,7 @@ describe("management pages", () => {
       });
     });
     expect(await screen.findByText(started.endpoint)).toBeTruthy();
-    expect(screen.getByText("OpenAI Work")).toBeTruthy();
+    expect(screen.getAllByText("OpenAI Work").length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByRole("button", { name: /More server actions:/ }));
     fireEvent.click(within(await screen.findByRole("group", { name: "Server actions" }))
@@ -2239,8 +2288,9 @@ describe("management pages", () => {
       profileId: "prof_00000000000000000000000000000001",
       slug: "default",
       displayName: "Default",
-      mode: "hybrid" as const,
       tools: [],
+      skills: [],
+      revision: 0,
     };
     const policyProvider = {
       providerId: "prov_00000000000000000000000000000001",

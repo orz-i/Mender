@@ -8,6 +8,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
+	mcpdomain "github.com/orz-i/Mender/backend/internal/mcp/domain"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 )
 
@@ -26,7 +27,7 @@ func TestSourceFirstAdmissionHidesUnclaimedAndUnavailableProviders(t *testing.T)
 		testCanonicalTool(t, "tool_00000000000000000000000000000023", offlineID, "workspace.read", "read", "Read file", "Read workspace file"),
 		testCanonicalTool(t, "tool_00000000000000000000000000000024", unboundID, "agent.delegate", "delegate", "Delegate to Agent", "Submit agent task"),
 	}
-	profile := f.profile(t, profiledomain.ExposureDynamic, []profiledomain.ToolBindingSpec{
+	profile := f.profile(t, mcpdomain.ModeDynamic, []profiledomain.ToolBindingSpec{
 		{ToolID: f.tools[0].ID()},
 		{ToolID: f.tools[1].ID()},
 		{ToolID: f.tools[2].ID()},
@@ -122,10 +123,10 @@ func TestDirectProjectionDoesNotExportUnclaimedOrUnavailableTools(t *testing.T) 
 		t.Run(fmt.Sprintf("case_%d", i), func(t *testing.T) {
 			f := newServerFixture(t)
 			tool := f.tools[0]
-			profile := f.profile(t, profiledomain.ExposureDirect, []profiledomain.ToolBindingSpec{
-				{ToolID: tool.ID(), Direct: true},
+			profile := f.profile(t, mcpdomain.ModeDirect, []profiledomain.ToolBindingSpec{
+				{ToolID: tool.ID()},
 			})
-			a, err := New(context.Background(), profile, Dependencies{
+			a, err := New(context.Background(), profile.Profile, profile.Config, Dependencies{
 				DescribeTool: func(_ context.Context, id catalogdomain.ToolID) (catalogdomain.Tool, error) {
 					if id != tool.ID() {
 						return catalogdomain.Tool{}, fmt.Errorf("unexpected ToolID")

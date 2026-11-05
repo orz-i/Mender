@@ -17,6 +17,7 @@ import (
 	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
+	mcpdomain "github.com/orz-i/Mender/backend/internal/mcp/domain"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 )
 
@@ -24,7 +25,7 @@ func TestDirectProfileListsAndCallsOnlySelectedTools(t *testing.T) {
 	t.Parallel()
 
 	fixture := newServerFixture(t)
-	profile := fixture.profile(t, profiledomain.ExposureDirect, []profiledomain.ToolBindingSpec{
+	profile := fixture.profile(t, mcpdomain.ModeDirect, []profiledomain.ToolBindingSpec{
 		{ToolID: fixture.tools[0].ID()},
 	})
 	adapter := fixture.adapter(t, profile)
@@ -67,7 +68,7 @@ func TestDynamicProfileExposesMetaToolsAndEnforcesMembership(t *testing.T) {
 	t.Parallel()
 
 	fixture := newServerFixture(t)
-	profile := fixture.profile(t, profiledomain.ExposureDynamic, []profiledomain.ToolBindingSpec{
+	profile := fixture.profile(t, mcpdomain.ModeDynamic, []profiledomain.ToolBindingSpec{
 		{ToolID: fixture.tools[0].ID()},
 	})
 	adapter := fixture.adapter(t, profile)
@@ -144,7 +145,6 @@ func TestProfileBindingPresentationOverridesMCPProjection(t *testing.T) {
 	fixture := newServerFixture(t)
 	binding, err := profiledomain.NewToolBinding(profiledomain.ToolBindingSpec{
 		ToolID:              fixture.tools[0].ID(),
-		Direct:              true,
 		Alias:               "open_prod_issue",
 		TitleOverride:       "Open production issue",
 		DescriptionOverride: "Open an issue in the production tracker.",
@@ -154,8 +154,8 @@ func TestProfileBindingPresentationOverridesMCPProjection(t *testing.T) {
 	}
 	profile := fixture.profileBindings(
 		t,
-		profiledomain.ExposureHybrid,
-		[]profiledomain.ToolBinding{binding},
+		mcpdomain.ModeHybrid,
+		[]profiledomain.ToolBinding{binding}, binding.ToolID(),
 	)
 	adapter := fixture.adapter(t, profile)
 	client := connectClient(t, adapter)
@@ -271,17 +271,17 @@ func TestMCPDirectProjectionRejectsNormalizedNameCollision(t *testing.T) {
 	)
 	fixture.tools = []catalogdomain.Tool{first, second}
 
-	firstBinding, err := profiledomain.NewToolBinding(profiledomain.ToolBindingSpec{ToolID: first.ID(), Direct: true})
+	firstBinding, err := profiledomain.NewToolBinding(profiledomain.ToolBindingSpec{ToolID: first.ID()})
 	if err != nil {
 		t.Fatal(err)
 	}
-	secondBinding, err := profiledomain.NewToolBinding(profiledomain.ToolBindingSpec{ToolID: second.ID(), Direct: true})
+	secondBinding, err := profiledomain.NewToolBinding(profiledomain.ToolBindingSpec{ToolID: second.ID()})
 	if err != nil {
 		t.Fatal(err)
 	}
 	profile := fixture.profileBindings(
 		t,
-		profiledomain.ExposureDirect,
+		mcpdomain.ModeDirect,
 		[]profiledomain.ToolBinding{firstBinding, secondBinding},
 	)
 
@@ -289,7 +289,7 @@ func TestMCPDirectProjectionRejectsNormalizedNameCollision(t *testing.T) {
 		first.ID():  first,
 		second.ID(): second,
 	}
-	_, err = New(context.Background(), profile, Dependencies{
+	_, err = New(context.Background(), profile.Profile, profile.Config, Dependencies{
 		DescribeTool: func(_ context.Context, id catalogdomain.ToolID) (catalogdomain.Tool, error) {
 			return byID[id], nil
 		},
@@ -314,10 +314,10 @@ func TestHybridProfileCombinesDirectAndDynamicExposure(t *testing.T) {
 	t.Parallel()
 
 	fixture := newServerFixture(t)
-	profile := fixture.profile(t, profiledomain.ExposureHybrid, []profiledomain.ToolBindingSpec{
-		{ToolID: fixture.tools[0].ID(), Direct: true},
-		{ToolID: fixture.tools[1].ID(), Direct: false},
-	})
+	profile := fixture.profile(t, mcpdomain.ModeHybrid, []profiledomain.ToolBindingSpec{
+		{ToolID: fixture.tools[0].ID()},
+		{ToolID: fixture.tools[1].ID()},
+	}, fixture.tools[0].ID())
 	adapter := fixture.adapter(t, profile)
 	client := connectClient(t, adapter)
 
@@ -439,7 +439,7 @@ func newServerFixture(t *testing.T) *serverFixture {
 	}
 }
 
-func (f *serverFixture) profile(t *testing.T, mode profiledomain.ExposureMode, specs []profiledomain.ToolBindingSpec) profiledomain.Profile {
+func (f *serverFixture) profile(t *testing.T, mode mcpdomain.Mode, specs []profiledomain.ToolBindingSpec, direct ...catalogdomain.ToolID) fixtureProfile {
 	t.Helper()
 	bindings := make([]profiledomain.ToolBinding, 0, len(specs))
 	for _, spec := range specs {
@@ -449,14 +449,15 @@ func (f *serverFixture) profile(t *testing.T, mode profiledomain.ExposureMode, s
 		}
 		bindings = append(bindings, binding)
 	}
-	return f.profileBindings(t, mode, bindings)
+	return f.profileBindings(t, mode, bindings, direct...)
 }
 
 func (f *serverFixture) profileBindings(
 	t *testing.T,
-	mode profiledomain.ExposureMode,
+	mode mcpdomain.Mode,
 	bindings []profiledomain.ToolBinding,
-) profiledomain.Profile {
+	direct ...catalogdomain.ToolID,
+) fixtureProfile {
 	t.Helper()
 	id, _ := profiledomain.ParseProfileID("prof_00000000000000000000000000000001")
 	slug, _ := profiledomain.NewSlug("default")
@@ -464,16 +465,24 @@ func (f *serverFixture) profileBindings(
 		id,
 		slug,
 		"Default",
-		mode,
 		bindings,
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return profile
+	config, err := mcpdomain.NewConfig(id, mode, "", direct)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return fixtureProfile{Profile: profile, Config: config}
 }
 
-func (f *serverFixture) adapter(t *testing.T, profile profiledomain.Profile) *Adapter {
+type fixtureProfile struct {
+	profiledomain.Profile
+	Config mcpdomain.Config
+}
+
+func (f *serverFixture) adapter(t *testing.T, profile fixtureProfile) *Adapter {
 	t.Helper()
 
 	byID := make(map[catalogdomain.ToolID]catalogdomain.Tool, len(f.tools))
@@ -481,7 +490,7 @@ func (f *serverFixture) adapter(t *testing.T, profile profiledomain.Profile) *Ad
 		byID[tool.ID()] = tool
 	}
 
-	adapter, err := New(context.Background(), profile, Dependencies{
+	adapter, err := New(context.Background(), profile.Profile, profile.Config, Dependencies{
 		DescribeTool: func(_ context.Context, id catalogdomain.ToolID) (catalogdomain.Tool, error) {
 			tool, ok := byID[id]
 			if !ok {

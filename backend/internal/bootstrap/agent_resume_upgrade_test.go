@@ -10,7 +10,6 @@ import (
 	agentdomain "github.com/orz-i/Mender/backend/internal/agent/domain"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	profileapp "github.com/orz-i/Mender/backend/internal/profile/application"
-	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 	_ "modernc.org/sqlite"
 )
 
@@ -48,15 +47,17 @@ func TestAgentResumeUpgradesFourToolFacadeWithoutChangingProfileGrants(t *testin
 	if len(oldIDs) != 4 || resumeID == "" {
 		t.Fatal("missing original or resume Tool")
 	}
-	profile, err := runtime.Profiles.Create.Execute(ctx, profileapp.CreateProfileRequest{
-		Slug: "four-tool-profile", DisplayName: "Existing Profile", Mode: profiledomain.ExposureDirect,
-	})
+	profile, err := createMCPProfileFixture(t, runtime, ctx, profileapp.CreateProfileRequest{
+		Slug: "four-tool-profile", DisplayName: "Existing Profile",
+	}, "direct")
+
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = runtime.Profiles.AddTool.Execute(ctx, profileapp.AddToolRequest{
-		ProfileSlug: profile.Slug(), ToolID: catalogdomain.ToolID(oldIDs["agent.delegate"]), Direct: true,
-	})
+	_, err = addMCPProfileToolFixture(t, runtime, ctx, profileapp.AddToolRequest{
+		ProfileSlug: profile.Slug(), ToolID: catalogdomain.ToolID(oldIDs["agent.delegate"]),
+	}, true)
+
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -12,7 +12,6 @@ import (
 	agentdomain "github.com/orz-i/Mender/backend/internal/agent/domain"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	profileapp "github.com/orz-i/Mender/backend/internal/profile/application"
-	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 	_ "modernc.org/sqlite"
 )
@@ -111,8 +110,8 @@ func TestOpenCodeAgentV7ToV8PreservesAllLiveRelationships(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	profile, err := r.Profiles.Create.Execute(ctx, profileapp.CreateProfileRequest{
-		Slug: "migration-profile", DisplayName: "Migration profile", Mode: profiledomain.ExposureDirect})
+	profile, err := createMCPProfileFixture(t, r, ctx, profileapp.CreateProfileRequest{
+		Slug: "migration-profile", DisplayName: "Migration profile"}, "direct")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -135,8 +134,8 @@ func TestOpenCodeAgentV7ToV8PreservesAllLiveRelationships(t *testing.T) {
 	// Exact Profile ToolBinding must survive a rebuilt Agent table.
 	// Tool IDs reference the existing Provider, never a copy of the Agent.
 	// Workspace binding and grant survive even if no sandbox process is started.
-	if _, err := r.Profiles.AddTool.Execute(ctx, profileapp.AddToolRequest{
-		ProfileSlug: profile.Slug(), ToolID: mustToolID(t, delegateID), Direct: true}); err != nil {
+	if _, err := addMCPProfileToolFixture(t, r, ctx, profileapp.AddToolRequest{
+		ProfileSlug: profile.Slug(), ToolID: mustToolID(t, delegateID)}, true); err != nil {
 		t.Fatal(err)
 	}
 	linkedRoot, err := filepath.EvalSymlinks(t.TempDir())

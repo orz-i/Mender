@@ -11,7 +11,6 @@ import (
 	agentdomain "github.com/orz-i/Mender/backend/internal/agent/domain"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	profileapplication "github.com/orz-i/Mender/backend/internal/profile/application"
-	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 )
 
 // This is an end-to-end MCP transport regression with two distinct Agent
@@ -65,10 +64,10 @@ func TestMCPDiscoveryUsesRealAgentOwnerNotFacadeDisplay(t *testing.T) {
 		agents = append(agents, selectedAgent{providerID, agentName, delegate})
 	}
 
-	profile, err := r.Profiles.Create.Execute(ctx, profileapplication.CreateProfileRequest{
+	profile, err := createMCPProfileFixture(t, r, ctx, profileapplication.CreateProfileRequest{
 		Slug: "agent-owner-search", DisplayName: "Agent owner search",
-		Mode: profiledomain.ExposureDynamic,
-	})
+	}, "dynamic")
+
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -98,16 +98,18 @@ func setupGovernedTaskToolFixture(t *testing.T) *governedTaskToolFixture {
 		}
 		ids[tool.SourceKey] = parsed
 	}
-	profile, err := r.Profiles.Create.Execute(ctx, profileapp.CreateProfileRequest{
-		Slug: "agent-tools-test", DisplayName: "Agent Tool Scope", Mode: profiledomain.ExposureDirect,
-	})
+	profile, err := createMCPProfileFixture(t, r, ctx, profileapp.CreateProfileRequest{
+		Slug: "agent-tools-test", DisplayName: "Agent Tool Scope",
+	}, "direct")
+
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, source := range []string{"workspace.read", "workspace.edit", "workspace.shell"} {
-		profile, err = r.Profiles.AddTool.Execute(ctx, profileapp.AddToolRequest{
-			ProfileSlug: profile.Slug(), ToolID: ids[source], Direct: true,
-		})
+		profile, err = addMCPProfileToolFixture(t, r, ctx, profileapp.AddToolRequest{
+			ProfileSlug: profile.Slug(), ToolID: ids[source],
+		}, true)
+
 		if err != nil {
 			t.Fatal(err)
 		}

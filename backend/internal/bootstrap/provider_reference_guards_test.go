@@ -50,9 +50,10 @@ func providerReferenceFixture(t *testing.T, r *Runtime) (catalogdomain.ProviderI
 
 func profileReferenceFixture(t *testing.T, r *Runtime) profiledomain.Slug {
 	t.Helper()
-	p, err := r.Profiles.Create.Execute(context.Background(), profileapplication.CreateProfileRequest{
-		Slug: "reference-test", DisplayName: "Reference Test", Mode: profiledomain.ExposureDynamic,
-	})
+	p, err := createMCPProfileFixture(t, r, context.Background(), profileapplication.CreateProfileRequest{
+		Slug: "reference-test", DisplayName: "Reference Test",
+	}, "dynamic")
+
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,7 +118,7 @@ func TestProviderDeleteReferenceGuardBlocksLateProfileAndRollsBackConfig(t *test
 	}
 	// Bypass application pre-validation to reproduce the delayed SQL commit
 	// of a ToolBinding that was checked before Provider deletion.
-	_, err = db.ExecContext(ctx, `INSERT INTO profile_tools(profile_id,tool_id,direct) VALUES(?,?,1)`, profile.ID().String(), toolID.String())
+	_, err = db.ExecContext(ctx, `INSERT INTO profile_tools(profile_id,tool_id) VALUES(?,?)`, profile.ID().String(), toolID.String())
 	if err == nil || !strings.Contains(err.Error(), "Profile Tool reference unavailable") {
 		t.Fatalf("late Profile insert error=%v, want guarded refusal", err)
 	}

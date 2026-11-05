@@ -10,14 +10,13 @@ import (
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	profileapplication "github.com/orz-i/Mender/backend/internal/profile/application"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
-	tunneldomain "github.com/orz-i/Mender/backend/internal/tunnel/domain"
 )
 
 func auditProfile(t *testing.T, store *Store) profiledomain.Profile {
 	t.Helper()
 	id, _ := profiledomain.ParseProfileID("prof_00000000000000000000000000000001")
 	slug, _ := profiledomain.NewSlug("audit-profile")
-	profile, err := profiledomain.NewProfileWithBindings(id, slug, "Audit Profile", profiledomain.ExposureDynamic, nil)
+	profile, err := profiledomain.NewProfileWithBindings(id, slug, "Audit Profile", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -36,9 +35,9 @@ func auditTool(t *testing.T, id string) catalogdomain.ToolID {
 	return result
 }
 
-func auditBinding(t *testing.T, toolID catalogdomain.ToolID, direct bool) profiledomain.ToolBinding {
+func auditBinding(t *testing.T, toolID catalogdomain.ToolID, _ bool) profiledomain.ToolBinding {
 	t.Helper()
-	binding, err := profiledomain.NewToolBinding(profiledomain.ToolBindingSpec{ToolID: toolID, Direct: direct})
+	binding, err := profiledomain.NewToolBinding(profiledomain.ToolBindingSpec{ToolID: toolID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,43 +110,6 @@ func TestProfileRevisionPreventsStaleRevocationRestore(t *testing.T) {
 	all, err := store.ListProfiles(ctx)
 	if err != nil || len(all) != 1 || all[0].Revision() != 3 {
 		t.Fatalf("ListProfiles revision = %v, %v", all, err)
-	}
-}
-
-func TestProfileRevisionIncludesTunnelAndReplacement(t *testing.T) {
-	ctx := context.Background()
-	store := openTestStore(t)
-	initial := auditProfile(t, store)
-	editor, err := store.GetProfileByID(ctx, initial.ID())
-	if err != nil {
-		t.Fatal(err)
-	}
-	stale, err := store.GetProfileByID(ctx, initial.ID())
-	if err != nil {
-		t.Fatal(err)
-	}
-	tunnelID, _ := tunneldomain.ParseTunnelID("tun_00000000000000000000000000000001")
-	editor, err = editor.SetTunnel(tunnelID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := store.SaveProfile(ctx, editor); err != nil {
-		t.Fatal(err)
-	}
-	stale, err = stale.ReplaceBindings(nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := store.SaveProfile(ctx, stale); !errors.Is(err, profileapplication.ErrRevisionConflict) {
-		t.Fatalf("stale replace error = %v", err)
-	}
-	got, err := store.GetProfileByID(ctx, initial.ID())
-	if err != nil {
-		t.Fatal(err)
-	}
-	value, ok := got.TunnelID()
-	if !ok || value != tunnelID || got.Revision() != 1 {
-		t.Fatalf("tunnel after stale replace: %q, %v, rev=%d", value, ok, got.Revision())
 	}
 }
 

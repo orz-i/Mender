@@ -12,7 +12,7 @@ const oldID = "sinst_00000000000000000000000000000002";
 const profile: Profile = {
   profileId: "prof_00000000000000000000000000000001",
   slug: "delivery", displayName: "Delivery",
-  mode: "hybrid", tools: [], skills: [oldID],
+  revision: 0, tools: [], skills: [oldID],
 };
 
 function installation(id: string, name: string, enabled: boolean): SkillInstallation {

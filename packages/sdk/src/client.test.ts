@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { createMenderClient } from "./client";
+import { createMenderClient, type Profile, type ProfileMCPDelivery, type ReplaceProfileToolsRequest } from "./client";
 
 describe("Mender SDK", () => {
   it("discovers Provider plugins and creates a generic Provider", async () => {
@@ -320,26 +320,23 @@ describe("Mender SDK", () => {
   });
 
   it("replaces Profile Tool membership through the generated contract", async () => {
+    const input: ReplaceProfileToolsRequest = { tools: [
+      { toolId: "tool_1", alias: "chosen_alias", policyConstraint: "deny", credentialRefs: ["credential://github/work"] },
+      { toolId: "tool_2" },
+    ] };
+    const profile: Profile = {
+      profileId: "prof_1", slug: "default", displayName: "Default", skills: [], revision: 0,
+      tools: [
+        { toolId: "tool_1", alias: "chosen_alias", titleOverride: "", descriptionOverride: "", policyConstraint: "deny", concurrencyConstraint: "inherit", credentialRefs: ["credential://github/work"] },
+        { toolId: "tool_2", alias: "", titleOverride: "", descriptionOverride: "", policyConstraint: "inherit", concurrencyConstraint: "inherit", credentialRefs: [] },
+      ],
+    };
     const fetch = async (request: Request) => {
       expect(request.method).toBe("PUT");
       expect(request.url).toContain("/api/v1/profiles/default/tools");
-      await expect(request.json()).resolves.toEqual({
-        tools: [
-          { toolId: "tool_1", direct: true },
-          { toolId: "tool_2", direct: false },
-        ],
-      });
+      await expect(request.json()).resolves.toEqual(input);
       return new Response(
-        JSON.stringify({
-          profileId: "prof_1",
-          slug: "default",
-          displayName: "Default",
-          mode: "hybrid",
-          tools: [
-            { toolId: "tool_1", direct: true },
-            { toolId: "tool_2", direct: false },
-          ],
-        }),
+        JSON.stringify(profile),
         {
           status: 200,
           headers: { "Content-Type": "application/json" },
@@ -352,20 +349,101 @@ describe("Mender SDK", () => {
       fetch,
     });
 
-    await expect(
-      client.replaceProfileTools("default", {
-        tools: [
-          { toolId: "tool_1", direct: true },
-          { toolId: "tool_2", direct: false },
-        ],
-      }),
-    ).resolves.toMatchObject({
-      slug: "default",
-      tools: [
-        { toolId: "tool_1", direct: true },
-        { toolId: "tool_2", direct: false },
-      ],
+    const updated = await client.replaceProfileTools("default", input);
+    expect(updated).toEqual(profile);
+    expect(updated).not.toHaveProperty("mode");
+    expect(updated).not.toHaveProperty("tunnelId");
+    expect(updated.tools.every((tool) => !("direct" in tool))).toBe(true);
+  });
+
+  it("returns null only for an explicitly unconfigured MCP delivery", async () => {
+    const client = createMenderClient({
+      baseUrl: "http://localhost:8080/api/v1",
+      fetch: async (request) => {
+        expect(request.method).toBe("GET");
+        expect(new URL(request.url).pathname).toBe("/api/v1/profiles/selected/mcp-delivery");
+        expect(await request.text()).toBe("");
+        return new Response(JSON.stringify({ code: "mcp_delivery_not_configured", message: "MCP delivery: not configured" }), {
+          status: 404, headers: { "Content-Type": "application/json" },
+        });
+      },
     });
+    await expect(client.getProfileMCPDelivery("selected")).resolves.toBeNull();
+  });
+
+  it.each([
+    { status: 404, code: "not_found", message: "Profile not found" },
+    { status: 409, code: "revision_conflict", message: "Delivery revision changed" },
+    { status: 500, code: "mcp_delivery_not_configured", message: "Storage unavailable" },
+    { status: 403, code: "forbidden", message: "Owner required" },
+  ])("preserves MCP delivery HTTP errors ($status/$code)", async ({ status, code, message }) => {
+    const client = createMenderClient({
+      baseUrl: "http://localhost:8080/api/v1",
+      fetch: () => Promise.resolve(new Response(JSON.stringify({ code, message }), {
+        status, headers: { "Content-Type": "application/json" },
+      })),
+    });
+    await expect(client.getProfileMCPDelivery("selected")).rejects.toMatchObject({
+      name: "MenderApiError", status, code, message,
+    });
+  });
+
+  it("does not treat an unknown 404 envelope or transport failure as unconfigured", async () => {
+    const unknown = createMenderClient({
+      baseUrl: "http://localhost:8080/api/v1",
+      fetch: () => Promise.resolve(new Response(JSON.stringify({ error: { code: "mcp_delivery_not_configured" } }), {
+        status: 404, headers: { "Content-Type": "application/json" },
+      })),
+    });
+    await expect(unknown.getProfileMCPDelivery("selected")).rejects.toMatchObject({
+      name: "MenderApiError", code: "http_error", status: 404,
+    });
+    const transportError = new Error("connection lost");
+    const unavailable = createMenderClient({
+      baseUrl: "http://localhost:8080/api/v1", fetch: () => Promise.reject(transportError),
+    });
+    await expect(unavailable.getProfileMCPDelivery("selected")).rejects.toBe(transportError);
+  });
+
+  it("preserves exact MCP delivery identity and both zero revision fences", async () => {
+    const tunnelId = "tun_0123456789abcdef0123456789abcdef";
+    const response: ProfileMCPDelivery = {
+      profileId: "prof_0123456789abcdef0123456789abcdef", profileRevision: 0, revision: 0,
+      mode: "hybrid", tunnelId,
+      directToolIds: ["tool_0123456789abcdef0123456789abcdef"],
+    };
+    const client = createMenderClient({
+      baseUrl: "http://localhost:8080/api/v1",
+      fetch: async (request) => {
+        expect(request.method).toBe("PUT");
+        expect(new URL(request.url).pathname).toBe("/api/v1/profiles/selected/mcp-delivery");
+        await expect(request.json()).resolves.toEqual({
+          mode: response.mode, tunnelId: response.tunnelId, directToolIds: response.directToolIds,
+          expectedProfileRevision: 0, expectedRevision: 0,
+        });
+        return new Response(JSON.stringify(response), { status: 200, headers: { "Content-Type": "application/json" } });
+      },
+    });
+    await expect(client.configureProfileMCPDelivery("selected", {
+      mode: response.mode, tunnelId, directToolIds: response.directToolIds,
+      expectedProfileRevision: 0, expectedRevision: 0,
+    })).resolves.toEqual(response);
+  });
+
+  it("omits only the delivery revision fence for an explicit create", async () => {
+    const response: ProfileMCPDelivery = { profileId: "prof_1", profileRevision: 0, revision: 0, mode: "dynamic", directToolIds: [] };
+    const client = createMenderClient({
+      baseUrl: "http://localhost:8080/api/v1",
+      fetch: async (request) => {
+        const input: unknown = await request.json();
+        expect(input).toEqual({ mode: "dynamic", directToolIds: [], expectedProfileRevision: 0 });
+        expect(input).not.toHaveProperty("expectedRevision");
+        return new Response(JSON.stringify(response), { status: 200, headers: { "Content-Type": "application/json" } });
+      },
+    });
+    await expect(client.configureProfileMCPDelivery("selected", {
+      mode: "dynamic", directToolIds: [], expectedProfileRevision: 0,
+    })).resolves.toEqual(response);
   });
 
   it("replaces Profile Skill membership through the typed generated contract", async () => {
@@ -376,7 +454,7 @@ describe("Mender SDK", () => {
       await expect(request.json()).resolves.toEqual({ installationIds: [id] });
       return new Response(JSON.stringify({
         profileId: "prof_1", slug: "default", displayName: "Default",
-        mode: "hybrid", tools: [], skills: [id],
+        revision: 0, tools: [], skills: [id],
       }), { status: 200, headers: { "Content-Type": "application/json" } });
     };
     const client = createMenderClient({ baseUrl: "http://localhost:8080/api/v1", fetch });

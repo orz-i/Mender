@@ -11,7 +11,6 @@ import (
 	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
 	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	profileapplication "github.com/orz-i/Mender/backend/internal/profile/application"
-	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 	workspaceplugin "github.com/orz-i/Mender/backend/internal/workspace/infrastructure/plugin"
 	_ "modernc.org/sqlite"
 )
@@ -53,9 +52,10 @@ func TestRuntimeRejectsWorkspaceV1WithoutRewritingToolOrProfile(t *testing.T) {
 	if err != nil || len(tools) != 4 {
 		t.Fatalf("tools %+v %v", tools, err)
 	}
-	profile, err := runtime.Profiles.Create.Execute(ctx, profileapplication.CreateProfileRequest{
-		Slug: "v1-bound", DisplayName: "Bound", Mode: profiledomain.ExposureDynamic,
-	})
+	profile, err := createMCPProfileFixture(t, runtime, ctx, profileapplication.CreateProfileRequest{
+		Slug: "v1-bound", DisplayName: "Bound",
+	}, "dynamic")
+
 	if err != nil {
 		t.Fatal(err)
 	}

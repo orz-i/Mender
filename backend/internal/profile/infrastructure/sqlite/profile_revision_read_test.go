@@ -26,7 +26,7 @@ func TestProfileRevisionReadObservesOtherConnectionsWithoutMutation(t *testing.T
 
 	id, _ := profiledomain.ParseProfileID("prof_00000000000000000000000000000001")
 	slug, _ := profiledomain.NewSlug("live-profile")
-	p, err := profiledomain.NewProfileWithBindings(id, slug, "Revision test", profiledomain.ExposureDynamic, nil)
+	p, err := profiledomain.NewProfileWithBindings(id, slug, "Revision test", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

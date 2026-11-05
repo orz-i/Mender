@@ -370,10 +370,12 @@ func TestProfileCreateListAndShowJSON(t *testing.T) {
 		"profile", "create",
 		"--slug", "default",
 		"--name", "Default",
-		"--mode", "hybrid",
 	)
-	if created["slug"] != "default" || created["mode"] != "hybrid" {
+	if created["slug"] != "default" {
 		t.Fatalf("created profile = %#v", created)
+	}
+	if _, exists := created["mode"]; exists {
+		t.Fatal("Profile response retained MCP delivery authority")
 	}
 
 	listed := execute("profile", "list")

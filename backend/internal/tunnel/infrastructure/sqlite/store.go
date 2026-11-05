@@ -163,6 +163,9 @@ func (s *Store) List(ctx context.Context) ([]tunneldomain.Tunnel, error) {
 func (s *Store) Delete(ctx context.Context, id tunneldomain.TunnelID) error {
 	result, err := s.db.ExecContext(ctx, "DELETE FROM tunnels WHERE id = ?", id.String())
 	if err != nil {
+		if strings.Contains(err.Error(), "MCP delivery Tunnel in use") {
+			return fmt.Errorf("%w: %w", tunnelapplication.ErrTunnelInUse, err)
+		}
 		return fmt.Errorf("delete tunnel: %w", err)
 	}
 	count, err := result.RowsAffected()

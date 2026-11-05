@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
+	mcpdomain "github.com/orz-i/Mender/backend/internal/mcp/domain"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 )
 
@@ -29,7 +30,7 @@ func TestToolDiscoverySuppressesWeakDescriptionsAfterNamedMatches(t *testing.T) 
 	for _, tool := range fixture.tools {
 		bindings = append(bindings, profiledomain.ToolBindingSpec{ToolID: tool.ID()})
 	}
-	client := connectClient(t, fixture.adapter(t, fixture.profile(t, profiledomain.ExposureDynamic, bindings)))
+	client := connectClient(t, fixture.adapter(t, fixture.profile(t, mcpdomain.ModeDynamic, bindings)))
 
 	cases := []struct {
 		name string

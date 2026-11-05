@@ -11,7 +11,6 @@ import (
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	gov "github.com/orz-i/Mender/backend/internal/governance/domain"
 	profileapp "github.com/orz-i/Mender/backend/internal/profile/application"
-	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 	sandboxapplication "github.com/orz-i/Mender/backend/internal/sandbox/application"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 )
@@ -43,14 +42,14 @@ func TestMCPSSHJobsSeparateGrantsAndReadOnlyRecoveryWithUncertainLease(t *testin
 		t.Fatalf("Jobs facade not ready %+v %v", suite, err)
 	}
 
-	profile, err := r.Profiles.Create.Execute(ctx, profileapp.CreateProfileRequest{
-		Slug: "mcp-jobs", DisplayName: "MCP Jobs", Mode: profiledomain.ExposureDirect})
+	profile, err := createMCPProfileFixture(t, r, ctx, profileapp.CreateProfileRequest{
+		Slug: "mcp-jobs", DisplayName: "MCP Jobs"}, "direct")
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, tool := range suite.Tools {
-		profile, err = r.Profiles.AddTool.Execute(ctx, profileapp.AddToolRequest{
-			ProfileSlug: profile.Slug(), ToolID: catalogdomain.ToolID(tool.ToolID), Direct: true})
+		profile, err = addMCPProfileToolFixture(t, r, ctx, profileapp.AddToolRequest{
+			ProfileSlug: profile.Slug(), ToolID: catalogdomain.ToolID(tool.ToolID)}, true)
 		if err != nil {
 			t.Fatal(err)
 		}

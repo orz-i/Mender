@@ -216,7 +216,6 @@ func TestTunnelManagementAPI(t *testing.T) {
 		map[string]any{
 			"slug":        "external",
 			"displayName": "External",
-			"mode":        "dynamic",
 		},
 		http.StatusCreated,
 	)
@@ -224,8 +223,8 @@ func TestTunnelManagementAPI(t *testing.T) {
 		t,
 		server.Client(),
 		http.MethodPut,
-		server.URL+"/api/v1/profiles/external/tunnel",
-		map[string]any{"tunnelId": tunnelID},
+		server.URL+"/api/v1/profiles/external/mcp-delivery",
+		map[string]any{"mode": "dynamic", "tunnelId": tunnelID, "directToolIds": []string{}, "expectedProfileRevision": 0},
 		http.StatusOK,
 	)
 	if profile["tunnelId"] != tunnelID {
@@ -248,8 +247,8 @@ func TestTunnelManagementAPI(t *testing.T) {
 		t,
 		server.Client(),
 		http.MethodPut,
-		server.URL+"/api/v1/profiles/external/tunnel",
-		map[string]any{"tunnelId": ""},
+		server.URL+"/api/v1/profiles/external/mcp-delivery",
+		map[string]any{"mode": "dynamic", "tunnelId": "", "directToolIds": []string{}, "expectedProfileRevision": 0, "expectedRevision": 0},
 		http.StatusOK,
 	)
 	if _, ok := cleared["tunnelId"]; ok {
@@ -468,7 +467,6 @@ func TestManagementAPIEndToEnd(t *testing.T) {
 		map[string]any{
 			"slug":        "default",
 			"displayName": "Default",
-			"mode":        "hybrid",
 		},
 		http.StatusCreated,
 	)
@@ -479,7 +477,6 @@ func TestManagementAPIEndToEnd(t *testing.T) {
 		server.URL+"/api/v1/profiles/default/tools",
 		map[string]any{
 			"toolId": toolID,
-			"direct": true,
 		},
 		http.StatusOK,
 	)
@@ -517,8 +514,8 @@ func TestManagementAPIEndToEnd(t *testing.T) {
 		map[string]any{
 			"tools": []map[string]any{
 				{
-					"toolId":                toolID,
-					"direct":                true,
+					"toolId": toolID,
+
 					"alias":                 "echo_profile",
 					"titleOverride":         "Profile Echo",
 					"descriptionOverride":   "Echo through the default Profile",
@@ -567,6 +564,9 @@ func TestManagementAPIEndToEnd(t *testing.T) {
 	if scopedTools, ok := scoped["tools"].([]any); !ok || len(scopedTools) != 1 {
 		t.Fatalf("profile search = %#v", scoped)
 	}
+
+	requestJSON(t, server.Client(), http.MethodPut, server.URL+"/api/v1/profiles/default/mcp-delivery",
+		map[string]any{"mode": "hybrid", "directToolIds": []string{toolID}, "expectedProfileRevision": replacedProfile["revision"]}, http.StatusOK)
 
 	startedServer := requestJSON(
 		t,

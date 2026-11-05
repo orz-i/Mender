@@ -1,4 +1,4 @@
-package bootstrap
+package managed
 
 import (
 	"context"
@@ -26,9 +26,9 @@ func newCatalogChangeHandler(t *testing.T) (*managedProfileMCPHTTPHandler, *chan
 	state := &changingCatalogFixture{}
 	state.fingerprint.Store("v0")
 	handler, err := newManagedProfileMCPHTTPHandler(p, projectionText("v0"),
-		func(context.Context, profiledomain.ProfileID) (uint64, error) { return 0, nil },
-		func(context.Context, profiledomain.ProfileID) (profiledomain.Profile, error) { return p, nil },
-		func(context.Context, profiledomain.Profile) (http.Handler, error) {
+		func(context.Context, profiledomain.ProfileID) (Versions, error) { return Versions{}, nil },
+		func(context.Context, profiledomain.ProfileID) (Snapshot, error) { return p, nil },
+		func(context.Context, Snapshot) (http.Handler, error) {
 			state.builds.Add(1)
 			if state.changeDuringBuild.CompareAndSwap(true, false) {
 				state.revision.Add(1)
@@ -42,7 +42,7 @@ func newCatalogChangeHandler(t *testing.T) (*managedProfileMCPHTTPHandler, *chan
 				}
 				return state.revision.Load(), nil
 			},
-			fingerprint: func(context.Context, profiledomain.Profile) (string, error) {
+			fingerprint: func(context.Context, Snapshot) (string, error) {
 				if state.fingerprintFailed.Load() {
 					return "", errors.New("secret fingerprint error")
 				}
@@ -131,15 +131,15 @@ func TestManagedProfileCatalogMetadataChangeDuringLoadNeverPublishes(t *testing.
 	fingerprint := "unchanged"
 	var builds atomic.Int64
 	h, err := newManagedProfileMCPHTTPHandler(p, projectionText("v0"),
-		func(context.Context, profiledomain.ProfileID) (uint64, error) { return 0, nil },
-		func(context.Context, profiledomain.ProfileID) (profiledomain.Profile, error) { return p, nil },
-		func(context.Context, profiledomain.Profile) (http.Handler, error) {
+		func(context.Context, profiledomain.ProfileID) (Versions, error) { return Versions{}, nil },
+		func(context.Context, profiledomain.ProfileID) (Snapshot, error) { return p, nil },
+		func(context.Context, Snapshot) (http.Handler, error) {
 			builds.Add(1)
 			return projectionText("v1"), nil
 		},
 		managedMCPToolCatalog{
 			revision: func(context.Context) (int64, error) { return rev.Load(), nil },
-			fingerprint: func(context.Context, profiledomain.Profile) (string, error) {
+			fingerprint: func(context.Context, Snapshot) (string, error) {
 				rev.Add(1) // Writer commits while loading Tool metadata.
 				return fingerprint, nil
 			}, initialRevision: 0, initialFingerprint: "v0",

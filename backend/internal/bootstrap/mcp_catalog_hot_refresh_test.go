@@ -9,11 +9,10 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	catalogsqlite "github.com/orz-i/Mender/backend/internal/catalog/infrastructure/sqlite"
-	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 )
 
 func TestManagedMCPHTTPRefreshesCatalogMetadataWithoutChangingProfile(t *testing.T) {
-	for _, mode := range []profiledomain.ExposureMode{profiledomain.ExposureDirect, profiledomain.ExposureDynamic, profiledomain.ExposureHybrid} {
+	for _, mode := range []string{"direct", "dynamic", "hybrid"} {
 		t.Run(string(mode), func(t *testing.T) {
 			f := newLiveMCPFixture(t, mode)
 			ctx := context.Background()
@@ -22,7 +21,7 @@ func TestManagedMCPHTTPRefreshesCatalogMetadataWithoutChangingProfile(t *testing
 			if err != nil {
 				t.Fatal(err)
 			}
-			if mode != profiledomain.ExposureDirect {
+			if mode != "direct" {
 				initialDesc := readDescribedTool(t, f, f.ids["echo_alpha"])
 				if initialDesc["title"] != "echo_alpha" {
 					t.Fatalf("unexpected initial title: %#v", initialDesc)
@@ -70,7 +69,7 @@ func TestManagedMCPHTTPRefreshesCatalogMetadataWithoutChangingProfile(t *testing
 			if err != nil || profileAfter.Revision() != beforeProfile.Revision() {
 				t.Fatalf("Profile unexpectedly changed: %v / %v", profileAfter.Revision(), err)
 			}
-			if mode != profiledomain.ExposureDirect {
+			if mode != "direct" {
 				actual := readDescribedTool(t, f, f.ids["echo_alpha"])
 				if actual["title"] != "Fresh Search Tool" || actual["description"] != "Catalog metadata updated while MCP remains connected" {
 					t.Fatalf("stale MCP describe: %#v", actual)
@@ -105,7 +104,7 @@ func TestManagedMCPHTTPRefreshesCatalogMetadataWithoutChangingProfile(t *testing
 					t.Fatalf("stale tags: %#v", actual)
 				}
 			}
-			if mode != profiledomain.ExposureDynamic {
+			if mode != "dynamic" {
 				listed, err := f.session.ListTools(ctx, nil)
 				if err != nil {
 					t.Fatal(err)

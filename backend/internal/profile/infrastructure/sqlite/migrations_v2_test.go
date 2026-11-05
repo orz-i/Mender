@@ -82,8 +82,8 @@ func TestOpenMigratesProfileV1ToToolBindingColumns(t *testing.T) {
 	).Scan(&version); err != nil {
 		t.Fatal(err)
 	}
-	if version != 6 {
-		t.Fatalf("schema version = %d, want 6", version)
+	if version != 7 {
+		t.Fatalf("schema version = %d, want 7", version)
 	}
 	var revision uint64
 	if err := store.db.QueryRowContext(context.Background(), "SELECT revision FROM profiles WHERE slug='default'").Scan(&revision); err != nil {
@@ -140,17 +140,6 @@ func TestOpenMigratesProfileV1ToToolBindingColumns(t *testing.T) {
 		}
 	}
 
-	var tunnelID string
-	if err := store.db.QueryRowContext(
-		context.Background(),
-		"SELECT tunnel_id FROM profiles WHERE slug = 'default'",
-	).Scan(&tunnelID); err != nil {
-		t.Fatal(err)
-	}
-	if tunnelID != "" {
-		t.Fatalf("migrated tunnel_id = %q, want empty", tunnelID)
-	}
-
 	slug, _ := profiledomain.NewSlug("default")
 	profile, err := store.GetProfileBySlug(context.Background(), slug)
 	if err != nil {
@@ -161,8 +150,7 @@ func TestOpenMigratesProfileV1ToToolBindingColumns(t *testing.T) {
 		t.Fatalf("Bindings() = %#v", bindings)
 	}
 	binding := bindings[0]
-	if !binding.Direct() ||
-		binding.Alias() != "" ||
+	if binding.Alias() != "" ||
 		binding.TitleOverride() != "" ||
 		binding.DescriptionOverride() != "" ||
 		binding.PolicyConstraint() != profiledomain.PolicyInherit ||

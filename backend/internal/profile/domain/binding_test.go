@@ -12,8 +12,8 @@ func TestToolBindingDefaultsAndNormalization(t *testing.T) {
 
 	toolID := mustToolID(t, "tool_00000000000000000000000000000001")
 	binding, err := NewToolBinding(ToolBindingSpec{
-		ToolID:              toolID,
-		Direct:              true,
+		ToolID: toolID,
+
 		Alias:               "  create_issue  ",
 		TitleOverride:       "  Create production issue  ",
 		DescriptionOverride: "  Create an issue in the production tracker.  ",
@@ -21,8 +21,8 @@ func TestToolBindingDefaultsAndNormalization(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewToolBinding() error = %v", err)
 	}
-	if binding.ToolID() != toolID || !binding.Direct() {
-		t.Fatalf("identity/direct = %q/%v", binding.ToolID(), binding.Direct())
+	if binding.ToolID() != toolID {
+		t.Fatalf("identity = %q", binding.ToolID())
 	}
 	if binding.Alias() != "create_issue" {
 		t.Fatalf("Alias() = %q", binding.Alias())
@@ -159,15 +159,15 @@ func TestToolBindingCredentialRefsAreUniqueAndCopied(t *testing.T) {
 	}
 }
 
-func TestProfileWithBindingsPreservesGovernanceAndNormalizesExposure(t *testing.T) {
+func TestProfileWithBindingsPreservesGovernance(t *testing.T) {
 	t.Parallel()
 
 	id, _ := ParseProfileID("prof_00000000000000000000000000000001")
 	slug, _ := NewSlug("default")
 	toolID := mustToolID(t, "tool_00000000000000000000000000000001")
 	binding, err := NewToolBinding(ToolBindingSpec{
-		ToolID:                toolID,
-		Direct:                false,
+		ToolID: toolID,
+
 		Alias:                 "prod_issue",
 		TitleOverride:         "Production issue",
 		DescriptionOverride:   "Create production issues.",
@@ -182,7 +182,7 @@ func TestProfileWithBindingsPreservesGovernanceAndNormalizesExposure(t *testing.
 		id,
 		slug,
 		"Default",
-		ExposureDirect,
+
 		[]ToolBinding{binding},
 	)
 	if err != nil {
@@ -192,9 +192,6 @@ func TestProfileWithBindingsPreservesGovernanceAndNormalizesExposure(t *testing.
 	got, ok := profile.Binding(toolID)
 	if !ok {
 		t.Fatal("Binding() did not find Tool")
-	}
-	if !got.Direct() {
-		t.Fatal("direct Profile did not normalize binding to Direct")
 	}
 	if got.Alias() != "prod_issue" ||
 		got.TitleOverride() != "Production issue" ||
@@ -211,7 +208,7 @@ func TestProfileWithBindingsRejectsDuplicateToolIDs(t *testing.T) {
 	id, _ := ParseProfileID("prof_00000000000000000000000000000001")
 	slug, _ := NewSlug("default")
 	toolID := mustToolID(t, "tool_00000000000000000000000000000001")
-	first, _ := NewToolBinding(ToolBindingSpec{ToolID: toolID, Direct: true})
+	first, _ := NewToolBinding(ToolBindingSpec{ToolID: toolID})
 	second, _ := NewToolBinding(ToolBindingSpec{
 		ToolID:           toolID,
 		Alias:            "alternate",
@@ -222,7 +219,7 @@ func TestProfileWithBindingsRejectsDuplicateToolIDs(t *testing.T) {
 		id,
 		slug,
 		"Default",
-		ExposureHybrid,
+
 		[]ToolBinding{first, second},
 	); err == nil {
 		t.Fatal("NewProfileWithBindings() accepted duplicate ToolID")

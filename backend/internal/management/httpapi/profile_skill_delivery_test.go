@@ -10,7 +10,6 @@ import (
 
 	"github.com/orz-i/Mender/backend/internal/bootstrap"
 	profileapp "github.com/orz-i/Mender/backend/internal/profile/application"
-	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 	skilldomain "github.com/orz-i/Mender/backend/internal/skill/domain"
 )
 
@@ -30,14 +29,16 @@ func TestHTTPProfileSkillDeliveryReadOnlyAndOwnerScoped(t *testing.T) {
 	}
 	id := skillList[0].InstallationID
 	profile, err := r.Profiles.Create.Execute(ctx, profileapp.CreateProfileRequest{
-		Slug: "one", DisplayName: "One", Mode: profiledomain.ExposureHybrid,
+		Slug: "one", DisplayName: "One",
 	})
+
 	if err != nil {
 		t.Fatal(err)
 	}
 	other, err := r.Profiles.Create.Execute(ctx, profileapp.CreateProfileRequest{
-		Slug: "two", DisplayName: "Two", Mode: profiledomain.ExposureHybrid,
+		Slug: "two", DisplayName: "Two",
 	})
+
 	if err != nil {
 		t.Fatal(err)
 	}

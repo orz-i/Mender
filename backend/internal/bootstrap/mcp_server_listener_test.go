@@ -8,8 +8,9 @@ import (
 	"strings"
 	"testing"
 
+	mcpmanaged "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/managed"
+
 	profileapplication "github.com/orz-i/Mender/backend/internal/profile/application"
-	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 )
 
 func TestManagedMCPPortAutoRotationPreservesExistingListener(t *testing.T) {
@@ -29,7 +30,7 @@ func TestManagedMCPPortAutoRotationPreservesExistingListener(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if firstPort > 65535-managedMCPPortAttempts {
+	if firstPort > 65535-mcpmanaged.PortAttempts {
 		t.Skip("OS allocated a port too close to 65535 for the bounded rotation test")
 	}
 
@@ -38,9 +39,10 @@ func TestManagedMCPPortAutoRotationPreservesExistingListener(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = runtime.Close() })
-	profile, err := runtime.Profiles.Create.Execute(ctx, profileapplication.CreateProfileRequest{
-		Slug: "rotation", DisplayName: "Port rotation", Mode: profiledomain.ExposureDynamic,
-	})
+	profile, err := createMCPProfileFixture(t, runtime, ctx, profileapplication.CreateProfileRequest{
+		Slug: "rotation", DisplayName: "Port rotation",
+	}, "dynamic")
+
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,7 +61,7 @@ func TestManagedMCPPortAutoRotationPreservesExistingListener(t *testing.T) {
 		if parseErr != nil {
 			t.Fatal(parseErr)
 		}
-		if newHost != host || newPort <= firstPort || newPort >= firstPort+managedMCPPortAttempts {
+		if newHost != host || newPort <= firstPort || newPort >= firstPort+mcpmanaged.PortAttempts {
 			t.Fatalf("rotated from %q to %q, outside bounded loopback range", occupied.Addr(), instance.Address)
 		}
 		if instance.Endpoint != "http://"+instance.Address+"/mcp" {
@@ -103,7 +105,7 @@ func TestManagedMCPPortAutoRotationPreservesExistingListener(t *testing.T) {
 
 func TestManagedMCPPortAllocationRetainsPortZeroContractAndRejectsInvalidPort(t *testing.T) {
 	t.Parallel()
-	listener, err := listenManagedMCPPort("127.0.0.1:0")
+	listener, err := mcpmanaged.ListenPort("127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,7 +114,7 @@ func TestManagedMCPPortAllocationRetainsPortZeroContractAndRejectsInvalidPort(t 
 	}
 	_ = listener.Close()
 
-	if invalid, err := listenManagedMCPPort("127.0.0.1:65536"); err == nil {
+	if invalid, err := mcpmanaged.ListenPort("127.0.0.1:65536"); err == nil {
 		_ = invalid.Close()
 		t.Fatal("out of range port unexpectedly accepted")
 	}

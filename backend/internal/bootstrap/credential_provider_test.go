@@ -24,7 +24,6 @@ import (
 	mcpplugin "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/plugin"
 	openapiplugin "github.com/orz-i/Mender/backend/internal/openapi/infrastructure/plugin"
 	profileapplication "github.com/orz-i/Mender/backend/internal/profile/application"
-	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 )
 
 func TestCredentialBackedHTTPProviderEnforcesProfileScope(t *testing.T) {
@@ -125,14 +124,13 @@ func TestCredentialBackedHTTPProviderEnforcesProfileScope(t *testing.T) {
 	}
 	toolID := search[0].ToolID
 
-	allowed, err := runtime.Profiles.Create.Execute(
+	allowed, err := createMCPProfileFixture(t, runtime,
 		ctx,
 		profileapplication.CreateProfileRequest{
 			Slug:        "allowed-credential",
 			DisplayName: "Allowed Credential",
-			Mode:        profiledomain.ExposureDynamic,
-		},
-	)
+		}, "dynamic")
+
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -179,14 +177,13 @@ func TestCredentialBackedHTTPProviderEnforcesProfileScope(t *testing.T) {
 		t.Fatalf("upstream calls after allowed profile = %d, want 1", upstreamCalls.Load())
 	}
 
-	denied, err := runtime.Profiles.Create.Execute(
+	denied, err := createMCPProfileFixture(t, runtime,
 		ctx,
 		profileapplication.CreateProfileRequest{
 			Slug:        "denied-credential",
 			DisplayName: "Denied Credential",
-			Mode:        profiledomain.ExposureDynamic,
-		},
-	)
+		}, "dynamic")
+
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -385,14 +382,13 @@ paths:
 	}
 	toolID := search[0].ToolID
 
-	allowed, err := runtime.Profiles.Create.Execute(
+	allowed, err := createMCPProfileFixture(t, runtime,
 		ctx,
 		profileapplication.CreateProfileRequest{
 			Slug:        "openapi-allowed",
 			DisplayName: "OpenAPI Allowed",
-			Mode:        profiledomain.ExposureDynamic,
-		},
-	)
+		}, "dynamic")
+
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -431,14 +427,13 @@ paths:
 		t.Fatalf("allowed upstream calls = %d, want 1", upstreamCalls.Load())
 	}
 
-	denied, err := runtime.Profiles.Create.Execute(
+	denied, err := createMCPProfileFixture(t, runtime,
 		ctx,
 		profileapplication.CreateProfileRequest{
 			Slug:        "openapi-denied",
 			DisplayName: "OpenAPI Denied",
-			Mode:        profiledomain.ExposureDynamic,
-		},
-	)
+		}, "dynamic")
+
 	if err != nil {
 		t.Fatal(err)
 	}

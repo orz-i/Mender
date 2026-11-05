@@ -6,7 +6,6 @@ import (
 
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	skilldomain "github.com/orz-i/Mender/backend/internal/skill/domain"
-	tunneldomain "github.com/orz-i/Mender/backend/internal/tunnel/domain"
 )
 
 // AddBinding returns a new Profile with one additional ToolBinding.
@@ -19,22 +18,12 @@ func (p Profile) AddBinding(binding ToolBinding) (Profile, error) {
 	}
 	bindings := p.Bindings()
 	bindings = append(bindings, binding)
-	return p.rebuild(bindings, p.tunnelID)
+	return p.rebuild(bindings)
 }
 
 // ReplaceBindings returns the same Profile identity with an exact ToolBinding set.
 func (p Profile) ReplaceBindings(bindings []ToolBinding) (Profile, error) {
-	return p.rebuild(bindings, p.tunnelID)
-}
-
-// SetTunnel returns the same Profile with one Tunnel binding.
-func (p Profile) SetTunnel(tunnelID tunneldomain.TunnelID) (Profile, error) {
-	return p.rebuild(p.bindings, tunnelID)
-}
-
-// ClearTunnel returns the same Profile with no Tunnel binding.
-func (p Profile) ClearTunnel() (Profile, error) {
-	return p.rebuild(p.bindings, "")
+	return p.rebuild(bindings)
 }
 
 // RemoveTool returns a new Profile without one ToolBinding.
@@ -49,7 +38,7 @@ func (p Profile) RemoveTool(toolID catalogdomain.ToolID) (Profile, error) {
 			bindings = append(bindings, binding)
 		}
 	}
-	return p.rebuild(bindings, p.tunnelID)
+	return p.rebuild(bindings)
 }
 
 // ReplaceSkills binds exact immutable Skill installations without deploying them.
@@ -69,8 +58,8 @@ func (p Profile) ReplaceSkills(ids []skilldomain.InstallationID) (Profile, error
 }
 
 // rebuild preserves the read aggregate revision for optimistic concurrency.
-func (p Profile) rebuild(bindings []ToolBinding, tunnelID tunneldomain.TunnelID) (Profile, error) {
-	next, err := NewProfileWithBindingsAndTunnel(p.id, p.slug, p.displayName, p.mode, tunnelID, bindings)
+func (p Profile) rebuild(bindings []ToolBinding) (Profile, error) {
+	next, err := NewProfileWithBindings(p.id, p.slug, p.displayName, bindings)
 	if err != nil {
 		return Profile{}, err
 	}

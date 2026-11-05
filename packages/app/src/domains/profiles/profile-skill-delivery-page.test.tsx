@@ -10,7 +10,7 @@ import { ProfileSkillDeliveryPage } from "./profile-skill-delivery-page";
 const installationId = "sinst_00000000000000000000000000000001";
 const profile: Profile = {
   profileId: "prof_00000000000000000000000000000001",
-  slug: "delivery", displayName: "Delivery", mode: "hybrid",
+  slug: "delivery", displayName: "Delivery",
   revision: 3, tools: [], skills: [installationId],
 };
 const skill: SkillInstallation = {

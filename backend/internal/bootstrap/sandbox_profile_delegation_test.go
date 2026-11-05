@@ -67,12 +67,12 @@ func TestMCPProfileSandboxDelegationReadAndRevoke(t *testing.T) {
 		t.Fatal("missing Workspace Tools")
 	}
 	makeProfile := func(slug string) profiledomain.Profile {
-		p, e := r.Profiles.Create.Execute(ctx, profileapp.CreateProfileRequest{Slug: slug, DisplayName: slug, Mode: profiledomain.ExposureDirect})
+		p, e := createMCPProfileFixture(t, r, ctx, profileapp.CreateProfileRequest{Slug: slug, DisplayName: slug}, "direct")
 		if e != nil {
 			t.Fatal(e)
 		}
 		for _, id := range []string{readID, editID} {
-			p, e = r.Profiles.AddTool.Execute(ctx, profileapp.AddToolRequest{ProfileSlug: p.Slug(), ToolID: catalogdomain.ToolID(id), Direct: true})
+			p, e = addMCPProfileToolFixture(t, r, ctx, profileapp.AddToolRequest{ProfileSlug: p.Slug(), ToolID: catalogdomain.ToolID(id)}, true)
 			if e != nil {
 				t.Fatal(e)
 			}

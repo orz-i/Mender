@@ -7,25 +7,13 @@ import (
 
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	skilldomain "github.com/orz-i/Mender/backend/internal/skill/domain"
-	tunneldomain "github.com/orz-i/Mender/backend/internal/tunnel/domain"
 )
 
-// ExposureMode controls how Profile Tools are projected through MCP.
-type ExposureMode string
-
-const (
-	ExposureDirect  ExposureMode = "direct"
-	ExposureDynamic ExposureMode = "dynamic"
-	ExposureHybrid  ExposureMode = "hybrid"
-)
-
-// Profile is the immutable Tool exposure and governance boundary consumed by adapters.
+// Profile is the immutable capability selection and governance boundary consumed by delivery adapters.
 type Profile struct {
 	id          ProfileID
 	slug        Slug
 	displayName string
-	mode        ExposureMode
-	tunnelID    tunneldomain.TunnelID
 	bindings    []ToolBinding
 	skills      []skilldomain.InstallationID
 	revision    uint64
@@ -40,33 +28,8 @@ func (p Profile) WithRevision(revision uint64) Profile {
 	return p
 }
 
-// NewProfileWithBindings constructs a Profile and normalizes binding exposure by mode.
-func NewProfileWithBindings(
-	id ProfileID,
-	slug Slug,
-	displayName string,
-	mode ExposureMode,
-	bindings []ToolBinding,
-) (Profile, error) {
-	return NewProfileWithBindingsAndTunnel(
-		id,
-		slug,
-		displayName,
-		mode,
-		"",
-		bindings,
-	)
-}
-
-// NewProfileWithBindingsAndTunnel restores a Profile including its optional Tunnel binding.
-func NewProfileWithBindingsAndTunnel(
-	id ProfileID,
-	slug Slug,
-	displayName string,
-	mode ExposureMode,
-	tunnelID tunneldomain.TunnelID,
-	bindings []ToolBinding,
-) (Profile, error) {
+// NewProfileWithBindings constructs a capability bundle without choosing a delivery.
+func NewProfileWithBindings(id ProfileID, slug Slug, displayName string, bindings []ToolBinding) (Profile, error) {
 	if _, err := ParseProfileID(id.String()); err != nil {
 		return Profile{}, err
 	}
@@ -82,23 +45,11 @@ func NewProfileWithBindingsAndTunnel(
 		return Profile{}, fmt.Errorf("display_name: is too long")
 	}
 
-	switch mode {
-	case ExposureDirect, ExposureDynamic, ExposureHybrid:
-	default:
-		return Profile{}, fmt.Errorf("exposure_mode: unknown mode %q", mode)
-	}
-	if tunnelID != "" {
-		if _, err := tunneldomain.ParseTunnelID(tunnelID.String()); err != nil {
-			return Profile{}, fmt.Errorf("tunnel_id: %w", err)
-		}
-	}
-
 	normalized := make([]ToolBinding, 0, len(bindings))
 	seen := make(map[catalogdomain.ToolID]struct{}, len(bindings))
 	for _, binding := range bindings {
 		rebuilt, err := NewToolBinding(ToolBindingSpec{
 			ToolID:                binding.ToolID(),
-			Direct:                binding.Direct(),
 			Alias:                 binding.Alias(),
 			TitleOverride:         binding.TitleOverride(),
 			DescriptionOverride:   binding.DescriptionOverride(),
@@ -117,13 +68,6 @@ func NewProfileWithBindingsAndTunnel(
 		}
 		seen[rebuilt.ToolID()] = struct{}{}
 
-		switch mode {
-		case ExposureDirect:
-			rebuilt = rebuilt.withDirect(true)
-		case ExposureDynamic:
-			rebuilt = rebuilt.withDirect(false)
-		case ExposureHybrid:
-		}
 		normalized = append(normalized, rebuilt)
 	}
 
@@ -131,8 +75,6 @@ func NewProfileWithBindingsAndTunnel(
 		id:          id,
 		slug:        slug,
 		displayName: displayName,
-		mode:        mode,
-		tunnelID:    tunnelID,
 		bindings:    normalized,
 	}, nil
 }
@@ -147,14 +89,6 @@ func (p Profile) Slug() Slug {
 
 func (p Profile) DisplayName() string {
 	return p.displayName
-}
-
-func (p Profile) Mode() ExposureMode {
-	return p.mode
-}
-
-func (p Profile) TunnelID() (tunneldomain.TunnelID, bool) {
-	return p.tunnelID, p.tunnelID != ""
 }
 
 func (p Profile) Bindings() []ToolBinding {
@@ -185,16 +119,6 @@ func (p Profile) ToolIDs() []catalogdomain.ToolID {
 	ids := make([]catalogdomain.ToolID, 0, len(p.bindings))
 	for _, binding := range p.bindings {
 		ids = append(ids, binding.ToolID())
-	}
-	return ids
-}
-
-func (p Profile) DirectToolIDs() []catalogdomain.ToolID {
-	ids := make([]catalogdomain.ToolID, 0, len(p.bindings))
-	for _, binding := range p.bindings {
-		if binding.Direct() {
-			ids = append(ids, binding.ToolID())
-		}
 	}
 	return ids
 }

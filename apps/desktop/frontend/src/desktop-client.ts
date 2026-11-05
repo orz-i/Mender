@@ -17,6 +17,7 @@ import type {
   RuntimeGovernanceStatus,
   RuntimeIsolation,
   Profile,
+  ProfileMCPDelivery,
   Provider,
   ProviderMutationResponse,
   ProviderPlugin,
@@ -72,6 +73,7 @@ import {
   type RuntimeGovernanceStatus as BindingRuntimeGovernanceStatus,
   type RuntimeIsolation as BindingRuntimeIsolation,
   type Profile as BindingProfile,
+  type ProfileMCPDelivery as BindingProfileMCPDelivery,
   type Provider as BindingProvider,
   type ProviderMutationResponse as BindingProviderMutationResponse,
   type ProviderPlugin as BindingProviderPlugin,
@@ -380,7 +382,7 @@ export function createDesktopMenderClient(): MenderClient {
 
     async createProfile(body) {
       return profile(
-        await Service.CreateProfile(body.slug, body.displayName, body.mode),
+        await Service.CreateProfile(body.slug, body.displayName),
       );
     },
 
@@ -424,8 +426,17 @@ export function createDesktopMenderClient(): MenderClient {
       return profile(await Service.RemoveProfileTool(slug, toolId));
     },
 
-    async setProfileTunnel(slug, body) {
-      return profile(await Service.SetProfileTunnel(slug, body.tunnelId));
+    async getProfileMCPDelivery(slug) {
+      const value=await Service.GetProfileMCPDelivery(slug);
+      return value===null?null:profileMCPDelivery(value);
+    },
+
+    async configureProfileMCPDelivery(slug, body) {
+      return profileMCPDelivery(await Service.ConfigureProfileMCPDelivery(slug, {
+        mode:body.mode,tunnelId:body.tunnelId ?? "",directToolIds:body.directToolIds,
+        expectedProfileRevision:body.expectedProfileRevision,
+        ...(body.expectedRevision===undefined?{}:{expectedRevision:body.expectedRevision}),
+      }));
     },
 
     async listAgents(){
@@ -1613,19 +1624,21 @@ function invocationResult(value: BindingInvocationResult): InvocationResult {
   };
 }
 
+function profileMCPDelivery(value: BindingProfileMCPDelivery): ProfileMCPDelivery {
+  return {profileId:value.profileId,profileRevision:value.profileRevision,revision:value.revision,
+    mode:exposureMode(value.mode),directToolIds:value.directToolIds??[],
+    ...(value.tunnelId===undefined?{}:{tunnelId:value.tunnelId})};
+}
+
 function profile(value: BindingProfile): Profile {
-  const mode = exposureMode(value.mode);
   return {
     profileId: value.profileId,
     slug: value.slug,
     displayName: value.displayName,
-    mode,
-    ...(value.tunnelId === undefined ? {} : { tunnelId: value.tunnelId }),
     skills: value.skills ?? [],
     revision: value.revision,
     tools: (value.tools ?? []).map((tool) => ({
       toolId: tool.toolId,
-      direct: tool.direct,
       alias: tool.alias,
       titleOverride: tool.titleOverride,
       descriptionOverride: tool.descriptionOverride,
@@ -1640,7 +1653,6 @@ function profile(value: BindingProfile): Profile {
 
 function bindingProfileTool(tool: {
   toolId: string;
-  direct?: boolean;
   alias?: string;
   titleOverride?: string;
   descriptionOverride?: string;
@@ -1650,7 +1662,6 @@ function bindingProfileTool(tool: {
 }) {
   return {
     toolId: tool.toolId,
-    direct: tool.direct ?? false,
     alias: tool.alias ?? "",
     titleOverride: tool.titleOverride ?? "",
     descriptionOverride: tool.descriptionOverride ?? "",

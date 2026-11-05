@@ -13,7 +13,6 @@ import (
 	agentdelegation "github.com/orz-i/Mender/backend/internal/agent/infrastructure/delegationprovider"
 	catalogapp "github.com/orz-i/Mender/backend/internal/catalog/application"
 	profileapp "github.com/orz-i/Mender/backend/internal/profile/application"
-	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 )
 
 // A real MCP client session must be able to dispatch a governed asynchronous
@@ -57,16 +56,18 @@ func TestAgentDelegationThroughMCPClientSession(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	profile, err := r.Profiles.Create.Execute(ctx, profileapp.CreateProfileRequest{
-		Slug: "agent-mcp", DisplayName: "Agent MCP Fixture", Mode: profiledomain.ExposureDirect,
-	})
+	profile, err := createMCPProfileFixture(t, r, ctx, profileapp.CreateProfileRequest{
+		Slug: "agent-mcp", DisplayName: "Agent MCP Fixture",
+	}, "direct")
+
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, tool := range tools {
-		profile, err = r.Profiles.AddTool.Execute(ctx, profileapp.AddToolRequest{
-			ProfileSlug: profile.Slug(), ToolID: tool.ID(), Direct: true,
-		})
+		profile, err = addMCPProfileToolFixture(t, r, ctx, profileapp.AddToolRequest{
+			ProfileSlug: profile.Slug(), ToolID: tool.ID(),
+		}, true)
+
 		if err != nil {
 			t.Fatal(err)
 		}

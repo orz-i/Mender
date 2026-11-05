@@ -13,6 +13,7 @@ import (
 	credentialapplication "github.com/orz-i/Mender/backend/internal/credential/application"
 	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
+	mcpdelivery "github.com/orz-i/Mender/backend/internal/mcp/application/delivery"
 	mcpserver "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/server"
 	policyapplication "github.com/orz-i/Mender/backend/internal/policy/application"
 	profileapplication "github.com/orz-i/Mender/backend/internal/profile/application"
@@ -239,6 +240,11 @@ func exitCode(err error) int {
 		errors.Is(err, credentialapplication.ErrReferenceConflict),
 		errors.Is(err, credentialapplication.ErrCredentialInUse),
 		errors.Is(err, profileapplication.ErrProfileNotFound),
+		errors.Is(err, mcpdelivery.ErrNotFound),
+		errors.Is(err, mcpdelivery.ErrRevisionConflict),
+		errors.Is(err, mcpdelivery.ErrProfileRevisionConflict),
+		errors.Is(err, mcpdelivery.ErrToolOutsideProfile),
+		errors.Is(err, mcpdelivery.ErrInvalidConfiguration),
 		errors.Is(err, skillapplication.ErrInstallationNotFound),
 		errors.Is(err, skillapplication.ErrInstallationConflict),
 		errors.Is(err, skillapplication.ErrInstallationInUse),

@@ -13,20 +13,17 @@ import (
 	profileapplication "github.com/orz-i/Mender/backend/internal/profile/application"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 	skilldomain "github.com/orz-i/Mender/backend/internal/skill/domain"
-	tunneldomain "github.com/orz-i/Mender/backend/internal/tunnel/domain"
 )
 
 func (s *Store) CreateProfile(ctx context.Context, profile profiledomain.Profile) error {
 	result, err := s.db.ExecContext(
 		ctx,
-		`INSERT INTO profiles(id, slug, display_name, exposure_mode, tunnel_id)
-        VALUES (?, ?, ?, ?, ?)
+		`INSERT INTO profiles(id, slug, display_name)
+        VALUES (?, ?, ?)
         ON CONFLICT(slug) DO NOTHING`,
 		profile.ID().String(),
 		profile.Slug().String(),
 		profile.DisplayName(),
-		string(profile.Mode()),
-		profileTunnelID(profile),
 	)
 	if err != nil {
 		return fmt.Errorf("create profile: %w", err)
@@ -64,50 +61,50 @@ func (s *Store) GetProfileByID(
 	ctx context.Context,
 	id profiledomain.ProfileID,
 ) (profiledomain.Profile, error) {
-	var rawID, rawSlug, displayName, rawMode, rawTunnelID string
+	var rawID, rawSlug, displayName string
 	var revision uint64
 	err := s.db.QueryRowContext(
 		ctx,
-		`SELECT id, slug, display_name, exposure_mode, tunnel_id, revision
+		`SELECT id, slug, display_name, revision
         FROM profiles
         WHERE id = ?`,
 		id.String(),
-	).Scan(&rawID, &rawSlug, &displayName, &rawMode, &rawTunnelID, &revision)
+	).Scan(&rawID, &rawSlug, &displayName, &revision)
 	if errors.Is(err, sql.ErrNoRows) {
 		return profiledomain.Profile{}, profileapplication.ErrProfileNotFound
 	}
 	if err != nil {
 		return profiledomain.Profile{}, fmt.Errorf("get profile by id: %w", err)
 	}
-	return s.restoreProfile(ctx, rawID, rawSlug, displayName, rawMode, rawTunnelID, revision)
+	return s.restoreProfile(ctx, rawID, rawSlug, displayName, revision)
 }
 
 func (s *Store) GetProfileBySlug(
 	ctx context.Context,
 	slug profiledomain.Slug,
 ) (profiledomain.Profile, error) {
-	var rawID, rawSlug, displayName, rawMode, rawTunnelID string
+	var rawID, rawSlug, displayName string
 	var revision uint64
 	err := s.db.QueryRowContext(
 		ctx,
-		`SELECT id, slug, display_name, exposure_mode, tunnel_id, revision
+		`SELECT id, slug, display_name, revision
         FROM profiles
         WHERE slug = ?`,
 		slug.String(),
-	).Scan(&rawID, &rawSlug, &displayName, &rawMode, &rawTunnelID, &revision)
+	).Scan(&rawID, &rawSlug, &displayName, &revision)
 	if errors.Is(err, sql.ErrNoRows) {
 		return profiledomain.Profile{}, profileapplication.ErrProfileNotFound
 	}
 	if err != nil {
 		return profiledomain.Profile{}, fmt.Errorf("get profile: %w", err)
 	}
-	return s.restoreProfile(ctx, rawID, rawSlug, displayName, rawMode, rawTunnelID, revision)
+	return s.restoreProfile(ctx, rawID, rawSlug, displayName, revision)
 }
 
 func (s *Store) ListProfiles(ctx context.Context) ([]profiledomain.Profile, error) {
 	rows, err := s.db.QueryContext(
 		ctx,
-		`SELECT id, slug, display_name, exposure_mode, tunnel_id, revision
+		`SELECT id, slug, display_name, revision
         FROM profiles
         ORDER BY slug, id`,
 	)
@@ -116,8 +113,8 @@ func (s *Store) ListProfiles(ctx context.Context) ([]profiledomain.Profile, erro
 	}
 
 	type row struct {
-		id, slug, displayName, mode, tunnelID string
-		revision                              uint64
+		id, slug, displayName string
+		revision              uint64
 	}
 	rawProfiles := make([]row, 0)
 	for rows.Next() {
@@ -126,8 +123,6 @@ func (s *Store) ListProfiles(ctx context.Context) ([]profiledomain.Profile, erro
 			&value.id,
 			&value.slug,
 			&value.displayName,
-			&value.mode,
-			&value.tunnelID,
 			&value.revision,
 		); err != nil {
 			_ = rows.Close()
@@ -150,8 +145,6 @@ func (s *Store) ListProfiles(ctx context.Context) ([]profiledomain.Profile, erro
 			raw.id,
 			raw.slug,
 			raw.displayName,
-			raw.mode,
-			raw.tunnelID,
 			raw.revision,
 		)
 		if err != nil {
@@ -172,11 +165,9 @@ func (s *Store) SaveProfile(ctx context.Context, profile profiledomain.Profile) 
 	result, err := tx.ExecContext(
 		ctx,
 		`UPDATE profiles
-        SET display_name = ?, exposure_mode = ?, tunnel_id = ?, revision = revision + 1
+        SET display_name = ?, revision = revision + 1
         WHERE id = ? AND revision = ?`,
 		profile.DisplayName(),
-		string(profile.Mode()),
-		profileTunnelID(profile),
 		profile.ID().String(),
 		profile.Revision(),
 	)
@@ -198,12 +189,38 @@ func (s *Store) SaveProfile(ctx context.Context, profile profiledomain.Profile) 
 		return profileapplication.ErrRevisionConflict
 	}
 
-	if _, err := tx.ExecContext(
-		ctx,
-		"DELETE FROM profile_tools WHERE profile_id = ?",
-		profile.ID().String(),
-	); err != nil {
-		return fmt.Errorf("save profile: clear memberships: %w", err)
+	// Preserve independently owned MCP direct selections for unchanged
+	// members. Only true removals may cascade into the delivery relationship.
+	retained := make(map[string]struct{}, len(profile.Bindings()))
+	for _, binding := range profile.Bindings() {
+		retained[binding.ToolID().String()] = struct{}{}
+	}
+	rows, err := tx.QueryContext(ctx, "SELECT tool_id FROM profile_tools WHERE profile_id=?", profile.ID().String())
+	if err != nil {
+		return fmt.Errorf("save profile: list previous bindings: %w", err)
+	}
+	var removed []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			_ = rows.Close()
+			return err
+		}
+		if _, keep := retained[id]; !keep {
+			removed = append(removed, id)
+		}
+	}
+	rowsErr, closeErr := rows.Err(), rows.Close()
+	if rowsErr != nil {
+		return rowsErr
+	}
+	if closeErr != nil {
+		return closeErr
+	}
+	for _, id := range removed {
+		if _, err := tx.ExecContext(ctx, "DELETE FROM profile_tools WHERE profile_id=? AND tool_id=?", profile.ID().String(), id); err != nil {
+			return fmt.Errorf("save profile: remove membership: %w", err)
+		}
 	}
 
 	for _, binding := range profile.Bindings() {
@@ -216,26 +233,26 @@ func (s *Store) SaveProfile(ctx context.Context, profile profiledomain.Profile) 
 			return fmt.Errorf("save profile: encode credential refs: %w", err)
 		}
 
-		direct := 0
-		if binding.Direct() {
-			direct = 1
-		}
 		if _, err := tx.ExecContext(
 			ctx,
 			`INSERT INTO profile_tools(
                 profile_id,
                 tool_id,
-                direct,
                 alias,
                 title_override,
                 description_override,
                 policy_constraint,
                 concurrency_constraint,
                 credential_refs_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(profile_id,tool_id) DO UPDATE SET
+                alias=excluded.alias, title_override=excluded.title_override,
+                description_override=excluded.description_override,
+                policy_constraint=excluded.policy_constraint,
+                concurrency_constraint=excluded.concurrency_constraint,
+                credential_refs_json=excluded.credential_refs_json`,
 			profile.ID().String(),
 			binding.ToolID().String(),
-			direct,
 			binding.Alias(),
 			binding.TitleOverride(),
 			binding.DescriptionOverride(),
@@ -273,8 +290,6 @@ func (s *Store) restoreProfile(
 	rawID string,
 	rawSlug string,
 	displayName string,
-	rawMode string,
-	rawTunnelID string,
 	revision uint64,
 ) (profiledomain.Profile, error) {
 	id, err := profiledomain.ParseProfileID(rawID)
@@ -285,19 +300,10 @@ func (s *Store) restoreProfile(
 	if err != nil {
 		return profiledomain.Profile{}, fmt.Errorf("parse profile slug: %w", err)
 	}
-	var tunnelID tunneldomain.TunnelID
-	if rawTunnelID != "" {
-		tunnelID, err = tunneldomain.ParseTunnelID(rawTunnelID)
-		if err != nil {
-			return profiledomain.Profile{}, fmt.Errorf("parse profile tunnel id: %w", err)
-		}
-	}
-
 	rows, err := s.db.QueryContext(
 		ctx,
 		`SELECT
             tool_id,
-            direct,
             alias,
             title_override,
             description_override,
@@ -318,7 +324,6 @@ func (s *Store) restoreProfile(
 	for rows.Next() {
 		var (
 			rawToolID             string
-			direct                int
 			alias                 string
 			titleOverride         string
 			descriptionOverride   string
@@ -328,7 +333,6 @@ func (s *Store) restoreProfile(
 		)
 		if err := rows.Scan(
 			&rawToolID,
-			&direct,
 			&alias,
 			&titleOverride,
 			&descriptionOverride,
@@ -357,7 +361,6 @@ func (s *Store) restoreProfile(
 
 		binding, err := profiledomain.NewToolBinding(profiledomain.ToolBindingSpec{
 			ToolID:                toolID,
-			Direct:                direct == 1,
 			Alias:                 alias,
 			TitleOverride:         titleOverride,
 			DescriptionOverride:   descriptionOverride,
@@ -374,12 +377,10 @@ func (s *Store) restoreProfile(
 		return profiledomain.Profile{}, fmt.Errorf("load profile memberships: rows: %w", err)
 	}
 
-	profile, err := profiledomain.NewProfileWithBindingsAndTunnel(
+	profile, err := profiledomain.NewProfileWithBindings(
 		id,
 		slug,
 		displayName,
-		profiledomain.ExposureMode(rawMode),
-		tunnelID,
 		bindings,
 	)
 	if err != nil {
@@ -440,11 +441,4 @@ func (s *Store) ListSkillProfiles(ctx context.Context, id skilldomain.Installati
 		return nil, err
 	}
 	return result, nil
-}
-
-func profileTunnelID(profile profiledomain.Profile) string {
-	if tunnelID, ok := profile.TunnelID(); ok {
-		return tunnelID.String()
-	}
-	return ""
 }

@@ -28,7 +28,7 @@ import {
   TableRow,
 } from "@mender/ui/components/table";
 
-import { formatDateTime, formatNumber, t } from "../../i18n/i18n";
+import { formatDateTime, formatNumber, t, tCount } from "../../i18n/i18n";
 import { StatusBadge } from "../../shared/status-badge";
 import { errorMessage } from "../../shared/errors";
 import { ErrorNotice, InsightBanner } from "../../shared/page";
@@ -237,7 +237,7 @@ export function OverviewPage({ client }: { client: MenderClient }) {
           icon={Layers3Icon}
           label="Profiles"
           value={data?.profiles.length ?? 0}
-          description="MCP exposure boundaries"
+          description="Selected Tools"
         />
       </MetricStrip>
       )}
@@ -322,7 +322,7 @@ export function OverviewPage({ client }: { client: MenderClient }) {
 
           <DataPanel
             title="Profiles"
-            description="MCP exposure boundaries"
+            description="Selected Tools"
             actions={<PanelLink to="/profiles" label="View" destination="Profiles" />}
           >
             {data?.profiles.length ? (
@@ -333,7 +333,7 @@ export function OverviewPage({ client }: { client: MenderClient }) {
                       <p className="truncate text-sm font-medium">{profile.displayName || profile.slug}</p>
                       <p className="mt-0.5 truncate text-xs text-muted-foreground">{profile.slug}</p>
                     </div>
-                    <Badge variant="outline">{profile.mode}</Badge>
+                    <Badge variant="outline">{tCount(profile.tools.length, "{{count}} selected Tool", "{{count}} selected Tools")}</Badge>
                   </div>
                 ))}
               </div>

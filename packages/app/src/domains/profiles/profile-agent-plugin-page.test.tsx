@@ -12,10 +12,10 @@ import { ProfileAgentPluginPage } from "./profile-agent-plugin-page";
 const skillID = "sinst_00000000000000000000000000000001";
 const profile: Profile = {
   profileId: "prof_00000000000000000000000000000001",
-  slug: "delivery", displayName: "Delivery", revision: 4, mode: "hybrid",
+  slug: "delivery", displayName: "Delivery", revision: 4,
   tools: [{
     toolId: "tool_00000000000000000000000000000001",
-    direct: true, alias: "", titleOverride: "", descriptionOverride: "",
+    alias: "", titleOverride: "", descriptionOverride: "",
     policyConstraint: "inherit", concurrencyConstraint: "inherit", credentialRefs: [],
   }],
   skills: [skillID],

@@ -1329,13 +1329,12 @@ func (s *Service) ListProfiles() (ProfileList, error) {
 	return ProfileList{Profiles: items}, nil
 }
 
-func (s *Service) CreateProfile(slug string, displayName string, mode string) (Profile, error) {
+func (s *Service) CreateProfile(slug string, displayName string) (Profile, error) {
 	profile, err := s.runtime.Profiles.Create.Execute(
 		s.ctx,
 		profileapplication.CreateProfileRequest{
 			Slug:        slug,
 			DisplayName: displayName,
-			Mode:        profiledomain.ExposureMode(mode),
 		},
 	)
 	if err != nil {
@@ -1428,7 +1427,6 @@ func (s *Service) AddProfileTool(
 		profileapplication.AddToolRequest{
 			ProfileSlug:           profileSlug,
 			ToolID:                id,
-			Direct:                tool.Direct,
 			Alias:                 tool.Alias,
 			TitleOverride:         tool.TitleOverride,
 			DescriptionOverride:   tool.DescriptionOverride,
@@ -1464,7 +1462,6 @@ func (s *Service) ReplaceProfileTools(
 		}
 		bindings = append(bindings, profileapplication.ToolBindingInput{
 			ToolID:                id,
-			Direct:                item.Direct,
 			Alias:                 item.Alias,
 			TitleOverride:         item.TitleOverride,
 			DescriptionOverride:   item.DescriptionOverride,
@@ -1524,31 +1521,6 @@ func (s *Service) RemoveProfileTool(slug string, toolID string) (Profile, error)
 		profileapplication.RemoveToolRequest{
 			ProfileSlug: profileSlug,
 			ToolID:      id,
-		},
-	)
-	if err != nil {
-		return Profile{}, err
-	}
-	return profileProjection(profile), nil
-}
-
-func (s *Service) SetProfileTunnel(slug string, tunnelID string) (Profile, error) {
-	profileSlug, err := profiledomain.NewSlug(slug)
-	if err != nil {
-		return Profile{}, err
-	}
-	var id tunneldomain.TunnelID
-	if tunnelID != "" {
-		id, err = tunneldomain.ParseTunnelID(tunnelID)
-		if err != nil {
-			return Profile{}, err
-		}
-	}
-	profile, err := s.runtime.Profiles.SetTunnel.Execute(
-		s.ctx,
-		profileapplication.SetTunnelRequest{
-			ProfileSlug: profileSlug,
-			TunnelID:    id,
 		},
 	)
 	if err != nil {
@@ -2143,7 +2115,6 @@ func profileProjection(profile profiledomain.Profile) Profile {
 	for _, binding := range profile.Bindings() {
 		tools = append(tools, ProfileTool{
 			ToolID:                binding.ToolID().String(),
-			Direct:                binding.Direct(),
 			Alias:                 binding.Alias(),
 			TitleOverride:         binding.TitleOverride(),
 			DescriptionOverride:   binding.DescriptionOverride(),
@@ -2156,16 +2127,12 @@ func profileProjection(profile profiledomain.Profile) Profile {
 		ProfileID:   profile.ID().String(),
 		Slug:        profile.Slug().String(),
 		DisplayName: profile.DisplayName(),
-		Mode:        string(profile.Mode()),
 		Tools:       tools,
 		Skills:      make([]string, 0, len(profile.Skills())),
 		Revision:    profile.Revision(),
 	}
 	for _, id := range profile.Skills() {
 		result.Skills = append(result.Skills, id.String())
-	}
-	if tunnelID, ok := profile.TunnelID(); ok {
-		result.TunnelID = tunnelID.String()
 	}
 	return result
 }

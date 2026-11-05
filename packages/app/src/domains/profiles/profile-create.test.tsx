@@ -11,9 +11,9 @@ const result: Profile = {
   profileId: "prof_0123456789abcdef0123456789abcdef",
   slug: "my-profile",
   displayName: "My Profile",
-  mode: "hybrid",
   tools: [],
-  tunnelId: "",
+  skills: [],
+  revision: 0,
 };
 
 function openCreate(overrides: Partial<MenderClient> = {}) {
@@ -53,11 +53,12 @@ describe("Profile create page", () => {
   it("shows a complete full-page form, normalizes its slug and opens editing after creation", async () => {
     const { createProfile } = openCreate();
     expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.queryByRole("combobox", { name: "Exposure mode" })).toBeNull();
     enterProfile(" My   Profile ");
     expect(screen.getByText("Result: my-profile")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Create profile" }));
     await waitFor(() => expect(createProfile).toHaveBeenCalledWith({
-      slug: "my-profile", displayName: "My Profile", mode: "hybrid",
+      slug: "my-profile", displayName: "My Profile",
     }));
     expect(await screen.findByText("Tool editor")).toBeTruthy();
   });
@@ -90,7 +91,7 @@ describe("Profile create page", () => {
     expect(screen.queryByRole("alert")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Create profile" }));
     await waitFor(() => expect(createProfile).toHaveBeenLastCalledWith({
-      slug: "my-profile-2", displayName: "My Profile", mode: "hybrid",
+      slug: "my-profile-2", displayName: "My Profile",
     }));
   });
 

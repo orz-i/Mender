@@ -216,9 +216,8 @@ func (h *Handler) listProfiles(w http.ResponseWriter, r *http.Request) {
 }
 
 type createProfileRequest struct {
-	Slug        string                     `json:"slug"`
-	DisplayName string                     `json:"displayName"`
-	Mode        profiledomain.ExposureMode `json:"mode"`
+	Slug        string `json:"slug"`
+	DisplayName string `json:"displayName"`
 }
 
 func (h *Handler) createProfile(w http.ResponseWriter, r *http.Request) {
@@ -232,7 +231,6 @@ func (h *Handler) createProfile(w http.ResponseWriter, r *http.Request) {
 		profileapplication.CreateProfileRequest{
 			Slug:        input.Slug,
 			DisplayName: input.DisplayName,
-			Mode:        input.Mode,
 		},
 	)
 	if err != nil {
@@ -258,7 +256,6 @@ func (h *Handler) getProfile(w http.ResponseWriter, r *http.Request) {
 
 type addProfileToolRequest struct {
 	ToolID                string   `json:"toolId"`
-	Direct                bool     `json:"direct"`
 	Alias                 string   `json:"alias"`
 	TitleOverride         string   `json:"titleOverride"`
 	DescriptionOverride   string   `json:"descriptionOverride"`
@@ -298,7 +295,6 @@ func (h *Handler) addProfileTool(w http.ResponseWriter, r *http.Request) {
 		profileapplication.AddToolRequest{
 			ProfileSlug:           slug,
 			ToolID:                toolID,
-			Direct:                input.Direct,
 			Alias:                 input.Alias,
 			TitleOverride:         input.TitleOverride,
 			DescriptionOverride:   input.DescriptionOverride,
@@ -340,7 +336,6 @@ func (h *Handler) replaceProfileTools(w http.ResponseWriter, r *http.Request) {
 		}
 		tools = append(tools, profileapplication.ToolBindingInput{
 			ToolID:                toolID,
-			Direct:                item.Direct,
 			Alias:                 item.Alias,
 			TitleOverride:         item.TitleOverride,
 			DescriptionOverride:   item.DescriptionOverride,
@@ -485,7 +480,6 @@ func profileProjection(profile profiledomain.Profile) map[string]any {
 	for _, binding := range profile.Bindings() {
 		tools = append(tools, map[string]any{
 			"toolId":                binding.ToolID().String(),
-			"direct":                binding.Direct(),
 			"alias":                 binding.Alias(),
 			"titleOverride":         binding.TitleOverride(),
 			"descriptionOverride":   binding.DescriptionOverride(),
@@ -498,13 +492,9 @@ func profileProjection(profile profiledomain.Profile) map[string]any {
 		"profileId":   profile.ID().String(),
 		"slug":        profile.Slug().String(),
 		"displayName": profile.DisplayName(),
-		"mode":        string(profile.Mode()),
 		"tools":       tools,
 		"skills":      profileSkillIDs(profile),
 		"revision":    profile.Revision(),
-	}
-	if tunnelID, ok := profile.TunnelID(); ok {
-		result["tunnelId"] = tunnelID.String()
 	}
 	return result
 }

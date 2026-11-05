@@ -22,6 +22,7 @@ import (
 	governancelocaluser "github.com/orz-i/Mender/backend/internal/governance/infrastructure/localuser"
 	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
 	invocationrouter "github.com/orz-i/Mender/backend/internal/invocation/infrastructure/router"
+	mcpmanaged "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/managed"
 	mcpplugin "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/plugin"
 	platformplugin "github.com/orz-i/Mender/backend/internal/plugin"
 	installationdomain "github.com/orz-i/Mender/backend/internal/plugin/installation/domain"
@@ -63,6 +64,7 @@ type Runtime struct {
 	Catalog                     *Catalog
 	Credentials                 *Credentials
 	Profiles                    *Profiles
+	MCPDelivery                 *MCPDelivery
 	Tunnels                     *Tunnels
 	Policy                      *Policies
 	Skills                      *Skills
@@ -95,8 +97,7 @@ type Runtime struct {
 	closersMu sync.Mutex
 	closers   []io.Closer
 
-	mcpServersMu sync.Mutex
-	mcpServers   map[string]*managedMCPServer
+	managedMCP *mcpmanaged.Manager
 }
 
 // NewRuntime constructs the protocol-independent local runtime.
@@ -145,12 +146,11 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		}
 	}()
 
-	profiles, err := NewProfilesWithTunnelLookup(
+	profiles, err := NewProfiles(
 		ctx,
 		options.DatabasePath,
 		catalog.store,
 		profileCredentialLookup{get: credentials.Get},
-		profileTunnelLookup{get: tunnels.Get},
 	)
 	if err != nil {
 		_ = credentials.Close()
@@ -158,9 +158,23 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		_ = catalog.Close()
 		return nil, fmt.Errorf("compose runtime: profiles: %w", err)
 	}
+	mcpDelivery, err := newMCPDelivery(ctx, options.DatabasePath, profiles.GetByID, tunnels.Get)
+	if err != nil {
+		_ = profiles.Close()
+		_ = credentials.Close()
+		_ = auditStore.Close()
+		_ = catalog.Close()
+		return nil, fmt.Errorf("compose runtime: MCP delivery: %w", err)
+	}
+	mcpDeliveryOwned := true
+	defer func() {
+		if mcpDeliveryOwned {
+			_ = mcpDelivery.Close()
+		}
+	}()
 	tunnels.Delete = tunnelapplication.NewDeleteTunnel(
 		tunnels.store,
-		runtimeTunnelUsageChecker{profiles: profiles},
+		runtimeTunnelUsageChecker{profiles: profiles, delivery: mcpDelivery},
 	)
 
 	policies, err := NewPolicies(ctx, options.DatabasePath, catalog, profiles)
@@ -518,6 +532,7 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		Catalog:                     catalog,
 		Credentials:                 credentials,
 		Profiles:                    profiles,
+		MCPDelivery:                 mcpDelivery,
 		Tunnels:                     tunnels,
 		Policy:                      policies,
 		Skills:                      skills,
@@ -544,13 +559,16 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		ownerPrincipal:              ownerPrincipal,
 		agentStore:                  agentStore,
 		agentLauncher:               agentLauncher,
-		mcpServers:                  make(map[string]*managedMCPServer),
+	}
+	mcpDeliveryOwned = false
+	if err := result.configureManagedMCP(result.MCPDelivery.Get.Execute, result.MCPDelivery.GetRevision.Execute); err != nil {
+		return nil, errors.Join(fmt.Errorf("compose runtime: managed MCP: %w", err), result.Close())
 	}
 	if err := result.Agents.ConfigureToolSupplyResolver(result.resolveAgentToolSupply); err != nil {
 		return nil, errors.Join(fmt.Errorf("compose runtime: Agent tool delivery: %w", err), result.Close())
 	}
 	tunnels.Delete = tunnelapplication.NewDeleteTunnel(tunnels.store, runtimeTunnelUsageChecker{
-		profiles: profiles, active: result.isTunnelActive,
+		profiles: profiles, delivery: mcpDelivery, active: result.isTunnelActive,
 	})
 	// The shared DB is the final authority for cross-context Tool/Policy refs.
 	// Register persistence guards only after every bounded-context table exists.
@@ -637,6 +655,7 @@ func (r *Runtime) Close() error {
 		r.providerConfigs.Close(),
 		r.Policy.Close(),
 		r.Profiles.Close(),
+		r.MCPDelivery.Close(),
 		r.Tunnels.Close(),
 		r.Credentials.Close(),
 		r.audit.Close(),

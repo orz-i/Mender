@@ -39,7 +39,6 @@ const (
 // ToolBindingSpec is the input used to construct one Profile-owned ToolBinding.
 type ToolBindingSpec struct {
 	ToolID                catalogdomain.ToolID
-	Direct                bool
 	Alias                 string
 	TitleOverride         string
 	DescriptionOverride   string
@@ -51,7 +50,6 @@ type ToolBindingSpec struct {
 // ToolBinding is the Profile-owned relationship to one canonical Tool.
 type ToolBinding struct {
 	toolID                catalogdomain.ToolID
-	direct                bool
 	alias                 string
 	titleOverride         string
 	descriptionOverride   string
@@ -116,7 +114,6 @@ func NewToolBinding(spec ToolBindingSpec) (ToolBinding, error) {
 
 	return ToolBinding{
 		toolID:                spec.ToolID,
-		direct:                spec.Direct,
 		alias:                 alias,
 		titleOverride:         title,
 		descriptionOverride:   description,
@@ -128,10 +125,6 @@ func NewToolBinding(spec ToolBindingSpec) (ToolBinding, error) {
 
 func (b ToolBinding) ToolID() catalogdomain.ToolID {
 	return b.toolID
-}
-
-func (b ToolBinding) Direct() bool {
-	return b.direct
 }
 
 func (b ToolBinding) Alias() string {
@@ -178,9 +171,4 @@ func normalizeCredentialRefs(
 		result = append(result, parsed)
 	}
 	return result, nil
-}
-
-func (b ToolBinding) withDirect(direct bool) ToolBinding {
-	b.direct = direct
-	return b
 }

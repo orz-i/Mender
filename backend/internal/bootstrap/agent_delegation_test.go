@@ -18,7 +18,6 @@ import (
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	policydomain "github.com/orz-i/Mender/backend/internal/policy/domain"
 	profileapplication "github.com/orz-i/Mender/backend/internal/profile/application"
-	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 )
 
 type fixtureAgentExecutor struct{ finished chan struct{} }
@@ -109,9 +108,10 @@ func TestGovernedCanonicalAgentDelegationToolFixture(t *testing.T) {
 		t.Fatalf("Agent facade Tools = %v", ids)
 	}
 
-	p, err := r.Profiles.Create.Execute(ctx, profileapplication.CreateProfileRequest{
-		Slug: "agent-test-a", DisplayName: "Agent Test A", Mode: profiledomain.ExposureDynamic,
-	})
+	p, err := createMCPProfileFixture(t, r, ctx, profileapplication.CreateProfileRequest{
+		Slug: "agent-test-a", DisplayName: "Agent Test A",
+	}, "dynamic")
+
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -213,9 +213,10 @@ func TestGovernedCanonicalAgentDelegationToolFixture(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Same TaskID under another Profile service must not reveal results.
-	p2, err := r.Profiles.Create.Execute(ctx, profileapplication.CreateProfileRequest{
-		Slug: "agent-test-b", DisplayName: "Agent Test B", Mode: profiledomain.ExposureDynamic,
-	})
+	p2, err := createMCPProfileFixture(t, r, ctx, profileapplication.CreateProfileRequest{
+		Slug: "agent-test-b", DisplayName: "Agent Test B",
+	}, "dynamic")
+
 	if err != nil {
 		t.Fatal(err)
 	}

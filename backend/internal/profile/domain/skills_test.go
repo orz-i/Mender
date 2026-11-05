@@ -10,7 +10,7 @@ import (
 func TestProfileSkillMembershipImmutableExactAndPreservedDuringToolMutation(t *testing.T) {
 	id, _ := ParseProfileID("prof_00000000000000000000000000000001")
 	slug, _ := NewSlug("delivery")
-	profile, err := NewProfileWithBindings(id, slug, "Delivery", ExposureHybrid, nil)
+	profile, err := NewProfileWithBindings(id, slug, "Delivery", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

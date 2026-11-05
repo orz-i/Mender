@@ -21,17 +21,15 @@ type Profiles struct {
 	ReplaceTools  profileapplication.ReplaceTools
 	ReplaceSkills profileapplication.ReplaceSkills
 	RemoveTool    profileapplication.RemoveTool
-	SetTunnel     profileapplication.SetTunnel
 
 	store *profilesqlite.Store
 }
 
-func NewProfilesWithTunnelLookup(
+func NewProfiles(
 	ctx context.Context,
 	databasePath string,
 	tools profileapplication.ToolLookup,
 	credentials profileapplication.CredentialLookup,
-	tunnels profileapplication.TunnelLookup,
 ) (*Profiles, error) {
 	store, err := profilesqlite.Open(ctx, databasePath)
 	if err != nil {
@@ -48,7 +46,6 @@ func NewProfilesWithTunnelLookup(
 		AddTool:      profileapplication.NewAddTool(store, tools, credentials),
 		ReplaceTools: profileapplication.NewReplaceTools(store, tools, credentials),
 		RemoveTool:   profileapplication.NewRemoveTool(store),
-		SetTunnel:    profileapplication.NewSetTunnel(store, tunnels),
 		store:        store,
 	}, nil
 }

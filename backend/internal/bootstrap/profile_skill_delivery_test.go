@@ -25,9 +25,10 @@ func deliveryFixture(t *testing.T) (*Runtime, context.Context, string, profiledo
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = r.Close() })
-	p, err := r.Profiles.Create.Execute(ctx, profileapp.CreateProfileRequest{
-		Slug: "deliver", DisplayName: "Deliver", Mode: profiledomain.ExposureHybrid,
-	})
+	p, err := createMCPProfileFixture(t, r, ctx, profileapp.CreateProfileRequest{
+		Slug: "deliver", DisplayName: "Deliver",
+	}, "hybrid")
+
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,9 +111,10 @@ func TestProfileSkillDeliveryOwnsOnlyExplicitSelectionsAndLeavesLegacyUnassigned
 			t.Fatalf("owner mismatch: %+v", item)
 		}
 	}
-	second, err := r.Profiles.Create.Execute(ctx, profileapp.CreateProfileRequest{
-		Slug: "another", DisplayName: "Another", Mode: profiledomain.ExposureHybrid,
-	})
+	second, err := createMCPProfileFixture(t, r, ctx, profileapp.CreateProfileRequest{
+		Slug: "another", DisplayName: "Another",
+	}, "hybrid")
+
 	if err != nil {
 		t.Fatal(err)
 	}

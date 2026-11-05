@@ -1,4 +1,4 @@
-package bootstrap
+package managed
 
 import (
 	"fmt"
@@ -10,6 +10,10 @@ import (
 // not Profile activation, MCP construction, Tunnel startup, or any authorization.
 // Each attempt is an atomic OS bind; never probe a port and use it later.
 const managedMCPPortAttempts = 32
+
+const PortAttempts = managedMCPPortAttempts
+
+func ListenPort(address string) (net.Listener, error) { return listenManagedMCPPort(address) }
 
 func listenManagedMCPPort(address string) (net.Listener, error) {
 	host, portText, err := net.SplitHostPort(address)

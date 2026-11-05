@@ -18,7 +18,7 @@ func TestDesktopDeploysOnlySelectedProfileSkillsToExplicitProjectRoot(t *testing
 	}
 	t.Cleanup(func() { _ = r.Close() })
 	s := NewService(ctx, r)
-	profile, err := s.CreateProfile("local-skill-delivery", "Local Skills", "hybrid")
+	profile, err := s.CreateProfile("local-skill-delivery", "Local Skills")
 	if err != nil {
 		t.Fatal(err)
 	}

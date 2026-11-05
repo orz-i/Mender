@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 
-import type { Profile, Provider, ToolSummary } from "@mender/sdk";
+import type { Provider, ToolSummary } from "@mender/sdk";
 import { Button } from "@mender/ui/components/button";
 import { Input } from "@mender/ui/components/input";
 
@@ -16,7 +16,6 @@ import { profileSourceLabels } from "./profile-source-label";
  */
 export function ProfileToolSourcePicker({
   open,
-  profile,
   providers,
   tools,
   hasMore,
@@ -26,7 +25,6 @@ export function ProfileToolSourcePicker({
   selected,
   selectedCounts,
   dirty,
-  direct,
   busy,
   error,
   onSourceQueryChange,
@@ -34,14 +32,12 @@ export function ProfileToolSourcePicker({
   onBackToSources,
   onQueryChange,
   onSelectedChange,
-  onDirectChange,
   onApply,
   onLoadMore,
   onSave,
   onClose,
 }: {
   open: boolean;
-  profile: Profile | null;
   providers: Provider[];
   tools: ToolSummary[];
   hasMore: boolean;
@@ -51,7 +47,6 @@ export function ProfileToolSourcePicker({
   selected: Set<string>;
   selectedCounts: Map<string, number>;
   dirty: boolean;
-  direct: Record<string, boolean>;
   busy: boolean;
   error: string;
   onSourceQueryChange: (value: string) => void;
@@ -59,7 +54,6 @@ export function ProfileToolSourcePicker({
   onBackToSources: () => void;
   onQueryChange: (value: string) => void;
   onSelectedChange: (value: Set<string>) => void;
-  onDirectChange: (value: Record<string, boolean>) => void;
   onApply: () => void;
   onLoadMore: () => void;
   onSave: () => void;
@@ -169,16 +163,6 @@ export function ProfileToolSourcePicker({
                         <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">{tool.description}</p>
                       ) : null}
                     </div>
-                    {profile?.mode === "hybrid" && checked ? (
-                      <label className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
-                        <input
-                          type="checkbox"
-                          checked={direct[tool.toolId] ?? false}
-                          onChange={(event) => onDirectChange({ ...direct, [tool.toolId]: event.target.checked })}
-                        />
-                        {t("Direct export")}
-                      </label>
-                    ) : null}
                   </div>
                 );
               }) : error ? null : (

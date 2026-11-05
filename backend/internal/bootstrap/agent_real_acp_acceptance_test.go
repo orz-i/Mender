@@ -17,7 +17,6 @@ import (
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	profileapp "github.com/orz-i/Mender/backend/internal/profile/application"
-	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 	processisolation "github.com/orz-i/Mender/backend/internal/runtimegovernance/infrastructure/processisolation"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 )
@@ -125,16 +124,18 @@ func TestPhase46OptInRealRestrictedAgentGovernedTools(t *testing.T) {
 		}
 		ids[tool.SourceKey] = id
 	}
-	profile, err := r.Profiles.Create.Execute(ctx, profileapp.CreateProfileRequest{
-		Slug: "real-agent-acceptance", DisplayName: "Real Agent disposable scope", Mode: profiledomain.ExposureDirect,
-	})
+	profile, err := createMCPProfileFixture(t, r, ctx, profileapp.CreateProfileRequest{
+		Slug: "real-agent-acceptance", DisplayName: "Real Agent disposable scope",
+	}, "direct")
+
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, key := range []string{"workspace.read", "workspace.edit"} {
-		profile, err = r.Profiles.AddTool.Execute(ctx, profileapp.AddToolRequest{
-			ProfileSlug: profile.Slug(), ToolID: ids[key], Direct: true,
-		})
+		profile, err = addMCPProfileToolFixture(t, r, ctx, profileapp.AddToolRequest{
+			ProfileSlug: profile.Slug(), ToolID: ids[key],
+		}, true)
+
 		if err != nil {
 			t.Fatal(err)
 		}

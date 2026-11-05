@@ -9,7 +9,6 @@ import (
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	profileapplication "github.com/orz-i/Mender/backend/internal/profile/application"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
-	tunneldomain "github.com/orz-i/Mender/backend/internal/tunnel/domain"
 )
 
 func TestProfileRoundTripAndMembershipPersistence(t *testing.T) {
@@ -21,21 +20,20 @@ func TestProfileRoundTripAndMembershipPersistence(t *testing.T) {
 	first, _ := catalogdomain.ParseToolID("tool_00000000000000000000000000000001")
 	second, _ := catalogdomain.ParseToolID("tool_00000000000000000000000000000002")
 
-	firstBinding, err := profiledomain.NewToolBinding(profiledomain.ToolBindingSpec{ToolID: first, Direct: true})
+	firstBinding, err := profiledomain.NewToolBinding(profiledomain.ToolBindingSpec{ToolID: first})
 	if err != nil {
 		t.Fatal(err)
 	}
-	secondBinding, err := profiledomain.NewToolBinding(profiledomain.ToolBindingSpec{ToolID: second, Direct: false})
+	secondBinding, err := profiledomain.NewToolBinding(profiledomain.ToolBindingSpec{ToolID: second})
 	if err != nil {
 		t.Fatal(err)
 	}
-	tunnelID, _ := tunneldomain.ParseTunnelID("tun_00000000000000000000000000000001")
-	profile, err := profiledomain.NewProfileWithBindingsAndTunnel(
+
+	profile, err := profiledomain.NewProfileWithBindings(
 		id,
 		slug,
 		"Default",
-		profiledomain.ExposureHybrid,
-		tunnelID,
+
 		[]profiledomain.ToolBinding{firstBinding, secondBinding},
 	)
 	if err != nil {
@@ -49,17 +47,15 @@ func TestProfileRoundTripAndMembershipPersistence(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetProfileByID() error = %v", err)
 	}
-	loadedTunnelID, hasTunnel := loadedByID.TunnelID()
-	if loadedByID.Slug() != slug || len(loadedByID.Bindings()) != 2 ||
-		!hasTunnel || loadedTunnelID != tunnelID {
-		t.Fatalf("GetProfileByID() = %+v, tunnel = %q", loadedByID.Bindings(), loadedTunnelID)
+	if loadedByID.Slug() != slug || len(loadedByID.Bindings()) != 2 {
+		t.Fatalf("GetProfileByID() = %+v", loadedByID.Bindings())
 	}
 
 	loaded, err := store.GetProfileBySlug(context.Background(), slug)
 	if err != nil {
 		t.Fatalf("GetProfileBySlug() error = %v", err)
 	}
-	if loaded.ID() != profile.ID() || len(loaded.Bindings()) != 2 || len(loaded.DirectToolIDs()) != 1 {
+	if loaded.ID() != profile.ID() || len(loaded.Bindings()) != 2 {
 		t.Fatalf("loaded Profile = %+v", loaded.Bindings())
 	}
 
@@ -94,8 +90,8 @@ func TestProfileSlugConflict(t *testing.T) {
 	slug, _ := profiledomain.NewSlug("default")
 	firstID, _ := profiledomain.ParseProfileID("prof_00000000000000000000000000000001")
 	secondID, _ := profiledomain.ParseProfileID("prof_00000000000000000000000000000002")
-	first, _ := profiledomain.NewProfileWithBindings(firstID, slug, "First", profiledomain.ExposureDynamic, nil)
-	second, _ := profiledomain.NewProfileWithBindings(secondID, slug, "Second", profiledomain.ExposureDynamic, nil)
+	first, _ := profiledomain.NewProfileWithBindings(firstID, slug, "First", nil)
+	second, _ := profiledomain.NewProfileWithBindings(secondID, slug, "Second", nil)
 
 	if err := store.CreateProfile(context.Background(), first); err != nil {
 		t.Fatal(err)

@@ -515,7 +515,6 @@ type InvocationResult struct {
 
 type ProfileTool struct {
 	ToolID                string   `json:"toolId"`
-	Direct                bool     `json:"direct"`
 	Alias                 string   `json:"alias"`
 	TitleOverride         string   `json:"titleOverride"`
 	DescriptionOverride   string   `json:"descriptionOverride"`
@@ -528,11 +527,28 @@ type Profile struct {
 	ProfileID   string        `json:"profileId"`
 	Slug        string        `json:"slug"`
 	DisplayName string        `json:"displayName"`
-	Mode        string        `json:"mode"`
-	TunnelID    string        `json:"tunnelId,omitempty"`
 	Tools       []ProfileTool `json:"tools"`
 	Skills      []string      `json:"skills"`
 	Revision    uint64        `json:"revision"`
+}
+
+// ProfileMCPDelivery is desired delivery configuration, separate from both
+// Profile membership and any running listener or Tunnel process.
+type ProfileMCPDelivery struct {
+	ProfileID       string   `json:"profileId"`
+	ProfileRevision uint64   `json:"profileRevision"`
+	Revision        uint64   `json:"revision"`
+	Mode            string   `json:"mode"`
+	TunnelID        string   `json:"tunnelId,omitempty"`
+	DirectToolIDs   []string `json:"directToolIds"`
+}
+
+type ProfileMCPDeliveryInput struct {
+	Mode                    string   `json:"mode"`
+	TunnelID                string   `json:"tunnelId,omitempty"`
+	DirectToolIDs           []string `json:"directToolIds"`
+	ExpectedProfileRevision uint64   `json:"expectedProfileRevision"`
+	ExpectedRevision        *uint64  `json:"expectedRevision,omitempty"`
 }
 
 type Tunnel struct {

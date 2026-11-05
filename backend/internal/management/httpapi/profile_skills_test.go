@@ -25,7 +25,7 @@ func TestProfileSkillsManagementHTTPUsesExactSelectionWithoutDeploying(t *testin
 	t.Cleanup(server.Close)
 	url := server.URL + "/api/v1/profiles/delivery/skills"
 	profile := requestJSON(t, server.Client(), http.MethodPost, server.URL+"/api/v1/profiles", map[string]any{
-		"slug": "delivery", "displayName": "Delivery", "mode": "hybrid",
+		"slug": "delivery", "displayName": "Delivery",
 	}, http.StatusCreated)
 	if ids, ok := profile["skills"].([]any); !ok || len(ids) != 0 {
 		t.Fatalf("new Profile Skill selection = %#v", profile["skills"])

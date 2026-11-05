@@ -275,14 +275,13 @@ func TestRuntimeUnknownFactApprovalAndProfileCannotRelaxGlobalDeny(t *testing.T)
 		t.Fatal(err)
 	}
 
-	profile, err := runtime.Profiles.Create.Execute(
+	profile, err := createMCPProfileFixture(t, runtime,
 		ctx,
 		profileapplication.CreateProfileRequest{
 			Slug:        "global-deny",
 			DisplayName: "Global Deny",
-			Mode:        profiledomain.ExposureDynamic,
-		},
-	)
+		}, "dynamic")
+
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -373,14 +372,13 @@ func TestInvocationPolicyAdapterMapsOnlyBoundedGovernanceContext(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	profile, err := runtime.Profiles.Create.Execute(
+	profile, err := createMCPProfileFixture(t, runtime,
 		ctx,
 		profileapplication.CreateProfileRequest{
 			Slug:        "policy-map",
 			DisplayName: "Policy Map",
-			Mode:        profiledomain.ExposureDynamic,
-		},
-	)
+		}, "dynamic")
+
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -16,7 +16,6 @@ import type {
   Profile,
   Provider,
   ToolSummary,
-  Tunnel,
 } from "@mender/sdk";
 import { Badge } from "@mender/ui/components/badge";
 import { Button } from "@mender/ui/components/button";
@@ -46,7 +45,7 @@ type ProfileToolBinding = Profile["tools"][number];
 
 type PresentationForm = Pick<
   ProfileToolBinding,
-  "direct" | "alias" | "titleOverride" | "descriptionOverride"
+  "alias" | "titleOverride" | "descriptionOverride"
 >;
 
 const TOOL_ALIAS_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9_.-]*[A-Za-z0-9])?$/;
@@ -67,7 +66,6 @@ function ProfileEditor({ client, slug }: { client: MenderClient; slug: string | 
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [providers, setProviders] = useState<Provider[]>([]);
   const [credentials, setCredentials] = useState<Credential[]>([]);
-  const [tunnels, setTunnels] = useState<Tunnel[]>([]);
   const [catalogTools, setCatalogTools] = useState<ToolSummary[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [hasSnapshot, setHasSnapshot] = useState(false);
@@ -86,7 +84,6 @@ function ProfileEditor({ client, slug }: { client: MenderClient; slug: string | 
   });
   const [manageQuery, setManageQuery] = useState("");
   const [manageSourceId, setManageSourceId] = useState("");
-  const [manageExposure, setManageExposure] = useState<"all" | "direct" | "dynamic">("all");
   const [pickerSlug, setPickerSlug] = useState("");
   const [pickerQuery, setPickerQuery] = useState("");
   const [pickerSourceQuery, setPickerSourceQuery] = useState("");
@@ -97,12 +94,10 @@ function ProfileEditor({ client, slug }: { client: MenderClient; slug: string | 
   const pickerRequestRef = useRef(0);
   const attemptedToolDetails = useRef(new Set<string>());
   const [pickerSelected, setPickerSelected] = useState<Set<string>>(new Set());
-  const [pickerDirect, setPickerDirect] = useState<Record<string, boolean>>({});
 
   const [presentationSlug, setPresentationSlug] = useState("");
   const [presentationToolId, setPresentationToolId] = useState("");
   const [presentationForm, setPresentationForm] = useState<PresentationForm>({
-    direct: false,
     alias: "",
     titleOverride: "",
     descriptionOverride: "",
@@ -128,21 +123,18 @@ function ProfileEditor({ client, slug }: { client: MenderClient; slug: string | 
       client.listProfiles(),
       client.listProviders(),
       client.listCredentials(),
-      client.listTunnels(),
       client.browseTools({ limit: 100 }),
     ])
       .then(([
         profileResult,
         providerResult,
         credentialResult,
-        tunnelResult,
         toolResult,
       ]) => {
         if (active) {
           setProfiles(profileResult.profiles);
           setProviders(providerResult.providers);
           setCredentials(credentialResult.credentials);
-          setTunnels(tunnelResult.tunnels);
           setCatalogTools(toolResult.tools);
           setHasSnapshot(true);
           setError("");
@@ -276,10 +268,6 @@ function ProfileEditor({ client, slug }: { client: MenderClient; slug: string | 
       if ((knownTools.get(selection.toolId)?.providerId ?? "__unknown__") !== manageSourceId) {
         return false;
       }
-      if (manageExposure !== "all" &&
-        (selection.direct ? "direct" : "dynamic") !== manageExposure) {
-        return false;
-      }
       if (!needle) return true;
       const tool = knownTools.get(selection.toolId);
       return [
@@ -287,7 +275,7 @@ function ProfileEditor({ client, slug }: { client: MenderClient; slug: string | 
         tool?.title, tool?.name, tool?.description,
       ].some((value) => value?.toLocaleLowerCase().includes(needle));
     });
-  }, [managedProfile, manageSourceId, manageQuery, manageExposure, knownTools]);
+  }, [managedProfile, manageSourceId, manageQuery, knownTools]);
   const managedToolPagination = usePagination(visibleManagedTools);
 
   const pickerSelectedCounts = useMemo(() => {
@@ -305,12 +293,9 @@ function ProfileEditor({ client, slug }: { client: MenderClient; slug: string | 
     if (pickerSelected.size !== pickerProfile.tools.length) return true;
     for (const binding of pickerProfile.tools) {
       if (!pickerSelected.has(binding.toolId)) return true;
-      const direct = pickerProfile.mode === "direct" ? true :
-        pickerProfile.mode === "dynamic" ? false : (pickerDirect[binding.toolId] ?? false);
-      if (direct !== binding.direct) return true;
     }
     return false;
-  }, [pickerProfile, pickerSelected, pickerDirect]);
+  }, [pickerProfile, pickerSelected]);
 
   function openToolPicker() {
     if (managedProfile === null) return;
@@ -324,9 +309,6 @@ function ProfileEditor({ client, slug }: { client: MenderClient; slug: string | 
     setPickerAppliedQuery("");
     setError("");
     setPickerSelected(new Set(managedProfile.tools.map((selection) => selection.toolId)));
-    setPickerDirect(Object.fromEntries(managedProfile.tools.map((selection) =>
-      [selection.toolId, selection.direct],
-    )));
     // Refresh only source metadata; the chooser starts at sources, not a
     // preloaded flat Catalog Tool list.
     void client.listProviders().then((response) => setProviders(response.providers))
@@ -434,15 +416,7 @@ function ProfileEditor({ client, slug }: { client: MenderClient; slug: string | 
     );
     const tools = [...pickerSelected].map((toolId) => {
       const existing = existingById.get(toolId);
-      const direct =
-        pickerProfile.mode === "direct"
-          ? true
-          : pickerProfile.mode === "dynamic"
-            ? false
-            : (pickerDirect[toolId] ?? false);
-      return existing === undefined
-        ? { toolId, direct }
-        : { ...existing, direct };
+      return existing === undefined ? { toolId } : existing;
     });
 
     setBusy(true);
@@ -486,7 +460,6 @@ function ProfileEditor({ client, slug }: { client: MenderClient; slug: string | 
     }
     const slug = managedProfile.slug;
     setPresentationForm({
-      direct: binding.direct,
       alias: binding.alias,
       titleOverride: binding.titleOverride,
       descriptionOverride: binding.descriptionOverride,
@@ -510,19 +483,13 @@ function ProfileEditor({ client, slug }: { client: MenderClient; slug: string | 
     if (presentationProfile === null || presentationBinding === null || !aliasValid) {
       return;
     }
-    const direct =
-      presentationProfile.mode === "direct"
-        ? true
-        : presentationProfile.mode === "dynamic"
-          ? false
-          : presentationForm.direct;
     setBusy(true);
     setPresentationError("");
     try {
       const profile = await client.replaceProfileTools(presentationProfile.slug, {
         tools: presentationProfile.tools.map((binding) =>
           binding.toolId === presentationBinding.toolId
-            ? { ...binding, ...presentationForm, alias: trimmedAlias, direct }
+            ? { ...binding, ...presentationForm, alias: trimmedAlias }
             : binding,
         ),
       });
@@ -630,27 +597,6 @@ function ProfileEditor({ client, slug }: { client: MenderClient; slug: string | 
     }
   }
 
-  async function setProfileTunnel(tunnelId: string) {
-    if (managedProfile === null) {
-      return;
-    }
-
-    setBusy(true);
-    setError("");
-    try {
-      const profile = await client.setProfileTunnel(managedProfile.slug, {
-        tunnelId,
-      });
-      setProfiles((current) =>
-        current.map((item) => (item.slug === profile.slug ? profile : item)),
-      );
-    } catch (reason) {
-      setError(errorMessage(reason));
-    } finally {
-      setBusy(false);
-    }
-  }
-
   async function removeTool() {
     if (managedProfile === null || pendingRemoval === null || busy) return;
     setBusy(true);
@@ -686,9 +632,6 @@ function ProfileEditor({ client, slug }: { client: MenderClient; slug: string | 
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-base font-semibold">{managedProfile?.displayName ?? t("Manage profile")}</h2>
-              {manageView === "overview" ? (
-                <p className="mt-1 text-xs text-muted-foreground">{t("Review Profile settings and update its Tunnel binding.")}</p>
-              ) : null}
             </div>
             <PageTabs label="Manage Profile sections">
               <PageTab label="Overview" active={manageView === "overview"}
@@ -705,34 +648,12 @@ function ProfileEditor({ client, slug }: { client: MenderClient; slug: string | 
               <dl className="grid gap-x-8 gap-y-5 sm:grid-cols-2">
                 <ReadOnlyField label="Slug" value={managedProfile.slug} />
                 <ReadOnlyField label="Display name" value={managedProfile.displayName} />
-                <ReadOnlyField label="Mode" value={t(managedProfile.mode)} />
               </dl>
 
-              <div className="rounded-lg border border-border bg-muted/30 p-4">
-                <Field label="Tunnel" help={t("Select a Tunnel to make this Profile's managed MCP server reachable through that provider. Mender still binds the MCP server to loopback.")}>
-                  <select
-                    aria-label={t("Profile tunnel")}
-                    value={managedProfile.tunnelId ?? ""}
-                    disabled={busy}
-                    onChange={(event) =>
-                      void setProfileTunnel(event.target.value)
-                    }
-                    className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
-                  >
-                    <option value="">{t("Local only (no Tunnel)")}</option>
-                    {tunnels.map((tunnel) => (
-                      <option key={tunnel.tunnelId} value={tunnel.tunnelId}>
-                        {tunnel.displayName} · {t("OpenAI")}
-                      </option>
-                    ))}
-                  </select>
-                  {managedProfile.tunnelId ? (
-                    <p role="note" className="mt-1 text-xs font-medium">
-                      {t("This Tunnel makes the Profile reachable from external clients.")}
-                    </p>
-                  ) : null}
-                </Field>
-              </div>
+              <Button size="sm" variant="outline" onClick={() =>
+                void navigate("/profiles/" + encodeURIComponent(managedProfile.slug) + "/deliveries/mcp")}>
+                {t("Manage MCP delivery")}
+              </Button>
 
                 </div>
               ) : (
@@ -762,28 +683,13 @@ function ProfileEditor({ client, slug }: { client: MenderClient; slug: string | 
               </div>
 
               {manageSourceId ? (
-                <div className={managedProfile.mode === "hybrid"
-                  ? "grid shrink-0 gap-2 sm:grid-cols-[minmax(0,1fr)_180px]"
-                  : "shrink-0"}>
+                <div className="shrink-0">
                   <Input
                     aria-label={t("Search selected tools")}
                     placeholder={t("Search selected tools…")}
                     value={manageQuery}
                     onChange={(event) => { setManageQuery(event.target.value); managedToolPagination.reset(); }}
                   />
-                  {managedProfile.mode === "hybrid" ? <select
-                    aria-label={t("Exposure filter")}
-                    value={manageExposure}
-                    onChange={(event) => {
-                      setManageExposure(event.target.value as typeof manageExposure);
-                      managedToolPagination.reset();
-                    }}
-                    className="h-9 min-w-0 rounded-lg border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
-                  >
-                    <option value="all">{t("All exposures")}</option>
-                    <option value="direct">{t("Direct")}</option>
-                    <option value="dynamic">{t("Dynamic")}</option>
-                  </select> : null}
                 </div>
               ) : (
                 <Input
@@ -817,9 +723,6 @@ function ProfileEditor({ client, slug }: { client: MenderClient; slug: string | 
                             <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{description}</p>
                           ) : null}
                           <div className="mt-2 flex flex-wrap gap-1.5">
-                            {managedProfile.mode === "hybrid" ? <Badge variant="outline">
-                              {t(selection.direct ? "Direct" : "Dynamic")}
-                            </Badge> : null}
                             {selection.alias ? (
                               <Badge variant="secondary">
                                 {t("Alias:")} {selection.alias}
@@ -912,7 +815,7 @@ function ProfileEditor({ client, slug }: { client: MenderClient; slug: string | 
                         type="button"
                         aria-label={t("Manage source {{source}}", { source: group.label })}
                         className="flex w-full items-center gap-3 px-4 py-4 text-left hover:bg-muted/40 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring"
-                        onClick={() => { setManageSourceId(group.id); setManageQuery(""); setManageExposure("all"); managedToolPagination.reset(); }}
+                        onClick={() => { setManageSourceId(group.id); setManageQuery(""); managedToolPagination.reset(); }}
                       >
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-sm font-medium">{group.label}</span>
@@ -945,7 +848,6 @@ function ProfileEditor({ client, slug }: { client: MenderClient; slug: string | 
       ) : null}
       <ProfileToolSourcePicker
         open={pickerProfile !== null}
-        profile={pickerProfile}
         providers={providers}
         tools={pickerTools}
         hasMore={pickerNextCursor !== null && pickerAppliedQuery === pickerQuery.trim()}
@@ -956,7 +858,6 @@ function ProfileEditor({ client, slug }: { client: MenderClient; slug: string | 
         selected={pickerSelected}
         selectedCounts={pickerSelectedCounts}
         dirty={pickerDirty}
-        direct={pickerDirect}
         busy={busy}
         error={error}
         onSourceQueryChange={setPickerSourceQuery}
@@ -964,7 +865,6 @@ function ProfileEditor({ client, slug }: { client: MenderClient; slug: string | 
         onBackToSources={backToPickerSources}
         onQueryChange={setPickerQuery}
         onSelectedChange={setPickerSelected}
-        onDirectChange={setPickerDirect}
         onApply={() => void searchPicker()}
         onSave={() => void saveToolSelection()}
         onClose={closeToolPicker}
@@ -1061,27 +961,6 @@ function ProfileEditor({ client, slug }: { client: MenderClient; slug: string | 
                   }
                 />
               </Field>
-              {presentationProfile.mode === "hybrid" ? (
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={presentationForm.direct}
-                    onChange={(event) =>
-                      setPresentationForm((current) => ({
-                        ...current,
-                        direct: event.target.checked,
-                      }))
-                    }
-                  />
-                  {t("Direct export")}
-                </label>
-              ) : (
-                <p className="text-xs leading-5 text-muted-foreground">
-                  {t("Direct export is controlled by this Profile's {{mode}} exposure mode.", {
-                    mode: t(presentationProfile.mode),
-                  })}
-                </p>
-              )}
             </div>
           ) : null}
 

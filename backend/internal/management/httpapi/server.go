@@ -15,6 +15,7 @@ import (
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	credentialapplication "github.com/orz-i/Mender/backend/internal/credential/application"
 	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
+	mcpdelivery "github.com/orz-i/Mender/backend/internal/mcp/application/delivery"
 	installationapplication "github.com/orz-i/Mender/backend/internal/plugin/installation/application"
 	policyapplication "github.com/orz-i/Mender/backend/internal/policy/application"
 	profileapplication "github.com/orz-i/Mender/backend/internal/profile/application"
@@ -119,7 +120,8 @@ func (h *Handler) routes() {
 	h.mux.HandleFunc("GET /api/v1/profiles/{slug}/skill-deployments", h.listProfileSkillDeployments)
 	h.mux.HandleFunc("DELETE /api/v1/profiles/{slug}/skill-deployments/{deploymentId}", h.undeployProfileSkill)
 	h.mux.HandleFunc("DELETE /api/v1/profiles/{slug}/tools/{toolId}", h.removeProfileTool)
-	h.mux.HandleFunc("PUT /api/v1/profiles/{slug}/tunnel", h.setProfileTunnel)
+	h.mux.HandleFunc("GET /api/v1/profiles/{slug}/mcp-delivery", h.getProfileMCPDelivery)
+	h.mux.HandleFunc("PUT /api/v1/profiles/{slug}/mcp-delivery", h.configureProfileMCPDelivery)
 
 	h.mux.HandleFunc("GET /api/v1/agents", h.listAgents)
 	h.mux.HandleFunc("POST /api/v1/agents", h.createAgent)
@@ -268,6 +270,8 @@ func isLoopbackHostname(host string) bool {
 
 func writeKnownError(w http.ResponseWriter, err error) {
 	switch {
+	case errors.Is(err, mcpdelivery.ErrNotFound):
+		writeAPIError(w, http.StatusNotFound, "mcp_delivery_not_configured", err)
 	case errors.Is(err, catalogapplication.ErrProviderNotFound),
 		errors.Is(err, catalogapplication.ErrToolNotFound),
 		errors.Is(err, policyapplication.ErrRuleNotFound),
@@ -282,6 +286,8 @@ func writeKnownError(w http.ResponseWriter, err error) {
 		writeAPIError(w, http.StatusNotFound, "not_found", err)
 
 	case errors.Is(err, catalogapplication.ErrStaleToolCursor),
+		errors.Is(err, mcpdelivery.ErrRevisionConflict),
+		errors.Is(err, mcpdelivery.ErrProfileRevisionConflict),
 		errors.Is(err, catalogapplication.ErrNamespaceConflict),
 		errors.Is(err, policyapplication.ErrRuleConflict),
 		errors.Is(err, policyapplication.ErrReferenceConflict),
@@ -312,6 +318,8 @@ func writeKnownError(w http.ResponseWriter, err error) {
 		writeAPIError(w, http.StatusConflict, "conflict", err)
 
 	case errors.Is(err, catalogapplication.ErrInvalidToolCursor),
+		errors.Is(err, mcpdelivery.ErrInvalidConfiguration),
+		errors.Is(err, mcpdelivery.ErrToolOutsideProfile),
 		errors.Is(err, catalogapplication.ErrInvalidSearchLimit),
 		errors.Is(err, policyapplication.ErrInvalidRule),
 		errors.Is(err, policyapplication.ErrProfileReferenceNotFound),

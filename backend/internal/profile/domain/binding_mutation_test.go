@@ -23,7 +23,7 @@ func TestProfileBindingMutationsPreserveExistingGovernance(t *testing.T) {
 		id,
 		slug,
 		"Default",
-		ExposureHybrid,
+
 		[]ToolBinding{first},
 	)
 	if err != nil {
@@ -31,8 +31,8 @@ func TestProfileBindingMutationsPreserveExistingGovernance(t *testing.T) {
 	}
 
 	second, err := NewToolBinding(ToolBindingSpec{
-		ToolID:        secondID,
-		Direct:        true,
+		ToolID: secondID,
+
 		TitleOverride: "Second Tool",
 	})
 	if err != nil {

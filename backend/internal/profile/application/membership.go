@@ -12,7 +12,6 @@ import (
 type AddToolRequest struct {
 	ProfileSlug           profiledomain.Slug
 	ToolID                catalogdomain.ToolID
-	Direct                bool
 	Alias                 string
 	TitleOverride         string
 	DescriptionOverride   string
@@ -49,7 +48,6 @@ func (uc AddTool) Execute(
 	}
 	binding, err := newToolBinding(ToolBindingInput{
 		ToolID:                request.ToolID,
-		Direct:                request.Direct,
 		Alias:                 request.Alias,
 		TitleOverride:         request.TitleOverride,
 		DescriptionOverride:   request.DescriptionOverride,

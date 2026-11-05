@@ -7,65 +7,18 @@ import (
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 )
 
-func TestProfileExposureModesNormalizeDirectSelection(t *testing.T) {
+func TestProfileSelectionPreservesExactMembers(t *testing.T) {
 	t.Parallel()
-
 	first := mustToolID(t, "tool_00000000000000000000000000000001")
 	second := mustToolID(t, "tool_00000000000000000000000000000002")
 	id, _ := ParseProfileID("prof_00000000000000000000000000000001")
 	slug, _ := NewSlug("default")
-
-	tests := []struct {
-		name       string
-		mode       ExposureMode
-		selections []ToolBinding
-		wantDirect []catalogdomain.ToolID
-	}{
-		{
-			name: "direct",
-			mode: ExposureDirect,
-			selections: []ToolBinding{
-				mustBinding(t, first, false),
-				mustBinding(t, second, false),
-			},
-			wantDirect: []catalogdomain.ToolID{first, second},
-		},
-		{
-			name: "dynamic",
-			mode: ExposureDynamic,
-			selections: []ToolBinding{
-				mustBinding(t, first, true),
-				mustBinding(t, second, true),
-			},
-			wantDirect: nil,
-		},
-		{
-			name: "hybrid",
-			mode: ExposureHybrid,
-			selections: []ToolBinding{
-				mustBinding(t, first, true),
-				mustBinding(t, second, false),
-			},
-			wantDirect: []catalogdomain.ToolID{first},
-		},
+	p, err := NewProfileWithBindings(id, slug, "Default", []ToolBinding{mustBinding(t, first), mustBinding(t, second)})
+	if err != nil {
+		t.Fatal(err)
 	}
-
-	for _, tc := range tests {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			profile, err := NewProfileWithBindings(id, slug, "Default", tc.mode, tc.selections)
-			if err != nil {
-				t.Fatalf("NewProfileWithBindings() error = %v", err)
-			}
-			if !slices.Equal(profile.DirectToolIDs(), tc.wantDirect) {
-				t.Fatalf("DirectToolIDs() = %v, want %v", profile.DirectToolIDs(), tc.wantDirect)
-			}
-			if !profile.Contains(first) || !profile.Contains(second) {
-				t.Fatal("Profile.Contains() rejected selected Tool")
-			}
-		})
+	if !slices.Equal(p.ToolIDs(), []catalogdomain.ToolID{first, second}) || !p.Contains(first) || !p.Contains(second) {
+		t.Fatalf("selection changed: %+v", p.Bindings())
 	}
 }
 
@@ -80,10 +33,10 @@ func TestProfileRejectsDuplicateToolMembership(t *testing.T) {
 		id,
 		slug,
 		"Default",
-		ExposureHybrid,
+
 		[]ToolBinding{
-			mustBinding(t, toolID, true),
-			mustBinding(t, toolID, false),
+			mustBinding(t, toolID),
+			mustBinding(t, toolID),
 		},
 	)
 	if err == nil {
@@ -122,9 +75,9 @@ func mustToolID(t *testing.T, raw string) catalogdomain.ToolID {
 	return id
 }
 
-func mustBinding(t *testing.T, toolID catalogdomain.ToolID, direct bool) ToolBinding {
+func mustBinding(t *testing.T, toolID catalogdomain.ToolID) ToolBinding {
 	t.Helper()
-	binding, err := NewToolBinding(ToolBindingSpec{ToolID: toolID, Direct: direct})
+	binding, err := NewToolBinding(ToolBindingSpec{ToolID: toolID})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -48,6 +48,14 @@ export function ConfigureAgentToolPlacement(agentID: string, workspaceKey: strin
     return $Call.ByID(3023164410, agentID, workspaceKey, sandboxID, toolIDs);
 }
 
+/**
+ * ConfigureProfileMCPDelivery changes desired configuration only. The slug is
+ * resolved by Runtime; callers cannot supply another Profile's identity.
+ */
+export function ConfigureProfileMCPDelivery(slug: string, input: $models.ProfileMCPDeliveryInput): $CancellablePromise<$models.ProfileMCPDelivery> {
+    return $Call.ByID(829651963, slug, input);
+}
+
 export function CreateAgent(input: $models.CreateAgentInput): $CancellablePromise<$models.Agent> {
     return $Call.ByID(3419625921, input);
 }
@@ -88,8 +96,8 @@ export function CreatePolicyRule(input: $models.PolicyRuleInput): $CancellablePr
     return $Call.ByID(2018955356, input);
 }
 
-export function CreateProfile(slug: string, displayName: string, mode: string): $CancellablePromise<$models.Profile> {
-    return $Call.ByID(891700837, slug, displayName, mode);
+export function CreateProfile(slug: string, displayName: string): $CancellablePromise<$models.Profile> {
+    return $Call.ByID(891700837, slug, displayName);
 }
 
 export function CreateProvider($namespace: string, displayName: string, description: string, pluginID: string, installationID: string, config: { [_ in string]?: any } | null): $CancellablePromise<$models.ProviderMutationResponse> {
@@ -246,6 +254,10 @@ export function GetProfile(slug: string): $CancellablePromise<$models.Profile> {
  */
 export function GetProfileCLIInstructions(slug: string): $CancellablePromise<$models.ProfileCLIInstructions> {
     return $Call.ByID(3750059704, slug);
+}
+
+export function GetProfileMCPDelivery(slug: string): $CancellablePromise<$models.ProfileMCPDelivery | null> {
+    return $Call.ByID(3464805851, slug);
 }
 
 export function GetRuntimeGovernance(): $CancellablePromise<$models.RuntimeGovernanceStatus> {
@@ -537,10 +549,6 @@ export function SetPolicyDefault(decision: string): $CancellablePromise<$models.
 
 export function SetPolicyRuleEnabled(ruleID: string, enabled: boolean): $CancellablePromise<$models.PolicyRule> {
     return $Call.ByID(2414471985, ruleID, enabled);
-}
-
-export function SetProfileTunnel(slug: string, tunnelID: string): $CancellablePromise<$models.Profile> {
-    return $Call.ByID(1012038523, slug, tunnelID);
 }
 
 export function SetSSHJobAdmission(raw: string, paused: boolean): $CancellablePromise<$models.SSHJobAdmissionState> {

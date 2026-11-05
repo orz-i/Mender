@@ -15,7 +15,6 @@ import (
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	modeltoolsplugin "github.com/orz-i/Mender/backend/internal/modeltools/infrastructure/plugin"
 	profileapplication "github.com/orz-i/Mender/backend/internal/profile/application"
-	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 )
 
 func TestModelToolsProviderSyncIsLocalAndProfileCredentialScopeBlocksExecution(
@@ -151,14 +150,13 @@ func TestModelToolsProviderSyncIsLocalAndProfileCredentialScopeBlocksExecution(
 		)
 	}
 
-	profile, err := runtime.Profiles.Create.Execute(
+	profile, err := createMCPProfileFixture(t, runtime,
 		ctx,
 		profileapplication.CreateProfileRequest{
 			Slug:        "model-tools-denied",
 			DisplayName: "Model Tools Denied",
-			Mode:        profiledomain.ExposureDynamic,
-		},
-	)
+		}, "dynamic")
+
 	if err != nil {
 		t.Fatal(err)
 	}

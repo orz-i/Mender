@@ -14,7 +14,9 @@ import (
 	catalogapp "github.com/orz-i/Mender/backend/internal/catalog/application"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	credentialapp "github.com/orz-i/Mender/backend/internal/credential/application"
+	mcpdomain "github.com/orz-i/Mender/backend/internal/mcp/domain"
 	mcpplugin "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/plugin"
+	mcpsqlite "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/sqlite"
 	profileapp "github.com/orz-i/Mender/backend/internal/profile/application"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 	profilesqlite "github.com/orz-i/Mender/backend/internal/profile/infrastructure/sqlite"
@@ -32,7 +34,7 @@ type liveMCPFixture struct {
 	tunnelRunner *fakeTunnelRunner
 }
 
-func newLiveMCPFixture(t *testing.T, mode profiledomain.ExposureMode, useTunnel ...bool) *liveMCPFixture {
+func newLiveMCPFixture(t *testing.T, mode string, useTunnel ...bool) *liveMCPFixture {
 	t.Helper()
 	ctx := context.Background()
 	counts := new([2]atomic.Int32)
@@ -86,15 +88,17 @@ func newLiveMCPFixture(t *testing.T, mode profiledomain.ExposureMode, useTunnel 
 	if ids["echo_alpha"] == "" || ids["echo_beta"] == "" {
 		t.Fatalf("unexpected upstream tools=%+v", ids)
 	}
-	profile, err := runtime.Profiles.Create.Execute(ctx, profileapp.CreateProfileRequest{
-		Slug: "live-mcp", DisplayName: "Live MCP", Mode: mode,
-	})
+	profile, err := createMCPProfileFixture(t, runtime, ctx, profileapp.CreateProfileRequest{
+		Slug: "live-mcp", DisplayName: "Live MCP",
+	}, mode)
+
 	if err != nil {
 		t.Fatal(err)
 	}
-	profile, err = runtime.Profiles.AddTool.Execute(ctx, profileapp.AddToolRequest{
-		ProfileSlug: profile.Slug(), ToolID: ids["echo_alpha"], Direct: mode != profiledomain.ExposureDynamic,
-	})
+	profile, err = addMCPProfileToolFixture(t, runtime, ctx, profileapp.AddToolRequest{
+		ProfileSlug: profile.Slug(), ToolID: ids["echo_alpha"],
+	}, mode != "dynamic")
+
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,9 +116,9 @@ func newLiveMCPFixture(t *testing.T, mode profiledomain.ExposureMode, useTunnel 
 		if tunnelErr != nil {
 			t.Fatal(tunnelErr)
 		}
-		profile, err = runtime.Profiles.SetTunnel.Execute(ctx, profileapp.SetTunnelRequest{
-			ProfileSlug: profile.Slug(), TunnelID: tunnel.ID(),
-		})
+		profile, err = setMCPProfileTunnelFixture(t, runtime, ctx,
+			profile.Slug(), tunnel.ID())
+
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -195,7 +199,7 @@ func (f *liveMCPFixture) assertStableListener(t *testing.T) {
 }
 
 func TestManagedMCPHTTPProfileMembershipRefreshDirectAndHybrid(t *testing.T) {
-	for _, mode := range []profiledomain.ExposureMode{profiledomain.ExposureDirect, profiledomain.ExposureHybrid} {
+	for _, mode := range []string{"direct", "hybrid"} {
 		t.Run(string(mode), func(t *testing.T) {
 			f := newLiveMCPFixture(t, mode)
 			initial := f.toolNames(t)
@@ -212,7 +216,7 @@ func TestManagedMCPHTTPProfileMembershipRefreshDirectAndHybrid(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			newBinding, err := profiledomain.NewToolBinding(profiledomain.ToolBindingSpec{ToolID: f.ids["echo_beta"], Direct: true})
+			newBinding, err := profiledomain.NewToolBinding(profiledomain.ToolBindingSpec{ToolID: f.ids["echo_beta"]})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -223,6 +227,42 @@ func TestManagedMCPHTTPProfileMembershipRefreshDirectAndHybrid(t *testing.T) {
 			if err := external.SaveProfile(context.Background(), updated); err != nil {
 				t.Fatal(err)
 			}
+			if mode == "hybrid" {
+				// Membership and MCP direct exposure now have separate owners.
+				// An external selection write must not implicitly configure delivery.
+				if names := f.toolNames(t); containsName(names, "upstream__echo_beta") {
+					t.Fatalf("Profile member silently became a direct MCP Tool: %v", names)
+				}
+				if names := f.searchNames(t); !containsName(names, "echo_beta") {
+					t.Fatalf("new Profile member missing from dynamic discovery: %v", names)
+				}
+				f.assertStableListener(t)
+				// A separate MCP writer also exercises cross-connection config
+				// revisions while the original HTTP client remains connected.
+				delivery, err := mcpsqlite.Open(context.Background(), f.dbPath)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer func() { _ = delivery.Close() }()
+				config, err := delivery.GetConfig(context.Background(), profile.ID())
+				if err != nil {
+					t.Fatal(err)
+				}
+				currentSelection, err := external.GetProfileByID(context.Background(), profile.ID())
+				if err != nil {
+					t.Fatal(err)
+				}
+				tunnelID, _ := config.TunnelID()
+				next, err := mcpdomain.NewConfig(profile.ID(), config.Mode(), tunnelID,
+					append(config.DirectToolIDs(), f.ids["echo_beta"]))
+				if err != nil {
+					t.Fatal(err)
+				}
+				revision := config.Revision()
+				if _, err := delivery.PutConfig(context.Background(), next, currentSelection.Revision(), &revision); err != nil {
+					t.Fatal(err)
+				}
+			}
 			added := f.toolNames(t)
 			if !containsName(added, "upstream__echo_alpha") || !containsName(added, "upstream__echo_beta") {
 				t.Fatalf("external AddBinding not reflected: %v", added)
@@ -232,8 +272,8 @@ func TestManagedMCPHTTPProfileMembershipRefreshDirectAndHybrid(t *testing.T) {
 			// Replace the exposed name/metadata in one committed operation.
 			_, err = f.runtime.Profiles.ReplaceTools.Execute(context.Background(), profileapp.ReplaceToolsRequest{
 				ProfileSlug: f.profile.Slug(), Tools: []profileapp.ToolBindingInput{
-					{ToolID: f.ids["echo_alpha"], Direct: true, Alias: "renamed_alpha", TitleOverride: "Renamed Alpha"},
-					{ToolID: f.ids["echo_beta"], Direct: true},
+					{ToolID: f.ids["echo_alpha"], Alias: "renamed_alpha", TitleOverride: "Renamed Alpha"},
+					{ToolID: f.ids["echo_beta"]},
 				},
 			})
 			if err != nil {
@@ -276,7 +316,7 @@ func containsName(names []string, want string) bool {
 }
 
 func TestManagedMCPHTTPDynamicMetaToolsReflectUpdatedMembership(t *testing.T) {
-	f := newLiveMCPFixture(t, profiledomain.ExposureDynamic)
+	f := newLiveMCPFixture(t, "dynamic")
 	if got := f.toolNames(t); len(got) != 3 || !containsName(got, "mender_search_tools") {
 		t.Fatalf("dynamic tools/list=%v", got)
 	}
@@ -320,7 +360,7 @@ func TestManagedMCPHTTPDynamicMetaToolsReflectUpdatedMembership(t *testing.T) {
 }
 
 func TestManagedMCPHTTPProfileChangesDoNotRestartTunnel(t *testing.T) {
-	f := newLiveMCPFixture(t, profiledomain.ExposureDynamic, true)
+	f := newLiveMCPFixture(t, "dynamic", true)
 	if f.server.TunnelID == "" || f.tunnelRunner == nil {
 		t.Fatal("fixture Tunnel was not started")
 	}

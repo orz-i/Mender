@@ -8,7 +8,10 @@ import { getLocale, t } from "../i18n/i18n";
 function apiErrorMessage(code: string): string {
   switch (code) {
     case "conflict":
+    case "revision_conflict":
       return t("The request conflicts with the current state.");
+    case "mcp_delivery_not_configured":
+      return t("Configure MCP delivery before starting a server.");
     case "execution_error":
       return t("Tool execution failed.");
     case "http_error":

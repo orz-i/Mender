@@ -10,7 +10,6 @@ import (
 type CreateProfileRequest struct {
 	Slug        string
 	DisplayName string
-	Mode        profiledomain.ExposureMode
 }
 
 type CreateProfile struct {
@@ -38,7 +37,6 @@ func (uc CreateProfile) Execute(
 		id,
 		slug,
 		request.DisplayName,
-		request.Mode,
 		nil,
 	)
 	if err != nil {

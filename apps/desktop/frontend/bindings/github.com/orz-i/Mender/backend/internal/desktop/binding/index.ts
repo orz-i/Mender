@@ -69,6 +69,8 @@ export type {
     ProfileAgentPluginExport,
     ProfileCLIInstructions,
     ProfileList,
+    ProfileMCPDelivery,
+    ProfileMCPDeliveryInput,
     ProfileTool,
     Provider,
     ProviderActivationAuditList,

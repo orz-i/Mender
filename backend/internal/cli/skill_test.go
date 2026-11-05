@@ -110,7 +110,7 @@ func TestSkillCLIManagedLifecycle(t *testing.T) {
 		t.Fatalf("enabled installation = %#v", enabled)
 	}
 
-	execute("profile", "create", "--slug", "delivery", "--name", "Delivery", "--mode", "hybrid")
+	execute("profile", "create", "--slug", "delivery", "--name", "Delivery")
 	localCLI := execute("profile", "cli", "delivery")
 	if localCLI["databasePath"] != dbPath || localCLI["profileSlug"] != "delivery" {
 		t.Fatalf("Profile CLI instructions = %#v", localCLI)

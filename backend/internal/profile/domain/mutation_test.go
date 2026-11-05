@@ -2,7 +2,7 @@ package domain
 
 import "testing"
 
-func TestProfileReplaceToolsNormalizesByMode(t *testing.T) {
+func TestProfileReplaceToolsPreservesExactSelection(t *testing.T) {
 	t.Parallel()
 
 	id, _ := ParseProfileID("prof_00000000000000000000000000000001")
@@ -10,18 +10,18 @@ func TestProfileReplaceToolsNormalizesByMode(t *testing.T) {
 	first := mustToolID(t, "tool_00000000000000000000000000000001")
 	second := mustToolID(t, "tool_00000000000000000000000000000002")
 
-	profile, err := NewProfileWithBindings(id, slug, "Default", ExposureDirect, nil)
+	profile, err := NewProfileWithBindings(id, slug, "Default", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	replaced, err := profile.ReplaceBindings([]ToolBinding{
-		mustBinding(t, first, false),
-		mustBinding(t, second, false),
+		mustBinding(t, first),
+		mustBinding(t, second),
 	})
 	if err != nil {
 		t.Fatalf("ReplaceTools() error = %v", err)
 	}
-	if len(replaced.Bindings()) != 2 || len(replaced.DirectToolIDs()) != 2 {
+	if len(replaced.Bindings()) != 2 {
 		t.Fatalf("replaced selections = %+v", replaced.Bindings())
 	}
 }
@@ -34,14 +34,14 @@ func TestProfileAddAndRemoveTool(t *testing.T) {
 	first := mustToolID(t, "tool_00000000000000000000000000000001")
 	second := mustToolID(t, "tool_00000000000000000000000000000002")
 
-	profile, err := NewProfileWithBindings(id, slug, "Default", ExposureHybrid, []ToolBinding{
-		mustBinding(t, first, true),
+	profile, err := NewProfileWithBindings(id, slug, "Default", []ToolBinding{
+		mustBinding(t, first),
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	added, err := profile.AddBinding(mustBinding(t, second, false))
+	added, err := profile.AddBinding(mustBinding(t, second))
 	if err != nil {
 		t.Fatalf("AddTool() error = %v", err)
 	}

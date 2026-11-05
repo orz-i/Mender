@@ -1,4 +1,4 @@
-package bootstrap
+package managed
 
 import (
 	"context"
@@ -10,18 +10,31 @@ import (
 	"sync/atomic"
 	"testing"
 
+	mcpdomain "github.com/orz-i/Mender/backend/internal/mcp/domain"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 )
 
-func freshProjectionProfile(t *testing.T) profiledomain.Profile {
+func freshProjectionProfile(t *testing.T) Snapshot {
 	t.Helper()
 	id, _ := profiledomain.ParseProfileID("prof_00000000000000000000000000000001")
 	slug, _ := profiledomain.NewSlug("live-projection")
-	p, err := profiledomain.NewProfileWithBindings(id, slug, "Live Projection", profiledomain.ExposureDynamic, nil)
+	return snapshotFixture(t, id, slug, "Live Projection")
+}
+func snapshotFixture(t *testing.T, id profiledomain.ProfileID, slug profiledomain.Slug, name string) Snapshot {
+	t.Helper()
+	profile, err := profiledomain.NewProfileWithBindings(id, slug, name, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return p
+	config, err := mcpdomain.NewConfig(id, mcpdomain.ModeDynamic, "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return Snapshot{Profile: profile, Config: config}
+}
+func (s Snapshot) WithRevision(revision uint64) Snapshot {
+	s.Profile = s.Profile.WithRevision(revision)
+	return s
 }
 
 func projectionText(value string) http.Handler {
@@ -36,14 +49,17 @@ func responseBody(t *testing.T, h http.Handler) (int, string) {
 }
 
 // The original tests vary only Profile revisions; the Catalog is unchanged.
-func newTestProfileHandler(profile profiledomain.Profile, initial http.Handler,
+func newTestProfileHandler(profile Snapshot, initial http.Handler,
 	revision func(context.Context, profiledomain.ProfileID) (uint64, error),
-	load func(context.Context, profiledomain.ProfileID) (profiledomain.Profile, error),
-	build func(context.Context, profiledomain.Profile) (http.Handler, error),
+	load func(context.Context, profiledomain.ProfileID) (Snapshot, error),
+	build func(context.Context, Snapshot) (http.Handler, error),
 ) (*managedProfileMCPHTTPHandler, error) {
-	return newManagedProfileMCPHTTPHandler(profile, initial, revision, load, build, managedMCPToolCatalog{
+	return newManagedProfileMCPHTTPHandler(profile, initial, func(ctx context.Context, id profiledomain.ProfileID) (Versions, error) {
+		rev, err := revision(ctx, id)
+		return Versions{Profile: rev}, err
+	}, load, build, managedMCPToolCatalog{
 		revision:        func(context.Context) (int64, error) { return 0, nil },
-		fingerprint:     func(context.Context, profiledomain.Profile) (string, error) { return "fixture", nil },
+		fingerprint:     func(context.Context, Snapshot) (string, error) { return "fixture", nil },
 		initialRevision: 0, initialFingerprint: "fixture",
 	})
 }
@@ -61,10 +77,10 @@ func TestManagedProfileHotRefreshFailsClosedAndRetries(t *testing.T) {
 			}
 			return rev.Load(), nil
 		},
-		func(context.Context, profiledomain.ProfileID) (profiledomain.Profile, error) {
+		func(context.Context, profiledomain.ProfileID) (Snapshot, error) {
 			return p.WithRevision(rev.Load()), nil
 		},
-		func(_ context.Context, latest profiledomain.Profile) (http.Handler, error) {
+		func(_ context.Context, latest Snapshot) (http.Handler, error) {
 			builds.Add(1)
 			if rebuilding.Load() {
 				return nil, errors.New("secret tool metadata error")
@@ -107,10 +123,10 @@ func TestManagedProfileHotRefreshPublishesMonotonicallyAcrossConcurrentRequests(
 	var publishes atomic.Int64
 	h, err := newTestProfileHandler(p, projectionText("v0"),
 		func(context.Context, profiledomain.ProfileID) (uint64, error) { return currentRevision.Load(), nil },
-		func(context.Context, profiledomain.ProfileID) (profiledomain.Profile, error) {
+		func(context.Context, profiledomain.ProfileID) (Snapshot, error) {
 			return p.WithRevision(currentRevision.Load()), nil
 		},
-		func(_ context.Context, latest profiledomain.Profile) (http.Handler, error) {
+		func(_ context.Context, latest Snapshot) (http.Handler, error) {
 			publishes.Add(1)
 			return projectionText(fmt.Sprint("v", latest.Revision())), nil
 		})
@@ -149,16 +165,13 @@ func TestManagedProfileRefreshRejectsIdentityChangeAndRollback(t *testing.T) {
 	p := freshProjectionProfile(t)
 	otherID, _ := profiledomain.ParseProfileID("prof_00000000000000000000000000000002")
 	slug, _ := profiledomain.NewSlug("replaced")
-	different, err := profiledomain.NewProfileWithBindings(otherID, slug, "Different", profiledomain.ExposureDynamic, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	different := snapshotFixture(t, otherID, slug, "Different")
 	h, err := newTestProfileHandler(p.WithRevision(2), projectionText("v2"),
 		func(context.Context, profiledomain.ProfileID) (uint64, error) { return 3, nil },
-		func(context.Context, profiledomain.ProfileID) (profiledomain.Profile, error) {
+		func(context.Context, profiledomain.ProfileID) (Snapshot, error) {
 			return different.WithRevision(3), nil
 		},
-		func(context.Context, profiledomain.Profile) (http.Handler, error) {
+		func(context.Context, Snapshot) (http.Handler, error) {
 			return projectionText("wrong"), nil
 		})
 	if err != nil {
@@ -168,7 +181,7 @@ func TestManagedProfileRefreshRejectsIdentityChangeAndRollback(t *testing.T) {
 		t.Fatalf("identity change was accepted: %d %q", status, body)
 	}
 
-	h.load = func(context.Context, profiledomain.ProfileID) (profiledomain.Profile, error) {
+	h.load = func(context.Context, profiledomain.ProfileID) (Snapshot, error) {
 		return p.WithRevision(1), nil
 	}
 	if status, _ := responseBody(t, h); status != 503 {
@@ -183,10 +196,10 @@ func TestManagedProfileRefreshRejectsConcurrentCommitAcrossLoadAndBuild(t *testi
 	var updateAtBuild atomic.Bool
 	h, err := newTestProfileHandler(p, projectionText("v0"),
 		func(context.Context, profiledomain.ProfileID) (uint64, error) { return revision.Load(), nil },
-		func(context.Context, profiledomain.ProfileID) (profiledomain.Profile, error) {
+		func(context.Context, profiledomain.ProfileID) (Snapshot, error) {
 			return p.WithRevision(revision.Load()), nil
 		},
-		func(_ context.Context, latest profiledomain.Profile) (http.Handler, error) {
+		func(_ context.Context, latest Snapshot) (http.Handler, error) {
 			if updateAtBuild.Load() {
 				revision.Add(1)
 				updateAtBuild.Store(false)

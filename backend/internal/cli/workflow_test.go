@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -240,11 +241,9 @@ func TestCLILocalWorkflowWithPersistedHTTPProvider(t *testing.T) {
 		"profile", "create",
 		"--slug", "default",
 		"--name", "Default",
-		"--mode", "hybrid",
 	)
 	configuredProfile := execute(
 		"profile", "add-tool", "default", toolID,
-		"--direct",
 		"--alias", "echo_cli",
 		"--title", "CLI Echo",
 		"--description", "Echo configured through the CLI",
@@ -263,11 +262,12 @@ func TestCLILocalWorkflowWithPersistedHTTPProvider(t *testing.T) {
 		configuredBinding["concurrencyConstraint"] != "serial" {
 		t.Fatalf("configured Profile binding = %#v", configuredBinding)
 	}
+	execute("profile", "mcp-delivery", "configure", "default", "--mode", "hybrid",
+		"--profile-revision", fmt.Sprint(configuredProfile["revision"]), "--direct-tool", toolID)
 	restricted := execute(
 		"profile", "create",
 		"--slug", "restricted",
 		"--name", "Restricted",
-		"--mode", "dynamic",
 	)
 	restrictedID, _ := restricted["profileId"].(string)
 	if restrictedID == "" {

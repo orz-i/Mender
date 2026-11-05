@@ -99,13 +99,14 @@ func fixtureExternalTunnel(t *testing.T, r *Runtime, installed installationdomai
 	if err != nil {
 		t.Fatal(err)
 	}
-	profile, err := r.Profiles.Create.Execute(ctx, profileapp.CreateProfileRequest{
-		Slug: "external-tunnel", DisplayName: "External Tunnel", Mode: profiledomain.ExposureDynamic,
-	})
+	profile, err := createMCPProfileFixture(t, r, ctx, profileapp.CreateProfileRequest{
+		Slug: "external-tunnel", DisplayName: "External Tunnel",
+	}, "dynamic")
+
 	if err != nil {
 		t.Fatal(err)
 	}
-	profile, err = r.Profiles.SetTunnel.Execute(ctx, profileapp.SetTunnelRequest{ProfileSlug: profile.Slug(), TunnelID: tunnel.ID()})
+	profile, err = setMCPProfileTunnelFixture(t, r, ctx, profile.Slug(), tunnel.ID())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -193,11 +194,11 @@ func TestNativeTunnelTransportManagedMCPAndReferences(t *testing.T) {
 	if err := r.StopMCPServer(ctx, restarted.ServerID); err != nil {
 		t.Fatal(err)
 	}
-	profile, err = r.Profiles.SetTunnel.Execute(ctx, profileapp.SetTunnelRequest{ProfileSlug: profile.Slug()})
+	profile, err = setMCPProfileTunnelFixture(t, r, ctx, profile.Slug(), "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, present := profile.TunnelID(); present {
+	if _, present := profileMCPFixtureTunnel(t, r, ctx, profile); present {
 		t.Fatal("Profile Tunnel reference not cleared")
 	}
 	// Unbound Tunnel inventory is still an authoritative package reference.
@@ -301,7 +302,7 @@ func TestNativeTunnelDeleteBlockedDuringManagedMCPTeardown(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := r.Profiles.SetTunnel.Execute(ctx, profileapp.SetTunnelRequest{ProfileSlug: profile.Slug()}); err != nil {
+	if _, err := setMCPProfileTunnelFixture(t, r, ctx, profile.Slug(), ""); err != nil {
 		t.Fatal(err)
 	}
 	if err := r.Tunnels.Delete.Execute(ctx, tunnel.ID()); err == nil {

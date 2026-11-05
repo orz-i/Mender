@@ -15,7 +15,6 @@ import (
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	policydomain "github.com/orz-i/Mender/backend/internal/policy/domain"
 	profileapp "github.com/orz-i/Mender/backend/internal/profile/application"
-	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 )
 
 // This test executor emits protocol-shaped evidence, never inference, shell
@@ -79,9 +78,10 @@ func TestAgentResumeCanonicalToolRequiresExplicitProfileBindingAndExactLineage(t
 			t.Fatalf("missing canonical %s", key)
 		}
 	}
-	profile, err := r.Profiles.Create.Execute(ctx, profileapp.CreateProfileRequest{
-		Slug: "resume-profile", DisplayName: "Resume", Mode: profiledomain.ExposureDynamic,
-	})
+	profile, err := createMCPProfileFixture(t, r, ctx, profileapp.CreateProfileRequest{
+		Slug: "resume-profile", DisplayName: "Resume",
+	}, "dynamic")
+
 	if err != nil {
 		t.Fatal(err)
 	}

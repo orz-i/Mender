@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import { useLocation, useNavigate, useParams } from "react-router";
 
-import type { MCPServerInstance, MenderClient, Profile, Provider, SkillInstallation, ToolSummary, Tunnel } from "@mender/sdk";
+import type { MCPServerInstance, MenderClient, Profile, Provider, SkillInstallation, ToolSummary } from "@mender/sdk";
 import { Badge } from "@mender/ui/components/badge";
 import { Button } from "@mender/ui/components/button";
 
@@ -28,7 +28,6 @@ function ProfileDetailContent({ client, slug }: { client: MenderClient; slug: st
   const location = useLocation();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [providers, setProviders] = useState<Provider[]>([]);
-  const [tunnels, setTunnels] = useState<Tunnel[]>([]);
   const [tools, setTools] = useState<ToolSummary[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState("");
@@ -51,13 +50,11 @@ function ProfileDetailContent({ client, slug }: { client: MenderClient; slug: st
     void Promise.all([
       client.getProfile(slug),
       client.listProviders(),
-      client.listTunnels(),
       client.browseTools({ limit: 100 }),
-    ]).then(async ([item, sources, tunnelResult, catalog]) => {
+    ]).then(async ([item, sources, catalog]) => {
       if (!active) return;
       setProfile(item);
       setProviders(sources.providers);
-      setTunnels(tunnelResult.tunnels);
       setTools(catalog.tools);
       setError("");
       setLoaded(true);
@@ -155,12 +152,8 @@ function ProfileDetailContent({ client, slug }: { client: MenderClient; slug: st
             <dl className="grid gap-x-8 gap-y-6 p-5 sm:grid-cols-2">
               <Metadata name={t("Slug")} value={profile.slug} />
               <Metadata name={t("Display name")} value={profile.displayName} />
-              <Metadata name={t("Exposure mode")} value={t(profile.mode)} />
               <Metadata name={t("Tools")} value={tCount(profile.tools.length, "{{count}} selected Tool", "{{count}} selected Tools")} />
               <Metadata name={t("Skills")} value={String(profile.skills?.length ?? 0)} />
-              <Metadata name={t("Tunnel")} value={profile.tunnelId
-                ? (tunnels.find((item) => item.tunnelId === profile.tunnelId)?.displayName ?? t("Configured"))
-                : t("Local only")} />
             </dl>
           ) : section === "skills" ? (
             <div className="flex flex-col gap-4 p-5">
@@ -280,7 +273,6 @@ function ProfileDetailContent({ client, slug }: { client: MenderClient; slug: st
                         <p className="text-sm font-medium">{toolTitle}</p>
                         {description ? <ProfileToolDescription description={description} toolTitle={toolTitle} /> : null}
                         <div className="flex flex-wrap gap-2">
-                          <Badge variant="outline">{t(item.direct ? "Direct" : "Dynamic")}</Badge>
                           {item.alias ? <Badge variant="secondary">{t("Alias:")} {item.alias}</Badge> : null}
                           {item.policyConstraint !== "inherit" ? (
                             <Badge variant={item.policyConstraint === "deny" ? "destructive" : "secondary"}>

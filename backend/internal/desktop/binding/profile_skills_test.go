@@ -18,7 +18,7 @@ func TestWailsProfileSkillsRoundTripWithoutHostDeployment(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = runtime.Close() })
 	service := NewService(ctx, runtime)
-	created, err := service.CreateProfile("delivery", "Delivery", "hybrid")
+	created, err := service.CreateProfile("delivery", "Delivery")
 	if err != nil {
 		t.Fatal(err)
 	}

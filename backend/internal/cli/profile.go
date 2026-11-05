@@ -17,10 +17,11 @@ import (
 func (a *app) newProfileCommand() *cobra.Command {
 	command := &cobra.Command{
 		Use:   "profile",
-		Short: "Manage tool exposure profiles",
+		Short: "Manage Profile selections and delivery",
 	}
 	command.AddCommand(a.newProfileCreateCommand())
 	command.AddCommand(a.newProfileListCommand())
+	command.AddCommand(a.newProfileMCPDeliveryCommand())
 	command.AddCommand(a.newProfileShowCommand())
 	command.AddCommand(a.newProfileAddToolCommand())
 	command.AddCommand(a.newProfileRemoveToolCommand())
@@ -160,19 +161,15 @@ func (a *app) newProfileUndeploySkillCommand() *cobra.Command {
 }
 
 func (a *app) newProfileCreateCommand() *cobra.Command {
-	var slugValue, displayName, modeValue string
+	var slugValue, displayName string
 
 	command := &cobra.Command{
 		Use:   "create",
 		Short: "Create a profile",
 		Args:  exactArgs(0),
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			if slugValue == "" || displayName == "" || modeValue == "" {
-				return usageError{err: fmt.Errorf("--slug, --name, and --mode are required")}
-			}
-			mode, err := parseExposureMode(modeValue)
-			if err != nil {
-				return usageError{err: err}
+			if slugValue == "" || displayName == "" {
+				return usageError{err: fmt.Errorf("--slug and --name are required")}
 			}
 
 			return a.withRuntime(cmd.Context(), func(runtime *bootstrap.Runtime) error {
@@ -181,7 +178,6 @@ func (a *app) newProfileCreateCommand() *cobra.Command {
 					profileapplication.CreateProfileRequest{
 						Slug:        slugValue,
 						DisplayName: displayName,
-						Mode:        mode,
 					},
 				)
 				if err != nil {
@@ -196,7 +192,6 @@ func (a *app) newProfileCreateCommand() *cobra.Command {
 	}
 	command.Flags().StringVar(&slugValue, "slug", "", "stable profile slug")
 	command.Flags().StringVar(&displayName, "name", "", "profile display name")
-	command.Flags().StringVar(&modeValue, "mode", "", "exposure mode: direct, dynamic, or hybrid")
 	return command
 }
 
@@ -221,14 +216,13 @@ func (a *app) newProfileListCommand() *cobra.Command {
 				}
 
 				writer := tabwriter.NewWriter(a.options.Stdout, 0, 4, 2, ' ', 0)
-				_, _ = fmt.Fprintln(writer, "SLUG\tID\tMODE\tTOOLS\tNAME")
+				_, _ = fmt.Fprintln(writer, "SLUG\tID\tTOOLS\tNAME")
 				for _, profile := range profiles {
 					_, _ = fmt.Fprintf(
 						writer,
-						"%s\t%s\t%s\t%d\t%s\n",
+						"%s\t%s\t%d\t%s\n",
 						profile.Slug(),
 						profile.ID(),
-						profile.Mode(),
 						len(profile.Bindings()),
 						profile.DisplayName(),
 					)
@@ -257,10 +251,9 @@ func (a *app) newProfileShowCommand() *cobra.Command {
 				}
 				return a.writeValue(
 					fmt.Sprintf(
-						"%s (%s) mode=%s tools=%d",
+						"%s (%s) tools=%d",
 						profile.Slug(),
 						profile.ID(),
-						profile.Mode(),
 						len(profile.Bindings()),
 					),
 					profileProjection(profile),
@@ -271,7 +264,6 @@ func (a *app) newProfileShowCommand() *cobra.Command {
 }
 
 func (a *app) newProfileAddToolCommand() *cobra.Command {
-	var direct bool
 	var alias string
 	var titleOverride string
 	var descriptionOverride string
@@ -307,7 +299,6 @@ func (a *app) newProfileAddToolCommand() *cobra.Command {
 					profileapplication.AddToolRequest{
 						ProfileSlug:           slug,
 						ToolID:                toolID,
-						Direct:                direct,
 						Alias:                 alias,
 						TitleOverride:         titleOverride,
 						DescriptionOverride:   descriptionOverride,
@@ -326,7 +317,6 @@ func (a *app) newProfileAddToolCommand() *cobra.Command {
 			})
 		},
 	}
-	command.Flags().BoolVar(&direct, "direct", false, "export this Tool directly in hybrid mode")
 	command.Flags().StringVar(&alias, "alias", "", "Profile-local machine/model Tool alias")
 	command.Flags().StringVar(&titleOverride, "title", "", "Profile-local Tool title override")
 	command.Flags().StringVar(&descriptionOverride, "description", "", "Profile-local Tool description override")
@@ -379,18 +369,6 @@ func (a *app) newProfileRemoveToolCommand() *cobra.Command {
 				)
 			})
 		},
-	}
-}
-
-func parseExposureMode(value string) (profiledomain.ExposureMode, error) {
-	mode := profiledomain.ExposureMode(value)
-	switch mode {
-	case profiledomain.ExposureDirect,
-		profiledomain.ExposureDynamic,
-		profiledomain.ExposureHybrid:
-		return mode, nil
-	default:
-		return "", fmt.Errorf("mode must be direct, dynamic, or hybrid")
 	}
 }
 
@@ -455,7 +433,6 @@ func profileProjection(profile profiledomain.Profile) map[string]any {
 	for _, binding := range profile.Bindings() {
 		bindings = append(bindings, map[string]any{
 			"toolId":                binding.ToolID().String(),
-			"direct":                binding.Direct(),
 			"alias":                 binding.Alias(),
 			"titleOverride":         binding.TitleOverride(),
 			"descriptionOverride":   binding.DescriptionOverride(),
@@ -474,7 +451,6 @@ func profileProjection(profile profiledomain.Profile) map[string]any {
 		"profileId":   profile.ID().String(),
 		"slug":        profile.Slug().String(),
 		"displayName": profile.DisplayName(),
-		"mode":        string(profile.Mode()),
 		"tools":       bindings,
 	}
 }

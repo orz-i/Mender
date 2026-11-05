@@ -7,7 +7,6 @@ import (
 
 	"github.com/orz-i/Mender/backend/internal/bootstrap"
 	profileapplication "github.com/orz-i/Mender/backend/internal/profile/application"
-	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 )
 
 func TestDesktopProfileGrantContract(t *testing.T) {
@@ -22,7 +21,7 @@ func TestDesktopProfileGrantContract(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	profile, err := runtime.Profiles.Create.Execute(ctx, profileapplication.CreateProfileRequest{Slug: "desktop-grant", DisplayName: "Desktop grant", Mode: profiledomain.ExposureHybrid})
+	profile, err := runtime.Profiles.Create.Execute(ctx, profileapplication.CreateProfileRequest{Slug: "desktop-grant", DisplayName: "Desktop grant"})
 	if err != nil {
 		t.Fatal(err)
 	}

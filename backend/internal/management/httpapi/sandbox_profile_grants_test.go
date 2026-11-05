@@ -22,7 +22,7 @@ func TestHTTPProfileSandboxGrantLifecycle(t *testing.T) {
 	sandbox := requestJSON(t, server.Client(), http.MethodPost, server.URL+"/api/v1/sandboxes/local",
 		map[string]any{"name": "Grant fixture", "root": t.TempDir(), "isolation": "host"}, http.StatusCreated)
 	profile := requestJSON(t, server.Client(), http.MethodPost, server.URL+"/api/v1/profiles",
-		map[string]any{"slug": "grant-fixture", "displayName": "Grant fixture", "mode": "hybrid"}, http.StatusCreated)
+		map[string]any{"slug": "grant-fixture", "displayName": "Grant fixture"}, http.StatusCreated)
 	base := server.URL + "/api/v1/sandboxes/" + sandbox["sandboxId"].(string)
 	path := base + "/profile-grants/" + profile["profileId"].(string)
 	got := requestJSON(t, server.Client(), http.MethodGet, base+"/profile-grants", nil, http.StatusOK)

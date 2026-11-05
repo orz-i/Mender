@@ -11,7 +11,6 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	profileapp "github.com/orz-i/Mender/backend/internal/profile/application"
-	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 )
 
@@ -47,11 +46,11 @@ func TestWorkspaceMultiTargetProfileMCPAuthorization(t *testing.T) {
 	if readID == "" {
 		t.Fatal("read tool missing")
 	}
-	profile, err := r.Profiles.Create.Execute(ctx, profileapp.CreateProfileRequest{Slug: "shared-tools", DisplayName: "Shared tools", Mode: profiledomain.ExposureDirect})
+	profile, err := createMCPProfileFixture(t, r, ctx, profileapp.CreateProfileRequest{Slug: "shared-tools", DisplayName: "Shared tools"}, "direct")
 	if err != nil {
 		t.Fatal(err)
 	}
-	profile, err = r.Profiles.AddTool.Execute(ctx, profileapp.AddToolRequest{ProfileSlug: profile.Slug(), ToolID: readID, Direct: true})
+	profile, err = addMCPProfileToolFixture(t, r, ctx, profileapp.AddToolRequest{ProfileSlug: profile.Slug(), ToolID: readID}, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -130,15 +129,17 @@ func TestWorkspaceMultiTargetProfileMCPAuthorization(t *testing.T) {
 	}
 	// The ToolID and alias are shared, but the Sandbox grant remains bound
 	// to the exact Profile. A second Profile cannot borrow the first grant.
-	other, err := r.Profiles.Create.Execute(ctx, profileapp.CreateProfileRequest{
-		Slug: "other-shared-tools", DisplayName: "Other profile", Mode: profiledomain.ExposureDirect,
-	})
+	other, err := createMCPProfileFixture(t, r, ctx, profileapp.CreateProfileRequest{
+		Slug: "other-shared-tools", DisplayName: "Other profile",
+	}, "direct")
+
 	if err != nil {
 		t.Fatal(err)
 	}
-	other, err = r.Profiles.AddTool.Execute(ctx, profileapp.AddToolRequest{
-		ProfileSlug: other.Slug(), ToolID: readID, Direct: true,
-	})
+	other, err = addMCPProfileToolFixture(t, r, ctx, profileapp.AddToolRequest{
+		ProfileSlug: other.Slug(), ToolID: readID,
+	}, true)
+
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -14,7 +14,6 @@ import (
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	profileapplication "github.com/orz-i/Mender/backend/internal/profile/application"
-	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 )
 
 type waitingAgentExecutor struct{ started chan struct{} }
@@ -63,9 +62,10 @@ func TestAgentCanonicalTaskCancellationFixture(t *testing.T) {
 	for _, tool := range tools {
 		ids[tool.SourceKey()] = tool.ID()
 	}
-	profile, err := r.Profiles.Create.Execute(ctx, profileapplication.CreateProfileRequest{
-		Slug: "agent-cancel", DisplayName: "Cancelable Fixture", Mode: profiledomain.ExposureDynamic,
-	})
+	profile, err := createMCPProfileFixture(t, r, ctx, profileapplication.CreateProfileRequest{
+		Slug: "agent-cancel", DisplayName: "Cancelable Fixture",
+	}, "dynamic")
+
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,4 +1,4 @@
-package bootstrap
+package managed
 
 import (
 	"context"
@@ -9,7 +9,6 @@ import (
 	"slices"
 
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
-	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 )
 
 // profileToolMetadataFingerprint describes the effective immutable Tool
@@ -18,7 +17,7 @@ import (
 // so a no-op synchronization cannot restart unrelated MCP Provider adapters.
 //
 // CatalogRevision is checked before and after this bounded read by the caller.
-func (r *Runtime) profileToolMetadataFingerprint(ctx context.Context, profile profiledomain.Profile) (string, error) {
+func (r *Manager) fingerprint(ctx context.Context, profile Snapshot) (string, error) {
 	ids := slices.Clone(profile.ToolIDs())
 	slices.SortFunc(ids, func(a, b catalogdomain.ToolID) int {
 		if a.String() < b.String() {
@@ -31,7 +30,7 @@ func (r *Runtime) profileToolMetadataFingerprint(ctx context.Context, profile pr
 	})
 	hasher := sha256.New()
 	for _, id := range ids {
-		tool, err := r.Catalog.DescribeTool.Execute(ctx, id)
+		tool, err := r.deps.DescribeTool(ctx, id)
 		if err != nil {
 			return "", fmt.Errorf("fingerprint Profile Tool %s: %w", id, err)
 		}

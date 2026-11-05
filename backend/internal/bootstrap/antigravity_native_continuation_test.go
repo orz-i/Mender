@@ -13,7 +13,6 @@ import (
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	profileapp "github.com/orz-i/Mender/backend/internal/profile/application"
-	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 )
 
 const bootstrapAgyNativeSession = "dfe3c2a6-211b-48dc-bfa8-a5d2ccf51b85"
@@ -76,9 +75,10 @@ func TestCanonicalAntigravitySessionContinuationPreservesGrantAndLineage(t *test
 		}
 		ids[item.SourceKey] = id
 	}
-	profile, err := r.Profiles.Create.Execute(ctx, profileapp.CreateProfileRequest{
-		Slug: "agy-resume", DisplayName: "Agy Continuation", Mode: profiledomain.ExposureDynamic,
-	})
+	profile, err := createMCPProfileFixture(t, r, ctx, profileapp.CreateProfileRequest{
+		Slug: "agy-resume", DisplayName: "Agy Continuation",
+	}, "dynamic")
+
 	if err != nil {
 		t.Fatal(err)
 	}

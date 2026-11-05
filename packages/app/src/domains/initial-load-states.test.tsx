@@ -105,11 +105,12 @@ describe("Initial request failures remain separate from real empty inventories",
   });
 
   it("retries Profile list metadata after an initial dependency failure", async () => {
-    const listTunnels = vi.fn()
-      .mockRejectedValueOnce(new Error("Tunnels offline"))
-      .mockResolvedValue({ tunnels: [] });
+    const listProfiles = vi.fn()
+      .mockRejectedValueOnce(new Error("Profiles offline"))
+      .mockResolvedValue({ profiles: [] });
+    const listTunnels = vi.fn().mockResolvedValue({tunnels:[]});
     const client = {
-      listProfiles: vi.fn().mockResolvedValue({ profiles: [] }),
+      listProfiles,
       listProviders: vi.fn().mockResolvedValue({ providers: [] }),
       listTunnels,
       browseTools: vi.fn().mockResolvedValue({ tools: [] }),
@@ -118,10 +119,11 @@ describe("Initial request failures remain separate from real empty inventories",
     render(<MemoryRouter><ProfilesPage client={client} /></MemoryRouter>);
 
     const alert = await screen.findByRole("alert");
-    expect(alert.textContent).toContain("Tunnels offline");
+    expect(alert.textContent).toContain("Profiles offline");
     expect(screen.queryByText("No profiles")).toBeNull();
     retryError();
     expect(await screen.findByText("No profiles")).toBeTruthy();
-    await waitFor(() => expect(listTunnels).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(listProfiles).toHaveBeenCalledTimes(2));
+    expect(listTunnels).not.toHaveBeenCalled();
   });
 });

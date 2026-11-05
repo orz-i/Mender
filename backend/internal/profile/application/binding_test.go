@@ -32,9 +32,9 @@ func TestAddToolStoresFullBindingConfiguration(t *testing.T) {
 	}, nil)
 
 	updated, err := add.Execute(context.Background(), AddToolRequest{
-		ProfileSlug:           profile.Slug(),
-		ToolID:                tool.ID(),
-		Direct:                true,
+		ProfileSlug: profile.Slug(),
+		ToolID:      tool.ID(),
+
 		Alias:                 "create_prod_issue",
 		TitleOverride:         "Create production issue",
 		DescriptionOverride:   "Create an issue in the production tracker.",
@@ -49,8 +49,7 @@ func TestAddToolStoresFullBindingConfiguration(t *testing.T) {
 	if !ok {
 		t.Fatal("updated Profile missing ToolBinding")
 	}
-	if !binding.Direct() ||
-		binding.Alias() != "create_prod_issue" ||
+	if binding.Alias() != "create_prod_issue" ||
 		binding.TitleOverride() != "Create production issue" ||
 		binding.DescriptionOverride() != "Create an issue in the production tracker." ||
 		binding.PolicyConstraint() != profiledomain.PolicyRequireApproval ||
@@ -68,7 +67,7 @@ func TestAddToolStoresFullBindingConfiguration(t *testing.T) {
 	}
 }
 
-func TestReplaceToolsRejectsEffectiveDirectNameCollisionBeforeSave(t *testing.T) {
+func TestReplaceToolsKeepsChannelSpecificNamesOutOfSelectionValidation(t *testing.T) {
 	t.Parallel()
 
 	repository := newMemoryRepository()
@@ -100,25 +99,24 @@ func TestReplaceToolsRejectsEffectiveDirectNameCollisionBeforeSave(t *testing.T)
 		Tools: []ToolBindingInput{
 			{
 				ToolID: first.ID(),
-				Direct: true,
-				Alias:  "shared",
+
+				Alias: "shared",
 			},
 			{
 				ToolID: second.ID(),
-				Direct: true,
 			},
 		},
 	})
-	if !errors.Is(err, ErrBindingNameConflict) {
-		t.Fatalf("ReplaceTools.Execute() error = %v, want ErrBindingNameConflict", err)
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	stored, err := repository.GetProfileBySlug(context.Background(), profile.Slug())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(stored.Bindings()) != 0 {
-		t.Fatalf("failed replacement persisted partial bindings = %#v", stored.Bindings())
+	if len(stored.Bindings()) != 2 {
+		t.Fatalf("selection lost channel-independent bindings: %+v", stored.Bindings())
 	}
 }
 
@@ -145,8 +143,8 @@ func TestReplaceToolsValidatesEveryToolBeforeSave(t *testing.T) {
 	_, err := replace.Execute(context.Background(), ReplaceToolsRequest{
 		ProfileSlug: profile.Slug(),
 		Tools: []ToolBindingInput{
-			{ToolID: valid.ID(), Direct: true},
-			{ToolID: missing, Direct: true},
+			{ToolID: valid.ID()},
+			{ToolID: missing},
 		},
 	})
 	if !errors.Is(err, catalogapplication.ErrToolNotFound) {
@@ -312,7 +310,7 @@ func applicationBindingProfile(
 		id,
 		slug,
 		"Binding Profile",
-		profiledomain.ExposureHybrid,
+
 		nil,
 	)
 	if err != nil {

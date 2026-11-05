@@ -44,9 +44,9 @@ func addPluginTestTool(t *testing.T, r *Runtime, ctx context.Context,
 	slug profiledomain.Slug, toolID catalogdomain.ToolID,
 ) {
 	t.Helper()
-	if _, err := r.Profiles.AddTool.Execute(ctx, profileapp.AddToolRequest{
-		ProfileSlug: slug, ToolID: toolID, Direct: true,
-	}); err != nil {
+	if _, err := addMCPProfileToolFixture(t, r, ctx, profileapp.AddToolRequest{
+		ProfileSlug: slug, ToolID: toolID,
+	}, true); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -112,9 +112,10 @@ func TestExportProfileAgentPluginPinsExactSkillsAndOnlyExplicitHTTPSMCP(t *testi
 	}
 
 	// A Profile with Tools but no Skills can publish an MCP-only dependency.
-	another, err := r.Profiles.Create.Execute(ctx, profileapp.CreateProfileRequest{
-		Slug: "just-tools", DisplayName: "Tools", Mode: profiledomain.ExposureHybrid,
-	})
+	another, err := createMCPProfileFixture(t, r, ctx, profileapp.CreateProfileRequest{
+		Slug: "just-tools", DisplayName: "Tools",
+	}, "hybrid")
+
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -11,7 +11,6 @@ import (
 	agentdomain "github.com/orz-i/Mender/backend/internal/agent/domain"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	profileapp "github.com/orz-i/Mender/backend/internal/profile/application"
-	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 	_ "modernc.org/sqlite"
 )
 
@@ -43,11 +42,11 @@ func TestRefreshReadyAgentToolsUpdatesSchemaWithoutIdentityChange(t *testing.T) 
 	if delegateID == "" {
 		t.Fatal("delegate tool missing")
 	}
-	profile, err := r.Profiles.Create.Execute(ctx, profileapp.CreateProfileRequest{Slug: "existing-agent", DisplayName: "Existing Profile", Mode: profiledomain.ExposureDirect})
+	profile, err := createMCPProfileFixture(t, r, ctx, profileapp.CreateProfileRequest{Slug: "existing-agent", DisplayName: "Existing Profile"}, "direct")
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = r.Profiles.AddTool.Execute(ctx, profileapp.AddToolRequest{ProfileSlug: profile.Slug(), ToolID: catalogdomain.ToolID(delegateID), Direct: true})
+	_, err = addMCPProfileToolFixture(t, r, ctx, profileapp.AddToolRequest{ProfileSlug: profile.Slug(), ToolID: catalogdomain.ToolID(delegateID)}, true)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -18,7 +18,7 @@ func TestDesktopProfileCLIDeliveryAndExactAgentPluginExport(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = r.Close() })
 	service := NewService(ctx, r)
-	profile, err := service.CreateProfile("docs-delivery", "Docs Delivery", "hybrid")
+	profile, err := service.CreateProfile("docs-delivery", "Docs Delivery")
 	if err != nil {
 		t.Fatal(err)
 	}
