@@ -3,7 +3,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -18,23 +17,8 @@ import (
 
 const internalPrefix = "github.com/orz-i/Mender/backend/internal/"
 
-type architectureException struct {
-	File     string `json:"file"`
-	Import   string `json:"import"`
-	Reason   string `json:"reason"`
-	RemoveIn string `json:"removeIn"`
-}
-
 func main() {
-	data, err := os.ReadFile("scripts/backend-architecture-exceptions.json")
-	if err != nil {
-		fail(err)
-	}
-	var exceptions []architectureException
-	if err := json.Unmarshal(data, &exceptions); err != nil {
-		fail(err)
-	}
-	violations, err := checkArchitecture(".", exceptions)
+	violations, err := checkArchitecture(".")
 	if err != nil {
 		fail(err)
 	}
@@ -44,7 +28,7 @@ func main() {
 		}
 		os.Exit(1)
 	}
-	fmt.Printf("backend architecture check: ok (%d exact legacy exceptions)\n", len(exceptions))
+	fmt.Println("backend architecture check: ok (no legacy import exceptions)")
 }
 
 func fail(err error) {
@@ -52,20 +36,7 @@ func fail(err error) {
 	os.Exit(1)
 }
 
-func checkArchitecture(root string, exceptions []architectureException) ([]string, error) {
-	allowed := make(map[string]bool, len(exceptions))
-	for _, exception := range exceptions {
-		key := exception.File + ":" + exception.Import
-		if exception.Reason == "" || exception.RemoveIn == "" ||
-			!strings.HasPrefix(exception.File, "backend/internal/") ||
-			forbiddenDependency(exception.File, exception.Import) == "" {
-			return nil, fmt.Errorf("invalid architecture exception %s", key)
-		}
-		if _, duplicate := allowed[key]; duplicate {
-			return nil, fmt.Errorf("duplicate architecture exception %s", key)
-		}
-		allowed[key] = false
-	}
+func checkArchitecture(root string) ([]string, error) {
 	var violations []string
 	err := filepath.WalkDir(filepath.Join(root, "backend/internal"), func(path string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
@@ -99,11 +70,6 @@ func checkArchitecture(root string, exceptions []architectureException) ([]strin
 			if reason == "" {
 				continue
 			}
-			key := relative + ":" + imported
-			if _, exists := allowed[key]; exists {
-				allowed[key] = true
-				continue
-			}
 			violations = append(violations, fmt.Sprintf("%s:%d: %s imports %s", relative, fset.Position(spec.Pos()).Line, reason, imported))
 		}
 		violations = append(violations, filepathMechanismViolations(relative, file, fset)...)
@@ -114,11 +80,6 @@ func checkArchitecture(root string, exceptions []architectureException) ([]strin
 	})
 	if err != nil {
 		return nil, err
-	}
-	for key, used := range allowed {
-		if !used {
-			violations = append(violations, "unused architecture exception: "+key)
-		}
 	}
 	slices.Sort(violations)
 	return violations, nil

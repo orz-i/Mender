@@ -26,7 +26,7 @@ func TestArchitectureRejectsWorkspacePresentationAndLegacyPorts(t *testing.T) {
 	writeArchitectureFixture(t, root, "backend/internal/sandbox/application/old.go", "package application\ntype WorkspaceSession interface{}\n")
 	writeArchitectureFixture(t, root, "backend/internal/sandbox/infrastructure/external/workspace.go", "package external\nimport _ \"github.com/orz-i/Mender/backend/internal/invocation/domain\"\n")
 	writeArchitectureFixture(t, root, "backend/internal/sandbox/infrastructure/external/configuration.go", "package external\nimport _ \"github.com/orz-i/Mender/backend/internal/invocation/infrastructure/jsonschema\"\n")
-	violations, err := checkArchitecture(root, nil)
+	violations, err := checkArchitecture(root)
 	if err != nil || len(violations) != 6 {
 		t.Fatalf("typed Workspace boundary: %v %v", violations, err)
 	}
@@ -38,28 +38,9 @@ func TestArchitectureChecksPlatformFilesAndIgnoresTestFixtures(t *testing.T) {
 	writeArchitectureFixture(t, root, "backend/internal/example/domain/source.go", "package domain\n// import \"os\" is only a comment\nimport \"fmt\"\n")
 	writeArchitectureFixture(t, root, "backend/internal/example/application/source_test.go", "package application\nimport _ \"os\"\n")
 	writeArchitectureFixture(t, root, "backend/internal/example/testdata/fixture.go", "not valid Go")
-	violations, err := checkArchitecture(root, nil)
+	violations, err := checkArchitecture(root)
 	if err != nil || len(violations) != 1 || !strings.Contains(violations[0], "leak_darwin.go") {
 		t.Fatalf("platform leak not isolated: violations=%v err=%v", violations, err)
-	}
-}
-
-func TestArchitectureExceptionsAreExactAndBecomeStale(t *testing.T) {
-	root := t.TempDir()
-	file := "backend/internal/agent/application/old.go"
-	writeArchitectureFixture(t, root, file, "package application\nimport _ \"os\"\n")
-	exceptions := []architectureException{{File: file, Import: "os", Reason: "existing read", RemoveIn: "R3"}}
-	if violations, err := checkArchitecture(root, exceptions); err != nil || len(violations) != 0 {
-		t.Fatalf("exact exception failed: %v %v", violations, err)
-	}
-	writeArchitectureFixture(t, root, "backend/internal/agent/application/new.go", "package application\nimport _ \"os\"\n")
-	if violations, err := checkArchitecture(root, exceptions); err != nil || len(violations) != 1 {
-		t.Fatalf("new file inherited exception: %v %v", violations, err)
-	}
-	writeArchitectureFixture(t, root, file, "package application\n")
-	violations, err := checkArchitecture(root, exceptions)
-	if err != nil || len(violations) != 2 || !strings.Contains(strings.Join(violations, "\n"), "unused architecture exception") {
-		t.Fatalf("stale exception not rejected: %v %v", violations, err)
 	}
 }
 
@@ -69,7 +50,7 @@ func TestArchitectureRejectsInfrastructureAndReverseApplicationEdges(t *testing.
 	writeArchitectureFixture(t, root, "backend/internal/catalog/domain/leak.go", "package domain\nimport _ \"github.com/orz-i/Mender/backend/internal/catalog/application\"\n")
 	writeArchitectureFixture(t, root, "backend/internal/providerplugin/leak.go", "package providerplugin\nimport _ \"github.com/orz-i/Mender/backend/internal/providerplugin/application\"\n")
 	writeArchitectureFixture(t, root, "backend/internal/providerplugin/application/ports.go", "package application\nimport _ \"github.com/orz-i/Mender/backend/internal/catalog/domain\"\n")
-	violations, err := checkArchitecture(root, nil)
+	violations, err := checkArchitecture(root)
 	if err != nil || len(violations) != 3 {
 		t.Fatalf("expected three bad edges and an allowed consumer port: %v %v", violations, err)
 	}
@@ -84,7 +65,7 @@ func TestArchitectureRejectsFilepathMechanismsAndAliases(t *testing.T) {
 	writeArchitectureFixture(t, root, "backend/internal/example/application/raw.go", "package application\nimport fp `path/filepath`\nvar walk = fp.Walk\n")
 	writeArchitectureFixture(t, root, "backend/internal/example/application/lexical.go", "package application\nimport fp \"path/filepath\"\nvar clean = fp.Clean\nfunc scoped(fp interface { EvalSymlinks(string) (string, error) }) { _, _ = fp.EvalSymlinks(\"x\") }\n")
 	writeArchitectureFixture(t, root, "backend/internal/example/infrastructure/resolve.go", "package infrastructure\nimport \"path/filepath\"\nvar resolve = filepath.EvalSymlinks\n")
-	violations, err := checkArchitecture(root, nil)
+	violations, err := checkArchitecture(root)
 	if err != nil || len(violations) != 5 {
 		t.Fatalf("filesystem mechanisms not isolated from lexical/port operations: %v %v", violations, err)
 	}
@@ -106,7 +87,7 @@ func TestArchitectureSeparatesProfileSelectionFromDeliveryImports(t *testing.T) 
 	} {
 		writeArchitectureFixture(t, root, file, source)
 	}
-	violations, err := checkArchitecture(root, nil)
+	violations, err := checkArchitecture(root)
 	if err != nil || len(violations) != 3 {
 		t.Fatalf("Profile direction or migration scope incorrect: %v %v", violations, err)
 	}
@@ -137,7 +118,7 @@ func (PolicyConstraint) Mode() string { return "inherit" }
 // type Profile struct { mode string } is historical prose, not authority.
 `)
 	writeArchitectureFixture(t, root, "backend/internal/mcp/domain/config.go", "package domain\ntype Config struct { mode string }\nfunc (Config) Mode() string { return \"direct\" }\n")
-	violations, err := checkArchitecture(root, nil)
+	violations, err := checkArchitecture(root)
 	if err != nil || len(violations) != 10 {
 		t.Fatalf("legacy Profile authority not isolated from legal Mode methods: %v %v", violations, err)
 	}
@@ -165,7 +146,7 @@ import channel "github.com/orz-i/Mender/backend/internal/mcp/domain"
 import selection "github.com/orz-i/Mender/backend/internal/profile/domain"
 type Dependencies struct { Build func(selection.Profile,channel.Config) web.Handler }
 `)
-	violations, err := checkArchitecture(root, nil)
+	violations, err := checkArchitecture(root)
 	if err != nil || len(violations) != 9 {
 		t.Fatalf("managed callback boundary: %v %v", violations, err)
 	}
@@ -199,7 +180,7 @@ type taskScopedMCPServer struct { listener net.Listener; server *http.Server }
 var taskProxies = make(map[string]*taskScopedMCPServer)
 var taskListen = net.Listen
 `)
-	violations, err := checkArchitecture(root, nil)
+	violations, err := checkArchitecture(root)
 	if err != nil || len(violations) != 7 {
 		t.Fatalf("Profile listener ownership scope: %v %v", violations, err)
 	}
@@ -213,7 +194,7 @@ var taskListen = net.Listen
 func TestArchitectureRejectsDotImportedProfileListenerMechanism(t *testing.T) {
 	root := t.TempDir()
 	writeArchitectureFixture(t, root, "backend/internal/bootstrap/mcp_servers_windows.go", "package bootstrap\nimport . \"net\"\nimport . \"net/http\"\n")
-	violations, err := checkArchitecture(root, nil)
+	violations, err := checkArchitecture(root)
 	if err != nil || len(violations) != 2 {
 		t.Fatalf("dot-import listener escape: %v %v", violations, err)
 	}
