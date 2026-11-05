@@ -111,6 +111,17 @@ export function ManagementShell({ client, approvals }: {
     window.localStorage.setItem(SIDEBAR_STORAGE_KEY, String(collapsed));
   }, [collapsed]);
 
+  // Follow the operating-system appearance without adding a per-page theme control.
+  // Keep Tailwind dark variants and semantic colors on the same root class.
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") return;
+    const preference = window.matchMedia("(prefers-color-scheme: dark)");
+    const applyAppearance = () => document.documentElement.classList.toggle("dark", preference.matches);
+    applyAppearance();
+    preference.addEventListener("change", applyAppearance);
+    return () => preference.removeEventListener("change", applyAppearance);
+  }, []);
+
   useEffect(() => {
     let active = true;
     void Promise.resolve()

@@ -1,8 +1,9 @@
 @import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
 @source "../components";
 @source "../../../app/src";
 
-/* Mender visual foundations — see docs/planning/interface-visual-refresh.md */
+/* Mender Magpie-inspired visual foundations — see docs/planning/magpie-inspired-ui-2026-11-05.md */
 :root {
   /* Magpie-inspired quiet desktop surface; Mender owns these semantic tokens. */
   --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "PingFang SC", "Microsoft YaHei UI", system-ui, sans-serif;

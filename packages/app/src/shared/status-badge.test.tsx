@@ -15,8 +15,8 @@ describe("status badge semantics", () => {
       <StatusBadge status="cancelled" />
     </>);
     expect(screen.getByText("unknown").closest('[data-slot="badge"]')?.className).toContain("bg-sunlight/20");
-    expect(screen.getByText("completed").closest('[data-slot="badge"]')?.className).toContain("bg-accent");
-    expect(screen.getByText("running").closest('[data-slot="badge"]')?.className).toContain("bg-teal/10");
+    expect(screen.getByText("completed").closest('[data-slot="badge"]')?.className).toContain("bg-teal/10");
+    expect(screen.getByText("running").closest('[data-slot="badge"]')?.className).toContain("bg-accent");
     expect(screen.getByText("failed").closest('[data-slot="badge"]')?.className).toContain("bg-destructive/10");
     expect(screen.getByText("cancelled").closest('[data-slot="badge"]')?.className).toContain("bg-muted/30");
   });
