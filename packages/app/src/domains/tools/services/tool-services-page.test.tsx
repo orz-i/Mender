@@ -60,12 +60,12 @@ afterEach(() => {
   resetLocaleForTesting();
 });
 
-describe("Tool services responsive cards", () => {
-  it("shows one named service card with a Tool drilldown action", async () => {
+describe("Tool services resource rows", () => {
+  it("shows a named service row with real management actions", async () => {
     mount();
     const link=await screen.findByRole("link",{name:"Echo Service"});
     expect(link.getAttribute("href")).toBe("/tools/prov_echo_01");
-    const card=link.closest<HTMLElement>('[data-slot="card"]');
+    const card=link.closest<HTMLElement>('[role="listitem"]');
     expect(card).toBeTruthy();
     expect(within(card!).getByText("5 tools")).toBeTruthy();
     expect(within(card!).queryByText("Model Context Protocol")).toBeNull();
@@ -85,7 +85,7 @@ describe("Tool service low-noise empty and active states", () => {
   it("does not repeat generic filler for described-by-name sources with discovered tools", async () => {
     mount([{ ...sampleProvider, description: "" }]);
     const card = (await screen.findByRole("link", { name: "Echo Service" }))
-      .closest<HTMLElement>('[data-slot="card"]');
+      .closest<HTMLElement>('[role="listitem"]');
     expect(card).toBeTruthy();
     expect(card!.querySelector('[data-slot="card-description"]')).toBeNull();
     expect(within(card!).getByText("5 tools")).toBeTruthy();
@@ -96,7 +96,7 @@ describe("Tool service low-noise empty and active states", () => {
   it("routes zero-tool services to details, while retaining explicit sync and edit", async () => {
     mount([{ ...sampleProvider, description: "", toolCount: 0 }]);
     const card = (await screen.findByRole("link", { name: "Echo Service" }))
-      .closest<HTMLElement>('[data-slot="card"]');
+      .closest<HTMLElement>('[role="listitem"]');
     expect(card).toBeTruthy();
     expect(within(card!).getByText("0 tools")).toBeTruthy();
     expect(within(card!).getByText("No tools have been discovered for this service yet.")).toBeTruthy();
@@ -123,7 +123,7 @@ describe("Tool service low-noise empty and active states", () => {
   it("does not replace user-provided source descriptions with a generated sentence", async () => {
     mount([{ ...sampleProvider, description: "Document lookup service", toolCount: 0 }]);
     const card = (await screen.findByRole("link", { name: "Echo Service" }))
-      .closest<HTMLElement>('[data-slot="card"]');
+      .closest<HTMLElement>('[role="listitem"]');
     expect(card).toBeTruthy();
     expect(within(card!).getByText("Document lookup service")).toBeTruthy();
     expect(within(card!).queryByText("No tools have been discovered for this service yet.")).toBeNull();
@@ -146,7 +146,7 @@ describe("Owned Tool service localized summary", () => {
     };
     mount([owned], []);
     const card = (await screen.findByRole("link", { name: "Grok" }))
-      .closest<HTMLElement>('[data-slot="card"]');
+      .closest<HTMLElement>('[role="listitem"]');
     expect(card).toBeTruthy();
     expect(within(card!).getByText(raw)).toBeTruthy();
 
@@ -172,10 +172,26 @@ describe("Owned Tool service localized summary", () => {
     setLocale("zh-CN");
     mount([external]);
     const card = (await screen.findByRole("link", { name: "Grok" }))
-      .closest<HTMLElement>('[data-slot="card"]');
+      .closest<HTMLElement>('[role="listitem"]');
     expect(card).toBeTruthy();
     expect(within(card!).getByText(original)).toBeTruthy();
     expect(within(card!).queryByText("Agent「Grok」的受管委派工具")).toBeNull();
+  });
+});
+
+describe("Tool service incomplete display metadata", () => {
+  it("does not blank the page when optional source descriptions and plugin issue metadata are missing", async () => {
+    const source = { ...sampleProvider, description: undefined } as unknown as Provider;
+    const client = {
+      listProviders: vi.fn().mockResolvedValue({ providers: [source] }),
+      listProviderPlugins: vi.fn().mockResolvedValue({ plugins: [] }),
+      listCredentials: vi.fn().mockResolvedValue({ credentials: [] }),
+    } as unknown as ManagementClient;
+    render(<MemoryRouter><ToolsPage client={client} /></MemoryRouter>);
+    const list = await screen.findByRole("list", { name: "Tool services" });
+    expect(within(list).getByRole("link", { name: "Echo Service" })).toBeTruthy();
+    expect(within(list).getByText("5 tools")).toBeTruthy();
+    expect(screen.queryByRole("alert")).toBeNull();
   });
 });
 
@@ -224,7 +240,7 @@ describe("resource-owned Tool service navigation", () => {
       <Route path="/agents/:agentId" element={<div>Agent owner details</div>} />
     </Routes></MemoryRouter>);
     const card = (await screen.findByRole("link", { name: "Grok - executor" }))
-      .closest<HTMLElement>('[data-slot="card"]');
+      .closest<HTMLElement>('[role="listitem"]');
     expect(card).toBeTruthy();
     expect(within(card!).getByText("No tools have been discovered for this service yet.")).toBeTruthy();
     expect(within(card!).queryByRole("button", { name: "View tools" })).toBeNull();
@@ -287,7 +303,7 @@ describe("resource-owned Tool service navigation", () => {
       </MemoryRouter>,
     );
     const link = await screen.findByRole("link", { name: visibleName });
-    const card = link.closest<HTMLElement>('[data-slot="card"]');
+    const card = link.closest<HTMLElement>('[role="listitem"]');
     expect(card).toBeTruthy();
     expect(within(card!).queryByRole("button", { name: "Edit " + visibleName })).toBeNull();
     expect(within(card!).queryByRole("button", { name: "Delete " + visibleName })).toBeNull();

@@ -75,24 +75,23 @@ describe("Agents focused management",()=>{
       getAgent: vi.fn().mockImplementation((id: string) =>
         Promise.resolve([mac, win].find((item) => item.agentId === id))),
     });
-    const macRow = await screen.findByRole("row", { name: /Mac Agent/ });
-    const macCell = within(macRow).getByRole("cell", { name: "Workspace: /Users/mini/Coding/Mender" });
+    const macRow = (await screen.findByRole("link", { name: "Mac Agent" })).closest('[role="listitem"]') as HTMLElement;
+    const macCell = within(macRow).getByLabelText("Workspace: /Users/mini/Coding/Mender");
     expect(within(macCell).getByText("…/Coding/Mender")).toBeTruthy();
     expect(macCell.getAttribute("title")).toBe("/Users/mini/Coding/Mender");
     expect(within(macRow).queryByText("/Users/mini/Coding/Mender")).toBeNull();
 
-    const winRow = screen.getByRole("row", { name: /Windows Agent/ });
-    const winCell = within(winRow).getByRole("cell", { name: /Workspace: C:/ });
+    const winRow = screen.getByRole("link", { name: "Windows Agent" }).closest('[role="listitem"]') as HTMLElement;
+    const winCell = within(winRow).getByLabelText(/Workspace: C:/);
     expect(within(winCell).getByText("…/Projects/Mender")).toBeTruthy();
     expect(winCell.getAttribute("title")).toBe(win.workspaceRoot);
     fireEvent.change(screen.getByRole("textbox", { name: "Search agents" }), {
       target: { value: "/Users/mini/Coding/Mender" },
     });
-    expect(screen.getByRole("row", { name: /Mac Agent/ })).toBeTruthy();
-    expect(screen.queryByRole("row", { name: /Windows Agent/ })).toBeNull();
+    expect(screen.getByRole("link", { name: "Mac Agent" })).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "Windows Agent" })).toBeNull();
 
-    fireEvent.click(within(screen.getByRole("row", { name: /Mac Agent/ }))
-      .getByRole("link", { name: "Mac Agent" }));
+    fireEvent.click(screen.getByRole("link", { name: "Mac Agent" }));
     expect(await screen.findByText("/Users/mini/Coding/Mender")).toBeTruthy();
   });
 
@@ -100,11 +99,9 @@ describe("Agents focused management",()=>{
     const root = { ...agent, agentId: "agent_root", name: "Root Agent", workspaceRoot: "/" };
     const short = { ...agent, agentId: "agent_short", name: "Short Agent", workspaceRoot: "src" };
     show("/agents", { listAgents: vi.fn().mockResolvedValue({ agents: [root, short] }) });
-    expect(await screen.findByRole("row", { name: /Root Agent/ })).toBeTruthy();
-    expect(within(screen.getByRole("row", { name: /Root Agent/ }))
-      .getByRole("cell", { name: "Workspace: /" }).textContent).toContain("/");
-    expect(within(screen.getByRole("row", { name: /Short Agent/ }))
-      .getByRole("cell", { name: "Workspace: src" }).textContent).toContain("src");
+    expect(await screen.findByRole("link", { name: "Root Agent" })).toBeTruthy();
+    expect(screen.getByLabelText("Workspace: /").textContent).toContain("/");
+    expect(screen.getByLabelText("Workspace: src").textContent).toContain("src");
   });
   it("lists previews and does not show create forms on the inventory",async()=>{
     show("/agents");
@@ -128,10 +125,10 @@ describe("Agents focused management",()=>{
       getAgent:vi.fn().mockImplementation((id:string)=>Promise.resolve([opencode,grok,codex].find(a=>a.agentId===id))),
     });
     for(const [fixture,label] of [[opencode,"OpenCode"],[grok,"Grok"],[codex,"Codex"]] as const){
-      const row=await screen.findByRole("row",{name:new RegExp(fixture.name)});
+      const row=(await screen.findByRole("link",{name:fixture.name})).closest('[role="listitem"]') as HTMLElement;
       expect(within(row).getByText(label)).toBeTruthy();
     }
-    const openCodeRow=screen.getByRole("row",{name:/OpenCode Instance/});
+    const openCodeRow=screen.getByRole("link",{name:"OpenCode Instance"}).closest('[role="listitem"]') as HTMLElement;
     fireEvent.click(within(openCodeRow).getByRole("link",{name:"OpenCode Instance"}));
     expect(await screen.findByText("OpenCode Instance")).toBeTruthy();
     expect(screen.getByText("OpenCode")).toBeTruthy();
@@ -535,39 +532,22 @@ describe("Agents focused management",()=>{
       getAgent,
     });
 
-    const table = await screen.findByRole("table", { name: "Agent inventory" });
-    expect(table).toBeTruthy();
-    expect(table.className).toContain("max-md:block");
-
-    const thead = table.querySelector("thead");
-    expect(thead?.className).toContain("max-md:sr-only");
-
-    const tbody = table.querySelector("tbody");
-    expect(tbody?.className).toContain("max-md:block");
-
-    const rows = table.querySelectorAll("tbody tr");
-    expect(rows.length).toBe(2);
-    expect(rows[0]?.className).toContain("max-md:grid");
-    expect(rows[1]?.className).toContain("max-md:grid");
-
-    // Both agents show name and prominent availability status
-    expect(within(table).getByText("Code Reviewer")).toBeTruthy();
-    expect(within(table).getByText("CLI missing")).toBeTruthy();
-    expect(within(table).getByText("Autonomous Coder")).toBeTruthy();
-    expect(within(table).getByText("CLI detected")).toBeTruthy();
-
-    // Backend, isolation summaries and workspace are rendered
-    expect(within(table).getByText("Codex")).toBeTruthy();
-    expect(within(table).getByText("Antigravity")).toBeTruthy();
-    expect(within(table).getAllByText("Restricted host").length).toBeGreaterThanOrEqual(1);
-    expect(within(table).getAllByText("Host (not isolated)").length).toBeGreaterThanOrEqual(1);
-    expect(within(table).getByText("/tmp/mender-agent-fixture")).toBeTruthy();
-    expect(within(table).getByText("/tmp/autonomous-coder-workspace")).toBeTruthy();
-
-    // Details navigation entrypoint is accessible and functional
-    const destinations = within(table).getAllByRole("link");
-    expect(destinations.length).toBe(2);
-    fireEvent.click(within(table).getByRole("link", { name: "Autonomous Coder" }));
+    const collection = await screen.findByRole("list", { name: "Agent inventory" });
+    const rows = within(collection).getAllByRole("listitem");
+    expect(rows).toHaveLength(2);
+    expect(collection.getAttribute("data-slot")).toBe("agent-collection");
+    // Source identity, runtime availability and workspace are all visible in one row.
+    expect(within(collection).getByRole("link", { name: "Code Reviewer" })).toBeTruthy();
+    expect(within(collection).getByText("CLI missing")).toBeTruthy();
+    expect(within(collection).getByRole("link", { name: "Autonomous Coder" })).toBeTruthy();
+    expect(within(collection).getByText("CLI detected")).toBeTruthy();
+    expect(within(collection).getByText("Codex")).toBeTruthy();
+    expect(within(collection).getByText("Antigravity")).toBeTruthy();
+    expect(within(collection).getByText("/tmp/mender-agent-fixture")).toBeTruthy();
+    expect(within(collection).getByText("/tmp/autonomous-coder-workspace")).toBeTruthy();
+    // A name is the entrypoint; there is no secondary redundant View button.
+    expect(within(collection).queryByRole("button", { name: "View" })).toBeNull();
+    fireEvent.click(within(collection).getByRole("link", { name: "Autonomous Coder" }));
     expect(await screen.findByText("Autonomous Coder")).toBeTruthy();
     expect(getAgent).toHaveBeenCalledWith(readyAgent.agentId);
   });
@@ -585,16 +565,16 @@ describe("Agents focused management",()=>{
       listAgents: vi.fn().mockResolvedValue({ agents: [agent, readyAgent] }),
     });
 
-    const table = await screen.findByRole("table", { name: "Agent inventory" });
-    expect(within(table).getByText("Code Reviewer")).toBeTruthy();
-    expect(within(table).getByText("Available Agent")).toBeTruthy();
+    const collection = await screen.findByRole("list", { name: "Agent inventory" });
+    expect(within(collection).getByText("Code Reviewer")).toBeTruthy();
+    expect(within(collection).getByText("Available Agent")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: /Available agents/ }));
-    expect(within(table).getByText("Available Agent")).toBeTruthy();
-    expect(within(table).queryByText("Code Reviewer")).toBeNull();
+    expect(within(collection).getByText("Available Agent")).toBeTruthy();
+    expect(within(collection).queryByText("Code Reviewer")).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: /Unavailable agents/ }));
-    expect(within(table).getByText("Code Reviewer")).toBeTruthy();
-    expect(within(table).queryByText("Available Agent")).toBeNull();
+    expect(within(collection).getByText("Code Reviewer")).toBeTruthy();
+    expect(within(collection).queryByText("Available Agent")).toBeNull();
   });
 });

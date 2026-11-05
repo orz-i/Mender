@@ -1,11 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router";
+import { BoxIcon, ChevronRightIcon } from "lucide-react";
 
 import type { ManagementClient, Sandbox } from "@mender/sdk";
 import { Button } from "@mender/ui/components/button";
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from "@mender/ui/components/table";
 
 import { t } from "../../i18n/i18n";
 import { errorMessage } from "../../shared/errors";
@@ -93,57 +91,38 @@ export function SandboxesPage({ client }: { client: ManagementClient }) {
         {!loaded ? (
           <div className="p-8 text-sm text-muted-foreground">{t("Loading Sandboxes…")}</div>
         ) : filtered.length ? (
-          <>
-            <Table aria-label={t("Sandbox inventory")} className="max-md:block max-md:w-full">
-              <TableHeader className="max-md:sr-only">
-                <TableRow>
-                  <TableHead>{t("Name")}</TableHead>
-                  <TableHead>{t("Backend")}</TableHead>
-                  <TableHead>{t("Isolation")}</TableHead>
-                  <TableHead>{t("State")}</TableHead>
-                  <TableHead>{t("Workspace")}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody className="max-md:block">
-                {pagination.items.map((item) => (
-                  <TableRow
-                    key={item.sandboxId}
-                    className="md:[&>td]:py-3 max-md:grid max-md:grid-cols-[minmax(0,1fr)_auto] max-md:items-start max-md:gap-x-3 max-md:gap-y-1.5 max-md:px-4 max-md:py-3.5 max-md:border-b max-md:last:border-b-0"
-                  >
-                    <TableCell className="font-medium max-md:col-start-1 max-md:row-start-1 max-md:block max-md:min-w-0 max-md:p-0">
-                      <Link to={"/sandboxes/" + item.sandboxId}
-                        className="block truncate rounded-sm font-medium text-sm text-foreground hover:text-primary-ink hover:underline focus-visible:outline-2 focus-visible:outline-ring"
-                        title={item.name}>
-                        {item.name}
-                      </Link>
-                    </TableCell>
-                    <TableCell className="max-md:col-start-1 max-md:row-start-2 max-md:block max-md:min-w-0 max-md:p-0">
-                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                        <span>{sandboxBackend(item)}</span>
-                        <span className="text-muted-foreground/50 md:hidden">·</span>
-                        <span className="md:hidden">{isolationLabel(item.isolation)}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="max-md:hidden">
-                      {isolationLabel(item.isolation)}
-                    </TableCell>
-                    <TableCell className="max-md:col-start-2 max-md:row-start-1 max-md:block max-md:p-0 max-md:justify-self-end">
-                      <StatusBadge status={item.state === "destroyed" || item.backendAvailable ? item.state : "unavailable"} className="max-md:px-2 max-md:py-0.5">
-                        {item.state === "destroyed" || item.backendAvailable
-                          ? sandboxStateLabel(item.state)
-                          : t("Backend unavailable")}
-                      </StatusBadge>
-                    </TableCell>
-                    <TableCell className="max-w-[240px] truncate font-mono text-xs text-muted-foreground max-md:col-start-1 max-md:row-start-3 max-md:block max-md:min-w-0 max-md:p-0">
-                      <span className="block truncate font-mono text-xs text-muted-foreground" title={item.localRoot}>
-                        {item.localRoot || "—"}
-                      </span>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </>
+          <div role="list" aria-label={t("Sandbox inventory")} data-slot="sandbox-collection"
+            className="divide-y divide-border/80">
+            {pagination.items.map((item) => (
+              <div role="listitem" key={item.sandboxId}>
+                <Link to={"/sandboxes/" + item.sandboxId} aria-label={item.name}
+                  className="group flex min-h-[78px] min-w-0 items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/40 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring sm:gap-4 sm:px-5">
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-secondary text-muted-foreground">
+                    <BoxIcon className="size-5" aria-hidden="true" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[14px] font-semibold text-foreground group-hover:text-primary-ink">{item.name}</span>
+                    <span className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-[12px] text-muted-foreground">
+                      <span>{sandboxBackend(item)}</span>
+                      <span className="text-border" aria-hidden="true">·</span>
+                      <span>{isolationLabel(item.isolation)}</span>
+                    </span>
+                  </span>
+                  <span className="hidden min-w-0 max-w-[28%] flex-col items-end gap-1 md:flex">
+                    <span className="text-[11px] text-muted-foreground">{t("Workspace")}</span>
+                    <span className="max-w-full truncate font-mono text-[11px] text-foreground" title={item.localRoot}>
+                      {item.localRoot || "—"}
+                    </span>
+                  </span>
+                  <StatusBadge status={item.state === "destroyed" || item.backendAvailable ? item.state : "unavailable"}
+                    className="shrink-0">
+                    {item.state === "destroyed" || item.backendAvailable ? sandboxStateLabel(item.state) : t("Backend unavailable")}
+                  </StatusBadge>
+                  <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground/60" aria-hidden="true" />
+                </Link>
+              </div>
+            ))}
+          </div>
         ) : (
           <EmptyPanelState>
             <EmptyState

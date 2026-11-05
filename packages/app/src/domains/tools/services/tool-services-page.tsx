@@ -7,6 +7,7 @@ import {
   KeyRoundIcon,
   Link2Icon,
   PencilIcon,
+  PlugIcon,
   RefreshCwIcon,
   Trash2Icon,
 } from "lucide-react";
@@ -21,7 +22,6 @@ import type {
 } from "@mender/sdk";
 import { Badge } from "@mender/ui/components/badge";
 import { Button } from "@mender/ui/components/button";
-import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@mender/ui/components/card";
 import {
   Dialog,
   DialogContent,
@@ -127,7 +127,7 @@ export function ToolsPage({ client }: { client: ManagementClient }) {
     try {
       const result = await client.listProviderPlugins();
       setProviderPlugins(result.plugins);
-      setProviderPluginIssues(result.issues);
+      setProviderPluginIssues(result.issues ?? []);
       setError("");
     } catch (reason) {
       setError(errorMessage(reason));
@@ -176,7 +176,7 @@ export function ToolsPage({ client }: { client: ManagementClient }) {
       .then(([pluginResult, providerResult, credentialResult, offeringResult]) => {
         if (active) {
           setProviderPlugins(pluginResult.plugins);
-          setProviderPluginIssues(pluginResult.issues);
+          setProviderPluginIssues(pluginResult.issues ?? []);
           setProviders(providerResult.providers);
           setHasSnapshot(true);
           setCredentials(credentialResult.credentials);
@@ -453,7 +453,8 @@ export function ToolsPage({ client }: { client: ManagementClient }) {
             {t("Loading services…")}
           </div>
         ) : visibleProviders.length ? (
-          <div className="grid w-full min-w-0 gap-3 sm:grid-cols-2 2xl:grid-cols-3">
+          <div role="list" aria-label={t("Tool services")} data-slot="tool-service-collection"
+            className="w-full min-w-0 divide-y divide-border/80 overflow-hidden rounded-xl border border-border bg-card">
             {providerPagination.items.map(provider => {
               const name=toolSourceLabel(provider);
               const managed=provider.toolSourceKind==="agent" || provider.toolSourceKind==="sandbox" ||
@@ -466,22 +467,20 @@ export function ToolsPage({ client }: { client: ManagementClient }) {
               const hasTools=provider.toolCount>0;
               const description=toolServiceDescription(provider).trim() ||
                 (!hasTools ? t("No tools have been discovered for this service yet.") : "");
-              return <Card key={provider.providerId} size="sm" className="h-full min-w-0 border-border/60 transition-[border-color,box-shadow] hover:border-primary/35 hover:shadow-sm">
-                <CardHeader className="min-w-0">
-                  <CardTitle className="min-w-0">
-                    <Link className="block truncate hover:text-primary-ink hover:underline focus-visible:rounded focus-visible:outline-2 focus-visible:outline-ring"
-                      title={name} to={"/tools/"+encodeURIComponent(provider.providerId)}>{name}</Link>
-                  </CardTitle>
-                  {description ? <CardDescription className="line-clamp-2">
-                    {description}
-                  </CardDescription> : null}
-                  <CardAction>
-                    <Badge variant="secondary">
-                      {tCount(provider.toolCount,"{{count}} tool","{{count}} tools")}
-                    </Badge>
-                  </CardAction>
-                </CardHeader>
-                <CardContent className="mt-auto flex min-w-0 flex-wrap items-center gap-2 border-t border-border/55 pt-3">
+              return <div key={provider.providerId} role="listitem"
+                className="flex min-h-[80px] min-w-0 flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 transition-colors hover:bg-muted/35 sm:px-5">
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-secondary text-muted-foreground">
+                  <PlugIcon className="size-5" aria-hidden="true" />
+                </span>
+                <div className="min-w-0 flex-[1_1_220px]">
+                  <Link className="block truncate rounded-sm text-[14px] font-semibold text-foreground hover:text-primary-ink hover:underline focus-visible:outline-2 focus-visible:outline-ring"
+                    title={name} to={"/tools/"+encodeURIComponent(provider.providerId)}>{name}</Link>
+                  {description ? <p className="mt-1 line-clamp-2 text-[12px] leading-4 text-muted-foreground">{description}</p> : null}
+                </div>
+                <Badge variant="secondary" className="shrink-0">
+                  {tCount(provider.toolCount,"{{count}} tool","{{count}} tools")}
+                </Badge>
+                <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-1.5">
                   {hasTools ? (
                     <Button size="sm" onClick={() => void navigate("/tools/"+encodeURIComponent(provider.providerId))}>
                       {t("View tools")} <ArrowRightIcon data-icon="inline-end" />
@@ -552,8 +551,8 @@ export function ToolsPage({ client }: { client: ManagementClient }) {
                       </PopoverContent>
                     </Popover>
                   ) : null}
-                </CardContent>
-              </Card>;
+                </div>
+              </div>;
             })}
           </div>
         ) : (

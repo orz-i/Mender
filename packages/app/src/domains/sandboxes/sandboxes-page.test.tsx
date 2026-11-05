@@ -54,27 +54,20 @@ afterEach(() => {
   resetLocaleForTesting();
 });
 
-describe("SandboxesPage responsive table", () => {
-  it("renders mobile-card-ready table layout and responsive grid classes", async () => {
+describe("SandboxesPage resource rows", () => {
+  it("renders a readable full-width inventory with identity, status and isolation", async () => {
     mount();
-    const table = await screen.findByRole("table", { name: "Sandbox inventory" });
-    expect(table).toBeTruthy();
-    expect(table.className).toContain("max-md:block");
-
-    const header = table.querySelector("thead");
-    expect(header?.className).toContain("max-md:sr-only");
-
-    const rows = table.querySelectorAll("tbody tr");
-    expect(rows.length).toBe(2);
-    expect(rows[0]?.className).toContain("max-md:grid");
-
-    expect(within(table).getByText("Primary Workspace")).toBeTruthy();
-    expect(within(table).getAllByText("Local workspace").length).toBeGreaterThanOrEqual(1);
-    expect(within(table).getByText("Ready")).toBeTruthy();
-    expect(within(table).getByText("D:/work/repo")).toBeTruthy();
-
-    expect(within(table).getByText("Container Environment")).toBeTruthy();
-    expect(within(table).getByText("Backend unavailable")).toBeTruthy();
+    const collection = await screen.findByRole("list", { name: "Sandbox inventory" });
+    expect(collection.getAttribute("data-slot")).toBe("sandbox-collection");
+    expect(within(collection).getAllByRole("listitem")).toHaveLength(2);
+    expect(within(collection).getByRole("link", { name: "Primary Workspace" })).toBeTruthy();
+    expect(within(collection).getAllByText("Local workspace").length).toBeGreaterThanOrEqual(1);
+    expect(within(collection).getByText("Ready")).toBeTruthy();
+    expect(within(collection).getByText("D:/work/repo")).toBeTruthy();
+    expect(within(collection).getByText("Host (not isolated)")).toBeTruthy();
+    expect(within(collection).getByRole("link", { name: "Container Environment" })).toBeTruthy();
+    expect(within(collection).getByText("Backend unavailable")).toBeTruthy();
+    expect(within(collection).queryByRole("table")).toBeNull();
   });
 
   it("filters sandboxes by query and category tab", async () => {
@@ -101,6 +94,6 @@ describe("SandboxesPage responsive table", () => {
   it("displays empty state when inventory has no items", async () => {
     mount([]);
     expect(await screen.findByText("No sandboxes")).toBeTruthy();
-    expect(screen.queryByRole("table")).toBeNull();
+    expect(screen.queryByRole("list", { name: "Sandbox inventory" })).toBeNull();
   });
 });

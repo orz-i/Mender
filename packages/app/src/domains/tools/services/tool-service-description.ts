@@ -6,7 +6,7 @@ import { t } from "../../../i18n/i18n";
  */
 export function toolServiceDescription(provider: Provider): string {
   const name = provider.toolSourceName;
-  if (!name) return provider.description;
+  if (!name) return provider.description || "";
 
   if (
     provider.toolSourceKind === "agent" &&
@@ -29,5 +29,5 @@ export function toolServiceDescription(provider: Provider): string {
   ) {
     return t("Owner-managed SSH Durable Jobs for {{name}}", { name });
   }
-  return provider.description;
+  return provider.description || "";
 }

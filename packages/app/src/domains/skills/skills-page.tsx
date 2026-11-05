@@ -7,7 +7,6 @@ import {
 import {
   BookOpenIcon,
   FileCode2Icon,
-  EyeIcon,
   HardDriveIcon,
   PackageOpenIcon,
   PlusIcon,
@@ -406,15 +405,16 @@ export function SkillsPage({
             />
           </EmptyPanelState>
         ) : (
-          <div className="p-3">
-            <div className="space-y-2">
+          <div className="p-0">
+            <div className="divide-y divide-border/80">
                   {skillPagination.items.map((item) => (
                       <div
                         key={item.installationId}
-                        className="group flex min-h-[64px] min-w-0 flex-col items-stretch gap-2.5 rounded-xl border border-border/70 bg-card p-3.5 transition-[border-color,box-shadow] hover:border-border hover:shadow-xs lg:flex-row lg:items-center dark:hover:border-border/80"
+                        className="group flex min-h-[76px] min-w-0 flex-col items-stretch gap-2.5 bg-card px-4 py-3.5 transition-colors hover:bg-muted/35 lg:flex-row lg:items-center sm:px-5"
                       >
                         <button
                           type="button"
+                          aria-label={t("View {{skill}}", { skill: item.name })}
                           onClick={() => openSkill(item)}
                           className="flex w-full min-w-0 flex-1 items-start gap-3 rounded-lg text-left outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card lg:items-center"
                         >
@@ -471,19 +471,7 @@ export function SkillsPage({
                           </span>
                         </button>
 
-                        <div className="flex w-full shrink-0 items-center justify-end gap-1 border-t border-border/65 pt-2 lg:w-auto lg:border-t-0 lg:pt-0">
-                          <IconButton
-                            type="button"
-                            variant="ghost"
-                            size="icon-lg"
-                            label={t("View {{skill}}", {
-                              skill: item.name,
-                            })}
-                            disabled={mutating}
-                            onClick={() => openSkill(item)}
-                          >
-                            <EyeIcon />
-                          </IconButton>
+                        <div className="flex w-full shrink-0 items-center justify-end gap-1 pt-2 lg:w-auto lg:border-l lg:border-border/75 lg:pl-3 lg:pt-0">
                           {!item.builtIn ? (
                             <>
                               <IconButton
