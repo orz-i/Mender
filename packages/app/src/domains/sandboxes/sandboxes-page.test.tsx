@@ -61,10 +61,10 @@ describe("SandboxesPage resource rows", () => {
     expect(collection.getAttribute("data-slot")).toBe("sandbox-collection");
     expect(within(collection).getAllByRole("listitem")).toHaveLength(2);
     expect(within(collection).getByRole("link", { name: "Primary Workspace" })).toBeTruthy();
-    expect(within(collection).getAllByText("Local workspace").length).toBeGreaterThanOrEqual(1);
+    expect(within(collection).getAllByText(/Local workspace/).length).toBeGreaterThanOrEqual(1);
     expect(within(collection).getByText("Ready")).toBeTruthy();
     expect(within(collection).getByText("D:/work/repo")).toBeTruthy();
-    expect(within(collection).getByText("Host (not isolated)")).toBeTruthy();
+    expect(within(collection).getByText(/Host \(not isolated\)/)).toBeTruthy();
     expect(within(collection).getByRole("link", { name: "Container Environment" })).toBeTruthy();
     expect(within(collection).getByText("Backend unavailable")).toBeTruthy();
     expect(within(collection).queryByRole("table")).toBeNull();

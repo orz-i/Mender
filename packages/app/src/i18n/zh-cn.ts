@@ -1,4 +1,5 @@
 export const zhCNMessages: Readonly<Record<string, string>> = {
+  "Clear search": "清除搜索",
   "Agent backend status could not be verified. Retry before configuring.": "无法核实智能体后端状态，请重试后再配置。",
   "Choose a built-in Agent to configure its workspace, delegated tasks, and permissions.": "选择预置智能体，配置工作区、委派任务和权限。",
   "Available Agent backends": "预置智能体",
@@ -349,7 +350,6 @@ export const zhCNMessages: Readonly<Record<string, string>> = {
   "To make these tools available to clients, select this tool source in a Profile.": "要让客户端使用这些工具，请先在配置档中选择这个工具来源。",
   "Open Profiles": "前往配置档",
   "View tool services": "查看工具服务",
-  "View tools": "查看工具",
   "Marketplace view": "插件市场视图",
   "Discover": "发现",
   "Installed plugins": "已安装插件",

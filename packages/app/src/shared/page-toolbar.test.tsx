@@ -49,7 +49,7 @@ describe("page-level toolbar and results surface", () => {
     expect(results.querySelector('[data-slot="card"]')).not.toBeNull();
   });
 
-  it("omits the outer Card wrapper and centers the empty state in the viewport", () => {
+  it("omits nested Cards and keeps empty guidance near the toolbar", () => {
     render(
       <main>
         <ResultPanel title="Sandbox inventory">
@@ -64,10 +64,10 @@ describe("page-level toolbar and results surface", () => {
     expect(region).toBeTruthy();
     // The outer Card wrapper must be removed
     expect(region.querySelector('[data-slot="card"]')).toBeNull();
-    // The plain centered container must be rendered instead
+    // Empty guidance follows the toolbar rather than occupying an entire viewport.
     const plain = region.querySelector('[data-slot="result-panel-plain"]');
     expect(plain).not.toBeNull();
-    expect(plain?.className).toContain("justify-center");
+    expect(plain?.className).toContain("justify-start");
     // Empty state should be rendered inside
     expect(within(region).getByText("No sandboxes")).toBeTruthy();
     expect(within(region).getByText("Create a local sandbox first.")).toBeTruthy();

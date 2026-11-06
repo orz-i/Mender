@@ -88,29 +88,29 @@ export function ResultPanel({
     variant === "plain" ||
     empty === true ||
     (variant !== "card" && empty !== false && hasEmptyState(children));
-  // Plain grids remain at the top of the page; only genuinely empty states
-  // expand to fill the remaining viewport for centered guidance.
+  // Plain grids and empty states remain directly below the page toolbar.
+  // Stretching empty states to viewport height makes desktop screens feel blank.
   const isPlainContent = variant === "plain" && empty === false;
 
   return (
     <section
       aria-label={t(title)}
       data-slot="result-panel"
-      className={cn("min-w-0", isPlain && !isPlainContent && "flex flex-1 flex-col justify-center")}
+      className={cn("min-w-0", isPlain && !isPlainContent && "flex flex-col")}
     >
       <h2 className="sr-only">{t(title)}</h2>
       {isPlain ? (
         <div
           data-slot="result-panel-plain"
           className={cn(
-            isPlainContent ? "min-w-0" : "flex min-w-0 flex-1 flex-col items-center justify-center",
+            isPlainContent ? "min-w-0" : "flex min-w-0 flex-col items-center justify-start",
             className,
           )}
         >
           {children}
         </div>
       ) : (
-        <Card className={cn("gap-0 py-0", className)}>
+        <Card className={cn("gap-0 overflow-hidden rounded-[15px] py-0 shadow-none", className)}>
           {children}
         </Card>
       )}

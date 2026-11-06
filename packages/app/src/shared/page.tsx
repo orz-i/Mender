@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { CircleAlertIcon } from "lucide-react";
 
 import { Button } from "@mender/ui/components/button";
 import { cn } from "@mender/ui/lib/utils";
@@ -23,8 +24,9 @@ export function PageHeader({
 
 export function ErrorNotice({ message, onRetry }: { message: string; onRetry?: (() => void) | undefined }) {
   return (
-    <div role="alert" className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-destructive/20 bg-destructive/10 px-5 py-4 text-sm text-destructive">
-      <p className="min-w-0 flex-1 break-words">{message}</p>
+    <div role="alert" className="mb-3 flex flex-wrap items-center gap-3 rounded-xl border border-destructive/20 bg-card px-4 py-3 text-[13px] text-foreground">
+      <CircleAlertIcon className="size-4 shrink-0 text-destructive" aria-hidden="true" />
+      <p className="min-w-0 flex-1 break-words leading-5">{message}</p>
       {onRetry ? (
         <Button type="button" size="sm" variant="outline" onClick={onRetry}>
           {t("Refresh")}
@@ -49,12 +51,12 @@ export function EmptyState({
     <div
       data-slot="empty-state"
       className={cn(
-        "w-full max-w-xl rounded-xl border border-dashed border-border bg-card px-5 py-9 text-center sm:px-8 sm:py-10",
+        "w-full max-w-xl rounded-xl border border-border/80 bg-card px-5 py-7 text-center sm:px-8 sm:py-8",
         className,
       )}
     >
-      <p className="text-[15px] font-medium tracking-tight text-foreground">{t(title)}</p>
-      <p className="mx-auto mt-1.5 max-w-md text-sm leading-6 text-muted-foreground">
+      <p className="text-[14px] font-semibold tracking-tight text-foreground">{t(title)}</p>
+      <p className="mx-auto mt-1.5 max-w-md text-[13px] leading-5 text-muted-foreground">
         {t(description)}
       </p>
       {action ? <div className="mt-5 flex justify-center">{action}</div> : null}

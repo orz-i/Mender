@@ -9,7 +9,7 @@ const badgeVariants = cva(
     variants: {
       variant: {
         default: "bg-accent text-accent-foreground [a]:hover:bg-accent/80",
-        positive: "border-teal/25 bg-teal/10 text-teal [a]:hover:bg-teal/15",
+        positive: "border-teal/25 bg-teal/10 text-foreground [a]:hover:bg-teal/15",
         information: "border-primary/20 bg-accent text-primary-ink [a]:hover:bg-primary/10",
         caution: "border-sunlight/60 bg-sunlight/20 text-foreground [a]:hover:bg-sunlight/30",
         secondary:

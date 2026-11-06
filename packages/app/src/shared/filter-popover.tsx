@@ -40,7 +40,7 @@ export function FilterPopover({
             aria-label={labelText}
             className={cn(
               "h-8 gap-1.5 rounded-lg border-input bg-card px-2.5 text-[12px] font-medium text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring",
-              activeCount > 0 && "border-primary/40 bg-accent text-accent-foreground font-semibold",
+              activeCount > 0 && "border-border bg-card font-semibold",
               className,
             )}
           />
@@ -48,7 +48,7 @@ export function FilterPopover({
       >
         <span>{labelText}</span>
         {activeCount > 0 ? (
-          <span className="flex min-w-5 items-center justify-center rounded-full bg-primary px-1 text-xs font-bold text-primary-foreground">
+          <span className="flex min-w-5 items-center justify-center rounded-md bg-secondary px-1 text-[11px] font-semibold text-foreground">
             {activeCount}
           </span>
         ) : null}

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router";
-import { BoxIcon, ChevronRightIcon } from "lucide-react";
+import { useNavigate } from "react-router";
+import { BoxIcon } from "lucide-react";
 
 import type { ManagementClient, Sandbox } from "@mender/sdk";
 import { Button } from "@mender/ui/components/button";
@@ -11,7 +11,8 @@ import { EmptyState, ErrorNotice } from "../../shared/page";
 import { PageTab, PageTabs, PageToolbar, ResultPanel } from "../../shared/page-toolbar";
 import { usePagination } from "../../shared/pagination";
 import { TablePagination } from "../../shared/table-pagination";
-import { StatusBadge } from "../../shared/status-badge";
+import { StatusInline } from "../../shared/status-badge";
+import { ResourceList, ResourceRow } from "../../shared/resource-list";
 import { EmptyPanelState, SearchField } from "../../shared/workbench";
 import { isolationLabel, sandboxBackend, sandboxStateLabel } from "./sandbox-display";
 
@@ -92,38 +93,29 @@ export function SandboxesPage({ client }: { client: ManagementClient }) {
         {!loaded ? (
           <div className="p-8 text-sm text-muted-foreground">{t("Loading Sandboxes…")}</div>
         ) : filtered.length ? (
-          <div role="list" aria-label={t("Sandbox inventory")} data-slot="sandbox-collection"
-            className="divide-y divide-border/80">
-            {pagination.items.map((item) => (
-              <div role="listitem" key={item.sandboxId}>
-                <Link to={"/sandboxes/" + item.sandboxId} aria-label={item.name}
-                  className="group flex min-h-[78px] min-w-0 items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/40 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring sm:gap-4 sm:px-5">
-                  <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-secondary text-muted-foreground">
-                    <BoxIcon className="size-5" aria-hidden="true" />
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[14px] font-semibold text-foreground group-hover:text-primary-ink">{item.name}</span>
-                    <span className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-[12px] text-muted-foreground">
-                      <span>{sandboxBackend(item)}</span>
-                      <span className="text-border" aria-hidden="true">·</span>
-                      <span>{isolationLabel(item.isolation)}</span>
+          <ResourceList label="Sandbox inventory" slot="sandbox-collection">
+            {pagination.items.map((item) => {
+              const status = item.state === "destroyed" || item.backendAvailable
+                ? item.state : "unavailable";
+              return (
+                <ResourceRow key={item.sandboxId}
+                  to={"/sandboxes/" + item.sandboxId}
+                  label={item.name}
+                  icon={BoxIcon}
+                  title={item.name}
+                  description={<>{sandboxBackend(item)} <span aria-hidden="true">·</span> {isolationLabel(item.isolation)}</>}
+                  detail={item.localRoot ? (
+                    <span className="block max-w-64 truncate font-mono text-[11px]" title={item.localRoot}>
+                      {item.localRoot}
                     </span>
-                  </span>
-                  <span className="hidden min-w-0 max-w-[28%] flex-col items-end gap-1 md:flex">
-                    <span className="text-[11px] text-muted-foreground">{t("Workspace")}</span>
-                    <span className="max-w-full truncate font-mono text-[11px] text-foreground" title={item.localRoot}>
-                      {item.localRoot || "—"}
-                    </span>
-                  </span>
-                  <StatusBadge status={item.state === "destroyed" || item.backendAvailable ? item.state : "unavailable"}
-                    className="shrink-0">
-                    {item.state === "destroyed" || item.backendAvailable ? sandboxStateLabel(item.state) : t("Backend unavailable")}
-                  </StatusBadge>
-                  <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground/60" aria-hidden="true" />
-                </Link>
-              </div>
-            ))}
-          </div>
+                  ) : undefined}
+                  status={<StatusInline status={status}>
+                    {status === "unavailable" ? t("Backend unavailable") : sandboxStateLabel(item.state)}
+                  </StatusInline>}
+                />
+              );
+            })}
+          </ResourceList>
         ) : (
           <EmptyPanelState>
             <EmptyState

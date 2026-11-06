@@ -64,3 +64,31 @@ export function StatusBadge({
     </Badge>
   );
 }
+
+
+/** Quiet Magpie-style status for dense resource rows. Not a Task outcome
+ * inference: the literal label remains supplied by the caller. */
+export function StatusInline({
+  status,
+  children,
+  className,
+}: {
+  status: string;
+  children: ReactNode;
+  className?: string;
+}) {
+  const visual = classifyVisualStatus(status);
+  const color = visual === "positive" ? "bg-teal" :
+    visual === "in-progress" ? "bg-primary" :
+    visual === "attention" ? "bg-sunlight" :
+    visual === "negative" ? "bg-destructive" : "bg-muted-foreground/65";
+  return (
+    <span data-slot="status-inline" className={cn(
+      "inline-flex max-w-full items-center justify-end gap-1.5 text-[12px] leading-4 text-muted-foreground",
+      className,
+    )}>
+      <span className={cn("size-[7px] shrink-0 rounded-full", color)} aria-hidden="true" />
+      <span className="min-w-0 truncate" title={status}>{children}</span>
+    </span>
+  );
+}

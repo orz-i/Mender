@@ -1,23 +1,6 @@
 import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
-import {
-  ActivityIcon,
-  BlocksIcon,
-  BookOpenIcon,
-  BoxIcon,
-  CableIcon,
-  CpuIcon,
-  GaugeIcon,
-  KeyRoundIcon,
-  Layers3Icon,
-  PackageSearchIcon,
-  PlugIcon,
-  ScrollTextIcon,
-  SearchIcon,
-  ServerCogIcon,
-  ShieldCheckIcon,
-  WrenchIcon,
-} from "lucide-react";
+import { SearchIcon, XIcon } from "lucide-react";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@mender/ui/components/card";
 import { Input } from "@mender/ui/components/input";
@@ -32,35 +15,6 @@ import {
 
 import { formatNumber, t } from "../i18n/i18n";
 import { cn } from "@mender/ui/lib/utils";
-
-const panelIcons: Record<string, LucideIcon> = {
-  "Recent invocations": ActivityIcon,
-  "Plugin catalog": BlocksIcon,
-  "Plugin details": BlocksIcon,
-  "Capabilities": WrenchIcon,
-  "Technical details": CpuIcon,
-  "Provider inventory": PlugIcon,
-  "Skill Library": BookOpenIcon,
-  "Tools": WrenchIcon,
-  "Profile inventory": Layers3Icon,
-  "Tunnel inventory": CableIcon,
-  "Running MCP servers": ServerCogIcon,
-  "Runtime budget": GaugeIcon,
-  "Process isolation": ShieldCheckIcon,
-  "Sandbox inventory": BoxIcon,
-  "Sandbox overview": BoxIcon,
-  "Create sandbox": BoxIcon,
-  "Sandbox activity": ActivityIcon,
-  "Security boundary": ShieldCheckIcon,
-  "Policy rules": ShieldCheckIcon,
-  "Credential inventory": KeyRoundIcon,
-  "Invocation history": ScrollTextIcon,
-  "Provider activation history": PlugIcon,
-  "Providers": PlugIcon,
-  "Profiles": Layers3Icon,
-  "Skills": BookOpenIcon,
-  "Catalog": PackageSearchIcon,
-};
 
 export function MetricStrip({
   children,
@@ -131,15 +85,15 @@ export function DataPanel({
   children: ReactNode;
   className?: string;
 }) {
-  const Icon = icon ?? panelIcons[title] ?? Layers3Icon;
+  const Icon = icon;
   return (
-    <Card className={["gap-0 py-0", className].join(" ")}>
-      <CardHeader className="min-h-[56px] px-4 py-3">
+    <Card data-kind="data-panel" className={cn("gap-0 overflow-hidden rounded-[15px] py-0 shadow-none", className)}>
+      <CardHeader className="min-h-[54px] px-5 py-3.5">
         <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-2">
-            <Icon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <div className="flex min-w-0 items-center gap-2.5">
+            {Icon ? <Icon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" /> : null}
             <div className="min-w-0">
-              <CardTitle className="text-[13px] font-semibold tracking-[-0.01em]">
+              <CardTitle className="text-[14px] font-semibold tracking-[-0.015em]">
                 {t(title)}
               </CardTitle>
               {description ? (
@@ -153,7 +107,7 @@ export function DataPanel({
         </div>
       </CardHeader>
       {toolbar ? (
-        <div className="border-b border-border px-4 py-2.5">
+        <div className="border-b border-border/75 px-5 py-2.5">
           {toolbar}
         </div>
       ) : null}
@@ -195,10 +149,25 @@ export function SearchField({
         aria-label={t(label)}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        onKeyDown={onKeyDown}
+        onKeyDown={(event) => {
+          if (event.key === "Escape" && value) {
+            event.preventDefault();
+            onChange("");
+            return;
+          }
+          onKeyDown?.(event);
+        }}
         placeholder={t(placeholder)}
-        className="h-9 bg-card pl-9"
+        className={cn("h-9 rounded-lg bg-card pr-9 pl-9 text-[13px] shadow-none", value && "pr-9")}
       />
+      {value ? (
+        <button type="button" aria-label={t("Clear search")}
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => onChange("")}
+          className="absolute top-1/2 right-1.5 flex size-7 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring">
+          <XIcon className="size-3.5" aria-hidden="true" />
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -250,7 +219,7 @@ export function EmptyPanelState({
     <div
       data-slot="empty-panel-state"
       className={cn(
-        "flex min-h-[220px] w-full flex-1 flex-col items-center justify-center py-8 px-4 text-center sm:px-6",
+        "flex min-h-[154px] w-full flex-col items-center justify-center px-4 py-6 text-center sm:px-6",
         className,
       )}
     >
