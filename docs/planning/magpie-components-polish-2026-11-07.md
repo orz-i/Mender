@@ -27,9 +27,35 @@ This is an **existing application**, not a prototype or a clone. Maintain Mender
 7. **QA**: preserve current page route/API/permissions and statuses; regression tests of shared primitives and representative Profile, Sandbox, Tool and detail navigation; lint, TypeScript, i18n, Vitest, web + desktop frontend build; browser screenshots and interaction proof.
 
 ## Staged work
-- [ ] A. Refine shared panels, detail navigation, empty states, search.
-- [ ] B. Apply consistent resource row/status anatomy to frequently used collections.
-- [ ] C. Check legacy management screens for overflow and compound toolbars, fix evidence-based problems.
-- [ ] D. Browser visual QA, responsive/accessibility, full regression and staged local commits.
+- [x] A. Refine shared panels, detail navigation, empty states, search.
+- [x] B. Apply consistent resource row/status anatomy to frequently used collections.
+- [x] C. Check legacy management screens for overflow and compound toolbars, fix evidence-based problems (Tool service duplicate CTA, loud filters and audit statuses; existing management routes responsive).
+- [x] D. Browser visual QA, responsive/accessibility, full regression and staged local commits. Wails-native validation remains separately pending because its window is unavailable on the Mac mini.
 
 **Boundaries**: no backend, database, ACP, Agent task state, permission or user-data mutation. No blind global CSS override. Use only existing explicit UI data. Do not push without explicit user request.
+
+
+## 实施与验收记录（2026-11-07）
+
+**实现范围（仅前端）**
+
+- 共用 `ResourceList`/`ResourceRow` 对齐配置档、沙盒的 76px 资源行：独立对象名称、次级说明、必要的右侧上下文和轻量状态圆点。未修改资源状态语义、后端存储或任务生命周期。
+- `DetailWorkspace` 从桌面固定 172px 左轨改为顶部单行横向主题导航；在移动端仅内部横向滚动。`aria-pressed` 和数量计数保持可读；正文恢复全宽。
+- `DataPanel` 不再自动为每个标题注入技术图标，保留明确由业务指定的图标；`ResultPanel`/`EmptyPanelState`/`EmptyState` 减少无效高度、重复边框和虚线边框。
+- 搜索框支持清除按钮和 Escape 清空；已经在 Profiles 页实际验证“Work”过滤后点清除恢复 2 条资源。
+- Tool services 的对象名称即查看入口，右侧不再有重复主按钮；编辑、认证、重绑、同步和删除继续由独立可访问菜单提供。Skills 的来源和启用状态改为文字+状态点，原有信任/启用/删除功能不变。
+- Audit 表格状态改为内联圆点文字，详情诊断字段拆成简单的定义行；错误提示与活跃筛选的背景对比降低装饰性但不隐藏异常。UI 组件 `Badge` 的成功状态文本改用语义前景色，修复浅色主题下对比度不足的问题。
+
+**浏览器 / 自动化证据**
+
+- 隔离 Web dev 浏览器测试，桌面 `1440×880`、手机 `390×844`；API 返回模拟数据，无真实用户操作、没有写生产存储。
+- 9 个主要路由：`/`、`/tools`、`/profiles`、`/agents/agent_demo`、`/sandboxes`、`/skills`、`/plugins`、`/audit`、`/runtime`，均验证 `document.documentElement.scrollWidth === 390`。
+- 另测 `/credentials`、`/tunnels`、`/policy`、`/agents`、`/profiles/new` 的手机路由，页面没有横向溢出。`/policy` 的模拟环境缺少 API 响应，显示明确请求错误；不计作策略业务功能通过。
+- 浏览器实际操作：Profile 查询→清除按钮→恢复两条资源；Agent 详情主题导航状态和内容确认；深色偏好保存且没有横向溢出。
+- WCAG axe 4.12.1：Profiles 移动端 `0 violations / 0 incomplete`；Agent 详情浅色 `0 violations / 1 incomplete`、深色 `0 violations / 3 incomplete`。Incompletes 为自动工具无法判定的对比度目标，应作人工视觉复核，**不代表完全无障碍认证**。
+- `pnpm exec eslint apps packages`、`pnpm -r --if-present run typecheck`、`pnpm i18n:check`（1639/1639）均通过；Vitest **76/76 文件、512/512 测试**通过；Web 与 Wails **前端**生产构建通过。保留已知 JS 主包超过 500kB 的体积警告，独立优化。
+- 截图位于本机 `/tmp/mender-magpie-components-before-*.png`、`/tmp/mender-magpie-components-after-*.png`、`/tmp/mender-magpie-components-detail-mobile.png`、`/tmp/mender-magpie-components-dark-agent.png`；为隔离测试 fixture，无生产身份数据。没有把截图复制入 Git 仓库。
+
+**保留边界**
+
+用户 Mac mini 上的 Wails 窗口在本阶段无法访问，故本轮完成的是浏览器组件 QA 与前端构建，不宣称原生 Wails 点击验收或后端功能验收。未推送远端，未触碰数据库、ACP、任务状态、权限与敏感信息。
