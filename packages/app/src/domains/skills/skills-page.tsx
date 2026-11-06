@@ -43,6 +43,7 @@ import { EmptyState, ErrorNotice } from "../../shared/page";
 import { PageTab, PageTabs, PageToolbar, ResultPanel } from "../../shared/page-toolbar";
 import { usePagination } from "../../shared/pagination";
 import { TablePagination } from "../../shared/table-pagination";
+import { StatusInline } from "../../shared/status-badge";
 import { FilterPopover, FilterSelectField } from "../../shared/filter-popover";
 import {
   EmptyPanelState,
@@ -420,7 +421,7 @@ export function SkillsPage({
                         >
                           <span
                             className={[
-                              "flex size-9 shrink-0 items-center justify-center rounded-lg",
+                               "flex size-9 shrink-0 items-center justify-center rounded-[10px]",
                               item.builtIn
                                 ? "bg-secondary text-muted-foreground"
                                 : "bg-muted text-muted-foreground",
@@ -438,22 +439,16 @@ export function SkillsPage({
                               <span className="truncate text-sm font-semibold tracking-tight text-foreground">
                                 {item.name}
                               </span>
-                              <Badge
-                                variant={item.builtIn ? "default" : "outline"}
-                                className="shrink-0"
-                              >
+                              <span className="shrink-0 text-[11px] font-normal text-muted-foreground">
                                 {item.builtIn ? t("Built-in") : t("Local")}
-                              </Badge>
+                              </span>
                               <span className="sm:hidden">
-                                <Badge
-                                  variant={item.enabled ? "default" : "secondary"}
-                                  className="shrink-0"
-                                >
-                                  {item.enabled ? t("Enabled") : t("Disabled")}
-                                </Badge>
+                                <StatusInline status={item.enabled ? "enabled" : "disabled"}>
+                                  {t(item.enabled ? "Enabled" : "Disabled")}
+                                </StatusInline>
                               </span>
                             </span>
-                            <span className="mt-1 block max-h-[3.75rem] max-w-2xl overflow-hidden text-sm leading-5 text-muted-foreground" title={item.description}>
+                            <span className="mt-1 block max-h-[3rem] max-w-2xl overflow-hidden text-[12px] leading-4 text-muted-foreground" title={item.description}>
                               {item.description}
                             </span>
                           </span>
@@ -462,12 +457,10 @@ export function SkillsPage({
                             <span className="block font-mono text-xs text-muted-foreground">
                               {item.versionHint || t("Unversioned")}
                             </span>
-                            <Badge
-                              variant={item.enabled ? "default" : "secondary"}
-                              className="mt-1 shrink-0"
-                            >
-                              {item.enabled ? t("Enabled") : t("Disabled")}
-                            </Badge>
+                            <StatusInline status={item.enabled ? "enabled" : "disabled"}
+                              className="mt-1">
+                              {t(item.enabled ? "Enabled" : "Disabled")}
+                            </StatusInline>
                           </span>
                         </button>
 

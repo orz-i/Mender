@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router";
 import {
-  ArrowRightIcon,
   EllipsisIcon,
   EyeIcon,
   KeyRoundIcon,
@@ -20,7 +19,6 @@ import type {
   ProviderPlugin,
   ProviderPluginIssue,
 } from "@mender/sdk";
-import { Badge } from "@mender/ui/components/badge";
 import { Button } from "@mender/ui/components/button";
 import {
   Dialog,
@@ -468,55 +466,41 @@ export function ToolsPage({ client }: { client: ManagementClient }) {
               const description=toolServiceDescription(provider).trim() ||
                 (!hasTools ? t("No tools have been discovered for this service yet.") : "");
               return <div key={provider.providerId} role="listitem"
-                className="flex min-h-[80px] min-w-0 flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 transition-colors hover:bg-muted/35 sm:px-5">
-                <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-secondary text-muted-foreground">
-                  <PlugIcon className="size-5" aria-hidden="true" />
+                className="flex min-h-[78px] min-w-0 flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 transition-colors hover:bg-muted/35 sm:gap-x-4 sm:px-5">
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-[10px] bg-secondary/80 text-muted-foreground">
+                  <PlugIcon className="size-[19px]" aria-hidden="true" />
                 </span>
                 <div className="min-w-0 flex-[1_1_220px]">
                   <Link className="block truncate rounded-sm text-[14px] font-semibold text-foreground hover:text-primary-ink hover:underline focus-visible:outline-2 focus-visible:outline-ring"
                     title={name} to={"/tools/"+encodeURIComponent(provider.providerId)}>{name}</Link>
                   {description ? <p className="mt-1 line-clamp-2 text-[12px] leading-4 text-muted-foreground">{description}</p> : null}
                 </div>
-                <Badge variant="secondary" className="shrink-0">
+                <span data-slot="tool-count" className="shrink-0 text-[12px] tabular-nums text-muted-foreground">
                   {tCount(provider.toolCount,"{{count}} tool","{{count}} tools")}
-                </Badge>
+                </span>
                 <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-1.5">
-                  {hasTools ? (
-                    <Button size="sm" onClick={() => void navigate("/tools/"+encodeURIComponent(provider.providerId))}>
-                      {t("View tools")} <ArrowRightIcon data-icon="inline-end" />
-                    </Button>
-                  ) : ownerPath ? (
-                    <Button size="sm" onClick={() => void navigate(ownerPath)}>
+                  {ownerPath ? (
+                    <Button size="sm" variant="ghost" onClick={() => void navigate(ownerPath)}>
                       {t("Manage")}
                     </Button>
-                  ) : (
-                    <Button size="sm" onClick={() => setViewProvider(provider)}>
+                  ) : managed ? (
+                    <Button size="sm" variant="ghost" onClick={() => setViewProvider(provider)}>
                       {t("Details")}
                     </Button>
-                  )}
-                  {hasTools && ownerPath ? (
-                    <Button size="sm" variant="outline" onClick={() => void navigate(ownerPath)}>
-                      {t("Manage")}
-                    </Button>
-                  ) : hasTools && managed ? (
-                    <Button size="sm" variant="outline" onClick={() => setViewProvider(provider)}>
-                      {t("Details")}
-                    </Button>
-                  ) : !managed ? (
+                  ) : null}
+                  {!managed ? (
                     <Popover open={openActionsProviderId === provider.providerId}
                       onOpenChange={(open) => setOpenActionsProviderId(open ? provider.providerId : null)}>
-                      <PopoverTrigger render={<Button size="sm" variant="outline" type="button" aria-label={t("Actions") + ": " + name} />}>
-                        <EllipsisIcon className="size-4" aria-hidden="true" />
-                        {t("Actions")}
+                      <PopoverTrigger render={<Button size="icon-sm" variant="ghost" type="button" className="size-8 text-muted-foreground"
+                        aria-label={t("Actions") + ": " + name} />}>
+                        <EllipsisIcon className="size-[18px]" aria-hidden="true" />
                       </PopoverTrigger>
                       <PopoverContent align="end" className="w-56 p-2">
                         <div className="grid gap-1" aria-label={t("Actions")}>
-                          {hasTools ? (
-                            <Button size="sm" variant="ghost" className="justify-start" aria-label={t("View {{provider}}", {provider:name})}
-                              onClick={() => { setOpenActionsProviderId(null); setViewProvider(provider); }}>
-                              <EyeIcon data-icon="inline-start" />{t("Details")}
-                            </Button>
-                          ) : null}
+                          <Button size="sm" variant="ghost" className="justify-start" aria-label={t("View {{provider}}", {provider:name})}
+                            onClick={() => { setOpenActionsProviderId(null); setViewProvider(provider); }}>
+                            <EyeIcon data-icon="inline-start" />{t("Details")}
+                          </Button>
                           <Button size="sm" variant="ghost" className="justify-start" aria-label={t("Edit {{provider}}", {provider:name})}
                             disabled={busy!=="" || !provider.pluginId}
                             onClick={() => { setOpenActionsProviderId(null); beginEdit(provider); }}>

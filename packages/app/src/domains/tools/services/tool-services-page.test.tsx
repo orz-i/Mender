@@ -69,7 +69,7 @@ describe("Tool services resource rows", () => {
     expect(card).toBeTruthy();
     expect(within(card!).getByText("5 tools")).toBeTruthy();
     expect(within(card!).queryByText("Model Context Protocol")).toBeNull();
-    expect(screen.getByRole("button",{name:"View tools"})).toBeTruthy();
+    expect(screen.queryByRole("button",{name:"View tools"})).toBeNull();
     expect(screen.queryByRole("navigation", { name: "Tool services pagination" })).toBeNull();
     expect(within(card!).queryByRole("button",{name:"View Echo Service"})).toBeNull();
     fireEvent.click(within(card!).getByRole("button",{name:"Actions: Echo Service"}));
@@ -89,7 +89,7 @@ describe("Tool service low-noise empty and active states", () => {
     expect(card).toBeTruthy();
     expect(card!.querySelector('[data-slot="card-description"]')).toBeNull();
     expect(within(card!).getByText("5 tools")).toBeTruthy();
-    expect(within(card!).getByRole("button", { name: "View tools" })).toBeTruthy();
+    expect(within(card!).queryByRole("button", { name: "View tools" })).toBeNull();
     expect(within(card!).getByRole("button", { name: "Actions: Echo Service" })).toBeTruthy();
   });
 
@@ -105,8 +105,8 @@ describe("Tool service low-noise empty and active states", () => {
     expect(await screen.findByRole("button", { name: "Sync Echo Service" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Edit Echo Service" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Delete Echo Service" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "View Echo Service" })).toBeNull();
-    fireEvent.click(within(card!).getByRole("button", { name: "Details" }));
+    expect(screen.getByRole("button", { name: "View Echo Service" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "View Echo Service" }));
     expect(await screen.findByRole("dialog", { name: "Provider details" })).toBeTruthy();
   });
 
@@ -114,7 +114,8 @@ describe("Tool service low-noise empty and active states", () => {
     setLocale("zh-CN");
     mount([{ ...sampleProvider, description: "", toolCount: 0 }]);
     expect(await screen.findByRole("link", { name: "Echo Service" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "详情" }));
+    fireEvent.click(screen.getByRole("button", { name: "操作: Echo Service" }));
+    fireEvent.click(screen.getByRole("button", { name: "查看 Echo Service" }));
     const dialog = await screen.findByRole("dialog", { name: "提供方详情" });
     fireEvent.click(within(dialog).getByRole("button", { name: "关闭" }));
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "提供方详情" })).toBeNull());

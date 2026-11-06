@@ -40,7 +40,7 @@ function AuditField({
   mono?: boolean;
 }) {
   return (
-    <div className="min-w-0 rounded-xl border border-border/70 bg-background/65 px-4 py-3">
+    <div className="min-w-0 border-b border-border/70 px-1 py-3">
       <dt className="text-xs font-medium text-muted-foreground">{t(label)}</dt>
       <dd className={["mt-1 whitespace-pre-wrap break-words text-sm text-foreground", mono ? "break-all font-mono text-xs leading-5" : ""].join(" ")}>
         {value || "—"}
@@ -104,7 +104,7 @@ export function AuditDetailDialog({
             />
 
             {section === "overview" ? (
-              <dl className="grid min-w-0 gap-3 sm:grid-cols-2">
+              <dl className="grid min-w-0 gap-x-5 gap-y-0 sm:grid-cols-2">
                 <AuditField
                   label={isInvocation ? t("Invocation ID") : t("Activation ID")}
                   value={isInvocation ? selection.record.invocationId : selection.record.activationId}
@@ -133,14 +133,14 @@ export function AuditDetailDialog({
               </dl>
             ) : section === "governance" ? (
               <div className="flex flex-col gap-3">
-                <dl className="grid min-w-0 gap-3 sm:grid-cols-2">
+                <dl className="grid min-w-0 gap-x-5 gap-y-0 sm:grid-cols-2">
                   <AuditField label="Policy" value={record.policyKind || "—"} />
                   <AuditField label="Approval" value={record.approval || "—"} />
                   <AuditField label="Scope" value={record.scopeKind || "—"} />
                   <AuditField label="Scope reference" value={record.scopeReference || "—"} mono />
                 </dl>
                 {record.policyReason ? (
-                  <div className="rounded-xl border border-border/70 bg-background/65 p-4">
+                  <div className="border-b border-border/70 px-1 py-3">
                     <p className="text-xs font-medium text-muted-foreground">{t("Policy reason")}</p>
                     <p className="mt-1 whitespace-pre-wrap break-words text-sm leading-6">{record.policyReason}</p>
                   </div>
@@ -157,7 +157,7 @@ export function AuditDetailDialog({
                         : "No diagnostic summary was retained for this record.")}
                   </p>
                 </div>
-                <dl className="grid min-w-0 gap-3 sm:grid-cols-2">
+                <dl className="grid min-w-0 gap-x-5 gap-y-0 sm:grid-cols-2">
                   <AuditField label="Error class" value={record.errorClass || "—"} />
                   {isInvocation ? (
                     <>

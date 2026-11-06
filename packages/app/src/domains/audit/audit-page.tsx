@@ -34,9 +34,9 @@ import {
   SearchField,
 } from "../../shared/workbench";
 import { AuditUsageSummary } from "./audit-usage-summary";
+import { StatusInline } from "../../shared/status-badge";
 import {
   AuditDetailDialog,
-  AuditStatusBadge,
   type AuditDetailSection,
   type AuditSelection,
 } from "./audit-detail-dialog";
@@ -375,7 +375,11 @@ export function AuditPage({ client }: { client: ManagementClient }) {
                     </TableCell>
                     <TableCell className="max-md:col-start-2 max-md:row-start-1 max-md:block max-md:p-0">
                       <div className="flex flex-col items-start gap-1 max-md:items-end">
-                        <AuditStatusBadge status={row.status} />
+                        <StatusInline status={row.status}>
+                          {row.status === "completed" ? t("Completed") :
+                            row.status === "failed" ? t("Failed") :
+                            row.status === "denied" ? t("Denied") : row.status}
+                        </StatusInline>
                         {row.status !== "completed" && row.errorClass ? (
                           <span className="max-w-32 truncate text-xs text-muted-foreground" title={row.errorClass}>
                             {auditErrorClassLabel(row.errorClass)}
