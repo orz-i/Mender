@@ -66,6 +66,21 @@ func TestToolRefreshPreservesIdentity(t *testing.T) {
 	}
 }
 
+func TestToolLegacyProviderProvenanceIsTyped(t *testing.T) {
+	providerID, _ := ParseProviderID("prov_0123456789abcdef0123456789abcdef")
+	now := time.Now().UTC()
+	toolID, _ := ParseToolID("tool_0123456789abcdef0123456789abcdef")
+	input, _ := NewSchema([]byte(`{"type":"object"}`))
+	tool, err := NewTool(toolID, providerID, ToolSpec{SourceKey: "files.read", Name: "read", InputSchema: input}, now)
+	if err != nil {
+		t.Fatalf("NewTool: %v", err)
+	}
+	ref := tool.SourceRef()
+	if ref.Kind() != SourceProvider || ref.ID() != providerID.String() || ref.String() != "provider:"+providerID.String() {
+		t.Fatalf("unexpected source: %+v", ref)
+	}
+}
+
 func TestToolRefreshRejectsSourceKeyChange(t *testing.T) {
 	t.Parallel()
 

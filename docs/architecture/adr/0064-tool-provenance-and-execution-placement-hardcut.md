@@ -1,9 +1,10 @@
 # ADR-0064: Separate Tool provenance, Agent-as-Tool ownership, Workspace context, and Sandbox execution placement
 
-- **Status:** Accepted as target architecture; stages B–H are **not implemented**
+- **Status:** Accepted as target architecture; Stage B domain contracts implemented (not activated); stages C–H not implemented
 - **Date:** 2026-11-07 (Mac host)
 - **Implementation plan:** [Hard-cut plan](../../planning/tool-workspace-sandbox-agent-hardcut-2026-11-07.md)
 - **Phase A evidence:** [Ownership inventory](../../planning/tool-hardcut-phase-a-inventory-2026-11-07.md) · [Migration / dry-run contract](../../planning/tool-hardcut-phase-a-migration-contract-2026-11-07.md)
+- **Stage B implementation:** [Typed sources, Workspace refs, native reserved IDs and deny-by-default TargetScope](../../planning/tool-hardcut-stage-b-2026-11-07.md)
 - **Refines or partially supersedes:** ADR-0003, ADR-0030, ADR-0038, ADR-0039, ADR-0046, ADR-0047, ADR-0049, ADR-0052, ADR-0056, ADR-0058, ADR-0061. This ADR replaces the prior **mandatory Provider parent** and **sourceId == ProviderID** assumptions, the **per-Sandbox Tool Suite Provider** as an enduring runtime identity, and Provider-keyed Workspace target aliases. Other security and lifecycle decisions remain in effect.
 
 ## Context

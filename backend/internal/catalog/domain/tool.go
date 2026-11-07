@@ -206,6 +206,14 @@ func (t Tool) ID() ToolID {
 	return t.id
 }
 
+// SourceRef exposes the verified provenance of legacy Provider-backed Tools.
+// Agent/native provenance will be persisted in the Stage D/E atomic hard cut;
+// do not treat a Provider ID as execution placement or a resource grant.
+func (t Tool) SourceRef() SourceRef {
+	ref, _ := ProviderSource(t.providerID)
+	return ref
+}
+
 func (t Tool) ProviderID() ProviderID {
 	return t.providerID
 }

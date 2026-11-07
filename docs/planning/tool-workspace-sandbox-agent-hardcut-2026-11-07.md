@@ -1,6 +1,6 @@
 # Mender 工具 / Agent as Tool / Workspace / Sandbox 归属与执行边界硬切治理
 
-**状态**：阶段 A 架构设计/静态盘点/迁移合同已交付；B–H 尚未实施，未进行任何真实数据迁移或代码硬切
+**状态**：阶段 A 已提交；阶段 B 的类型化领域合同已实现，完整质量门禁进行中；阶段 C–H 未实施，未执行真实数据迁移或运行时硬切
 
 **仓库基线**：`main` / `ce924e0`，Mac mini `/Users/mini/Coding/Mender`，2026-11-07
 
@@ -160,10 +160,13 @@
 - **Gate**：仅静态审计/文档一致性验证，不代表真实数据库可迁移；不触碰生产数据。下一阶段 B 首先需在实现中固定 native ToolID Registry、TargetScope 类型与无扩权测试。
 - **提交**：`docs(architecture): define tool ownership and target hard cut`。
 
-### B — Typed SourceRef 和 Workspace 最小模型
-- Catalog Tool 与只读 SourceRef、WorkspaceRef/Placement contract、静态 native Tool registry；不引入 Source CRUD。
-- 先实现纯 domain/application 查询和 fixture，生产旧路径不产生第二条可执行管线。
-- **Gate**：身份、同名、版本、owner、无副作用与分层测试。
+### B — Typed SourceRef 和 Workspace 最小模型（实现完成，验收收口中）
+- [x] Catalog Tool 只读 `SourceRef()` 与严格 `SourceRef(provider|agent|native)` 值类型；现存 Tool 保持 Provider-backed，尚不启用 Agent/native 新执行链。
+- [x] Workspace `wrk_` 身份、只读 Placement 查询 port；不允许类型化 Workspace 层直接依赖 Sandbox 实现。
+- [x] 九个固定 native Workspace/Job ToolID，宿主审核能力与静态登记（不向现有 Catalog/MCP 发布）。
+- [x] `TargetScope` 默认拒绝，精确 `(WorkspaceRef,SandboxID)` allow-set 与迁移的子集校验；仍不挂入不支持持久化的当前 Profile Binding。
+- [x] [阶段 B 实现与安全边界记录](tool-hardcut-stage-b-2026-11-07.md)；精确身份、无隐式扩大权限、只读查询、Registry 与分层测试。
+- **Gate**：定向 Go 测试与 architecture check 已通过；完整检查结果单独验收。
 - **提交**：`refactor(domain): type sources and workspace references`。
 
 ### C — 工具执行目标解析
