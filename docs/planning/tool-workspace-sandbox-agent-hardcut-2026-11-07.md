@@ -1,6 +1,6 @@
 # Mender 工具 / Agent as Tool / Workspace / Sandbox 归属与执行边界硬切治理
 
-**状态**：阶段 A 已提交；阶段 B 的类型化领域合同已实现，完整质量门禁进行中；阶段 C–H 未实施，未执行真实数据迁移或运行时硬切
+**状态**：阶段 A 已提交；阶段 B 的类型化领域合同已实现并提交（定向 Go/Race、前端与架构检查通过；全量 `pnpm check` 在 Bootstrap Race 10 分钟超时，详见 Stage B 记录）；阶段 C–H 未实施，未执行真实数据迁移或运行时硬切
 
 **仓库基线**：`main` / `ce924e0`，Mac mini `/Users/mini/Coding/Mender`，2026-11-07
 
@@ -166,7 +166,7 @@
 - [x] 九个固定 native Workspace/Job ToolID，宿主审核能力与静态登记（不向现有 Catalog/MCP 发布）。
 - [x] `TargetScope` 默认拒绝，精确 `(WorkspaceRef,SandboxID)` allow-set 与迁移的子集校验；仍不挂入不支持持久化的当前 Profile Binding。
 - [x] [阶段 B 实现与安全边界记录](tool-hardcut-stage-b-2026-11-07.md)；精确身份、无隐式扩大权限、只读查询、Registry 与分层测试。
-- **Gate**：定向 Go 测试与 architecture check 已通过；完整检查结果单独验收。
+- **Gate**：定向 Go/Race、后端架构、Go lint、完整普通 Go、前端/SDK/Wails 生成与构建均通过。全量 `pnpm check` 的 Bootstrap Race 10 分钟超时是待收口门禁，复验当时运行的 10 个 Bootstrap 测试在限制并发后通过。不得对外声称完整 canonical gate 已通过。
 - **提交**：`refactor(domain): type sources and workspace references`。
 
 ### C — 工具执行目标解析

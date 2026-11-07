@@ -39,8 +39,12 @@ The constants are the first 128 bits of `SHA256("io.mender.native.tool.v1/"+oper
 ## Verification
 
 - [x] Focused `go test`: Catalog Domain; curated Tool Suite Registry; Workspace Domain/Application; Profile Domain.
-- [x] `go run scripts/check-backend-architecture.go` — no new inward-boundary imports.
-- [ ] Full `pnpm check` and negative permission tests for the **future real runtime cutover** (Stages C–H).
+- [x] Full ordinary `go test ./backend/...` and backend `golangci-lint`: passed, 0 lint issues.
+- [x] `go test -race ./backend/internal/catalog/... ./backend/internal/profile/... ./backend/internal/workspace/... ./backend/internal/toolsuite/...`: all relevant packages passed (including Catalog SQLite and Profile SQLite).
+- [x] `go run scripts/check-backend-architecture.go`, SDK generation parity, Wails binding parity and Desktop architecture checks: passed.
+- [x] Separately completed `pnpm lint && pnpm typecheck && pnpm test && pnpm build`: i18n 1639/1639; Vitest 76 files / 512 tests; Web/Desktop frontend builds passed with pre-existing large-chunk warnings.
+- [x] Focused rerun of **all 10 Bootstrap tests still running at the full-suite timeout**, using `go test -race -count=1 -parallel=2 -timeout=4m ./backend/internal/bootstrap -run <10-test-regex>`: passed in 25.441s, exit 0.
+- [ ] **Full `pnpm check` remains red (exit 1)**: `go test -race ./backend/...` caused `backend/internal/bootstrap` to panic with `test timed out after 10m0s`, listing 10 concurrent tests. No confirmed race report or compilation failure was observed in that log. Bounded rerun success suggests full-suite scheduling/parallel-load sensitivity, **not proof** that the canonical full gate is green. Retain evidence in `/tmp/mender-tool-hardcut-stage-b-20261107-check.log` and `/tmp/mender-tool-hardcut-stage-b-bootstrap-race-focused.log`; investigate/verify a bounded full-suite runner separately before hard-cut release.
 - [ ] Disposable-database source/ID/ACL migration assessment (Stage E).
 - [ ] Real Wails and MCP client end-to-end acceptance after the hard cut (Stages G–H).
 
