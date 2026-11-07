@@ -1,6 +1,6 @@
 # ADR-0064: Separate Tool provenance, Agent-as-Tool ownership, Workspace context, and Sandbox execution placement
 
-- **Status:** Accepted as target architecture; Stage B–D typed contracts and Stage E offline assessment/limited candidate migration implemented (not activated); F–H production cutover not implemented
+- **Status:** Accepted as target architecture; Stages B–E implemented as typed/future-only contracts; Stage F1 typed Profile discovery and F2a atomic native lease fence implemented (not activated); F2b–F4/G/H production cutover pending
 - **Date:** 2026-11-07 (Mac host)
 - **Implementation plan:** [Hard-cut plan](../../planning/tool-workspace-sandbox-agent-hardcut-2026-11-07.md)
 - **Phase A evidence:** [Ownership inventory](../../planning/tool-hardcut-phase-a-inventory-2026-11-07.md) · [Migration / dry-run contract](../../planning/tool-hardcut-phase-a-migration-contract-2026-11-07.md)
@@ -8,6 +8,7 @@
 - **Stage C implementation:** [Guarded Workspace/Sandbox placement and test coverage; production integration pending](../../planning/tool-hardcut-stage-c-2026-11-07.md)
 - **Stage D implementation:** [SourceRef Catalog, native schemas, source-scoped executor and isolated SQLite/FTS contracts](../../planning/tool-hardcut-stage-d-2026-11-07.md)
 - **Stage E offline migration and blockers:** [Read-only assessment, online SQLite backup, verified candidate-only conversion, and explicit production cutover restrictions](../../planning/tool-hardcut-stage-e-2026-11-07.md)
+- **Stage F implementation:** [Profile-scoped SourceRef discovery, standalone Native lease fencing and unresolved production integration gates](../../planning/tool-hardcut-stage-f-2026-11-07.md)
 - **Refines or partially supersedes:** ADR-0003, ADR-0030, ADR-0038, ADR-0039, ADR-0046, ADR-0047, ADR-0049, ADR-0052, ADR-0056, ADR-0058, ADR-0061. This ADR replaces the prior **mandatory Provider parent** and **sourceId == ProviderID** assumptions, the **per-Sandbox Tool Suite Provider** as an enduring runtime identity, and Provider-keyed Workspace target aliases. Other security and lifecycle decisions remain in effect.
 
 ## Context

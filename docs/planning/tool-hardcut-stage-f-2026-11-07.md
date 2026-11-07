@@ -1,0 +1,57 @@
+# Tool ownership hard cut — Stage F contract and runtime integration
+
+**Status (2026-11-07): F1 typed Profile supply and F2a atomic native lease fence implemented/tested; F2b/F3/F4 not implemented. Production activation remains forbidden.**
+
+**Previous stages:** [ADR-0064](../architecture/adr/0064-tool-provenance-and-execution-placement-hardcut.md) · [Stage E offline candidate](tool-hardcut-stage-e-2026-11-07.md). The current Runtime still starts with Provider-backed v2 Catalog/Profile/MCP. Migrated Stage E candidates are for isolated testing only; they must never be opened by the old runtime or swapped into the live database.
+
+## Implementation order
+
+| Workstream | Owned boundary | Gate |
+| --- | --- | --- |
+| F1 — typed Profile supply projection | Canonical ToolID + exact SourceRef + Profile ToolBinding + native Workspace/Jobs TargetScope + AgentGrant; Direct/Hybrid selection resolved without provider clones | Profile-hidden tool/source cannot leak; native missing scope unavailable; grant removal and source deletion fail closed; duplicate exports rejected |
+| F2 — audited Invocation placement (F2a completed, F2b pending) | Existing Policy/Approval/Budget/Binding execution pipeline, stage C frozen workspace placement, path/effect facts, typed native executor and Agent Task executor | Approval for Sandbox A cannot execute on B; no fabricated receipts; atomically fenced scope revocation, no Host fallback or ACP process substitution |
+| F3 — typed MCP and management contracts | Profile-scoped sources → tools → describe → invoke, Direct/Hybrid names/cursors, OpenAPI Tool DTO and endpoints, CLI/Wails/SDK parity | No ProviderID source identity for native/Agent Tools, exact Profile filtering, source export collision and cursor invalidation test |
+| F4 — one runtime cutover | Pre-start cross-context migration coordinator, Schema version guards, single SourceRef Catalog + typed router, retire old Provider facade pathways | No dual executable paths, previously migrated grants remain subset of original, tests/real Wails and rollback proof |
+
+**Important change-control rule:** F1–F3 components may be implemented and tested against disposable Stage E candidates, but must be *inert* in the current Runtime until F4 meets all gates. No one-time migration against production data, no dynamic SDK route that silently falls back to ProviderID, no compatibility bridge, no ACP v2.
+
+## Stage E blockers that F must remove or explicitly retain
+
+1. **Profiles:** one native operation merges multiple formerly Sandbox-pinned Tools. A new Profile ToolBinding must contain exactly the old authorized Workspace/Sandbox pairs, not all accessible Sandbox grants; disagreement in alias/policy/concurrency/credential/direct requires explicit conflict resolution.
+2. **MCP presentation:** Agent as Tool may retain its ToolID while the source namespace changes. New direct exported names require an owner-reviewed per-Profile manifest, no silent redirects or duplicate names. The same applies to native Workspace and SSH Jobs.
+3. **Policy:** typed SourceRef is the operation origin; Provider Activation remains distinct. Old Provider selectors with resource facades require semantic translation or must block.
+4. **Workspaces:** local placement root ≠ remote content equivalence; Agent workspace root needs independent profile authority and ACP v1 Task/Session retention.
+5. **SSH Jobs:** must retain native JobID→Sandbox ownership, remote evidence, observation, cancellation and no auto-replay of uncertain jobs.
+6. **Schema and restart:** old binaries fail closed on the new version, typed runtime cannot reintroduce facade rows; backup restoration must be whole-DB and version-matched.
+
+## Initial F1 acceptance boundary
+
+Build a read-only adapter over the **new** Schema only. It must not call `bootstrap.NewRuntime`, register an Agent/backend, mutate Profile grants, or invoke a Tool. It may identify an Agent source only when its exact Profile grant exists; it may expose a native Tool only with one or more exact currently valid target scopes and corresponding Workspace placement. It must fetch only Tool metadata required for Profile-scoped supply, never secrets or raw Task/Job data. For Direct/Hybrid, export only exact selected ToolIDs, with collision rejection and independently reviewed source labels. Source names and ToolID stability do not authorize execution.
+
+The F1 adapter is *not* the final Stage F release. Its tests use disposable Stage E candidate SQL with a real Bootstrap-created local Sandbox and an Agent as Tool; they cover grant/revoke, SourceRef accuracy, duplicate exports, Profile-restricted browsing and stale cursor handling.
+
+## Implemented F1 — Profile-scoped typed source discovery
+
+- `backend/internal/profile/infrastructure/typedsupply`: Future **read-only, query-only** adapter. Requires Catalog v3, Profile v8, MCP delivery v2 and the Stage E migration marker; refuses legacy Provider-backed schemas and missing stores. It lists only the exact Profile's ToolBindings and validates each typed Tool SourceRef before display. Real Providers require a configured Provider; Agents require their exact AgentGrant; Native Workspace/Jobs Tools require a host-reviewed ToolID plus exact TargetScope and Sandbox Grant. Workspace Tools additionally require an independent Workspace Profile grant and a persisted Workspace→Sandbox placement.
+- Direct/Hybrid/Dynamic export is derived only from selected Profile ToolIDs, validated against each tool's actual SourceRef; new typed names are **not** automatically published by the legacy MCP server. Duplicate direct exports block. Source-scoped browse uses opaque v2 cursors including a full Profile-filtered snapshot fingerprint: revocation or presentation changes cause stale-cursor rejection rather than exposing a previously selected source.
+- The Profile projection returns source groups, names and bounded metadata; it intentionally does not include credential references, raw Tool arguments, Agent transcripts or remote Job records. These results are **not invocation approval**. The caller must revalidate the scopes/grants and Policy on every actual Tool invocation.
+- The Stage E future SQL candidate was tightened to require an explicit Workspace Profile grant as well as Profile ToolBinding, exact TargetScope and Sandbox capability grant before a new Native target scope can be inserted. Insert/revoke of Workspace, Sandbox, Agent grants and target scopes now increment Profile and MCP delivery revisions. This is future-schema hardening, **not a running v2 migration**.
+
+## Implemented F2a — atomic Native Workspace lease reservation
+
+- `backend/internal/sandbox/infrastructure/typedlease`: Tested **future-only** lease store. Requires a migrated database and trusted `InvocationAdmissionVerifier`; the verifier must confirm an Invocation already admitted by the canonical Policy/Approval pipeline. A matching ToolID, WorkspaceRef or Governance Facts alone cannot claim approval.
+- A single SQLite `INSERT ... SELECT` atomically checks the exact pinned `native:workspace` ToolID + source key, Profile service identity, Profile ToolBinding (non-deny), TargetScope, independent Workspace grant, Sandbox capability grant, matching Workspace placement/root/isolation and Ready Run generation. It writes to the existing `sandbox_execution_leases` table — there is no second Task/lease manager. Reserve cannot silently substitute Sandbox B for A, and cleanup requires the matching caller/token.
+- Tests prove all individual revocations fail closed, simultaneous Workspace-grant removal and reservation serialize safely, invalid ToolIDs/Approval facts are rejected, and the typed store refuses the old Schema. The test store does **not** launch a process, connect to remote hosts or execute a Tool.
+- **F2b still required:** provide an actual Invocation-owned, durable admission proof and combine stage C `GuardedRouter` with this exact atomic typed reservation, including all original `workspace_path` Policy facts, review/approval/budget/result guard/audit, backend RootAttestor and lease cleanup. Do **not** call the legacy generic `ReserveExecution` for native Profile invocation after the final cut: that legacy operation does not check Native ToolBinding TargetScope at the same commit point.
+
+## Quality evidence and open gates
+
+- [x] Focused Go unit and SQL integration tests for `typedsupply`, `typedlease` and the updated Stage E migration candidate, using disposable SQLite fixtures.
+- [x] Scoped Race Detector passed for these three packages, including concurrent grant revocation; `golangci-lint run ./backend/...` reported **0 issues**; backend architecture checker reported no exceptions.
+- [x] Full ordinary Go regression `go test -count=1 -parallel=2 -timeout=4m ./backend/...`: **exit 0**, recorded in `/tmp/mender-stage-f1-f2a-full-go-20261107.exit` and corresponding full log.
+- [x] SDK generation and Wails bindings: `pnpm sdk:check`, `pnpm desktop:bindings:check` passed. `pnpm lint && pnpm typecheck && pnpm test && pnpm build` passed: i18n **1639/1639**, Vitest **76 files / 512 tests**, and Web/Desktop builds with pre-existing large-chunk warnings.
+- [x] Documentation link/fence validation (4 edited documents) and staged Git whitespace checks.
+- [ ] Full canonical `pnpm check`: previous default Bootstrap full-suite Race timeout from B/C is still an outstanding blocker; no green claim without a completed run.
+- [ ] F2b canonical Invocation integration, F3 typed HTTP/MCP/CLI/SDK/Wails contracts and F4 one-way Runtime cutover remain **unimplemented**. No native Wails GUI acceptance and no production DB change.
+
+**Do not enable production use of this future-schema supply or lease adapter as a standalone executable path.** The Stage F whole-release gate remains open until the authorized caller path, client parity, migration review and recovery/rollback evidence are complete.
