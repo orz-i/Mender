@@ -64,8 +64,10 @@ Stage C implementation commit: `aa1a001` (`refactor(runtime): add guarded worksp
 - **Passed:** `go test -race -count=1 ./backend/internal/workspace/... ./backend/internal/sandbox/application ./backend/internal/sandbox/infrastructure/router ./backend/internal/catalog/domain ./backend/internal/profile/domain ./backend/internal/toolsuite/infrastructure/curated`.
 - **Passed:** `go run scripts/check-backend-architecture.go` and `golangci-lint run ./backend/...` (0 issues).
 - **Passed:** `pnpm lint && pnpm typecheck && pnpm test && pnpm build`; i18n 1639/1639, Vitest 76/76 files and 512/512 tests, Web/Desktop frontend builds passed. Only existing Vite large-bundle warnings remain.
-- **Evidence retained:** bounded full-backend Race test `go test -race -count=1 -parallel=2 -timeout=15m ./backend/...` in `/tmp/mender-stage-c-20261107-race.log` with exit receipt `/tmp/mender-stage-c-20261107-race.exit`. Treat its result separately from canonical `pnpm check`.
+- **Full-backend Race not completed:** `go test -race -count=1 -parallel=2 -timeout=15m ./backend/...` remained in the `backend/internal/bootstrap` integration package after more than eight minutes without a completion result. To avoid leaving a long-lived test process, that specific test worker was terminated (`exit 143`). No Race finding was printed before termination; **this is not a passing result**. Evidence: `/tmp/mender-stage-c-20261107-race.log`, receipt `/tmp/mender-stage-c-20261107-race.exit`. The direct Stage C modules' full scoped Race run above passed.
 - **Historical gate:** [Stage B](tool-hardcut-stage-b-2026-11-07.md) documented canonical `pnpm check` exit 1 from the default 10-minute Bootstrap full-parallel Race timeout. Focused bounded rerun passed; this **does not** make the canonical full gate green.
+
+**Open quality gate:** investigate/bootstrap the full-suite Race performance/parallelism and obtain a clean complete result before production hard cut. Do not silently turn the previously observed default 10-minute `pnpm check` timeout or this explicitly terminated bounded run into a green check.
 
 Stage C remains nonproduction-wired. No test in this phase is evidence of actual Profile TargetScope persistence, full client contract parity, Docker/SSH root attestation, live Agent execution, production database migration or Wails-native GUI acceptance.
 

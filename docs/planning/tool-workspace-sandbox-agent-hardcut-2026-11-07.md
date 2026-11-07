@@ -176,7 +176,7 @@
 - [x] 独立 Agent Task/Session/ACP v1 路径保持不变；不引入新的 Agent 运行时或覆盖原生工具审批。
 - [x] 负向测试：Policy 批 A 执行 B、未获 Invocation 准入、撤权/lease CAS 竞态、Backend 消失、目标 root/run 变化、无 Host fallback。
 - **不能宣称**：Workspace Inventory、Profile TargetScope、Invocation receipt 的生产适配器及数据持久化（阶段 D–F）；跨 Docker/SSH 的 root 认证、实际生产 MCP 路径切换、真正 Agent Tool Facade 退役均尚未完成。
-- **Gate**：定向 Race/Go/架构/lint 通过；全量有界 Race 结果记录于 Stage C 验收文档。
+- **Gate**：定向 Go/Race、架构/lint、前端 512 项测试和双端构建通过；全量有界 Race 在 Bootstrap 长时未结束，已停止并记录非通过状态。生产硬切前必须单独完成全量门禁。
 - **提交**：`refactor(runtime): resolve governed execution placement`。
 
 ### D — Catalog/Tool Source/Provider 硬切
