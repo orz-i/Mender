@@ -1,4 +1,4 @@
-package plugin
+package domain
 
 import (
 	"fmt"
@@ -8,7 +8,10 @@ import (
 
 const maxWorkspacePathBytes = 4096
 
-func normalizeRelativePath(raw string, allowRoot bool) (string, error) {
+// NormalizeRelativePath is the shared Workspace path-confinement rule for
+// argument-derived Policy facts and typed backend operations. It never grants
+// filesystem access; the selected backend must enforce confinement again.
+func NormalizeRelativePath(raw string, allowRoot bool) (string, error) {
 	if raw == "" && allowRoot {
 		return ".", nil
 	}

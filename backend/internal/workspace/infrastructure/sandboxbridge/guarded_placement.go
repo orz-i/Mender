@@ -1,7 +1,9 @@
 package sandboxbridge
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -11,6 +13,7 @@ import (
 	profile "github.com/orz-i/Mender/backend/internal/profile/domain"
 	sandboxapp "github.com/orz-i/Mender/backend/internal/sandbox/application"
 	sandbox "github.com/orz-i/Mender/backend/internal/sandbox/domain"
+	"github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/typedlease"
 	"github.com/orz-i/Mender/backend/internal/toolsuite/infrastructure/curated"
 	workspaceapp "github.com/orz-i/Mender/backend/internal/workspace/application"
 	workspace "github.com/orz-i/Mender/backend/internal/workspace/domain"
@@ -81,6 +84,10 @@ type ResolveRequest struct {
 	Operation         workspace.Operation
 	PinnedSandboxID   string
 	RequiredIsolation sandbox.IsolationClass
+	// Arguments are the original canonical, schema-validated invocation bytes.
+	// The host extracts the workspace_path Policy fact from them (not from a
+	// model-supplied target fact) and freezes a defensive copy for execution.
+	Arguments []byte
 }
 
 // FrozenPlacement captures the complete authorized candidate and its observed
@@ -95,6 +102,7 @@ type FrozenPlacement struct {
 }
 
 func (p FrozenPlacement) ToolID() catalog.ToolID   { return p.request.ToolID }
+func (p FrozenPlacement) Arguments() []byte        { return bytes.Clone(p.request.Arguments) }
 func (p FrozenPlacement) Workspace() workspace.Ref { return p.request.Workspace }
 func (p FrozenPlacement) SandboxID() sandbox.ID    { return p.placement.Sandbox.ID() }
 func (p FrozenPlacement) RunGeneration() uint64    { return p.placement.Run.Generation }
@@ -149,10 +157,11 @@ func (r GuardedRouter) Resolve(ctx context.Context, req ResolveRequest) (FrozenP
 	if !ok || placement.Sandbox.ID().String() != selected.SandboxID {
 		return FrozenPlacement{}, sandbox.ErrConflict
 	}
-	facts, err := selectionFacts(req.Operation, req.Workspace, placement.Sandbox.ID())
+	facts, err := selectionFacts(req.Operation, req.Workspace, placement.Sandbox.ID(), req.Arguments)
 	if err != nil {
 		return FrozenPlacement{}, err
 	}
+	req.Arguments = bytes.Clone(req.Arguments)
 	return FrozenPlacement{request: req, candidate: selected, placement: placement, facts: facts}, nil
 }
 
@@ -298,7 +307,11 @@ func (r GuardedRouter) inspect(
 	return placement, granted, nil
 }
 
-func selectionFacts(op workspace.Operation, ref workspace.Ref, id sandbox.ID) (invocation.GovernanceFacts, error) {
+func selectionFacts(op workspace.Operation, ref workspace.Ref, id sandbox.ID, arguments []byte) (invocation.GovernanceFacts, error) {
+	pathFact, err := reviewedWorkspacePath(op, ref, arguments)
+	if err != nil {
+		return invocation.GovernanceFacts{}, err
+	}
 	var effect invocation.EffectFact
 	switch op {
 	case workspace.Read:
@@ -320,7 +333,46 @@ func selectionFacts(op workspace.Operation, ref workspace.Ref, id sandbox.ID) (i
 	if err != nil {
 		return invocation.GovernanceFacts{}, err
 	}
-	return invocation.KnownGovernanceFacts([]invocation.EffectFact{effect}, []invocation.ResourceFact{w, s})
+	p, err := invocation.NewResourceFact("workspace_path", pathFact)
+	if err != nil {
+		return invocation.GovernanceFacts{}, err
+	}
+	return invocation.KnownGovernanceFacts([]invocation.EffectFact{effect}, []invocation.ResourceFact{w, s, p})
+}
+
+// reviewedWorkspacePath derives the same normalized path fact as the current
+// Workspace Tool plugin. It refuses requests for another WorkspaceRef and
+// never accepts a caller-provided Policy fact in place of argument parsing.
+func reviewedWorkspacePath(op workspace.Operation, ref workspace.Ref, arguments []byte) (string, error) {
+	var fields map[string]json.RawMessage
+	if len(arguments) == 0 || json.Unmarshal(arguments, &fields) != nil || fields == nil {
+		return "", fmt.Errorf("governed Workspace: canonical tool arguments required")
+	}
+	if raw, ok := fields["workspaceId"]; ok {
+		var requested string
+		if json.Unmarshal(raw, &requested) != nil || requested != ref.String() {
+			return "", sandbox.ErrNotAuthorized
+		}
+	}
+	field := "path"
+	allowRoot := false
+	switch op {
+	case workspace.Read, workspace.Edit:
+	case workspace.Search:
+		allowRoot = true
+	case workspace.Shell:
+		field = "cwd"
+		allowRoot = true
+	default:
+		return "", sandbox.ErrCapabilityUnavailable
+	}
+	var value string
+	if raw, ok := fields[field]; ok {
+		if json.Unmarshal(raw, &value) != nil {
+			return "", fmt.Errorf("governed Workspace: invalid path field")
+		}
+	}
+	return workspace.NormalizeRelativePath(value, allowRoot)
 }
 
 // Acquire takes facts ALREADY admitted by the canonical Invocation policy and
@@ -379,10 +431,25 @@ func (r GuardedRouter) Acquire(ctx context.Context, frozen FrozenPlacement, invo
 		current.Run != frozen.placement.Run || current.Required != frozen.placement.Required {
 		return nil, sandbox.ErrConflict
 	}
-	// Router.Acquire additionally rechecks the registered backend, grant
-	// atomically at lease reservation, run generation and sandbox.acquire
-	// Policy/Approval; it never re-routes to another Sandbox.
-	lease, err := r.deps.Router.Acquire(ctx, req.Caller, frozen.placement)
+	// Use the existing Router backend/session path, but require its Native-only
+	// entrypoint and atomic ToolBinding/TargetScope/Workspace-grant lease store.
+	// The legacy Sandbox Acquire path does not have that commit-point fence.
+	nativeRouter, ok := r.deps.Router.(interface {
+		AcquireNative(context.Context, governance.Context, sandboxapp.Placement) (*sandboxapp.Lease, error)
+	})
+	if !ok {
+		return nil, sandbox.ErrNotAuthorized
+	}
+	bound, err := typedlease.WithRequest(ctx, typedlease.Request{
+		InvocationID: invocationID, Caller: req.Caller, ToolID: req.ToolID,
+		Operation: req.Operation, Workspace: req.Workspace,
+		Sandbox: frozen.placement.Sandbox.ID(), Generation: frozen.placement.Run.Generation,
+		Isolation: req.RequiredIsolation, ApprovedFacts: admitted,
+	})
+	if err != nil {
+		return nil, err
+	}
+	lease, err := nativeRouter.AcquireNative(bound, req.Caller, frozen.placement)
 	if err != nil {
 		return nil, err
 	}

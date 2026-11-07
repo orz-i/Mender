@@ -56,11 +56,17 @@ func (e invocationExecution) run(ctx context.Context, attempt invocationAttempt,
 	}
 	attempt.events.lifecycle(invocationdomain.EventExecutionStarted)
 	credentials := credentialResolverForScope(e.credentials, attempt.metadata.context.Scope(), prepared.governance)
-	outcome, err := executeWithGuardRelease(ctx, executor, ExecutionRequest{
+	executionRequest := ExecutionRequest{
 		InvocationID: attempt.metadata.id, Tool: prepared.tool, Arguments: prepared.arguments,
 		MaxResultBytes: attempt.budget.MaxResultBytes(),
 		AdmittedFacts:  prepared.facts, Context: attempt.metadata.context,
-	}, credentials, attempt.events, release)
+	}
+	// Mint an attempt-local receipt only after the canonical Policy/Approval,
+	// Runtime Budget and binding gates succeed. Native Sandbox acquisition
+	// consumes this proof; arguments and plugins can never manufacture it.
+	admittedCtx := withAdmittedAttempt(ctx, executionRequest)
+	outcome, err := executeWithGuardRelease(admittedCtx, executor, executionRequest,
+		credentials, attempt.events, release)
 	if err != nil {
 		return executionFailure(ctx, admitted, err)
 	}
@@ -94,8 +100,12 @@ func (e invocationExecution) acquire(ctx context.Context, attempt invocationAtte
 		return nil, &stop
 	}
 	tool := admitted.prepared.tool
+	budgetSource := tool.SourceRef().ID()
+	if tool.SourceRef().Kind() != "provider" {
+		budgetSource = tool.SourceRef().String()
+	}
 	budgetRelease, err := e.runtimeBudget.AcquireInvocation(ctx, attempt.budget,
-		attempt.metadata.context.Principal().Reference(), tool.ProviderID().String(), tool.ID().String())
+		attempt.metadata.context.Principal().Reference(), budgetSource, tool.ID().String())
 	if errors.Is(err, runtimegovernancedomain.ErrBudgetExceeded) {
 		stop := rejectedInvocation(&tool, invocationdomain.RejectionRuntimeBudgetExceeded,
 			"Runtime execution budget is saturated", auditdomain.StatusDenied, auditdomain.ErrorBudget).withAdmission(admitted)

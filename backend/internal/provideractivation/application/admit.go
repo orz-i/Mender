@@ -86,7 +86,8 @@ func (uc Admit) Execute(
 	if err := request.Context.Validate(); err != nil {
 		return fmt.Errorf("admit provider activation: context: %w", err)
 	}
-	if _, err := catalogdomain.ParseProviderID(request.ProviderID.String()); err != nil {
+	sourceRef, err := catalogdomain.ProviderSource(request.ProviderID)
+	if err != nil {
 		return fmt.Errorf("admit provider activation: provider: %w", err)
 	}
 	if operation == nil {
@@ -154,7 +155,7 @@ func (uc Admit) Execute(
 				OperationID: activationID,
 				Action:      governancedomain.ActionProviderActivate,
 				Context:     request.Context,
-				ProviderID:  request.ProviderID,
+				SourceRef:   sourceRef,
 				Decision:    decision,
 			},
 		)

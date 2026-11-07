@@ -38,7 +38,7 @@ func (p *Plugin) ExtractGovernanceFacts(
 		if err := decodeStrict(clean.Bytes(), &input, "decode workspace.read governance arguments"); err != nil {
 			return invocationdomain.GovernanceFacts{}, err
 		}
-		normalized, err := normalizeRelativePath(input.Path, false)
+		normalized, err := workspace.NormalizeRelativePath(input.Path, false)
 		if err != nil {
 			return invocationdomain.GovernanceFacts{}, err
 		}
@@ -53,7 +53,7 @@ func (p *Plugin) ExtractGovernanceFacts(
 		if input.Path == "" {
 			input.Path = "."
 		}
-		normalized, err := normalizeRelativePath(input.Path, true)
+		normalized, err := workspace.NormalizeRelativePath(input.Path, true)
 		if err != nil {
 			return invocationdomain.GovernanceFacts{}, err
 		}
@@ -65,7 +65,7 @@ func (p *Plugin) ExtractGovernanceFacts(
 		if err := decodeStrict(clean.Bytes(), &input, "decode workspace.edit governance arguments"); err != nil {
 			return invocationdomain.GovernanceFacts{}, err
 		}
-		normalized, err := normalizeRelativePath(input.Path, false)
+		normalized, err := workspace.NormalizeRelativePath(input.Path, false)
 		if err != nil {
 			return invocationdomain.GovernanceFacts{}, err
 		}
@@ -81,7 +81,7 @@ func (p *Plugin) ExtractGovernanceFacts(
 		if cwd == "" {
 			cwd = "."
 		}
-		normalized, err := normalizeRelativePath(cwd, true)
+		normalized, err := workspace.NormalizeRelativePath(cwd, true)
 		if err != nil {
 			return invocationdomain.GovernanceFacts{}, err
 		}

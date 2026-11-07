@@ -13,7 +13,7 @@ type ApprovalRequest struct {
 	OperationID string
 	Action      governancedomain.Action
 	Context     governancedomain.Context
-	ProviderID  catalogdomain.ProviderID
+	SourceRef   catalogdomain.SourceRef // exact Tool or real Provider source; zero for Sandbox/Agent actions
 	ToolID      *catalogdomain.ToolID
 	SandboxID   string // bounded Sandbox reference for sandbox.* actions; never a ProviderID
 	Decision    policydomain.Decision

@@ -50,6 +50,9 @@ func TestInvocationPortOrderRetainsAdmissionSnapshotAndPostflightBoundary(t *tes
 	if !errors.Is(ports.executionContext.Err(), context.Canceled) {
 		t.Fatal("execution context was not closed after audit")
 	}
+	if ports.approvalRequest.SourceRef != ports.tool.SourceRef() || ports.approvalRequest.ToolID == nil || *ports.approvalRequest.ToolID != ports.tool.ID() {
+		t.Fatalf("approval lost exact Tool provenance: %+v", ports.approvalRequest)
+	}
 	if ports.record.InvocationID() != response.InvocationID || ports.executionRequest.InvocationID != response.InvocationID ||
 		ports.record.Approval() != auditdomain.ApprovalApproved || ports.record.ToolID() != ports.tool.ID() {
 		t.Fatalf("attempt identity/admission changed at finalization: %+v", ports.record)
@@ -206,6 +209,7 @@ type tracedInvocationPorts struct {
 	failAt                    string
 	onApproval                func()
 	onExecute                 func()
+	onExecuteCtx              func(context.Context, ExecutionRequest)
 	order                     []string
 	events                    []invocationdomain.Event
 	snapshotCalls             int
@@ -215,6 +219,7 @@ type tracedInvocationPorts struct {
 	acquiredBudget            runtimegovernancedomain.Budget
 	resultMaxBytes            int
 	policyRequest             PolicyRequest
+	approvalRequest           governanceapplication.ApprovalRequest
 	executionRequest          ExecutionRequest
 	record                    auditdomain.Record
 	approvalHadDeadline       bool
@@ -272,8 +277,9 @@ func (p *tracedInvocationPorts) Evaluate(_ context.Context, request PolicyReques
 	return p.decision, nil
 }
 
-func (p *tracedInvocationPorts) Approve(ctx context.Context, _ governanceapplication.ApprovalRequest) (bool, error) {
+func (p *tracedInvocationPorts) Approve(ctx context.Context, request governanceapplication.ApprovalRequest) (bool, error) {
 	p.order = append(p.order, "approval")
+	p.approvalRequest = request
 	_, p.approvalHadDeadline = ctx.Deadline()
 	if p.onApproval != nil {
 		p.onApproval()
@@ -317,9 +323,12 @@ func (p *tracedInvocationPorts) ExecutorFor(context.Context, catalogdomain.Tool)
 	return p, nil
 }
 
-func (p *tracedInvocationPorts) Execute(_ context.Context, request ExecutionRequest, _ CredentialResolver, _ ProgressReporter) (invocationdomain.Outcome, error) {
+func (p *tracedInvocationPorts) Execute(ctx context.Context, request ExecutionRequest, _ CredentialResolver, _ ProgressReporter) (invocationdomain.Outcome, error) {
 	p.order = append(p.order, "executor")
 	p.executionRequest = request
+	if p.onExecuteCtx != nil {
+		p.onExecuteCtx(ctx, request)
+	}
 	if p.onExecute != nil {
 		p.onExecute()
 	}

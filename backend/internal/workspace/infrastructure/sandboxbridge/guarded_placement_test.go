@@ -1,6 +1,7 @@
 package sandboxbridge
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"path/filepath"
@@ -205,6 +206,15 @@ func (p *guardedTestPlacements) ListWorkspacePlacements(ctx context.Context, ref
 	return append([]workspaceapp.PlacementCandidate(nil), p.entries...), nil
 }
 
+// Test-only Native Router adapter exercises the existing Sandbox lease path.
+// Production AcquireNative is implemented on sandboxrouter.Router only when
+// it owns the concrete typedlease.Store; this stub is not a runtime binding.
+type guardedTestNativeRouter struct{ *sandboxrouter.Router }
+
+func (r guardedTestNativeRouter) AcquireNative(ctx context.Context, caller governance.Context, placement sandboxapp.Placement) (*sandboxapp.Lease, error) {
+	return r.Acquire(ctx, caller, placement)
+}
+
 type guardedFixture struct {
 	route      GuardedRouter
 	reader     *guardedTestPlacements
@@ -279,7 +289,7 @@ func newGuardedFixture(t *testing.T) *guardedFixture {
 	work := &guardedTestWorkspaces{}
 	admissions := &guardedTestAdmissions{}
 	route, err := NewGuardedRouter(GuardedDependencies{
-		Placements: q, Router: router, Backends: backends, Grants: st, Workspaces: work,
+		Placements: q, Router: guardedTestNativeRouter{router}, Backends: backends, Grants: st, Workspaces: work,
 		Bindings: bindings, Roots: LocalRootAttestor{}, Admissions: admissions,
 	})
 	if err != nil {
@@ -292,7 +302,8 @@ func newGuardedFixture(t *testing.T) *guardedFixture {
 		route: route, reader: reader, store: st, backend: b, backends: backends,
 		gate: g, bindings: bindings, work: work, admissions: admissions,
 		request: ResolveRequest{Caller: caller, ToolID: guardedToolID(t, workspace.Read),
-			Workspace: ref, Operation: workspace.Read, RequiredIsolation: sandbox.IsolationRestrictedHost},
+			Workspace: ref, Operation: workspace.Read, RequiredIsolation: sandbox.IsolationRestrictedHost,
+			Arguments: []byte(`{"path":"README.md"}`)},
 	}
 }
 
@@ -311,7 +322,7 @@ func TestGuardedResolveAndAcquireUseSamePinnedSandboxAndLease(t *testing.T) {
 		t.Fatal("preflight opened backend, reserved lease, or invoked Sandbox Policy")
 	}
 	facts := plan.Facts()
-	if facts.Knowledge() != invocation.FactKnowledgeKnown || len(facts.Resources()) != 2 {
+	if facts.Knowledge() != invocation.FactKnowledgeKnown || len(facts.Resources()) != 3 {
 		t.Fatalf("unreviewed facts: %+v", facts)
 	}
 	lease, err := f.route.Acquire(ctx, plan, testInvocation, facts)
@@ -338,6 +349,8 @@ func TestGuardedFactsRejectApprovedAExecutedBOrMissingFacts(t *testing.T) {
 	ctx := context.Background()
 	wrong, _ := invocation.NewResourceFact("sandbox_id", testSandboxB)
 	workspaceFact, _ := invocation.NewResourceFact("workspace_id", testWorkspace)
+	wrongPath, _ := invocation.NewResourceFact("workspace_path", "other.txt")
+	sandboxFact, _ := invocation.NewResourceFact("sandbox_id", testSandboxA)
 	for _, tc := range []struct {
 		name  string
 		facts invocation.GovernanceFacts
@@ -347,6 +360,7 @@ func TestGuardedFactsRejectApprovedAExecutedBOrMissingFacts(t *testing.T) {
 		{"missing sandbox", mustGuardedFacts(t, []invocation.EffectFact{"filesystem.read"}, []invocation.ResourceFact{workspaceFact})},
 		{"switched sandbox", mustGuardedFacts(t, []invocation.EffectFact{"filesystem.read"}, []invocation.ResourceFact{workspaceFact, wrong})},
 		{"wrong effect", mustGuardedFacts(t, []invocation.EffectFact{"filesystem.write"}, plan.Facts().Resources())},
+		{"switched path", mustGuardedFacts(t, []invocation.EffectFact{"filesystem.read"}, []invocation.ResourceFact{workspaceFact, sandboxFact, wrongPath})},
 		{"duplicate sandbox", mustGuardedFacts(t, []invocation.EffectFact{"filesystem.read"}, append(plan.Facts().Resources(), plan.Facts().Resources()[1]))},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -569,5 +583,56 @@ func TestGuardedRouterRejectsMultipleEligibleSandboxesWithoutPinnedChoice(t *tes
 	}
 	if f.backend.opens != 0 || f.store.reserved != 0 {
 		t.Fatal("revoked B unexpectedly executed in A")
+	}
+}
+
+func TestGuardedWorkspacePathFactIsHostNormalizedAndFrozen(t *testing.T) {
+	f := newGuardedFixture(t)
+	req := f.request
+	req.Arguments = []byte(`{"path":"src/../README.md","workspaceId":"` + testWorkspace + `"}`)
+	plan, err := f.route.Resolve(context.Background(), req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pathFacts := 0
+	for _, fact := range plan.Facts().Resources() {
+		if fact.Kind() == "workspace_path" {
+			pathFacts++
+			if fact.Value() != "README.md" {
+				t.Fatalf("path Policy fact was not normalized: %+v", fact)
+			}
+		}
+	}
+	if pathFacts != 1 {
+		t.Fatal("Policy did not review one exact workspace_path")
+	}
+	original := plan.Arguments()
+	req.Arguments[0] = 'X'
+	if !bytes.Equal(plan.Arguments(), original) {
+		t.Fatal("model argument buffer mutation changed frozen approved execution")
+	}
+	original[0] = 'X'
+	if !bytes.Equal(plan.Arguments(), []byte(`{"path":"src/../README.md","workspaceId":"`+testWorkspace+`"}`)) {
+		t.Fatal("FrozenPlacement leaked writable argument memory")
+	}
+}
+
+func TestGuardedWorkspaceInvalidPathNeverReachesApprovalOrBackend(t *testing.T) {
+	for _, raw := range []string{
+		`{"path":"../private.txt"}`, `{"path":"/etc/passwd"}`,
+		`{"path":"README.md","workspaceId":"wrk_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}`,
+		`{"path":123}`, `{"path":""}`, `{"path":" README.md"}`,
+		`{"path":"README.md"}{"path":"another"}`,
+	} {
+		t.Run(raw, func(t *testing.T) {
+			f := newGuardedFixture(t)
+			f.request.Arguments = []byte(raw)
+			if _, err := f.route.Resolve(context.Background(), f.request); err == nil {
+				t.Fatalf("untrusted native path %s was accepted", raw)
+			}
+			if f.backend.opens != 0 || f.gate.hits != 0 || f.store.reserved != 0 {
+				t.Fatal("invalid path reached admission or Sandbox backend")
+			}
+		})
 	}
 }

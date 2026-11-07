@@ -118,6 +118,20 @@ func setup(t *testing.T) (*fakeStore, gov.Context, *gate, *backend, *Router) {
 	}
 	return f, caller, g, b, r
 }
+func TestNativeAcquireCannotUseLegacyProviderLeaseStore(t *testing.T) {
+	_, caller, gate, backend, router := setup(t)
+	placement, err := router.Resolve(context.Background(), sandboxdomain.ID("sbx_0123456789abcdef0123456789abcdef"), sandboxdomain.CapabilityRead)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := router.AcquireNative(context.Background(), caller, placement); !errors.Is(err, sandboxdomain.ErrNotAuthorized) {
+		t.Fatalf("native Tool incorrectly acquired Provider-only lease: %v", err)
+	}
+	if gate.calls.Load() != 0 || backend.opens.Load() != 0 {
+		t.Fatal("legacy Native acquire reached Policy or backend without atomic TargetScope store")
+	}
+}
+
 func TestResolveHasNoBackendEffectsAndDeniedAcquire(t *testing.T) {
 	_, caller, g, b, r := setup(t)
 	placement, err := r.Resolve(context.Background(), sandboxdomain.ID("sbx_0123456789abcdef0123456789abcdef"), sandboxdomain.CapabilityRead)

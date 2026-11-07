@@ -68,6 +68,8 @@ func TestAdmitApprovalRequiredFailsClosedBeforeOperation(t *testing.T) {
 	}
 	if fixture.approvals.calls != 1 ||
 		fixture.approvals.last.Action != governancedomain.ActionProviderActivate ||
+		fixture.approvals.last.SourceRef.Kind() != "provider" ||
+		fixture.approvals.last.SourceRef.ID() != fixture.request.ProviderID.String() ||
 		fixture.approvals.last.ToolID != nil {
 		t.Fatalf("approval = %#v calls=%d", fixture.approvals.last, fixture.approvals.calls)
 	}

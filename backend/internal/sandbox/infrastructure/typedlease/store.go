@@ -144,7 +144,7 @@ func validateOperation(op workspace.Operation, id catalog.ToolID,
 	if effectMatches != 1 {
 		return ErrUnadmitted
 	}
-	wsSeen, sbSeen := 0, 0
+	wsSeen, sbSeen, pathSeen := 0, 0, 0
 	for _, v := range approved.Resources() {
 		switch v.Kind() {
 		case "workspace_id":
@@ -157,9 +157,15 @@ func validateOperation(op workspace.Operation, id catalog.ToolID,
 			if v.Value() != sb.String() {
 				return ErrUnadmitted
 			}
+		case "workspace_path":
+			pathSeen++
+			normalized, err := workspace.NormalizeRelativePath(v.Value(), op == workspace.Search || op == workspace.Shell)
+			if err != nil || normalized != v.Value() {
+				return ErrUnadmitted
+			}
 		}
 	}
-	if wsSeen != 1 || sbSeen != 1 {
+	if wsSeen != 1 || sbSeen != 1 || pathSeen != 1 {
 		return ErrUnadmitted
 	}
 	return nil

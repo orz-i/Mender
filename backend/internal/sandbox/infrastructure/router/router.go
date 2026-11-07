@@ -11,6 +11,7 @@ import (
 	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	sandboxapp "github.com/orz-i/Mender/backend/internal/sandbox/application"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
+	"github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/typedlease"
 )
 
 type Router struct {
@@ -55,6 +56,19 @@ func (r *Router) Resolve(ctx context.Context, id sandboxdomain.ID, required sand
 		return sandboxapp.Placement{}, sandboxdomain.ErrConflict
 	}
 	return sandboxapp.Placement{Sandbox: item, Run: run, Required: required}, nil
+}
+
+// AcquireNative uses the same audited Sandbox Router and backend lifecycle,
+// but requires the typed atomic Profile/Workspace/ToolBinding lease store.
+// A legacy Provider-facade lease store cannot authorize a Native Tool.
+func (r *Router) AcquireNative(ctx context.Context, caller governancedomain.Context, placement sandboxapp.Placement) (*sandboxapp.Lease, error) {
+	if r == nil {
+		return nil, sandboxdomain.ErrNotAuthorized
+	}
+	if _, ok := r.leases.(*typedlease.Store); !ok {
+		return nil, sandboxdomain.ErrNotAuthorized
+	}
+	return r.Acquire(ctx, caller, placement)
 }
 
 // Acquire only works after an AdmissionGate decides sandbox.acquire. It reads

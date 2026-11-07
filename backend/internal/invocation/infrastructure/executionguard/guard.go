@@ -24,7 +24,8 @@ func (Unlimited) Acquire(
 	return func() {}, nil
 }
 
-// ProviderSerial serializes executions that target the same Provider.
+// ProviderSerial serializes operations sharing the same verified Tool source.
+// The legacy constructor name is retained until the API hard-cut cleanup.
 type ProviderSerial struct {
 	serial keyedSerial
 }
@@ -37,7 +38,7 @@ func (g *ProviderSerial) Acquire(
 	ctx context.Context,
 	request Request,
 ) (func(), error) {
-	return g.serial.acquire(ctx, request.Tool.ProviderID().String())
+	return g.serial.acquire(ctx, request.Tool.SourceRef().String())
 }
 
 // ToolSerial serializes executions that target the same canonical Tool.

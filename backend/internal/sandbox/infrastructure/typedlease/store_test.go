@@ -155,7 +155,11 @@ func atomicWorkspaceFixture(t *testing.T) *atomicFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	facts, err := invocation.KnownGovernanceFacts([]invocation.EffectFact{"filesystem.read"}, []invocation.ResourceFact{wf, sf})
+	pf, err := invocation.NewResourceFact("workspace_path", "README.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	facts, err := invocation.KnownGovernanceFacts([]invocation.EffectFact{"filesystem.read"}, []invocation.ResourceFact{wf, sf, pf})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -271,6 +275,17 @@ func TestAtomicLeaseRejectsUnapprovedInvocationAndDifferentTool(t *testing.T) {
 	bad.Workspace = "wrk_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	if _, err := f.store.Reserve(context.Background(), bad); err == nil {
 		t.Fatal("approved Workspace was replaced")
+	}
+	bad = f.request
+	var missingPath []invocation.ResourceFact
+	for _, fact := range f.request.ApprovedFacts.Resources() {
+		if fact.Kind() != "workspace_path" {
+			missingPath = append(missingPath, fact)
+		}
+	}
+	bad.ApprovedFacts, _ = invocation.KnownGovernanceFacts([]invocation.EffectFact{"filesystem.read"}, missingPath)
+	if _, err := f.store.Reserve(context.Background(), bad); !errors.Is(err, typedlease.ErrUnadmitted) {
+		t.Fatalf("native lease without reviewed workspace_path should be denied: %v", err)
 	}
 	if f.count(t) != 0 {
 		t.Fatal("failed admission left a lease")

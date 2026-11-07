@@ -52,7 +52,7 @@ func (a invocationAdmission) admit(ctx context.Context, attempt invocationAttemp
 		toolID := prepared.tool.ID()
 		approved, err := a.approvals.Approve(ctx, governanceapplication.ApprovalRequest{
 			OperationID: attempt.metadata.id.String(), Action: governancedomain.ActionToolInvoke,
-			Context: attempt.metadata.context, ProviderID: prepared.tool.ProviderID(), ToolID: &toolID, Decision: decision,
+			Context: attempt.metadata.context, SourceRef: prepared.tool.SourceRef(), ToolID: &toolID, Decision: decision,
 		})
 		if err != nil {
 			admitted.approval = auditdomain.ApprovalDenied
