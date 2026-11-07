@@ -101,11 +101,12 @@ type FrozenPlacement struct {
 	facts     invocation.GovernanceFacts
 }
 
-func (p FrozenPlacement) ToolID() catalog.ToolID   { return p.request.ToolID }
-func (p FrozenPlacement) Arguments() []byte        { return bytes.Clone(p.request.Arguments) }
-func (p FrozenPlacement) Workspace() workspace.Ref { return p.request.Workspace }
-func (p FrozenPlacement) SandboxID() sandbox.ID    { return p.placement.Sandbox.ID() }
-func (p FrozenPlacement) RunGeneration() uint64    { return p.placement.Run.Generation }
+func (p FrozenPlacement) ToolID() catalog.ToolID         { return p.request.ToolID }
+func (p FrozenPlacement) Operation() workspace.Operation { return p.request.Operation }
+func (p FrozenPlacement) Arguments() []byte              { return bytes.Clone(p.request.Arguments) }
+func (p FrozenPlacement) Workspace() workspace.Ref       { return p.request.Workspace }
+func (p FrozenPlacement) SandboxID() sandbox.ID          { return p.placement.Sandbox.ID() }
+func (p FrozenPlacement) RunGeneration() uint64          { return p.placement.Run.Generation }
 func (p FrozenPlacement) Facts() invocation.GovernanceFacts {
 	if p.facts.Validate() != nil {
 		return invocation.GovernanceFacts{}

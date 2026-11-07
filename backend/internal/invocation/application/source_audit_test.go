@@ -9,6 +9,10 @@ import (
 	invocation "github.com/orz-i/Mender/backend/internal/invocation/domain"
 )
 
+type auditedTarget struct{ facts invocation.GovernanceFacts }
+
+func (t auditedTarget) Facts() invocation.GovernanceFacts { return t.facts }
+
 func TestAgentAndNativeInvocationAuditNeverFabricatesProvider(t *testing.T) {
 	cases := []struct {
 		kind     string
@@ -37,6 +41,18 @@ func TestAgentAndNativeInvocationAuditNeverFabricatesProvider(t *testing.T) {
 				t.Fatal(err)
 			}
 			f.tools.tool = item
+			if tc.kind == "native" {
+				resources, err := invocation.NewResourceFact("workspace_path", "a")
+				if err != nil {
+					t.Fatal(err)
+				}
+				facts, err := invocation.KnownGovernanceFacts([]invocation.EffectFact{"filesystem.read"}, []invocation.ResourceFact{resources})
+				if err != nil {
+					t.Fatal(err)
+				}
+				f.facts.facts = facts
+				f.facts.target = auditedTarget{facts}
+			}
 			response, err := f.useCase.Execute(context.Background(), InvokeToolRequest{
 				ToolID: item.ID(), Arguments: []byte(`{}`),
 				Context: catalogInvocationContext(t, "typed-audit"),

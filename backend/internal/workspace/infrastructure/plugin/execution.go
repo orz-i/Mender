@@ -12,30 +12,37 @@ import (
 )
 
 func executeTyped(ctx context.Context, lease *workspaceapp.Lease, operation workspace.Operation, arguments invocation.JSONValue, maxResultBytes int) (invocation.Outcome, error) {
+	return executeTypedWithArgumentSize(ctx, lease, operation, arguments, maxResultBytes, len(arguments.Bytes()))
+}
+
+// A native Workspace call may carry a routing-only workspaceId. The typed
+// backend receives it stripped, while all size and canonical-byte limits use
+// the original admitted invocation rather than the shortened payload.
+func executeTypedWithArgumentSize(ctx context.Context, lease *workspaceapp.Lease, operation workspace.Operation, arguments invocation.JSONValue, maxResultBytes, originalBytes int) (invocation.Outcome, error) {
 	if err := ctx.Err(); err != nil {
 		return mapResult(nil, lease.Abort(err), maxResultBytes)
 	}
-	if err := lease.CheckArgumentSize(len(arguments.Bytes())); err != nil {
+	if err := lease.CheckArgumentSize(originalBytes); err != nil {
 		return mapResult(nil, lease.Abort(err), maxResultBytes)
 	}
 	var result any
 	var err error
 	switch operation {
 	case workspace.Read:
-		result, err = decodeAndRun(ctx, lease, arguments, sourceKeyRead, lease.Read)
+		result, err = decodeAndRun(ctx, lease, arguments, originalBytes, sourceKeyRead, lease.Read)
 	case workspace.Search:
-		result, err = decodeAndRun(ctx, lease, arguments, sourceKeySearch, lease.Search)
+		result, err = decodeAndRun(ctx, lease, arguments, originalBytes, sourceKeySearch, lease.Search)
 	case workspace.Edit:
-		result, err = decodeAndRun(ctx, lease, arguments, sourceKeyEdit, lease.Edit)
+		result, err = decodeAndRun(ctx, lease, arguments, originalBytes, sourceKeyEdit, lease.Edit)
 	case workspace.Shell:
-		result, err = decodeAndRun(ctx, lease, arguments, sourceKeyShell, lease.Shell)
+		result, err = decodeAndRun(ctx, lease, arguments, originalBytes, sourceKeyShell, lease.Shell)
 	default:
 		return mapResult(nil, lease.Abort(fmt.Errorf("unknown Workspace operation %q", operation)), maxResultBytes)
 	}
 	return mapResult(result, err, maxResultBytes)
 }
 
-func decodeAndRun[I, O any](ctx context.Context, lease *workspaceapp.Lease, arguments invocation.JSONValue, label string, run func(context.Context, I) (O, error)) (O, error) {
+func decodeAndRun[I, O any](ctx context.Context, lease *workspaceapp.Lease, arguments invocation.JSONValue, originalBytes int, label string, run func(context.Context, I) (O, error)) (O, error) {
 	var input I
 	if err := decodeStrict(arguments.Bytes(), &input, "decode "+label+" arguments"); err != nil {
 		var zero O
@@ -64,13 +71,13 @@ func decodeAndRun[I, O any](ctx context.Context, lease *workspaceapp.Lease, argu
 	switch request := any(&input).(type) {
 	case *workspace.ReadRequest:
 		request.Present = present
-		request.CanonicalBytes = len(arguments.Bytes())
+		request.CanonicalBytes = originalBytes
 	case *workspace.SearchRequest:
 		request.Present = present
-		request.CanonicalBytes = len(arguments.Bytes())
+		request.CanonicalBytes = originalBytes
 	case *workspace.EditRequest:
 		request.Present = present
-		request.CanonicalBytes = len(arguments.Bytes())
+		request.CanonicalBytes = originalBytes
 		var edits []map[string]json.RawMessage
 		if err := json.Unmarshal(fields["edits"], &edits); err == nil {
 			for index, edit := range edits {
@@ -81,7 +88,7 @@ func decodeAndRun[I, O any](ctx context.Context, lease *workspaceapp.Lease, argu
 		}
 	case *workspace.ShellRequest:
 		request.Present = present
-		request.CanonicalBytes = len(arguments.Bytes())
+		request.CanonicalBytes = originalBytes
 	}
 	return run(ctx, input)
 }

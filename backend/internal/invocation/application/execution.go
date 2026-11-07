@@ -59,7 +59,7 @@ func (e invocationExecution) run(ctx context.Context, attempt invocationAttempt,
 	executionRequest := ExecutionRequest{
 		InvocationID: attempt.metadata.id, Tool: prepared.tool, Arguments: prepared.arguments,
 		MaxResultBytes: attempt.budget.MaxResultBytes(),
-		AdmittedFacts:  prepared.facts, Context: attempt.metadata.context,
+		AdmittedFacts:  prepared.facts, Target: prepared.target, Context: attempt.metadata.context,
 	}
 	// Mint an attempt-local receipt only after the canonical Policy/Approval,
 	// Runtime Budget and binding gates succeed. Native Sandbox acquisition

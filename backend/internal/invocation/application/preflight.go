@@ -28,6 +28,7 @@ type preparedInvocation struct {
 	arguments  invocationdomain.JSONValue
 	facts      invocationdomain.GovernanceFacts
 	governance invocationdomain.ScopedBindingGovernance
+	target     ExecutionTarget
 }
 
 func (p invocationPreflight) snapshotBudget(ctx context.Context, rawArguments []byte) (runtimegovernancedomain.Budget, *invocationCompletion) {
@@ -93,14 +94,23 @@ func (p invocationPreflight) prepare(ctx context.Context, attempt invocationAtte
 	if p.facts == nil {
 		return preparedInvocation{}, preflightFailure(tool, "governance fact extractor is unavailable", nil)
 	}
-	facts, err := p.facts.Extract(ctx, tool, arguments)
+	extracted, err := p.facts.Extract(ctx, tool, arguments, attempt.metadata.context)
 	if err != nil {
 		return preparedInvocation{}, preflightFailure(tool, "derive governance facts", err)
 	}
-	if err := facts.Validate(); err != nil {
+	if err := extracted.Facts.Validate(); err != nil {
 		return preparedInvocation{}, preflightFailure(tool, "validate governance facts", err)
 	}
-	return preparedInvocation{tool: tool, arguments: arguments, facts: facts, governance: governance}, nil
+	if extracted.Target != nil {
+		if tool.SourceRef().Kind() != catalogdomain.SourceNative ||
+			!sameApprovedFacts(extracted.Facts, extracted.Target.Facts()) {
+			return preparedInvocation{}, preflightFailure(tool, "execution target facts mismatch", nil)
+		}
+	} else if tool.SourceRef().Kind() == catalogdomain.SourceNative {
+		return preparedInvocation{}, preflightFailure(tool, "native execution target is unavailable", nil)
+	}
+	return preparedInvocation{tool: tool, arguments: arguments, facts: extracted.Facts,
+		governance: governance, target: extracted.Target}, nil
 }
 
 func (p invocationPreflight) resolveScope(ctx context.Context, metadata invocationMetadata) (invocationdomain.ScopedBindingGovernance, *invocationCompletion) {

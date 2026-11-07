@@ -1612,18 +1612,20 @@ func (f *fakeArgumentValidator) Validate(
 }
 
 type fakeFactExtractor struct {
-	facts invocationdomain.GovernanceFacts
-	err   error
-	calls int
+	facts  invocationdomain.GovernanceFacts
+	target ExecutionTarget
+	err    error
+	calls  int
 }
 
 func (f *fakeFactExtractor) Extract(
 	context.Context,
 	catalogdomain.Tool,
 	invocationdomain.JSONValue,
-) (invocationdomain.GovernanceFacts, error) {
+	governancedomain.Context,
+) (GovernanceFactExtraction, error) {
 	f.calls++
-	return f.facts, f.err
+	return GovernanceFactExtraction{Facts: f.facts, Target: f.target}, f.err
 }
 
 type fakePolicy struct {
@@ -1754,15 +1756,17 @@ type fakeExecutor struct {
 	blockUntilDone    bool
 	progressMessage   string
 	lastReporter      ProgressReporter
+	last              ExecutionRequest
 }
 
 func (f *fakeExecutor) Execute(
 	ctx context.Context,
-	_ ExecutionRequest,
+	request ExecutionRequest,
 	credentials CredentialResolver,
 	progress ProgressReporter,
 ) (invocationdomain.Outcome, error) {
 	f.calls++
+	f.last = request
 	f.lastReporter = progress
 	if f.progressMessage != "" && progress != nil {
 		update, err := invocationdomain.NewProgressUpdate(f.progressMessage)

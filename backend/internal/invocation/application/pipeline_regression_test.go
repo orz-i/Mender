@@ -11,6 +11,7 @@ import (
 	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	governanceapplication "github.com/orz-i/Mender/backend/internal/governance/application"
+	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	policydomain "github.com/orz-i/Mender/backend/internal/policy/domain"
 	runtimegovernancedomain "github.com/orz-i/Mender/backend/internal/runtimegovernance/domain"
@@ -266,9 +267,9 @@ func (p *tracedInvocationPorts) Validate(context.Context, catalogdomain.Schema, 
 	return true, nil
 }
 
-func (p *tracedInvocationPorts) Extract(context.Context, catalogdomain.Tool, invocationdomain.JSONValue) (invocationdomain.GovernanceFacts, error) {
+func (p *tracedInvocationPorts) Extract(context.Context, catalogdomain.Tool, invocationdomain.JSONValue, governancedomain.Context) (GovernanceFactExtraction, error) {
 	p.order = append(p.order, "facts")
-	return p.facts, nil
+	return GovernanceFactExtraction{Facts: p.facts}, nil
 }
 
 func (p *tracedInvocationPorts) Evaluate(_ context.Context, request PolicyRequest) (policydomain.Decision, error) {

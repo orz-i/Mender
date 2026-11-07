@@ -6,8 +6,10 @@ import (
 	"errors"
 	"path/filepath"
 	"testing"
+	"time"
 
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
+	governancedomain "github.com/orz-i/Mender/backend/internal/governance/domain"
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
 	providerconfigstore "github.com/orz-i/Mender/backend/internal/providerplugin/configstore"
@@ -52,17 +54,18 @@ func TestInvocationGovernanceFactsUseReviewedBuiltInExtractorWithoutActivation(t
 		ctx,
 		tool,
 		arguments,
+		governancedomain.Context{},
 	)
 	if err != nil {
 		t.Fatalf("Extract() error = %v", err)
 	}
-	if facts.Knowledge() != invocationdomain.FactKnowledgeKnown {
-		t.Fatalf("Knowledge() = %s, want known", facts.Knowledge())
+	if facts.Facts.Knowledge() != invocationdomain.FactKnowledgeKnown {
+		t.Fatalf("Knowledge() = %s, want known", facts.Facts.Knowledge())
 	}
-	if got := facts.Effects(); len(got) != 1 || got[0] != "filesystem.write" {
+	if got := facts.Facts.Effects(); len(got) != 1 || got[0] != "filesystem.write" {
 		t.Fatalf("Effects() = %v", got)
 	}
-	resources := facts.Resources()
+	resources := facts.Facts.Resources()
 	if len(resources) != 1 ||
 		resources[0].Kind() != "workspace_path" ||
 		resources[0].Value() != "src/main.go" {
@@ -93,12 +96,12 @@ func TestInvocationGovernanceFactsRemainUnknownWithoutReviewedBuiltInExtractor(t
 	if err != nil {
 		t.Fatal(err)
 	}
-	facts, err := newInvocationGovernanceFactExtractor(store, registry).Extract(ctx, tool, arguments)
+	facts, err := newInvocationGovernanceFactExtractor(store, registry).Extract(ctx, tool, arguments, governancedomain.Context{})
 	if err != nil {
 		t.Fatalf("Extract() error = %v", err)
 	}
-	if facts.Knowledge() != invocationdomain.FactKnowledgeUnknown {
-		t.Fatalf("Knowledge() = %s, want unknown", facts.Knowledge())
+	if facts.Facts.Knowledge() != invocationdomain.FactKnowledgeUnknown {
+		t.Fatalf("Knowledge() = %s, want unknown", facts.Facts.Knowledge())
 	}
 }
 
@@ -145,12 +148,12 @@ func TestInvocationGovernanceFactsDoNotTrustExternalInstallations(t *testing.T) 
 	facts, err := newInvocationGovernanceFactExtractor(
 		store,
 		registry,
-	).Extract(ctx, mustGovernanceTool(t, providerID, "workspace.edit"), arguments)
+	).Extract(ctx, mustGovernanceTool(t, providerID, "workspace.edit"), arguments, governancedomain.Context{})
 	if err != nil {
 		t.Fatalf("Extract() error = %v", err)
 	}
-	if facts.Knowledge() != invocationdomain.FactKnowledgeUnknown {
-		t.Fatalf("Knowledge() = %s, want unknown", facts.Knowledge())
+	if facts.Facts.Knowledge() != invocationdomain.FactKnowledgeUnknown {
+		t.Fatalf("Knowledge() = %s, want unknown", facts.Facts.Knowledge())
 	}
 	if plugin.extracts != 0 || plugin.opens != 0 {
 		t.Fatalf("external config invoked built-in plugin: extracts=%d opens=%d", plugin.extracts, plugin.opens)
@@ -247,3 +250,45 @@ func (p *governanceTestPlugin) ExtractGovernanceFacts(
 
 var _ providerplugin.Plugin = (*governanceTestPlugin)(nil)
 var _ providerplugin.GovernanceFactProvider = (*governanceTestPlugin)(nil)
+
+func TestLegacyInvocationFactExtractorRejectsUncomposedTypedSources(t *testing.T) {
+	t.Parallel()
+	for _, spec := range []struct {
+		kind    catalogdomain.SourceKind
+		id, key string
+	}{
+		{catalogdomain.SourceAgent, "agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "agent.delegate"},
+		{catalogdomain.SourceNative, "workspace", "workspace.read"},
+		{catalogdomain.SourceNative, "jobs", "jobs.status"},
+	} {
+		t.Run(string(spec.kind)+":"+spec.id, func(t *testing.T) {
+			source, err := catalogdomain.NewSourceRef(spec.kind, spec.id)
+			if err != nil {
+				t.Fatal(err)
+			}
+			id, err := catalogdomain.ParseToolID("tool_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+			if err != nil {
+				t.Fatal(err)
+			}
+			schema, err := catalogdomain.NewSchema([]byte(`{"type":"object"}`))
+			if err != nil {
+				t.Fatal(err)
+			}
+			item, err := catalogdomain.NewToolFromSource(id, source, catalogdomain.ToolSpec{
+				SourceKey: spec.key, Name: "test", InputSchema: schema,
+			}, time.Now().UTC())
+			if err != nil {
+				t.Fatal(err)
+			}
+			args, err := invocationdomain.NewJSONValue([]byte(`{}`))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := newInvocationGovernanceFactExtractor(nil, nil).Extract(
+				context.Background(), item, args, governancedomain.Context{},
+			); err == nil {
+				t.Fatal("legacy Provider-v2 Runtime accepted uncomposed Agent/native source")
+			}
+		})
+	}
+}

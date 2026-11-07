@@ -38,13 +38,30 @@ type ArgumentValidator interface {
 	) (bool, error)
 }
 
-// GovernanceFactExtractor derives bounded Policy facts from validated input.
+// ExecutionTarget is the immutable, host-reviewed placement chosen before
+// Policy. A native executor must use this exact target after admission; Tool
+// arguments may request a Workspace but never manufacture this authority.
+type ExecutionTarget interface {
+	Facts() invocationdomain.GovernanceFacts
+}
+
+// GovernanceFactExtraction keeps the authorized target and its Policy facts
+// together for this single invocation. External Provider tools need no target.
+type GovernanceFactExtraction struct {
+	Facts  invocationdomain.GovernanceFacts
+	Target ExecutionTarget
+}
+
+// GovernanceFactExtractor derives bounded facts and an immutable execution
+// target from validated input AND the authenticated caller, before Policy.
+// No backend may be acquired, started or mutated at this stage.
 type GovernanceFactExtractor interface {
 	Extract(
 		context.Context,
 		catalogdomain.Tool,
 		invocationdomain.JSONValue,
-	) (invocationdomain.GovernanceFacts, error)
+		governancedomain.Context,
+	) (GovernanceFactExtraction, error)
 }
 
 // PolicyEvaluator decides whether an invocation may execute.
@@ -155,6 +172,10 @@ type ExecutionRequest struct {
 	// invocation's Policy decision. Executors may compare mutable target
 	// resolution against this snapshot, but cannot broaden its authority.
 	AdmittedFacts invocationdomain.GovernanceFacts
+	// Target is the frozen, pre-Policy execution placement for a native Tool.
+	// It is nil for Provider and Agent-as-Tool calls. Executors must not
+	// resolve a replacement target after approval or timeout.
+	Target ExecutionTarget
 	// Context is supplied by canonical Invocation after Policy/approval admission.
 	// Executors must never derive Principal/Scope from Tool arguments.
 	Context governancedomain.Context
