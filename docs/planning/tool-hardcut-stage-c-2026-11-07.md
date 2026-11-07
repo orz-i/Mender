@@ -58,6 +58,15 @@ No compatibility bridge, new generic execution engine, speculative browser sessi
 
 ## 4. Verification and release gate
 
-Recorded Stage C focused Go tests and race check must pass before code commit. [Stage B](tool-hardcut-stage-b-2026-11-07.md) documented a canonical `pnpm check` failure caused by Bootstrap full parallel Race test timing out after 10 minutes, while a bounded rerun of those same cases passed. Stage C must not hide that historical regression. Run bounded `go test -race -parallel=2 -timeout=15m ./backend/...` and separate CLI/SDK/UI checks as feasible. No Stage C change is allowed to claim the entire hard cut, real Wails, remote Sandbox placements or live Profile target restrictions are complete.
+Stage C implementation commit: `aa1a001` (`refactor(runtime): add guarded workspace execution placement`).
+
+- **Passed:** `go test -count=1 ./backend/internal/workspace/... ./backend/internal/sandbox/application ./backend/internal/sandbox/infrastructure/router`.
+- **Passed:** `go test -race -count=1 ./backend/internal/workspace/... ./backend/internal/sandbox/application ./backend/internal/sandbox/infrastructure/router ./backend/internal/catalog/domain ./backend/internal/profile/domain ./backend/internal/toolsuite/infrastructure/curated`.
+- **Passed:** `go run scripts/check-backend-architecture.go` and `golangci-lint run ./backend/...` (0 issues).
+- **Passed:** `pnpm lint && pnpm typecheck && pnpm test && pnpm build`; i18n 1639/1639, Vitest 76/76 files and 512/512 tests, Web/Desktop frontend builds passed. Only existing Vite large-bundle warnings remain.
+- **Evidence retained:** bounded full-backend Race test `go test -race -count=1 -parallel=2 -timeout=15m ./backend/...` in `/tmp/mender-stage-c-20261107-race.log` with exit receipt `/tmp/mender-stage-c-20261107-race.exit`. Treat its result separately from canonical `pnpm check`.
+- **Historical gate:** [Stage B](tool-hardcut-stage-b-2026-11-07.md) documented canonical `pnpm check` exit 1 from the default 10-minute Bootstrap full-parallel Race timeout. Focused bounded rerun passed; this **does not** make the canonical full gate green.
+
+Stage C remains nonproduction-wired. No test in this phase is evidence of actual Profile TargetScope persistence, full client contract parity, Docker/SSH root attestation, live Agent execution, production database migration or Wails-native GUI acceptance.
 
 **Next Stage D risk:** remove the mandatory Provider ancestry from the canonical Catalog atomically with native registration, resource provenance and Profile-source projections; never expose Stage C GuardedRouter to arbitrary callers without the real Invocation-issued admission verifier and TargetScope persistence.

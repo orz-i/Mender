@@ -1,6 +1,6 @@
 # System Context
 
-This document diagrams the **currently implemented** Provider-backed Tool facades and Workspace/Sandbox bridging. The accepted **future** hard-cut ownership contract is [ADR-0064](adr/0064-tool-provenance-and-execution-placement-hardcut.md), with [Phase A inventory](../planning/tool-hardcut-phase-a-inventory-2026-11-07.md). Do not read this diagram as evidence that typed SourceRef or shared Workspace identities are already running.
+This document diagrams the **currently implemented** Provider-backed Tool facades and Workspace/Sandbox bridging. The accepted **future** hard-cut ownership contract is [ADR-0064](adr/0064-tool-provenance-and-execution-placement-hardcut.md), with [Phase A inventory](../planning/tool-hardcut-phase-a-inventory-2026-11-07.md). The [Stage C guarded placement adapter](../planning/tool-hardcut-stage-c-2026-11-07.md) is tested but **not constructed by the current production Runtime**, because the new Catalog SourceRef and Profile TargetScope persistence are not yet activated. Do not read this diagram as evidence that the new typed SourceRef or shared Workspace identities are already running.
 
 ## Backend boundaries
 

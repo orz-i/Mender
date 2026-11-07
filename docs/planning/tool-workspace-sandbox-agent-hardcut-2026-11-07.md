@@ -1,6 +1,6 @@
 # Mender 工具 / Agent as Tool / Workspace / Sandbox 归属与执行边界硬切治理
 
-**状态**：阶段 A 已提交；阶段 B 的类型化领域合同已实现并提交（定向 Go/Race、前端与架构检查通过；全量 `pnpm check` 在 Bootstrap Race 10 分钟超时，详见 Stage B 记录）；阶段 C–H 未实施，未执行真实数据迁移或运行时硬切
+**状态**：阶段 A/B 已提交；阶段 C 的受信 Workspace/Sandbox 执行目标匹配适配器及负向测试已实现，仍未接入生产 Invocation，验证结果另见 Stage C 记录；阶段 D–H 尚未实施，未执行真实数据迁移或运行时硬切。阶段 B 全量 `pnpm check` 曾因 Bootstrap Race 并行负载超时，已记录并以有界并发回归复验。
 
 **仓库基线**：`main` / `ce924e0`，Mac mini `/Users/mini/Coding/Mender`，2026-11-07
 
@@ -169,10 +169,14 @@
 - **Gate**：定向 Go/Race、后端架构、Go lint、完整普通 Go、前端/SDK/Wails 生成与构建均通过。全量 `pnpm check` 的 Bootstrap Race 10 分钟超时是待收口门禁，复验当时运行的 10 个 Bootstrap 测试在限制并发后通过。不得对外声称完整 canonical gate 已通过。
 - **提交**：`refactor(domain): type sources and workspace references`。
 
-### C — 工具执行目标解析
-- 通过 Workspace application + Sandbox Router Resolve/Acquire 接入受信 requirements；保留唯一 Invocation admission 和 lease。
-- Agent Delegate 直达 Agent Task application；显式 Agent 工具供应每次调用仍经 Invocation。
-- **Gate**：Policy approved A ≠ execution B 拒绝、撤权竞态、隔离、分支失败/lease cleanup、无 Host 降级。
+### C — 工具执行目标解析（阶段性适配器与测试完成；未切换生产调用链）
+- [x] Workspace 应用层：从已授权 Workspaces 中明确选择、使用经批准默认或唯一候选；多个目标一律拒绝模糊推断。
+- [x] Workspace application 只读 Sandbox placement 匹配；Pin 目标不可用时绝不降级或改选其他 Sandbox。
+- [x] [Guarded Sandbox Bridge](tool-hardcut-stage-c-2026-11-07.md)：基于现有 Router Resolve/Acquire 核对 Native ToolID、Profile TargetScope、Workspace Authority、真实 Backend Capability/Isolation、local root 和 run generation；保存 reviewed facts，在已有 Invocation 批准后核对准入凭据并复验再取得原生持久租约。
+- [x] 独立 Agent Task/Session/ACP v1 路径保持不变；不引入新的 Agent 运行时或覆盖原生工具审批。
+- [x] 负向测试：Policy 批 A 执行 B、未获 Invocation 准入、撤权/lease CAS 竞态、Backend 消失、目标 root/run 变化、无 Host fallback。
+- **不能宣称**：Workspace Inventory、Profile TargetScope、Invocation receipt 的生产适配器及数据持久化（阶段 D–F）；跨 Docker/SSH 的 root 认证、实际生产 MCP 路径切换、真正 Agent Tool Facade 退役均尚未完成。
+- **Gate**：定向 Race/Go/架构/lint 通过；全量有界 Race 结果记录于 Stage C 验收文档。
 - **提交**：`refactor(runtime): resolve governed execution placement`。
 
 ### D — Catalog/Tool Source/Provider 硬切
