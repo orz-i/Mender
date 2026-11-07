@@ -1,6 +1,6 @@
 # Mender 工具 / Agent as Tool / Workspace / Sandbox 归属与执行边界硬切治理
 
-**状态**：阶段 A/B 已提交；阶段 C 的受信 Workspace/Sandbox 执行目标匹配适配器及负向测试已实现，仍未接入生产 Invocation，验证结果另见 Stage C 记录；阶段 D–H 尚未实施，未执行真实数据迁移或运行时硬切。阶段 B 全量 `pnpm check` 曾因 Bootstrap Race 并行负载超时，已记录并以有界并发回归复验。
+**状态**：阶段 A/B/C 已提交；阶段 D 已完成 Tool SourceRef 领域归属、宿主内建 Schema、来源路由及隔离的未来 Catalog SQLite/FTS 契约，仍未接入生产 Runtime；阶段 E–H 的一致性迁移、接口切换和实体清理尚未实施。真实用户数据库未变更。阶段 B/C 的全量 Bootstrap Race 门禁仍待专项收口，不能宣称整库全量门禁通过。
 
 **仓库基线**：`main` / `ce924e0`，Mac mini `/Users/mini/Coding/Mender`，2026-11-07
 
@@ -179,11 +179,16 @@
 - **Gate**：定向 Go/Race、架构/lint、前端 512 项测试和双端构建通过；全量有界 Race 在 Bootstrap 长时未结束，已停止并记录非通过状态。生产硬切前必须单独完成全量门禁。
 - **提交**：`refactor(runtime): resolve governed execution placement`。
 
-### D — Catalog/Tool Source/Provider 硬切
-- Catalog SQLite Schema、Tool Repository、FTS、native Workspace/Jobs 一份 Tool 注册、AgentID source、Provider 同步和调用全部转向 Typed SourceRef。
-- 从代码移除通过 Agent/Sandbox 先建 Provider 才能供应 Tool 的依赖；外部 Provider 功能不变。
-- **Gate**：Agent Task、Workspace read/edit/shell、SSH Jobs、外部 MCP/OpenAPI/Model Tools 交叉用例。
-- **提交**：`refactor(catalog): retire resource-backed tool providers`。
+### D — Catalog / Tool Source / Provider 归属模型（实现完成，生产硬切待 E/F）
+- [x] Canonical Tool 内部强制 SourceRef，支持 provider/agent/native；为当前生产 v2 保留 Provider-only 构造/读取，不在未迁移的旧库注册 native/Agent 工具。
+- [x] Provider Sync 明确使用 `provider:<ProviderID>`，旧 v2 Sync 与插件行为保持一致。
+- [x] Invocation Executor Router 基于精确 SourceRef 选择；两个同后端 AgentID 不混淆，native ToolID/SourceKey 必须匹配宿主审定注册表。
+- [x] 每个 Workspace/Jobs 操作一份固定 ToolID 和宿主审定的完整 Schema；不按 Sandbox 克隆新工具，不冒充 ACP Runtime。
+- [x] 独立的未来 SourceRef SQLite/FTS 仓库与只读来源查询、事务快照校验、Provider SQL owner guards，且未被生产 Catalog 自动迁移调用。
+- [x] [Stage D 实现、迁移前置条件及测试证据](tool-hardcut-stage-d-2026-11-07.md)。
+- **不可提前实施**：删除旧 Agent/Sandbox Facade、重建真实 DB、启用 native Tools、Profile TargetScope/Policy/MCP/SDK/Wails 切换，必须和 E/F 的安全迁移及交付共同完成。阶段 D 的隔离新结构不是第二条运行中的工具系统。
+- **Gate**：Catalog/Provider/Agent Native 元数据及路由回归，SourceRef SQLite FTS 与负向授权验证；全量 Bootstrap Race 门禁待最终治理。
+- **提交**：`refactor(catalog): prepare typed tool source and native registry`。
 
 ### E — 跨 Context 一次性迁移
 - 实现只读 dry-run、冲突报告、备份/恢复验证以及单事务 upgrade，删除旧 facade 业务表及失去用途的内部 Provider rows。

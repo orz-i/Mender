@@ -93,4 +93,4 @@ Minor implementation choices that remain inside an accepted architectural bounda
 - [ADR-0061: Type the Workspace execution boundary in R4](0061-r4-typed-workspace-boundary.md) — Accepted for R4
 - [ADR-0062: Separate Profile selection and delivery configuration in R5](0062-r5-profile-delivery-schema-boundaries.md) — Accepted for R5
 - [ADR-0063: Separate client capabilities and consolidate Tools ownership in R6](0063-r6-client-capabilities-tools-ownership.md) — Accepted for R6
-- [ADR-0064: Separate Tool provenance, Agent-as-Tool ownership, Workspace context, and Sandbox execution placement](0064-tool-provenance-and-execution-placement-hardcut.md) — Accepted as target architecture; Stage B types and Stage C guarded placement adapter implemented, runtime cutover D–H pending
+- [ADR-0064: Separate Tool provenance, Agent-as-Tool ownership, Workspace context, and Sandbox execution placement](0064-tool-provenance-and-execution-placement-hardcut.md) — Accepted as target architecture; Stage B/C/D typed contracts implemented without production activation, data/API/runtime hard cut E–H pending
