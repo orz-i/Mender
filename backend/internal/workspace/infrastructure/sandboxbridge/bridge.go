@@ -36,6 +36,13 @@ func (p Provider) Acquire(ctx context.Context, caller governance.Context, target
 	if err != nil {
 		return nil, fmt.Errorf("acquire Sandbox Workspace execution: %w", err)
 	}
+	return wrapWorkspaceLease(lease, placement)
+}
+
+// wrapWorkspaceLease retains the exact Sandbox lease and the established
+// backend-specific result/argument compatibility behavior. Both old and new
+// routes share it; no execution path is duplicated.
+func wrapWorkspaceLease(lease *sandboxapp.Lease, placement sandboxapp.Placement) (*workspaceapp.Lease, error) {
 	if lease == nil {
 		return nil, fmt.Errorf("acquire Sandbox Workspace execution: missing lease")
 	}
