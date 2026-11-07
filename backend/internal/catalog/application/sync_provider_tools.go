@@ -77,6 +77,10 @@ func (uc SyncProviderTools) Execute(
 	if err != nil {
 		return SyncProviderToolsResult{}, fmt.Errorf("sync provider tools: %w", err)
 	}
+	providerSource, err := domain.ProviderSource(providerID)
+	if err != nil {
+		return SyncProviderToolsResult{}, fmt.Errorf("sync provider tools: %w", err)
+	}
 
 	discovered, err := uc.source.DiscoverTools(ctx, provider)
 	if err != nil {
@@ -94,6 +98,9 @@ func (uc SyncProviderTools) Execute(
 
 	existingByKey := make(map[string]domain.Tool, len(current))
 	for _, tool := range current {
+		if tool.SourceRef() != providerSource {
+			return SyncProviderToolsResult{}, fmt.Errorf("sync provider tools: tool %s is owned by %s, expected %s", tool.ID(), tool.SourceRef(), providerSource)
+		}
 		existingByKey[tool.SourceKey()] = tool
 	}
 
@@ -133,7 +140,7 @@ func (uc SyncProviderTools) Execute(
 			return SyncProviderToolsResult{}, fmt.Errorf("sync provider tools: allocate tool id: %w", idErr)
 		}
 
-		tool, toolErr := domain.NewTool(id, providerID, spec, now)
+		tool, toolErr := domain.NewToolFromSource(id, providerSource, spec, now)
 		if toolErr != nil {
 			return SyncProviderToolsResult{}, fmt.Errorf("sync provider tools: create %q: %w", sourceKey, toolErr)
 		}

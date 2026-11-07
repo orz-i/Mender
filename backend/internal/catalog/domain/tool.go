@@ -18,7 +18,7 @@ const (
 // Tool is a canonical executable capability known to Mender.
 type Tool struct {
 	id           ToolID
-	providerID   ProviderID
+	source       SourceRef
 	sourceKey    string
 	name         string
 	title        string
@@ -41,17 +41,23 @@ type ToolSpec struct {
 	Tags         []string
 }
 
-// NewTool constructs a Tool from source metadata.
-func NewTool(
-	id ToolID,
-	providerID ProviderID,
-	spec ToolSpec,
-	now time.Time,
-) (Tool, error) {
+// NewTool is the current Provider-backed creation contract. The production
+// Catalog still stores provider_id until the single cross-context hard cut.
+func NewTool(id ToolID, providerID ProviderID, spec ToolSpec, now time.Time) (Tool, error) {
+	source, err := ProviderSource(providerID)
+	if err != nil {
+		return Tool{}, err
+	}
+	return NewToolFromSource(id, source, spec, now)
+}
+
+// NewToolFromSource creates a Tool with exactly one verified provenance.
+// Source identity does not grant execution or permit publication in a Profile.
+func NewToolFromSource(id ToolID, source SourceRef, spec ToolSpec, now time.Time) (Tool, error) {
 	if _, err := ParseToolID(id.String()); err != nil {
 		return Tool{}, err
 	}
-	if _, err := ParseProviderID(providerID.String()); err != nil {
+	if err := source.Validate(); err != nil {
 		return Tool{}, err
 	}
 	if err := validateToolSpec(spec); err != nil {
@@ -60,23 +66,24 @@ func NewTool(
 	if now.IsZero() {
 		return Tool{}, validationError("now", "must not be zero")
 	}
-
-	now = now.UTC()
-	return toolFromParts(id, providerID, spec, now, now), nil
+	return toolFromParts(id, source, spec, now.UTC(), now.UTC()), nil
 }
 
-// RestoreTool rehydrates a persisted Tool while enforcing invariants.
-func RestoreTool(
-	id ToolID,
-	providerID ProviderID,
-	spec ToolSpec,
-	createdAt time.Time,
-	updatedAt time.Time,
-) (Tool, error) {
+// RestoreTool rehydrates the existing Provider-only SQLite projection.
+func RestoreTool(id ToolID, providerID ProviderID, spec ToolSpec, createdAt, updatedAt time.Time) (Tool, error) {
+	source, err := ProviderSource(providerID)
+	if err != nil {
+		return Tool{}, err
+	}
+	return RestoreToolFromSource(id, source, spec, createdAt, updatedAt)
+}
+
+// RestoreToolFromSource validates a persisted Tool independent of Provider.
+func RestoreToolFromSource(id ToolID, source SourceRef, spec ToolSpec, createdAt, updatedAt time.Time) (Tool, error) {
 	if _, err := ParseToolID(id.String()); err != nil {
 		return Tool{}, err
 	}
-	if _, err := ParseProviderID(providerID.String()); err != nil {
+	if err := source.Validate(); err != nil {
 		return Tool{}, err
 	}
 	if err := validateToolSpec(spec); err != nil {
@@ -88,12 +95,11 @@ func RestoreTool(
 	if updatedAt.Before(createdAt) {
 		return Tool{}, validationError("updated_at", "must not be before created_at")
 	}
-
-	return toolFromParts(id, providerID, spec, createdAt.UTC(), updatedAt.UTC()), nil
+	return toolFromParts(id, source, spec, createdAt.UTC(), updatedAt.UTC()), nil
 }
 
-// RefreshMetadata returns an updated Tool while preserving Mender identity,
-// Provider identity, source identity, and creation time.
+// RefreshMetadata returns an updated Tool while preserving ToolID, exact
+// SourceRef, SourceKey and creation time.
 func (t Tool) RefreshMetadata(spec ToolSpec, now time.Time) (Tool, error) {
 	if spec.SourceKey != t.sourceKey {
 		return Tool{}, validationError("source_key", "cannot change when refreshing an existing tool")
@@ -108,19 +114,19 @@ func (t Tool) RefreshMetadata(spec ToolSpec, now time.Time) (Tool, error) {
 		return Tool{}, validationError("now", "must not be before created_at")
 	}
 
-	return toolFromParts(t.id, t.providerID, spec, t.createdAt, now.UTC()), nil
+	return toolFromParts(t.id, t.source, spec, t.createdAt, now.UTC()), nil
 }
 
 func toolFromParts(
 	id ToolID,
-	providerID ProviderID,
+	source SourceRef,
 	spec ToolSpec,
 	createdAt time.Time,
 	updatedAt time.Time,
 ) Tool {
 	return Tool{
 		id:           id,
-		providerID:   providerID,
+		source:       source,
 		sourceKey:    strings.TrimSpace(spec.SourceKey),
 		name:         strings.TrimSpace(spec.Name),
 		title:        strings.TrimSpace(spec.Title),
@@ -206,16 +212,18 @@ func (t Tool) ID() ToolID {
 	return t.id
 }
 
-// SourceRef exposes the verified provenance of legacy Provider-backed Tools.
-// Agent/native provenance will be persisted in the Stage D/E atomic hard cut;
-// do not treat a Provider ID as execution placement or a resource grant.
-func (t Tool) SourceRef() SourceRef {
-	ref, _ := ProviderSource(t.providerID)
-	return ref
-}
+// SourceRef returns the exact immutable Tool provenance; it is never a grant.
+func (t Tool) SourceRef() SourceRef { return t.source }
 
+// ProviderID is a compatibility accessor for the **currently deployed**
+// Provider-backed routes, until the atomic E/F cut replaces all consumers.
+// Non-Provider sources have no ProviderID; the old executor fails closed on
+// that absence, and Stage D does not register such Tools in the live Catalog.
 func (t Tool) ProviderID() ProviderID {
-	return t.providerID
+	if t.source.Kind() != SourceProvider {
+		return ""
+	}
+	return ProviderID(t.source.ID())
 }
 
 func (t Tool) SourceKey() string {
