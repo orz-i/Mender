@@ -1,6 +1,6 @@
 # Mender 工具 / Agent as Tool / Workspace / Sandbox 归属与执行边界硬切治理
 
-**状态**：阶段 A/B/C 已提交；阶段 D 已完成 Tool SourceRef 领域归属、宿主内建 Schema、来源路由及隔离的未来 Catalog SQLite/FTS 契约，仍未接入生产 Runtime；阶段 E–H 的一致性迁移、接口切换和实体清理尚未实施。真实用户数据库未变更。阶段 B/C 的全量 Bootstrap Race 门禁仍待专项收口，不能宣称整库全量门禁通过。
+**状态**：阶段 A–D 已提交；阶段 E 实现了只读迁移评估、在线一致性备份、已评估快照的离线候选数据库迁移与失败回滚（受严格阻断条件约束），**生产数据库未迁移、新 Runtime 未启用**。阶段 E 对有 Profile 导出变更、复杂授权、Agent Workspace、远端 Sandbox/SSH Job 的非空用户库仍阻断，必须在阶段 F/H 完成等价转换、审核和生产验收；全量 Bootstrap Race 门禁仍待收口。
 
 **仓库基线**：`main` / `ce924e0`，Mac mini `/Users/mini/Coding/Mender`，2026-11-07
 
@@ -190,11 +190,14 @@
 - **Gate**：Catalog/Provider/Agent Native 元数据及路由回归，SourceRef SQLite FTS 与负向授权验证；全量 Bootstrap Race 门禁待最终治理。
 - **提交**：`refactor(catalog): prepare typed tool source and native registry`。
 
-### E — 跨 Context 一次性迁移
-- 实现只读 dry-run、冲突报告、备份/恢复验证以及单事务 upgrade，删除旧 facade 业务表及失去用途的内部 Provider rows。
-- 同时迁移 Profile、MCP Direct/Hybrid、Policy、Agent ToolPlacement/Workspace、Workspace/Job 目标映射。失败关闭、幂等。
-- **Gate**：跨历史 Schema fixture、迁移故障注入、并发、FK/FTS/Policy、审计原样保留、真实备份恢复演练。
-- **提交**：`feat(migration): hard cut tool ownership and workspace targets`。
+### E — 跨 Context 一次性迁移（离线评估与受限候选升级已实现；真实切换待 F/H）
+- [x] [阶段 E 实施与验收记录](tool-hardcut-stage-e-2026-11-07.md)：只读 deterministic `assess`、跨 SQLite Schema/全部表数据指纹、来源/ToolID/Profile/Policy/Workspace/Task/Job 的完整冲突清单。
+- [x] SQLite Online Backup API：一致性备份、WAL 检查点、拒绝覆盖、0600 文件权限、备份/源摘要比较。
+- [x] `stage-copy`：离线候选库单事务重建新 Catalog/FTS、9 个内建 Native Tools、审计 ID 映射、SQL 来源引用守卫；通过的本地 Workspace/无 Profile Facade 与无活跃任务 Agent as Tool 可安全转换；旧 Runtime 拒绝高版本。
+- [x] 负向测试：Profile 合并约束冲突、MCP 来源变更即使 ToolID 未变、Policy 旧 Facade 匹配、未知 Agent Task、SSH 未获恢复证明、根目录消失/远端不确定、未知 Trigger、并行 Context 数据修改后的旧摘要、失败后备份/原库保全。
+- [ ] **待 F/H**：需要人工审核的 Profile/MCP Direct/Hybrid 名称与 TargetScope 等价转换、Agent Workspace 授权迁移、SSH Job/远端真实证据、生产维护窗口与最终运行时发布；没有无损证明时本阶段禁止真实升级。
+- **Gate**：仅可丢弃数据库离线验收；生产 `pnpm check`/全量 Race 门禁和 Wails 实机仍不得标记完成。
+- **提交**：`docs(governance): specify stage E offline migration and release blockers`、`feat(migration): stage guarded one-way tool ownership candidate`。
 
 ### F — API/MCP/CLI/SDK/Wails 同步
 - 统一来源 ID、Tool DTO、Catalog/Source-first 查询、Direct/Hybrid 导出、Profile picker、Agent task 操作和 Workspace targets；删除旧接口/旧 DTO/兼容别名。
