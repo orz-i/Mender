@@ -504,8 +504,9 @@ paths:
         - name: limit
           in: query
           schema: { type: integer, minimum: 1, maximum: 100, default: 100 }
-        - name: providerId
+        - name: sourceId
           in: query
+          description: Exact canonical Tool source identifier (provider:<id>, agent:<id>, native:workspace or native:jobs). Not an execution grant.
           schema: { type: string }
         - name: cursor
           in: query
@@ -538,8 +539,9 @@ paths:
         - name: limit
           in: query
           schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
-        - name: providerId
+        - name: sourceId
           in: query
+          description: Exact canonical Tool source identifier (provider:<id>, agent:<id>, native:workspace or native:jobs). Not an execution grant.
           schema: { type: string }
         - name: cursor
           in: query
@@ -2645,20 +2647,24 @@ components:
         total: { type: integer, minimum: 0 }
     ToolSummary:
       type: object
-      required: [rank, toolId, providerId, name, title, description]
+      required: [rank, toolId, sourceId, sourceKind, name, title, description]
       properties:
         rank: { type: integer, minimum: 1 }
         toolId: { type: string }
-        providerId: { type: string }
+        sourceId: { type: string, description: Exact verified Tool provenance; independent of execution environment. }
+        sourceKind: { type: string, enum: [provider, agent, native] }
+        providerId: { type: string, description: Present only for a real external Provider Tool, never a synthesized Agent or Sandbox Provider. }
         name: { type: string }
         title: { type: string }
         description: { type: string }
     ToolDetail:
       type: object
-      required: [toolId, providerId, sourceKey, name, title, description, inputSchema, tags]
+      required: [toolId, sourceId, sourceKind, sourceKey, name, title, description, inputSchema, tags]
       properties:
         toolId: { type: string }
-        providerId: { type: string }
+        sourceId: { type: string, description: Exact verified Tool provenance; independent of execution environment. }
+        sourceKind: { type: string, enum: [provider, agent, native] }
+        providerId: { type: string, description: Present only for a real external Provider Tool, never a synthesized Agent or Sandbox Provider. }
         sourceKey: { type: string }
         name: { type: string }
         title: { type: string }

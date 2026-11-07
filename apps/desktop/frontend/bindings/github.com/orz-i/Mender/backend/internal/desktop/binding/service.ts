@@ -28,8 +28,8 @@ export function BindWorkspaceToolTarget(providerID: string, key: string, sandbox
     return $Call.ByID(3051048187, providerID, key, sandboxID);
 }
 
-export function BrowseTools(limit: number, providerID: string, cursor: string): $CancellablePromise<$models.ToolList> {
-    return $Call.ByID(594360793, limit, providerID, cursor);
+export function BrowseTools(limit: number, sourceID: string, cursor: string): $CancellablePromise<$models.ToolList> {
+    return $Call.ByID(594360793, limit, sourceID, cursor);
 }
 
 export function CallTool(toolID: string, $arguments: { [_ in string]?: any } | null): $CancellablePromise<$models.InvocationResult> {
@@ -535,8 +535,8 @@ export function RotateNativeCredential($namespace: string, name: string, secret:
     return $Call.ByID(3563376993, $namespace, name, secret, sshKeyPassphrase);
 }
 
-export function SearchTools(query: string, limit: number, providerID: string, profile: string, cursor: string): $CancellablePromise<$models.ToolList> {
-    return $Call.ByID(1688287699, query, limit, providerID, profile, cursor);
+export function SearchTools(query: string, limit: number, sourceID: string, profile: string, cursor: string): $CancellablePromise<$models.ToolList> {
+    return $Call.ByID(1688287699, query, limit, sourceID, profile, cursor);
 }
 
 export function SetAgentApprovalPolicy(agentID: string, workspaceKey: string, mode: string): $CancellablePromise<$models.AgentApprovalPolicy> {

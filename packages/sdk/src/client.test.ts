@@ -300,7 +300,7 @@ describe("Mender SDK", () => {
       fetch: (request) => {
         expect(request.url).toContain("/api/v1/tools");
         expect(request.url).toContain("query=search");
-        expect(request.url).toContain("providerId=prov_1");
+        expect(request.url).toContain("sourceId=provider%3Aprov_1");
         expect(request.url).not.toContain("profile=");
         return Promise.resolve(
           new Response(
@@ -309,6 +309,8 @@ describe("Mender SDK", () => {
                 {
                   rank: 1,
                   toolId: "tool_1",
+                  sourceId: "provider:prov_1",
+                  sourceKind: "provider",
                   providerId: "prov_1",
                   name: "search",
                   title: "",
@@ -328,7 +330,7 @@ describe("Mender SDK", () => {
     const result = await client.searchTools({
       query: "search",
       limit: 30,
-      providerId: "prov_1",
+      sourceId: "provider:prov_1",
     });
     expect(result.tools).toHaveLength(1);
   });

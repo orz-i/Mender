@@ -224,9 +224,9 @@ export function createMenderClient(
         params: {
           query: {
             ...(input.limit === undefined ? {} : { limit: input.limit }),
-            ...(input.providerId === undefined
+            ...(input.sourceId === undefined
               ? {}
-              : { providerId: input.providerId }),
+              : { sourceId: input.sourceId }),
             ...(input.cursor === undefined ? {} : { cursor: input.cursor }),
           },
         },
@@ -240,9 +240,9 @@ export function createMenderClient(
           query: {
             query: input.query,
             ...(input.limit === undefined ? {} : { limit: input.limit }),
-            ...(input.providerId === undefined
+            ...(input.sourceId === undefined
               ? {}
-              : { providerId: input.providerId }),
+              : { sourceId: input.sourceId }),
             ...(input.cursor === undefined ? {} : { cursor: input.cursor }),
             ...(input.profile === undefined ? {} : { profile: input.profile }),
           },

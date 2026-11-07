@@ -48,6 +48,7 @@ type ToolView = "overview" | "description" | "schemas" | "invoke";
 
 export function CatalogPage({ client, providerId }: { client: ManagementClient; providerId: string }) {
   const navigate = useNavigate();
+  const sourceId = "provider:" + providerId;
   const [query, setQuery] = useState("");
   const [providers, setProviders] = useState<Provider[]>([]);
   const [results, setResults] = useState<ToolSummary[]>([]);
@@ -72,12 +73,12 @@ export function CatalogPage({ client, providerId }: { client: ManagementClient; 
     let active = true;
     void Promise.all([
       client.listProviders(),
-      client.browseTools({ limit: 100, providerId }),
+      client.browseTools({ limit: 100, sourceId }),
     ])
       .then(([providerResult, toolResult]) => {
         if (active) {
           setProviders(providerResult.providers);
-          setResults(toolResult.tools.filter(tool=>tool.providerId===providerId));
+          setResults(toolResult.tools.filter(tool=>tool.sourceId===sourceId));
           setNextCursor(toolResult.nextCursor ?? null);
           setActiveQuery("");
           setSearched(false);
@@ -92,14 +93,14 @@ export function CatalogPage({ client, providerId }: { client: ManagementClient; 
     return () => {
       active = false;
     };
-  }, [client, providerId, retryVersion]);
+  }, [client, providerId, sourceId, retryVersion]);
 
   async function browseAll() {
     setBusy("browse");
     setError("");
     try {
-      const response = await client.browseTools({ limit: 100, providerId });
-      setResults(response.tools.filter(tool=>tool.providerId===providerId));
+      const response = await client.browseTools({ limit: 100, sourceId });
+      setResults(response.tools.filter(tool=>tool.sourceId===sourceId));
       setNextCursor(response.nextCursor ?? null);
       setActiveQuery("");
       catalogPagination.reset();
@@ -124,9 +125,9 @@ export function CatalogPage({ client, providerId }: { client: ManagementClient; 
       const response = await client.searchTools({
         query,
         limit: 30,
-        providerId,
+        sourceId,
       });
-      setResults(response.tools.filter(tool=>tool.providerId===providerId));
+      setResults(response.tools.filter(tool=>tool.sourceId===sourceId));
       setNextCursor(response.nextCursor ?? null);
       setActiveQuery(query.trim());
       catalogPagination.reset();
@@ -147,11 +148,11 @@ export function CatalogPage({ client, providerId }: { client: ManagementClient; 
     setError("");
     try {
       const page = searched
-        ? await client.searchTools({query:activeQuery,providerId,limit:30,cursor:nextCursor})
-        : await client.browseTools({providerId,limit:100,cursor:nextCursor});
+        ? await client.searchTools({query:activeQuery,sourceId,limit:30,cursor:nextCursor})
+        : await client.browseTools({sourceId,limit:100,cursor:nextCursor});
       setResults(current=>{
         const seen=new Set(current.map(tool=>tool.toolId));
-        return [...current,...page.tools.filter(tool=>tool.providerId===providerId&&!seen.has(tool.toolId))];
+        return [...current,...page.tools.filter(tool=>tool.sourceId===sourceId&&!seen.has(tool.toolId))];
       });
       setNextCursor(page.nextCursor??null);
     } catch(reason) {
@@ -371,7 +372,7 @@ export function CatalogPage({ client, providerId }: { client: ManagementClient; 
               {selected === null
                 ? t("Canonical Tool detail")
                 : toolView === "overview" || toolView === null
-                  ? providerLabel(providers, selected.providerId)
+                  ? providerLabel(providers, selected.sourceId)
                   : selected.title || selected.name}
             </DialogDescription>
           </DialogHeader>
@@ -380,7 +381,7 @@ export function CatalogPage({ client, providerId }: { client: ManagementClient; 
           {selected !== null && (toolView === "overview" || toolView === null) ? (
             <div className="space-y-5">
               <div className="grid gap-3 sm:grid-cols-2">
-                <ToolMeta label="Source" value={providerLabel(providers, selected.providerId)} />
+                <ToolMeta label="Source" value={providerLabel(providers, selected.sourceId)} />
                 <ToolMeta label="Name" value={selected.name} />
                 <ToolMeta label="Tool ID" value={selected.toolId} mono />
                 <ToolMeta label="Source key" value={selected.sourceKey} mono />
@@ -529,6 +530,7 @@ function JsonBlock({ title, value }: { title: string; value: unknown }) {
   );
 }
 
-function providerLabel(providers: Provider[], providerId: string) {
-  return toolSourceLabel(providers.find((item) => item.providerId === providerId));
+function providerLabel(providers: Provider[], sourceId: string) {
+  if (!sourceId.startsWith("provider:")) return sourceId;
+  return toolSourceLabel(providers.find((item) => "provider:" + item.providerId === sourceId));
 }

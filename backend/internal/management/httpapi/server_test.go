@@ -545,7 +545,7 @@ func TestManagementAPIEndToEnd(t *testing.T) {
 		t,
 		server.Client(),
 		http.MethodGet,
-		server.URL+"/api/v1/tools?query=echo&providerId="+providerID,
+		server.URL+"/api/v1/tools?query=echo&sourceId=provider%3A"+providerID,
 		nil,
 		http.StatusOK,
 	)

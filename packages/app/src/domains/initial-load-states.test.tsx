@@ -78,7 +78,7 @@ describe("Initial request failures remain separate from real empty inventories",
       browseTools: vi.fn().mockResolvedValue({
         tools: [{
           toolId: "tool_search",
-          providerId: "prov_example",
+          providerId: "prov_example", sourceId:"provider:"+("prov_example"),sourceKind:"provider",
           name: "search_web",
           title: "Search Web",
           description: "Searches the web",

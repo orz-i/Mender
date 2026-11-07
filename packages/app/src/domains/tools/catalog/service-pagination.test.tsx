@@ -15,7 +15,7 @@ const provider:Provider={
 };
 const tools:ToolSummary[]=Array.from({length:105},(_,i)=>({
   rank:i+1,toolId:"tool_"+String(i+1).padStart(4,"0"),
-  providerId:provider.providerId,name:"search_"+(i+1),
+  providerId:provider.providerId,sourceId:"provider:"+provider.providerId,sourceKind:"provider",name:"search_"+(i+1),
   title:"Search tool "+(i+1),description:"Online search",
 }));
 function show(browseTools:ReturnType<typeof vi.fn>,searchTools=vi.fn()){
@@ -35,7 +35,7 @@ it("shows the 101st service Tool after a bounded continuation, not client-side f
   expect(screen.getByRole("button",{name:"Load more tools"})).toBeTruthy();
   fireEvent.click(screen.getByRole("button",{name:"Load more tools"}));
   await waitFor(()=>expect(browse).toHaveBeenCalledWith({
-    limit:100,providerId:"prov_1",cursor:"browse-page-two",
+    limit:100,sourceId:"provider:prov_1",cursor:"browse-page-two",
   }));
   await waitFor(()=>expect(screen.queryByRole("button",{name:"Load more tools"})).toBeNull());
   fireEvent.change(screen.getByRole("combobox",{name:"Service tools rows per page"}),{target:{value:"50"}});
@@ -55,6 +55,6 @@ it("retains exact Provider scope and query when extending lexical search",async(
   expect(await screen.findByText("Search tool 1")).toBeTruthy();
   fireEvent.click(screen.getByRole("button",{name:"Load more tools"}));
   await waitFor(()=>expect(search).toHaveBeenCalledWith({
-    query:"search",limit:30,providerId:"prov_1",cursor:"search-page-two",
+    query:"search",limit:30,sourceId:"provider:prov_1",cursor:"search-page-two",
   }));
 });

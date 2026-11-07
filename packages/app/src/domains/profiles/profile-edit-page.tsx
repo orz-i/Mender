@@ -229,7 +229,9 @@ function ProfileEditor({ client, slug }: { client: ManagementClient; slug: strin
         for (const result of chunk) {
           if (result.status === "fulfilled") {
             loaded.push({ rank: 0, toolId: result.value.toolId,
-              providerId: result.value.providerId, name: result.value.name,
+              sourceId: result.value.sourceId, sourceKind: result.value.sourceKind,
+              ...(result.value.providerId ? {providerId: result.value.providerId} : {}),
+              name: result.value.name,
               title: result.value.title, description: result.value.description });
           }
         }
@@ -238,19 +240,19 @@ function ProfileEditor({ client, slug }: { client: ManagementClient; slug: strin
     })();
   }, [client, managedProfile, knownTools]);
 
-  // Source IDs are exact ProviderIDs; a missing Tool remains in the
+  // Source IDs are exact typed identities; a missing Tool remains in the
   // management-only Unknown source bucket, never in the Add chooser.
   const managedSourceGroups = useMemo(() => {
     if (managedProfile === null) return [];
     const counts = new Map<string, number>();
     for (const binding of managedProfile.tools) {
-      const id = knownTools.get(binding.toolId)?.providerId ?? "__unknown__";
+      const id = knownTools.get(binding.toolId)?.sourceId ?? "__unknown__";
       counts.set(id, (counts.get(id) ?? 0) + 1);
     }
     return [...counts].map(([id, count]) => {
-      const provider = providerById.get(id);
+      const provider = id.startsWith("provider:") ? providerById.get(id.slice("provider:".length)) : undefined;
       return { id, count, provider, label: provider
-        ? sourceLabels.get(id) ?? t("Unknown source")
+        ? sourceLabels.get(provider.providerId) ?? t("Unknown source")
         : t("Unknown source") };
     }).sort((a, b) => a.label.localeCompare(b.label) || a.id.localeCompare(b.id));
   }, [managedProfile, knownTools, providerById, sourceLabels]);
@@ -267,7 +269,7 @@ function ProfileEditor({ client, slug }: { client: ManagementClient; slug: strin
     if (managedProfile === null || !manageSourceId) return [];
     const needle = manageQuery.trim().toLocaleLowerCase();
     return managedProfile.tools.filter((selection) => {
-      if ((knownTools.get(selection.toolId)?.providerId ?? "__unknown__") !== manageSourceId) {
+      if ((knownTools.get(selection.toolId)?.sourceId ?? "__unknown__") !== manageSourceId) {
         return false;
       }
       if (!needle) return true;
@@ -283,8 +285,8 @@ function ProfileEditor({ client, slug }: { client: ManagementClient; slug: strin
   const pickerSelectedCounts = useMemo(() => {
     const counts = new Map<string, number>();
     for (const id of pickerSelected) {
-      const providerId = knownTools.get(id)?.providerId;
-      if (providerId) counts.set(providerId, (counts.get(providerId) ?? 0) + 1);
+      const sourceId = knownTools.get(id)?.sourceId;
+      if (sourceId) counts.set(sourceId, (counts.get(sourceId) ?? 0) + 1);
     }
     return counts;
   }, [pickerSelected, knownTools]);
@@ -320,16 +322,16 @@ function ProfileEditor({ client, slug }: { client: ManagementClient; slug: strin
     // source, continue in that source instead of making the user choose it twice.
     setManageSlug("");
     setPickerSlug(slug);
-    const currentProvider = providerById.get(manageSourceId);
+    const currentProvider = manageSourceId.startsWith("provider:") ? providerById.get(manageSourceId.slice("provider:".length)) : undefined;
     if (currentProvider?.toolSourceSelectable && currentProvider.toolCount > 0) {
       void openPickerSource(manageSourceId);
     }
   }
 
-  async function openPickerSource(providerId: string) {
-    if (busy) return;
+  async function openPickerSource(sourceId: string) {
+    if (busy || !sourceId.startsWith("provider:")) return; // Stage G owns non-Provider source UI.
     const requestId = ++pickerRequestRef.current;
-    setPickerProvider(providerId);
+    setPickerProvider(sourceId);
     setPickerQuery("");
     setPickerAppliedQuery("");
     setPickerTools([]);
@@ -337,7 +339,7 @@ function ProfileEditor({ client, slug }: { client: ManagementClient; slug: strin
     setBusy(true);
     setError("");
     try {
-      const response = await client.browseTools({ providerId, limit: 100 });
+      const response = await client.browseTools({ sourceId, limit: 100 });
       if (requestId !== pickerRequestRef.current) return;
       setPickerTools(response.tools);
       setPickerNextCursor(response.nextCursor ?? null);
@@ -363,14 +365,14 @@ function ProfileEditor({ client, slug }: { client: ManagementClient; slug: strin
     if (!pickerProvider || busy) return;
     const requestId = ++pickerRequestRef.current;
     const query = pickerQuery.trim();
-    const providerId = pickerProvider;
+    const sourceId = pickerProvider;
     setBusy(true);
     setError("");
     setPickerNextCursor(null);
     try {
       const response = query
-        ? await client.searchTools({ query, limit: 100, providerId })
-        : await client.browseTools({ limit: 100, providerId });
+        ? await client.searchTools({ query, limit: 100, sourceId })
+        : await client.browseTools({ limit: 100, sourceId });
       if (requestId !== pickerRequestRef.current) return;
       setPickerTools(response.tools);
       setPickerNextCursor(response.nextCursor ?? null);
@@ -386,14 +388,14 @@ function ProfileEditor({ client, slug }: { client: ManagementClient; slug: strin
   async function loadMorePicker() {
     if (!pickerProvider || !pickerNextCursor || busy) return;
     const requestId = ++pickerRequestRef.current;
-    const providerId = pickerProvider;
+    const sourceId = pickerProvider;
     const cursor = pickerNextCursor;
     setBusy(true);
     setError("");
     try {
       const response = pickerAppliedQuery
-        ? await client.searchTools({ query: pickerAppliedQuery, limit: 100, cursor, providerId })
-        : await client.browseTools({ limit: 100, cursor, providerId });
+        ? await client.searchTools({ query: pickerAppliedQuery, limit: 100, cursor, sourceId })
+        : await client.browseTools({ limit: 100, cursor, sourceId });
       if (requestId !== pickerRequestRef.current) return;
       setPickerTools((current) => mergeTools(current, response.tools));
       setCatalogTools((current) => mergeTools(current, response.tools));

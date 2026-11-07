@@ -16,7 +16,27 @@ import (
 	skilldomain "github.com/orz-i/Mender/backend/internal/skill/domain"
 )
 
+// Tool discovery accepts only canonical SourceRef filters. Silently ignoring
+// an old providerId (or a typo) would turn a scoped request into an unscoped
+// Catalog query, so unknown/duplicate query parameters fail closed.
+func validateToolDiscoveryQuery(r *http.Request, allowed ...string) error {
+	fields := make(map[string]bool, len(allowed))
+	for _, name := range allowed {
+		fields[name] = true
+	}
+	for name, values := range r.URL.Query() {
+		if !fields[name] || len(values) != 1 {
+			return fmt.Errorf("unsupported or repeated Tool query parameter %q", name)
+		}
+	}
+	return nil
+}
+
 func (h *Handler) browseTools(w http.ResponseWriter, r *http.Request) {
+	if err := validateToolDiscoveryQuery(r, "limit", "cursor", "sourceId"); err != nil {
+		writeAPIError(w, http.StatusBadRequest, "validation_error", err)
+		return
+	}
 	limit := 100
 	if rawLimit := r.URL.Query().Get("limit"); rawLimit != "" {
 		parsed, err := strconv.Atoi(rawLimit)
@@ -27,18 +47,18 @@ func (h *Handler) browseTools(w http.ResponseWriter, r *http.Request) {
 		limit = parsed
 	}
 
-	var providerID *catalogdomain.ProviderID
-	if rawProviderID := r.URL.Query().Get("providerId"); rawProviderID != "" {
-		parsed, err := catalogdomain.ParseProviderID(rawProviderID)
+	var sourceRef *catalogdomain.SourceRef
+	if raw := r.URL.Query().Get("sourceId"); raw != "" {
+		parsed, err := catalogdomain.ParseSourceRef(raw)
 		if err != nil {
 			writeAPIError(w, http.StatusBadRequest, "validation_error", err)
 			return
 		}
-		providerID = &parsed
+		sourceRef = &parsed
 	}
 
 	page, err := h.runtime.PageCatalog(r.Context(), catalogapplication.PageToolsRequest{
-		Mode: "browse", Limit: limit, ProviderID: providerID, Cursor: r.URL.Query().Get("cursor"),
+		Mode: "browse", Limit: limit, SourceRef: sourceRef, Cursor: r.URL.Query().Get("cursor"),
 	}, nil)
 	if err != nil {
 		writeKnownError(w, err)
@@ -47,14 +67,19 @@ func (h *Handler) browseTools(w http.ResponseWriter, r *http.Request) {
 
 	items := make([]map[string]any, 0, len(page.Tools))
 	for index, result := range page.Tools {
-		items = append(items, map[string]any{
+		item := map[string]any{
 			"rank":        page.Offset + index + 1,
 			"toolId":      result.ToolID.String(),
-			"providerId":  result.ProviderID.String(),
+			"sourceId":    result.SourceRef.String(),
+			"sourceKind":  string(result.SourceRef.Kind()),
 			"name":        result.Name,
 			"title":       result.Title,
 			"description": result.Description,
-		})
+		}
+		if result.SourceRef.Kind() == catalogdomain.SourceProvider {
+			item["providerId"] = result.SourceRef.ID()
+		}
+		items = append(items, item)
 	}
 	result := map[string]any{"tools": items}
 	if page.NextCursor != "" {
@@ -64,6 +89,10 @@ func (h *Handler) browseTools(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) searchTools(w http.ResponseWriter, r *http.Request) {
+	if err := validateToolDiscoveryQuery(r, "query", "limit", "cursor", "sourceId", "profile"); err != nil {
+		writeAPIError(w, http.StatusBadRequest, "validation_error", err)
+		return
+	}
 	query := r.URL.Query().Get("query")
 	if query == "" {
 		writeAPIError(w, http.StatusBadRequest, "validation_error", fmt.Errorf("query is required"))
@@ -80,14 +109,14 @@ func (h *Handler) searchTools(w http.ResponseWriter, r *http.Request) {
 		limit = parsed
 	}
 
-	var providerID *catalogdomain.ProviderID
-	if rawProviderID := r.URL.Query().Get("providerId"); rawProviderID != "" {
-		parsed, err := catalogdomain.ParseProviderID(rawProviderID)
+	var sourceRef *catalogdomain.SourceRef
+	if raw := r.URL.Query().Get("sourceId"); raw != "" {
+		parsed, err := catalogdomain.ParseSourceRef(raw)
 		if err != nil {
 			writeAPIError(w, http.StatusBadRequest, "validation_error", err)
 			return
 		}
-		providerID = &parsed
+		sourceRef = &parsed
 	}
 
 	var profileSlug *profiledomain.Slug
@@ -101,7 +130,7 @@ func (h *Handler) searchTools(w http.ResponseWriter, r *http.Request) {
 	}
 
 	page, err := h.runtime.PageCatalog(r.Context(), catalogapplication.PageToolsRequest{
-		Mode: "search", Query: query, Limit: limit, ProviderID: providerID, Cursor: r.URL.Query().Get("cursor"),
+		Mode: "search", Query: query, Limit: limit, SourceRef: sourceRef, Cursor: r.URL.Query().Get("cursor"),
 	}, profileSlug)
 	if err != nil {
 		writeKnownError(w, err)
@@ -109,14 +138,19 @@ func (h *Handler) searchTools(w http.ResponseWriter, r *http.Request) {
 	}
 	items := make([]map[string]any, 0, len(page.Tools))
 	for index, result := range page.Tools {
-		items = append(items, map[string]any{
+		item := map[string]any{
 			"rank":        page.Offset + index + 1,
 			"toolId":      result.ToolID.String(),
-			"providerId":  result.ProviderID.String(),
+			"sourceId":    result.SourceRef.String(),
+			"sourceKind":  string(result.SourceRef.Kind()),
 			"name":        result.Name,
 			"title":       result.Title,
 			"description": result.Description,
-		})
+		}
+		if result.SourceRef.Kind() == catalogdomain.SourceProvider {
+			item["providerId"] = result.SourceRef.ID()
+		}
+		items = append(items, item)
 	}
 	result := map[string]any{"tools": items}
 	if page.NextCursor != "" {
@@ -434,9 +468,10 @@ func toolProjection(tool catalogdomain.Tool) (map[string]any, error) {
 			return nil, fmt.Errorf("decode output schema: %w", err)
 		}
 	}
-	return map[string]any{
+	result := map[string]any{
 		"toolId":       tool.ID().String(),
-		"providerId":   tool.ProviderID().String(),
+		"sourceId":     tool.SourceRef().String(),
+		"sourceKind":   string(tool.SourceRef().Kind()),
 		"sourceKey":    tool.SourceKey(),
 		"name":         tool.Name(),
 		"title":        tool.Title(),
@@ -444,7 +479,11 @@ func toolProjection(tool catalogdomain.Tool) (map[string]any, error) {
 		"inputSchema":  inputSchema,
 		"outputSchema": outputSchema,
 		"tags":         tool.Tags(),
-	}, nil
+	}
+	if tool.SourceRef().Kind() == catalogdomain.SourceProvider {
+		result["providerId"] = tool.SourceRef().ID()
+	}
+	return result, nil
 }
 
 func parseCredentialReferences(values []string) ([]credentialdomain.Reference, error) {

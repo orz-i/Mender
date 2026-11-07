@@ -103,7 +103,7 @@ export type ReplaceProfileSkillsRequest =
 
 export interface BrowseToolsInput {
   limit?: number;
-  providerId?: string;
+  sourceId?: string;
   cursor?: string;
 }
 
@@ -111,7 +111,7 @@ export interface SearchToolsInput {
   cursor?: string;
   query: string;
   limit?: number;
-  providerId?: string;
+  sourceId?: string;
   profile?: string;
 }
 

@@ -37,8 +37,8 @@ describe("management pages", () => {
       createdAt:"2026-10-16T00:00:00Z",updatedAt:"2026-10-16T00:00:00Z",
     };
     const browseTools=vi.fn().mockResolvedValue({tools:[
-      {rank:1,toolId:"tool_search",providerId:"prov_anysearch",name:"web_search",title:"Web search",description:"Find web pages"},
-      {rank:2,toolId:"tool_other",providerId:"prov_other",name:"read",title:"Other source tool",description:"Excluded"},
+      {rank:1,toolId:"tool_search",providerId:"prov_anysearch", sourceId:"provider:"+("prov_anysearch"),sourceKind:"provider",name:"web_search",title:"Web search",description:"Find web pages"},
+      {rank:2,toolId:"tool_other",providerId:"prov_other", sourceId:"provider:"+("prov_other"),sourceKind:"provider",name:"read",title:"Other source tool",description:"Excluded"},
     ]});
     renderApp("/tools",{
       listProviders:vi.fn().mockResolvedValue({providers:[anySearch]}),browseTools,
@@ -50,7 +50,7 @@ describe("management pages", () => {
     expect(screen.queryByRole("button",{name:"Show internal providers"})).toBeNull();
     fireEvent.click(cardLink);
     await waitFor(()=>expect(browseTools).toHaveBeenCalledWith({
-      limit:100,providerId:"prov_anysearch",
+      limit:100,sourceId:"provider:prov_anysearch",
     }));
     expect(await screen.findByText("Web search")).toBeTruthy();
     expect(screen.queryByText("Other source tool")).toBeNull();
@@ -1675,7 +1675,7 @@ describe("management pages", () => {
     });
     const getTool = vi.fn().mockResolvedValue({
       toolId: "tool_1",
-      providerId: "prov_1",
+      providerId: "prov_1", sourceId:"provider:"+("prov_1"),sourceKind:"provider",
       sourceKey: "issues.create",
       name: "create_issue",
       title: "Create issue",
@@ -1690,7 +1690,7 @@ describe("management pages", () => {
         {
           rank: 1,
           toolId: "tool_browse",
-          providerId: "prov_1",
+          providerId: "prov_1", sourceId:"provider:"+("prov_1"),sourceKind:"provider",
           name: "web_search",
           title: "Web search",
           description: "Browse synchronized Tool",
@@ -1702,7 +1702,7 @@ describe("management pages", () => {
         {
           rank: 1,
           toolId: "tool_1",
-          providerId: "prov_1",
+          providerId: "prov_1", sourceId:"provider:"+("prov_1"),sourceKind:"provider",
           name: "create_issue",
           title: "Create issue",
           description: "Create a repository issue",
@@ -1749,7 +1749,7 @@ describe("management pages", () => {
     await waitFor(() => {
       expect(browseTools).toHaveBeenLastCalledWith({
         limit: 100,
-        providerId: "prov_1",
+        sourceId: "provider:prov_1",
       });
     });
 
@@ -1763,7 +1763,7 @@ describe("management pages", () => {
       expect(searchTools).toHaveBeenCalledWith({
         query: "create issue",
         limit: 30,
-        providerId: "prov_1",
+        sourceId: "provider:prov_1",
       });
     });
     expect(await screen.findByText("Create issue")).toBeTruthy();
@@ -2042,7 +2042,7 @@ describe("management pages", () => {
           {
             rank: 1,
             toolId: "tool_1",
-            providerId: "prov_1",
+            providerId: "prov_1", sourceId:"provider:"+("prov_1"),sourceKind:"provider",
             name: "search",
             title: "Search",
             description: "Search the web",
@@ -2050,7 +2050,7 @@ describe("management pages", () => {
           {
             rank: 2,
             toolId: "tool_2",
-            providerId: "prov_1",
+            providerId: "prov_1", sourceId:"provider:"+("prov_1"),sourceKind:"provider",
             name: "extract",
             title: "Extract",
             description: "Extract content",
@@ -2317,7 +2317,7 @@ describe("management pages", () => {
     const policyTool = {
       rank: 1,
       toolId: "tool_00000000000000000000000000000001",
-      providerId: policyProvider.providerId,
+      providerId: policyProvider.providerId, sourceId:"provider:"+(policyProvider.providerId),sourceKind:"provider",
       name: "search",
       title: "Search",
       description: "Search documentation",
@@ -2614,7 +2614,7 @@ describe("management pages", () => {
           {
             invocationId: "inv_1",
             toolId: "tool_1",
-            providerId: "prov_1",
+            providerId: "prov_1", sourceId:"provider:"+("prov_1"),sourceKind:"provider",
             principalKind: "local_user",
             principalRef: "os:501",
             startedAt: "2026-09-26T00:00:00Z",
@@ -2656,7 +2656,7 @@ describe("management pages", () => {
           {
             invocationId: "inv_failed",
             toolId: "tool_1",
-            providerId: "prov_1",
+            providerId: "prov_1", sourceId:"provider:"+("prov_1"),sourceKind:"provider",
             principalKind: "local_user",
             principalRef: "os:501",
             startedAt: "2026-09-26T00:00:00Z",

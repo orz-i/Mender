@@ -38,6 +38,7 @@ func resolveProfileCLI(ctx context.Context, runtime *bootstrap.Runtime, raw stri
 
 func (a *app) newProfileToolSearchCommand() *cobra.Command {
 	var limit int
+	var sourceValue string
 	command := &cobra.Command{
 		Use:   "search <profile> <query>",
 		Short: "Search only Tools selected in this Profile",
@@ -62,9 +63,15 @@ func (a *app) newProfileToolSearchCommand() *cobra.Command {
 					}
 					return nil
 				}
-				tools, err := runtime.Catalog.SearchTools.Execute(cmd.Context(), catalogapp.SearchToolsRequest{
-					Query: args[1], Limit: limit, AllowedToolIDs: allowed,
-				})
+				request := catalogapp.SearchToolsRequest{Query: args[1], Limit: limit, AllowedToolIDs: allowed}
+				if sourceValue != "" {
+					source, err := catalogdomain.ParseSourceRef(sourceValue)
+					if err != nil {
+						return usageError{err: err}
+					}
+					request.SourceRef = &source
+				}
+				tools, err := runtime.Catalog.SearchTools.Execute(cmd.Context(), request)
 				if err != nil {
 					return err
 				}
@@ -85,6 +92,7 @@ func (a *app) newProfileToolSearchCommand() *cobra.Command {
 		},
 	}
 	command.Flags().IntVar(&limit, "limit", 10, "maximum search results")
+	command.Flags().StringVar(&sourceValue, "source", "", "exact Tool sourceId")
 	return command
 }
 
@@ -118,7 +126,7 @@ func (a *app) newProfileToolDescribeCommand() *cobra.Command {
 					return a.writeValue("", result)
 				}
 				_, err = fmt.Fprintf(a.options.Stdout, "%s (%s)\nProvider: %s\n%s\nInput schema: %s\n",
-					tool.Title(), tool.ID(), tool.ProviderID(), tool.Description(), string(tool.InputSchema().Bytes()))
+					tool.Title(), tool.ID(), tool.SourceRef(), tool.Description(), string(tool.InputSchema().Bytes()))
 				return err
 			})
 		},

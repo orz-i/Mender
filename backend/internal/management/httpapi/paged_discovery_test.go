@@ -63,7 +63,7 @@ func TestHTTPBrowseAndSearchCursorCoversLargeServiceCatalog(t *testing.T) {
 		firstCursor := ""
 		cursor := ""
 		for iteration := 0; iteration < 7; iteration++ {
-			u := server.URL + pathName + "&providerId=" + url.QueryEscape(provider.ID().String())
+			u := server.URL + pathName + "&sourceId=" + url.QueryEscape("provider:"+provider.ID().String())
 			if cursor != "" {
 				u += "&cursor=" + url.QueryEscape(cursor)
 			}
@@ -75,7 +75,7 @@ func TestHTTPBrowseAndSearchCursorCoversLargeServiceCatalog(t *testing.T) {
 			for _, record := range records {
 				tool := record.(map[string]any)
 				id := tool["toolId"].(string)
-				if seen[id] || tool["providerId"] != provider.ID().String() {
+				if seen[id] || tool["sourceId"] != "provider:"+provider.ID().String() {
 					t.Fatalf("duplicate or foreign tool: %#v", tool)
 				}
 				seen[id] = true
@@ -91,12 +91,17 @@ func TestHTTPBrowseAndSearchCursorCoversLargeServiceCatalog(t *testing.T) {
 		if len(seen) != 205 || firstCursor == "" {
 			t.Fatalf("%s paginated %d/205 tools", pathName, len(seen))
 		}
-		wrong := server.URL + pathName + "&providerId=prov_ffffffffffffffffffffffffffffffff&cursor=" + url.QueryEscape(firstCursor)
+		// An ignored legacy providerId must not silently broaden discovery.
+		requestJSON(t, server.Client(), http.MethodGet,
+			server.URL+pathName+"&providerId="+provider.ID().String(), nil, http.StatusBadRequest)
+		requestJSON(t, server.Client(), http.MethodGet,
+			server.URL+pathName+"&sourceId=provider%3Ainvalid", nil, http.StatusBadRequest)
+		wrong := server.URL + pathName + "&sourceId=" + url.QueryEscape("provider:prov_ffffffffffffffffffffffffffffffff") + "&cursor=" + url.QueryEscape(firstCursor)
 		requestJSON(t, server.Client(), http.MethodGet, wrong, nil, http.StatusBadRequest)
 		if _, err = db.ExecContext(ctx, "UPDATE tools SET title='changed' WHERE id=?", fmt.Sprintf("tool_%032x", 1)); err != nil {
 			t.Fatal(err)
 		}
-		stale := server.URL + pathName + "&providerId=" + provider.ID().String() + "&cursor=" + url.QueryEscape(firstCursor)
+		stale := server.URL + pathName + "&sourceId=" + url.QueryEscape("provider:"+provider.ID().String()) + "&cursor=" + url.QueryEscape(firstCursor)
 		requestJSON(t, server.Client(), http.MethodGet, stale, nil, http.StatusConflict)
 	}
 }

@@ -11,6 +11,7 @@ const tools: ToolSummary[] = Array.from({ length: 65 }, (_, i) => ({
   rank: i + 1,
   toolId: "tool_" + String(i + 1).padStart(4, "0"),
   providerId: "prov_" + (i % 3),
+  sourceId: "provider:prov_" + (i % 3), sourceKind: "provider",
   name: "tool_" + (i + 1),
   title: "Work tool " + (i + 1),
   description: "Tool description " + (i + 1),
@@ -60,9 +61,9 @@ function show(
   const initialProfile = options.initialProfile ?? profile;
   const replaceProfileTools = vi.fn().mockImplementation((_slug: string, body: { tools: Profile["tools"] }) =>
     Promise.resolve({ ...initialProfile, tools: body.tools }));
-  const browseTools = vi.fn().mockImplementation((input?: { providerId?: string; limit?: number }) => {
-    const list = input?.providerId
-      ? tools.filter((tool) => tool.providerId === input.providerId)
+  const browseTools = vi.fn().mockImplementation((input?: { sourceId?: string; limit?: number }) => {
+    const list = input?.sourceId
+      ? tools.filter((tool) => tool.sourceId === input.sourceId)
       : tools;
     return Promise.resolve({ tools: list.slice(0, input?.limit ?? 100) });
   });
@@ -133,7 +134,7 @@ it("adds tools inside the current source and keeps the cross-source draft explic
   expect(picker.querySelector('[data-slot="profile-tool-picker-list"]')?.className).toContain("overflow-y-auto");
   const currentTool = await within(picker).findByRole("checkbox", { name: "Select Work tool 2" });
   expect(within(picker).queryByRole("textbox", { name: "Search sources" })).toBeNull();
-  expect(browseTools).toHaveBeenCalledWith({ providerId: "prov_1", limit: 100 });
+  expect(browseTools).toHaveBeenCalledWith({ sourceId: "provider:prov_1", limit: 100 });
   expect(within(picker).getByText("65 tools selected")).toBeTruthy();
   fireEvent.click(currentTool);
   expect(within(picker).getByText("64 tools selected")).toBeTruthy();
@@ -170,13 +171,13 @@ it("keeps MCP delivery controls outside membership editing and retains governanc
 
 it("keeps source load failures inside the picker and offers a local retry", async () => {
   let failedOnce = false;
-  const browseTools = vi.fn().mockImplementation((input?: { providerId?: string; limit?: number }) => {
-    if (input?.providerId && !failedOnce) {
+  const browseTools = vi.fn().mockImplementation((input?: { sourceId?: string; limit?: number }) => {
+    if (input?.sourceId && !failedOnce) {
       failedOnce = true;
       return Promise.reject(new Error("Source catalog temporarily unavailable"));
     }
-    return Promise.resolve({ tools: input?.providerId
-      ? tools.filter((item) => item.providerId === input.providerId)
+    return Promise.resolve({ tools: input?.sourceId
+      ? tools.filter((item) => item.sourceId === input.sourceId)
       : tools });
   });
   show({ browseTools: browseTools as ManagementClient["browseTools"] });
@@ -279,11 +280,11 @@ it("switches sources while preserving pending ToolID selections and all unrelate
 it("paginates 105 Tools inside one source and never drops other selected sources", async () => {
   const more: ToolSummary[] = Array.from({ length: 105 }, (_, i) => ({
     rank: i + 1, toolId: "tool_" + String(i + 1).padStart(4, "0"),
-    providerId: "prov_0", name: "tool_" + (i + 1),
+    providerId: "prov_0", sourceId: "provider:prov_0", sourceKind: "provider", name: "tool_" + (i + 1),
     title: "Work tool " + (i + 1), description: "Search service tool " + (i + 1),
   }));
-  const browse = vi.fn().mockImplementation((args?: { providerId?: string; cursor?: string }) => {
-    if (!args?.providerId) return Promise.resolve({ tools: more.slice(0, 100) });
+  const browse = vi.fn().mockImplementation((args?: { sourceId?: string; cursor?: string }) => {
+    if (!args?.sourceId) return Promise.resolve({ tools: more.slice(0, 100) });
     if (args.cursor) return Promise.resolve({ tools: more.slice(100) });
     return Promise.resolve({ tools: more.slice(0, 100), nextCursor: "source-page-two" });
   });
@@ -293,7 +294,7 @@ it("paginates 105 Tools inside one source and never drops other selected sources
   expect(await within(picker).findByRole("button", { name: "Load more tools" })).toBeTruthy();
   fireEvent.click(within(picker).getByRole("button", { name: "Load more tools" }));
   await vi.waitFor(() => expect(browse).toHaveBeenCalledWith({
-    providerId: "prov_0", limit: 100, cursor: "source-page-two",
+    sourceId: "provider:prov_0", limit: 100, cursor: "source-page-two",
   }));
   await vi.waitFor(() => expect(within(picker).queryByRole("button", { name: "Load more tools" })).toBeNull());
   fireEvent.change(within(picker).getByRole("combobox", { name: "Catalog Tools rows per page" }), {
@@ -320,17 +321,17 @@ it("searches Tools only inside a chosen ProviderID instead of mixing same-named 
   });
   fireEvent.click(within(picker).getByRole("button", { name: "Apply" }));
   await vi.waitFor(() => expect(searchTools).toHaveBeenCalledWith({
-    query: "search", limit: 100, providerId: "prov_2",
+    query: "search", limit: 100, sourceId: "provider:prov_2",
   }));
 });
 
 it("selects only loaded ToolIDs; never implicitly grants later pages or future tools", async () => {
   const more: ToolSummary[] = Array.from({ length: 105 }, (_, i) => ({
     rank: i + 1, toolId: "tool_" + String(i + 1).padStart(4, "0"),
-    providerId: "prov_0", name: "tool_" + (i + 1), title: "Work tool " + (i + 1), description: "",
+    providerId: "prov_0", sourceId: "provider:prov_0", sourceKind: "provider", name: "tool_" + (i + 1), title: "Work tool " + (i + 1), description: "",
   }));
-  const browse = vi.fn().mockImplementation((args?: { providerId?: string }) => Promise.resolve({
-    tools: more.slice(0, 100), nextCursor: args?.providerId ? "not-loaded" : undefined,
+  const browse = vi.fn().mockImplementation((args?: { sourceId?: string }) => Promise.resolve({
+    tools: more.slice(0, 100), nextCursor: args?.sourceId ? "not-loaded" : undefined,
   }));
   const { replaceProfileTools } = show({ browseTools: browse as ManagementClient["browseTools"] });
   await chooseSources();
@@ -363,7 +364,7 @@ it("excludes unavailable/unclaimed sources from Add but preserves their existing
 });
 
 it("hydrates a bound Tool beyond the first Catalog page before grouping it by exact ProviderID", async () => {
-  const extra: ToolSummary = { rank: 105, toolId: "tool_0105", providerId: "prov_1",
+  const extra: ToolSummary = { rank: 105, toolId: "tool_0105", providerId: "prov_1", sourceId: "provider:prov_1", sourceKind: "provider",
     name: "tool_105", title: "Work tool 105", description: "Detail for far-page Tool" };
   const chosen: Profile = { ...profile, tools: [...profile.tools, { ...profile.tools[0]!, toolId: extra.toolId }] };
   const getTool = vi.fn().mockResolvedValue({ ...extra, sourceKey: "detail", inputSchema: {}, tags: [] });
@@ -401,14 +402,14 @@ it("distinguishes two identically named Agent instances by their unique configur
   const picker = await screen.findByRole("region", { name: "Choose tool sources" });
   fireEvent.click(within(picker).getByRole("button", { name: "Open source Same Agent · agent-same-b" }));
   await within(picker).findByRole("checkbox", { name: "Select Work tool 2" });
-  expect(browseTools).toHaveBeenCalledWith({ providerId: "prov_1", limit: 100 });
+  expect(browseTools).toHaveBeenCalledWith({ sourceId: "provider:prov_1", limit: 100 });
 });
 
 it("cancels during source loading without persisting or leaking a stale request into the next dialog", async () => {
   let finish!: (value: { tools: ToolSummary[] }) => void;
   const delayed = new Promise<{ tools: ToolSummary[] }>((resolve) => { finish = resolve; });
-  const browse = vi.fn().mockImplementation(async (args?: { providerId?: string }) =>
-    args?.providerId ? delayed : { tools });
+  const browse = vi.fn().mockImplementation(async (args?: { sourceId?: string }) =>
+    args?.sourceId ? delayed : { tools });
   const { replaceProfileTools } = show({ browseTools: browse as ManagementClient["browseTools"] });
   await chooseSources();
   const picker = screen.getByRole("region", { name: "Choose tool sources" });

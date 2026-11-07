@@ -2157,14 +2157,24 @@ export interface components {
         ToolSummary: {
             rank: number;
             toolId: string;
-            providerId: string;
+            /** @description Exact verified Tool provenance; independent of execution environment. */
+            sourceId: string;
+            /** @enum {string} */
+            sourceKind: "provider" | "agent" | "native";
+            /** @description Present only for a real external Provider Tool */
+            providerId?: string;
             name: string;
             title: string;
             description: string;
         };
         ToolDetail: {
             toolId: string;
-            providerId: string;
+            /** @description Exact verified Tool provenance; independent of execution environment. */
+            sourceId: string;
+            /** @enum {string} */
+            sourceKind: "provider" | "agent" | "native";
+            /** @description Present only for a real external Provider Tool */
+            providerId?: string;
             sourceKey: string;
             name: string;
             title: string;
@@ -3572,7 +3582,8 @@ export interface operations {
         parameters: {
             query?: {
                 limit?: number;
-                providerId?: string;
+                /** @description Exact canonical Tool source identifier (provider:<id>, agent:<id>, native:workspace or native:jobs). Not an execution grant. */
+                sourceId?: string;
                 cursor?: string;
             };
             header?: never;
@@ -3604,7 +3615,8 @@ export interface operations {
             query: {
                 query: string;
                 limit?: number;
-                providerId?: string;
+                /** @description Exact canonical Tool source identifier (provider:<id>, agent:<id>, native:workspace or native:jobs). Not an execution grant. */
+                sourceId?: string;
                 cursor?: string;
                 /** @description Optional Profile slug; search is restricted to the Profile\u0027s bound ToolIDs, not an invocation grant. */
                 profile?: string;

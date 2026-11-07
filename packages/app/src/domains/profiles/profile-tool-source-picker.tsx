@@ -11,7 +11,7 @@ import { TablePagination } from "../../shared/table-pagination";
 import { profileSourceLabels } from "./profile-source-label";
 
 /**
- * Profile selection mirrors Catalog /tools -> /tools/:providerId.
+ * Profile picker source keys are canonical SourceRefs, not provider IDs.
  * The source is only navigation: persisted grants remain exact ToolIDs.
  */
 export function ProfileToolSourcePicker({
@@ -59,7 +59,7 @@ export function ProfileToolSourcePicker({
   onSave: () => void;
   onClose: () => void;
 }) {
-  const selectedProvider = providers.find((provider) => provider.providerId === sourceId);
+  const selectedProvider = providers.find((provider) => "provider:" + provider.providerId === sourceId);
   const sourceLabels = useMemo(() => profileSourceLabels(providers), [providers]);
   const selectableSources = useMemo(() => {
     const needle = sourceQuery.trim().toLocaleLowerCase();
@@ -204,7 +204,7 @@ export function ProfileToolSourcePicker({
                   disabled={busy}
                   aria-label={t("Open source {{source}}", { source: sourceLabels.get(provider.providerId) ?? "" })}
                   className="flex w-full items-center gap-3 px-4 py-4 text-left hover:bg-muted/40 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring disabled:opacity-50"
-                  onClick={() => { onOpenSource(provider.providerId); toolsPagination.reset(); }}
+                  onClick={() => { onOpenSource("provider:" + provider.providerId); toolsPagination.reset(); }}
                 >
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-medium">{sourceLabels.get(provider.providerId)}</span>
@@ -213,7 +213,7 @@ export function ProfileToolSourcePicker({
                     </span>
                   </span>
                   <span className="text-xs text-muted-foreground">
-                    {tCount(selectedCounts.get(provider.providerId) ?? 0, "{{count}} selected", "{{count}} selected")}
+                    {tCount(selectedCounts.get("provider:" + provider.providerId) ?? 0, "{{count}} selected", "{{count}} selected")}
                   </span>
                   <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground" />
                 </button>

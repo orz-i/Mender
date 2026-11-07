@@ -69,7 +69,8 @@ function ProfileDetailContent({ client, slug }: { client: ManagementClient; slug
         for (const result of results) {
           if (result.status !== "fulfilled") continue;
           const tool = result.value;
-          recovered.push({ rank: 0, toolId: tool.toolId, providerId: tool.providerId,
+          recovered.push({ rank: 0, toolId: tool.toolId, sourceId: tool.sourceId,
+            sourceKind: tool.sourceKind, ...(tool.providerId ? {providerId: tool.providerId} : {}),
             name: tool.name, title: tool.title, description: tool.description });
         }
       }

@@ -124,7 +124,7 @@ func TestServiceEndToEndUsesSharedRuntime(t *testing.T) {
 		t.Fatalf("updated provider = %#v", updated.Provider)
 	}
 
-	browse, err := service.BrowseTools(100, created.Provider.ProviderID, "")
+	browse, err := service.BrowseTools(100, "provider:"+created.Provider.ProviderID, "")
 	if err != nil {
 		t.Fatalf("BrowseTools() error = %v", err)
 	}
@@ -193,7 +193,7 @@ func TestServiceEndToEndUsesSharedRuntime(t *testing.T) {
 	providerScoped, err := service.SearchTools(
 		"echo",
 		10,
-		created.Provider.ProviderID,
+		"provider:"+created.Provider.ProviderID,
 		"",
 		"",
 	)

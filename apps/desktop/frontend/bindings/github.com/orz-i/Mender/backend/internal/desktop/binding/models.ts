@@ -893,7 +893,9 @@ export interface SystemStatus {
 
 export interface ToolDetail {
     "toolId": string;
-    "providerId": string;
+    "sourceId": string;
+    "sourceKind": string;
+    "providerId"?: string;
     "sourceKey": string;
     "name": string;
     "title": string;
@@ -926,7 +928,9 @@ export interface ToolSuiteDefinitionList {
 export interface ToolSummary {
     "rank": number;
     "toolId": string;
-    "providerId": string;
+    "sourceId": string;
+    "sourceKind": string;
+    "providerId"?: string;
     "name": string;
     "title": string;
     "description": string;

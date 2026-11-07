@@ -1213,20 +1213,20 @@ func (s *Service) StopMCPServer(serverID string) error {
 	return s.runtime.StopMCPServer(s.ctx, serverID)
 }
 
-func (s *Service) BrowseTools(limit int, providerID string, cursor string) (ToolList, error) {
+func (s *Service) BrowseTools(limit int, sourceID string, cursor string) (ToolList, error) {
 	if limit == 0 {
 		limit = 100
 	}
-	var id *catalogdomain.ProviderID
-	if providerID != "" {
-		parsed, err := catalogdomain.ParseProviderID(providerID)
+	var source *catalogdomain.SourceRef
+	if sourceID != "" {
+		parsed, err := catalogdomain.ParseSourceRef(sourceID)
 		if err != nil {
 			return ToolList{}, err
 		}
-		id = &parsed
+		source = &parsed
 	}
 	page, err := s.runtime.PageCatalog(s.ctx, catalogapplication.PageToolsRequest{
-		Mode: "browse", Limit: limit, ProviderID: id, Cursor: cursor,
+		Mode: "browse", Limit: limit, SourceRef: source, Cursor: cursor,
 	}, nil)
 	if err != nil {
 		return ToolList{}, err
@@ -1234,17 +1234,17 @@ func (s *Service) BrowseTools(limit int, providerID string, cursor string) (Tool
 	return toolPageProjection(page), nil
 }
 
-func (s *Service) SearchTools(query string, limit int, providerID string, profile string, cursor string) (ToolList, error) {
+func (s *Service) SearchTools(query string, limit int, sourceID string, profile string, cursor string) (ToolList, error) {
 	if limit == 0 {
 		limit = defaultToolSearchLimit
 	}
-	var provider *catalogdomain.ProviderID
-	if providerID != "" {
-		parsed, err := catalogdomain.ParseProviderID(providerID)
+	var source *catalogdomain.SourceRef
+	if sourceID != "" {
+		parsed, err := catalogdomain.ParseSourceRef(sourceID)
 		if err != nil {
 			return ToolList{}, err
 		}
-		provider = &parsed
+		source = &parsed
 	}
 	var profileSlug *profiledomain.Slug
 	if profile != "" {
@@ -1255,7 +1255,7 @@ func (s *Service) SearchTools(query string, limit int, providerID string, profil
 		profileSlug = &slug
 	}
 	page, err := s.runtime.PageCatalog(s.ctx, catalogapplication.PageToolsRequest{
-		Mode: "search", Query: query, Limit: limit, ProviderID: provider, Cursor: cursor,
+		Mode: "search", Query: query, Limit: limit, SourceRef: source, Cursor: cursor,
 	}, profileSlug)
 	if err != nil {
 		return ToolList{}, err
@@ -1266,11 +1266,15 @@ func (s *Service) SearchTools(query string, limit int, providerID string, profil
 func toolPageProjection(page catalogapplication.ToolPage) ToolList {
 	items := make([]ToolSummary, 0, len(page.Tools))
 	for index, result := range page.Tools {
-		items = append(items, ToolSummary{
+		item := ToolSummary{
 			Rank: page.Offset + index + 1, ToolID: result.ToolID.String(),
-			ProviderID: result.ProviderID.String(), Name: result.Name,
-			Title: result.Title, Description: result.Description,
-		})
+			SourceID: result.SourceRef.String(), SourceKind: string(result.SourceRef.Kind()),
+			Name: result.Name, Title: result.Title, Description: result.Description,
+		}
+		if result.SourceRef.Kind() == catalogdomain.SourceProvider {
+			item.ProviderID = result.SourceRef.ID()
+		}
+		items = append(items, item)
 	}
 	return ToolList{Tools: items, NextCursor: page.NextCursor}
 }
@@ -2077,9 +2081,10 @@ func toolProjection(tool catalogdomain.Tool) (ToolDetail, error) {
 			return ToolDetail{}, fmt.Errorf("decode output schema: %w", err)
 		}
 	}
-	return ToolDetail{
+	result := ToolDetail{
 		ToolID:       tool.ID().String(),
-		ProviderID:   tool.ProviderID().String(),
+		SourceID:     tool.SourceRef().String(),
+		SourceKind:   string(tool.SourceRef().Kind()),
 		SourceKey:    tool.SourceKey(),
 		Name:         tool.Name(),
 		Title:        tool.Title(),
@@ -2087,7 +2092,11 @@ func toolProjection(tool catalogdomain.Tool) (ToolDetail, error) {
 		InputSchema:  inputSchema,
 		OutputSchema: outputSchema,
 		Tags:         tool.Tags(),
-	}, nil
+	}
+	if tool.SourceRef().Kind() == catalogdomain.SourceProvider {
+		result.ProviderID = tool.SourceRef().ID()
+	}
+	return result, nil
 }
 
 func parseCredentialReferences(values []string) ([]credentialdomain.Reference, error) {

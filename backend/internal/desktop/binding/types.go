@@ -458,7 +458,9 @@ type SyncResult struct {
 type ToolSummary struct {
 	Rank        int    `json:"rank"`
 	ToolID      string `json:"toolId"`
-	ProviderID  string `json:"providerId"`
+	SourceID    string `json:"sourceId"`
+	SourceKind  string `json:"sourceKind"`
+	ProviderID  string `json:"providerId,omitempty"`
 	Name        string `json:"name"`
 	Title       string `json:"title"`
 	Description string `json:"description"`
@@ -490,7 +492,9 @@ type MCPServerList struct {
 
 type ToolDetail struct {
 	ToolID       string   `json:"toolId"`
-	ProviderID   string   `json:"providerId"`
+	SourceID     string   `json:"sourceId"`
+	SourceKind   string   `json:"sourceKind"`
+	ProviderID   string   `json:"providerId,omitempty"`
 	SourceKey    string   `json:"sourceKey"`
 	Name         string   `json:"name"`
 	Title        string   `json:"title"`

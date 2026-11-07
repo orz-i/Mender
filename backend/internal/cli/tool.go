@@ -31,6 +31,7 @@ func (a *app) newToolCommand() *cobra.Command {
 func (a *app) newToolSearchCommand() *cobra.Command {
 	var limit int
 	var profileValue string
+	var sourceValue string
 
 	command := &cobra.Command{
 		Use:   "search <query>",
@@ -45,6 +46,13 @@ func (a *app) newToolSearchCommand() *cobra.Command {
 				request := catalogapplication.SearchToolsRequest{
 					Query: args[0],
 					Limit: limit,
+				}
+				if sourceValue != "" {
+					source, err := catalogdomain.ParseSourceRef(sourceValue)
+					if err != nil {
+						return usageError{err: err}
+					}
+					request.SourceRef = &source
 				}
 
 				if profileValue != "" {
@@ -89,6 +97,7 @@ func (a *app) newToolSearchCommand() *cobra.Command {
 		},
 	}
 	command.Flags().IntVar(&limit, "limit", 10, "maximum number of search results")
+	command.Flags().StringVar(&sourceValue, "source", "", "exact Tool sourceId (provider:/agent:/native:)")
 	command.Flags().StringVar(&profileValue, "profile", "", "restrict search to one profile slug")
 	return command
 }
@@ -132,7 +141,7 @@ func (a *app) newToolDescribeCommand() *cobra.Command {
 					"%s (%s)\nProvider: %s\n%s\nInput schema: %s\n",
 					tool.Title(),
 					tool.ID(),
-					tool.ProviderID(),
+					tool.SourceRef(),
 					tool.Description(),
 					string(tool.InputSchema().Bytes()),
 				)
@@ -297,14 +306,19 @@ func isNonSuccessOutcome(outcome invocationdomain.Outcome) bool {
 }
 
 func searchResultProjection(result catalogapplication.ToolSearchResult) map[string]any {
-	return map[string]any{
+	item := map[string]any{
 		"rank":        result.Rank,
 		"toolId":      result.ToolID.String(),
-		"providerId":  result.ProviderID.String(),
+		"sourceId":    result.SourceRef.String(),
+		"sourceKind":  string(result.SourceRef.Kind()),
 		"name":        result.Name,
 		"title":       result.Title,
 		"description": result.Description,
 	}
+	if result.SourceRef.Kind() == catalogdomain.SourceProvider {
+		item["providerId"] = result.SourceRef.ID()
+	}
+	return item
 }
 
 func toolProjection(tool catalogdomain.Tool) (map[string]any, error) {
@@ -320,9 +334,10 @@ func toolProjection(tool catalogdomain.Tool) (map[string]any, error) {
 		}
 	}
 
-	return map[string]any{
+	result := map[string]any{
 		"toolId":       tool.ID().String(),
-		"providerId":   tool.ProviderID().String(),
+		"sourceId":     tool.SourceRef().String(),
+		"sourceKind":   string(tool.SourceRef().Kind()),
 		"sourceKey":    tool.SourceKey(),
 		"name":         tool.Name(),
 		"title":        tool.Title(),
@@ -330,7 +345,11 @@ func toolProjection(tool catalogdomain.Tool) (map[string]any, error) {
 		"inputSchema":  inputSchema,
 		"outputSchema": outputSchema,
 		"tags":         tool.Tags(),
-	}, nil
+	}
+	if tool.SourceRef().Kind() == catalogdomain.SourceProvider {
+		result["providerId"] = tool.SourceRef().ID()
+	}
+	return result, nil
 }
 
 func invocationProjection(

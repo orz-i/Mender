@@ -348,7 +348,7 @@ export function createDesktopMenderClient(): ManagementClient {
     async browseTools(input = {}) {
       const result = await Service.BrowseTools(
         input.limit ?? 100,
-        input.providerId ?? "",
+        input.sourceId ?? "",
         input.cursor ?? "",
       );
       return { tools: (result.tools ?? []).map(toolSummary),
@@ -359,7 +359,7 @@ export function createDesktopMenderClient(): ManagementClient {
       const result = await Service.SearchTools(
         input.query,
         input.limit ?? 20,
-        input.providerId ?? "",
+        input.sourceId ?? "",
         input.profile ?? "",
         input.cursor ?? "",
       );
@@ -1524,7 +1524,9 @@ function toolSummary(value: BindingToolSummary): ToolSummary {
   return {
     rank: value.rank,
     toolId: value.toolId,
-    providerId: value.providerId,
+    sourceId: value.sourceId,
+    sourceKind: value.sourceKind as ToolSummary["sourceKind"],
+    ...(value.providerId === undefined ? {} : { providerId: value.providerId }),
     name: value.name,
     title: value.title,
     description: value.description,
@@ -1534,7 +1536,9 @@ function toolSummary(value: BindingToolSummary): ToolSummary {
 function toolDetail(value: BindingToolDetail): ToolDetail {
   return {
     toolId: value.toolId,
-    providerId: value.providerId,
+    sourceId: value.sourceId,
+    sourceKind: value.sourceKind as ToolDetail["sourceKind"],
+    ...(value.providerId === undefined ? {} : { providerId: value.providerId }),
     sourceKey: value.sourceKey,
     name: value.name,
     title: value.title,

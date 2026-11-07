@@ -868,8 +868,8 @@ function ScopeStep({
             value: tool.toolId,
             label: tool.title || tool.name,
             detail:
-              providers.find((provider) => provider.providerId === tool.providerId)
-                ?.namespace ?? tool.providerId,
+              providers.find((provider) => "provider:" + provider.providerId === tool.sourceId)
+                ?.namespace ?? tool.sourceId,
           }))}
           selected={form.match.toolIds}
           onToggle={(value, checked) =>

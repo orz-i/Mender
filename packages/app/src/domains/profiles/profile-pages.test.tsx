@@ -32,7 +32,7 @@ const provider: Provider = {
   transport: "http", toolCount: 1,
 };
 const tool: ToolSummary = {
-  rank: 1, toolId: "tool_search", providerId: "prov_source",
+  rank: 1, toolId: "tool_search", providerId: "prov_source", sourceId: "provider:prov_source", sourceKind: "provider",
   name: "search", title: "Search", description: "Search the web",
 };
 function show(initial: string, overrides: Partial<ManagementClient> = {}) {
