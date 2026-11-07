@@ -107,6 +107,12 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		return nil, fmt.Errorf("compose runtime: principal: %w", err)
 	}
 
+	// F4 safety fence: reject any typed/partially upgraded database before
+	// Catalog, Profile, Task recovery or other writable bounded-context Store.
+	if err := requireLegacyRuntimeSchema(ctx, options.DatabasePath); err != nil {
+		return nil, err
+	}
+
 	catalog, err := NewCatalog(ctx, CatalogOptions{DatabasePath: options.DatabasePath})
 	if err != nil {
 		return nil, fmt.Errorf("compose runtime: catalog: %w", err)
