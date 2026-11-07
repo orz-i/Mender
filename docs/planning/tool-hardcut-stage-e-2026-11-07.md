@@ -49,7 +49,7 @@ The `assess` command outputs JSON and returns 0 only for `ready`; `blocked` or `
 ## 3. Actual disposable database acceptance evidence
 
 - [x] Empty legacy `bootstrap.NewRuntime` DB: read-only repeatability, 7 expected schema versions, unchanged DB bytes, `ready` 0/0 and 9 future native operations.
-- [x] Consistent SQLite Online Backup; distinct destination, 0600, no overwrite, actual source fingerprint unchanged.
+- [x] Consistent SQLite Online Backup, including **committed WAL records with the source connection still open**; distinct destination, 0600, no overwrite, single-file checkpointed restore, actual source fingerprint unchanged.
 - [x] Empty DB offline upgrade: typed Catalog v3, 9 native tools/FTS, legacy facade tables removed, untrusted native SQL insert rejected, **old v2 Runtime explicitly refuses future schema**.
 - [x] Agent facade: 5 original Agent ToolIDs and AgentID preserved, internal Provider removed; SQL guard rejects deleting an Agent still owning canonical tools.
 - [x] Local Sandbox facade: 4 old ToolIDs mapped into native workspace tools, exact verified root/Workspace→Sandbox binding preserved; source unchanged.
@@ -63,8 +63,12 @@ The `assess` command outputs JSON and returns 0 only for `ready`; `blocked` or `
 - [x] Injected unknown legacy SQL trigger stops upgrade before it can commit; source and `.preupgrade` backup remain, candidate removed.
 - [x] SQLite future Workspace authority/root and placement UPDATE SQL blocked by candidate triggers.
 - [x] CLI `assess` / `stage-copy` return intentional failure codes, emit structured JSON, do not touch source, and reject wrong digest.
-- [x] Targeted Go tests including actual Bootstrap fixtures and SQL checks, scoped race, backend lint and architecture checks (record exact results in final phase acceptance).
-- [ ] Canonical full `pnpm check` remains blocked by the historical Bootstrap full-suite Race timeout in stages B/C; **cannot mark green without a complete passing run**.
+- [x] Full ordinary Go regression: `go test -count=1 -parallel=2 -timeout=4m ./backend/...` **exit 0** (receipt `/tmp/mender-stage-e-go-normal-20261107.exit`), plus a subsequent passing focused rerun after the WAL backup fixture was added.
+- [x] Focused Race Detector: `go test -race -count=1 ./backend/internal/migration/toolhardcut ./backend/cmd/mender-tool-migrate` — both packages passed, including real Bootstrap/SQLite fixtures.
+- [x] `golangci-lint run ./backend/...` — **0 issues**. `go run scripts/check-backend-architecture.go` — passed with no dependency exceptions.
+- [x] `pnpm desktop:bindings:check && pnpm sdk:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build` — Wails/SDK generation checks and TypeScript passed, i18n **1639/1639**, Vitest **76 files / 512 tests**, Web/Desktop builds passed with existing Vite large-chunk notices.
+- [x] `git diff --check` and edited Markdown local-link/fence checks passed before submission.
+- [ ] Canonical full `pnpm check` was **not rerun**: the historical full Bootstrap Race timeout remains open from stages B/C. Focused Stage E Race success and full ordinary Go success **do not** count as a canonical green run; Wails GUI was not manually tested because production runtime has not changed.
 
 ## 4. What remains a hard blocker for Stage F (not silently shipped in E)
 
