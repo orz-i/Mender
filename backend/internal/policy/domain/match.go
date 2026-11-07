@@ -316,7 +316,8 @@ type EvaluationInput struct {
 	PrincipalReference string
 	ScopeKind          governancedomain.ScopeKind
 	ScopeReference     string
-	ProviderID         string
+	ProviderID         string // real provider.activate only
+	SourceRef          string // canonical Tool provenance for tool.invoke
 	ToolID             string
 	FactKnowledge      FactKnowledge
 	Effects            []string
@@ -352,13 +353,19 @@ func (i EvaluationInput) Validate() error {
 	if _, err := governancedomain.NewContext(i.Origin, principal, scope); err != nil {
 		return fmt.Errorf("evaluation.context: %w", err)
 	}
-	if !isSandboxAction(i.Action) && !isAgentAction(i.Action) &&
-		(strings.TrimSpace(i.ProviderID) == "" || len(i.ProviderID) > maxSelectorValueLen) {
-		return fmt.Errorf("evaluation.provider_id: must be non-empty and bounded")
+	if i.Action == governancedomain.ActionProviderActivate {
+		if !validSourceIdentity("provider", i.ProviderID) || i.SourceRef != "" {
+			return fmt.Errorf("evaluation: provider.activate requires real Provider identity without Tool SourceRef")
+		}
+	} else if i.ProviderID != "" {
+		return fmt.Errorf("evaluation: non-provider action must not carry ProviderID")
 	}
 
 	switch i.Action {
 	case governancedomain.ActionToolInvoke:
+		if !validToolSourceRef(i.SourceRef) {
+			return fmt.Errorf("evaluation: tool.invoke requires exact Provider/Agent/Native SourceRef")
+		}
 		if strings.TrimSpace(i.ToolID) == "" || len(i.ToolID) > maxSelectorValueLen {
 			return fmt.Errorf("evaluation.tool_id: must be non-empty and bounded")
 		}
@@ -399,7 +406,7 @@ func (i EvaluationInput) Validate() error {
 			return fmt.Errorf("evaluation: sandbox action requires sandbox_id fact")
 		}
 	case governancedomain.ActionAgentActivate, governancedomain.ActionAgentTaskSubmit, governancedomain.ActionAgentTaskResume, governancedomain.ActionAgentTaskCancel:
-		if i.ProviderID != "" || i.ToolID != "" || i.FactKnowledge != FactKnown {
+		if i.SourceRef != "" || i.ToolID != "" || i.FactKnowledge != FactKnown {
 			return fmt.Errorf("evaluation: Agent action must use reviewed resource facts without Provider/Tool selectors")
 		}
 		if err := validateEvaluationFacts(i); err != nil {
@@ -488,7 +495,16 @@ func (m Match) Matches(input EvaluationInput) bool {
 			return false
 		}
 	}
-	if len(m.providerIDs) != 0 && !slices.Contains(m.providerIDs, input.ProviderID) {
+	// Provider selectors apply only to verified external Provider sources;
+	// Agent/Native tools never inherit a fabricated Provider identity.
+	providerID := input.ProviderID
+	if input.Action == governancedomain.ActionToolInvoke {
+		providerID = ""
+		if strings.HasPrefix(input.SourceRef, "provider:") {
+			providerID = strings.TrimPrefix(input.SourceRef, "provider:")
+		}
+	}
+	if len(m.providerIDs) != 0 && !slices.Contains(m.providerIDs, providerID) {
 		return false
 	}
 	if len(m.toolIDs) != 0 && !slices.Contains(m.toolIDs, input.ToolID) {
@@ -714,4 +730,32 @@ func hasAnyResource(matchers []ResourceMatcher, facts []ResourceFact) bool {
 		}
 	}
 	return false
+}
+
+// Source reference validation is syntactic only. Catalog independently
+// verifies ownership and host-reviewed operation family before Invocation.
+func validToolSourceRef(raw string) bool {
+	kind, id, ok := strings.Cut(raw, ":")
+	if !ok {
+		return false
+	}
+	switch kind {
+	case "provider", "agent":
+		return validSourceIdentity(kind, id)
+	case "native":
+		return id == "workspace" || id == "jobs"
+	default:
+		return false
+	}
+}
+func validSourceIdentity(kind, id string) bool {
+	prefix := "prov_"
+	if kind == "agent" {
+		prefix = "agent_"
+	}
+	if !strings.HasPrefix(id, prefix) || len(id) != len(prefix)+32 || id != strings.ToLower(id) {
+		return false
+	}
+	_, err := hex.DecodeString(strings.TrimPrefix(id, prefix))
+	return err == nil
 }

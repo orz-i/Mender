@@ -82,8 +82,12 @@ func (f invocationFinalizer) finish(ctx context.Context, attempt invocationAttem
 	var providerID *catalogdomain.ProviderID
 	metadata := attempt.metadata
 	if completion.tool != nil {
-		id := completion.tool.ProviderID()
-		providerID = &id
+		// Native and Agent-as-Tool own their canonical ToolID directly.
+		// Never fabricate an empty ProviderID for their durable audit record.
+		if completion.tool.SourceRef().Kind() == catalogdomain.SourceProvider {
+			id := completion.tool.ProviderID()
+			providerID = &id
+		}
 		metadata.toolID = completion.tool.ID()
 	}
 	auditCtx := ctx

@@ -51,7 +51,7 @@ func (a invocationPolicyEvaluator) Evaluate(
 		PrincipalReference: principal.Reference(),
 		ScopeKind:          scope.Kind(),
 		ScopeReference:     scope.Reference(),
-		ProviderID:         request.Tool.ProviderID().String(),
+		SourceRef:          request.Tool.SourceRef().String(),
 		ToolID:             request.Tool.ID().String(),
 		FactKnowledge:      factKnowledge,
 		Effects:            effects,

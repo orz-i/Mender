@@ -190,7 +190,7 @@ func validEvaluationInput(origin governancedomain.Origin, knowledge FactKnowledg
 		PrincipalReference: "test:user",
 		Origin:             origin,
 		ScopeKind:          governancedomain.ScopeCatalog,
-		ProviderID:         "prov_00000000000000000000000000000001",
+		SourceRef:          "provider:prov_00000000000000000000000000000001",
 		ToolID:             "tool_00000000000000000000000000000001",
 		FactKnowledge:      knowledge,
 	}

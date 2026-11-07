@@ -39,7 +39,7 @@ func TestMatchSemantics(t *testing.T) {
 		Origin:             governancedomain.OriginMCP,
 		ScopeKind:          governancedomain.ScopeProfile,
 		ScopeReference:     "prof_00000000000000000000000000000001",
-		ProviderID:         "prov_00000000000000000000000000000001",
+		SourceRef:          "provider:prov_00000000000000000000000000000001",
 		ToolID:             "tool_00000000000000000000000000000001",
 		FactKnowledge:      FactKnown,
 		Effects:            []string{"filesystem.write"},

@@ -36,7 +36,7 @@ func TestFreshStoreDefaultsToAllowWithNoRules(t *testing.T) {
 		PrincipalReference: "test:user",
 		Origin:             governancedomain.OriginCLI,
 		ScopeKind:          governancedomain.ScopeCatalog,
-		ProviderID:         "prov_00000000000000000000000000000001",
+		SourceRef:          "provider:prov_00000000000000000000000000000001",
 		ToolID:             "tool_00000000000000000000000000000001",
 		FactKnowledge:      policydomain.FactUnknown,
 	})

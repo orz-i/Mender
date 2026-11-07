@@ -25,7 +25,7 @@ func TestSandboxActionsCannotInheritToolOrProviderRules(t *testing.T) {
 	if !sandboxRule.Matches(sandbox) {
 		t.Fatal("sandbox selector did not match")
 	}
-	input := EvaluationInput{Action: gov.ActionToolInvoke, Origin: gov.OriginCLI, PrincipalKind: gov.PrincipalLocalUser, PrincipalReference: "owner", ScopeKind: gov.ScopeCatalog, ProviderID: "provider-test", ToolID: "tool-test", FactKnowledge: FactKnown, Resources: []ResourceFact{{Kind: "sandbox_id", Value: "sbx_0123456789abcdef0123456789abcdef"}}}
+	input := EvaluationInput{Action: gov.ActionToolInvoke, Origin: gov.OriginCLI, PrincipalKind: gov.PrincipalLocalUser, PrincipalReference: "owner", ScopeKind: gov.ScopeCatalog, SourceRef: "provider:prov_00000000000000000000000000000001", ToolID: "tool-test", FactKnowledge: FactKnown, Resources: []ResourceFact{{Kind: "sandbox_id", Value: "sbx_0123456789abcdef0123456789abcdef"}}}
 	if sandboxRule.Matches(input) {
 		t.Fatal("sandbox rule leaked into tool invocation")
 	}

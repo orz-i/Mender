@@ -17,7 +17,8 @@ type EvaluateRequest struct {
 	PrincipalReference string
 	ScopeKind          governancedomain.ScopeKind
 	ScopeReference     string
-	ProviderID         string
+	ProviderID         string // real provider.activate only
+	SourceRef          string // tool.invoke only
 	ToolID             string
 	FactKnowledge      policydomain.FactKnowledge
 	Effects            []string
@@ -62,6 +63,7 @@ func (uc Evaluate) Execute(
 		ScopeKind:          request.ScopeKind,
 		ScopeReference:     request.ScopeReference,
 		ProviderID:         request.ProviderID,
+		SourceRef:          request.SourceRef,
 		ToolID:             request.ToolID,
 		FactKnowledge:      request.FactKnowledge,
 		Effects:            append([]string(nil), request.Effects...),
