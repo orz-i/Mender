@@ -1,6 +1,6 @@
 # Mender 工具 / Agent as Tool / Workspace / Sandbox 归属与执行边界硬切治理
 
-**状态**：阶段 A–E 已提交；阶段 F 已实现封闭的 F1 SourceRef/Profile 工具供应投影及 F2a 原子 Native Workspace 租约检查（单事务 Profile ToolBinding、TargetScope、Workspace Grant、Sandbox Grant 和运行代际），但 **F2b Invocation 接线、F3 MCP/HTTP/CLI/SDK/Wails、F4 唯一生产 Runtime 切换均未完成**。真实数据库未迁移、新执行链未启用；Profile 导出审核、远端 SSH/Jobs 证据及 Bootstrap 全量 Race 门禁仍是硬阻断。
+**状态**：阶段 A–E 已提交；阶段 F 的 F1、F2a 与 F2b 必需的现有 Invocation→Sandbox Router 原子租约衔接/路径事实已实现，**实际 Native Executor/SourceRef Policy-Audit 生产装配、F3 公共 MCP/HTTP/CLI/SDK/Wails 合同和 F4 唯一 Runtime 硬切仍未完成**。未增加新治理阶段、无双执行系统；真实数据库未迁移、新执行链未启用。Profile 导出审核、远端 SSH/Jobs 证据、Bootstrap 全量 Race 仍是阻断。
 
 **仓库基线**：`main` / `ce924e0`，Mac mini `/Users/mini/Coding/Mender`，2026-11-07
 
@@ -199,11 +199,12 @@
 - **Gate**：仅可丢弃数据库离线验收；生产 `pnpm check`/全量 Race 门禁和 Wails 实机仍不得标记完成。
 - **提交**：`docs(governance): specify stage E offline migration and release blockers`、`feat(migration): stage guarded one-way tool ownership candidate`。
 
-### F — API/MCP/CLI/SDK/Wails 同步（F1/F2a 完成；F2b/F3/F4 待推进）
+### F — API/MCP/CLI/SDK/Wails 同步（F1/F2a 及 F2b 执行准入衔接完成；F3/F4 与最终装配待推进）
 - [x] [阶段 F 实施合同与证据](tool-hardcut-stage-f-2026-11-07.md)：新 Schema 上 Profile ToolID/SourceRef 来源分组、AgentGrant、Native ToolBinding + Workspace/Sandbox Grants + TargetScope、Direct/Hybrid/Dynamic 供应投影、Source-first 分页、失效 Cursor 和导出名称碰撞拒绝，**不接入旧 MCP**。
 - [x] 未来 Native Profile 工具的统一持久租约表中实现原子预留：ToolID + WorkspaceRef + SandboxID + 真实运行代际及独立授权的同 SQL 语句核对；并发撤权/错误批准事实负向测试通过；**没有独立执行引擎**。
 - [x] 阶段 E 未来 Schema 补足独立 Workspace Profile Grants、Native 目标插入约束、授权撤销/添加后的 Profile/MCP revision 递增。
-- [ ] F2b：现有 Policy/Approval/Budget/Invocation Receipt/Path Facts/Result Guard/Audit 与 GuardedRouter 的唯一调用链，必须把上述原子预留用于 Native 执行（不得退回旧 `ReserveExecution` 只检查 Sandbox Grant）。
+- [x] F2b 已复用唯一 Invocation→Sandbox Router 会话/租约链：Policy/Approval/预算与 Binding 成功后才附加内部审批凭据，`AcquireNative` 拒绝旧 Provider 租约 Store，`typedlease` 在同一次 SQL 预留中限制原目标；原有 Workspace 路径规则共用，Policy facts 必含规范化 `workspace_path`，冻结参数防篡改。
+- [ ] F2b 最终装配：Native Tool/Agent as Tool 执行器与 Policy/Approval/Audit 的 SourceRef、当前调用参数和 Source-first 运行时一体接线（不能以仅有的适配器测试冒充正式可调用能力）。
 - [ ] F3：统一 MCP/HTTP/CLI/SDK/Wails SourceRef、DTO 和 Direct/Hybrid 导出，拆除 ProviderID-only 来源 API，不允许双执行路径。
 - [ ] F4：跨 Context 正式运行时一次性切换、旧 Facade 代码退休和生产等价迁移/远端证据、Wails 实机验收。
 - **Gate**：F1/F2a 定向 Go/Race/架构和权限负向测试已通过；整个 F 的 HTTP/Wails/CLI parity 和生产门禁仍未完成，不得宣称阶段 F 或硬切已经结束。
