@@ -60,6 +60,7 @@ type Adapter struct {
 	deps              Dependencies
 	server            *mcp.Server
 	tools             map[catalogdomain.ToolID]catalogdomain.Tool
+	typed             *typedProfileProjection // future hard-cut profile reader; no second MCP transport
 }
 
 // New constructs a Profile-scoped MCP server.

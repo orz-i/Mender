@@ -100,7 +100,7 @@ func (a *Adapter) addMetaTools() {
 			Name:        metaSearchName,
 			Title:       "Search Mender tools",
 			Description: "Find Profile-visible tool sources by Agent, Workspace or service name (default view=sources). Then request view=tools with sourceId to list tools. For a tool name across sources use view=tools and query. Describe a toolId for its schema before calling it.",
-			InputSchema: json.RawMessage(`{"type":"object","additionalProperties":false,"properties":{"view":{"type":"string","enum":["sources","tools"],"description":"Default sources; tools lists tools within a source or searches across sources."},"query":{"type":"string","description":"Optional for sources or tools within a source; required for cross-source tool lookup."},"sourceId":{"type":"string","description":"Stable sourceId returned from source search (existing ProviderID)."},"cursor":{"type":"string","description":"Opaque nextCursor from the previous page."},"limit":{"type":"integer","minimum":1,"maximum":100}}}`),
+			InputSchema: json.RawMessage(`{"type":"object","additionalProperties":false,"properties":{"view":{"type":"string","enum":["sources","tools"],"description":"Default sources; tools lists tools within a source or searches across sources."},"query":{"type":"string","description":"Optional for sources or tools within a source; required for cross-source tool lookup."},"sourceId":{"type":"string","description":"Stable sourceId returned by source discovery."},"cursor":{"type":"string","description":"Opaque nextCursor from the previous page."},"limit":{"type":"integer","minimum":1,"maximum":100}}}`),
 		},
 		a.searchHandler,
 	)
@@ -340,6 +340,9 @@ func scoreTool(twp toolWithPresentation, src ToolSource, q string) int {
 }
 
 func (a *Adapter) searchHandler(ctx context.Context, request *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if a.typed != nil {
+		return a.typedSearch(ctx, request)
+	}
 	var input searchInput
 	if len(request.Params.Arguments) > 0 {
 		decoder := json.NewDecoder(strings.NewReader(string(request.Params.Arguments)))
@@ -775,6 +778,9 @@ func (a *Adapter) searchHandler(ctx context.Context, request *mcp.CallToolReques
 }
 
 func (a *Adapter) describeHandler(ctx context.Context, request *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if a.typed != nil {
+		return a.typedDescribe(ctx, request)
+	}
 	var input struct {
 		ToolID string `json:"toolId"`
 	}
@@ -837,6 +843,9 @@ func (a *Adapter) describeHandler(ctx context.Context, request *mcp.CallToolRequ
 }
 
 func (a *Adapter) callHandler(ctx context.Context, request *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if a.typed != nil {
+		return a.typedCall(ctx, request)
+	}
 	var input struct {
 		ToolID    string          `json:"toolId"`
 		Arguments json.RawMessage `json:"arguments"`
