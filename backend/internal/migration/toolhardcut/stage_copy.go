@@ -2,13 +2,10 @@ package toolhardcut
 
 import (
 	"context"
-	"crypto/sha256"
 	"database/sql"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -135,22 +132,22 @@ func StageCopy(ctx context.Context, sourcePath, destinationPath, expectedManifes
 	if err := db.Close(); err != nil {
 		return StagedCopy{}, err
 	}
-	// #nosec G304 -- newly created explicit candidate path; no user input is executed.
-	file, err := os.Open(dest)
+	fileHash, err := stagedFileHash(dest)
 	if err != nil {
 		return StagedCopy{}, err
 	}
-	hash := sha256.New()
-	_, copyErr := io.Copy(hash, file)
-	closeErr := file.Close()
-	if err := errors.Join(copyErr, closeErr); err != nil {
-		return StagedCopy{}, err
+	artifact := StagedCopy{
+		CandidatePath: dest, PreUpgradeBackupPath: backup, BeforeDigest: report.ManifestDigest,
+		AfterFileSHA256: fileHash,
+	}
+	// Reopen the committed new-Schema database with an independent read-only
+	// connection; a committed upgrade is not accepted on in-transaction evidence
+	// alone. On failure, discard only the candidate and retain its backup.
+	if err := VerifyStagedCopy(ctx, artifact); err != nil {
+		return StagedCopy{}, fmt.Errorf("verify committed hard-cut candidate: %w", err)
 	}
 	completed = true
-	return StagedCopy{
-		CandidatePath: dest, PreUpgradeBackupPath: backup, BeforeDigest: report.ManifestDigest,
-		AfterFileSHA256: "sha256:" + hex.EncodeToString(hash.Sum(nil)),
-	}, nil
+	return artifact, nil
 }
 
 func applyTypedSchema(ctx context.Context, tx *sql.Tx, report Report) error {
