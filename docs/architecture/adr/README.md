@@ -85,7 +85,7 @@ Minor implementation choices that remain inside an accepted architectural bounda
 - [ADR-0053: Agent approval inbox and scoped trust](0053-agent-approval-inbox-and-scoped-trust.md) — Accepted
 - [ADR-0054: ACP approval revision and delivery](0054-acp-approval-revision-and-delivery.md) — Implemented
 - [ADR-0055: Managed MCP Profile hot refresh](0055-managed-mcp-profile-hot-refresh.md) — Accepted
-- [ADR-0056: Profile-scoped source-first MCP Tool discovery](0056-source-first-mcp-tool-discovery.md) — Accepted
+- [ADR-0056: Profile-scoped source-first MCP Tool discovery](0056-source-first-mcp-tool-discovery.md) — Accepted; `sourceId = ProviderID` and mandatory Provider provenance are superseded by ADR-0064 for the target hard cut
 - [ADR-0057: Evidence-bound Agent lifecycle and native session continuation](0057-agent-session-lifecycle-recovery.md) — Partially implemented; recovery/reattachment remains proposed
 - [ADR-0058: Profile as a unified capability bundle and delivery root](0058-profile-unified-delivery-root.md) — Accepted
 - [ADR-0059: Restore application ownership in the R0-R2 refactor](0059-r0-r2-application-boundaries.md) — Accepted for R0-R2
@@ -93,3 +93,4 @@ Minor implementation choices that remain inside an accepted architectural bounda
 - [ADR-0061: Type the Workspace execution boundary in R4](0061-r4-typed-workspace-boundary.md) — Accepted for R4
 - [ADR-0062: Separate Profile selection and delivery configuration in R5](0062-r5-profile-delivery-schema-boundaries.md) — Accepted for R5
 - [ADR-0063: Separate client capabilities and consolidate Tools ownership in R6](0063-r6-client-capabilities-tools-ownership.md) — Accepted for R6
+- [ADR-0064: Separate Tool provenance, Agent-as-Tool ownership, Workspace context, and Sandbox execution placement](0064-tool-provenance-and-execution-placement-hardcut.md) — Accepted as target architecture; implementation pending (B–H)

@@ -14,12 +14,14 @@ Mender is a local-first **Tool and Resource aggregation, governance, and supply 
 
 Mender manages version-pinned native Plugin Packages and typed Extensions, configured Provider/Agent/Sandbox/Tunnel Resources, reviewed Tool Suites and Marketplace integration offerings. Resource ownership and executable Tool exposure are separate decisions. A canonical Tool is registered once and may then be discovered, authorized, invoked, audited, and supplied through CLI, MCP, and Agent Skills without duplicating the governance pipeline.
 
+**Target ownership boundary (ADR-0064; not yet implemented):** a Tool has a verified Provider, Agent-as-Tool, or Mender-native provenance; it is not required to belong to a Provider. Workspace identifies an approved work target. Sandbox supplies actual execution placement, capabilities and isolation without owning generic Tool definitions. Profile selects the supplied capabilities and tightens access. The current implementation still uses internal Agent/Sandbox Provider facades until the one-way hard cut is delivered.
+
 ## Primary capabilities
 
 Mender should eventually provide:
 
 - Native Plugin Package installation, exact Extension pinning and independent configured Provider, Agent, Sandbox and Tunnel Resource lifecycles, including explicitly trusted external types.
-- Reviewed integration offerings and host-owned resource-bound Tool Suites; configuration does not imply Profile exposure or Policy authorization.
+- Reviewed integration offerings and host-owned capability Tool Suites; configuration does not imply Profile exposure, Policy authorization, Workspace access or Sandbox execution permission.
 - A canonical tool catalog independent from MCP or any other protocol.
 - Search, describe, and invoke workflows for large catalogs.
 - Profiles whose ToolBindings combine membership, exposure, aliases/presentation, and restrictive execution governance.
@@ -69,33 +71,30 @@ These may become integrations or adjacent capabilities, but they must not distor
 The target execution flow is:
 
 ```text
-Provider
+Tool Source (Provider / Agent as Tool / Native)
    |
    v
-Normalize
+Canonical Tool Catalog
    |
-   v
-Catalog
-   |
-   +--> Search / Describe
+   +--> Search / Describe (no execution)
    |
    v
 Execution Scope (Catalog / Profile)
    |
    v
-Input Validation
+Input Validation / Trusted Target Resolution
    |
    v
-Governance Facts
+Governance Facts (exact approved Workspace / Sandbox when required)
    |
    v
-Policy / Approval
+Policy / Approval / Profile constraints
    |
    v
-Execution Guard
+Execution Guard / Runtime Budget / Exact Placement Recheck
    |
    v
-Credential-boundary Execution
+Provider Executor | Agent Task | Workspace Tool + Sandbox Lease
    |
    v
 Result Guard
@@ -121,7 +120,7 @@ Initial target users are:
 
 A first usable release should allow a user to:
 
-1. Register Providers through built-in plugins (including MCP, supported OpenAPI 3 descriptions, provider-hosted Model Tools, and governed local Workspace capabilities) or explicitly installed external Provider plugins, all normalized behind governed Mender Tool contracts.
+1. Register independent external Providers through supported MCP, OpenAPI, Model Tools or installed Provider plugins; configure Agent-as-Tool and Sandbox resources independently; expose Mender-native Workspace/Job capabilities without per-resource Provider clones after ADR-0064 is implemented.
 2. Synchronize their tools into a canonical catalog.
 3. Create a profile containing a subset of tools.
 4. Search, inspect, and invoke tools from the CLI.

@@ -1,5 +1,7 @@
 # System Context
 
+This document diagrams the **currently implemented** Provider-backed Tool facades and Workspace/Sandbox bridging. The accepted **future** hard-cut ownership contract is [ADR-0064](adr/0064-tool-provenance-and-execution-placement-hardcut.md), with [Phase A inventory](../planning/tool-hardcut-phase-a-inventory-2026-11-07.md). Do not read this diagram as evidence that typed SourceRef or shared Workspace identities are already running.
+
 ## Backend boundaries
 
 Solid arrows show calls across boundaries. `bootstrap.Runtime` constructs the
