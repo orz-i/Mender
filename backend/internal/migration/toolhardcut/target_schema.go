@@ -145,6 +145,12 @@ func installHardcutTargetSchema(ctx context.Context, tx *sql.Tx) error {
    verified_revision INTEGER NOT NULL CHECK(verified_revision>0),
    PRIMARY KEY(workspace_id,sandbox_id)
   )`,
+		`CREATE TABLE workspace_profile_grants (
+   workspace_id TEXT NOT NULL REFERENCES workspaces(workspace_id) ON DELETE RESTRICT,
+   profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+   granted_at TEXT NOT NULL,
+   PRIMARY KEY(workspace_id,profile_id)
+  )`,
 		`CREATE TABLE profile_tool_target_scopes (
    profile_id TEXT NOT NULL,
    tool_id TEXT NOT NULL,
@@ -160,10 +166,49 @@ func installHardcutTargetSchema(ctx context.Context, tx *sql.Tx) error {
        SELECT 1 FROM workspace_placements p
        WHERE p.workspace_id=NEW.workspace_id AND p.sandbox_id=NEW.sandbox_id))
      OR (t.source_id='jobs' AND NEW.workspace_id=''))
+    AND EXISTS(SELECT 1 FROM sandbox_profile_grants g
+      WHERE g.profile_id=NEW.profile_id AND g.sandbox_id=NEW.sandbox_id
+      AND g.capability=CASE t.source_key
+        WHEN 'workspace.read' THEN 'file.read'
+        WHEN 'workspace.search' THEN 'file.search'
+        WHEN 'workspace.edit' THEN 'file.edit'
+        WHEN 'workspace.shell' THEN 'process.shell'
+        WHEN 'jobs.submit' THEN 'job.submit'
+        WHEN 'jobs.status' THEN 'job.observe'
+        WHEN 'jobs.logs' THEN 'job.observe'
+        WHEN 'jobs.result' THEN 'job.observe'
+        WHEN 'jobs.cancel' THEN 'job.cancel' END)
+    AND (t.source_id='jobs' OR EXISTS(
+      SELECT 1 FROM workspace_profile_grants wg
+      WHERE wg.workspace_id=NEW.workspace_id AND wg.profile_id=NEW.profile_id))
    )
-   BEGIN SELECT RAISE(ABORT,'unreviewed Tool target scope'); END`,
+   BEGIN SELECT RAISE(ABORT,'unreviewed Tool target scope or missing Workspace/Sandbox grant'); END`,
 		`CREATE TRIGGER profile_tool_target_update_guard BEFORE UPDATE ON profile_tool_target_scopes
    BEGIN SELECT RAISE(ABORT,'Tool target scope immutable; replace explicitly'); END`,
+		`CREATE TRIGGER profile_target_scope_add_revision AFTER INSERT ON profile_tool_target_scopes
+   BEGIN UPDATE profiles SET revision=revision+1 WHERE id=NEW.profile_id;
+   UPDATE mcp_delivery_configs SET revision=revision+1 WHERE profile_id=NEW.profile_id; END`,
+		`CREATE TRIGGER profile_target_scope_remove_revision AFTER DELETE ON profile_tool_target_scopes
+   BEGIN UPDATE profiles SET revision=revision+1 WHERE id=OLD.profile_id;
+   UPDATE mcp_delivery_configs SET revision=revision+1 WHERE profile_id=OLD.profile_id; END`,
+		`CREATE TRIGGER workspace_profile_grant_add_revision AFTER INSERT ON workspace_profile_grants
+   BEGIN UPDATE profiles SET revision=revision+1 WHERE id=NEW.profile_id;
+   UPDATE mcp_delivery_configs SET revision=revision+1 WHERE profile_id=NEW.profile_id; END`,
+		`CREATE TRIGGER workspace_profile_grant_remove_revision AFTER DELETE ON workspace_profile_grants
+   BEGIN UPDATE profiles SET revision=revision+1 WHERE id=OLD.profile_id;
+   UPDATE mcp_delivery_configs SET revision=revision+1 WHERE profile_id=OLD.profile_id; END`,
+		`CREATE TRIGGER agent_grant_profile_supply_add_revision AFTER INSERT ON agent_grants
+   BEGIN UPDATE profiles SET revision=revision+1 WHERE id=NEW.profile_id;
+   UPDATE mcp_delivery_configs SET revision=revision+1 WHERE profile_id=NEW.profile_id; END`,
+		`CREATE TRIGGER agent_grant_profile_supply_remove_revision AFTER DELETE ON agent_grants
+   BEGIN UPDATE profiles SET revision=revision+1 WHERE id=OLD.profile_id;
+   UPDATE mcp_delivery_configs SET revision=revision+1 WHERE profile_id=OLD.profile_id; END`,
+		`CREATE TRIGGER sandbox_grant_profile_supply_add_revision AFTER INSERT ON sandbox_profile_grants
+   BEGIN UPDATE profiles SET revision=revision+1 WHERE id=NEW.profile_id;
+   UPDATE mcp_delivery_configs SET revision=revision+1 WHERE profile_id=NEW.profile_id; END`,
+		`CREATE TRIGGER sandbox_grant_profile_supply_remove_revision AFTER DELETE ON sandbox_profile_grants
+   BEGIN UPDATE profiles SET revision=revision+1 WHERE id=OLD.profile_id;
+   UPDATE mcp_delivery_configs SET revision=revision+1 WHERE profile_id=OLD.profile_id; END`,
 		`CREATE TRIGGER workspace_authority_immutable_update
    BEFORE UPDATE OF owner_kind,owner_ref,verified_root ON workspaces
    BEGIN SELECT RAISE(ABORT,'Workspace authority/root cannot be rebound in place'); END`,
@@ -190,6 +235,8 @@ func checkConverted(ctx context.Context, tx *sql.Tx, report Report) error {
 		{"SELECT COUNT(*) FROM tools", report.Counts.ToolsAfter},
 		{"SELECT COUNT(*) FROM tools_fts", report.Counts.ToolsAfter},
 		{"SELECT COUNT(*) FROM native_tool_contracts", 9},
+		{"SELECT COUNT(*) FROM workspace_profile_grants", 0},
+		{"SELECT COUNT(*) FROM profile_tool_target_scopes", 0},
 		{"SELECT COUNT(*) FROM hardcut_legacy_tool_identities", report.Counts.ToolsBefore},
 		{"SELECT COUNT(*) FROM profile_tools WHERE tool_id NOT IN (SELECT id FROM tools)", 0},
 		{"SELECT COUNT(*) FROM provider_configs WHERE plugin_id IN ('io.mender.provider.agent-delegation','io.mender.provider.workspace','io.mender.provider.sandbox-jobs')", 0},
