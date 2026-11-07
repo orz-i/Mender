@@ -6,7 +6,9 @@ import (
 	"sync"
 
 	catalog "github.com/orz-i/Mender/backend/internal/catalog/domain"
+	governance "github.com/orz-i/Mender/backend/internal/governance/domain"
 	invocation "github.com/orz-i/Mender/backend/internal/invocation/application"
+	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
 	"github.com/orz-i/Mender/backend/internal/toolsuite/infrastructure/curated"
 )
 
@@ -97,6 +99,33 @@ func (r *Router) ExecutorFor(_ context.Context, tool catalog.Tool) (invocation.T
 	}
 	return executor, nil
 }
+
+// Extract delegates only to the *same* SourceRef-registered executor used by
+// Invocation. Future Agent/native executors must implement the trusted facts
+// port; a merely executable Provider without this port cannot fabricate
+// Workspace/Sandbox admission. Current v2 Provider facts remain in bootstrap
+// until F4 removes their Provider-based composition atomically.
+func (r *Router) Extract(ctx context.Context, tool catalog.Tool, args invocationdomain.JSONValue,
+	caller governance.Context,
+) (invocation.GovernanceFactExtraction, error) {
+	// External Provider plugins cannot supply authoritative policy facts by
+	// implementing a Go interface. Their existing host-reviewed extractor is
+	// the sole authority, even after the F4 cutover.
+	if tool.SourceRef().Kind() == catalog.SourceProvider {
+		return invocation.GovernanceFactExtraction{}, fmt.Errorf("provider facts require host-reviewed configuration")
+	}
+	executor, err := r.ExecutorFor(ctx, tool)
+	if err != nil {
+		return invocation.GovernanceFactExtraction{}, err
+	}
+	facts, ok := executor.(invocation.GovernanceFactExtractor)
+	if !ok {
+		return invocation.GovernanceFactExtraction{}, fmt.Errorf("tool source has no reviewed governance fact extractor")
+	}
+	return facts.Extract(ctx, tool, args, caller)
+}
+
+var _ invocation.GovernanceFactExtractor = (*Router)(nil)
 
 func verifiedOperation(source catalog.SourceRef, tool catalog.Tool) bool {
 	switch source.Kind() {

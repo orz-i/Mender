@@ -323,15 +323,27 @@ func (p *Plugin) ExtractGovernanceFacts(_ context.Context, raw json.RawMessage, 
 	default:
 		return invocationdomain.UnknownGovernanceFacts(), nil
 	}
-	resource, err := invocationdomain.NewResourceFact("agent_id", config.AgentID)
-	if err != nil {
-		return invocationdomain.GovernanceFacts{}, err
-	}
-	return invocationdomain.KnownGovernanceFacts(
-		[]invocationdomain.EffectFact{invocationdomain.EffectFact(tool.SourceKey())},
-		[]invocationdomain.ResourceFact{resource})
+	return reviewedAgentToolFacts(config.AgentID, tool.SourceKey())
 }
 
 var _ providerplugin.Plugin = (*Plugin)(nil)
 var _ providerplugin.Instance = (*Instance)(nil)
 var _ providerplugin.GovernanceFactProvider = (*Plugin)(nil)
+
+// The trusted Agent resource, not a Provider facade, owns the same reviewed
+// Policy facts for each of its delegate/task-control operations. This is
+// shared until F4 retires the Provider-facing Plugin transport.
+func reviewedAgentToolFacts(agentID string, sourceKey string) (invocationdomain.GovernanceFacts, error) {
+	switch sourceKey {
+	case sourceDelegate, sourceStatus, sourceResult, sourceCancel, sourceResume:
+	default:
+		return invocationdomain.GovernanceFacts{}, agentdomain.ErrInvalid
+	}
+	resource, err := invocationdomain.NewResourceFact("agent_id", agentID)
+	if err != nil {
+		return invocationdomain.GovernanceFacts{}, err
+	}
+	return invocationdomain.KnownGovernanceFacts(
+		[]invocationdomain.EffectFact{invocationdomain.EffectFact(sourceKey)},
+		[]invocationdomain.ResourceFact{resource})
+}
