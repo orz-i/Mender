@@ -372,9 +372,9 @@ paths:
 	search, err := runtime.Catalog.SearchTools.Execute(
 		ctx,
 		catalogapplication.SearchToolsRequest{
-			Query:      "secure",
-			Limit:      10,
-			ProviderID: providerIDPtr(provider.ID()),
+			Query:     "secure",
+			Limit:     10,
+			SourceRef: providerSourcePtr(provider.ID()),
 		},
 	)
 	if err != nil || len(search) != 1 {

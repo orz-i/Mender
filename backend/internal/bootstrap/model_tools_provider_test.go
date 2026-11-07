@@ -85,9 +85,9 @@ func TestModelToolsProviderSyncIsLocalAndProfileCredentialScopeBlocksExecution(
 	search, err := runtime.Catalog.SearchTools.Execute(
 		ctx,
 		catalogapplication.SearchToolsRequest{
-			Query:      "web search",
-			Limit:      10,
-			ProviderID: providerIDPtr(provider.ID()),
+			Query:     "web search",
+			Limit:     10,
+			SourceRef: providerSourcePtr(provider.ID()),
 		},
 	)
 	if err != nil || len(search) != 1 {
@@ -134,9 +134,9 @@ func TestModelToolsProviderSyncIsLocalAndProfileCredentialScopeBlocksExecution(
 	search, err = runtime.Catalog.SearchTools.Execute(
 		ctx,
 		catalogapplication.SearchToolsRequest{
-			Query:      "web search",
-			Limit:      10,
-			ProviderID: providerIDPtr(provider.ID()),
+			Query:     "web search",
+			Limit:     10,
+			SourceRef: providerSourcePtr(provider.ID()),
 		},
 	)
 	if err != nil || len(search) != 1 {

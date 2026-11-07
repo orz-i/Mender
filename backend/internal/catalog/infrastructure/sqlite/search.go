@@ -104,10 +104,13 @@ func searchStatement(
 ) (string, []any, error) {
 	statement := selectPrefix
 	args := []any{match}
-	if scope.ProviderID != nil {
+	if scope.SourceRef != nil {
+		if err := requireLegacyProviderSource(scope.SourceRef); err != nil {
+			return "", nil, err
+		}
 		statement += `
 	AND tools_fts.provider_id = ?`
-		args = append(args, scope.ProviderID.String())
+		args = append(args, scope.SourceRef.ID())
 	}
 	if scope.AllowedToolIDs != nil {
 		allowed, err := encodeAllowedToolIDs(scope.AllowedToolIDs)

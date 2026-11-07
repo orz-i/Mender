@@ -528,7 +528,7 @@ func (m *memoryCatalog) SearchTools(
 	}
 
 	for _, tool := range m.toolsByID {
-		if scope.ProviderID != nil && tool.ProviderID() != *scope.ProviderID {
+		if scope.SourceRef != nil && tool.SourceRef() != *scope.SourceRef {
 			continue
 		}
 		if scope.AllowedToolIDs != nil {

@@ -336,7 +336,7 @@ func TestSearchToolsScopedPaginationRestrictsBeforeRankingWindow(t *testing.T) {
 		t.Fatal(err)
 	}
 	extraScoped, err := store.SearchTools(ctx, query, 10, application.ToolSearchScope{
-		ProviderID:     &extraProvider,
+		SourceRef:      testProviderSource(extraProvider),
 		AllowedToolIDs: allowed,
 	})
 	if err != nil {
@@ -348,7 +348,7 @@ func TestSearchToolsScopedPaginationRestrictsBeforeRankingWindow(t *testing.T) {
 
 	// Provider filter alone keeps the ranking intact.
 	providerOnly, err := store.SearchTools(ctx, query, 10, application.ToolSearchScope{
-		ProviderID: &extraProvider,
+		SourceRef: testProviderSource(extraProvider),
 	})
 	if err != nil {
 		t.Fatalf("provider SearchTools() error = %v", err)
@@ -522,14 +522,14 @@ func TestSearchStatementComposesScopeAndRankForEveryPath(t *testing.T) {
 	}{
 		{name: "unscoped", prefix: searchToolsStatement, scope: application.ToolSearchScope{}, wantArgs: 8},
 		{name: "provider", prefix: searchToolsStatement,
-			scope: application.ToolSearchScope{ProviderID: &provider}, wantArgs: 9, hasProvider: true},
+			scope: application.ToolSearchScope{SourceRef: testProviderSource(provider)}, wantArgs: 9, hasProvider: true},
 		{name: "allowed", prefix: searchToolsStatement,
 			scope:    application.ToolSearchScope{AllowedToolIDs: []domain.ToolID{allowedID}},
 			wantArgs: 9, hasAllowed: true},
 		{name: "paged-unscoped", prefix: pagedSearchToolsStatement,
 			scope: application.ToolSearchScope{}, wantArgs: 8},
 		{name: "paged-both", prefix: pagedSearchToolsStatement,
-			scope: application.ToolSearchScope{ProviderID: &provider,
+			scope: application.ToolSearchScope{SourceRef: testProviderSource(provider),
 				AllowedToolIDs: []domain.ToolID{allowedID}},
 			wantArgs: 10, hasAllowed: true, hasProvider: true},
 	}

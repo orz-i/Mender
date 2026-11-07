@@ -269,8 +269,8 @@ func TestBrowseToolsAndProviderCountsUseCompactCatalogRows(t *testing.T) {
 	}
 
 	scoped, err := browse.Execute(context.Background(), application.BrowseToolsRequest{
-		Limit:      10,
-		ProviderID: ptrProviderID(first.ID()),
+		Limit:     10,
+		SourceRef: testProviderSource(first.ID()),
 	})
 	if err != nil {
 		t.Fatalf("scoped BrowseTools.Execute() error = %v", err)
@@ -382,10 +382,6 @@ func createProvider(t *testing.T, store *Store, namespaceValue, rawID string) do
 	return provider
 }
 
-func ptrProviderID(value domain.ProviderID) *domain.ProviderID {
-	return &value
-}
-
 func mustProviderID(t *testing.T, raw string) domain.ProviderID {
 	t.Helper()
 	id, err := domain.ParseProviderID(raw)
@@ -406,4 +402,12 @@ func mustToolID(t *testing.T, raw string) domain.ToolID {
 
 func testTime() time.Time {
 	return time.Date(2026, 9, 25, 12, 0, 0, 123456789, time.UTC)
+}
+
+func testProviderSource(id domain.ProviderID) *domain.SourceRef {
+	source, err := domain.ProviderSource(id)
+	if err != nil {
+		panic(err)
+	}
+	return &source
 }

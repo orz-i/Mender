@@ -58,13 +58,13 @@ func (r *Runtime) SearchCatalog(
 	ctx context.Context,
 	query string,
 	limit int,
-	providerID *catalogdomain.ProviderID,
+	sourceRef *catalogdomain.SourceRef,
 	profileSlug *profiledomain.Slug,
 ) ([]catalogapplication.ToolSearchResult, error) {
 	request := catalogapplication.SearchToolsRequest{
-		Query:      query,
-		Limit:      limit,
-		ProviderID: providerID,
+		Query:     query,
+		Limit:     limit,
+		SourceRef: sourceRef,
 	}
 	if profileSlug != nil {
 		profile, err := r.Profiles.Get.Execute(ctx, *profileSlug)

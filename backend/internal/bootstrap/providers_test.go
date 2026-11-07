@@ -330,9 +330,9 @@ paths:
 	search, err := runtime.Catalog.SearchTools.Execute(
 		ctx,
 		catalogapplication.SearchToolsRequest{
-			Query:      "echo",
-			Limit:      10,
-			ProviderID: providerIDPtr(provider.ID()),
+			Query:     "echo",
+			Limit:     10,
+			SourceRef: providerSourcePtr(provider.ID()),
 		},
 	)
 	if err != nil || len(search) != 1 {
@@ -378,9 +378,9 @@ paths:
 	search, err = runtime.Catalog.SearchTools.Execute(
 		ctx,
 		catalogapplication.SearchToolsRequest{
-			Query:      "echo",
-			Limit:      10,
-			ProviderID: providerIDPtr(provider.ID()),
+			Query:     "echo",
+			Limit:     10,
+			SourceRef: providerSourcePtr(provider.ID()),
 		},
 	)
 	if err != nil || len(search) != 1 {
@@ -622,9 +622,9 @@ func TestConfiguredProviderRuntimeReusesAndReplacesPluginInstances(t *testing.T)
 	search, err := runtime.Catalog.SearchTools.Execute(
 		ctx,
 		catalogapplication.SearchToolsRequest{
-			Query:      "echo",
-			Limit:      10,
-			ProviderID: providerIDPtr(provider.ID()),
+			Query:     "echo",
+			Limit:     10,
+			SourceRef: providerSourcePtr(provider.ID()),
 		},
 	)
 	if err != nil {
@@ -702,10 +702,6 @@ func TestConfiguredProviderRuntimeReusesAndReplacesPluginInstances(t *testing.T)
 			got,
 		)
 	}
-}
-
-func providerIDPtr(id catalogdomain.ProviderID) *catalogdomain.ProviderID {
-	return &id
 }
 
 type runtimeTestProviderPlugin struct {
@@ -801,4 +797,12 @@ func (i *runtimeTestProviderInstance) Close() error {
 		i.owner.mu.Unlock()
 	})
 	return nil
+}
+
+func providerSourcePtr(id catalogdomain.ProviderID) *catalogdomain.SourceRef {
+	ref, err := catalogdomain.ProviderSource(id)
+	if err != nil {
+		panic(err)
+	}
+	return &ref
 }

@@ -14,7 +14,7 @@ import (
 // A nil AllowedToolIDs slice means unrestricted. A non-nil empty slice means
 // that no Tool is visible.
 type ToolSearchScope struct {
-	ProviderID     *domain.ProviderID
+	SourceRef      *domain.SourceRef
 	AllowedToolIDs []domain.ToolID
 }
 
@@ -32,7 +32,7 @@ type ToolSearch interface {
 type SearchToolsRequest struct {
 	Query          string
 	Limit          int
-	ProviderID     *domain.ProviderID
+	SourceRef      *domain.SourceRef
 	AllowedToolIDs []domain.ToolID
 }
 
@@ -40,7 +40,7 @@ type SearchToolsRequest struct {
 type ToolSearchResult struct {
 	Rank        int
 	ToolID      domain.ToolID
-	ProviderID  domain.ProviderID
+	SourceRef   domain.SourceRef
 	Name        string
 	Title       string
 	Description string
@@ -67,6 +67,11 @@ func (uc SearchTools) Execute(
 		return nil, ErrInvalidSearchLimit
 	}
 
+	if request.SourceRef != nil {
+		if err := request.SourceRef.Validate(); err != nil {
+			return nil, fmt.Errorf("search tools: invalid SourceRef: %w", err)
+		}
+	}
 	for _, id := range request.AllowedToolIDs {
 		if _, err := domain.ParseToolID(id.String()); err != nil {
 			return nil, fmt.Errorf("search tools: allowed tool id: %w", err)
@@ -74,7 +79,7 @@ func (uc SearchTools) Execute(
 	}
 
 	tools, err := uc.search.SearchTools(ctx, query, request.Limit, ToolSearchScope{
-		ProviderID:     request.ProviderID,
+		SourceRef:      request.SourceRef,
 		AllowedToolIDs: slices.Clone(request.AllowedToolIDs),
 	})
 	if err != nil {
@@ -86,7 +91,7 @@ func (uc SearchTools) Execute(
 		results = append(results, ToolSearchResult{
 			Rank:        i + 1,
 			ToolID:      tool.ID(),
-			ProviderID:  tool.ProviderID(),
+			SourceRef:   tool.SourceRef(),
 			Name:        tool.Name(),
 			Title:       tool.Title(),
 			Description: tool.Description(),

@@ -75,7 +75,7 @@ func TestCatalogScopedFTSUsesAllowedIDsBeforeOffsetAndLimit(t *testing.T) {
 	provider := mustProviderIDTB(t, "prov_ffffffffffffffffffffffffffffffff")
 	search := application.NewSearchTools(store)
 	results, err := search.Execute(ctx, application.SearchToolsRequest{
-		Query: "catalog", Limit: 1, ProviderID: &provider, AllowedToolIDs: allow,
+		Query: "catalog", Limit: 1, SourceRef: testProviderSource(provider), AllowedToolIDs: allow,
 	})
 	if err != nil || len(results) != 1 {
 		t.Fatalf("allowed SQL-scoped limit 1 = %+v err=%v", results, err)
@@ -85,7 +85,7 @@ func TestCatalogScopedFTSUsesAllowedIDsBeforeOffsetAndLimit(t *testing.T) {
 	}
 	req := application.PageToolsRequest{
 		Mode: "search", Query: "catalog", Limit: 1,
-		ProviderID: &provider, Profile: "restricted", AllowedToolIDs: allow,
+		SourceRef: testProviderSource(provider), Profile: "restricted", AllowedToolIDs: allow,
 	}
 	seen := map[domain.ToolID]bool{}
 	for i := 0; i < 4; i++ {
@@ -106,7 +106,7 @@ func TestCatalogScopedFTSUsesAllowedIDsBeforeOffsetAndLimit(t *testing.T) {
 	}
 	other := mustProviderIDTB(t, "prov_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
 	results, err = search.Execute(ctx, application.SearchToolsRequest{
-		Query: "catalog", Limit: 10, ProviderID: &other, AllowedToolIDs: allow,
+		Query: "catalog", Limit: 10, SourceRef: testProviderSource(other), AllowedToolIDs: allow,
 	})
 	if err != nil || len(results) != 0 {
 		t.Fatalf("provider filter bypassed: %+v err=%v", results, err)

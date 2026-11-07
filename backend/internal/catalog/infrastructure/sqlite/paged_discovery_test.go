@@ -19,7 +19,7 @@ func TestCatalogPagesBeyondHundredWithScopedCursorAndRevision(t *testing.T) {
 	}
 	for _, mode := range []string{"browse", "search"} {
 		t.Run(mode, func(t *testing.T) {
-			req := application.PageToolsRequest{Mode: mode, Limit: 43, ProviderID: &provider}
+			req := application.PageToolsRequest{Mode: mode, Limit: 43, SourceRef: testProviderSource(provider)}
 			if mode == "search" {
 				req.Query = "catalog common"
 			}
@@ -35,7 +35,7 @@ func TestCatalogPagesBeyondHundredWithScopedCursorAndRevision(t *testing.T) {
 					t.Fatalf("invalid page length %d", len(page.Tools))
 				}
 				for _, tool := range page.Tools {
-					if tool.ProviderID != provider || seen[tool.ToolID] {
+					if tool.SourceRef != *testProviderSource(provider) || seen[tool.ToolID] {
 						t.Fatalf("unscoped or duplicated Tool: %+v", tool)
 					}
 					seen[tool.ToolID] = true
@@ -57,7 +57,7 @@ func TestCatalogPagesBeyondHundredWithScopedCursorAndRevision(t *testing.T) {
 	if err != nil || initial.NextCursor == "" {
 		t.Fatalf("first page %+v %v", initial, err)
 	}
-	withOtherScope := application.PageToolsRequest{Mode: "browse", Limit: 21, Cursor: initial.NextCursor, ProviderID: &provider}
+	withOtherScope := application.PageToolsRequest{Mode: "browse", Limit: 21, Cursor: initial.NextCursor, SourceRef: testProviderSource(provider)}
 	if _, err = pager.Execute(ctx, withOtherScope); !errors.Is(err, application.ErrInvalidToolCursor) {
 		t.Fatalf("cross-Provider cursor accepted: %v", err)
 	}
@@ -96,7 +96,7 @@ func TestCatalogPagedSearchHonorsProfileRestrictionAndProviderFilter(t *testing.
 		allowed = append(allowed, ids[i])
 	}
 	req := application.PageToolsRequest{
-		Mode: "search", Query: "catalog common", Limit: 7, ProviderID: &provider,
+		Mode: "search", Query: "catalog common", Limit: 7, SourceRef: testProviderSource(provider),
 		Profile: "profile.team", AllowedToolIDs: allowed,
 	}
 	seen := map[domain.ToolID]bool{}

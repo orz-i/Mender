@@ -50,8 +50,12 @@ func (s *Store) PagedSearchTools(
 		if parseErr != nil {
 			return nil, fmt.Errorf("paged tool search: ProviderID: %w", parseErr)
 		}
+		source, err := domain.ProviderSource(providerID)
+		if err != nil {
+			return nil, fmt.Errorf("paged tool search: invalid source: %w", err)
+		}
 		items = append(items, application.ToolListItem{
-			ToolID: toolID, ProviderID: providerID, Name: name, Title: title, Description: description,
+			ToolID: toolID, SourceRef: source, Name: name, Title: title, Description: description,
 		})
 	}
 	if err = rows.Err(); err != nil {

@@ -26,7 +26,7 @@ const maxToolPageOffset = 10_000_000
 // ToolPager is a compact read-only catalog port, not an executor.
 type ToolPager interface {
 	CatalogRevision(context.Context) (int64, error)
-	PagedBrowseTools(context.Context, int, *domain.ProviderID, int) ([]ToolListItem, error)
+	PagedBrowseTools(context.Context, int, *domain.SourceRef, int) ([]ToolListItem, error)
 	PagedSearchTools(context.Context, string, int, ToolSearchScope, int) ([]ToolListItem, error)
 }
 type PageToolsRequest struct {
@@ -34,7 +34,7 @@ type PageToolsRequest struct {
 	Query          string
 	Limit          int
 	Cursor         string
-	ProviderID     *domain.ProviderID
+	SourceRef      *domain.SourceRef
 	Profile        string
 	AllowedToolIDs []domain.ToolID
 }
@@ -57,8 +57,8 @@ type pageCursor struct {
 
 func pageScope(request PageToolsRequest) string {
 	provider := ""
-	if request.ProviderID != nil {
-		provider = request.ProviderID.String()
+	if request.SourceRef != nil {
+		provider = request.SourceRef.String()
 	}
 	allowed := make([]string, 0, len(request.AllowedToolIDs))
 	for _, id := range request.AllowedToolIDs {
@@ -112,6 +112,11 @@ func (uc PageTools) Execute(ctx context.Context, request PageToolsRequest) (Tool
 		request.Profile != "" || request.AllowedToolIDs != nil {
 		return result, ErrInvalidToolCursor
 	}
+	if request.SourceRef != nil {
+		if err := request.SourceRef.Validate(); err != nil {
+			return result, fmt.Errorf("page tools: invalid SourceRef: %w", err)
+		}
+	}
 	for _, id := range request.AllowedToolIDs {
 		if _, err := domain.ParseToolID(id.String()); err != nil {
 			return result, fmt.Errorf("page tools: allowed id: %w", err)
@@ -135,10 +140,10 @@ func (uc PageTools) Execute(ctx context.Context, request PageToolsRequest) (Tool
 	}
 	var items []ToolListItem
 	if request.Mode == "browse" {
-		items, err = uc.pager.PagedBrowseTools(ctx, request.Limit+1, request.ProviderID, offset)
+		items, err = uc.pager.PagedBrowseTools(ctx, request.Limit+1, request.SourceRef, offset)
 	} else {
 		items, err = uc.pager.PagedSearchTools(ctx, request.Query, request.Limit+1,
-			ToolSearchScope{ProviderID: request.ProviderID, AllowedToolIDs: slices.Clone(request.AllowedToolIDs)}, offset)
+			ToolSearchScope{SourceRef: request.SourceRef, AllowedToolIDs: slices.Clone(request.AllowedToolIDs)}, offset)
 	}
 	if err != nil {
 		return result, fmt.Errorf("page tools: list: %w", err)

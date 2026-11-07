@@ -8,14 +8,14 @@ import (
 	"github.com/orz-i/Mender/backend/internal/catalog/domain"
 )
 
-func (s *Store) BrowseTools(ctx context.Context, limit int, providerID *domain.ProviderID) ([]application.ToolListItem, error) {
-	return s.PagedBrowseTools(ctx, limit, providerID, 0)
+func (s *Store) BrowseTools(ctx context.Context, limit int, sourceRef *domain.SourceRef) ([]application.ToolListItem, error) {
+	return s.PagedBrowseTools(ctx, limit, sourceRef, 0)
 }
 
 func (s *Store) PagedBrowseTools(
 	ctx context.Context,
 	limit int,
-	providerID *domain.ProviderID,
+	sourceRef *domain.SourceRef,
 	offset int,
 ) ([]application.ToolListItem, error) {
 	query := `SELECT id, provider_id, name, title, description
@@ -23,13 +23,16 @@ func (s *Store) PagedBrowseTools(
 		ORDER BY provider_id, name, id
 		LIMIT ? OFFSET ?`
 	args := []any{limit, offset}
-	if providerID != nil {
+	if sourceRef != nil {
 		query = `SELECT id, provider_id, name, title, description
 			FROM tools
 			WHERE provider_id = ?
 			ORDER BY name, id
 			LIMIT ? OFFSET ?`
-		args = []any{providerID.String(), limit, offset}
+		if err := requireLegacyProviderSource(sourceRef); err != nil {
+			return nil, err
+		}
+		args = []any{sourceRef.ID(), limit, offset}
 	}
 
 	rows, err := s.db.QueryContext(ctx, query, args...)
@@ -58,9 +61,13 @@ func (s *Store) PagedBrowseTools(
 		if err != nil {
 			return nil, fmt.Errorf("browse tools: parse provider id: %w", err)
 		}
+		source, err := domain.ProviderSource(id)
+		if err != nil {
+			return nil, fmt.Errorf("browse tools: invalid source: %w", err)
+		}
 		items = append(items, application.ToolListItem{
 			ToolID:      toolID,
-			ProviderID:  id,
+			SourceRef:   source,
 			Name:        name,
 			Title:       title,
 			Description: description,

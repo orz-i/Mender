@@ -9,7 +9,7 @@ import (
 
 type ToolListItem struct {
 	ToolID      domain.ToolID
-	ProviderID  domain.ProviderID
+	SourceRef   domain.SourceRef
 	Name        string
 	Title       string
 	Description string
@@ -19,13 +19,13 @@ type ToolBrowser interface {
 	BrowseTools(
 		context.Context,
 		int,
-		*domain.ProviderID,
+		*domain.SourceRef,
 	) ([]ToolListItem, error)
 }
 
 type BrowseToolsRequest struct {
-	Limit      int
-	ProviderID *domain.ProviderID
+	Limit     int
+	SourceRef *domain.SourceRef
 }
 
 type BrowseTools struct {
@@ -43,7 +43,12 @@ func (uc BrowseTools) Execute(
 	if request.Limit < 1 || request.Limit > 100 {
 		return nil, ErrInvalidSearchLimit
 	}
-	items, err := uc.browser.BrowseTools(ctx, request.Limit, request.ProviderID)
+	if request.SourceRef != nil {
+		if err := request.SourceRef.Validate(); err != nil {
+			return nil, fmt.Errorf("browse tools: invalid SourceRef: %w", err)
+		}
+	}
+	items, err := uc.browser.BrowseTools(ctx, request.Limit, request.SourceRef)
 	if err != nil {
 		return nil, fmt.Errorf("browse tools: %w", err)
 	}
