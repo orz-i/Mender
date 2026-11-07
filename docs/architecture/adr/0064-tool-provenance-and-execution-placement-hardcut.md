@@ -1,6 +1,6 @@
 # ADR-0064: Separate Tool provenance, Agent-as-Tool ownership, Workspace context, and Sandbox execution placement
 
-- **Status:** Accepted as target architecture; Stages B–E typed/future-only contracts; F1 Profile discovery, F2a atomic Native lease and F2b Invocation-issued attempt proof/Native Router, caller-scoped frozen target and Agent/Native executor adapters implemented (not activated); final production composition and F3/F4/G/H cutover pending
+- **Status:** Accepted as target architecture; Stages B–E typed/future-only contracts; F1 Profile discovery, F2a atomic Native lease and F2b Invocation-issued attempt proof/Native Router, caller-scoped frozen target and Agent/Native executor adapters implemented (not activated); F3 typed MCP Profile projection tested offline; final management/CLI/SDK/Wails and production F4/G/H composition pending
 - **Date:** 2026-11-07 (Mac host)
 - **Implementation plan:** [Hard-cut plan](../../planning/tool-workspace-sandbox-agent-hardcut-2026-11-07.md)
 - **Phase A evidence:** [Ownership inventory](../../planning/tool-hardcut-phase-a-inventory-2026-11-07.md) · [Migration / dry-run contract](../../planning/tool-hardcut-phase-a-migration-contract-2026-11-07.md)
