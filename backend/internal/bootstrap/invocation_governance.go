@@ -13,31 +13,37 @@ import (
 	providerconfigstore "github.com/orz-i/Mender/backend/internal/providerplugin/configstore"
 )
 
-// invocationGovernanceFactExtractor routes reviewed built-in Provider fact
-// extraction from persisted configuration without activating Provider instances.
+// invocationGovernanceFactExtractor routes Provider facts through reviewed
+// configuration and native/Agent facts through exact, host-registered SourceRef
+// executors. Neither path activates a Provider during preflight.
 type invocationGovernanceFactExtractor struct {
-	configs *providerconfigstore.Store
-	plugins *providerplugin.Registry
+	configs     *providerconfigstore.Store
+	plugins     *providerplugin.Registry
+	sourceFacts invocationapplication.GovernanceFactExtractor
 }
 
 func newInvocationGovernanceFactExtractor(
 	configs *providerconfigstore.Store,
 	plugins *providerplugin.Registry,
+	sourceFacts invocationapplication.GovernanceFactExtractor,
 ) invocationapplication.GovernanceFactExtractor {
-	return invocationGovernanceFactExtractor{configs: configs, plugins: plugins}
+	return invocationGovernanceFactExtractor{configs: configs, plugins: plugins, sourceFacts: sourceFacts}
 }
 
 func (e invocationGovernanceFactExtractor) Extract(
 	ctx context.Context,
 	tool catalogdomain.Tool,
 	arguments invocationdomain.JSONValue,
-	_ governancedomain.Context,
+	caller governancedomain.Context,
 ) (invocationapplication.GovernanceFactExtraction, error) {
-	// The current production composer is still Provider-v2. It must reject
-	// future native/Agent sources until F4 installs their host-owned fact
-	// extraction and exact pre-Policy placement in the single pipeline.
 	if tool.SourceRef().Kind() != catalogdomain.SourceProvider {
-		return invocationapplication.GovernanceFactExtraction{}, fmt.Errorf("extract governance facts: native/Agent source executor not composed")
+		// No Provider plugin can declare the trusted Native/Agent facts port.
+		// The same registered SourceRef executor must supply both facts and
+		// execution. An unregistered source fails before Policy/approval.
+		if e.sourceFacts == nil {
+			return invocationapplication.GovernanceFactExtraction{}, fmt.Errorf("extract governance facts: source executor not composed")
+		}
+		return e.sourceFacts.Extract(ctx, tool, arguments, caller)
 	}
 	if e.configs == nil || e.plugins == nil {
 		return invocationapplication.GovernanceFactExtraction{}, fmt.Errorf(

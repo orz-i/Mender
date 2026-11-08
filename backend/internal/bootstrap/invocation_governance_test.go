@@ -50,7 +50,7 @@ func TestInvocationGovernanceFactsUseReviewedBuiltInExtractorWithoutActivation(t
 	if err != nil {
 		t.Fatal(err)
 	}
-	facts, err := newInvocationGovernanceFactExtractor(store, registry).Extract(
+	facts, err := newInvocationGovernanceFactExtractor(store, registry, nil).Extract(
 		ctx,
 		tool,
 		arguments,
@@ -96,7 +96,7 @@ func TestInvocationGovernanceFactsRemainUnknownWithoutReviewedBuiltInExtractor(t
 	if err != nil {
 		t.Fatal(err)
 	}
-	facts, err := newInvocationGovernanceFactExtractor(store, registry).Extract(ctx, tool, arguments, governancedomain.Context{})
+	facts, err := newInvocationGovernanceFactExtractor(store, registry, nil).Extract(ctx, tool, arguments, governancedomain.Context{})
 	if err != nil {
 		t.Fatalf("Extract() error = %v", err)
 	}
@@ -148,6 +148,7 @@ func TestInvocationGovernanceFactsDoNotTrustExternalInstallations(t *testing.T) 
 	facts, err := newInvocationGovernanceFactExtractor(
 		store,
 		registry,
+		nil,
 	).Extract(ctx, mustGovernanceTool(t, providerID, "workspace.edit"), arguments, governancedomain.Context{})
 	if err != nil {
 		t.Fatalf("Extract() error = %v", err)
@@ -284,7 +285,7 @@ func TestLegacyInvocationFactExtractorRejectsUncomposedTypedSources(t *testing.T
 			if err != nil {
 				t.Fatal(err)
 			}
-			if _, err := newInvocationGovernanceFactExtractor(nil, nil).Extract(
+			if _, err := newInvocationGovernanceFactExtractor(nil, nil, nil).Extract(
 				context.Background(), item, args, governancedomain.Context{},
 			); err == nil {
 				t.Fatal("legacy Provider-v2 Runtime accepted uncomposed Agent/native source")

@@ -498,7 +498,7 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		options:       options,
 		tools:         catalog.store,
 		profileScopes: newInvocationProfileScopeResolver(profiles.GetByID),
-		facts:         newInvocationGovernanceFactExtractor(providerConfigs, providerPlugins),
+		facts:         newInvocationGovernanceFactExtractor(providerConfigs, providerPlugins, executors),
 		policy:        policies,
 		governance:    runtimeGovernance,
 		executors:     executors,
