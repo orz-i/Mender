@@ -35,6 +35,22 @@ func NewProfiles(
 	if err != nil {
 		return nil, fmt.Errorf("compose profiles: %w", err)
 	}
+	return composeProfiles(store, tools, credentials), nil
+}
+
+// NewTypedProfiles keeps the same Profile application services, using the
+// already-migrated v3 Store. It does not create grants or run old migrations.
+func NewTypedProfiles(ctx context.Context, databasePath string, tools profileapplication.ToolLookup,
+	credentials profileapplication.CredentialLookup) (*Profiles, error) {
+	store, err := profilesqlite.OpenTyped(ctx, databasePath)
+	if err != nil {
+		return nil, fmt.Errorf("compose typed profiles: %w", err)
+	}
+	return composeProfiles(store, tools, credentials), nil
+}
+
+func composeProfiles(store *profilesqlite.Store, tools profileapplication.ToolLookup,
+	credentials profileapplication.CredentialLookup) *Profiles {
 	ids := profileidentity.NewGenerator()
 
 	return &Profiles{
@@ -47,7 +63,7 @@ func NewProfiles(
 		ReplaceTools: profileapplication.NewReplaceTools(store, tools, credentials),
 		RemoveTool:   profileapplication.NewRemoveTool(store),
 		store:        store,
-	}, nil
+	}
 }
 
 // Bootstrap bridge: Profile validates exact Skill state without reading content
