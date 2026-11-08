@@ -495,17 +495,16 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 	skills.profileSkillUsage = profiles.store.ListSkillProfiles
 
 	providerActivation, invokeTool := (runtimeInvocationWiring{
-		options:         options,
-		catalog:         catalog,
-		profiles:        profiles,
-		providerConfigs: providerConfigs,
-		plugins:         providerPlugins,
-		policy:          policies,
-		governance:      runtimeGovernance,
-		executors:       executors,
-		credentials:     credentials,
-		audit:           auditStore,
-		approval:        approvalGate,
+		options:       options,
+		tools:         catalog.store,
+		profileScopes: newInvocationProfileScopeResolver(profiles.GetByID),
+		facts:         newInvocationGovernanceFactExtractor(providerConfigs, providerPlugins),
+		policy:        policies,
+		governance:    runtimeGovernance,
+		executors:     executors,
+		credentials:   credentials,
+		audit:         auditStore,
+		approval:      approvalGate,
 	}).compose()
 
 	agents, agentStore, agentLauncher, err := newAgents(ctx, options.DatabasePath, ownerPrincipal, profiles, policies, runtimeGovernance, options.AgentExecutor)
