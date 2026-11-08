@@ -14,6 +14,7 @@ import (
 // Store implements Catalog application persistence ports with SQLite.
 type Store struct {
 	db *sql.DB
+	*ProviderRepository
 }
 
 // Open opens or creates a Catalog SQLite database and applies migrations.
@@ -32,7 +33,7 @@ func Open(ctx context.Context, path string) (*Store, error) {
 		return nil, fmt.Errorf("open catalog sqlite: %w", err)
 	}
 
-	store := &Store{db: db}
+	store := &Store{db: db, ProviderRepository: NewProviderRepository(db)}
 	if err := db.PingContext(ctx); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("open catalog sqlite: ping: %w", err)

@@ -11,8 +11,18 @@ import (
 	"github.com/orz-i/Mender/backend/internal/catalog/domain"
 )
 
+// ProviderRepository owns only configured external Provider metadata. It is
+// shared by the legacy Catalog Store and the canonical SourceRef Catalog;
+// it never opens a database, performs migrations, or touches Tool records.
+// The caller owns the connection and its lifetime.
+type ProviderRepository struct{ db *sql.DB }
+
+func NewProviderRepository(db *sql.DB) *ProviderRepository {
+	return &ProviderRepository{db: db}
+}
+
 // CreateProvider persists a newly registered Provider.
-func (s *Store) CreateProvider(ctx context.Context, provider domain.Provider) error {
+func (s *ProviderRepository) CreateProvider(ctx context.Context, provider domain.Provider) error {
 	result, err := s.db.ExecContext(
 		ctx,
 		`INSERT INTO providers(
@@ -41,7 +51,7 @@ func (s *Store) CreateProvider(ctx context.Context, provider domain.Provider) er
 }
 
 // UpdateProvider persists mutable Provider metadata while preserving stable identity.
-func (s *Store) UpdateProvider(ctx context.Context, provider domain.Provider) error {
+func (s *ProviderRepository) UpdateProvider(ctx context.Context, provider domain.Provider) error {
 	result, err := s.db.ExecContext(
 		ctx,
 		`UPDATE providers
@@ -67,7 +77,7 @@ func (s *Store) UpdateProvider(ctx context.Context, provider domain.Provider) er
 }
 
 // GetProvider loads one Provider by stable Mender identity.
-func (s *Store) GetProvider(
+func (s *ProviderRepository) GetProvider(
 	ctx context.Context,
 	id domain.ProviderID,
 ) (domain.Provider, error) {
@@ -148,7 +158,7 @@ func parseTime(value string) (time.Time, error) {
 	return time.Parse(time.RFC3339Nano, value)
 }
 
-func (s *Store) ListProviders(ctx context.Context) ([]domain.Provider, error) {
+func (s *ProviderRepository) ListProviders(ctx context.Context) ([]domain.Provider, error) {
 	rows, err := s.db.QueryContext(
 		ctx,
 		`SELECT id, namespace, display_name, description, created_at, updated_at
@@ -174,7 +184,7 @@ func (s *Store) ListProviders(ctx context.Context) ([]domain.Provider, error) {
 	return providers, nil
 }
 
-func (s *Store) FindProviderByNamespace(
+func (s *ProviderRepository) FindProviderByNamespace(
 	ctx context.Context,
 	namespace domain.Namespace,
 ) (domain.Provider, error) {
@@ -195,7 +205,7 @@ func (s *Store) FindProviderByNamespace(
 	return provider, nil
 }
 
-func (s *Store) RemoveProvider(ctx context.Context, id domain.ProviderID) error {
+func (s *ProviderRepository) RemoveProvider(ctx context.Context, id domain.ProviderID) error {
 	result, err := s.db.ExecContext(ctx, "DELETE FROM providers WHERE id = ?", id.String())
 	if err != nil {
 		return fmt.Errorf("remove provider: %w", err)

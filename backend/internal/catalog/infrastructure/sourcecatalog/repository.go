@@ -11,7 +11,9 @@ import (
 	"strings"
 	"time"
 
+	application "github.com/orz-i/Mender/backend/internal/catalog/application"
 	catalog "github.com/orz-i/Mender/backend/internal/catalog/domain"
+	providersqlite "github.com/orz-i/Mender/backend/internal/catalog/infrastructure/sqlite"
 	suite "github.com/orz-i/Mender/backend/internal/toolsuite/domain"
 	"github.com/orz-i/Mender/backend/internal/toolsuite/infrastructure/curated"
 )
@@ -33,6 +35,9 @@ type OwnerVerifier interface {
 // upgrade or modify the schema when opened. bootstrap.Runtime never constructs
 // this adapter until Stage E's cross-context migration is in place.
 type Repository struct {
+	// Provider CRUD is the same canonical repository in v2/v3, not a second
+	// implementation or a fabricated Provider parent for Native/Agent Tools.
+	*providersqlite.ProviderRepository
 	db    *sql.DB
 	owner OwnerVerifier
 }
@@ -50,7 +55,7 @@ func NewRepository(ctx context.Context, db *sql.DB, owner OwnerVerifier) (*Repos
 			return nil, fmt.Errorf("source catalog: typed schema unavailable: %w", err)
 		}
 	}
-	return &Repository{db: db, owner: owner}, nil
+	return &Repository{db: db, owner: owner, ProviderRepository: providersqlite.NewProviderRepository(db)}, nil
 }
 
 // UpsertSourceSnapshot upserts stable canonical ToolIDs in one transaction.
@@ -307,7 +312,7 @@ func (r *Repository) GetTool(ctx context.Context, id catalog.ToolID) (catalog.To
 	}
 	tool, err := scanSourceTool(r.db.QueryRowContext(ctx, "SELECT "+sourceColumns+" FROM tools WHERE id=?", id.String()))
 	if errors.Is(err, sql.ErrNoRows) {
-		return catalog.Tool{}, sql.ErrNoRows
+		return catalog.Tool{}, application.ErrToolNotFound
 	}
 	return tool, err
 }
