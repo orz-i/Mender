@@ -105,6 +105,13 @@ A read-only `mender-tool-migrate assess` on the local application SQLite snapsho
 - Verification: ordinary `go test -count=1 -parallel=2 -timeout=4m ./backend/...` **exit 0** (`/tmp/mender-f4-profile-fullgo.exit`); targeted typed Profile `go test -race -count=1 -run TestTypedInvocationScope` **exit 0** (`/tmp/mender-f4-scope-target-race.exit`); scoped Bootstrap+Typed Profile ordinary tests pass; `golangci-lint run ./backend/...` **0 issues** and architecture checker **0 violations**. The previously interrupted multi-package Bootstrap Race run is **not** claimed green, and the canonical full `pnpm check` remains open.
 - **Not yet F4 completion:** `bootstrap.NewRuntime` still refuses v3 Schema; there is no live v3 Router, managed MCP switch, native SSH Jobs execution, real-data conflict resolution, facade retirement or Wails acceptance. Do not swap the real DB or activate these future-schema adapters independently.
 
+## F4 canonical SourceRef fact routing (2026-11-08)
+
+- The already-existing `invocationGovernanceFactExtractor` now delegates `agent` / `native` provenance to the **same** host-registered `invocationrouter.Router.Extract` used by execution, while continuing to obtain **real Provider** facts exclusively from its trusted configuration/Plugin contract. No Provider executor, external plugin RPC, user Tool description or absent Agent/Native source may mint trusted facts.
+- The current Provider-v2 Runtime injects its existing executor registry; because it still registers Provider sources only, Native/Agent facts remain unavailable in production until the full F4 cutover. This closes the conditional wiring dependency without introducing a second Invocation, Policy or adapter execution loop.
+- Focused tests prove exact Agent A/B source isolation and Provider executor fact spoofing rejection. No real ACP task, Sandbox job, SSH connection, database swap or Wails migration was performed. This does **not** satisfy the remaining F4 v3 composer, live SSH Job, 13-blocker data review or old-Facade retirement gates.
+- Verification: `go test -count=1 -parallel=2 -timeout=4m ./backend/...` **exit 0** (`/tmp/mender-f4-sourcefacts-fullgo.exit`), focused `go test -race -run TestHostSourceFactRoutingUsesOnlyRegisteredAgentAndNotProviderExecutor` **exit 0** (`/tmp/mender-f4-sourcefacts-race.exit`), `golangci-lint run ./backend/...` **0 issues** (`/tmp/mender-f4-sourcefacts-lint.log`), architecture checker **0 violations** and `git diff --check` clean. This does **not** certify full canonical `pnpm check` or a Wails/v3 Runtime cutover.
+
 ## Quality evidence and open gates
 
 - [x] Focused Go unit and SQL integration tests for `typedsupply`, `typedlease` and the updated Stage E migration candidate, using disposable SQLite fixtures.
