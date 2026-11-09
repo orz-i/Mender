@@ -1,6 +1,6 @@
 module github.com/orz-i/Mender/sdk/providerplugin/go
 
-go 1.27.2
+go 1.27.3
 
 require (
 	github.com/hashicorp/go-hclog v1.6.3
