@@ -1,6 +1,6 @@
 # Mender 工具 / Agent as Tool / Workspace / Sandbox 归属与执行边界硬切治理
 
-**状态**：阶段 A–E 已提交；阶段 F 的 F1、F2a 与 F2b 必需的现有 Invocation→Sandbox Router 原子租约衔接/路径事实已实现，**实际 Native Executor/SourceRef Policy-Audit 生产装配、F3 公共 MCP/HTTP/CLI/SDK/Wails 合同和 F4 唯一 Runtime 硬切仍未完成**。未增加新治理阶段、无双执行系统；真实数据库未迁移、新执行链未启用。Profile 导出审核、远端 SSH/Jobs 证据、Bootstrap 全量 Race 仍是阻断。
+**状态（2026-11-09 复核）**：A–E、F1–F3 的已提交合同与候选测试已有证据；**F4 唯一正式 v3 Runtime 硬切尚未完成**，旧 `bootstrap.NewRuntime` 仍是 Provider-v2；真实数据库迁移 `blocked`（13 项既有冲突、24 项 MCP 导出审查），旧 Facade 尚未退休，完整 `pnpm check`/真实 Wails 的发布证明尚未完成。F4 只按 [冻结收口总控](tool-hardcut-f4-closure-freeze.md) 的三个门槛推进，不追加子阶段；此处旧进度清单仅作历史。
 
 **仓库基线**：`main` / `ce924e0`，Mac mini `/Users/mini/Coding/Mender`，2026-11-07
 

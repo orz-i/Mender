@@ -2,6 +2,8 @@
 
 **Status (2026-11-07): F1–F3 contracts completed and tested in isolation. F4 pre-start legacy Schema refusal, post-commit candidate/backup attestation, and the canonical Invocation typed Profile-scope port seam and future-only typed Profile/Agent/Sandbox Store admission have been implemented on the governance branch; a real disposable v3 Agent status tool has now traversed canonical Invocation and MCP with independent Policy/Grant/Audit checks, but the v3 Runtime composition (with future-only typed Catalog storage now verified), 13 real-data conflicts, one-way live cutover, old Facade retirement and Wails acceptance remain outstanding. This is an F4 *safety-gate delivery*, not an activated hard cut. Production activation remains forbidden.**
 
+**F4 范围冻结 / 唯一后续验收清单：**[F4 closure freeze](tool-hardcut-f4-closure-freeze.md)。本文件只记录已完成的阶段证据，不再继续追加 F4 小节。
+
 **Previous stages:** [ADR-0064](../architecture/adr/0064-tool-provenance-and-execution-placement-hardcut.md) · [Stage E offline candidate](tool-hardcut-stage-e-2026-11-07.md). The current Runtime still starts with Provider-backed v2 Catalog/Profile/MCP. Migrated Stage E candidates are for isolated testing only; they must never be opened by the old runtime or swapped into the live database.
 
 ## Implementation order
