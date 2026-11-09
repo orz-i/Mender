@@ -34,6 +34,9 @@ func (r *Manager) fingerprint(ctx context.Context, profile Snapshot) (string, er
 		if err != nil {
 			return "", fmt.Errorf("fingerprint Profile Tool %s: %w", id, err)
 		}
+		if tool.ID() != id || tool.SourceRef().Validate() != nil {
+			return "", fmt.Errorf("fingerprint Profile Tool %s: invalid canonical source identity", id)
+		}
 		var output []byte
 		if schema := tool.OutputSchema(); schema != nil {
 			output = schema.Bytes()
@@ -42,7 +45,8 @@ func (r *Manager) fingerprint(ctx context.Context, profile Snapshot) (string, er
 		// ordering; tool input/output schemas are immutable canonical byte slices.
 		fields := struct {
 			ToolID      string   `json:"toolId"`
-			ProviderID  string   `json:"providerId"`
+			SourceRef   string   `json:"sourceId"`
+			ProviderID  string   `json:"providerId,omitempty"`
 			SourceKey   string   `json:"sourceKey"`
 			Name        string   `json:"name"`
 			Title       string   `json:"title"`
@@ -51,10 +55,13 @@ func (r *Manager) fingerprint(ctx context.Context, profile Snapshot) (string, er
 			Output      []byte   `json:"output"`
 			Tags        []string `json:"tags"`
 		}{
-			ToolID: id.String(), ProviderID: tool.ProviderID().String(),
+			ToolID: id.String(), SourceRef: tool.SourceRef().String(),
 			SourceKey: tool.SourceKey(), Name: tool.Name(), Title: tool.Title(),
 			Description: tool.Description(), Input: tool.InputSchema().Bytes(),
 			Output: output, Tags: tool.Tags(),
+		}
+		if tool.SourceRef().Kind() == catalogdomain.SourceProvider {
+			fields.ProviderID = tool.ProviderID().String()
 		}
 		blob, err := json.Marshal(fields)
 		if err != nil {

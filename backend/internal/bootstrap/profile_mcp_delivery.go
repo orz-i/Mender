@@ -24,7 +24,22 @@ func newMCPDelivery(ctx context.Context, path string, profiles profileapplicatio
 	if err != nil {
 		return nil, err
 	}
-	return &MCPDelivery{Get: mcpdelivery.NewGet(store), GetRevision: mcpdelivery.NewGetRevision(store), Configure: mcpdelivery.NewConfigure(store, profiles, tunnels), store: store}, nil
+	return composeMCPDelivery(store, profiles, tunnels), nil
+}
+
+// newTypedMCPDelivery uses the SAME existing MCP Delivery application use
+// cases; the v3 schema must be verified before opening the Store. This does
+// not start a listener or activate a Provider/Tunnel.
+func newTypedMCPDelivery(ctx context.Context, path string, profiles profileapplication.GetProfileByID, tunnels tunnelapplication.GetTunnel) (*MCPDelivery, error) {
+	store, err := mcpsqlite.OpenTyped(ctx, path)
+	if err != nil {
+		return nil, err
+	}
+	return composeMCPDelivery(store, profiles, tunnels), nil
+}
+
+func composeMCPDelivery(store *mcpsqlite.Store, profiles profileapplication.GetProfileByID, tunnels tunnelapplication.GetTunnel) *MCPDelivery {
+	return &MCPDelivery{Get: mcpdelivery.NewGet(store), GetRevision: mcpdelivery.NewGetRevision(store), Configure: mcpdelivery.NewConfigure(store, profiles, tunnels), store: store}
 }
 
 func (d *MCPDelivery) Close() error {
