@@ -35,13 +35,13 @@ func (r *Runtime) NewMCPServer(
 	return adapter, nil
 }
 
-func (r *Runtime) newMCPProjection(ctx context.Context, profile profiledomain.Profile, config mcpdomain.Config) (*mcpserver.Adapter, error) {
-	return mcpserver.New(ctx, profile, config, mcpserver.Dependencies{
-		DescribeTool:    r.Catalog.DescribeTool.Execute,
-		GetProvider:     r.Catalog.GetProvider.Execute,
-		InvokeTool:      r.invokeToolWithSSHTimeout,
-		ResolveSources:  r.resolveMCPToolSources,
-		CatalogRevision: r.Catalog.store.CatalogRevision,
+func (r *Runtime) newMCPProjection(ctx context.Context, profile profiledomain.Profile, _ mcpdomain.Config) (*mcpserver.Adapter, error) {
+	// Both direct CLI MCP and managed HTTP MCP use the identical typed,
+	// Profile-restricted source projection and single governed Invocation.
+	// There is no ProviderID fallback or second MCP execution engine.
+	return mcpserver.NewTyped(ctx, profile.ID().String(), mcpserver.TypedDependencies{
+		Profiles: r.typedSupply, DescribeTool: r.Catalog.DescribeTool.Execute,
+		InvokeTool: r.invokeToolWithSSHTimeout,
 	})
 }
 

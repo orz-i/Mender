@@ -2,21 +2,18 @@ package bootstrap
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
 	"fmt"
-	"strings"
-	"unicode"
+	"time"
 
 	agentapplication "github.com/orz-i/Mender/backend/internal/agent/application"
 	agentdomain "github.com/orz-i/Mender/backend/internal/agent/domain"
 	agentdelegation "github.com/orz-i/Mender/backend/internal/agent/infrastructure/delegationprovider"
-	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
+	catalogidentity "github.com/orz-i/Mender/backend/internal/catalog/infrastructure/identity"
 	gov "github.com/orz-i/Mender/backend/internal/governance/domain"
 )
 
-// AgentTool describes one canonical Tool, never an executable implementation.
+// AgentTool describes one canonical Agent-owned Tool, not a Provider facade.
 type AgentTool struct {
 	ToolID    string `json:"toolId"`
 	SourceKey string `json:"sourceKey"`
@@ -24,218 +21,169 @@ type AgentTool struct {
 	Title     string `json:"title"`
 }
 
-// AgentTools is a side-effect-free description of one Agent's tool suite.
+// AgentTools is a read-only projection of Agent as Tool operations.
 type AgentTools struct {
 	SuiteID      string      `json:"suiteId"`
-	Status       string      `json:"status"` // missing, ready, incomplete, conflict
+	Status       string      `json:"status"`
 	ProviderID   string      `json:"providerId,omitempty"`
 	ProviderName string      `json:"providerName,omitempty"`
 	Tools        []AgentTool `json:"tools"`
 }
 
+type ownedAgentCatalog interface {
+	ListSourceTools(context.Context, catalogdomain.SourceRef) ([]catalogdomain.Tool, error)
+	UpsertSourceSnapshot(context.Context, catalogdomain.SourceRef, []catalogdomain.Tool) error
+}
+
+// AgentTools resolves the exact AgentID's catalog identity; an Agent is never
+// wrapped in an internal Provider to satisfy the Tool catalog.
 func (r *Runtime) AgentTools(ctx context.Context, id agentdomain.ID, caller gov.Context) (AgentTools, error) {
 	if _, err := r.Agents.Get(ctx, id, caller); err != nil {
 		return AgentTools{}, err
 	}
 	result := AgentTools{SuiteID: "agent.delegation", Status: "missing", Tools: []AgentTool{}}
-	configs, err := r.providerConfigs.List(ctx)
+	store, ok := r.Catalog.store.(ownedAgentCatalog)
+	if !ok {
+		return result, agentdomain.ErrUnavailable
+	}
+	source, err := catalogdomain.AgentSource(string(id))
 	if err != nil {
 		return result, err
 	}
-	var matches []catalogdomain.ProviderID
-	for _, config := range configs {
-		if config.PluginID != agentdelegation.ID || config.InstallationID != nil {
-			continue
-		}
-		var binding struct {
-			AgentID string `json:"agentId"`
-		}
-		if json.Unmarshal(config.Config, &binding) != nil {
-			continue
-		}
-		if binding.AgentID == string(id) {
-			matches = append(matches, config.ProviderID)
-		}
-	}
-	pinned, err := r.agentStore.GetToolFacade(ctx, id)
+	tools, err := store.ListSourceTools(ctx, source)
 	if err != nil {
 		return result, err
 	}
-	// A matching Provider without an Agent-owned pin is an unmanaged
-	// reference, not an adoptable resource. Refuse both implicit adoption
-	// and creation of a second facade under an existing Provider.
-	if len(matches) > 1 || (pinned == "" && len(matches) != 0) ||
-		(pinned != "" && (len(matches) == 0 || pinned != matches[0].String())) {
-		result.Status = "conflict"
-		return result, nil
-	}
-	if len(matches) == 0 {
-		return result, nil
-	}
-	providerID := matches[0]
-	provider, err := r.Catalog.GetProvider.Execute(ctx, providerID)
-	if err != nil {
-		result.Status = "conflict"
-		return result, nil
-	}
-	result.ProviderID = providerID.String()
-	result.ProviderName = provider.DisplayName()
-	tools, err := r.Catalog.store.ListProviderTools(ctx, providerID)
-	if err != nil {
-		return result, err
-	}
-	found := map[string]bool{}
+	seen := make(map[string]bool)
 	for _, tool := range tools {
-		result.Tools = append(result.Tools, AgentTool{ToolID: tool.ID().String(),
-			SourceKey: tool.SourceKey(), Name: tool.Name(), Title: tool.Title()})
-		found[tool.SourceKey()] = true
+		result.Tools = append(result.Tools, AgentTool{
+			ToolID: tool.ID().String(), SourceKey: tool.SourceKey(),
+			Name: tool.Name(), Title: tool.Title(),
+		})
+		seen[tool.SourceKey()] = true
+	}
+	if len(tools) == 0 {
+		return result, nil
 	}
 	result.Status = "ready"
-	for _, source := range []string{"agent.delegate", "agent.status", "agent.result", "agent.cancel", "agent.resume"} {
-		if !found[source] {
+	for _, key := range []string{"agent.delegate", "agent.status", "agent.result", "agent.cancel", "agent.resume"} {
+		if !seen[key] {
 			result.Status = "incomplete"
 			break
 		}
 	}
+	if len(tools) != 5 {
+		result.Status = "conflict"
+	}
 	return result, nil
 }
 
-func agentFacadeNamespace(name string, id agentdomain.ID) string {
-	var slug strings.Builder
-	previousDash := false
-	for _, ch := range strings.ToLower(name) {
-		switch {
-		case ch >= 'a' && ch <= 'z', ch >= '0' && ch <= '9':
-			slug.WriteRune(ch)
-			previousDash = false
-		case (unicode.IsSpace(ch) || ch == '-' || ch == '_') && slug.Len() > 0 && !previousDash:
-			slug.WriteByte('-')
-			previousDash = true
-		}
-		if slug.Len() >= 20 {
-			break
-		}
-	}
-	prefix := strings.Trim(slug.String(), "-")
-	if prefix == "" {
-		prefix = "agent"
-	}
-	hex := strings.TrimPrefix(string(id), "agent_")
-	return "agent-" + prefix + "-" + hex[len(hex)-16:]
-}
-
-// EnsureAgentTools explicitly creates or refreshes one resource-owned facade.
-// No Profile membership, AgentGrant or Policy rule is mutated.
+// EnsureAgentTools publishes only this exact configured Agent's verified
+// operation set. Neither a Provider nor any Profile grants are created.
 func (r *Runtime) EnsureAgentTools(ctx context.Context, id agentdomain.ID, caller gov.Context) (AgentTools, error) {
 	agent, err := r.Agents.Get(ctx, id, caller)
 	if err != nil {
 		return AgentTools{}, err
 	}
-	state, err := r.AgentTools(ctx, id, caller)
+	store, ok := r.Catalog.store.(ownedAgentCatalog)
+	if !ok {
+		return AgentTools{}, agentdomain.ErrUnavailable
+	}
+	source, err := catalogdomain.AgentSource(string(id))
 	if err != nil {
 		return AgentTools{}, err
 	}
-	if state.Status == "conflict" {
-		return state, fmt.Errorf("%w: Agent delegation Providers are unpinned, duplicated or mismatched", agentdomain.ErrConflict)
-	}
-	if state.Status == "ready" {
-		// Explicit owner action also refreshes schema of an already-ready suite.
-		// Phase 40 reasoningEffort is a new optional field on the same ToolID,
-		// so the existing Profile ToolBindings and AgentGrant must remain stable.
-		providerID, err := catalogdomain.ParseProviderID(state.ProviderID)
-		if err != nil {
-			return state, err
-		}
-		if _, err = r.syncConfiguredProviderForOwner(ctx, providerID, caller, true); err != nil {
-			return state, fmt.Errorf("refresh managed Agent tool schema: %w", err)
-		}
-		return r.AgentTools(ctx, id, caller)
-	}
-	if state.ProviderID == "" {
-		raw, err := json.Marshal(map[string]string{"agentId": string(id)})
-		if err != nil {
-			return state, err
-		}
-		provider, err := r.registerConfiguredProvider(ctx, catalogapplication.RegisterProviderRequest{
-			Namespace:   agentFacadeNamespace(agent.Spec().Name, id),
-			DisplayName: agent.Spec().Name,
-			Description: "Managed Agent Delegation tools for " + agent.Spec().Name,
-		}, agentdelegation.ID, raw, caller, true)
-		if err != nil {
-			// A concurrent create may have won the unique namespace. Retry
-			// only the metadata lookup, never the side-effecting create.
-			current, lookupErr := r.AgentTools(ctx, id, caller)
-			if lookupErr == nil && current.ProviderID != "" && current.Status != "conflict" {
-				state = current
-			} else {
-				return state, fmt.Errorf("create Agent tool facade: %w", err)
-			}
-		} else {
-			state.ProviderID = provider.ID().String()
-		}
-	}
-	providerID, err := catalogdomain.ParseProviderID(state.ProviderID)
+	existing, err := store.ListSourceTools(ctx, source)
 	if err != nil {
-		return state, err
+		return AgentTools{}, err
 	}
-	if _, err = r.syncConfiguredProviderForOwner(ctx, providerID, caller, true); err != nil {
-		return state, fmt.Errorf("synchronize Agent tool facade: %w", err)
+	byKey := make(map[string]catalogdomain.Tool, len(existing))
+	for _, tool := range existing {
+		byKey[tool.SourceKey()] = tool
 	}
-	if err = r.agentStore.ClaimToolFacade(ctx, id, providerID.String()); err != nil {
-		return state, fmt.Errorf("claim Agent tool facade: %w", err)
+	definitions, err := agentdelegation.ReviewedOwnedTools(agent)
+	if err != nil {
+		return AgentTools{}, err
+	}
+	now := time.Now().UTC()
+	ids := catalogidentity.NewGenerator()
+	planned := make([]catalogdomain.Tool, 0, len(definitions))
+	for _, def := range definitions {
+		input, e := catalogdomain.NewSchema(def.InputSchema)
+		if e != nil {
+			return AgentTools{}, e
+		}
+		var output *catalogdomain.Schema
+		if len(def.OutputSchema) != 0 {
+			value, e := catalogdomain.NewSchema(def.OutputSchema)
+			if e != nil {
+				return AgentTools{}, e
+			}
+			output = &value
+		}
+		spec := catalogdomain.ToolSpec{
+			SourceKey: def.SourceKey, Name: def.Name, Title: def.Title,
+			Description: def.Description, InputSchema: input, OutputSchema: output,
+			Tags: def.Tags,
+		}
+		var item catalogdomain.Tool
+		if current, found := byKey[def.SourceKey]; found {
+			item, e = current.RefreshMetadata(spec, now)
+		} else {
+			newID, idErr := ids.NewToolID()
+			if idErr != nil {
+				return AgentTools{}, idErr
+			}
+			item, e = catalogdomain.NewToolFromSource(newID, source, spec, now)
+		}
+		if e != nil {
+			return AgentTools{}, e
+		}
+		planned = append(planned, item)
+	}
+	if err = store.UpsertSourceSnapshot(ctx, source, planned); err != nil {
+		return AgentTools{}, fmt.Errorf("register Agent owned Tool IDs: %w", err)
+	}
+	owned, err := agentdelegation.NewOwnedExecutor(r.Agents, id)
+	if err != nil {
+		return AgentTools{}, err
+	}
+	if err = r.executors.RegisterSource(source, owned); err != nil {
+		return AgentTools{}, err
 	}
 	return r.AgentTools(ctx, id, caller)
 }
 
-// CreateAgentWithTools is the single user-facing explicit creation path for
-// HTTP, Wails and CLI. Tool activation failure is recoverable and does not
-// conceal an Agent record already persisted.
-func (r *Runtime) CreateAgentWithTools(ctx context.Context, req agentapplication.CreateRequest, caller gov.Context) (agentdomain.Agent, error) {
-	agent, err := r.Agents.Create(ctx, req, caller)
+// CreateAgentWithTools is the existing public owner action; it now creates
+// Agent-owned Catalog ToolIDs rather than an internal Provider facade.
+func (r *Runtime) CreateAgentWithTools(ctx context.Context, request agentapplication.CreateRequest, caller gov.Context) (agentdomain.Agent, error) {
+	agent, err := r.Agents.Create(ctx, request, caller)
 	if err != nil {
 		return agent, err
 	}
 	if _, err = r.EnsureAgentTools(ctx, agent.ID(), caller); err != nil {
-		return agent, fmt.Errorf("agent %s created but tools are not ready; repair from agent details: %w", agent.ID(), err)
+		return agent, fmt.Errorf("agent %s created but Tool registration is incomplete: %w", agent.ID(), err)
 	}
 	return agent, nil
 }
 
-// DeleteAgentWithTools refuses to delete an in-use Provider/Agent. The hosted
-// facade must be explicitly retired; no Profile bindings are silently removed.
+// DeleteAgentWithTools fails closed while canonical ToolIDs exist: their
+// Profile/Policy/Audit references require explicit atomic source retirement.
+// Never recreate a facade, silently delete a ToolBinding, or lose task history.
 func (r *Runtime) DeleteAgentWithTools(ctx context.Context, id agentdomain.ID, caller gov.Context) error {
-	if _, err := r.Agents.Get(ctx, id, caller); err != nil {
-		return err
-	}
 	state, err := r.AgentTools(ctx, id, caller)
 	if err != nil {
 		return err
-	}
-	if state.Status == "conflict" {
-		return fmt.Errorf("%w: Agent tool associations need explicit resolution", agentdomain.ErrConflict)
 	}
 	tasks, err := r.Agents.Tasks(ctx, id, caller)
 	if err != nil {
 		return err
 	}
-	if len(tasks) > 0 {
+	if len(tasks) != 0 {
 		return fmt.Errorf("%w: Agent has task history", agentdomain.ErrConflict)
 	}
-	if state.ProviderID != "" {
-		providerID, parseErr := catalogdomain.ParseProviderID(state.ProviderID)
-		if parseErr != nil {
-			return parseErr
-		}
-		if err = r.ensureProviderUnused(ctx, providerID); err != nil {
-			return err
-		}
-		if err = r.agentStore.ReleaseToolFacade(ctx, id, state.ProviderID); err != nil {
-			return err
-		}
-		if err = r.DeleteConfiguredProvider(ctx, providerID); err != nil {
-			restoreErr := r.agentStore.ClaimToolFacade(context.WithoutCancel(ctx), id, state.ProviderID)
-			return errors.Join(err, restoreErr)
-		}
+	if len(state.Tools) != 0 {
+		return fmt.Errorf("%w: Agent has canonical Tools requiring reviewed retirement", agentdomain.ErrConflict)
 	}
 	return r.Agents.Delete(ctx, id, caller)
 }

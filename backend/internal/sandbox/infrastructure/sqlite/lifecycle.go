@@ -149,12 +149,20 @@ func (s *Store) changePassiveLifecycle(ctx context.Context, expected sandboxdoma
 		}
 	}
 	if action == governancedomain.ActionSandboxDestroy {
-		// Resource ownership and raw Provider config references are both
-		// checked within the Run CAS transaction. FK restrictions alone cannot
-		// protect a logical Destroy because the Sandbox row is not deleted.
-		// A Jobs facade is as authoritative a reference as Workspace.
+		// A logical Destroy changes only the Run, not the Sandbox row.
+		// Committed Workspace placements and native Tool target restrictions
+		// must be checked inside the SAME state-CAS transaction, preventing a
+		// Sandbox from being destroyed beneath an authorized Profile.
 		var dependent int
-		err = tx.QueryRowContext(ctx, `SELECT
+		if s.typed {
+			err = tx.QueryRowContext(ctx, `SELECT
+			(SELECT COUNT(*) FROM workspace_placements WHERE sandbox_id=?) +
+			(SELECT COUNT(*) FROM profile_tool_target_scopes WHERE sandbox_id=?)`,
+				expected.SandboxID.String(), expected.SandboxID.String()).Scan(&dependent)
+		} else {
+			// Historical Provider-v2 Store fixtures only. The official v3
+			// bootstrap uses OpenTyped and never enters this path.
+			err = tx.QueryRowContext(ctx, `SELECT
 			(SELECT COUNT(*) FROM sandbox_tool_suite_bindings WHERE sandbox_id=?) +
 			(SELECT COUNT(*) FROM sandbox_job_suite_bindings WHERE sandbox_id=?) +
 			(SELECT COUNT(*) FROM provider_configs
@@ -162,9 +170,10 @@ func (s *Store) changePassiveLifecycle(ctx context.Context, expected sandboxdoma
 			   AND ((plugin_id='io.mender.provider.workspace' AND config_version=2)
 			     OR (plugin_id='io.mender.provider.sandbox-jobs' AND config_version=1))
 			   AND CASE WHEN json_valid(config_json) THEN json_extract(config_json,'$.sandboxId') END=?)`,
-			expected.SandboxID.String(), expected.SandboxID.String(), expected.SandboxID.String()).Scan(&dependent)
+				expected.SandboxID.String(), expected.SandboxID.String(), expected.SandboxID.String()).Scan(&dependent)
+		}
 		if err != nil {
-			return sandboxdomain.Run{}, fmt.Errorf("local Sandbox lifecycle: Tool Suite reference check unavailable: %w", err)
+			return sandboxdomain.Run{}, fmt.Errorf("local Sandbox lifecycle: Tool target reference check unavailable: %w", err)
 		}
 		if dependent != 0 {
 			return sandboxdomain.Run{}, sandboxdomain.ErrConflict

@@ -162,6 +162,14 @@ var taskOutput = []byte(`{"type":"object","additionalProperties":false,"required
 var cancelOutput = []byte(`{"type":"object","additionalProperties":false,"required":["taskId","cancelRequested"],
 	"properties":{"taskId":{"type":"string"},"cancelRequested":{"type":"boolean"}}}`)
 
+// ReviewedOwnedTools reuses the one existing Agent operation/Schema contract
+// without creating, opening or activating a Provider façade. Only the Agent
+// resource owns the callable tool identities in the typed Catalog.
+func ReviewedOwnedTools(agent agentdomain.Agent) ([]catalogapplication.DiscoveredTool, error) {
+	return (&Instance{backend: agent.Spec().Backend,
+		resumeUnsupported: agent.Spec().Isolation != "host"}).DiscoverTools(context.Background(), catalogdomain.Provider{})
+}
+
 func (i *Instance) DiscoverTools(_ context.Context, _ catalogdomain.Provider) ([]catalogapplication.DiscoveredTool, error) {
 	if i == nil {
 		return nil, agentdomain.ErrUnavailable

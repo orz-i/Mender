@@ -112,6 +112,15 @@ func (r *Runtime) CallConfiguredTool(
 		}
 		return invocationapplication.InvokeToolResponse{}, err
 	}
+	// Native Workspace/Jobs and Agent as Tool have a registered SourceRef
+	// executor and no Provider to activate. They always enter the same
+	// Invocation gate; this is not a shortcut around ToolBinding or Policy.
+	if tool.SourceRef().Kind() != catalogdomain.SourceProvider {
+		return r.invokeToolWithSSHTimeout(ctx, request)
+	}
+	if tool.ProviderID() == "" {
+		return invocationapplication.InvokeToolResponse{}, fmt.Errorf("activate tool provider: Tool %s has no verified Provider owner", toolID)
+	}
 	if err := r.activateConfiguredProvider(ctx, tool.ProviderID(), executionContext); err != nil {
 		return invocationapplication.InvokeToolResponse{}, fmt.Errorf("activate tool provider: %w", err)
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"path/filepath"
 	"sync"
 	"time"
@@ -15,6 +16,7 @@ import (
 	invocationapp "github.com/orz-i/Mender/backend/internal/invocation/application"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
+	workspace "github.com/orz-i/Mender/backend/internal/workspace/domain"
 )
 
 // agentTaskToolCapability is an ephemeral capability owned by the original
@@ -28,6 +30,7 @@ type agentTaskToolCapability struct {
 	generation          uint64
 	profileID           string
 	workspaceRoot       string
+	workspaceID         workspace.Ref
 	sandboxID           sandboxdomain.ID
 	caller              gov.Context
 	allowed             map[catalogdomain.ToolID]string // ToolID -> immutable Workspace SourceKey
@@ -129,7 +132,7 @@ func (r *Runtime) openAgentTaskToolCapability(ctx context.Context,
 	if err != nil {
 		return "", err
 	}
-	if suite.Status != "ready" || suite.ProviderID == "" {
+	if suite.Status != "ready" || suite.ProviderID != "" {
 		return "", agentdomain.ErrUnavailable
 	}
 	sources := make(map[catalogdomain.ToolID]string, len(suite.Tools))
@@ -170,6 +173,13 @@ func (r *Runtime) openAgentTaskToolCapability(ctx context.Context,
 	if err != nil {
 		return "", err
 	}
+	// The workspace is NOT inferred from an Agent alias or a path string.
+	// Resolve one existing, owner-attested and Profile-authorized Workspace
+	// placement for this exact Sandbox and every selected native Tool.
+	workspaceRef, err := r.resolveTaskNativeWorkspace(ctx, caller, sandboxID, task.WorkspaceRoot, requested)
+	if err != nil {
+		return "", err
+	}
 	secret := [32]byte{}
 	if _, err := rand.Read(secret[:]); err != nil {
 		return "", err
@@ -194,7 +204,7 @@ func (r *Runtime) openAgentTaskToolCapability(ctx context.Context,
 	}
 	r.agentToolGateway.tickets[token] = agentTaskToolCapability{
 		taskID: taskID, agentID: task.AgentID, generation: task.Generation,
-		profileID: profileID.String(), workspaceRoot: task.WorkspaceRoot, sandboxID: sandboxID,
+		profileID: profileID.String(), workspaceRoot: task.WorkspaceRoot, workspaceID: workspaceRef, sandboxID: sandboxID,
 		caller: caller, allowed: permitted, expiresAt: expires,
 	}
 	return token, nil
@@ -291,20 +301,110 @@ func (r *Runtime) invokeAgentTaskTool(ctx context.Context, token string, id cata
 	if err != nil {
 		return invocationapp.InvokeToolResponse{}, err
 	}
-	if tool.SourceKey() != capability.allowed[id] {
+	if tool.SourceKey() != capability.allowed[id] ||
+		tool.SourceRef().Kind() != catalogdomain.SourceNative ||
+		tool.SourceRef().ID() != "workspace" {
 		return invocationapp.InvokeToolResponse{}, agentdomain.ErrForbidden
 	}
-	if tool.ProviderID().String() == "" {
+	// Recheck exact Profile TargetScope, Workspace grant and Sandbox grant
+	// before entering the canonical Invocation. Revocation invalidates an
+	// already-issued task bearer; the atomic Native lease checks again.
+	ref, err := r.resolveTaskNativeWorkspace(ctx, capability.caller,
+		capability.sandboxID, capability.workspaceRoot, []catalogdomain.ToolID{id})
+	if err != nil || ref != capability.workspaceID {
 		return invocationapp.InvokeToolResponse{}, agentdomain.ErrForbidden
 	}
-	pinned, err := r.Sandboxes.store.GetWorkspaceSuite(ctx, capability.sandboxID)
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(arguments, &fields) != nil || fields == nil {
+		return invocationapp.InvokeToolResponse{}, agentdomain.ErrInvalid
+	}
+	if raw, exists := fields["workspaceId"]; exists {
+		var callerRef string
+		if json.Unmarshal(raw, &callerRef) != nil || callerRef != ref.String() {
+			return invocationapp.InvokeToolResponse{}, agentdomain.ErrForbidden
+		}
+	}
+	trusted, err := json.Marshal(ref.String())
 	if err != nil {
 		return invocationapp.InvokeToolResponse{}, err
 	}
-	if pinned == "" || pinned != tool.ProviderID().String() {
-		return invocationapp.InvokeToolResponse{}, agentdomain.ErrForbidden
+	fields["workspaceId"] = trusted // never allow the model to select a different workspace
+	verified, err := json.Marshal(fields)
+	if err != nil {
+		return invocationapp.InvokeToolResponse{}, err
 	}
-	return r.CallConfiguredTool(ctx, id, arguments, capability.caller)
+	return r.CallConfiguredTool(ctx, id, verified, capability.caller)
+}
+
+// resolveTaskNativeWorkspace requires ONE pre-existing, fully authorized
+// WorkspaceRef whose verified local Sandbox root matches the admitted Task.
+// Ambiguous roots, stale grants and missing target scopes all fail closed.
+func (r *Runtime) resolveTaskNativeWorkspace(ctx context.Context, caller gov.Context,
+	sandboxID sandboxdomain.ID, root string, ids []catalogdomain.ToolID) (workspace.Ref, error) {
+	if r == nil || r.workspaceInventory == nil || len(ids) == 0 ||
+		caller.Scope().Kind() != gov.ScopeProfile {
+		return "", agentdomain.ErrForbidden
+	}
+	profileID := caller.Scope().Reference()
+	refs, err := r.workspaceInventory.ListAccessibleWorkspaces(ctx, caller)
+	if err != nil {
+		return "", agentdomain.ErrForbidden
+	}
+	var selected workspace.Ref
+	for _, ref := range refs {
+		placements, err := r.workspaceInventory.ListWorkspacePlacements(ctx, ref)
+		if err != nil {
+			return "", agentdomain.ErrForbidden
+		}
+		for _, placement := range placements {
+			if placement.SandboxID != sandboxID.String() || placement.TargetRoot != root {
+				continue
+			}
+			target, err := profiledomain.NewExecutionTarget(ref.String(), sandboxID.String())
+			if err != nil {
+				return "", agentdomain.ErrForbidden
+			}
+			admitted := true
+			for _, id := range ids {
+				tool, err := r.Catalog.store.GetTool(ctx, id)
+				if err != nil || tool.SourceRef().Kind() != catalogdomain.SourceNative ||
+					tool.SourceRef().ID() != "workspace" {
+					return "", agentdomain.ErrForbidden
+				}
+				var required sandboxdomain.Capability
+				switch tool.SourceKey() {
+				case "workspace.read":
+					required = sandboxdomain.CapabilityRead
+				case "workspace.search":
+					required = sandboxdomain.CapabilitySearch
+				case "workspace.edit":
+					required = sandboxdomain.CapabilityEdit
+				default:
+					return "", agentdomain.ErrForbidden
+				}
+				scope, found, err := r.workspaceInventory.BindingTargetScope(ctx, profileID, id)
+				if err != nil || !found || !scope.Allows(target) {
+					admitted = false
+					break
+				}
+				grant, err := r.Sandboxes.store.HasProfileGrant(ctx, sandboxID, profileID, required)
+				if err != nil || !grant {
+					admitted = false
+					break
+				}
+			}
+			if admitted {
+				if selected != "" {
+					return "", agentdomain.ErrConflict
+				}
+				selected = ref
+			}
+		}
+	}
+	if selected == "" {
+		return "", agentdomain.ErrForbidden
+	}
+	return selected, nil
 }
 
 // closeAgentTaskToolCapability expires the bearer token regardless of whether

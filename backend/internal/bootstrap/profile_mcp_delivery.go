@@ -19,14 +19,6 @@ type MCPDelivery struct {
 	store       *mcpsqlite.Store
 }
 
-func newMCPDelivery(ctx context.Context, path string, profiles profileapplication.GetProfileByID, tunnels tunnelapplication.GetTunnel) (*MCPDelivery, error) {
-	store, err := mcpsqlite.Open(ctx, path)
-	if err != nil {
-		return nil, err
-	}
-	return composeMCPDelivery(store, profiles, tunnels), nil
-}
-
 // newTypedMCPDelivery uses the SAME existing MCP Delivery application use
 // cases; the v3 schema must be verified before opening the Store. This does
 // not start a listener or activate a Provider/Tunnel.

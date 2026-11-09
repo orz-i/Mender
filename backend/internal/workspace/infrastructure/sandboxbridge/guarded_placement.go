@@ -173,8 +173,14 @@ func (r GuardedRouter) validateRequest(req ResolveRequest) error {
 	if err := req.Workspace.Validate(); err != nil {
 		return fmt.Errorf("governed Workspace identity: %w", err)
 	}
-	if err := req.RequiredIsolation.Validate(); err != nil {
-		return fmt.Errorf("governed Workspace isolation: %w", err)
+	// An omitted class means the caller did not require a stricter class,
+	// NOT that the runtime may select any arbitrary target: Profile TargetScope,
+	// Sandbox grant, exact Workspace root, verified Backend and unique placement
+	// are still enforced. The selected Sandbox isolation is pinned in the lease.
+	if req.RequiredIsolation != "" {
+		if err := req.RequiredIsolation.Validate(); err != nil {
+			return fmt.Errorf("governed Workspace isolation: %w", err)
+		}
 	}
 	if req.PinnedSandboxID != "" {
 		if _, err := sandbox.ParseID(req.PinnedSandboxID); err != nil {
@@ -271,7 +277,7 @@ func (r GuardedRouter) inspect(
 	if placement.Sandbox.Validate() != nil || placement.Run.SandboxID != placement.Sandbox.ID() ||
 		placement.Sandbox.ID().String() != candidate.SandboxID || placement.Required != capability ||
 		placement.Run.Generation == 0 || placement.Run.State != sandbox.StateReady ||
-		placement.Sandbox.Isolation() != req.RequiredIsolation {
+		(req.RequiredIsolation != "" && placement.Sandbox.Isolation() != req.RequiredIsolation) {
 		return sandboxapp.Placement{}, false, nil
 	}
 	// The exact registered backend must prove the operation, not a Plugin
@@ -441,11 +447,18 @@ func (r GuardedRouter) Acquire(ctx context.Context, frozen FrozenPlacement, invo
 	if !ok {
 		return nil, sandbox.ErrNotAuthorized
 	}
+	// A known owner-required class stays fixed. Otherwise pin the *actual*
+	// verified backend class from the original immutable placement; the
+	// typed lease compares it with current SQLite in the writer transaction.
+	isolation := req.RequiredIsolation
+	if isolation == "" {
+		isolation = frozen.placement.Sandbox.Isolation()
+	}
 	bound, err := typedlease.WithRequest(ctx, typedlease.Request{
 		InvocationID: invocationID, Caller: req.Caller, ToolID: req.ToolID,
 		Operation: req.Operation, Workspace: req.Workspace,
 		Sandbox: frozen.placement.Sandbox.ID(), Generation: frozen.placement.Run.Generation,
-		Isolation: req.RequiredIsolation, ApprovedFacts: admitted,
+		Isolation: isolation, ApprovedFacts: admitted,
 	})
 	if err != nil {
 		return nil, err

@@ -24,6 +24,7 @@ import (
 	invocationrouter "github.com/orz-i/Mender/backend/internal/invocation/infrastructure/router"
 	mcpmanaged "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/managed"
 	mcpplugin "github.com/orz-i/Mender/backend/internal/mcp/infrastructure/plugin"
+	hardcut "github.com/orz-i/Mender/backend/internal/migration/toolhardcut"
 	platformplugin "github.com/orz-i/Mender/backend/internal/plugin"
 	installationdomain "github.com/orz-i/Mender/backend/internal/plugin/installation/domain"
 	installationlocalfs "github.com/orz-i/Mender/backend/internal/plugin/installation/infrastructure/localfs"
@@ -32,16 +33,21 @@ import (
 	profileapplication "github.com/orz-i/Mender/backend/internal/profile/application"
 	profiledelivery "github.com/orz-i/Mender/backend/internal/profile/application/delivery"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
+	profilesupply "github.com/orz-i/Mender/backend/internal/profile/infrastructure/typedsupply"
 	provideractivationapplication "github.com/orz-i/Mender/backend/internal/provideractivation/application"
 	providerplugin "github.com/orz-i/Mender/backend/internal/providerplugin"
 	providerbuiltin "github.com/orz-i/Mender/backend/internal/providerplugin/builtin"
 	providerconfigstore "github.com/orz-i/Mender/backend/internal/providerplugin/configstore"
 	providerexternal "github.com/orz-i/Mender/backend/internal/providerplugin/external"
 	sandboxexternal "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/external"
+	sshjobsplugin "github.com/orz-i/Mender/backend/internal/sshjobs/infrastructure/plugin"
 	tunnelapplication "github.com/orz-i/Mender/backend/internal/tunnel/application"
 	tunnelexternal "github.com/orz-i/Mender/backend/internal/tunnel/infrastructure/external"
 	tunnelregistry "github.com/orz-i/Mender/backend/internal/tunnel/infrastructure/pluginregistry"
 	tunnelprocess "github.com/orz-i/Mender/backend/internal/tunnel/infrastructure/process"
+	workspaceapp "github.com/orz-i/Mender/backend/internal/workspace/application"
+	workspaceplugin "github.com/orz-i/Mender/backend/internal/workspace/infrastructure/plugin"
+	"github.com/orz-i/Mender/backend/internal/workspace/infrastructure/sandboxbridge"
 )
 
 // RuntimeOptions configures the shared local execution runtime.
@@ -97,7 +103,9 @@ type Runtime struct {
 	closersMu sync.Mutex
 	closers   []io.Closer
 
-	managedMCP *mcpmanaged.Manager
+	typedSupply        *profilesupply.Reader
+	workspaceInventory *sandboxbridge.TypedInventory
+	managedMCP         *mcpmanaged.Manager
 }
 
 // NewRuntime constructs the protocol-independent local runtime.
@@ -107,13 +115,19 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		return nil, fmt.Errorf("compose runtime: principal: %w", err)
 	}
 
-	// F4 safety fence: reject any typed/partially upgraded database before
-	// Catalog, Profile, Task recovery or other writable bounded-context Store.
-	if err := requireLegacyRuntimeSchema(ctx, options.DatabasePath); err != nil {
-		return nil, err
+	// The official CLI, menderd and Wails entry accepts the COMPLETE typed v3
+	// schema only. A v2 or partially migrated DB is never repaired in place:
+	// offline Stage E attestation and an operator-controlled swap are required.
+	if err := ensureFreshTypedDatabase(options.DatabasePath); err != nil {
+		return nil, fmt.Errorf("compose runtime: v3 fresh schema: %w", err)
 	}
+	preflight, err := hardcut.OpenTypedContextStore(ctx, options.DatabasePath)
+	if err != nil {
+		return nil, fmt.Errorf("compose runtime: v3 schema required: %w", err)
+	}
+	_ = preflight.Close()
 
-	catalog, err := NewCatalog(ctx, CatalogOptions{DatabasePath: options.DatabasePath})
+	catalog, err := NewTypedCatalog(ctx, CatalogOptions{DatabasePath: options.DatabasePath})
 	if err != nil {
 		return nil, fmt.Errorf("compose runtime: catalog: %w", err)
 	}
@@ -152,7 +166,7 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		}
 	}()
 
-	profiles, err := NewProfiles(
+	profiles, err := NewTypedProfiles(
 		ctx,
 		options.DatabasePath,
 		catalog.store,
@@ -164,7 +178,7 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		_ = catalog.Close()
 		return nil, fmt.Errorf("compose runtime: profiles: %w", err)
 	}
-	mcpDelivery, err := newMCPDelivery(ctx, options.DatabasePath, profiles.GetByID, tunnels.Get)
+	mcpDelivery, err := newTypedMCPDelivery(ctx, options.DatabasePath, profiles.GetByID, tunnels.Get)
 	if err != nil {
 		_ = profiles.Close()
 		_ = credentials.Close()
@@ -183,7 +197,7 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		runtimeTunnelUsageChecker{profiles: profiles, delivery: mcpDelivery},
 	)
 
-	policies, err := NewPolicies(ctx, options.DatabasePath, catalog, profiles)
+	policies, err := NewTypedPolicies(ctx, options.DatabasePath, catalog, profiles)
 	if err != nil {
 		_ = profiles.Close()
 		_ = credentials.Close()
@@ -192,7 +206,7 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		return nil, fmt.Errorf("compose runtime: policy: %w", err)
 	}
 
-	providerConfigs, err := providerconfigstore.Open(ctx, options.DatabasePath)
+	providerConfigs, err := providerconfigstore.OpenTyped(ctx, options.DatabasePath)
 	if err != nil {
 		_ = policies.Close()
 		_ = profiles.Close()
@@ -243,7 +257,7 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 	// Sandboxes are composed before Provider plugins so Workspace activation
 	// only observes post-cut Sandbox bindings. Migration is one DB transaction.
 	approvalGate := policylocal.RejectApproval{}
-	sandboxes, err := NewSandboxes(ctx, options.DatabasePath, policies.Evaluate, approvalGate, runtimeGovernance, credentials.Resolver, func(ctx context.Context, id profiledomain.ProfileID) error {
+	sandboxes, err := NewTypedSandboxes(ctx, options.DatabasePath, policies.Evaluate, approvalGate, runtimeGovernance, credentials.Resolver, func(ctx context.Context, id profiledomain.ProfileID) error {
 		_, err := profiles.GetByID.Execute(ctx, id)
 		return err
 	})
@@ -257,18 +271,9 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 			_ = sandboxes.Close()
 		}
 	}()
-	if err := installSandboxProviderBindingGuards(ctx, options.DatabasePath); err != nil {
-		closeBootstrapStores()
-		return nil, fmt.Errorf("compose runtime: Workspace Sandbox binding guards: %w", err)
-	}
 	executors := invocationrouter.New()
 	providerPlugins := providerplugin.NewRegistry()
-	if err := providerbuiltin.Register(
-		providerPlugins,
-		sandboxes.router,
-		sandboxes,
-		sandboxes,
-	); err != nil {
+	if err := providerbuiltin.Register(providerPlugins); err != nil {
 		_ = providerConfigs.Close()
 		_ = policies.Close()
 		_ = profiles.Close()
@@ -494,10 +499,81 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 	profiles.ReplaceSkills = profileapplication.NewReplaceSkills(profiles.store, profileSkillStatus{skills: skills})
 	skills.profileSkillUsage = profiles.store.ListSkillProfiles
 
+	// Compose a single SourceRef-aware Invocation, using the same persisted
+	// grants and lease ledger as the typed Catalog/Profiles/Sandboxes.
+	typedReader, err := profilesupply.Open(ctx, options.DatabasePath)
+	if err != nil {
+		_ = skills.Close()
+		_ = providerInstances.CloseAll()
+		_ = externalProcesses.CloseAll()
+		_ = pluginInstallations.Close()
+		closeBootstrapStores()
+		return nil, fmt.Errorf("compose runtime: typed Profile supply: %w", err)
+	}
+	typedInventoryDB, err := hardcut.OpenTypedContextStore(ctx, options.DatabasePath)
+	if err != nil {
+		_ = typedReader.Close()
+		_ = skills.Close()
+		_ = providerInstances.CloseAll()
+		_ = externalProcesses.CloseAll()
+		_ = pluginInstallations.Close()
+		closeBootstrapStores()
+		return nil, fmt.Errorf("compose runtime: Workspace placement authority: %w", err)
+	}
+	inventory, err := sandboxbridge.NewTypedInventory(ctx, typedInventoryDB)
+	if err != nil {
+		_ = typedInventoryDB.Close()
+		_ = typedReader.Close()
+		_ = skills.Close()
+		_ = providerInstances.CloseAll()
+		_ = externalProcesses.CloseAll()
+		_ = pluginInstallations.Close()
+		closeBootstrapStores()
+		return nil, fmt.Errorf("compose runtime: Workspace inventory: %w", err)
+	}
+	selection, err := workspaceapp.NewWorkspaceSelection(inventory)
+	if err != nil {
+		return nil, fmt.Errorf("compose runtime: workspace selection: %w", err)
+	}
+	placements, err := workspaceapp.NewPlacementQuery(inventory)
+	if err != nil {
+		return nil, fmt.Errorf("compose runtime: Workspace placement: %w", err)
+	}
+	guarded, err := sandboxbridge.NewGuardedRouter(sandboxbridge.GuardedDependencies{
+		Placements: placements, Router: sandboxes.router, Backends: sandboxes.backendPlugins,
+		Grants: sandboxes.store, Workspaces: inventory, Bindings: inventory,
+		Roots: sandboxbridge.LocalRootAttestor{}, Admissions: invocationapplication.ApprovedAttemptVerifier{},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("compose runtime: guarded Workspace Router: %w", err)
+	}
+	workspaceSource, err := catalogdomain.NativeSource("workspace")
+	if err != nil {
+		return nil, err
+	}
+	if err := executors.RegisterSource(workspaceSource, workspaceplugin.NativeWorkspaceTools{
+		Selection: selection, Router: guarded,
+	}); err != nil {
+		return nil, fmt.Errorf("compose runtime: Native Workspace Tool: %w", err)
+	}
+	// Native SSH Jobs use the existing Sandbox JobID/remote recovery service,
+	// with the typed Profile TargetScope checked independently of Sandbox grants.
+	jobSource, err := catalogdomain.NativeSource("jobs")
+	if err != nil {
+		return nil, err
+	}
+	jobExecutor, err := sshjobsplugin.NewNativeJobs(ctx, typedInventoryDB, sandboxes, sandboxes.Get)
+	if err != nil {
+		return nil, fmt.Errorf("compose runtime: Native SSH Job Tool: %w", err)
+	}
+	if err = executors.RegisterSource(jobSource, jobExecutor); err != nil {
+		return nil, fmt.Errorf("compose runtime: register Native SSH Job Tool: %w", err)
+	}
+
 	providerActivation, invokeTool := (runtimeInvocationWiring{
 		options:       options,
 		tools:         catalog.store,
-		profileScopes: newInvocationProfileScopeResolver(profiles.GetByID),
+		profileScopes: typedReader,
 		facts:         newInvocationGovernanceFactExtractor(providerConfigs, providerPlugins, executors),
 		policy:        policies,
 		governance:    runtimeGovernance,
@@ -507,7 +583,7 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		approval:      approvalGate,
 	}).compose()
 
-	agents, agentStore, agentLauncher, err := newAgents(ctx, options.DatabasePath, ownerPrincipal, profiles, policies, runtimeGovernance, options.AgentExecutor)
+	agents, agentStore, agentLauncher, err := newTypedAgents(ctx, options.DatabasePath, ownerPrincipal, profiles, policies, runtimeGovernance, options.AgentExecutor)
 	if err != nil {
 		_ = skills.Close()
 		_ = providerInstances.CloseAll()
@@ -517,18 +593,22 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		return nil, fmt.Errorf("compose runtime: Agent backend: %w", err)
 	}
 
-	// The Tool facade is only registered after its Agent service is ready.
-	// Registration is inert; Provider activation and Task submission retain
-	// their independent governance gates.
-	if err := providerPlugins.Register(agentdelegation.New(agents, ownerPrincipal)); err != nil {
-		_ = agents.Close()
-		_ = agentStore.Close()
-		_ = skills.Close()
-		_ = providerInstances.CloseAll()
-		_ = externalProcesses.CloseAll()
-		_ = pluginInstallations.Close()
-		closeBootstrapStores()
-		return nil, fmt.Errorf("compose runtime: Agent delegation Provider: %w", err)
+	listedAgents, err := agentStore.ListAgents(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("compose runtime: list owned Agents: %w", err)
+	}
+	for _, owned := range listedAgents {
+		source, sourceErr := catalogdomain.AgentSource(string(owned.ID()))
+		if sourceErr != nil {
+			return nil, fmt.Errorf("compose runtime: Agent source: %w", sourceErr)
+		}
+		ownedExecutor, sourceErr := agentdelegation.NewOwnedExecutor(agents, owned.ID())
+		if sourceErr != nil {
+			return nil, fmt.Errorf("compose runtime: Agent executor: %w", sourceErr)
+		}
+		if sourceErr = executors.RegisterSource(source, ownedExecutor); sourceErr != nil {
+			return nil, fmt.Errorf("compose runtime: bind Agent source: %w", sourceErr)
+		}
 	}
 	tunnelsOwned = false
 	runtimeGovernanceOwned = false
@@ -546,6 +626,8 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		RuntimeGovernance:           runtimeGovernance,
 		InvokeTool:                  invokeTool,
 		ListAudit:                   auditapplication.NewListRecords(auditStore),
+		typedSupply:                 typedReader,
+		workspaceInventory:          inventory,
 		ListProviderActivationAudit: auditapplication.NewListProviderActivations(auditStore),
 		audit:                       auditStore,
 		executors:                   executors,
@@ -566,6 +648,8 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		agentLauncher:               agentLauncher,
 	}
 	mcpDeliveryOwned = false
+	result.addCloser(typedInventoryDB)
+	result.addCloser(typedReader)
 	if err := result.configureManagedMCP(result.MCPDelivery.Get.Execute, result.MCPDelivery.GetRevision.Execute); err != nil {
 		return nil, errors.Join(fmt.Errorf("compose runtime: managed MCP: %w", err), result.Close())
 	}
@@ -575,11 +659,6 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 	tunnels.Delete = tunnelapplication.NewDeleteTunnel(tunnels.store, runtimeTunnelUsageChecker{
 		profiles: profiles, delivery: mcpDelivery, active: result.isTunnelActive,
 	})
-	// The shared DB is the final authority for cross-context Tool/Policy refs.
-	// Register persistence guards only after every bounded-context table exists.
-	if err := installProviderReferenceGuards(ctx, options.DatabasePath); err != nil {
-		return nil, errors.Join(fmt.Errorf("compose runtime: provider reference guards: %w", err), result.Close())
-	}
 	return result, nil
 }
 

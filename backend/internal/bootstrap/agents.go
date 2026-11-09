@@ -2,7 +2,6 @@ package bootstrap
 
 import (
 	"context"
-	"time"
 
 	agentapplication "github.com/orz-i/Mender/backend/internal/agent/application"
 	agentdomain "github.com/orz-i/Mender/backend/internal/agent/domain"
@@ -22,21 +21,16 @@ func (r *Runtime) AgentAvailability(backend agentdomain.Backend) (string, error)
 	return r.agentLauncher.Availability(backend)
 }
 
-// newAgents composes a host-reviewed set of local ACP Agent backends. External
-// plugin packages cannot silently acquire the native process authority.
-func newAgents(ctx context.Context, dbPath string, owner gov.Principal,
+// newTypedAgents reuses the existing ACP Task/Session and approval service on
+// an already attested v3 schema. Opening a store does NOT reinterpret unknown
+// tasks, invalidate pending approvals or resume/replay an old process. Recovery
+// decisions remain explicit, after the exclusive runtime cutover boundary.
+func newTypedAgents(ctx context.Context, dbPath string, owner gov.Principal,
 	profiles *Profiles, policies *Policies, governance *RuntimeGovernance,
 	fixtureRunner agentapplication.Executor,
 ) (*agentapplication.Service, *agentsqlite.Store, *agentacp.LocalFactory, error) {
-	store, err := agentsqlite.Open(ctx, dbPath)
+	store, err := agentsqlite.OpenTyped(ctx, dbPath)
 	if err != nil {
-		return nil, nil, nil, err
-	}
-	// Only expired prior-run tasks can be fenced into unknown. A live
-	// 10-minute task is never reclassified merely because another Runtime
-	// opened the same database; no task is automatically replayed.
-	if _, err := store.ReconcileExpired(ctx, time.Now().Add(-(agentapplication.TaskTimeout + 2*time.Minute))); err != nil {
-		_ = store.Close()
 		return nil, nil, nil, err
 	}
 	return composeAgentService(ctx, store, owner, profiles, policies, governance, fixtureRunner)

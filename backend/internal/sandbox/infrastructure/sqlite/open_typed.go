@@ -16,5 +16,5 @@ func OpenTyped(ctx context.Context, path string) (*Store, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open typed Sandbox sqlite: %w", err)
 	}
-	return &Store{db: db}, nil
+	return &Store{db: db, typed: true}, nil
 }

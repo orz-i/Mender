@@ -3,12 +3,10 @@ package bootstrap
 import (
 	"context"
 
-	agentapplication "github.com/orz-i/Mender/backend/internal/agent/application"
 	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	providerapplication "github.com/orz-i/Mender/backend/internal/providerplugin/application"
 	providerretirement "github.com/orz-i/Mender/backend/internal/providerplugin/infrastructure/sqlite"
-	sandboxapplication "github.com/orz-i/Mender/backend/internal/sandbox/application"
 )
 
 // providerManagement only wires existing owners into the configured Provider
@@ -29,12 +27,8 @@ func (r *Runtime) providerManagement() providerapplication.Service {
 		Clock:           r.Catalog.clock,
 		IsManagedFacade: isManagedProviderFacade,
 	}
-	if r.agentStore != nil {
-		deps.AgentOwnership = agentapplication.NewFacadeOwnership(r.agentStore)
-	}
-	if r.Sandboxes != nil && r.Sandboxes.store != nil {
-		deps.SandboxOwnership = sandboxapplication.NewToolSuiteOwnership(r.Sandboxes.store)
-	}
+	// Agent and Sandbox are directly owned SourceRefs in v3, not Provider
+	// children; their retired facade tables are absent from the database.
 	return providerapplication.NewService(deps)
 }
 

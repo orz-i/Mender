@@ -2,6 +2,8 @@ package bootstrap
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,6 +13,7 @@ import (
 
 	governanceapplication "github.com/orz-i/Mender/backend/internal/governance/application"
 	invocationapplication "github.com/orz-i/Mender/backend/internal/invocation/application"
+	hardcut "github.com/orz-i/Mender/backend/internal/migration/toolhardcut"
 	pluginprocess "github.com/orz-i/Mender/backend/internal/plugin/process"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 	sandboxapplication "github.com/orz-i/Mender/backend/internal/sandbox/application"
@@ -24,12 +27,14 @@ import (
 	sandboxrouter "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/router"
 	sandboxsqlite "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/sqlite"
 	sandboxssh "github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/sshremote"
+	"github.com/orz-i/Mender/backend/internal/sandbox/infrastructure/typedlease"
 )
 
 // Sandboxes owns the persistent Sandbox inventory and a fail-closed Execution
 // Router. Provider/Tool execution is not redirected until the Workspace hard cut.
 type Sandboxes struct {
 	store                      *sandboxsqlite.Store
+	leaseDB                    *sql.DB
 	router                     *sandboxrouter.Router
 	backendPlugins             *sandboxpluginregistry.Registry
 	externalInstallationLookup sandboxexternal.InstallationLookup
@@ -60,6 +65,46 @@ func NewSandboxes(ctx context.Context, databasePath string, policy sandboxapplic
 	if err != nil {
 		return nil, fmt.Errorf("compose sandboxes: %w", err)
 	}
+	return composeSandboxes(ctx, databasePath, store, store, policy, approval, governance, credentials, profileExists)
+}
+
+// NewTypedSandboxes uses the SAME Sandbox application/router and real backends,
+// but admits leases only through the reviewed v3 Profile/Workspace grant table.
+// Neither calling this constructor nor opening a typed DB starts a remote job.
+func NewTypedSandboxes(ctx context.Context, databasePath string, policy sandboxapplication.AdmissionPolicy, approval governanceapplication.ApprovalGate, governance *RuntimeGovernance, credentials invocationapplication.CredentialResolver, profileExists func(context.Context, profiledomain.ProfileID) error) (*Sandboxes, error) {
+	if policy == nil || approval == nil || governance == nil || governance.processIsolation == nil || profileExists == nil {
+		return nil, fmt.Errorf("compose sandboxes: policy/approval unavailable")
+	}
+	store, err := sandboxsqlite.OpenTyped(ctx, databasePath)
+	if err != nil {
+		return nil, fmt.Errorf("compose typed sandboxes: %w", err)
+	}
+	leaseDB, err := hardcut.OpenTypedContextStore(ctx, databasePath)
+	if err != nil {
+		_ = store.Close()
+		return nil, fmt.Errorf("compose typed Sandbox lease: %w", err)
+	}
+	leaseStore, err := typedlease.New(ctx, leaseDB, invocationapplication.ApprovedAttemptVerifier{})
+	if err != nil {
+		_ = leaseDB.Close()
+		_ = store.Close()
+		return nil, fmt.Errorf("compose typed Sandbox lease: %w", err)
+	}
+	instance, err := composeSandboxes(ctx, databasePath, store, store, policy, approval, governance, credentials, profileExists)
+	if err != nil {
+		_ = leaseDB.Close()
+		return nil, err
+	}
+	if err := instance.router.ConfigureNativeLeases(leaseStore); err != nil {
+		_ = instance.Close()
+		_ = leaseDB.Close()
+		return nil, fmt.Errorf("compose typed Sandbox Native lease: %w", err)
+	}
+	instance.leaseDB = leaseDB
+	return instance, nil
+}
+
+func composeSandboxes(ctx context.Context, databasePath string, store *sandboxsqlite.Store, leases sandboxapplication.ExecutionLeaseStore, policy sandboxapplication.AdmissionPolicy, approval governanceapplication.ApprovalGate, governance *RuntimeGovernance, credentials invocationapplication.CredentialResolver, profileExists func(context.Context, profiledomain.ProfileID) error) (*Sandboxes, error) {
 	gate := sandboxapplication.NewAdmit(policy, approval, store, sandboxidentity.Generator{}, systemClock{}, store)
 	launcher := sandboxWorkspaceShellLauncher{governance: governance}
 	localBackend, err := sandboxlocalworkspace.New(launcher)
@@ -103,7 +148,7 @@ func NewSandboxes(ctx context.Context, databasePath string, policy sandboxapplic
 			return nil, fmt.Errorf("compose sandbox backend extension: %w", registerErr)
 		}
 	}
-	router, err := sandboxrouter.New(store, store, gate, store, registry)
+	router, err := sandboxrouter.New(store, store, gate, leases, registry)
 	if err != nil {
 		_ = component.Close()
 		return nil, fmt.Errorf("compose sandboxes: router: %w", err)
@@ -155,6 +200,9 @@ func (s *Sandboxes) Close() error {
 	s.dockerMu.Unlock()
 	if s.daytonaTemplates != nil {
 		_ = s.daytonaTemplates.Close()
+	}
+	if s.leaseDB != nil {
+		return errors.Join(s.store.Close(), s.leaseDB.Close())
 	}
 	return s.store.Close()
 }

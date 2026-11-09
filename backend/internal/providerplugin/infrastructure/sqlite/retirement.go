@@ -66,8 +66,17 @@ func (r Retirement) Delete(ctx context.Context, providerID catalogdomain.Provide
 	if _, err := tx.ExecContext(ctx, "DELETE FROM provider_configs WHERE provider_id=?", providerID.String()); err != nil {
 		return referenceDeletionError("config", err)
 	}
-	if _, err := tx.ExecContext(ctx, "DELETE FROM tools_fts WHERE provider_id=?", providerID.String()); err != nil {
+	// The canonical v3 Catalog stores ownership as SourceRef, not tools.provider_id.
+	// Cross-context Profile/Policy/Agent references are checked by the v3
+	// SQLite triggers at the same commit boundary. No legacy Facade tables
+	// are consulted or recreated. ToolID retirement and FTS removal are one
+	// write transaction; a concurrent grant blocks rather than broadens access.
+	if _, err := tx.ExecContext(ctx, `DELETE FROM tools_fts WHERE tool_id IN (
+		SELECT id FROM tools WHERE source_kind='provider' AND source_id=?)`, providerID.String()); err != nil {
 		return referenceDeletionError("search index", err)
+	}
+	if _, err := tx.ExecContext(ctx, "DELETE FROM tools WHERE source_kind='provider' AND source_id=?", providerID.String()); err != nil {
+		return referenceDeletionError("owned ToolIDs", err)
 	}
 	result, err := tx.ExecContext(ctx, "DELETE FROM providers WHERE id=?", providerID.String())
 	if err != nil {
@@ -91,7 +100,9 @@ func referenceDeletionError(phase string, err error) error {
 	if strings.Contains(msg, "provider has active references") ||
 		strings.Contains(msg, "foreign key constraint failed") ||
 		strings.Contains(msg, "resource-owned") ||
-		strings.Contains(msg, "managed agent facade") {
+		strings.Contains(msg, "managed agent facade") ||
+		strings.Contains(msg, "tool is native or referenced by profile/policy") ||
+		strings.Contains(msg, "provider has owned tool references") {
 		return fmt.Errorf("%w: Provider references changed during %s", providerapplication.ErrProviderInUse, phase)
 	}
 	return fmt.Errorf("delete provider: %s: %w", phase, err)

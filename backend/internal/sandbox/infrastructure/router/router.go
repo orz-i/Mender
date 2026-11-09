@@ -15,11 +15,12 @@ import (
 )
 
 type Router struct {
-	definitions sandboxapp.SandboxLookup
-	runs        sandboxapp.RunLookup
-	gate        sandboxapp.AdmissionGate
-	backends    sandboxapp.BackendResolver
-	leases      sandboxapp.ExecutionLeaseStore
+	definitions  sandboxapp.SandboxLookup
+	runs         sandboxapp.RunLookup
+	gate         sandboxapp.AdmissionGate
+	backends     sandboxapp.BackendResolver
+	leases       sandboxapp.ExecutionLeaseStore
+	nativeLeases *typedlease.Store
 }
 
 func New(definitions sandboxapp.SandboxLookup, runs sandboxapp.RunLookup, gate sandboxapp.AdmissionGate, leases sandboxapp.ExecutionLeaseStore, backends sandboxapp.BackendResolver) (*Router, error) {
@@ -58,23 +59,37 @@ func (r *Router) Resolve(ctx context.Context, id sandboxdomain.ID, required sand
 	return sandboxapp.Placement{Sandbox: item, Run: run, Required: required}, nil
 }
 
-// AcquireNative uses the same audited Sandbox Router and backend lifecycle,
-// but requires the typed atomic Profile/Workspace/ToolBinding lease store.
-// A legacy Provider-facade lease store cannot authorize a Native Tool.
+// ConfigureNativeLeases pins the additional commit-point authority for a
+// canonical native Workspace Tool. The ordinary Sandbox lifecycle continues
+// to use its existing Sandbox-owner/grant lease ledger, and both paths share
+// the same Router, backend resolver, admission gate and durable lease table.
+// Only bootstrap may call this before any execution begins.
+func (r *Router) ConfigureNativeLeases(leases *typedlease.Store) error {
+	if r == nil || leases == nil || r.nativeLeases != nil {
+		return sandboxdomain.ErrNotAuthorized
+	}
+	r.nativeLeases = leases
+	return nil
+}
+
+// AcquireNative has the SAME Sandbox execution path as Acquire, but requires
+// the stronger ToolBinding/Workspace/approved-Invocation atomic lease.
+// A plain Sandbox acquire can never substitute this source-specific admission.
 func (r *Router) AcquireNative(ctx context.Context, caller governancedomain.Context, placement sandboxapp.Placement) (*sandboxapp.Lease, error) {
-	if r == nil {
+	if r == nil || r.nativeLeases == nil {
 		return nil, sandboxdomain.ErrNotAuthorized
 	}
-	if _, ok := r.leases.(*typedlease.Store); !ok {
-		return nil, sandboxdomain.ErrNotAuthorized
-	}
-	return r.Acquire(ctx, caller, placement)
+	return r.acquire(ctx, caller, placement, r.nativeLeases)
 }
 
 // Acquire only works after an AdmissionGate decides sandbox.acquire. It reads
 // state again and compares identity and generation to reject stale placements.
 // No backend substitution or weakening of the bound security class is allowed.
 func (r *Router) Acquire(ctx context.Context, principal governancedomain.Context, placement sandboxapp.Placement) (*sandboxapp.Lease, error) {
+	return r.acquire(ctx, principal, placement, r.leases)
+}
+
+func (r *Router) acquire(ctx context.Context, principal governancedomain.Context, placement sandboxapp.Placement, leases sandboxapp.ExecutionLeaseStore) (*sandboxapp.Lease, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -119,14 +134,14 @@ func (r *Router) Acquire(ctx context.Context, principal governancedomain.Context
 	}
 	// Reserve from the persistent store before touching a backend; all Runtime
 	// processes sharing the same SQLite database compete for this one lease.
-	token, err := r.leases.ReserveExecution(ctx, spec.ID, run.Generation, principal, placement.Required)
+	token, err := leases.ReserveExecution(ctx, spec.ID, run.Generation, principal, placement.Required)
 	if err != nil {
 		return nil, fmt.Errorf("reserve Sandbox execution: %w", err)
 	}
 	releaseExecution := func() error {
 		releaseCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 		defer cancel()
-		return r.leases.ReleaseExecution(releaseCtx, spec.ID, token)
+		return leases.ReleaseExecution(releaseCtx, spec.ID, token)
 	}
 	session, err := backend.Open(ctx, current, run)
 	if err != nil {

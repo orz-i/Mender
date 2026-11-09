@@ -60,6 +60,15 @@ func (r *Runtime) ActivateProfileProviders(
 				err,
 			)
 		}
+		// Agent-as-Tool and host-native Workspace/Job Tools have no Provider
+		// to activate. The Provider activation gate applies only to a real
+		// external SourceRef, never to a fabricated empty Provider ID.
+		if tool.SourceRef().Kind() != catalogdomain.SourceProvider {
+			continue
+		}
+		if tool.ProviderID() == "" {
+			return fmt.Errorf("activate profile provider: Tool %s lacks Provider ownership", toolID)
+		}
 		providerSet[tool.ProviderID()] = struct{}{}
 	}
 

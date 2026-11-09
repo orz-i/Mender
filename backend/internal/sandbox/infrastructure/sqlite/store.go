@@ -18,7 +18,10 @@ import (
 )
 
 // Store owns only Sandbox tables; it does not reach into Provider persistence.
-type Store struct{ db *sql.DB }
+type Store struct {
+	db    *sql.DB
+	typed bool // set only by the explicit, strictly validated v3 constructor
+}
 
 func Open(ctx context.Context, path string) (*Store, error) {
 	if strings.TrimSpace(path) == "" {
