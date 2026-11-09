@@ -4,7 +4,7 @@
 >
 > 基线：`governance/tool-ownership-hardcut`，`ef605a38`；工作树干净；2026-11-09（Mac 主机本地日期）。
 >
-> 现有 20 次 F4 提交完成了 typed Catalog/Profile/Policy/Agent/Sandbox/MCP 的多个候选验证；**正式 `bootstrap.NewRuntime`、menderd/Wails 启动仍使用 Provider-v2**。已验证真实 DB 迁移报告 `blocked`：54→41 tools，13 冲突（来源所有权 5、SSH 恢复 5、Placement 2、Agent Task 1，涉及 unknown 8），24 MCP 导出变更待审查。测试证据 ≠ 生产切换授权。
+> 原始 F4 仅具有 typed Catalog/Profile/Policy/Agent/Sandbox/MCP 候选验证，**当时**正式 `bootstrap.NewRuntime` 使用 Provider-v2；当前更新见下方正式 v3 硬切交付记录。已验证真实 DB 迁移报告 `blocked`：54→41 tools，13 冲突（来源所有权 5、SSH 恢复 5、Placement 2、Agent Task 1，涉及 unknown 8），24 MCP 导出变更待审查。测试证据 ≠ 生产切换授权。
 
 ## F4 完成定义（只有以下 3 个门槛）
 
@@ -52,10 +52,18 @@
 
 ## 当前审计基准 / 验收记录
 
-- [ ] 门槛 1：**未完成**。`bootstrap.NewRuntime` 仍 Provider-v2；typed Stores 与 MCP 候选分散；`menderd` 与 `apps/desktop` 仍从此启动。
+- [ ] 门槛 1：**正式 Runtime 已切为 v3，完整验收尚未完成**。`bootstrap.NewRuntime`、menderd 和 Wails 共用单一 typed SourceRef Runtime；新库与 Stage E v3 库均能启动。正式入口的 Native Workspace MCP、Agent Task status、外部 MCP Provider Invoke 与 SourceRef、Profile 授权撤销、Sandbox lease、Managed MCP 已有真实代码与回归证据；尚缺真实 ACP delegate/resume 和 SSH Durable Jobs 在目标 Backend 上的实测，不得宣称全部能力完成。
 - [ ] 门槛 2：**Blocked**。只读报告 `/tmp/mender-f4-native-managed-readonly-assess.json`：13 conflicts、24 MCP export diffs；真实 DB 不可自动转。
-- [ ] 门槛 3：**未完成**。旧 Facade 写入路径仍存在；`pnpm security:check` 与更新 Go 依赖后的完整 `pnpm check` 均已通过。旧 Facade 与正式 v3 Runtime/Wails 实机验收仍未完成。
+- [ ] 门槛 3：**未完成**。生产启动不再注册 Agent/Sandbox 内部 Provider，旧 v2 ProviderRef 与 Workspace Target 执行链已退出正式 Runtime；但 Provider-keyed Workspace Target 管理 CRUD/API/客户端合同等旧入口仍待退休。新版本全量 Go 回归有大量依赖旧 v2 Facade 的测试失败，真实 Wails 实机未验收，故**新分支不满足 `pnpm check`**。新 v3 代码的 Go lint、官方入口定向 Race、Go architecture、`pnpm security:check`、TS typecheck、Wails Bindings check 均通过。旧 v2 基线上的 `pnpm check` 通过证明不能用于新硬切版本。
 - Git 状态与后续实测：以每轮经验证的提交/命令为准；本清单不以新增代码量、测试量或文档长度表示完成度。
+
+### 2026-11-09 F4 正式 v3 硬切实际交付（不增加任务）
+
+- **`2d3110a8`**：正式 `bootstrap.NewRuntime` 改为 strictly v3；复用 typed Catalog/Profile/Policy/Agent Store、Sandbox Router 与 Native 专用原子 Lease；统一 SourceRef Invocation 和 MCP，删除启动期 Agent/Sandbox Provider Facade 注册以及旧 Provider-keyed guards；保留外部 MCP/OpenAPI/Model Tools；在不可验证环境下拒绝 Native SSH Jobs。新建数据库只使用校验过的空 v3 image；现有 v2 数据库从不自动改写或迁移。
+- **`00f4fd46`**：增加 `TestOfficialV3` 真正入口验收（新库、Agent SourceID/ToolID 稳定、MCP 文件读取与授权撤销、Provider MCP 调用与受引用/解绑后的原子退休、Sandbox 生命周期、Native Jobs 缺失 TargetScope 的拒绝、旧 v2 数据库零修改），并保留 test-only historical v2 空库快照。没有引入新旧双 Runtime。
+- **验证成功**：`go test -race -count=1 ./backend/internal/bootstrap -run '^Test(OfficialV3|AgentTaskToolGateway|TaskScopedMCP|ConfiguredAgentTaskReceivesOptionalGovernedToolSupply|ConfiguredPlacementRejects)'`；迁移 CLI、Provider builtin、Sandbox Router、Sandbox SQLite 定向 Go 测试；`golangci-lint` 0 issues；`go run scripts/check-backend-architecture.go`；`pnpm security:check` exit 0；`pnpm typecheck` exit 0；`pnpm desktop:bindings:check` exit 0；`git diff --check`。正式 menderd 在**可丢弃** v3 数据库上返回 `GET system/status、providers、tools/browse、agents、sandboxes、tool-suites` HTTP 200。
+- **仍是 release-blocked**：完整 `go test ./backend/...` 已观察到多处旧 Facade 合同与迁移集成测试不兼容，新代码完整 `pnpm check` 尚未通过；Provider-keyed Workspace Target 旧管理入口未完全退休；真实 ACP/SSH 与 Wails 实机未验证。真实用户库原有 `13 conflicts + 24 MCP export diffs` 未重新解释或清除。**禁止因为上述定向测试通过而关闭 F4。**
+- 所有实际改动仅落在 `governance/tool-ownership-hardcut`，未推送远端，未改写真实数据库、历史 Task 或运行服务。
 
 ### 2026-11-09 唯一完整质量检查记录
 
