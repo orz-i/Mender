@@ -1,6 +1,6 @@
 # Mender 工具 / Agent as Tool / Workspace / Sandbox 归属与执行边界硬切治理
 
-**状态（2026-11-09 复核）**：A–E、F1–F3 的已提交合同与候选测试已有证据；**F4 唯一正式 v3 Runtime 硬切尚未完成**，旧 `bootstrap.NewRuntime` 仍是 Provider-v2；真实数据库迁移 `blocked`（13 项既有冲突、24 项 MCP 导出审查），旧 Facade 尚未退休，完整 `pnpm check`/真实 Wails 的发布证明尚未完成。F4 只按 [冻结收口总控](tool-hardcut-f4-closure-freeze.md) 的三个门槛推进，不追加子阶段；此处旧进度清单仅作历史。
+**状态（2026-11-09 复核）**：A–E、F1–F3 的已提交合同与候选测试已有证据；**F4 唯一正式 v3 Runtime 硬切尚未完成**，旧 `bootstrap.NewRuntime` 仍是 Provider-v2；真实数据库迁移 `blocked`（13 项既有冲突、24 项 MCP 导出审查），旧 Facade 尚未退休，完整 `pnpm check` 已通过但安全扫描未通过、真实 Wails 的发布证明尚未完成。F4 只按 [冻结收口总控](tool-hardcut-f4-closure-freeze.md) 的三个门槛推进，不追加子阶段；此处旧进度清单仅作历史。
 
 **仓库基线**：`main` / `ce924e0`，Mac mini `/Users/mini/Coding/Mender`，2026-11-07
 

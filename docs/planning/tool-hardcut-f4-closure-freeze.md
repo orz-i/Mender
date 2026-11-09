@@ -54,5 +54,11 @@
 
 - [ ] 门槛 1：**未完成**。`bootstrap.NewRuntime` 仍 Provider-v2；typed Stores 与 MCP 候选分散；`menderd` 与 `apps/desktop` 仍从此启动。
 - [ ] 门槛 2：**Blocked**。只读报告 `/tmp/mender-f4-native-managed-readonly-assess.json`：13 conflicts、24 MCP export diffs；真实 DB 不可自动转。
-- [ ] 门槛 3：**未完成**。旧 Facade 写入路径仍存在；完整 `pnpm check` 与真实 Wails 验收未提供。
+- [ ] 门槛 3：**未完成**。旧 Facade 写入路径仍存在；`pnpm check` 已真实通过，但 `pnpm security:check` 未通过、正式 v3 Runtime/Wails 实机验收未提供。
 - Git 状态与后续实测：以每轮经验证的提交/命令为准；本清单不以新增代码量、测试量或文档长度表示完成度。
+
+### 2026-11-09 唯一完整质量检查记录
+
+- **`pnpm check` exit 0**：脚本/插件 SDK、架构及 Go modules、OpenAPI SDK 与 Wails Bindings drift、Go lint、常规全量 Go、**全量 `go test -race ./backend/...`**、ESLint、TypeScript、i18n **1639/1639**、Vitest **76 files / 512 tests**、Web+Desktop 构建均通过；Bootstrap Race 完整耗时 **465.918 秒**。原始日志：`/tmp/mender-f4-freeze-pnpm-check.log`，退出记录：`/tmp/mender-f4-freeze-pnpm-check.exit`。
+- **`pnpm security:check` exit nonzero**（在 Go 扫描处终止，JS 审计没有运行，不可宣称通过）：`govulncheck` 发现 **3 项可达漏洞**：`GO-2026-6809`（当前 `go1.27.2`，修复于 `go1.27.3`）；`GO-2026-6795`、`GO-2026-6785`（`github.com/getkin/kin-openapi v0.145.0`，分别修复于 `v0.148.0`、`v0.149.0`）。日志：`/tmp/mender-f4-freeze-security.log`。这是**既定门槛 3 的失败证据**，不衍生新阶段；未修改依赖来隐藏失败。
+- 以上是**现存 Provider-v2 运行分支的质量基线**，不能证明新的 v3 Runtime 已正式集成，不能冒充真实 Wails 原生操作验收，也不是生产迁移授权。
