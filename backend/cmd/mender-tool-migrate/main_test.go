@@ -9,21 +9,13 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/orz-i/Mender/backend/internal/bootstrap"
+	legacyfixture "github.com/orz-i/Mender/backend/internal/testfixtures/v2"
 	_ "modernc.org/sqlite"
 )
 
 func cliDB(t *testing.T) string {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "mender.sqlite")
-	r, err := bootstrap.NewRuntime(context.Background(), bootstrap.RuntimeOptions{DatabasePath: path})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := r.Close(); err != nil {
-		t.Fatal(err)
-	}
-	return path
+	return legacyfixture.EmptyDatabase(t)
 }
 
 func TestCLIReadOnlyAssessAndSeparateCandidate(t *testing.T) {

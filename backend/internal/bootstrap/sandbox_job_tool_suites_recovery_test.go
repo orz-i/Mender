@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	catalogapplication "github.com/orz-i/Mender/backend/internal/catalog/application"
@@ -38,7 +39,7 @@ func TestSSHJobsFacadeRecoversAfterInterruptedCreationWithoutNewIdentity(t *test
 	}
 	// Simulate a process dying between Provider persist and Tool synchronization.
 	provider, err := first.registerConfiguredProvider(ctx, catalogapplication.RegisterProviderRequest{
-		Namespace: jobFacadeNamespace(resource.ID()), DisplayName: "Interrupted Job Suite",
+		Namespace: "sandbox-jobs-" + strings.TrimPrefix(resource.ID().String(), "sbx_"), DisplayName: "Interrupted Job Suite",
 	}, jobsplugin.ID, config, owner, true)
 	if err != nil {
 		t.Fatal(err)

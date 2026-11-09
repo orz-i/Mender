@@ -3,6 +3,7 @@ package bootstrap
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,6 +15,7 @@ import (
 	catalogdomain "github.com/orz-i/Mender/backend/internal/catalog/domain"
 	gov "github.com/orz-i/Mender/backend/internal/governance/domain"
 	invocationdomain "github.com/orz-i/Mender/backend/internal/invocation/domain"
+	hardcut "github.com/orz-i/Mender/backend/internal/migration/toolhardcut"
 	profileapp "github.com/orz-i/Mender/backend/internal/profile/application"
 	profiledomain "github.com/orz-i/Mender/backend/internal/profile/domain"
 	processisolation "github.com/orz-i/Mender/backend/internal/runtimegovernance/infrastructure/processisolation"
@@ -118,9 +120,44 @@ func setupGovernedTaskToolFixture(t *testing.T) *governedTaskToolFixture {
 		[]sandboxdomain.Capability{sandboxdomain.CapabilityRead, sandboxdomain.CapabilityEdit}, owner); err != nil {
 		t.Fatal(err)
 	}
-	agent, err := r.Agents.Create(ctx, agentapp.CreateRequest{
-		Name: "Backend-independent Agent", Backend: agentdomain.BackendGrok, WorkspaceRoot: root, Isolation: "restricted_host",
-	}, owner)
+
+	// The v3 Task Tool gateway never fabricates a Provider or guesses which
+	// Workspace a restricted Sandbox contains. All TargetScope and grants
+	// are explicitly seeded in this disposable owner-reviewed fixture.
+	writer, err := hardcut.OpenTypedContextStore(ctx, r.providerDatabasePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = writer.Close() }()
+	workspaceID := "wrk_33333333333333333333333333333333"
+	run, err := r.Sandboxes.GetRun(ctx, sandbox.ID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows := []struct {
+		sql  string
+		args []any
+	}{
+		{`INSERT INTO workspaces(workspace_id,owner_kind,owner_ref,display_name,verified_root,created_at)
+		 VALUES(?,?,?,?,?,?)`, []any{workspaceID, string(owner.Principal().Kind()), owner.Principal().Reference(), "test owned", root, time.Now().UTC().Format(time.RFC3339Nano)}},
+		{`INSERT INTO workspace_placements(workspace_id,sandbox_id,backend_root,verified_revision)
+		 VALUES(?,?,?,?)`, []any{workspaceID, sandbox.ID().String(), root, run.Generation}},
+		{`INSERT INTO workspace_profile_grants(workspace_id,profile_id,granted_at) VALUES(?,?,?)`,
+			[]any{workspaceID, profile.ID().String(), "test"}},
+	}
+	for _, row := range rows {
+		if _, err := writer.ExecContext(ctx, row.sql, row.args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, key := range []string{"workspace.read", "workspace.edit"} {
+		if _, err := writer.ExecContext(ctx, `INSERT INTO profile_tool_target_scopes
+		(profile_id,tool_id,workspace_id,sandbox_id) VALUES(?,?,?,?)`,
+			profile.ID().String(), ids[key].String(), workspaceID, sandbox.ID().String()); err != nil {
+			t.Fatal(fmt.Errorf("seed %s native Tool TargetScope: %w", key, err))
+		}
+	}
+	agent, err := r.Agents.Create(ctx, agentapp.CreateRequest{Name: "Backend-independent Agent", Backend: agentdomain.BackendGrok, WorkspaceRoot: root, Isolation: "restricted_host"}, owner)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -175,7 +212,7 @@ func TestAgentTaskToolGatewayUsesCanonicalInvocationAndRetainsToolIDs(t *testing
 		t.Fatalf("shell escaped task Tool allowlist: %v", err)
 	}
 	after, err := f.runtime.SandboxWorkspaceTools(context.Background(), f.sandbox.ID(), f.owner)
-	if err != nil || after.ProviderID == "" || after.Status != "ready" {
+	if err != nil || after.ProviderID != "" || after.Status != "ready" {
 		t.Fatalf("Suite changed %+v %v", after, err)
 	}
 	for _, tool := range after.Tools {

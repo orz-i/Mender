@@ -9,21 +9,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/orz-i/Mender/backend/internal/bootstrap"
 	"github.com/orz-i/Mender/backend/internal/migration/toolhardcut"
+	legacyfixture "github.com/orz-i/Mender/backend/internal/testfixtures/v2"
 )
 
 func emptyRuntimeFixture(t *testing.T) string {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "mender.sqlite")
-	runtime, err := bootstrap.NewRuntime(context.Background(), bootstrap.RuntimeOptions{DatabasePath: path})
-	if err != nil {
-		t.Fatalf("prepare disposable legacy runtime: %v", err)
-	}
-	if err := runtime.Close(); err != nil {
-		t.Fatal(err)
-	}
-	return path
+	return legacyfixture.EmptyDatabase(t)
 }
 
 func TestAssessReadOnlyAndDeterministicOnDisposableRuntime(t *testing.T) {
