@@ -36,6 +36,20 @@
 - 所有测试优先使用独立 disposable DB；严禁将候选 v3 替换真实 DB；不向远端推送、不重启真实 Wails、不更改用户运行资源，除非另有明确授权。
 - 出现影响正确性的真实阻断时，可直接修复；其他建议直接拒绝纳入 F4 范围。
 
+## 既有迁移阻断的事实分组（只读，非新工作项）
+
+来源：`/tmp/mender-f4-live-assess-20261107.json` 与 `/tmp/mender-f4-native-managed-readonly-assess.json`；两份均为 `blocked`，54→41 Tools、**13/13 冲突未减少、24/24 MCP Diff 未减少**。
+
+| 既有阻断 | 已核实的事实 | 唯一允许的处理 |
+| --- | --- | --- |
+| Source owner 5 | 集中于**一个**缺乏 ownership pin 的 resource-style Provider 与它的 4 个 orphan workspace Tools | 从已有持久引用、实际资源与 Profile/Policy 关联核实 owner；没有等价证据就保留 blocked，不能推断/强删 |
+| SSH 5 | 涉及 3 个 SSH Sandbox 恢复证明均 `unverified`，其中两个旧 Job Facade 仍有 Provider→Sandbox 关联 | 先验证远端 Job/Task 原生恢复证据和归属；不能把网络不可达当作任务完成 |
+| Placement 2 | 两个 Sandbox 无法从可信后端元数据证明远端根/Owner | 无可验证的 Root 与 Owner 就保持不迁移，不按字符串同名匹配 |
+| Agent Task 1 | Task evidence 为 `unknown:8`、`completed:34`、`failed:33`、`cancelled:1` | 逐条保留身份和恢复证据；不自动提交、完成、取消或重跑 |
+| MCP Export 24 | 全部集中于**同一个** Profile：15 个 Source Namespace 变更，9 个 breaking ToolID 变更；另有 9 个 Profile Binding 映射 | 基于原来的 Profile 限制完成 owner-review 的逐项清单和客户端更新；不做名称 alias 兼容桥 |
+
+**阻断数量是条件，不是绩效指标。** 代码门禁可先完成；上述可核实事实未齐备时，最终状态仍为 `release-blocked`。
+
 ## 当前审计基准 / 验收记录
 
 - [ ] 门槛 1：**未完成**。`bootstrap.NewRuntime` 仍 Provider-v2；typed Stores 与 MCP 候选分散；`menderd` 与 `apps/desktop` 仍从此启动。
