@@ -39,6 +39,18 @@ func newAgents(ctx context.Context, dbPath string, owner gov.Principal,
 		_ = store.Close()
 		return nil, nil, nil, err
 	}
+	return composeAgentService(ctx, store, owner, profiles, policies, governance, fixtureRunner)
+}
+
+// composeAgentService is the ONE Agent/ACP Task Service composer for both
+// existing v2 and future v3 persistence. Opening or recovering a Store is a
+// separate lifecycle decision: an offline v3 candidate must not expire its
+// pending approvals or reclassify unknown Tasks merely because it was opened.
+// Only the eventual single v3 Runtime may authorize those transitions.
+func composeAgentService(ctx context.Context, store *agentsqlite.Store, owner gov.Principal,
+	profiles *Profiles, policies *Policies, governance *RuntimeGovernance,
+	fixtureRunner agentapplication.Executor,
+) (*agentapplication.Service, *agentsqlite.Store, *agentacp.LocalFactory, error) {
 	launcher, err := agentacp.NewLocalFactory(governance.processIsolation)
 	if err != nil {
 		_ = store.Close()
