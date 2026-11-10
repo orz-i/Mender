@@ -29,6 +29,16 @@ flowchart LR
 
 No runtime may create a Provider facade for an Agent/Sandbox or infer that selecting a Workspace places an ACP child process inside a Sandbox. Ambiguous target selection, unsupported capability, revoked authorization and uncertain effects fail closed; there is no implicit Host fallback or unknown Task replay.
 
+## Shared Workspace and executable-target authority
+
+The v3 runtime exposes a **Workspace registry**, separate from both the canonical Tool Catalog and the Sandbox inventory. Its local owner workflow is `register existing canonical project root → attach an exactly matching owned Local Sandbox → grant Profile access → select a native ToolBinding in Profile → grant the exact Sandbox capability → authorize the Tool TargetScope`. Registration, attachment, and Profile selection never grant each other's permissions automatically. Each step is visible through the same HTTP/SDK/Wails/CLI owner-facing management contract; there are no Provider-keyed Workspace target APIs.
+
+Native `workspace.*` calls select a unique authorized Workspace and verified placement or require an explicit WorkspaceID. A local Catalog owner can execute against an **owned** Sandbox after Policy/Approval, admission and the generation-bound durable lease. A Profile invocation (MCP service or locally scoped CLI/Desktop/HTTP) additionally requires its current Profile ToolBinding, Workspace grant, Sandbox capability grant and exact Tool TargetScope at execution admission. Distinct Principal/Origin values remain intact: a local Profile operation never impersonates an MCP service. A grant revoke or placement detach retires affected TargetScopes in the same transaction, so later regrant/reattach cannot revive stale execution authority.
+
+The current root attestor is deliberately **Local Workspace only**; Docker, SSH, Daytona and third-party backends require a real backend-specific trusted target-root proof before native Workspace execution is enabled. This boundary must fail closed rather than treating similar directory strings as authority. `native:jobs` uses SSH-owned job admission and detached Task recovery, with an exact Profile Tool TargetScope or a separately authenticated owner call, and never submits a task when the owner merely selects its target.
+
+Agent-as-Tool Task/Session and its existing per-Agent Workspace aliases remain a distinct ACP v1 context model; they are **not** silently converted to shared WorkspaceRefs or assumed to inherit Sandbox isolation. Any future convergence must preserve Agent-specific current grants, resume semantics and real backend execution rather than introducing a façade.
+
 ## Client and domain boundaries
 
 - Web and desktop share `ManagementClient`; Wails exports native owner capabilities. CRUD for Agent, Sandbox, Profile, Credentials and Provider belongs to their own application boundary.
