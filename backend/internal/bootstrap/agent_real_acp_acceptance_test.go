@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -19,6 +20,7 @@ import (
 	profileapp "github.com/orz-i/Mender/backend/internal/profile/application"
 	processisolation "github.com/orz-i/Mender/backend/internal/runtimegovernance/infrastructure/processisolation"
 	sandboxdomain "github.com/orz-i/Mender/backend/internal/sandbox/domain"
+	workspaceapp "github.com/orz-i/Mender/backend/internal/workspace/application"
 )
 
 // Run explicitly with MENDER_PHASE46_REAL_AGENT_BACKEND=opencode (or grok).
@@ -144,7 +146,33 @@ func TestPhase46OptInRealRestrictedAgentGovernedTools(t *testing.T) {
 		[]sandboxdomain.Capability{sandboxdomain.CapabilityRead, sandboxdomain.CapabilityEdit}, owner); err != nil {
 		t.Fatal(err)
 	}
-	agent, err := r.Agents.Create(ctx, agentapp.CreateRequest{
+	// The v3 Runtime does not infer Workspace authority from an Agent cwd or
+	// the Sandbox root. The live acceptance must configure the complete
+	// trusted owner-attested Workspace → Placement → Profile grant → exact
+	// Tool TargetScope chain just like a real user. No implicit grants.
+	shared, err := r.Workspaces.RegisterLocal(ctx, owner, "ACP isolated project", root)
+	if err != nil {
+		t.Fatalf("real ACP Workspace registration: %v", err)
+	}
+	if err = r.Workspaces.LinkLocal(ctx, owner, shared.ID, sandbox.ID().String()); err != nil {
+		t.Fatalf("real ACP exact Sandbox placement: %v", err)
+	}
+	if err = r.Workspaces.Grant(ctx, owner, shared.ID, profile.ID().String()); err != nil {
+		t.Fatalf("real ACP Workspace Profile grant: %v", err)
+	}
+	for _, key := range []string{"workspace.read", "workspace.edit"} {
+		if err = r.Workspaces.PutTarget(ctx, owner, workspaceapp.TargetRecord{
+			ProfileID: profile.ID().String(), ToolID: ids[key], WorkspaceID: shared.ID.String(), SandboxID: sandbox.ID().String(),
+		}); err != nil {
+			t.Fatalf("real ACP %s TargetScope: %v", key, err)
+		}
+	}
+	confirmed, err := r.Workspaces.Targets(ctx, owner, profile.ID().String())
+	if err != nil || len(confirmed) != 2 {
+		t.Fatalf("real ACP Tool TargetScope proof: %v %d", err, len(confirmed))
+	}
+
+	agent, err := r.CreateAgentWithTools(ctx, agentapp.CreateRequest{
 		Name: "Real restricted ACP acceptance", Backend: backend, WorkspaceRoot: root, Isolation: "restricted_host",
 	}, owner)
 	if err != nil {
@@ -153,6 +181,19 @@ func TestPhase46OptInRealRestrictedAgentGovernedTools(t *testing.T) {
 	if err := r.Agents.Grant(ctx, agent.ID(), profile.ID().String(), owner); err != nil {
 		t.Fatal(err)
 	}
+	// This is a real Agent as Tool acceptance: invoke the canonical AgentID-owned
+	// agent.delegate Tool, rather than bypassing the Catalog/Invocation path
+	// with a direct Agent Task service submission.
+	agentIDs := agentOwnedToolIDs(t, r, ctx, agent.ID(), owner)
+	delegateID := agentIDs["agent.delegate"]
+	if delegateID == "" {
+		t.Fatal("Agent-owned delegate Tool missing")
+	}
+	profile, err = r.Profiles.AddTool.Execute(ctx, profileapp.AddToolRequest{ProfileSlug: profile.Slug(), ToolID: delegateID})
+	if err != nil {
+		t.Fatalf("explicit Agent delegate Profile binding: %v", err)
+	}
+
 	if _, err := r.ConfigureAgentToolPlacement(ctx, agent.ID(), "", sandbox.ID().String(),
 		[]string{ids["workspace.read"].String(), ids["workspace.edit"].String()}, owner); err != nil {
 		t.Fatal(err)
@@ -168,15 +209,35 @@ func TestPhase46OptInRealRestrictedAgentGovernedTools(t *testing.T) {
 			"containing exactly phase46 governed real edit. Do not use fetch or other tools. " +
 			"Confirm only after both calls succeed."
 	}
-	task, err := r.Agents.Submit(ctx, agent.ID(), prompt, taskServicePrincipal(t, profile.ID().String()))
+	arguments, err := json.Marshal(struct {
+		Prompt string `json:"prompt"`
+	}{Prompt: prompt})
 	if err != nil {
-		t.Fatalf("real Task admission failed: %v", err)
+		t.Fatal(err)
+	}
+	delegated, err := r.CallConfiguredTool(ctx, delegateID, arguments, taskServicePrincipal(t, profile.ID().String()))
+	if err != nil {
+		t.Fatalf("real canonical agent.delegate Invocation failed: %v", err)
+	}
+	if delegated.Outcome.Kind() != invocationdomain.OutcomeKindComplete {
+		t.Fatalf("real Agent as Tool admission outcome %s", delegated.Outcome.Kind())
+	}
+	var delegationReceipt struct {
+		TaskID string `json:"taskId"`
+		Status string `json:"status"`
+	}
+	if err = json.Unmarshal(delegated.Outcome.Content().Bytes(), &delegationReceipt); err != nil {
+		t.Fatal(err)
+	}
+	taskID, err := agentdomain.ParseTaskID(delegationReceipt.TaskID)
+	if err != nil {
+		t.Fatalf("real canonical Agent Tool failed to produce a TaskID: %v", err)
 	}
 	// Explicit short operator acceptance bound, not the 10-minute product deadline.
 	var finished agentdomain.Task
 	limit := time.Now().Add(50 * time.Second)
 	for time.Now().Before(limit) {
-		finished, err = r.Agents.Task(ctx, task.ID, owner)
+		finished, err = r.Agents.Task(ctx, taskID, owner)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -186,7 +247,7 @@ func TestPhase46OptInRealRestrictedAgentGovernedTools(t *testing.T) {
 		time.Sleep(150 * time.Millisecond)
 	}
 	if !finished.Status.Terminal() {
-		_ = r.Agents.Cancel(ctx, task.ID, owner)
+		_ = r.Agents.Cancel(ctx, taskID, owner)
 		t.Fatal("real Agent acceptance exceeded 50-second smoke bound; cancel requested")
 	}
 	stage := "no_runner_receipt"
@@ -204,10 +265,13 @@ func TestPhase46OptInRealRestrictedAgentGovernedTools(t *testing.T) {
 			calls[ev.ToolID()]++
 		}
 	}
-	t.Logf("real_backend=%s, restricted=true, task_state=%s, stage=%s, successful_read=%d, successful_edit=%d",
-		backend, finished.Status, stage, calls[ids["workspace.read"]], calls[ids["workspace.edit"]])
+	t.Logf("real_backend=%s, restricted=true, task_state=%s, stage=%s, successful_delegate=%d, successful_read=%d, successful_edit=%d",
+		backend, finished.Status, stage, calls[delegateID], calls[ids["workspace.read"]], calls[ids["workspace.edit"]])
 	if finished.Status != agentdomain.TaskCompleted {
 		t.Fatalf("real restricted Agent did not finish (diagnostic category=%q)", finished.Diagnostic)
+	}
+	if calls[delegateID] != 1 {
+		t.Fatalf("canonical agent.delegate Invocation missing from completed audit (count=%d)", calls[delegateID])
 	}
 	if calls[ids["workspace.read"]] == 0 || calls[ids["workspace.edit"]] == 0 {
 		t.Fatal("Agent did not invoke both governed Mender tools (Agent text is not proof)")

@@ -184,17 +184,17 @@ describe("SkillsPage", () => {
       expect(undeploySkill).toHaveBeenCalledWith(deployment.deploymentId);
     });
 
-    fireEvent.click(
-      screen.getAllByRole("button", { name: "Close" })[0]!,
-    );
+    // Undeploy/install trigger asynchronous refresh. Wait for the dialog's
+    // actual accessible Close button instead of racing a transient re-render.
+    fireEvent.click((await screen.findAllByRole("button", { name: "Close" }))[0]!);
 
     fireEvent.click(screen.getByRole("button", { name: "Install Skill" }));
     await waitFor(() => {
       expect(installSkill).toHaveBeenCalledTimes(1);
     });
-    fireEvent.click(
-      screen.getAllByRole("button", { name: "Close" })[0]!,
-    );
+    // Undeploy/install trigger asynchronous refresh. Wait for the dialog's
+    // actual accessible Close button instead of racing a transient re-render.
+    fireEvent.click((await screen.findAllByRole("button", { name: "Close" }))[0]!);
 
     expect(screen.queryByRole("button", { name: "Deploy example-skill" })).toBeNull();
 
