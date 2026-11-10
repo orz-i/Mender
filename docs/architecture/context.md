@@ -49,6 +49,7 @@ Agent-as-Tool Task/Session and its existing per-Agent Workspace aliases remain a
 ## Repository entry points
 
 - `backend/internal/bootstrap/runtime.go`: official single v3 Runtime assembly.
+- `backend/internal/schema/v3`: **sole** hash-pinned v3 SQLite schema initializer and strict 14-context version verifier; each Domain Store only opens this shared schema.
 - `backend/internal/catalog`: typed Tool source identity, discoverable canonical catalog and FTS.
 - `backend/internal/invocation`: admission, Policy/Approval/Budget, execution dispatch and audit.
 - `backend/internal/workspace`: logical WorkspaceRef, placement filtering and governed native operations.

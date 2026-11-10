@@ -1,69 +1,28 @@
-# Catalog Performance
+# Catalog performance — canonical v3
 
-Catalog discovery is designed for progressive disclosure. Search should operate on compact metadata and return a bounded result set without requiring clients to enumerate or load every Tool schema.
+Mender discovers tools through the canonical **Typed SourceRef Catalog**. Search uses FTS5/BM25 metadata indexes and bounded ToolID rehydration; it does not activate Providers, start Agents, open Sandboxes or inject every Tool schema into the caller's context.
 
-## Scale fixture
+## Current 10,000-Tool fixture
 
-The SQLite Catalog integration suite contains a deterministic 10,000-Tool fixture.
+`backend/internal/catalog/infrastructure/sourcecatalog/search_v3_regression_test.go` uses the **same pinned v3 schema image** as the official Runtime (not an isolated Provider-v2 table). The fixture inserts 10,000 externally sourced Tool definitions in one independent Provider and preserves the nine immutable native Tool definitions. It verifies:
 
-It verifies:
+- bounded common-query search results;
+- an exact unique-token hit in the large Catalog;
+- Profile-style ToolID allowlists before returning results;
+- typed Provider SourceRef filtering, including absent/other sources;
+- safe handling of FTS-special syntax without exposing unselected tools.
 
-- an unrestricted search returns only the requested bounded result count,
-- a unique lexical token resolves the expected Tool,
-- profile-style allow-list search never returns a Tool outside membership,
-- the same FTS5/BM25 path used by production is exercised.
-
-Run the correctness test:
+Correctness test:
 
 ```bash
-go test ./backend/internal/catalog/infrastructure/sqlite \
-  -run TestCatalogSearchAtTenThousandTools \
-  -count=1
+go test ./backend/internal/catalog/infrastructure/sourcecatalog \
+  -run '^TestTypedCatalogFTSScopedSearchAtTenThousandTools$' -count=1
 ```
 
-## Benchmarks
-
-Run:
+Benchmark (no fixed wall-clock threshold):
 
 ```bash
 pnpm go:bench:catalog
 ```
 
-or directly:
-
-```bash
-go test ./backend/internal/catalog/infrastructure/sqlite \
-  -run '^$' \
-  -bench 'BenchmarkCatalog(Search|ScopedSearch)10K' \
-  -benchmem
-```
-
-The benchmarks intentionally do not enforce a CI wall-clock threshold. Host CPU, filesystem, SQLite runtime, and Go version materially affect absolute time.
-
-The useful signals are:
-
-- trend in ns/op,
-- bytes allocated per operation,
-- allocations per operation,
-- large regressions in scoped versus unrestricted discovery.
-
-## Phase 8 baseline
-
-Captured on 2026-09-26 on Apple M4 / darwin arm64 after scoped-search loading was hardened:
-
-| Benchmark | Approx. time | Bytes/op | Allocs/op |
-| --- | ---: | ---: | ---: |
-| `BenchmarkCatalogSearch10K` | 24.4 ms | 85 KB | 1.8k |
-| `BenchmarkCatalogScopedSearch10K` | 21.4 ms | 280 KB | 8.4k |
-
-The scoped benchmark uses a 100-Tool allow-list distributed across a 10,000-Tool Catalog.
-
-Before the Phase 8 adapter optimization, the same scoped workload was approximately 42 ms, 7.3 MB/op, and 167k allocations/op because disallowed FTS candidates were being fully rehydrated, including schemas, before membership filtering.
-
-The optimized path first scans ranked Tool IDs, filters membership, then loads full canonical Tool records only for the bounded visible result set.
-
-## Interpretation
-
-These numbers are a development baseline, not an SLA.
-
-A future performance gate should use controlled benchmark infrastructure and statistically evaluated historical comparisons rather than a fixed millisecond threshold in ordinary CI.
+This runs `BenchmarkTypedCatalogSearch10K` against the current v3 Catalog. Track `ns/op`, `B/op`, allocation counts, and scoped-query behavior under the same machine, Go and SQLite versions. Pre-v3 performance figures are not an acceptance baseline for the current SourceRef-aware query and should not be used to justify a regression or an incorrect schema fixture.
