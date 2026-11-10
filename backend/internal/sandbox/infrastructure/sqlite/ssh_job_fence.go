@@ -66,7 +66,7 @@ func (s *Store) ReserveSSHJobSubmit(ctx context.Context, id sandboxdomain.ID, ge
 	if err := caller.Validate(); err != nil {
 		return "", err
 	}
-	profileID, delegated := sandboxapp.ProfileServiceID(caller)
+	profileID, delegated := sandboxapp.ProfileInvocationID(caller)
 	if !delegated && caller.Principal().Kind() != gov.PrincipalLocalUser {
 		return "", sandboxdomain.ErrNotAuthorized
 	}
@@ -81,6 +81,10 @@ func (s *Store) ReserveSSHJobSubmit(ctx context.Context, id sandboxdomain.ID, ge
 	defer func() { _ = tx.Rollback() }()
 	person := caller.Principal()
 	scope := caller.Scope()
+	ownerFlag := 0
+	if scope.Kind() == gov.ScopeCatalog {
+		ownerFlag = 1
+	}
 	result, err := tx.ExecContext(ctx, `INSERT INTO sandbox_execution_leases(
  sandbox_id,lease_token,generation,principal_kind,principal_ref,scope_kind,scope_ref,acquired_at)
  SELECT r.sandbox_id,?,?,?,?,?,?,? FROM sandbox_runs r
@@ -89,11 +93,11 @@ func (s *Store) ReserveSSHJobSubmit(ctx context.Context, id sandboxdomain.ID, ge
  AND s.backend_installation_id=''
  AND NOT EXISTS (SELECT 1 FROM sandbox_ssh_job_admission_controls c WHERE c.sandbox_id=r.sandbox_id AND c.paused=1)
  AND (
-  (s.owner_kind=? AND s.owner_ref=?) OR
+  (?=1 AND s.owner_kind=? AND s.owner_ref=?) OR
   (?=1 AND EXISTS(SELECT 1 FROM sandbox_profile_grants g WHERE g.sandbox_id=s.id AND g.profile_id=? AND g.capability='job.submit'))
  )`,
 		token, generation, string(person.Kind()), person.Reference(), string(scope.Kind()), scope.Reference(), time.Now().UTC().Format(time.RFC3339Nano),
-		id.String(), generation, string(person.Kind()), person.Reference(), delegated, profileID)
+		id.String(), generation, ownerFlag, string(person.Kind()), person.Reference(), delegated, profileID)
 	if err != nil || !oneRow(result) {
 		return "", sandboxdomain.ErrConflict
 	}

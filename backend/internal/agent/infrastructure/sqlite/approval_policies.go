@@ -159,7 +159,7 @@ func (s *Store) RecordAutomaticApproval(ctx context.Context, a agentdomain.Appro
   VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		a.ID, a.TaskID, a.AgentID, a.Generation, a.SessionID, a.ToolCallID,
 		a.Kind, a.Target, a.CanAllow, a.AllowOptionID, a.RejectOptionID,
-		string(agentdomain.ApprovalAllowedOnce), a.CreatedAt.Format(time.RFC3339Nano),
+		string(agentdomain.ApprovalAllowedOnce), formatChronologicalTime(a.CreatedAt),
 		a.ExpiresAt.UnixMilli(), now.Format(time.RFC3339Nano), "policy")
 	if err != nil {
 		return fmt.Errorf("%w: automatic Agent approval: %w", agentdomain.ErrConflict, err)

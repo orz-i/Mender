@@ -241,7 +241,7 @@ func (r GuardedRouter) currentBindingScope(ctx context.Context, req ResolveReque
 			return profile.TargetScope{}, sandbox.ErrNotAuthorized
 		}
 	}
-	id, ok := sandboxapp.ProfileServiceID(req.Caller)
+	id, ok := sandboxapp.ProfileInvocationID(req.Caller)
 	if !ok {
 		return profile.TargetScope{}, sandbox.ErrNotAuthorized
 	}
@@ -300,10 +300,10 @@ func (r GuardedRouter) inspect(
 	if !rootMatches {
 		return sandboxapp.Placement{}, false, nil
 	}
-	if sandboxapp.IsOwner(req.Caller, placement.Sandbox) {
+	if sandboxapp.LocalCatalogOwner(req.Caller) && sandboxapp.IsOwner(req.Caller, placement.Sandbox) {
 		return placement, true, nil
 	}
-	id, ok := sandboxapp.ProfileServiceID(req.Caller)
+	id, ok := sandboxapp.ProfileInvocationID(req.Caller)
 	if !ok {
 		return sandboxapp.Placement{}, false, nil
 	}

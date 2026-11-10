@@ -13,13 +13,18 @@ import (
 	sand "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 )
 
+// A fixed nine-digit fractional part is required: RFC3339Nano elides
+// trailing zeros, and lexical SQL ORDER BY reverses timestamps such as
+// .730Z versus .734Z within the same second.
+const orderedAdmissionTime = "2006-01-02T15:04:05.000000000Z07:00"
+
 // RecordSandboxAdmission stores bounded admission metadata without operation payloads.
 func (s *Store) RecordSandboxAdmission(ctx context.Context, record app.AdmissionAudit) error {
 	if err := validateAdmission(record); err != nil {
 		return err
 	}
 	_, err := s.db.ExecContext(ctx, `INSERT INTO sandbox_admissions(operation_id,sandbox_id,action,principal_kind,principal_ref,origin,scope_kind,scope_reference,policy_kind,policy_reason,approval,status,started_at,finished_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-		record.OperationID, record.SandboxID.String(), string(record.Action), string(record.PrincipalKind), record.PrincipalRef, string(record.Origin), string(record.ScopeKind), record.ScopeReference, string(record.PolicyKind), record.PolicyReason, record.Approval, record.Status, record.StartedAt.UTC().Format(time.RFC3339Nano), record.FinishedAt.UTC().Format(time.RFC3339Nano))
+		record.OperationID, record.SandboxID.String(), string(record.Action), string(record.PrincipalKind), record.PrincipalRef, string(record.Origin), string(record.ScopeKind), record.ScopeReference, string(record.PolicyKind), record.PolicyReason, record.Approval, record.Status, record.StartedAt.UTC().Format(orderedAdmissionTime), record.FinishedAt.UTC().Format(orderedAdmissionTime))
 	if err != nil {
 		return fmt.Errorf("record sandbox admission: %w", err)
 	}

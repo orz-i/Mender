@@ -55,3 +55,40 @@ type ProfileGrant struct {
 	ProfileID    string                     `json:"profileId"`
 	Capabilities []sandboxdomain.Capability `json:"capabilities"`
 }
+
+// ProfileInvocationID recognizes two deliberately distinct, host-authenticated
+// entry points for a Profile-scoped Tool call. MCP requires a service Principal
+// pinned to that Profile, while local owner frontends retain their actual
+// local-user Principal and original CLI/Desktop/HTTP origin. This is never a
+// general substitute for ProfileServiceID when authenticating an MCP session.
+func ProfileInvocationID(caller governancedomain.Context) (string, bool) {
+	if id, ok := ProfileServiceID(caller); ok {
+		return id, true
+	}
+	if caller.Validate() != nil || caller.Scope().Kind() != governancedomain.ScopeProfile || caller.Principal().Kind() != governancedomain.PrincipalLocalUser {
+		return "", false
+	}
+	switch caller.Origin() {
+	case governancedomain.OriginCLI, governancedomain.OriginDesktop, governancedomain.OriginManagementHTTP:
+	default:
+		return "", false
+	}
+	id := caller.Scope().Reference()
+	if _, err := profiledomain.ParseProfileID(id); err != nil {
+		return "", false
+	}
+	return id, true
+}
+
+// LocalCatalogOwner is an explicitly authenticated management invocation,
+// never a Profile service, Plugin Principal or anonymous API caller.
+func LocalCatalogOwner(caller governancedomain.Context) bool {
+	if caller.Validate() != nil || caller.Scope().Kind() != governancedomain.ScopeCatalog || caller.Principal().Kind() != governancedomain.PrincipalLocalUser {
+		return false
+	}
+	switch caller.Origin() {
+	case governancedomain.OriginCLI, governancedomain.OriginDesktop, governancedomain.OriginManagementHTTP:
+		return true
+	}
+	return false
+}

@@ -73,6 +73,13 @@ func (r *Runtime) sandboxWorkspaceCapabilitySnapshot(ctx context.Context, id san
 		return false, "Sandbox backend is unavailable", nil
 	}
 	spec := item.Spec()
+	// Tool capability alone cannot attest a Workspace's execution root.
+	// The official v3 Native Workspace router currently has an exact local
+	// root attestor only. Do not advertise an SSH/Docker/Daytona/External
+	// Sandbox as executable until its own trusted target-side attestor exists.
+	if spec.Backend != sandboxdomain.BackendLocalWorkspace {
+		return false, "Native Workspace execution requires a backend-specific verified root; only local_workspace is supported", nil
+	}
 	contracts, err := r.Sandboxes.backendPlugins.VerifiedWorkspaceContracts(spec.Backend, spec.Binding)
 	if err != nil {
 		return false, "Workspace operations unavailable on this exact Sandbox backend", nil

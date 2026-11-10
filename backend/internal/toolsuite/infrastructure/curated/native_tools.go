@@ -7,10 +7,10 @@ import (
 	suite "github.com/orz-i/Mender/backend/internal/toolsuite/domain"
 )
 
-// NativeTool is a reserved, immutable identity for a future Mender-hosted Tool.
-// These descriptors are INERT in Stage B: they are not Catalog registrations,
-// execution routes, Profile grants, or advertised MCP Tools. Stage D/E must
-// validate collisions against the actual SQLite inventory before publishing.
+// NativeTool is a reserved, immutable identity for a host-reviewed Tool.
+// The v3 Catalog publishes these canonical definitions independently of
+// Sandbox instances or Agent-owned resources; registration itself never
+// creates a Profile grant or execution placement.
 type NativeTool struct {
 	ToolID     catalog.ToolID
 	Source     catalog.SourceRef
@@ -38,9 +38,10 @@ var reservedNativeTools = []struct {
 	{"tool_2829fcf2f091f0566c5579b4d22bd70f", "jobs", "jobs.cancel", suite.JobCancel},
 }
 
-// PlannedNativeTools is the pure, host-owned migration registry. It does not
-// query/activate Providers, open Sandboxes or infer availability from Suite
-// metadata. Callers must not publish these descriptors before the hard cut.
+// PlannedNativeTools is the pure host-owned canonical identity registry.
+// It does not query or activate Providers, open Sandboxes or infer execution
+// availability from a Suite definition. The v3 Runtime separately checks each
+// Tool's Profile scope, target and backend capability at invocation.
 func PlannedNativeTools() ([]NativeTool, error) {
 	result := make([]NativeTool, 0, len(reservedNativeTools))
 	seenID := make(map[catalog.ToolID]bool, len(reservedNativeTools))

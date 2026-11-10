@@ -106,7 +106,7 @@ func (r *Router) acquire(ctx context.Context, principal governancedomain.Context
 	// Only the exact trusted MCP Profile service shape may seek a delegated grant.
 	// Admission and the atomic lease store each independently enforce that grant.
 	if !sandboxapp.IsOwner(principal, placement.Sandbox) {
-		if _, valid := sandboxapp.ProfileServiceID(principal); !valid {
+		if _, valid := sandboxapp.ProfileInvocationID(principal); !valid {
 			return nil, sandboxdomain.ErrNotAuthorized
 		}
 	}

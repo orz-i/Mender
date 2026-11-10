@@ -95,7 +95,9 @@ func (s *Store) Get(
 }
 
 func formatTime(value time.Time) string {
-	return value.UTC().Format(time.RFC3339Nano)
+	// Keep lexical ORDER BY finished_at in chronological order at nanosecond
+	// precision, including timestamps whose fractional part ends in zero.
+	return value.UTC().Format("2006-01-02T15:04:05.000000000Z07:00")
 }
 
 func (s *Store) ListRecords(

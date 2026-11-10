@@ -65,9 +65,9 @@ func (a Admit) AdmitAcquire(ctx context.Context, governance governancedomain.Con
 	if err := placement.Required.Validate(); err != nil {
 		return fmt.Errorf("admit sandbox: capability: %w", err)
 	}
-	owner := IsOwner(governance, placement.Sandbox)
+	owner := IsOwner(governance, placement.Sandbox) && governance.Scope().Kind() != governancedomain.ScopeProfile
 	if !owner {
-		profileID, trusted := ProfileServiceID(governance)
+		profileID, trusted := ProfileInvocationID(governance)
 		if !trusted || a.grants == nil {
 			return sandboxdomain.ErrNotAuthorized
 		}

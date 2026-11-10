@@ -33,7 +33,7 @@ func (s *Store) ReserveExecution(ctx context.Context, id sandboxdomain.ID, gener
 	if err := capability.Validate(); err != nil {
 		return "", err
 	}
-	profileID, delegated := sandboxapplication.ProfileServiceID(principal)
+	profileID, delegated := sandboxapplication.ProfileInvocationID(principal)
 	if !delegated && principal.Principal().Kind() != governancedomain.PrincipalLocalUser {
 		// Preserve actual service-owned Sandbox access while rejecting untrusted
 		// service-to-other-owner acquisition. The INSERT still checks ownership.
@@ -55,6 +55,10 @@ func (s *Store) ReserveExecution(ctx context.Context, id sandboxdomain.ID, gener
 	// Authorize and reserve as ONE SQLite write. The grant cannot be revoked
 	// between authorization and the lease; other Runtime processes share this DB.
 	delegatedFlag := 0
+	ownerFlag := 0
+	if scope.Kind() == governancedomain.ScopeCatalog {
+		ownerFlag = 1
+	}
 	if delegated {
 		delegatedFlag = 1
 	}
@@ -63,12 +67,12 @@ func (s *Store) ReserveExecution(ctx context.Context, id sandboxdomain.ID, gener
  JOIN sandboxes s ON s.id=r.sandbox_id
  WHERE r.sandbox_id=? AND r.generation=? AND r.state='ready'
  AND (
-   (s.owner_kind=? AND s.owner_ref=?)
+   (?=1 AND s.owner_kind=? AND s.owner_ref=?)
    OR (?=1 AND EXISTS (
      SELECT 1 FROM sandbox_profile_grants g
      WHERE g.sandbox_id=s.id AND g.profile_id=? AND g.capability=?
    ))
- )`, id.String(), token, generation, string(subject.Kind()), subject.Reference(), string(scope.Kind()), scope.Reference(), time.Now().UTC().Format(time.RFC3339Nano), id.String(), generation, string(subject.Kind()), subject.Reference(), delegatedFlag, profileID, string(capability))
+ )`, id.String(), token, generation, string(subject.Kind()), subject.Reference(), string(scope.Kind()), scope.Reference(), time.Now().UTC().Format(time.RFC3339Nano), id.String(), generation, ownerFlag, string(subject.Kind()), subject.Reference(), delegatedFlag, profileID, string(capability))
 	if err != nil {
 		if uniqueError(err) {
 			return "", sandboxdomain.ErrConflict

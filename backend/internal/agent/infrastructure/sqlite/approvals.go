@@ -55,7 +55,7 @@ func (s *Store) CreateApproval(ctx context.Context, a agentdomain.Approval) erro
     WHERE task_id=? AND status='pending') < ?`,
 		string(a.ID), string(a.TaskID), string(a.AgentID), a.Generation, a.SessionID, a.ToolCallID,
 		a.Kind, a.Target, a.CanAllow, a.AllowOptionID, a.RejectOptionID, string(a.Status),
-		a.CreatedAt.UTC().Format(time.RFC3339Nano), a.ExpiresAt.UnixMilli(), "", "owner",
+		formatChronologicalTime(a.CreatedAt), a.ExpiresAt.UnixMilli(), "", "owner",
 		string(a.TaskID), string(a.AgentID), a.Generation, string(a.TaskID), maxPendingPerTask)
 	if err != nil {
 		return fmt.Errorf("%w: record bounded Agent approval: %w", agentdomain.ErrConflict, err)

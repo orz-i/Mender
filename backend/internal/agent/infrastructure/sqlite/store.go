@@ -15,6 +15,12 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+// Agent Task/Approval listings use chronological SQL text ordering. Always
+// store a fixed-width UTC fractional part rather than variable RFC3339Nano.
+func formatChronologicalTime(value time.Time) string {
+	return value.UTC().Format("2006-01-02T15:04:05.000000000Z07:00")
+}
+
 // Store is the authoritative persistent Agent/Task/Grant inventory.
 // It intentionally owns no executable and never resolves credentials.
 type Store struct{ db *sql.DB }
@@ -160,7 +166,7 @@ func (s *Store) CreateTask(ctx context.Context, t agentdomain.Task) error {
 	_, err := s.db.ExecContext(ctx, `INSERT INTO agent_tasks(`+taskColumns+`) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		string(t.ID), string(t.AgentID), string(t.Status), t.Origin, t.PrincipalKind, t.PrincipalRef,
 		t.ScopeKind, t.ScopeRef, t.Generation, t.Result, t.Diagnostic, 0,
-		t.CreatedAt.UTC().Format(time.RFC3339Nano), t.UpdatedAt.UTC().Format(time.RFC3339Nano),
+		formatChronologicalTime(t.CreatedAt), formatChronologicalTime(t.UpdatedAt),
 		t.Model, t.WorkspaceKey, t.WorkspaceRoot, t.ReasoningEffort, int(t.ExecutionTimeout()/time.Second), t.Title)
 	return err
 }
@@ -190,7 +196,7 @@ func (s *Store) CreateAdmittedTask(ctx context.Context, t agentdomain.Task, maxA
 	  AND (?='' OR ?='' OR EXISTS(SELECT 1 FROM agent_workspace_grants WHERE agent_id=? AND workspace_key=? AND profile_id=?))`,
 		string(t.ID), string(t.AgentID), string(t.Status), t.Origin, t.PrincipalKind, t.PrincipalRef,
 		t.ScopeKind, t.ScopeRef, t.Generation, t.Result, t.Diagnostic, 0,
-		t.CreatedAt.UTC().Format(time.RFC3339Nano), t.UpdatedAt.UTC().Format(time.RFC3339Nano),
+		formatChronologicalTime(t.CreatedAt), formatChronologicalTime(t.UpdatedAt),
 		t.Model, t.WorkspaceKey, t.WorkspaceRoot, t.ReasoningEffort, int(t.ExecutionTimeout()/time.Second), t.Title,
 		string(t.AgentID), maxActive, globalTaskLimit,
 		t.PrincipalKind, t.PrincipalRef, principalTaskLimit,

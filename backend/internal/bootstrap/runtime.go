@@ -46,8 +46,10 @@ import (
 	tunnelregistry "github.com/orz-i/Mender/backend/internal/tunnel/infrastructure/pluginregistry"
 	tunnelprocess "github.com/orz-i/Mender/backend/internal/tunnel/infrastructure/process"
 	workspaceapp "github.com/orz-i/Mender/backend/internal/workspace/application"
+	workspacelocalroot "github.com/orz-i/Mender/backend/internal/workspace/infrastructure/localroot"
 	workspaceplugin "github.com/orz-i/Mender/backend/internal/workspace/infrastructure/plugin"
 	"github.com/orz-i/Mender/backend/internal/workspace/infrastructure/sandboxbridge"
+	workspacesqlite "github.com/orz-i/Mender/backend/internal/workspace/infrastructure/sqlite"
 )
 
 // RuntimeOptions configures the shared local execution runtime.
@@ -75,6 +77,7 @@ type Runtime struct {
 	Policy                      *Policies
 	Skills                      *Skills
 	Sandboxes                   *Sandboxes
+	Workspaces                  *workspaceapp.Registry
 	Agents                      *agentapplication.Service
 	RuntimeGovernance           *RuntimeGovernance
 	InvokeTool                  invocationapplication.InvokeTool
@@ -531,6 +534,28 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		closeBootstrapStores()
 		return nil, fmt.Errorf("compose runtime: Workspace inventory: %w", err)
 	}
+	// The Registry shares this v3 connection with the Workspace inventory.
+	// Failure to compose any of its ports must release the complete partially
+	// opened Runtime; leaving a SQLite writer open would strand startup.
+	closeWorkspaceComposition := func() {
+		_ = typedInventoryDB.Close()
+		_ = typedReader.Close()
+		_ = skills.Close()
+		_ = providerInstances.CloseAll()
+		_ = externalProcesses.CloseAll()
+		_ = pluginInstallations.Close()
+		closeBootstrapStores()
+	}
+	workspaceRegistryStore, err := workspacesqlite.NewRegistryStore(ctx, typedInventoryDB)
+	if err != nil {
+		closeWorkspaceComposition()
+		return nil, fmt.Errorf("compose runtime: Workspace registry: %w", err)
+	}
+	workspaceRegistry, err := workspaceapp.NewRegistry(workspaceRegistryStore, workspaceSandboxLookup{sandboxes}, workspacelocalroot.Verifier{})
+	if err != nil {
+		closeWorkspaceComposition()
+		return nil, fmt.Errorf("compose runtime: Workspace registry: %w", err)
+	}
 	selection, err := workspaceapp.NewWorkspaceSelection(inventory)
 	if err != nil {
 		return nil, fmt.Errorf("compose runtime: workspace selection: %w", err)
@@ -622,6 +647,7 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 		Policy:                      policies,
 		Skills:                      skills,
 		Sandboxes:                   sandboxes,
+		Workspaces:                  workspaceRegistry,
 		Agents:                      agents,
 		RuntimeGovernance:           runtimeGovernance,
 		InvokeTool:                  invokeTool,

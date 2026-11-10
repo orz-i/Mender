@@ -439,12 +439,24 @@ func (r *Repository) RetireOwnedAgent(ctx context.Context, source catalog.Source
 		return fmt.Errorf("retire owned Agent: source no longer exists or is unverified: %w", ErrUnverifiedSource)
 	}
 	for _, query := range []string{
+		`SELECT EXISTS(SELECT 1 FROM agent_workspaces WHERE agent_id=?)`,
+		`SELECT EXISTS(SELECT 1 FROM agent_workspace_grants WHERE agent_id=?)`,
+		`SELECT EXISTS(SELECT 1 FROM agent_tool_placements WHERE agent_id=?)`,
+		`SELECT EXISTS(SELECT 1 FROM agent_approval_policies WHERE agent_id=?)`,
 		`SELECT EXISTS(SELECT 1 FROM agent_tasks WHERE agent_id=?)`,
 		`SELECT EXISTS(SELECT 1 FROM agent_grants WHERE agent_id=?)`,
-		`SELECT EXISTS(SELECT 1 FROM policy_rules r,json_each(CASE WHEN json_valid(r.match_json) THEN r.match_json ELSE '{}' END,'$.agentIds') v WHERE v.value=?)`,
+		`SELECT EXISTS(SELECT 1 FROM policy_rules r, json_each(CASE WHEN json_valid(r.match_json) THEN r.match_json ELSE '{}' END, '$.resourcesAny') v
+            WHERE json_extract(v.value,'$.kind')='agent_id' AND (
+              (json_extract(v.value,'$.operator')='exact' AND json_extract(v.value,'$.value')=?) OR
+              (json_extract(v.value,'$.operator')='prefix' AND substr(?,1,length(json_extract(v.value,'$.value')))=json_extract(v.value,'$.value'))
+            ))`,
 	} {
 		var referenced int
-		if err = tx.QueryRowContext(ctx, query, source.ID()).Scan(&referenced); err != nil {
+		bindings := []any{source.ID()}
+		if strings.Contains(query, "$.resourcesAny") {
+			bindings = append(bindings, source.ID())
+		}
+		if err = tx.QueryRowContext(ctx, query, bindings...).Scan(&referenced); err != nil {
 			return err
 		}
 		if referenced != 0 {

@@ -178,6 +178,27 @@ func (s *Store) ReplaceProfileGrants(ctx context.Context, id sandboxdomain.ID, p
 			_, err = tx.ExecContext(ctx, "INSERT INTO sandbox_profile_grants(sandbox_id,profile_id,capability,granted_at) VALUES(?,?,?,?)", id.String(), profileID, string(capability), now)
 		} else {
 			action = "revoke"
+			// An explicitly retired capability permanently invalidates any
+			// Profile Tool TargetScopes it previously admitted. Regranting a
+			// Sandbox later must never resurrect those old execution targets.
+			if s.typed {
+				_, err = tx.ExecContext(ctx, `DELETE FROM profile_tool_target_scopes WHERE sandbox_id=? AND profile_id=? AND tool_id IN (
+                SELECT id FROM tools WHERE source_kind='native' AND
+                  CASE source_key
+                    WHEN 'workspace.read' THEN 'file.read'
+                    WHEN 'workspace.search' THEN 'file.search'
+                    WHEN 'workspace.edit' THEN 'file.edit'
+                    WHEN 'workspace.shell' THEN 'process.shell'
+                    WHEN 'jobs.submit' THEN 'job.submit'
+                    WHEN 'jobs.status' THEN 'job.observe'
+                    WHEN 'jobs.logs' THEN 'job.observe'
+                    WHEN 'jobs.result' THEN 'job.observe'
+                    WHEN 'jobs.cancel' THEN 'job.cancel'
+                  END=?)`, id.String(), profileID, string(capability))
+				if err != nil {
+					return fmt.Errorf("replace Sandbox Profile grants: retire Tool target scopes: %w", err)
+				}
+			}
 			_, err = tx.ExecContext(ctx, "DELETE FROM sandbox_profile_grants WHERE sandbox_id=? AND profile_id=? AND capability=?", id.String(), profileID, string(capability))
 		}
 		if err != nil {

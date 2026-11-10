@@ -134,7 +134,7 @@ func (n *NativeJobs) admit(ctx context.Context, tool catalog.Tool, args invocati
 	if item.Validate() != nil {
 		return nativeJobInput{}, "", sandbox.ErrNotAuthorized
 	}
-	if profileID, ok := sandboxapp.ProfileServiceID(caller); ok {
+	if profileID, ok := sandboxapp.ProfileInvocationID(caller); ok {
 		// The ToolBinding TargetScope is the preserved per-Sandbox authority;
 		// a broad Sandbox grant does not permit invoking an unselected Tool.
 		var allowed int

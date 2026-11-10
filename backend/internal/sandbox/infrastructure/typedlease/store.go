@@ -80,7 +80,7 @@ func (r Request) Validate() error {
 	if err := r.Caller.Validate(); err != nil {
 		return err
 	}
-	if _, ok := sandboxapp.ProfileServiceID(r.Caller); !ok {
+	if _, ok := sandboxapp.ProfileInvocationID(r.Caller); !ok && !sandboxapp.LocalCatalogOwner(r.Caller) {
 		return sandbox.ErrNotAuthorized
 	}
 	if _, err := invocation.ParseInvocationID(r.InvocationID.String()); err != nil {
@@ -201,7 +201,7 @@ func (s *Store) Reserve(ctx context.Context, r Request) (string, error) {
 	if err := r.Validate(); err != nil {
 		return "", err
 	}
-	profileID, _ := sandboxapp.ProfileServiceID(r.Caller)
+	profileID, _ := sandboxapp.ProfileInvocationID(r.Caller)
 	if err := s.verifier.VerifyAdmittedAttempt(ctx, r.InvocationID, r.Caller, r.ToolID, r.ApprovedFacts); err != nil {
 		return "", fmt.Errorf("%w: %w", ErrUnadmitted, err)
 	}
@@ -213,7 +213,10 @@ func (s *Store) Reserve(ctx context.Context, r Request) (string, error) {
 	token := hex.EncodeToString(random[:])
 	subject, scope := r.Caller.Principal(), r.Caller.Scope()
 	now := time.Now().UTC().Format(time.RFC3339Nano)
-	result, err := s.db.ExecContext(ctx, `INSERT INTO sandbox_execution_leases
+	var result sql.Result
+	var err error
+	if profileID != "" {
+		result, err = s.db.ExecContext(ctx, `INSERT INTO sandbox_execution_leases
  (sandbox_id,lease_token,generation,principal_kind,principal_ref,scope_kind,scope_ref,acquired_at)
  SELECT r.sandbox_id,?,?,?,?,?,?,? FROM sandbox_runs r
  JOIN sandboxes sb ON sb.id=r.sandbox_id
@@ -231,9 +234,29 @@ func (s *Store) Reserve(ctx context.Context, r Request) (string, error) {
    AND sb.isolation=? AND t.source_kind='native'
    AND t.source_id='workspace' AND t.source_key=?
    AND b.policy_constraint!='deny'`,
-		token, r.Generation, string(subject.Kind()), subject.Reference(), string(scope.Kind()), scope.Reference(), now,
-		r.ToolID.String(), profileID, r.Workspace.String(), capability, r.Sandbox.String(),
-		r.Generation, string(r.Isolation), sourceKey)
+			token, r.Generation, string(subject.Kind()), subject.Reference(), string(scope.Kind()), scope.Reference(), now,
+			r.ToolID.String(), profileID, r.Workspace.String(), capability, r.Sandbox.String(),
+			r.Generation, string(r.Isolation), sourceKey)
+	} else {
+		// A local Catalog owner still needs the exact admitted Invocation, an
+		// owned registered Workspace, an owned Sandbox, matching root, Ready run,
+		// pinned generation and native ToolID. It does not impersonate an MCP
+		// Profile or require a fabricated Profile ToolBinding to read its own data.
+		result, err = s.db.ExecContext(ctx, `INSERT INTO sandbox_execution_leases
+ (sandbox_id,lease_token,generation,principal_kind,principal_ref,scope_kind,scope_ref,acquired_at)
+ SELECT r.sandbox_id,?,?,?,?,?,?,? FROM sandbox_runs r
+ JOIN sandboxes sb ON sb.id=r.sandbox_id
+ JOIN tools t ON t.id=?
+ JOIN workspace_placements w ON w.sandbox_id=r.sandbox_id AND w.workspace_id=?
+ JOIN workspaces ws ON ws.workspace_id=w.workspace_id
+ WHERE r.sandbox_id=? AND r.generation=? AND r.state='ready'
+  AND sb.owner_kind=? AND sb.owner_ref=? AND ws.owner_kind=? AND ws.owner_ref=?
+  AND sb.backend='local_workspace' AND sb.local_root=w.backend_root AND ws.verified_root=w.backend_root
+  AND sb.isolation=? AND t.source_kind='native' AND t.source_id='workspace' AND t.source_key=?`,
+			token, r.Generation, string(subject.Kind()), subject.Reference(), string(scope.Kind()), scope.Reference(), now,
+			r.ToolID.String(), r.Workspace.String(), r.Sandbox.String(), r.Generation,
+			string(subject.Kind()), subject.Reference(), string(subject.Kind()), subject.Reference(), string(r.Isolation), sourceKey)
+	}
 	if err != nil {
 		return "", fmt.Errorf("native Workspace reserve: %w", err)
 	}
@@ -256,7 +279,7 @@ func (s *Store) Release(ctx context.Context, caller governance.Context, sandboxI
 	if err := caller.Validate(); err != nil {
 		return err
 	}
-	if _, ok := sandboxapp.ProfileServiceID(caller); !ok {
+	if _, ok := sandboxapp.ProfileInvocationID(caller); !ok && !sandboxapp.LocalCatalogOwner(caller) {
 		return sandbox.ErrNotAuthorized
 	}
 	if _, err := sandbox.ParseID(sandboxID.String()); err != nil {

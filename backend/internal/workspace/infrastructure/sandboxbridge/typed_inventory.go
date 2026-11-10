@@ -43,7 +43,7 @@ func (i *TypedInventory) callerScope(caller governance.Context) (profileID strin
 	if i == nil || i.db == nil || caller.Validate() != nil {
 		return "", false, workspaceapp.ErrWorkspaceUnavailable
 	}
-	if id, ok := sandboxapp.ProfileServiceID(caller); ok {
+	if id, ok := sandboxapp.ProfileInvocationID(caller); ok {
 		return id, false, nil
 	}
 	if caller.Scope().Kind() != governance.ScopeCatalog || caller.Principal().Kind() != governance.PrincipalLocalUser {

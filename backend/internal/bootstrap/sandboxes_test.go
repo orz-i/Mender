@@ -7,10 +7,12 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	governance "github.com/orz-i/Mender/backend/internal/governance/domain"
 	policyapplication "github.com/orz-i/Mender/backend/internal/policy/application"
 	policydomain "github.com/orz-i/Mender/backend/internal/policy/domain"
+	sandboxapplication "github.com/orz-i/Mender/backend/internal/sandbox/application"
 	sandbox "github.com/orz-i/Mender/backend/internal/sandbox/domain"
 	workspaceapp "github.com/orz-i/Mender/backend/internal/workspace/application"
 	workspacedomain "github.com/orz-i/Mender/backend/internal/workspace/domain"
@@ -212,5 +214,54 @@ func TestLocalSandboxProvisionAndSandboxLeaseShareOwner(t *testing.T) {
 	admitted, err := runtime.Sandboxes.store.ListSandboxAdmissions(ctx, item.ID(), 10)
 	if err != nil || len(admitted) != 2 || admitted[0].Action != governance.ActionSandboxAcquire || admitted[1].Action != governance.ActionSandboxProvision {
 		t.Fatalf("admissions %+v %v", admitted, err)
+	}
+}
+
+// V3 sandbox audit ordering must be chronological, not RFC3339Nano lexical.
+// Variable-width fractions (.73Z vs .734Z) sort in the opposite order.
+func TestV3SandboxAdmissionsChronologicalSubsecondOrdering(t *testing.T) {
+	ctx := context.Background()
+	r, err := NewRuntime(ctx, RuntimeOptions{DatabasePath: filepath.Join(t.TempDir(), "audit-order.db")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = r.Close() }()
+	caller, err := governance.NewContext(governance.OriginCLI, r.OwnerPrincipal(), governance.CatalogScope())
+	if err != nil {
+		t.Fatal(err)
+	}
+	item, err := r.Sandboxes.CreateLocalSandbox(ctx, CreateLocalSandboxRequest{Name: "Ordering test", Root: t.TempDir(), Isolation: sandbox.IsolationHost}, caller)
+	if err != nil {
+		t.Fatal(err)
+	}
+	base := time.Date(2040, 1, 1, 0, 0, 0, 0, time.UTC)
+	before := base.Add(730 * time.Millisecond)
+	after := base.Add(734 * time.Millisecond)
+	for _, one := range []struct {
+		id    string
+		start time.Time
+	}{
+		{"sadm_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", before},
+		{"sadm_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", after},
+	} {
+		record := sandboxapplication.AdmissionAudit{
+			OperationID: one.id, SandboxID: item.ID(), Action: governance.ActionSandboxAcquire,
+			PrincipalKind: caller.Principal().Kind(), PrincipalRef: caller.Principal().Reference(),
+			Origin: caller.Origin(), ScopeKind: caller.Scope().Kind(), ScopeReference: caller.Scope().Reference(),
+			PolicyKind: policydomain.DecisionAllow, PolicyReason: "policy.default.allow", Approval: "not_required", Status: "admitted",
+			StartedAt: one.start, FinishedAt: one.start.Add(time.Microsecond),
+		}
+		if err := r.Sandboxes.store.RecordSandboxAdmission(ctx, record); err != nil {
+			t.Fatal(err)
+		}
+	}
+	admissions, err := r.Sandboxes.store.ListSandboxAdmissions(ctx, item.ID(), 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(admissions) != 3 || admissions[0].OperationID != "sadm_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" ||
+		admissions[1].OperationID != "sadm_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" ||
+		!admissions[0].StartedAt.After(admissions[1].StartedAt) {
+		t.Fatalf("Sandbox Admission ordering lost subsecond chronology: %+v", admissions)
 	}
 }
