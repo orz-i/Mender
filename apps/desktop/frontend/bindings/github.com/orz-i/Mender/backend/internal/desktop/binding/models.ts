@@ -542,6 +542,17 @@ export interface ProfileTool {
     "credentialRefs": string[] | null;
 }
 
+export interface ProfileToolTarget {
+    "profileId": string;
+    "toolId": string;
+    "workspaceId": string;
+    "sandboxId": string;
+}
+
+export interface ProfileToolTargets {
+    "targets": ProfileToolTarget[] | null;
+}
+
 export interface Provider {
     "providerId": string;
     "toolSourceKind"?: string;
@@ -945,4 +956,33 @@ export interface Tunnel {
 
 export interface TunnelList {
     "tunnels": Tunnel[] | null;
+}
+
+export interface WorkspaceList {
+    "workspaces": WorkspaceRecord[] | null;
+}
+
+export interface WorkspacePlacement {
+    "workspaceId": string;
+    "sandboxId": string;
+    "backendRoot": string;
+}
+
+export interface WorkspacePlacementList {
+    "placements": WorkspacePlacement[] | null;
+}
+
+export interface WorkspaceProfileGrants {
+    "profileIds": string[] | null;
+}
+
+/**
+ * WorkspaceRecord is the desktop projection of one reusable logical work
+ * context; it is not a Sandbox Tool source or an execution grant.
+ */
+export interface WorkspaceRecord {
+    "workspaceId": string;
+    "displayName": string;
+    "verifiedRoot": string;
+    "createdAt": string;
 }

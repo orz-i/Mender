@@ -373,6 +373,19 @@ export function createDesktopMenderClient(): ManagementClient {
       return invocationResult(await Service.CallTool(toolId, argumentsValue));
     },
 
+    async listWorkspaces(){const result=await Service.ListWorkspaces();return {workspaces:(result.workspaces??[]).map(v=>({...v}))};},
+    async createWorkspace(body){return {...await Service.CreateWorkspace(body.displayName,body.verifiedRoot)};},
+    async getWorkspace(workspaceId){return {...await Service.GetWorkspace(workspaceId)};},
+    async deleteWorkspace(workspaceId){await Service.DeleteWorkspace(workspaceId);},
+    async listWorkspacePlacements(workspaceId){const result=await Service.ListWorkspacePlacements(workspaceId);return {placements:(result.placements??[]).map(v=>({...v}))};},
+    async linkWorkspaceSandbox(workspaceId,sandboxId){await Service.LinkWorkspaceSandbox(workspaceId,sandboxId);},
+    async unlinkWorkspaceSandbox(workspaceId,sandboxId){await Service.UnlinkWorkspaceSandbox(workspaceId,sandboxId);},
+    async listWorkspaceProfileGrants(workspaceId){const result=await Service.ListWorkspaceProfileGrants(workspaceId);return {profileIds:result.profileIds??[]};},
+    async grantWorkspaceProfile(workspaceId,profileId){await Service.GrantWorkspaceProfile(workspaceId,profileId);},
+    async revokeWorkspaceProfile(workspaceId,profileId){await Service.RevokeWorkspaceProfile(workspaceId,profileId);},
+    async listProfileToolTargets(slug){const result=await Service.ListProfileToolTargets(slug);return {targets:(result.targets??[]).map(v=>({...v}))};},
+    async addProfileToolTarget(slug,body){return {...await Service.PutProfileToolTarget(slug,body.toolId,body.workspaceId,body.sandboxId)};},
+    async removeProfileToolTarget(slug,toolId,sandboxId,workspaceId){await Service.DeleteProfileToolTarget(slug,toolId,workspaceId,sandboxId);},
     async listProfiles() {
       const result = await Service.ListProfiles();
       return { profiles: (result.profiles ?? []).map(profile) };

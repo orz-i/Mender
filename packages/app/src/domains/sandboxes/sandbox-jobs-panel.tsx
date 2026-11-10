@@ -1,3 +1,4 @@
+import { SandboxJobsAccess } from "./sandbox-jobs-access";
 import { useEffect, useState } from "react";
 import type { ManagementClient, Sandbox, SandboxToolSuite } from "@mender/sdk";
 import { Badge } from "@mender/ui/components/badge";
@@ -19,7 +20,7 @@ export function SandboxJobsPanel({client,sandbox}:{client:ManagementClient;sandb
     }).catch((reason:unknown)=>{if(active){setLoaded(true);setError(errorMessage(reason));}});
     return()=>{active=false;};
   },[client,sandbox.sandboxId]);
-  return <DataPanel title={t("SSH Durable Jobs capabilities")} description={sandbox.name}>
+  return <div className="space-y-4"><DataPanel title={t("SSH Durable Jobs capabilities")} description={sandbox.name}>
     <div className="space-y-2 border-b border-border px-5 py-4">
       {suite?<Badge variant="outline">{t(suite.available?"Ready":"Incompatible")}</Badge>:null}
       <p className="text-xs leading-5 text-muted-foreground">{suite?.issue || t("Shared native Jobs tools require explicit Profile ToolBinding, SSH Sandbox capability and Policy authorization.")}</p>
@@ -33,5 +34,5 @@ export function SandboxJobsPanel({client,sandbox}:{client:ManagementClient;sandb
         <TableCell className="font-mono text-xs">{tool.sourceKey}</TableCell>
       </TableRow>)}</TableBody></Table>
       :<EmptyPanelState><p className="text-sm text-muted-foreground">{t("No compatible Jobs capabilities found.")}</p></EmptyPanelState>}
-  </DataPanel>;
+  </DataPanel><SandboxJobsAccess client={client} sandbox={sandbox}/></div>;
 }

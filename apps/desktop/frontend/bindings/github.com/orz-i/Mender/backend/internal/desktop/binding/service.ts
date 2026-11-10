@@ -104,6 +104,10 @@ export function CreateSSHRemoteSandbox(input: $models.CreateSSHRemoteSandboxInpu
     return $Call.ByID(2154512183, input);
 }
 
+export function CreateWorkspace(displayName: string, verifiedRoot: string): $CancellablePromise<$models.WorkspaceRecord> {
+    return $Call.ByID(452016893, displayName, verifiedRoot);
+}
+
 export function DecideAgentApproval(approvalID: string, choice: string): $CancellablePromise<$models.AgentApproval> {
     return $Call.ByID(2111120830, approvalID, choice);
 }
@@ -124,6 +128,10 @@ export function DeletePolicyRule(ruleID: string): $CancellablePromise<void> {
     return $Call.ByID(3136236455, ruleID);
 }
 
+export function DeleteProfileToolTarget(slug: string, toolID: string, workspaceID: string, sandboxID: string): $CancellablePromise<void> {
+    return $Call.ByID(2178228811, slug, toolID, workspaceID, sandboxID);
+}
+
 export function DeleteProvider(providerID: string): $CancellablePromise<void> {
     return $Call.ByID(1608019374, providerID);
 }
@@ -138,6 +146,10 @@ export function DeleteSkillInstallation(installationID: string): $CancellablePro
 
 export function DeleteTunnel(tunnelID: string): $CancellablePromise<void> {
     return $Call.ByID(1992939505, tunnelID);
+}
+
+export function DeleteWorkspace(id: string): $CancellablePromise<void> {
+    return $Call.ByID(1359942212, id);
 }
 
 /**
@@ -300,12 +312,20 @@ export function GetTool(toolID: string): $CancellablePromise<$models.ToolDetail>
     return $Call.ByID(973227434, toolID);
 }
 
+export function GetWorkspace(id: string): $CancellablePromise<$models.WorkspaceRecord> {
+    return $Call.ByID(3309705613, id);
+}
+
 export function GrantAgentProfile(agentID: string, profileID: string): $CancellablePromise<void> {
     return $Call.ByID(967894880, agentID, profileID);
 }
 
 export function GrantAgentWorkspace(id: string, key: string, profileID: string): $CancellablePromise<void> {
     return $Call.ByID(2075628980, id, key, profileID);
+}
+
+export function GrantWorkspaceProfile(workspaceID: string, profileID: string): $CancellablePromise<void> {
+    return $Call.ByID(1588827636, workspaceID, profileID);
 }
 
 export function InspectAgentModels(id: string): $CancellablePromise<$models.AgentModelChoices> {
@@ -335,6 +355,10 @@ export function InstallProviderPlugin(sourcePath: string): $CancellablePromise<$
 
 export function InstallSkill(sourcePath: string): $CancellablePromise<$models.SkillInstallation> {
     return $Call.ByID(3234224228, sourcePath);
+}
+
+export function LinkWorkspaceSandbox(workspaceID: string, sandboxID: string): $CancellablePromise<void> {
+    return $Call.ByID(3907182448, workspaceID, sandboxID);
 }
 
 export function ListAgentAdmissions(id: string): $CancellablePromise<$models.AgentAdmissionList> {
@@ -408,6 +432,10 @@ export function ListProfileSkillDeployments(slug: string): $CancellablePromise<$
     return $Call.ByID(1800599246, slug);
 }
 
+export function ListProfileToolTargets(slug: string): $CancellablePromise<$models.ProfileToolTargets> {
+    return $Call.ByID(4116080759, slug);
+}
+
 export function ListProfiles(): $CancellablePromise<$models.ProfileList> {
     return $Call.ByID(2998135054);
 }
@@ -446,6 +474,22 @@ export function ListToolSuites(): $CancellablePromise<$models.ToolSuiteDefinitio
 
 export function ListTunnels(): $CancellablePromise<$models.TunnelList> {
     return $Call.ByID(3666209663);
+}
+
+export function ListWorkspacePlacements(id: string): $CancellablePromise<$models.WorkspacePlacementList> {
+    return $Call.ByID(1060737597, id);
+}
+
+export function ListWorkspaceProfileGrants(workspaceID: string): $CancellablePromise<$models.WorkspaceProfileGrants> {
+    return $Call.ByID(2321990257, workspaceID);
+}
+
+export function ListWorkspaces(): $CancellablePromise<$models.WorkspaceList> {
+    return $Call.ByID(1205118014);
+}
+
+export function PutProfileToolTarget(slug: string, toolID: string, workspaceID: string, sandboxID: string): $CancellablePromise<$models.ProfileToolTarget> {
+    return $Call.ByID(3743575225, slug, toolID, workspaceID, sandboxID);
 }
 
 export function PutSandboxProfileGrants(sandboxID: string, profileID: string, capabilities: string[] | null): $CancellablePromise<$models.SandboxProfileGrants> {
@@ -505,6 +549,10 @@ export function RevokeAgentWorkspace(id: string, key: string, profileID: string)
 
 export function RevokeSandboxProfileGrants(sandboxID: string, profileID: string): $CancellablePromise<$models.SandboxProfileGrants> {
     return $Call.ByID(954645277, sandboxID, profileID);
+}
+
+export function RevokeWorkspaceProfile(workspaceID: string, profileID: string): $CancellablePromise<void> {
+    return $Call.ByID(849060452, workspaceID, profileID);
 }
 
 export function RotateNativeCredential($namespace: string, name: string, secret: string, sshKeyPassphrase: string): $CancellablePromise<$models.Credential> {
@@ -576,6 +624,10 @@ export function UndeployProfileSkill(slug: string, deploymentID: string): $Cance
 
 export function UndeploySkill(deploymentID: string): $CancellablePromise<void> {
     return $Call.ByID(1941215937, deploymentID);
+}
+
+export function UnlinkWorkspaceSandbox(workspaceID: string, sandboxID: string): $CancellablePromise<void> {
+    return $Call.ByID(3377581887, workspaceID, sandboxID);
 }
 
 export function UntrustSkillInstallation(installationID: string): $CancellablePromise<$models.SkillInstallation> {

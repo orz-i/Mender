@@ -72,6 +72,8 @@ export type {
     ProfileMCPDelivery,
     ProfileMCPDeliveryInput,
     ProfileTool,
+    ProfileToolTarget,
+    ProfileToolTargets,
     Provider,
     ProviderActivationAuditList,
     ProviderActivationAuditRecord,
@@ -118,5 +120,10 @@ export type {
     ToolSuiteDefinitionList,
     ToolSummary,
     Tunnel,
-    TunnelList
+    TunnelList,
+    WorkspaceList,
+    WorkspacePlacement,
+    WorkspacePlacementList,
+    WorkspaceProfileGrants,
+    WorkspaceRecord
 } from "./models.js";

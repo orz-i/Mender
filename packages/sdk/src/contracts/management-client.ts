@@ -18,6 +18,12 @@ export type ToolDetail = components["schemas"]["ToolDetail"];
 export type InvocationResult = components["schemas"]["InvocationResult"];
 export type Profile = components["schemas"]["Profile"];
 export type Tunnel = components["schemas"]["Tunnel"];
+export type WorkspaceRecord=components["schemas"]["WorkspaceRecord"];
+export type WorkspacePlacement=components["schemas"]["WorkspacePlacement"];
+export type WorkspaceProfileGrants=components["schemas"]["WorkspaceProfileGrants"];
+export type ProfileToolTarget=components["schemas"]["ProfileToolTarget"];
+export type CreateWorkspaceRequest=components["schemas"]["CreateWorkspaceRequest"];
+export type CreateProfileToolTargetRequest=components["schemas"]["CreateProfileToolTargetRequest"];
 export type Agent = components["schemas"]["Agent"];
 export type AgentTools = components["schemas"]["AgentTools"];
 export type AgentWorkspace = components["schemas"]["AgentWorkspace"];
@@ -170,6 +176,19 @@ export interface ManagementClient {
     toolId: string,
     argumentsValue: Record<string, unknown>,
   ): Promise<InvocationResult>;
+  listWorkspaces():Promise<{workspaces:WorkspaceRecord[]}>;
+  createWorkspace(body:CreateWorkspaceRequest):Promise<WorkspaceRecord>;
+  getWorkspace(workspaceId:string):Promise<WorkspaceRecord>;
+  deleteWorkspace(workspaceId:string):Promise<void>;
+  listWorkspacePlacements(workspaceId:string):Promise<{placements:WorkspacePlacement[]}>;
+  linkWorkspaceSandbox(workspaceId:string,sandboxId:string):Promise<void>;
+  unlinkWorkspaceSandbox(workspaceId:string,sandboxId:string):Promise<void>;
+  listWorkspaceProfileGrants(workspaceId:string):Promise<WorkspaceProfileGrants>;
+  grantWorkspaceProfile(workspaceId:string,profileId:string):Promise<void>;
+  revokeWorkspaceProfile(workspaceId:string,profileId:string):Promise<void>;
+  listProfileToolTargets(slug:string):Promise<{targets:ProfileToolTarget[]}>;
+  addProfileToolTarget(slug:string,body:CreateProfileToolTargetRequest):Promise<ProfileToolTarget>;
+  removeProfileToolTarget(slug:string,toolId:string,sandboxId:string,workspaceId:string):Promise<void>;
   listProfiles(): Promise<{ profiles: Profile[] }>;
   createProfile(body: CreateProfileRequest): Promise<Profile>;
   getProfile(slug: string): Promise<Profile>;

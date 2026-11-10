@@ -3,6 +3,7 @@ import type { ManagementClient, Sandbox, SandboxToolSuite } from "@mender/sdk";
 import { Badge } from "@mender/ui/components/badge";
 import { Button } from "@mender/ui/components/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@mender/ui/components/table";
+import { SandboxWorkspaceAccess } from "./sandbox-workspace-access";
 import { SandboxJobsPanel } from "./sandbox-jobs-panel";
 import { SandboxJobRecoveryPanel } from "./sandbox-job-recovery-panel";
 import { t } from "../../i18n/i18n";
@@ -41,7 +42,7 @@ function WorkspaceCapabilities({client,sandbox}:{client:ManagementClient;sandbox
 
 export function SandboxToolsPanel({client,sandbox}:{client:ManagementClient;sandbox:Sandbox}) {
   const [category,setCategory]=useState<"workspace"|"jobs"|"recovery">("workspace");
-  if(sandbox.backend!=="ssh_remote")return <WorkspaceCapabilities client={client} sandbox={sandbox}/>;
+  if(sandbox.backend!=="ssh_remote")return <div className="space-y-4"><WorkspaceCapabilities client={client} sandbox={sandbox}/><SandboxWorkspaceAccess client={client} sandbox={sandbox}/></div>;
   return <div className="space-y-4">
     <div className="flex items-center gap-2" role="tablist" aria-label={t("Sandbox capabilities")}>
       <Button size="sm" role="tab" aria-selected={category==="workspace"} variant={category==="workspace"?"default":"outline"}

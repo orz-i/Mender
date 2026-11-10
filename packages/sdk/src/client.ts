@@ -266,6 +266,19 @@ export function createMenderClient(
       return requireData(result);
     },
 
+    async listWorkspaces(){return requireData(await client.GET("/workspaces"));},
+    async createWorkspace(body){return requireData(await client.POST("/workspaces",{body}));},
+    async getWorkspace(workspaceId){return requireData(await client.GET("/workspaces/{workspaceId}",{params:{path:{workspaceId}}}));},
+    async deleteWorkspace(workspaceId){const res=await client.DELETE("/workspaces/{workspaceId}",{params:{path:{workspaceId}}});if(!res.response.ok)throwApiError(res.error,res.response);},
+    async listWorkspacePlacements(workspaceId){return requireData(await client.GET("/workspaces/{workspaceId}/placements",{params:{path:{workspaceId}}}));},
+    async linkWorkspaceSandbox(workspaceId,sandboxId){const res=await client.PUT("/workspaces/{workspaceId}/placements/{sandboxId}",{params:{path:{workspaceId,sandboxId}}});if(!res.response.ok)throwApiError(res.error,res.response);},
+    async unlinkWorkspaceSandbox(workspaceId,sandboxId){const res=await client.DELETE("/workspaces/{workspaceId}/placements/{sandboxId}",{params:{path:{workspaceId,sandboxId}}});if(!res.response.ok)throwApiError(res.error,res.response);},
+    async listWorkspaceProfileGrants(workspaceId){return requireData(await client.GET("/workspaces/{workspaceId}/profile-grants",{params:{path:{workspaceId}}}));},
+    async grantWorkspaceProfile(workspaceId,profileId){const res=await client.PUT("/workspaces/{workspaceId}/profile-grants/{profileId}",{params:{path:{workspaceId,profileId}}});if(!res.response.ok)throwApiError(res.error,res.response);},
+    async revokeWorkspaceProfile(workspaceId,profileId){const res=await client.DELETE("/workspaces/{workspaceId}/profile-grants/{profileId}",{params:{path:{workspaceId,profileId}}});if(!res.response.ok)throwApiError(res.error,res.response);},
+    async listProfileToolTargets(slug){return requireData(await client.GET("/profiles/{slug}/tool-targets",{params:{path:{slug}}}));},
+    async addProfileToolTarget(slug,body){return requireData(await client.POST("/profiles/{slug}/tool-targets",{params:{path:{slug}},body}));},
+    async removeProfileToolTarget(slug,toolId,sandboxId,workspaceId){const res=await client.DELETE("/profiles/{slug}/tool-targets/{toolId}/{sandboxId}",{params:{path:{slug,toolId,sandboxId},query:{workspaceId}}});if(!res.response.ok)throwApiError(res.error,res.response);},
     async listProfiles() {
       const result = await client.GET("/profiles");
       return requireData(result);

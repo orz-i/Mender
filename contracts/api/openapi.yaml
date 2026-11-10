@@ -556,6 +556,182 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '502': { $ref: '#/components/responses/BadGateway' }
+  /workspaces:
+    get:
+      operationId: listWorkspaces
+      responses:
+        '200':
+          description: Explicitly registered, owner-visible Workspaces
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [workspaces]
+                properties:
+                  workspaces: { type: array, items: { $ref: '#/components/schemas/WorkspaceRecord' } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      operationId: createWorkspace
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateWorkspaceRequest' }
+      responses:
+        '201':
+          description: Shared Workspace registered, no Tool or Sandbox grant created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkspaceRecord' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /workspaces/{workspaceId}:
+    parameters:
+      - name: workspaceId
+        in: path
+        required: true
+        schema: { type: string, pattern: '^wrk_[0-9a-f]{32}$' }
+    get:
+      operationId: getWorkspace
+      responses:
+        '200':
+          description: Current registered Workspace
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkspaceRecord' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      operationId: deleteWorkspace
+      responses:
+        '204': { description: Unreferenced Workspace retired }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /workspaces/{workspaceId}/placements:
+    get:
+      operationId: listWorkspacePlacements
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Exact verified execution targets of a Workspace
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [placements]
+                properties:
+                  placements: { type: array, items: { $ref: '#/components/schemas/WorkspacePlacement' } }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /workspaces/{workspaceId}/placements/{sandboxId}:
+    parameters:
+      - name: workspaceId
+        in: path
+        required: true
+        schema: { type: string }
+      - name: sandboxId
+        in: path
+        required: true
+        schema: { type: string }
+    put:
+      operationId: linkWorkspaceSandbox
+      description: Explicitly attest an owned Local Sandbox root; remote backends fail closed until a trusted attestor is available
+      responses:
+        '204': { description: Exact placement linked without implicit grants }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+    delete:
+      operationId: unlinkWorkspaceSandbox
+      responses:
+        '204': { description: Unreferenced placement detached }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /workspaces/{workspaceId}/profile-grants:
+    get:
+      operationId: listWorkspaceProfileGrants
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Exact Profiles with an explicit Workspace access grant
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkspaceProfileGrants' }
+  /workspaces/{workspaceId}/profile-grants/{profileId}:
+    parameters:
+      - name: workspaceId
+        in: path
+        required: true
+        schema: { type: string }
+      - name: profileId
+        in: path
+        required: true
+        schema: { type: string }
+    put:
+      operationId: grantWorkspaceProfile
+      responses:
+        '204': { description: Workspace selection grant created, not a Tool or Sandbox grant }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+    delete:
+      operationId: revokeWorkspaceProfile
+      responses:
+        '204': { description: Grant and its exact Tool TargetScopes retired atomically }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /profiles/{slug}/tool-targets:
+    parameters:
+      - $ref: '#/components/parameters/ProfileSlug'
+    get:
+      operationId: listProfileToolTargets
+      responses:
+        '200':
+          description: Current exact Profile Tool execution target scopes
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [targets]
+                properties:
+                  targets: { type: array, items: { $ref: '#/components/schemas/ProfileToolTarget' } }
+    post:
+      operationId: createProfileToolTarget
+      description: Requires an existing ToolBinding and all matching Workspace/Sandbox grants; does not grant any missing prerequisite
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateProfileToolTargetRequest' }
+      responses:
+        '201':
+          description: Exact native Tool target authorized
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProfileToolTarget' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /profiles/{slug}/tool-targets/{toolId}/{sandboxId}:
+    delete:
+      operationId: deleteProfileToolTarget
+      parameters:
+        - $ref: '#/components/parameters/ProfileSlug'
+        - $ref: '#/components/parameters/ToolId'
+        - name: sandboxId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: workspaceId
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        '204': { description: Exact Tool target retired }
+        '403': { $ref: '#/components/responses/Forbidden' }
   /profiles:
     get:
       operationId: listProfiles
@@ -2981,6 +3157,53 @@ components:
           maxItems: 64
           items: { $ref: '#/components/schemas/AgentModelChoice' }
         reasoningEffort: { $ref: '#/components/schemas/AgentSelectChoices' }
+    WorkspaceRecord:
+      type: object
+      additionalProperties: false
+      required: [workspaceId, displayName, verifiedRoot, createdAt]
+      properties:
+        workspaceId: { type: string, pattern: '^wrk_[0-9a-f]{32}$' }
+        displayName: { type: string }
+        verifiedRoot: { type: string, description: Canonical local directory; a Workspace identity is not an execution grant }
+        createdAt: { type: string, format: date-time }
+    CreateWorkspaceRequest:
+      type: object
+      additionalProperties: false
+      required: [displayName, verifiedRoot]
+      properties:
+        displayName: { type: string, minLength: 1, maxLength: 160 }
+        verifiedRoot: { type: string, minLength: 1, description: Existing canonical absolute local directory }
+    WorkspacePlacement:
+      type: object
+      additionalProperties: false
+      required: [workspaceId, sandboxId, backendRoot]
+      properties:
+        workspaceId: { type: string }
+        sandboxId: { type: string }
+        backendRoot: { type: string, description: Verified Sandbox-specific root, not an arbitrary host mount }
+    WorkspaceProfileGrants:
+      type: object
+      additionalProperties: false
+      required: [profileIds]
+      properties:
+        profileIds: { type: array, items: { type: string } }
+    ProfileToolTarget:
+      type: object
+      additionalProperties: false
+      required: [profileId, toolId, workspaceId, sandboxId]
+      properties:
+        profileId: { type: string }
+        toolId: { type: string }
+        workspaceId: { type: string, description: Required for native:workspace, empty for native:jobs }
+        sandboxId: { type: string }
+    CreateProfileToolTargetRequest:
+      type: object
+      additionalProperties: false
+      required: [toolId, workspaceId, sandboxId]
+      properties:
+        toolId: { type: string }
+        workspaceId: { type: string }
+        sandboxId: { type: string }
     AgentWorkspace:
       type: object
       required: [key, workspaceRoot, profileIds]
