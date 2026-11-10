@@ -42,7 +42,6 @@ import type {
   AgentTools,
   AgentWorkspace,
   AgentModelChoices,
-  WorkspaceToolTarget,
   AgentTask,
   AgentAdmissionEvent,
   SandboxActivity,
@@ -91,7 +90,6 @@ import {
   type AgentTools as BindingAgentTools,
   type AgentWorkspace as BindingAgentWorkspace,
   type AgentModelChoices as BindingAgentModelChoices,
-  type WorkspaceToolTarget as BindingWorkspaceToolTarget,
   type AgentTask as BindingAgentTask,
   type AgentAdmissionEvent as BindingAgentAdmissionEvent,
   type Sandbox as BindingSandbox,
@@ -461,23 +459,16 @@ export function createDesktopMenderClient(): ManagementClient {
     },
     async grantAgentProfile(agentId,profileId){await Service.GrantAgentProfile(agentId,profileId);},
     async revokeAgentProfile(agentId,profileId){await Service.RevokeAgentProfile(agentId,profileId);},
-    async listWorkspaceToolTargets(providerId){const r=await Service.ListWorkspaceToolTargets(providerId);return {workspaces:(r.workspaces??[]).map(workspaceToolTarget)};},
-    async bindWorkspaceToolTarget(providerId,key,sandboxId){await Service.BindWorkspaceToolTarget(providerId,key,sandboxId);},
-    async unbindWorkspaceToolTarget(providerId,key){await Service.UnbindWorkspaceToolTarget(providerId,key);},
     async listToolSuites(){
       const result=await Service.ListToolSuites();
       return {suites:(result.suites??[]).map(toolSuiteDefinition)};
     },
     async getSandboxTools(sandboxId){return sandboxToolSuite(await Service.GetSandboxTools(sandboxId));},
-    async ensureSandboxTools(sandboxId){return sandboxToolSuite(await Service.EnsureSandboxTools(sandboxId));},
-    async removeSandboxTools(sandboxId){await Service.RemoveSandboxTools(sandboxId);},
     async getSandboxJobTools(sandboxId){return sandboxToolSuite(await Service.GetSandboxJobTools(sandboxId));},
     async getSSHJobRecovery(sandboxId){return await Service.GetSSHJobRecovery(sandboxId) as SSHJobRecoveryView;},
     async resolveSSHJobRecovery(sandboxId,taskId,body){return await Service.ResolveSSHJobRecovery(sandboxId,taskId,body.fingerprint,body.generation,body.reason) as SSHJobResolutionReceipt;},
     async getSSHJobAdmission(sandboxId){return await Service.GetSSHJobAdmission(sandboxId);},
     async setSSHJobAdmission(sandboxId,body){return await Service.SetSSHJobAdmission(sandboxId,body.paused);},
-    async ensureSandboxJobTools(sandboxId){return sandboxToolSuite(await Service.EnsureSandboxJobTools(sandboxId));},
-    async removeSandboxJobTools(sandboxId){await Service.RemoveSandboxJobTools(sandboxId);},
     async listSandboxes() {
       const result = await Service.ListSandboxes();
       return { sandboxes: (result.sandboxes ?? []).map(sandbox) };
@@ -965,7 +956,7 @@ function toolSuiteDefinition(value:BindingToolSuiteDefinition):ToolSuiteDefiniti
 }
 function sandboxToolSuite(value:BindingSandboxToolSuite):SandboxToolSuite {
   if(!["sandbox.workspace","sandbox.jobs"].includes(value.suiteId) ||
-    !["missing","ready","legacy","incomplete","conflict","incompatible"].includes(value.status)){
+    !["missing","ready","incompatible"].includes(value.status)){
     throw new MenderClientInvariantError("Invalid Sandbox Tool Suite state");
   }
   return {...value,suiteId:value.suiteId as SandboxToolSuite["suiteId"],status:value.status as SandboxToolSuite["status"],
@@ -995,9 +986,6 @@ function agent(value:BindingAgent):Agent {
   }
   return {...value,backend:value.backend,isolation:value.isolation};
 }
-function workspaceToolTarget(value:BindingWorkspaceToolTarget):WorkspaceToolTarget {
-  return {key:value.key,sandboxId:value.sandboxId};
-}
 function agentModelChoices(value:BindingAgentModelChoices):AgentModelChoices {
   return {current:value.current,models:(value.models??[]).map(m=>({id:m.id,name:m.name})),
     ...(value.reasoningEffort?{reasoningEffort:{current:value.reasoningEffort.current,
@@ -1012,7 +1000,7 @@ function agentTools(value:BindingAgentTools):AgentTools {
     throw new MenderClientInvariantError("Unknown Agent tool suite: "+value.suiteId);
   }
   if(value.status!=="missing"&&value.status!=="ready"&&value.status!=="incomplete"&&
-    value.status!=="legacy"&&value.status!=="conflict"){
+    value.status!=="conflict"){
     throw new MenderClientInvariantError("Unknown Agent tools state: "+value.status);
   }
   return {
@@ -1435,12 +1423,8 @@ function skillDeploymentDrift(
 function provider(value: BindingProvider): Provider {
   const transport = providerTransport(value.transport);
   const sourceKind = value.toolSourceKind;
-  if (sourceKind && !["provider", "agent", "sandbox", "unclaimed"].includes(sourceKind)) {
+  if (sourceKind && !["provider", "unclaimed"].includes(sourceKind)) {
     throw new MenderClientInvariantError("Unsupported Tool source kind: " + sourceKind);
-  }
-  if ((sourceKind === "agent" || sourceKind === "sandbox") &&
-      (!value.toolSourceId || !value.toolSourceName)) {
-    throw new MenderClientInvariantError("Resource-owned Tool source is missing its verified owner");
   }
   return {
     providerId: value.providerId,

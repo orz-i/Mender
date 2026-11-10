@@ -60,7 +60,6 @@ export type {
   AgentTools,
   AgentWorkspace,
   AgentModelChoices,
-  WorkspaceToolTarget,
   AgentTask,
   AgentAdmissionEvent,
   AgentGrants,

@@ -449,54 +449,6 @@ paths:
           description: Provider deleted
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
-  /tool-services/{providerId}/workspaces:
-    parameters:
-      - name: providerId
-        in: path
-        required: true
-        schema: { type: string }
-    get:
-      operationId: listWorkspaceToolTargets
-      responses:
-        '200':
-          description: Additional owner-configured Sandbox targets for an existing Workspace Tool service
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [workspaces]
-                properties:
-                  workspaces: { type: array, items: { $ref: '#/components/schemas/WorkspaceToolTarget' } }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '404': { $ref: '#/components/responses/NotFound' }
-  /tool-services/{providerId}/workspaces/{workspaceKey}:
-    parameters:
-      - name: providerId
-        in: path
-        required: true
-        schema: { type: string }
-      - name: workspaceKey
-        in: path
-        required: true
-        schema: { type: string, pattern: '^[a-z0-9_-]{1,64}$' }
-    put:
-      operationId: bindWorkspaceToolTarget
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/BindWorkspaceToolTargetRequest' }
-      responses:
-        '204': { description: Additional governed target bound without creating another Provider or Tool }
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '409': { $ref: '#/components/responses/Conflict' }
-    delete:
-      operationId: unbindWorkspaceToolTarget
-      responses:
-        '204': { description: Target alias removed without altering existing ToolIDs }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '404': { $ref: '#/components/responses/NotFound' }
   /tools/browse:
     get:
       operationId: browseTools
@@ -1285,24 +1237,6 @@ paths:
               schema: { $ref: '#/components/schemas/SandboxToolSuite' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
-    post:
-      operationId: ensureSandboxTools
-      responses:
-        '200':
-          description: Explicitly create/adopt Workspace Tool Suite without granting Profile access
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/SandboxToolSuite' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '409': { $ref: '#/components/responses/Conflict' }
-    delete:
-      operationId: removeSandboxTools
-      responses:
-        '204': { description: Unreferenced resource-owned Workspace Tool Suite retired }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '409': { $ref: '#/components/responses/Conflict' }
   /sandboxes/{sandboxId}/job-tools:
     parameters:
       - $ref: '#/components/parameters/SandboxId'
@@ -1316,24 +1250,6 @@ paths:
               schema: { $ref: '#/components/schemas/SandboxToolSuite' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
-    post:
-      operationId: ensureSandboxJobTools
-      responses:
-        '200':
-          description: Explicitly provision an SSH Jobs facade without assigning Profile permissions
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/SandboxToolSuite' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '409': { $ref: '#/components/responses/Conflict' }
-    delete:
-      operationId: removeSandboxJobTools
-      responses:
-        '204': { description: Unreferenced, quiescent SSH Jobs facade retired; TaskIDs and lifecycle marker remain }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '409': { $ref: '#/components/responses/Conflict' }
   /sandboxes/{sandboxId}/jobs/admission:
     parameters:
       - $ref: '#/components/parameters/SandboxId'
@@ -2544,7 +2460,7 @@ components:
         description: { type: string }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
-        toolSourceKind: { type: string, enum: [provider, agent, sandbox, unclaimed] }
+        toolSourceKind: { type: string, enum: [provider, unclaimed] }
         toolSourceId: { type: string, description: Verified resource ID or ProviderID for direct sources }
         toolSourceName: { type: string, description: Verified resource display name; not a runtime-health claim }
         toolSourceSelectable: { type: boolean, description: Current verified attribution and known source-wide availability for Profile candidate selection; not execution authorization }
@@ -3088,9 +3004,7 @@ components:
       additionalProperties: false
       properties:
         suiteId: { type: string, enum: [agent.delegation] }
-        status: { type: string, enum: [missing, ready, incomplete, legacy, conflict] }
-        providerId: { type: string }
-        providerName: { type: string }
+        status: { type: string, enum: [missing, ready, incomplete, conflict] }
         tools: { type: array, items: { $ref: '#/components/schemas/AgentTool' } }
     AgentTask:
       type: object
@@ -3236,19 +3150,6 @@ components:
         managed: { type: boolean }
         paused: { type: boolean }
         evidence: { $ref: '#/components/schemas/SSHJobRecoveryEvidence' }
-    WorkspaceToolTarget:
-      type: object
-      required: [key, sandboxId]
-      additionalProperties: false
-      properties:
-        key: { type: string }
-        sandboxId: { type: string }
-    BindWorkspaceToolTargetRequest:
-      type: object
-      required: [sandboxId]
-      additionalProperties: false
-      properties:
-        sandboxId: { type: string, pattern: '^sbx_[0-9a-f]{32}$' }
     SandboxToolSuite:
       type: object
       required: [suiteId, sandboxId, status, available, tools]
@@ -3256,11 +3157,9 @@ components:
       properties:
         suiteId: { type: string, enum: [sandbox.workspace, sandbox.jobs] }
         sandboxId: { type: string, pattern: '^sbx_[0-9a-f]{32}$' }
-        status: { type: string, enum: [missing, ready, legacy, incomplete, conflict, incompatible] }
+        status: { type: string, enum: [missing, ready, incompatible] }
         available: { type: boolean }
         issue: { type: string }
-        providerId: { type: string }
-        providerName: { type: string }
         tools: { type: array, items: { $ref: '#/components/schemas/SandboxTool' } }
     Sandbox:
       type: object

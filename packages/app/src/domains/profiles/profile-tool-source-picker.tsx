@@ -1,14 +1,14 @@
 import { useMemo } from "react";
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 
-import type { Provider, ToolSummary } from "@mender/sdk";
+import type { ToolSummary } from "@mender/sdk";
 import { Button } from "@mender/ui/components/button";
 import { Input } from "@mender/ui/components/input";
 
 import { t, tCount } from "../../i18n/i18n";
 import { usePagination } from "../../shared/pagination";
 import { TablePagination } from "../../shared/table-pagination";
-import { profileSourceLabels } from "./profile-source-label";
+import type { ProfileToolSource } from "./profile-source-label";
 
 /**
  * Profile picker source keys are canonical SourceRefs, not provider IDs.
@@ -16,7 +16,7 @@ import { profileSourceLabels } from "./profile-source-label";
  */
 export function ProfileToolSourcePicker({
   open,
-  providers,
+  sources,
   tools,
   hasMore,
   query,
@@ -38,7 +38,7 @@ export function ProfileToolSourcePicker({
   onClose,
 }: {
   open: boolean;
-  providers: Provider[];
+  sources: ProfileToolSource[];
   tools: ToolSummary[];
   hasMore: boolean;
   query: string;
@@ -59,18 +59,13 @@ export function ProfileToolSourcePicker({
   onSave: () => void;
   onClose: () => void;
 }) {
-  const selectedProvider = providers.find((provider) => "provider:" + provider.providerId === sourceId);
-  const sourceLabels = useMemo(() => profileSourceLabels(providers), [providers]);
+  const selectedSource = sources.find((source) => source.sourceId === sourceId);
   const selectableSources = useMemo(() => {
-    const needle = sourceQuery.trim().toLocaleLowerCase();
-    return providers
-      .filter((provider) => provider.toolSourceSelectable === true && provider.toolCount > 0)
-      .filter((provider) => !needle ||
-        (sourceLabels.get(provider.providerId) ?? "").toLocaleLowerCase().includes(needle))
-      .sort((left, right) =>
-        (sourceLabels.get(left.providerId) ?? "").localeCompare(sourceLabels.get(right.providerId) ?? "") ||
-        left.providerId.localeCompare(right.providerId));
-  }, [providers, sourceQuery, sourceLabels]);
+    const needle=sourceQuery.trim().toLocaleLowerCase();
+    return sources.filter((source) => source.selectable && source.toolCount>0)
+      .filter((source) => !needle || source.label.toLocaleLowerCase().includes(needle))
+      .sort((left,right)=>left.label.localeCompare(right.label)||left.sourceId.localeCompare(right.sourceId));
+  },[sources,sourceQuery]);
 
   // Hooks remain unconditional while only one information level is rendered.
   const sourcesPagination = usePagination(selectableSources);
@@ -96,7 +91,7 @@ export function ProfileToolSourcePicker({
                 </Button>
                 <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
                 <h2 className="min-w-0 truncate text-base font-semibold">
-                  {selectedProvider ? sourceLabels.get(selectedProvider.providerId) : t("Service unavailable")}
+                  {selectedSource?.label ?? t("Service unavailable")}
                 </h2>
               </div>
               <p className="text-xs text-muted-foreground">
@@ -197,23 +192,23 @@ export function ProfileToolSourcePicker({
               </span>
             </div>
             <div data-slot="profile-source-picker-list" className="min-h-0 flex-1 divide-y divide-border overflow-y-auto overscroll-contain rounded-lg border border-border">
-              {sourcesPagination.items.length ? sourcesPagination.items.map((provider) => (
+              {sourcesPagination.items.length ? sourcesPagination.items.map((source) => (
                 <button
-                  key={provider.providerId}
+                  key={source.sourceId}
                   type="button"
                   disabled={busy}
-                  aria-label={t("Open source {{source}}", { source: sourceLabels.get(provider.providerId) ?? "" })}
+                  aria-label={t("Open source {{source}}", { source: source.label })}
                   className="flex w-full items-center gap-3 px-4 py-4 text-left hover:bg-muted/40 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring disabled:opacity-50"
-                  onClick={() => { onOpenSource("provider:" + provider.providerId); toolsPagination.reset(); }}
+                  onClick={() => { onOpenSource(source.sourceId); toolsPagination.reset(); }}
                 >
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium">{sourceLabels.get(provider.providerId)}</span>
+                    <span className="block truncate text-sm font-medium">{source.label}</span>
                     <span className="mt-1 block text-xs text-muted-foreground">
-                      {tCount(provider.toolCount, "{{count}} tool", "{{count}} tools")}
+                      {tCount(source.toolCount, "{{count}} tool", "{{count}} tools")}
                     </span>
                   </span>
                   <span className="text-xs text-muted-foreground">
-                    {tCount(selectedCounts.get("provider:" + provider.providerId) ?? 0, "{{count}} selected", "{{count}} selected")}
+                    {tCount(selectedCounts.get(source.sourceId) ?? 0, "{{count}} selected", "{{count}} selected")}
                   </span>
                   <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground" />
                 </button>

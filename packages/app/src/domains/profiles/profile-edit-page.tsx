@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 
 import type {
+  Agent,
   Credential,
   ManagementClient,
   Profile,
@@ -33,7 +34,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@mender/ui/components/p
 import { errorMessage } from "../../shared/errors";
 import { FormHeading } from "../../shared/form-info";
 import { ProfileToolSourcePicker } from "./profile-tool-source-picker";
-import { profileSourceLabels } from "./profile-source-label";
+import { profileToolSources } from "./profile-source-label";
 import { EmptyState, ErrorNotice } from "../../shared/page";
 import { DetailWorkspace } from "../../shared/detail-workspace";
 import { usePagination } from "../../shared/pagination";
@@ -66,6 +67,7 @@ function ProfileEditor({ client, slug }: { client: ManagementClient; slug: strin
   const location = useLocation();
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [providers, setProviders] = useState<Provider[]>([]);
+  const [agents,setAgents] = useState<Agent[]>([]);
   const [credentials, setCredentials] = useState<Credential[]>([]);
   const [catalogTools, setCatalogTools] = useState<ToolSummary[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -88,7 +90,7 @@ function ProfileEditor({ client, slug }: { client: ManagementClient; slug: strin
   const [pickerSlug, setPickerSlug] = useState("");
   const [pickerQuery, setPickerQuery] = useState("");
   const [pickerSourceQuery, setPickerSourceQuery] = useState("");
-  const [pickerProvider, setPickerProvider] = useState("");
+  const [pickerSourceId, setPickerSourceId] = useState("");
   const [pickerTools, setPickerTools] = useState<ToolSummary[]>([]);
   const [pickerNextCursor,setPickerNextCursor] = useState<string|null>(null);
   const [pickerAppliedQuery,setPickerAppliedQuery] = useState("");
@@ -123,18 +125,21 @@ function ProfileEditor({ client, slug }: { client: ManagementClient; slug: strin
     void Promise.all([
       client.listProfiles(),
       client.listProviders(),
+      client.listAgents(),
       client.listCredentials(),
       client.browseTools({ limit: 100 }),
     ])
       .then(([
         profileResult,
         providerResult,
+        agentResult,
         credentialResult,
         toolResult,
       ]) => {
         if (active) {
           setProfiles(profileResult.profiles);
           setProviders(providerResult.providers);
+          setAgents(agentResult.agents);
           setCredentials(credentialResult.credentials);
           setCatalogTools(toolResult.tools);
           setHasSnapshot(true);
@@ -205,11 +210,8 @@ function ProfileEditor({ client, slug }: { client: ManagementClient; slug: strin
     return result;
   }, [catalogTools, pickerTools]);
 
-  const providerById = useMemo(
-    () => new Map(providers.map((provider) => [provider.providerId, provider])),
-    [providers],
-  );
-  const sourceLabels = useMemo(() => profileSourceLabels(providers), [providers]);
+  const sourceEntries = useMemo(() => profileToolSources(providers,agents,catalogTools), [providers,agents,catalogTools]);
+  const sourceById = useMemo(() => new Map(sourceEntries.map((source)=>[source.sourceId,source])),[sourceEntries]);
 
   // Profile ToolBindings persist only canonical ToolIDs. Hydrate missing
   // selected Tool metadata by exact ID so a second+ Catalog page cannot
@@ -250,12 +252,10 @@ function ProfileEditor({ client, slug }: { client: ManagementClient; slug: strin
       counts.set(id, (counts.get(id) ?? 0) + 1);
     }
     return [...counts].map(([id, count]) => {
-      const provider = id.startsWith("provider:") ? providerById.get(id.slice("provider:".length)) : undefined;
-      return { id, count, provider, label: provider
-        ? sourceLabels.get(provider.providerId) ?? t("Unknown source")
-        : t("Unknown source") };
+      const source=sourceById.get(id);
+      return {id,count,source,label:source?.label ?? t("Unknown source")};
     }).sort((a, b) => a.label.localeCompare(b.label) || a.id.localeCompare(b.id));
-  }, [managedProfile, knownTools, providerById, sourceLabels]);
+  }, [managedProfile, knownTools, sourceById]);
 
   const visibleManagedSources = useMemo(() => {
     const needle = manageQuery.trim().toLocaleLowerCase();
@@ -307,7 +307,7 @@ function ProfileEditor({ client, slug }: { client: ManagementClient; slug: strin
     pickerRequestRef.current += 1;
     setPickerSourceQuery("");
     setPickerQuery("");
-    setPickerProvider("");
+    setPickerSourceId("");
     setPickerTools([]);
     setPickerNextCursor(null);
     setPickerAppliedQuery("");
@@ -315,23 +315,28 @@ function ProfileEditor({ client, slug }: { client: ManagementClient; slug: strin
     setPickerSelected(new Set(managedProfile.tools.map((selection) => selection.toolId)));
     // Refresh only source metadata; the chooser starts at sources, not a
     // preloaded flat Catalog Tool list.
-    void client.listProviders().then((response) => setProviders(response.providers))
-      .catch((reason: unknown) => setError(errorMessage(reason)));
+    void Promise.all([
+      client.listProviders(), client.listAgents(),
+      client.browseTools({sourceId:"native:workspace",limit:100}),
+      client.browseTools({sourceId:"native:jobs",limit:100}),
+    ]).then(([providerResult,agentResult,workspaceResult,jobsResult])=>{
+      setProviders(providerResult.providers);
+      setAgents(agentResult.agents);
+      setCatalogTools((current)=>mergeTools(mergeTools(current,workspaceResult.tools.filter(t=>t.sourceId==="native:workspace")),jobsResult.tools.filter(t=>t.sourceId==="native:jobs")));
+    }).catch((reason:unknown)=>setError(errorMessage(reason)));
 
     // Full-page selection replaces the editor. When already managing an available
     // source, continue in that source instead of making the user choose it twice.
     setManageSlug("");
     setPickerSlug(slug);
-    const currentProvider = manageSourceId.startsWith("provider:") ? providerById.get(manageSourceId.slice("provider:".length)) : undefined;
-    if (currentProvider?.toolSourceSelectable && currentProvider.toolCount > 0) {
-      void openPickerSource(manageSourceId);
-    }
+    const currentSource=sourceById.get(manageSourceId);
+    if(currentSource?.selectable && currentSource.toolCount>0){void openPickerSource(manageSourceId);}
   }
 
   async function openPickerSource(sourceId: string) {
-    if (busy || !sourceId.startsWith("provider:")) return; // Stage G owns non-Provider source UI.
+    if (busy || !sourceById.get(sourceId)?.selectable) return;
     const requestId = ++pickerRequestRef.current;
-    setPickerProvider(sourceId);
+    setPickerSourceId(sourceId);
     setPickerQuery("");
     setPickerAppliedQuery("");
     setPickerTools([]);
@@ -353,7 +358,7 @@ function ProfileEditor({ client, slug }: { client: ManagementClient; slug: strin
 
   function backToPickerSources() {
     pickerRequestRef.current += 1;
-    setPickerProvider("");
+    setPickerSourceId("");
     setPickerQuery("");
     setPickerAppliedQuery("");
     setPickerTools([]);
@@ -362,10 +367,10 @@ function ProfileEditor({ client, slug }: { client: ManagementClient; slug: strin
   }
 
   async function searchPicker() {
-    if (!pickerProvider || busy) return;
+    if (!pickerSourceId || busy) return;
     const requestId = ++pickerRequestRef.current;
     const query = pickerQuery.trim();
-    const sourceId = pickerProvider;
+    const sourceId = pickerSourceId;
     setBusy(true);
     setError("");
     setPickerNextCursor(null);
@@ -386,9 +391,9 @@ function ProfileEditor({ client, slug }: { client: ManagementClient; slug: strin
   }
 
   async function loadMorePicker() {
-    if (!pickerProvider || !pickerNextCursor || busy) return;
+    if (!pickerSourceId || !pickerNextCursor || busy) return;
     const requestId = ++pickerRequestRef.current;
-    const sourceId = pickerProvider;
+    const sourceId = pickerSourceId;
     const cursor = pickerNextCursor;
     setBusy(true);
     setError("");
@@ -450,7 +455,7 @@ function ProfileEditor({ client, slug }: { client: ManagementClient; slug: strin
     setPickerSlug("");
     setPickerSourceQuery("");
     setPickerQuery("");
-    setPickerProvider("");
+    setPickerSourceId("");
     setPickerTools([]);
     setPickerNextCursor(null);
     setError("");
@@ -816,7 +821,7 @@ function ProfileEditor({ client, slug }: { client: ManagementClient; slug: strin
                             {tCount(group.count, "{{count}} selected Tool", "{{count}} selected Tools")}
                           </span>
                         </span>
-                        {group.provider?.toolSourceSelectable === false || !group.provider ? (
+                        {!group.source?.selectable ? (
                           <Badge variant="outline">{t("Unavailable")}</Badge>
                         ) : null}
                         <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground" />
@@ -841,13 +846,13 @@ function ProfileEditor({ client, slug }: { client: ManagementClient; slug: strin
       ) : null}
       <ProfileToolSourcePicker
         open={pickerProfile !== null}
-        providers={providers}
+        sources={sourceEntries}
         tools={pickerTools}
         hasMore={pickerNextCursor !== null && pickerAppliedQuery === pickerQuery.trim()}
         onLoadMore={() => void loadMorePicker()}
         query={pickerQuery}
         sourceQuery={pickerSourceQuery}
-        sourceId={pickerProvider}
+        sourceId={pickerSourceId}
         selected={pickerSelected}
         selectedCounts={pickerSelectedCounts}
         dirty={pickerDirty}

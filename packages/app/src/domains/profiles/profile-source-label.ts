@@ -1,4 +1,5 @@
-import type { Provider } from "@mender/sdk";
+import type { Agent, Provider, ToolSummary } from "@mender/sdk";
+import { t } from "../../i18n/i18n";
 
 import { toolSourceLabel } from "../tools";
 
@@ -22,4 +23,37 @@ export function profileSourceLabels(providers: Provider[]): Map<string, string> 
     );
   }
   return labels;
+}
+
+// The Profile chooser consumes real Tool SourceRefs. Provider inventory alone
+// is insufficient: Agent as Tool and host-native Workspace/Jobs tools do not
+// have (or create) a ProviderID.
+export interface ProfileToolSource {
+  sourceId: string;
+  label: string;
+  toolCount: number;
+  selectable: boolean;
+}
+
+export function profileToolSources(providers: Provider[], agents: Agent[], tools: ToolSummary[]): ProfileToolSource[] {
+  const providerLabels = profileSourceLabels(providers);
+  const result: ProfileToolSource[] = providers.map((provider) => ({
+    sourceId: "provider:" + provider.providerId,
+    label: providerLabels.get(provider.providerId) ?? provider.displayName,
+    toolCount: provider.toolCount,
+    selectable: provider.toolSourceSelectable === true,
+  }));
+  const agentNames = new Map<string,number>();
+  for (const agent of agents) agentNames.set(agent.name,(agentNames.get(agent.name)??0)+1);
+  for (const agent of agents) result.push({
+    sourceId: "agent:" + agent.agentId,
+    label: (agentNames.get(agent.name)??0)>1 ? agent.name+" · "+agent.agentId.slice(-8) : agent.name,
+    toolCount: 5,
+    selectable: true, // AgentGrant/ToolBinding is independently required for invocation.
+  });
+  for (const native of [{id:"native:workspace",label:t("Workspace tools")},{id:"native:jobs",label:t("SSH Jobs")}] as const) {
+    const count = tools.filter((tool) => tool.sourceId === native.id).length;
+    if (count) result.push({sourceId:native.id,label:native.label,toolCount:count,selectable:true});
+  }
+  return result;
 }

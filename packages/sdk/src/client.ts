@@ -376,25 +376,12 @@ export function createMenderClient(
       if(!result.response.ok)throwApiError(result.error,result.response);
     },
     async listToolSuites(){return requireData(await client.GET("/tool-suites"));},
-    async listWorkspaceToolTargets(providerId){return requireData(await client.GET("/tool-services/{providerId}/workspaces",{params:{path:{providerId}}}));},
-    async bindWorkspaceToolTarget(providerId,workspaceKey,sandboxId){const r=await client.PUT("/tool-services/{providerId}/workspaces/{workspaceKey}",{params:{path:{providerId,workspaceKey}},body:{sandboxId}});if(!r.response.ok)throwApiError(r.error,r.response);},
-    async unbindWorkspaceToolTarget(providerId,workspaceKey){const r=await client.DELETE("/tool-services/{providerId}/workspaces/{workspaceKey}",{params:{path:{providerId,workspaceKey}}});if(!r.response.ok)throwApiError(r.error,r.response);},
     async getSandboxTools(sandboxId){return requireData(await client.GET("/sandboxes/{sandboxId}/tools",{params:{path:{sandboxId}}}));},
-    async ensureSandboxTools(sandboxId){return requireData(await client.POST("/sandboxes/{sandboxId}/tools",{params:{path:{sandboxId}}}));},
-    async removeSandboxTools(sandboxId){
-      const result=await client.DELETE("/sandboxes/{sandboxId}/tools",{params:{path:{sandboxId}}});
-      if(!result.response.ok)throwApiError(result.error,result.response);
-    },
     async getSandboxJobTools(sandboxId){return requireData(await client.GET("/sandboxes/{sandboxId}/job-tools",{params:{path:{sandboxId}}}));},
     async getSSHJobRecovery(sandboxId){return requireData(await client.GET("/sandboxes/{sandboxId}/jobs/recovery",{params:{path:{sandboxId}}}));},
     async resolveSSHJobRecovery(sandboxId,taskId,body){return requireData(await client.POST("/sandboxes/{sandboxId}/jobs/recovery/{taskId}/resolve",{params:{path:{sandboxId,taskId}},body}));},
     async getSSHJobAdmission(sandboxId){return requireData(await client.GET("/sandboxes/{sandboxId}/jobs/admission",{params:{path:{sandboxId}}}));},
     async setSSHJobAdmission(sandboxId,body){return requireData(await client.PUT("/sandboxes/{sandboxId}/jobs/admission",{params:{path:{sandboxId}},body}));},
-    async ensureSandboxJobTools(sandboxId){return requireData(await client.POST("/sandboxes/{sandboxId}/job-tools",{params:{path:{sandboxId}}}));},
-    async removeSandboxJobTools(sandboxId){
-      const result=await client.DELETE("/sandboxes/{sandboxId}/job-tools",{params:{path:{sandboxId}}});
-      if(!result.response.ok)throwApiError(result.error,result.response);
-    },
     async listSandboxes() {
       const result = await client.GET("/sandboxes");
       return requireData(result);

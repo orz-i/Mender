@@ -24,10 +24,6 @@ export function BindAgentWorkspace(id: string, key: string, workspaceRoot: strin
     return $Call.ByID(441566533, id, key, workspaceRoot);
 }
 
-export function BindWorkspaceToolTarget(providerID: string, key: string, sandboxID: string): $CancellablePromise<void> {
-    return $Call.ByID(3051048187, providerID, key, sandboxID);
-}
-
 export function BrowseTools(limit: number, sourceID: string, cursor: string): $CancellablePromise<$models.ToolList> {
     return $Call.ByID(594360793, limit, sourceID, cursor);
 }
@@ -190,14 +186,6 @@ export function EnableSkillInstallation(installationID: string): $CancellablePro
 
 export function EnsureAgentTools(id: string): $CancellablePromise<$models.AgentTools> {
     return $Call.ByID(2907355678, id);
-}
-
-export function EnsureSandboxJobTools(id: string): $CancellablePromise<$models.SandboxToolSuite> {
-    return $Call.ByID(4104741551, id);
-}
-
-export function EnsureSandboxTools(id: string): $CancellablePromise<$models.SandboxToolSuite> {
-    return $Call.ByID(2389196380, id);
 }
 
 /**
@@ -460,10 +448,6 @@ export function ListTunnels(): $CancellablePromise<$models.TunnelList> {
     return $Call.ByID(3666209663);
 }
 
-export function ListWorkspaceToolTargets(providerID: string): $CancellablePromise<$models.WorkspaceToolTargets> {
-    return $Call.ByID(1567910759, providerID);
-}
-
 export function PutSandboxProfileGrants(sandboxID: string, profileID: string, capabilities: string[] | null): $CancellablePromise<$models.SandboxProfileGrants> {
     return $Call.ByID(3444082118, sandboxID, profileID, capabilities);
 }
@@ -490,14 +474,6 @@ export function ReleasePendingAgentApprovals(agentID: string, workspaceKey: stri
 
 export function RemoveProfileTool(slug: string, toolID: string): $CancellablePromise<$models.Profile> {
     return $Call.ByID(610642707, slug, toolID);
-}
-
-export function RemoveSandboxJobTools(id: string): $CancellablePromise<void> {
-    return $Call.ByID(2580882197, id);
-}
-
-export function RemoveSandboxTools(id: string): $CancellablePromise<void> {
-    return $Call.ByID(471789370, id);
 }
 
 /**
@@ -588,10 +564,6 @@ export function TrustSkillInstallation(installationID: string): $CancellableProm
 
 export function UnbindAgentWorkspace(id: string, key: string): $CancellablePromise<void> {
     return $Call.ByID(57772674, id, key);
-}
-
-export function UnbindWorkspaceToolTarget(providerID: string, key: string): $CancellablePromise<void> {
-    return $Call.ByID(2928939058, providerID, key);
 }
 
 /**

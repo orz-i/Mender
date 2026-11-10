@@ -775,89 +775,22 @@ describe("desktop Mender client", () => {
     );
   });
 
-  it("preserves Host-verified Tool service ownership across the native Wails boundary", async () => {
-    const common = {
-      namespace: "tools",
-      displayName: "Internal facade",
-      description: "",
-      createdAt: "2026-10-16T00:00:00Z",
-      updatedAt: "2026-10-16T00:00:00Z",
-      transport: "unconfigured",
-      toolCount: 4,
-    };
-    vi.mocked(Service.ListProviders).mockResolvedValue({
-      providers: [
-        {
-          ...common, providerId: "prov_agent",
-          toolSourceKind: "agent",
-          toolSourceId: "agent_grok",
-          toolSourceName: "Grok - executor",
-          toolSourceSelectable: true,
-          pluginId: "io.mender.provider.agent-delegation",
-        },
-        {
-          ...common, providerId: "prov_sandbox",
-          toolSourceKind: "sandbox",
-          toolSourceId: "sbx_rocky",
-          toolSourceName: "Rocky",
-          toolSourceSelectable: false,
-          pluginId: "io.mender.provider.workspace",
-        },
-        {
-          ...common, providerId: "prov_anysearch",
-          toolSourceKind: "provider",
-          toolSourceId: "prov_anysearch",
-          toolSourceName: "AnySearch",
-          toolSourceSelectable: true,
-          displayName: "AnySearch",
-          pluginId: "io.mender.provider.mcp",
-        },
-        {
-          ...common, providerId: "prov_legacy",
-          toolSourceKind: "unclaimed",
-          toolSourceSelectable: false,
-          pluginId: "io.mender.provider.workspace",
-        },
-      ],
-    });
-
-    const { providers } = await createDesktopMenderClient().listProviders();
-    expect(providers.map(({ toolSourceKind, toolSourceId, toolSourceName }) => ({
-      toolSourceKind, toolSourceId, toolSourceName,
-    }))).toEqual([
-      { toolSourceKind: "agent", toolSourceId: "agent_grok", toolSourceName: "Grok - executor" },
-      { toolSourceKind: "sandbox", toolSourceId: "sbx_rocky", toolSourceName: "Rocky" },
-      { toolSourceKind: "provider", toolSourceId: "prov_anysearch", toolSourceName: "AnySearch" },
-      { toolSourceKind: "unclaimed", toolSourceId: undefined, toolSourceName: undefined },
-    ]);
-    expect(providers.map((item) => item.toolSourceSelectable)).toEqual([true, false, true, false]);
-    expect(providers[0]?.displayName).toBe("Internal facade");
-    expect(providers[2]?.displayName).toBe("AnySearch");
+  it("only reports independent Providers, with no resource-owned facade sources", async () => {
+    const common={providerId:"prov_anysearch",namespace:"anysearch",displayName:"AnySearch",description:"",createdAt:"2026-10-16T00:00:00Z",updatedAt:"2026-10-16T00:00:00Z",transport:"http",toolCount:4};
+    vi.mocked(Service.ListProviders).mockResolvedValue({providers:[{...common,toolSourceKind:"provider",toolSourceId:"prov_anysearch",toolSourceName:"AnySearch",toolSourceSelectable:true}]});
+    const {providers}=await createDesktopMenderClient().listProviders();
+    expect(providers).toHaveLength(1);
+    expect(providers[0]?.toolSourceKind).toBe("provider");
+    expect(providers[0]?.toolSourceId).toBe("prov_anysearch");
+    expect(providers[0]?.toolSourceSelectable).toBe(true);
   });
-
-  it("fails closed when Wails returns unsupported or incomplete Tool service ownership", async () => {
-    const base = {
-      providerId: "prov_unknown",
-      namespace: "unknown",
-      displayName: "Unknown",
-      description: "",
-      createdAt: "2026-10-16T00:00:00Z",
-      updatedAt: "2026-10-16T00:00:00Z",
-      transport: "unconfigured",
-      toolCount: 0,
-    };
-    const client = createDesktopMenderClient();
-    vi.mocked(Service.ListProviders).mockResolvedValue({
-      providers: [{ ...base, toolSourceKind: "plugin-marketplace" }],
-    });
+  it("rejects unsupported old resource facade projections", async () => {
+    const base={providerId:"prov_unknown",namespace:"unknown",displayName:"Unknown",description:"",createdAt:"2026-10-16T00:00:00Z",updatedAt:"2026-10-16T00:00:00Z",transport:"unconfigured",toolCount:0};
+    const client=createDesktopMenderClient();
+    vi.mocked(Service.ListProviders).mockResolvedValue({providers:[{...base,toolSourceKind:"agent"}]});
     await expect(client.listProviders()).rejects.toThrow("Unsupported Tool source kind");
-
-    vi.mocked(Service.ListProviders).mockResolvedValue({
-      providers: [{ ...base, toolSourceKind: "agent", toolSourceId: "agent_grok" }],
-    });
-    await expect(client.listProviders()).rejects.toThrow(
-      "Resource-owned Tool source is missing its verified owner",
-    );
+    vi.mocked(Service.ListProviders).mockResolvedValue({providers:[{...base,toolSourceKind:"sandbox"}]});
+    await expect(client.listProviders()).rejects.toThrow("Unsupported Tool source kind");
   });
 
   it("normalizes nullable binding arrays without leaking Wails models", async () => {

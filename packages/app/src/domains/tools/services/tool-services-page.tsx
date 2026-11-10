@@ -455,13 +455,6 @@ export function ToolsPage({ client }: { client: ManagementClient }) {
             className="w-full min-w-0 divide-y divide-border/80 overflow-hidden rounded-xl border border-border bg-card">
             {providerPagination.items.map(provider => {
               const name=toolSourceLabel(provider);
-              const managed=provider.toolSourceKind==="agent" || provider.toolSourceKind==="sandbox" ||
-                isInternalProvider(provider.pluginId);
-              const ownerPath=provider.toolSourceKind==="agent" && provider.toolSourceId
-                ? "/agents/"+encodeURIComponent(provider.toolSourceId)
-                : provider.toolSourceKind==="sandbox" && provider.toolSourceId
-                  ? "/sandboxes/"+encodeURIComponent(provider.toolSourceId)
-                  : null;
               const hasTools=provider.toolCount>0;
               const description=toolServiceDescription(provider).trim() ||
                 (!hasTools ? t("No tools have been discovered for this service yet.") : "");
@@ -479,16 +472,6 @@ export function ToolsPage({ client }: { client: ManagementClient }) {
                   {tCount(provider.toolCount,"{{count}} tool","{{count}} tools")}
                 </span>
                 <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-1.5">
-                  {ownerPath ? (
-                    <Button size="sm" variant="ghost" onClick={() => void navigate(ownerPath)}>
-                      {t("Manage")}
-                    </Button>
-                  ) : managed ? (
-                    <Button size="sm" variant="ghost" onClick={() => setViewProvider(provider)}>
-                      {t("Details")}
-                    </Button>
-                  ) : null}
-                  {!managed ? (
                     <Popover open={openActionsProviderId === provider.providerId}
                       onOpenChange={(open) => setOpenActionsProviderId(open ? provider.providerId : null)}>
                       <PopoverTrigger render={<Button size="icon-sm" variant="ghost" type="button" className="size-8 text-muted-foreground"
@@ -534,7 +517,6 @@ export function ToolsPage({ client }: { client: ManagementClient }) {
                         </div>
                       </PopoverContent>
                     </Popover>
-                  ) : null}
                 </div>
               </div>;
             })}

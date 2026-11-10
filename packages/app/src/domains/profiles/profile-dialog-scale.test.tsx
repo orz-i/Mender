@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
-import type { ManagementClient, Profile, Provider, ToolSummary } from "@mender/sdk";
+import type { Agent, ManagementClient, Profile, Provider, ToolSummary } from "@mender/sdk";
 import { TooltipProvider } from "@mender/ui/components/tooltip";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -56,25 +56,27 @@ afterEach(() => {
 
 function show(
   overrides: Partial<ManagementClient> = {},
-  options: { initialProfile?: Profile; providers?: Provider[]; initialSection?: "overview" | "tools" } = {},
+  options: { initialProfile?: Profile; providers?: Provider[]; initialSection?: "overview" | "tools"; agents?: Agent[]; extraTools?: ToolSummary[] } = {},
 ) {
   const initialProfile = options.initialProfile ?? profile;
   const replaceProfileTools = vi.fn().mockImplementation((_slug: string, body: { tools: Profile["tools"] }) =>
     Promise.resolve({ ...initialProfile, tools: body.tools }));
+  const catalogue=[...tools,...(options.extraTools??[])];
   const browseTools = vi.fn().mockImplementation((input?: { sourceId?: string; limit?: number }) => {
     const list = input?.sourceId
-      ? tools.filter((tool) => tool.sourceId === input.sourceId)
-      : tools;
+      ? catalogue.filter((tool) => tool.sourceId === input.sourceId)
+      : catalogue;
     return Promise.resolve({ tools: list.slice(0, input?.limit ?? 100) });
   });
   const getTool = vi.fn().mockImplementation((id: string) => {
-    const tool = tools.find((item) => item.toolId === id);
+    const tool = catalogue.find((item) => item.toolId === id);
     if (!tool) return Promise.reject(new Error("not found"));
     return Promise.resolve({ ...tool, sourceKey: tool.name, inputSchema: {}, tags: [] });
   });
   const client = {
     listProfiles: vi.fn().mockResolvedValue({ profiles: [initialProfile] }),
     listProviders: vi.fn().mockResolvedValue({ providers: options.providers ?? providers }),
+    listAgents: vi.fn().mockResolvedValue({agents:options.agents??[]}),
     listCredentials: vi.fn().mockResolvedValue({ credentials: [] }),
     listTunnels: vi.fn().mockResolvedValue({ tunnels: [] }),
     browseTools,
@@ -349,12 +351,12 @@ it("selects only loaded ToolIDs; never implicitly grants later pages or future t
 it("excludes unavailable/unclaimed sources from Add but preserves their existing bindings in Manage", async () => {
   const candidates: Provider[] = [
     providers[0]!,
-    { ...providers[1]!, toolSourceSelectable: false, toolSourceKind: "sandbox" },
+    { ...providers[1]!, toolSourceSelectable: false, toolSourceKind: "provider" },
     { ...providers[2]!, toolSourceSelectable: false, toolSourceKind: "unclaimed" },
   ];
   show({}, { providers: candidates });
   const manageDialog = await manage();
-  expect(within(manageDialog).getByRole("button", { name: "Manage source Tool source 1 · Workspace" })).toBeTruthy();
+  expect(within(manageDialog).getByRole("button", { name: "Manage source Tool source 1" })).toBeTruthy();
   expect(within(manageDialog).getByRole("button", { name: "Manage source Tool source 2" })).toBeTruthy();
   fireEvent.click(within(manageDialog).getByRole("button", { name: "Add tools" }));
   const picker = await screen.findByRole("region", { name: "Choose tool sources" });
@@ -388,10 +390,10 @@ it("hydrates a bound Tool beyond the first Catalog page before grouping it by ex
   expect(sent.tools.some((binding) => binding.toolId === extra.toolId)).toBe(true);
 });
 
-it("distinguishes two identically named Agent instances by their unique configured source", async () => {
+it("distinguishes two identically named Provider instances by namespace", async () => {
   const duplicate: Provider[] = [
-    { ...providers[0]!, namespace: "agent-same-a", displayName: "Same Agent", toolSourceName: "Same Agent", toolSourceKind: "agent", toolSourceId: "agent_a" },
-    { ...providers[1]!, namespace: "agent-same-b", displayName: "Same Agent", toolSourceName: "Same Agent", toolSourceKind: "agent", toolSourceId: "agent_b" },
+    { ...providers[0]!, namespace: "agent-same-a", displayName: "Same Agent", toolSourceName: "Same Agent", toolSourceKind: "provider", toolSourceId: "agent_a" },
+    { ...providers[1]!, namespace: "agent-same-b", displayName: "Same Agent", toolSourceName: "Same Agent", toolSourceKind: "provider", toolSourceId: "agent_b" },
     providers[2]!,
   ];
   const { browseTools } = show({}, { providers: duplicate });
@@ -511,4 +513,22 @@ it("requires explicit confirmation before removing a Profile Tool and keeps all 
   expect(body.tools.some((binding) => binding.toolId === "tool_0001")).toBe(false);
   expect(body.tools.find((binding) => binding.toolId === "tool_0065")).toEqual(profile.tools[64]);
   await vi.waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+});
+
+it("chooses configured Agent as Tool and canonical Native Workspace operations without creating Providers",async()=>{
+  const agent:Agent={agentId:"agent_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",name:"Review bot",backend:"grok",pluginId:"io.mender.agent.grok",extensionId:"main",workspaceRoot:"/tmp/test",isolation:"host",backendAvailable:true,createdAt:"2026-11-09T00:00:00Z"};
+  const native:ToolSummary={rank:1,toolId:"tool_native_read",sourceId:"native:workspace",sourceKind:"native",name:"read",title:"Native read",description:"Read bounded Workspace"};
+  const delegate:ToolSummary={rank:2,toolId:"tool_agent_delegate",sourceId:"agent:"+agent.agentId,sourceKind:"agent",name:"delegate",title:"Delegate",description:"Submit Agent task"};
+  const {browseTools}=show({}, {agents:[agent],extraTools:[native,delegate]});
+  const picker=await chooseSources();
+  const agentSource=await within(picker).findByRole("button",{name:"Open source Review bot"});
+  expect(agentSource).toBeTruthy();
+  expect(within(picker).getByRole("button",{name:"Open source Workspace tools"})).toBeTruthy();
+  fireEvent.click(agentSource);
+  expect(await within(picker).findByText("Delegate")).toBeTruthy();
+  expect(browseTools).toHaveBeenCalledWith({sourceId:"agent:"+agent.agentId,limit:100});
+  fireEvent.click(within(picker).getByRole("button",{name:"Back to sources"}));
+  fireEvent.click(within(picker).getByRole("button",{name:"Open source Workspace tools"}));
+  expect(await within(picker).findByText("Native read")).toBeTruthy();
+  expect(browseTools).toHaveBeenCalledWith({sourceId:"native:workspace",limit:100});
 });

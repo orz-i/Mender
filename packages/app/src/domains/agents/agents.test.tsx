@@ -23,7 +23,6 @@ const task:AgentTask={
   updatedAt:"2026-10-11T10:01:00Z",cancelRequested:false,
 };
 const suite:AgentTools={suiteId:"agent.delegation",status:"ready",
-  providerId:"prov_00000000000000000000000000000001",providerName:"Code Reviewer",
   tools:["delegate","status","result","cancel"].map((name,i)=>({
     toolId:"tool_"+String(i+1).padStart(32,"0"),sourceKey:"agent."+name,name,title:name,
   })),

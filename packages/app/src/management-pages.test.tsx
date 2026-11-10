@@ -2808,6 +2808,7 @@ function renderApp(
     listCredentials: vi.fn().mockResolvedValue({ credentials: [] }),
     listTunnels: vi.fn().mockResolvedValue({ tunnels: [] }),
     listSandboxes: vi.fn().mockResolvedValue({ sandboxes: [] }),
+    listAgents:vi.fn().mockResolvedValue({agents:[]}),
     getSandbox: vi.fn(),
     createLocalSandbox: vi.fn(),
     getSandboxBackends: vi.fn().mockResolvedValue({ dockerAvailable: false, dockerStatus: "unavailable", daytonaConfigured: false, daytonaStatus: "credential required" }),

@@ -160,8 +160,6 @@ export interface AgentToolPlacementList {
 export interface AgentTools {
     "suiteId": string;
     "status": string;
-    "providerId"?: string;
-    "providerName"?: string;
     "tools": AgentTool[] | null;
 }
 
@@ -809,8 +807,6 @@ export interface SandboxToolSuite {
     "suiteId": string;
     "sandboxId": string;
     "status": string;
-    "providerId"?: string;
-    "providerName"?: string;
     "available": boolean;
     "issue"?: string;
     "tools": SandboxTool[] | null;
@@ -949,13 +945,4 @@ export interface Tunnel {
 
 export interface TunnelList {
     "tunnels": Tunnel[] | null;
-}
-
-export interface WorkspaceToolTarget {
-    "key": string;
-    "sandboxId": string;
-}
-
-export interface WorkspaceToolTargets {
-    "workspaces": WorkspaceToolTarget[] | null;
 }

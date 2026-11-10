@@ -8,13 +8,9 @@ beforeEach(() => { resetLocaleForTesting(); setLocale("en"); });
 afterEach(() => resetLocaleForTesting());
 
 const provider = { providerId:"prov_1",displayName:"Opaque internal name",namespace:"opaque" } as Provider;
-it("renders the verified owner instead of internal Provider facade naming", () => {
-  expect(toolSourceLabel({...provider,toolSourceKind:"agent",toolSourceId:"agent_1",toolSourceName:"Research Agent"}))
-    .toBe("Research Agent");
-  expect(toolSourceLabel({...provider,toolSourceKind:"sandbox",toolSourceId:"sbx_1",toolSourceName:"Development Sandbox",pluginId:"io.mender.provider.workspace"}))
-    .toBe("Development Sandbox · Workspace");
-  expect(toolSourceLabel({...provider,toolSourceKind:"sandbox",toolSourceId:"sbx_1",toolSourceName:"SSH",pluginId:"io.mender.provider.sandbox-jobs"}))
-    .toBe("SSH · Jobs");
+it("renders only independently configured Provider names", () => {
+  expect(toolSourceLabel({...provider,toolSourceKind:"provider",toolSourceName:"GitHub MCP"})).toBe("GitHub MCP");
+  expect(toolSourceLabel({...provider,displayName:"Owner selected name"})).toBe("Owner selected name");
 });
 it("marks unclaimed technical adapters and preserves direct Provider names",()=>{
   expect(toolSourceLabel({...provider,toolSourceKind:"unclaimed"})).toBe("Opaque internal name");

@@ -39,6 +39,7 @@ function show(initial: string, overrides: Partial<ManagementClient> = {}) {
   const client = {
     listProfiles: vi.fn().mockResolvedValue({ profiles: [profile] }),
     listProviders: vi.fn().mockResolvedValue({ providers: [provider] }),
+    listAgents:vi.fn().mockResolvedValue({agents:[]}),
     listTunnels: vi.fn().mockResolvedValue({ tunnels: [] }),
     browseTools: vi.fn().mockResolvedValue({ tools: [tool] }),
     getProfile: vi.fn().mockResolvedValue(profile),

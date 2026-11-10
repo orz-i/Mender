@@ -50,8 +50,7 @@ describe("optional Agent governed tool execution",()=>{
  it("lists only matching ready restricted Sandbox and eligible existing Workspace Tools",async()=>{
   const listSandboxes=vi.fn().mockResolvedValue({sandboxes});
   const configure=vi.fn().mockResolvedValue({workspaceKey:"",sandboxId:sandboxes[0]!.sandboxId,toolIds:[toolRead]});
-  const ensure=vi.fn();
-  const client={...baseClient,listSandboxes,ensureSandboxTools:ensure};
+  const client={...baseClient,listSandboxes};
   const toolPlacements={...basePlacements,configureAgentToolPlacement:configure};
   render(<AgentToolExecutionSettings client={client} toolPlacements={toolPlacements} agent={agent}/>);
   expect(await screen.findByText(root)).toBeTruthy();
@@ -72,7 +71,6 @@ describe("optional Agent governed tool execution",()=>{
   fireEvent.click(within(dialog).getByRole("checkbox",{name:"Read"}));
   fireEvent.click(within(dialog).getByRole("button",{name:"Save"}));
   await waitFor(()=>expect(configure).toHaveBeenCalledWith(agent.agentId,"",sandboxes[0]!.sandboxId,[toolRead]));
-  expect(ensure).not.toHaveBeenCalled();
  });
  it("blocks configuration of Host Agent without mutating its existing workspace",async()=>{
   const list=vi.fn();const save=vi.fn();
@@ -86,9 +84,8 @@ describe("optional Agent governed tool execution",()=>{
   expect(save).not.toHaveBeenCalled();
  });
  it("shows a safe empty candidate state without provisioning Sandboxes or tools",async()=>{
-  const ensure=vi.fn();const save=vi.fn();
-  const client={...baseClient,listSandboxes:vi.fn().mockResolvedValue({sandboxes:sandboxes.slice(1)}),
-   ensureSandboxTools:ensure};
+  const save=vi.fn();
+  const client={...baseClient,listSandboxes:vi.fn().mockResolvedValue({sandboxes:sandboxes.slice(1)})};
   const toolPlacements={...basePlacements,configureAgentToolPlacement:save};
   render(<AgentToolExecutionSettings client={client} toolPlacements={toolPlacements} agent={agent}/>);
   expect(await screen.findByText(root)).toBeTruthy();
@@ -97,7 +94,6 @@ describe("optional Agent governed tool execution",()=>{
   expect(await within(dialog).findByText(/No matching ready restricted Sandbox/)).toBeTruthy();
   expect(within(dialog).getByRole<HTMLButtonElement>("button",{name:"Save"}).disabled).toBe(true);
   expect(within(dialog).queryByRole("option",{name:"Host sandbox"})).toBeNull();
-  expect(ensure).not.toHaveBeenCalled();
   expect(save).not.toHaveBeenCalled();
  });
  it("keeps owner editor open and reports configuration errors without clearing selection",async()=>{

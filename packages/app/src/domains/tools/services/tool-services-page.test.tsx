@@ -1,6 +1,6 @@
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { ManagementClient, Provider, ProviderPlugin } from "@mender/sdk";
-import { MemoryRouter, Route, Routes } from "react-router";
+import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { resetLocaleForTesting, setLocale } from "../../../i18n/i18n";
@@ -131,52 +131,13 @@ describe("Tool service low-noise empty and active states", () => {
   });
 });
 
-describe("Owned Tool service localized summary", () => {
-  it("shows accurate host-generated text and searches both Chinese and original English", async () => {
-    const raw = "Managed Agent Delegation tools for Grok";
-    const owned: Provider = {
-      ...sampleProvider,
-      providerId: "prov_agent_grok",
-      displayName: "Grok service",
-      description: raw,
-      toolCount: 4,
-      pluginId: "io.mender.provider.agent-delegation",
-      toolSourceKind: "agent",
-      toolSourceId: "agent_grok",
-      toolSourceName: "Grok",
-    };
-    mount([owned], []);
-    const card = (await screen.findByRole("link", { name: "Grok" }))
-      .closest<HTMLElement>('[role="listitem"]');
-    expect(card).toBeTruthy();
-    expect(within(card!).getByText(raw)).toBeTruthy();
-
-    act(() => setLocale("zh-CN"));
-    expect(within(card!).getByText("Agent「Grok」的受管委派工具")).toBeTruthy();
-    const search = screen.getByRole("textbox", { name: "搜索服务" });
-    fireEvent.change(search, { target: { value: "受管委派工具" } });
-    expect(screen.getByRole("link", { name: "Grok" })).toBeTruthy();
-    fireEvent.change(search, { target: { value: raw } });
-    expect(screen.getByRole("link", { name: "Grok" })).toBeTruthy();
-
-    act(() => setLocale("en"));
-    expect(within(card!).getByText(raw)).toBeTruthy();
-    expect(owned.description).toBe(raw);
-  });
-
-  it("keeps arbitrary Provider descriptions unchanged, even with matching English templates", async () => {
-    const original = "Managed Agent Delegation tools for Grok";
-    const external: Provider = {
-      ...sampleProvider, providerId: "prov_external", description: original,
-      toolSourceName: "Grok", toolSourceKind: "provider",
-    };
-    setLocale("zh-CN");
-    mount([external]);
-    const card = (await screen.findByRole("link", { name: "Grok" }))
-      .closest<HTMLElement>('[role="listitem"]');
+describe("External Provider descriptions", () => {
+  it("preserves configured display and content even when it resembles historic internal template", async () => {
+    const original="Managed Agent Delegation tools for Grok";
+    mount([{...sampleProvider,description:original,toolSourceKind:"provider"}]);
+    const card=(await screen.findByRole("link",{name:"Echo Service"})).closest<HTMLElement>('[role="listitem"]');
     expect(card).toBeTruthy();
     expect(within(card!).getByText(original)).toBeTruthy();
-    expect(within(card!).queryByText("Agent「Grok」的受管委派工具")).toBeNull();
   });
 });
 
@@ -216,99 +177,5 @@ describe("Tool service error state", () => {
     await screen.findByText("No tool services");
     await waitFor(() => expect(listProviders).toHaveBeenCalledTimes(2));
     expect(screen.queryByRole("alert")).toBeNull();
-  });
-});
-
-describe("resource-owned Tool service navigation", () => {
-  it("uses Manage for an Agent-owned zero-tool source without exposing generic mutation actions", async () => {
-    const source: Provider = {
-      ...sampleProvider,
-      providerId: "prov_empty_agent",
-      description: "",
-      toolCount: 0,
-      toolSourceKind: "agent",
-      toolSourceId: "agent_grok",
-      toolSourceName: "Grok - executor",
-      pluginId: "io.mender.provider.agent-delegation",
-    };
-    const client = {
-      listProviders: vi.fn().mockResolvedValue({ providers: [source] }),
-      listProviderPlugins: vi.fn().mockResolvedValue({ plugins: [], issues: [] }),
-      listCredentials: vi.fn().mockResolvedValue({ credentials: [] }),
-    } as unknown as ManagementClient;
-    render(<MemoryRouter initialEntries={["/tools"]}><Routes>
-      <Route path="/tools" element={<ToolsPage client={client} />} />
-      <Route path="/agents/:agentId" element={<div>Agent owner details</div>} />
-    </Routes></MemoryRouter>);
-    const card = (await screen.findByRole("link", { name: "Grok - executor" }))
-      .closest<HTMLElement>('[role="listitem"]');
-    expect(card).toBeTruthy();
-    expect(within(card!).getByText("No tools have been discovered for this service yet.")).toBeTruthy();
-    expect(within(card!).queryByRole("button", { name: "View tools" })).toBeNull();
-    expect(within(card!).queryByRole("button", { name: /Actions/ })).toBeNull();
-    expect(within(card!).getByRole("link", { name: "Grok - executor" }).getAttribute("href"))
-      .toBe("/tools/prov_empty_agent");
-    fireEvent.click(within(card!).getByRole("button", { name: "Manage" }));
-    expect(await screen.findByText("Agent owner details")).toBeTruthy();
-  });
-  it.each([
-    {
-      kind: "agent" as const,
-      pluginId: "io.mender.provider.agent-delegation",
-      ownerId: "agent_grok",
-      ownerName: "Grok - executor",
-      visibleName: "Grok - executor",
-      destination: "Agent owner details",
-    },
-    {
-      kind: "sandbox" as const,
-      pluginId: "io.mender.provider.workspace",
-      ownerId: "sbx_rocky",
-      ownerName: "Rocky",
-      visibleName: "Rocky · Workspace",
-      destination: "Sandbox owner details",
-    },
-    {
-      kind: "sandbox" as const,
-      pluginId: "io.mender.provider.sandbox-jobs",
-      ownerId: "sbx_rocky",
-      ownerName: "Rocky",
-      visibleName: "Rocky · Jobs",
-      destination: "Sandbox owner details",
-    },
-  ])("opens $kind owner for $visibleName without generic Provider mutation controls", async ({
-    kind, pluginId, ownerId, ownerName, visibleName, destination,
-  }) => {
-    const source: Provider = {
-      ...sampleProvider,
-      providerId: "prov_managed_01",
-      displayName: "Internal Facade",
-      pluginId,
-      toolSourceKind: kind,
-      toolSourceId: ownerId,
-      toolSourceName: ownerName,
-    };
-    const client = {
-      listProviders: vi.fn().mockResolvedValue({ providers: [source] }),
-      listProviderPlugins: vi.fn().mockResolvedValue({ plugins: [], issues: [] }),
-      listCredentials: vi.fn().mockResolvedValue({ credentials: [] }),
-    } as unknown as ManagementClient;
-
-    render(
-      <MemoryRouter initialEntries={["/tools"]}>
-        <Routes>
-          <Route path="/tools" element={<ToolsPage client={client} />} />
-          <Route path="/agents/:agentId" element={<div>Agent owner details</div>} />
-          <Route path="/sandboxes/:sandboxId" element={<div>Sandbox owner details</div>} />
-        </Routes>
-      </MemoryRouter>,
-    );
-    const link = await screen.findByRole("link", { name: visibleName });
-    const card = link.closest<HTMLElement>('[role="listitem"]');
-    expect(card).toBeTruthy();
-    expect(within(card!).queryByRole("button", { name: "Edit " + visibleName })).toBeNull();
-    expect(within(card!).queryByRole("button", { name: "Delete " + visibleName })).toBeNull();
-    fireEvent.click(within(card!).getByRole("button", { name: "Manage" }));
-    expect(await screen.findByText(destination)).toBeTruthy();
   });
 });

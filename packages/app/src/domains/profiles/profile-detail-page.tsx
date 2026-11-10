@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ArrowRightIcon, ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import { useLocation, useNavigate, useParams } from "react-router";
 
-import type { MCPServerInstance, ManagementClient, Profile, Provider, SkillInstallation, ToolSummary } from "@mender/sdk";
+import type { MCPServerInstance, ManagementClient, Profile, Provider, Agent, SkillInstallation, ToolSummary } from "@mender/sdk";
 import { Badge } from "@mender/ui/components/badge";
 import { Button } from "@mender/ui/components/button";
 
@@ -15,7 +15,7 @@ import { usePagination } from "../../shared/pagination";
 import { TablePagination } from "../../shared/table-pagination";
 import { DataPanel } from "../../shared/workbench";
 import { DetailWorkspace } from "../../shared/detail-workspace";
-import { profileSourceLabels } from "./profile-source-label";
+import { profileToolSources } from "./profile-source-label";
 
 type Section = "overview" | "tools" | "skills" | "deliveries";
 
@@ -30,6 +30,7 @@ function ProfileDetailContent({ client, slug }: { client: ManagementClient; slug
   const [profile, setProfile] = useState<Profile | null>(null);
   usePageHeading(profile?.displayName);
   const [providers, setProviders] = useState<Provider[]>([]);
+  const [agents,setAgents]=useState<Agent[]>([]);
   const [tools, setTools] = useState<ToolSummary[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState("");
@@ -52,11 +53,13 @@ function ProfileDetailContent({ client, slug }: { client: ManagementClient; slug
     void Promise.all([
       client.getProfile(slug),
       client.listProviders(),
+      client.listAgents(),
       client.browseTools({ limit: 100 }),
-    ]).then(async ([item, sources, catalog]) => {
+    ]).then(async ([item, sources, agentResult, catalog]) => {
       if (!active) return;
       setProfile(item);
       setProviders(sources.providers);
+      setAgents(agentResult.agents);
       setTools(catalog.tools);
       setError("");
       setLoaded(true);
@@ -112,11 +115,11 @@ function ProfileDetailContent({ client, slug }: { client: ManagementClient; slug
   const skillById = useMemo(() =>
     new Map(skillLibrary.map((item) => [item.installationId, item])), [skillLibrary]);
   const toolById = useMemo(() => new Map(tools.map((tool) => [tool.toolId, tool])), [tools]);
-  const sourceLabels = useMemo(() => profileSourceLabels(providers), [providers]);
+  const sourceLabels=useMemo(()=>new Map(profileToolSources(providers,agents,tools).map(source=>[source.sourceId,source.label])),[providers,agents,tools]);
   const sourceGroups = useMemo(() => {
     const counts = new Map<string, number>();
     for (const binding of profile?.tools ?? []) {
-      const id = toolById.get(binding.toolId)?.providerId ?? "__unknown__";
+      const id = toolById.get(binding.toolId)?.sourceId ?? "__unknown__";
       counts.set(id, (counts.get(id) ?? 0) + 1);
     }
     return [...counts].map(([id, count]) => ({
@@ -126,7 +129,7 @@ function ProfileDetailContent({ client, slug }: { client: ManagementClient; slug
 
   const sourceTools = useMemo(() =>
     (profile?.tools ?? []).filter((binding) =>
-      (toolById.get(binding.toolId)?.providerId ?? "__unknown__") === sourceId),
+      (toolById.get(binding.toolId)?.sourceId ?? "__unknown__") === sourceId),
   [profile, toolById, sourceId]);
   const sourcePagination = usePagination(sourceGroups);
   const toolPagination = usePagination(sourceTools);
