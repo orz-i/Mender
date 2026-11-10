@@ -9,7 +9,7 @@ Read:
 - `docs/product/vision.md`
 - `docs/architecture/principles.md`
 - `docs/architecture/adr/README.md`
-- `docs/planning/roadmap.md`
+- `docs/architecture/context.md`
 - `docs/governance/development-workflow.md`
 
 If a proposed change conflicts with an accepted ADR or repository-level architecture principle, write a new ADR before implementation.

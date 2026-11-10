@@ -10,8 +10,7 @@ import (
 	"strings"
 )
 
-// OpenTypedContextStore returns a new SQLite handle for an existing, already
-// migrated v3 database. It NEVER runs migrations, creates a missing file,
+// OpenTypedContextStore returns a new SQLite handle for an existing, validated v3 database. It NEVER runs migrations, creates a missing file,
 // activates a resource, or performs Agent/Sandbox startup recovery. F4's
 // single runtime composer owns the remaining lifecycle admission.
 //

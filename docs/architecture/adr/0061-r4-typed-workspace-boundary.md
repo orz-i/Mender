@@ -2,7 +2,7 @@
 
 - Status: Accepted for R4
 - Date: 2026-11-05
-- Evidence: [R4 implementation](../../planning/refactor-r4-2026-11-05.md)
+- Evidence: R4 implementation (historical)
 
 Workspace drivers currently decode Tool JSON and construct Invocation Outcomes.
 That mixes Tool presentation and backend execution, duplicates defaults, and

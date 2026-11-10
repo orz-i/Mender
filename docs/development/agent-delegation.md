@@ -69,7 +69,7 @@ pnpm check
 
 For focused edits, run `go test -race ./backend/internal/agent/... ./backend/internal/bootstrap`, `pnpm i18n:check`, `pnpm typecheck`, and `pnpm test`. No real Codex/Grok prompt is executed by the automated suite; external CLI authentication and production desktop GUI smoke remain separate manual operator checks.
 
-See [ADR-0038](../architecture/adr/0038-governed-agent-delegation.md) and [Phase 33](../planning/phase-33-governed-agent-delegation.md).
+See [ADR-0038](../architecture/adr/0038-governed-agent-delegation.md) and Phase 33 (historical).
 
 
 ## Phase 40 — Reusable model and local workspace selections
@@ -104,7 +104,7 @@ Omitting those fields preserves default selection. A nonempty `reasoningEffort` 
 
 The `restricted_host` process boundary is not a VM or general Sandbox lease: registering an owner-approved Agent cwd does not grant the Agent stronger isolation. `host` mode must remain an explicit owner choice. Real Codex/Grok login, subscription/model entitlements, API billing, host filesystem policy and live compatibility are not proven by fixture tests or a detected CLI binary.
 
-For multi-target **Workspace Tools** (a separate resource/tool capability), see [Workspace Tool targets](workspace-tool-targets.md). Agent workspace grants and Sandbox Workspace Tool grants remain different authority checks.
+For multi-target **Workspace Tools** (a separate resource/tool capability), see [native Workspace placement](../architecture/context.md). Agent workspace grants and Sandbox Workspace Tool grants remain different authority checks.
 
 ## OpenCode local ACP backend (Phase 41)
 
@@ -121,7 +121,7 @@ The owner can adjust its default model and thought level under **Agent → Overv
 
 This has been accepted through no-prompt local ACP protocol tests and deterministic delegated-task fixtures. Live OpenCode inference/entitlement or paid model success **has not been tested**.
 
-[ADR-0048](../architecture/adr/0048-opencode-native-acp-agent-backend.md) · [Phase 41](../planning/phase-41-opencode-native-agent-backend.md)
+[ADR-0048](../architecture/adr/0048-opencode-native-acp-agent-backend.md) · Phase 41 (historical)
 
 ## Owner-only ACP permission approvals (Phase 44 checkpoint)
 
@@ -143,4 +143,4 @@ The **installed OpenCode v2.0.30** has now completed a real restricted-host ACP 
 
 This remains a narrow protected-root write boundary, **not** complete filesystem, network, credential or native-tool confinement: OpenCode Code Mode includes `fetch` and session helpers, and Seatbelt permits some outbound traffic and temporary writes. Grok remains blocked at `session/new` without an approved runtime/account environment; Codex ACP delivery is unverified. Neither is silently downgraded to Host. For actual user-project code writes, explicitly verify the installed CLI, owner-selected Sandbox and Profile grants on a disposable root before changing real files.
 
-[ADR-0052](../architecture/adr/0052-optional-agent-governed-tool-placement.md) · [Phase 46](../planning/phase-46-optional-agent-governed-tools.md).
+[ADR-0052](../architecture/adr/0052-optional-agent-governed-tool-placement.md) · Phase 46 (historical).

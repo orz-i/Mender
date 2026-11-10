@@ -238,7 +238,7 @@ pnpm check
 It includes binding regeneration, desktop architecture checks, desktop adapter Go tests, race tests, strict TypeScript, Vitest, and both Web/Desktop Vite production builds.
 
 Native Wails build, packaging and WebView interaction require separate platform
-verification. See the [real-environment acceptance matrix](../planning/refactor-r7-2026-11-05.md#real-environment-acceptance).
+verification. See the real-environment acceptance matrix (historical).
 
 ## Product scope
 

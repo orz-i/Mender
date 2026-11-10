@@ -5,7 +5,7 @@ is software, an extension implements a typed host contract, and a configured
 Provider/Sandbox/Tunnel is an independently governed resource.
 
 The accepted architecture is [ADR-0037](../architecture/adr/0037-multi-kind-plugin-platform.md).
-Work is tracked in [Phase 27](../planning/phase-27-multi-kind-plugin-platform.md).
+Work is tracked in Phase 27 (historical).
 
 ## Extension kinds
 
@@ -49,7 +49,7 @@ A signed-off offering is not evidence that the service is reachable or that
 an external account/API key works; operator-side live verification is separate.
 For ownership and trust boundaries, see
 [ADR-0039](../architecture/adr/0039-offerings-resource-tool-suites.md)
-and [Phase 34 C](../planning/phase-34-c-integration-offerings.md).
+and Phase 34 C (historical).
 
 ## Governed Tool Suites and resource ownership (Phase 34 D)
 
@@ -100,7 +100,7 @@ Remote MCP services can instead be connected as normal reviewed/custom MCP
 integrations, with their own transport/security lifecycle.
 
 See [ADR-0039](../architecture/adr/0039-offerings-resource-tool-suites.md)
-and [Phase 34 D](../planning/phase-34-d-tool-suite-governance.md).
+and Phase 34 D (historical).
 
 ## Package manifest v2
 

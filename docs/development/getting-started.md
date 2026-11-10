@@ -48,7 +48,7 @@ Fixtures that require a verified restricted-host backend or a local POSIX
 filesystem/shell report explicit capability skips when unavailable. Their
 rejection paths remain tested. A local Windows SFTP fixture limitation does not
 imply a Windows client cannot connect to a real Linux SSH server. See the
-[check portability record](../planning/check-portability-2026-11-05.md) for the
+check portability record (historical) for the
 failure classification and verification evidence.
 
 ## Common commands
@@ -132,7 +132,7 @@ edges directly. ESLint checks the common client, shared feature code, the Tools
 public entry and UI dependency direction.
 
 Native Wails build/package and live backend checks are separate from the
-portable gate. The [real-environment acceptance matrix](../planning/refactor-r7-2026-11-05.md#real-environment-acceptance)
+portable gate. The real-environment acceptance matrix (historical)
 lists prerequisites and the evidence to record.
 
 ## Quality policy

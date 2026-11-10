@@ -3,7 +3,7 @@
 - Status: Accepted for R5
 - Date: 2026-11-05
 - Baseline: `5e1ad38` (R4)
-- Evidence: [R5 implementation](../../planning/refactor-r5-2026-11-05.md)
+- Evidence: R5 implementation (historical)
 - Extends: [ADR-0058](0058-profile-unified-delivery-root.md)
 - Upgrade policy: [ADR-0014](0014-sqlite-upgrade-compatibility.md)
 

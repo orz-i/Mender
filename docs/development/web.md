@@ -49,7 +49,7 @@ MCP (stdio or Streamable HTTP), OpenAPI and Model Tools. Enabled external
 installations show their exact package versions and use the shared
 schema-driven configuration form. Create the Workspace Tool Suite from its
 owning Sandbox, then manage additional targets from the service page. See
-[Workspace Tool Targets](workspace-tool-targets.md).
+[v3 tool ownership and Workspace execution](../architecture/context.md).
 
 Service actions include View, Edit, Sync and Delete as applicable. An external
 Provider can be rebound to another enabled installation of the same PluginID.

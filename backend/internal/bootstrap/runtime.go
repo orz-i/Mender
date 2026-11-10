@@ -117,7 +117,7 @@ func NewRuntime(ctx context.Context, options RuntimeOptions) (*Runtime, error) {
 
 	// The official CLI, menderd and Wails entry accepts the COMPLETE typed v3
 	// schema only. A v2 or partially migrated DB is never repaired in place:
-	// offline Stage E attestation and an operator-controlled swap are required.
+	// operators must back up and explicitly replace v2 data; no implicit migration.
 	if err := ensureFreshTypedDatabase(options.DatabasePath); err != nil {
 		return nil, fmt.Errorf("compose runtime: v3 fresh schema: %w", err)
 	}

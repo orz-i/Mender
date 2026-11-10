@@ -7,7 +7,7 @@
 
 ## 1. Verified evidence
 
-*Historical pre-implementation baseline.* The findings immediately below describe the Mender runtime before Phase 44 code changes. For the implemented cooperative single-file read checkpoint and outstanding authoritative execution gate, see [Phase 44 acceptance](../../planning/phase-44-acp-approval-governed-agent-tools.md).
+*Historical pre-implementation baseline.* The findings immediately below describe the Mender runtime before Phase 44 code changes. For the implemented cooperative single-file read checkpoint and outstanding authoritative execution gate, see Phase 44 acceptance (historical).
 
 Repository:
 

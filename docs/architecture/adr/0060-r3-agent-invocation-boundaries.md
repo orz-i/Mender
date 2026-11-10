@@ -3,7 +3,7 @@
 - Status: Accepted for R3
 - Date: 2026-11-05
 - Refines: ADR-0002, ADR-0033, ADR-0038, ADR-0059
-- Plan and evidence: [R3 implementation](../../planning/refactor-r3-2026-11-05.md)
+- Plan and evidence: R3 implementation (historical)
 
 ## Context
 

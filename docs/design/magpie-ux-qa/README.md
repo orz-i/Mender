@@ -4,8 +4,6 @@
 - [Magpie GUI Shell](https://github.com/yetone/magpie/blob/main/docs/subsystems/gui-shell.md)
 - [Magpie Agents screenshot](https://github.com/yetone/magpie/blob/main/site/public/img/agents-light.png)
 - Magpie themes/source: `internal/gui/assets/app.css`.
-- 前轮视觉 token 与原生表层基线：`docs/planning/magpie-inspired-ui-2026-11-05.md`。
-- 本轮任务路径与验收目标：`docs/planning/magpie-ux-structural-redesign-2026-11-05.md`。
 
 ## 结构改造成果
 1. **一级导航**：任务顺序 Workspace → Connections → Advanced；所有项目默认可见，减少默认隐藏分组造成的发现成本。保留侧栏折叠、移动端抽屉、命令搜索、权限化审批入口。

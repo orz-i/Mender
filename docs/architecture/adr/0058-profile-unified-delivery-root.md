@@ -3,7 +3,7 @@
 - Status: Accepted
 - Date: 2026-10-23
 - Extends: [ADR-0004](0004-runtime-modes-and-mcp.md), [ADR-0008](0008-mcp-adapter.md), [ADR-0016](0016-managed-downstream-mcp-servers.md), [ADR-0029](0029-skill-resource-management.md), [ADR-0031](0031-managed-profile-tunnels.md), [ADR-0039](0039-offerings-resource-tool-suites.md), [ADR-0055](0055-managed-mcp-profile-hot-refresh.md)
-- Design and migration: [Profile unified delivery plan](../../planning/profile-unified-delivery-2026-10-23.md)
+- Design and migration: Profile unified delivery plan (historical)
 
 ## Context and verified baseline
 

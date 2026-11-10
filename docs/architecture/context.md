@@ -1,199 +1,47 @@
-# System Context
+# Mender system context — v3 runtime
 
-This document diagrams the **currently implemented** Provider-backed Tool facades and Workspace/Sandbox bridging. The accepted **future** hard-cut ownership contract is [ADR-0064](adr/0064-tool-provenance-and-execution-placement-hardcut.md), with [Phase A inventory](../planning/tool-hardcut-phase-a-inventory-2026-11-07.md). The [Stage C guarded placement adapter](../planning/tool-hardcut-stage-c-2026-11-07.md) is tested but **not constructed by the current production Runtime**, because the new Catalog SourceRef and Profile TargetScope persistence are not yet activated. Do not read this diagram as evidence that the new typed SourceRef or shared Workspace identities are already running.
+Mender is a tool/resource aggregation, governance and supply platform for external LLMs and agents. It does **not** own the caller's Agent Loop. A configured Agent is an **Agent as Tool** resource with its own Task/Session lifecycle.
 
-## Backend boundaries
+This document describes the only supported runtime schema and execution boundary after the tool ownership hard cut (ADR-0064). Historical Provider-owned resource facades and Provider-keyed Workspace Tool targets are not part of the supported architecture.
 
-Solid arrows show calls across boundaries. `bootstrap.Runtime` constructs the
-adapters and owns shutdown. HTTP and Wails share the management read models and
-delegate writes to the application that owns the resource.
+## Source, context and execution boundaries
 
 ```mermaid
 flowchart LR
-  Control["Management HTTP / Wails binding"] --> Query["Management queries"]
-  Query --> Projection["Read-only SQLite projection"]
-  Control --> UseCases["Provider / Agent / Sandbox use cases"]
-  UseCases --> Stores["Context stores and atomic reference guards"]
-  Control --> Delivery["Profile delivery use cases"]
-  Delivery --> Skill["Skill deployment and export ports"]
-  Control --> Config["MCP delivery configuration"]
-  Config --> Stores
-  Profile["Profile membership and governance use cases"] --> Stores
-  Managed["Managed MCP HTTP listener and Tunnel"] --> Config
-  Managed --> Profile
-  Managed --> Invoke["Governed Invocation"]
-  CLI["CLI / Agent Skill / MCP stdio"] --> Invoke
-  Control --> Invoke
-  Invoke --> Executors["Built-in Tools / Provider plugins / resource-owned Tool suites"]
+  HTTP[Management HTTP / Web] --> Runtime[Bootstrap v3 Runtime]
+  Wails[Wails Desktop] --> Runtime
+  CLI[CLI / MCP] --> Runtime
+  Runtime --> Catalog[Canonical Tool Catalog - typed SourceRef]
+  Runtime --> Profile[Profile membership / target scope]
+  Runtime --> Invocation[Single governed Invocation]
+  Catalog --> Invocation
+  Profile --> Invocation
+  Invocation --> Policy[Policy / Approval / Budget / Audit]
+  Invocation --> Provider[Independent Provider executor]
+  Invocation --> Agent[Agent as Tool - Task/Session / ACP v1]
+  Invocation --> Native[Native workspace / jobs executor]
+  Native --> Workspace[Authorized WorkspaceRef]
+  Workspace --> Placement[Verified placement and Sandbox lease]
+  Placement --> Sandbox[Sandbox Backend - capability / isolation / generation]
 ```
 
-The shared Invocation entry point owns preflight, admission, execution and
-terminal audit. Provider activation has its own admission decision. Agent
-resource admission, ACP native permission handling and Tool authorization are
-separate. Agent Task/Session execution and native approvals share one runtime
-coordinator, and the local workspace verifier supplies filesystem observations.
-Secrets are resolved at the execution or connection boundary.
+**Tool** identifies a callable operation and schema. Its `SourceRef` is `provider:<id>`, `agent:<id>`, or a host-reviewed `native:<key>`. **Provider** is only the independently configured external tool origin, not a mandatory parent of Agent/Native tools. **Profile** chooses which tools can be supplied and may further restrict approved target scope; selecting a tool does not grant an execution target. **Workspace** identifies the approved work object; **Sandbox** owns capability, isolation, target root, run generation, grants and lease. Native workspace operations require an exact admitted and revalidated target. External provider tools use their Provider executor; Agent-as-Tool calls use their Agent Backend and Task service.
 
-Workspace Tool JSON decoding and Outcome mapping live in the Tool adapter.
-`workspace/application` applies common operation semantics and consumes a
-lease port. `workspace/infrastructure/sandboxbridge` implements that port by
-calling the Sandbox router for an admitted target. Sandbox owns grants,
-placement, generation, leases and driver selection. Local, Docker, Daytona,
-SSH and External sessions use `workspace/domain` operation types. The
-External adapter maps them to Sandbox Plugin Protocol v1.
+No runtime may create a Provider facade for an Agent/Sandbox or infer that selecting a Workspace places an ACP child process inside a Sandbox. Ambiguous target selection, unsupported capability, revoked authorization and uncertain effects fail closed; there is no implicit Host fallback or unknown Task replay.
 
-## Client and feature boundaries
+## Client and domain boundaries
 
-```mermaid
-flowchart LR
-  Web["Web host"] --> HTTP["SDK HTTP adapter"]
-  Desktop["Desktop host"] --> Wails["Wails adapter"]
-  HTTP --> Common["ManagementClient"]
-  Wails --> Common
-  Desktop --> Owner["LocalOwnerCapabilities"]
-  App["Shared product app"] --> Common
-  App --> Owner
-  App --> Tools["Tools public entry"]
-  Tools --> Features["Services / Catalog / Workspace Targets"]
-  Features --> Form["Shared plugin configuration"]
-  Sandbox["External Sandbox creation"] --> Form
-  Features --> UI["UI primitives"]
-  Form --> UI
-```
+- Web and desktop share `ManagementClient`; Wails exports native owner capabilities. CRUD for Agent, Sandbox, Profile, Credentials and Provider belongs to their own application boundary.
+- Catalog discovery and Profile tool selection are source-first; internal `SourceRef` identities are not extra source resources a user must create.
+- There is only one externally usable Invocation pathway for MCP, CLI and management actions. It owns admission, result guards and terminal audit. Provider activation and Agent Task admission retain their respective resource-specific checks.
+- The v3 startup path opens only a complete typed database; legacy v2 files cannot be opened, silently converted, repaired or mixed with v3. New installations use the pinned empty v3 schema image. See [ADR-0064](adr/0064-tool-provenance-and-execution-placement-hardcut.md) and [hard-cut acceptance](../governance/runtime-v3-hardcut.md).
 
-Desktop supplies approval and Agent Tool placement capability objects.
-Their availability controls the UI. The backend binding still authorizes each
-owner operation. The Web host supplies the common client. Feature consumers
-import Tools through its public entry, and shared form controls depend on no
-feature. See [local development](../development/getting-started.md) for the
-repository paths and verification commands.
+## Repository entry points
 
-## Core domain language
-
-### Provider
-
-A source of one or more tools.
-
-Examples include a remote MCP server, a local MCP stdio process, a built-in Go provider, or a package/bundle adapted into a supported provider form.
-
-Provider identity is stable and must not rely solely on upstream display names.
-
-### Tool
-
-A canonical executable capability known to Mender.
-
-A Tool has stable identity, human/model-facing metadata, input and output schemas, provenance, and execution requirements.
-
-A Tool is not an MCP-specific struct.
-
-### Profile
-
-A named selection of canonical Tools and exact Skill installations with
-restrictive execution constraints.
-
-A Profile owns ToolBindings and its selection revision. MCP delivery owns
-mode, Tunnel association, direct projection selection and a separate revision.
-Profile-scoped authorization remains based on membership and binding governance.
-
-Profiles support CLI recipes, MCP endpoints, Skill deployment and Agent Plugin
-export. Local recipes and exported artifacts are explicit snapshots.
-
-### ToolBinding
-
-The Profile-owned relationship between one Profile and one canonical Tool.
-
-ToolBinding may customize Profile-facing alias/title/description and may tighten execution policy or serialize calls for that binding. ToolID remains canonical identity; schemas and provenance remain Catalog-owned.
-
-### Principal
-
-A bounded security subject asserted by a trusted Mender adapter or composition root.
-
-Live Principals are explicit and non-anonymous. Initial kinds distinguish the local Runtime owner from Mender-owned service identities such as a downstream Profile MCP endpoint. A Principal is not arbitrary caller text and must not be inferred from unverified transport metadata.
-
-### Governance Context
-
-The shared security context for governed actions. It contains Origin, Principal, and an explicit Catalog/Profile scope. Invocation and Provider activation consume the same vocabulary so Policy can reason about what authority is acquiring or using a capability.
-
-### Invocation
-
-A governed tool.invoke action within one Governance Context.
-
-Invocation owns Profile membership enforcement for Profile-scoped calls, validates input before Policy/execution, derives reviewed Governance Facts, applies ToolBinding tightening and execution/result guards, and returns a canonical outcome.
-
-An invocation may complete immediately, require additional input, be rejected, fail, be cancelled, or become a long-running task.
-
-### Provider Activation
-
-A governed provider.activate action that admits Provider capability acquisition before Plugin.Open, native process start, discovery Credential resolution, upstream discovery/list calls, or executor-route registration.
-
-Provider activation is not modeled as a synthetic Tool invocation because Tool identity and arguments may not exist yet.
-
-### Runtime Budget
-
-The persistent Runtime-owned hard limits applied after governance admission and before execution side effects. Runtime Budget caps Tool/Principal/Provider/global concurrency, Provider activation concurrency, effective execution timeout, arguments, and results. Profile constraints may tighten these limits but cannot raise them.
-
-### Execution Environment
-
-The host-owned boundary used when Mender launches local child processes. Local process capabilities explicitly choose host or restricted_host isolation. restricted_host is platform-enforced containment and fails closed when unavailable; it is not presented as VM/container isolation.
-
-### Policy
-
-A persistent Runtime-wide PolicySet that determines whether governed actions may proceed.
-
-Rules explicitly select actions and may match bounded Origin, Principal, scope, Provider/Tool identity, and reviewed Governance Facts where the action supports them. Matching deny decisions dominate require-approval/allow rules; the default decision applies only when no rule matches. ToolBinding policy remains a second tightening layer for tool.invoke only. Raw arguments, secrets, and Credential References do not cross the Policy boundary.
-
-### Credential
-
-A human-manageable Reference plus non-secret metadata for authentication material required by a Provider or Tool.
-
-Credential inventory metadata may be persisted and selected by Profile/Provider configuration. Secret values remain infrastructure concerns and are resolved only from native OS credential storage or environment-backed sources at execution/connection boundaries.
-
-### Audit Record
-
-Data-minimized durable governance evidence. Invocation Audit records Principal, scope/origin, outcome classification, and relevant Policy decisions. Provider activation has a separate audit record with Principal, Provider, Policy/Approval outcome, and bounded failure metadata. Neither surface stores raw Tool payloads, Provider configs, or secret material.
-
-## Adapter boundaries
-
-### MCP inbound adapter
-
-Converts MCP requests into application commands and queries.
-
-It exposes a configured Profile using its MCP delivery mode. Managed HTTP
-refreshes projections using Profile, MCP delivery and Catalog revisions. A
-stdio instance uses a startup snapshot for the life of the client process.
-
-### MCP provider adapter
-
-Connects to upstream MCP servers, maps their tools into the canonical Catalog model, and delegates execution through the Invocation application layer. Remote non-loopback HTTP transport requires TLS; local stdio processes run without a shell and receive a reduced ambient environment. External Provider process launch additionally uses the Runtime Execution Environment when restricted_host is selected. These controls reduce authority but do not claim VM/container isolation.
-
-### CLI adapter
-
-Provides local search, describe, invoke, provider, profile, and server operations.
-
-The CLI is a first-class interface, not a wrapper around HTTP.
-
-### Agent Skill adapter
-
-Provides progressive-disclosure instructions and optional generated resources that guide agents to use the Mender CLI/runtime.
-
-### Management HTTP API
-
-Provides the loopback administration transport used by the browser host. It is distinct from MCP protocol endpoints.
-
-### Desktop binding adapter
-
-Adapts the same Runtime/Application management semantics to Wails bindings without routing through the management HTTP server. Wails SDK imports and WebView lifecycle remain in the desktop shell; the backend adapter itself is Wails-independent.
-
-## Persistence
-
-The initial local implementation is expected to use SQLite.
-
-Persistence is accessed through context-specific ports. Database schema layout must not become the domain boundary.
-
-A later remote deployment may use a different backing store without changing domain semantics.
-
-## Composition
-
-Dependency construction occurs at explicit composition roots used by the `mender` CLI, `menderd` daemon/server, and Wails desktop shell.
-
-The same application use cases are reused by all entry points.
+- `backend/internal/bootstrap/runtime.go`: official single v3 Runtime assembly.
+- `backend/internal/catalog`: typed Tool source identity, discoverable canonical catalog and FTS.
+- `backend/internal/invocation`: admission, Policy/Approval/Budget, execution dispatch and audit.
+- `backend/internal/workspace`: logical WorkspaceRef, placement filtering and governed native operations.
+- `backend/internal/sandbox`: runtime backend, verified capability/isolation, grants and lease.
+- `backend/internal/agent`: Agent as Tool, ACP v1 Task/Session and native approval.
+- `packages/app/src`: shared React product UI; `packages/sdk/src`: HTTP client; `apps/desktop/frontend`: Wails client.

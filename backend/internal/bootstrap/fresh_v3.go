@@ -12,7 +12,7 @@ import (
 	"path/filepath"
 )
 
-// An empty, attested Stage E v3 schema with pinned native Tool contracts and
+// An empty, hash-pinned v3 schema with pinned native Tool contracts and
 // zero Agent/Provider/Sandbox/Profile/Credential/Task user records. This is the
 // first-run schema baseline, not a legacy runtime or a data migration route.
 // The compressed SQLite image is portable; it is opened only when no DB exists.

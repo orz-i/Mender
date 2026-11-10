@@ -1,14 +1,7 @@
 # ADR-0064: Separate Tool provenance, Agent-as-Tool ownership, Workspace context, and Sandbox execution placement
 
-- **Status:** Accepted as target architecture; Stages B–E typed/future-only contracts; F1 Profile discovery, F2a atomic Native lease and F2b Invocation-issued attempt proof/Native Router, caller-scoped frozen target and Agent/Native executor adapters implemented (not activated); F3 SourceRef Catalog/MCP/HTTP/CLI/SDK/Wails contracts verified; F4 old-Runtime pre-start refusal and offline candidate attestation implemented; F4 production/G/H cutover and legacy facade removal pending
-- **Date:** 2026-11-07 (Mac host)
-- **Implementation plan:** [Hard-cut plan](../../planning/tool-workspace-sandbox-agent-hardcut-2026-11-07.md) · [F4 scope freeze / exit gates](../../planning/tool-hardcut-f4-closure-freeze.md)
-- **Phase A evidence:** [Ownership inventory](../../planning/tool-hardcut-phase-a-inventory-2026-11-07.md) · [Migration / dry-run contract](../../planning/tool-hardcut-phase-a-migration-contract-2026-11-07.md)
-- **Stage B implementation & gate record:** [Typed sources, Workspace refs, native reserved IDs, deny-by-default TargetScope and canonical race timeout evidence](../../planning/tool-hardcut-stage-b-2026-11-07.md)
-- **Stage C implementation:** [Guarded Workspace/Sandbox placement and test coverage; production integration pending](../../planning/tool-hardcut-stage-c-2026-11-07.md)
-- **Stage D implementation:** [SourceRef Catalog, native schemas, source-scoped executor and isolated SQLite/FTS contracts](../../planning/tool-hardcut-stage-d-2026-11-07.md)
-- **Stage E offline migration and blockers:** [Read-only assessment, online SQLite backup, verified candidate-only conversion, and explicit production cutover restrictions](../../planning/tool-hardcut-stage-e-2026-11-07.md)
-- **Stage F implementation:** [Profile-scoped SourceRef discovery, standalone Native lease fencing and unresolved production integration gates](../../planning/tool-hardcut-stage-f-2026-11-07.md)
+- **Status:** Accepted and active in the official v3 Runtime; v2 data has been deliberately retired by operator-approved reset. See [runtime acceptance](../../governance/runtime-v3-hardcut.md).
+- **Decision date:** 2026-11-07; hard-cut reset approved 2026-11-09.
 - **Refines or partially supersedes:** ADR-0003, ADR-0030, ADR-0038, ADR-0039, ADR-0046, ADR-0047, ADR-0049, ADR-0052, ADR-0056, ADR-0058, ADR-0061. This ADR replaces the prior **mandatory Provider parent** and **sourceId == ProviderID** assumptions, the **per-Sandbox Tool Suite Provider** as an enduring runtime identity, and Provider-keyed Workspace target aliases. Other security and lifecycle decisions remain in effect.
 
 ## Context
@@ -76,13 +69,11 @@ Preserve the grouping and progressive `sources → tools → describe → invoke
 
 For Direct/Hybrid MCP, exported **names, title and descriptions** are presentation decisions separate from provenance; collisions must be detected and rejected, never silently shadowed. Provider namespaces can still be used for real Providers but no longer synthesize internal Agent/Sandbox Providers. Old external names may change for collapsed tools; enumerate those differences in dry-run manifest and update clients/exported configuration atomically at cutover. Retain old external Provider tool behavior.
 
-### 7. One forward-only migration release, no runtime compatibility path
+### 7. v3-only startup; operator-approved legacy data retirement
 
-Implement and test a **read-only, deterministic dry-run** before permitting the actual cut. Cross-context tools, Profile/MCP delivery, Policy, Agent, Sandbox and Workspaces share one local SQLite file but have separate application/domain ownership. A narrowly scoped **infrastructure-only migration coordinator** must run after a maintenance/lock boundary and before new Runtime resources start; it commits all cross-context identity, references, triggers, FTS and schema version updates as one atomic transaction. Independent context migrations may still create brand-new databases, but must not perform half-upgrades of existing populated legacy stores.
+The operator selected a full legacy data reset on 2026-11-09 rather than importing the Provider-v2 identity and permission graph. A v2 database is never opened by the v3 Runtime; new databases receive the pinned, verified empty typed v3 image. Historical data was consistently backed up but is not part of current runtime authority. Per-ToolID, Profile, Agent, SSH Job and MCP export migration conflict review is intentionally not supported after the reset. The old migration staging and compatibility facades are retired with their historical tests and documents.
 
-Require a verified consistent backup, dry-run with zero unresolved blockers, no concurrent old writers, `foreign_key_check`, `integrity_check`, key/count/revision comparisons and an actual recovery rehearsal. On failure, roll back. Old binaries fail closed on future schemas; rollback means **stop and restore pre-upgrade whole-database backup**, not dual-read/downgrade.
-
-Remove old facade Provider rows, config/route management, Provider-keyed workspace targets, API routes and UI controls from the **final running code**. Keep immutable historical audit and Agent/SSH job evidence, with an audit-only legacy identity lookup where necessary. This lookup must never permit legacy ToolID invocation. Never replay unknown Agent Tasks or possibly executed SSH Jobs during migration.
+No runtime dual read/write, Provider-keyed aliases or downgrade path is allowed. This is an explicit destructive break, not a claim that old grants, uncertain Tasks or remote Workspace placements were faithfully migrated. Real capability and authorization checks continue to be required before enabling new v3 tools.
 
 ## Invariants and acceptance
 

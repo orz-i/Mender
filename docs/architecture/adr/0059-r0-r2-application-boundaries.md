@@ -4,7 +4,7 @@
 - Date: 2026-11-05
 - Refines: ADR-0002, ADR-0010, ADR-0011, ADR-0032, ADR-0039, ADR-0042
 - Preserves: ADR-0014, ADR-0038, ADR-0050, ADR-0055, ADR-0058
-- Plan and evidence: [R0-R2 implementation](../../planning/refactor-r0-r2-2026-11-05.md)
+- Plan and evidence: R0-R2 implementation (historical)
 
 ## Context
 
@@ -93,7 +93,7 @@ ownership also require behavior tests and review.
 
 R3 removed the temporary Agent filesystem edges. R7 retired the empty
 exception file and its loader. See the
-[R7 integration record](../../planning/refactor-r7-2026-11-05.md).
+R7 integration record (historical).
 
 ## Alternatives considered
 

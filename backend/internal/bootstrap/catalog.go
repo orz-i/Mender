@@ -61,7 +61,7 @@ type Catalog struct {
 // NewTypedCatalog composes canonical Catalog services over the only supported
 // v3 schema. It requires an existing database and verifies the exact current
 // Agent/Provider identity; no Sandbox/Agent can grant itself a Tool source. This
-// constructor is only for the future single F4 v3 Runtime composition.
+// constructor is used by the official Runtime composition.
 func NewTypedCatalog(ctx context.Context, options CatalogOptions) (*Catalog, error) {
 	db, err := hardcut.OpenTypedContextStore(ctx, options.DatabasePath)
 	if err != nil {

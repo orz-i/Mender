@@ -29,7 +29,7 @@ See:
 - [Architecture principles](docs/architecture/principles.md)
 - [System context](docs/architecture/context.md)
 - [Architecture Decision Records](docs/architecture/adr/)
-- [Roadmap](docs/planning/roadmap.md)
+- Runtime architecture
 - [Local development](docs/development/getting-started.md)
 - [CLI reference](docs/development/cli.md)
 - [Management Web UI](docs/development/web.md)
